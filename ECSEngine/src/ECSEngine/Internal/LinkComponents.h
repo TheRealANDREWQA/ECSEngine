@@ -36,7 +36,7 @@ namespace ECSEngine {
 	// It returns ECS_ASSET_TYPE_COUNT if there is not an asset field type. It will set the boolean flag to false if the field 
 	// has been identified to be an asset field but incorrectly specified (like an array of meshes or pointer indirection to 2).
 	// The asset pointer that will be filled in for the GPU resources (textures, samplers and shaders) will be the interface pointer, 
-	// not the pointer to the ResourceView or SamplerState. In this way the result can be passed tp ExtractLinkComponentFunctionAsset
+	// not the pointer to the ResourceView or SamplerState. In this way the result can be passed to ExtractLinkComponentFunctionAsset
 	// class of functions to get the correct type
 	ECSENGINE_API AssetTargetFieldFromReflection GetAssetTargetFieldFromReflection(
 		const Reflection::ReflectionType* type,
@@ -45,6 +45,7 @@ namespace ECSEngine {
 	);
 
 	// Only accesses the field and returns the interface/pointer to the structure
+	// Returns { nullptr, -1 } if the asset is could not be retrieved
 	ECSENGINE_API Stream<void> GetAssetTargetFieldFromReflection(
 		const Reflection::ReflectionType* type,
 		unsigned int field,
@@ -128,21 +129,36 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	// There must be asset_fields.size slots in the field_data array
 	ECSENGINE_API void GetLinkComponentAssetData(
 		const Reflection::ReflectionType* type,
 		const void* link_component,
 		const AssetDatabase* database,
 		Stream<LinkComponentAssetField> asset_fields,
-		Stream<void>* field_data
+		CapacityStream<Stream<void>>* field_data
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	// There must be asset_fields.size slots in the field_data array
 	ECSENGINE_API void GetLinkComponentAssetDataForTarget(
 		const Reflection::ReflectionType* type,
 		const void* target,
 		Stream<LinkComponentAssetField> asset_fields,
-		Stream<void>* field_data
+		CapacityStream<Stream<void>>* field_data
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	// This version searches for a specific asset type from asset fields that can reference other assets
+	// like materials can reference textures, samplers and shaders
+	ECSENGINE_API void GetLinkComponentAssetDataForTargetDeep(
+		const Reflection::ReflectionType* type,
+		const void* target,
+		Stream<LinkComponentAssetField> asset_fields,
+		const AssetDatabase* database,
+		ECS_ASSET_TYPE asset_type,
+		CapacityStream<Stream<void>>* field_data
 	);
 	
 	// ------------------------------------------------------------------------------------------------------------

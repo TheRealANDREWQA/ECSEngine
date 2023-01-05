@@ -10,6 +10,360 @@ using namespace ECSEngine;
 
 // ----------------------------------------------------------------------------------------------
 
+struct CreateAssetAsyncTaskData {
+	EditorState* editor_state;
+	ECS_ASSET_TYPE asset_type;
+	unsigned int handle;
+	// The sandbox index is needed to unlock the sandbox at the end
+	// It can be -1
+	unsigned int sandbox_index = -1;
+
+	UIActionHandler callback = {};
+};
+
+ECS_THREAD_TASK(CreateAssetAsyncTask) {
+	CreateAssetAsyncTaskData* data = (CreateAssetAsyncTaskData*)_data;
+
+	bool success = CreateAsset(data->editor_state, data->handle, data->asset_type);
+	if (!success) {
+		const char* type_string = ConvertAssetTypeString(data->asset_type);
+		Stream<char> asset_name = data->editor_state->asset_database->GetAssetName(data->handle, data->asset_type);
+		ECS_FORMAT_TEMP_STRING(error_message, "Failed to create asset {#}, type {#}. Possible causes: invalid path or the processing failed.", asset_name, type_string);
+		EditorSetConsoleError(error_message);
+	}
+
+	if (data->callback.action != nullptr) {
+		CreateAssetAsyncCallbackInfo info;
+		info.handle = data->handle;
+		info.success = success;
+		info.type = data->asset_type;
+
+		ActionData dummy_data;
+		dummy_data.data = data->callback.data;
+		dummy_data.additional_data = &info;
+		dummy_data.system = nullptr;
+		data->callback.action(&dummy_data);
+
+		// Deallocate the data if it has the size > 0
+		if (data->callback.data_size > 0) {
+			data->editor_state->editor_allocator->Deallocate(data->callback.data);
+		}
+	}
+
+	// Release the editor state flags
+	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+
+	if (data->sandbox_index != -1) {
+		UnlockSandbox(data->editor_state, data->sandbox_index);
+	}
+}
+
+struct CreateAssetAsyncEventData {
+	unsigned int handle;
+	ECS_ASSET_TYPE type;
+	UIActionHandler callback = {};
+};
+
+EDITOR_EVENT(CreateAssetAsyncEvent) {
+	CreateAssetAsyncEventData* data = (CreateAssetAsyncEventData*)_data;
+
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		return true;
+	}
+
+	// Launch a background task - block the resource manager first
+	EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+	EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+
+	CreateAssetAsyncTaskData task_data;
+	task_data.asset_type = data->type;
+	task_data.editor_state = editor_state;
+	task_data.handle = data->handle;
+	task_data.sandbox_index = -1;
+	task_data.callback = data->callback;
+	EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(CreateAssetAsyncTask, &task_data, sizeof(task_data)));
+	return false;
+}
+
+struct RegisterEventData {
+	unsigned int* handle;
+	ECS_ASSET_TYPE type;
+	bool unregister_if_exists;
+	unsigned int name_size;
+	unsigned int file_size;
+	// If the sandbox index is -1, then it will registered as a global asset
+	unsigned int sandbox_index;
+	UIActionHandler callback;
+};
+
+EDITOR_EVENT(RegisterEvent) {
+	RegisterEventData* data = (RegisterEventData*)_data;
+
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		if (data->unregister_if_exists) {
+			unsigned int current_handle = *data->handle;
+			if (current_handle != -1) {
+				UnregisterSandboxAssetElement element;
+				element.handle = current_handle;
+				element.type = data->type;
+				AddUnregisterAssetEvent(editor_state, { &element, 1 }, data->sandbox_index != -1, data->sandbox_index);
+			}
+		}
+
+		unsigned int data_sizes[2] = {
+			data->name_size,
+			data->file_size
+		};
+
+		Stream<char> name = function::GetCoallescedStreamFromType(data, 0, data_sizes).AsIs<char>();
+		Stream<wchar_t> file = function::GetCoallescedStreamFromType(data, 1, data_sizes).AsIs<wchar_t>();
+		bool loaded_now = false;
+
+		unsigned int handle = -1;
+		if (data->sandbox_index != -1) {
+			EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+			handle = sandbox->database.AddAsset(name, file, data->type, &loaded_now);
+		}
+		else {
+			handle = editor_state->asset_database->AddAsset(name, file, data->type, &loaded_now);
+		}
+		*data->handle = handle;
+
+		if (handle == -1) {
+			// Send a warning
+			ECS_FORMAT_TEMP_STRING(warning, "Failed to load asset {#} metadata, type {#}.", name, ConvertAssetTypeString(data->type));
+			EditorSetConsoleWarn(warning);
+
+			// We still have to call the callback
+			if (data->callback.action != nullptr) {
+				CreateAssetAsyncCallbackInfo info;
+				info.handle = handle;
+				info.type = data->type;
+				info.success = false;
+
+				ActionData dummy_data;
+				dummy_data.data = data->callback.data;
+				dummy_data.additional_data = &info;
+				dummy_data.system = nullptr;
+				data->callback.action(&dummy_data);
+
+				// Deallocate the data, if it has the size > 0
+				if (data->callback.data_size > 0) {
+					editor_state->editor_allocator->Deallocate(data->callback.data);
+				}
+			}
+
+			// Unlock the sandbox
+			if (data->sandbox_index != -1) {
+				UnlockSandbox(editor_state, data->sandbox_index);
+			}
+			return false;
+		}
+
+		if (loaded_now) {
+			// Launch a background task - block the resource manager first
+			EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+			EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+
+			CreateAssetAsyncTaskData task_data;
+			task_data.asset_type = data->type;
+			task_data.editor_state = editor_state;
+			task_data.handle = handle;
+			task_data.callback = data->callback;
+			task_data.sandbox_index = data->sandbox_index;
+			EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(CreateAssetAsyncTask, &task_data, sizeof(task_data)));
+		}
+		return false;
+	}
+	else {
+		return true;
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+struct UnregisterEventDataBase {
+	unsigned int sandbox_index;
+	bool sandbox_assets;
+	UIActionHandler callback;
+};
+
+struct UnregisterEventData {
+	UnregisterEventDataBase base_data;
+	Stream<UnregisterSandboxAssetElement> elements;
+};
+
+struct UnregisterEventHomogeneousData {
+	UnregisterEventDataBase base_data;
+	ECS_ASSET_TYPE type;
+	Stream<unsigned int> elements;
+};
+
+template<typename Extractor>
+EDITOR_EVENT(UnregisterAssetEventImpl) {
+	UnregisterEventDataBase* data = (UnregisterEventDataBase*)_data;
+
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		auto fail = [](Stream<char> asset_name, Stream<wchar_t> file, ECS_ASSET_TYPE type, Stream<char> tail_message) {
+			const char* type_string = ConvertAssetTypeString(type);
+			ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+			if (file.size > 0) {
+				ECS_FORMAT_STRING(error_message, "Failed to remove asset {#} with settings {#}, type {#}. {#}", file, asset_name, type_string, tail_message);
+			}
+			else {
+				ECS_FORMAT_STRING(error_message, "Failed to remove asset {#}, type {#}. {#}", asset_name, type_string, tail_message);
+			}
+			EditorSetConsoleError(error_message);
+		};
+
+		if (data->sandbox_assets) {
+			auto loop = [=](unsigned int sandbox_index, bool check_exists_in_sandbox) {
+				ActionData dummy_data;
+				dummy_data.system = nullptr;
+
+				size_t count = Extractor::Count(data);
+
+				for (size_t index = 0; index < count; index++) {
+					unsigned int handle = Extractor::Handle(data, index);
+					ECS_ASSET_TYPE type = Extractor::Type(data, index);
+
+					Stream<char> asset_name = editor_state->asset_database->GetAssetName(handle, type);
+					Stream<wchar_t> file = editor_state->asset_database->GetAssetPath(handle, type);
+
+					EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+					unsigned int database_reference_index = sandbox->database.GetIndex(handle, type);
+					if (database_reference_index == -1) {
+						if (check_exists_in_sandbox) {
+							__debugbreak();
+							ECS_FORMAT_TEMP_STRING(tail_message, "It doesn't exist in the sandbox {#} asset database reference.", sandbox_index);
+							fail(asset_name, file, type, tail_message);
+						}
+					}
+					else {
+						// Call the callback before actually removing the asset
+						if (data->callback.action != nullptr) {
+							dummy_data.data = data->callback.data;
+							dummy_data.additional_data = &handle;
+							data->callback.action(&dummy_data);
+						}
+
+						sandbox->database.RemoveAssetWithAction(database_reference_index, type, [&](unsigned int handle, ECS_ASSET_TYPE type, void* metadata) {
+							bool success = RemoveAsset(editor_state, metadata, type);
+							if (!success) {
+								fail(asset_name, file, type, "Possible causes: internal error or the asset was not loaded in the first place.");
+							}
+						});
+					}
+				}
+			};
+
+			bool remove_all = data->sandbox_index == -1;
+			SandboxAction(editor_state, data->sandbox_index, [&](unsigned int sandbox_index) {
+				loop(sandbox_index, remove_all);
+				});
+		}
+		else {
+			ActionData dummy_data;
+			dummy_data.system = nullptr;
+
+			size_t count = Extractor::Count(data);
+			for (size_t index = 0; index < count; index++) {
+				unsigned int handle = Extractor::Handle(data, index);
+				ECS_ASSET_TYPE type = Extractor::Type(data, index);
+
+				Stream<char> asset_name = editor_state->asset_database->GetAssetName(handle, type);
+				Stream<wchar_t> file = editor_state->asset_database->GetAssetPath(handle, type);
+
+				size_t metadata_storage[ECS_KB];
+
+				// Call the callback before actually removing the asset
+				if (data->callback.action != nullptr) {
+					dummy_data.data = data->callback.data;
+					dummy_data.additional_data = &handle;
+					data->callback.action(&dummy_data);
+				}
+
+				bool removed_now = editor_state->asset_database->RemoveAsset(handle, type, metadata_storage);
+
+				if (removed_now) {
+					bool success = RemoveAsset(editor_state, metadata_storage, type);
+					if (!success) {
+						fail(asset_name, file, type, "Possible causes: internal error or the asset was not loaded in the first place.");
+					}
+				}
+			}
+		}
+
+		void* element_buffer = Extractor::Data(data);
+		// Deallocate the buffer of data
+		editor_state->editor_allocator->Deallocate(element_buffer);
+
+		if (data->sandbox_assets) {
+			// Unlock the sandbox
+			SandboxAction(editor_state, data->sandbox_index, [=](unsigned int sandbox_index) {
+				UnlockSandbox(editor_state, sandbox_index);
+				});
+		}
+		return false;
+	}
+	else {
+		return true;
+	}
+}
+
+EDITOR_EVENT(UnregisterAssetEvent) {
+	struct Extractor {
+		static unsigned int Handle(void* _data, size_t index) {
+			UnregisterEventData* data = (UnregisterEventData*)_data;
+			return data->elements[index].handle;
+		}
+
+		static ECS_ASSET_TYPE Type(void* _data, size_t index) {
+			UnregisterEventData* data = (UnregisterEventData*)_data;
+			return data->elements[index].type;
+		}
+
+		static size_t Count(void* _data) {
+			UnregisterEventData* data = (UnregisterEventData*)_data;
+			return data->elements.size;
+		}
+
+		static void* Data(void* _data) {
+			UnregisterEventData* data = (UnregisterEventData*)_data;
+			return data->elements.buffer;
+		}
+	};
+	return UnregisterAssetEventImpl<Extractor>(editor_state, _data);
+}
+
+EDITOR_EVENT(UnregisterAssetEventHomogeneous) {
+	struct Extractor {
+		static unsigned int Handle(void* _data, size_t index) {
+			UnregisterEventHomogeneousData* data = (UnregisterEventHomogeneousData*)_data;
+			return data->elements[index];
+		}
+
+		static ECS_ASSET_TYPE Type(void* _data, size_t index) {
+			UnregisterEventHomogeneousData* data = (UnregisterEventHomogeneousData*)_data;
+			return data->type;
+		}
+
+		static size_t Count(void* _data) {
+			UnregisterEventData* data = (UnregisterEventData*)_data;
+			return data->elements.size;
+		}
+
+		static void* Data(void* _data) {
+			UnregisterEventHomogeneousData* data = (UnregisterEventHomogeneousData*)_data;
+			return data->elements.buffer;
+		}
+	};
+	return UnregisterAssetEventImpl<Extractor>(editor_state, _data);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 Stream<wchar_t> AssetMetadataTimeStampPath(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, CapacityStream<wchar_t>& storage) {
 	editor_state->asset_database->FileLocationAsset(GetAssetName(metadata, type), GetAssetFile(metadata, type), storage, type);
 	return storage;
@@ -43,6 +397,136 @@ Stream<wchar_t> AssetTargetFileTimeStampPath(const EditorState* editor_state, co
 	}
 
 	return path;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void AddUnregisterAssetEvent(
+	EditorState* editor_state,
+	Stream<UnregisterSandboxAssetElement> elements,
+	bool sandbox_assets,
+	unsigned int sandbox_index,
+	UIActionHandler callback
+)
+{
+	if (elements.size == 0) {
+		return;
+	}
+
+	UnregisterEventData event_data = { { sandbox_index, sandbox_assets, callback } };
+	event_data.elements.InitializeAndCopy(editor_state->EditorAllocator(), elements);
+	EditorAddEvent(editor_state, UnregisterAssetEvent, &event_data, sizeof(event_data));
+
+	if (sandbox_assets) {
+		SandboxAction(editor_state, sandbox_index, [=](unsigned int sandbox_index) {
+			LockSandbox(editor_state, sandbox_index);
+		});
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void AddUnregisterAssetEventHomogeneous(
+	EditorState* editor_state,
+	Stream<Stream<unsigned int>> elements,
+	bool sandbox_assets,
+	unsigned int sandbox_index,
+	UIActionHandler callback
+)
+{
+	for (size_t index = 0; index < elements.size; index++) {
+		if (elements[index].size > 0) {
+			UnregisterEventHomogeneousData event_data = { { sandbox_index, sandbox_assets, callback }, (ECS_ASSET_TYPE)index };
+			event_data.elements.InitializeAndCopy(editor_state->EditorAllocator(), elements[index]);
+			EditorAddEvent(editor_state, UnregisterAssetEventHomogeneous, &event_data, sizeof(event_data));
+
+			if (sandbox_assets) {
+				SandboxAction(editor_state, sandbox_index, [=](unsigned int sandbox_index) {
+					// Lock the sandbox
+					LockSandbox(editor_state, sandbox_index);
+				});
+			}
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool AddRegisterAssetEvent(
+	EditorState* editor_state,
+	Stream<char> name,
+	Stream<wchar_t> file,
+	ECS_ASSET_TYPE type,
+	unsigned int* handle,
+	unsigned int sandbox_index,
+	bool unload_if_existing,
+	UIActionHandler callback
+)
+{
+	ECS_ASSERT(name.size > 0);
+	if (AssetHasFile(type)) {
+		ECS_ASSERT(file.size > 0);
+	}
+
+	unsigned int existing_handle = FindAsset(editor_state, name, file, type);
+	if (existing_handle == -1) {
+		size_t storage[128];
+		unsigned int write_size = 0;
+		Stream<void> streams[] = {
+			name,
+			file
+		};
+		RegisterEventData* data = function::CreateCoallescedStreamsIntoType<RegisterEventData>(storage, { streams, std::size(streams) }, &write_size);
+		data->handle = handle;
+		data->sandbox_index = sandbox_index;
+		data->type = type;
+		data->name_size = name.size;
+		data->file_size = file.size;
+		data->unregister_if_exists = unload_if_existing;
+		data->callback = callback;
+		data->callback.data = function::CopyNonZero(editor_state->editor_allocator, data->callback.data, data->callback.data_size);
+
+		EditorAddEvent(editor_state, RegisterEvent, data, write_size);
+		if (sandbox_index != -1) {
+			// Lock the sandbox
+			LockSandbox(editor_state, sandbox_index);
+		}
+		return false;
+	}
+	else {
+		unsigned int previous_handle = *handle;
+
+		if (sandbox_index != -1) {
+			GetSandbox(editor_state, sandbox_index)->database.AddAsset(existing_handle, type, true);
+		}
+		else {
+			editor_state->asset_database->AddAsset(existing_handle, type);
+		}
+		*handle = existing_handle;
+
+		if (unload_if_existing) {
+			if (previous_handle != -1) {
+				UnregisterSandboxAssetElement element;
+				element.handle = previous_handle;
+				element.type = type;
+				AddUnregisterAssetEvent(editor_state, { &element, 1 }, sandbox_index != -1, sandbox_index);
+			}
+		}
+
+		if (callback.action != nullptr) {
+			CreateAssetAsyncCallbackInfo info;
+			info.handle = existing_handle;
+			info.type = type;
+			info.success = true;
+
+			ActionData dummy_data;
+			dummy_data.data = callback.data;
+			dummy_data.additional_data = &info;
+			dummy_data.system = nullptr;
+			callback.action(&dummy_data);
+		}
+		return true;
+	}
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -121,6 +605,19 @@ bool CreateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 		InsertAssetTimeStamp(editor_state, metadata, type);
 	}
 	return success;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback)
+{
+	callback.data = function::CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
+		
+	CreateAssetAsyncEventData event_data;
+	event_data.handle = handle;
+	event_data.type = type;
+	event_data.callback = callback;
+	EditorAddEvent(editor_state, CreateAssetAsyncEvent, &event_data, sizeof(event_data));
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -656,6 +1153,13 @@ size_t GetAssetExternalTimeStamp(const EditorState* editor_state, const void* me
 
 // ----------------------------------------------------------------------------------------------
 
+unsigned int GetAssetReferenceCount(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
+{
+	return editor_state->asset_database->GetReferenceCount(handle, type);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 void InsertAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
 {
 	const void* metadata = editor_state->asset_database->GetAssetConst(handle, type);
@@ -681,6 +1185,21 @@ void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_A
 	metadata_file_stamp = metadata_file_stamp == -1 ? 0 : metadata_file_stamp;
 
 	editor_state->runtime_resource_manager->AddTimeStamp(metadata_file, std::max(metadata_file_stamp, runtime_asset_stamp));
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool RegisterGlobalAsset(
+	EditorState* editor_state, 
+	Stream<char> name, 
+	Stream<wchar_t> file, 
+	ECS_ASSET_TYPE type, 
+	unsigned int* handle, 
+	bool unload_if_existing, 
+	UIActionHandler callback
+)
+{
+	return AddRegisterAssetEvent(editor_state, name, file, type, handle, -1, unload_if_existing, callback);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -728,6 +1247,27 @@ bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 bool WriteForwardingFile(Stream<wchar_t> absolute_path, Stream<wchar_t> target_path)
 {
 	return WriteBufferToFileBinary(absolute_path, target_path) == ECS_FILE_STATUS_OK;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void UnregisterGlobalAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback) {
+	UnregisterSandboxAssetElement element;
+	element.handle = handle;
+	element.type = type;
+	UnregisterGlobalAsset(editor_state, Stream<UnregisterSandboxAssetElement>(&element, 1), callback);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void UnregisterGlobalAsset(EditorState* editor_state, Stream<UnregisterSandboxAssetElement> elements, UIActionHandler callback) {
+	AddUnregisterAssetEvent(editor_state, elements, false, -1, callback);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void UnregisterGlobalAsset(EditorState* editor_state, Stream<Stream<unsigned int>> elements, UIActionHandler callback) {
+	AddUnregisterAssetEventHomogeneous(editor_state, elements, false, -1, callback);
 }
 
 // ----------------------------------------------------------------------------------------------

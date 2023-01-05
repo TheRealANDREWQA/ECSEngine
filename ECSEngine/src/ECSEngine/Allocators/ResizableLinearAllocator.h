@@ -16,6 +16,7 @@ namespace ECSEngine {
 	struct ECSENGINE_API ResizableLinearAllocator
 	{
 		ResizableLinearAllocator();
+		ResizableLinearAllocator(size_t capacity, size_t backup_size, AllocatorPolymorphic allocator);
 		ResizableLinearAllocator(void* buffer, size_t capacity, size_t backup_size, AllocatorPolymorphic allocator);
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ResizableLinearAllocator);
@@ -54,6 +55,10 @@ namespace ECSEngine {
 		void SetMarker_ts();
 
 		SpinLock m_spin_lock;
+		// This is not the real buffer received in the constructor
+		// It is offsetted by a count of void* in order to keep the m_allocated_buffers
+		// inside the initial_allocation. So the buffer in the constructor is actually the
+		// m_allocated_buffers
 		void* m_initial_buffer;
 		size_t m_initial_capacity;
 

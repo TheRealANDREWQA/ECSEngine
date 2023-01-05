@@ -16,6 +16,10 @@ struct EditorState;
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+void InspectorDrawNothing(EditorState* editor_state, unsigned int inspector_index, void* data, Tools::UIDrawer* drawer);
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void InspectorCleanNothing(EditorState* editor_state, unsigned int inspector_index, void* data);
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -65,11 +69,11 @@ void InspectorDrawHlslTextFile(EditorState* editor_state, unsigned int inspector
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetMatchingIndexFromRobin(EditorState* editor_state);
+unsigned int GetMatchingIndexFromRobin(EditorState* editor_state, unsigned int target_sandbox = -1);
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetMatchingIndexFromRobin(EditorState* editor_state, unsigned int target_sandbox);
+InspectorDrawFunction GetInspectorDrawFunction(const EditorState* editor_state, unsigned int inspector_index);
 
 // ----------------------------------------------------------------------------------------------------------------------------
 

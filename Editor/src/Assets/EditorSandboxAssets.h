@@ -3,6 +3,7 @@
 #include "ECSEngineAssets.h"
 #include "ECSEngineComponents.h"
 #include "../Editor/EditorEvent.h"
+#include "Assets/AssetManagement.h"
 
 struct EditorState;
 
@@ -36,30 +37,42 @@ void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandb
 
 // There must be unique_count elements in the given pointer
 // These are mapped to the component value - can index directly
+// When the deep search is set to true, for assets that can be referenced by other assets
+// (i.e. textures and samplers by materials) it will report those fields as well
 void GetLinkComponentsWithAssetFieldsUnique(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	LinkComponentWithAssetFields* link_with_fields, 
 	AllocatorPolymorphic allocator,
-	Stream<ECS_ASSET_TYPE> asset_types
+	Stream<ECS_ASSET_TYPE> asset_types,
+	bool deep_search = true
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
 // There must be shared_count elements in the given pointer
 // These are mapped to the component value - can index directly
+// When the deep search is set to true, for assets that can be referenced by other assets
+// (i.e. textures, samplers and shaders by materials) it will report those fields as well
 void GetLinkComponentWithAssetFieldsShared(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	LinkComponentWithAssetFields* link_with_fields,
 	AllocatorPolymorphic allocator,
-	Stream<ECS_ASSET_TYPE> asset_types
+	Stream<ECS_ASSET_TYPE> asset_types,
+	bool deep_search = true
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-// If the sandbox index is left to -1, then it will search all sandboxes
-bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
+// This check the database associated with the sandbox to see if the asset appears in that database
+bool IsAssetReferencedInSandbox(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// This will search the entities in the sandbox to see if their components reference the asset
+// If the sandbox index is left to -1, then it will search all sandboxes.
+bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -83,7 +96,8 @@ void LoadAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsigned i
 // It writes the handle of the asset. If the deserialization failed, it will write -1
 // The reason for which it takes a pointer to the handle is that this may not run when called
 // due to a prevention of resource loads. It returns true if the resource already exists and no asynchronous load is done
-// Can optionally give a callback to call when the load is finalized. The handle will be given in the additional_data field
+// Can optionally give a callback to call when the load is finalized. A structure of type CreateAssetAsyncCallbackInfo
+// will be given in the additional_data member
 bool RegisterSandboxAsset(
 	EditorState* editor_state,
 	unsigned int sandbox_index, 
@@ -108,11 +122,6 @@ void ReloadAssets(EditorState* editor_state, Stream<Stream<unsigned int>> assets
 void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback = {});
 
 // -------------------------------------------------------------------------------------------------------------
-
-struct UnregisterSandboxAssetElement {
-	unsigned int handle;
-	ECS_ASSET_TYPE type;
-};
 
 // Can optionally give a callback to call when the unload is finalized. The handle will be given in the additional_data field
 // Can give -1 as the sandbox index in order to eliminate the asset from all sandboxes

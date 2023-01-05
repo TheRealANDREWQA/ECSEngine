@@ -477,7 +477,7 @@ namespace ECSEngine {
 	{
 		MultiPackedFile result;
 
-		HashTableCopyWithIdentifiers(lookup_table, result.lookup_table, allocator);
+		HashTableCopy<false, true>(lookup_table, result.lookup_table, allocator);
 
 		// Copy the stream now - can't use a deep copy because the call does a coallescing
 		// allocation and the deallocate does not. (in the main case it is segragated)

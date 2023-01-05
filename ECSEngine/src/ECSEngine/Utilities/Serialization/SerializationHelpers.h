@@ -52,6 +52,8 @@ namespace ECSEngine {
 
 #define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name), SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, version, nullptr } 
 
+#define ECS_SERIALIZE_CUSTOM_TYPE_SWITCH_CAPACITY 8
+
 	struct SerializeCustomType {
 		Reflection::ReflectionCustomType container_type;
 		SerializeCustomTypeWriteFunction write;
@@ -60,6 +62,7 @@ namespace ECSEngine {
 
 		// Can modify the behaviour of the serializer
 		void* user_data;
+		bool switches[ECS_SERIALIZE_CUSTOM_TYPE_SWITCH_CAPACITY] = { false };
 	};
 
 	extern SerializeCustomType ECS_SERIALIZE_CUSTOM_TYPES[];
@@ -181,6 +184,9 @@ namespace ECSEngine {
 	ECSENGINE_API void SetSerializeCustomTypeUserData(unsigned int index, void* buffer);
 
 	ECSENGINE_API void ClearSerializeCustomTypeUserData(unsigned int index);
+
+	// Sets the switch to the new value and returns the old value
+	ECSENGINE_API bool SetSerializeCustomTypeSwitch(unsigned int index, unsigned char switch_index, bool new_status);
 
 #pragma endregion
 
@@ -678,11 +684,13 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool IgnoreWithSize(uintptr_t* stream);
+	// Returns the amount of pointer data
+	ECSENGINE_API size_t IgnoreWithSize(uintptr_t* stream);
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool IgnoreWithSizeShort(uintptr_t* stream);
+	// Returns the amount of pointer data
+	ECSENGINE_API size_t IgnoreWithSizeShort(uintptr_t* stream);
 
 	// -----------------------------------------------------------------------------------------
 

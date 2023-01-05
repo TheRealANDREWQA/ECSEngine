@@ -337,7 +337,8 @@ LinkComponentWithAssetFields GetLinkComponentWithAssetFieldForComponent(
 	Component component,
 	bool shared,
 	AllocatorPolymorphic allocator,
-	Stream<ECS_ASSET_TYPE> asset_types
+	Stream<ECS_ASSET_TYPE> asset_types,
+	bool deep_search
 ) {
 	LinkComponentWithAssetFields info_type;
 
@@ -349,6 +350,13 @@ LinkComponentWithAssetFields GetLinkComponentWithAssetFieldForComponent(
 	info_type.type = editor_state->editor_components.GetType(target_type_name);
 	GetAssetFieldsFromLinkComponentTarget(info_type.type, asset_fields);
 
+	bool is_material_dependency = false;
+	if (deep_search) {
+		for (size_t index = 0; index < asset_types.size && !is_material_dependency; index++) {
+			is_material_dependency |= asset_types[index] == ECS_ASSET_TEXTURE || asset_types[index] == ECS_ASSET_GPU_SAMPLER || asset_types[index] == ECS_ASSET_SHADER;
+		}
+	}
+
 	// Go through the asset fields. If the component doesn't have the given asset type, then don't bother with it
 	for (unsigned int index = 0; index < asset_fields.size; index++) {
 		size_t asset_index = 0;
@@ -356,6 +364,11 @@ LinkComponentWithAssetFields GetLinkComponentWithAssetFieldForComponent(
 			if (asset_types[asset_index] == asset_fields[index].type) {
 				break;
 			}
+		}
+
+		if (is_material_dependency && asset_fields[index].type == ECS_ASSET_MATERIAL) {
+			// Make it such that the asset index is different from asset_types.size
+			asset_index = -1;
 		}
 
 		if (asset_index == asset_types.size) {
@@ -373,12 +386,13 @@ void GetLinkComponentsWithAssetFieldsUnique(
 	unsigned int sandbox_index, 
 	LinkComponentWithAssetFields* link_with_fields, 
 	AllocatorPolymorphic allocator,
-	Stream<ECS_ASSET_TYPE> asset_types
+	Stream<ECS_ASSET_TYPE> asset_types,
+	bool deep_search
 )
 {
 	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 	entity_manager->ForEachComponent([&](Component component) {
-		link_with_fields[component.value] = GetLinkComponentWithAssetFieldForComponent(editor_state, component, false, allocator, asset_types);
+		link_with_fields[component.value] = GetLinkComponentWithAssetFieldForComponent(editor_state, component, false, allocator, asset_types, deep_search);
 	});
 }
 
@@ -389,18 +403,38 @@ void GetLinkComponentWithAssetFieldsShared(
 	unsigned int sandbox_index, 
 	LinkComponentWithAssetFields* link_with_fields, 
 	AllocatorPolymorphic allocator,
-	Stream<ECS_ASSET_TYPE> asset_types
+	Stream<ECS_ASSET_TYPE> asset_types,
+	bool deep_search
 )
 {
 	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 	entity_manager->ForEachSharedComponent([&](Component component) {
-		link_with_fields[component.value] = GetLinkComponentWithAssetFieldForComponent(editor_state, component, true, allocator, asset_types);
+		link_with_fields[component.value] = GetLinkComponentWithAssetFieldForComponent(editor_state, component, true, allocator, asset_types, deep_search);
 	});
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index)
+bool IsAssetReferencedInSandbox(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, unsigned int sandbox_index)
+{
+	if (sandbox_index == -1) {
+		// We just need to return the find value from the main database - assets that have
+		// dependencies will draw their dependencies into it as well
+		return editor_state->asset_database->FindAsset(name, file, type) != -1;
+	}
+	else {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		AssetTypedHandle typed_handle = sandbox->database.FindDeep(name, file, type);
+		if (typed_handle.handle != -1) {
+			return true;
+		}
+		return false;
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index)
 {
 	bool return_value = false;
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
@@ -436,14 +470,16 @@ bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* met
 				ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, ECS_ARCHETYPE_MAX_COMPONENTS);
 				for (unsigned char index = 0; index < component_to_visit_count; index++) {
 					Stream<LinkComponentAssetField> asset_fields = link_with_fields[signature[components_to_visit[index]]].asset_fields;
-					GetLinkComponentAssetDataForTarget(
+					GetLinkComponentAssetDataForTargetDeep(
 						component_reflection_types[index],
 						unique_components[components_to_visit[index]],
 						asset_fields,
-						asset_data.buffer
+						editor_state->asset_database,
+						type,
+						&asset_data
 					);
 
-					for (size_t subindex = 0; subindex < asset_fields.size; subindex++) {
+					for (unsigned int subindex = 0; subindex < asset_data.size; subindex++) {
 						if (CompareAssetPointers(asset_data[subindex].buffer, asset_pointer.buffer, type)) {
 							return_value = true;
 							return true;
@@ -467,14 +503,16 @@ bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* met
 				[&](Component component, SharedInstance shared_instance) {
 					ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, ECS_ARCHETYPE_MAX_COMPONENTS);
 					Stream<LinkComponentAssetField> asset_fields = link_with_fields[component].asset_fields;
-					GetLinkComponentAssetDataForTarget(
+					GetLinkComponentAssetDataForTargetDeep(
 						component_reflection_types[0],
 						entity_manager->GetSharedData(component, shared_instance),
 						asset_fields,
-						asset_data.buffer
+						editor_state->asset_database,
+						type,
+						&asset_data
 					);
 
-					for (size_t subindex = 0; subindex < asset_fields.size; subindex++) {
+					for (unsigned int subindex = 0; subindex < asset_data.size; subindex++) {
 						if (CompareAssetPointers(asset_data[subindex].buffer, asset_pointer.buffer, type)) {
 							return_value = true;
 							return true;
@@ -524,127 +562,6 @@ void LoadAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsigned i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-struct RegisterAssetTaskData {
-	EditorState* editor_state;
-	unsigned int handle;
-	// The sandbox index is needed to unlock the sandbox at the end
-	unsigned int sandbox_index;
-	ECS_ASSET_TYPE asset_type;
-
-	UIActionHandler callback;
-};
-
-ECS_THREAD_TASK(RegisterAssetTask) {
-	RegisterAssetTaskData* data = (RegisterAssetTaskData*)_data;
-
-	bool success = CreateAsset(data->editor_state, data->handle, data->asset_type);
-	if (!success) {
-		const char* type_string = ConvertAssetTypeString(data->asset_type);
-		Stream<char> asset_name = data->editor_state->asset_database->GetAssetName(data->handle, data->asset_type);
-		ECS_FORMAT_TEMP_STRING(error_message, "Failed to create asset {#}, type {#}. Possible causes: invalid path or the processing failed.", asset_name, type_string);
-		EditorSetConsoleError(error_message);
-	}
-
-	if (data->callback.action != nullptr) {
-		ActionData dummy_data;
-		dummy_data.data = data->callback.data;
-		dummy_data.additional_data = &data->handle;
-		dummy_data.system = nullptr;
-		data->callback.action(&dummy_data);
-
-		// Deallocate the data if it has the size > 0
-		if (data->callback.data_size > 0) {
-			data->editor_state->editor_allocator->Deallocate(data->callback.data);
-		}
-	}
-
-	// Release the editor state flags
-	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_LAUNCH);
-	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
-
-	if (data->sandbox_index != -1) {
-		UnlockSandbox(data->editor_state, data->sandbox_index);
-	}
-}
-
-struct RegisterEventData {
-	unsigned int* handle;
-	ECS_ASSET_TYPE type;
-	bool unregister_if_exists;
-	unsigned int name_size;
-	unsigned int file_size;
-	unsigned int sandbox_index;
-	UIActionHandler callback;
-};
-
-EDITOR_EVENT(RegisterEvent) {
-	RegisterEventData* data = (RegisterEventData*)_data;
-
-	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		if (data->unregister_if_exists) {
-			unsigned int current_handle = *data->handle;
-			if (current_handle != -1) {
-				UnregisterSandboxAsset(editor_state, data->sandbox_index, current_handle, data->type);
-			}
-		}
-
-		unsigned int data_sizes[2] = {
-			data->name_size,
-			data->file_size
-		};
-
-		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
-		Stream<char> name = function::GetCoallescedStreamFromType(data, 0, data_sizes).AsIs<char>();
-		Stream<wchar_t> file = function::GetCoallescedStreamFromType(data, 1, data_sizes).AsIs<wchar_t>();
-		
-		bool loaded_now = false;
-		unsigned int handle = sandbox->database.AddAsset(name, file, data->type, &loaded_now);
-		*data->handle = handle;
-
-		if (handle == -1) {
-			// Send a warning
-			ECS_FORMAT_TEMP_STRING(warning, "Failed to load asset {#} metadata, type {#}.", name, ConvertAssetTypeString(data->type));
-			EditorSetConsoleWarn(warning);
-
-			// We still have to call the callback
-			if (data->callback.action != nullptr) {
-				ActionData dummy_data;
-				dummy_data.data = data->callback.data;
-				dummy_data.additional_data = &handle;
-				dummy_data.system = nullptr;
-				data->callback.action(&dummy_data);
-
-				// Deallocate the data, if it has the size > 0
-				if (data->callback.data_size > 0) {
-					editor_state->editor_allocator->Deallocate(data->callback.data);
-				}
-			}
-
-			// Unlock the sandbox
-			UnlockSandbox(editor_state, data->sandbox_index);
-			return false;
-		}
-
-		if (loaded_now) {
-			// Launch a background task - block the resource manager first
-			EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
-			EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
-
-			RegisterAssetTaskData task_data;
-			task_data.asset_type = data->type;
-			task_data.editor_state = editor_state;
-			task_data.handle = handle;
-			task_data.callback = data->callback;
-			task_data.sandbox_index = data->sandbox_index;
-			EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(RegisterAssetTask, &task_data, sizeof(task_data)));
-		}
-		return false;
-	}
-	else {
-		return true;
-	}
-}
-
 // The registration needs to be moved into an event in case the resource manager is locked
 bool RegisterSandboxAsset(
 	EditorState* editor_state, 
@@ -657,55 +574,7 @@ bool RegisterSandboxAsset(
 	UIActionHandler callback
 )
 {
-	ECS_ASSERT(name.size > 0);
-	if (AssetHasFile(type)) {
-		ECS_ASSERT(file.size > 0);
-	}
-
-	unsigned int existing_handle = FindAsset(editor_state, name, file, type);
-	if (existing_handle == -1) {
-		size_t storage[128];
-		unsigned int write_size = 0;
-		Stream<void> streams[] = {
-			name,
-			file
-		};
-		RegisterEventData* data = function::CreateCoallescedStreamsIntoType<RegisterEventData>(storage, { streams, std::size(streams) }, &write_size);
-		data->handle = handle;
-		data->sandbox_index = sandbox_index;
-		data->type = type;
-		data->name_size = name.size;
-		data->file_size = file.size;
-		data->unregister_if_exists = unregister_if_exists;
-		data->callback = callback;
-		data->callback.data = function::CopyNonZero(editor_state->editor_allocator, data->callback.data, data->callback.data_size);
-
-		EditorAddEvent(editor_state, RegisterEvent, data, write_size);
-		// Lock the sandbox
-		LockSandbox(editor_state, sandbox_index);
-		return false;
-	}
-	else {
-		unsigned int previous_handle = *handle;
-
-		GetSandbox(editor_state, sandbox_index)->database.AddAsset(existing_handle, type, true);
-		*handle = existing_handle;
-
-		if (unregister_if_exists) {
-			if (previous_handle != -1) {
-				UnregisterSandboxAsset(editor_state, sandbox_index, previous_handle, type);
-			}
-		}
-
-		if (callback.action != nullptr) {
-			ActionData dummy_data;
-			dummy_data.data = callback.data;
-			dummy_data.additional_data = &existing_handle;
-			dummy_data.system = nullptr;
-			callback.action(&dummy_data);
-		}
-		return true;
-	}
+	return AddRegisterAssetEvent(editor_state, name, file, type, handle, sandbox_index, unregister_if_exists, callback);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -751,99 +620,6 @@ void ReloadAssets(EditorState* editor_state, Stream<Stream<unsigned int>> assets
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-struct UnregisterEventData {
-	unsigned int sandbox_index;
-	Stream<UnregisterSandboxAssetElement> elements;
-	UIActionHandler callback;
-};
-
-struct UnregisterEventHomogeneousData {
-	unsigned int sandbox;
-	ECS_ASSET_TYPE type;
-	Stream<unsigned int> elements;
-	UIActionHandler callback;
-};
-
-template<typename Extractor>
-EDITOR_EVENT(UnregisterEvent) {
-	UnregisterEventData* data = (UnregisterEventData*)_data;
-
-	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		auto loop = [=](unsigned int sandbox_index, bool check_exists_in_sandbox) {
-			ActionData dummy_data;
-			dummy_data.system = nullptr;
-
-			for (size_t index = 0; index < data->elements.size; index++) {
-				unsigned int handle = Extractor::Handle(data, index);
-				ECS_ASSET_TYPE type = Extractor::Type(data, index);
-
-				Stream<char> asset_name = editor_state->asset_database->GetAssetName(handle, type);
-				Stream<wchar_t> file = editor_state->asset_database->GetAssetPath(handle, type);
-
-				size_t metadata_storage[ECS_KB];
-
-				auto fail = [type, asset_name, file](Stream<char> tail_message) {
-					const char* type_string = ConvertAssetTypeString(type);
-					ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-					if (file.size > 0) {
-						ECS_FORMAT_STRING(error_message, "Failed to remove asset {#} with settings {#}, type {#}. {#}", file, asset_name, type_string, tail_message);
-					}
-					else {
-						ECS_FORMAT_STRING(error_message, "Failed to remove asset {#}, type {#}. {#}", asset_name, type_string, tail_message);
-					}
-					EditorSetConsoleError(error_message);
-				};
-
-				EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-				unsigned int database_reference_index = sandbox->database.GetIndex(handle, type);
-				if (database_reference_index == -1) {
-					if (check_exists_in_sandbox) {
-						__debugbreak();
-						ECS_FORMAT_TEMP_STRING(tail_message, "It doesn't exist in the sandbox {#} asset database reference.", sandbox_index);
-						fail(tail_message);
-					}
-				}
-				else {
-					// Call the callback before actually removing the asset
-					if (data->callback.action != nullptr) {
-						dummy_data.data = data->callback.data;
-						dummy_data.additional_data = &handle;
-						data->callback.action(&dummy_data);
-					}
-
-					bool removed_now = sandbox->database.RemoveAsset(database_reference_index, type, metadata_storage);
-
-					if (removed_now) {
-						bool success = RemoveAsset(editor_state, metadata_storage, type);
-						if (!success) {
-							fail("Possible causes: internal error or the asset was not loaded in the first place.");
-						}
-					}
-				}
-			}
-		};
-
-		bool remove_all = data->sandbox_index == -1;
-		SandboxAction(editor_state, data->sandbox_index, [&](unsigned int sandbox_index) {
-			loop(sandbox_index, remove_all);
-		});
-
-		// Deallocate the buffer of data
-		editor_state->editor_allocator->Deallocate(data->elements.buffer);
-
-		// Unlock the sandbox
-		SandboxAction(editor_state, data->sandbox_index, [=](unsigned int sandbox_index) {
-			UnlockSandbox(editor_state, sandbox_index);
-		});
-		return false;
-	}
-	else {
-		return true;
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback)
 {
 	UnregisterSandboxAssetElement element = { handle, type };
@@ -854,60 +630,14 @@ void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_inde
 
 void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<UnregisterSandboxAssetElement> elements, UIActionHandler callback)
 {
-	// No elements to unload
-	if (elements.size == 0) {
-		return;
-	}
-
-	struct Extractor {
-		static unsigned int Handle(void* _data, size_t index) {
-			UnregisterEventData* data = (UnregisterEventData*)_data;
-			return data->elements[index].handle;
-		}
-
-		static ECS_ASSET_TYPE Type(void* _data, size_t index) {
-			UnregisterEventData* data = (UnregisterEventData*)_data;
-			return data->elements[index].type;
-		}
-	};
-
-	UnregisterEventData event_data = { sandbox_index, { nullptr, 0}, callback };
-	UnregisterEventData* allocated_data = (UnregisterEventData*)EditorAddEvent(editor_state, UnregisterEvent<Extractor>, &event_data, sizeof(event_data));
-	allocated_data->elements.InitializeAndCopy(editor_state->EditorAllocator(), elements);
-
-	SandboxAction(editor_state, sandbox_index, [=](unsigned int sandbox_index) {
-		LockSandbox(editor_state, sandbox_index);
-	});
+	AddUnregisterAssetEvent(editor_state, elements, true, sandbox_index, callback);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<Stream<unsigned int>> elements, UIActionHandler callback) 
 {
-	for (size_t index = 0; index < elements.size; index++) {
-		if (elements[index].size > 0) {
-			struct Extractor {
-				static unsigned int Handle(void* _data, size_t index) {
-					UnregisterEventHomogeneousData* data = (UnregisterEventHomogeneousData*)_data;
-					return data->elements[index];
-				}
-
-				static ECS_ASSET_TYPE Type(void* _data, size_t index) {
-					UnregisterEventHomogeneousData* data = (UnregisterEventHomogeneousData*)_data;
-					return data->type;
-				}
-			};
-
-			UnregisterEventHomogeneousData event_data = { sandbox_index, (ECS_ASSET_TYPE)index, { nullptr, 0}, callback };
-			UnregisterEventHomogeneousData* allocated_data = (UnregisterEventHomogeneousData*)EditorAddEvent(editor_state, UnregisterEvent<Extractor>, &event_data, sizeof(event_data));
-			allocated_data->elements.InitializeAndCopy(editor_state->EditorAllocator(), elements[index]);
-
-			SandboxAction(editor_state, sandbox_index, [=](unsigned int sandbox_index) {
-				// Lock the sandbox
-				LockSandbox(editor_state, sandbox_index);
-			});
-		}
-	}
+	AddUnregisterAssetEventHomogeneous(editor_state, elements, true, sandbox_index, callback);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1207,7 +937,7 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 
 	// Do the same for shared components
 	entity_manager->ForEachSharedComponent([&](Component component) {
-		LinkComponentWithAssetFields link_with_fields = GetLinkComponentWithAssetFieldForComponent(editor_state, component, true, stack_allocator, assets_to_check);
+		LinkComponentWithAssetFields link_with_fields = GetLinkComponentWithAssetFieldForComponent(editor_state, component, true, stack_allocator, assets_to_check, false);
 
 		if (link_with_fields.asset_fields.size > 0) {
 			entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {

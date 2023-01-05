@@ -457,26 +457,16 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionManager::ReflectionManager(MemoryManager* allocator, size_t type_count, size_t enum_count) : folders(GetAllocatorPolymorphic(allocator), 0)
+		ReflectionManager::ReflectionManager(AllocatorPolymorphic allocator, size_t type_count, size_t enum_count) : folders(allocator, 0)
 		{
 			InitializeFieldTable();
 			InitializeTypeTable(type_count);
 			InitializeEnumTable(enum_count);
 
-			constants.Initialize(GetAllocatorPolymorphic(allocator), 0);
-			blittable_types.Initialize(GetAllocatorPolymorphic(allocator), 0);
+			constants.Initialize(allocator, 0);
+			blittable_types.Initialize(allocator, 0);
 
 			AddBlittableException(STRING(Stream<void>), sizeof(Stream<void>), alignof(Stream<void>));
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void ReflectionManager::ClearTypeDefinitions()
-		{
-			type_definitions.ForEachConst([&](ReflectionType type, ResourceIdentifier identifier) {
-				Deallocate(folders.allocator, type.name.buffer);
-			});
-			type_definitions.Clear();
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -829,11 +819,49 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::ClearEnumDefinitions() {
-			enum_definitions.ForEach([&](ReflectionEnum enum_, ResourceIdentifier identifier) {
-				Deallocate(folders.allocator, enum_.name.buffer);
-			});
-			enum_definitions.Clear();
+		void ReflectionManager::ClearFromAllocator(bool isolated_use, bool isolated_use_deallocate_types)
+		{
+			AllocatorPolymorphic allocator = folders.allocator;
+
+			if (isolated_use) {
+				// Now for the identifiers, if they have the ptr different from their reflection type name,
+				// then deallocate it as well
+				if (isolated_use_deallocate_types) {
+					type_definitions.ForEachConst([allocator](const ReflectionType& type, ResourceIdentifier identifier) {
+						if (type.name.buffer != identifier.ptr) {
+							Deallocate(allocator, identifier.ptr);
+						}
+						type.Deallocate(allocator);
+					});
+				}
+				type_definitions.Deallocate(allocator);
+				type_definitions.InitializeFromBuffer(nullptr, 0);
+
+				enum_definitions.ForEachConst([allocator](const ReflectionEnum& enum_, ResourceIdentifier identifier) {
+					if (enum_.name.buffer != identifier.ptr) {
+						Deallocate(allocator, identifier.ptr);
+					}
+					enum_.Deallocate(allocator);
+				});
+				enum_definitions.Deallocate(allocator);
+				enum_definitions.InitializeFromBuffer(nullptr, 0);
+
+				for (unsigned int index = 0; index < constants.size; index++) {
+					DeallocateIfBelongs(allocator, constants[index].name.buffer);
+				}
+			}
+			else {
+				for (unsigned int index = 0; index < folders.size; index++) {
+					if (folders[index].allocated_buffer != nullptr) {
+						Deallocate(allocator, folders[index].allocated_buffer);
+					}
+				}
+			}
+
+			constants.FreeBuffer();
+			field_table.Deallocate(allocator);
+			blittable_types.FreeBuffer();
+			folders.FreeBuffer();
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -843,6 +871,16 @@ namespace ECSEngine {
 			folders[index] = { function::StringCopy(folders.allocator, root), nullptr };
 			folders.size++;
 			return index;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::CopyTypes(ReflectionManager* other) const
+		{
+			AllocatorPolymorphic other_allocator = other->Allocator();
+			HashTableCopy<true, false>(type_definitions, other->type_definitions, other_allocator, [](const ReflectionType* type, ResourceIdentifier identifier) {
+				return type->name;
+			});
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1823,6 +1861,27 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		void ReflectionManager::SetTypeAlignment(ReflectionType* type, size_t alignment)
 		{
 			type->alignment = alignment;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void SetInstanceFieldDefaultData(const ReflectionField* field, void* data)
+		{
+			void* current_field = function::OffsetPointer(data, field->info.pointer_offset);
+
+			if (field->info.has_default_value) {
+				memcpy(
+					current_field,
+					&field->info.default_bool,
+					field->info.byte_size
+				);
+			}
+			else {
+				ECS_ASSERT(field->info.basic_type != ReflectionBasicFieldType::UserDefined);
+				// Memsetting to 0 should be fine for all the other cases (streams, pointers,
+				// basic type arrays, or enums)
+				memset(current_field, 0, field->info.byte_size);
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -4124,7 +4183,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 				else {
 					// Use the default
-					new_reflection_manager->SetInstanceFieldDefaultData(&new_type->fields[new_index], new_data);
+					if (new_reflection_manager != nullptr) {
+						new_reflection_manager->SetInstanceFieldDefaultData(&new_type->fields[new_index], new_data);	
+					}
+					else {
+						SetInstanceFieldDefaultData(&new_type->fields[new_index], new_data);
+					}
 				}
 			}
 		}
@@ -4252,6 +4316,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					}
 				}
 				else {
+					ECS_ASSERT(first_reflection_manager != nullptr && second_reflection_manager != nullptr);
+
 					// Call the functor again
 					ReflectionType new_nested_type;
 					ReflectionType old_nested_type;
@@ -4411,7 +4477,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// If either one is a user defined type, then proceed with the default data
 				if (second_info->info.basic_type == ReflectionBasicFieldType::UserDefined
 					|| first_info->info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+					if (second_reflection_manager != nullptr) {
+						second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+					}
+					else {
+						SetInstanceFieldDefaultData(second_info, second_data);
+					}
 				}
 				else {
 					if (second_info->info.stream_type != ReflectionStreamFieldType::Basic && 
@@ -4445,7 +4516,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// Need to allocate
 								if (allocator.allocator == nullptr) {
 									// Set the default
-									second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+									if (second_reflection_manager != nullptr) {
+										second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+									}
+									else {
+										SetInstanceFieldDefaultData(second_info, second_data);
+									}
 								}
 								else {
 									void* allocation = Allocate(allocator, field.size * (size_t)second_info->info.stream_byte_size);
@@ -4506,7 +4582,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								else {
 									// Need to allocate
 									if (allocator.allocator == nullptr) {
-										second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+										if (second_reflection_manager != nullptr) {
+											second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+										}
+										else {
+											SetInstanceFieldDefaultData(second_info, second_data);
+										}
 									}
 									else {
 										void* allocation = Allocate(allocator, field.size * second_info->info.stream_byte_size);
@@ -4536,7 +4617,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							);
 						}
 						else {
-							second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+							if (second_reflection_manager != nullptr) {
+								second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+							}
+							else {
+								SetInstanceFieldDefaultData(second_info, second_data);
+							}
 						}
 					}
 				}

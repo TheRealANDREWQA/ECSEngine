@@ -33,7 +33,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_GET_TRANSFORM = (size_t)1 << 26;
 		constexpr size_t UI_CONFIG_INITIALIZER_DO_NOT_BEGIN = (size_t)1 << 27;
 		
-		// Low slots availabel 28, 29
+		// Low slots available 28, 29
 
 		// High slots available 60, 61, 62, 63 (60 aliases with the an array config)
 		
@@ -217,8 +217,8 @@ namespace ECSEngine {
 		// and that it should add a header (not a collapsing one) before the values
 		constexpr size_t UI_CONFIG_ARRAY_MULTI_LINE = (size_t)1 << 60;
 
-		constexpr size_t UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE = (size_t)1 << 50;
-		constexpr size_t UI_CONFIG_COLOR_FLOAT_CALLBACK = (size_t)1 << 51;
+		constexpr size_t UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE = (size_t)1 << 61;
+		constexpr size_t UI_CONFIG_COLOR_FLOAT_CALLBACK = (size_t)1 << 62;
 	}
 
 }

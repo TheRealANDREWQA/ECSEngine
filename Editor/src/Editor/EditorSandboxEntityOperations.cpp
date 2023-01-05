@@ -696,7 +696,7 @@ bool SandboxSplatLinkComponentAssetFields(EditorState* editor_state, unsigned in
 		return true;
 	}
 
-	GetLinkComponentAssetData(type, link_component, editor_state->asset_database, asset_fields, assets.buffer);
+	GetLinkComponentAssetData(type, link_component, editor_state->asset_database, asset_fields, &assets);
 
 	if (Reflection::GetReflectionTypeLinkComponentNeedsDLL(type)) {
 		unsigned int module_index = editor_state->editor_components.FindComponentModuleInReflection(editor_state, component_name);

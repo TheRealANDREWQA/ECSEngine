@@ -35,6 +35,9 @@ namespace ECSEngine {
 		bool SoA = false
 	>
 	struct HashTable {
+		typedef T Value;
+		typedef Identifier Identifier;
+
 		struct Pair {
 			T value;
 			Identifier identifier;
@@ -582,6 +585,15 @@ namespace ECSEngine {
 			return TableHashFunction::Next(capacity);
 		}
 
+		void CopyDistanceMetadata(const unsigned char* metadata) {
+			unsigned int extended_capacity = GetExtendedCapacity();
+			memcpy(m_metadata, metadata, sizeof(unsigned char) * extended_capacity);
+		}
+
+		void CopyDistanceMetadata(const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>* table) {
+			CopyDistanceMetadata(table->m_metadata);
+		}
+
 		// Equivalent to memcpy'ing the data from the other table
 		void Copy(AllocatorPolymorphic allocator, const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>* table) {
 			size_t table_size = MemoryOf(table->GetCapacity());
@@ -593,6 +605,14 @@ namespace ECSEngine {
 			// Now blit the data - it can just be memcpy'ed from the other
 			memcpy(allocation, table->GetAllocatedBuffer(), table_size);
 			m_count = table->m_count;
+		}
+
+		// Deallocates the pointer if it is not nullptr and the capacity is
+		// bigger than 0
+		void Deallocate(AllocatorPolymorphic allocator) const {
+			if (GetAllocatedBuffer() != nullptr && GetCapacity() > 0) {
+				ECSEngine::Deallocate(allocator, GetAllocatedBuffer());
+			}
 		}
 
 		// It will set the internal hash buffers accordingly to the new hash buffer. It does not modify anything
@@ -622,8 +642,10 @@ namespace ECSEngine {
 			unsigned int extended_capacity = capacity + 31;
 			SetBuffers(buffer, capacity);
 
-			// make distance 0 for keys, account for padding elements
-			memset(m_metadata, 0, sizeof(unsigned char) * extended_capacity);
+			if (capacity > 0 && buffer != nullptr) {
+				// make distance 0 for keys, account for padding elements
+				memset(m_metadata, 0, sizeof(unsigned char) * extended_capacity);
+			}
 			m_function = TableHashFunction(additional_info);
 		}
 
@@ -738,7 +760,7 @@ namespace ECSEngine {
 	template<typename T>
 	using HashTableDefault = HashTable<T, ResourceIdentifier, HashFunctionPowerOfTwo>;
 
-	// The identifier 
+	// The identifier must have the function Identifier Copy(AllocatorPolymorphic allocator) const;
 	template<typename Table>
 	void HashTableCopyIdentifiers(const Table& source, Table& destination, AllocatorPolymorphic allocator) {
 		source.ForEachIndexConst([&](unsigned int index) {
@@ -748,6 +770,74 @@ namespace ECSEngine {
 		});
 	}
 
+	// The value must have the function Value Copy(AllocatorPolymorphic allocator) const; 
+	template<typename Table>
+	void HashTableCopyValues(const Table& source, Table& destination, AllocatorPolymorphic allocator) {
+		source.ForEachIndexConst([&](unsigned int index) {
+			auto current_value = source.GetValueFromIndex(index);
+			auto* value = destination.GetValuePtrFromIndex(index);
+			*value = current_value.Copy(allocator);
+		});
+	}
+
+	template<typename Value, typename Identifier>
+	ECS_INLINE Identifier HashTableCopyRetargetIdentifierDefault(const Value* value, Identifier identifier) {
+		return identifier;
+	}
+
+	// The identifier must have the function Identifier Copy(AllocatorPolymorphic allocator) const;
+	// The value must have the function Value Copy(AllocatorPolymorphic allocator) const;
+	// Can optionally specify a retarget identifier lambda to change what the identifier is
+	// The arguments are (const Value*, Identifier)
+	template<bool copy_values, bool copy_identifiers, typename Table, typename RetargetIdentifier>
+	void HashTableCopy(
+		const Table& source,
+		Table& destination,
+		AllocatorPolymorphic allocator,
+		RetargetIdentifier&& retarget_identifier
+	) {
+		if constexpr (!copy_identifiers && !copy_values) {
+			destination.Copy(allocator, &source);
+		}
+		else {
+			destination.Initialize(allocator, source.GetCapacity());
+			destination.m_function = source.m_function;
+			destination.CopyDistanceMetadata(&source);
+
+			source.ForEachIndexConst([&](unsigned int index) {
+				auto current_value = source.GetValueFromIndex(index);
+				auto* value = destination.GetValuePtrFromIndex(index);
+				if constexpr (copy_values) {
+					*value = current_value.Copy(allocator);
+				}
+				else {
+					*value = current_value;
+				}
+
+				auto current_identifier = source.GetIdentifierFromIndex(index);
+				auto* identifier = destination.GetIdentifierPtrFromIndex(index);
+				if constexpr (copy_identifiers) {
+					*identifier = current_identifier.Copy(allocator);
+				}
+				else {
+					*identifier = retarget_identifier(value, current_identifier);
+				}
+			});
+		}
+	}
+
+	// The identifier must have the function Identifier Copy(AllocatorPolymorphic allocator) const;
+	// The value must have the function Value Copy(AllocatorPolymorphic allocator) const;
+	template<bool copy_values, bool copy_identifiers, typename Table>
+	void HashTableCopy(
+		const Table& source, 
+		Table& destination, 
+		AllocatorPolymorphic allocator
+	) {
+		HashTableCopy<copy_values, copy_identifiers>(source, destination, allocator, HashTableCopyRetargetIdentifierDefault<typename Table::Value, typename Table::Identifier>);
+	}
+
+	// The identifier must have the function void Deallocate(AllocatorPolymorphic allocator);
 	template<typename Table>
 	void HashTableDeallocateIdentifiers(const Table& source, AllocatorPolymorphic allocator) {
 		source.ForEachConst([&](auto value, auto identifier) {
@@ -755,16 +845,31 @@ namespace ECSEngine {
 		});
 	}
 
+	// The value must have the function void Deallocate(AllocatorPolymorphic allocator);
 	template<typename Table>
-	void HashTableCopyWithIdentifiers(const Table& source, Table& destination, AllocatorPolymorphic allocator) {
-		destination.Copy(allocator, &source);
-		HashTableCopyIdentifiers(source, destination, allocator);
+	void HashTableDeallocateValues(const Table& source, AllocatorPolymorphic allocator) {
+		source.ForEachConst([&](auto value, auto identifier) {
+			value.Deallocate(allocator);
+		});
 	}
 
-	template<typename Table>
-	void HashTableDeallocateWithIdentifiers(const Table& source, AllocatorPolymorphic allocator) {
-		HashTableDeallocateIdentifiers(source, allocator);
-		Deallocate(allocator, source.GetAllocatedBuffer());
+	// The identifier must have the function void Deallocate(AllocatorPolymorphic allocator);
+	// The value must have the function void Deallocate(AllocatorPolymorphic allocator);
+	template<bool deallocate_values, bool deallocate_identifiers, typename Table>
+	void HashTableDeallocate(const Table& source, AllocatorPolymorphic allocator) {
+		if (source.GetCapacity() > 0 && source.GetAllocatedBuffer() != nullptr) {
+			if constexpr (deallocate_values || deallocate_identifiers) {
+				source.ForEachConst([&](const auto& value, const auto& identifier) {
+					if constexpr (deallocate_values) {
+						value.Deallocate(allocator);
+					}
+					if constexpr (deallocate_identifiers) {
+						identifier.Deallocate(allocator);
+					}
+				});
+			}
+			Deallocate(allocator, source.GetAllocatedBuffer());
+		}
 	}
 
 	// Both the Value and the Identifier need to have the functions for single allocations

@@ -170,6 +170,10 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API ReflectionType {
+			// It will try to deallocate anything that can be deallocated (when using
+			// non coallesced allocations). It uses IfBelongs deallocations
+			void Deallocate(AllocatorPolymorphic allocator) const;
+
 			// If the tag is nullptr, it returns false. If it is set, it will check if the substring exists
 			bool HasTag(Stream<char> string) const;
 
@@ -180,6 +184,9 @@ namespace ECSEngine {
 
 			// Returns DBL_MAX if it doesn't exist
 			double GetEvaluation(Stream<char> name) const;
+
+			// Every buffer will be individually allocated
+			ReflectionType Copy(AllocatorPolymorphic allocator) const;
 
 			// Copies everything that needs to be copied into this buffer
 			ReflectionType CopyTo(uintptr_t& ptr) const;
@@ -197,6 +204,9 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API ReflectionEnum {
+			// Uses IfBelongs deallocations.
+			void Deallocate(AllocatorPolymorphic allocator) const;
+
 			// Copies everything that needs to be copied into this buffer
 			ReflectionEnum CopyTo(uintptr_t& ptr) const;
 

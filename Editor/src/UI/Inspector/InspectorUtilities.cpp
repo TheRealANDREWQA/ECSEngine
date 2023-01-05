@@ -9,6 +9,13 @@ ECS_TOOLS;
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+void InspectorDrawNothing(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
+	UIDrawConfig config;
+	drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Nothing is selected.");
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void InspectorCleanNothing(EditorState* editor_state, unsigned int inspector_index, void* data) {}
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -127,10 +134,20 @@ void InspectorDrawFileTimes(UIDrawer* drawer, Stream<wchar_t> path) {
 // ----------------------------------------------------------------------------------------------------------------------------
 
 unsigned int GetMatchingIndexFromRobin(EditorState* editor_state, unsigned int target_sandbox) {
+	// Look for an inspector that doesn't have a function assigned (i.e. the InspectorNothing function) and use that one
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		unsigned int current_inspector = (editor_state->inspector_manager.round_robin_index[target_sandbox] + index) % editor_state->inspector_manager.data.size;
-		if (editor_state->inspector_manager.data[current_inspector].target_sandbox == target_sandbox && !IsInspectorLocked(editor_state, current_inspector)) {
-			editor_state->inspector_manager.round_robin_index[target_sandbox] = current_inspector + 1 == editor_state->inspector_manager.data.size ?
+		bool matches_sandbox = target_sandbox == -1 || GetInspectorTargetSandbox(editor_state, index) == target_sandbox;
+		if (matches_sandbox && GetInspectorDrawFunction(editor_state, index) == InspectorDrawNothing) {
+			return index;
+		}
+	}
+
+	unsigned int round_robing_index = target_sandbox == -1 ? editor_state->sandboxes.size : target_sandbox;
+	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
+		unsigned int current_inspector = (editor_state->inspector_manager.round_robin_index[round_robing_index] + index) % editor_state->inspector_manager.data.size;
+		bool matches_sandbox = target_sandbox == -1 || GetInspectorTargetSandbox(editor_state, current_inspector) == target_sandbox;
+		if (matches_sandbox && !IsInspectorLocked(editor_state, current_inspector)) {
+			editor_state->inspector_manager.round_robin_index[round_robing_index] = current_inspector + 1 == editor_state->inspector_manager.data.size ?
 				0 : current_inspector + 1;
 			return current_inspector;
 		}
@@ -141,17 +158,9 @@ unsigned int GetMatchingIndexFromRobin(EditorState* editor_state, unsigned int t
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetMatchingIndexFromRobin(EditorState* editor_state) {
-	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		unsigned int current_inspector = (editor_state->inspector_manager.round_robin_index[editor_state->sandboxes.size] + index) % editor_state->inspector_manager.data.size;
-		if (!IsInspectorLocked(editor_state, current_inspector)) {
-			editor_state->inspector_manager.round_robin_index[editor_state->sandboxes.size] = current_inspector + 1 == editor_state->inspector_manager.data.size ?
-				0 : current_inspector + 1;
-			return current_inspector;
-		}
-	}
-
-	return -1;
+InspectorDrawFunction GetInspectorDrawFunction(const EditorState* editor_state, unsigned int inspector_index)
+{
+	return editor_state->inspector_manager.data[inspector_index].draw_function;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -170,11 +179,8 @@ unsigned int ChangeInspectorDrawFunction(
 {
 	EDITOR_STATE(editor_state);
 
-	if (sandbox_index != -1) {
+	if (inspector_index == -1) {
 		inspector_index = GetMatchingIndexFromRobin(editor_state, sandbox_index);
-	}
-	else if (inspector_index == -1) {
-		inspector_index = GetMatchingIndexFromRobin(editor_state);
 	}
 
 	if (inspector_index != -1) {

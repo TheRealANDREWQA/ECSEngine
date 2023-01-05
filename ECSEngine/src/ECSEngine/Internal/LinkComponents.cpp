@@ -60,7 +60,7 @@ namespace ECSEngine {
 				asset_type = ECS_ASSET_TARGET_FIELD_NAMES[index].asset_type;
 				if (data != nullptr) {
 					result.asset = GetAssetTargetFieldFromReflection(type, field, data, asset_type);
-					success = result.asset.buffer != nullptr;
+					success = result.asset.size != -1;
 				}
 				else {
 					success = true;
@@ -99,7 +99,7 @@ namespace ECSEngine {
 		};
 
 		const void* pointer = nullptr;
-		size_t pointer_size = 0;
+		size_t pointer_size = -1;
 
 		bool success = get_pointer_from_field(&type->fields[field].info, &pointer);
 
@@ -112,6 +112,11 @@ namespace ECSEngine {
 				// Extract the size and the pointer is deeper
 				pointer_size = *(size_t*)function::OffsetPointer(pointer, sizeof(void*));
 				pointer = *(void**)pointer;
+			}
+			
+			if (asset_type != ECS_ASSET_MISC) {
+				// Indicate that the retrieval was successfull
+				pointer_size = 0;
 			}
 		}
 
@@ -397,12 +402,14 @@ namespace ECSEngine {
 		const void* link_component,
 		const AssetDatabase* database, 
 		Stream<LinkComponentAssetField> asset_fields,
-		Stream<void>* field_data
+		CapacityStream<Stream<void>>* field_data
 	)
 	{
 		constexpr size_t static_data_size = std::max(std::max(std::max(std::max(std::max(sizeof(MeshMetadata), sizeof(TextureMetadata)), 
 			sizeof(GPUSamplerMetadata)), sizeof(ShaderMetadata)), sizeof(MaterialAsset)), sizeof(MiscAsset));
 		static const char empty_metadata[static_data_size] = { 0 };
+
+		ECS_ASSERT(field_data->capacity - field_data->size >= asset_fields.size);
 
 		for (size_t index = 0; index < asset_fields.size; index++) {
 			unsigned int handle = *(unsigned int*)function::OffsetPointer(link_component, type->fields[asset_fields[index].field_index].info.pointer_offset);
@@ -414,7 +421,7 @@ namespace ECSEngine {
 				metadata = database->GetAssetConst(handle, asset_fields[index].type);
 			}
 			Stream<void> asset_data = GetAssetFromMetadata(metadata, asset_fields[index].type);
-			field_data[index] = asset_data;
+			field_data->Add(asset_data);
 		}
 	}
 
@@ -424,13 +431,83 @@ namespace ECSEngine {
 		const Reflection::ReflectionType* type, 
 		const void* target, 
 		Stream<LinkComponentAssetField> asset_fields, 
-		Stream<void>* field_data
+		CapacityStream<Stream<void>>* field_data
 	)
 	{
+		ECS_ASSERT(field_data->capacity - field_data->size >= asset_fields.size);
+
 		for (size_t index = 0; index < asset_fields.size; index++) {
 			AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, target);
 			ECS_ASSERT(target_field.type == asset_fields[index].type && target_field.success);
-			field_data[index] = target_field.asset;
+			field_data->Add(target_field.asset);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetLinkComponentAssetDataForTargetDeep(
+		const Reflection::ReflectionType* type,
+		const void* target,
+		Stream<LinkComponentAssetField> asset_fields,
+		const AssetDatabase* database,
+		ECS_ASSET_TYPE asset_type,
+		CapacityStream<Stream<void>>* field_data
+	) {
+		for (size_t index = 0; index < asset_fields.size; index++) {
+			AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, target);
+			ECS_ASSERT(target_field.type == asset_fields[index].type && target_field.success);
+			if (asset_fields[index].type == asset_type) {
+				field_data->AddSafe(target_field.asset);
+			}
+			else {
+				// If the asset type is a texture or gpu sampler, it can be referenced by a material
+				if (asset_type == ECS_ASSET_TEXTURE || asset_type == ECS_ASSET_GPU_SAMPLER || asset_type == ECS_ASSET_SHADER) {
+					if (asset_fields[index].type == ECS_ASSET_MATERIAL) {
+						unsigned int handle = database->FindAssetEx(target_field.asset, target_field.type);
+						if (handle != -1) {
+							const MaterialAsset* material = database->GetMaterialConst(handle);
+							// Normally, if the material is constructed, all handles should not be invalid (aka -1)
+							// But let's be conservative and still check for it
+
+							if (asset_type == ECS_ASSET_TEXTURE) {
+								for (size_t material_type = 0; material_type < ECS_MATERIAL_SHADER_COUNT; material_type++) {
+									for (size_t subindex = 0; subindex < material->textures[material_type].size; subindex++) {
+										unsigned int current_handle = material->textures[material_type][subindex].metadata_handle;
+										if (current_handle != -1) {
+											const TextureMetadata* texture = database->GetTextureConst(current_handle);
+											field_data->AddSafe({ texture->Pointer(), 0 });
+										}
+									}
+								}
+							}
+							else if (asset_type == ECS_ASSET_GPU_SAMPLER) {
+								for (size_t material_type = 0; material_type < ECS_MATERIAL_SHADER_COUNT; material_type++) {
+									for (size_t subindex = 0; subindex < material->samplers[material_type].size; subindex++) {
+										unsigned int current_handle = material->samplers[material_type][subindex].metadata_handle;
+										if (current_handle != -1) {
+											const GPUSamplerMetadata* sampler = database->GetGPUSamplerConst(current_handle);
+											field_data->AddSafe({ sampler->Pointer(), 0 });
+										}
+									}
+								}
+							}
+							else if (asset_type == ECS_ASSET_SHADER) {
+								unsigned int vertex_handle = material->vertex_shader_handle;
+								if (vertex_handle != -1) {
+									const ShaderMetadata* shader = database->GetShaderConst(vertex_handle);
+									field_data->AddSafe({ shader->Pointer(), 0 });
+								}
+
+								unsigned int pixel_handle = material->pixel_shader_handle;
+								if (pixel_handle != -1) {
+									const ShaderMetadata* shader = database->GetShaderConst(pixel_handle);
+									field_data->AddSafe({ shader->Pointer(), 0 });
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -746,8 +823,7 @@ namespace ECSEngine {
 		}
 
 		ECS_STACK_CAPACITY_STREAM(Stream<void>, assets, 512);
-		GetLinkComponentAssetData(base_data->link_type, link_data, base_data->asset_database, asset_fields, assets.buffer);
-		assets.size = asset_fields.size;
+		GetLinkComponentAssetData(base_data->link_type, link_data, base_data->asset_database, asset_fields, &assets);
 
 		if (needs_dll) {
 			// Build it using the function

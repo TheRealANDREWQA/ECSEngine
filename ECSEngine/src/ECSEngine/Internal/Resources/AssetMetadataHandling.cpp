@@ -234,12 +234,11 @@ namespace ECSEngine {
 
 	void ShaderMetadataIdentifier(const ShaderMetadata* metadata, CapacityStream<void>& identifier)
 	{
-		identifier.Add(&metadata->compile_flag);
-		identifier.Add(&metadata->shader_type);
-		for (size_t index = 0; index < metadata->macros.size; index++) {
-			identifier.Add({ metadata->macros[index].name, strlen(metadata->macros[index].name) });
-			identifier.Add({ metadata->macros[index].definition, strlen(metadata->macros[index].definition) });
-		}
+		ShaderCompileOptions options;
+		options.compile_flags = metadata->compile_flag;
+		options.target = ECS_SHADER_TARGET_5_0;
+		options.macros = metadata->macros;
+		GenerateShaderCompileOptionsSuffix(options, identifier);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -249,6 +248,20 @@ namespace ECSEngine {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 		AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&stack_allocator);
 		
+		// For the GPU samplers, if they are not created, we must create them
+		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
+			for (size_t index = 0; index < material->samplers[type].size; index++) {
+				if (material->samplers[type][index].metadata_handle == -1) {
+					return false;
+				}
+				GPUSamplerMetadata* metadata = asset_database->GetGPUSampler(material->samplers[type][index].metadata_handle);
+				if (!IsAssetFromMetadataValid({ metadata->Pointer(), 0 })) {
+					// Create the pointer
+					CreateSamplerFromMetadata(resource_manager, metadata);
+				}
+			}
+		}
+
 		UserMaterial user_material;
 		ConvertMaterialAssetToUserMaterial(asset_database, material, &user_material, allocator, mount_point);
 	
@@ -259,12 +272,25 @@ namespace ECSEngine {
 		stack_allocator.ClearBackup();
 
 		if (success) {
-			if (material->material_pointer == nullptr) {
+			if (!IsAssetFromMetadataValid({ material->material_pointer, 0 })) {
 				AllocatorPolymorphic database_allocator = asset_database->Allocator();
 				database_allocator.allocation_type = ECS_ALLOCATION_MULTI;
 				material->material_pointer = (Material*)Allocate(database_allocator, sizeof(Material));
 			}
 			memcpy(material->material_pointer, &runtime_material, sizeof(runtime_material));
+			// Also update the asset pointers for its dependencies when they are loaded the first time
+			ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, typed_handles, 128);
+			material->GetDependencies(&typed_handles);
+			for (unsigned int index = 0; index < typed_handles.size; index++) {
+				void* metadata = asset_database->GetAsset(typed_handles[index].handle, typed_handles[index].type);
+				Stream<void> current_asset = GetAssetFromMetadata(metadata, typed_handles[index].type);
+				if (!IsAssetFromMetadataValid(current_asset)) {
+					current_asset = AssetFromResourceManager(resource_manager, metadata, typed_handles[index].type, mount_point);
+					// Update the pointer
+					SetAssetToMetadata(metadata, typed_handles[index].type, current_asset);
+				}
+			}
+
 			return true;
 		}
 		return false;
@@ -321,7 +347,8 @@ namespace ECSEngine {
 
 			for (size_t subindex = 0; subindex < material->samplers[index].size; subindex++) {
 				user_material->samplers[sampler_total_count].shader_type = shader_type;
-				user_material->samplers[sampler_total_count].state = database->GetGPUSamplerConst(material->samplers[index][subindex].metadata_handle)->sampler;
+				const GPUSamplerMetadata* gpu_sampler = database->GetGPUSamplerConst(material->samplers[index][subindex].metadata_handle);
+				user_material->samplers[sampler_total_count].state = gpu_sampler->sampler;
 				sampler_total_count++;
 			}
 		}
@@ -457,7 +484,7 @@ namespace ECSEngine {
 		case ECS_ASSET_GPU_SAMPLER:
 		case ECS_ASSET_MATERIAL:
 		{
-
+			// Nothing to do here - these are not stored in the resource manager
 		}
 		break;
 		default:
@@ -467,28 +494,47 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	template<typename Metadata>
-	bool IsTypeFromMetadataLoaded(const ResourceManager* resource_manager, const Metadata* metadata, Stream<wchar_t> mount_point, ResourceType type, Stream<void> suffix) {
-		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, mount_point, absolute_path);
+	Stream<void> AssetFromResourceManager(const ResourceManager* resource_manager, const void* metadata, ECS_ASSET_TYPE type, Stream<wchar_t> mount_point)
+	{
+		if (type == ECS_ASSET_GPU_SAMPLER || type == ECS_ASSET_MATERIAL) {
+			return GetAssetFromMetadata(metadata, type);
+		}
+		else if (type != ECS_ASSET_MESH && type != ECS_ASSET_TEXTURE && type != ECS_ASSET_SHADER && type != ECS_ASSET_MISC) {
+			ECS_ASSERT(false);
+			return { nullptr, 0 };
+		}
+		else {
+			ECS_STACK_VOID_STREAM(suffix, 512);
+			AssetMetadataIdentifier(metadata, type, suffix);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+			Stream<wchar_t> file_path = function::MountPathOnlyRel(GetAssetFile(metadata, type), mount_point, absolute_path);
 
-		return resource_manager->GetResourceIndex(file_path, type, suffix) != -1;
+			const void* resource = resource_manager->GetResource(file_path, AssetTypeToResourceType(type), suffix);
+			if (type == ECS_ASSET_MISC) {
+				if (resource != nullptr) {
+					ResizableStream<void>* data = (ResizableStream<void>*)resource;
+					return data->ToStream();
+				}
+				else {
+					return { nullptr, 0 };
+				}
+			}
+			return { resource, 0 };
+		}
 	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
 
 	bool IsMeshFromMetadataLoaded(const ResourceManager* resource_manager, const MeshMetadata* metadata, Stream<wchar_t> mount_point)
 	{
-		ECS_STACK_VOID_STREAM(suffix, 512);
-		MeshMetadataIdentifier(metadata, suffix);
-		return IsTypeFromMetadataLoaded(resource_manager, metadata, mount_point, ResourceType::CoallescedMesh, suffix);
+		return AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_MESH, mount_point).buffer != nullptr;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
 	bool IsTextureFromMetadataLoaded(const ResourceManager* resource_manager, const TextureMetadata* metadata, Stream<wchar_t> mount_point)
 	{
-		ECS_STACK_VOID_STREAM(suffix, 512);
-		TextureMetadataIdentifier(metadata, suffix);
-		return IsTypeFromMetadataLoaded(resource_manager, metadata, mount_point, ResourceType::Texture, suffix);
+		return AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_TEXTURE, mount_point).buffer != nullptr;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -507,10 +553,7 @@ namespace ECSEngine {
 
 	bool IsShaderFromMetadataLoaded(const ResourceManager* resource_manager, const ShaderMetadata* metadata, Stream<wchar_t> mount_point)
 	{
-		ECS_STACK_VOID_STREAM(suffix, 512);
-		ShaderMetadataIdentifier(metadata, suffix);
-
-		return IsTypeFromMetadataLoaded(resource_manager, metadata, mount_point, ResourceType::Shader, suffix);
+		return AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_SHADER, mount_point).buffer != nullptr;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -541,6 +584,7 @@ namespace ECSEngine {
 		Stream<wchar_t> mount_point = { nullptr, 0 };
 
 		if (load_desc != nullptr) {
+			load_desc->dependencies_are_ready = false;
 			has_typed_handles = load_desc->missing_handles != nullptr;
 			has_error_string = load_desc->error_string != nullptr;
 			has_segmened_error_string = load_desc->segmented_error_string != nullptr;
@@ -651,9 +695,15 @@ namespace ECSEngine {
 		// Add a basic error message
 		if (has_error_string) {
 			if (success && !is_loaded) {
-				load_desc->error_string->AddStream("The material is not created but dependencies are ready");
-				if (has_segmened_error_string) {
-					load_desc->segmented_error_string->AddSafe(*load_desc->error_string);
+				if (load_desc != nullptr) {
+					load_desc->dependencies_are_ready = true;
+					load_desc->error_string->AddStream("The material is not created but dependencies are ready");
+					if (has_segmened_error_string) {
+						load_desc->segmented_error_string->AddSafe(*load_desc->error_string);
+					}
+					if (has_typed_handles) {
+						load_desc->missing_handles->AddSafe({ 0, ECS_ASSET_MATERIAL });
+					}
 				}
 			}
 		}
@@ -665,7 +715,7 @@ namespace ECSEngine {
 
 	bool IsMiscFromMetadataLoaded(const ResourceManager* resource_manager, const MiscAsset* metadata, Stream<wchar_t> mount_point)
 	{
-		return IsTypeFromMetadataLoaded(resource_manager, metadata, mount_point, ResourceType::Misc, {});
+		return AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_MISC, mount_point).buffer != nullptr;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -734,8 +784,27 @@ namespace ECSEngine {
 
 			for (unsigned int index = 0; index < count; index++) {
 				unsigned int handle = database->GetHandle(index, type);
-				if (!IsAssetFromMetadataLoaded(resource_manager, main_database->GetAssetConst(handle, type), type, mount_point, randomized_assets)) {
+				const void* current_asset = main_database->GetAssetConst(handle, type);
+				// Check to see if the handle was already added
+				unsigned int existing_index = function::SearchBytes(missing_handles[type].buffer, missing_handles[type].size, handle, sizeof(handle));
+				if (existing_index == -1 && !IsAssetFromMetadataLoaded(resource_manager, current_asset, type, mount_point, randomized_assets)) {
 					missing_handles[type].AddSafe(handle);
+					// Add its dependencies as well if they don't exist already
+					ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
+					GetAssetDependencies(current_asset, type, &dependencies);
+					for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
+						CapacityStream<unsigned int>* current_handles = missing_handles + dependencies[subindex].type;
+						existing_index = function::SearchBytes(
+							current_handles->buffer,
+							current_handles->size,
+							dependencies[subindex].handle,
+							sizeof(unsigned int)
+						);
+						current_asset = main_database->GetAssetConst(dependencies[subindex].handle, dependencies[subindex].type);
+						if (existing_index == -1 && !IsAssetFromMetadataLoaded(resource_manager, current_asset, dependencies[subindex].type, mount_point, randomized_assets)) {
+							current_handles->AddSafe(dependencies[subindex].handle);
+						}
+					}
 				}
 			}
 		};
@@ -877,6 +946,94 @@ namespace ECSEngine {
 			ECS_ASSERT(false, "Invalid asset type");
 		}
 		return false;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	void ConvertMaterialFromDatabaseToDatabase(
+		const MaterialAsset* material, 
+		const AssetDatabase* original_database, 
+		const AssetDatabase* target_database, 
+		MaterialAsset* output_material,
+		AllocatorPolymorphic allocator,
+		bool handles_only
+	)
+	{
+		unsigned int counts[ECS_MATERIAL_SHADER_COUNT * 3];
+		material->WriteCounts(true, true, true, counts);
+		output_material->Resize(counts, allocator, true);
+		output_material->reflection_manager = material->reflection_manager;
+		output_material->material_pointer = material->material_pointer;
+
+		unsigned int vertex_handle = material->vertex_shader_handle;
+		if (vertex_handle != -1) {
+			Stream<char> name = original_database->GetAssetName(vertex_handle, ECS_ASSET_SHADER);
+			Stream<wchar_t> file = original_database->GetAssetPath(vertex_handle, ECS_ASSET_SHADER);
+			vertex_handle = target_database->FindAsset(name, file, ECS_ASSET_SHADER);
+		}
+		output_material->vertex_shader_handle = vertex_handle;
+
+		unsigned int pixel_handle = material->pixel_shader_handle;
+		if (pixel_handle != -1) {
+			Stream<char> name = original_database->GetAssetName(pixel_handle, ECS_ASSET_SHADER);
+			Stream<wchar_t> file = original_database->GetAssetPath(pixel_handle, ECS_ASSET_SHADER);
+			pixel_handle = target_database->FindAsset(name, file, ECS_ASSET_SHADER);
+		}
+		output_material->pixel_shader_handle = pixel_handle;
+
+		auto loop = [=](auto is_handles_only) {
+			for (unsigned int index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+				for (unsigned int subindex = 0; subindex < counts[index]; subindex++) {
+					output_material->textures[index][subindex].slot = material->textures[index][subindex].slot;
+					
+					unsigned int current_handle = material->textures[index][subindex].metadata_handle;
+					if (current_handle != -1) {
+						Stream<char> name = original_database->GetAssetName(current_handle, ECS_ASSET_TEXTURE);
+						Stream<wchar_t> file = original_database->GetAssetPath(current_handle, ECS_ASSET_TEXTURE);
+						current_handle = target_database->FindAsset(name, file, ECS_ASSET_TEXTURE);
+					}
+					output_material->textures[index][subindex].metadata_handle = current_handle;
+
+					Stream<char> name = material->textures[index][subindex].name;
+					if constexpr (!is_handles_only) {
+						name = function::StringCopy(allocator, name);
+					}
+					output_material->textures[index][subindex].name = name;
+				}
+
+				for (unsigned int subindex = 0; subindex < counts[index + ECS_MATERIAL_SHADER_COUNT]; subindex++) {
+					output_material->samplers[index][subindex].slot = material->samplers[index][subindex].slot;
+
+					unsigned int current_handle = material->samplers[index][subindex].metadata_handle;
+					if (current_handle != -1) {
+						Stream<char> name = original_database->GetAssetName(current_handle, ECS_ASSET_GPU_SAMPLER);
+						current_handle = target_database->FindAsset(name, {}, ECS_ASSET_GPU_SAMPLER);
+					}
+					output_material->samplers[index][subindex].metadata_handle = current_handle;
+
+					Stream<char> name = material->samplers[index][subindex].name;
+					if constexpr (!is_handles_only) {
+						name = function::StringCopy(allocator, name);
+					}
+					output_material->samplers[index][subindex].name = name;
+				}
+
+				memcpy(output_material->buffers[index].buffer, material->buffers[index].buffer, sizeof(*material->buffers[index].buffer) * material->buffers[index].size);
+				if constexpr (!is_handles_only) {
+					for (unsigned int subindex = 0; subindex < counts[index + ECS_MATERIAL_SHADER_COUNT * 2]; subindex++) {
+						output_material->buffers[index][subindex].name = function::StringCopy(allocator, material->buffers[index][subindex].name);
+						output_material->buffers[index][subindex].data = function::Copy(allocator, material->buffers[index][subindex].data);
+					}
+				}
+			}
+		};
+
+		if (handles_only) {
+			loop(std::true_type{});
+		}
+		else {
+			loop(std::false_type{});
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------

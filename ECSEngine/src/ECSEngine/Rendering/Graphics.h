@@ -496,11 +496,10 @@ namespace ECSEngine {
 
 		IndexBuffer CreateIndexBuffer(Stream<unsigned int> indices, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// No source code path will be assigned - so no reflection can be done on it
+		// Returns a nullptr shader if it fails
 		PixelShader CreatePixelShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// Source code path will be allocated from the assigned allocator;
-		// Reflection works
+		// Returns a nullptr shader if it fails
 		PixelShader CreatePixelShaderFromSource(
 			Stream<char> source_code, 
 			ID3DInclude* include_policy,
@@ -509,9 +508,10 @@ namespace ECSEngine {
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		// No source code path will be assigned - so no reflection can be done on it
+		// Returns a nullptr shader if it fails
 		VertexShader CreateVertexShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
+		// Returns a nullptr shader if it fails
 		// The byte code is allocated from the graphics allocator. The reason for that pointer
 		// is such that you can create an input layout from it.
 		// It is automatically deallocated when creating an input layout.
@@ -524,10 +524,10 @@ namespace ECSEngine {
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		// No source code path will be assigned - so no reflection can be done on it
+		// Returns a nullptr shader if it fails
 		DomainShader CreateDomainShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// Reflection works
+		// Returns a nullptr shader if it fails
 		DomainShader CreateDomainShaderFromSource(
 			Stream<char> source_code,
 			ID3DInclude* include_policy, 
@@ -536,10 +536,10 @@ namespace ECSEngine {
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		// No source code path will be assigned - so no reflection can be done on it
+		// Returns a nullptr shader if it fails
 		HullShader CreateHullShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// Reflection works
+		// Returns a nullptr shader if it fails
 		HullShader CreateHullShaderFromSource(
 			Stream<char> source_code, 
 			ID3DInclude* include_policy,
@@ -548,10 +548,10 @@ namespace ECSEngine {
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		// No source code path will be assigned - so no reflection can be done on it
+		// Returns a nullptr shader if it fails
 		GeometryShader CreateGeometryShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// Reflection works
+		// Returns a nullptr shader if it fails
 		GeometryShader CreateGeometryShaderFromSource(
 			Stream<char> source_code, 
 			ID3DInclude* include_policy, 
@@ -560,11 +560,10 @@ namespace ECSEngine {
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		// No source code path will be assigned - so no reflection can be done on it
+		// Returns a nullptr shader if it fails
 		ComputeShader CreateComputeShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// Source code path will be allocated from the assigned allocator;
-		// Reflection works
+		// Returns a nullptr shader if it fails
 		ComputeShader CreateComputeShaderFromSource(
 			Stream<char> source_code,
 			ID3DInclude* include_policy, 
@@ -573,9 +572,11 @@ namespace ECSEngine {
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
+		// Returns a nullptr shader if it fails
 		// Returns only the interface
 		void* CreateShader(Stream<void> byte_code, ECS_SHADER_TYPE type, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
+		// Returns a nullptr shader if it fails
 		// Returns only the interface
 		// The byte code is relevant only when the shader is a vertex shader
 		void* CreateShaderFromSource(

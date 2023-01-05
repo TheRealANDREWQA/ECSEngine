@@ -77,11 +77,12 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 			void* allocation = Allocate(allocator, MemoryOf(size + new_elements));
 			CopyTo(allocation);
-			InitializeFromBuffer(allocation, size + new_elements);
 
 			if (deallocate_old) {
 				Deallocate(allocator);
 			}
+
+			InitializeFromBuffer(allocation, size + new_elements);
 
 			return old_buffer;
 		}
@@ -150,7 +151,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		// It only deallocates if the size is greater than 0
 		template<typename Allocator>
 		ECS_INLINE void Deallocate(Allocator* allocator) const {
-			if (size > 0) {
+			if (size > 0 && buffer != nullptr) {
 				allocator->Deallocate(buffer);
 			}
 		}
@@ -429,7 +430,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		// Does not change the size or the pointer
 		// It only deallocates if the size is greater than 0
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
-			if (size > 0) {
+			if (size > 0 && buffer != nullptr) {
 				ECSEngine::Deallocate(allocator, buffer);
 			}
 		}
@@ -1217,6 +1218,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 			buffer = new_buffer;
 			capacity = new_capacity;
+		}
+
+		ECS_INLINE Stream<void> ToStream() const {
+			return { buffer, size };
+		}
+
+		ECS_INLINE CapacityStream<void> ToCapacityStream() const {
+			return { buffer, size, capacity };
 		}
 
 		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity) {

@@ -35,22 +35,22 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	bool IgnoreWithSize(uintptr_t* stream)
+	size_t IgnoreWithSize(uintptr_t* stream)
 	{
 		size_t size = 0;
 		Read<true>(stream, &size, sizeof(size));
 		Ignore(stream, size);
-		return true;
+		return size;
 	}
 
 	// -----------------------------------------------------------------------------------------
 
-	bool IgnoreWithSizeShort(uintptr_t* stream)
+	size_t IgnoreWithSizeShort(uintptr_t* stream)
 	{
 		unsigned short size = 0;
 		Read<true>(stream, &size, sizeof(size));
 		Ignore(stream, size);
-		return true;
+		return size;
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -1043,6 +1043,16 @@ namespace ECSEngine {
 	void ClearSerializeCustomTypeUserData(unsigned int index)
 	{
 		ECS_SERIALIZE_CUSTOM_TYPES[index].user_data = nullptr;
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+	bool SetSerializeCustomTypeSwitch(unsigned int index, unsigned char switch_index, bool new_status) 
+	{
+		ECS_ASSERT(switch_index < ECS_SERIALIZE_CUSTOM_TYPE_SWITCH_CAPACITY);
+		bool old_status = ECS_SERIALIZE_CUSTOM_TYPES[index].switches[switch_index];
+		ECS_SERIALIZE_CUSTOM_TYPES[index].switches[switch_index] = new_status;
+		return old_status;
 	}
 
 	// -----------------------------------------------------------------------------------------

@@ -459,6 +459,29 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void ReflectionType::Deallocate(AllocatorPolymorphic allocator) const
+		{
+			for (size_t index = 0; index < fields.size; index++) {
+				DeallocateIfBelongs(allocator, fields[index].name.buffer);
+				DeallocateIfBelongs(allocator, fields[index].definition.buffer);
+				if (fields[index].tag.size > 0) {
+					DeallocateIfBelongs(allocator, fields[index].tag.buffer);
+				}
+			}
+			for (size_t index = 0; index < evaluations.size; index++) {
+				DeallocateIfBelongs(allocator, evaluations[index].name.buffer);
+			}
+			
+			if (tag.size > 0) {
+				DeallocateIfBelongs(allocator, tag.buffer);
+			}
+			DeallocateIfBelongs(allocator, name.buffer);
+			DeallocateIfBelongs(allocator, fields.buffer);
+			DeallocateIfBelongs(allocator, evaluations.buffer);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool ReflectionType::HasTag(Stream<char> string) const
 		{
 			if (tag.size == 0) {
@@ -497,6 +520,29 @@ namespace ECSEngine {
 			}
 
 			return DBL_MAX;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionType ReflectionType::Copy(AllocatorPolymorphic allocator) const
+		{
+			ReflectionType copy;
+
+			copy.name.InitializeAndCopy(allocator, name);
+			copy.fields.InitializeAndCopy(allocator, fields);
+			copy.evaluations.InitializeAndCopy(allocator, evaluations);
+			copy.tag.InitializeAndCopy(allocator, tag);
+			copy.byte_size = byte_size;
+			copy.alignment = alignment;
+			copy.folder_hierarchy_index = folder_hierarchy_index;
+			copy.is_blittable = is_blittable;
+			for (size_t index = 0; index < fields.size; index++) {
+				copy.fields[index].name.InitializeAndCopy(allocator, fields[index].name);
+				copy.fields[index].tag.InitializeAndCopy(allocator, fields[index].tag);
+				copy.fields[index].definition.InitializeAndCopy(allocator, fields[index].definition);
+			}
+
+			return copy;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -563,6 +609,17 @@ namespace ECSEngine {
 		size_t ReflectionType::CopySize() const
 		{
 			return name.CopySize() + tag.CopySize() + StreamDeepCopySize(fields) + StreamDeepCopySize(evaluations);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionEnum::Deallocate(AllocatorPolymorphic allocator) const
+		{
+			for (size_t index = 0; index < fields.size; index++) {
+				DeallocateIfBelongs(allocator, fields[index].buffer);
+			}
+			DeallocateIfBelongs(allocator, fields.buffer);
+			DeallocateIfBelongs(allocator, name.buffer);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

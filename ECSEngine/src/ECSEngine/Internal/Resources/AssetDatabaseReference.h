@@ -60,6 +60,15 @@ namespace ECSEngine {
 		// Copies the current contents into a new database using the allocator given
 		AssetDatabaseReference Copy(AllocatorPolymorphic allocator) const;
 
+		// Returns the first index that matches the given asset. Returns -1 if it doesn't exist
+		unsigned int Find(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type) const;
+
+		// If it finds the asset in the original type, it returns its index inside the stream.
+		// If it doesn't, it will search other types of assets that can reference it and return the handle
+		// and the type of the asset that references it (at the moment only materials reference other assets)
+		// Returns -1 if it doesn't appear at all in the database
+		AssetTypedHandle FindDeep(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type) const;
+
 		MeshMetadata* GetMesh(unsigned int index);
 
 		TextureMetadata* GetTexture(unsigned int index);
@@ -79,7 +88,13 @@ namespace ECSEngine {
 		// It returns -1 if it doesn't find it
 		unsigned int GetIndex(unsigned int handle, ECS_ASSET_TYPE type) const;
 
-		AssetDatabase* GetDatabase() const;
+		unsigned int GetReferenceCountIndex(unsigned int index, ECS_ASSET_TYPE type) const;
+
+		unsigned int GetReferenceCountHandle(unsigned int handle, ECS_ASSET_TYPE type) const;
+
+		ECS_INLINE AssetDatabase* GetDatabase() const {
+			return database;
+		}
 
 		unsigned int GetCount(ECS_ASSET_TYPE type) const;
 
@@ -118,6 +133,17 @@ namespace ECSEngine {
 
 		// It removes it only from this internal storage, not doing it for the main database
 		void RemoveAssetThisOnly(unsigned int index, ECS_ASSET_TYPE type);
+
+		// If the asset is to be evicted - e.g. it was the last reference, then it will call the functor
+		// before/after the remove is actually done. Can control the before/after with the template boolean argument
+		// The functor receives as arguments (unsigned int handle, ECS_ASSET_TYPE type, AssetType* asset)
+		// Returns true if the asset was removed from the main database
+		template<bool before_removal = true, typename Functor>
+		ECS_INLINE bool RemoveAssetWithAction(unsigned int index, ECS_ASSET_TYPE type, Functor&& functor) {
+			unsigned int handle = GetHandle(index, type);
+			RemoveAssetThisOnly(index, type);
+			return database->RemoveAssetWithAction(handle, type, functor);
+		}
 
 		// Clears all the assets that are inside. It doesn't decrement the reference count of the assets
 		// that are alive inside.

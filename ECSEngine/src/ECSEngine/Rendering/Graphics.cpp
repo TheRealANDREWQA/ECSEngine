@@ -27,18 +27,14 @@ namespace ECSEngine {
 
 	const char* SHADER_COMPILE_TARGET[] = {
 		"vs_5_0",
-		"vs_5_1",
 		"ps_5_0",
-		"ps_5_1",
 		"ds_5_0",
-		"ds_5_1",
 		"hs_5_0",
-		"hs_5_1",
 		"gs_5_0",
-		"gs_5_1",
 		"cs_5_0",
-		"cs_5_1"
 	};
+
+	static_assert(std::size(SHADER_COMPILE_TARGET) == (ECS_SHADER_TYPE_COUNT * ECS_SHADER_TARGET_COUNT));
 
 	const wchar_t* SHADER_HELPERS_VERTEX[] = {
 		ECS_VERTEX_SHADER_SOURCE(EquirectangleToCube),
@@ -782,7 +778,6 @@ namespace ECSEngine {
 			error_message_blob->Release();
 		}
 
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), blob, "Compiling a shader failed.");
 		return blob;
 	}
 
@@ -790,11 +785,13 @@ namespace ECSEngine {
 	
 	PixelShader Graphics::CreatePixelShader(Stream<void> byte_code, bool temporary, DebugInfo debug_info)
 	{
-		PixelShader shader;
+		PixelShader shader = { nullptr };
 
 		HRESULT result;
 		result = m_device->CreatePixelShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Pixel shader failed.");
+		if (FAILED(result)) {
+			return shader;
+		}
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
 	}
@@ -818,11 +815,13 @@ namespace ECSEngine {
 	
 	// The vertex shader must not have the blob released
 	VertexShader Graphics::CreateVertexShader(Stream<void> byte_code, bool temporary, DebugInfo debug_info) {
-		VertexShader shader;
+		VertexShader shader = { nullptr };
 
 		HRESULT result;
 		result = m_device->CreateVertexShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Vertex shader failed.");
+		if (FAILED(result)) {
+			return shader;
+		}
 		
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
@@ -843,6 +842,12 @@ namespace ECSEngine {
 			return { nullptr };
 		}
 
+		VertexShader shader = CreateVertexShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() }, temporary, debug_info);
+
+		if (shader.shader == nullptr) {
+			return shader;
+		}
+
 		if (vertex_byte_code != nullptr) {
 			void* allocation = m_allocator->Allocate_ts(byte_code->GetBufferSize());
 			vertex_byte_code->buffer = allocation;
@@ -850,7 +855,6 @@ namespace ECSEngine {
 			vertex_byte_code->size = byte_code->GetBufferSize();
 		}
 
-		VertexShader shader = CreateVertexShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() }, temporary, debug_info);
 		byte_code->Release();
 		return shader;
 	}
@@ -859,11 +863,15 @@ namespace ECSEngine {
 
 	DomainShader Graphics::CreateDomainShader(Stream<void> byte_code, bool temporary, DebugInfo debug_info)
 	{
-		DomainShader shader;
+		DomainShader shader = { nullptr };
 
 		HRESULT result; 
 		result = m_device->CreateDomainShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Domain shader failed."); 
+		
+		if (FAILED(result)) {
+			return shader;
+		}
+
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
 	}
@@ -891,12 +899,15 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	HullShader Graphics::CreateHullShader(Stream<void> byte_code, bool temporary, DebugInfo debug_info) {
-		HullShader shader;
+		HullShader shader = { nullptr };
 
 		HRESULT result;
 		result = m_device->CreateHullShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Hull shader failed.");
 		
+		if (FAILED(result)) {
+			return shader;
+		}
+
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
 	}
@@ -923,11 +934,15 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	GeometryShader Graphics::CreateGeometryShader(Stream<void> byte_code, bool temporary, DebugInfo debug_info) {
-		GeometryShader shader;
+		GeometryShader shader = { nullptr };
 
 		HRESULT result;
 		result = m_device->CreateGeometryShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Geometry shader failed.");
+		
+		if (FAILED(result)) {
+			return shader;
+		}
+
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
 	}
@@ -954,11 +969,15 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	ComputeShader Graphics::CreateComputeShader(Stream<void> byte_code, bool temporary, DebugInfo debug_info) {
-		ComputeShader shader;
+		ComputeShader shader = { nullptr };
 
 		HRESULT result;
 		result = m_device->CreateComputeShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Compute shader failed.");
+
+		if (FAILED(result)) {
+			return shader;
+		}
+
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
 	}
@@ -1053,7 +1072,7 @@ namespace ECSEngine {
 			return { nullptr, 0 };
 		}
 
-		void* allocation = Allocate(allocator, blob->GetBufferSize());
+		void* allocation = AllocateTs(allocator.allocator, allocator.allocator_type, blob->GetBufferSize());
 		memcpy(allocation, blob->GetBufferPointer(), blob->GetBufferSize());
 		return { allocation, blob->GetBufferSize() };
 	}

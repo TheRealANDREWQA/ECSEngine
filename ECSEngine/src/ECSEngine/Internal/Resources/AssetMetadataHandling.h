@@ -137,6 +137,10 @@ namespace ECSEngine {
 	// resource manager it will not fill in anything
 	ECSENGINE_API void AssetMetadataResourceIdentifier(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<void>& path_identifier, Stream<wchar_t> mount_point = { nullptr, 0 });
 
+	// Returns the asset that is being stored in the resource manager. For assets that are not stored, it will return the asset
+	// that is being stored in the metadata
+	ECSENGINE_API Stream<void> AssetFromResourceManager(const ResourceManager* resource_manager, const void* metadata, ECS_ASSET_TYPE type, Stream<wchar_t> mount_point = { nullptr, 0 });
+
 #pragma endregion
 
 #pragma region Is Loaded
@@ -166,11 +170,14 @@ namespace ECSEngine {
 	ECSENGINE_API bool IsMaterialFromMetadataLoaded(const MaterialAsset* metadata, bool randomized_asset = false);
 	
 	// If the segmented error string is given, then the error string must be specified as well
+	// If the missing_handles contains only a single element with asset type of material then it means
+	// that the dependencies are ready but the material itself is not loaded
 	struct IsMaterialFromMetadataLoadedExDesc {
 		Stream<wchar_t> mount_point = { nullptr, 0 };
 		CapacityStream<char>* error_string = nullptr;
 		CapacityStream<AssetTypedHandle>* missing_handles = nullptr;
 		CapacityStream<Stream<char>>* segmented_error_string = nullptr;
+		bool dependencies_are_ready = false;
 	};
 
 	// A different version which goes the assigned textures and shaders and determines if
@@ -252,6 +259,19 @@ namespace ECSEngine {
 	);
 
 #pragma endregion
+
+	// If an asset is not found in the target database, then it will place the handle as a -1
+	// If the handles_only is set to true, then the material name and the other names are not allocated
+	// When handles_only is set to false, for constant buffers it will allocate the data as well, the reflection type
+	// is not copied tho
+	ECSENGINE_API void ConvertMaterialFromDatabaseToDatabase(
+		const MaterialAsset* material,
+		const AssetDatabase* original_database,
+		const AssetDatabase* target_database,
+		MaterialAsset* output_material,
+		AllocatorPolymorphic allocator,
+		bool handles_only = true
+	);
 
 	ECSENGINE_API bool DoesMaterialDependOn(const MaterialAsset* material, const void* other_metadata, ECS_ASSET_TYPE type);
 

@@ -58,7 +58,8 @@ namespace ECSEngine {
 		ECS_SHADER_BUFFER_STRUCTURED,
 		ECS_SHADER_BUFFER_READ_WRITE_STRUCTURED,
 		ECS_SHADER_BUFFER_APPEND,
-		ECS_SHADER_BUFFER_CONSUME
+		ECS_SHADER_BUFFER_CONSUME,
+		ECS_SHADER_BUFFER_COUNT
 	};
 
 	// Byte size is useful only for constant buffers in order to create them directly
@@ -94,6 +95,23 @@ namespace ECSEngine {
 		unsigned short register_index;
 	};
 
+	struct ShaderReflectionBufferMatrixField {
+		uint2 position;
+		Stream<char> name;
+	};
+
+	struct ShaderReflectionBuffersOptions {
+		bool only_constant_buffers = false;
+		CapacityStream<Reflection::ReflectionType>* constant_buffer_reflection = nullptr;
+
+		CapacityStream<ShaderReflectionBufferMatrixField> matrix_types_storage = { nullptr, 0, 0 };
+		CapacityStream<char> matrix_type_name_storage = { nullptr, 0, 0 };
+		// If this is specified, then it will fill in the positions and the row counts
+		// of the matrix types. There will be a stream for each type. The matrix_types_storage and matrix_type_name_storage
+		// must be specified in order to fill in the values (they will not be allocated from the allocator)
+		Stream<ShaderReflectionBufferMatrixField>* matrix_types = nullptr;
+	};
+
 	struct ECSENGINE_API ShaderReflection {
 		ShaderReflection();
 		ShaderReflection(void* allocation);
@@ -114,8 +132,7 @@ namespace ECSEngine {
 			Stream<wchar_t> path, 
 			CapacityStream<ShaderReflectedBuffer>& buffers, 
 			AllocatorPolymorphic allocator,
-			bool only_constant_buffers = false,
-			Reflection::ReflectionType* constant_buffer_reflection = nullptr
+			ShaderReflectionBuffersOptions options = {}
 		) const;
 
 		// Returns whether or not it succeded
@@ -125,8 +142,7 @@ namespace ECSEngine {
 			Stream<char> source_code, 
 			CapacityStream<ShaderReflectedBuffer>& buffers, 
 			AllocatorPolymorphic allocator, 
-			bool only_constant_buffers = false,
-			Reflection::ReflectionType* constant_buffer_reflection = nullptr
+			ShaderReflectionBuffersOptions options = {}
 		) const;
 
 		// Returns whether or not it succeded
@@ -172,18 +188,21 @@ namespace ECSEngine {
 		ShaderReflectionCBTypeMapping cb_mapping_table;
 	};
 
-	// Parses a single constant buffer out of the given source code and can optionally
+	// Parses a single struct (that can be a constant buffer) out of the given source code and can optionally
 	// give a reflection type to construct. The allocator is needed only when the reflection
 	// type is specified, it needs to be specified such that the allocations needed for the
 	// reflection type are performed from it. The default slot position is used to assign in
 	// the slot value when there is no register keyword specified. If it fails it returns
 	// buffer with byte size -1 (it can fail if it cannot reflect the byte size or the type)
-	ECSENGINE_API ShaderReflectedBuffer ReflectShaderConstantBuffer(
+	// When the type is a struct it will fill in the type field to ECS_SHADER_BUFFER_COUNT
+	ECSENGINE_API ShaderReflectedBuffer ReflectShaderStruct(
 		const ShaderReflection* shader_reflection, 
 		Stream<char> source,
 		unsigned int default_slot_position,
 		Reflection::ReflectionType* reflection_type = nullptr,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator = { nullptr },
+		Stream<ShaderReflectionBufferMatrixField>* matrix_types = nullptr,
+		CapacityStream<char>* matrix_type_name_storage = nullptr
 	);
 
 	ECSENGINE_API void ShaderConstantBufferReflectionTypeCopy(
@@ -205,6 +224,12 @@ namespace ECSEngine {
 	ECSENGINE_API void ShaderReflectedSamplersDeallocate(
 		Stream<ShaderReflectedSampler> samplers,
 		AllocatorPolymorphic allocator
+	);
+
+	ECSENGINE_API void ShaderReflectedBuffersDeallocate(
+		Stream<ShaderReflectedBuffer> buffers,
+		AllocatorPolymorphic allocator,
+		Stream<Reflection::ReflectionType> reflection_types = { nullptr, 0 }
 	);
 
 }

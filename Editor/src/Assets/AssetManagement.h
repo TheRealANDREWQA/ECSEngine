@@ -5,6 +5,46 @@ using namespace ECSEngine;
 
 struct EditorState;
 
+struct UnregisterSandboxAssetElement {
+	unsigned int handle;
+	ECS_ASSET_TYPE type;
+};
+
+// The sandbox_assets boolean should be true if the assets belong to a sandbox
+// If they belong to sandboxes and the sandbox_index is -1 then it will remove it
+// from every sandbox that contains it
+void AddUnregisterAssetEvent(
+	EditorState* editor_state,
+	Stream<UnregisterSandboxAssetElement> elements,
+	bool sandbox_assets,
+	unsigned int sandbox_index = -1,
+	UIActionHandler callback = {}
+);
+
+// The sandbox_assets boolean should be true if the assets belong to a sandbox
+// If they belong to sandboxes and the sandbox_index is -1 then it will remove it
+// from every sandbox that contains it
+void AddUnregisterAssetEventHomogeneous(
+	EditorState* editor_state,
+	Stream<Stream<unsigned int>> elements,
+	bool sandbox_assets,
+	unsigned int sandbox_index = -1,
+	UIActionHandler callback = {}
+);
+
+// If the sandbox index is -1, then it will not add it to a sandbox database
+// It returns true if the resource already exists and no asynchronous load is done
+bool AddRegisterAssetEvent(
+	EditorState* editor_state,
+	Stream<char> name,
+	Stream<wchar_t> file,
+	ECS_ASSET_TYPE type,
+	unsigned int* handle,
+	unsigned int sandbox_index = -1,
+	bool unload_if_existing = false,
+	UIActionHandler callback = {}
+);
+
 // The path does not need to have the extension. It will be appended automatically
 // This is a thunk file (it does not contain anything)
 bool CreateMaterialFile(const EditorState* editor_state, Stream<wchar_t> relative_path);
@@ -28,6 +68,16 @@ bool CreateAssetSetting(const EditorState* editor_state, Stream<char> name, Stre
 // Returns true if it succeeded, else false.
 // This doesn't check the prevent resource load flag and wait until is cleared
 bool CreateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
+
+struct CreateAssetAsyncCallbackInfo {
+	unsigned int handle;
+	ECS_ASSET_TYPE type;
+	bool success;
+};
+
+// This will run on a background thread. The callback receives as additional_data a structure
+// of type CreateAssetAsyncCallbackInfo.
+void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback = {});
 
 // If an asset like a mesh or a texture doesn't have a default setting, it creates one
 void CreateAssetDefaultSetting(const EditorState* editor_state);
@@ -102,11 +152,29 @@ size_t GetAssetRuntimeTimeStamp(const EditorState* editor_state, const void* met
 // not the internally stored one
 size_t GetAssetExternalTimeStamp(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
 
+unsigned int GetAssetReferenceCount(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
+
 // Inserts a time stamp into the resource manager
 void InsertAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
 // Inserts a time stamp into the resource manager
 void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+// The file is ignored for materials and samplers
+// It writes the handle of the asset. If the deserialization failed, it will write -1
+// The reason for which it takes a pointer to the handle is that this may not run when called
+// due to a prevention of resource loads. It returns true if the resource already exists and no asynchronous load is done
+// Can optionally give a callback to call when the load is finalized. A structure of type CreateAssetAsyncCallbackInfo
+// will be given in the additional_data member
+bool RegisterGlobalAsset(
+	EditorState* editor_state, 
+	Stream<char> name,
+	Stream<wchar_t> file,
+	ECS_ASSET_TYPE type,
+	unsigned int* handle,
+	bool unload_if_existing = false,
+	UIActionHandler callback = {}
+);
 
 void RemoveAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
@@ -122,3 +190,15 @@ bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 
 // Returns true if it managed to write
 bool WriteForwardingFile(Stream<wchar_t> absolute_path, Stream<wchar_t> target_path);
+
+// This unregister is for assets that are not tied down to a sandbox.
+// Useful for example for inspectors. It will wait until the flag EDITOR_STATE_PREVENT_RESOURCE_LOADING is cleared
+void UnregisterGlobalAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback = {});
+
+// This unregister is for assets that are not tied down to a sandbox.
+// Useful for example for inspectors. It will wait until the flag EDITOR_STATE_PREVENT_RESOURCE_LOADING is cleared
+void UnregisterGlobalAsset(EditorState* editor_state, Stream<UnregisterSandboxAssetElement> elements, UIActionHandler callback = {});
+
+// This unregister is for assets that are not tied down to a sandbox.
+// Useful for example for inspectors. It will wait until the flag EDITOR_STATE_PREVENT_RESOURCE_LOADING is cleared
+void UnregisterGlobalAsset(EditorState* editor_state, Stream<Stream<unsigned int>> elements, UIActionHandler callback = {});

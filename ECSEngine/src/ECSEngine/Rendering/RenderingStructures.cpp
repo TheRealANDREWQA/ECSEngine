@@ -829,11 +829,20 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------------------
 
 	void UserMaterialTexture::GenerateSettingsSuffix(CapacityStream<void>& suffix) const {
-		suffix.Add(&shader_type);
-		suffix.Add(&slot);
 		suffix.Add(&srgb);
 		suffix.Add(&generate_mips);
 		suffix.Add(&compression);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	void GenerateShaderCompileOptionsSuffix(ShaderCompileOptions compile_options, CapacityStream<void>& suffix) {
+		suffix.Add(&compile_options.compile_flags);
+		suffix.Add(&compile_options.target);
+		for (size_t index = 0; index < compile_options.macros.size; index++) {
+			suffix.Add({ compile_options.macros[index].name, strlen(compile_options.macros[index].name) });
+			suffix.Add({ compile_options.macros[index].definition, strlen(compile_options.macros[index].definition) });
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------

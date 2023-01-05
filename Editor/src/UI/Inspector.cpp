@@ -73,13 +73,6 @@ void CleanInspectorData(EditorState* editor_state, unsigned int inspector_index)
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawNothing(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
-	UIDrawConfig config;
-	drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Nothing is selected.");
-}
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
 void InspectorDrawSceneFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
 	const wchar_t* _absolute_path = (const wchar_t*)_data;
 	Stream<wchar_t> absolute_path = _absolute_path;
@@ -119,23 +112,6 @@ void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initia
 		float zoomed_icon_size = ICON_SIZE * drawer.zoom_ptr->y;
 		float padlock_size = PADLOCK_SIZE * drawer.zoom_ptr->y;
 
-		UIDrawConfig config;
-		UIConfigRelativeTransform transform;
-		transform.scale.y = drawer.GetRelativeTransformFactorsZoomed({ 0.0f, PADLOCK_SIZE }).y;
-		transform.offset.y = (zoomed_icon_size - padlock_size) / 2;
-		config.AddFlag(transform);
-
-		drawer.SpriteTextureBool(
-			UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_MAKE_SQUARE,
-			config, 
-			ECS_TOOLS_UI_TEXTURE_UNLOCKED_PADLOCK, 
-			ECS_TOOLS_UI_TEXTURE_LOCKED_PADLOCK,
-			&data->flags, 
-			INSPECTOR_FLAG_LOCKED, 
-			EDITOR_GREEN_COLOR
-		);
-		drawer.current_row_y_scale = zoomed_icon_size;
-
 		const char* COMBO_PREFIX = "Sandbox: ";
 
 		unsigned int sandbox_count = editor_state->sandboxes.size;
@@ -151,112 +127,58 @@ void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initia
 		}
 		combo_labels.size = sandbox_count;
 
-		// The final positions will be set inside the if
-		UIConfigAbsoluteTransform combo_transform;
-		combo_transform.position.y = drawer.GetCurrentPositionNonOffset().y;
-
-		float square_scale = drawer.GetSquareScale(drawer.layout.default_element_y).x;
-		UIConfigAbsoluteTransform cog_transform;
-
+		UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+		row_layout.SetHorizontalAlignment(ECS_UI_ALIGN_MIDDLE);
+		row_layout.AddSquareLabel();
 		if (sandbox_count > 0) {
-			float combo_size = drawer.ComboBoxDefaultSize(combo_labels, { nullptr, 0 }, COMBO_PREFIX);
-
-			combo_transform.position.x = drawer.GetAlignedToRight(combo_size).x;
-			combo_transform.scale = { combo_size, drawer.GetElementDefaultScale().y };
-
-			cog_transform.position.x = combo_transform.position.x - square_scale - drawer.layout.element_indentation;
-			cog_transform.position.y = combo_transform.position.y;
-			cog_transform.scale = { square_scale, drawer.layout.default_element_y };
+			row_layout.AddSquareLabel();
+			row_layout.AddComboBox(combo_labels, { nullptr, 0 }, COMBO_PREFIX);
 		}
 
-		if (data->draw_function == nullptr) {
-			ChangeInspectorToNothing(editor_state, inspector_index);
-		}
+		size_t configuration = 0;
+		UIDrawConfig config;
+		row_layout.GetTransform(config, configuration);
 
-		data->draw_function(editor_state, inspector_index, data->draw_data, &drawer);
+		drawer.SpriteTextureBool(
+			configuration,
+			config, 
+			ECS_TOOLS_UI_TEXTURE_UNLOCKED_PADLOCK, 
+			ECS_TOOLS_UI_TEXTURE_LOCKED_PADLOCK,
+			&data->flags, 
+			INSPECTOR_FLAG_LOCKED, 
+			EDITOR_GREEN_COLOR
+		);
 
-		// Draw now the combo for the sandbox
-		// We draw later on rather then at that moment because it will interfere with what's on the first row
 		if (sandbox_count > 0) {
-			drawer.current_row_y_scale = zoomed_icon_size;
+			config.flag_count = 0;
+			configuration = 0;
+			row_layout.GetTransform(config, configuration);
 
-			// In order to detect the offset for the combo draw, look into the text stream, sprite stream and solid color stream and
-			// see which is the bound
-			UISpriteVertex* sprites = drawer.HandleSpriteBuffer(0);
-			size_t sprite_count = *drawer.HandleSpriteCount(0);
-			// The first sprite is always the padlock
-			float row_y_start = sprites[0].position.y;
-			float row_y_end = sprites[2].position.y;
+			struct OpenSandboxSettings {
+				EditorState* editor_state;
+				unsigned int inspector_index;
+			};
 
-			float sprite_bound = -1.0f;
-			size_t last_index = 0;
-			// The signs need to be inversed because the y starts from the bottom of the screen in vertex space
-			// Normally they should be >= and <=
-			while (last_index < sprite_count && sprites[last_index].position.y <= row_y_start && sprites[last_index + 2].position.y >= row_y_end) {
-				last_index += 6;
-			}
-			if (last_index > 0) {
-				last_index -= 6;
-				sprite_bound = sprites[last_index + 1].position.x;
-			}
+			auto open_sandbox_settings = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
 
-			UISpriteVertex* text_sprites = drawer.HandleTextSpriteBuffer(0);
-			size_t text_sprite_count = *drawer.HandleTextSpriteCount(0);
-			float2 text_span = { 0.0f, 0.0f };
-			float initial_text_position = -1.0f;
+				OpenSandboxSettings* data = (OpenSandboxSettings*)_data;
+				ChangeInspectorToSandboxSettings(data->editor_state, data->inspector_index);
+			};
 
-			if (text_sprite_count > 0) {
-				last_index = 0;
-				initial_text_position = text_sprites[0].position.x;
-
-				// The signs need to be inversed because the y starts from the bottom of the screen in vertex space
-				// Normally they should be >= and <=
-				while (last_index < text_sprite_count && text_sprites[last_index].position.y <= row_y_start && text_sprites[last_index + 2].position.y >= row_y_end) {
-					last_index += 6;
-				}
-				if (last_index > 0) {
-					last_index -= 6;
-					text_span = GetTextSpan(Stream<UISpriteVertex>(text_sprites, last_index));
-				}
-			}
-
-			UIVertexColor* solid_color = drawer.HandleSolidColorBuffer(0);
-			size_t solid_color_count = *drawer.HandleSolidColorCount(0);
-			float solid_color_bound = -1.0f;
-			if (solid_color_count > 0) {
-				last_index = 0;
-				// The title bar might get detected, skip them
-				while (last_index < solid_color_count && (solid_color[last_index].position.y >= row_y_start || solid_color[last_index + 2].position.y <= row_y_end)) {
-					last_index += 6;
-				}
-				size_t last_last_index = last_index;
-				// The signs need to be inversed because the y starts from the bottom of the screen in vertex space
-				// Normally they should be >= and <=
-				while (last_index < solid_color_count && solid_color[last_index].position.y <= row_y_start && solid_color[last_index + 2].position.y >= row_y_end) {
-					solid_color_bound = std::max(solid_color_bound, solid_color[last_index + 1].position.x);
-					last_index += 6;
-				}
-			}
-
-			float final_bound = initial_text_position + text_span.x + drawer.layout.element_indentation;
-			final_bound = std::max(final_bound, solid_color_bound + drawer.layout.element_indentation);
-			final_bound = std::max(final_bound, sprite_bound + drawer.layout.element_indentation);
-
-			float cog_limit = final_bound;
-			float offset = cog_limit - cog_transform.position.x;
-			if (offset > 0.0f) {
-				offset += drawer.region_render_offset.x;
-				cog_transform.position.x += offset;
-				combo_transform.position.x += offset;
-			}
+			OpenSandboxSettings open_data;
+			open_data = { editor_state, inspector_index };
+			drawer.SpriteButton(
+				configuration,
+				config,
+				{ open_sandbox_settings, &open_data, sizeof(open_data) },
+				ECS_TOOLS_UI_TEXTURE_COG
+			);
 
 			// To the rightmost border draw the bound sandbox index
 			config.flag_count = 0;
-			config.AddFlag(combo_transform);
-
-			UIConfigComboBoxPrefix combo_prefix;
-			combo_prefix.prefix = COMBO_PREFIX;
-			config.AddFlag(combo_prefix);
+			configuration = 0;
+			row_layout.GetTransform(config, configuration);
 
 			// We need to notify with a callback that the target sandbox has changed such that the inspector is reset
 			struct ComboCallbackData {
@@ -275,45 +197,31 @@ void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initia
 			ComboCallbackData combo_callback_data = { editor_state, inspector_index };
 			UIConfigComboBoxCallback combo_callback;
 			combo_callback.handler = { combo_callback_action, &combo_callback_data, sizeof(combo_callback_data) };
-
 			config.AddFlag(combo_callback);
+
+			UIConfigComboBoxPrefix combo_prefix;
+			combo_prefix.prefix = COMBO_PREFIX;
+			config.AddFlag(combo_prefix);
 
 			// Draw the checkbox
 			// For the moment, cast the pointer to unsigned char even tho it is an unsigned int
 			// It behaves correctly since if the value stays lower than UCHAR_MAX
 			drawer.ComboBox(
-				UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_COMBO_BOX_CALLBACK,
+				configuration | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_CALLBACK,
 				config,
 				"Sandbox combo",
 				combo_labels,
 				sandbox_count,
 				(unsigned char*)&editor_state->inspector_manager.data[inspector_index].target_sandbox
 			);
-
-			config.flag_count = 0;
-			config.AddFlag(cog_transform);
-
-			struct OpenSandboxSettings {
-				EditorState* editor_state;
-				unsigned int inspector_index;
-			};
-
-			auto open_sandbox_settings = [](ActionData* action_data) {
-				UI_UNPACK_ACTION_DATA;
-				
-				OpenSandboxSettings* data = (OpenSandboxSettings*)_data;
-				ChangeInspectorToSandboxSettings(data->editor_state, data->inspector_index);
-			};
-
-			OpenSandboxSettings open_data;
-			open_data = { editor_state, inspector_index };
-			drawer.SpriteButton(
-				UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_ALIGN_TO_ROW_Y,
-				config, 
-				{ open_sandbox_settings, &open_data, sizeof(open_data) },
-				ECS_TOOLS_UI_TEXTURE_COG
-			);
 		}
+		drawer.NextRow();
+
+		if (data->draw_function == nullptr) {
+			ChangeInspectorToNothing(editor_state, inspector_index);
+		}
+
+		data->draw_function(editor_state, inspector_index, data->draw_data, &drawer);
 	}
 }
 

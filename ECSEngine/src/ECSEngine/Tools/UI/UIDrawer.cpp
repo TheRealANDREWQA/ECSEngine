@@ -3657,6 +3657,7 @@ namespace ECSEngine {
 				}
 			}
 
+			float old_x_scale = scale.x;
 			scale.x = std::max(scale.x, min_value);
 			if (configuration & UI_CONFIG_COMBO_BOX_NAME_WITH_SCALE) {
 				float difference = scale.x - min_value;
@@ -3664,6 +3665,9 @@ namespace ECSEngine {
 					difference = std::min(difference, layout.element_indentation + data->name.scale.x);
 					scale.x -= difference;
 				}
+			}
+			if (scale.x != old_x_scale) {
+				element_scale.x += scale.x - old_x_scale;
 			}
 
 			GetElementAlignedPosition(configuration, config, position, element_scale);
@@ -9576,6 +9580,7 @@ namespace ECSEngine {
 
 				configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
 
+				size_t previous_text_sprite_count = *HandleTextSpriteCount(configuration);
 				if (~configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 					TextLabel(configuration, config, text, position, scale);
 				}
@@ -9602,16 +9607,19 @@ namespace ECSEngine {
 							AddDefaultClickable(configuration, position, scale, { DefaultHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 						}
 						else {
+							UISpriteVertex* sprite_vertex = HandleTextSpriteBuffer(configuration);
 							size_t* count = HandleTextSpriteCount(configuration);
-							Stream<char> identifier = HandleResourceIdentifier(text);
-							size_t text_size = ParseStringIdentifier(identifier);
-							size_t text_vertex_count = text_size * 6;
 
-							if (*count >= text_vertex_count) {
+							if (*count > previous_text_sprite_count) {
+								size_t text_vertex_count = *count - previous_text_sprite_count;
+
 								UIDefaultTextHoverableData hoverable_data;
 								hoverable_data.color = label_color;
 
-								hoverable_data.text_offset = element_descriptor.label_padd;
+								float2 text_position = sprite_vertex[*count - text_vertex_count].position;
+								text_position.y = -text_position.y;
+								float2 offset = text_position - position;
+								hoverable_data.text_offset = offset;
 								
 								Color text_color;
 								float2 text_size;
@@ -9633,6 +9641,7 @@ namespace ECSEngine {
 								AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), hoverable_phase }, handler);
 							
 								UIDefaultTextHoverableData* handler_hoverable_data = (UIDefaultTextHoverableData*)system->GetLastHoverableData(dockspace, border_index);
+								Stream<char> identifier = HandleResourceIdentifier(text);
 								handler_hoverable_data->text.buffer = (char*)GetHandlerBuffer(identifier.size, hoverable_phase);
 								handler_hoverable_data->text.Copy(identifier);
 							}
@@ -10189,6 +10198,9 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::ColorFloatInputDrawer(size_t configuration, UIDrawConfig& config, Stream<char> name, ColorFloat* color, float2 position, float2 scale) {
+			float min_x_scale = GetSquareScale(scale.y).x + layout.element_indentation + 0.002f;
+			scale.x = function::ClampMin(scale.x, min_x_scale);
+
 			Stream<char> identifier = HandleResourceIdentifier(name);
 
 			// The resource must be taken from the table with manual parsing
@@ -10200,7 +10212,9 @@ namespace ECSEngine {
 			data->color_float = color;
 
 			size_t COLOR_INPUT_DRAWER_CONFIGURATION = configuration | UI_CONFIG_COLOR_INPUT_CALLBACK | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW |
-				UI_CONFIG_MAKE_SQUARE | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW;
+				UI_CONFIG_MAKE_SQUARE;
+
+			float before_current_x = current_x;
 
 			// Draw the color input
 			COLOR_INPUT_DRAWER_CONFIGURATION |= configuration & UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE ? UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE : 0;
@@ -10213,13 +10227,34 @@ namespace ECSEngine {
 				&data->base_color
 			);
 
+			float horizontal_x = current_x - before_current_x;
+			scale.x -= horizontal_x;
+
 			// Draw the intensity
 			char intensity_input_name[256];
 			ColorFloatInputIntensityInputName(intensity_input_name);
 
 			size_t FLOAT_INPUT_CONFIGURATION = configuration | UI_CONFIG_TEXT_INPUT_CALLBACK;
 			FLOAT_INPUT_CONFIGURATION |= configuration & UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE ? UI_CONFIG_NUMBER_INPUT_DEFAULT : 0;
-			FloatInputDrawer(FLOAT_INPUT_CONFIGURATION, config, intensity_input_name, &data->intensity, 0.0f, 10000.0f, { current_x - region_render_offset.x, position.y }, scale);
+			FLOAT_INPUT_CONFIGURATION = function::ClearFlag(FLOAT_INPUT_CONFIGURATION, UI_CONFIG_NAME_PADDING);
+
+			// Add the callback
+			UIConfigTextInputCallback callback;
+			callback.handler.action = ColorFloatInputIntensityCallback;
+			callback.handler.data = data;
+			callback.handler.data_size = 0;
+			callback.handler.phase = ECS_UI_DRAW_NORMAL;
+			config.AddFlag(callback);
+			FloatInputDrawer(
+				FLOAT_INPUT_CONFIGURATION, 
+				config, 
+				intensity_input_name, 
+				&data->intensity, 
+				0.0f, 
+				10000.0f, 
+				{ current_x - region_render_offset.x, position.y }, 
+				scale
+			);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -10238,7 +10273,7 @@ namespace ECSEngine {
 			// name - if there is any
 			ECS_STACK_CAPACITY_STREAM(char, color_input_name, 256);
 			color_input_name.Copy(identifier);
-			color_input_name.AddStream(" resource");
+			color_input_name.AddStream("resource");
 			color_input_name.AssertCapacity();
 			input = GetMainAllocatorBufferAndStoreAsResource<UIDrawerColorFloatInput>(color_input_name);
 
@@ -10249,6 +10284,7 @@ namespace ECSEngine {
 			Color default_sdr_color = HDRColorToSDR(default_color, &default_sdr_intensity);
 
 			bool has_callback = function::HasFlag(configuration, UI_CONFIG_COLOR_FLOAT_CALLBACK);
+			bool has_color_callback = function::HasFlag(configuration, UI_CONFIG_COLOR_INPUT_CALLBACK);
 			configuration = function::ClearFlag(configuration, UI_CONFIG_COLOR_FLOAT_CALLBACK);
 
 			// The intensity will be controlled by number input - the reference must be made through the name
@@ -10280,24 +10316,32 @@ namespace ECSEngine {
 			config.flag_count--;
 
 			// The callback must be intercepted
-			if (has_callback) {
+			if (has_color_callback) {
 				// Make a coallesced allocation for the callback data
-				UIConfigColorFloatCallback* callback = (UIConfigColorFloatCallback*)config.GetParameter(UI_CONFIG_COLOR_FLOAT_CALLBACK);
+				UIActionHandler current_callback = {};
+
+				if (has_callback) {
+					const UIConfigColorFloatCallback* float_callback = (const UIConfigColorFloatCallback*)config.GetParameter(UI_CONFIG_COLOR_FLOAT_CALLBACK);
+					current_callback = float_callback->callback;
+				}
+				UIConfigColorInputCallback* color_callback = (UIConfigColorInputCallback*)config.GetParameter(UI_CONFIG_COLOR_INPUT_CALLBACK);
+
 				UIDrawerColorFloatInputCallbackData* callback_data = (UIDrawerColorFloatInputCallbackData*)GetMainAllocatorBuffer(
-					sizeof(UIDrawerColorFloatInputCallbackData) + callback->callback.data_size
+					sizeof(UIDrawerColorFloatInputCallbackData) + current_callback.data_size
 				);
 				callback_data->input = input;
-				if (callback->callback.data_size > 0) {
+				if (current_callback.data_size > 0) {
 					void* callback_data_user = function::OffsetPointer(callback_data, sizeof(UIDrawerColorFloatInputCallbackData));
-					memcpy(callback_data_user, callback->callback.data, callback->callback.data_size);
+					memcpy(callback_data_user, current_callback.data, current_callback.data_size);
 					callback_data->callback_data = callback_data_user;
 				}
 				else {
-					callback_data->callback_data = callback->callback.data;
+					callback_data->callback_data = current_callback.data;
 				}
-				callback->callback.action = ColorFloatInputCallback;
-				callback->callback.data = callback_data;
-				callback->callback.data_size = 0;
+
+				color_callback->callback.action = ColorFloatInputCallback;
+				color_callback->callback.data = callback_data;
+				color_callback->callback.data_size = 0;
 			}
 			else {
 				UIDrawerColorFloatInputCallbackData callback_data;

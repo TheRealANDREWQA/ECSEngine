@@ -1990,6 +1990,11 @@ namespace ECSEngine {
 		{
 			// At the moment there is a limit to how many groupings an instance can have
 			ECS_ASSERT(type->groupings.size < UI_REFLECTION_MAX_GROUPINGS_PER_TYPE);
+			grouping.name = function::StringCopy(GetAllocatorPolymorphic(allocator), grouping.name);
+			if (grouping.per_element_name.size > 0) {
+				grouping.per_element_name = function::StringCopy(GetAllocatorPolymorphic(allocator), grouping.per_element_name);
+			}
+
 			type->groupings.AddResize(GetAllocatorPolymorphic(allocator), 1, true);
 			type->groupings[type->groupings.size - 1] = grouping;
 		}
@@ -4384,6 +4389,12 @@ namespace ECSEngine {
 			}
 
 			if (type.groupings.size > 0) {
+				for (size_t index = 0; index < type.groupings.size; index++) {
+					allocator->Deallocate(type.groupings[index].name.buffer);
+					if (type.groupings[index].per_element_name.size > 0) {
+						allocator->Deallocate(type.groupings[index].per_element_name.buffer);
+					}
+				}
 				allocator->Deallocate(type.groupings.buffer);
 			}
 
@@ -4546,7 +4557,13 @@ namespace ECSEngine {
 				};
 				
 				if (grouping->name.size > 0) {
+					drawer->PushIdentifierStack(grouping->name);
+
+					size_t current_index = index;
 					drawer->CollapsingHeader(grouping->name, &instance->grouping_open_state[global_grouping_index - 1], draw_grouping);
+					index = current_index + grouping->range - 1;
+
+					drawer->PopIdentifierStack();
 				}
 				else {
 					draw_grouping();

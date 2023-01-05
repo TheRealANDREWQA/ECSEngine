@@ -24,9 +24,18 @@ struct AssetOverrideCallbackVerifyData {
 	bool prevent_registering;
 };
 
+// Mirrors CreateAssetAsyncCallbackInfo in AssetManagement.h
+struct AssetOverrideCallbackAdditionalInfo {
+	unsigned int handle;
+	ECSEngine::ECS_ASSET_TYPE type;
+	bool success;
+};
+
 // Can optionally mark the callback as a verify callback that will receive
 // in the additional data field a AssetOverrideCallbackVerifyData* which
-// it can use to prevent the registering/unregistering part of the
+// it can use to prevent the registering/unregistering part of the.
+// If the normal callback is called, then it receives in the additional_data field
+// a structure of type
 struct AssetOverrideBindCallbackData {
 	ECSEngine::Tools::UIActionHandler handler;
 	bool verify_handler = false;
@@ -34,9 +43,16 @@ struct AssetOverrideBindCallbackData {
 
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback);
 
+struct AssetOverrideBindNewDatabaseData {
+	ECSEngine::AssetDatabase* database;
+};
+
+ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindNewDatabase);
+
 struct AssetOverrideSetAllData {
 	AssetOverrideSetSandboxIndexData set_index;
 	AssetOverrideBindCallbackData callback;
+	AssetOverrideBindNewDatabaseData new_database = { nullptr };
 };
 
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetAll);

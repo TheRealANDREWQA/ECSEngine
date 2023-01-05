@@ -1,7 +1,7 @@
 #include "editorpch.h"
 #include "AssetSettingHelper.h"
 #include "../Editor/EditorState.h"
-
+#include "../Assets/EditorSandboxAssets.h"
 #include "../Assets/AssetManagement.h"
 #include "../Editor/EditorPalette.h"
 #include "../Project/ProjectFolders.h"
@@ -25,7 +25,7 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 		const size_t ALLOCATOR_CAPACITY = ECS_KB * 32;
 		void* allocator_buffer = editor_state->editor_allocator->Allocate(ALLOCATOR_CAPACITY);
 		helper_data->temp_allocator = LinearAllocator(allocator_buffer, ALLOCATOR_CAPACITY);
-		helper_data->lazy_timer.DelayStart(LAZY_TIMER_RELOAD_MS, ECS_TIMER_DURATION_MS);
+		helper_data->lazy_timer.DelayStart(-LAZY_TIMER_RELOAD_MS, ECS_TIMER_DURATION_MS);
 	}
 
 	const char* COMBO_NAME = "Settings";
@@ -225,7 +225,9 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 	else {
 		drawer->NextRow();
 	}
-	
+
+	AssetSettingsExtractPointerFromMainDatabase(editor_state, helper_data->metadata, asset_type);
+	AssetSettingsIsReferencedUIStatus(drawer, editor_state, helper_data->SelectedName(), GetAssetFile(helper_data->metadata, asset_type), asset_type);
 	return helper_data->current_names.size > 0;
 }
 
@@ -237,6 +239,28 @@ void AssetSettingsHelperDestroy(EditorState* editor_state, AssetSettingsHelperDa
 	}
 	if (editor_state->editor_allocator->Belongs(helper_data->temp_allocator.m_buffer)) {
 		editor_state->editor_allocator->Deallocate(helper_data->temp_allocator.m_buffer);
+	}
+}
+
+void AssetSettingsHelperChangedAction(ActionData* action_data)
+{
+	UI_UNPACK_ACTION_DATA;
+
+	AssetSettingsHelperChangedActionData* data = (AssetSettingsHelperChangedActionData*)_data;
+	Stream<wchar_t> file = GetAssetFile(data->helper_data->metadata, data->asset_type);
+	Stream<char> name = data->helper_data->SelectedName();
+	unsigned int handle = data->target_database->FindAsset(name, file, data->asset_type);
+	bool success = true;
+	if (handle != -1) {
+		success = data->target_database->UpdateAsset(handle, data->helper_data->metadata, data->asset_type);
+	}
+	else {
+		success = data->target_database->WriteAssetFile(data->helper_data->metadata, data->asset_type);
+	}
+
+	if (!success) {
+		ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", name, file, ConvertAssetTypeString(data->asset_type));
+		EditorSetConsoleWarn(error_message);
 	}
 }
 
@@ -254,17 +278,17 @@ void AssetSettingsHelperChangedWithFileAction(ActionData* action_data)
 	bool same_file_and_name = function::CompareStrings(current_name, previous_name) && function::CompareStrings(current_file, previous_file);
 	// If the file is empty, then the target is not yet asigned, so can't do anything
 	if (current_file.size > 0) {
-		unsigned int handle = data->editor_state->asset_database->FindAsset(previous_name, previous_file, data->asset_type);
+		unsigned int handle = data->target_database->FindAsset(previous_name, previous_file, data->asset_type);
 		bool success = true;
 		if (handle != -1) {
-			success = data->editor_state->asset_database->UpdateAsset(handle, data->asset, data->asset_type);
+			success = data->target_database->UpdateAsset(handle, data->asset, data->asset_type);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
 				EditorSetConsoleWarn(error_message);
 			}
 		}
 		else {
-			success = data->editor_state->asset_database->WriteAssetFile(data->asset, data->asset_type);
+			success = data->target_database->WriteAssetFile(data->asset, data->asset_type);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
 				EditorSetConsoleWarn(error_message);
@@ -276,7 +300,7 @@ void AssetSettingsHelperChangedWithFileAction(ActionData* action_data)
 				if (!same_file_and_name) {
 					// Remove the previous asset file
 					ECS_STACK_CAPACITY_STREAM(wchar_t, previous_metadata_file, 512);
-					data->editor_state->asset_database->FileLocationShader(previous_name, previous_file, previous_metadata_file);
+					data->target_database->FileLocationShader(previous_name, previous_file, previous_metadata_file);
 					if (!RemoveFile(previous_metadata_file)) {
 						ECS_FORMAT_TEMP_STRING(console_message, "Failed to remove metadata file {#}.", previous_metadata_file);
 						EditorSetConsoleWarn(console_message);
@@ -297,40 +321,18 @@ void AssetSettingsHelperChangedWithFileAction(ActionData* action_data)
 	}
 }
 
-void AssetSettingsHelperChangedAction(ActionData* action_data)
-{
-	UI_UNPACK_ACTION_DATA;
-
-	AssetSettingsHelperChangedActionData* data = (AssetSettingsHelperChangedActionData*)_data;
-	Stream<wchar_t> file = GetAssetFile(data->helper_data->metadata, data->asset_type);
-	Stream<char> name = data->helper_data->SelectedName();
-	unsigned int handle = data->editor_state->asset_database->FindAsset(name, file, data->asset_type);
-	bool success = true;
-	if (handle != -1) {
-		success = data->editor_state->asset_database->UpdateAsset(handle, data->helper_data->metadata, data->asset_type);
-	}
-	else {
-		success = data->editor_state->asset_database->WriteAssetFile(data->helper_data->metadata, data->asset_type);
-	}
-
-	if (!success) {
-		ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", name, file, ConvertAssetTypeString(data->asset_type));
-		EditorSetConsoleWarn(error_message);
-	}
-}
-
 void AssetSettingsHelperChangedNoFileAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	AssetSettingsHelperChangedNoFileActionData* data = (AssetSettingsHelperChangedNoFileActionData*)_data;
 	Stream<char> name = GetAssetName(data->asset, data->asset_type);
-	unsigned int handle = data->editor_state->asset_database->FindAsset(name, { nullptr, 0 }, data->asset_type);
+	unsigned int handle = data->target_database->FindAsset(name, { nullptr, 0 }, data->asset_type);
 	bool success = true;
 	if (handle != -1) {
-		success = data->editor_state->asset_database->UpdateAsset(handle, data->asset, data->asset_type);
+		success = data->target_database->UpdateAsset(handle, data->asset, data->asset_type);
 	}
 	else {
-		success = data->editor_state->asset_database->WriteAssetFile(data->asset, data->asset_type);
+		success = data->target_database->WriteAssetFile(data->asset, data->asset_type);
 	}
 
 	if (!success) {
@@ -352,4 +354,34 @@ void AssetSettingsHelperBaseConfig(UIDrawConfig* draw_config) {
 
 	UIConfigWindowDependentSize window_dependent_size;
 	draw_config->AddFlag(window_dependent_size);
+}
+
+void AssetSettingsExtractPointerFromMainDatabase(const EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type) {
+	Stream<char> name = GetAssetName(metadata, type);
+	Stream<wchar_t> file = GetAssetFile(metadata, type);
+	unsigned int handle = editor_state->asset_database->FindAsset(name, file, type);
+	if (handle != -1) {
+		const void* main_metadata = editor_state->asset_database->GetAssetConst(handle, type);
+		SetAssetToMetadata(metadata, type, GetAssetFromMetadata(main_metadata, type));
+	}
+}
+
+void AssetSettingsIsReferencedUIStatus(Tools::UIDrawer* drawer, const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type) {
+	UIDrawConfig config;
+	bool is_asset_referenced = IsAssetReferencedInSandbox(editor_state, name, file, type);
+	
+	const size_t SPRITE_CONFIGURATION = UI_CONFIG_MAKE_SQUARE;
+	const size_t TEXT_CONFIGURATION = UI_CONFIG_ALIGN_TO_ROW_Y;
+
+	if (is_asset_referenced) {
+		drawer->SpriteRectangle(SPRITE_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_INFO_ICON, EDITOR_GREEN_COLOR);
+		drawer->Text(TEXT_CONFIGURATION, config, "The asset is in use.");
+	}
+	else {
+		Color green_color = EDITOR_GREEN_COLOR;
+		green_color.alpha = 150;
+		drawer->SpriteRectangle(SPRITE_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_INFO_ICON, green_color);
+		drawer->Text(TEXT_CONFIGURATION | UI_CONFIG_UNAVAILABLE_TEXT, config, "The asset is not being used.");
+	}
+	drawer->NextRow();
 }

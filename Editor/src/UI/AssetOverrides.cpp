@@ -29,6 +29,7 @@ struct BaseDrawData {
 	bool callback_verify;
 
 	EditorState* editor_state;
+	AssetDatabase* target_database;
 	CapacityStream<char> filter;
 	ResizableLinearAllocator resizable_allocator;
 	Timer timer;
@@ -149,6 +150,7 @@ bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 struct SelectActionData {
 	EditorState* editor_state;
 	unsigned int* handle;
+	AssetDatabase* target_database;
 
 	Stream<char> name;
 	Stream<wchar_t> file;
@@ -171,23 +173,41 @@ void SelectAction(ActionData* action_data) {
 		data->name.buffer = (char*)function::OffsetPointer(data, sizeof(*data));
 	}
 
-	bool register_asset = true;
-	if (data->verify_action) {
-		AssetOverrideCallbackVerifyData verify_data;
-		verify_data.editor_state = data->editor_state;
-		verify_data.name = data->name;
-		verify_data.file = data->file;
-		verify_data.prevent_registering = false;
-		action_data->data = data->action_data;
-		action_data->additional_data = &verify_data;
-		data->action(action_data);
+	// Only register the asset if the asset is to be loaded into the main database
+	if (data->target_database == data->editor_state->asset_database) {
+		bool register_asset = true;
+		if (data->verify_action) {
+			AssetOverrideCallbackVerifyData verify_data;
+			verify_data.editor_state = data->editor_state;
+			verify_data.name = data->name;
+			verify_data.file = data->file;
+			verify_data.prevent_registering = false;
+			action_data->data = data->action_data;
+			action_data->additional_data = &verify_data;
+			data->action(action_data);
 
-		register_asset = !verify_data.prevent_registering;
+			register_asset = !verify_data.prevent_registering;
+		}
+
+		if (register_asset) {
+			// If now it is loaded, launch the resource manager load task as well
+			RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->handle, true, { data->action, data->action_data, 0 });
+		}
 	}
+	else {
+		*data->handle = data->target_database->AddAsset(data->name, data->file, data->type);
+		if (data->action != nullptr) {
+			CreateAssetAsyncCallbackInfo info;
+			info.handle = *data->handle;
+			info.type = data->type;
+			info.success = *data->handle != -1;
 
-	if (register_asset) {
-		// If now it is loaded, launch the resource manager load task as well
-		RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->handle, true, { data->action, data->action_data, 0 });
+			ActionData dummy_data;
+			dummy_data.data = data->action_data;
+			dummy_data.additional_data = &info;
+			dummy_data.system = nullptr;
+			data->action(&dummy_data);
+		}
 	}
 
 	system->PushDestroyWindowHandler(system->GetWindowIndexFromBorder(dockspace, border_index));
@@ -201,9 +221,11 @@ void SelectAction(ActionData* action_data) {
 
 struct DeselectActionData {
 	EditorState* editor_state;
+	unsigned int* handle;
+	AssetDatabase* target_database;
+
 	unsigned int sandbox_index;
 	ECS_ASSET_TYPE asset_type;
-	unsigned int* handle;
 
 	Action callback_action;
 	void* callback_action_data;
@@ -215,30 +237,48 @@ void DeselectAction(ActionData* action_data) {
 
 	DeselectActionData* data = (DeselectActionData*)_data;
 
-	bool unregister_asset = true;
-	if (data->verify_action) {
-		AssetOverrideCallbackVerifyData verify_data;
-		verify_data.editor_state = data->editor_state;
-		verify_data.name = data->editor_state->asset_database->GetAssetName(*data->handle, data->asset_type);
-		verify_data.file = data->editor_state->asset_database->GetAssetPath(*data->handle, data->asset_type);
-		verify_data.prevent_registering = false;
-		action_data->data = data->callback_action_data;
-		action_data->additional_data = &verify_data;
-		data->callback_action(action_data);
+	// Only if the target database matches the editor database
+	if (data->target_database == data->editor_state->asset_database) {
+		bool unregister_asset = true;
+		if (data->verify_action) {
+			AssetOverrideCallbackVerifyData verify_data;
+			verify_data.editor_state = data->editor_state;
+			verify_data.name = data->editor_state->asset_database->GetAssetName(*data->handle, data->asset_type);
+			verify_data.file = data->editor_state->asset_database->GetAssetPath(*data->handle, data->asset_type);
+			verify_data.prevent_registering = false;
+			action_data->data = data->callback_action_data;
+			action_data->additional_data = &verify_data;
+			data->callback_action(action_data);
 
-		unregister_asset = !verify_data.prevent_registering;
+			unregister_asset = !verify_data.prevent_registering;
+		}
+
+		if (unregister_asset) {
+			// If the index is -1, then it is a global asset
+			if (data->sandbox_index != -1) {
+				UnregisterSandboxAsset(data->editor_state, data->sandbox_index, *data->handle, data->asset_type, { data->callback_action, data->callback_action_data, 0 });
+			}
+			else {
+				UnregisterGlobalAsset(data->editor_state, *data->handle, data->asset_type, { data->callback_action, data->callback_action_data, 0 });
+			}
+		}
 	}
-
-	if (unregister_asset) {
-		UnregisterSandboxAsset(data->editor_state, data->sandbox_index, *data->handle, data->asset_type, { data->callback_action, data->callback_action_data, 0 });
+	else {
+		data->target_database->RemoveAsset(*data->handle, data->asset_type);
+		if (data->callback_action != nullptr) {
+			ActionData dummy_data;
+			dummy_data.system = nullptr;
+			dummy_data.data = data->callback_action_data;
+			dummy_data.additional_data = data->handle;
+			data->callback_action(&dummy_data);
+		}
 	}
 
 	unsigned int selection_input = system->GetWindowFromName(SELECTION_INPUT_WINDOW_NAME);
 	if (selection_input != -1) {
 		system->PushDestroyWindowHandler(selection_input);
 	}
-
-	// Make the handle equal to -1, even when the unload fails
+	
 	*data->handle = -1;
 }
 
@@ -251,6 +291,7 @@ void CreateSelectActionData(SelectActionData* select_data, const BaseDrawData* b
 	select_data->action = base_data->callback_action;
 	select_data->action_data = base_data->callback_action_data;
 	select_data->verify_action = base_data->callback_verify;
+	select_data->target_database = base_data->target_database;
 }
 
 // The stack allocation must be at least ECS_KB * 4 large
@@ -384,6 +425,7 @@ void DrawDeselectButton(UIDrawer& drawer, DrawBaseReturn* base_return, ECS_ASSET
 		deselect_data.callback_action = base_return->select_data->action;
 		deselect_data.callback_action_data = base_return->select_data->action_data;
 		deselect_data.verify_action = base_return->select_data->verify_action;
+		deselect_data.target_database = base_return->select_data->target_database;
 
 		// Draw a none button
 		const size_t BASE_CONFIGURATION = UI_CONFIG_MAKE_SQUARE | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
@@ -705,6 +747,7 @@ void MiscDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 
 struct OverrideBaseData {
 	EditorState* editor_state;
+	AssetDatabase* database;
 	CapacityStream<char> selection;
 	unsigned int sandbox_index;
 	bool callback_is_ptr;
@@ -741,6 +784,7 @@ void OverrideAssetHandle(
 	base_window_data->callback_action = base_data->callback;
 	base_window_data->callback_action_data = base_data->callback_is_ptr ? base_data->callback_data_ptr : base_data->callback_data;
 	base_window_data->callback_verify = base_data->callback_verify;
+	base_window_data->target_database = base_data->database;
 
 	UIWindowDescriptor window_descriptor;
 	window_descriptor.draw = window_draw;
@@ -758,8 +802,8 @@ void OverrideAssetHandle(
 
 	unsigned int handle_value = *handle;
 	if (handle_value != -1) {
-		Stream<char> name = base_data->editor_state->asset_database->GetAssetName(handle_value, type);
-		Stream<wchar_t> file = base_data->editor_state->asset_database->GetAssetPath(handle_value, type);
+		Stream<char> name = base_data->database->GetAssetName(handle_value, type);
+		Stream<wchar_t> file = base_data->database->GetAssetPath(handle_value, type);
 
 		if (file.size > 0) {
 			Stream<wchar_t> filename = function::PathFilenameBoth(file);
@@ -869,6 +913,7 @@ ECS_UI_REFLECTION_INSTANCE_INITIALIZE_OVERRIDE(AssetInitialize) {
 	data->selection.buffer = (char*)drawer->allocator->Allocate(sizeof(char) * capacity, alignof(char));
 	data->selection.size = 0;
 	data->selection.capacity = capacity;
+	data->database = global_data->editor_state->asset_database;
 
 	data->editor_state = global_data->editor_state;
 	data->callback_verify = false;
@@ -900,6 +945,7 @@ ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetSandboxIndex) {
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback) {
 	OverrideBaseData* data = (OverrideBaseData*)_data;
 	AssetOverrideBindCallbackData* modify_data = (AssetOverrideBindCallbackData*)user_data;
+
 	data->callback = modify_data->handler.action;
 	ECS_ASSERT(modify_data->handler.data_size <= sizeof(data->callback_data));
 	if (modify_data->handler.data_size == 0) {
@@ -913,10 +959,20 @@ ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback) {
 	data->callback_verify = modify_data->verify_handler;
 }
 
+ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindNewDatabase) {
+	OverrideBaseData* data = (OverrideBaseData*)_data;
+	AssetOverrideBindNewDatabaseData* modify_data = (AssetOverrideBindNewDatabaseData*)user_data;
+
+	data->database = modify_data->database;
+}
+
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetAll) {
 	AssetOverrideSetAllData* modify_data = (AssetOverrideSetAllData*)user_data;
 	AssetOverrideSetSandboxIndex(allocator, _data, _global_data, &modify_data->set_index);
 	AssetOverrideBindCallback(allocator, _data, _global_data, &modify_data->callback);
+	if (modify_data->new_database.database != nullptr) {
+		AssetOverrideBindNewDatabase(allocator, _data, _global_data, &modify_data->new_database);
+	}
 }
 
 #pragma endregion
