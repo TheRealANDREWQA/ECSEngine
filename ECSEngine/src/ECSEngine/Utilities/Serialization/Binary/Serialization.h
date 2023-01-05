@@ -37,7 +37,18 @@ namespace ECSEngine {
 		bool IsUnchanged(unsigned int type_index, const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type) const;
 
 		// Writes all types into the reflection manager. A stack allocator should be passed such that small allocations can be made
-		void ToNormalReflection(Reflection::ReflectionManager* reflection_manager, AllocatorPolymorphic allocator) const;
+		// Can optionally specify if the byte size, alignment and the is_blittable status are calculated afterwards or if the names
+		// and the definition for the fields are allocated from the given allocator
+		void ToNormalReflection(
+			Reflection::ReflectionManager* reflection_manager, 
+			AllocatorPolymorphic allocator,
+			bool allocate_all = false,
+			bool check_before_insertion = false,
+			bool calculate_parameters = false
+		) const;
+
+		// Fills in the types that came from this deserialize table
+		void ExtractTypesFromReflection(Reflection::ReflectionManager* reflection_manager, CapacityStream<Reflection::ReflectionType*> types) const;
 
 		Stream<Type> types;
 		// Each serializer has the version written at the beginning
@@ -238,8 +249,15 @@ namespace ECSEngine {
 		uintptr_t data
 	);
 
+	// It will ignore the current type + the deserialize field table
+	// Suitable for ignoring a single type at a time
+	ECSENGINE_API void IgnoreDeserialize(
+		uintptr_t& data
+	);
+
 	// It will ignore the current type. It must be placed after the deserialize table has been called on the
-	// the data. If the deserialized manager is not available, it will create it inside
+	// the data. If the deserialized manager is not available, it will create it inside (useful for ignoring
+	// multiple elements from the same time)
 	ECSENGINE_API void IgnoreDeserialize(
 		uintptr_t& data,
 		DeserializeFieldTable field_table,

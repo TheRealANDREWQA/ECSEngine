@@ -1,3 +1,4 @@
+#include "../Macros.hlsli"
 #include "../PBRBase.hlsli"
 #include "../Utilities.hlsli"
 
@@ -49,7 +50,7 @@ cbuffer Environment : register(b1)
 
 cbuffer Modifiers : register(b2)
 {
-    float4 tint : packoffset(c0);
+    float4 tint : packoffset(c0); ECS_REFLECT_AS_FLOAT_COLOR
     float metallic_factor : packoffset(c1.x);
     float roughness_factor : packoffset(c1.y);
     float normal_strength : packoffset(c1.z);

@@ -71,6 +71,9 @@ void InspectorDrawGPUSamplerFile(EditorState* editor_state, unsigned int inspect
 	InspectorOpenAndShowButton(drawer, data->path);
 	drawer->CrossLine();
 
+	AssetSettingsExtractPointerFromMainDatabase(editor_state, &data->sampler_metadata, ECS_ASSET_GPU_SAMPLER);
+	AssetSettingsIsReferencedUIStatus(drawer, editor_state, data->sampler_metadata.name, {}, ECS_ASSET_GPU_SAMPLER);
+
 	// Draw the settings
 	UIDrawConfig config;
 
@@ -81,6 +84,7 @@ void InspectorDrawGPUSamplerFile(EditorState* editor_state, unsigned int inspect
 	callback_data.editor_state = editor_state;
 	callback_data.asset = &data->sampler_metadata;
 	callback_data.asset_type = ECS_ASSET_GPU_SAMPLER;
+	callback_data.target_database = editor_state->asset_database;
 
 	UIConfigComboBoxCallback combo_callback;
 	combo_callback.handler = { AssetSettingsHelperChangedNoFileAction, &callback_data, sizeof(callback_data) };

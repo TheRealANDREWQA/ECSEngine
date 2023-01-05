@@ -106,7 +106,7 @@ void AssetExplorerDraw(void* window_data, void* drawer_descriptor, bool initiali
 						configuration |= UI_CONFIG_RECTANGLE_TOOL_TIP;
 					}
 					
-					bool is_asset_referenced = IsAssetReferencedInSandbox(editor_state, asset, asset_type);
+					bool is_asset_referenced = IsAssetReferencedInSandboxEntities(editor_state, asset, asset_type);
 					UIConfigActiveState active_state;
 					active_state.state = is_asset_referenced;
 					config.AddFlag(active_state);

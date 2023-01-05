@@ -101,12 +101,16 @@ namespace ECSEngine {
 			};
 
 			ReflectionManager() {}
-			ReflectionManager(MemoryManager* allocator, size_t type_count = ECS_REFLECTION_MAX_TYPE_COUNT, size_t enum_count = ECS_REFLECTION_MAX_ENUM_COUNT);
+			ReflectionManager(AllocatorPolymorphic allocator, size_t type_count = ECS_REFLECTION_MAX_TYPE_COUNT, size_t enum_count = ECS_REFLECTION_MAX_ENUM_COUNT);
 
 			ReflectionManager(const ReflectionManager& other) = default;
 			ReflectionManager& operator = (const ReflectionManager& other) = default;
 
 			void AddBlittableException(Stream<char> definition, unsigned int byte_size, unsigned int alignment);
+
+			ECS_INLINE AllocatorPolymorphic Allocator() const {
+				return folders.allocator;
+			}
 
 			// Returns true if it succededs. It can fail due to expression evaluation
 			// or if a referenced type is not yet reflected
@@ -116,11 +120,16 @@ namespace ECSEngine {
 				unsigned int folder_index
 			);
 
-			void ClearEnumDefinitions();
-			void ClearTypeDefinitions();
+			// Clears any allocations from the allocator. If the isolated_use is set to true,
+			// then will assume that the types have been added manually. Can optionally specify if the
+			// types need to be deallocated (they can be omitted if they reference types stable from outside). 
+			// For the normal use it will use the folder hierarchy allocation.
+			void ClearFromAllocator(bool isolated_use = false, bool isolated_use_deallocate_types = true);
 
 			// Returns the current index; it may change if removals take place
 			unsigned int CreateFolderHierarchy(Stream<wchar_t> root);
+
+			void CopyTypes(ReflectionManager* other) const;
 
 			void DeallocateThreadTaskData(ReflectionManagerParseStructuresThreadTaskData& data);
 
@@ -249,10 +258,11 @@ namespace ECSEngine {
 			ReflectionFieldTable field_table;
 			ResizableStream<FolderHierarchy> folders;
 			ResizableStream<ReflectionConstant> constants;
-
-			// Blittable types that are easier
 			ResizableStream<BlittableType> blittable_types;
 		};
+
+		// If there are no user defined types, this version will work
+		ECSENGINE_API void SetInstanceFieldDefaultData(const ReflectionField* field, void* data);
 
 		ECSENGINE_API bool IsTypeCharacter(char character);
 
@@ -464,6 +474,8 @@ namespace ECSEngine {
 		// then it will not allocate and instead be with size 0 and nullptr (that means, the previous data will not be copied, not referenced)
 		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
 		// for buffers it will always allocate even when the type is the same
+		// The old and the new reflection manager can be made nullptr if you are sure there are no nested types
+		// Or custom types
 		ECSENGINE_API void CopyReflectionTypeToNewVersion(
 			const ReflectionManager* old_reflection_manager,
 			const ReflectionManager* new_reflection_manager,
@@ -490,6 +502,8 @@ namespace ECSEngine {
 		// then it will not allocate and instead be with size 0 and nullptr (that means, the previous data will not be copied, not referenced)
 		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
 		// for buffers it will always allocate even when the type is the same
+		// The old and the new reflection manager can be made nullptr if you are sure there are no nested types
+		// Or custom types
 		ECSENGINE_API void ConvertReflectionFieldToOtherField(
 			const ReflectionManager* first_reflection_manager,
 			const ReflectionManager* second_reflection_manager,

@@ -72,6 +72,7 @@ void InspectorDrawTextureFile(EditorState* editor_state, unsigned int inspector_
 		changed_base_data.asset_type = ECS_ASSET_TEXTURE;
 		changed_base_data.editor_state = editor_state;
 		changed_base_data.helper_data = &data->helper_data;
+		changed_base_data.target_database = editor_state->asset_database;
 
 		UIConfigCheckBoxCallback check_box_callback;
 		check_box_callback.handler = { AssetSettingsHelperChangedAction, &changed_base_data, sizeof(changed_base_data) };

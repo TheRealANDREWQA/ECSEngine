@@ -20,7 +20,7 @@
 
 namespace ECSEngine {
 
-#define ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT 100
+#define ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT 1
 
 	// The handler must implement a void* parameter for additional info and must return void*
 	// If it returns a nullptr, it means the load failed so do not add it to the table
@@ -1368,7 +1368,13 @@ namespace ECSEngine {
 			vertex_shader = LoadShaderImplementation(user_material->vertex_shader, ECS_SHADER_VERTEX, &source_code, &byte_code, user_material->vertex_compile_options, load_descriptor);
 		}
 		else {
-			vertex_shader = LoadShader<true>(user_material->vertex_shader, ECS_SHADER_VERTEX, &source_code, &byte_code, user_material->vertex_compile_options, load_descriptor);
+			ResourceManagerLoadDesc current_desc;
+			ECS_STACK_VOID_STREAM(suffix, 512);
+			if (user_material->generate_unique_name_from_setting) {
+				GenerateShaderCompileOptionsSuffix(user_material->vertex_compile_options, suffix);
+			}
+			current_desc.identifier_suffix = suffix;
+			vertex_shader = LoadShader<true>(user_material->vertex_shader, ECS_SHADER_VERTEX, &source_code, &byte_code, user_material->vertex_compile_options, current_desc);
 		}
 		converted_material->vertex_shader = vertex_shader;
 
@@ -1376,7 +1382,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		InputLayout input_layout = m_graphics->ReflectVertexShaderInput(source_code, byte_code);
+		InputLayout input_layout = m_graphics->ReflectVertexShaderInput(source_code, byte_code, false);
 		if (input_layout.layout == nullptr) {
 			// Release the source code before
 			Deallocate(source_code.buffer);
@@ -1386,15 +1392,18 @@ namespace ECSEngine {
 
 		ECS_STACK_CAPACITY_STREAM(ECS_MESH_INDEX, mesh_indices, ECS_MESH_BUFFER_COUNT);
 		m_graphics->ReflectVertexBufferMapping(source_code, mesh_indices);
-		
-		// The source code now can be released
-		Deallocate(source_code.buffer);
 
 		if (dont_load) {
 			converted_material->pixel_shader = LoadShaderImplementation(user_material->pixel_shader, ECS_SHADER_PIXEL, nullptr, nullptr, user_material->pixel_compile_options, load_descriptor);
 		}
 		else {
-			converted_material->pixel_shader = LoadShader<true>(user_material->pixel_shader, ECS_SHADER_PIXEL, nullptr, nullptr, user_material->pixel_compile_options, load_descriptor);
+			ResourceManagerLoadDesc current_desc;
+			ECS_STACK_VOID_STREAM(suffix, 512);
+			if (user_material->generate_unique_name_from_setting) {
+				GenerateShaderCompileOptionsSuffix(user_material->pixel_compile_options, suffix);
+			}
+			current_desc.identifier_suffix = suffix;
+			converted_material->pixel_shader = LoadShader<true>(user_material->pixel_shader, ECS_SHADER_PIXEL, nullptr, nullptr, user_material->pixel_compile_options, current_desc);
 		}
 
 		auto deallocate_vertex_shader = [&]() {
@@ -1403,7 +1412,13 @@ namespace ECSEngine {
 				UnloadShaderImplementation(converted_material->vertex_shader.Interface(), ECS_SHADER_VERTEX);
 			}
 			else {
-				UnloadShader<true>(user_material->vertex_shader);
+				ResourceManagerLoadDesc current_desc;
+				ECS_STACK_VOID_STREAM(suffix, 512);
+				if (user_material->generate_unique_name_from_setting) {
+					GenerateShaderCompileOptionsSuffix(user_material->vertex_compile_options, suffix);
+				}
+				current_desc.identifier_suffix = suffix;
+				UnloadShader<true>(user_material->vertex_shader, current_desc);
 			}
 		};
 
@@ -1417,7 +1432,13 @@ namespace ECSEngine {
 				UnloadShaderImplementation(converted_material->pixel_shader.Interface(), ECS_SHADER_PIXEL);
 			}
 			else {
-				UnloadShader<true>(user_material->pixel_shader);
+				ResourceManagerLoadDesc current_desc;
+				ECS_STACK_VOID_STREAM(suffix, 512);
+				if (user_material->generate_unique_name_from_setting) {
+					GenerateShaderCompileOptionsSuffix(user_material->pixel_compile_options, suffix);
+				}
+				current_desc.identifier_suffix = suffix;
+				UnloadShader<true>(user_material->pixel_shader, current_desc);
 			}
 		};
 
@@ -1498,7 +1519,7 @@ namespace ECSEngine {
 			ConstantBuffer buffer;
 			ECS_ASSERT(user_material->buffers[index].dynamic || user_material->buffers[index].data.buffer != nullptr);
 			if (user_material->buffers[index].dynamic) {
-				if (user_material->buffers[index].data.buffer == nullptr) {
+				if (user_material->buffers[index].data.buffer != nullptr) {
 					buffer = m_graphics->CreateConstantBuffer(user_material->buffers[index].data.size, user_material->buffers[index].data.buffer);
 				}
 				else {
@@ -1506,7 +1527,8 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				buffer = m_graphics->CreateConstantBuffer(user_material->buffers[index].data.size, user_material->buffers[index].data.buffer);
+				// Can make this IMMUTABLE
+				buffer = m_graphics->CreateConstantBuffer(user_material->buffers[index].data.size, user_material->buffers[index].data.buffer, false, ECS_GRAPHICS_USAGE_IMMUTABLE);
 			}
 
 			if (user_material->buffers[index].shader_type == ECS_SHADER_VERTEX) {
@@ -1517,7 +1539,7 @@ namespace ECSEngine {
 				ECS_ASSERT(converted_material->v_buffer_count <= ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT);
 			}
 			else {
-				unsigned char p_index = converted_material->v_buffer_count;
+				unsigned char p_index = converted_material->p_buffer_count;
 				converted_material->p_buffers[p_index] = buffer;
 				converted_material->p_buffer_slot[p_index] = user_material->buffers[index].slot;
 				converted_material->p_buffer_count++;
@@ -1639,7 +1661,12 @@ namespace ECSEngine {
 			manager->m_memory->Deallocate_ts(contents.buffer);
 		}
 		else {
-			*shader_source_code = Stream<char>(contents.buffer, contents.size);
+			if (shader != nullptr) {
+				*shader_source_code = Stream<char>(contents.buffer, contents.size);
+			}
+			else {
+				manager->m_memory->Deallocate_ts(contents.buffer);
+			}
 		}
 
 		return { shader };
@@ -1665,18 +1692,20 @@ namespace ECSEngine {
 			function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY)
 		);
 
-		if (ex_desc != nullptr && ex_desc->HasFilename()) {
-			ex_desc->Lock();
+		if (shader != nullptr) {
+			if (ex_desc != nullptr && ex_desc->HasFilename()) {
+				ex_desc->Lock();
 
-			void* allocation = manager->Allocate(sizeof(VertexShaderStorage));
-			VertexShaderStorage* storage = (VertexShaderStorage*)allocation;
-			// Doesn't matter the type here
-			storage->shader = (ID3D11VertexShader*)shader;
-			storage->source_code = { nullptr, 0 };
-			storage->byte_code = { nullptr, 0 };
-			manager->AddResource(ex_desc->filename, ResourceType::Shader, allocation, ex_desc->time_stamp, load_descriptor.identifier_suffix);
+				void* allocation = manager->Allocate(sizeof(VertexShaderStorage));
+				VertexShaderStorage* storage = (VertexShaderStorage*)allocation;
+				// Doesn't matter the type here
+				storage->shader = (ID3D11VertexShader*)shader;
+				storage->source_code = { nullptr, 0 };
+				storage->byte_code = { nullptr, 0 };
+				manager->AddResource(ex_desc->filename, ResourceType::Shader, allocation, ex_desc->time_stamp, load_descriptor.identifier_suffix);
 
-			ex_desc->Unlock();
+				ex_desc->Unlock();
+			}
 		}
 
 		return { shader };
@@ -1708,24 +1737,23 @@ namespace ECSEngine {
 				VertexShaderStorage* shader = (VertexShaderStorage*)allocation;
 				shader->shader = LoadShaderImplementation(filename, shader_type, shader_source_code, byte_code, options, load_descriptor);
 
-				if (shader_source_code != nullptr) {
-					shader->source_code = *shader_source_code;
-				}
-				else {
-					shader->source_code = { nullptr, 0 };
-				}
+				if (shader->shader.shader != nullptr) {
+					if (shader_source_code != nullptr) {
+						shader->source_code = *shader_source_code;
+					}
+					else {
+						shader->source_code = { nullptr, 0 };
+					}
 
-				if (byte_code != nullptr && shader_type == ECS_SHADER_VERTEX) {
-					void* byte_code_allocation = Allocate(byte_code->size);
-					memcpy(byte_code_allocation, byte_code->buffer, byte_code->size);
-					shader->byte_code = *byte_code;
-					shader->byte_code.buffer = byte_code_allocation;
+					if (byte_code != nullptr && shader_type == ECS_SHADER_VERTEX) {
+						shader->byte_code = *byte_code;
+					}
+					else {
+						shader->byte_code = { nullptr, 0 };
+					}
+					return allocation;
 				}
-				else {
-					shader->byte_code = { nullptr, 0 };
-				}
-
-				return allocation;
+				return (void*)nullptr;
 		});
 
 		if constexpr (reference_counted) {
@@ -1733,25 +1761,26 @@ namespace ECSEngine {
 				if (!*is_loaded_first_time) {
 					// Need to get the source code or the byte code
 					VertexShaderStorage* storage = (VertexShaderStorage*)shader;
-					// For byte code we need the source code as well
-					if (shader_source_code != nullptr || byte_code != nullptr) {
-						if (storage->source_code.size == 0) {
-							// Load the file and store it inside the current storage
-							Stream<char> source_code = ReadWholeFileText(filename, Allocator());
-							storage->source_code = source_code;
+					if (storage != nullptr) {
+						// For byte code we need the source code as well
+						if (shader_source_code != nullptr || byte_code != nullptr) {
+							if (storage->source_code.size == 0) {
+								// Load the file and store it inside the current storage
+								Stream<char> source_code = ReadWholeFileText(filename, Allocator());
+								storage->source_code = source_code;
+							}
+							if (shader_source_code != nullptr) {
+								*shader_source_code = storage->source_code;
+							}
 						}
-						if (shader_source_code != nullptr) {
-							*shader_source_code = storage->source_code;
+						if (byte_code != nullptr) {
+							if (storage->byte_code.size == 0) {
+								ShaderIncludeFiles include_files(m_memory, m_shader_directory);
+								storage->byte_code = m_graphics->CompileShaderToByteCode(storage->source_code, ECS_SHADER_VERTEX, &include_files, Allocator(), options);
+							}
+							*byte_code = storage->byte_code;
 						}
 					}
-					if (byte_code != nullptr) {
-						if (storage->byte_code.size == 0) {
-							ShaderIncludeFiles include_files(m_memory, m_shader_directory);
-							storage->byte_code = m_graphics->CompileShaderToByteCode(storage->source_code, ECS_SHADER_VERTEX, &include_files, Allocator(), options);
-						}
-						*byte_code = storage->byte_code;
-					}
-
 				}
 			}
 		}
@@ -2001,17 +2030,29 @@ namespace ECSEngine {
 			UnloadShaderImplementation(material->pixel_shader.Interface(), ECS_SHADER_PIXEL);
 		}
 		else {
-			UnloadShader<true>(user_material->vertex_shader, load_desc);
-			UnloadShader<true>(user_material->pixel_shader, load_desc);
+			ResourceManagerLoadDesc current_desc;
+			ECS_STACK_VOID_STREAM(suffix, 512);
+			if (user_material->generate_unique_name_from_setting) {
+				GenerateShaderCompileOptionsSuffix(user_material->vertex_compile_options, suffix);
+			}
+			current_desc.identifier_suffix = suffix;
+			UnloadShader<true>(user_material->vertex_shader, current_desc);
+			suffix.size = 0;
+			
+			if (user_material->generate_unique_name_from_setting) {
+				GenerateShaderCompileOptionsSuffix(user_material->pixel_compile_options, suffix);
+			}
+			current_desc.identifier_suffix = suffix;
+			UnloadShader<true>(user_material->pixel_shader, current_desc);
 		}
 		m_graphics->FreeResource(material->layout);
 
 		auto remove_entry = [](unsigned char slot, auto* buffers, unsigned char& buffer_count, unsigned char* slots) {
 			unsigned char subindex = 0;
 
-			// Weird situation, the compiler keeps asking for a valid initialization for a reference as if
-			// entry is a reference when in fact it should be just the type of element from the buffers pointer
-			decltype(*buffers) entry = buffers[0];
+			// When using decltype(*buffers), the compiler actually generates a reference type instead of a value type
+			// Extremely annoying bug since it is counter intuitive. Has to do this work around
+			typename std::remove_reference<decltype(*buffers)>::type entry = buffers[0];
 			for (; subindex < buffer_count; subindex++) {
 				if (slots[subindex] == slot) {
 					entry = buffers[subindex];

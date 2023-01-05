@@ -94,7 +94,7 @@ namespace ECSEngine {
 			// Optimistically assume the lock is free on the first try
 			unsigned char before = byte.fetch_or(ECS_BIT(bit_index), ECS_ACQUIRE);
 
-			// The lock is free if the 7th bit is cleared
+			// The lock is free if the bit is cleared
 			if (IsBitUnlocked(before, bit_index)) {
 				return;
 			}

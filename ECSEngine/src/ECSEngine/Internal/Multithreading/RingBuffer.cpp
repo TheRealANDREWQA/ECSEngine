@@ -24,9 +24,13 @@ namespace ECSEngine {
 
 	void* RingBuffer::Allocate(size_t allocation_size)
 	{
+		lock.lock();
+
 		if (size + allocation_size > capacity) {
 			size = 0;
 		}
+
+		lock.unlock();
 
 		// The only wait condition is that the size is less than last_in_use
 		// and the size + allocation_size is greater than last_in_use
@@ -38,7 +42,9 @@ namespace ECSEngine {
 		}
 
 		void* allocation = function::OffsetPointer(buffer, size);
+		lock.lock();
 		size += allocation_size;
+		lock.unlock();
 
 		return allocation;
 	}

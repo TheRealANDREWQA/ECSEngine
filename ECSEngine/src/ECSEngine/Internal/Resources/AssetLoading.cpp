@@ -774,7 +774,7 @@ namespace ECSEngine {
 		else if (data->extra.dimension == CONTROL_BLOCK_MULTI_PACKED) {
 			data->extra.multi_packed_file->Deallocate(persistent_allocator);
 			for (size_t index = 0; index < data->extra.multi_packed_inputs.size; index++) {
-				HashTableDeallocateWithIdentifiers(data->extra.multi_packed_inputs[index].lookup_table, persistent_allocator);
+				HashTableDeallocate<false, true>(data->extra.multi_packed_inputs[index].lookup_table, persistent_allocator);
 				CloseFile(data->extra.multi_packed_inputs[index].file_handle);
 			}
 		}
@@ -1016,7 +1016,7 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic allocator = GetPersistentAllocator(database);
 		PackedFile* allocated_packed_file = (PackedFile*)Allocate(allocator, sizeof(PackedFile));
-		HashTableCopyWithIdentifiers(packed_file->lookup_table, allocated_packed_file->lookup_table, allocator);
+		HashTableCopy<false, true>(packed_file->lookup_table, allocated_packed_file->lookup_table, allocator);
 		allocated_packed_file->file_handle = packed_file->file_handle;
 
 		ControlBlockExtra extra;
@@ -1052,7 +1052,7 @@ namespace ECSEngine {
 
 		PackedFile* allocated_packed_files = (PackedFile*)Allocate(allocator, sizeof(PackedFile) * packed_files.size);
 		for (size_t index = 0; index < packed_files.size; index++) {
-			HashTableCopyWithIdentifiers(packed_files[index].lookup_table, allocated_packed_files[index].lookup_table, allocator);
+			HashTableCopy<false, true>(packed_files[index].lookup_table, allocated_packed_files[index].lookup_table, allocator);
 			allocated_packed_files[index].file_handle = packed_files[index].file_handle;
 		}
 

@@ -522,7 +522,7 @@ public:
 		metadata.path = L"Path";
 		metadata.AddMacro("PogChamp", "New", linear_allocator);
 		metadata.AddMacro("Hey there", "Totally", linear_allocator);
-		
+
 		ECS_SERIALIZE_CODE serialize_code = Serialize(reflection_manager, reflection_manager->GetType(STRING(ShaderMetadata)), &metadata, memory_ptr);
 		ECS_ASSERT(serialize_code == ECS_SERIALIZE_OK);
 
@@ -532,7 +532,7 @@ public:
 		DeserializeOptions options;
 		options.backup_allocator = linear_allocator;
 		options.field_allocator = linear_allocator;
-		ECS_DESERIALIZE_CODE deserialize_code = Deserialize(reflection_manager, reflection_manager->GetType(STRING(ShaderMetadata)), &deserialized_metadata, 
+		ECS_DESERIALIZE_CODE deserialize_code = Deserialize(reflection_manager, reflection_manager->GetType(STRING(ShaderMetadata)), &deserialized_metadata,
 			memory_ptr, &options);
 		ECS_ASSERT(deserialize_code == ECS_DESERIALIZE_OK);
 

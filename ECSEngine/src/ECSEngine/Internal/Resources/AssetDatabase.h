@@ -86,11 +86,17 @@ namespace ECSEngine {
 		// Returns a handle to that asset. Does not verify it it already exists
 		unsigned int AddAssetInternal(const void* asset, ECS_ASSET_TYPE type, unsigned int reference_count = 1);
 
+		// It will search for the asset using the name and file. If it finds it, it will return a handle to it
+		// and increment the reference count. Else it will add it and return the handle
+		unsigned int AddFindAssetInternal(const void* asset, ECS_ASSET_TYPE type, unsigned int reference_count = 1);
+
 		// It increments by one the reference count for that asset.
-		void AddAsset(unsigned int handle, ECS_ASSET_TYPE type);
+		void AddAsset(unsigned int handle, ECS_ASSET_TYPE type, unsigned int reference_count = 1);
 
 		// Retrive the allocator for this database
-		AllocatorPolymorphic Allocator() const;
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
+			return mesh_metadata.allocator;
+		}
 
 		// Creates a new standalone database with the given allocator and the given handles
 		AssetDatabase Copy(Stream<unsigned int>* handle_mask, AllocatorPolymorphic allocator) const;
@@ -250,11 +256,25 @@ namespace ECSEngine {
 
 		unsigned int GetAssetHandleFromIndex(unsigned int index, ECS_ASSET_TYPE type) const;
 
+		unsigned int GetIndexFromAssetHandle(unsigned int handle, ECS_ASSET_TYPE type) const;
+
+		// Returns the reference count stored in the actual stream. This is the total reference count
+		// of direct (or standalone) references + references from assets that depend on it
 		unsigned int GetReferenceCount(unsigned int handle, ECS_ASSET_TYPE type) const;
+
+		// Returns the count of direct references to that asset
+		unsigned int GetReferenceCountStandalone(unsigned int handle, ECS_ASSET_TYPE type) const;
+
+		// The counts stream is a pair with the x component being the handle and the y being the reference count
+		// It will find the standalone count for each handle in the asset type
+		void GetReferenceCountsStandalone(ECS_ASSET_TYPE type, CapacityStream<uint2>* counts) const;
 
 		AssetDatabaseSnapshot GetSnapshot() const;
 
 		unsigned int GetRandomizedPointer(ECS_ASSET_TYPE type) const;
+
+		// Returns true if the asset is being referenced by another asset
+		bool IsAssetReferencedByOtherAsset(unsigned int handle, ECS_ASSET_TYPE type) const;
 
 		// Generates the list of randomized values that are still valid
 		void RandomizedPointerList(unsigned int maximum_count, ECS_ASSET_TYPE type, CapacityStream<unsigned int>& values) const;
@@ -278,17 +298,20 @@ namespace ECSEngine {
 		// It does not set the name or the file
 		bool ReadGPUSamplerFile(Stream<char> name, GPUSamplerMetadata* metadata) const;
 
-		// It does not set the name or the file
-		bool ReadShaderFile(Stream<char> name, Stream<wchar_t> file, ShaderMetadata* metadata) const;
+		// It does not set the name or the file. Can optionally provide an allocator for the buffers that are used
+		// otherwise the allocator from this database will be used.
+		bool ReadShaderFile(Stream<char> name, Stream<wchar_t> file, ShaderMetadata* metadata, AllocatorPolymorphic allocator = { nullptr }) const;
 
-		// It does not set the name or the file
-		bool ReadMaterialFile(Stream<char> name, MaterialAsset* asset) const;
+		// It does not set the name or the file. Can optionally provide an allocator for the buffers that are used
+		// otherwise the allocator from this database will be used.
+		bool ReadMaterialFile(Stream<char> name, MaterialAsset* asset, AllocatorPolymorphic allocator = { nullptr }) const;
 
 		// It does not set the name or the file
 		bool ReadMiscFile(Stream<char> name, Stream<wchar_t> file, MiscAsset* asset) const;
 
-		// It does not set the name or the file
-		bool ReadAssetFile(Stream<char> name, Stream<wchar_t> file, void* metadata, ECS_ASSET_TYPE asset_type) const;
+		// It does not set the name or the file.  Can optionally provide an allocator for the buffers that are used
+		// otherwise the allocator from this database will be used. (this is used only for shaders and materials)
+		bool ReadAssetFile(Stream<char> name, Stream<wchar_t> file, void* metadata, ECS_ASSET_TYPE asset_type, AllocatorPolymorphic allocator = { nullptr }) const;
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
@@ -320,6 +343,85 @@ namespace ECSEngine {
 
 		// Does not destroy the file. It will remove the asset no matter what the reference count is
 		void RemoveAssetForced(unsigned int handle, ECS_ASSET_TYPE type);
+
+		// If the asset is to be evicted - e.g. it was the last reference, then it will call the functor
+		// before/after the remove is actually done. Can control the before/after with the template boolean argument
+		// The functor receives as arguments (unsigned int handle, ECS_ASSET_TYPE type, AssetType* asset)
+		// Returns true if the asset was removed
+		template<bool before_removal = true, typename Functor>
+		bool RemoveAssetWithAction(unsigned int handle, ECS_ASSET_TYPE type, Functor&& functor) {
+			// Returns true if the asset was removed
+			auto remove_lambda = [&](auto& sparse_set) {
+				auto& metadata = sparse_set[handle];
+				metadata.reference_count--;
+
+				if (metadata.reference_count == 0) {
+					if constexpr (before_removal) {
+						functor(handle, type, &metadata.value);
+					}
+
+					// Deallocate the memory
+					metadata.value.DeallocateMemory(sparse_set.allocator);
+					sparse_set.RemoveSwapBack(handle);
+
+					if constexpr (!before_removal) {
+						functor(handle, type, &metadata.value);
+					}
+
+					return true;
+				}
+				return false;
+			};
+
+			switch (type) {
+			case ECS_ASSET_MESH:
+			{
+				return remove_lambda(mesh_metadata);
+			}
+			break;
+			case ECS_ASSET_TEXTURE:
+			{
+				return remove_lambda(texture_metadata);
+			}
+			break;
+			case ECS_ASSET_GPU_SAMPLER:
+			{
+				return remove_lambda(gpu_sampler_metadata);
+			}
+			break;
+			case ECS_ASSET_SHADER:
+			{
+				return remove_lambda(shader_metadata);
+			}
+			break;
+			case ECS_ASSET_MATERIAL:
+			{
+				// Need to take the metadata now, and then deallocate the dependencies since the functor
+				// might use the handles that are dependencies.
+				MaterialAsset old_asset;
+				old_asset = *GetMaterialConst(handle);
+				bool removed = remove_lambda(material_asset);
+				if (removed) {
+					RemoveAssetDependencies(&old_asset, ECS_ASSET_MATERIAL);
+				}
+				return removed;
+			}
+			break;
+			case ECS_ASSET_MISC:
+			{
+				return remove_lambda(misc_asset);
+			}
+			break;
+			default:
+				ECS_ASSERT(false);
+			}
+			return false;
+		}
+
+		void RemoveAssetDependencies(const void* asset, ECS_ASSET_TYPE type);
+
+		// If the asset has dependencies, it will remove them
+		void RemoveAssetDependencies(unsigned int handle, ECS_ASSET_TYPE type);
 
 		// The restore works only when elements were added, if removals have happened
 		// these will produce undefined behaviour

@@ -7,6 +7,7 @@
 #include "ECSEngineSerialization.h"
 #include "ECSEngineSerializationHelpers.h"
 #include "ECSEngineComponents.h"
+#include "../Editor/EditorEvent.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Reflection;
@@ -845,29 +846,84 @@ void EditorComponents::EmptyEventStream()
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::FinalizeEvent(const ReflectionManager* reflection_manager, UIReflectionDrawer* ui_drawer, EditorComponentEvent event)
-{
-	// At the moment only the calls that need to update the component
+struct FinalizeEventSingleThreadedData {
+	EditorComponentEvent event_;
+	const ReflectionManager* reflection_manager;
+	UIReflectionDrawer* ui_drawer;
+};
 
-	switch (event.type) {
+// When the finalize event needs to do something on the main thread
+// it will push an event for that purpose. For example when creating UI types
+EDITOR_EVENT(FinalizeEventSingleThreaded) {
+	FinalizeEventSingleThreadedData* data = (FinalizeEventSingleThreadedData*)_data;
+
+	switch (data->event_.type) {
 	case EDITOR_COMPONENT_EVENT_IS_ADDED:
 	{
 		// Update the UIDrawer
-		const ReflectionType* type = reflection_manager->GetType(event.name);
-		UIReflectionType* ui_type = ui_drawer->CreateType(type);
+		const ReflectionType* type = data->reflection_manager->GetType(data->event_.name);
+		UIReflectionType* ui_type = data->ui_drawer->CreateType(type);
 		// Change all buffers to resizable
 		// And disable their writes
-		ui_drawer->ConvertTypeStreamsToResizable(ui_type);
-		ui_drawer->DisableInputWrites(ui_type);
+		data->ui_drawer->ConvertTypeStreamsToResizable(ui_type);
+		data->ui_drawer->DisableInputWrites(ui_type);
 	}
 	break;
 	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
 	{
 		// Update the UIDrawer, the destroy call will destroy all instances of that type
 		// If it still exists. If the module is released all at once, then this type might not exist
-		if (ui_drawer->GetTypePtr(event.name) != nullptr) {
-			ui_drawer->DestroyType(event.name);
+		if (data->ui_drawer->GetTypePtr(data->event_.name) != nullptr) {
+			data->ui_drawer->DestroyType(data->event_.name);
 		}
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_ALLOCATOR_SIZE_CHANGED:
+	{
+		ECS_ASSERT(false);
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_DIFFERENT_COMPONENT_DIFFERENT_ID:
+	{
+		ECS_ASSERT(false);
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_HAS_CHANGED:
+	{
+		ECS_ASSERT(false);
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID:
+	{
+		ECS_ASSERT(false);
+	}
+	break;
+	}
+
+	return false;
+}
+
+void EditorComponents::FinalizeEvent(EditorState* editor_state, const ReflectionManager* reflection_manager, UIReflectionDrawer* ui_drawer, EditorComponentEvent event)
+{
+	switch (event.type) {
+	case EDITOR_COMPONENT_EVENT_IS_ADDED:
+	{
+		// Push an event - the main thread could be adding another UI type in the meantime
+		FinalizeEventSingleThreadedData single_threaded_data;
+		single_threaded_data.event_ = event;
+		single_threaded_data.reflection_manager = reflection_manager;
+		single_threaded_data.ui_drawer = ui_drawer;
+		EditorAddEvent(editor_state, FinalizeEventSingleThreaded, &single_threaded_data, sizeof(single_threaded_data));
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
+	{
+		// Push an event - the main thread could be adding another UI type in the meantime
+		FinalizeEventSingleThreadedData single_threaded_data;
+		single_threaded_data.event_ = event;
+		single_threaded_data.reflection_manager = reflection_manager;
+		single_threaded_data.ui_drawer = ui_drawer;
+		EditorAddEvent(editor_state, FinalizeEventSingleThreaded, &single_threaded_data, sizeof(single_threaded_data));
 	}
 	break;
 	case EDITOR_COMPONENT_EVENT_ALLOCATOR_SIZE_CHANGED:
@@ -878,7 +934,7 @@ void EditorComponents::FinalizeEvent(const ReflectionManager* reflection_manager
 	case EDITOR_COMPONENT_EVENT_DIFFERENT_COMPONENT_DIFFERENT_ID:
 	{
 		event.type = EDITOR_COMPONENT_EVENT_HAS_CHANGED;
-		FinalizeEvent(reflection_manager, ui_drawer, event);
+		FinalizeEvent(editor_state, reflection_manager, ui_drawer, event);
 	}
 	break;
 	case EDITOR_COMPONENT_EVENT_HAS_CHANGED:
@@ -888,10 +944,10 @@ void EditorComponents::FinalizeEvent(const ReflectionManager* reflection_manager
 		// Update the UIDrawer as well
 		// Destroy the component to invalidate all current instances and then recreate it
 		event.type = EDITOR_COMPONENT_EVENT_IS_REMOVED;
-		FinalizeEvent(reflection_manager, ui_drawer, event);
+		FinalizeEvent(editor_state, reflection_manager, ui_drawer, event);
 		
 		event.type = EDITOR_COMPONENT_EVENT_IS_ADDED;
-		FinalizeEvent(reflection_manager, ui_drawer, event);
+		FinalizeEvent(editor_state, reflection_manager, ui_drawer, event);
 	}
 	break;
 	case EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID:
@@ -2010,7 +2066,12 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 	}
 	else {
 		data->finalize_event_lock->lock();
-		data->editor_state->editor_components.FinalizeEvent(data->editor_state->module_reflection->reflection, data->editor_state->module_reflection, data->event_to_handle);
+		data->editor_state->editor_components.FinalizeEvent(
+			data->editor_state, 
+			data->editor_state->module_reflection->reflection, 
+			data->editor_state->module_reflection, 
+			data->event_to_handle
+		);
 		data->finalize_event_lock->unlock();
 	}
 

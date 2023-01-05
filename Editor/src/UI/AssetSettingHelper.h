@@ -30,6 +30,7 @@ void AssetSettingsHelperDestroy(EditorState* editor_state, AssetSettingsHelperDa
 
 struct AssetSettingsHelperChangedActionData {
 	EditorState* editor_state;
+	AssetDatabase* target_database;
 	AssetSettingsHelperData* helper_data;
 	ECS_ASSET_TYPE asset_type;
 };
@@ -40,6 +41,7 @@ void AssetSettingsHelperChangedAction(ActionData* action_data);
 // with the new file path
 struct AssetSettingsHelperChangedWithFileActionData {
 	EditorState* editor_state;
+	AssetDatabase* target_database;
 	Stream<wchar_t> previous_target_file;
 	Stream<char> previous_name;
 	ECS_ASSET_TYPE asset_type;
@@ -51,6 +53,7 @@ void AssetSettingsHelperChangedWithFileAction(ActionData* action_data);
 
 struct AssetSettingsHelperChangedNoFileActionData {
 	EditorState* editor_state;
+	AssetDatabase* target_database;
 	ECS_ASSET_TYPE asset_type;
 	const void* asset;
 };
@@ -60,3 +63,8 @@ void AssetSettingsHelperChangedNoFileAction(ActionData* action_data);
 size_t AssetSettingsHelperBaseConfiguration();
 
 void AssetSettingsHelperBaseConfig(UIDrawConfig* draw_config);
+
+// Sets the pointer of the metadata to the one found in the asset database, if the asset is loaded
+void AssetSettingsExtractPointerFromMainDatabase(const EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type);
+
+void AssetSettingsIsReferencedUIStatus(Tools::UIDrawer* drawer, const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);

@@ -4,6 +4,7 @@
 #include "../../Reflection/ReflectionStringFunctions.h"
 #include "../SerializationHelpers.h"
 #include "../../../Containers/Stacks.h"
+#include "../../../Allocators/ResizableLinearAllocator.h"
 
 #define DESERIALIZE_FIELD_TABLE_MAX_TYPES (32)
 
@@ -130,7 +131,7 @@ namespace ECSEngine {
 					}
 
 					// If user defined, write the definition aswell
-					if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					if (field->info.basic_type == ReflectionBasicFieldType::UserDefined || field->info.basic_type == ReflectionBasicFieldType::Enum) {
 						Stream<char> definition_stream = field->definition;
 						total_size += WriteWithSizeShort<write_data>(&stream, definition_stream.buffer, (unsigned short)definition_stream.size);
 					}
@@ -393,6 +394,9 @@ namespace ECSEngine {
 			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD_REFLECT));
 			if (!skip_serializable) {
 				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
+				if (!skip_serializable) {
+					skip_serializable = reflection_manager->FindBlittableException(type->fields[index].definition).x != -1;
+				}
 			}
 
 			if (!skip_serializable && type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
@@ -446,6 +450,8 @@ namespace ECSEngine {
 		bool has_options = options != nullptr;
 
 		Stream<SerializeOmitField> omit_fields = has_options ? options->omit_fields : Stream<SerializeOmitField>(nullptr, 0);
+
+		sizeof(DeserializeFieldInfo);
 
 		if (!has_options || (has_options && options->verify_dependent_types)) {
 			// Check that the type has all its dependencies met
@@ -1318,7 +1324,7 @@ namespace ECSEngine {
 			return_code = deserialize_without_table();
 		}
 
-		return ECS_DESERIALIZE_OK;
+		return return_code;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -1427,10 +1433,13 @@ namespace ECSEngine {
 			}
 
 			// The definition
-			if (type->fields[index].basic_type == ReflectionBasicFieldType::UserDefined) {
+			if (type->fields[index].basic_type == ReflectionBasicFieldType::UserDefined || type->fields[index].basic_type == ReflectionBasicFieldType::Enum) {
 				unsigned short definition_size = 0;
 				ReferenceDataWithSizeShort<true>(&data, (void**)&type->fields[index].definition.buffer, definition_size);
 				type->fields[index].definition.size = definition_size;
+			}
+			else {
+				type->fields[index].definition = GetBasicFieldDefinition(type->fields[index].basic_type);
 			}
 		}
 
@@ -1594,14 +1603,28 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
+	void IgnoreDeserialize(uintptr_t& data)
+	{
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+
+		DeserializeFieldTable field_table;
+		field_table = DeserializeFieldTableFromData(data, GetAllocatorPolymorphic(&stack_allocator));
+		IgnoreDeserialize(data, field_table);
+
+		stack_allocator.ClearBackup();
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
 	void IgnoreDeserialize(uintptr_t& data, DeserializeFieldTable field_table, const ReflectionManager* deserialized_manager)
 	{
 		ReflectionManager temp_manager;
-		size_t stack_allocation_size = deserialized_manager == nullptr ? ECS_KB * 16 : 0;
+		size_t stack_allocation_size = deserialized_manager == nullptr ? ECS_KB * 32 : 0;
 		void* stack_allocation = ECS_STACK_ALLOC(stack_allocation_size);
 		LinearAllocator linear_allocator(stack_allocation, stack_allocation_size);
 		if (deserialized_manager == nullptr) {
 			deserialized_manager = &temp_manager;
+			temp_manager.type_definitions.Initialize(&linear_allocator, 256);
 			field_table.ToNormalReflection(&temp_manager, GetAllocatorPolymorphic(&linear_allocator));
 		}
 
@@ -1826,12 +1849,27 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	void DeserializeFieldTable::ToNormalReflection(ReflectionManager* reflection_manager, AllocatorPolymorphic allocator) const
+	void DeserializeFieldTable::ToNormalReflection(
+		ReflectionManager* reflection_manager, 
+		AllocatorPolymorphic allocator, 
+		bool allocate_all,
+		bool check_for_insertion,
+		bool calculate_parameters
+	) const
 	{
-		for (size_t index = 0; index < types.size; index++) {
+		// Commit all types and then calculate the byte size and the alignment for them
+		// + is_trivially copyable
+
+		auto add_type = [=](size_t index) {
 			ReflectionType type;
 			type.name = types[index].name;
+			if (allocate_all) {
+				type.name = function::StringCopy(allocator, type.name);
+			}
 			type.fields.Initialize(allocator, types[index].fields.size);
+			type.tag = { nullptr, 0 };
+			type.evaluations = { nullptr, 0 };
+			unsigned short field_offset = 0;
 			for (size_t field_index = 0; field_index < types[index].fields.size; field_index++) {
 				type.fields[field_index].name = types[index].fields[field_index].name;
 				type.fields[field_index].definition = types[index].fields[field_index].definition;
@@ -1840,9 +1878,49 @@ namespace ECSEngine {
 				type.fields[field_index].info.byte_size = types[index].fields[field_index].byte_size;
 				type.fields[field_index].info.stream_type = types[index].fields[field_index].stream_type;
 				type.fields[field_index].info.stream_byte_size = types[index].fields[field_index].stream_byte_size;
+				type.fields[field_index].info.pointer_offset = field_offset;
+				type.fields[field_index].tag = { nullptr, 0 };
+
+				if (allocate_all) {
+					type.fields[field_index].name = function::StringCopy(allocator, type.fields[field_index].name);
+					type.fields[field_index].definition = function::StringCopy(allocator, type.fields[field_index].definition);
+				}
+				field_offset += type.fields[field_index].info.byte_size;
 			}
 
 			ECS_ASSERT(!reflection_manager->type_definitions.Insert(type, type.name));
+		};
+
+		for (size_t index = 0; index < types.size; index++) {
+			if (check_for_insertion) {
+				if (reflection_manager->type_definitions.Find(types[index].name) == -1) {
+					add_type(index);
+				}
+			}
+			else {
+				add_type(index);
+			}
+		}
+
+		if (calculate_parameters) {
+			for (size_t index = 0; index < types.size; index++) {
+				Reflection::ReflectionType* ptr = reflection_manager->type_definitions.GetValuePtr(types[index].name);
+				ptr->byte_size = CalculateReflectionTypeByteSize(reflection_manager, ptr);
+				ptr->alignment = CalculateReflectionTypeAlignment(reflection_manager, ptr);
+				ptr->is_blittable = SearchIsBlittable(reflection_manager, ptr);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	void DeserializeFieldTable::ExtractTypesFromReflection(
+		Reflection::ReflectionManager* reflection_manager, 
+		CapacityStream<Reflection::ReflectionType*> reflection_types
+	) const
+	{
+		for (size_t index = 0; index < types.size; index++) {
+			reflection_types.AddSafe(reflection_manager->type_definitions.GetValuePtr(types[index].name));
 		}
 	}
 

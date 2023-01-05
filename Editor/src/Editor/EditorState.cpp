@@ -398,14 +398,14 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->ui_system = ui;
 
 	Reflection::ReflectionManager* editor_reflection_manager = (Reflection::ReflectionManager*)malloc(sizeof(Reflection::ReflectionManager));
-	*editor_reflection_manager = Reflection::ReflectionManager(editor_allocator);
+	*editor_reflection_manager = Reflection::ReflectionManager(GetAllocatorPolymorphic(editor_allocator));
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
 	ECS_TEMP_ASCII_STRING(error_message, 256);
-	bool success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)0, /*editor_task_manager,*/ &error_message);
+	bool success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)0, editor_task_manager, &error_message);
 	ECS_ASSERT(success);
 
-	success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)1, /*editor_task_manager,*/ &error_message);
+	success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)1, editor_task_manager, &error_message);
 	ECS_ASSERT(success);
 
 	size_t editor_component_allocator_size = editor_state->editor_components.DefaultAllocatorSize();
@@ -416,16 +416,19 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	*editor_ui_reflection = UIReflectionDrawer(resizable_arena, editor_reflection_manager);
 	editor_state->ui_reflection = editor_ui_reflection;
 
+	EditorEvent* editor_events = (EditorEvent*)calloc(EDITOR_EVENT_QUEUE_CAPACITY, sizeof(EditorEvent));
+	editor_state->event_queue.InitializeFromBuffer(editor_events, EDITOR_EVENT_QUEUE_CAPACITY);
+
 	// Update the editor components
 	editor_state->editor_components.UpdateComponents(editor_reflection_manager, 0, "ECSEngine");
 	// Finalize every event
 	for (unsigned int index = 0; index < editor_state->editor_components.events.size; index++) {
-		editor_state->editor_components.FinalizeEvent(editor_reflection_manager, editor_ui_reflection, editor_state->editor_components.events[index]);
+		editor_state->editor_components.FinalizeEvent(editor_state, editor_reflection_manager, editor_ui_reflection, editor_state->editor_components.events[index]);
 	}
 	editor_state->editor_components.EmptyEventStream();
 
 	Reflection::ReflectionManager* module_reflection_manager = (Reflection::ReflectionManager*)malloc(sizeof(Reflection::ReflectionManager));
-	*module_reflection_manager = Reflection::ReflectionManager(editor_allocator);
+	*module_reflection_manager = Reflection::ReflectionManager(GetAllocatorPolymorphic(editor_allocator));
 
 	// Inherit the constants from the ui_reflection
 	module_reflection_manager->InheritConstants(editor_reflection_manager);
@@ -464,9 +467,6 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	FileExplorerData* file_explorer_data = (FileExplorerData*)calloc(1, sizeof(FileExplorerData));
 	editor_state->file_explorer_data = file_explorer_data;
 	InitializeFileExplorer(editor_state);
-
-	EditorEvent* editor_events = (EditorEvent*)calloc(EDITOR_EVENT_QUEUE_CAPACITY, sizeof(EditorEvent));
-	editor_state->event_queue.InitializeFromBuffer(editor_events, EDITOR_EVENT_QUEUE_CAPACITY);
 
 	ProjectModules* project_modules = (ProjectModules*)malloc(sizeof(ProjectModules));
 	project_modules->Initialize(polymorphic_editor_allocator, 0);

@@ -55,14 +55,6 @@ const char* VERTEX_BUFFER_MAPPINGS[] = {
 	"BONE_INFLUENCE"
 };
 
-const char* INTERPOLATION_MODIFIERS[] = {
-	"linear",
-	"centroid",
-	"nointerpolation",
-	"noperspective",
-	"sample"
-};
-
 const char* VERTEX_BUFFER_MACRO_MAPPINGS[] = {
 	STRING(ECS_REFLECT_POSITION),
 	STRING(ECS_REFLECT_NORMAL),
@@ -231,7 +223,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// Returns the byte offset of the element. If no packoffset is specified, then it will return USHORT_MAX
 	unsigned short ParsePackoffset(const char* starting_character, const char* new_line_character) {
-		unsigned short offset = 0;
+		unsigned short offset = USHORT_MAX;
 
 		starting_character = function::SkipWhitespace(starting_character);
 		if (starting_character < new_line_character) {
@@ -247,6 +239,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 						// Determine if there is a dot in between
 						const char* dot = strchr(paranthese_start, '.');
 						Stream<char> int_parse = { paranthese_start, function::PointerDifference(paranthese_end, paranthese_start) };
+						offset = 0;
 						if (dot != nullptr) {
 							if (dot < new_line_character) {
 								// Get the x, y, z, w specifier
@@ -446,15 +439,29 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	unsigned int ConvertConstantBufferFieldToReflectionField(
 		const ShaderReflectionConstantBufferField* shader_field, 
 		Reflection::ReflectionField* reflection_fields,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* matrix_field_name_storage,
+		Stream<ShaderReflectionBufferMatrixField>* matrix_field
 	) {
-		reflection_fields[0].definition = function::StringCopy(allocator, shader_field->definition);
+		if (matrix_field != nullptr && shader_field->basic_component_count > 1) {
+			matrix_field->buffer[matrix_field->size].name.buffer = matrix_field_name_storage->buffer + matrix_field_name_storage->size;
+			matrix_field->buffer[matrix_field->size].name.Copy(shader_field->name);
+			matrix_field_name_storage->size += shader_field->name.size;
+			matrix_field_name_storage->AssertCapacity();
+		}
 		reflection_fields[0].name = function::StringCopy(allocator, shader_field->name);
+
+		reflection_fields[0].definition = function::StringCopy(allocator, shader_field->definition);
 		reflection_fields[0].info.basic_type = shader_field->basic_type;
 		reflection_fields[0].info.pointer_offset = shader_field->pointer_offset;
-		reflection_fields[0].info.basic_type_count = shader_field->basic_array_count;
 		reflection_fields[0].info.stream_type = shader_field->basic_array_count == 0 ? Reflection::ReflectionStreamFieldType::Basic : 
 			Reflection::ReflectionStreamFieldType::BasicTypeArray;
+		if (shader_field->basic_array_count == 0) {
+			reflection_fields[0].info.basic_type_count = 1;
+		}
+		else {
+			reflection_fields[0].info.basic_type_count = shader_field->basic_array_count;
+		}
 
 		if (shader_field->default_value[0].x != DBL_MAX) {
 			memcpy(&reflection_fields[0].info.default_bool, shader_field->default_value, sizeof(double4));
@@ -464,7 +471,20 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			reflection_fields[0].info.has_default_value = false;
 		}
 		reflection_fields[0].info.stream_byte_size = 0;
-		reflection_fields[0].info.byte_size = Reflection::GetReflectionBasicFieldTypeByteSize(shader_field->basic_type);
+		if (shader_field->basic_type == Reflection::ReflectionBasicFieldType::UserDefined) {
+			if (function::CompareStrings(shader_field->definition, "Color")) {
+				reflection_fields[0].info.byte_size = sizeof(Color);
+			}
+			else if (function::CompareStrings(shader_field->definition, "ColorFloat")) {
+				reflection_fields[0].info.byte_size = sizeof(ColorFloat);
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+		}
+		else {
+			reflection_fields[0].info.byte_size = Reflection::GetReflectionBasicFieldTypeByteSize(shader_field->basic_type);
+		}
 		reflection_fields[0].tag = { nullptr, 0 };
 
 		if (shader_field->basic_component_count > 1) {
@@ -577,17 +597,6 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		const char* number_start = strchr(register_ptr, '(');
 		const char* number_end = strchr(number_start, ')');
 		return function::ConvertCharactersToInt(Stream<char>(number_start, number_end - number_start));
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------------------------
-
-	bool IsInterpolationAttribute(Stream<char> string) {
-		for (size_t index = 0; index < std::size(INTERPOLATION_MODIFIERS); index++) {
-			if (function::CompareStrings(INTERPOLATION_MODIFIERS[index], string)) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -1062,11 +1071,10 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		Stream<wchar_t> path, 
 		CapacityStream<ShaderReflectedBuffer>& buffers, 
 		AllocatorPolymorphic allocator,
-		bool only_constant_buffers,
-		Reflection::ReflectionType* constant_buffer_reflection
+		ShaderReflectionBuffersOptions options
 	) const {
 		return ReflectProperty(this, path, [&](Stream<char> data) {
-			return ReflectShaderBuffersSource(data, buffers, allocator, only_constant_buffers, constant_buffer_reflection);
+			return ReflectShaderBuffersSource(data, buffers, allocator, options);
 		});
 	}
 
@@ -1074,8 +1082,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		Stream<char> source_code, 
 		CapacityStream<ShaderReflectedBuffer>& buffers, 
 		AllocatorPolymorphic allocator,
-		bool only_constant_buffers,
-		Reflection::ReflectionType* constant_buffer_reflection
+		ShaderReflectionBuffersOptions options
 	) const
 	{
 		// Make the last character \0 - it will be a non important character
@@ -1083,6 +1090,15 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 		const char* omit_string = STRING(ECS_REFLECT_OMIT);
 		size_t omit_string_size = strlen(omit_string);
+
+		auto clean = [&]() {
+			if (options.constant_buffer_reflection != nullptr) {
+				ShaderReflectedBuffersDeallocate(buffers, allocator, *options.constant_buffer_reflection);
+			}
+			else {
+				ShaderReflectedBuffersDeallocate(buffers, allocator);
+			}
+		};
 
 		// Search for keywords
 		// Cbuffer is a special keyword; don't include in the for loop
@@ -1095,15 +1111,33 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 			const char* end_bracket = function::FindMatchingParenthesis(cbuffer_ptr, source_code.buffer + source_code.size, '{', '}', 0);
 			if (end_bracket == nullptr) {
+				clean();
 				return false;
 			}
 			Stream<char> parse_buffer_code = { cbuffer_ptr, function::PointerDifference(end_bracket, cbuffer_ptr) + 1 };
 
 			if (memcmp(before_end_line.buffer, omit_string, omit_string_size) != 0) {
-				Reflection::ReflectionType* reflection_type = constant_buffer_reflection == nullptr ? nullptr : constant_buffer_reflection + buffers.size;
-				buffers[buffers.size] = ReflectShaderConstantBuffer(this, parse_buffer_code, buffers.size, reflection_type, allocator);
+				Reflection::ReflectionType* reflection_type = nullptr;
+				if (options.constant_buffer_reflection != nullptr) {
+					ECS_ASSERT(options.constant_buffer_reflection->size < options.constant_buffer_reflection->capacity);
+					reflection_type = options.constant_buffer_reflection->buffer + buffers.size;
+				}
+				Stream<ShaderReflectionBufferMatrixField>* matrix_type = nullptr;
+				if (reflection_type != nullptr) {
+					if (options.matrix_types_storage.buffer != nullptr && options.matrix_types != nullptr) {
+						matrix_type = options.matrix_types + buffers.size;
+						matrix_type->size = 0;
+						matrix_type->buffer = options.matrix_types_storage.buffer + options.matrix_types_storage.size;
+					}
+				}
+				buffers[buffers.size] = ReflectShaderStruct(this, parse_buffer_code, buffers.size, reflection_type, allocator, matrix_type, &options.matrix_type_name_storage);
 				if (buffers[buffers.size].byte_size == -1) {
+					clean();
 					return false;
+				}
+				if (matrix_type != nullptr) {
+					options.matrix_types_storage.size += matrix_type->size;
+					options.matrix_types_storage.AssertCapacity();
 				}
 				buffers.size++;
 			}
@@ -1113,7 +1147,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			cbuffer_ptr = strstr(current_parse_range.buffer, BUFFER_KEYWORDS[ECS_SHADER_BUFFER_CONSTANT]);
 		}
 
-		if (!only_constant_buffers) {
+		if (!options.only_constant_buffers) {
 			size_t constant_buffer_count = buffers.size;
 			for (size_t index = 1; index < std::size(BUFFER_KEYWORDS); index++) {
 				current_parse_range = source_code;
@@ -1121,6 +1155,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				while (current_buffer != nullptr) {
 					const char* semicolon = strchr(current_buffer, ';');
 					if (semicolon == nullptr) {
+						clean();
 						return false;
 					}
 
@@ -1261,64 +1296,17 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	bool ShaderReflection::ReflectShaderMacros(
 		Stream<char> source_code, 
-		CapacityStream<Stream<char>>* defined_macro,
+		CapacityStream<Stream<char>>* defined_macros,
 		CapacityStream<Stream<char>>* conditional_macros,
 		AllocatorPolymorphic allocator
 	) const
 	{
-		auto get_name = [allocator](Stream<char> name) {
-			if (allocator.allocator != nullptr) {
-				return function::StringCopy(allocator, name);
-			}
-			return name;
-		};
-
-		// Make the last character \0 - it will be a non important character
-		source_code[source_code.size - 1] = '\0';
-		ECS_STACK_CAPACITY_STREAM(unsigned int, macro_positions, 512);
-
-		if (defined_macro != nullptr) {
-			// Find all #define
-			function::FindToken(source_code, "#define", macro_positions);
-
-			// Exclude the function argument macros
-			for (unsigned int index = 0; index < macro_positions.size; index++) {
-				const char* macro_start = source_code.buffer + macro_positions[index];
-				macro_start = function::SkipCodeIdentifier(macro_start + 1);
-				const char* macro_name_start = function::SkipWhitespace(macro_start);
-				const char* macro_name_end = function::SkipCodeIdentifier(macro_name_start);
-				macro_name_end = function::SkipWhitespace(macro_name_end);
-				if (*macro_name_end == '(') {
-					// Function macro, exclude it
-					continue;
-				}
-
-				size_t name_size = function::PointerDifference(macro_name_end, macro_name_end);
-				defined_macro->AddSafe(get_name(Stream<char>(macro_name_start, name_size)));
-			}
-		}
-
-		// Determine all the conditional macros now
-		macro_positions.size = 0;
-
-		if (conditional_macros != nullptr) {
-			function::FindToken(source_code, "#ifdef", macro_positions);
-
-			for (unsigned int index = 0; index < macro_positions.size; index++) {
-				const char* macro_start = source_code.buffer + macro_positions[index];
-				macro_start = function::SkipCodeIdentifier(macro_start + 1);
-				const char* macro_name_start = function::SkipWhitespace(macro_start);
-				const char* macro_name_end = function::SkipCodeIdentifier(macro_name_start);
-				size_t name_size = function::PointerDifference(macro_name_end, macro_name_start);
-
-				Stream<char> macro = { macro_name_start, name_size };
-				// Check to see if it already exists in the set, such that we don't write it multiple times
-				unsigned int exists_index = function::FindString(macro, *conditional_macros);
-				if (exists_index == -1) {
-					conditional_macros->AddSafe(get_name(macro));
-				}
-			}
-		}
+		function::SourceCodeMacros macros;
+		function::GetSourceCodeMacrosCTokens(&macros);
+		macros.allocator = allocator;
+		macros.defined_macros = defined_macros;
+		macros.conditional_macros = conditional_macros;
+		function::GetSourceCodeMacros(source_code, &macros);
 
 		return true;
 	}
@@ -1543,23 +1531,34 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	ShaderReflectedBuffer ReflectShaderConstantBuffer(
+	ShaderReflectedBuffer ReflectShaderStruct(
 		const ShaderReflection* shader_reflection, 
 		Stream<char> source,
 		unsigned int default_slot_position,
 		Reflection::ReflectionType* reflection_type, 
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		Stream<ShaderReflectionBufferMatrixField>* matrix_types,
+		CapacityStream<char>* matrix_type_name_storage
 	)
 	{
 		ShaderReflectedBuffer reflected_buffer;
 
 		ECS_ASSERT(reflection_type == nullptr || allocator.allocator != nullptr);
 
+		reflected_buffer.type = ECS_SHADER_BUFFER_COUNT;
+
 		const char* starting_pointer = source.buffer;
 		size_t cbuffer_size = strlen(BUFFER_KEYWORDS[0]);
 		if (memcmp(starting_pointer, BUFFER_KEYWORDS[ECS_SHADER_BUFFER_CONSTANT], cbuffer_size) == 0) {
 			// Get buffer name
 			starting_pointer += cbuffer_size + 1;
+			reflected_buffer.type = ECS_SHADER_BUFFER_CONSTANT;
+		}
+		else {
+			size_t struct_size = strlen("struct");
+			if (memcmp(starting_pointer, "struct", struct_size * sizeof(char)) == 0) {
+				starting_pointer += struct_size + 1;
+			}
 		}
 
 		while (!function::IsAlphabetCharacter(*starting_pointer)) {
@@ -1570,9 +1569,8 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			starting_pointer++;
 		}
 
-		// Name and type
+		// Name
 		reflected_buffer.name = SetName(name_start, starting_pointer, allocator);
-		reflected_buffer.type = ECS_SHADER_BUFFER_CONSTANT;
 
 		// Register index
 		char* end_bracket = (char*)function::FindMatchingParenthesis(starting_pointer, source.buffer + source.size, '{', '}', 0);
@@ -1613,7 +1611,20 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					// We need to record other properties
 					ShaderReflectionConstantBufferField buffer_field;
 					ParseShaderReflectionConstantBufferField(shader_reflection, &buffer_field, identifier.buffer, next_new_line, &current_offset);
-					reflected_fields.size += ConvertConstantBufferFieldToReflectionField(&buffer_field, reflected_fields.buffer + reflected_fields.size, allocator);
+					unsigned int field_count = ConvertConstantBufferFieldToReflectionField(
+						&buffer_field, 
+						reflected_fields.buffer + reflected_fields.size, 
+						allocator, 
+						matrix_type_name_storage, 
+						matrix_types
+					);
+					if (field_count > 1) {
+						if (matrix_types != nullptr) {
+							matrix_types->buffer[matrix_types->size].position = { reflected_fields.size, field_count };
+							matrix_types->size++;
+						}
+					}
+					reflected_fields.size += field_count;
 					total_byte_size = 0;
 				}
 				else {
@@ -1681,13 +1692,13 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		for (size_t index = 0; index < reflection_type->fields.size; index++) {
 			Deallocate(allocator, reflection_type->fields[index].name.buffer);
 			Deallocate(allocator, reflection_type->fields[index].definition.buffer);
+			if (reflection_type->fields[index].tag.size > 0) {
+				Deallocate(allocator, reflection_type->fields[index].tag.buffer);
+			}
 		}
 
 		Deallocate(allocator, reflection_type->name.buffer);
 		Deallocate(allocator, reflection_type->fields.buffer);
-		if (reflection_type->tag.size > 0) {
-			Deallocate(allocator, reflection_type->tag.buffer);
-		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -1715,6 +1726,21 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				Deallocate(allocator, samplers[index].name.buffer);
 			}
 			DeallocateIfBelongs(allocator, samplers.buffer);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------------------------
+
+	void ShaderReflectedBuffersDeallocate(
+		Stream<ShaderReflectedBuffer> buffers,
+		AllocatorPolymorphic allocator,
+		Stream<Reflection::ReflectionType> reflection_types
+	) {
+		for (size_t index = 0; index < buffers.size; index++) {
+			Deallocate(allocator, buffers[index].name.buffer);
+		}
+		for (size_t index = 0; index < reflection_types.size; index++) {
+			ShaderConstantBufferReflectionTypeDeallocate(reflection_types.buffer + index, allocator);
 		}
 	}
 

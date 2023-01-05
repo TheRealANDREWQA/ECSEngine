@@ -1,5 +1,6 @@
 #pragma once
 #include "../../Core.h"
+#include "ConcurrentPrimitives.h"
 
 namespace ECSEngine {
 
@@ -21,6 +22,7 @@ namespace ECSEngine {
 		size_t size;
 		size_t capacity;
 		std::atomic<size_t> last_in_use;
+		SpinLock lock;
 	};
 
 }

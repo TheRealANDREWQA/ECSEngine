@@ -181,12 +181,33 @@ struct InspectorDrawEntityData {
 		return function::FindString(name, link_components, [](LinkComponent component) { return component.name; });
 	}
 
+	void RemoveCreatedInstance(EditorState* editor_state, Stream<char> component_name) {
+		for (size_t index = 0; index < created_instances.size; index++) {
+			// The name of the component is at the beginning of each instance name
+			if (memcmp(created_instances[index].name.buffer, component_name.buffer, component_name.size * sizeof(char)) == 0) {
+				if (editor_state->module_reflection->GetInstancePtr(created_instances[index].name) != nullptr) {
+					// It is from the module side
+					editor_state->module_reflection->DestroyInstance(created_instances[index].name);
+				}
+				else {
+					// It must be from the engine side
+					ECS_ASSERT(editor_state->ui_reflection->GetInstancePtr(created_instances[index].name) != nullptr);
+					editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
+				}
+				editor_state->editor_allocator->Deallocate(created_instances[index].name.buffer);
+				created_instances.RemoveSwapBack(index);
+				break;
+			}
+		}
+	}
+
 	// Removes all the memory allocated for the capacity inputs of that component
 	void RemoveComponent(EditorState* editor_state, Stream<char> component_name) {
 		unsigned int index = FindMatchingInput(component_name);
 		ECS_ASSERT(index != -1);
 		ClearComponent(editor_state, index);
 		matching_inputs.RemoveSwapBack(index);
+		RemoveCreatedInstance(editor_state, component_name);
 	}
 
 	void RemoveLinkComponent(EditorState* editor_state, Stream<char> name) {
@@ -241,9 +262,20 @@ struct InspectorDrawEntityData {
 	Stream<CreatedInstance> created_instances;
 };
 
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void InspectorCleanEntity(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawEntityData* data = (InspectorDrawEntityData*)_data;
 	data->Clear(editor_state);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void InspectorComponentUIIInstanceName(Stream<char> component_name, Stream<char> base_entity_name, unsigned int sandbox_index, CapacityStream<char>& instance_name) {
+	instance_name.Copy(component_name);
+	instance_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+	instance_name.AddStream(base_entity_name);
+	function::ConvertIntToChars(instance_name, sandbox_index);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -605,10 +637,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 			change_component_data.component_name = current_component_name;
 
-			instance_name.Copy(current_component_name);
-			instance_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-			instance_name.AddStream(base_entity_name);
-			function::ConvertIntToChars(instance_name, sandbox_index);
+			InspectorComponentUIIInstanceName(current_component_name, base_entity_name, sandbox_index, instance_name);
 
 			// Check to see whether or not the component is from the engine side or from the module side
 			UIReflectionDrawer* ui_drawer = editor_state->module_reflection;

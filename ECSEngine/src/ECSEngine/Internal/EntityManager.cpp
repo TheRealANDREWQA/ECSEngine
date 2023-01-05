@@ -1275,7 +1275,8 @@ namespace ECSEngine {
 					shared_signature.count--;
 					shared_signature.indices[subindex] = shared_signature.indices[shared_signature.count];
 					shared_signature.instances[subindex] = shared_signature.instances[shared_signature.count];
-
+					// Decrement the subindex as well in order to not crash when exiting when this is the last element
+					subindex--;
 					break;
 				}
 			}

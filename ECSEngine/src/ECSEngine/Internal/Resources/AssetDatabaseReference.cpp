@@ -111,6 +111,44 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
+	unsigned int AssetDatabaseReference::Find(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type) const
+	{
+		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+		unsigned int handle = database->FindAsset(name, file, type);
+		if (handle != -1) {
+			return function::SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(unsigned int));
+		}
+		return -1;
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	AssetTypedHandle AssetDatabaseReference::FindDeep(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type) const
+	{
+		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+		unsigned int handle = database->FindAsset(name, file, type);
+		if (handle != -1) {
+			unsigned int index = (unsigned int)function::SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(unsigned int));
+			if (index != -1) {
+				return { index, type };
+			}
+
+			// If it can be referenced, continue
+			if (type == ECS_ASSET_TEXTURE || type == ECS_ASSET_GPU_SAMPLER || type == ECS_ASSET_SHADER) {
+				ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
+				for (unsigned int index = 0; index < streams[ECS_ASSET_MATERIAL].size; index++) {
+					bool is_referenced = DoesAssetReferenceOtherAsset(handle, type, database->GetMaterialConst(streams[ECS_ASSET_MATERIAL][index]), ECS_ASSET_MATERIAL);
+					if (is_referenced) {
+						return { streams[ECS_ASSET_MATERIAL][index], ECS_ASSET_MATERIAL };
+					}
+				}
+			}
+		}
+		return { (unsigned int)-1, type };
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
 	MeshMetadata* AssetDatabaseReference::GetMesh(unsigned int index)
 	{
 		return (MeshMetadata*)GetAsset(index, ECS_ASSET_MESH);
@@ -176,9 +214,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	AssetDatabase* AssetDatabaseReference::GetDatabase() const
+	unsigned int AssetDatabaseReference::GetReferenceCountIndex(unsigned int index, ECS_ASSET_TYPE type) const
 	{
-		return database;
+		return GetReferenceCountHandle(GetHandle(index, type), type);
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabaseReference::GetReferenceCountHandle(unsigned int handle, ECS_ASSET_TYPE type) const
+	{
+		return database->GetReferenceCount(handle, type);
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -290,7 +335,7 @@ namespace ECSEngine {
 		out_database->material_asset.ResizeNoCopy(material_asset.size);
 		out_database->misc_asset.ResizeNoCopy(misc_asset.size);
 
-		auto set_value = [&](auto stream, ECS_ASSET_TYPE type) {
+		auto set_value = [&](auto stream, ECS_ASSET_TYPE type, auto add_function) {
 			if (stream.size > 0) {
 				// Create a temporary copy of the stream and eliminate the duplicates
 				ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, stream_copy, stream.size);
@@ -319,17 +364,49 @@ namespace ECSEngine {
 				}
 
 				for (unsigned int index = 0; index < stream_copy.size; index++) {
-					out_database->AddAssetInternal(database->GetAsset(stream_copy[index], type), type, reference_count[index]);
+					add_function(stream_copy[index], reference_count[index], type);
+					
 				}
 			}
 		};
 
-		set_value(mesh_metadata, ECS_ASSET_MESH);
-		set_value(texture_metadata, ECS_ASSET_TEXTURE);
-		set_value(gpu_sampler_metadata, ECS_ASSET_GPU_SAMPLER);
-		set_value(shader_metadata, ECS_ASSET_SHADER);
-		set_value(material_asset, ECS_ASSET_MATERIAL);
-		set_value(misc_asset, ECS_ASSET_MISC);
+		auto add_asset_internal = [this, out_database](unsigned int handle, unsigned int reference_count, ECS_ASSET_TYPE type) {
+			out_database->AddAssetInternal(database->GetAsset(handle, type), type, reference_count);
+		};
+
+		set_value(mesh_metadata, ECS_ASSET_MESH, add_asset_internal);
+		set_value(texture_metadata, ECS_ASSET_TEXTURE, add_asset_internal);
+		set_value(gpu_sampler_metadata, ECS_ASSET_GPU_SAMPLER, add_asset_internal);
+		set_value(shader_metadata, ECS_ASSET_SHADER, add_asset_internal);
+		set_value(misc_asset, ECS_ASSET_MISC, add_asset_internal);
+
+		auto add_material = [this, out_database](unsigned int handle, unsigned int reference_count, ECS_ASSET_TYPE type) {
+			auto get_new_handle = [this, out_database](unsigned int handle, ECS_ASSET_TYPE type) {
+				if (handle != -1) {
+					const void* asset = database->GetAssetConst(handle, type);
+					handle = out_database->AddFindAssetInternal(asset, type);
+				}
+				return handle;
+			};
+
+			const MaterialAsset* current_asset = database->GetMaterialConst(handle);
+			MaterialAsset new_asset;
+			new_asset.CopyAndResize(current_asset, out_database->Allocator());
+
+			new_asset.vertex_shader_handle = get_new_handle(current_asset->vertex_shader_handle, ECS_ASSET_SHADER);
+			new_asset.pixel_shader_handle = get_new_handle(current_asset->pixel_shader_handle, ECS_ASSET_SHADER);
+
+			for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
+				for (size_t subindex = 0; subindex < current_asset->textures[type].size; subindex++) {
+					new_asset.textures[type][subindex].metadata_handle = get_new_handle(current_asset->textures[type][subindex].metadata_handle, ECS_ASSET_TEXTURE);
+				}
+				for (size_t subindex = 0; subindex < current_asset->samplers[type].size; subindex++) {
+					new_asset.samplers[type][subindex].metadata_handle = get_new_handle(current_asset->samplers[type][subindex].metadata_handle, ECS_ASSET_GPU_SAMPLER);
+				}
+			}
+			out_database->AddAssetInternal(&new_asset, ECS_ASSET_MATERIAL, reference_count);
+		};
+		set_value(material_asset, ECS_ASSET_MATERIAL, add_material);
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -378,7 +455,39 @@ namespace ECSEngine {
 		set_values(standalone_database->texture_metadata, texture_metadata, ECS_ASSET_TEXTURE);
 		set_values(standalone_database->gpu_sampler_metadata, gpu_sampler_metadata, ECS_ASSET_GPU_SAMPLER);
 		set_values(standalone_database->shader_metadata, shader_metadata, ECS_ASSET_SHADER);
+
+		// Set the Do not increment dependencies flag for the material asset
+		SetSerializeCustomMaterialDoNotIncrementDependencies(true);
 		set_values(standalone_database->material_asset, material_asset, ECS_ASSET_MATERIAL);
+		SetSerializeCustomMaterialDoNotIncrementDependencies(false);
+		// For assets that are being referenced by other assets, we need to remove the count of
+		// external references from other assets
+		ECS_ASSET_TYPE referenceable_assets[] = {
+			ECS_ASSET_TEXTURE,
+			ECS_ASSET_GPU_SAMPLER,
+			ECS_ASSET_SHADER
+		};
+		ECS_STACK_CAPACITY_STREAM(uint2, external_references, 1024);
+		ResizableStream<unsigned int>* asset_streams = (ResizableStream<unsigned int>*)this;
+		for (size_t type = 0; type < std::size(referenceable_assets); type++) {
+			external_references.size = 0;
+			standalone_database->GetReferenceCountsStandalone(referenceable_assets[type], &external_references);
+			for (unsigned int index = 0; index < external_references.size; index++) {
+				unsigned int reference_count = standalone_database->GetReferenceCount(external_references[index].x, referenceable_assets[type]);
+				unsigned int difference = reference_count - external_references[index].y;
+				for (unsigned int diff_index = 0; diff_index < difference; diff_index++) {
+					unsigned int existing_index = function::SearchBytes(
+						asset_streams[referenceable_assets[type]].buffer,
+						asset_streams[referenceable_assets[type]].size,
+						external_references[index].x,
+						sizeof(unsigned int)
+					);
+					ECS_ASSERT(existing_index != -1);
+					asset_streams[referenceable_assets[type]].RemoveSwapBack(existing_index);
+				}
+			}
+		}
+		
 		set_values(standalone_database->misc_asset, misc_asset, ECS_ASSET_MISC);
 
 		// If it has pointer remapping, iterate the master database and report the changed values

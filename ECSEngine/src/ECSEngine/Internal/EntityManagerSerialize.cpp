@@ -2205,8 +2205,6 @@ namespace ECSEngine {
 		}
 		else {
 			// Must use the deserialize to take care of the data that can be read
-			// TODO: At the moment if the data has a buffer it will be allocated using malloc
-			// Make a decision on how to handle this case. (the data will be leaked)
 			DeserializeOptions options;
 			options.read_type_table = false;
 			options.field_table = &functor_data->field_table;

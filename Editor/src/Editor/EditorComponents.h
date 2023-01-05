@@ -84,7 +84,12 @@ struct EditorComponents {
 
 	// Should be called if the calls for resolve event have been applied successfully on all entity managers
 	// It does clean up job like updating the internal component after applying the changes
-	void FinalizeEvent(const ECSEngine::Reflection::ReflectionManager* reflection_manager, ECSEngine::Tools::UIReflectionDrawer* ui_drawer, EditorComponentEvent event);
+	void FinalizeEvent(
+		EditorState* editor_state,
+		const ECSEngine::Reflection::ReflectionManager* reflection_manager, 
+		ECSEngine::Tools::UIReflectionDrawer* ui_drawer, 
+		EditorComponentEvent event
+	);
 
 	// Returns the index inside the loaded_modules if the module has components recorded here, else -1.
 	unsigned int FindModule(ECSEngine::Stream<char> name) const;

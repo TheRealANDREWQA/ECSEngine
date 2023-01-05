@@ -116,6 +116,7 @@ void RemoveAnywhereCallback(ActionData* action_data) {
 	changed_data.editor_state = data->editor_state;
 	changed_data.previous_name = data->draw_data->shader_metadata.name;
 	changed_data.previous_target_file = data->draw_data->shader_metadata.file;
+	changed_data.target_database = data->editor_state->asset_database;
 	action_data->data = &changed_data;
 	AssetSettingsHelperChangedWithFileAction(action_data);
 };
@@ -334,6 +335,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 			changed_data.thunk_file_path = data->draw_data->path;
 			changed_data.previous_name = data->draw_data->shader_metadata.name;
 			changed_data.previous_target_file = *previous_path;
+			changed_data.target_database = data->editor_state->asset_database;
 
 			action_data->data = &changed_data;
 			AssetSettingsHelperChangedWithFileAction(action_data);
@@ -406,6 +408,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 	combo_changed_data.thunk_file_path = data->path;
 	combo_changed_data.previous_name = data->shader_metadata.name;
 	combo_changed_data.previous_target_file = data->shader_metadata.file;
+	combo_changed_data.target_database = editor_state->asset_database;
 	UIActionHandler modified_callback = { AssetSettingsHelperChangedWithFileAction, &combo_changed_data, sizeof(combo_changed_data) };
 
 	UIConfigComboBoxCallback combo_callback;
@@ -515,6 +518,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 			changed_data.editor_state = data->editor_state;
 			changed_data.previous_name = data->data->shader_metadata.name;
 			changed_data.previous_target_file = data->data->shader_metadata.file;
+			changed_data.target_database = data->editor_state->asset_database;
 			action_data->data = &changed_data;
 			AssetSettingsHelperChangedWithFileAction(action_data);
 		};

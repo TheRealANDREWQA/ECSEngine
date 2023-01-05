@@ -12,6 +12,9 @@ namespace ECSEngine {
 	ResizableLinearAllocator::ResizableLinearAllocator() : m_initial_buffer(nullptr), m_initial_capacity(0), m_allocated_buffers(nullptr), 
 		m_allocated_buffer_capacity(0), m_allocated_buffer_size(0), m_top(0), m_marker(0), m_backup_size(0), m_backup({ nullptr }) {}
 
+	ResizableLinearAllocator::ResizableLinearAllocator(size_t capacity, size_t backup_size, AllocatorPolymorphic allocator)
+		: ResizableLinearAllocator(ECSEngine::Allocate(allocator, capacity), capacity, backup_size, allocator) {}
+
 	ResizableLinearAllocator::ResizableLinearAllocator(void* buffer, size_t capacity, size_t backup_size, AllocatorPolymorphic allocator) 
 		: m_top(0), m_marker(0), m_backup_size(backup_size), m_backup(allocator) 
 	{
@@ -107,7 +110,8 @@ namespace ECSEngine {
 	void ResizableLinearAllocator::Free()
 	{
 		ClearBackup();
-		DeallocateIfBelongs(m_backup, m_initial_buffer);
+		// This is the buffer that was received in the constructor
+		DeallocateIfBelongs(m_backup, m_allocated_buffers);
 	}
 
 	// ---------------------------------------------------------------------------------

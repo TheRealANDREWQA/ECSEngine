@@ -128,6 +128,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 		changed_base_data.editor_state = editor_state;
 		changed_base_data.asset_type = ECS_ASSET_MESH;
 		changed_base_data.helper_data = &data->helper_data;
+		changed_base_data.target_database = editor_state->asset_database;
 
 		UIConfigTextInputCallback float_input_callback;
 		float_input_callback.handler = { AssetSettingsHelperChangedAction, &changed_base_data, sizeof(changed_base_data) };

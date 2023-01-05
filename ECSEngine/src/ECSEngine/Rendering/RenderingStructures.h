@@ -23,7 +23,7 @@ function(Texture3D);
 ECS_GRAPHICS_BUFFERS(function); 
 
 #define ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT 4
-#define ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT 4
+#define ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT 6
 #define ECS_MATERIAL_VERTEX_TEXTURES_COUNT 2
 #define ECS_MATERIAL_PIXEL_TEXTURES_COUNT 8
 #define ECS_MATERIAL_UAVIEW_COUNT 4
@@ -310,7 +310,6 @@ namespace ECSEngine {
 
 	enum ECS_SHADER_TARGET : unsigned char {
 		ECS_SHADER_TARGET_5_0,
-		ECS_SHADER_TARGET_5_1,
 		ECS_SHADER_TARGET_COUNT
 	};
 
@@ -1460,6 +1459,10 @@ namespace ECSEngine {
 		ECS_SHADER_TYPE shader_type;
 		unsigned char slot;
 	};
+
+	// Generates an identifier that can be used to uniquely identify a shader based on its options
+	// Useful for the resource manager
+	ECSENGINE_API void GenerateShaderCompileOptionsSuffix(ShaderCompileOptions compile_options, CapacityStream<void>& suffix);
 
 	// A user material which is based only on textures and constant buffers
 	struct UserMaterial {

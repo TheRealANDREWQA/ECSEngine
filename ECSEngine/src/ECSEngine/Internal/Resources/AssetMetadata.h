@@ -82,6 +82,8 @@ namespace ECSEngine {
 			return (void**)&mesh_pointer;
 		}
 
+		ECS_INLINE void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const {}
+
 		Stream<char> name;
 		Stream<wchar_t> file;
 		float scale_factor;
@@ -109,6 +111,8 @@ namespace ECSEngine {
 			return (void**)&texture;
 		}
 
+		ECS_INLINE void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const {}
+
 		Stream<char> name;
 		Stream<wchar_t> file;
 		bool sRGB;
@@ -132,6 +136,8 @@ namespace ECSEngine {
 		ECS_INLINE void** PtrToPointer() {
 			return (void**)&sampler;
 		}
+
+		ECS_INLINE void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const {}
 
 		Stream<char> name;
 		ECS_SAMPLER_ADDRESS_TYPE address_mode;
@@ -176,6 +182,8 @@ namespace ECSEngine {
 			return &shader_interface;
 		}
 
+		ECS_INLINE void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const {}
+
 		Stream<char> name;
 		Stream<wchar_t> file;
 		Stream<ShaderMacro> macros;
@@ -189,6 +197,7 @@ namespace ECSEngine {
 	};
 
 	struct MaterialAssetResource {
+		Stream<char> name;
 		unsigned int metadata_handle;
 		unsigned char slot;
 	};
@@ -196,7 +205,10 @@ namespace ECSEngine {
 	// Constant buffer description
 	// If it is dynamic, the data can be missing (the size must still be specified,
 	// the pointer can be nullptr then).
+	// The reflection type can be missing
 	struct MaterialAssetBuffer {
+		Reflection::ReflectionType* reflection_type = nullptr;
+		Stream<char> name;
 		Stream<void> data;
 		bool dynamic;
 		unsigned char slot;
@@ -218,8 +230,28 @@ namespace ECSEngine {
 		MaterialAsset() = default;
 		MaterialAsset(Stream<char> name, AllocatorPolymorphic allocator);
 
-		// This asset can only be copied with an allocator
+		// Does not allocate the names for the textures, samplers or buffers, neither it allocates
+		// the reflection type with the given allocator
+		void CopyAndResize(const MaterialAsset* asset, AllocatorPolymorphic allocator, bool allocate_name = false);
+
+		// It will copy the buffer/texture/sampler information from the other asset for those resources
+		// that match names. For textures/samplers it will only copy the slot, for the buffers it will copy
+		// the slot, the dynamic status and the data. The reflection manager must be set
+		void CopyMatchingNames(const MaterialAsset* asset);
+
+		// This asset can only be copied with an allocator - the difference between this function
+		// and the CopyAndResize is that this function does copy the name for textures, samplers or buffers and
+		// also allocates the reflection type with the allocator + the reflection manager
 		MaterialAsset Copy(AllocatorPolymorphic allocator) const;
+
+		// Deallocates everything that can be deallocated from the buffer reflection types
+		void DeallocateBufferReflectionTypes(AllocatorPolymorphic allocator) const;
+
+		// Deallocates the data.buffer pointer of each buffer
+		void DeallocateBufferPointers(AllocatorPolymorphic allocator) const;
+
+		// Deallocates the names of the textures, samplers and buffers
+		void DeallocateNames(AllocatorPolymorphic allocator) const;
 
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
@@ -267,6 +299,13 @@ namespace ECSEngine {
 			bool do_not_copy = false
 		);
 
+		// Resizes the counts to the ones in the other material
+		void Resize(
+			const MaterialAsset* other,
+			AllocatorPolymorphic allocator,
+			bool do_not_copy = false
+		);
+
 		void WriteCounts(bool write_texture, bool write_sampler, bool write_buffers, unsigned int* counts) const;
 
 		// The counts is a contiguous array with all the counts for textures, samplers and buffers
@@ -286,6 +325,8 @@ namespace ECSEngine {
 			return (void**)&material_pointer;
 		}
 
+		void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const;
+
 		Stream<char> name;
 		// These are maintained as a coallesced buffer
 		Stream<MaterialAssetResource> textures[ECS_MATERIAL_SHADER_COUNT];
@@ -295,10 +336,12 @@ namespace ECSEngine {
 		unsigned int pixel_shader_handle;
 
 		// A pointer to the graphics object
-		Material* material_pointer; ECS_SKIP_REFLECTION()
+		Material* material_pointer;
+		// This is used for serialization/deserialization and for CopyMatchingNames
+		Reflection::ReflectionManager* reflection_manager;
 	};
 
-	struct ECS_REFLECT MiscAsset {
+	struct ECSENGINE_API ECS_REFLECT MiscAsset {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
 		MiscAsset Copy(AllocatorPolymorphic allocator) const;
@@ -315,6 +358,8 @@ namespace ECSEngine {
 		ECS_INLINE void** PtrToPointer() {
 			return (void**)&data;
 		}
+
+		ECS_INLINE void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const {}
 
 		Stream<char> name;
 		Stream<wchar_t> file;
@@ -362,5 +407,10 @@ namespace ECSEngine {
 
 	// If long format is specified then it will print the full file path for absolute paths instead of only the filename
 	ECSENGINE_API void AssetToString(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<char>& string, bool long_format = false);
+
+	ECSENGINE_API void GetAssetDependencies(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* handles);
+
+	// Returns true if the asset given references the given handle
+	ECSENGINE_API bool DoesAssetReferenceOtherAsset(unsigned int handle, ECS_ASSET_TYPE handle_type, const void* asset, ECS_ASSET_TYPE type);
 
 }
