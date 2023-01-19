@@ -96,13 +96,32 @@ void ChangeAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_AS
 
 void ChangeAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, size_t new_stamp);
 
+struct DeallocateAssetDependency {
+	unsigned int handle;
+	ECS_ASSET_TYPE type;
+	// This is the previous value of the built asset
+	Stream<void> previous_pointer;
+};
+
 // Returns true if it succeeded, else false. It can fail if the resource doesn't exist
-// This doesn't check the prevent resource load flag and wait until is cleared
-bool DeallocateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
+// This doesn't check the prevent resource load flag and wait until is cleared.
+// If the recurse flag is set to true, then it will deallocate all assets that depend on it
+// If the recurse flag is true and the dependent_assets is given it will fill in the assets that were deallocated
+// during the recursion (those deallocations that were successful)
+bool DeallocateAsset(
+	EditorState* editor_state, 
+	unsigned int handle, 
+	ECS_ASSET_TYPE type, 
+	bool recurse = true, 
+	CapacityStream<DeallocateAssetDependency>* dependent_assets = nullptr
+);
 
 // Returns true if it succeeded, else false. It can fail if the resource doesn't exist
 // This doesn't check the prevent resource load flag and wait until is cleared
-bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type);
+// If the recurse flag is set to true, then it will deallocate all assets that depend on it
+// If the recurse flag is true and the dependent_assets is given it will fill in the assets that were deallocated
+// during the recursion (those deallocations that were successful)
+bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type, bool recurse = true, CapacityStream<DeallocateAssetDependency>* dependent_assets = nullptr);
 
 // It may not run immediately since it may be prevented from loading resources
 void DeleteAssetSetting(EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
@@ -110,8 +129,18 @@ void DeleteAssetSetting(EditorState* editor_state, Stream<char> name, Stream<wch
 // Deletes all asset metadata files which have their asset missing
 void DeleteMissingAssetSettings(const EditorState* editor_state);
 
-// Returns true if the asset already exists or not. For materials and samplers the file parameter is ignored
+// Returns true if the asset already exists in the asset database or not. For materials and samplers the file parameter is ignored
 bool ExistsAsset(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
+
+// Returns true if the asset exists in the resource manager
+bool ExistsAssetInResourceManager(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
+
+// Returns true if the assets exists in the resource manager
+bool ExistsAssetInResourceManager(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+// It will remove the asset from the asset database without deallocating it from the resource manager
+// Also, it will remove the time stamp associated with this asset from the database
+void EvictAssetFromDatabase(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
 // Returns the handle of the asset. Returns -1 if it doesn't exist
 unsigned int FindAsset(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
@@ -140,7 +169,21 @@ Stream<Stream<char>> GetAssetCorrespondingMetadata(const EditorState* editor_sta
 
 // Fills in the handles of the assets that are out of date (have been changed from outside, like a mesh or a texture, ECS files as well)
 // If the update stamp flag is true then it will also update the time stamps stored into the resource manager
-Stream<Stream<unsigned int>> GetOutOfDateAssets(EditorState* editor_state, AllocatorPolymorphic allocator, bool update_stamp = true);
+// If the include dependencies is set to true, if an assets has changed and another asset depends on it, it will also add the latter to the
+// outdated list of assets
+Stream<Stream<unsigned int>> GetOutOfDateAssets(EditorState* editor_state, AllocatorPolymorphic allocator, bool update_stamp = true, bool include_dependencies = true);
+
+// Fills in the handles of the assets for which the metadata file has changed since last time
+// If the update stamp flag is true then it will also update the time stamps stored into the resource manager
+// If the include dependencies is set to true, if an assets has changed and another asset depends on it, it will also add the latter to the
+// outdated list of assets
+Stream<Stream<unsigned int>> GetOutOfDateAssetsMetadata(EditorState* editor_state, AllocatorPolymorphic allocator, bool update_stamp = true, bool include_dependencies = true);
+
+// Fills in the handles of the assets that have their target changed
+// If the update stamp flag is true then it will also update the time stamps stored into the resource manager
+// If the include dependencies is set to true, if an assets has changed and another asset depends on it, it will also add the latter to the
+// outdated list of assets
+Stream<Stream<unsigned int>> GetOutOfDateAssetsTargetFile(EditorState* editor_state, AllocatorPolymorphic allocator, bool update_stamp = true, bool include_dependencies = true);
 
 Stream<Stream<unsigned int>> GetDependentAssetsFor(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
 
@@ -151,6 +194,19 @@ size_t GetAssetRuntimeTimeStamp(const EditorState* editor_state, const void* met
 // It returns the time stamp of the target file (if it has one) and that of the metadata from the OS,
 // not the internally stored one
 size_t GetAssetExternalTimeStamp(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+// It returns the time stamp of the target file (if it has one) and that of the metadata from the OS,
+// not the internally stored one
+size_t GetAssetExternalTimeStamp(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, Stream<wchar_t> assets_folder);
+
+// It returns the time stamp of the metadata file that corresponds to the asset
+size_t GetAssetMetadataTimeStamp(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+// Returns the time stamp of the target asset (like for meshes or textures)
+size_t GetAssetTargetFileTimeStamp(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+// Returns the time stamp of the target asset (like for meshes or textures)
+size_t GetAssetTargetFileTimeStamp(const void* metadata, ECS_ASSET_TYPE type, Stream<wchar_t> assets_folder);
 
 unsigned int GetAssetReferenceCount(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
@@ -181,12 +237,13 @@ void RemoveAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_AS
 void RemoveAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
 
 // Deallocates the asset and removes the time stamp from the resource manager. Returns true if the deallocation
-// was successful, else false
+// was successful, else false.
 bool RemoveAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type);
 
 // Deallocates the asset and removes the time stamp from the resource manager, it will also eliminate it from the
-// asset database
-bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
+// asset database. If the recurse flag is set to true, then it will recursively called for each dependency
+// that is maintained alive only by this asset
+bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, bool recurse = true);
 
 // Returns true if it managed to write
 bool WriteForwardingFile(Stream<wchar_t> absolute_path, Stream<wchar_t> target_path);

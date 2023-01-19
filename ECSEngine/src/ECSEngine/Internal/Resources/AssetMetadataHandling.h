@@ -242,12 +242,25 @@ namespace ECSEngine {
 	// if it doesn't it does nothing)
 	ECSENGINE_API bool DeallocateShaderFromMetadata(ResourceManager* resource_manager, ShaderMetadata* metadata, Stream<wchar_t> mount_point = { nullptr, 0 });
 
-	ECSENGINE_API void DeallocateMaterialFromMetadata(ResourceManager* resource_manager, MaterialAsset* material, const AssetDatabase* database, Stream<wchar_t> mount_point = { nullptr, 0 });
+	// If the check_resource is set to true, it will check to see that the texture/shader exists in the resource
+	// manager and attempt to unload if it does
+	ECSENGINE_API void DeallocateMaterialFromMetadata(
+		ResourceManager* resource_manager, 
+		MaterialAsset* material, 
+		const AssetDatabase* database, 
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		bool check_resource = false
+	);
 
 	// Returns true if the resource reference counted was decremented (by default it checks to see if it exists,
 	// if it doesn't it does nothing)
 	ECSENGINE_API bool DeallocateMiscAssetFromMetadata(ResourceManager* resource_manager, MiscAsset* misc, Stream<wchar_t> mount_point = { nullptr, 0 });
 	
+	// These are options that apply only to certain asset types
+	struct DeallocateAssetFromMetadataOptions {
+		bool material_check_resource = false;
+	};
+
 	// Returns true if the resource reference counted was decremented (by default it checks to see if it exists,
 	// if it doesn't it does nothing). For materials and samplers it always returns true
 	ECSENGINE_API bool DeallocateAssetFromMetadata(
@@ -255,7 +268,8 @@ namespace ECSEngine {
 		AssetDatabase* database, 
 		void* metadata,
 		ECS_ASSET_TYPE type, 
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		DeallocateAssetFromMetadataOptions options = {}
 	);
 
 #pragma endregion
@@ -272,12 +286,6 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		bool handles_only = true
 	);
-
-	ECSENGINE_API bool DoesMaterialDependOn(const MaterialAsset* material, const void* other_metadata, ECS_ASSET_TYPE type);
-
-	// Determines assets that use the given asset (at the moment only the material references other assets)
-	// For example if a texture is being used and a material references it, then it will fill in the material that references it
-	ECSENGINE_API Stream<Stream<unsigned int>> GetDependentAssetsFor(const AssetDatabase* database, const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
 
 	ECSENGINE_API void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code);
 

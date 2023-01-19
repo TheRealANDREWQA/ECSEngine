@@ -884,14 +884,22 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	void DeallocateMaterialFromMetadata(ResourceManager* resource_manager, MaterialAsset* material, const AssetDatabase* database, Stream<wchar_t> mount_point)
+	void DeallocateMaterialFromMetadata(
+		ResourceManager* resource_manager, 
+		MaterialAsset* material, 
+		const AssetDatabase* database, 
+		Stream<wchar_t> mount_point,
+		bool check_resource
+	)
 	{
 		// Deallocate the textures and the buffers
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 
 		UserMaterial user_material;
 		ConvertMaterialAssetToUserMaterial(database, material, &user_material, GetAllocatorPolymorphic(&stack_allocator), mount_point);
-		resource_manager->UnloadUserMaterial(&user_material, (Material*)material->material_pointer);
+		ResourceManagerLoadDesc load_desc;
+		load_desc.load_flags = check_resource ? ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE : 0;
+		resource_manager->UnloadUserMaterial(&user_material, (Material*)material->material_pointer, load_desc);
 
 		stack_allocator.ClearBackup();
 	}
@@ -907,7 +915,14 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	bool DeallocateAssetFromMetadata(ResourceManager* resource_manager, AssetDatabase* database, void* metadata, ECS_ASSET_TYPE type, Stream<wchar_t> mount_point)
+	bool DeallocateAssetFromMetadata(
+		ResourceManager* resource_manager, 
+		AssetDatabase* database, 
+		void* metadata, 
+		ECS_ASSET_TYPE type,
+		Stream<wchar_t> mount_point,
+		DeallocateAssetFromMetadataOptions options
+	)
 	{
 		switch (type) {
 		case ECS_ASSET_MESH:
@@ -933,7 +948,7 @@ namespace ECSEngine {
 		break;
 		case ECS_ASSET_MATERIAL:
 		{
-			DeallocateMaterialFromMetadata(resource_manager, (MaterialAsset*)metadata, database, mount_point);
+			DeallocateMaterialFromMetadata(resource_manager, (MaterialAsset*)metadata, database, mount_point, options.material_check_resource);
 			return true;
 		}
 		break;
@@ -1034,78 +1049,6 @@ namespace ECSEngine {
 		else {
 			loop(std::false_type{});
 		}
-	}
-
-	// -------------------------------------------------------------------------------------------------------------------------
-
-	bool DoesMaterialDependOn(const MaterialAsset* material, const void* other_metadata, ECS_ASSET_TYPE type)
-	{
-		switch (type) {
-		case ECS_ASSET_TEXTURE: 
-		{
-			TextureMetadata* metadata = (TextureMetadata*)other_metadata;
-			return material->material_pointer->ContainsTexture(metadata->texture);
-		}
-		break;
-		case ECS_ASSET_GPU_SAMPLER:
-		{
-			GPUSamplerMetadata* metadata = (GPUSamplerMetadata*)other_metadata;
-			return material->material_pointer->ContainsSampler(metadata->sampler);
-		}
-		break;
-		case ECS_ASSET_SHADER:
-		{
-			ShaderMetadata* metadata = (ShaderMetadata*)other_metadata;
-			if (metadata->shader_type == ECS_SHADER_VERTEX) {
-				return material->material_pointer->ContainsShader(VertexShader::FromInterface(metadata->shader_interface));
-			}
-			else if (metadata->shader_type == ECS_SHADER_PIXEL) {
-				return material->material_pointer->ContainsShader(PixelShader::FromInterface(metadata->shader_interface));
-			}
-			else {
-				return false;
-			}
-		}
-		break;
-		case ECS_ASSET_MESH:
-		case ECS_ASSET_MATERIAL:
-		case ECS_ASSET_MISC:
-			return false;
-		default:
-			ECS_ASSERT(false, "Invalid asset type");
-		}
-	}
-
-	// -------------------------------------------------------------------------------------------------------------------------
-
-	Stream<Stream<unsigned int>> GetDependentAssetsFor(const AssetDatabase* database, const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator)
-	{
-		Stream<Stream<unsigned int>> handles;
-		handles.Initialize(allocator, ECS_ASSET_TYPE_COUNT);
-		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			handles[index] = { nullptr, 0 };
-		}
-
-		if (type == ECS_ASSET_MESH || type == ECS_ASSET_MISC || type == ECS_ASSET_MATERIAL) {
-			return handles;
-		}
-
-		if (type != ECS_ASSET_TEXTURE && type != ECS_ASSET_GPU_SAMPLER && type != ECS_ASSET_SHADER) {
-			ECS_ASSERT(false, "Invalid asset type");
-		}
-
-		unsigned int material_count = database->GetAssetCount(ECS_ASSET_MATERIAL);
-		handles[ECS_ASSET_MATERIAL].Initialize(allocator, material_count);
-		handles[ECS_ASSET_MATERIAL].size = 0;
-		for (unsigned int index = 0; index < material_count; index++) {
-			unsigned int handle = database->GetAssetHandleFromIndex(index, ECS_ASSET_MATERIAL);
-			const MaterialAsset* asset = database->GetMaterialConst(handle);
-
-			if (DoesMaterialDependOn(asset, metadata, type)) {
-				handles[ECS_ASSET_MATERIAL].Add(handle);
-			}
-		}
-		return handles;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------

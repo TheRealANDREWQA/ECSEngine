@@ -1077,7 +1077,7 @@ void GetModuleDLLImports(EditorState* editor_state, unsigned int index)
 		}
 	}
 
-	editor_state->project_modules->buffer[index].dll_imports = StreamDeepCopy(dll_imports, editor_state->EditorAllocator());
+	editor_state->project_modules->buffer[index].dll_imports = StreamCoallescedDeepCopy(dll_imports, editor_state->EditorAllocator());
 
 	_stack_allocator.ClearBackup();
 }

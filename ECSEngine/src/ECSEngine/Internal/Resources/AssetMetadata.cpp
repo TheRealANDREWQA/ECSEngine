@@ -206,6 +206,57 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	bool MaterialAsset::CompareOptions(const MaterialAsset* other) const
+	{
+		bool same_shaders = vertex_shader_handle == other->vertex_shader_handle && pixel_shader_handle == other->pixel_shader_handle;
+		if (same_shaders) {
+			for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
+				if (textures[type].size != other->textures[type].size) {
+					return false;
+				}
+				if (samplers[type].size != other->samplers[type].size) {
+					return false;
+				}
+				if (buffers[type].size != other->buffers[type].size) {
+					return false;
+				}
+
+				for (size_t index = 0; index < textures[type].size; index++) {
+					MaterialAssetResource texture = textures[type][index];
+					MaterialAssetResource other_texture = other->textures[type][index];
+					if (texture.slot != other_texture.slot || texture.metadata_handle != other_texture.metadata_handle) {
+						return false;
+					}
+				}
+				
+				for (size_t index = 0; index < samplers[type].size; index++) {
+					MaterialAssetResource sampler = samplers[type][index];
+					MaterialAssetResource other_sampler = other->samplers[type][index];
+					if (sampler.slot != other_sampler.slot || sampler.metadata_handle != other_sampler.metadata_handle) {
+						return false;
+					}
+				}
+
+				for (size_t index = 0; index < buffers[type].size; index++) {
+					const MaterialAssetBuffer* buffer = buffers[type].buffer + index;
+					const MaterialAssetBuffer* other_buffer = other->buffers[type].buffer + index;
+					if (buffer->dynamic != other_buffer->dynamic || buffer->slot != other_buffer->slot || buffer->data.size != other_buffer->data.size) {
+						return false;
+					}
+
+					// If they have different byte representation, then they are different
+					if (memcmp(buffer->data.buffer, other_buffer->data.buffer, buffer->data.size) != 0) {
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	void MaterialAsset::CopyAndResize(const MaterialAsset* asset, AllocatorPolymorphic allocator, bool allocate_name)
 	{
 		Resize(asset, allocator, true);
@@ -508,6 +559,81 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	void MaterialAsset::RemapDependencies(Stream<AssetTypedHandle> handles)
+	{
+		size_t current_handles_size = 0;
+
+		auto get_handle = [&current_handles_size, handles](ECS_ASSET_TYPE type) {
+			ECS_ASSERT(handles.size > current_handles_size);
+			ECS_ASSERT(handles[current_handles_size].type == type);
+
+			return handles[current_handles_size++].handle;
+		};
+ 
+		if (vertex_shader_handle != -1) {
+			vertex_shader_handle = get_handle(ECS_ASSET_SHADER);
+		}
+
+		if (pixel_shader_handle != -1) {
+			pixel_shader_handle = get_handle(ECS_ASSET_SHADER);
+		}
+
+		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
+			for (size_t index = 0; index < textures[type].size; index++) {
+				if (textures[type][index].metadata_handle != -1) {
+					textures[type][index].metadata_handle = get_handle(ECS_ASSET_TEXTURE);
+				}
+			}
+			for (size_t index = 0; index < samplers[type].size; index++) {
+				if (samplers[type][index].metadata_handle != -1) {
+					samplers[type][index].metadata_handle = get_handle(ECS_ASSET_GPU_SAMPLER);
+				}
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	bool MaterialAsset::DependsUpon(const void* metadata, ECS_ASSET_TYPE type) const
+	{
+		switch (type) {
+		case ECS_ASSET_TEXTURE:
+		{
+			TextureMetadata* metadata = (TextureMetadata*)metadata;
+			return material_pointer->ContainsTexture(metadata->texture);
+		}
+		break;
+		case ECS_ASSET_GPU_SAMPLER:
+		{
+			GPUSamplerMetadata* metadata = (GPUSamplerMetadata*)metadata;
+			return material_pointer->ContainsSampler(metadata->sampler);
+		}
+		break;
+		case ECS_ASSET_SHADER:
+		{
+			ShaderMetadata* metadata = (ShaderMetadata*)metadata;
+			if (metadata->shader_type == ECS_SHADER_VERTEX) {
+				return material_pointer->ContainsShader(VertexShader::FromInterface(metadata->shader_interface));
+			}
+			else if (metadata->shader_type == ECS_SHADER_PIXEL) {
+				return material_pointer->ContainsShader(PixelShader::FromInterface(metadata->shader_interface));
+			}
+			else {
+				return false;
+			}
+		}
+		break;
+		case ECS_ASSET_MESH:
+		case ECS_ASSET_MATERIAL:
+		case ECS_ASSET_MISC:
+			return false;
+		default:
+			ECS_ASSERT(false, "Invalid asset type");
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	ShaderMetadata::ShaderMetadata() : name(nullptr, 0), macros(nullptr, 0) {}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -553,6 +679,17 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	void ShaderMetadata::CopyOptions(const ShaderMetadata* other, AllocatorPolymorphic allocator)
+	{
+		shader_type = other->shader_type;
+		compile_flag = other->compile_flag;
+
+		DeallocateMacros(allocator);
+		macros = StreamDeepCopy(other->macros, allocator);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	ShaderMetadata ShaderMetadata::Copy(AllocatorPolymorphic allocator) const
 	{
 		ShaderMetadata metadata = ShaderMetadata(name, macros, allocator);
@@ -593,11 +730,8 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void ShaderMetadata::DeallocateMemory(AllocatorPolymorphic allocator) const
+	void ShaderMetadata::DeallocateMacros(AllocatorPolymorphic allocator) const
 	{
-		DeallocateIfBelongs(allocator, name.buffer);
-		DeallocateIfBelongs(allocator, file.buffer);
-
 		if (BelongsToAllocator(allocator, macros.buffer)) {
 			for (size_t index = 0; index < macros.size; index++) {
 				Deallocate(allocator, macros[index].name);
@@ -606,6 +740,16 @@ namespace ECSEngine {
 
 			Deallocate(allocator, macros.buffer);
 		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void ShaderMetadata::DeallocateMemory(AllocatorPolymorphic allocator) const
+	{
+		DeallocateIfBelongs(allocator, name.buffer);
+		DeallocateIfBelongs(allocator, file.buffer);
+
+		DeallocateMacros(allocator);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -807,40 +951,31 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+#define ASSET_SWITCH(asset_type, function_to_call) \
+	switch(asset_type) { \
+	case ECS_ASSET_MESH: \
+	function_to_call(ECS_ASSET_MESH, MeshMetadata); \
+	case ECS_ASSET_TEXTURE: \
+	function_to_call(ECS_ASSET_TEXTURE, TextureMetadata); \
+	case ECS_ASSET_GPU_SAMPLER: \
+	function_to_call(ECS_ASSET_GPU_SAMPLER, GPUSamplerMetadata); \
+	case ECS_ASSET_SHADER: \
+	function_to_call(ECS_ASSET_SHADER, ShaderMetadata); \
+	case ECS_ASSET_MATERIAL: \
+	function_to_call(ECS_ASSET_MATERIAL, MaterialAsset); \
+	case ECS_ASSET_MISC: \
+	function_to_call(ECS_ASSET_MISC, MiscAsset); \
+	default: \
+		ECS_ASSERT(false, "Invalid asset type"); \
+	}
+
 	void DeallocateAssetBase(const void* asset, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator)
 	{
-		switch (type) {
-		case ECS_ASSET_MESH:
-		{
-			((MeshMetadata*)asset)->DeallocateMemory(allocator);
-		}
-		break;
-		case ECS_ASSET_TEXTURE:
-		{
-			((TextureMetadata*)asset)->DeallocateMemory(allocator);
-		}
-		break;
-		case ECS_ASSET_GPU_SAMPLER:
-		{
-			((GPUSamplerMetadata*)asset)->DeallocateMemory(allocator);
-		}
-		break;
-		case ECS_ASSET_SHADER:
-		{
-			((ShaderMetadata*)asset)->DeallocateMemory(allocator);
-		}
-		break;
-		case ECS_ASSET_MATERIAL:
-		{
-			((MaterialAsset*)asset)->DeallocateMemory(allocator);
-		}
-		break;
-		case ECS_ASSET_MISC:
-		{
-			((MiscAsset*)asset)->DeallocateMemory(allocator);
-		}
-		break;
-		}
+#define CASE(asset_type, metadata_type) ((metadata_type*)asset)->DeallocateMemory(allocator); break;
+		
+		ASSET_SWITCH(type, CASE);
+
+#undef CASE
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -887,40 +1022,11 @@ namespace ECSEngine {
 
 	void CreateDefaultAsset(void* asset, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type)
 	{
-		switch (type) {
-		case ECS_ASSET_MESH:
-		{
-			((MeshMetadata*)asset)->Default(name, file);
-		}
-		break;
-		case ECS_ASSET_TEXTURE:
-		{
-			((TextureMetadata*)asset)->Default(name, file);
-		}
-		break;
-		case ECS_ASSET_GPU_SAMPLER:
-		{
-			((GPUSamplerMetadata*)asset)->Default(name, file);
-		}
-		break;
-		case ECS_ASSET_SHADER:
-		{
-			((ShaderMetadata*)asset)->Default(name, file);
-		}
-		break;
-		case ECS_ASSET_MATERIAL:
-		{
-			((MaterialAsset*)asset)->Default(name, file);
-		}
-		break;
-		case ECS_ASSET_MISC:
-		{
-			((MiscAsset*)asset)->Default(name, file);
-		}
-		break;
-		default:
-			ECS_ASSERT(false, "Invalid asset type.");
-		}
+#define CASE(asset_type, metadata_type) ((metadata_type*)asset)->Default(name, file); break;
+
+		ASSET_SWITCH(type, CASE);
+
+#undef CASE
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1106,45 +1212,16 @@ namespace ECSEngine {
 
 	void GetAssetDependencies(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* handles)
 	{
-		switch (type) {
-		case ECS_ASSET_MESH:
-		{
-			const MeshMetadata* mesh = (MeshMetadata*)metadata;
-			mesh->GetDependencies(handles);
+		if (type == ECS_ASSET_MATERIAL) {
+			((MaterialAsset*)metadata)->GetDependencies(handles);
 		}
-		break;
-		case ECS_ASSET_TEXTURE:
-		{
-			const TextureMetadata* texture = (TextureMetadata*)metadata;
-			texture->GetDependencies(handles);
-		}
-		break;
-		case ECS_ASSET_GPU_SAMPLER:
-		{
-			const GPUSamplerMetadata* sampler = (GPUSamplerMetadata*)metadata;
-			sampler->GetDependencies(handles);
-		}
-		break;
-		case ECS_ASSET_SHADER:
-		{
-			const ShaderMetadata* shader = (ShaderMetadata*)metadata;
-			shader->GetDependencies(handles);
-		}
-		break;
-		case ECS_ASSET_MATERIAL:
-		{
-			const MaterialAsset* material = (MaterialAsset*)metadata;
-			material->GetDependencies(handles);
-		}
-		break;
-		case ECS_ASSET_MISC:
-		{
-			const MiscAsset* misc = (MiscAsset*)metadata;
-			misc->GetDependencies(handles);
-		}
-		break;
-		default:
-			ECS_ASSERT(false, "Invalid asset type");
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void RemapAssetDependencies(void* metadata, ECS_ASSET_TYPE type, Stream<AssetTypedHandle> handles) {
+		if (type == ECS_ASSET_MATERIAL) {
+			((MaterialAsset*)metadata)->RemapDependencies(handles);
 		}
 	}
 
@@ -1168,4 +1245,21 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------------
+
+	bool CompareAssetOptions(const void* first, const void* second, ECS_ASSET_TYPE type) {
+#define CASE(asset_type, metadata_type)	{ \
+											const metadata_type* first_metadata = (const metadata_type*)first; \
+											return first_metadata->CompareOptions((const metadata_type*)second); \
+										} \
+										break;
+
+		ASSET_SWITCH(type, CASE);
+
+#undef CASE
+
+		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 }

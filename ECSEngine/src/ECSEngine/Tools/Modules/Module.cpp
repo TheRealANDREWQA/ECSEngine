@@ -72,7 +72,7 @@ namespace ECSEngine {
 
 			free(file.buffer);
 			if (dependencies.size > 0) {
-				result = StreamDeepCopy(dependencies, allocator);
+				result = StreamCoallescedDeepCopy(dependencies, allocator);
 			}
 		}
 		return result;
@@ -152,7 +152,7 @@ namespace ECSEngine {
 						extension[3] = 'l';
 					}
 				}
-				result = StreamDeepCopy(dependencies, allocator);
+				result = StreamCoallescedDeepCopy(dependencies, allocator);
 			}
 
 			stack_allocator.ClearBackup();
@@ -250,7 +250,7 @@ namespace ECSEngine {
 		module->task_function(&task_data);
 		schedule_tasks.AssertCapacity();
 
-		return StreamDeepCopy(schedule_tasks, allocator);	
+		return StreamCoallescedDeepCopy(schedule_tasks, allocator);	
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -400,17 +400,17 @@ namespace ECSEngine {
 		ECS_ASSERT(serialize_shared_components.size == deserialize_shared_components.size);
 
 		// Make a single coallesced allocation
-		size_t total_memory = StreamDeepCopySize(serialize_components) + StreamDeepCopySize(deserialize_components) + StreamDeepCopySize(serialize_shared_components)
-			+ StreamDeepCopySize(deserialize_shared_components);
+		size_t total_memory = StreamCoallescedDeepCopySize(serialize_components) + StreamCoallescedDeepCopySize(deserialize_components) + StreamCoallescedDeepCopySize(serialize_shared_components)
+			+ StreamCoallescedDeepCopySize(deserialize_shared_components);
 
 		ModuleSerializeComponentStreams streams;
 		void* allocation = AllocateEx(allocator, total_memory);
 		uintptr_t buffer = (uintptr_t)allocation;
 
-		streams.serialize_components = StreamDeepCopy(serialize_components, buffer);
-		streams.deserialize_components = StreamDeepCopy(deserialize_components, buffer);
-		streams.serialize_shared_components = StreamDeepCopy(serialize_shared_components, buffer);
-		streams.deserialize_shared_components = StreamDeepCopy(deserialize_shared_components, buffer);
+		streams.serialize_components = StreamCoallescedDeepCopy(serialize_components, buffer);
+		streams.deserialize_components = StreamCoallescedDeepCopy(deserialize_components, buffer);
+		streams.serialize_shared_components = StreamCoallescedDeepCopy(serialize_shared_components, buffer);
+		streams.deserialize_shared_components = StreamCoallescedDeepCopy(deserialize_shared_components, buffer);
 
 		if (streams.serialize_components.size == 0) {
 			streams.serialize_components.buffer = nullptr;

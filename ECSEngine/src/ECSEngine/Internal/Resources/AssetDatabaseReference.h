@@ -8,6 +8,7 @@
 namespace ECSEngine {
 
 	struct AssetDatabase;
+	struct AssetDatabaseRemoveInfo;
 
 	namespace Reflection {
 		struct ReflectionManager;
@@ -121,7 +122,7 @@ namespace ECSEngine {
 		// Returns true if the asset was evicted e.g. its reference count reached 0
 		// Can optionally fill in the fields of the evicted asset such that you can use it
 		// for some other purpose. The values are valid only until the next remove or addition
-		bool RemoveMaterial(unsigned int index, MaterialAsset* storage = nullptr);
+		bool RemoveMaterial(unsigned int index, AssetDatabaseRemoveInfo* remove_info = nullptr);
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
 		bool RemoveMisc(unsigned int index, MiscAsset* storage = nullptr);
@@ -129,7 +130,7 @@ namespace ECSEngine {
 		// Returns true if the asset was evicted e.g. its reference count reached 0
 		// Can optionally fill in the fields of the evicted asset such that you can use it
 		// for some other purpose. The values are valid only until the next remove or addition
-		bool RemoveAsset(unsigned int index, ECS_ASSET_TYPE type, void* storage = nullptr);
+		bool RemoveAsset(unsigned int index, ECS_ASSET_TYPE type, AssetDatabaseRemoveInfo* remove_info = nullptr);
 
 		// It removes it only from this internal storage, not doing it for the main database
 		void RemoveAssetThisOnly(unsigned int index, ECS_ASSET_TYPE type);
@@ -137,12 +138,13 @@ namespace ECSEngine {
 		// If the asset is to be evicted - e.g. it was the last reference, then it will call the functor
 		// before/after the remove is actually done. Can control the before/after with the template boolean argument
 		// The functor receives as arguments (unsigned int handle, ECS_ASSET_TYPE type, AssetType* asset)
-		// Returns true if the asset was removed from the main database
-		template<bool before_removal = true, typename Functor>
+		// Returns true if the asset was removed from the main database. If the only_main_asset is set to true
+		// then the functor will not be called for its dependencies
+		template<bool only_main_asset = false, bool before_removal = true, typename Functor>
 		ECS_INLINE bool RemoveAssetWithAction(unsigned int index, ECS_ASSET_TYPE type, Functor&& functor) {
 			unsigned int handle = GetHandle(index, type);
 			RemoveAssetThisOnly(index, type);
-			return database->RemoveAssetWithAction(handle, type, functor);
+			return database->RemoveAssetWithAction<only_main_asset, before_removal>(handle, type, functor);
 		}
 
 		// Clears all the assets that are inside. It doesn't decrement the reference count of the assets

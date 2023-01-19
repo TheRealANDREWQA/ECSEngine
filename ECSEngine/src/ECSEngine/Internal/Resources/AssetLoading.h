@@ -53,6 +53,17 @@ namespace ECSEngine {
 		AtomicStream<LoadAssetFailure>* load_failures = nullptr;
 		Stream<wchar_t> mount_point = { nullptr, 0 };
 
+		// With this mask can specify which actual handles should be loaded
+		// There must be ECS_ASSET_TYPE_COUNT streams
+		Stream<Stream<unsigned int>> include_assets = { nullptr, 0 };
+		// With this mask can specify which handles should be omitted when
+		// generating tasks. There must be ECS_ASSET_TYPE_COUNT streams
+		Stream<Stream<unsigned int>> exclude_assets = { nullptr, 0 };
+
+		// For assets which can have dependencies, if the dependency has a pointer that is valid,
+		// it will assume that it is already loaded
+		bool assets_with_dependencies_assume_valid_as_loaded = true;
+
 		// The function must cast the data into a LoadAssetOnSuccessData* and then cast to its own data
 		// The spin lock can be used to get exclusive access to the resource manager and reference the
 		// asset that was successfully preloaded/processed. Also the thread task data will also be copied

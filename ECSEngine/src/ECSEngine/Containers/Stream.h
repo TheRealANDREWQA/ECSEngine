@@ -106,6 +106,12 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			Copy(other.buffer, other.size);
 		}
 
+		ECS_INLINE Stream<T> Copy(AllocatorPolymorphic allocator) const {
+			Stream<T> result;
+			result.InitializeAndCopy(allocator, *this);
+			return result;
+		}
+
 		// it will not set the size
 		ECS_INLINE void CopySlice(size_t starting_index, const void* memory, size_t count) {
 			memcpy(buffer + starting_index, memory, sizeof(T) * count);
@@ -120,7 +126,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			memcpy(memory, buffer, sizeof(T) * size);
 		}
 
-		// Added return type in order to be compatible with StreamDeepCopy
+		// Added return type in order to be compatible with StreamCoallescedDeepCopy
 		ECS_INLINE Stream<T> CopyTo(uintptr_t& memory) const {
 			return CopyTo(memory, size);
 		}
@@ -212,16 +218,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 			return -1;
 		}
-
-		/*template<typename Functor>
-		size_t SearchFunctor(Functor&& functor) const {
-			for (size_t index = 0; index < size; index++) {
-				if (functor(buffer[index])) {
-					return index;
-				}
-			}
-			return -1;
-		}*/
 
 		ECS_INLINE T& operator [](size_t index) {
 			return buffer[index];
@@ -370,6 +366,34 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			AddStream(other);
 		}
 
+		// Returns the index at which it was added. Can select the amount by which it grows by with the growth_count argument
+		unsigned int AddResize(T element, AllocatorPolymorphic allocator, unsigned int growth_count = 1, bool deallocate_previous = true) {
+			if (size == capacity) {
+				void* old_buffer = buffer;
+				Initialize(allocator, size, capacity + growth_count);
+				memcpy(buffer, old_buffer, MemoryOf(size));
+				if (deallocate_previous) {
+					ECSEngine::Deallocate(allocator, old_buffer);
+				}
+			}
+			return Add(element);
+		}
+
+		// Returns the index at which they were added. Can select the amount by which it grows with the growth_count
+		// (the total growth count is necessary_elements + growth_count)
+		unsigned int AddResizeStream(Stream<T> elements, AllocatorPolymorphic allocator, unsigned int growth_count = 0, bool deallocate_previous = true) {
+			if (size + elements.size > capacity) {
+				void* old_buffer = buffer;
+				unsigned int needed_elements = (unsigned int)elements.size + size - capacity;
+				Initialize(allocator, size, elements.size + size + growth_count);
+				memcpy(buffer, old_buffer, MemoryOf(size));
+				if (deallocate previous) {
+					ECSEngine::Deallocate(allocator, old_buffer);
+				}
+			}
+			return AddStream(elements);
+		}
+
 		ECS_INLINE void AssertCapacity() const {
 			ECS_ASSERT(size <= capacity);
 		}
@@ -394,6 +418,12 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			Copy(other.buffer, other.size);
 		}
 
+		ECS_INLINE CapacityStream<T> Copy(AllocatorPolymorphic allocator) const {
+			CapacityStream<T> result;
+			result.InitializeAndCopy(allocator, ToStream());
+			return result;
+		}
+
 		// it will not set the size and will not do a check
 		ECS_INLINE void CopySlice(unsigned int starting_index, const void* memory, unsigned int count) {
 			memcpy(buffer + starting_index, memory, sizeof(T) * count);
@@ -408,7 +438,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			memcpy(memory, buffer, sizeof(T) * size);
 		}
 
-		// Added return type to be able to be used with StreamDeepCopy
+		// Added return type to be able to be used with StreamCoallescedDeepCopy
 		ECS_INLINE CapacityStream<T> CopyTo(uintptr_t& memory) const {
 			return CopyTo(memory, size);
 		}
@@ -520,16 +550,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 			return -1;
 		}
-
-		/*template<typename Functor>
-		unsigned int SearchFunctor(Functor&& functor) const {
-			for (unsigned int index = 0; index < size; index++) {
-				if (functor(buffer[index])) {
-					return index;
-				}
-			}
-			return -1;
-		}*/
 
 		ECS_INLINE T& operator [](unsigned int index) {
 			return buffer[index];
@@ -664,6 +684,12 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			Copy(other.buffer, other.size);
 		}
 
+		ECS_INLINE ResizableStream<T> Copy(AllocatorPolymorphic allocator) const {
+			ResizableStream<T> result;
+			result.InitializeAndCopy(allocator, ToStream());
+			return result;
+		}
+
 		// it will not set the size and will not do a check
 		ECS_INLINE void CopySlice(unsigned int starting_index, const void* memory, unsigned int count) {
 			memcpy(buffer + starting_index, memory, sizeof(T) * count);
@@ -678,7 +704,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			memcpy(memory, buffer, sizeof(T) * size);
 		}
 
-		// If it is desirable to be used with StreamDeepCopy, the problem is that
+		// If it is desirable to be used with StreamCoallescedDeepCopy, the problem is that
 		// it cannot use coallesced allocation. Wait for a use case to decide
 		ECS_INLINE void CopyTo(uintptr_t& memory) const {
 			CopyTo(memory, size);
@@ -923,6 +949,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size = memory_size;
 		}
 
+		ECS_INLINE Stream<void> Copy(AllocatorPolymorphic allocator) const {
+			Stream<void> result;
+			result.Initialize(allocator, size);
+			result.Copy(buffer, size);
+			return result;
+		}
+
 		// it will not set the size
 		ECS_INLINE void CopySlice(size_t offset, const void* memory, size_t memory_size) {
 			memcpy((void*)((size_t)buffer + offset), memory, memory_size);
@@ -1033,6 +1066,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size = memory_size;
 		}
 
+		ECS_INLINE CapacityStream<void> Copy(AllocatorPolymorphic allocator) const {
+			CapacityStream<void> result;
+			result.Initialize(allocator, size);
+			result.Copy(buffer, size);
+			return result;
+		}
+
 		// it will not set the size
 		ECS_INLINE void CopySlice(unsigned int offset, const void* memory, unsigned int memory_size) {
 			memcpy((void*)((uintptr_t)buffer + offset), memory, memory_size);
@@ -1130,7 +1170,9 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		// it will set the size
 		ECS_INLINE void Copy(const void* memory, unsigned int count) {
-			ResizeNoCopy(count);
+			if (count != capacity) {
+				ResizeNoCopy(count);
+			}
 			memcpy(buffer, memory, count);
 			size = count;
 		}
@@ -1143,6 +1185,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		// it will set the size
 		ECS_INLINE void Copy(CapacityStream<void> other) {
 			Copy(other.buffer, other.size);
+		}
+
+		ECS_INLINE ResizableStream<void> Copy(AllocatorPolymorphic allocator) const {
+			ResizableStream<void> result;
+			result.Initialize(allocator, size);
+			result.Copy(buffer, size);
+			return result;
 		}
 
 		ECS_INLINE void CopyTo(void* memory) const {
@@ -1228,6 +1277,18 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return { buffer, size, capacity };
 		}
 
+		// Divides the size and the capacity by the sizeof(T)
+		template<typename T>
+		ECS_INLINE ResizableStream<T> As() const {
+			return { buffer, size / sizeof(T), capacity / sizeof(T), allocator };
+		}
+
+		// Does not divide the size and capacity by the sizeof(T)
+		template<typename T>
+		ECS_INLINE ResizableStream<T> AsIs() const {
+			return { buffer, size, capacity, allocator };
+		}
+
 		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity) {
 			allocator = _allocator;
 			if (_capacity > 0) {
@@ -1247,12 +1308,26 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	};
 
 	// The template parameter of the stream must have as functions
+	// Type Copy(AllocatorPolymorphic allocator) const;
+	template<typename Stream>
+	Stream StreamDeepCopy(Stream input, AllocatorPolymorphic allocator) {
+		Stream result;
+
+		result.Initialize(allocator, input.size);
+		for (size_t index = 0; index < input.size; index++) {
+			result[index] = input[index].Copy(allocator);
+		}
+
+		return result;
+	}
+
+	// The template parameter of the stream must have as functions
 	// size_t CopySize() const;
 	// void Copy(uintptr_t& ptr);
 	// If copy size returns 0, it assumes it needs no buffers and does not call
 	// the copy function.
 	template<typename Stream>
-	Stream StreamDeepCopy(Stream input, AllocatorPolymorphic allocator) {
+	Stream StreamCoallescedDeepCopy(Stream input, AllocatorPolymorphic allocator) {
 		Stream new_stream;
 		
 		ECS_STACK_CAPACITY_STREAM(size_t, copy_sizes, 1024);
@@ -1301,7 +1376,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	// If copy size returns 0, it assumes it needs no buffers and does not call
 	// the copy function.
 	template<typename Stream>
-	Stream StreamDeepCopy(Stream input, uintptr_t& ptr) {
+	Stream StreamCoallescedDeepCopy(Stream input, uintptr_t& ptr) {
 		Stream new_stream;
 		new_stream.InitializeAndCopy(ptr, input);
 
@@ -1315,8 +1390,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		return new_stream;
 	}
 
+	// The template parameter of the stream must have as functions
+	// size_t CopySize() const;
 	template<typename Stream>
-	size_t StreamDeepCopySize(Stream input) {
+	size_t StreamCoallescedDeepCopySize(Stream input) {
 		size_t total_size = input.MemoryOf(input.size);
 
 		for (size_t index = 0; index < (size_t)input.size; index++) {

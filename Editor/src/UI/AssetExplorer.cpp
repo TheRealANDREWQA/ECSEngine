@@ -33,7 +33,7 @@ void AssetExplorerDraw(void* window_data, void* drawer_descriptor, bool initiali
 		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 		GetProjectAssetsFolder(editor_state, assets_folder);
 
-		auto iterate = [&](ECS_ASSET_TYPE asset_type, auto stream) {
+		auto iterate_asset_type = [&](ECS_ASSET_TYPE asset_type, auto stream) {
 			const char* string = ConvertAssetTypeString(asset_type);
 			drawer.CollapsingHeader(string, &data->opened_headers[asset_type], [&]() {
 				struct SelectData {
@@ -122,12 +122,24 @@ void AssetExplorerDraw(void* window_data, void* drawer_descriptor, bool initiali
 		drawer.NextRow();
 
 		// Display the metadata active in the database
-		iterate(ECS_ASSET_MESH, database->mesh_metadata.ToStream());
-		iterate(ECS_ASSET_TEXTURE, database->texture_metadata.ToStream());
-		iterate(ECS_ASSET_GPU_SAMPLER, database->gpu_sampler_metadata.ToStream());
-		iterate(ECS_ASSET_SHADER, database->shader_metadata.ToStream());
-		iterate(ECS_ASSET_MATERIAL, database->material_asset.ToStream());
-		iterate(ECS_ASSET_MISC, database->misc_asset.ToStream());
+		iterate_asset_type(ECS_ASSET_MESH, database->mesh_metadata.ToStream());
+		iterate_asset_type(ECS_ASSET_TEXTURE, database->texture_metadata.ToStream());
+		iterate_asset_type(ECS_ASSET_GPU_SAMPLER, database->gpu_sampler_metadata.ToStream());
+		iterate_asset_type(ECS_ASSET_SHADER, database->shader_metadata.ToStream());
+		iterate_asset_type(ECS_ASSET_MATERIAL, database->material_asset.ToStream());
+		iterate_asset_type(ECS_ASSET_MISC, database->misc_asset.ToStream());
+
+		drawer.NextRow();
+		drawer.CrossLine();
+		drawer.NextRow();
+
+		drawer.Text("Resources in Resource Manager");
+		auto iterate_resource_type = [&](ResourceType resource_type) {
+			ResourceManager* resource_manager = editor_state->RuntimeResourceManager();
+			resource_manager->ForEachResourceIdentifier(resource_type, [](ResourceIdentifier identifier) {
+
+			});
+		};
 	}
 
 }

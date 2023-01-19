@@ -22,10 +22,43 @@ namespace ECSEngine {
 		ECS_ASSET_TYPE_COUNT
 	};
 
+	inline ECS_ASSET_TYPE ECS_ASSET_TYPES_REFERENCEABLE[] = {
+		ECS_ASSET_TEXTURE,
+		ECS_ASSET_GPU_SAMPLER,
+		ECS_ASSET_SHADER
+	};
+
+	inline ECS_ASSET_TYPE ECS_ASSET_TYPES_WITH_DEPENDENCIES[] = {
+		ECS_ASSET_MATERIAL
+	};
+
 	struct AssetTypedHandle {
 		unsigned int handle;
 		ECS_ASSET_TYPE type;
 	};
+
+	struct AssetTypedMetadata {
+		void* metadata;
+		ECS_ASSET_TYPE type;
+	};
+
+	inline bool IsAssetTypeReferenceable(ECS_ASSET_TYPE type) {
+		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_REFERENCEABLE); index++) {
+			if (type == ECS_ASSET_TYPES_REFERENCEABLE[index]) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	inline bool IsAssetTypeWithDependencies(ECS_ASSET_TYPE type) {
+		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_WITH_DEPENDENCIES); index++) {
+			if (type == ECS_ASSET_TYPES_WITH_DEPENDENCIES[index]) {
+				return true;
+			}
+		}
+		return false;
+	}
 
 	ECSENGINE_API bool AssetHasFile(ECS_ASSET_TYPE type);
 
@@ -67,6 +100,17 @@ namespace ECSEngine {
 	struct ECSENGINE_API ECS_REFLECT MeshMetadata {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
+		// Returns true if the parameters besides the name, target file and the asset pointer are the same
+		ECS_INLINE bool CompareOptions(const MeshMetadata* other) const {
+			return scale_factor == other->scale_factor && invert_z_axis == other->invert_z_axis && optimize_level == other->optimize_level;
+		}
+
+		ECS_INLINE void CopyOptions(const MeshMetadata* other) {
+			scale_factor = other->scale_factor;
+			invert_z_axis = other->invert_z_axis;
+			optimize_level = other->optimize_level;
+		}
+
 		MeshMetadata Copy(AllocatorPolymorphic allocator) const;
 
 		// Sets default values and aliases the name
@@ -82,8 +126,6 @@ namespace ECSEngine {
 			return (void**)&mesh_pointer;
 		}
 
-		ECS_INLINE void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const {}
-
 		Stream<char> name;
 		Stream<wchar_t> file;
 		float scale_factor;
@@ -96,6 +138,17 @@ namespace ECSEngine {
 	struct ECSENGINE_API ECS_REFLECT TextureMetadata {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 		
+		// Returns true if the parameters besides the name, target file and the asset pointer are the same
+		ECS_INLINE bool CompareOptions(const TextureMetadata* other) const {
+			return sRGB == other->sRGB && generate_mip_maps == other->generate_mip_maps && compression_type == other->compression_type;
+		}
+
+		ECS_INLINE void CopyOptions(const TextureMetadata* other) {
+			sRGB = other->sRGB;
+			generate_mip_maps = other->generate_mip_maps;
+			compression_type = other->compression_type;
+		}
+
 		TextureMetadata Copy(AllocatorPolymorphic allocator) const;
 
 		// Sets default values and aliases the name
@@ -111,8 +164,6 @@ namespace ECSEngine {
 			return (void**)&texture;
 		}
 
-		ECS_INLINE void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const {}
-
 		Stream<char> name;
 		Stream<wchar_t> file;
 		bool sRGB;
@@ -125,6 +176,24 @@ namespace ECSEngine {
 	struct ECSENGINE_API ECS_REFLECT GPUSamplerMetadata {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
+		// Returns true if the parameters besides the name, target file and the asset pointer are the same
+		ECS_INLINE bool CompareOptions(const GPUSamplerMetadata* other) const {
+			bool compare = address_mode == other->address_mode && filter_mode == other->filter_mode;
+			if (compare) {
+				if (filter_mode == ECS_SAMPLER_FILTER_ANISOTROPIC) {
+					return anisotropic_level == other->anisotropic_level;
+				}
+				return true;
+			}
+			return false;
+		}
+
+		ECS_INLINE void CopyOptions(const GPUSamplerMetadata* other) {
+			address_mode = other->address_mode;
+			filter_mode = other->filter_mode;
+			anisotropic_level = other->anisotropic_level;
+		}
+
 		GPUSamplerMetadata Copy(AllocatorPolymorphic allocator) const;
 
 		void Default(Stream<char> name, Stream<wchar_t> file);
@@ -136,8 +205,6 @@ namespace ECSEngine {
 		ECS_INLINE void** PtrToPointer() {
 			return (void**)&sampler;
 		}
-
-		ECS_INLINE void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const {}
 
 		Stream<char> name;
 		ECS_SAMPLER_ADDRESS_TYPE address_mode;
@@ -154,9 +221,29 @@ namespace ECSEngine {
 
 		void AddMacro(Stream<char> name, Stream<char> definition, AllocatorPolymorphic allocator);
 
+		// Returns true if the parameters besides the name, target file and the asset pointer are the same
+		ECS_INLINE bool CompareOptions(const ShaderMetadata* other) const {
+			bool compare = shader_type == other->shader_type && compile_flag == other->compile_flag;
+			if (compare) {
+				if (macros.size == other->macros.size) {
+					for (size_t index = 0; index < macros.size; index++) {
+						if (!macros[index].Compare(other->macros[index])) {
+							return false;
+						}
+					}
+					return true;
+				}
+			}
+			return false;
+		}
+
+		void CopyOptions(const ShaderMetadata* other, AllocatorPolymorphic allocator);
+
 		ShaderMetadata Copy(AllocatorPolymorphic allocator) const;
 
 		bool SameTarget(const ShaderMetadata* other) const;
+
+		void DeallocateMacros(AllocatorPolymorphic allocator) const;
 
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
@@ -181,8 +268,6 @@ namespace ECSEngine {
 		ECS_INLINE void** PtrToPointer() {
 			return &shader_interface;
 		}
-
-		ECS_INLINE void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const {}
 
 		Stream<char> name;
 		Stream<wchar_t> file;
@@ -229,6 +314,9 @@ namespace ECSEngine {
 	struct ECSENGINE_API MaterialAsset {
 		MaterialAsset() = default;
 		MaterialAsset(Stream<char> name, AllocatorPolymorphic allocator);
+
+		// Returns true if the parameters besides the name, target file and the asset pointer are the same
+		bool CompareOptions(const MaterialAsset* other) const;
 
 		// Does not allocate the names for the textures, samplers or buffers, neither it allocates
 		// the reflection type with the given allocator
@@ -327,6 +415,14 @@ namespace ECSEngine {
 
 		void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const;
 
+		// After retrieving the dependencies using GetDependencies, you can change the handle values
+		// inside the stream and call this function to change the handle values for these assets in their corresponding order
+		void RemapDependencies(Stream<AssetTypedHandle> handles);
+
+		// Uses the asset pointer of the metadata to verify that it belongs in the material pointer as well
+		// - it does not use the handle values
+		bool DependsUpon(const void* metadata, ECS_ASSET_TYPE type) const;
+
 		Stream<char> name;
 		// These are maintained as a coallesced buffer
 		Stream<MaterialAssetResource> textures[ECS_MATERIAL_SHADER_COUNT];
@@ -344,6 +440,11 @@ namespace ECSEngine {
 	struct ECSENGINE_API ECS_REFLECT MiscAsset {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
+		// Returns true if the parameters besides the name, target file and the asset pointer are the same
+		ECS_INLINE bool CompareOptions(const MiscAsset* other) const {
+			return true;
+		}
+
 		MiscAsset Copy(AllocatorPolymorphic allocator) const;
 
 		// Returns true if they have the same target
@@ -359,13 +460,20 @@ namespace ECSEngine {
 			return (void**)&data;
 		}
 
-		ECS_INLINE void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const {}
-
 		Stream<char> name;
 		Stream<wchar_t> file;
 
 		Stream<void> data; ECS_SKIP_REFLECTION()
 	};
+
+	constexpr size_t AssetMetadataMaxByteSize() {
+		// When using the initializer list the compiler will not evaluate this to a constant
+		constexpr size_t max1 = std::max(sizeof(MeshMetadata), sizeof(TextureMetadata));
+		constexpr size_t max2 = std::max(sizeof(GPUSamplerMetadata), sizeof(ShaderMetadata));
+		constexpr size_t max3 = std::max(sizeof(MaterialAsset), sizeof(MiscAsset));
+		constexpr size_t max4 = std::max(max1, max2);
+		return std::max(max3, max4);
+	}
 
 	ECSENGINE_API void DeallocateAssetBase(const void* asset, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
 
@@ -410,7 +518,30 @@ namespace ECSEngine {
 
 	ECSENGINE_API void GetAssetDependencies(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* handles);
 
+	ECSENGINE_API void RemapAssetDependencies(void* metadata, ECS_ASSET_TYPE type, Stream<AssetTypedHandle> handles);
+
+	// The functor receives as arguments the handle and the asset type of the dependency
+	// When early_exit is desired, return true to exit.
+	template<bool early_exit = false, typename Functor>
+	void ForEachAssetDependency(const void* metadata, ECS_ASSET_TYPE type, Functor&& functor) {
+		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
+		GetAssetDependencies(metadata, type, &dependencies);
+		for (unsigned int index = 0; index < dependencies.size; index++) {
+			if constexpr (early_exit) {
+				if (functor(dependencies[index].handle, dependencies[index].type)) {
+					break;
+				}
+			}
+			else {
+				functor(dependencies[index].handle, dependencies[index].type);
+			}
+		}
+	}
+
 	// Returns true if the asset given references the given handle
 	ECSENGINE_API bool DoesAssetReferenceOtherAsset(unsigned int handle, ECS_ASSET_TYPE handle_type, const void* asset, ECS_ASSET_TYPE type);
+
+	// Returns true if the parameters besides the name, target file and the asset pointer are the same
+	ECSENGINE_API bool CompareAssetOptions(const void* first, const void* second, ECS_ASSET_TYPE type);
 
 }

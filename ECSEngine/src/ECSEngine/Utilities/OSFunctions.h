@@ -154,7 +154,7 @@ namespace ECSEngine {
 
 		ECSENGINE_API void SetSymbolicLinksPaths(Stream<Stream<wchar_t>> module_paths);
 
-		// Assumes that SymInitialize has been called
+		// Assumes that InitializeSymbolicLinksPaths has been called
 		ECSENGINE_API void GetCallStackFunctionNames(CapacityStream<char>& string);
 
 		enum ECS_THREAD_PRIORITY : unsigned char {

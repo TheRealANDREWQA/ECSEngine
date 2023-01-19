@@ -826,35 +826,35 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	char* ResourceManager::LoadTextFile(
+	Stream<char>* ResourceManager::LoadTextFile(
 		Stream<wchar_t> filename,
-		size_t* size, 
 		ResourceManagerLoadDesc load_descriptor
 	)
 	{
-		return (char*)LoadResource<reference_counted>(
+		return (Stream<char>*)LoadResource<reference_counted>(
 			this,
 			filename,
-			ResourceType::TextFile, 
+			ResourceType::TextFile,
+			sizeof(Stream<char>),
 			load_descriptor,
-			[=]() {
-				return LoadTextFileImplementation(filename, size);
+			[=](void* allocation) {
+				Stream<char> data = LoadTextFileImplementation(filename);
+				if (data.buffer != nullptr) {
+					Stream<char>* stream = (Stream<char>*)allocation;
+					*stream = data;
+				}
+				return data.buffer;
 			}
 		);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(char*, ResourceManager::LoadTextFile, Stream<wchar_t>, size_t*, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(Stream<char>*, ResourceManager::LoadTextFile, Stream<wchar_t>, ResourceManagerLoadDesc);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	char* ResourceManager::LoadTextFileImplementation(Stream<wchar_t> file, size_t* parameter)
+	Stream<char> ResourceManager::LoadTextFileImplementation(Stream<wchar_t> file)
 	{
-		Stream<char> contents = ReadWholeFileText(file, Allocator());
-		if (contents.buffer != nullptr) {
-			*parameter = contents.size;
-			return contents.buffer;
-		}
-		return nullptr;
+		return ReadWholeFileText(file, Allocator());
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -2025,6 +2025,7 @@ namespace ECSEngine {
 	void ResourceManager::UnloadUserMaterial(const UserMaterial* user_material, Material* material, ResourceManagerLoadDesc load_desc)
 	{
 		bool dont_load = function::HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
+		bool check_resource_before_unload = function::HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
 		if (dont_load) {
 			UnloadShaderImplementation(material->vertex_shader.Interface(), ECS_SHADER_VERTEX);
 			UnloadShaderImplementation(material->pixel_shader.Interface(), ECS_SHADER_PIXEL);
@@ -2036,14 +2037,18 @@ namespace ECSEngine {
 				GenerateShaderCompileOptionsSuffix(user_material->vertex_compile_options, suffix);
 			}
 			current_desc.identifier_suffix = suffix;
-			UnloadShader<true>(user_material->vertex_shader, current_desc);
+			if (!check_resource_before_unload || Exists(user_material->vertex_shader, ResourceType::Shader, suffix)) {
+				UnloadShader<true>(user_material->vertex_shader, current_desc);
+			}
 			suffix.size = 0;
 			
 			if (user_material->generate_unique_name_from_setting) {
 				GenerateShaderCompileOptionsSuffix(user_material->pixel_compile_options, suffix);
 			}
 			current_desc.identifier_suffix = suffix;
-			UnloadShader<true>(user_material->pixel_shader, current_desc);
+			if (!check_resource_before_unload || Exists(user_material->pixel_shader, ResourceType::Shader, suffix)) {
+				UnloadShader<true>(user_material->pixel_shader, current_desc);
+			}
 		}
 		m_graphics->FreeResource(material->layout);
 
@@ -2080,7 +2085,9 @@ namespace ECSEngine {
 				UnloadTextureImplementation(resource_view);
 			}
 			else {
-				UnloadTexture<true>(user_material->textures[index].filename, manager_desc);
+				if (!check_resource_before_unload || Exists(user_material->textures[index].filename, ResourceType::Texture, suffix)) {
+					UnloadTexture<true>(user_material->textures[index].filename, manager_desc);
+				}
 			}		
 		}
 

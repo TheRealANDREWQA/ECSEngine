@@ -252,6 +252,9 @@ void AssetSettingsHelperChangedAction(ActionData* action_data)
 	unsigned int handle = data->target_database->FindAsset(name, file, data->asset_type);
 	bool success = true;
 	if (handle != -1) {
+		// Add an event to deallocate the asset based on its old values
+		const void* old_asset = data->editor_state->asset_database->GetAssetConst(handle, data->asset_type);
+		DeallocateAssetWithRemapping(data->editor_state, handle, data->asset_type, old_asset);
 		success = data->target_database->UpdateAsset(handle, data->helper_data->metadata, data->asset_type);
 	}
 	else {
@@ -281,6 +284,10 @@ void AssetSettingsHelperChangedWithFileAction(ActionData* action_data)
 		unsigned int handle = data->target_database->FindAsset(previous_name, previous_file, data->asset_type);
 		bool success = true;
 		if (handle != -1) {
+			// Unload the asset
+			// Add an event to deallocate the asset based on its old values
+			const void* old_asset = data->editor_state->asset_database->GetAssetConst(handle, data->asset_type);
+			DeallocateAssetWithRemapping(data->editor_state, handle, data->asset_type, old_asset);
 			success = data->target_database->UpdateAsset(handle, data->asset, data->asset_type);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
@@ -329,6 +336,9 @@ void AssetSettingsHelperChangedNoFileAction(ActionData* action_data) {
 	unsigned int handle = data->target_database->FindAsset(name, { nullptr, 0 }, data->asset_type);
 	bool success = true;
 	if (handle != -1) {
+		// Add an event to deallocate the asset based on its old values
+		const void* old_asset = data->editor_state->asset_database->GetAssetConst(handle, data->asset_type);
+		DeallocateAssetWithRemapping(data->editor_state, handle, data->asset_type, old_asset);
 		success = data->target_database->UpdateAsset(handle, data->asset, data->asset_type);
 	}
 	else {

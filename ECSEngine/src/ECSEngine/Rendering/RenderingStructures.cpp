@@ -840,8 +840,10 @@ namespace ECSEngine {
 		suffix.Add(&compile_options.compile_flags);
 		suffix.Add(&compile_options.target);
 		for (size_t index = 0; index < compile_options.macros.size; index++) {
-			suffix.Add({ compile_options.macros[index].name, strlen(compile_options.macros[index].name) });
-			suffix.Add({ compile_options.macros[index].definition, strlen(compile_options.macros[index].definition) });
+			size_t name_size = strlen(compile_options.macros[index].name);
+			size_t definition_size = strlen(compile_options.macros[index].definition);
+			suffix.Add({ compile_options.macros[index].name, name_size });
+			suffix.Add({ compile_options.macros[index].definition, definition_size });
 		}
 	}
 

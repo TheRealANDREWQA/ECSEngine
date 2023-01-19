@@ -26,6 +26,22 @@ namespace ECSEngine {
 		unsigned int stream_sizes[ECS_ASSET_TYPE_COUNT];
 	};
 
+	struct AssetDatabaseRemoveInfo {
+		// If the asset is removed it will copy the metadata into this pointer
+		void* storage = nullptr;
+		// When set to true it will remove the dependencies as well
+		bool remove_dependencies = true;
+		// When set it will fill in the dependencies for this asset
+		CapacityStream<AssetTypedHandle>* dependencies = nullptr;
+
+		// The remove dependencies flag must be set for this to be considered
+		// When set it will copy the dependency data into the given buffer from storage_dependencies_allocation
+		// and write back the pointer here. The storage_dependencies_allocation must be specified as well.
+		// It will write the metadata only for those assets that have been evicted.
+		CapacityStream<AssetTypedMetadata>* storage_dependencies = nullptr;
+		CapacityStream<void> storage_dependencies_allocation = { nullptr, 0, 0 };
+	};
+
 	// The last character is a path separator
 	ECSENGINE_API void AssetDatabaseFileDirectory(Stream<wchar_t> file_location, CapacityStream<wchar_t>& path, ECS_ASSET_TYPE type);
 
@@ -118,6 +134,11 @@ namespace ECSEngine {
 
 		// Deallocates all the streams (but it does not deallocate the individual assets)
 		void DeallocateStreams();
+
+		// The main asset should be an asset that can have dependencies (like materials) and referenced_asset
+		// a referenceable asset (like textures, samplers, shaders). It uses the handle values in order to determine
+		// if the asset is referenced or not
+		bool DependsUpon(const void* main_asset, ECS_ASSET_TYPE type, const void* referenced_asset, ECS_ASSET_TYPE referenced_type) const;
 
 		// Returns the handle to that asset. Returns -1 if it doesn't exist
 		unsigned int FindMesh(Stream<char> name, Stream<wchar_t> file) const;
@@ -269,6 +290,13 @@ namespace ECSEngine {
 		// It will find the standalone count for each handle in the asset type
 		void GetReferenceCountsStandalone(ECS_ASSET_TYPE type, CapacityStream<uint2>* counts) const;
 
+		// Determines assets that use the given asset (at the moment only the material references other assets)
+		// For example if a texture is being used and a material references it, then it will fill in the material that references it
+		Stream<Stream<unsigned int>> GetDependentAssetsFor(const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator) const;
+
+		// Fills in the dependencies that the given asset has
+		void GetDependencies(unsigned int handle, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* dependencies) const;
+
 		AssetDatabaseSnapshot GetSnapshot() const;
 
 		unsigned int GetRandomizedPointer(ECS_ASSET_TYPE type) const;
@@ -331,7 +359,7 @@ namespace ECSEngine {
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveMaterial(unsigned int handle, MaterialAsset* storage = nullptr);
+		bool RemoveMaterial(unsigned int handle, AssetDatabaseRemoveInfo* remove_info = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
@@ -339,16 +367,19 @@ namespace ECSEngine {
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type, void* storage = nullptr);
+		bool RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type, AssetDatabaseRemoveInfo* remove_info = nullptr);
 
 		// Does not destroy the file. It will remove the asset no matter what the reference count is
-		void RemoveAssetForced(unsigned int handle, ECS_ASSET_TYPE type);
+		// If the decrement_dependencies is set to true, then it will decrement the reference count of its dependencies
+		// (it will not forcefully remove them)
+		void RemoveAssetForced(unsigned int handle, ECS_ASSET_TYPE type, AssetDatabaseRemoveInfo* remove_info = nullptr);
 
 		// If the asset is to be evicted - e.g. it was the last reference, then it will call the functor
 		// before/after the remove is actually done. Can control the before/after with the template boolean argument
 		// The functor receives as arguments (unsigned int handle, ECS_ASSET_TYPE type, AssetType* asset)
-		// Returns true if the asset was removed
-		template<bool before_removal = true, typename Functor>
+		// Returns true if the asset was removed. If the only_main_asset is set to true, the functor will not be called
+		// for dependencies
+		template<bool only_main_asset = false, bool before_removal = true, typename Functor>
 		bool RemoveAssetWithAction(unsigned int handle, ECS_ASSET_TYPE type, Functor&& functor) {
 			// Returns true if the asset was removed
 			auto remove_lambda = [&](auto& sparse_set) {
@@ -401,8 +432,10 @@ namespace ECSEngine {
 				MaterialAsset old_asset;
 				old_asset = *GetMaterialConst(handle);
 				bool removed = remove_lambda(material_asset);
-				if (removed) {
-					RemoveAssetDependencies(&old_asset, ECS_ASSET_MATERIAL);
+				if constexpr (!only_main_asset) {
+					if (removed) {
+						RemoveAssetDependencies(&old_asset, ECS_ASSET_MATERIAL);
+					}
 				}
 				return removed;
 			}

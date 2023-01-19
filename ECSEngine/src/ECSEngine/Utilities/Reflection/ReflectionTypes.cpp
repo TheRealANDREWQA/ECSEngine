@@ -608,7 +608,7 @@ namespace ECSEngine {
 
 		size_t ReflectionType::CopySize() const
 		{
-			return name.CopySize() + tag.CopySize() + StreamDeepCopySize(fields) + StreamDeepCopySize(evaluations);
+			return name.CopySize() + tag.CopySize() + StreamCoallescedDeepCopySize(fields) + StreamCoallescedDeepCopySize(evaluations);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -630,7 +630,7 @@ namespace ECSEngine {
 
 			copy.folder_hierarchy_index = folder_hierarchy_index;
 			copy.name.InitializeAndCopy(ptr, name);
-			copy.fields = StreamDeepCopy(fields, ptr);
+			copy.fields = StreamCoallescedDeepCopy(fields, ptr);
 
 			return copy;
 		}
