@@ -34,6 +34,11 @@
 // multithreading race conditions). This applies both for loading and unloading
 #define ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS (1 << 18)
 
+// Tells the unloader that some resources might have already been unloaded
+// and to check each resource before attempting to unload it. This is activated
+// only when the flag ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS is also set
+#define ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE (1 << 19)
+
 
 namespace ECSEngine {
 
@@ -186,6 +191,33 @@ namespace ECSEngine {
 		// ptr the path to the resource. This version also records which assets have been removed
 		Stream<ResourceIdentifier> EvictOutdatedResources(ResourceType type, AllocatorPolymorphic allocator);
 
+		// The functor will receive as parameter the ResourceIdentifier of the resource. If the resource was added
+		// with a suffix, the identifier includes the suffix. For early exit it must return true to exit
+		template<bool early_exit = false, typename Functor>
+		void ForEachResourceIdentifier(ResourceType resource_type, Functor&& functor) const {
+			m_resource_types[(unsigned int)resource_type].ForEachConst<early_exit>([&](ResourceManagerEntry entry, ResourceIdentifier identifier) {
+				if constexpr (early_exit) {
+					return functor(identifier);
+				}
+				else {
+					functor(identifier);
+				}
+			});
+		}
+
+		// The functor will receive as parameter a void* with the resource. For early exit it must return true to exit.
+		template<bool early_exit = false, typename Functor>
+		void ForEachResource(ResourceType resource_type, Functor&& functor) const {
+			m_resource_types[(unsigned int)resource_type].ForEachConst<early_exit>([&](ResourceManagerEntry entry, ResourceIdentifier identifier) {
+				if constexpr (early_exit) {
+					return functor(entry.data_pointer.GetPointer());
+				}
+				else {
+					functor(entry.data_pointer.GetPointer());
+				}
+			});
+		}
+
 		// It returns -1 if the resource doesn't exist
 		unsigned int GetResourceIndex(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
 
@@ -219,15 +251,15 @@ namespace ECSEngine {
 		// GPU resources which require this
 		void InheritResources(const ResourceManager* other);
 
-		// resource folder path different from -1 will use the folder in the specified thread position
+		// The file is allocated from the current allocator of the resource manager
 		template<bool reference_counted = false>
-		char* LoadTextFile(
+		Stream<char>* LoadTextFile(
 			Stream<wchar_t> filename,
-			size_t* size,
 			ResourceManagerLoadDesc load_descriptor = {}
 		);
 
-		char* LoadTextFileImplementation(Stream<wchar_t> file, size_t* size);
+		// The file is allocated from the current allocator of the resource manager
+		Stream<char> LoadTextFileImplementation(Stream<wchar_t> file);
 
 		// In order to generate mip-maps, the context must be supplied
 		// FLAGS: ECS_RESOURCE_MANAGER_TEXTURE_HDR_TONEMAP
@@ -485,6 +517,8 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		// The material will have the textures and the buffers removed from the material
+		// Flags: ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE
+		// (the latter in conjunction with the first flag)
 		void UnloadUserMaterial(const UserMaterial* user_material, Material* material, ResourceManagerLoadDesc load_desc = {});
 
 		// ---------------------------------------------------------------------------------------------------------------------------

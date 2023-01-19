@@ -31,8 +31,6 @@ EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 		Stream<UpdateAssetToComponentElement> update_assets;
 		update_assets.Initialize(&stack_allocator, total_size);
 
-		CapacityStream<unsigned int> randomized_indices;
-
 		size_t update_index = 0;
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
@@ -51,10 +49,10 @@ EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 
 					ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
 					if (target_file.size > 0) {
-						ECS_FORMAT_STRING(console_message, "Failed to unload asset {#}, type {#} and target file {#}.", asset_name, type_string, target_file);
+						ECS_FORMAT_STRING(console_message, "Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", asset_name, type_string, target_file);
 					}
 					else {
-						ECS_FORMAT_STRING(console_message, "Failed to unload asset {#}, type {#}.", asset_name, type_string);
+						ECS_FORMAT_STRING(console_message, "Failed to unload asset {#}, type {#} or assets that depend on it.", asset_name, type_string);
 					}
 					EditorSetConsoleError(console_message);
 				}
@@ -77,6 +75,150 @@ EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 	}
 }
 
+struct DeallocateAssetWithRemappingWithOldMetadataEventData {
+	ECS_ASSET_TYPE type;
+	bool force_execution;
+	// Store the old_metadata directly here
+	size_t old_metadata[AssetMetadataMaxByteSize()];
+};
+
+EDITOR_EVENT(DeallocateAssetWithRemappingWithOldMetadataEvent) {
+	DeallocateAssetWithRemappingWithOldMetadataEventData* data = (DeallocateAssetWithRemappingWithOldMetadataEventData*)_data;
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING) || data->force_execution) {
+		ECS_STACK_CAPACITY_STREAM(UpdateAssetToComponentElement, update_asset, 1);
+
+		update_asset[0].old_asset = GetAssetFromMetadata(data->old_metadata, data->type);
+		update_asset[0].type = data->type;
+
+		// Deallocate the asset and then randomize it (already done in the Deallocate function)
+		bool success = DeallocateAsset(editor_state, data->old_metadata, data->type);
+		if (!success) {
+			Stream<wchar_t> target_file = GetAssetFile(data->old_metadata, data->type);
+			Stream<char> asset_name = GetAssetName(data->old_metadata, data->type);
+			const char* type_string = ConvertAssetTypeString(data->type);
+
+			ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
+			if (target_file.size > 0) {
+				ECS_FORMAT_STRING(console_message, "Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", asset_name, type_string, target_file);
+			}
+			else {
+				ECS_FORMAT_STRING(console_message, "Failed to unload asset {#}, type {#} or assets that depend on it.", asset_name, type_string);
+			}
+			EditorSetConsoleError(console_message);
+		}
+		else {
+			// The new randomized pointer value is in the old metadata
+			Stream<void> new_asset_value = GetAssetFromMetadata(data->old_metadata, data->type);
+			update_asset[0].new_asset = new_asset_value;
+
+			// Update the link components
+			UpdateAssetsToComponents(editor_state, update_asset);
+		}
+		return false;
+	}
+	else {
+		return true;
+	}
+}
+
+struct DeallocateAssetWithRemappingMetadataChangeEventData {
+	Stream<Stream<unsigned int>> handles;
+	bool force_execution;
+};
+
+EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
+	DeallocateAssetWithRemappingMetadataChangeEventData* data = (DeallocateAssetWithRemappingMetadataChangeEventData*)_data;
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING) || data->force_execution) {
+		size_t total_size = 0;
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			total_size += data->handles[index].size;
+		}
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(update_assets_allocator, ECS_KB * 64, ECS_MB);
+		Stream<UpdateAssetToComponentElement> update_assets;
+		update_assets.Initialize(&update_assets_allocator, total_size);
+		update_assets.size = 0;
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(file_asset_allocator, ECS_KB * 64, ECS_MB);
+
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
+
+			for (size_t subindex = 0; subindex < data->handles[index].size; subindex++) {
+				void* metadata = editor_state->asset_database->GetAsset(data->handles[index][subindex], current_type);
+
+				Stream<char> asset_name = GetAssetName(metadata, current_type);
+				Stream<wchar_t> target_file = GetAssetFile(metadata, current_type);
+				size_t file_metadata[AssetMetadataMaxByteSize()];
+				CreateDefaultAsset(file_metadata, {}, {}, current_type);
+				bool success = editor_state->asset_database->ReadAssetFile(
+					asset_name, 
+					target_file, 
+					file_metadata, 
+					current_type,
+					GetAllocatorPolymorphic(&file_asset_allocator)
+				);
+
+				auto fail = [=](const char* message_with_file, const char* message_without_file) {
+					const char* type_string = ConvertAssetTypeString(current_type);
+
+					ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
+					if (target_file.size > 0) {
+						ECS_FORMAT_STRING(console_message, message_with_file, asset_name, type_string, target_file);
+					}
+					else {
+						ECS_FORMAT_STRING(console_message, message_without_file, asset_name, type_string);
+					}
+					EditorSetConsoleError(console_message);
+				};
+
+				if (success) {
+					if (!CompareAssetOptions(metadata, file_metadata, current_type)) {
+						UpdateAssetToComponentElement update_element;
+						update_element.old_asset = GetAssetFromMetadata(metadata, current_type);
+						update_element.type = current_type;
+
+						ECS_STACK_CAPACITY_STREAM(DeallocateAssetDependency, dependent_assets, 512);
+
+						// Deallocate the asset and then randomize it (already done in the Deallocate function)
+						bool success = DeallocateAsset(editor_state, metadata, current_type, true, &dependent_assets);
+						if (!success) {
+							fail("Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", "Failed to unload asset {#}, type {#} or assets that depend on it.");
+						}
+						else {
+							// Copy the new option values
+							Stream<void> new_asset_value = GetAssetFromMetadata(metadata, current_type);
+							update_element.new_asset = new_asset_value;
+							update_assets.Add(update_element);
+
+							// Also update the dependent assets that were successfully deallocated
+							for (unsigned int dependency_index = 0; dependency_index < dependent_assets.size; dependency_index++) {
+								// Check to see
+							}
+						}
+					}
+				}
+				else {
+					fail(
+						"Failed to read metadata file for asset {#}, type {#} and target file {#} after it changed. The in memory version was not changed.",
+						"Failed to read metadata file for asset {#}, type {#} after it changed. The in memory version was not changed."
+					);
+				}
+			}
+		}
+
+		// Update the link components
+		UpdateAssetsToComponents(editor_state, update_assets);
+
+		update_assets_allocator.ClearBackup();
+		file_asset_allocator.ClearBackup();
+		return false;
+	}
+	else {
+		return true;
+	}
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------
 
 void DeallocateAssetWithRemapping(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, bool commit)
@@ -87,7 +229,25 @@ void DeallocateAssetWithRemapping(EditorState* editor_state, unsigned int handle
 	}
 
 	handles[type] = { &handle, 1 };
+	handles.size = ECS_ASSET_TYPE_COUNT;
 	DeallocateAssetsWithRemapping(editor_state, handles, commit);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void DeallocateAssetWithRemapping(EditorState* editor_state, const void* old_metadata, ECS_ASSET_TYPE type, bool commit)
+{
+	DeallocateAssetWithRemappingWithOldMetadataEventData event_data;
+	event_data.type = type;
+	memcpy(event_data.old_metadata, old_metadata, AssetMetadataByteSize(type));
+	if (commit) {
+		event_data.force_execution = true;
+		DeallocateAssetWithRemappingWithOldMetadataEvent(editor_state, &event_data);
+	}
+	else {
+		event_data.force_execution = false;
+		EditorAddEvent(editor_state, DeallocateAssetWithRemappingWithOldMetadataEvent, &event_data, sizeof(event_data));
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -95,6 +255,7 @@ void DeallocateAssetWithRemapping(EditorState* editor_state, unsigned int handle
 void DeallocateAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsigned int>> handles, bool commit)
 {
 	DeallocateAssetWithRemappingEventData event_data;
+	handles.size = ECS_ASSET_TYPE_COUNT;
 	if (commit) {
 		event_data.handles = handles;
 		event_data.force_execution = true;
@@ -102,10 +263,30 @@ void DeallocateAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsi
 	}
 	else {
 		event_data.force_execution = false;
-		event_data.handles = StreamDeepCopy(handles, editor_state->EditorAllocator());
+		event_data.handles = StreamCoallescedDeepCopy(handles, editor_state->EditorAllocator());
 		EditorAddEvent(editor_state, DeallocateAssetWithRemappingEvent, &event_data, sizeof(event_data));
 	}
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void DeallocateAssetsWithRemappingMetadataChange(EditorState* editor_state, Stream<Stream<unsigned int>> handles, bool commit)
+{
+	DeallocateAssetWithRemappingMetadataChangeEventData event_data;
+	handles.size = ECS_ASSET_TYPE_COUNT;
+	if (commit) {
+		event_data.handles = handles;
+		event_data.force_execution = true;
+		DeallocateAssetWithRemappingMetadataChangeEvent(editor_state, &event_data);
+	}
+	else {
+		event_data.force_execution = false;
+		event_data.handles = StreamCoallescedDeepCopy(handles, editor_state->EditorAllocator());
+		EditorAddEvent(editor_state, DeallocateAssetWithRemappingMetadataChangeEvent, &event_data, sizeof(event_data));
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
 
 // Separate the atomic parts accordingly such that we don't have false sharing
 struct LoadSandboxMissingAssetsEventData {
@@ -611,11 +792,64 @@ EDITOR_EVENT(ReloadEvent) {
 
 void ReloadAssets(EditorState* editor_state, Stream<Stream<unsigned int>> assets_to_reload)
 {
-	ReloadEventData event_data;
-	// Create a temporary resource manager where the assets will be loaded into
-	event_data.asset_handles = StreamDeepCopy(assets_to_reload, editor_state->EditorAllocator());
-	event_data.load_data = nullptr;
-	EditorAddEvent(editor_state, ReloadEvent, &event_data, sizeof(event_data));
+	size_t total_count = 0;
+	for (size_t index = 0; index < assets_to_reload.size; index++) {
+		total_count += assets_to_reload[index].size;
+	}
+
+	if (total_count > 0) {
+		ReloadEventData event_data;
+		event_data.asset_handles = StreamCoallescedDeepCopy(assets_to_reload, editor_state->EditorAllocator());
+		event_data.load_data = nullptr;
+		EditorAddEvent(editor_state, ReloadEvent, &event_data, sizeof(event_data));
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+struct ReloadAssetsMetadataChangeEventData {
+	LoadSandboxMissingAssetsEventData* load_data;
+	Stream<Stream<unsigned int>> asset_handles;
+};
+
+EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
+	ReloadAssetsMetadataChangeEventData* data = (ReloadAssetsMetadataChangeEventData*)_data;
+
+	if (data->load_data == nullptr) {
+		if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+			// Unload the assets
+			DeallocateAssetsWithRemappingMetadataChange(editor_state, data->asset_handles, true);
+
+			data->load_data = InitializeEventData(editor_state, data->asset_handles);
+			// Can deallocate the asset handles
+			editor_state->editor_allocator->Deallocate(data->asset_handles.buffer);
+			// Now load the assets again
+			return LoadSandboxMissingAssetsEvent(editor_state, data->load_data);
+		}
+		else {
+			return true;
+		}
+	}
+	else {
+		// The load sandbox missing assets event will set the resource loading flag
+		// Keep calling the event
+		return LoadSandboxMissingAssetsEvent(editor_state, data->load_data);
+	}
+}
+
+void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigned int>> assets_to_reload)
+{
+	size_t total_count = 0;
+	for (size_t index = 0; index < assets_to_reload.size; index++) {
+		total_count += assets_to_reload[index].size;
+	}
+
+	if (total_count > 0) {
+		ReloadAssetsMetadataChangeEventData event_data;
+		event_data.asset_handles = StreamCoallescedDeepCopy(assets_to_reload, editor_state->EditorAllocator());
+		event_data.load_data = nullptr;
+		EditorAddEvent(editor_state, ReloadAssetsMetadataChangeEvent, &event_data, sizeof(event_data));
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -852,6 +1086,10 @@ void UpdateAssetToComponents(EditorState* editor_state, Stream<void> old_asset, 
 
 void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToComponentElement> elements, unsigned int sandbox_index)
 {
+	if (elements.size == 0) {
+		return;
+	}
+
 	if (sandbox_index == -1) {
 		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
 			UpdateAssetsToComponents(editor_state, elements, index);

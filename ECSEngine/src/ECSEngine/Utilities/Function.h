@@ -27,7 +27,7 @@ namespace ECSEngine {
 		ECSENGINE_API void* RemapPointer(const void* first_base, const void* second_base, const void* pointer);
 
 		template<typename CharacterType>
-		CharacterType Character(char character) {
+		ECS_INLINE CharacterType Character(char character) {
 			if constexpr (std::is_same_v<CharacterType, char>) {
 				return character;
 			}
@@ -36,11 +36,11 @@ namespace ECSEngine {
 			}
 		}
 
-		inline bool IsPowerOfTwo(int x) {
+		ECS_INLINE bool IsPowerOfTwo(int x) {
 			return (x & (x - 1)) == 0;
 		}
 
-		inline uintptr_t AlignPointer(uintptr_t pointer, size_t alignment) {
+		ECS_INLINE uintptr_t AlignPointer(uintptr_t pointer, size_t alignment) {
 			ECS_ASSERT(IsPowerOfTwo(alignment));
 
 			size_t mask = alignment - 1;
@@ -48,17 +48,17 @@ namespace ECSEngine {
 		}
 
 		// Determines how many slots are needed to hold the given count with the chunk size
-		inline size_t SlotsFor(size_t count, size_t chunk_size) {
+		ECS_INLINE size_t SlotsFor(size_t count, size_t chunk_size) {
 			return count / chunk_size + ((count % chunk_size) != 0);
 		}
 
-		inline void Capitalize(char* character) {
+		ECS_INLINE void Capitalize(char* character) {
 			if (*character >= 'a' && *character <= 'z') {
 				*character = *character - 32;
 			}
 		}
 
-		inline void Uncapitalize(char* character) {
+		ECS_INLINE void Uncapitalize(char* character) {
 			if (*character >= 'A' && *character <= 'Z') {
 				*character += 'a' - 'A';
 			}
@@ -71,7 +71,7 @@ namespace ECSEngine {
 			size_t data_size;
 		};
 
-		inline void CopyPointers(Stream<CopyPointer> copy_data) {
+		ECS_INLINE void CopyPointers(Stream<CopyPointer> copy_data) {
 			for (size_t index = 0; index < copy_data.size; index++) {
 				memcpy(*copy_data[index].destination, copy_data[index].data, copy_data[index].data_size);
 			}
@@ -87,86 +87,86 @@ namespace ECSEngine {
 			}
 		}
 
-		inline bool HasFlag(size_t configuration, size_t flag) {
+		ECS_INLINE bool HasFlag(size_t configuration, size_t flag) {
 			return (configuration & flag) != 0;
 		}
 
 		// We're not using any macros or variadic templates. Just write up to 5 args
-		inline size_t HasFlag(size_t configuration, size_t flag0, size_t flag1) {
+		ECS_INLINE size_t HasFlag(size_t configuration, size_t flag0, size_t flag1) {
 			return HasFlag(HasFlag(configuration, flag0), flag1);
 		}
 
-		inline size_t HasFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2) {
+		ECS_INLINE size_t HasFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2) {
 			return HasFlag(HasFlag(configuration, flag0), flag1, flag2);
 		}
 
-		inline size_t HasFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3) {
+		ECS_INLINE size_t HasFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3) {
 			return HasFlag(HasFlag(configuration, flag0), flag1, flag2, flag3);
 		}
 
-		inline size_t HasFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3, size_t flag4) {
+		ECS_INLINE size_t HasFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3, size_t flag4) {
 			return HasFlag(HasFlag(configuration, flag0), flag1, flag2, flag3, flag4);
 		}
 
-		inline bool HasFlagAtomic(const std::atomic<size_t>& configuration, size_t flag) {
+		ECS_INLINE bool HasFlagAtomic(const std::atomic<size_t>& configuration, size_t flag) {
 			return (configuration.load(std::memory_order_relaxed) & flag) != 0;
 		}
 
-		inline size_t ClearFlag(size_t configuration, size_t flag) {
+		ECS_INLINE size_t ClearFlag(size_t configuration, size_t flag) {
 			return configuration & (~flag);
 		}
 
 		// We're not using any macros or variadic templates. Just write up to 5 args
-		inline size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1) {
+		ECS_INLINE size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1) {
 			return ClearFlag(ClearFlag(configuration, flag0), flag1);
 		}
 
-		inline size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2) {
+		ECS_INLINE size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2) {
 			return ClearFlag(ClearFlag(configuration, flag0), flag1, flag2);
 		}
 
-		inline size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3) {
+		ECS_INLINE size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3) {
 			return ClearFlag(ClearFlag(configuration, flag0), flag1, flag2, flag3);
 		}
 
-		inline size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3, size_t flag4) {
+		ECS_INLINE size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3, size_t flag4) {
 			return ClearFlag(ClearFlag(configuration, flag0), flag1, flag2, flag3, flag4);
 		}
 
-		inline void ClearFlagAtomic(std::atomic<size_t>& configuration, size_t flag) {
+		ECS_INLINE void ClearFlagAtomic(std::atomic<size_t>& configuration, size_t flag) {
 			configuration.fetch_and(~flag, std::memory_order_relaxed);
 		}
 
-		inline size_t SetFlag(size_t configuration, size_t flag) {
+		ECS_INLINE size_t SetFlag(size_t configuration, size_t flag) {
 			return configuration | flag;
 		}
 
 		// We're not using any macros or variadic templates. Just write up to 5 args
-		inline size_t SetFlag(size_t configuration, size_t flag0, size_t flag1) {
+		ECS_INLINE size_t SetFlag(size_t configuration, size_t flag0, size_t flag1) {
 			return SetFlag(SetFlag(configuration, flag0), flag1);
 		}
 
-		inline size_t SetFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2) {
+		ECS_INLINE size_t SetFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2) {
 			return SetFlag(SetFlag(configuration, flag0), flag1, flag2);
 		}
 
-		inline size_t SetFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3) {
+		ECS_INLINE size_t SetFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3) {
 			return SetFlag(SetFlag(configuration, flag0), flag1, flag2, flag3);
 		}
 
-		inline size_t SetFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3, size_t flag4) {
+		ECS_INLINE size_t SetFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3, size_t flag4) {
 			return SetFlag(SetFlag(configuration, flag0), flag1, flag2, flag3, flag4);
 		}
 
-		inline void SetFlagAtomic(std::atomic<size_t>& configuration, size_t flag) {
+		ECS_INLINE void SetFlagAtomic(std::atomic<size_t>& configuration, size_t flag) {
 			configuration.fetch_or(flag, std::memory_order_relaxed);
 		}
 
-		inline bool CompareStrings(Stream<wchar_t> string, Stream<wchar_t> other) {
+		ECS_INLINE bool CompareStrings(Stream<wchar_t> string, Stream<wchar_t> other) {
 			return string.size == other.size && (memcmp(string.buffer, other.buffer, sizeof(wchar_t) * other.size) == 0);
 		}
 
-		inline bool CompareStrings(Stream<char> string, Stream<char> other) {
+		ECS_INLINE bool CompareStrings(Stream<char> string, Stream<char> other) {
 			return string.size == other.size && (memcmp(string.buffer, other.buffer, sizeof(char) * other.size) == 0);
 		}
 
@@ -187,44 +187,44 @@ namespace ECSEngine {
 			return string.size < comparator.size;
 		}
 
-		inline bool StringIsLess(Stream<char> string, Stream<char> comparator) {
+		ECS_INLINE bool StringIsLess(Stream<char> string, Stream<char> comparator) {
 			return StringIsLessImpl(string, comparator);
 		}
 
-		inline bool StringIsLess(Stream<wchar_t> string, Stream<wchar_t> comparator) {
+		ECS_INLINE bool StringIsLess(Stream<wchar_t> string, Stream<wchar_t> comparator) {
 			return StringIsLessImpl(string, comparator);
 		}
 
-		inline void* OffsetPointer(const void* pointer, int64_t offset) {
+		ECS_INLINE void* OffsetPointer(const void* pointer, int64_t offset) {
 			return (void*)((int64_t)pointer + offset);
 		}
 
-		inline void* OffsetPointer(Stream<void> pointer) {
+		ECS_INLINE void* OffsetPointer(Stream<void> pointer) {
 			return OffsetPointer(pointer.buffer, pointer.size);
 		}
 
-		inline void* OffsetPointer(CapacityStream<void> pointer) {
+		ECS_INLINE void* OffsetPointer(CapacityStream<void> pointer) {
 			return OffsetPointer(pointer.buffer, pointer.size);
 		}
 
 		// a - b
-		inline size_t PointerDifference(const void* a, const void* b) {
+		ECS_INLINE size_t PointerDifference(const void* a, const void* b) {
 			return (uintptr_t)a - (uintptr_t)b;
 		}
 
 		// Returns true if the pointer >= base && pointer < base + size
-		inline bool IsPointerRange(const void* base, size_t size, const void* pointer) {
+		ECS_INLINE bool IsPointerRange(const void* base, size_t size, const void* pointer) {
 			return pointer >= base && PointerDifference(pointer, base) < size;
 		}
 
-		inline bool AreAliasing(Stream<void> first, Stream<void> second) {
+		ECS_INLINE bool AreAliasing(Stream<void> first, Stream<void> second) {
 			auto test = [](Stream<void> first, Stream<void> second) {
 				return first.buffer >= second.buffer && (first.buffer < function::OffsetPointer(second.buffer, second.size));
 			};
 			return test(first, second) || test(second, first);
 		}
 
-		inline void* RemapPointerIfInRange(const void* base, size_t size, const void* new_base, const void* pointer) {
+		ECS_INLINE void* RemapPointerIfInRange(const void* base, size_t size, const void* new_base, const void* pointer) {
 			if (IsPointerRange(base, size, pointer)) {
 				return RemapPointer(base, new_base, pointer);
 			}
@@ -233,39 +233,39 @@ namespace ECSEngine {
 		
 		// Returns the index of the first most significant bit set, -1 if no bit is set
 		// (it is like a reverse search inside the bits)
-		inline unsigned int FirstMSB64(size_t number) {
+		ECS_INLINE unsigned int FirstMSB64(size_t number) {
 			unsigned long value = 0;
 			return _BitScanReverse64(&value, number) == 0 ? -1 : value;
 		}
 
 		// Returns the index of the first most significant bit set, -1 if no bit is set
 		// (it is like a reverse search inside the bits)
-		inline unsigned int FirstMSB(unsigned int number) {
+		ECS_INLINE unsigned int FirstMSB(unsigned int number) {
 			unsigned long value = 0;
 			return _BitScanReverse(&value, number) == 0 ? -1 : value;
 		}
 
 		// Returns the index of the first least significant bit set, -1 if no bit is set
 		// (it is like a forward search inside bits)
-		inline unsigned int FirstLSB64(size_t number) {
+		ECS_INLINE unsigned int FirstLSB64(size_t number) {
 			unsigned long value = 0;
 			return _BitScanForward64(&value, number) == 0 ? -1 : value;
 		}
 
 		// Returns the index of the first least significant bit set, -1 if no bit is set
 		// (it is like a forward search inside bits)
-		inline unsigned int FirstLSB(unsigned int number) {
+		ECS_INLINE unsigned int FirstLSB(unsigned int number) {
 			unsigned long value = 0;
 			return _BitScanForward(&value, number) == 0 ? -1 : value;
 		}
 
 		/* Supports alignments up to 256 bytes */
-		inline uintptr_t AlignPointerStack(uintptr_t pointer, size_t alignment) {
+		ECS_INLINE uintptr_t AlignPointerStack(uintptr_t pointer, size_t alignment) {
 			uintptr_t first_aligned_pointer = AlignPointer(pointer, alignment);
 			return first_aligned_pointer + alignment * ((first_aligned_pointer - pointer) == 0);
 		}
 
-		inline size_t PowerOfTwoGreater(size_t number) {
+		ECS_INLINE size_t PowerOfTwoGreater(size_t number) {
 			// Use bitscan to quickly find this out
 			// Example 00011010 -> 00100000
 
@@ -275,11 +275,27 @@ namespace ECSEngine {
 		}
 
 		// Extends the 47th bit into the 48-63 range
-		inline void* SignExtendPointer(const void* pointer) {
+		ECS_INLINE void* SignExtendPointer(const void* pointer) {
 			intptr_t ptr = (intptr_t)pointer;
 			ptr <<= 16;
 			ptr >>= 16;
 			return (void*)ptr;
+		}
+
+		// It will copy the null termination character
+		ECS_INLINE Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string) {
+			Stream<char> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
+			result.Copy(string);
+			result[string.size] = '\0';
+			return result;
+		}
+
+		// It will copy the null termination character
+		ECS_INLINE Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string) {
+			Stream<wchar_t> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
+			result.Copy(string);
+			result[string.size] = L'\0';
+			return result;
 		}
 
 		// The type must have as its first field a size_t describing the stream size
@@ -294,37 +310,37 @@ namespace ECSEngine {
 
 		// The type must have its first field a size_t describing its stream size
 		template<typename StreamType, typename Type>
-		inline Stream<StreamType> GetEmbeddedStream(const Type* type) {
+		ECS_INLINE Stream<StreamType> GetEmbeddedStream(const Type* type) {
 			const size_t* size_ptr = (const size_t*)type;
 			return { function::OffsetPointer(type, sizeof(*type)), *size_ptr };
 		}
 
-		inline bool IsNumberCharacter(char value) {
+		ECS_INLINE bool IsNumberCharacter(char value) {
 			return value >= '0' && value <= '9';
 		}
 
-		inline bool IsNumberCharacter(wchar_t value) {
+		ECS_INLINE bool IsNumberCharacter(wchar_t value) {
 			return value >= L'0' && value <= L'9';
 		}
 
-		inline bool IsAlphabetCharacter(char value) {
+		ECS_INLINE bool IsAlphabetCharacter(char value) {
 			return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z');
 		}
 
-		inline bool IsAlphabetCharacter(wchar_t value) {
+		ECS_INLINE bool IsAlphabetCharacter(wchar_t value) {
 			return (value >= L'a' && value <= L'z') || (value >= L'A' && value <= L'Z');
 		}
 
-		inline bool IsCodeIdentifierCharacter(char value) {
+		ECS_INLINE bool IsCodeIdentifierCharacter(char value) {
 			return IsNumberCharacter(value) || IsAlphabetCharacter(value) || value == '_';
 		}
 
-		inline bool IsCodeIdentifierCharacter(wchar_t value) {
+		ECS_INLINE bool IsCodeIdentifierCharacter(wchar_t value) {
 			return IsNumberCharacter(value) || IsAlphabetCharacter(value) || value == L'_';
 		}
 
 		// Can use the increment to go backwards by setting it to -1
-		inline const char* SkipSpace(const char* pointer, int increment = 1) {
+		ECS_INLINE const char* SkipSpace(const char* pointer, int increment = 1) {
 			while (*pointer == ' ') {
 				pointer += increment;
 			}
@@ -334,33 +350,33 @@ namespace ECSEngine {
 		// pointers should be aligned preferably to 32 bytes at least
 		ECSENGINE_API void avx2_copy(void* destination, const void* source, size_t bytes);
 
-		inline void ConvertASCIIToWide(wchar_t* wide_string, const char* pointer, size_t max_w_string_count) {
+		ECS_INLINE void ConvertASCIIToWide(wchar_t* wide_string, const char* pointer, size_t max_w_string_count) {
 			int result = MultiByteToWideChar(CP_ACP, 0, pointer, -1, wide_string, max_w_string_count);
 		}
 
-		inline void ConvertASCIIToWide(wchar_t* wide_string, Stream<char> pointer, size_t max_w_string_count) {
+		ECS_INLINE void ConvertASCIIToWide(wchar_t* wide_string, Stream<char> pointer, size_t max_w_string_count) {
 			int result = MultiByteToWideChar(CP_ACP, 0, pointer.buffer, pointer.size, wide_string, max_w_string_count);
 		}
 
-		inline void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string) {
+		ECS_INLINE void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string) {
 			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
 			wide_string.size += ascii_string.size;
 		}
 
-		inline void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string) {
+		ECS_INLINE void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string) {
 			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
 			wide_string.size += ascii_string.size;
 		}
 
 		// Can use the increment to go backwards by setting it to -1
-		inline const char* SkipCodeIdentifier(const char* pointer, int increment = 1) {
+		ECS_INLINE const char* SkipCodeIdentifier(const char* pointer, int increment = 1) {
 			while (IsCodeIdentifierCharacter(*pointer)) {
 				pointer += increment;
 			}
 			return pointer;
 		}
 
-		inline const wchar_t* SkipCodeIdentifier(const wchar_t* pointer, int increment = 1) {
+		ECS_INLINE const wchar_t* SkipCodeIdentifier(const wchar_t* pointer, int increment = 1) {
 			while (IsCodeIdentifierCharacter(*pointer)) {
 				pointer += increment;
 			}
@@ -373,7 +389,7 @@ namespace ECSEngine {
 		// returns the count of decoded numbers
 		ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, int* number_buffer);
 
-		inline void ConvertWideCharsToASCII(
+		ECS_INLINE void ConvertWideCharsToASCII(
 			const wchar_t* wide_chars,
 			char* chars,
 			size_t wide_char_count,
@@ -389,7 +405,7 @@ namespace ECSEngine {
 			ECS_ASSERT(status == 0);
 		}
 
-		inline void ConvertWideCharsToASCII(
+		ECS_INLINE void ConvertWideCharsToASCII(
 			const wchar_t* wide_chars,
 			char* chars,
 			size_t wide_char_count,
@@ -400,7 +416,7 @@ namespace ECSEngine {
 			ECS_ASSERT(status == 0);
 		}
 
-		inline void ConvertWideCharsToASCII(
+		ECS_INLINE void ConvertWideCharsToASCII(
 			Stream<wchar_t> wide_chars,
 			CapacityStream<char>& ascii_chars
 		) {
@@ -412,7 +428,7 @@ namespace ECSEngine {
 
 		// Tabs and spaces
 		// Can use the increment to go backwards by setting it to -1
-		inline const char* SkipWhitespace(const char* pointer, int increment = 1) {
+		ECS_INLINE const char* SkipWhitespace(const char* pointer, int increment = 1) {
 			while (*pointer == ' ' || *pointer == '\t') {
 				pointer += increment;
 			}
@@ -420,7 +436,7 @@ namespace ECSEngine {
 		}
 
 		// Can use the increment to go backwards by setting it to -1
-		inline const wchar_t* SkipWhitespace(const wchar_t* pointer, int increment = 1) {
+		ECS_INLINE const wchar_t* SkipWhitespace(const wchar_t* pointer, int increment = 1) {
 			while (*pointer == L' ' || *pointer == L'\t') {
 				pointer += increment;
 			}
@@ -428,14 +444,14 @@ namespace ECSEngine {
 		}
 
 		// Tabs, spaces and new lines
-		inline const char* SkipWhitespaceEx(const char* pointer, int increment = 1) {
+		ECS_INLINE const char* SkipWhitespaceEx(const char* pointer, int increment = 1) {
 			while (*pointer == ' ' || *pointer == '\t' || *pointer == '\n') {
 				pointer += increment;
 			}
 			return pointer;
 		}
 
-		inline const wchar_t* SkipWhitespaceEx(const wchar_t* pointer, int increment = 1) {
+		ECS_INLINE const wchar_t* SkipWhitespaceEx(const wchar_t* pointer, int increment = 1) {
 			while (*pointer == L' ' || *pointer == L'\t' || *pointer == L'\n') {
 				pointer += increment;
 			}
@@ -445,16 +461,16 @@ namespace ECSEngine {
 		// Shifts the pointer 3 positions to the right in order to provide significant digits for hashing functions
 		// like power of two that use the lower bits in order to hash the element inside the table.
 		// It will clip to only 24 bits - 3 bytes - that's the precision the hash table work with
-		inline unsigned int PointerHash(void* ptr) {
+		ECS_INLINE unsigned int PointerHash(void* ptr) {
 			return (unsigned int)(((uintptr_t)ptr >> 3) & 0x0000000000FFFFFF);
 		}
 
-		inline size_t GetSimdCount(size_t count, size_t vector_size) {
+		ECS_INLINE size_t GetSimdCount(size_t count, size_t vector_size) {
 			return count & (-vector_size);
 		}
 
 		template<bool is_delta = false, typename Value>
-		Value Lerp(Value a, Value b, float percentage) {
+		ECS_INLINE Value Lerp(Value a, Value b, float percentage) {
 			if constexpr (!is_delta) {
 				return (b - a) * percentage + a;
 			}
@@ -464,12 +480,12 @@ namespace ECSEngine {
 		}
 
 		template<typename Value>
-		float InverseLerp(Value a, Value b, Value c) {
+		ECS_INLINE float InverseLerp(Value a, Value b, Value c) {
 			return (c - a) / (b - a);
 		}
 
 		template<typename Value>
-		Value PlanarLerp(Value a, Value b, Value c, Value d, float x_percentage, float y_percentage) {
+		inline Value PlanarLerp(Value a, Value b, Value c, Value d, float x_percentage, float y_percentage) {
 			// Interpolation formula
 			// a ----- b
 			// |       |
@@ -484,24 +500,24 @@ namespace ECSEngine {
 		}
 
 		template<typename Function>
-		float2 SampleFunction(float value, Function&& function) {
+		ECS_INLINE float2 SampleFunction(float value, Function&& function) {
 			return { value, function(value) };
 		}
 
 		template<typename Value>
-		Value Clamp(Value value, Value min, Value max) {
+		ECS_INLINE Value Clamp(Value value, Value min, Value max) {
 			return ClampMax(ClampMin(value, min), max);
 		}
 
 		// The value will not be less than min
 		template<typename Value>
-		Value ClampMin(Value value, Value min) {
+		ECS_INLINE Value ClampMin(Value value, Value min) {
 			return value < min ? min : value;
 		}
 
 		// The value will not be greater than max
 		template<typename Value>
-		Value ClampMax(Value value, Value max) {
+		ECS_INLINE Value ClampMax(Value value, Value max) {
 			return value > max ? max : value;
 		}
 

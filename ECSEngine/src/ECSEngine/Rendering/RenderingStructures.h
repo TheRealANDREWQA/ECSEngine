@@ -304,6 +304,14 @@ namespace ECSEngine {
 	ECSENGINE_API ECS_SAMPLER_ADDRESS_TYPE GetGraphicsAddressModeFromNative(D3D11_TEXTURE_ADDRESS_MODE address_mode);
 
 	struct ECS_REFLECT ShaderMacro {
+		ECS_INLINE bool Compare(ShaderMacro other) const {
+			return function::CompareStrings(Stream<char>(name), other.name) && function::CompareStrings(Stream<char>(definition), other.definition);
+		}
+
+		ECS_INLINE ShaderMacro Copy(AllocatorPolymorphic allocator) const {
+			return { function::StringCopy(allocator, name).buffer, function::StringCopy(allocator, definition).buffer };
+		}
+
 		const char* name;
 		const char* definition;
 	};

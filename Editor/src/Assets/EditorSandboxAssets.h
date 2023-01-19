@@ -18,15 +18,31 @@ struct LinkComponentWithAssetFields {
 
 // It will just deallocate the runtime asset and modify the sandbox scenes link components
 // If the commit flag is set to true then it will execute it immediately, otherwise it will postpone until
-// the resource loading editor state flag is reset
+// the resource loading editor state flag is cleared
 void DeallocateAssetWithRemapping(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, bool commit = false);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // It will just deallocate the runtime asset and modify the sandbox scenes link components
 // If the commit flag is set to true then it will execute it immediately, otherwise it will postpone until
-// the resource loading editor state flag is reset
+// the resource loading editor state flag is cleared. This version will copy the old_metadata and deallocate the asset based
+// on that metadata instead of the current version. It will still remap the pointer tho
+void DeallocateAssetWithRemapping(EditorState* editor_state, const void* old_metadata, ECS_ASSET_TYPE type, bool commit = false);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// It will just deallocate the runtime asset and modify the sandbox scenes link components
+// If the commit flag is set to true then it will execute it immediately, otherwise it will postpone until
+// the resource loading editor state flag is reset.
 void DeallocateAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsigned int>> handles, bool commit = false);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// If the runtime version of the metadata is different from the file version, then it will deallocate the asset.
+// If they match it will not do anything.
+// If the commit flag is set to true then it will execute it immediately, otherwise it will postpone until
+// the resource loading editor state flag is reset.
+void DeallocateAssetsWithRemappingMetadataChange(EditorState* editor_state, Stream<Stream<unsigned int>> handles, bool commit = false);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -111,9 +127,17 @@ bool RegisterSandboxAsset(
 
 // -------------------------------------------------------------------------------------------------------------
 
-// A stream corresponds to an asset type. The ints are handles. Does not check to see if there are
-// no assets to be reloaded to quit early
+// A stream corresponds to an asset type. The ints are handles. It checks to see if there is anything to reload
+// and quit early if there is none
 void ReloadAssets(EditorState* editor_state, Stream<Stream<unsigned int>> assets_to_reload);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// A stream corresponds to an asset type. The ints are handles. It checks to see if there is anything to reload
+// and quit early if there is none. This version will load the metadata from the file and if it matches
+// the in-memory version then it will only create the asset, it will not attempt to deallocate it. If it is different,
+// then it will also unload the asset first and remap the pointer
+void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigned int>> assets_to_reload);
 
 // -------------------------------------------------------------------------------------------------------------
 

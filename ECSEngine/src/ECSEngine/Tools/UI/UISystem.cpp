@@ -8699,10 +8699,9 @@ namespace ECSEngine {
 		void UISystem::ReadFontDescriptionFile(Stream<wchar_t> filename) {
 			// loading font uv descriptor;
 			size_t size = 2000;
-			void* uv_buffer = m_resource_manager->LoadTextFileImplementation(filename, &size);
-			char* uv_character_buffer = (char*)uv_buffer;
+			Stream<char> uv_buffer = m_resource_manager->LoadTextFileImplementation(filename);
 			unsigned int uvs[1024];
-			size_t numbers = function::ParseNumbersFromCharString(Stream<char>(uv_character_buffer, size), uvs);
+			size_t numbers = function::ParseNumbersFromCharString(uv_buffer, uvs);
 
 			// first two numbers represents the texture width and height
 			// these parameters will be used to normalize the coordinates

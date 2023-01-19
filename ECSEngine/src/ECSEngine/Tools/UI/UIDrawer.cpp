@@ -3311,10 +3311,10 @@ namespace ECSEngine {
 
 				InitializeElementName(configuration, UI_CONFIG_COMBO_BOX_NO_NAME, config, identifier, &data->name, position, scale);
 
-				size_t allocation_size = StreamDeepCopySize(labels);
+				size_t allocation_size = StreamCoallescedDeepCopySize(labels);
 				void* allocation = GetMainAllocatorBuffer(allocation_size);
 				uintptr_t ptr = (uintptr_t)allocation;
-				data->labels = StreamDeepCopy(labels, ptr);
+				data->labels = StreamCoallescedDeepCopy(labels, ptr);
 
 				if (configuration & UI_CONFIG_COMBO_BOX_PREFIX) {
 					const UIConfigComboBoxPrefix* prefix = (const UIConfigComboBoxPrefix*)config.GetParameter(UI_CONFIG_COMBO_BOX_PREFIX);
@@ -9968,7 +9968,7 @@ namespace ECSEngine {
 
 					if (has_changed) {
 						// Need to update manually the labels before calling into it
-						size_t allocation_size = StreamDeepCopySize(labels);
+						size_t allocation_size = StreamCoallescedDeepCopySize(labels);
 						void* allocation = GetMainAllocatorBuffer(allocation_size);
 						// Notify the dynamic element that the allocation has changed
 						unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, HandleResourceIdentifier(name));
@@ -9977,7 +9977,7 @@ namespace ECSEngine {
 						RemoveAllocation(data->labels.buffer);
 
 						uintptr_t ptr = (uintptr_t)allocation;
-						data->labels = StreamDeepCopy(labels, ptr);
+						data->labels = StreamCoallescedDeepCopy(labels, ptr);
 
 						float current_max_x = 0.0f;
 						for (size_t index = 0; index < labels.size; index++) {
@@ -10574,10 +10574,10 @@ namespace ECSEngine {
 			config.flag_count--;
 
 			if (extensions.size > 0) {
-				size_t copy_size = StreamDeepCopySize(extensions);
+				size_t copy_size = StreamCoallescedDeepCopySize(extensions);
 				void* allocation = drawer->GetMainAllocatorBuffer(copy_size);
 				uintptr_t ptr = (uintptr_t)allocation;
-				callback_data->extensions = StreamDeepCopy(extensions, ptr);
+				callback_data->extensions = StreamCoallescedDeepCopy(extensions, ptr);
 			}
 			else {
 				callback_data->extensions = { nullptr, 0 };
@@ -10890,10 +10890,10 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		Stream<Stream<char>> AllocateFilterMenuCopyLabels(UIDrawer* drawer, Stream<Stream<char>> labels) {
-			size_t copy_size = StreamDeepCopySize(labels);
+			size_t copy_size = StreamCoallescedDeepCopySize(labels);
 			void* copy_allocation = drawer->GetMainAllocatorBuffer(copy_size);
 			uintptr_t copy_ptr = (uintptr_t)copy_allocation;
-			return StreamDeepCopy(labels, copy_ptr);
+			return StreamCoallescedDeepCopy(labels, copy_ptr);
 		}
 
 		Stream<Stream<char>> ReallocateFilterMenuCopyLabels(UIDrawer* drawer, Stream<Stream<char>> old_labels, Stream<Stream<char>> new_labels) {

@@ -28,6 +28,9 @@ struct InspectorDrawMeshFileData {
 	float window_thumbnail_percentage;
 
 	MeshMetadata current_metadata;
+	// This will be copied every frame from the current metadata
+	// such that when 
+	MeshMetadata previous_metadata;
 	AssetSettingsHelperData helper_data;
 };
 

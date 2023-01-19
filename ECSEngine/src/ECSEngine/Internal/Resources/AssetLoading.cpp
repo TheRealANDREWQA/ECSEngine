@@ -1143,8 +1143,10 @@ namespace ECSEngine {
 						index_to_remove = index;
 					}
 
-					size_t metadata_storage[ECS_KB];
-					bool unloaded_now = database_reference->RemoveAsset(index_to_remove, current_type, metadata_storage);
+					size_t metadata_storage[AssetMetadataMaxByteSize()];
+					AssetDatabaseRemoveInfo remove_info;
+					remove_info.storage = metadata_storage;
+					bool unloaded_now = database_reference->RemoveAsset(index_to_remove, current_type, &remove_info);
 					if (unloaded_now) {
 						DeallocateAssetFromMetadata(resource_manager, database, metadata_storage, current_type, mount_point);
 					}

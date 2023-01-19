@@ -879,25 +879,6 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string) {
-			Stream<char> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
-			result.Copy(string);
-			result[string.size] = '\0';
-			return result;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string)
-		{
-			Stream<wchar_t> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
-			result.Copy(string);
-			result[string.size] = L'\0';
-			return result;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		void MakeSequence(Stream stream, size_t offset)
 		{

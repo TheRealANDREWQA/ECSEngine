@@ -238,51 +238,61 @@ namespace ECSEngine {
 
 	bool AssetDatabaseReference::RemoveMesh(unsigned int index, MeshMetadata* storage)
 	{
-		return RemoveAsset(index, ECS_ASSET_MESH);
+		AssetDatabaseRemoveInfo info;
+		info.storage = storage;
+		return RemoveAsset(index, ECS_ASSET_MESH, &info);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
 	bool AssetDatabaseReference::RemoveTexture(unsigned int index, TextureMetadata* storage)
 	{
-		return RemoveAsset(index, ECS_ASSET_TEXTURE);
+		AssetDatabaseRemoveInfo info;
+		info.storage = storage;
+		return RemoveAsset(index, ECS_ASSET_TEXTURE, &info);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
 	bool AssetDatabaseReference::RemoveGPUSampler(unsigned int index, GPUSamplerMetadata* storage)
 	{
-		return RemoveAsset(index, ECS_ASSET_GPU_SAMPLER);
+		AssetDatabaseRemoveInfo info;
+		info.storage = storage;
+		return RemoveAsset(index, ECS_ASSET_GPU_SAMPLER, &info);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
 	bool AssetDatabaseReference::RemoveShader(unsigned int index, ShaderMetadata* storage)
 	{
-		return RemoveAsset(index, ECS_ASSET_SHADER);
+		AssetDatabaseRemoveInfo info;
+		info.storage = storage;
+		return RemoveAsset(index, ECS_ASSET_SHADER, &info);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::RemoveMaterial(unsigned int index, MaterialAsset* storage)
+	bool AssetDatabaseReference::RemoveMaterial(unsigned int index, AssetDatabaseRemoveInfo* remove_info)
 	{
-		return RemoveAsset(index, ECS_ASSET_MATERIAL);
+		return RemoveAsset(index, ECS_ASSET_MATERIAL, remove_info);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
 	bool AssetDatabaseReference::RemoveMisc(unsigned int index, MiscAsset* storage)
 	{
-		return RemoveAsset(index, ECS_ASSET_MISC);
+		AssetDatabaseRemoveInfo info;
+		info.storage = storage;
+		return RemoveAsset(index, ECS_ASSET_MISC, &info);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::RemoveAsset(unsigned int index, ECS_ASSET_TYPE type, void* storage)
+	bool AssetDatabaseReference::RemoveAsset(unsigned int index, ECS_ASSET_TYPE type, AssetDatabaseRemoveInfo* remove_info)
 	{
 		unsigned int handle = GetHandle(index, type);
 		RemoveAssetThisOnly(index, type);
-		return database->RemoveAsset(handle, type, storage);
+		return database->RemoveAsset(handle, type, remove_info);
 	}
 
 	// ------------------------------------------------------------------------------------------------
