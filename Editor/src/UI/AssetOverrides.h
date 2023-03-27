@@ -24,11 +24,17 @@ struct AssetOverrideCallbackVerifyData {
 	bool prevent_registering;
 };
 
-// Mirrors CreateAssetAsyncCallbackInfo in AssetManagement.h
 struct AssetOverrideCallbackAdditionalInfo {
 	unsigned int handle;
 	ECSEngine::ECS_ASSET_TYPE type;
 	bool success;
+	bool is_selection;
+
+	// This is used only for deselection
+	// This will be the asset with all of its values
+	// before removal - since the asset can be removed from
+	// the database
+	void* previous_asset;
 };
 
 // Can optionally mark the callback as a verify callback that will receive
@@ -36,9 +42,13 @@ struct AssetOverrideCallbackAdditionalInfo {
 // it can use to prevent the registering/unregistering part of the.
 // If the normal callback is called, then it receives in the additional_data field
 // a structure of type
+// For deselection, if you wish the callback to be called after the handle has been made -1
+// but the handle will be the value before being deallocated
+// then clear callback_before_handle_update to false
 struct AssetOverrideBindCallbackData {
 	ECSEngine::Tools::UIActionHandler handler;
 	bool verify_handler = false;
+	bool callback_before_handle_update = true;
 };
 
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback);

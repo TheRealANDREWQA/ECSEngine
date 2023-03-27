@@ -14,6 +14,19 @@ using namespace ECSEngine;
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void FromDeallocateAssetDependencyToUpdateAssetToComponentElement(
+	CapacityStream<UpdateAssetToComponentElement>* update_assets, 
+	Stream<DeallocateAssetDependency> deallocate_dependencies
+) {
+	for (size_t index = 0; index < deallocate_dependencies.size; index++) {
+		UpdateAssetToComponentElement element;
+		element.new_asset = deallocate_dependencies[index].new_pointer;
+		element.old_asset = deallocate_dependencies[index].previous_pointer;
+		element.type = deallocate_dependencies[index].type;
+		update_assets->Add(element);
+	}
+}
+
 struct DeallocateAssetWithRemappingEventData {
 	Stream<Stream<unsigned int>> handles;
 	bool force_execution;
@@ -28,20 +41,18 @@ EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 		}
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 4);
-		Stream<UpdateAssetToComponentElement> update_assets;
-		update_assets.Initialize(&stack_allocator, total_size);
+		CapacityStream<UpdateAssetToComponentElement> update_assets;
+		update_assets.Initialize(&stack_allocator, 0, total_size);
 
 		size_t update_index = 0;
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
 
 			for (size_t subindex = 0; subindex < data->handles[index].size; subindex++) {
+				ECS_STACK_CAPACITY_STREAM(DeallocateAssetDependency, deallocate_dependencies, 512);
 				void* metadata = editor_state->asset_database->GetAsset(data->handles[index][subindex], current_type);
-				update_assets[update_index].old_asset = GetAssetFromMetadata(metadata, current_type);
-				update_assets[update_index].type = current_type;
 
-				// Deallocate the asset and then randomize it (already done in the Deallocate function)
-				bool success = DeallocateAsset(editor_state, metadata, current_type);
+				bool success = DeallocateAsset(editor_state, metadata, current_type, true, &deallocate_dependencies);
 				if (!success) {
 					Stream<wchar_t> target_file = GetAssetFile(metadata, current_type);
 					Stream<char> asset_name = GetAssetName(metadata, current_type);
@@ -57,10 +68,9 @@ EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 					EditorSetConsoleError(console_message);
 				}
 
-				Stream<void> new_asset_value = GetAssetFromMetadata(metadata, current_type);
-				update_assets[update_index].new_asset = new_asset_value;
-
-				update_index++;
+				// Set the new_asset for those assets that have been changed
+				update_assets.Expand(GetAllocatorPolymorphic(&stack_allocator), deallocate_dependencies.size);
+				FromDeallocateAssetDependencyToUpdateAssetToComponentElement(&update_assets, deallocate_dependencies);
 			}
 		}
 
@@ -78,20 +88,21 @@ EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 struct DeallocateAssetWithRemappingWithOldMetadataEventData {
 	ECS_ASSET_TYPE type;
 	bool force_execution;
+private:
+	char padding[6];
+public:
 	// Store the old_metadata directly here
-	size_t old_metadata[AssetMetadataMaxByteSize()];
+	char old_metadata[AssetMetadataMaxByteSize()];
 };
 
 EDITOR_EVENT(DeallocateAssetWithRemappingWithOldMetadataEvent) {
 	DeallocateAssetWithRemappingWithOldMetadataEventData* data = (DeallocateAssetWithRemappingWithOldMetadataEventData*)_data;
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING) || data->force_execution) {
-		ECS_STACK_CAPACITY_STREAM(UpdateAssetToComponentElement, update_asset, 1);
-
-		update_asset[0].old_asset = GetAssetFromMetadata(data->old_metadata, data->type);
-		update_asset[0].type = data->type;
+		ECS_STACK_CAPACITY_STREAM(UpdateAssetToComponentElement, update_assets, 256);
+		ECS_STACK_CAPACITY_STREAM(DeallocateAssetDependency, deallocate_dependency, 256);
 
 		// Deallocate the asset and then randomize it (already done in the Deallocate function)
-		bool success = DeallocateAsset(editor_state, data->old_metadata, data->type);
+		bool success = DeallocateAsset(editor_state, data->old_metadata, data->type, true, &deallocate_dependency);
 		if (!success) {
 			Stream<wchar_t> target_file = GetAssetFile(data->old_metadata, data->type);
 			Stream<char> asset_name = GetAssetName(data->old_metadata, data->type);
@@ -107,12 +118,10 @@ EDITOR_EVENT(DeallocateAssetWithRemappingWithOldMetadataEvent) {
 			EditorSetConsoleError(console_message);
 		}
 		else {
-			// The new randomized pointer value is in the old metadata
-			Stream<void> new_asset_value = GetAssetFromMetadata(data->old_metadata, data->type);
-			update_asset[0].new_asset = new_asset_value;
+			FromDeallocateAssetDependencyToUpdateAssetToComponentElement(&update_assets, deallocate_dependency);
 
 			// Update the link components
-			UpdateAssetsToComponents(editor_state, update_asset);
+			UpdateAssetsToComponents(editor_state, update_assets);
 		}
 		return false;
 	}
@@ -135,11 +144,11 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 		}
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(update_assets_allocator, ECS_KB * 64, ECS_MB);
-		Stream<UpdateAssetToComponentElement> update_assets;
-		update_assets.Initialize(&update_assets_allocator, total_size);
-		update_assets.size = 0;
+		CapacityStream<UpdateAssetToComponentElement> update_assets;
+		update_assets.Initialize(&update_assets_allocator, 0, total_size);
 
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(file_asset_allocator, ECS_KB * 64, ECS_MB);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_file_asset_allocator, ECS_KB * 64, ECS_MB);
+		AllocatorPolymorphic file_asset_allocator = GetAllocatorPolymorphic(&_file_asset_allocator);
 
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
@@ -149,14 +158,15 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 
 				Stream<char> asset_name = GetAssetName(metadata, current_type);
 				Stream<wchar_t> target_file = GetAssetFile(metadata, current_type);
-				size_t file_metadata[AssetMetadataMaxByteSize()];
-				CreateDefaultAsset(file_metadata, {}, {}, current_type);
+				alignas(alignof(size_t)) char file_metadata[AssetMetadataMaxByteSize()];
+				// Temporarly copy the name and the file
+				CreateDefaultAsset(file_metadata, function::StringCopy(file_asset_allocator, asset_name), function::StringCopy(file_asset_allocator, target_file), current_type);
 				bool success = editor_state->asset_database->ReadAssetFile(
 					asset_name, 
 					target_file, 
 					file_metadata, 
 					current_type,
-					GetAllocatorPolymorphic(&file_asset_allocator)
+					file_asset_allocator
 				);
 
 				auto fail = [=](const char* message_with_file, const char* message_without_file) {
@@ -174,28 +184,39 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 
 				if (success) {
 					if (!CompareAssetOptions(metadata, file_metadata, current_type)) {
-						UpdateAssetToComponentElement update_element;
-						update_element.old_asset = GetAssetFromMetadata(metadata, current_type);
-						update_element.type = current_type;
-
-						ECS_STACK_CAPACITY_STREAM(DeallocateAssetDependency, dependent_assets, 512);
+						ECS_STACK_CAPACITY_STREAM(DeallocateAssetDependency, external_dependencies, 256);
 
 						// Deallocate the asset and then randomize it (already done in the Deallocate function)
-						bool success = DeallocateAsset(editor_state, metadata, current_type, true, &dependent_assets);
+						bool success = DeallocateAsset(editor_state, metadata, current_type, true, &external_dependencies);
 						if (!success) {
 							fail("Failed to unload asset {#}, type {#} and target file {#} or assets that depend on it.", "Failed to unload asset {#}, type {#} or assets that depend on it.");
 						}
 						else {
-							// Copy the new option values
-							Stream<void> new_asset_value = GetAssetFromMetadata(metadata, current_type);
-							update_element.new_asset = new_asset_value;
-							update_assets.Add(update_element);
+							ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, internal_dependencies, 256);
+							GetAssetDependencies(metadata, current_type, &internal_dependencies);
 
-							// Also update the dependent assets that were successfully deallocated
-							for (unsigned int dependency_index = 0; dependency_index < dependent_assets.size; dependency_index++) {
-								// Check to see
+							// Update the asset inside the asset database
+							Stream<void> randomized_value = GetAssetFromMetadata(metadata, current_type);
+							DeallocateAssetBase(metadata, current_type, editor_state->asset_database->Allocator());
+							CopyAssetBase(metadata, file_metadata, current_type, editor_state->asset_database->Allocator());
+							// Reinstate the old pointer value
+							SetAssetToMetadata(metadata, current_type, randomized_value);
+
+							// It is fine to clear the allocator since copying the old elements into the new buffer
+							// is the same as copying in the same spot
+							update_assets_allocator.Clear();
+							update_assets.Expand(GetAllocatorPolymorphic(&update_assets_allocator), external_dependencies.size);
+							FromDeallocateAssetDependencyToUpdateAssetToComponentElement(&update_assets, external_dependencies);
+
+							// Remove the assets that were previously dependencies for the metadata
+							for (unsigned int dependency = 0; dependency < internal_dependencies.size; dependency++) {
+								DecrementAssetReference(editor_state, internal_dependencies[dependency].handle, internal_dependencies[dependency].type);
 							}
 						}
+					}
+					else {
+						// We don't need to remove the time stamps because they were not added
+						editor_state->asset_database->RemoveAssetDependencies(file_metadata, current_type);
 					}
 				}
 				else {
@@ -211,7 +232,7 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 		UpdateAssetsToComponents(editor_state, update_assets);
 
 		update_assets_allocator.ClearBackup();
-		file_asset_allocator.ClearBackup();
+		_file_asset_allocator.ClearBackup();
 		return false;
 	}
 	else {
@@ -378,6 +399,11 @@ EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 			// Deallocate the data and the database and clear the flags
 			AllocatorPolymorphic allocator = editor_state->EditorAllocator();
 
+			unsigned int total_asset_count = 0;
+			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+				total_asset_count += data->database.GetAssetCount((ECS_ASSET_TYPE)index);
+			}
+
 			// Copy the resources to the editor database that were loaded successfully.
 			if (failure_count == 0) {
 				editor_state->asset_database->CopyAssetPointers(&data->database);
@@ -392,10 +418,6 @@ EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 			else {
 				// Create the asset mask and also record the time stamps
 				ECS_STACK_CAPACITY_STREAM(Stream<unsigned int>, asset_mask, ECS_ASSET_TYPE_COUNT);
-				unsigned int total_asset_count = 0;
-				for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-					total_asset_count += data->database.GetAssetCount((ECS_ASSET_TYPE)index);
-				}
 
 				Stream<LoadAssetFailure> failures = data->failures->ToStream();
 				ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, asset_mask_storage, total_asset_count - failure_count);
@@ -420,20 +442,25 @@ EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 				editor_state->asset_database->CopyAssetPointers(&data->database, asset_mask.buffer);
 			}
 
+			ECS_STACK_CAPACITY_STREAM_DYNAMIC(UpdateAssetToComponentElement, update_elements, total_asset_count);
+
 			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 				ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
 				// Deallocate the mesh pointers for randomized assets
 				unsigned int count = data->database.GetAssetCount(current_type);
+
 				for (unsigned int subindex = 0; subindex < count; subindex++) {
 					const void* metadata = data->database.GetAssetConst(data->database.GetAssetHandleFromIndex(subindex, current_type), current_type);
 					Stream<void> current_asset = GetAssetFromMetadata(metadata, current_type);
 					if (current_asset.buffer != data->previous_pointers[current_type][subindex]) {
-						// Update the link components
-						UpdateAssetToComponents(editor_state, { data->previous_pointers[current_type][subindex], 0 }, current_asset, current_type);
+						update_elements.Add({ { data->previous_pointers[current_type][subindex], 0 }, current_asset, current_type });
 					}
 				}
 				Deallocate(allocator, data->previous_pointers[current_type]);
 			}
+
+			// Update the link components
+			UpdateAssetsToComponents(editor_state, update_elements);
 
 			data->database.DeallocateStreams();
 			DeallocateIfBelongs(allocator, data->failures->buffer);
@@ -760,33 +787,126 @@ bool RegisterSandboxAsset(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+struct FinishReloadAssetEventData {
+	Stream<UpdateAssetToComponentElement> update_elements;
+};
+
+EDITOR_EVENT(FinishReloadAssetEvent) {
+	FinishReloadAssetEventData* data = (FinishReloadAssetEventData*)_data;
+
+	UpdateAssetsToComponents(editor_state, data->update_elements);
+	editor_state->multithreaded_editor_allocator->Deallocate_ts(data->update_elements.buffer);
+	return false;
+}
+
+struct ReloadAssetTaskData {
+	EditorState* editor_state;
+	Stream<Stream<unsigned int>> asset_handles;
+};
+
+// Returns a component with type ECS_ASSET_TYPE_COUNT when there is nothing to be update
+UpdateAssetToComponentElement ReloadAssetTaskIteration(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE asset_type, Stream<wchar_t> assets_folder) {
+	void* metadata = editor_state->asset_database->GetAsset(handle, asset_type);
+	Stream<void> old_asset = GetAssetFromMetadata(metadata, asset_type);
+
+	bool2 success = ReloadAssetFromMetadata(editor_state->RuntimeResourceManager(), editor_state->asset_database, metadata, asset_type, assets_folder);
+	if (!success.x || !success.y) {
+		Stream<char> asset_name = GetAssetName(metadata, asset_type);
+		Stream<wchar_t> asset_file = GetAssetFile(metadata, asset_type);
+		Stream<char> asset_type_string = ConvertAssetTypeString(asset_type);
+		ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
+
+		Stream<char> detailed_part = !success.x ? "The deallocation part failed." : "The creation part failed.";
+
+		if (asset_file.size > 0) {
+			ECS_FORMAT_STRING(console_message, "Failed to reload asset {#}, target file {#}, type {#}. {#}", asset_name, asset_file, asset_type_string, detailed_part);
+		}
+		else {
+			ECS_FORMAT_STRING(console_message, "Failed to reload asset {#}, type {#}. {#}", asset_name, asset_type_string, detailed_part);
+		}
+		EditorSetConsoleError(console_message);
+
+		if (success.x) {
+			// The deallocation went through - randomize the pointer and update the component
+			unsigned int randomized_value = editor_state->asset_database->RandomizePointer(handle, asset_type);
+			UpdateAssetToComponentElement update_element;
+			update_element.old_asset = old_asset;
+			update_element.new_asset = { (void*)randomized_value, 0 };
+			update_element.type = asset_type;
+
+			return update_element;
+		}
+	}
+	else {
+		UpdateAssetToComponentElement update_element;
+		update_element.old_asset = old_asset;
+		update_element.new_asset = GetAssetFromMetadata(metadata, asset_type);
+		update_element.type = asset_type;
+
+		return update_element;
+	}
+
+	return { {}, {}, ECS_ASSET_TYPE_COUNT };
+}
+
+ECS_THREAD_TASK(ReloadAssetTask) {
+	ReloadAssetTaskData* data = (ReloadAssetTaskData*)_data;
+
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+	GetProjectAssetsFolder(data->editor_state, assets_folder);
+
+	ECS_STACK_CAPACITY_STREAM(UpdateAssetToComponentElement, update_elements, 1024);
+
+	// Go through each asset and reload it individually
+	for (size_t type = 0; type < ECS_ASSET_TYPE_COUNT; type++) {
+		ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)type;
+		for (size_t index = 0; index < data->asset_handles[asset_type].size; index++) {
+			unsigned int handle = data->asset_handles[asset_type][index];
+			UpdateAssetToComponentElement update_element = ReloadAssetTaskIteration(data->editor_state, handle, asset_type, assets_folder);
+			if (update_element.type != ECS_ASSET_TYPE_COUNT) {
+				update_elements.AddSafe(update_element);
+			}
+		}
+	}
+
+	// Push an event to make the changes in the sandbox entities on the main thread since
+	// the main thread could be interacting with the sandbox at that point
+	if (update_elements.size > 0) {
+		Stream<UpdateAssetToComponentElement> new_elements;
+		new_elements.Initialize(data->editor_state->MultithreadedEditorAllocator(), update_elements.size);
+		new_elements.Copy(update_elements);
+
+		FinishReloadAssetEventData finish_data;
+		finish_data.update_elements = new_elements;
+		EditorAddEvent(data->editor_state, FinishReloadAssetEvent, &finish_data, sizeof(finish_data));
+	}
+
+	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+
+	Deallocate(data->editor_state->MultithreadedEditorAllocator(), data->asset_handles.buffer);
+}
+
 struct ReloadEventData {
-	LoadSandboxMissingAssetsEventData* load_data;
 	Stream<Stream<unsigned int>> asset_handles;
 };
 
 EDITOR_EVENT(ReloadEvent) {
 	ReloadEventData* data = (ReloadEventData*)_data;
 
-	if (data->load_data == nullptr) {
-		if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-			// Unload the assets
-			DeallocateAssetsWithRemapping(editor_state, data->asset_handles, true);
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		// Acquire the resource loading and launch a thread task to perform the reload
+		EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+		EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
 
-			data->load_data = InitializeEventData(editor_state, data->asset_handles);
-			// Can deallocate the asset handles
-			editor_state->editor_allocator->Deallocate(data->asset_handles.buffer);
-			// Now load the assets again
-			return LoadSandboxMissingAssetsEvent(editor_state, data->load_data);
-		}
-		else {
-			return true;
-		}
+		ReloadAssetTaskData task_data;
+		task_data.asset_handles = data->asset_handles;
+		task_data.editor_state = editor_state;
+		EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(ReloadAssetTask, &task_data, sizeof(task_data)));
+		return false;
 	}
 	else {
-		// The load sandbox missing assets event will set the resource loading flag
-		// Keep calling the event
-		return LoadSandboxMissingAssetsEvent(editor_state, data->load_data);
+		return true;
 	}
 }
 
@@ -799,41 +919,309 @@ void ReloadAssets(EditorState* editor_state, Stream<Stream<unsigned int>> assets
 
 	if (total_count > 0) {
 		ReloadEventData event_data;
-		event_data.asset_handles = StreamCoallescedDeepCopy(assets_to_reload, editor_state->EditorAllocator());
-		event_data.load_data = nullptr;
+		event_data.asset_handles = StreamCoallescedDeepCopy(assets_to_reload, editor_state->MultithreadedEditorAllocator());
 		EditorAddEvent(editor_state, ReloadEvent, &event_data, sizeof(event_data));
 	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+struct ReloadAssetsMetadataChangeTaskData {
+	EditorState* editor_state;
+	Stream<Stream<unsigned int>> asset_handles;
+};
+
+ECS_THREAD_TASK(ReloadAssetsMetadataChangeTask) {
+	ReloadAssetsMetadataChangeTaskData* data = (ReloadAssetsMetadataChangeTaskData*)_data;
+
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+	GetProjectAssetsFolder(data->editor_state, assets_folder);
+
+	ECS_STACK_CAPACITY_STREAM(UpdateAssetToComponentElement, update_elements, 1024);
+	ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, old_dependencies, 512);
+
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+
+	// This is a separate allocator in order to use clear on the stack allocator inside the loop
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 8, ECS_MB);
+	ECS_STACK_CAPACITY_STREAM(CapacityStream<unsigned int>, initial_assets, ECS_ASSET_TYPE_COUNT);
+	ECS_STACK_CAPACITY_STREAM(CapacityStream<unsigned int>, new_assets_to_add, ECS_ASSET_TYPE_COUNT);
+	for (size_t type = 0; type < ECS_ASSET_TYPE_COUNT; type++) {
+		initial_assets[type].Initialize(&temporary_allocator, 0, 64);
+		initial_assets[type].Copy(data->asset_handles[type]);
+		new_assets_to_add[type].Initialize(&temporary_allocator, 0, 64);
+	}
+
+	auto calculate_remaining_assets = [](Stream<CapacityStream<unsigned int>> asset_handles) {
+		unsigned int total = 0;
+		for (unsigned int index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			total += asset_handles[index].size;
+		}
+		return total;
+	};
+
+	auto loop = [&](Stream<CapacityStream<unsigned int>> asset_handles, Stream<CapacityStream<unsigned int>> assets_to_add, auto initial_reload) {
+		// Go through each asset and reload it individually
+		auto add_external_dependencies = [&](const void* metadata, ECS_ASSET_TYPE asset_type) {
+			Stream<Stream<unsigned int>> external_dependencies = data->editor_state->asset_database->GetDependentAssetsFor(
+				metadata,
+				asset_type,
+				GetAllocatorPolymorphic(&stack_allocator)
+			);
+			for (size_t subtype = 0; subtype < ECS_ASSET_TYPE_COUNT; subtype++) {
+				assets_to_add[subtype].AddStreamSafe(external_dependencies[subtype]);
+			}
+		};
+
+		// Empty the assets to add
+		for (size_t type = 0; type < ECS_ASSET_TYPE_COUNT; type++) {
+			assets_to_add[type].size = 0;
+		}
+
+		for (size_t type = 0; type < ECS_ASSET_TYPE_COUNT; type++) {
+			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)type;
+
+			for (size_t index = 0; index < asset_handles[asset_type].size; index++) {
+				unsigned int handle = asset_handles[asset_type][index];
+				void* metadata = data->editor_state->asset_database->GetAsset(handle, asset_type);
+
+				if constexpr (!initial_reload) {
+					UpdateAssetToComponentElement update_element = ReloadAssetTaskIteration(data->editor_state, handle, asset_type, assets_folder);
+					if (update_element.type != ECS_ASSET_TYPE_COUNT) {
+						update_elements.AddSafe(update_element);
+
+						// If the new pointer is not randomized, then it means that the reload was successful
+						// In that case add the external dependencies to the assets_to_add
+						if (IsAssetFromMetadataValid(metadata, asset_type)) {
+							add_external_dependencies(metadata, asset_type);
+						}
+					}
+				}
+				else {			
+					Stream<void> old_asset = GetAssetFromMetadata(metadata, asset_type);
+
+					old_dependencies.size = 0;
+					GetAssetDependencies(metadata, asset_type, &old_dependencies);
+
+					Stream<char> current_name = GetAssetName(metadata, asset_type);
+					Stream<wchar_t> current_file = GetAssetFile(metadata, asset_type);
+
+					alignas(alignof(void*)) char file_metadata[AssetMetadataMaxByteSize()];
+					CreateDefaultAsset(file_metadata, current_name, current_file, asset_type);
+
+					stack_allocator.Clear();
+
+					// Read the metadata file
+					bool success = data->editor_state->asset_database->ReadAssetFile(
+						current_name,
+						current_file,
+						file_metadata,
+						asset_type,
+						GetAllocatorPolymorphic(&stack_allocator)
+					);
+					if (success) {
+						// Set the pointer of the file metadata to the one in the database and then update the database
+						SetAssetToMetadata(file_metadata, asset_type, old_asset);
+
+						Stream<void> new_asset_pointer = GetAssetFromMetadata(metadata, asset_type);
+						bool modified_database_metadata = false;
+
+						if (ValidateAssetMetadataOptions(file_metadata, asset_type)) {
+							ReloadAssetResult reload_result = ReloadAssetFromMetadata(
+								data->editor_state->RuntimeResourceManager(),
+								data->editor_state->asset_database,
+								metadata,
+								file_metadata,
+								asset_type,
+								assets_folder
+							);
+							if (reload_result.is_different) {
+								if (!reload_result.success.x || !reload_result.success.y) {
+									Stream<char> asset_type_string = ConvertAssetTypeString(asset_type);
+									ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
+
+									Stream<char> detailed_part = !reload_result.success.x ? "The deallocation part failed." : "The creation part failed.";
+
+									if (current_file.size > 0) {
+										ECS_FORMAT_STRING(console_message, "Failed to reload asset {#}, target file {#}, type {#}. {#}",
+											current_name, current_file, asset_type_string, detailed_part);
+									}
+									else {
+										ECS_FORMAT_STRING(console_message, "Failed to reload asset {#}, type {#}. {#}", current_name, asset_type_string, detailed_part);
+									}
+									EditorSetConsoleError(console_message);
+
+									if (reload_result.success.x) {
+										// The assets has been deallocated, we need to randomize the pointer and update the components
+										unsigned int randomized_value = data->editor_state->asset_database->RandomizePointer(handle, asset_type);
+										UpdateAssetToComponentElement update_element;
+										update_element.old_asset = old_asset;
+										update_element.new_asset = { (void*)randomized_value, 0 };
+										update_element.type = asset_type;
+
+										update_elements.AddSafe(update_element);
+									}
+
+									// We need to remove the dependencies of the file metadata
+									// We don't need to remove the time stamps because they were not added
+									data->editor_state->asset_database->RemoveAssetDependencies(file_metadata, asset_type);
+								}
+								else {
+									UpdateAssetToComponentElement update_element;
+									update_element.old_asset = old_asset;
+									update_element.new_asset = GetAssetFromMetadata(file_metadata, asset_type);
+									update_element.type = asset_type;
+
+									// For some assets the pointer might not change
+									if (update_element.new_asset.buffer != old_asset.buffer) {
+										update_elements.AddSafe(update_element);
+									}
+
+									// We need to remove the references to the old dependencies
+									// If an asset was removed from the dependency list and is being kept alive
+									// only by this reference it will cause an unnecessary unload. So update the metadata
+									// in the database first before proceeding
+									DeallocateAssetBase(metadata, asset_type, data->editor_state->asset_database->Allocator());
+									CopyAssetBase(metadata, file_metadata, asset_type, data->editor_state->asset_database->Allocator());
+									SetAssetToMetadata(metadata, asset_type, GetAssetFromMetadata(file_metadata, asset_type));
+									modified_database_metadata = true;
+
+									for (unsigned int dependency = 0; dependency < old_dependencies.size; dependency++) {
+										DecrementAssetReference(data->editor_state, old_dependencies[dependency].handle, old_dependencies[dependency].type);
+									}
+
+									add_external_dependencies(metadata, asset_type);
+
+									// We also need to get the internal dependencies for the file metadata and insert time stamps for
+									// assets that have been missing
+									ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, file_internal_dependencies, 128);
+									GetAssetDependencies(file_metadata, asset_type, &file_internal_dependencies);
+
+									for (unsigned int subindex = 0; subindex < file_internal_dependencies.size; subindex++) {
+										bool has_time_stamp = HasAssetTimeStamp(data->editor_state, file_internal_dependencies[subindex].handle, file_internal_dependencies[subindex].type);
+										if (!has_time_stamp) {
+											InsertAssetTimeStamp(data->editor_state, file_internal_dependencies[subindex].handle, file_internal_dependencies[subindex].type);
+										}
+									}
+								}
+							}
+							else {
+								// We need to remove the reference count additions made by the file read
+								// We don't need to remove the time stamps because they were not added
+								data->editor_state->asset_database->RemoveAssetDependencies(file_metadata, asset_type);
+							}
+						}
+						else {
+							// Remove the reference count increments for internal dependencies by the previous metadata
+							// And deallocate the previous data. Also we need to create any dependencies that the new asset
+							// brought with it and were not loaded before
+							ECS_STACK_CAPACITY_STREAM(DeallocateAssetDependency, deallocate_dependencies, 512);
+							ECS_STACK_CAPACITY_STREAM(CreateAssetInternalDependenciesElement, create_dependencies, 512);
+
+							bool deallocate_success = DeallocateAsset(data->editor_state, metadata, asset_type, true, &deallocate_dependencies);
+							if (!deallocate_success) {
+								ECS_STACK_CAPACITY_STREAM(char, asset_string, 512);
+								AssetToString(metadata, asset_type, asset_string);
+								ECS_FORMAT_TEMP_STRING(console_message, "Failed to deallocate asset {#}.", asset_string);
+								EditorSetConsoleError(console_message);
+							}
+							FromDeallocateAssetDependencyToUpdateAssetToComponentElement(&update_elements, deallocate_dependencies);
+
+							bool internal_success = CreateAssetInternalDependencies(data->editor_state, file_metadata, asset_type, &create_dependencies);
+							for (unsigned int dependency = 0; dependency < create_dependencies.size; dependency++) {
+								if (create_dependencies[dependency].WasChanged()) {
+									update_elements.AddSafe({ 
+										create_dependencies[dependency].old_asset, 
+										create_dependencies[dependency].new_asset, 
+										create_dependencies[dependency].type 
+									});
+								}
+							}
+
+							new_asset_pointer = GetAssetFromMetadata(metadata, asset_type);
+
+							// We don't need to remove the time stamps because they were not added
+							data->editor_state->asset_database->RemoveAssetDependencies(metadata, asset_type);
+						}
+
+						// This can happen before in one of the branches
+						if (!modified_database_metadata) {
+							// Copy back into the database the new asset
+							DeallocateAssetBase(metadata, asset_type, data->editor_state->asset_database->Allocator());
+							CopyAssetBase(metadata, file_metadata, asset_type, data->editor_state->asset_database->Allocator());
+
+							SetAssetToMetadata(metadata, asset_type, new_asset_pointer);
+						}
+					}
+				}
+			}
+		}
+	};
+
+	loop(initial_assets, new_assets_to_add, std::true_type{});
+
+	// 0 means use initial assets for the main one, 1 means use new assets_to_add 
+	unsigned char asset_handle_index = 1;
+	unsigned int initial_assets_count = 0;
+	unsigned int new_assets_to_add_count = calculate_remaining_assets(new_assets_to_add);
+	while (initial_assets_count > 0 || new_assets_to_add_count > 0) {
+		if (asset_handle_index == 0) {
+			loop(initial_assets, new_assets_to_add, std::false_type{});
+
+			initial_assets_count = 0;
+			new_assets_to_add_count = calculate_remaining_assets(new_assets_to_add);
+			asset_handle_index = 1;
+		}
+		else {
+			loop(new_assets_to_add, initial_assets, std::false_type{});
+
+			initial_assets_count = calculate_remaining_assets(initial_assets);
+			new_assets_to_add_count = 0;
+			asset_handle_index = 0;
+		}
+	}
+
+	// Push an event to make the changes in the sandbox entities on the main thread since
+	// the main thread could be interacting with the sandbox at that point
+	if (update_elements.size > 0) {
+		Stream<UpdateAssetToComponentElement> new_elements;
+		new_elements.Initialize(data->editor_state->MultithreadedEditorAllocator(), update_elements.size);
+		new_elements.Copy(update_elements);
+
+		FinishReloadAssetEventData finish_data;
+		finish_data.update_elements = new_elements;
+		EditorAddEvent(data->editor_state, FinishReloadAssetEvent, &finish_data, sizeof(finish_data));
+	}
+
+	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+
+	Deallocate(data->editor_state->MultithreadedEditorAllocator(), data->asset_handles.buffer);
+
+	stack_allocator.ClearBackup();
+	temporary_allocator.ClearBackup();
+}
+
 struct ReloadAssetsMetadataChangeEventData {
-	LoadSandboxMissingAssetsEventData* load_data;
 	Stream<Stream<unsigned int>> asset_handles;
 };
 
 EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 	ReloadAssetsMetadataChangeEventData* data = (ReloadAssetsMetadataChangeEventData*)_data;
 
-	if (data->load_data == nullptr) {
-		if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-			// Unload the assets
-			DeallocateAssetsWithRemappingMetadataChange(editor_state, data->asset_handles, true);
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		// Acquire the resource loading and launch a thread task to perform the reload
+		EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
+		EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
 
-			data->load_data = InitializeEventData(editor_state, data->asset_handles);
-			// Can deallocate the asset handles
-			editor_state->editor_allocator->Deallocate(data->asset_handles.buffer);
-			// Now load the assets again
-			return LoadSandboxMissingAssetsEvent(editor_state, data->load_data);
-		}
-		else {
-			return true;
-		}
+		ReloadAssetsMetadataChangeTaskData task_data;
+		task_data.asset_handles = data->asset_handles;
+		task_data.editor_state = editor_state;
+		EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(ReloadAssetsMetadataChangeTask, &task_data, sizeof(task_data)));
+		return false;
 	}
 	else {
-		// The load sandbox missing assets event will set the resource loading flag
-		// Keep calling the event
-		return LoadSandboxMissingAssetsEvent(editor_state, data->load_data);
+		return true;
 	}
 }
 
@@ -846,8 +1234,7 @@ void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigne
 
 	if (total_count > 0) {
 		ReloadAssetsMetadataChangeEventData event_data;
-		event_data.asset_handles = StreamCoallescedDeepCopy(assets_to_reload, editor_state->EditorAllocator());
-		event_data.load_data = nullptr;
+		event_data.asset_handles = StreamCoallescedDeepCopy(assets_to_reload, editor_state->MultithreadedEditorAllocator());
 		EditorAddEvent(editor_state, ReloadAssetsMetadataChangeEvent, &event_data, sizeof(event_data));
 	}
 }
@@ -1163,7 +1550,7 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 						if (result == ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
 							break;
 						}
-						ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK);
+						ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_NONE);
 					}
 				}
 			}
@@ -1193,7 +1580,7 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 						if (result == ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
 							break;
 						}
-						ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK);
+						ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_NONE);
 					}
 				}
 			});

@@ -2,7 +2,7 @@
 #include "../Core.h"
 #include "ecspch.h"
 #include "RenderingStructures.h"
-#include "../Internal/Resources/ResourceTypes.h"
+#include "../Resources/ResourceTypes.h"
 #include "../Allocators/AllocatorTypes.h"
 
 namespace ECSEngine {
@@ -61,6 +61,9 @@ namespace ECSEngine {
 
 		return functions[face]();
 	}
+
+	// Returns a viewport that spans the given texture (from (0, 0) to (width, height))
+	ECSENGINE_API GraphicsViewport GetGraphicsViewportForTexture(Texture2D texture, float min_depth = 0.0f, float max_depth = 1.0f);
 
 	ECSENGINE_API void CreateCubeVertexBuffer(Graphics* graphics, float positive_span, VertexBuffer& vertex_buffer, IndexBuffer& index_buffer, bool temporary = false);
 

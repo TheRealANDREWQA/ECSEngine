@@ -132,7 +132,7 @@ void CreateModuleSettingsCallback(ActionData* action_data) {
 #pragma endregion
 
 void InspectorDrawModuleClean(EditorState* editor_state, unsigned int inspector_index, void* _data) {
-	EDITOR_STATE(editor_state);
+	UISystem* ui_system = editor_state->ui_system;
 	DrawModuleData* data = (DrawModuleData*)_data;
 
 	// If there is currently a present reflection, release it
@@ -165,8 +165,6 @@ void InspectorDrawModuleClean(EditorState* editor_state, unsigned int inspector_
 }
 
 void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
-	EDITOR_STATE(editor_state);
-
 	DrawModuleData* data = (DrawModuleData*)_data;
 	data->inspector_index = inspector_index;
 	unsigned int module_index = GetModuleIndexFromName(editor_state, data->module_name);
@@ -305,8 +303,8 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 		// Coallesce the string
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, type_names, 32);
 		for (size_t index = 0; index < reflected_type_indices.size; index++) {
-			UIReflectionType type = editor_state->module_reflection->GetType(reflected_type_indices[index]);
-			type_names[index] = type.name;
+			const UIReflectionType* type = editor_state->module_reflection->GetType(reflected_type_indices[index]);
+			type_names[index] = type->name;
 		}
 		type_names.size = reflected_type_indices.size;
 		drawer->LabelList(UI_CONFIG_LABEL_TRANSPARENT, config, "Module settings types", type_names);
@@ -554,7 +552,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 			config.AddFlag(dependent_size);
 			for (size_t index = 0; index < instance_indices.size; index++) {
 				// Display them as collapsing headers
-				UIReflectionInstance* instance = editor_state->module_reflection->GetInstancePtr(instance_indices[index]);
+				UIReflectionInstance* instance = editor_state->module_reflection->GetInstance(instance_indices[index]);
 
 				Stream<char> separator = function::FindFirstCharacter(instance->name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR);
 				Stream<char> name = { instance->name.buffer, instance->name.size - separator.size };

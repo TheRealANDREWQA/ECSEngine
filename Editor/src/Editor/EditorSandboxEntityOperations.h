@@ -80,7 +80,6 @@ bool ConvertLinkComponentToTarget(
 // the non asset fields)
 bool ConvertLinkComponentToTarget(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
 	Stream<char> link_component,
 	void* target_data,
 	const void* link_data,
@@ -133,12 +132,47 @@ void* GetSandboxSharedInstance(EditorState* editor_state, unsigned int sandbox_i
 // Shared components only. Returns nullptr if the component doesn't exist or the shared instance is invalid
 const void* GetSandboxSharedInstance(const EditorState* editor_state, unsigned int sandbox_index, Component component, SharedInstance instance);
 
+// Returns a component from an entity unique or shared. If it doesn't exist it returns nullptr
+void* GetSandboxEntityComponentEx(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Component component, bool shared);
+
+// Returns a component from an entity unique or shared. If it doesn't exist it returns nullptr
+const void* GetSandboxEntityComponentEx(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, Component component, bool shared);
+
 MemoryArena* GetComponentAllocator(EditorState* editor_state, unsigned int sandbox_index, Component component);
 
 MemoryArena* GetSharedComponentAllocator(EditorState* editor_state, unsigned int sandbox_index, Component component);
 
 // Might reference the internal storage or the given one
 Stream<char> GetEntityName(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, CapacityStream<char> storage);
+
+// Fills in the asset handles for the given component of the entity
+// (some can repeat if the component has multiple handles of the same type)
+void GetSandboxEntityComponentAssets(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Component component, 
+	CapacityStream<AssetTypedHandle>* handles
+);
+
+// Fills in the asset handles for the given shared component of the entity
+// (some can repeat if the component has multiple handles of the same type)
+void GetSandboxEntitySharedComponentAssets(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Component component, 
+	CapacityStream<AssetTypedHandle>* handles
+);
+
+// Fills in the asset handles that the entity uses (some can repeat if they appear multiple
+// times in the same component or in different components)
+void GetSandboxEntityAssets(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	CapacityStream<AssetTypedHandle>* handles
+);
 
 void ParentSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, Entity child, Entity parent);
 
@@ -163,9 +197,11 @@ void SandboxForEachEntity(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	ForEachEntityFunctor functor,
-	void* data,
-	ComponentSignature components,
-	ComponentSignature shared_signature
+	void* functor_data,
+	ComponentSignature unique_signature,
+	ComponentSignature shared_signature,
+	ComponentSignature unique_exclude_signature = {},
+	ComponentSignature shared_exclude_signature = {}
 );
 
 // The functor takes as parameters Archetype*, ArchetypeBase*, Entity, void** unique_components

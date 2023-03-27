@@ -41,23 +41,35 @@ namespace ECSEngine {
 		return SearchIsBlittable(data->reflection_manager, template_type);
 	}
 
+	// --------------------------------------------------------------------------------------
+
 	ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(ReferenceCounted) {
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 		CopyReflectionType(data->reflection_manager, template_type, data->source, data->destination, data->allocator);
 
 		// Also copy the reference count
-		size_t byte_size = 0;
-		uint2 exception_index = data->reflection_manager->FindBlittableException(data->definition);
-		if (exception_index.x != -1) {
-			byte_size = exception_index.x;
-		}
-		else {
-			byte_size = Reflection::SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
-		}
+		size_t byte_size = Reflection::SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
+		ECS_ASSERT(byte_size != -1);
 
 		unsigned int* source_value = (unsigned int*)function::OffsetPointer(data->source, byte_size);
 		unsigned int* destination_value = (unsigned int*)function::OffsetPointer(data->destination, byte_size);
 		*destination_value = *source_value;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	ECS_REFLECTION_CUSTOM_TYPE_COMPARE_FUNCTION(ReferenceCounted) {
+		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
+		if (!Reflection::CompareReflectionTypeInstances(data->reflection_manager, template_type, data->first, data->second, 1)) {
+			return false;
+		}
+
+		size_t byte_size = Reflection::SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
+		ECS_ASSERT(byte_size != -1);
+		// Now compare the reference count
+		unsigned int* first_reference_count = (unsigned int*)function::OffsetPointer(data->first, byte_size);
+		unsigned int* second_reference_count = (unsigned int*)function::OffsetPointer(data->second, byte_size);
+		return *first_reference_count == *second_reference_count;
 	}
 
 	// --------------------------------------------------------------------------------------

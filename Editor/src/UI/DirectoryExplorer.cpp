@@ -34,7 +34,6 @@ bool IsProtectedFolderSelected(DirectoryExplorerData* data) {
 	wchar_t temp_characters[512];
 	CapacityStream<wchar_t> folder(temp_characters, 0, 512);
 
-	EDITOR_STATE(data->editor_state);
 	EditorState* editor_state = (EditorState*)data->editor_state;
 	ProjectFile* project_file = editor_state->project_file;
 	folder.Copy(project_file->path);
@@ -58,7 +57,6 @@ void DirectoryExplorerHierarchySelectableCallback(ActionData* action_data) {
 
 	const char* label = (const char*)_additional_data;
 	DirectoryExplorerData* data = (DirectoryExplorerData*)_data;
-	EDITOR_STATE(data->editor_state);
 	EditorState* editor_state = (EditorState*)data->editor_state;
 
 	Stream<char> label_stream(label, strlen(label));
@@ -109,7 +107,6 @@ void DirectoryExplorerCreateFolderCallback(ActionData* action_data) {
 	function::ConvertWideCharsToASCII(*data->current_path, ascii);
 	OS::CreateFolderWithError(*data->current_path, system);
 
-	EDITOR_STATE(data->editor_state);
 	EditorState* editor_state = (EditorState*)data->editor_state;
 	ProjectFile* project_file = editor_state->project_file;
 	ascii.size = data->current_path->size - project_file->path.size - 1;
@@ -172,7 +169,6 @@ void DirectoryExplorerRenameFolderCallback(ActionData* action_data) {
 	CapacityStream<char> ascii(ascii_path, 0, 512);
 	function::ConvertWideCharsToASCII(*data->current_path, ascii);
 
-	EDITOR_STATE(data->editor_state);
 	EditorState* editor_state = (EditorState*)data->editor_state;
 	ProjectFile* project_file = editor_state->project_file;
 	ascii.size = data->current_path->size - project_file->path.size - 1;
@@ -237,7 +233,7 @@ void DirectoryExplorerCopyPath(ActionData* action_data) {
 	CopyPathToClipboardStreamAction(action_data);
 }
 
-void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void DirectoryExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	DirectoryExplorerData* data = (DirectoryExplorerData*)window_data;
@@ -247,17 +243,19 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 
 	if (initialize) {
 		drawer.layout.next_row_y_offset *= 0.5f;
-		EDITOR_STATE(data->editor_state);
 		EditorState* editor_state = data->editor_state;
+		
+		AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+
 		FileExplorerData* file_explorer_data = (FileExplorerData*)editor_state->file_explorer_data;
 		data->current_path = &file_explorer_data->current_directory;
 		data->directories_ptrs.Initialize(editor_allocator, 0, POINTER_CAPACITY);
 		data->directories_ptrs.size = 0;
 
-		data->allocator = LinearAllocator(editor_allocator->Allocate(LINEAR_ALLOCATOR_SIZE), LINEAR_ALLOCATOR_SIZE);
+		data->allocator = LinearAllocator(editor_allocator, LINEAR_ALLOCATOR_SIZE);
 
 		size_t total_right_click_menu_size = (sizeof(UIActionHandler) + sizeof(bool)) * RIGHT_CLICK_ROW_COUNT + sizeof(UIDrawerMenuState);
-		void* right_click_allocation = editor_allocator->Allocate(total_right_click_menu_size);
+		void* right_click_allocation = Allocate(editor_allocator, total_right_click_menu_size);
 		uintptr_t right_click_ptr = (uintptr_t)right_click_allocation;
 		data->right_click_menu_handlers.InitializeFromBuffer(right_click_ptr, RIGHT_CLICK_ROW_COUNT, RIGHT_CLICK_ROW_COUNT);
 
@@ -305,10 +303,9 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 		config.AddFlag(right_click);
 
 		data->drawer_hierarchy = drawer.FilesystemHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", Stream<Stream<char>>(nullptr, 0));
-		EditorStateLazyEvaluationSetMax(editor_state, EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER);
+		EditorStateLazyEvaluationTrigger(editor_state, EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER);
 	}
 
-	EDITOR_STATE(data->editor_state);
 	EditorState* editor_state = data->editor_state;
 
 	UIDrawConfig config;
@@ -348,9 +345,7 @@ void DirectoryExplorerDestroyCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	DirectoryExplorerData* data = (DirectoryExplorerData*)_additional_data;
-	EDITOR_STATE(data->editor_state);
-
-	editor_allocator->Deallocate(data->right_click_menu_handlers.buffer);
+	Deallocate(data->editor_state->EditorAllocator(), data->right_click_menu_handlers.buffer);
 }
 
 void DirectoryExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
@@ -367,8 +362,6 @@ void DirectoryExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState*
 }
 
 unsigned int CreateDirectoryExplorerWindow(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	constexpr float window_size_x = 0.8f;
 	constexpr float window_size_y = 0.8f;
 	float2 window_size = { window_size_x, window_size_y };
@@ -382,17 +375,15 @@ unsigned int CreateDirectoryExplorerWindow(EditorState* editor_state) {
 	size_t stack_memory[128];
 	DirectoryExplorerSetDescriptor(descriptor, editor_state, stack_memory);
 
-	return ui_system->Create_Window(descriptor);
+	return editor_state->ui_system->Create_Window(descriptor);
 }
 
 void DirectoryExplorerTick(EditorState* editor_state)
 {
-	EDITOR_STATE(editor_state);
-
 	ProjectFile* project_file = editor_state->project_file;
-	unsigned int window_index = ui_system->GetWindowFromName(DIRECTORY_EXPLORER_WINDOW_NAME);
+	unsigned int window_index = editor_state->ui_system->GetWindowFromName(DIRECTORY_EXPLORER_WINDOW_NAME);
 	if (window_index != -1) {
-		DirectoryExplorerData* data = (DirectoryExplorerData*)ui_system->GetWindowData(window_index);
+		DirectoryExplorerData* data = (DirectoryExplorerData*)editor_state->ui_system->GetWindowData(window_index);
 
 		if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER, LAZY_EVALUATION_MILLISECONDS_TICK)) {
 			data->allocator.Clear();

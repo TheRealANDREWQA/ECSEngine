@@ -21,7 +21,7 @@
     <ClCompile Include="src\pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\TempHeader.cpp">
+    <ClCompile Include="src\Render.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -35,10 +35,10 @@
     <ClInclude Include="src\pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\TempHeader.h">
+    <ClInclude Include="src\Export.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Export.h">
+    <ClInclude Include="src\Render.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

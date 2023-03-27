@@ -5,8 +5,8 @@
 
 struct HubProject {
 	ECSEngine::Stream<wchar_t> path;
+	ECSEngine::Stream<char> error_message = { nullptr, 0 };
 	ProjectFile data;
-	const char* error_message = nullptr;
 };
 
 struct HubData {

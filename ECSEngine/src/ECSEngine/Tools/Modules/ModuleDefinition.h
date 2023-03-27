@@ -1,10 +1,10 @@
 #pragma once
 #include "../../Core.h"
-#include "../../Internal/EntityManagerSerializeTypes.h"
-#include "../../Internal/Multithreading/TaskSchedulerTypes.h"
-#include "../../Internal/Resources/AssetMetadata.h"
+#include "../../ECS/EntityManagerSerializeTypes.h"
+#include "../../Multithreading/TaskSchedulerTypes.h"
+#include "../../Resources/AssetMetadata.h"
 #include "../../Tools/UI/UIStructures.h"
-#include "../../Internal/World.h"
+#include "../../ECS/World.h"
 
 namespace ECSEngine {
 

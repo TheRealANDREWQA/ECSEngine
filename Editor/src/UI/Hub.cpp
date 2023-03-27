@@ -15,12 +15,10 @@ using namespace ECSEngine::Tools;
 constexpr float INCREASE_FONT_SIZE_FACTOR = 1.3f;
 
 void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
-	EDITOR_STATE(editor_state);
-
 	HubData* hub = editor_state->hub_data;
 	ECS_ASSERT(hub->projects.size < hub->projects.capacity);
 
-	hub->projects[hub->projects.size].error_message = nullptr;
+	hub->projects[hub->projects.size].error_message = { nullptr, 0 };
 	hub->projects[hub->projects.size].path = function::StringCopy(editor_state->EditorAllocator(), path);
 	hub->projects.size++;
 
@@ -29,20 +27,20 @@ void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
 	}
 }
 
+void DeallocateHubProject(EditorState* editor_state, size_t project_hub_index)
+{
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+	HubData* data = editor_state->hub_data;
+
+	data->projects[project_hub_index].error_message.Deallocate(editor_allocator);
+	data->projects[project_hub_index].path.Deallocate(editor_allocator);
+}
+
 void DeallocateHubProjects(EditorState* editor_state)
 {
-	EDITOR_STATE(editor_state);
-
 	HubData* data = editor_state->hub_data;
 	for (size_t index = 0; index < data->projects.size; index++) {
-		if (data->projects[index].error_message != nullptr) {
-			editor_allocator->Deallocate(data->projects[index].error_message);
-			data->projects[index].error_message = nullptr;
-		}
-		/*else {
-			const void* first_pointer = ui_reflection->reflection->GetTypeInstancePointer(STRING(ProjectFile), data->projects.buffer + index);
-			editor_allocator->Deallocate(first_pointer);
-		}*/
+		DeallocateHubProject(editor_state, index);
 	}
 }
 
@@ -72,8 +70,7 @@ void AddExistingProjectAction(ActionData* action_data) {
 }
 
 void LoadHubProjects(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	HubData* hub_data = editor_state->hub_data;
 
 	for (size_t index = 0; index < hub_data->projects.size; index++) {
@@ -89,10 +86,7 @@ void LoadHubProjects(EditorState* editor_state) {
 		bool success = OpenProjectFile(open_data);
 
 		if (!success) {
-			size_t error_message_size = strlen(error_message) + 1;
-			void* allocation = editor_allocator->Allocate(error_message_size, alignof(char));
-			hub_data->projects[index].error_message = (char*)allocation;
-			memcpy(allocation, error_message, error_message_size);
+			hub_data->projects[index].error_message.InitializeAndCopy(editor_allocator, error_message);
 		}
 	}
 }
@@ -111,8 +105,6 @@ void ReloadHubProjectsAction(ActionData* action_data) {
 }
 
 void ResetHubData(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	HubData* data = editor_state->hub_data;
 	DeallocateHubProjects(editor_state);
 	data->projects.size = 0;
@@ -120,15 +112,13 @@ void ResetHubData(EditorState* editor_state) {
 
 void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
 {
-	EDITOR_STATE(editor_state);
-
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+	TaskManager* task_manager = editor_state->task_manager;
+	
 	HubData* hub_data = editor_state->hub_data;
 	for (size_t index = 0; index < hub_data->projects.size; index++) {
 		if (function::CompareStrings(path, hub_data->projects[index].path)) {
-			editor_allocator->Deallocate(hub_data->projects[index].path.buffer);
-			if (hub_data->projects[index].error_message != nullptr) {
-				editor_allocator->Deallocate(hub_data->projects[index].error_message);
-			}
+			DeallocateHubProject(editor_state, index);
 			hub_data->projects.Remove(index);
 			task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(SaveEditorFileThreadTask, editor_state, 0));
 			return;
@@ -156,6 +146,12 @@ bool RestoreHubProject(EditorState* editor_state, Stream<wchar_t> path, Stream<w
 		CreateErrorMessageWindow(editor_state->ui_system, operation_data.error_message);
 		return false;
 	}
+	else {
+		ECS_STACK_CAPACITY_STREAM(wchar_t, complete_file_path, 512);
+		GetProjectFilePath(&project_file, complete_file_path);
+		AddHubProject(editor_state, complete_file_path);
+		ReloadHubProjects(editor_state);
+	}
 
 	return true;
 }
@@ -171,7 +167,7 @@ struct RestoreHubProjectWizardData {
 	bool name_deduced;
 };
 
-void RestoreHubProjectWizardDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void RestoreHubProjectWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	RestoreHubProjectWizardData* data = (RestoreHubProjectWizardData*)window_data;
@@ -219,6 +215,7 @@ void RestoreHubProjectWizardDraw(void* window_data, void* drawer_descriptor, boo
 		UIDrawConfig config;
 
 		transform.scale.x = 5.0f;
+		config.AddFlag(transform);
 		drawer.TextInput(UI_CONFIG_RELATIVE_TRANSFORM, config, "Project Name", &data->name);
 	}
 	drawer.NextRow(2.0f);
@@ -304,8 +301,6 @@ void CreateRestoreHubProjectWizard(ActionData* action_data) {
 
 void SortHubProjects(EditorState* editor_state)
 {
-	EDITOR_STATE(editor_state);
-
 	HubData* data = editor_state->hub_data;
 
 	struct SortElement {
@@ -344,7 +339,7 @@ void SortHubProjects(EditorState* editor_state)
 	}
 }
 
-void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	EditorState* editor_state = (EditorState*)window_data;
@@ -557,7 +552,7 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			config.flag_count--;
 		};
 
-		if (data->projects[index].error_message == nullptr) {
+		if (data->projects[index].error_message.size == 0) {
 			char last_write_time[128];
 			last_write_time[0] = '\0';
 			bool succeeded = OS::GetRelativeFileTimes(data->projects[index].path, nullptr, nullptr, last_write_time);
@@ -676,8 +671,8 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 }
 
 void Hub(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-	
+	UISystem* ui_system = editor_state->ui_system;
+
 	UIWindowDescriptor window_descriptor;
 	window_descriptor.window_name = "Project";
 	window_descriptor.draw = HubDraw;

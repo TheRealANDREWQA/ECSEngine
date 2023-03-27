@@ -10,7 +10,7 @@ struct EditorState;
 // In the stack memory the first 4 bytes need to be the entities window index
 void EntitiesUISetDescriptor(ECSEngine::Tools::UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
-void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize);
+void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 // It creates the dockspace and the window
 // A new window is created.

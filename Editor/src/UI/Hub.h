@@ -9,6 +9,8 @@ struct EditorState;
 
 void AddHubProject(EditorState* editor_state, Stream<wchar_t> path);
 
+void DeallocateHubProject(EditorState* editor_state, size_t project_hub_index);
+
 void DeallocateHubProjects(EditorState* editor_state);
 
 void LoadHubProjects(EditorState* editor_state);
@@ -25,6 +27,6 @@ void SortHubProjects(EditorState* editor_state);
 
 void HubTick(EditorState* editor_state);
 
-void HubDraw(void* window_data, void* drawer_descriptor, bool initialize);
+void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 void Hub(EditorState* editor_state);

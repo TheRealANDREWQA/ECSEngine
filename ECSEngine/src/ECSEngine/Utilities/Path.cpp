@@ -207,14 +207,20 @@ namespace ECSEngine {
 			return ASCIIPath(path.buffer + parent_size + (parent_size > 0), path.size - parent_size - (parent_size > 0));
 		}
 
+		// --------------------------------------------------------------------------------------------------
+
 		Path PathFilenameBoth(Path path)
 		{
-			return GetValidPath(PathFilename(path), PathFilename(path, ECS_OS_PATH_SEPARATOR_REL));
+			Path absolute_filename = PathFilename(path);
+			Path relative_filename = PathFilename(path, ECS_OS_PATH_SEPARATOR_REL);
+			return absolute_filename.size < relative_filename.size ? absolute_filename : relative_filename;
 		}
 
 		ASCIIPath PathFilenameBoth(ASCIIPath path)
 		{
-			return GetValidPath(PathFilename(path), PathFilename(path, ECS_OS_PATH_SEPARATOR_ASCII_REL));
+			ASCIIPath absolute_filename = PathFilename(path);
+			ASCIIPath relative_filename = PathFilename(path, ECS_OS_PATH_SEPARATOR_REL);
+			return absolute_filename.size < relative_filename.size ? absolute_filename : relative_filename;
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -235,8 +241,6 @@ namespace ECSEngine {
 		Path PathRelativeToFilename(Path path, Path reference) {
 			return PathRelativeToFilenameImpl(path, reference, ECS_OS_PATH_SEPARATOR_REL);
 		}
-
-		// --------------------------------------------------------------------------------------------------
 
 		ASCIIPath PathRelativeToFilename(ASCIIPath path, ASCIIPath reference) {
 			return PathRelativeToFilenameImpl(path, reference, ECS_OS_PATH_SEPARATOR_ASCII_REL);

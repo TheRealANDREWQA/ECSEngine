@@ -7,6 +7,7 @@
 #include "../../Assets/AssetManagement.h"
 #include "../../Assets/AssetExtensions.h"
 #include "../AssetIcons.h"
+#include "../AssetSettingHelper.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -17,7 +18,7 @@ struct InspectorDrawMiscFileData {
 
 void InspectorCleanMisc(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawMiscFileData* data = (InspectorDrawMiscFileData*)_data;
-	//AssetSettingsHelperDestroy(editor_state, &data->helper_data);
+	editor_state->editor_allocator->Deallocate(data->asset.name.buffer);
 }
 
 void InspectorDrawMiscFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
@@ -25,7 +26,8 @@ void InspectorDrawMiscFile(EditorState* editor_state, unsigned int inspector_ind
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, path_storage, 512);
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
-	Stream<wchar_t> path = function::MountPathOnlyRel(data->asset.file, assets_folder, path);
+
+	Stream<wchar_t> path = function::MountPathOnlyRel(data->asset.file, assets_folder, path_storage);
 	// Check to see if the file still exists - else revert to draw nothing
 	if (!ExistsFileOrFolder(path)) {
 		ChangeInspectorToNothing(editor_state, inspector_index);
@@ -41,6 +43,9 @@ void InspectorDrawMiscFile(EditorState* editor_state, unsigned int inspector_ind
 
 	// Draw the settings
 	UIDrawConfig config;
+
+	AssetSettingsExtractPointerFromMainDatabase(editor_state, &data->asset, ECS_ASSET_MISC);
+	AssetSettingsIsReferencedUIStatus(drawer, editor_state, data->asset.name, {}, ECS_ASSET_MISC);
 
 	drawer->CrossLine();
 }
@@ -64,6 +69,19 @@ void ChangeInspectorToMiscFile(EditorState* editor_state, Stream<wchar_t> path, 
 		InspectorDrawMiscFileData* draw_data = (InspectorDrawMiscFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 		draw_data->asset.file = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->asset.file.Copy(path);
+
+		// Retrieve the name
+		ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
+		GetAssetNameFromThunkOrForwardingFile(editor_state, draw_data->asset.file, asset_name);
+
+		// Retrieve the data from the file, if any
+		bool success = editor_state->asset_database->ReadMiscFile(asset_name, draw_data->asset.file, &draw_data->asset);
+		asset_name = function::StringCopy(editor_state->EditorAllocator(), asset_name);
+		draw_data->asset.name = asset_name;
+		if (!success) {
+			// Set the default for the metadata
+			draw_data->asset.Default(asset_name, { nullptr, 0 });
+		}
 	}
 }
 

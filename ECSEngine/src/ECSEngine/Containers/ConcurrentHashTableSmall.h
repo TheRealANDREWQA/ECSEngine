@@ -1,6 +1,6 @@
 #pragma once
 #include "../Core.h"
-#include "../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../Multithreading/ConcurrentPrimitives.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "Hashing.h"
 #include "../Utilities/BasicTypes.h"

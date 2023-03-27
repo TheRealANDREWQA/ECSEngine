@@ -66,6 +66,10 @@ struct EditorState {
 		return runtime_resource_manager;
 	}
 
+	inline ECSEngine::ResourceManager* UIResourceManager() {
+		return ui_system->m_resource_manager;
+	}
+
 	inline ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
 		return editor_allocator->m_backup;
 	}
@@ -99,7 +103,7 @@ struct EditorState {
 	}
 
 	inline ECSEngine::AllocatorPolymorphic MultithreadedEditorAllocator() const {
-		return ECSEngine::GetAllocatorPolymorphic(multithreaded_editor_allocator);
+		return ECSEngine::GetAllocatorPolymorphic(multithreaded_editor_allocator, ECSEngine::ECS_ALLOCATION_MULTI);
 	}
 
 	EditorStateTick editor_tick;
@@ -122,6 +126,7 @@ struct EditorState {
 	ECSEngine::ResourceManager* runtime_resource_manager;
 	ECSEngine::Graphics* runtime_graphics;
 	
+
 	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> launched_module_compilation[EDITOR_MODULE_CONFIGURATION_COUNT];
 	// Needed to syncronize the threads when removing the launched module compilation
 	ECSEngine::SpinLock launched_module_compilation_lock;
@@ -196,7 +201,7 @@ unsigned short EditorStateLazyEvaluation(EditorState* editor_state, unsigned int
 bool EditorStateLazyEvaluationTrue(EditorState* editor_state, unsigned int index, unsigned short duration);
 
 // It will set it to the maximum USHORT_MAX such that the lazy evaluation will trigger next time
-void EditorStateLazyEvaluationSetMax(EditorState* editor_state, unsigned int index);
+void EditorStateLazyEvaluationTrigger(EditorState* editor_state, unsigned int index);
 
 // Can be used to set the evaluation to a certain value (useful for triggering a lazy evaluation a bit latter)
 void EditorStateLazyEvaluationSet(EditorState* editor_state, unsigned int index, unsigned short value);
@@ -208,9 +213,3 @@ void EditorStateApplicationQuit(EditorState* editor_state, char* quit_response);
 
 // Updates the asset database path from the current active project
 void EditorStateSetDatabasePath(EditorState* editor_state);
-
-#define EDITOR_STATE(editor_state) UIReflectionDrawer* ui_reflection = ((EditorState*)editor_state)->ui_reflection; \
-UISystem* ui_system = ((EditorState*)editor_state)->ui_system; \
-MemoryManager* editor_allocator = ((EditorState*)editor_state)->editor_allocator; \
-MemoryManager* multithreaded_editor_allocator = ((EditorState*)editor_state)->multithreaded_editor_allocator; \
-TaskManager* task_manager = ((EditorState*)editor_state)->task_manager;

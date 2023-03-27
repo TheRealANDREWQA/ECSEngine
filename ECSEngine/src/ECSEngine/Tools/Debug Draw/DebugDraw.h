@@ -1,11 +1,11 @@
 #pragma once
-#include "..\..\Core.h"
-#include "..\..\Rendering\Graphics.h"
-#include "..\..\Allocators\MemoryManager.h"
-#include "..\..\Math\Matrix.h"
-#include "..\..\Containers\Deck.h"
-#include "..\..\Internal\Multithreading\ConcurrentPrimitives.h"
-#include "..\..\Rendering\RenderingStructures.h"
+#include "../../Core.h"
+#include "../../Rendering/Graphics.h"
+#include "../../Allocators/MemoryManager.h"
+#include "../../Math/Matrix.h"
+#include "../../Containers/Deck.h"
+#include "../../Multithreading/ConcurrentPrimitives.h"
+#include "../../Rendering/RenderingStructures.h"
 #include "DebugDrawTypes.h"
 
 namespace ECSEngine {

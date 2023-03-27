@@ -2,7 +2,7 @@
 #include "../Core.h"
 #include "ecspch.h"
 #include "Stream.h"
-#include "../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../Multithreading/ConcurrentPrimitives.h"
 #include "../Utilities/FunctionInterfaces.h"
 
 #define ECS_CIRCULAR_QUEUE_RESIZE_FACTOR 1.5f
@@ -331,7 +331,7 @@ namespace ECSEngine {
 			return m_lock.try_lock();
 		}
 
-		// It has good sleep behaviour on many missed tries
+		// It has good sleep behaviour on many missed loads
 		ECS_INLINE void SpinWaitElements() {
 			if (m_queue.GetSize() == 0) {
 				m_lock.wait_signaled();

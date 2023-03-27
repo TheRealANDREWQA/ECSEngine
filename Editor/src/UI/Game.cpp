@@ -2,6 +2,7 @@
 #include "Game.h"
 #include "..\Editor\EditorState.h"
 #include "..\HelperWindows.h"
+#include "Common.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
@@ -19,7 +20,7 @@ struct GameData {
 	unsigned int active_camera;
 };
 
-void GameWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	GameData* data = (GameData*)window_data;
@@ -93,6 +94,11 @@ void CreateGameUIWindowAction(ActionData* action_data) {
 
 unsigned int CreateGameUIWindowOnly(EditorState* editor_state, unsigned int index) {
 	return CreateDefaultWindowWithIndex(GAME_WINDOW_NAME, editor_state, { 0.7f, 0.8f }, index, GameSetDecriptor);
+}
+
+void DestroyInvalidGameUIWindows(EditorState* editor_state)
+{
+	DestroyIndexedWindows(editor_state, GAME_WINDOW_NAME, editor_state->sandboxes.size, MAX_GAME_WINDOWS);
 }
 
 void GetGameUIWindowName(unsigned int index, CapacityStream<char>& name)

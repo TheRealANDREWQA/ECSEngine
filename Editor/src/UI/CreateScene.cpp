@@ -86,7 +86,7 @@ void CancelSceneAction(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------
 
-void SaveScenePopUpDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void SaveScenePopUpDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	SaveScenePopUpDrawData* data = (SaveScenePopUpDrawData*)window_data;
@@ -309,8 +309,10 @@ void ChangeSandboxSceneAction(ActionData* action_data) {
 
 		bool success = OS::FileExplorerGetFile(&get_file_data);
 		if (!success) {
-			ECS_FORMAT_TEMP_STRING(console_message, "Failed to get new scene path. Reason: {#}.", get_file_data.error_message);
-			EditorSetConsoleError(console_message);
+			if (!get_file_data.user_cancelled) {
+				ECS_FORMAT_TEMP_STRING(console_message, "Failed to get new scene path. Reason: {#}.", get_file_data.error_message);
+				EditorSetConsoleError(console_message);
+			}
 		}
 		else {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, assets_directory, 512);

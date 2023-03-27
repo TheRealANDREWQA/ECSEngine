@@ -812,6 +812,7 @@ namespace ECSEngine {
 			}
 
 			UIActionHandler callback;
+			UIActionHandler final_callback = { nullptr };
 		};
 
 		struct UIConfigColorFloatCallback {
@@ -1611,7 +1612,7 @@ namespace ECSEngine {
 			// If the action_data is nullptr, then it will skip the callback
 			void AddSelection(const void* label, ActionData* action_data);
 
-			void AddOpenedLabel(UISystem* system, unsigned int window_index, const void* label);
+			void AddOpenedLabel(UISystem* system, const void* label);
 
 			// If the action_data is nullptr, then it will skip the callback
 			void ChangeSelection(const void* label, ActionData* action_data);
@@ -1643,7 +1644,7 @@ namespace ECSEngine {
 			// If the action_data is nullptr, then it will skip the callback
 			void RemoveSelection(const void* label, ActionData* action_data);
 
-			void RemoveOpenedLabel(UISystem* system, unsigned int window_index, const void* label);
+			void RemoveOpenedLabel(UISystem* system, const void* label);
 
 			void ResetCopiedLabels(ActionData* action_data);
 
@@ -1694,6 +1695,9 @@ namespace ECSEngine {
 
 			// The byte size of the label. If default behaviour is used, this will be 0
 			unsigned short label_size;
+
+			// This is the index of the UI window from which the allocations are to be made
+			unsigned int window_index;
 
 			// Used for the dynamic identifier
 			Stream<char> identifier;

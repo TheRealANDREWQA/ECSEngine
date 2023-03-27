@@ -2,7 +2,12 @@
 #include "Console.h"
 #include "Function.h"
 #include "OSFunctions.h"
-#include "../Internal/World.h"
+#include "../ECS/World.h"
+
+#define PENDING_MESSAGE_COUNT 512
+
+#define FILE_BUFFERING_STACK_SIZE ECS_KB * 128
+//#define ENABLE_PENDING_MESSAGES
 
 namespace ECSEngine {
 
@@ -10,34 +15,51 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	bool ConsoleAppendMessageToDump(ECS_FILE_HANDLE file, unsigned int index, Console* console) {
+	bool ConsoleAppendMessageToDump(ECS_FILE_HANDLE file, unsigned int index, Console* console, CapacityStream<void>& buffering) {
 		// temporarly swap the \0 to \n in order to have it formatted correctly
 		char* mutable_ptr = (char*)console->messages[index].message.buffer;
 		mutable_ptr[console->messages[index].message.size] = '\n';
-		bool success = WriteFile(file, { mutable_ptr, console->messages[index].message.size + 1 });
+		bool success = WriteFile(file, { mutable_ptr, console->messages[index].message.size + 1 }, buffering);
 		mutable_ptr[console->messages[index].message.size] = '\0';
 		return success;
 	}
 
+	// This actually commits the pending messages - the console function also takes into account the dump thread
+	// The pending messages stream is reset
+	void ConsoleActualCommitPendingMessages(Console* console) {
+		unsigned int pending_count = console->pending_messages.SpinWaitWrites();
+		console->messages.Resize(console->messages.size + pending_count);
+		console->messages.AddStream(console->pending_messages.ToStream());
+		console->pending_messages.Reset();
+	}
+
 	// ------------------------------------------------------------------------------------
+
+	struct ConsoleDumpData {
+		unsigned int starting_index;
+	};
 
 	void ConsoleDump(unsigned int thread_index, World* world, void* _data) {
 		ConsoleDumpData* data = (ConsoleDumpData*)_data;
-		ECS_FILE_HANDLE file = 0;
-		ECS_FILE_STATUS_FLAGS status = FileCreate(data->console->dump_path, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE);
 
-		ECS_ASSERT(status == ECS_FILE_STATUS_OK);
+		Console* console = GetConsole();
 
-		data->console->dump_lock.lock();
+#ifdef ENABLE_PENDING_MESSAGES
+		console->dump_lock.lock();
+#else 
+		console->commit_lock.lock();
+#endif
 
 #pragma region Header
 
 		Date current_date = OS::GetLocalTime();
 
+		ECS_STACK_VOID_STREAM(file_buffering, FILE_BUFFERING_STACK_SIZE);
+
 		bool success = true;
 		const char header_annotation[] = "**********************************************\n";
 		size_t annotation_size = std::size(header_annotation) - 1;
-		success &= WriteFile(file, { header_annotation, annotation_size });
+		success &= WriteFile(console->dump_file, { header_annotation, annotation_size }, file_buffering);
 
 		char time_characters[256];
 		Stream<char> time_stream = Stream<char>(time_characters, 0);
@@ -58,45 +80,79 @@ namespace ECSEngine {
 		const char description[] = "Console output\n";
 		time_stream.AddStream(Stream<char>(description, std::size(description) - 1));
 
-		success &= WriteFile(file, { time_characters, time_stream.size });
-		success &= WriteFile(file, { header_annotation, annotation_size });
+		success &= WriteFile(console->dump_file, { time_characters, time_stream.size }, file_buffering);
+		success &= WriteFile(console->dump_file, { header_annotation, annotation_size }, file_buffering);
 
 #pragma endregion
 
 #pragma region Messages
 
-		for (size_t index = 0; index < data->console->messages.size && success; index++) {
-			success &= ConsoleAppendMessageToDump(file, index, data->console);
+
+#ifdef ENABLE_PENDING_MESSAGES
+		// Now see if there are any pending messages - firstly check the commit lock
+		if (data->console->commit_lock.is_locked()) {
+			// Perform the actual commit
+			ConsoleActualCommitPendingMessages(data->console);
+
+			// Unlock the commit lock
+			data->console->commit_lock.unlock();
+		}
+#endif
+
+		for (unsigned int index = 0; index < console->messages.size && success; index++) {
+			success &= ConsoleAppendMessageToDump(console->dump_file, index, console, file_buffering);
 		}
 
-		data->console->dump_lock.unlock();
-		data->console->last_dumped_message = data->console->messages.size;
+		console->last_dumped_message = console->messages.size;
+
+		if (file_buffering.size > 0 && success) {
+			success = WriteFile(console->dump_file, file_buffering);
+		}
+		ECS_ASSERT(success);
+
+#ifdef ENABLE_PENDING_MESSAGES
+		// Now add all the remaining pending messages
+		//unsigned int previous_write_index = data->console->pending_messages.write_index.load(ECS_RELAXED);
+		//while ()
+
+		console->dump_lock.unlock();
+#else
+		console->commit_lock.unlock();
+#endif
 
 #pragma endregion
-
-		CloseFile(file);
-		ECS_ASSERT(success);
+	
 	}
 
 	void ConsoleAppendToDump(unsigned int thread_index, World* world, void* _data)
 	{
-		ConsoleDumpData* data = (ConsoleDumpData*)_data;
-		ECS_FILE_HANDLE file = 0;
-		ECS_FILE_STATUS_FLAGS status = OpenFile(data->console->dump_path, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_APEND | ECS_FILE_ACCESS_TEXT);
+		Console* console = GetConsole();
 
-		ECS_ASSERT(status == ECS_FILE_STATUS_OK);
-
-		data->console->dump_lock.lock();
+#ifdef ENABLE_PENDING_MESSAGES
+		console->dump_lock.lock();
+#else
+		console->commit_lock.lock();
+#endif
+		
+		ECS_STACK_VOID_STREAM(file_buffering, FILE_BUFFERING_STACK_SIZE);
 
 		bool write_success = true;
-		for (size_t index = data->starting_index; index < data->console->messages.size && write_success; index++) {
-			write_success &= ConsoleAppendMessageToDump(file, index, data->console);
+		for (unsigned int index = console->last_dumped_message; index < console->messages.size && write_success; index++) {
+			write_success &= ConsoleAppendMessageToDump(console->dump_file, index, console, file_buffering);
 		}
-		data->console->last_dumped_message += data->console->messages.size - data->starting_index;
 
-		data->console->dump_lock.unlock();
-		CloseFile(file);
+		if (write_success && file_buffering.size > 0) {
+			write_success = WriteFile(console->dump_file, file_buffering);
+		}
+		console->last_dumped_message = console->messages.size;
+
 		ECS_ASSERT(write_success);
+
+#ifdef ENABLE_PENDING_MESSAGES
+		console->dump_lock.unlock();
+#else
+		console->commit_lock.unlock();
+#endif
 	}
 
 	// -------------------------------------------------------------------------------------------------------
@@ -110,26 +166,33 @@ namespace ECSEngine {
 
 	Console::Console(MemoryManager* allocator, TaskManager* task_manager, Stream<wchar_t> _dump_path) : allocator(allocator),
 		pause_on_error(false), verbosity_level(ECS_CONSOLE_VERBOSITY_DETAILED), dump_type(ECS_CONSOLE_DUMP_COUNT),
-		task_manager(task_manager), last_dumped_message(0), dump_count_for_commit(1) {
+		task_manager(task_manager), last_dumped_message(0), dump_count_for_commit(1), dump_file(-1)
+	{
 		format = ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_SECONDS;
 		messages.Initialize(GetAllocatorPolymorphic(allocator), 0);
 		system_filter_strings.Initialize(GetAllocatorPolymorphic(allocator), 0);
 
-		// Make a stable reference to the dump path
-		dump_path = function::StringCopy(GetAllocatorPolymorphic(allocator), _dump_path);
+		// Initialize the pending messages
+		pending_messages.Initialize(allocator, PENDING_MESSAGE_COUNT);
+
+		ChangeDumpPath(_dump_path);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
 	void Console::Lock()
 	{
-		lock.lock();
+		commit_lock.lock();
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
 	void Console::Clear()
 	{
+		// Wait for both commit and dump locks
+		commit_lock.wait_locked();
+		dump_lock.wait_locked();
+
 		for (size_t index = 0; index < messages.size; index++) {
 			allocator->Deallocate(messages[index].message.buffer);
 		}
@@ -165,6 +228,14 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
+	void Console::CommitPendingMessages()
+	{
+#ifdef ENABLE_PENDING_MESSAGES
+#endif
+	}
+
+	// -------------------------------------------------------------------------------------------------------
+
 	void Console::ConvertToMessage(Stream<char> message, ConsoleMessage& console_message)
 	{
 		size_t format_character_count = GetFormatCharacterCount();
@@ -184,8 +255,16 @@ namespace ECSEngine {
 
 	void Console::ChangeDumpPath(Stream<wchar_t> new_path)
 	{
-		allocator->Deallocate(dump_path.buffer);
+		if (dump_file != -1) {
+			CloseFile(dump_file);
+		}
+
+		dump_path.Deallocate(GetAllocatorPolymorphic(allocator));
 		dump_path = function::StringCopy(GetAllocatorPolymorphic(allocator), new_path);
+
+		// Open the file
+		ECS_ASSERT(FileCreate(new_path, &dump_file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE) == ECS_FILE_STATUS_OK);
+
 		Dump();
 	}
 
@@ -193,11 +272,7 @@ namespace ECSEngine {
 
 	void Console::AppendDump()
 	{
-		ConsoleDumpData dump_data;
-		dump_data.console = this;
-		dump_data.starting_index = last_dumped_message;
-
-		ThreadTask task = ECS_THREAD_TASK_NAME(ConsoleAppendToDump, &dump_data, sizeof(dump_data));
+		ThreadTask task = ECS_THREAD_TASK_NAME(ConsoleAppendToDump, nullptr, 0);
 		task_manager->AddDynamicTaskAndWake(task);
 	}
 
@@ -206,7 +281,6 @@ namespace ECSEngine {
 	void Console::Dump()
 	{
 		ConsoleDumpData dump_data;
-		dump_data.console = this;
 		dump_data.starting_index = 0;
 
 		ThreadTask task = ECS_THREAD_TASK_NAME(ConsoleDump, &dump_data, sizeof(dump_data));
@@ -226,7 +300,7 @@ namespace ECSEngine {
 		if (system.size > 0) {
 			unsigned int system_index = function::FindString(system, Stream<Stream<char>>(system_filter_strings.buffer, system_filter_strings.size));
 			if (system_index != -1) {
-				console_message.system_filter = 1 << system_index;
+				console_message.system_filter = 1 << (size_t)system_index;
 			}
 			else {
 				console_message.system_filter = CONSOLE_SYSTEM_FILTER_ALL;
@@ -236,12 +310,42 @@ namespace ECSEngine {
 			console_message.system_filter = CONSOLE_SYSTEM_FILTER_ALL;
 		}
 
-		lock.lock();
+		// Wait while the commit lock is unlocked
+#ifdef ENABLE_PENDING_MESSAGES
+		commit_lock.wait_locked();
+
+		// Request a location to write - if the index is valid go on
+		unsigned int write_location = pending_messages.RequestInt(1);
+		if (write_location >= pending_messages.capacity) {
+			// Try to get the commit lock
+			if (commit_lock.try_lock()) {
+				// Commit the current pending messages
+				CommitPendingMessages();
+				commit_lock.unlock();
+			}
+			else {
+				// Wait while the commit is happening
+				commit_lock.wait_locked();
+			}
+			
+			// Rerequest the location
+			write_location = pending_messages.RequestInt(1);
+		}	
+		pending_messages[write_location] = console_message;
+#else
+		commit_lock.lock();
 		messages.Add(console_message);
-		lock.unlock();
+		commit_lock.unlock();
+#endif
+
 		if (dump_type == ECS_CONSOLE_DUMP_COUNT) {
-			if (messages.size > last_dumped_message) {
-				if (messages.size - last_dumped_message >= dump_count_for_commit) {
+			unsigned int current_total_count = messages.size;
+#ifdef ENABLE_PENDING_MESSAGES
+			current_total_count += pending_messages.size.load(ECS_RELAXED);
+#endif
+
+			if (current_total_count > last_dumped_message) {
+				if (current_total_count - last_dumped_message >= dump_count_for_commit) {
 					AppendDump();
 				}
 			}

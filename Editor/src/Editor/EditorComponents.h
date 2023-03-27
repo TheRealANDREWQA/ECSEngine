@@ -69,9 +69,17 @@ struct EditorComponents {
 	};
 	
 	struct LinkComponent {
+		// Only the target is separately allocated - the name is the allocated and kept inside the hash table
+		// of the reflection manager and does not need to be deallocated by us
+		ECS_INLINE void Deallocate(ECSEngine::AllocatorPolymorphic allocator) const {
+			target.Deallocate(allocator);
+		}
+
 		ECSEngine::Stream<char> name;
 		ECSEngine::Stream<char> target;
 	};
+
+	void AddType(const ECSEngine::Reflection::ReflectionType* type, unsigned int module_index);
 
 	// Registers a new component to the entity manager
 	// Can a provide an optional lock that is used to lock the entity manager in order to execute the operation
@@ -126,6 +134,8 @@ struct EditorComponents {
 	const ECSEngine::Reflection::ReflectionType* GetType(ECSEngine::Stream<char> name) const;
 
 	const ECSEngine::Reflection::ReflectionType* GetType(unsigned int module_index, unsigned int type_index) const;
+
+	const ECSEngine::Reflection::ReflectionType* GetType(ECSEngine::Component component, bool shared) const;
 
 	void GetUniqueLinkComponents(ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& link_types) const;
 
@@ -228,6 +238,12 @@ struct EditorComponents {
 		ECSEngine::Stream<char> component_name,
 		ECSEngine::Stream<ECSEngine::SpinLock> archetype_locks = { nullptr, 0 }
 	);
+	// Removes all internal types that were associated with the given module. Also, it will update the entity managers
+	// in order to remove all the components and systems that were associated with that module
+	void RemoveModule(EditorState* editor_state, unsigned int loaded_module_index);
+
+	// Removes all the components that came from the given module
+	void RemoveModuleFromManager(ECSEngine::EntityManager* entity_manager, unsigned int loaded_module_index) const;
 
 	// Removes it only from the internal storage, not from the entity managers
 	// User ResolveEvent if it is a component alongside the entity managers to be updated
@@ -235,9 +251,6 @@ struct EditorComponents {
 
 	// Removes the component from the manager.
 	void RemoveTypeFromManager(ECSEngine::EntityManager* entity_manager, ECSEngine::Component component, bool shared, ECSEngine::SpinLock* lock = nullptr) const;
-
-	// Removes all the components that came from the given module and destroys those archetypes
-	void RemoveModuleFromManager(ECSEngine::EntityManager* entity_manager, unsigned int loaded_module_index) const;
 
 	// Does not deallocate any buffers. It will only set the default values.
 	void ResetComponent(ECSEngine::Stream<char> component_name, void* component_data) const;
@@ -253,9 +266,6 @@ struct EditorComponents {
 	// It works only for unique and link components to unique components
 	// Sets the component to default values. If it has buffers, it will deallocate them.
 	void ResetComponentFromManager(ECSEngine::EntityManager* entity_manager, ECSEngine::Stream<char> component_name, ECSEngine::Entity entity) const;
-
-	// Removes all internal types that were associated with the given module
-	void RemoveModule(unsigned int loaded_module_index);
 
 	// Returns true if it handled the event, else false when the event needs to be reprocessed later on (for example when resizing
 	// a component allocator and the component has not yet been registered because of the event)

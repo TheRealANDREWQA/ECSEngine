@@ -101,6 +101,25 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		ReflectionField ReflectionField::Copy(AllocatorPolymorphic allocator) const
+		{
+			ReflectionField field;
+
+			field.name = function::StringCopy(allocator, name);
+			field.definition = function::StringCopy(allocator, definition);
+			if (field.tag.size > 0) {
+				field.tag = function::StringCopy(allocator, tag);
+			}
+			else {
+				field.tag = { nullptr, 0 };
+			}
+			field.info = info;
+
+			return field;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionField ReflectionField::CopyTo(uintptr_t& ptr) const {
 			ReflectionField copy;
 
@@ -110,6 +129,17 @@ namespace ECSEngine {
 			copy.info = info;
 
 			return copy;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionField::DeallocateSeparate(AllocatorPolymorphic allocator) const
+		{
+			Deallocate(allocator, name.buffer);
+			Deallocate(allocator, definition.buffer);
+			if (tag.size > 0) {
+				Deallocate(allocator, tag.buffer);
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -269,12 +299,24 @@ namespace ECSEngine {
 		static_assert(std::size(ECS_STREAM_FIELD_TYPE_ALIGNMENT) == (unsigned int)ReflectionStreamFieldType::COUNT);
 		static_assert(std::size(ECS_BASIC_FIELD_TYPE_STRING) == (unsigned int)ReflectionBasicFieldType::COUNT);
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type) {
 			return ECS_BASIC_FIELD_TYPE_ALIGNMENT[(unsigned int)field_type];
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type) {
 			return ECS_STREAM_FIELD_TYPE_ALIGNMENT[(unsigned int)stream_type];
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		size_t GetFieldTypeAlignment(const ReflectionFieldInfo* info)
+		{
+			return info->stream_type == ReflectionStreamFieldType::Basic || info->stream_type == ReflectionStreamFieldType::BasicTypeArray ?
+				GetFieldTypeAlignment(info->basic_type) : GetFieldTypeAlignment(info->stream_type);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -459,6 +501,13 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void ReflectionType::DeallocateCoallesced(AllocatorPolymorphic allocator) const
+		{
+			ECSEngine::Deallocate(allocator, name.buffer);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionType::Deallocate(AllocatorPolymorphic allocator) const
 		{
 			for (size_t index = 0; index < fields.size; index++) {
@@ -536,6 +585,7 @@ namespace ECSEngine {
 			copy.alignment = alignment;
 			copy.folder_hierarchy_index = folder_hierarchy_index;
 			copy.is_blittable = is_blittable;
+			copy.is_blittable_with_pointer = is_blittable_with_pointer;
 			for (size_t index = 0; index < fields.size; index++) {
 				copy.fields[index].name.InitializeAndCopy(allocator, fields[index].name);
 				copy.fields[index].tag.InitializeAndCopy(allocator, fields[index].tag);
@@ -546,6 +596,17 @@ namespace ECSEngine {
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionType ReflectionType::CopyCoallesced(AllocatorPolymorphic allocator) const
+		{
+			size_t copy_size = CopySize();
+			void* allocation = Allocate(allocator, copy_size);
+			uintptr_t allocation_ptr = (uintptr_t)allocation;
+			return CopyTo(allocation_ptr);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 
 		ReflectionType ReflectionType::CopyTo(uintptr_t& ptr) const
 		{
@@ -600,6 +661,7 @@ namespace ECSEngine {
 			}
 			copy.folder_hierarchy_index = folder_hierarchy_index;
 			copy.is_blittable = is_blittable;
+			copy.is_blittable_with_pointer = is_blittable_with_pointer;
 
 			return copy;
 		}

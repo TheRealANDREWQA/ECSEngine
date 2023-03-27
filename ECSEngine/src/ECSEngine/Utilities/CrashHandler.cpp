@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "CrashHandler.h"
 #include "Crash.h"
-#include "../Internal/World.h"
+#include "../ECS/World.h"
 #include "OSFunctions.h"
 #include "Console.h"
 

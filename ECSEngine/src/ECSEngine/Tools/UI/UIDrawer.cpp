@@ -4177,6 +4177,9 @@ namespace ECSEngine {
 				if (configuration & UI_CONFIG_COLOR_INPUT_CALLBACK) {
 					const UIConfigColorInputCallback* callback = (const UIConfigColorInputCallback*)config.GetParameter(UI_CONFIG_COLOR_INPUT_CALLBACK);
 
+					data->callback = callback->callback;
+					data->final_callback = callback->final_callback;
+
 					if (callback->callback.data_size > 0) {
 						void* allocation = GetMainAllocatorBuffer(callback->callback.data_size);
 						memcpy(allocation, callback->callback.data, callback->callback.data_size);
@@ -4186,11 +4189,15 @@ namespace ECSEngine {
 						data->callback.data = callback->callback.data;
 					}
 
-					data->callback.action = callback->callback.action;
-					data->callback.data_size = callback->callback.data_size;
+					if (callback->final_callback.action != nullptr && callback->final_callback.data_size > 0) {
+						void* allocation = GetMainAllocatorBuffer(callback->final_callback.data_size);
+						memcpy(allocation, callback->final_callback.data, callback->final_callback.data_size);
+						data->final_callback.data = allocation;
+					}
 				}
 				else {
 					data->callback.action = nullptr;
+					data->final_callback.action = nullptr;
 				}
 
 				return data;
@@ -4241,7 +4248,7 @@ namespace ECSEngine {
 			LABEL_CONFIGURATION |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
 
 			size_t SLIDER_CONFIGURATION = configuration | UI_CONFIG_ELEMENT_NAME_FIRST;
-			SLIDER_CONFIGURATION |= ~configuration & UI_CONFIG_SLIDER_ENTER_VALUES ? 0 : UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
+			SLIDER_CONFIGURATION |= configuration & UI_CONFIG_SLIDER_ENTER_VALUES ? UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK : 0;
 
 			bool rgb = false;
 			bool hsv = false;
@@ -9655,7 +9662,7 @@ namespace ECSEngine {
 				}
 
 				if (configuration & UI_CONFIG_RECTANGLE_TOOL_TIP) {
-					if (IsPointInRectangle(mouse_position, position, scale)) {
+					if (IsMouseInRectangle(position, scale)) {
 						const UIConfigToolTip* tool_tip = (const UIConfigToolTip*)config.GetParameter(UI_CONFIG_RECTANGLE_TOOL_TIP);
 
 						UITextTooltipHoverableData hover_data;
@@ -10315,6 +10322,8 @@ namespace ECSEngine {
 			);
 			config.flag_count--;
 
+			UIConfigColorInputCallback initial_color_callback;
+			
 			// The callback must be intercepted
 			if (has_color_callback) {
 				// Make a coallesced allocation for the callback data
@@ -10325,6 +10334,7 @@ namespace ECSEngine {
 					current_callback = float_callback->callback;
 				}
 				UIConfigColorInputCallback* color_callback = (UIConfigColorInputCallback*)config.GetParameter(UI_CONFIG_COLOR_INPUT_CALLBACK);
+				initial_color_callback = *color_callback;
 
 				UIDrawerColorFloatInputCallbackData* callback_data = (UIDrawerColorFloatInputCallbackData*)GetMainAllocatorBuffer(
 					sizeof(UIDrawerColorFloatInputCallbackData) + current_callback.data_size
@@ -10344,15 +10354,37 @@ namespace ECSEngine {
 				color_callback->callback.data_size = 0;
 			}
 			else {
-				UIDrawerColorFloatInputCallbackData callback_data;
-				callback_data.callback = nullptr;
-				callback_data.callback_data = nullptr;
-				callback_data.input = input;
-				UIConfigColorInputCallback callback = { ColorFloatInputCallback, &callback_data, sizeof(callback_data) };
+				Action float_color_callback = nullptr;
+				void* float_color_callback_data = nullptr;
+
+				UIDrawerColorFloatInputCallbackData stack_callback_data;
+				UIDrawerColorFloatInputCallbackData* callback_data = &stack_callback_data;
+
+				size_t size_to_allocate = sizeof(stack_callback_data);
+
+				if (has_callback) {
+					const UIConfigColorFloatCallback* float_callback = (const UIConfigColorFloatCallback*)config.GetParameter(UI_CONFIG_COLOR_FLOAT_CALLBACK);
+					float_color_callback = float_callback->callback.action;
+					float_color_callback_data = float_callback->callback.data;
+					
+					if (float_callback->callback.data_size > 0) {
+						size_to_allocate = 0;
+						callback_data = (UIDrawerColorFloatInputCallbackData*)GetMainAllocatorBuffer(
+							sizeof(UIDrawerColorFloatInputCallbackData) + float_callback->callback.data_size
+						);
+						float_color_callback_data = function::OffsetPointer(callback_data, sizeof(*callback_data));
+						memcpy(float_color_callback_data, float_callback->callback.data, float_callback->callback.data_size);
+					}
+				}
+
+				callback_data->callback = float_color_callback;
+				callback_data->callback_data = float_color_callback_data;
+				callback_data->input = input;
+				UIConfigColorInputCallback callback = { ColorFloatInputCallback, callback_data, size_to_allocate };
 
 				// Cringe MSVC bug - it does not set the callback data correctly
-				memset(&callback_data.callback, 0, 16);
-				memcpy(&callback_data.input, &input, sizeof(input));
+				//memset(&callback_data.callback, 0, 16);
+				//memcpy(&callback_data.input, &input, sizeof(input));
 				config.AddFlag(callback);
 			}
 
@@ -10368,6 +10400,12 @@ namespace ECSEngine {
 				position,
 				scale
 			);
+
+			// Restore the previous color callback
+			if (has_color_callback) {
+				UIConfigColorInputCallback* color_callback = (UIConfigColorInputCallback*)config.GetParameter(UI_CONFIG_COLOR_INPUT_CALLBACK);
+				*color_callback = initial_color_callback;
+			}
 
 			if (~configuration & UI_CONFIG_COLOR_INPUT_CALLBACK) {
 				config.flag_count--;
@@ -11565,6 +11603,13 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		UIConfigAbsoluteTransform UIDrawer::GetWholeRegionTransform() const
+		{
+			return { GetRegionPosition() + GetRegionRenderOffset(), GetRegionScale() };
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		void* UIDrawer::GetTempBuffer(size_t size, ECS_UI_DRAW_PHASE phase, size_t alignment) {
 			return system->TemporaryAllocator(thread_id, phase)->Allocate(size, alignment);
 		}
@@ -12027,20 +12072,29 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		bool UIDrawer::HasClicked(float2 position, float2 scale) {
-			return IsPointInRectangle(mouse_position, position, scale) && system->m_mouse_tracker->LeftButton() == MBPRESSED;
+			return IsMouseInRectangle(position, scale) && system->m_mouse_tracker->LeftButton() == MBPRESSED;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		bool UIDrawer::IsClicked(float2 position, float2 scale)
 		{
-			return IsPointInRectangle(mouse_position, position, scale) && system->m_mouse->GetState()->LeftButton();
+			return IsMouseInRectangle(position, scale) && system->m_mouse->GetState()->LeftButton();
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		bool UIDrawer::IsMouseInRectangle(float2 position, float2 scale) {
-			return IsPointInRectangle(mouse_position, position, scale);
+			if (IsPointInRectangle(mouse_position, position, scale)) {
+				// Search to see if it is the top most window
+				UIDockspace* top_most_dockspace;
+				DockspaceType top_most_dockspace_type;
+				unsigned int top_most_border_index = system->GetDockspaceRegionFromMouse(mouse_position, &top_most_dockspace, top_most_dockspace_type);
+				if (border_index == top_most_border_index && top_most_dockspace == dockspace && top_most_dockspace_type == dockspace_type) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -13140,6 +13194,7 @@ namespace ECSEngine {
 				data->hovered_label.InitializeFromBuffer(ptr, 0, MAX_CAPACITY);
 
 				data->label_size = storage_type_size;
+				data->window_index = window_index;
 
 				return data;
 			});

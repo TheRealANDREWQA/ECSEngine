@@ -113,6 +113,34 @@ unsigned int ChangeInspectorDrawFunctionWithSearch(
 	return ChangeInspectorDrawFunction(editor_state, inspector_index, functions, data, data_size, sandbox_index);
 }
 
+// The functor takes a parameter the data of the inspector to be compared and returns true
+// if a match was found, else false. This is used to instead highlight an inspector if it already exists.
+// It returns the index of an already existing inspector that matches the functor in the x component
+// If there is none it will be it -1 and the y component will be the index of an inspector that didn't target
+// that element (it can be -1 if they are all locked). The z component is the index of the inspector found (without
+// distinction for existing vs not existing inspector)
+template<typename Functor>
+uint3 ChangeInspectorDrawFunctionWithSearchEx(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	InspectorFunctions functions,
+	void* data,
+	size_t data_size,
+	unsigned int sandbox_index,
+	Functor&& functor
+) {
+	ECS_STACK_CAPACITY_STREAM(unsigned int, indices, MAX_INSPECTOR_WINDOWS);
+	FindInspectorWithDrawFunction(editor_state, functions.draw_function, &indices, sandbox_index);
+	for (unsigned int index = 0; index < indices.size; index++) {
+		if (functor(GetInspectorDrawFunctionData(editor_state, indices[index]))) {
+			return { indices[index], (unsigned int)-1, indices[index] };
+		}
+	}
+
+	unsigned int new_inspector_index = ChangeInspectorDrawFunction(editor_state, inspector_index, functions, data, data_size, sandbox_index);
+	return { (unsigned int)-1, new_inspector_index, new_inspector_index };
+}
+
 // ----------------------------------------------------------------------------------------------------------------------------
 
 // Returns the first inspector which matches the sandbox and the draw function, or -1 if it doesn't exist

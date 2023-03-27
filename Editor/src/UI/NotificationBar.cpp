@@ -34,11 +34,10 @@ void FocusConsole(ActionData* action_data) {
 	CreateConsole(system);
 }
 
-void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	NotificationBarData* data = (NotificationBarData*)window_data;
-	EDITOR_STATE(data->editor_state);
 
 	drawer.DisablePaddingForRenderRegion();
 	drawer.DisablePaddingForRenderSliders();
@@ -129,7 +128,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 
 // It creates the dockspace and the window
 void CreateNotificationBar(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
+	UISystem* ui_system = editor_state->ui_system;
 
 	unsigned int window_index = CreateNotificationBarWindow(editor_state);
 	ECS_ASSERT(window_index != -1);
@@ -147,7 +146,7 @@ void CreateNotificationBarAction(ActionData* action_data) {
 }
 
 unsigned int CreateNotificationBarWindow(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
+	UISystem* ui_system = editor_state->ui_system;
 
 	float2 window_size = { 2.0f - ECS_TOOLS_UI_ONE_PIXEL_X, NOTIFICATION_BAR_WINDOW_SIZE };
 	UIWindowDescriptor descriptor;

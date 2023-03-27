@@ -10,7 +10,7 @@ struct EditorState;
 // In the stack memory the first 4 bytes need to be the sandbox index
 void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
-void GameWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
+void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 // It creates the dockspace and the window
 void CreateGameUIWindow(EditorState* editor_state, unsigned int index);
@@ -26,6 +26,9 @@ void CreateGameUIWindowAction(ActionData* action_data);
 
 // It only creates the window, it will not be assigned to any dockspace and returns the window index
 unsigned int CreateGameUIWindowOnly(EditorState* editor_state, unsigned int index);
+
+// Destroys all Game windows whose sandbox no longer exists
+void DestroyInvalidGameUIWindows(EditorState* editor_state);
 
 void GetGameUIWindowName(unsigned int index, ECSEngine::CapacityStream<char>& name);
 

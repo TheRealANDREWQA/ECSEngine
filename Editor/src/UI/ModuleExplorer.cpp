@@ -55,7 +55,7 @@ struct ModuleExplorerData {
 
 // --------------------------------------------------------------------------------------------------------
 
-void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void AddModuleWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	const float INPUT_X_FACTOR = 7.0f;
@@ -209,10 +209,8 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 			}
 
 			if (success) {
-				EDITOR_STATE(data->editor_state);
-
 				ThreadTask task = ECS_THREAD_TASK_NAME(SaveProjectModuleFileThreadTask, data->editor_state, 0);
-				task_manager->AddDynamicTaskAndWake(task);
+				data->editor_state->task_manager->AddDynamicTaskAndWake(task);
 			}
 		}
 		else {
@@ -566,10 +564,9 @@ void ModuleExplorerSetAllDistribution(ActionData* action_data) {
 
 // --------------------------------------------------------------------------------------------------------
 
-void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
-	EDITOR_STATE(window_data);
 	EditorState* editor_state = (EditorState*)window_data;
 
 	ModuleExplorerData* explorer_data = nullptr;

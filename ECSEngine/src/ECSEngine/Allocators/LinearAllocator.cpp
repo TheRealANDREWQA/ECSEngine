@@ -1,8 +1,12 @@
 #include "ecspch.h";
 #include "LinearAllocator.h"
 #include "../Utilities/Function.h"
+#include "AllocatorPolymorphic.h"
 
 namespace ECSEngine {
+	
+	LinearAllocator::LinearAllocator(AllocatorPolymorphic allocator, size_t capacity) : m_buffer(ECSEngine::Allocate(allocator, capacity)),
+		m_capacity(capacity), m_top(0), m_marker(0), m_spin_lock() {}
 
 	void* LinearAllocator::Allocate(size_t size, size_t alignment) {
 		// calculating the current pointer and aligning it

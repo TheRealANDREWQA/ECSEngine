@@ -24,7 +24,7 @@ namespace ECSEngine {
 		ECS_INLINE Vector4(int x, int y, int z, int w) {
 			value = _mm_castsi128_ps(_mm_setr_epi32(x, y, z, w));
 		}
-		ECS_INLINE Vector4(Vec4f _value) : value(_value) {}
+		ECS_INLINE ECS_VECTORCALL Vector4(Vec4f _value) : value(_value) {}
 		ECS_INLINE Vector4(const float* values) {
 			value.load(values);
 		}
@@ -102,10 +102,10 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		ECS_INLINE operator Vec4f() const {
+		ECS_INLINE ECS_VECTORCALL operator Vec4f() const {
 			return value;
 		}
-		ECS_INLINE operator __m128() const {
+		ECS_INLINE ECS_VECTORCALL operator __m128() const {
 			return value.operator __m128();
 		}
 
@@ -187,7 +187,7 @@ namespace ECSEngine {
 		ECS_INLINE Vector8(int x0, int y0, int z0, int w0, int x1, int y1, int z1, int w1) {
 			value = _mm256_castsi256_ps(_mm256_setr_epi32(x0, y0, z0, w0, x1, y1, z1, w1));
 		}
-		ECS_INLINE Vector8(Vec8f _value) : value(_value) {}
+		ECS_INLINE ECS_VECTORCALL Vector8(Vec8f _value) : value(_value) {}
 		ECS_INLINE Vector8(const float* values) {
 			value.load(values);
 		}
@@ -197,7 +197,7 @@ namespace ECSEngine {
 		ECS_INLINE Vector8(float3 values0, float3 values1) {
 			value = Vec8f(values0.x, values0.y, values0.z, 0.0f, values1.x, values1.y, values1.z, 0.0f);
 		}
-		ECS_INLINE Vector8(Vector4 low, Vector4 high) {
+		ECS_INLINE ECS_VECTORCALL Vector8(Vector4 low, Vector4 high) {
 			value = Vec8f(low.value, high.value);
 		}
 
@@ -266,11 +266,11 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		ECS_INLINE operator Vec8f() const {
+		ECS_INLINE ECS_VECTORCALL operator Vec8f() const {
 			return value;
 		}
 
-		ECS_INLINE operator __m256() const {
+		ECS_INLINE ECS_VECTORCALL operator __m256() const {
 			return value.operator __m256();
 		}
 
@@ -343,11 +343,11 @@ namespace ECSEngine {
 			return _mm_cvtss_f32(value.get_high());
 		}
 
-		ECS_INLINE Vector4 Low() const {
+		ECS_INLINE Vector4 ECS_VECTORCALL Low() const {
 			return value.get_low();
 		}
 
-		ECS_INLINE Vector4 High() const {
+		ECS_INLINE Vector4 ECS_VECTORCALL High() const {
 			return value.get_high();
 		}
 
@@ -409,11 +409,11 @@ namespace ECSEngine {
 #pragma region Zero Vector
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Vector4 ZeroVector4() {
+	ECS_INLINE Vector4 ECS_VECTORCALL ZeroVector4() {
 		return Vec4f(_mm_setzero_ps());
 	}
 
-	ECS_INLINE Vector8 ZeroVector8() {
+	ECS_INLINE Vector8 ECS_VECTORCALL ZeroVector8() {
 		return Vec8f(_mm256_setzero_ps());
 	}
 

@@ -32,7 +32,7 @@
 //}
 //
 //template<bool initializer>
-//void DrawSomething(void* window_data, void* drawer_descriptor) {
+//void DrawSomething(void* window_data, UIDrawerDescriptor* drawer_descriptor) {
 //	using namespace ECSEngine::Tools;
 //	UI_PREPARE_DRAWER(initializer);
 //

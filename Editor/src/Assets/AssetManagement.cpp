@@ -28,12 +28,19 @@ ECS_THREAD_TASK(CreateAssetAsyncTask) {
 	if (!success) {
 		const char* type_string = ConvertAssetTypeString(data->asset_type);
 		Stream<char> asset_name = data->editor_state->asset_database->GetAssetName(data->handle, data->asset_type);
-		ECS_FORMAT_TEMP_STRING(error_message, "Failed to create asset {#}, type {#}. Possible causes: invalid path or the processing failed.", asset_name, type_string);
-		EditorSetConsoleError(error_message);
+		bool is_valid = ValidateAssetMetadataOptions(data->editor_state->asset_database->GetAssetConst(data->handle, data->asset_type), data->asset_type);
+		if (is_valid) {
+			ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+			ECS_FORMAT_STRING(error_message, "Failed to create asset {#}, type {#}. Possible causes: invalid path or the processing failed.", asset_name, type_string);
+			EditorSetConsoleError(error_message);
+		}
+
+		// We should still try to create its dependencies that were loaded for the first time
+		CreateAssetInternalDependencies(data->editor_state, data->handle, data->asset_type);
 	}
 
 	if (data->callback.action != nullptr) {
-		CreateAssetAsyncCallbackInfo info;
+		RegisterAssetEventCallbackInfo info;
 		info.handle = data->handle;
 		info.success = success;
 		info.type = data->asset_type;
@@ -137,7 +144,7 @@ EDITOR_EVENT(RegisterEvent) {
 
 			// We still have to call the callback
 			if (data->callback.action != nullptr) {
-				CreateAssetAsyncCallbackInfo info;
+				RegisterAssetEventCallbackInfo info;
 				info.handle = handle;
 				info.type = data->type;
 				info.success = false;
@@ -217,82 +224,83 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 			EditorSetConsoleError(error_message);
 		};
 
-		if (data->sandbox_assets) {
-			auto loop = [=](unsigned int sandbox_index, bool check_exists_in_sandbox) {
-				ActionData dummy_data;
-				dummy_data.system = nullptr;
+		auto loop = [=](unsigned int sandbox_index) {
+			ActionData dummy_data;
+			dummy_data.system = nullptr;
 
-				size_t count = Extractor::Count(data);
+			size_t count = Extractor::Count(data);
 
-				for (size_t index = 0; index < count; index++) {
-					unsigned int handle = Extractor::Handle(data, index);
+			for (size_t index = 0; index < count; index++) {
+				unsigned int handle = Extractor::Handle(data, index);
+				if (handle != -1) {
 					ECS_ASSET_TYPE type = Extractor::Type(data, index);
 
 					Stream<char> asset_name = editor_state->asset_database->GetAssetName(handle, type);
 					Stream<wchar_t> file = editor_state->asset_database->GetAssetPath(handle, type);
 
-					EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-					unsigned int database_reference_index = sandbox->database.GetIndex(handle, type);
-					if (database_reference_index == -1) {
-						if (check_exists_in_sandbox) {
-							__debugbreak();
-							ECS_FORMAT_TEMP_STRING(tail_message, "It doesn't exist in the sandbox {#} asset database reference.", sandbox_index);
-							fail(asset_name, file, type, tail_message);
-						}
+					// Call the callback before actually removing the asset
+					if (data->callback.action != nullptr) {
+						UnregisterAssetEventCallbackInfo info;
+						info.handle = handle;
+						info.type = type;
+
+						dummy_data.data = data->callback.data;
+						dummy_data.additional_data = &info;
+						data->callback.action(&dummy_data);
 					}
-					else {
-						// Call the callback before actually removing the asset
-						if (data->callback.action != nullptr) {
-							dummy_data.data = data->callback.data;
-							dummy_data.additional_data = &handle;
-							data->callback.action(&dummy_data);
-						}
 
-						bool success = RemoveAsset(editor_state, sandbox->database.GetHandle(database_reference_index, type), type);
-						if (!success) {
-							fail(asset_name, file, type, "Possible causes: internal error or the asset was not loaded in the first place.");
-						}
-					}
-				}
-			};
-
-			bool remove_all = data->sandbox_index == -1;
-			SandboxAction(editor_state, data->sandbox_index, [&](unsigned int sandbox_index) {
-				loop(sandbox_index, remove_all);
-			});
-		}
-		else {
-			ActionData dummy_data;
-			dummy_data.system = nullptr;
-
-			size_t count = Extractor::Count(data);
-			for (size_t index = 0; index < count; index++) {
-				unsigned int handle = Extractor::Handle(data, index);
-				ECS_ASSET_TYPE type = Extractor::Type(data, index);
-
-				Stream<char> asset_name = editor_state->asset_database->GetAssetName(handle, type);
-				Stream<wchar_t> file = editor_state->asset_database->GetAssetPath(handle, type);
-
-				size_t metadata_storage[ECS_KB];
-
-				// Call the callback before actually removing the asset
-				if (data->callback.action != nullptr) {
-					dummy_data.data = data->callback.data;
-					dummy_data.additional_data = &handle;
-					data->callback.action(&dummy_data);
-				}
-
-				AssetDatabaseRemoveInfo remove_info;
-				remove_info.storage = metadata_storage;
-				bool removed_now = editor_state->asset_database->RemoveAsset(handle, type, &remove_info);
-
-				if (removed_now) {
-					bool success = RemoveAsset(editor_state, metadata_storage, type);
+					bool success = DecrementAssetReference(editor_state, handle, type, sandbox_index);
 					if (!success) {
 						fail(asset_name, file, type, "Possible causes: internal error or the asset was not loaded in the first place.");
 					}
 				}
 			}
+		};
+
+		if (data->sandbox_assets) {
+			SandboxAction(editor_state, data->sandbox_index, [&](unsigned int sandbox_index) {
+				loop(sandbox_index);
+			});
+		}
+		else {
+			//ActionData dummy_data;
+			//dummy_data.system = nullptr;
+
+			//size_t count = Extractor::Count(data);
+			//for (size_t index = 0; index < count; index++) {
+			//	unsigned int handle = Extractor::Handle(data, index);
+			//	ECS_ASSET_TYPE type = Extractor::Type(data, index);
+
+			//	Stream<char> asset_name = editor_state->asset_database->GetAssetName(handle, type);
+			//	Stream<wchar_t> file = editor_state->asset_database->GetAssetPath(handle, type);
+
+			//	size_t metadata_storage[ECS_KB];
+
+			//	// Call the callback before actually removing the asset
+			//	if (data->callback.action != nullptr) {
+			//		UnregisterAssetEventCallbackInfo info;
+			//		info.handle = handle;
+			//		info.type = type;
+
+			//		dummy_data.data = data->callback.data;
+			//		dummy_data.additional_data = &info;
+			//		data->callback.action(&dummy_data);
+			//	}
+
+			//	AssetDatabaseRemoveInfo remove_info;
+			//	remove_info.storage = metadata_storage;
+			//	bool removed_now = editor_state->asset_database->RemoveAsset(handle, type, &remove_info);
+
+			//	if (removed_now) {
+			//		bool success = RemoveAsset(editor_state, metadata_storage, type);
+			//		if (!success) {
+			//			fail(asset_name, file, type, "Possible causes: internal error or the asset was not loaded in the first place.");
+			//		}
+			//	}
+			//}
+
+			// This will remove the asset without belonging to a certain sandbox
+			loop(-1);
 		}
 
 		void* element_buffer = Extractor::Data(data);
@@ -303,7 +311,7 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 			// Unlock the sandbox
 			SandboxAction(editor_state, data->sandbox_index, [=](unsigned int sandbox_index) {
 				UnlockSandbox(editor_state, sandbox_index);
-				});
+			});
 		}
 		return false;
 	}
@@ -547,7 +555,7 @@ bool AddRegisterAssetEvent(
 		}
 
 		if (callback.action != nullptr) {
-			CreateAssetAsyncCallbackInfo info;
+			RegisterAssetEventCallbackInfo info;
 			info.handle = existing_handle;
 			info.type = type;
 			info.success = true;
@@ -633,22 +641,15 @@ bool CreateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 		type,
 		assets_folder
 	);
-	if (success) {
-		// Create the asset time stamp
-		InsertAssetTimeStamp(editor_state, metadata, type);
 
-		// Get its dependencies. If they don't already don't have a time stamp, we need to create time stamps for them as well
-		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
-		GetAssetDependencies(metadata, type, &dependencies);
-		for (unsigned int index = 0; index < dependencies.size; index++) {
-			ECS_ASSET_TYPE current_type = dependencies[index].type;
-			const void* current_dependency = editor_state->asset_database->GetAssetConst(dependencies[index].handle, current_type);
-			size_t time_stamp = GetAssetRuntimeTimeStamp(editor_state, current_dependency, current_type);
-			if (time_stamp == -1) {
-				// It doesn't exist, insert it
-				InsertAssetTimeStamp(editor_state, current_dependency, current_type);
-			}
-		}
+	// Insert the time stamp if it doesn't already exist, even if it fails
+	InsertAssetTimeStamp(editor_state, metadata, type, true);
+
+	// Get its dependencies. If they don't already don't have a time stamp, we need to create time stamps for them as well
+	ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
+	GetAssetDependencies(metadata, type, &dependencies);
+	for (unsigned int index = 0; index < dependencies.size; index++) {
+		InsertAssetTimeStamp(editor_state, dependencies[index].handle, dependencies[index].type, true);
 	}
 	return success;
 }
@@ -664,6 +665,61 @@ void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_
 	event_data.type = type;
 	event_data.callback = callback;
 	EditorAddEvent(editor_state, CreateAssetAsyncEvent, &event_data, sizeof(event_data));
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool CreateAssetInternalDependencies(
+	EditorState* editor_state, 
+	unsigned int handle, 
+	ECS_ASSET_TYPE type, 
+	CapacityStream<CreateAssetInternalDependenciesElement>* dependency_elements
+)
+{
+	const void* metadata = editor_state->asset_database->GetAssetConst(handle, type);
+	return CreateAssetInternalDependencies(editor_state, metadata, type, dependency_elements);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool CreateAssetInternalDependencies(
+	EditorState* editor_state, 
+	const void* metadata, 
+	ECS_ASSET_TYPE type, 
+	CapacityStream<CreateAssetInternalDependenciesElement>* dependency_elements
+)
+{
+	bool success = true;
+
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+	GetProjectAssetsFolder(editor_state, assets_folder);
+
+	ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, internal_dependencies, 512);
+	GetAssetDependencies(metadata, type, &internal_dependencies);
+
+	for (unsigned int index = 0; index < internal_dependencies.size; index++) {
+		const void* current_dependency = editor_state->asset_database->GetAssetConst(internal_dependencies[index].handle, internal_dependencies[index].type);
+		Stream<void> previous_pointer = GetAssetFromMetadata(current_dependency, internal_dependencies[index].type);
+
+		bool current_success = true;
+		if (!IsAssetFromMetadataValid(previous_pointer) || !IsAssetFromMetadataLoaded(
+			editor_state->RuntimeResourceManager(), 
+			current_dependency, 
+			internal_dependencies[index].type, 
+			assets_folder,
+			true)
+		) {
+			current_success = CreateAsset(editor_state, internal_dependencies[index].handle, internal_dependencies[index].type);
+			success &= !current_success;
+		}
+		Stream<void> new_pointer = GetAssetFromMetadata(current_dependency, internal_dependencies[index].type);
+
+		if (dependency_elements != nullptr) {
+			dependency_elements->AddSafe({ internal_dependencies[index].handle, internal_dependencies[index].type, current_success, previous_pointer, new_pointer });
+		}
+	}
+
+	return success;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -849,6 +905,13 @@ bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE t
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 	GetProjectAssetsFolder(editor_state, assets_folder);
 
+	unsigned int previous_dependent_assets_size = 0;
+	if (dependent_assets != nullptr) {
+		Stream<void> current_asset = GetAssetFromMetadata(metadata, type);
+		unsigned int current_handle = editor_state->asset_database->FindAssetEx(current_asset, type);
+		previous_dependent_assets_size = dependent_assets->Add({ current_handle, type, current_asset, { nullptr, 0 } });
+	}
+
 	DeallocateAssetFromMetadataOptions options;
 	options.material_check_resource = true;
 	bool success = DeallocateAssetFromMetadata(
@@ -871,9 +934,9 @@ bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE t
 					Stream<void> previous_data = GetAssetFromMetadata(current_metadata, current_type);
 					bool recurse_success = DeallocateAsset(editor_state, current_metadata, current_type, true, dependent_assets);
 					success &= recurse_success;
-					if (recurse_success && dependent_assets != nullptr) {
-						dependent_assets->AddSafe({ current_dependent_assets[index][subindex], current_type, previous_data });
-					}
+					//if (recurse_success && dependent_assets != nullptr) {
+						//dependent_assets->AddSafe({ current_dependent_assets[index][subindex], current_type, previous_data, GetAssetFromMetadata(current_metadata, current_type) });
+					//}
 				}
 			}
 			stack_allocator.ClearBackup();
@@ -882,6 +945,10 @@ bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE t
 		// Randomize the asset
 		unsigned int randomized_value = editor_state->asset_database->GetRandomizedPointer(type);
 		SetRandomizedAssetToMetadata(metadata, type, randomized_value);
+
+		if (dependent_assets != nullptr) {
+			dependent_assets->buffer[previous_dependent_assets_size].new_pointer = GetAssetFromMetadata(metadata, type);
+		}
 	}
 	return success;
 }
@@ -964,7 +1031,7 @@ void DeleteAssetSetting(EditorState* editor_state, Stream<char> name, Stream<wch
 
 void DeleteMissingAssetSettings(const EditorState* editor_state)
 {
-	// At the moment only meshes and textures need this.
+	// At the moment only meshes and textures don't need thunks/forwarding files
 	Stream<wchar_t> mesh_extensions[std::size(ASSET_MESH_EXTENSIONS)];
 	Stream<wchar_t> texture_extensions[std::size(ASSET_TEXTURE_EXTENSIONS)];
 
@@ -988,6 +1055,7 @@ void DeleteMissingAssetSettings(const EditorState* editor_state)
 		ECS_STACK_CAPACITY_STREAM(wchar_t, current_file, 512);
 		AssetDatabase::ExtractFileFromFile(path, current_file);
 		if (current_file.size > 0) {
+			function::ReplaceCharacter(current_file, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 			assets_folder->AddStream(current_file);
 			if (!ExistsFileOrFolder(*assets_folder)) {
 				// Destroy the current setting
@@ -1011,6 +1079,35 @@ void DeleteMissingAssetSettings(const EditorState* editor_state)
 	// It has a final backslash
 	metadata_directory.size--;
 	ForEachFileInDirectory(metadata_directory, &assets_folder, functor);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index)
+{
+	auto remove_from_reference = [=]() {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		unsigned int reference_index = sandbox->database.GetIndex(handle, type);
+		if (reference_index != -1) {
+			sandbox->database.RemoveAssetThisOnly(reference_index, type);
+		}
+	};
+
+	unsigned int reference_count = editor_state->asset_database->GetReferenceCount(handle, type);
+	if (reference_count == 1) {
+		bool success = RemoveAsset(editor_state, handle, type);
+		if (success && sandbox_index != -1) {
+			remove_from_reference();
+		}
+		return success;
+	}
+	else {
+		editor_state->asset_database->RemoveAsset(handle, type);
+		if (sandbox_index != -1) {
+			remove_from_reference();
+		}
+		return true;
+	}
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1167,6 +1264,52 @@ bool GetAssetFileFromForwardingFile(Stream<wchar_t> absolute_path, CapacityStrea
 
 // ----------------------------------------------------------------------------------------------
 
+bool GetAssetFileFromAssetMetadata(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, CapacityStream<wchar_t>& path, bool absolute_path)
+{
+	Stream<wchar_t> target_file = GetAssetFile(metadata, type);
+	Stream<char> name = GetAssetName(metadata, type);
+
+	if (absolute_path) {
+		GetProjectAssetsFolder(editor_state, path);
+		path.Add(ECS_OS_PATH_SEPARATOR);
+	}
+
+	switch (type) {
+		// Meshes and textures are handled the same
+	case ECS_ASSET_MESH:
+	case ECS_ASSET_TEXTURE:
+		path.AddStreamSafe(target_file);
+		function::ReplaceCharacter(path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+
+		break;
+		// All the other assets have thunk or forwarding file
+	case ECS_ASSET_GPU_SAMPLER:
+	case ECS_ASSET_MATERIAL:
+	case ECS_ASSET_SHADER:
+	case ECS_ASSET_MISC:
+	{
+		function::ConvertASCIIToWide(path, name);
+		function::ReplaceCharacter(path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+
+		path.AddStream(ASSET_EXTENSIONS[type][0]);
+	}
+		break;
+	default:
+		ECS_ASSERT(false, "Invalid asset type");
+	}
+
+	return true;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool GetAssetFileFromAssetMetadata(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, CapacityStream<wchar_t>& path, bool absolute_path)
+{
+	return GetAssetFileFromAssetMetadata(editor_state, editor_state->asset_database->GetAssetConst(handle, type), type, path, absolute_path);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 Stream<Stream<char>> GetAssetCorrespondingMetadata(const EditorState* editor_state, Stream<wchar_t> file, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator)
 {
 	return editor_state->asset_database->GetMetadatasForFile(file, type, allocator);
@@ -1218,6 +1361,14 @@ Stream<Stream<unsigned int>> GetOutOfDateAssetsImpl(EditorState* editor_state, A
 
 				if (update_stamp) {
 					ChangeAssetTimeStamp(editor_state, metadata, current_type, external_time_stamp);
+				}
+			}
+			else if (runtime_time_stamp == -1 && external_time_stamp != -1) {
+				// Register it and insert the time stamp
+				handles[current_type].Add(current_handle);
+
+				if (update_stamp) {
+					InsertAssetTimeStamp(editor_state, metadata, current_type);
 				}
 			}
 		}
@@ -1291,9 +1442,15 @@ Stream<Stream<unsigned int>> GetOutOfDateAssetsTargetFile(EditorState* editor_st
 
 // ----------------------------------------------------------------------------------------------
 
-Stream<Stream<unsigned int>> GetDependentAssetsFor(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator)
+Stream<Stream<unsigned int>> GetDependentAssetsFor(
+	const EditorState* editor_state, 
+	const void* metadata, 
+	ECS_ASSET_TYPE type, 
+	AllocatorPolymorphic allocator, 
+	bool include_itself
+)
 {
-	return editor_state->asset_database->GetDependentAssetsFor(metadata, type, allocator);
+	return editor_state->asset_database->GetDependentAssetsFor(metadata, type, allocator, include_itself);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1383,15 +1540,37 @@ unsigned int GetAssetReferenceCount(const EditorState* editor_state, unsigned in
 
 // ----------------------------------------------------------------------------------------------
 
-void InsertAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
+bool HasAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
 {
-	const void* metadata = editor_state->asset_database->GetAssetConst(handle, type);
-	InsertAssetTimeStamp(editor_state, metadata, type);
+	return HasAssetTimeStamp(editor_state, editor_state->asset_database->GetAssetConst(handle, type), type);
 }
 
 // ----------------------------------------------------------------------------------------------
 
-void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type) {
+bool HasAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
+	Stream<wchar_t> target_file = AssetMetadataTimeStampPath(editor_state, metadata, type, storage);
+	return editor_state->RuntimeResourceManager()->Exists(target_file, ResourceType::TimeStamp);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void InsertAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, bool if_is_missing)
+{
+	const void* metadata = editor_state->asset_database->GetAssetConst(handle, type);
+	InsertAssetTimeStamp(editor_state, metadata, type, if_is_missing);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, bool if_is_missing) {
+	if (if_is_missing) {
+		if (HasAssetTimeStamp(editor_state, metadata, type)) {
+			return;
+		}
+	}
+
 	ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
 
 	size_t runtime_asset_stamp = 0;
@@ -1458,7 +1637,7 @@ bool RemoveAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type)
 
 bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, bool recurse)
 {
-	size_t asset_metadata[AssetMetadataMaxByteSize()];
+	alignas(alignof(size_t)) char asset_metadata[AssetMetadataMaxByteSize()];
 	void* metadata = editor_state->asset_database->GetAsset(handle, type);
 	memcpy(asset_metadata, metadata, AssetMetadataByteSize(type));
 	bool success = RemoveAsset(editor_state, asset_metadata, type);
@@ -1488,6 +1667,15 @@ bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 		}
 	}
 	return success;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void RemoveAssetDependencies(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type)
+{
+	editor_state->asset_database->RemoveAssetDependencies(metadata, type, [=](unsigned int handle, ECS_ASSET_TYPE type) {
+		RemoveAssetTimeStamp(editor_state, handle, type);
+	});
 }
 
 // ----------------------------------------------------------------------------------------------

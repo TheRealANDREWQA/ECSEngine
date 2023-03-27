@@ -6,8 +6,6 @@ cbuffer Matrices : register(b0)
     float4x4 world_view_projection_matrix : packoffset(c4);
     float2 uv_tiling : packoffset(c8.x);
     float2 uv_offset : packoffset(c8.z);
-    float2 new_value : packoffset(c9.x);
-    float4x4 new_tiled_value : packoffset(c10.x);
 }
 
 struct VS_INPUT ECS_REFLECT_INCREMENT_INPUT_SLOT

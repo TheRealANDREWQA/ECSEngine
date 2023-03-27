@@ -1,7 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "MultipoolAllocator.h"
-#include "../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../Multithreading/ConcurrentPrimitives.h"
 
 namespace ECSEngine {
 

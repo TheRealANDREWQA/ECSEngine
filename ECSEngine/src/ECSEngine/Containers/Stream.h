@@ -71,19 +71,25 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return previous_size;
 		}
 
-		// Returns the previous buffer
-		void* AddResize(AllocatorPolymorphic allocator, size_t new_elements, bool deallocate_old = false) {
-			void* old_buffer = buffer;
+		// Returns the old buffer
+		void* AddResize(T element, AllocatorPolymorphic allocator, bool deallocate_old = false) {
+			void* old_buffer = Expand(allocator, 1, deallocate_old);
+			buffer[size - 1] = element;
+			return old_buffer;
+		}
 
-			void* allocation = Allocate(allocator, MemoryOf(size + new_elements));
-			CopyTo(allocation);
+		// Returns the old buffer
+		void* AddResize(const T* element, AllocatorPolymorphic allocator, bool deallocate_old = false) {
+			void* old_buffer = Expand(allocator, 1, deallocate_old);
+			buffer[size - 1] = *element;
+			return old_buffer;
+		}
 
-			if (deallocate_old) {
-				Deallocate(allocator);
-			}
-
-			InitializeFromBuffer(allocation, size + new_elements);
-
+		// Returns the old buffer
+		void* AddResize(Stream<T> elements, AllocatorPolymorphic allocator, bool deallocate_old = false) {
+			size_t old_size = elements.size;
+			void* old_buffer = Expand(allocator, elements.size, deallocate_old);
+			CopySlice(old_size, elements);
 			return old_buffer;
 		}
 
@@ -93,6 +99,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size_t unsigned_amount = (size_t)amount;
 			buffer += unsigned_amount;
 			size -= unsigned_amount;
+		}
+
+		// Increments the pointer and decrements the size with the given amount
+		// and returns the stream with those values. It does not modify this one
+		ECS_INLINE Stream<T> AdvanceReturn(int64_t amount = 1) const {
+			Stream<T> copy = *this;
+			copy.Advance(amount);
+			return copy;
 		}
 
 		// it will set the size
@@ -162,12 +176,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
-		ECS_INLINE void Insert(size_t index, T value) {
-			DisplaceElements(index, 1);
-			buffer[index] = value;
-			size++;
-		}
-		
 		// Does not update the size
 		void DisplaceElements(size_t starting_index, int64_t displacement) {
 			// If the displacement is negative, start from the bottom up
@@ -184,6 +192,25 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
+		// Returns the previous buffer (the size is also updated)
+		void* Expand(AllocatorPolymorphic allocator, size_t new_elements, bool deallocate_old = false) {
+			return Resize(allocator, size + new_elements, true, deallocate_old);
+		}
+
+		// Returns the previous buffer (the size is also updated)
+		void* Expand(AllocatorPolymorphic allocator, Stream<T> new_elements, bool deallocate_old = false) {
+			size_t old_size = size;
+			void* old_buffer = Resize(allocator, size + new_elements.size, true, deallocate_old);
+			new_elements.CopyTo(buffer + old_size);
+			return old_buffer;
+		}
+
+		ECS_INLINE void Insert(size_t index, T value) {
+			DisplaceElements(index, 1);
+			buffer[index] = value;
+			size++;
+		}
+
 		// Set the count to the count of elements that you want to be removed
 		ECS_INLINE void Remove(size_t index, size_t count = 1) {
 			for (size_t copy_index = index + count; copy_index < size; copy_index++) {
@@ -195,6 +222,25 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		ECS_INLINE void RemoveSwapBack(size_t index) {
 			size--;
 			buffer[index] = buffer[size];
+		}
+
+		// Returns the previous buffer (the size is also updated)
+		void* Resize(AllocatorPolymorphic allocator, size_t new_size, bool copy_old_elements = true, bool deallocate_old = false) {
+			void* old_buffer = buffer;
+
+			void* allocation = Allocate(allocator, MemoryOf(new_size));
+			if (copy_old_elements) {
+				size_t copy_size = new_size > size ? size : new_size;
+				memcpy(allocation, buffer, sizeof(T) * copy_size);
+			}
+
+			if (deallocate_old) {
+				Deallocate(allocator);
+			}
+
+			InitializeFromBuffer(allocation, new_size);
+
+			return old_buffer;
 		}
 
 		ECS_INLINE void Swap(size_t first, size_t second) {
@@ -366,31 +412,17 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			AddStream(other);
 		}
 
-		// Returns the index at which it was added. Can select the amount by which it grows by with the growth_count argument
-		unsigned int AddResize(T element, AllocatorPolymorphic allocator, unsigned int growth_count = 1, bool deallocate_previous = true) {
-			if (size == capacity) {
-				void* old_buffer = buffer;
-				Initialize(allocator, size, capacity + growth_count);
-				memcpy(buffer, old_buffer, MemoryOf(size));
-				if (deallocate_previous) {
-					ECSEngine::Deallocate(allocator, old_buffer);
-				}
-			}
+		// Returns the index at which it was added. Can select the amount by which it grows with the growth_count
+		// (the total growth count is necessary_elements + growth_count)
+		unsigned int AddResize(T element, AllocatorPolymorphic allocator, unsigned int growth_count = 0, bool deallocate_previous = true) {
+			Expand(allocator, 1, growth_count, deallocate_previous);
 			return Add(element);
 		}
 
 		// Returns the index at which they were added. Can select the amount by which it grows with the growth_count
 		// (the total growth count is necessary_elements + growth_count)
 		unsigned int AddResizeStream(Stream<T> elements, AllocatorPolymorphic allocator, unsigned int growth_count = 0, bool deallocate_previous = true) {
-			if (size + elements.size > capacity) {
-				void* old_buffer = buffer;
-				unsigned int needed_elements = (unsigned int)elements.size + size - capacity;
-				Initialize(allocator, size, elements.size + size + growth_count);
-				memcpy(buffer, old_buffer, MemoryOf(size));
-				if (deallocate previous) {
-					ECSEngine::Deallocate(allocator, old_buffer);
-				}
-			}
+			Expand(allocator, elements.size, growth_count, deallocate_previous);
 			return AddStream(elements);
 		}
 
@@ -474,6 +506,22 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
+		// Returns the old buffer if a resize was performed, else nullptr. Can select the amount by which it grows with the growth_count
+		// (the capacity will be necessary_elements + growth_count). 
+		void* Expand(AllocatorPolymorphic allocator, unsigned int expand_count, unsigned int growth_count = 0, bool deallocate_previous = true) {
+			if (size + expand_count > capacity) {
+				void* old_buffer = buffer;
+				unsigned int needed_elements = expand_count + size;
+				Initialize(allocator, size, needed_elements + growth_count);
+				memcpy(buffer, old_buffer, MemoryOf(size));
+				if (deallocate_previous) {
+					ECSEngine::Deallocate(allocator, old_buffer);
+				}
+				return old_buffer;
+			}
+			return nullptr;
+		}
+
 		ECS_INLINE bool IsFull() const {
 			return size == capacity;
 		}
@@ -502,7 +550,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		// The new_elements value will be added to the capacity, not to the current size
-		void Resize(AllocatorPolymorphic allocator, unsigned int new_elements) {
+		/*void Resize(AllocatorPolymorphic allocator, unsigned int new_elements) {
 			void* old_buffer = buffer;
 
 			void* allocation = Allocate(allocator, MemoryOf(capacity + new_elements));
@@ -510,7 +558,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			InitializeFromBuffer(allocation, size, capacity + new_elements);
 		
 			return old_buffer;
-		}
+		}*/
 
 		ECS_INLINE void Reset() {
 			size = 0;
@@ -791,7 +839,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 			memcpy(new_buffer, buffer, sizeof(T) * (size < new_capacity ? size : new_capacity));
 
-			if (buffer != nullptr)
+			if (buffer != nullptr && size > 0)
 				Deallocate(allocator, buffer);
 
 			buffer = new_buffer;
@@ -802,7 +850,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			T* new_buffer = (T*)Allocate(allocator, new_capacity * sizeof(T), alignof(T));
 			ECS_ASSERT(new_buffer != nullptr);
 
-			if (buffer != nullptr)
+			if (buffer != nullptr && size > 0)
 				Deallocate(allocator, buffer);
 
 			buffer = new_buffer;
@@ -971,6 +1019,15 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			memcpy(memory, buffer, size * byte_size);
 		}
 
+		ECS_INLINE bool Equals(Stream<void> other) const {
+			return size == other.size && memcmp(buffer, other.buffer, size) == 0;
+		}
+
+		// If the size is used as an element count instead of byte size
+		ECS_INLINE bool Equals(Stream<void> other, size_t element_size) const {
+			return size == other.size && memcmp(buffer, other.buffer, size * element_size) == 0;
+		}
+
 		// If used polymorphically
 		ECS_INLINE void SetElement(size_t index, const void* data, size_t byte_size) {
 			CopySlice(index * byte_size, data, byte_size);
@@ -1080,6 +1137,15 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		ECS_INLINE void CopyTo(void* memory) const {
 			memcpy(memory, buffer, size);
+		}
+
+		ECS_INLINE bool Equals(Stream<void> other) const {
+			return size == other.size && memcmp(buffer, other.buffer, size) == 0;
+		}
+
+		// If the size is used as an element count instead of byte size
+		ECS_INLINE bool Equals(Stream<void> other, size_t element_size) const {
+			return size == other.size && memcmp(buffer, other.buffer, (size_t)size * element_size) == 0;
 		}
 
 		// If used polymorphically
@@ -1201,6 +1267,15 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		ECS_INLINE void CopyTo(uintptr_t& memory) const {
 			memcpy((void*)memory, buffer, size);
 			memory += size;
+		}
+
+		ECS_INLINE bool Equals(Stream<void> other) const {
+			return size == other.size && memcmp(buffer, other.buffer, size) == 0;
+		}
+
+		// If the size is used as an element count instead of byte size
+		ECS_INLINE bool Equals(Stream<void> other, size_t element_size) const {
+			return size == other.size && memcmp(buffer, other.buffer, (size_t)size * element_size) == 0;
 		}
 
 		void FreeBuffer() {
@@ -1401,6 +1476,33 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		return total_size;
+	}
+
+	ECS_INLINE bool operator == (Stream<char> left, Stream<char> right) {
+		return left.size == right.size && memcmp(left.buffer, right.buffer, left.size * sizeof(char)) == 0;
+	}
+
+	ECS_INLINE bool operator == (Stream<wchar_t> left, Stream<wchar_t> right) {
+		return left.size == right.size && memcmp(left.buffer, right.buffer, left.size * sizeof(wchar_t)) == 0;
+	}
+
+	ECS_INLINE bool operator != (Stream<char> left, Stream<char> right) {
+		return !(left == right);
+	}
+
+	ECS_INLINE bool operator != (Stream<wchar_t> left, Stream<wchar_t> right) {
+		return !(left == right);
+	}
+
+	// The stream element must have the function void ToString(CapacityStream<char>& string) const;
+	template<typename StreamType>
+	ECS_INLINE void StreamToString(StreamType input, CapacityStream<char>& string, Stream<char> separator = ", ") {
+		for (size_t index = 0; index < input.size; index++) {
+			input[index].ToString(string);
+			if (index < input.size - 1) {
+				string.AddStreamSafe(separator);
+			}
+		}
 	}
 
 }

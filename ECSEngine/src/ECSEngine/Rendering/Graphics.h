@@ -93,6 +93,13 @@ namespace ECSEngine {
 		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
 	};
 
+	struct GraphicsRenderDestinationOptions {
+		bool gamma_corrected = true;
+		bool no_stencil = false;
+		ECS_GRAPHICS_MISC_FLAGS render_misc = ECS_GRAPHICS_MISC_NONE;
+		ECS_GRAPHICS_MISC_FLAGS depth_misc = ECS_GRAPHICS_MISC_NONE;
+	};
+
 	struct GraphicsPipelineBlendState {
 		BlendState blend_state;
 		float blend_factors[4];
@@ -117,15 +124,6 @@ namespace ECSEngine {
 	struct GraphicsBoundViews {
 		RenderTargetView target;
 		DepthStencilView depth_stencil;
-	};
-
-	struct GraphicsViewport {
-		float top_left_x;
-		float top_left_y;
-		float width;
-		float height;
-		float min_depth;
-		float max_depth;
 	};
 
 	struct GraphicsPipelineState {
@@ -208,6 +206,17 @@ namespace ECSEngine {
 		DebugInfo debug_info;
 		ECS_GRAPHICS_RESOURCE_TYPE type;
 		std::atomic<bool> is_deleted;
+	};
+
+	struct GraphicsResourceSnapshot {
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+			// This is maintained as a coallesced buffer
+			ECSEngine::Deallocate(allocator, interface_pointers.buffer);
+		}
+
+		// These are maintained as SoA buffers
+		Stream<void*> interface_pointers;
+		Stream<ECS_GRAPHICS_RESOURCE_TYPE> types;
 	};
 
 #define ECS_GRAPHICS_ASSERT_GRAPHICS_RESOURCE static_assert(std::is_same_v<Resource, VertexBuffer> || std::is_same_v<Resource, IndexBuffer> || std::is_same_v<Resource, VertexShader> \
@@ -333,6 +342,8 @@ namespace ECSEngine {
 			return resource.Interface();
 		}
 	}
+
+	ECSENGINE_API void FreeGraphicsResourceInterface(void* interface_pointer, ECS_GRAPHICS_RESOURCE_TYPE type);
 
 	ECSENGINE_API MemoryManager DefaultGraphicsAllocator(GlobalMemoryManager* manager);
 
@@ -948,9 +959,14 @@ namespace ECSEngine {
 		
 		// -------------------------------------------- Getters and other operations --------------------------------------------
 
+		// Can optionally bind the render target and the depth stencil
+		void ChangeInitialRenderTarget(RenderTargetView render_target, DepthStencilView depth_stencil, bool bind = true);
+
 		// It does not acquire the lock - call this if inside a lock
 		// Can be called only from a single thread
 		void CommitInternalResourcesToBeFreed();
+
+		void FreeTrackedResources();
 
 		template<typename Resource>
 		void AddInternalResource(Resource resource, DebugInfo debug_info = ECS_DEBUG_INFO) {
@@ -1038,21 +1054,27 @@ namespace ECSEngine {
 			}
 		}
 
+		template<typename View>
+		void FreeView(View view) {
+			ID3D11Resource* resource = view.GetResource();
+			FreeResource(view);
+			// It doesn't matter what the type is - only the interface
+			FreeResource(Texture2D(resource));
+		}
+
+		void FreeRenderDestination(RenderDestination destination);
+
 		// It will assert FALSE if it doesn't exist
 		void RemoveResourceFromTracking(void* resource);
 
 		// If it doesn't find the resource, it does nothing
 		void RemovePossibleResourceFromTracking(void* resource);
 
-		void FreeResourceView(ResourceView view);
-
-		void FreeUAView(UAView view);
-
-		void FreeRenderView(RenderTargetView view);
-
 		void CreateRenderTargetViewFromSwapChain(bool gamma_corrected);
 		
 		void CreateWindowRenderTargetView(bool gamma_corrected);
+
+		RenderDestination CreateRenderDestination(uint2 texture_size, GraphicsRenderDestinationOptions options = {});
 
 		void CreateWindowDepthStencilView();
 
@@ -1092,6 +1114,8 @@ namespace ECSEngine {
 
 		GraphicsPipelineState GetPipelineState() const;
 
+		GraphicsResourceSnapshot GetResourceSnapshot(AllocatorPolymorphic allocator) const;
+
 		void GetWindowSize(unsigned int& width, unsigned int& height) const;
 
 		uint2 GetWindowSize() const;
@@ -1108,6 +1132,11 @@ namespace ECSEngine {
 
 		void RestorePipelineState(const GraphicsPipelineState* state);
 
+		// It will remove the resources which have been added in between the snapshot and the current state.
+		// Returns true if all the resources from the previous snapshot are still valid else it returns false. 
+		// It doesn't deallocate the snapshot (it must be done outside)!
+		bool RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot);
+
 		void ResizeSwapChainSize(HWND hWnd, float width, float height);
 
 		void ResizeViewport(float top_left_x, float top_left_y, float new_width, float new_height);
@@ -1116,6 +1145,18 @@ namespace ECSEngine {
 		bool SwapBuffers(unsigned int sync_interval);
 
 		void SetNewSize(HWND hWnd, unsigned int width, unsigned int height);
+
+		// Transfers a shared GPU texture/buffer from a Graphics instance to another - should only create
+		// another runtime DX11 reference to that texture, there should be no memory blit or copy
+		// It does not affect samplers, input layouts, shaders, other pipeline objects (rasterizer/blend/depth states)
+		// Use this function only for textures and buffers since these are the only ones who actually need transfering
+		template<typename Resource>
+		Resource TransferGPUResource(Resource resource, bool temporary = false);
+
+		// Transfers the deep target buffer or texture and then creates a new texture view that points to it
+		// Only views should be given
+		template<typename View>
+		View TransferGPUView(View view, bool temporary = false);
 
 		// It will register the newly created resources if not temporary
 		Mesh TransferMesh(const Mesh* mesh, bool temporary = false);

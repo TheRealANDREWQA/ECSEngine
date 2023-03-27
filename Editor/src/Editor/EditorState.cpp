@@ -98,7 +98,6 @@ void EditorStateWaitFlag(size_t sleep_milliseconds, const EditorState* editor_st
 // -----------------------------------------------------------------------------------------------------------------
 
 void TickModuleStatus(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
 	ProjectModules* project_modules = editor_state->project_modules;
 
 	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_UPDATE_MODULE_STATUS, LAZY_EVALUATION_MODULE_STATUS)) {
@@ -187,14 +186,12 @@ void TickLazyEvaluationCounters(EditorState* editor_state) {
 // -----------------------------------------------------------------------------------------------------------------
 
 void TickGPUTasks(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	if (editor_state->gpu_tasks.GetSize() > 0 && !EditorStateHasFlag(editor_state, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
 		ThreadTask gpu_task;
 		while (editor_state->gpu_tasks.Pop(gpu_task)) {
 			gpu_task.function(0, nullptr, gpu_task.data);
 			if (gpu_task.data_size > 0) {
-				multithreaded_editor_allocator->Deallocate(gpu_task.data);
+				Deallocate(editor_state->MultithreadedEditorAllocator(), gpu_task.data);
 			}
 		}
 	}
@@ -259,8 +256,7 @@ void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTa
 		editor_state->task_manager->AddDynamicTaskAndWake(task);
 	}
 	else {
-		EDITOR_STATE(editor_state);
-		task.data = task.data_size > 0 ? function::Copy(GetAllocatorPolymorphic(multithreaded_editor_allocator, ECS_ALLOCATION_MULTI), task.data, task.data_size) : task.data;
+		task.data = task.data_size > 0 ? function::Copy(editor_state->MultithreadedEditorAllocator(), task.data, task.data_size) : task.data;
 		editor_state->pending_background_tasks.Push(task);
 	}
 }
@@ -269,8 +265,7 @@ void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTa
 
 void EditorStateAddGPUTask(EditorState* editor_state, ThreadTask task)
 {
-	EDITOR_STATE(editor_state);
-	task.data = task.data_size > 0 ? function::Copy(GetAllocatorPolymorphic(multithreaded_editor_allocator, ECS_ALLOCATION_MULTI), task.data, task.data_size) : task.data;
+	task.data = task.data_size > 0 ? function::Copy(editor_state->MultithreadedEditorAllocator(), task.data, task.data_size) : task.data;
 	editor_state->gpu_tasks.Push(task);
 }
 
@@ -460,7 +455,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	MemoryManager* console_memory_manager = (MemoryManager*)malloc(sizeof(MemoryManager));
 	*console_memory_manager = DefaultConsoleAllocator(global_memory_manager);
-	SetConsole(console_memory_manager, editor_task_manager, CONSOLE_RELATIVE_DUMP_PATH);
+	SetConsole(console_memory_manager, editor_task_manager, L"TempDump.txt");
 
 	GetConsole()->AddSystemFilterString(EDITOR_CONSOLE_SYSTEM_NAME);
 
@@ -512,6 +507,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	// This will be run asynchronously for the graphics object
 	InitializeRuntime(editor_state);
+
+	// Change the dump type to none during the hub phase
+	Console* console = GetConsole();
+	console->SetDumpType(ECS_CONSOLE_DUMP_NONE);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -545,7 +544,7 @@ bool EditorStateLazyEvaluationTrue(EditorState* editor_state, unsigned int index
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorStateLazyEvaluationSetMax(EditorState* editor_state, unsigned int index)
+void EditorStateLazyEvaluationTrigger(EditorState* editor_state, unsigned int index)
 {
 	editor_state->lazy_evaluation_counters[index] = USHORT_MAX;
 }

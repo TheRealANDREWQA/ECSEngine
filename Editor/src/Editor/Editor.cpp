@@ -673,6 +673,20 @@ public:
 		//HRESULT resultssss = pixel_shader.shader->QueryInterface(__uuidof(IDXGIResource), (void**)&dxgi_resource);
 		//graphics_copy.BindPixelShader(pixel_shader);
 
+//sizeof(ShaderMetadata);
+//sizeof(GPUSamplerMetadata);
+//sizeof(MeshMetadata);
+//sizeof(AssetDatabaseReference);
+//sizeof(CameraParameters);
+//sizeof(OrientedPoint);
+////sizeof(Name);
+//sizeof(TextureMetadata);
+//sizeof(WorldDescriptor);
+//sizeof(AssetDatabase);
+//sizeof(EditorSandboxModule);
+//sizeof(ProjectFile);
+//sizeof(EditorSandbox);
+
 		while (true) {
 			auto run_application = [&](char application_quit_value) {
 				while (result == 0 && application_quit == application_quit_value) {

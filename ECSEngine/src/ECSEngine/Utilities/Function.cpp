@@ -634,6 +634,30 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
+		Stream<char> FindMatchingParenthesis(Stream<char> range, char opened_char, char closed_char, unsigned int opened_count)
+		{
+			const char* opened_paren = FindMatchingParenthesis(range.buffer, range.buffer + range.size, opened_char, closed_char, opened_count);
+			if (opened_paren == nullptr) {
+				return { nullptr, 0 };
+			}
+
+			return { opened_paren, function::PointerDifference(range.buffer + range.size, opened_paren) };
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<wchar_t> FindMatchingParenthesis(Stream<wchar_t> range, wchar_t opened_char, wchar_t closed_char, unsigned int opened_count) 
+		{
+			const wchar_t* opened_paren = FindMatchingParenthesis(range.buffer, range.buffer + range.size, opened_char, closed_char, opened_count);
+			if (opened_paren == nullptr) {
+				return { nullptr, 0 };
+			}
+
+			return { opened_paren, function::PointerDifference(range.buffer + range.size, opened_paren) };
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
 		Stream<char> FindDelimitedString(Stream<char> range, char opened_delimiter, char closed_delimiter, bool skip_whitespace)
 		{
 			Stream<char> first_delimiter = function::FindFirstCharacter(range, opened_delimiter);
@@ -834,7 +858,7 @@ namespace ECSEngine {
 				ranges[ranges.size - 1] = previous_block;
 				ranges.AddSafe(new_block);
 
-				current_token.Advance(token.size);
+				current_token.Advance(remove_count);
 				current_parse_range = current_token;
 				current_token = function::FindFirstToken(current_parse_range, token);
 			}
@@ -1208,8 +1232,8 @@ namespace ECSEngine {
 				macros = total_macros;
 			}
 
-			source_code = RemoveSingleLineComment(source_code, "//");
-			source_code = RemoveMultiLineComments(source_code, "/*", "*/");
+			source_code = RemoveSingleLineComment(source_code, ECS_C_FILE_SINGLE_LINE_COMMENT_TOKEN);
+			source_code = RemoveMultiLineComments(source_code, ECS_C_FILE_MULTI_LINE_COMMENT_OPENED_TOKEN, ECS_C_FILE_MULTI_LINE_COMMENT_CLOSED_TOKEN);
 
 			ConditionalPreprocessorDirectives directives;
 			GetConditionalPreprocessorDirectivesCSource(&directives);
@@ -1221,7 +1245,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		bool IsFloatingPointNumber(Stream<char> characters)
+		bool IsFloatingPointNumber(Stream<char> characters, bool skip_whitespace)
 		{
 			unsigned int dot_count = 0;
 			size_t starting_index = characters[0] == '+' || characters[0] == '-';
@@ -1229,7 +1253,9 @@ namespace ECSEngine {
 				if ((characters[index] < '0' || characters[index] > '9') && characters[index] != '.') {
 					// For the floating point if it has a trailing f allow it
 					if (index != characters.size - 1 || characters[index] != 'f') {
-						return false;
+						if (!skip_whitespace || !IsWhitespaceEx(characters[index])) {
+							return false;
+						}
 					}
 				}
 
@@ -1240,14 +1266,16 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		bool IsIntegerNumber(Stream<char> characters)
+		bool IsIntegerNumber(Stream<char> characters, bool skip_whitespace)
 		{
 			size_t starting_index = characters[0] == '+' || characters[0] == '-';
 			for (size_t index = starting_index; index < characters.size; index++) {
-				// The comma is a separator between the 1000 parts
+				// The comma is a separator between powers of 10^3
 				// Include these as well
 				if ((characters[index] < '0' || characters[index] > '9') && characters[index] != ',') {
-					return false;
+					if (!skip_whitespace || !IsWhitespaceEx(characters[index])) {
+						return false;
+					}
 				}
 			}
 			return true;

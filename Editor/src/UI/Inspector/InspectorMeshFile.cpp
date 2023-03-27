@@ -10,6 +10,7 @@
 #include "../AssetSettingHelper.h"
 
 #include "../../Assets/AssetExtensions.h"
+#include "InspectorMeshFile.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -298,7 +299,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 	}
 }
 
-void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
+void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index, Stream<char> initial_name) {
 	InspectorDrawMeshFileData data;
 	data.mesh = nullptr;
 	data.radius_delta = 0.0f;
@@ -308,7 +309,7 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 
 	// Allocate the data and embedd the path in it
 	// Later on. It is fine to read from the stack more bytes
-	inspector_index = ChangeInspectorDrawFunctionWithSearch(
+	uint3 inspector_indices = ChangeInspectorDrawFunctionWithSearchEx(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawMeshFile, InspectorCleanMeshFile },
@@ -321,12 +322,16 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 		}
 	);
 
-	if (inspector_index != -1) {
+	if (inspector_indices.y != -1) {
 		// Get the data and set the path
-		InspectorDrawMeshFileData* draw_data = (InspectorDrawMeshFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
+		InspectorDrawMeshFileData* draw_data = (InspectorDrawMeshFileData*)GetInspectorDrawFunctionData(editor_state, inspector_indices.y);
 		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.Copy(path);
 		draw_data->path[draw_data->path.size] = L'\0';
+	}
+
+	if (initial_name.size > 0 && inspector_indices.z != -1) {
+		ChangeInspectorMeshFileConfiguration(editor_state, inspector_indices.z, initial_name);
 	}
 }
 
@@ -334,4 +339,10 @@ void InspectorMeshFileAddFunctors(InspectorTable* table) {
 	for (size_t index = 0; index < std::size(ASSET_MESH_EXTENSIONS); index++) {
 		AddInspectorTableFunction(table, { InspectorDrawMeshFile, InspectorCleanMeshFile }, ASSET_MESH_EXTENSIONS[index]);
 	}
+}
+
+void ChangeInspectorMeshFileConfiguration(EditorState* editor_state, unsigned int inspector_index, Stream<char> name)
+{
+	InspectorDrawMeshFileData* draw_data = (InspectorDrawMeshFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
+	draw_data->helper_data.SetNewSetting(name);
 }

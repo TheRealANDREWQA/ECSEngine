@@ -60,6 +60,10 @@ namespace ECSEngine {
 		}
 
 		unsigned int Find(Identifier identifier) const {
+			if (GetCount() == 0) {
+				return -1;
+			}
+
 			unsigned int key = ObjectHashFunction::Hash(identifier);
 
 			// calculating the index for the array with the hash function
@@ -803,6 +807,7 @@ namespace ECSEngine {
 			destination.Initialize(allocator, source.GetCapacity());
 			destination.m_function = source.m_function;
 			destination.CopyDistanceMetadata(&source);
+			destination.m_count = source.m_count;
 
 			source.ForEachIndexConst([&](unsigned int index) {
 				auto current_value = source.GetValueFromIndex(index);

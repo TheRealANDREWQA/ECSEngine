@@ -23,16 +23,16 @@ void MissingProjectsDestroyCallback(ActionData* action_data) {
 
 	Stream<const char*>* data = (Stream<const char*>*)_additional_data;
 	EditorState* editor_state = (EditorState*)_data;
-	EDITOR_STATE(editor_state);
-
-	editor_allocator->Deallocate(data->buffer);
+	
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+	Deallocate(editor_allocator, data->buffer);
 	for (size_t index = 0; index < data->size; index++) {
-		editor_allocator->Deallocate(data->buffer[index]);
+		Deallocate(editor_allocator, data->buffer[index]);
 	}
 	ReleaseLockedWindow(action_data);
 }
 
-void MissingProjectsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void MissingProjectsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	Stream<Stream<char>>* paths = (Stream<Stream<char>>*)window_data;
@@ -70,8 +70,7 @@ void CreateMissingProjectWindow(EditorState* editor_state, Stream<Stream<char>> 
 		descriptor.initial_size_x = 1000.0f;
 		descriptor.initial_size_y = 1000.0f;
 
-		EDITOR_STATE(editor_state);
-		ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_LOCK_WINDOW | UI_DOCKSPACE_NO_DOCKING | UI_POP_UP_WINDOW_FIT_TO_CONTENT
+		editor_state->ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_LOCK_WINDOW | UI_DOCKSPACE_NO_DOCKING | UI_POP_UP_WINDOW_FIT_TO_CONTENT
 			| UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER | UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE);
 		return false;
 	};
@@ -80,8 +79,6 @@ void CreateMissingProjectWindow(EditorState* editor_state, Stream<Stream<char>> 
 }
 
 bool SaveEditorFile(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	HubData* hub_data = (HubData*)editor_state->hub_data;
 	ECS_FILE_HANDLE file = 0;
 	ECS_FILE_STATUS_FLAGS status = OpenFile(EDITOR_FILE, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_TRUNCATE_FILE);
@@ -104,8 +101,6 @@ bool SaveEditorFile(EditorState* editor_state) {
 }
 
 bool LoadEditorFile(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	HubData* hub_data = (HubData*)editor_state->hub_data;
 
 	ECS_FILE_HANDLE file = 0;
@@ -127,7 +122,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 		}
 		
 		hub_data->projects.size = 0;
-		for (size_t index = 0; index < project_count && success; index++) {
+		for (unsigned short index = 0; index < project_count && success; index++) {
 			unsigned short path_size = 0;
 			success &= ReadFile(file, { &path_size, sizeof(path_size) });
 
@@ -141,14 +136,14 @@ bool LoadEditorFile(EditorState* editor_state) {
 			Path current_path(temp_path, path_size);
 			current_path[path_size] = L'\0';
 			if (!ExistsFileOrFolder(current_path)) {
-				void* allocation = editor_allocator->Allocate(sizeof(char) * (current_path.size + 1), alignof(char));
+				void* allocation = Allocate(editor_state->EditorAllocator(), sizeof(char) * (current_path.size + 1), alignof(char));
 				CapacityStream<char> allocated_path(allocation, 0, current_path.size + 1);
 				function::ConvertWideCharsToASCII(current_path, allocated_path);
 				invalid_file_paths.Add(allocated_path.buffer);
 			}
 			else {
 				unsigned int project_index = hub_data->projects.size;
-				hub_data->projects[project_index].error_message = nullptr;
+				hub_data->projects[project_index].error_message = { nullptr, 0 };
 				hub_data->projects[project_index].path = function::StringCopy(editor_state->EditorAllocator(), current_path);
 				hub_data->projects.size++;
 			}
@@ -156,7 +151,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 
 		// Make an allocation for the stream pointers
 		if (invalid_file_paths.size > 0) {
-			void* allocation = editor_allocator->Allocate(sizeof(Stream<char>) * invalid_file_paths.size);
+			void* allocation = Allocate(editor_state->EditorAllocator(), sizeof(Stream<char>) * invalid_file_paths.size);
 			memcpy(allocation, invalid_file_paths.buffer, sizeof(Stream<char>) * invalid_file_paths.size);
 			CreateMissingProjectWindow(editor_state, Stream<Stream<char>>(allocation, invalid_file_paths.size));
 

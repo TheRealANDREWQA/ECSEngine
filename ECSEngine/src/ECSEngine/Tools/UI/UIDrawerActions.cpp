@@ -610,7 +610,7 @@ namespace ECSEngine {
 				data->input->hsv.alpha = data->input->rgb->alpha;
 			}
 
-			data->input->Callback(action_data);
+			data->input->Callback(action_data, false);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -628,7 +628,8 @@ namespace ECSEngine {
 
 				// For debug
 				Color back_to_rgb = HSVToRGB(input->hsv);
-				input->Callback(action_data);
+
+				input->Callback(action_data, false);
 			}
 		}
 
@@ -643,7 +644,7 @@ namespace ECSEngine {
 				data->hsv = RGBToHSV(data->default_color);
 
 				action_data->data = data->callback.data;
-				data->Callback(action_data);
+				data->Callback(action_data, true);
 			}
 		}
 
@@ -656,7 +657,7 @@ namespace ECSEngine {
 			data->hsv = RGBToHSV(data->color_picker_initial_color);
 			*data->rgb = data->color_picker_initial_color;
 
-			data->Callback(action_data);
+			data->Callback(action_data, false);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1630,6 +1631,8 @@ namespace ECSEngine {
 			UIDrawerTextInput* input = data->input;
 
 			UIDrawerTextInputActionData* additional_data = (UIDrawerTextInputActionData*)_additional_data;
+			// Make it nullptr such that the callbacks won't think they have additional data
+			action_data->additional_data = nullptr;
 			system->m_focused_window_data.clean_up_call_general = true;
 
 			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL && !keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
@@ -2055,7 +2058,7 @@ namespace ECSEngine {
 			data->input->hsv.value = (1.0f - y_factor) * Color::GetRange();
 			*data->input->rgb = HSVToRGB(data->input->hsv);
 
-			data->input->Callback(action_data);
+			data->input->Callback(action_data, false);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -2071,7 +2074,7 @@ namespace ECSEngine {
 			info->input->hsv.hue = factor * Color::GetRange();
 			*info->input->rgb = HSVToRGB(info->input->hsv);
 
-			info->input->Callback(action_data);
+			info->input->Callback(action_data, false);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -2087,12 +2090,12 @@ namespace ECSEngine {
 			info->input->rgb->alpha = (1.0f - factor) * Color::GetRange();
 			info->input->hsv.alpha = info->input->rgb->alpha;
 
-			info->input->Callback(action_data);
+			info->input->Callback(action_data, false);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void ColorInputWindowDraw(void* window_data, void* drawer_descriptor, bool initializer) {
+		void ColorInputWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer) {
 			UI_PREPARE_DRAWER(initializer);
 
 			const size_t RECTANGLE_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION;
@@ -2394,6 +2397,15 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		void ColorInputWindowDestroy(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerColorInput* color_input = (UIDrawerColorInput*)_data;
+			color_input->Callback(action_data, true);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
 		void ColorInputCreateWindow(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
@@ -2405,6 +2417,8 @@ namespace ECSEngine {
 			Color* hsv_color = &data->hsv;
 			UIWindowDescriptor window_descriptor;
 			window_descriptor.draw = ColorInputWindowDraw;
+			window_descriptor.destroy_action = ColorInputWindowDestroy;
+			window_descriptor.destroy_action_data = data;
 
 			float2 window_position;
 			if (position.x + system->m_descriptors.misc.color_input_window_size_x > 0.98f) {
@@ -2425,11 +2439,9 @@ namespace ECSEngine {
 			window_descriptor.initial_position_y = window_position.y;
 			window_descriptor.initial_size_x = system->m_descriptors.misc.color_input_window_size_x;
 			window_descriptor.initial_size_y = system->m_descriptors.misc.color_input_window_size_y;
-			window_descriptor.private_action = SkipAction;
-			window_descriptor.private_action_data = nullptr;
 
 			UIDrawerColorInputWindowData window_data;
-			window_data.color = *data->rgb;
+			window_data.initial_color = *data->rgb;
 			window_data.input = data;
 
 			window_descriptor.window_name = "ColorInputWindow";
@@ -2455,7 +2467,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void ComboBoxWindowDraw(void* window_data, void* drawer_descriptor, bool initializer) {
+		void ComboBoxWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer) {
 			UI_PREPARE_DRAWER(initializer);
 
 			UIDrawerComboBoxClickable* data = (UIDrawerComboBoxClickable*)window_data;
@@ -2527,7 +2539,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void MenuDraw(void* window_data, void* drawer_descriptor, bool initializer) {
+		void MenuDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer) {
 			UI_PREPARE_DRAWER(initializer);
 
 			UIDrawerMenuDrawWindowData* data = (UIDrawerMenuDrawWindowData*)window_data;
@@ -2621,7 +2633,9 @@ namespace ECSEngine {
 						}
 						system->PushFrameHandler({ MenuCleanupSystemHandler, &cleanup_data, sizeof(cleanup_data) });
 						system->DeallocateGeneralHandler();
+						system->DeallocateHoverableHandler();
 						system->m_focused_window_data.ResetGeneralHandler();
+						system->m_focused_window_data.ResetHoverableHandler();
 					}
 				};
 
@@ -3138,7 +3152,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		template<typename DataType>
-		void FilterMenuDrawInternal(void* window_data, void* drawer_descriptor, bool initialize) {
+		void FilterMenuDrawInternal(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			DataType* data = (DataType*)window_data;
@@ -3162,19 +3176,19 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void FilterMenuDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+		void FilterMenuDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			FilterMenuDrawInternal<UIDrawerFilterMenuData>(window_data, drawer_descriptor, initialize);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void FilterMenuSinglePointerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+		void FilterMenuSinglePointerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			FilterMenuDrawInternal<UIDrawerFilterMenuSinglePointerData>(window_data, drawer_descriptor, initialize);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void PathInputFilesystemDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+		void PathInputFilesystemDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			UIDrawerPathInputFolderWindowData* data = (UIDrawerPathInputFolderWindowData*)window_data;
@@ -3360,7 +3374,7 @@ namespace ECSEngine {
 			CapacityStream<wchar_t>* path;
 		};
 
-		void PathInputFolderWithInputsWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+		void PathInputFolderWithInputsWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			const char* FILTER_STRING_NAME = "Filter string";
 			const size_t FILTER_STRING_CAPACITY = 256;
 
@@ -3588,15 +3602,13 @@ namespace ECSEngine {
 
 				data->hierarchy->ChangeSelection(label_storage, action_data);
 
-				unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
-
 				// Look to see if we need to remove it or add it
 				unsigned int opened_index = data->hierarchy->FindOpenedLabel(label_storage);
 				if (opened_index == -1) {
-					data->hierarchy->AddOpenedLabel(system, window_index, label_storage);
+					data->hierarchy->AddOpenedLabel(system, label_storage);
 				}
 				else {
-					data->hierarchy->RemoveOpenedLabel(system, window_index, label_storage);
+					data->hierarchy->RemoveOpenedLabel(system, label_storage);
 				}
 			}
 		}

@@ -2,7 +2,7 @@
 #include "../Core.h"
 #include "../Containers/Stream.h"
 #include "../Containers/HashTable.h"
-#include "../Internal/InternalStructures.h"
+#include "../ECS/InternalStructures.h"
 #include "RenderingStructures.h"
 #include "ecspch.h"
 #include "../Utilities/Reflection/ReflectionTypes.h"

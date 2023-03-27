@@ -1,2 +1,2 @@
 #pragma once
-#include "../ECSEngine/Internal/Resources/Scene.h"
+#include "../ECSEngine/Resources/Scene.h"

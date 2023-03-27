@@ -347,7 +347,6 @@ namespace ECSEngine {
 		{
 			UISystem* system = action_data->system;
 
-			unsigned int window_index = system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index);
 			// Change the selected label now
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, identifier);
 
@@ -383,7 +382,7 @@ namespace ECSEngine {
 			TriggerSelectable(action_data);
 		}
 
-		void UIDrawerLabelHierarchyData::AddOpenedLabel(UISystem* system, unsigned int window_index, const void* label)
+		void UIDrawerLabelHierarchyData::AddOpenedLabel(UISystem* system, const void* label)
 		{
 			unsigned int copy_size = CopySize();
 
@@ -418,7 +417,6 @@ namespace ECSEngine {
 
 			UISystem* system = action_data->system;
 
-			unsigned int window_index = system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index);
 			// Change the selected label now
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, identifier);
 
@@ -454,7 +452,6 @@ namespace ECSEngine {
 		void UIDrawerLabelHierarchyData::ChangeSelection(Stream<void> labels, ActionData* action_data) {
 			UISystem* system = action_data->system;
 
-			unsigned int window_index = system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index);
 			// Change the selected label now
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, identifier);
 
@@ -503,7 +500,6 @@ namespace ECSEngine {
 		{
 			UISystem* system = action_data->system;
 
-			unsigned int window_index = system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index);
 			// Change the selected label now
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, identifier);
 
@@ -533,7 +529,7 @@ namespace ECSEngine {
 			TriggerSelectable(action_data);
 		}
 
-		void UIDrawerLabelHierarchyData::RemoveOpenedLabel(UISystem* system, unsigned int window_index, const void* label)
+		void UIDrawerLabelHierarchyData::RemoveOpenedLabel(UISystem* system, const void* label)
 		{
 			unsigned int copy_size = CopySize();
 			unsigned int dynamic_index = DynamicIndex(system, window_index);
@@ -571,7 +567,6 @@ namespace ECSEngine {
 		void UIDrawerLabelHierarchyData::ResetCopiedLabels(ActionData* action_data)
 		{
 			UISystem* system = action_data->system;
-			unsigned int window_index = system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index);
 
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, identifier);
 
@@ -586,7 +581,6 @@ namespace ECSEngine {
 		{
 			UISystem* system = action_data->system;
 
-			unsigned int window_index = system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index);
 			// Change the selected label now
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, identifier);
 
@@ -674,7 +668,6 @@ namespace ECSEngine {
 		void UIDrawerLabelHierarchyData::RecordSelection(ActionData* action_data)
 		{
 			UISystem* system = action_data->system;
-			unsigned int window_index = system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index);
 
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, identifier);
 
@@ -867,7 +860,7 @@ namespace ECSEngine {
 
 					if (untyped_label != nullptr) {
 						// Add the label to the opened_labels
-						AddOpenedLabel(action_data->system, action_data->system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index), untyped_label);
+						AddOpenedLabel(action_data->system, untyped_label);
 					}
 				}
 			}

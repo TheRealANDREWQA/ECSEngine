@@ -6,3 +6,5 @@ ECSEngine/Dependencies
 Editor/Resources/CompiledShaders
 Modules/*/bin-int
 Modules/*/bin
+RunGPUThunk.bat
+KillGPUThunk.bat

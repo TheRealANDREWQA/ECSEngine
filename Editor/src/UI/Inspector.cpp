@@ -9,6 +9,7 @@
 #include "../Modules/Module.h"
 #include "ECSEngineRendering.h"
 #include "../Modules/ModuleSettings.h"
+#include "../Assets/AssetManagement.h"
 
 #include "Inspector/InspectorUtilities.h"
 #include "Inspector/InspectorMeshFile.h"
@@ -87,7 +88,7 @@ void InspectorDrawSceneFile(EditorState* editor_state, unsigned int inspector_in
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	const float PADLOCK_SIZE = 0.04f;
 	const float REDUCE_FONT_SIZE = 1.0f;
 
@@ -228,8 +229,6 @@ void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initia
 // ----------------------------------------------------------------------------------------------------------------------------
 
 unsigned int CreateInspectorWindow(EditorState* editor_state, unsigned int inspector_index) {
-	EDITOR_STATE(editor_state);
-
 	UIWindowDescriptor descriptor;
 	descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.x);
 	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.y);
@@ -241,7 +240,7 @@ unsigned int CreateInspectorWindow(EditorState* editor_state, unsigned int inspe
 	*stack_inspector_index = inspector_index;
 	InspectorSetDescriptor(descriptor, editor_state, stack_memory);
 
-	return ui_system->Create_Window(descriptor);
+	return editor_state->ui_system->Create_Window(descriptor);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -307,9 +306,17 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsi
 		InspectorDrawMiscFile
 	};
 
+	auto mesh_wrapper = [](EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
+		ChangeInspectorToMeshFile(editor_state, path, inspector_index);
+	};
+
+	auto texture_wrapper = [](EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
+		ChangeInspectorToTextureFile(editor_state, path, inspector_index);
+	};
+
 	void (*change_functions[])(EditorState*, Stream<wchar_t>, unsigned int) = {
-		ChangeInspectorToMeshFile,
-		ChangeInspectorToTextureFile,
+		mesh_wrapper,
+		texture_wrapper,
 		ChangeInspectorToGPUSamplerFile,
 		ChangeInspectorToShaderFile,
 		ChangeInspectorToMaterialFile,
@@ -523,6 +530,55 @@ void RegisterInspectorSandbox(EditorState* editor_state) {
 bool IsInspectorLocked(const EditorState* editor_state, unsigned int inspector_index)
 {
 	return function::HasFlag(editor_state->inspector_manager.data[inspector_index].flags, INSPECTOR_FLAG_LOCKED);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void ChangeInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
+{
+	editor_state->inspector_manager.data[inspector_index].target_sandbox = sandbox_index;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void ChangeInspectorToAsset(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE asset_type, unsigned int inspector_index) {
+	ECS_STACK_CAPACITY_STREAM(wchar_t, metadata_file, 512);
+	bool success = GetAssetFileFromAssetMetadata(editor_state, metadata, asset_type, metadata_file);
+	
+	// Early exit if it failed
+	if (!success) {
+		return;
+	}
+
+	switch (asset_type) {
+	case ECS_ASSET_MESH:
+		ChangeInspectorToMeshFile(editor_state, metadata_file, inspector_index, GetAssetName(metadata, asset_type));
+		break;
+	case ECS_ASSET_TEXTURE:
+		ChangeInspectorToTextureFile(editor_state, metadata_file, inspector_index, GetAssetName(metadata, asset_type));
+		break;
+	case ECS_ASSET_GPU_SAMPLER:
+		ChangeInspectorToGPUSamplerFile(editor_state, metadata_file, inspector_index);
+		break;
+	case ECS_ASSET_SHADER:
+		ChangeInspectorToShaderFile(editor_state, metadata_file, inspector_index);
+		break;
+	case ECS_ASSET_MATERIAL:
+		ChangeInspectorToMaterialFile(editor_state, metadata_file, inspector_index);
+		break;
+	case ECS_ASSET_MISC:
+		ChangeInspectorToMiscFile(editor_state, metadata_file, inspector_index);
+		break;
+	default:
+		ECS_ASSERT(false, "Invalid asset type");
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void ChangeInspectorToAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE asset_type, unsigned int inspector_index)
+{
+	ChangeInspectorToAsset(editor_state, editor_state->asset_database->GetAssetConst(handle, asset_type), asset_type, inspector_index);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

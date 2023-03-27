@@ -15,7 +15,7 @@ constexpr const char* RENAME_FOLDER_WIZARD_INPUT_NAME = "New Folder Name";
 
 void CreateDockspaceFromWindow(const char* window_name, EditorState* editor_state, CreateWindowFunction function)
 {
-	EDITOR_STATE(editor_state);
+	UISystem* ui_system = editor_state->ui_system;
 
 	unsigned int window_index = ui_system->GetWindowFromName(window_name);
 	if (window_index == -1) {
@@ -33,7 +33,7 @@ void CreateDockspaceFromWindow(const char* window_name, EditorState* editor_stat
 
 void CreateDockspaceFromWindowWithIndex(const char* window_name, EditorState* editor_state, unsigned int index, CreateWindowFunctionWithIndex function)
 {
-	EDITOR_STATE(editor_state);
+	UISystem* ui_system = editor_state->ui_system;
 
 	// Construct the name as well
 	ECS_STACK_CAPACITY_STREAM(char, constructed_name, 128);
@@ -123,7 +123,7 @@ void ChooseDirectoryOrFileNameButtonAction(ActionData* action_data) {
 	DestroyCurrentActionWindow(action_data);
 }
 
-void ChooseDirectoryOrFileName(void* window_data, void* drawer_descriptor, bool initialize) {
+void ChooseDirectoryOrFileName(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	ChooseDirectoryOrFileNameData* data = (ChooseDirectoryOrFileNameData*)window_data;

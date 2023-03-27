@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "DebugDraw.h"
 #include "../../Utilities/FunctionInterfaces.h"
-#include "../../Internal/Resources/ResourceManager.h"
+#include "../../Resources/ResourceManager.h"
 #include "../../Rendering/GraphicsHelpers.h"
 
 constexpr size_t SMALL_VERTEX_BUFFER_CAPACITY = 8;

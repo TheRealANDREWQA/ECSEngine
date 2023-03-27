@@ -715,9 +715,10 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixPerspectiveFOV(float angle_y, float aspect_ratio, float near_z, float far_z) {
+	// The FOV angle needs to be expressed in degrees
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixPerspectiveFOV(float fov, float aspect_ratio, float near_z, float far_z) {
 		// x_scale = y_scale / aspect_ratio;
-		// y_scale = cotangent(angle_y / 2.0f);
+		// y_scale = cotangent(fov / 2.0f);
 		// range = far_z / (far_z - near_z);
 		
 
@@ -726,8 +727,8 @@ namespace ECSEngine {
 		//    0         0        range           1
 		//    0         0   -range * near_z      0
 		
-		angle_y = DegToRad(angle_y);
-		float tangent = tanf(angle_y * 0.5f);
+		fov = DegToRad(fov);
+		float tangent = tanf(fov * 0.5f);
 		float y_scale = 1.0f / tangent;
 		float x_scale = y_scale / aspect_ratio;
 		float range = far_z / (far_z - near_z);

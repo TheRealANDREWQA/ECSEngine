@@ -1,2 +1,2 @@
 #pragma once
-#include "../ECSEngine/Internal/ForEach.h"
+#include "../ECSEngine/ECS/ForEach.h"

@@ -110,14 +110,14 @@ void InspectorTextureFileAddFunctors(InspectorTable* table) {
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeInspectorToTextureFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index)
+void ChangeInspectorToTextureFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index, Stream<char> initial_name)
 {
 	size_t _draw_data_storage[128];
 	unsigned int write_size = 0;
 	InspectorDrawTextureData* draw_data = function::CreateCoallescedStreamIntoType<InspectorDrawTextureData>(_draw_data_storage, path, &write_size);
 	memset(&draw_data->helper_data, 0, sizeof(draw_data->helper_data));
 
-	ChangeInspectorDrawFunctionWithSearch(
+	uint3 indices = ChangeInspectorDrawFunctionWithSearchEx(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawTextureFile, InspectorCleanTexture },
@@ -129,6 +129,18 @@ void ChangeInspectorToTextureFile(EditorState* editor_state, Stream<wchar_t> pat
 			return function::CompareStrings(other_data->Path(), path);
 		}
 	);
+	
+	if (initial_name.size > 0 && indices.z != -1) {
+		ChangeInspectorTextureFileConfiguration(editor_state, indices.z, initial_name);
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void ChangeInspectorTextureFileConfiguration(EditorState* editor_state, unsigned int inspector_index, Stream<char> name)
+{
+	InspectorDrawTextureData* draw_data = (InspectorDrawTextureData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
+	draw_data->helper_data.SetNewSetting(name);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

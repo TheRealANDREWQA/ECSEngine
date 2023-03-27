@@ -273,7 +273,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void ColorInputWindowDraw(void* window_data, void* drawer_descriptor, bool initializer);
+		ECSENGINE_API void ColorInputWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -281,7 +281,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void ComboBoxWindowDraw(void* window_data, void* drawer_descriptor, bool initializer);
+		ECSENGINE_API void ComboBoxWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -289,7 +289,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void MenuDraw(void* window_data, void* drawer_descriptor, bool initializer);
+		ECSENGINE_API void MenuDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -306,15 +306,15 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void FilterMenuDraw(void* window_data, void* drawer_descriptor, bool initialize);
+		ECSENGINE_API void FilterMenuDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void FilterMenuSinglePointerDraw(void* window_data, void* drawer_descriptor, bool initialize);
+		ECSENGINE_API void FilterMenuSinglePointerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void PathInputFilesystemDraw(void* window_data, void* drawer_descriptor, bool initialize);
+		ECSENGINE_API void PathInputFilesystemDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 		// --------------------------------------------------------------------------------------------------------------
 

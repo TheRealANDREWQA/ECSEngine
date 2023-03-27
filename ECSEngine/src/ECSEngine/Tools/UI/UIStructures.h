@@ -7,7 +7,7 @@
 #include "../../Allocators/MemoryManager.h"
 #include "../../Allocators/LinearAllocator.h"
 #include "../../Rendering/RenderingStructures.h"
-#include "../../Internal/InternalStructures.h"
+#include "../../ECS/InternalStructures.h"
 #include "UIMacros.h"
 #include "../../Application.h"
 #include "../../Utilities/Timer.h"
@@ -22,7 +22,7 @@ namespace ECSEngine {
 		struct UISystem;
 		struct UIDockspace;
 
-		using UIToolsAllocator = ECSEngine::ResizableMemoryArena;
+		typedef ECSEngine::ResizableMemoryArena UIToolsAllocator;
 
 		template<typename T>
 		using UIDynamicStream = ResizableStream<T>;
@@ -64,9 +64,11 @@ namespace ECSEngine {
 			HID::Mouse* mouse;
 		};
 
-		using Action = void (*)(ActionData* action_data);
-		using WindowDraw = void (*)(void* window_data, void* drawer_descriptor, bool initializer);
-		using UIDrawerElementDraw = void (*)(void* element_data, void* drawer_ptr);
+		struct UIDrawerDescriptor;
+
+		typedef void (*Action)(ActionData* action_data);
+		typedef void (*WindowDraw)(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer);
+		typedef void (*UIDrawerElementDraw)(void* element_data, void* drawer_ptr);
 
 		// data size 0 will be interpreted as take data as a pointer, with no data copy
 		struct UIActionHandler {
@@ -522,14 +524,7 @@ namespace ECSEngine {
 
 #pragma region Window
 
-		using WindowTable = HashTableDefault<void*>;
-
-		struct ECSENGINE_API UIDrawerElementDrawData {
-			UIDrawerElementDraw draw;
-			void* data;
-			UIDynamicStream<void*> element_allocations;
-			unsigned int previous_allocation_count;
-		};
+		typedef HashTableDefault<void*> WindowTable;
 
 		struct ECSENGINE_API UIWindowDynamicResource {
 			Stream<void*> element_allocations;

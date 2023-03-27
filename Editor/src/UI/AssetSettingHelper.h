@@ -11,10 +11,22 @@ struct AssetSettingsHelperData {
 		return current_names.size > 0 ? current_names[selected_setting] : Stream<char>(nullptr, 0);
 	}
 
+	inline unsigned char FindName(Stream<char> name) const {
+		unsigned int value = function::FindString(name, current_names);
+		return value == -1 ? UCHAR_MAX : value;
+	}
+
+	// If it doesn't exist, it will not assign it
+	inline void SetNewSetting(Stream<char> name) {
+		unsigned char index = FindName(name);
+		if (index != UCHAR_MAX) {
+			selected_setting = index;
+		}
+	}
+
 	unsigned char selected_setting;
 	bool is_new_name;
 	LinearAllocator temp_allocator;
-	// The current name that is being selected
 	Stream<Stream<char>> current_names;
 	CapacityStream<char> new_name;
 	Timer lazy_timer;

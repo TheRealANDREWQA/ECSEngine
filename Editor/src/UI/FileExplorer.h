@@ -8,7 +8,7 @@ struct EditorState;
 // Stack memory size should be at least 512
 void FileExplorerSetDescriptor(ECSEngine::Tools::UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
-void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize);
+void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 void CreateFileExplorer(EditorState* editor_state);
 

@@ -1,3 +1,3 @@
 #pragma once
-#include "../ECSEngine/Internal/Components.h"
-#include "../ECSEngine/Internal/LinkComponents.h"
+#include "../ECSEngine/ECS/Components.h"
+#include "../ECSEngine/ECS/LinkComponents.h"

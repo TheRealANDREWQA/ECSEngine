@@ -28,8 +28,6 @@ struct SaveCurrentProjectConfirmationData {
 // -------------------------------------------------------------------------------------------------------------------
 
 void CreateProjectMisc(ProjectOperationData* data) {
-	EDITOR_STATE(data->editor_state);
-
 	ECS_TEMP_STRING(new_console_dump_stream, 512);
 
 	new_console_dump_stream.AddStreamSafe(data->file_data->path);
@@ -50,13 +48,13 @@ void CreateProjectMisc(ProjectOperationData* data) {
 	save_automatically_data.editor_state = data->editor_state;;
 	save_automatically_data.timer = Timer();
 	save_automatically_data.timer.SetMarker();
-	ui_system->PushFrameHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
+	data->editor_state->ui_system->PushFrameHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
 }
 
 // -------------------------------------------------------------------------------------------------------------------
 
 void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
-	EDITOR_STATE(data->editor_state);
+	UISystem* ui_system = data->editor_state->ui_system;
 
 	wchar_t temp_characters[512];
 	CapacityStream<wchar_t> new_directory_path(temp_characters, 0, 512);
@@ -139,7 +137,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 
 void CreateProject(ProjectOperationData* data)
 {
-	EDITOR_STATE(data->editor_state);
+	UISystem* ui_system = data->editor_state->ui_system;
 
 	if (ExistsProjectInFolder(data->file_data)) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
@@ -278,8 +276,6 @@ bool CheckProjectDirectoryIntegrity(const ProjectFile* project) {
 
 void DeallocateCurrentProject(EditorState* editor_state)
 {
-	EDITOR_STATE(editor_state);
-
 	if (editor_state->project_file->path.size > 0) {
 		EditorStateDestroy(editor_state);
 		editor_state->project_file = nullptr;
@@ -349,11 +345,10 @@ void CreateProjectWizardAction(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------------
 
-void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void CreateProjectWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	CreateProjectWizardData* data = (CreateProjectWizardData*)window_data;
-	EDITOR_STATE(data->project_data.editor_state);
 	EditorState* editor_state = data->project_data.editor_state;
 	ProjectFile* file_data = editor_state->project_file;
 
@@ -442,8 +437,6 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 // -------------------------------------------------------------------------------------------------------------------
 
 void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data) {
-	EDITOR_STATE(wizard_data->project_data.editor_state);
-
 	// launch wizard window
 	UIWindowDescriptor window_descriptor;
 	window_descriptor.draw = CreateProjectWizardDraw;
@@ -467,8 +460,6 @@ void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data)
 // -------------------------------------------------------------------------------------------------------------------
 
 bool OpenProjectFile(ProjectOperationData data) {
-	EDITOR_STATE(data.editor_state);
-
 	ECS_TEMP_STRING(project_path, 256);
 	GetProjectFilePath(data.file_data, project_path);
 
@@ -489,7 +480,13 @@ bool OpenProjectFile(ProjectOperationData data) {
 	options.backup_allocator = allocator;
 	options.error_message = &error_message;
 
-	ECS_DESERIALIZE_CODE status = Deserialize(ui_reflection->reflection, ui_reflection->reflection->GetType(STRING(ProjectFile)), file_data, project_path, &options);
+	ECS_DESERIALIZE_CODE status = Deserialize(
+		data.editor_state->ui_reflection->reflection, 
+		data.editor_state->ui_reflection->reflection->GetType(STRING(ProjectFile)), 
+		file_data, 
+		project_path, 
+		&options
+	);
 	if (status != ECS_DESERIALIZE_OK) {
 		if (data.error_message.buffer != nullptr) {
 			ECS_FORMAT_STRING(data.error_message, "Failed to deserialize project file {#}. Detailed message: {#}.", project_path, error_message);
@@ -540,7 +537,7 @@ bool OpenProjectFile(ProjectOperationData data) {
 		return false;
 	}
 
-	void* allocation = editor_allocator->Allocate(sizeof(wchar_t) * (file_data->path.size + file_data->project_name.size));
+	void* allocation = Allocate(data.editor_state->EditorAllocator(), sizeof(wchar_t) * (file_data->path.size + file_data->project_name.size));
 	uintptr_t ptr = (uintptr_t)allocation;
 	file_data->path.InitializeAndCopy(ptr, file_data->path);
 	file_data->project_name.InitializeAndCopy(ptr, file_data->project_name);
@@ -559,7 +556,7 @@ void OpenProjectFileAction(ActionData* action_data) {
 
 bool OpenProject(ProjectOperationData data)
 {
-	EDITOR_STATE(data.editor_state);
+	UISystem* ui_system = data.editor_state->ui_system;
 
 	EditorStateSetFlag(data.editor_state, EDITOR_STATE_DO_NOT_ADD_TASKS);
 
@@ -588,6 +585,9 @@ bool OpenProject(ProjectOperationData data)
 	console_dump_path.AddStream(CONSOLE_RELATIVE_DUMP_PATH);
 	ECS_ASSERT(console_dump_path.size < 256);
 	GetConsole()->ChangeDumpPath(console_dump_path);
+
+	// Also change the console to dump type count messages
+	GetConsole()->SetDumpType(ECS_CONSOLE_DUMP_COUNT);
 
 	// Before we load the UI we need to load the modules and the sandboxes
 	ECS_STACK_CAPACITY_STREAM(wchar_t, module_path, 256);
@@ -729,7 +729,7 @@ void RepairProjectAuxiliaryDirectories(ProjectOperationData data)
 // -------------------------------------------------------------------------------------------------------------------
 
 bool SaveProjectFile(ProjectOperationData data) {
-	EDITOR_STATE(data.editor_state);
+	UIReflectionDrawer* ui_reflection = data.editor_state->ui_reflection;
 
 	wchar_t temp_characters[256];
 	CapacityStream<wchar_t> project_path = CapacityStream<wchar_t>(temp_characters, 0, 256);
@@ -739,8 +739,7 @@ bool SaveProjectFile(ProjectOperationData data) {
 
 	if (!success) {
 		if (data.error_message.buffer != nullptr) {
-			data.error_message.size = function::FormatString(data.error_message.buffer, "Saving project file failed; writing to {#}", project_path.buffer);
-			data.error_message.AssertCapacity();
+			ECS_FORMAT_STRING(data.error_message, "Saving project file failed; writing to {#}", project_path);
 		}
 		return false;
 	}
@@ -819,8 +818,6 @@ void SaveProjectAction(ActionData* action_data) {
 // -------------------------------------------------------------------------------------------------------------------
 
 bool SaveCurrentProjectConverted(EditorState* _editor_state, bool (*function)(ProjectOperationData)) {
-	EDITOR_STATE(_editor_state);
-
 	ProjectOperationData data;
 	data.editor_state = _editor_state;
 	data.file_data = data.editor_state->project_file;
@@ -869,8 +866,6 @@ void SaveCurrentProjectConfirmation(ActionData* action_data) {
 
 void SaveCurrentProjectWithConfirmation(EditorState* editor_state, Stream<char> description, UIActionHandler callback)
 {
-	EDITOR_STATE(editor_state);
-
 	const char* button_names[] = { "Save", "Don't Save" };
 	UIActionHandler handlers[2];
 	ChooseOptionWindowData choose_data;
@@ -885,15 +880,13 @@ void SaveCurrentProjectWithConfirmation(EditorState* editor_state, Stream<char> 
 	handlers[0] = { SaveCurrentProjectAction, &handler_data, sizeof(handler_data) };
 	handlers[1] = callback;
 
-	CreateChooseOptionWindow(ui_system, choose_data);
+	CreateChooseOptionWindow(editor_state->ui_system, choose_data);
 }
 
 // -------------------------------------------------------------------------------------------------------------------
 
 void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
 	descriptor.draw = ConsoleWindowDraw;
-
-	EDITOR_STATE(editor_state);
 
 	ConsoleWindowData* window_data = (ConsoleWindowData*)stack_memory;
 	CreateConsoleWindowData(*window_data);
@@ -906,7 +899,6 @@ void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_st
 // -------------------------------------------------------------------------------------------------------------------
 
 ECS_THREAD_TASK(SaveProjectThreadTask) {
-	EDITOR_STATE(_data);
 	EditorState* editor_state = (EditorState*)_data;
 	ProjectFile* project_file = editor_state->project_file;
 
@@ -916,7 +908,7 @@ ECS_THREAD_TASK(SaveProjectThreadTask) {
 	template_path.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);
 
 	CapacityStream<char> error_message = { nullptr, 0, 0 };
-	bool success = SaveProjectUITemplate(ui_system, { template_path }, error_message);
+	bool success = SaveProjectUITemplate(editor_state->ui_system, { template_path }, error_message);
 	if (!success) {
 		EditorSetConsoleError("Automatic project UI save failed.");
 	}
@@ -930,9 +922,8 @@ void SaveProjectUIAutomatically(ActionData* action_data)
 
 	SaveProjectUIAutomaticallyData* data = (SaveProjectUIAutomaticallyData*)_data;
 	if (data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) > SAVE_PROJECT_AUTOMATICALLY_TICK) {
-		EDITOR_STATE(data->editor_state);
 		ThreadTask task = ECS_THREAD_TASK_NAME(SaveProjectThreadTask, data->editor_state, 0);
-		task_manager->AddDynamicTaskAndWake(task);
+		data->editor_state->task_manager->AddDynamicTaskAndWake(task);
 		data->timer.SetMarker();
 	}
 }

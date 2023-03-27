@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "Module.h"
 #include "../../Utilities/Function.h"
-#include "../../Internal/World.h"
+#include "../../ECS/World.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
 #include "../../Utilities/FunctionInterfaces.h"
 #include "../../Utilities/Path.h"
@@ -223,18 +223,18 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator)
+	void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
 	{
-		module->build_asset_types = LoadModuleBuildAssetTypes(&module->base_module, allocator);
-		module->link_components = LoadModuleLinkComponentTargets(&module->base_module, allocator);
+		module->build_asset_types = LoadModuleBuildAssetTypes(&module->base_module, allocator, error_message);
+		module->link_components = LoadModuleLinkComponentTargets(&module->base_module, allocator, error_message);
+		module->tasks = LoadModuleTasks(&module->base_module, allocator, error_message);
 		module->serialize_streams = LoadModuleSerializeComponentFunctors(&module->base_module, allocator);
-		module->tasks = LoadModuleTasks(&module->base_module, allocator);
 		module->ui_descriptors = LoadModuleUIDescriptors(&module->base_module, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	Stream<TaskSchedulerElement> LoadModuleTasks(const Module* module, AllocatorPolymorphic allocator)
+	Stream<TaskSchedulerElement> LoadModuleTasks(const Module* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
 	{
 		const size_t STACK_MEMORY_CAPACITY = ECS_KB * 64;
 		void* stack_allocation = ECS_STACK_ALLOC(STACK_MEMORY_CAPACITY);
@@ -250,7 +250,10 @@ namespace ECSEngine {
 		module->task_function(&task_data);
 		schedule_tasks.AssertCapacity();
 
-		return StreamCoallescedDeepCopy(schedule_tasks, allocator);	
+		Stream<TaskSchedulerElement> tasks = schedule_tasks;
+		ValidateModuleTasks(tasks, error_message);
+
+		return StreamCoallescedDeepCopy(tasks, allocator);	
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -309,7 +312,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	Stream<ModuleBuildAssetType> LoadModuleBuildAssetTypes(const Module* module, AllocatorPolymorphic allocator)
+	Stream<ModuleBuildAssetType> LoadModuleBuildAssetTypes(const Module* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
 	{
 		if (!module->build_functions) {
 			return { nullptr, 0 };
@@ -329,7 +332,7 @@ namespace ECSEngine {
 		asset_types.AssertCapacity();
 
 		Stream<ModuleBuildAssetType> asset_type_stream(asset_types);
-		ValidateModuleBuildAssetTypes(asset_type_stream);
+		ValidateModuleBuildAssetTypes(asset_type_stream, error_message);
 
 		size_t total_memory = sizeof(ModuleBuildAssetType) * asset_types.size + extra_memory.m_top;
 
@@ -433,7 +436,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	Stream<ModuleLinkComponentTarget> LoadModuleLinkComponentTargets(const Module* module, AllocatorPolymorphic allocator)
+	Stream<ModuleLinkComponentTarget> LoadModuleLinkComponentTargets(const Module* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
 	{
 		if (!module->link_components) {
 			return { nullptr, 0 };
@@ -453,7 +456,7 @@ namespace ECSEngine {
 
 		link_components.AssertCapacity();
 		Stream<ModuleLinkComponentTarget> valid_links(link_components);
-		ValidateModuleLinkComponentTargets(valid_links);
+		ValidateModuleLinkComponentTargets(valid_links, error_message);
 
 		// Calculate the total byte size
 		size_t total_memory = sizeof(ModuleLinkComponentTarget) * valid_links.size + temp_allocator.m_top;
@@ -521,42 +524,114 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void ValidateModuleBuildAssetTypes(Stream<ModuleBuildAssetType>& build_types)
+	// The functor must return true when an element is invalid
+	template<typename StreamType, typename InvalidateFunctor>
+	size_t ValidateModuleInformation(
+		StreamType& elements, 
+		InvalidateFunctor&& invalidate_functor
+	)
 	{
-		// Validate that the names are properly provided, as well the extension and the functions
-		for (int32_t index = 0; index < (int32_t)build_types.size; index++) {
-			if (build_types[index].extension.buffer == nullptr || build_types[index].extension.size == 0) {
-				build_types.Swap(index, build_types.size - 1);
-				index--;
-				continue;
-			}
+		size_t initial_count = elements.size;
 
-			if (build_types[index].build_function == nullptr) {
-				build_types.Swap(index, build_types.size - 1);
+		for (int64_t index = 0; index < (int64_t)elements.size; index++) {
+			if (invalidate_functor(elements[index])) {
+				elements.Swap(index, elements.size - 1);
 				index--;
+				elements.size--;
 				continue;
 			}
 		}
+
+		return initial_count;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void ValidateModuleLinkComponentTargets(Stream<ModuleLinkComponentTarget>& link_targets)
+	size_t ValidateModuleTasks(Stream<TaskSchedulerElement>& tasks, CapacityStream<char>* error_message) 
 	{
-		// Validate that the names are properly provided, aswell as the extension and the functions
-		for (int32_t index = 0; index < (int32_t)link_targets.size; index++) {
-			if (link_targets[index].component_name.buffer == nullptr || link_targets[index].component_name.size == 0) {
-				link_targets.Swap(index, link_targets.size - 1);
-				index--;
-				continue;
+		return ValidateModuleInformation(tasks, [=](const TaskSchedulerElement& element) {
+			if (element.task_name.size == 0) {
+				if (error_message != nullptr) {
+					ECS_STACK_CAPACITY_STREAM(char, group_name, 64);
+					TaskGroupToString(element.task_group, group_name);
+
+					if (element.task_dependencies.size > 0) {
+						ECS_STACK_CAPACITY_STREAM(char, temp_string, 512);
+						StreamToString(element.task_dependencies, temp_string);
+						ECS_FORMAT_STRING(*error_message, "Task with dependencies {#} in group {#} has no name specified", temp_string, group_name);
+					}
+					else {
+						ECS_FORMAT_STRING(*error_message, "Task in group {#} has no name specified", group_name);
+					}
+				}
+
+				return true;
+			}
+			return false;
+		});
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	size_t ValidateModuleBuildAssetTypes(Stream<ModuleBuildAssetType>& build_types, CapacityStream<char>* error_message)
+	{
+		return ValidateModuleInformation(build_types, [=](const ModuleBuildAssetType& element) {
+			if (element.extension.buffer == nullptr || element.extension.size == 0) {
+				if (error_message != nullptr) {
+					if (element.asset_editor_name.size > 0) {
+						ECS_FORMAT_STRING(*error_message, "Build Asset Type {#} is missing the extension", element.asset_editor_name);
+					}
+					else if (element.asset_metadata_name.size > 0) {
+						ECS_FORMAT_STRING(*error_message, "Build Asset Type with metadata {#} is missing the extension", element.asset_metadata_name);
+					}
+					else {
+						error_message->AddStreamSafe("Build Asset Type is missing the extension");
+					}
+				}
+
+				return true;
 			}
 
-			if (link_targets[index].build_function == nullptr || link_targets[index].reverse_function == nullptr) {
-				link_targets.Swap(index, link_targets.size - 1);
-				index--;
-				continue;
+			if (element.build_function == nullptr) {
+				if (error_message != nullptr) {
+					if (element.asset_editor_name.size > 0) {
+						ECS_FORMAT_STRING(*error_message, "Build Asset Type {#} is missing the build function", element.asset_editor_name);
+					}
+					else if (element.asset_metadata_name.size > 0) {
+						ECS_FORMAT_STRING(*error_message, "Build Asset Type with metadata {#} is missing the build function", element.asset_metadata_name);
+					}
+					else {
+						error_message->AddStreamSafe("Build Asset Type is missing the build function");
+					}
+				}
+
+				return true;
 			}
-		}
+			return false;
+		});
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	size_t ValidateModuleLinkComponentTargets(Stream<ModuleLinkComponentTarget>& link_targets, CapacityStream<char>* error_message)
+	{
+		return ValidateModuleInformation(link_targets, [=](const ModuleLinkComponentTarget& element) {
+			if (element.component_name.buffer == nullptr || element.component_name.size == 0) {
+				if (error_message != nullptr) {
+					error_message->AddStreamSafe("A link component is missing the component name");
+				}
+				return true;
+			}
+
+			if (element.build_function == nullptr || element.reverse_function == nullptr) {
+				if (error_message != nullptr) {
+					ECS_FORMAT_STRING(*error_message, "User defined conversion for link component {#} is missing the build or the reverse function", element.component_name);
+				}
+				return true;
+			}
+
+			return false;
+		});
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 #include "ecspch.h"
 #include "ModuleUtilities.h"
-#include "../../Internal/LinkComponents.h"
+#include "../../ECS/LinkComponents.h"
 #include "../../Utilities/Reflection/Reflection.h"
-#include "../../Internal/EntityManagerSerialize.h"
+#include "../../ECS/EntityManagerSerialize.h"
 
 namespace ECSEngine {
 

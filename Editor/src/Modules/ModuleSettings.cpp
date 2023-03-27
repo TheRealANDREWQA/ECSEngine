@@ -63,7 +63,7 @@ void AllocateModuleSettings(
 		EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
 
 		for (size_t index = 0; index < type_indices.size; index++) {
-			UIReflectionType* ui_type = editor_state->module_reflection->GetTypePtr(type_indices[index]);
+			UIReflectionType* ui_type = editor_state->module_reflection->GetType(type_indices[index]);
 
 			Stream<char> type_name = ui_type->name;
 			const ReflectionType* type = reflection_manager->GetType(type_name);
@@ -111,7 +111,7 @@ void CreateModuleSettings(
 		settings.size = 0;
 
 		for (size_t index = 0; index < instance_indices.size; index++) {
-			UIReflectionInstance* instance = editor_state->module_reflection->GetInstancePtr(instance_indices[index]);
+			UIReflectionInstance* instance = editor_state->module_reflection->GetInstance(instance_indices[index]);
 
 			Stream<char> type_name = instance->type_name;
 			const ReflectionType* type = reflection_manager->GetType(type_name);
@@ -171,8 +171,6 @@ void DestroyModuleSettings(
 	unsigned int settings_id
 )
 {
-	EDITOR_STATE(editor_state);
-
 	EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 
@@ -356,7 +354,7 @@ bool SaveModuleSettings(const EditorState* editor_state, unsigned int module_ind
 		// Get the reflection types in order to serialize
 		ReflectionManager* reflection = editor_state->module_reflection->reflection;
 		for (size_t index = 0; index < indices.size; index++) {
-			module_types[index] = reflection->GetType(editor_state->module_reflection->GetType(indices[index]).name);
+			module_types[index] = reflection->GetType(editor_state->module_reflection->GetType(indices[index])->name);
 			size_t setting_index = SearchSetting(settings, module_types[index]->name);
 			instance_memory[index] = settings[setting_index].data;
 		}
@@ -408,7 +406,7 @@ void SetModuleDefaultSettings(
 
 	if (indices.size > 0) {
 		for (size_t index = 0; index < indices.size; index++) {
-			UIReflectionType* ui_type = editor_state->module_reflection->GetTypePtr(indices[index]);
+			UIReflectionType* ui_type = editor_state->module_reflection->GetType(indices[index]);
 			const ReflectionType* type = editor_state->module_reflection->reflection->GetType(ui_type->name);
 			size_t setting_index = SearchSetting(settings, ui_type->name);
 			void* instance_memory = settings[setting_index].data;

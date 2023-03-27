@@ -31,13 +31,14 @@ namespace ECSEngine {
 	ECSENGINE_API Module LoadModule(Stream<wchar_t> path);
 
 	// Loads the streams from the given module
-	ECSENGINE_API void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator);
+	ECSENGINE_API void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message = nullptr);
 
 	// It will not release the OS Handle - it must be kept around as long as the tasks are loaded;
 	// It does a single coallesced allocation. Deallocate the buffer to free the memory
 	ECSENGINE_API Stream<TaskSchedulerElement> LoadModuleTasks(
 		const Module* module,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	// It will not releaase the OS Handle - it must be kept around as long as the descriptors are loaded;
@@ -53,7 +54,8 @@ namespace ECSEngine {
 	// Returns { nullptr, 0 } if the function does not exist
 	ECSENGINE_API Stream<ModuleBuildAssetType> LoadModuleBuildAssetTypes(
 		const Module* module,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	// It will not releaase the OS Handle - it must be kept around as long as the functors are loaded;
@@ -70,7 +72,8 @@ namespace ECSEngine {
 	// Returns { nullptr, 0 } if the function does not exist
 	ECSENGINE_API Stream<ModuleLinkComponentTarget> LoadModuleLinkComponentTargets(
 		const Module* module,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	// Frees the OS handle to the valid module function but it does not deallocate the tasks
@@ -83,12 +86,16 @@ namespace ECSEngine {
 
 	ECSENGINE_API void ReleaseAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator);
 
-	// It will move all the valid types in the front of the stream while keeping the invalid ones
-	// at the end
-	ECSENGINE_API void ValidateModuleBuildAssetTypes(Stream<ModuleBuildAssetType>& build_types);
+	// It will move all the valid tasks in front of the stream while keeping the invalid ones at the end
+	// Returns the previous size, the new size will reflect the count of the valid tasks
+	ECSENGINE_API size_t ValidateModuleTasks(Stream<TaskSchedulerElement>& tasks, CapacityStream<char>* error_message = nullptr);
 
-	// It will move all the valid types in the front of the stream while keeping the invalid ones
-	// at the end
-	ECSENGINE_API void ValidateModuleLinkComponentTargets(Stream<ModuleLinkComponentTarget>& link_targets);
+	// It will move all the valid build types in front of the stream while keeping the invalid ones at the end
+	// Returns the previous size, the new size will reflect the count of the valid build types
+	ECSENGINE_API size_t ValidateModuleBuildAssetTypes(Stream<ModuleBuildAssetType>& build_types, CapacityStream<char>* error_message = nullptr);
+
+	// It will move all the valid link targets in front of the stream while keeping the invalid ones at the end
+	// Returns the previous size, the new size will reflect the count of the valid link targets
+	ECSENGINE_API size_t ValidateModuleLinkComponentTargets(Stream<ModuleLinkComponentTarget>& link_targets, CapacityStream<char>* error_message = nullptr);
 
 }

@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "UIDrawerWindows.h"
-#include "../../Internal/Multithreading/TaskManager.h"
+#include "../../Multithreading/TaskManager.h"
 #include "../../Utilities/OSFunctions.h"
 #include "../../Utilities/File.h"
 #include "UIDrawerActions.h"
@@ -258,7 +258,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void WindowParameterDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+		void WindowParameterDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			UIWindowDrawerDescriptor* descriptors = (UIWindowDrawerDescriptor*)window_data;
@@ -788,7 +788,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void SystemParametersDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+		void SystemParametersDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			UISystemDescriptors* descriptors = &drawer.GetSystem()->m_descriptors;
@@ -1001,14 +1001,14 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void DrawNothing(void* window_data, void* drawer_descriptor, bool initialize)
+		void DrawNothing(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize)
 		{
 			UI_PREPARE_DRAWER(initialize);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void ErrorMessageWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+		void ErrorMessageWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			drawer.DisablePaddingForRenderSliders();
@@ -1091,7 +1091,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void ConfirmWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+		void ConfirmWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			drawer.DisablePaddingForRenderSliders();
@@ -1248,7 +1248,7 @@ namespace ECSEngine {
 			}
 		}
 
-		void ChooseOptionWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+		void ChooseOptionWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			drawer.DisablePaddingForRenderSliders();
@@ -1292,7 +1292,7 @@ namespace ECSEngine {
 			CloseXBorderClickableAction(action_data);
 		}
 
-		void TextInputWizard(void* window_data, void* drawer_descriptor, bool initialize)
+		void TextInputWizard(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize)
 		{
 			UI_PREPARE_DRAWER(initialize);
 
@@ -1461,7 +1461,7 @@ namespace ECSEngine {
 			drawer->NextRow();
 		}
 
-		void TextFileDraw(void* window_data, void* drawer_descriptor, bool initialize)
+		void TextFileDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize)
 		{
 			UI_PREPARE_DRAWER(initialize);
 
@@ -1514,7 +1514,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void ConsoleWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+		void ConsoleWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			ConsoleWindowData* data = (ConsoleWindowData*)window_data;
@@ -2037,7 +2037,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void InjectValuesWindowDraw(void* window_data, void* drawer_descriptor, bool initializer) {
+		void InjectValuesWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer) {
 			UI_PREPARE_DRAWER(initializer);
 
 			InjectWindowData* data = (InjectWindowData*)window_data;

@@ -1,7 +1,7 @@
 #pragma once
 #include "AllocatorTypes.h"
 #include "../Core.h"
-#include "../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../Multithreading/ConcurrentPrimitives.h"
 #include "../Utilities/StackScope.h"
 
 namespace ECSEngine {

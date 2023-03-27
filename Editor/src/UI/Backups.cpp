@@ -71,7 +71,7 @@ void RestoreBackupAction(ActionData* action_data) {
 #define LINEAR_ALLOCATOR_NAME "Allocator"
 #define LINEAR_ALLOCATOR_SIZE ECS_KB * 16
 
-void BackupsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	EditorState* editor_state = (EditorState*)window_data;
@@ -300,7 +300,7 @@ struct RestoreBackupWindowDrawData {
 	bool selected[PROJECT_BACKUP_COUNT];
 };
 
-void RestoreBackupWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void RestoreBackupWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	RestoreBackupWindowDrawData* data = (RestoreBackupWindowDrawData*)window_data;

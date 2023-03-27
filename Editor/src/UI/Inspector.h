@@ -1,5 +1,6 @@
 #pragma once
 #include "ECSEngineUI.h"
+#include "ECSEngineAssets.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -14,7 +15,7 @@ enum EDITOR_MODULE_LOAD_STATUS : unsigned char;
 // In the stack memory the first 4 bytes should be the inspector index
 void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
-void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
+void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 // Only creates the UI window, not the dockspace. Returns the window index
 unsigned int CreateInspectorWindow(EditorState* editor_state, unsigned int inspector_index);
@@ -38,6 +39,10 @@ void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int in
 void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index = -1);
 
 void ChangeInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index);
+
+void ChangeInspectorToAsset(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE asset_type, unsigned int inspector_index = -1);
+
+void ChangeInspectorToAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE asset_type, unsigned int inspector_index = -1);
 
 // Returns the index of the sandbox that is being referenced by the inspector
 unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned int inspector_index);

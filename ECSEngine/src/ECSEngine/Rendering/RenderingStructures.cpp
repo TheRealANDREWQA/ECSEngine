@@ -243,7 +243,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateShaderResourceView(resource, descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 1D Shader View failed.");
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture Shader View failed.");
 
 		return view;
 	}
@@ -619,6 +619,25 @@ namespace ECSEngine {
 
 	Camera::Camera(Matrix _projection, float3 _translation, float3 _rotation) : projection(_projection), translation(_translation), rotation(_rotation) {}
 
+	Camera::Camera(const CameraParameters& parameters) {
+		translation = parameters.translation;
+		rotation = parameters.rotation;
+
+		if (parameters.is_orthographic) {
+			SetOrthographicProjection(parameters.width, parameters.height, parameters.near_z, parameters.far_z);
+		}
+		else {
+			SetPerspectiveProjection(parameters.width, parameters.height, parameters.near_z, parameters.far_z);
+		}
+	}
+
+	Camera::Camera(const CameraParametersFOV& parameters) {
+		translation = parameters.translation;
+		rotation = parameters.rotation;
+
+		SetPerspectiveProjectionFOV(parameters.fov, parameters.aspect_ratio, parameters.near_z, parameters.far_z);
+	}
+
 	void Camera::SetOrthographicProjection(float width, float height, float near_z, float far_z) {
 		projection = MatrixOrthographic(width, height, near_z, far_z);
 	}
@@ -627,8 +646,8 @@ namespace ECSEngine {
 		projection = MatrixPerspective(width, height, near_z, far_z);
 	}
 
-	void Camera::SetPerspectiveProjectionFOV(float angle_y, float aspect_ratio, float near_z, float far_z) {
-		projection = MatrixPerspectiveFOV(angle_y, aspect_ratio, near_z, far_z);
+	void Camera::SetPerspectiveProjectionFOV(float fov, float aspect_ratio, float near_z, float far_z) {
+		projection = MatrixPerspectiveFOV(fov, aspect_ratio, near_z, far_z);
 	}
 
 	Matrix Camera::GetViewProjectionMatrix() const {
@@ -832,11 +851,12 @@ namespace ECSEngine {
 		suffix.Add(&srgb);
 		suffix.Add(&generate_mips);
 		suffix.Add(&compression);
+		suffix.Add(name);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	void GenerateShaderCompileOptionsSuffix(ShaderCompileOptions compile_options, CapacityStream<void>& suffix) {
+	void GenerateShaderCompileOptionsSuffix(ShaderCompileOptions compile_options, CapacityStream<void>& suffix, Stream<void> optional_addition) {
 		suffix.Add(&compile_options.compile_flags);
 		suffix.Add(&compile_options.target);
 		for (size_t index = 0; index < compile_options.macros.size; index++) {
@@ -845,6 +865,8 @@ namespace ECSEngine {
 			suffix.Add({ compile_options.macros[index].name, name_size });
 			suffix.Add({ compile_options.macros[index].definition, definition_size });
 		}
+
+		suffix.Add(optional_addition);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -1070,6 +1092,79 @@ namespace ECSEngine {
 
 		return false;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	void Material::CopyVertexShader(const Material* other) {
+		layout = other->layout;
+		vertex_shader = other->vertex_shader;
+		vertex_buffer_mapping_count = other->vertex_buffer_mapping_count;
+		memcpy(vertex_buffer_mappings, other->vertex_buffer_mappings, sizeof(other->vertex_buffer_mappings[0]) * other->vertex_buffer_mapping_count);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+	
+	void Material::CopyPixelShader(const Material* other) {
+		pixel_shader = other->pixel_shader;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+	
+	void Material::CopyTextures(const Material* other) {
+		v_texture_count = other->v_texture_count;
+		memcpy(v_textures, other->v_textures, sizeof(v_textures[0]) * v_texture_count);
+		memcpy(v_texture_slot, other->v_texture_slot, sizeof(other->v_texture_slot[0]) * v_texture_count);
+
+		p_texture_count = other->p_texture_count;
+		memcpy(p_textures, other->p_textures, sizeof(p_textures[0]) * p_texture_count);
+		memcpy(p_texture_slot, other->p_texture_slot, sizeof(other->p_texture_slot[0]) * p_texture_count);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+	
+	void Material::CopyConstantBuffers(const Material* other) {
+		v_buffer_count = other->v_buffer_count;
+		memcpy(v_buffers, other->v_buffers, sizeof(v_buffers[0]) * v_buffer_count);
+		memcpy(v_buffer_slot, other->v_buffer_slot, sizeof(v_buffer_slot[0]) * v_buffer_count);
+
+		p_buffer_count = other->p_buffer_count;
+		memcpy(p_buffers, other->p_buffers, sizeof(p_buffers[0]) * p_buffer_count);
+		memcpy(p_buffer_slot, other->p_buffer_slot, sizeof(p_buffer_slot[0]) * p_buffer_count);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+	
+	void Material::CopySamplers(const Material * other) {
+		v_sampler_count = other->v_sampler_count;
+		memcpy(v_samplers, other->v_samplers, sizeof(v_samplers[0]) * v_sampler_count);
+		memcpy(v_sampler_slot, other->v_sampler_slot, sizeof(v_sampler_slot[0]) * v_sampler_count);
+
+		p_sampler_count = other->p_sampler_count;
+		memcpy(p_samplers, other->p_samplers, sizeof(p_samplers[0]) * p_sampler_count);
+		memcpy(p_sampler_slot, other->p_sampler_slot, sizeof(p_sampler_slot[0]) * p_sampler_count);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	void Material::CopyUnorderedViews(const Material* other)
+	{
+		unordered_view_count = other->unordered_view_count;
+		memcpy(unordered_views, other->unordered_views, sizeof(unordered_views[0]) * unordered_view_count);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	void Material::Copy(const Material* other)
+	{
+		CopyVertexShader(other);
+		CopyPixelShader(other);
+		CopyTextures(other);
+		CopySamplers(other);
+		CopyConstantBuffers(other);
+		CopyUnorderedViews(other);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 

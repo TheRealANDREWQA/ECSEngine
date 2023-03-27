@@ -3,8 +3,8 @@
 #include "../Function.h"
 #include "../FunctionInterfaces.h"
 #include "../../Allocators/MemoryManager.h"
-#include "../../Internal/Multithreading/TaskManager.h"
-#include "../../Internal/InternalStructures.h"
+#include "../../Multithreading/TaskManager.h"
+#include "../../ECS/InternalStructures.h"
 #include "../../Containers/HashTable.h"
 #include "../../Containers/AtomicStream.h"
 #include "ReflectionTypes.h"
@@ -28,8 +28,6 @@ namespace ECSEngine {
 			ECS_REFLECTION_CUSTOM_TYPE_STREAM,
 			ECS_REFLECTION_CUSTOM_TYPE_REFERENCE_COUNTED,
 			ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET,
-			ECS_REFLECTION_CUSTOM_TYPE_COLOR,
-			ECS_REFLECTION_CUSTOM_TYPE_COLOR_FLOAT,
 			ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET,
 			ECS_REFLECTION_CUSTOM_TYPE_DATA_POINTER,
 			ECS_REFLECTION_CUSTOM_TYPE_COUNT
@@ -51,14 +49,6 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------------------------
 
 		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(SparseSet);
-
-		// ---------------------------------------------------------------------------------------------------------------------
-
-		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(Color);
-
-		// ---------------------------------------------------------------------------------------------------------------------
-		
-		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(ColorFloat);
 
 		// ---------------------------------------------------------------------------------------------------------------------
 
@@ -89,15 +79,22 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API ReflectionManager {
+			struct AddedType {
+				Stream<char> type_name;
+				AllocatorPolymorphic allocator;
+				bool coallesced_allocation;
+			};
+			
 			struct FolderHierarchy {
 				Stream<wchar_t> root;
 				const void* allocated_buffer;
+				ResizableStream<AddedType> added_types;
 			};
 
 			struct BlittableType {
 				Stream<char> name;
-				unsigned int byte_size;
-				unsigned int alignment;
+				size_t byte_size;
+				size_t alignment;
 			};
 
 			ReflectionManager() {}
@@ -106,7 +103,10 @@ namespace ECSEngine {
 			ReflectionManager(const ReflectionManager& other) = default;
 			ReflectionManager& operator = (const ReflectionManager& other) = default;
 
-			void AddBlittableException(Stream<char> definition, unsigned int byte_size, unsigned int alignment);
+			void AddBlittableException(Stream<char> definition, size_t byte_size, size_t alignment);
+
+			// Adds a type to a certain hierarchy. It will be deallocated when the hierarchy is freed using the allocator given
+			void AddTypeToHierarchy(const ReflectionType* type, unsigned int folder_hierarchy, AllocatorPolymorphic allocator, bool coallesced);
 
 			ECS_INLINE AllocatorPolymorphic Allocator() const {
 				return folders.allocator;
@@ -138,7 +138,7 @@ namespace ECSEngine {
 			double EvaluateExpression(Stream<char> expression);
 
 			// Returns the byte size and the alignment
-			uint2 FindBlittableException(Stream<char> name) const;
+			ulong2 FindBlittableException(Stream<char> name) const;
 
 			void FreeFolderHierarchy(unsigned int folder_index);
 
@@ -153,6 +153,9 @@ namespace ECSEngine {
 
 			const ReflectionEnum* GetEnum(Stream<char> name) const;
 			const ReflectionEnum* GetEnum(unsigned int index) const;
+
+			// Returns DBL_MAX if it doesn't exist
+			double GetConstant(Stream<char> name) const;
 
 			// Returns -1 if it fails
 			unsigned int GetHierarchyIndex(Stream<wchar_t> hierarchy) const;
@@ -350,6 +353,9 @@ namespace ECSEngine {
 		// It will deduce the alignment from the user defined types aswell
 		ECSENGINE_API size_t CalculateReflectionTypeAlignment(const ReflectionManager* reflection_manager, const ReflectionType* type);
 
+		// Calculates the byte size and the alignment alongside the is_blittable values
+		ECSENGINE_API void CalculateReflectionTypeCachedParameters(const ReflectionManager* reflection_manager, ReflectionType* type);
+
 		ECSENGINE_API size_t GetReflectionTypeByteSize(const ReflectionType* type);
 
 		ECSENGINE_API size_t GetReflectionTypeAlignment(const ReflectionType* type);
@@ -384,7 +390,8 @@ namespace ECSEngine {
 			ReflectionEnum& enum_
 		);
 
-		// Can optionally give field definitions to be considered as trivially copyable
+		// Returns true if it can be copied with memcpy, else false
+		// It returns true when all fields are fundamental types non pointer
 		ECSENGINE_API bool SearchIsBlittable(
 			const ReflectionManager* reflection_manager,
 			const ReflectionType* type
@@ -392,10 +399,29 @@ namespace ECSEngine {
 
 		// Returns true if it can be copied with memcpy, else false
 		// It returns true when all fields are fundamental types non pointer
-		// Can optionally give field definitions to be considered as trivially copyable
 		ECSENGINE_API bool SearchIsBlittable(
 			const ReflectionManager* reflection_manager,
 			Stream<char> definition
+		);
+
+		// Returns true if it can be copied with memcpy, else false
+		// It returns true when all fields are fundamental types or pointers
+		ECSENGINE_API bool SearchIsBlittableWithPointer(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type
+		);
+
+		// Returns true if it can be copied with memcpy, else false
+		// It returns true when all fields are fundamental types or pointers
+		ECSENGINE_API bool SearchIsBlittableWithPointer(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition
+		);
+
+		// For all fields which are streams it will determine the element byte size and fill it in inside the field
+		ECSENGINE_API void SetReflectionTypeFieldsStreamByteSize(
+			const ReflectionManager* reflection_manager,
+			ReflectionType* reflection_type
 		);
 
 		// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
@@ -416,35 +442,39 @@ namespace ECSEngine {
 			AllocatorPolymorphic field_allocator
 		);
 
-		// Works for user defined types aswell
-		ECSENGINE_API size_t GetFieldTypeAlignmentEx(const ReflectionManager* reflection_manager, ReflectionField field);
+		// Works for user defined types as well
+		ECSENGINE_API size_t GetFieldTypeAlignmentEx(const ReflectionManager* reflection_manager, const ReflectionField& field);
 
 		// Copies non used defined field
 		ECSENGINE_API void CopyReflectionFieldBasic(const ReflectionFieldInfo* info, const void* source, void* destination, AllocatorPolymorphic allocator);
 
 		ECSENGINE_API size_t GetBasicTypeArrayElementSize(const ReflectionFieldInfo& info);
 
-		ECSENGINE_API void* GetReflectionFieldStreamBuffer(const ReflectionFieldInfo& info, const void* data);
+		// Can optionally specify whether or not to offset into the data
+		ECSENGINE_API void* GetReflectionFieldStreamBuffer(const ReflectionFieldInfo& info, const void* data, bool offset_into_data = true);
 
-		ECSENGINE_API size_t GetReflectionFieldStreamSize(const ReflectionFieldInfo& info, const void* data);
+		// Can optionally specify whether or not to offset into the data
+		ECSENGINE_API size_t GetReflectionFieldStreamSize(const ReflectionFieldInfo& info, const void* data, bool offset_into_data = true);
 
-		// It will offset the data in order to reach the stream field
+		// Can optionally specify whether or not to offset into the data
 		// The size of the void stream is that of the elements, not that of the byte size of the elements
 		// This version does not take into account embedded arrays
-		ECSENGINE_API Stream<void> GetReflectionFieldStreamVoid(const ReflectionFieldInfo& info, const void* data);
+		ECSENGINE_API Stream<void> GetReflectionFieldStreamVoid(const ReflectionFieldInfo& info, const void* data, bool offset_into_data = true);
 
-		// It will offset the data in order to reach the stream field
-		ECSENGINE_API ResizableStream<void> GetReflectionFieldResizableStreamVoid(const ReflectionFieldInfo& info, const void* data);
+		// Can optionally specify whether or not to offset into the data
+		// The size of the void stream is that of the elements, not that of the byte size of the elements
+		// This version does not take into account embedded arrays
+		ECSENGINE_API ResizableStream<void> GetReflectionFieldResizableStreamVoid(const ReflectionFieldInfo& info, const void* data, bool offset_into_data = true);
 
-		// It will offset the data in order to reach the stream field
+		// Can optionally specify whether or not to offset into the data
 		// This version takes into account embedded arrays. The size of the void stream is the element count, not
 		// the byte size of the elements
-		ECSENGINE_API Stream<void> GetReflectionFieldStreamVoidEx(const ReflectionFieldInfo& info, const void* data);
+		ECSENGINE_API Stream<void> GetReflectionFieldStreamVoidEx(const ReflectionFieldInfo& info, const void* data, bool offset_into_data = true);
 
-		// It will offset the data in order to reach the stream field
+		// Can optionally specify whether or not to offset into the data
 		// This version takes into account embedded arrays. The size of the void stream is the element count, not
 		// the byte size of the elements
-		ECSENGINE_API ResizableStream<void> GetReflectionFieldResizableStreamVoidEx(const ReflectionFieldInfo& info, const void* data);
+		ECSENGINE_API ResizableStream<void> GetReflectionFieldResizableStreamVoidEx(const ReflectionFieldInfo& info, const void* data, bool offset_into_data = true);
 
 		ECSENGINE_API size_t GetReflectionFieldStreamElementByteSize(const ReflectionFieldInfo& info);
 
@@ -453,12 +483,12 @@ namespace ECSEngine {
 		ECSENGINE_API ReflectionBasicFieldType ConvertBasicTypeMultiComponentToSingle(ReflectionBasicFieldType type);
 
 		// It will offset the data in order to reach the stream field
-		ECSENGINE_API void SetReflectionFieldResizableStreamVoid(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data);
+		ECSENGINE_API void SetReflectionFieldResizableStreamVoid(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data, bool offset_into_data = true);
 
 		// It will offset the data in order to reach the stream field
 		// This version takes into account embedded arrays. The size of the void stream is the element count,
 		// not the byte size of the elements
-		ECSENGINE_API void SetReflectionFieldResizableStreamVoidEx(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data);
+		ECSENGINE_API void SetReflectionFieldResizableStreamVoidEx(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data, bool offset_into_data = true);
 
 		// Returns true if both types are the same in their respective reflection managers
 		ECSENGINE_API bool CompareReflectionTypes(
@@ -466,6 +496,44 @@ namespace ECSEngine {
 			const ReflectionManager* second_reflection_manager,
 			const ReflectionType* first, 
 			const ReflectionType* second
+		);
+
+		// Returns true if the instances of the reflection field match. Does not work for user defined types that are
+		// basic or basic arrays. Can optionally specify whether or not should use the pointer offset in the info
+		ECSENGINE_API bool CompareReflectionFieldInfoInstances(
+			const ReflectionFieldInfo* info,
+			const void* first,
+			const void* second,
+			bool offset_into_data = true
+		);
+
+		// Returns true if the instances of the reflection field match. Works for all cases (including custom types
+		// or user defined types, streams, pointers and basic arrays). Can optionally specify whether or not should use the pointer offset in the info
+		ECSENGINE_API bool CompareReflectionFieldInstances(
+			const ReflectionManager* reflection_manager,
+			const ReflectionField* field,
+			const void* first,
+			const void* second,
+			bool offset_into_data = true
+		);
+
+		// Compares two instances of the same type to see if they contain the same data.
+		// Returns true in case they contain the same data
+		ECSENGINE_API bool CompareReflectionTypeInstances(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type,
+			const void* first,
+			const void* second
+		);
+
+		// Compares two instances of a certain type to see if they contain the same data.
+		// Returns true in case they contain the same data
+		ECSENGINE_API bool CompareReflectionTypeInstances(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const void* first,
+			const void* second,
+			size_t count
 		);
 
 		// Copies the data from the old_type into the new type and checks for remappings
@@ -515,11 +583,8 @@ namespace ECSEngine {
 			bool always_allocate_for_buffers = false
 		);
 
-		ECSENGINE_API bool IsReflectionTypeComponent(const ReflectionType* type);
-
-		ECSENGINE_API bool IsReflectionTypeSharedComponent(const ReflectionType* type);
-
-		ECSENGINE_API bool IsReflectionTypeLinkComponent(const ReflectionType* type);
+		// Returns true if the type references in any of its fields the subtype
+		ECSENGINE_API bool DependsUpon(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<char> subtype);
 
 		// Returns { nullptr, 0 } if there is no target specified
 		ECSENGINE_API Stream<char> GetReflectionTypeLinkComponentTarget(const ReflectionType* type);
@@ -530,14 +595,20 @@ namespace ECSEngine {
 		// Returns true if the link component needs to be built using DLL functions
 		ECSENGINE_API bool GetReflectionTypeLinkComponentNeedsDLL(const ReflectionType* type);
 
-		// Returns true if the type references in any of its fields the subtype
-		ECSENGINE_API bool DependsUpon(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<char> subtype);
-
 		// Determines all the buffers that the ECS runtime can use
 		ECSENGINE_API void GetReflectionTypeRuntimeBuffers(const ReflectionType* type, CapacityStream<ComponentBuffer>& component_buffers);
 
 		// Returns the byte size and the alignment for the field
 		ECSENGINE_API ulong2 GetReflectionTypeGivenFieldTag(const ReflectionField* field);
+
+		// Returns -1 if the field is the field does not have the byte size specified else the specified byte size
+		ECSENGINE_API ulong2 GetReflectionFieldSkipMacroByteSize(const ReflectionField* field);
+
+		// Fills in the user defined types that this field has (only custom types can have dependencies with any stream type 
+		// or if a field is a user defined type)
+		ECSENGINE_API void GetReflectionFieldDependentTypes(const ReflectionField* field, CapacityStream<Stream<char>>& dependencies);
+
+		ECSENGINE_API void GetReflectionFieldDependentTypes(Stream<char> definition, CapacityStream<Stream<char>>& dependencies);
 
 		// Walks through the fields and returns the component buffer and optionally the index of the field that
 		// corresponds to that buffer index
@@ -548,6 +619,25 @@ namespace ECSEngine {
 		ECSENGINE_API size_t GetReflectionDataPointerElementByteSize(const ReflectionManager* manager, Stream<char> tag);
 
 		ECSENGINE_API void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependent_types);
+
+		ECSENGINE_API bool IsReflectionTypeComponent(const ReflectionType* type);
+
+		ECSENGINE_API bool IsReflectionTypeSharedComponent(const ReflectionType* type);
+
+		ECSENGINE_API bool IsReflectionTypeLinkComponent(const ReflectionType* type);
+
+		// Returns true if the field was tagged with ECS_REFLECTION_SKIP
+		ECSENGINE_API bool IsReflectionFieldSkipped(const ReflectionField* field);
+
+		// Determines the dependency graph for these reflection types. The first types are those ones
+		// that have no dependencies, the second group depends only on the first and so on.
+		// Returns true if the dependencies are valid, else false. It will fill in the two buffers given,
+		// one with the names of the types and the other one with the subgroups
+		ECSENGINE_API bool ConstructReflectionTypeDependencyGraph(
+			Stream<ReflectionType> types, 
+			CapacityStream<Stream<char>>& ordered_types, 
+			CapacityStream<uint2>& subgroups
+		);
 
 	}
 

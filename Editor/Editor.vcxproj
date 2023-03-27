@@ -211,6 +211,7 @@
     <ClInclude Include="src\UI\AssetOverrides.h" />
     <ClInclude Include="src\UI\AssetSettingHelper.h" />
     <ClInclude Include="src\UI\Backups.h" />
+    <ClInclude Include="src\UI\Common.h" />
     <ClInclude Include="src\UI\DirectoryExplorer.h" />
     <ClInclude Include="src\UI\EntitiesUI.h" />
     <ClInclude Include="src\UI\FileExplorer.h" />
@@ -272,6 +273,7 @@
     <ClCompile Include="src\UI\AssetOverrides.cpp" />
     <ClCompile Include="src\UI\AssetSettingHelper.cpp" />
     <ClCompile Include="src\UI\Backups.cpp" />
+    <ClCompile Include="src\UI\Common.cpp" />
     <ClCompile Include="src\UI\DirectoryExplorer.cpp" />
     <ClCompile Include="src\UI\EntitiesUI.cpp" />
     <ClCompile Include="src\UI\FileExplorer.cpp" />

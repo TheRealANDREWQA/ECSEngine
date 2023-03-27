@@ -81,6 +81,23 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	GraphicsViewport GetGraphicsViewportForTexture(Texture2D texture, float min_depth, float max_depth)
+	{
+		GraphicsViewport viewport;
+
+		D3D11_TEXTURE2D_DESC descriptor;
+		texture.Interface()->GetDesc(&descriptor);
+
+		viewport.width = descriptor.Width;
+		viewport.height = descriptor.Height;
+		viewport.min_depth = min_depth;
+		viewport.max_depth = max_depth;
+
+		return viewport;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void CreateCubeVertexBuffer(Graphics* graphics, float positive_span, VertexBuffer& vertex_buffer, IndexBuffer& index_buffer, bool temporary)
 	{
 		float negative_span = -positive_span;
