@@ -848,8 +848,15 @@ namespace ECSEngine {
 			case ReflectionStreamFieldType::Pointer:
 			{
 				Stream<char> asterisk = function::FindFirstCharacter(definition, '*');
-				asterisk.buffer = (char*)function::SkipWhitespace(asterisk.buffer, -1);
-				return { definition.buffer, function::PointerDifference(asterisk.buffer, definition.buffer) + 1 };
+				Stream<char> result;
+				if (asterisk.size > 0) {
+					asterisk.buffer = (char*)function::SkipWhitespace(asterisk.buffer, -1);
+					result = { definition.buffer, function::PointerDifference(asterisk.buffer, definition.buffer) + 1 };
+				}
+				else {
+					result = definition;
+				}
+				return result;
 			}
 				break;
 			case ReflectionStreamFieldType::BasicTypeArray:

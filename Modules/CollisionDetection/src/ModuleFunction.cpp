@@ -1,19 +1,10 @@
 #include "pch.h"
 #include "ModuleFunction.h"
-#include "../../Graphics/src/TempHeader.h"
 
 using namespace ECSEngine;
 
 void ModuleTaskFunction(ModuleTaskFunctionData* data) {
-	GraphicsFunction();
-	// Hey there
-	// PogChamp
-	// New Modification
-	// New thing
-	// My Thing
-	// He d dadsadwqe
-	// Hey There
-	// Modification
+	
 }
 
 #if 0

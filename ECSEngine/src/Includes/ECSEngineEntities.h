@@ -1,2 +1,2 @@
 #pragma once
-#include "../ECSEngine/Internal/InternalStructures.h"
+#include "../ECSEngine/ECS/InternalStructures.h"

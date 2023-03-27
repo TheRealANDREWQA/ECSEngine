@@ -1,6 +1,6 @@
 #pragma once
 #include "../Core.h"
-#include "../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../Multithreading/ConcurrentPrimitives.h"
 
 namespace ECSEngine {
 

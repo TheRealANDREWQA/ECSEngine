@@ -5,7 +5,7 @@
 #include "../Reflection/Reflection.h"
 #include "../Reflection/ReflectionMacros.h"
 #include "../ReferenceCountSerialize.h"
-#include "../../Internal/Resources/AssetMetadataSerialize.h"
+#include "../../Resources/AssetMetadataSerialize.h"
 #include "../../Containers/SparseSet.h"
 
 namespace ECSEngine {
@@ -627,16 +627,6 @@ namespace ECSEngine {
 		helper_data.template_type = template_type;
 		helper_data.write_data = data;
 		return total_serialize_size + SerializeCustomWriteHelperEx(&helper_data);
-
-		/*SerializeCustomTypeDeduceTypeHelperData basic_helper_data;
-		basic_helper_data.reflection_manager = data->reflection_manager;
-		basic_helper_data.template_type = &template_type;
-
-		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&basic_helper_data);
-		data->definition = template_type;
-
-		total_serialize_size = SerializeCustomWriteHelper(basic_type, stream_type, &reflection_type, custom_serializer_index, data, { buffer, buffer_count }, template_type_byte_size);
-		return total_serialize_size;*/
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -681,24 +671,6 @@ namespace ECSEngine {
 		helper_data.element_count = buffer_count;
 		helper_data.elements_to_allocate = buffer_count;
 		return DeserializeCustomReadHelperEx(&helper_data);
-
-		//size_t template_type_byte_size = SerializeCustomTypeDeduceTypeHelper(template_type, data->reflection_manager, &reflection_type, custom_serializer_index, basic_type, stream_type);
-		//data->definition = template_type;
-
-		//// It will correctly handle the failure case
-		//size_t total_deserialize_size = DeserializeCustomReadHelper(
-		//	basic_type,
-		//	stream_type,
-		//	&reflection_type,
-		//	custom_serializer_index,
-		//	data,
-		//	buffer_count,
-		//	buffer_count,
-		//	template_type_byte_size,
-		//	(void**)data->data
-		//);
-
-		//return total_deserialize_size;
 	}
 
 #pragma endregion
@@ -876,80 +848,6 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region Color
-
-#define SERIALIZE_CUSTOM_COLOR_VERSION (0)
-
-	// -----------------------------------------------------------------------------------------
-
-	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(Color) {
-		size_t write_size = 0;
-		if (data->write_data) {
-			Write<true>(data->stream, data->data, sizeof(char) * 4);
-		}
-		else {
-			write_size += Write<false>(data->stream, data->data, sizeof(char) * 4);
-		}
-		return write_size;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(Color) {
-		if (data->version != SERIALIZE_CUSTOM_COLOR_VERSION) {
-			return -1;
-		}
-
-		if (data->read_data) {
-			Read<true>(data->stream, data->data, sizeof(char) * 4);
-		}
-		else {
-			Read<false>(data->stream, data->data, sizeof(char) * 4);
-		}
-		return 0;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Color Float
-
-#define SERIALIZE_CUSTOM_COLOR_FLOAT_VERSION (0)
-
-	// -----------------------------------------------------------------------------------------
-
-	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(ColorFloat) {
-		size_t write_size = 0;
-		if (data->write_data) {
-			Write<true>(data->stream, data->data, sizeof(float) * 4);
-		}
-		else {
-			write_size += Write<false>(data->stream, data->data, sizeof(float) * 4);
-		}
-		return write_size;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(ColorFloat) {
-		if (data->version != SERIALIZE_CUSTOM_COLOR_FLOAT_VERSION) {
-			return -1;
-		}
-
-		if (data->read_data) {
-			Read<true>(data->stream, data->data, sizeof(float) * 4);
-		}
-		else {
-			Read<false>(data->stream, data->data, sizeof(float) * 4);
-		}
-		return 0;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-#pragma endregion
-
 #pragma region Data Pointer
 
 #define SERIALIZE_CUSTOM_DATA_POINTER_VERSION (0)
@@ -968,7 +866,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(DataPointer) {
-		if (data->version != SERIALIZE_CUSTOM_COLOR_FLOAT_VERSION) {
+		if (data->version != SERIALIZE_CUSTOM_DATA_POINTER_VERSION) {
 			return -1;
 		}
 
@@ -1008,8 +906,6 @@ namespace ECSEngine {
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(Stream, SERIALIZE_CUSTOM_STREAM_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(ReferenceCounted, ECS_SERIALIZE_CUSTOM_TYPE_REFERENCE_COUNTED_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(SparseSet, SERIALIZE_SPARSE_SET_VERSION),
-		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(Color, SERIALIZE_CUSTOM_COLOR_VERSION),
-		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(ColorFloat, SERIALIZE_CUSTOM_COLOR_FLOAT_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(MaterialAsset, ECS_SERIALIZE_CUSTOM_TYPE_MATERIAL_ASSET_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(DataPointer, SERIALIZE_CUSTOM_DATA_POINTER_VERSION)
 	};

@@ -156,6 +156,12 @@ namespace ECSEngine {
 	*/
 	template<typename Base>
 	struct Base2 {
+		typedef Base Base;
+		constexpr static inline size_t BaseCount() {
+			return 2;
+		}
+		
+
 		constexpr Base2() {}
 		/*constexpr Base2(Base _x) : x(_x) {}*/
 		constexpr Base2(Base _x, Base _y) : x(_x), y(_y) {}
@@ -251,6 +257,11 @@ namespace ECSEngine {
 	*/
 	template<typename Base>
 	struct Base3 {
+		typedef Base Base;
+		constexpr inline static size_t BaseCount() {
+			return 3;
+		}
+
 		constexpr Base3() {}
 		//constexpr Base3(Base _x) : x(_x) {}
 		//constexpr Base3(Base _x, Base _y) : x(_x), y(_y) {}
@@ -353,6 +364,11 @@ namespace ECSEngine {
 	*/
 	template<class Base>
 	struct Base4 {
+		typedef Base Base;
+		constexpr static inline size_t BaseCount() {
+			return 4;
+		}
+
 		constexpr  Base4() {}
 		//constexpr Base4(Base _x) : x(_x) {}
 		//constexpr Base4(Base _x, Base _y) : x(_x), y(_y) {}
@@ -490,5 +506,47 @@ namespace ECSEngine {
 	typedef Base4<uint64_t> ulong4;
 	typedef Base4<float> float4;
 	typedef Base4<double> double4;
+
+	// Apply a pair-wise function on basic type with 2 components
+	template<typename BasicType, typename Functor>
+	ECS_INLINE BasicType BasicType2Action(BasicType first, BasicType second, Functor&& functor) {
+		return { (typename BasicType::Base)functor(first.x, second.x), (typename BasicType::Base)functor(first.y, second.y) };
+	}
+
+	// Apply a pair-wise function on a baisc type with 3 components
+	template<typename BasicType, typename Functor>
+	ECS_INLINE BasicType BasicType3Action(BasicType first, BasicType second, Functor&& functor) {
+		return { functor(first.x, second.x), functor(first.y, second.y), functor(first.z, second.z) };
+	}
+
+	// Apply a pair-wise function ob a basic type with 4 components
+	template<typename BasicType, typename Functor>
+	ECS_INLINE BasicType BasicType4Action(BasicType first, BasicType second, Functor&& functor) {
+		return { functor(first.x, second.x), functor(first.y, second.y), functor(first.z, second.z), functor(first.w, second.y) };
+	}
+
+	template<typename BasicType, typename Functor>
+	ECS_INLINE BasicType BasicTypeAction(BasicType first, BasicType second, Functor&& functor) {
+		constexpr size_t base_count = BasicType::BaseCount();
+		if constexpr (base_count == 2) {
+			return BasicType2Action(first, second, functor);
+		}
+		else if constexpr (base_count == 3) {
+			return BasicType3Action(first, second, functor);
+		}
+		else if constexpr (base_count == 4) {
+			return BasicType4Action(first, second, functor);
+		}
+		else {
+			static_assert(false, "Invalid Basic Type for Action");
+		}
+	}
+
+	template<typename BasicType>
+	ECS_INLINE BasicType Abs(BasicType first, BasicType second) {
+		return BasicTypeAction(first, second, [](auto first, auto second) {
+			return first > second ? first - second : second - first;
+		});
+	}
 
 }

@@ -34,7 +34,7 @@ namespace ECSEngine {
 			return !(*this == other);
 		}
 
-		ECS_INLINE float operator [](unsigned int index) const {
+		ECS_INLINE float ECS_VECTORCALL operator [](unsigned int index) const {
 			return value.extract(index);
 		}
 
@@ -96,7 +96,7 @@ namespace ECSEngine {
 			return { !is_equal.x, !is_equal.y };
 		}
 
-		ECS_INLINE float operator [](unsigned int index) const {
+		ECS_INLINE float ECS_VECTORCALL operator [](unsigned int index) const {
 			return value.extract(index);
 		}
 
@@ -131,11 +131,11 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		ECS_INLINE Quaternion Low() const {
+		ECS_INLINE Quaternion ECS_VECTORCALL Low() const {
 			return Quaternion(value.get_low());
 		}
 
-		ECS_INLINE Quaternion High() const {
+		ECS_INLINE Quaternion ECS_VECTORCALL High() const {
 			return Quaternion(value.get_high());
 		}
 
@@ -309,8 +309,65 @@ namespace ECSEngine {
 			Vector4 dot = Dot3(from_vector, half);
 			return Quaternion(blend4<0, 1, 2, 4>(axis, dot));
 		}
+
+		// Expects the from vector and the to vector to be normalized
+		ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromVectorsHelper(Vector8 from_vector, Vector8 to_vector) {
+			// If they are equal return an identity quaternion
+			if (from_vector == to_vector) {
+				return PackedQuaternionIdentity();
+			}
+			// else check if they are opposite 
+			// If they are, return the most orthogonal axis of the from_vector vector
+			// that can be used to create a pure quaternion
+			else if (from_vector == Vector8(-to_vector)) {
+				Vector8 no_abs_from_vector_vector = from_vector;
+				from_vector = abs(from_vector);
+				alignas(32) float4 values[2];
+				from_vector.StoreAligned(&values);
+
+				Vector8 one = VectorGlobals::ONE_8;
+				Vector8 zero = ZeroVector8();
+				Vector8 orthogonal = blend8<8, 0, 0, 0, 8, 0, 0, 0>(zero, one);
+
+				// first assignment - no need to do a second blend to keep the original values
+				if (values[0].y < values[0].x) {
+					orthogonal = blend8<0, 8, 0, 0, 8, 0, 0, 0>(zero, one);
+				}
+				else if (values[0].z < values[0].y && values[0].z < values[0].x) {
+					orthogonal = blend8<0, 0, 8, 0, 8, 0, 0, 0>(zero, one);
+				}
+
+				// second assignment - original values must be kept so a second blend must be done
+				if (values[1].y < values[1].x) {
+					// only the first 4 values of the zero one blend must be correct
+					orthogonal = blend8<0, 1, 2, 3, 8, 9, 10, 11>(blend8<0, 8, 0, 0, 0, 0, 0, 0>(zero, one), orthogonal);
+				}
+				else if (values[1].z < values[1].y && values[1].z < values[1].x) {
+					orthogonal = blend8<0, 1, 2, 3, 8, 9, 10, 11>(blend8<0, 0, 8, 0, 0, 0, 0, 0>(zero, one), orthogonal);
+				}
+
+				Vector8 axis = Normalize(Cross(no_abs_from_vector_vector, orthogonal));
+				return PackedQuaternion(blend8<0, 1, 2, 8, 4, 5, 6, 8>(axis, zero));
+			}
+
+			// can't be sure which branch each half must take
+			// so split them in 2 Vector4's and do each assignment
+			// and then merge
+			Vector4 from_vector_vector_low = from_vector.value.get_low();
+			Vector4 from_vector_vector_high = from_vector.value.get_high();
+
+			Vector4 to_vector_low = to_vector.value.get_low();
+			Vector4 to_vector_high = to_vector.value.get_high();
+
+			Quaternion quaternion_low = SIMDHelpers::QuaternionFromVectorsHelper(from_vector_vector_low, to_vector_low);
+			Quaternion quaternion_high = SIMDHelpers::QuaternionFromVectorsHelper(from_vector_vector_high, to_vector_high);
+
+			return PackedQuaternion(quaternion_low, quaternion_high);
+		}
 	}
 
+	// If the vectors are already normalized you can call directly
+	// SIMDHelpers::QuaternionFromVectorsHelper
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromVectors(Vector4 from, Vector4 to) {
 		// Normalize the vectors
 		from = Normalize3(from);
@@ -319,6 +376,8 @@ namespace ECSEngine {
 		return SIMDHelpers::QuaternionFromVectorsHelper(from, to);
 	}
 
+	// If the vectors are already normalized you can call directly
+	// SIMDHelpers::QuaternionFromVectorsHelper
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromVectors(float3 from, float3 to) {
 		Vector4 from_vector(from);
 		Vector4 to_vector(to);
@@ -326,64 +385,18 @@ namespace ECSEngine {
 		return QuaternionFromVectors(from_vector, to_vector);
 	}
 
+	// If the vectors are already normalized you can call directly
+	// SIMDHelpers::QuaternionFromVectorsHelper
 	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromVectors(Vector8 from, Vector8 to) {
 		// Normalize the vectors
 		from = Normalize3(from);
 		to = Normalize3(to);
 
-		// If they are equal return an identity quaternion
-		if (from == to) {
-			return PackedQuaternionIdentity();
-		}
-		// else check if they are opposite 
-		// If they are, return the most orthogonal axis of the from vector
-		// that can be used to create a pure quaternion
-		else if (from == Vector8(-to)) {
-			Vector8 no_abs_from_vector = from;
-			from = abs(from);
-			alignas(32) float4 values[2];
-			from.StoreAligned(&values);
-
-			Vector8 one = VectorGlobals::ONE_8;
-			Vector8 zero = ZeroVector8();
-			Vector8 orthogonal = blend8<8, 0, 0, 0, 8, 0, 0, 0>(zero, one);
-
-			// first assignment - no need to do a second blend to keep the original values
-			if (values[0].y < values[0].x) {
-				orthogonal = blend8<0, 8, 0, 0, 8, 0, 0, 0>(zero, one);
-			}
-			else if (values[0].z < values[0].y && values[0].z < values[0].x) {
-				orthogonal = blend8<0, 0, 8, 0, 8, 0, 0, 0>(zero, one);
-			}
-
-			// second assignment - original values must be kept so a second blend must be done
-			if (values[1].y < values[1].x) {
-				// only the first 4 values of the zero one blend must be correct
-				orthogonal = blend8<0, 1, 2, 3, 8, 9, 10, 11>(blend8<0, 8, 0, 0, 0, 0, 0, 0>(zero, one), orthogonal);
-			}
-			else if (values[1].z < values[1].y && values[1].z < values[1].x) {
-				orthogonal = blend8<0, 1, 2, 3, 8, 9, 10, 11>(blend8<0, 0, 8, 0, 0, 0, 0, 0>(zero, one), orthogonal);
-			}
-
-			Vector8 axis = Normalize(Cross(no_abs_from_vector, orthogonal));
-			return PackedQuaternion(blend8<0, 1, 2, 8, 4, 5, 6, 8>(axis, zero));
-		}
-
-		// can't be sure which branch each half must take
-		// so split them in 2 Vector4's and do each assignment
-		// and then merge
-		Vector4 from_vector_low = from.value.get_low();
-		Vector4 from_vector_high = from.value.get_high();
-
-		Vector4 to_vector_low = to.value.get_low();
-		Vector4 to_vector_high = to.value.get_high();
-
-		Quaternion quaternion_low = SIMDHelpers::QuaternionFromVectorsHelper(from_vector_low, to_vector_low);
-		Quaternion quaternion_high = SIMDHelpers::QuaternionFromVectorsHelper(from_vector_high, to_vector_high);
-
-		return PackedQuaternion(quaternion_low, quaternion_high);
+		return SIMDHelpers::QuaternionFromVectorsHelper(from, to);
 	}
 
+	// If the vectors are already normalized you can call directly
+	// SIMDHelpers::QuaternionFromVectorsHelper
 	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromVectors(Vector4 from1, Vector4 to1, Vector4 from2, Vector4 to2) {
 		Vector8 from(from1, from2);
 		Vector8 to(to1, to2);

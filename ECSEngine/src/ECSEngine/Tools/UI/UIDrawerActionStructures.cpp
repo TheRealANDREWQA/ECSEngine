@@ -459,11 +459,23 @@ namespace ECSEngine {
 			}
 		}
 
-		void UIDrawerColorInput::Callback(ActionData* action_data)
+		void UIDrawerColorInput::Callback(ActionData* action_data, bool final)
 		{
 			if (callback.action != nullptr) {
-				action_data->data = callback.data;
-				callback.action(action_data);
+				if (final && final_callback.action != nullptr) {
+					action_data->data = final_callback.data;
+					final_callback.action(action_data);
+				}
+				else {
+					action_data->data = callback.data;
+					callback.action(action_data);
+				}
+			}
+			else {
+				if (final && final_callback.action != nullptr) {
+					action_data->data = final_callback.data;
+					final_callback.action(action_data);
+				}
 			}
 		}
 

@@ -120,13 +120,13 @@ struct InspectorDrawEntityData {
 		}
 		if (created_instances.size > 0) {
 			for (size_t index = 0; index < created_instances.size; index++) {
-				if (editor_state->module_reflection->GetInstancePtr(created_instances[index].name) != nullptr) {
+				if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
 					// It is from the module side
 					editor_state->module_reflection->DestroyInstance(created_instances[index].name);
 				}
 				else {
 					// It must be from the engine side
-					ECS_ASSERT(editor_state->ui_reflection->GetInstancePtr(created_instances[index].name) != nullptr);
+					ECS_ASSERT(editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr);
 					editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
 				}
 				editor_state->editor_allocator->Deallocate(created_instances[index].name.buffer);
@@ -156,6 +156,11 @@ struct InspectorDrawEntityData {
 		// Unregister the asset handles
 		UnregisterSandboxLinkComponent(editor_state, sandbox_index, link_components[index].data, link_components[index].name);
 
+		ClearLinkComponentSkipAssets(editor_state, index);
+	}
+
+	// Clears the component without unregistering the asset handles
+	void ClearLinkComponentSkipAssets(EditorState* editor_state, unsigned int index) {
 		unsigned int matching_input_index = FindMatchingInput(link_components[index].name);
 		ClearComponent(editor_state, matching_input_index);
 		// Reallocate the link component - since it might have changed byte size
@@ -168,7 +173,7 @@ struct InspectorDrawEntityData {
 		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_components[index].name);
 		ECSEngine::ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[index].data);
 	}
-
+	
 	unsigned int FindMatchingInput(Stream<char> component_name) const {
 		return function::FindString(component_name, matching_inputs, [](MatchingInputs input) { return input.component_name; });
 	}
@@ -185,13 +190,13 @@ struct InspectorDrawEntityData {
 		for (size_t index = 0; index < created_instances.size; index++) {
 			// The name of the component is at the beginning of each instance name
 			if (memcmp(created_instances[index].name.buffer, component_name.buffer, component_name.size * sizeof(char)) == 0) {
-				if (editor_state->module_reflection->GetInstancePtr(created_instances[index].name) != nullptr) {
+				if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
 					// It is from the module side
 					editor_state->module_reflection->DestroyInstance(created_instances[index].name);
 				}
 				else {
 					// It must be from the engine side
-					ECS_ASSERT(editor_state->ui_reflection->GetInstancePtr(created_instances[index].name) != nullptr);
+					ECS_ASSERT(editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr);
 					editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
 				}
 				editor_state->editor_allocator->Deallocate(created_instances[index].name.buffer);
@@ -204,9 +209,11 @@ struct InspectorDrawEntityData {
 	// Removes all the memory allocated for the capacity inputs of that component
 	void RemoveComponent(EditorState* editor_state, Stream<char> component_name) {
 		unsigned int index = FindMatchingInput(component_name);
-		ECS_ASSERT(index != -1);
-		ClearComponent(editor_state, index);
-		matching_inputs.RemoveSwapBack(index);
+		if (index != -1) {
+			// Some components can be missing the matching inputs (they have no buffers)
+			ClearComponent(editor_state, index);
+			matching_inputs.RemoveSwapBack(index);
+		}
 		RemoveCreatedInstance(editor_state, component_name);
 	}
 
@@ -232,9 +239,6 @@ struct InspectorDrawEntityData {
 	}
 
 	void ResetLinkComponent(EditorState* editor_state, unsigned int link_index, unsigned int sandbox_index) {
-		// Unregister the asset handles
-		UnregisterSandboxLinkComponent(editor_state, sandbox_index, link_components[link_index].data, link_components[link_index].name);
-
 		unsigned int matching_input_index = FindMatchingInput(link_components[link_index].name);
 		ResetComponent(editor_state, matching_input_index);
 
@@ -311,10 +315,6 @@ void RemoveComponentCallback(ActionData* action_data) {
 	RemoveComponentCallbackData* data = (RemoveComponentCallbackData*)_data;
 	Stream<char> link_target = data->editor_state->editor_components.GetComponentFromLink(data->component_name);
 	if (link_target.size > 0) {
-		unsigned int link_index = data->draw_data->FindLinkComponent(data->component_name);
-		ECS_ASSERT(link_index != -1);
-		UnregisterSandboxLinkComponent(data->editor_state, data->sandbox_index, data->draw_data->link_components[link_index].data, data->component_name);
-		
 		data->draw_data->RemoveLinkComponent(data->editor_state, data->component_name);
 		data->component_name = link_target;
 	}
@@ -485,8 +485,6 @@ void InspectorEntityHeaderConstructButtons(
 // ----------------------------------------------------------------------------------------------------------------------------
 
 void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
-	EDITOR_STATE(editor_state);
-
 	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
 	InspectorDrawEntityData* data = (InspectorDrawEntityData*)_data;
 
@@ -641,14 +639,14 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 			// Check to see whether or not the component is from the engine side or from the module side
 			UIReflectionDrawer* ui_drawer = editor_state->module_reflection;
-			UIReflectionType* type = editor_state->ui_reflection->GetTypePtr(current_component_name);
+			UIReflectionType* type = editor_state->ui_reflection->GetType(current_component_name);
 			if (type != nullptr) {
 				// Engine side
 				ui_drawer = editor_state->ui_reflection;
 			}
 			// Else module side
 
-			UIReflectionInstance* instance = ui_drawer->GetInstancePtr(instance_name);
+			UIReflectionInstance* instance = ui_drawer->GetInstance(instance_name);
 
 			auto set_instance_inputs = [&]() {
 				// Check to see if it has any buffers and bind their allocators
@@ -671,7 +669,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 					ui_drawer->AssignInstanceResizableAllocator(instance, component_allocator, false);
 					// For every text input, directory input or file input, allocate a separate buffer
 					// such that we don't use the component allocator to hold that data
-					UIReflectionType ui_type = ui_drawer->GetType(instance->type_name);
+					const UIReflectionType* ui_type = ui_drawer->GetType(instance->type_name);
 
 					ECS_STACK_CAPACITY_STREAM(unsigned int, input_indices, 64);
 					ui_drawer->GetTypeMatchingFields(ui_type, UIReflectionIndex::TextInput, input_indices);
@@ -741,7 +739,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 						
 					}
 					else {
-						data->ClearLinkComponent(editor_state, link_index, sandbox_index);
+						data->ClearLinkComponentSkipAssets(editor_state, link_index);
 					}
 					current_component = data->link_components[link_index].data;
 
@@ -1000,13 +998,6 @@ void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_ind
 		sizeof(*draw_data) + INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY,
 		sandbox_index
 	);
-}
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
-void ChangeInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
-{
-	editor_state->inspector_manager.data[inspector_index].target_sandbox = sandbox_index;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "../Rendering/RenderingStructures.h"
-#include "../Internal/Multithreading/ThreadTask.h"
+#include "../Multithreading/ThreadTask.h"
 
 namespace ECSEngine {
 

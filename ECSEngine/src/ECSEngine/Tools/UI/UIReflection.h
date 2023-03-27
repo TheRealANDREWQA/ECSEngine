@@ -243,10 +243,10 @@ namespace ECSEngine {
 
 		struct UIReflectionDrawer;
 
-		// Any buffers that are allocated need to be placed into the buffers capacity stream
-		typedef void (*UIReflectionInstanceInitializeOverride)(UIReflectionDrawer* drawer, Stream<char> name, void* data, void* global_data);
+		typedef void (*UIReflectionInstanceInitializeOverride)(AllocatorPolymorphic allocator, UIReflectionDrawer* drawer, Stream<char> name, void* data, void* global_data);
 
 #define ECS_UI_REFLECTION_INSTANCE_INITIALIZE_OVERRIDE(name) void name( \
+		ECSEngine::AllocatorPolymorphic allocator, \
 		ECSEngine::Tools::UIReflectionDrawer* drawer, \
 		ECSEngine::Stream<char> name, \
 		void* _data, \
@@ -399,8 +399,7 @@ namespace ECSEngine {
 			// This will be called for all fields of that override type
 			void BindInstanceFieldOverride(UIReflectionInstance* instance, Stream<char> tag, UIReflectionInstanceModifyOverride modify_override, void* user_data);
 			
-			// If the allocator is left unspecified, then it will use the allocator for this
-			// UIReflectionDrawer
+			// If the allocator is left unspecified, then it will use the allocator from this UIReflectionDrawer
 			void BindInstanceFieldOverride(
 				void* override_data, 
 				Stream<char> tag, 
@@ -431,9 +430,22 @@ namespace ECSEngine {
 			// Can optionally specify a name by which it will be identified
 			UIReflectionType* CreateType(const Reflection::ReflectionType* type, Stream<char> identifier_name = { nullptr, 0 });
 
-			UIReflectionInstance* CreateInstance(Stream<char> name, Stream<char> type_name);
+			// Can optionally give a user defined allocator to be used for allocations inside the user defined fields.
+			// By default it will pass on the allocator of this UIReflectionDrawer. It will store this allocator and give
+			// it back to the deallocate function unless overriden. The allocation of the field overrides actually happens
+			// when the function BindInstancePtrs is called - not on this call
+			UIReflectionInstance* CreateInstance(Stream<char> name, Stream<char> type_name, AllocatorPolymorphic user_defined_allocator = { nullptr });
 			// If the identifier name is specified, it will use that as the type_name instead of type->name
-			UIReflectionInstance* CreateInstance(Stream<char> name, const UIReflectionType* type, Stream<char> identifier_name = { nullptr, 0 });
+			// Can optionally give a user defined allocator to be used for allocations inside the user defined fields.
+			// By default it will pass on the allocator of this UIReflectionDrawer. It will store this allocator and give
+			// it back to the deallocate function unless overriden. The allocation of the field overrides actually happens
+			// when the function BindInstancePtrs is called - not on this call
+			UIReflectionInstance* CreateInstance(
+				Stream<char> name, 
+				const UIReflectionType* type, 
+				Stream<char> identifier_name = { nullptr, 0 }, 
+				AllocatorPolymorphic user_defined_allocator = { nullptr }
+			);
 
 			// It will create a type for each reflected type from the given hierarchy.
 			// Returns how many types were created
@@ -473,7 +485,8 @@ namespace ECSEngine {
 			void DisableInputWrites(UIReflectionType* type, bool all_writes = true);
 			
 			// User facing method. If the allocator is left unspecified then it will use the
-			// allocator from this UIReflectionDrawer
+			// allocator from the UIReflectionDrawer. Be careful what allocator you give (the same one
+			// as when initializing)
 			void DeallocateFieldOverride(Stream<char> tag, void* data, AllocatorPolymorphic allocator = { nullptr });
 
 			void DeallocateInstance(UIReflectionInstance* instance);
@@ -546,38 +559,40 @@ namespace ECSEngine {
 			// If a suffix is provided, only those instances which match a type name with the appended suffix will be provided
 			void GetHierarchyInstances(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options);
 
-			UIReflectionInstance GetInstance(Stream<char> name) const;
-			UIReflectionInstance GetInstance(unsigned int index) const;
-			
-			// It will assert that it exists
-			UIReflectionType GetType(Stream<char> name) const;
-			// It will assert that it exists
-			UIReflectionType GetType(unsigned int index) const;
-
-			// Returns nullptr if it doesn't exist.
-			UIReflectionType* GetTypePtr(Stream<char> name);
 			// Returns nullptr if it doesn't exist
-			UIReflectionType* GetTypePtr(unsigned int index);
+			UIReflectionInstance* GetInstance(Stream<char> name);
+			// Returns nullptr if it doesn't exist
+			UIReflectionInstance* GetInstance(unsigned int index);
+
+			const UIReflectionInstance* GetInstance(Stream<char> name) const;
+			const UIReflectionInstance* GetInstance(unsigned int index) const;
+			
+			// Returns nullptr if it doesn't exist.
+			UIReflectionType* GetType(Stream<char> name);
+			// Returns nullptr if it doesn't exist
+			UIReflectionType* GetType(unsigned int index);
+
+			// It will assert that it exists
+			const UIReflectionType* GetType(Stream<char> name) const;
+			// It will assert that it exists
+			const UIReflectionType* GetType(unsigned int index) const;
 
 			unsigned int GetTypeCount() const;
 			unsigned int GetInstanceCount() const;
 
-			// Returns nullptr if it doesn't exist
-			UIReflectionInstance* GetInstancePtr(Stream<char> name);
-			// Returns nullptr if it doesn't exist
-			UIReflectionInstance* GetInstancePtr(unsigned int index);
-
-			void GetTypeMatchingFields(UIReflectionType type, UIReflectionIndex index, CapacityStream<unsigned int>& indices) const;
-			void GetTypeMatchingFields(UIReflectionType type, UIReflectionStreamType stream_type, CapacityStream<unsigned int>& indices) const;
+			void GetTypeMatchingFields(const UIReflectionType* type, UIReflectionIndex index, CapacityStream<unsigned int>& indices) const;
+			void GetTypeMatchingFields(const UIReflectionType* type, UIReflectionStreamType stream_type, CapacityStream<unsigned int>& indices) const;
 
 			// Returns the current bound stream for the TextInput/DirectoryInput/FileInput
 			CapacityStream<void> GetInputStream(const UIReflectionInstance* instance, unsigned int field_index) const;
 			
-			unsigned int GetTypeFieldIndex(UIReflectionType type, Stream<char> field_name) const;
+			unsigned int GetTypeFieldIndex(const UIReflectionType* type, Stream<char> field_name) const;
 			unsigned int GetTypeFieldIndex(Stream<char> type_name, Stream<char> field_name);
 
 			// User facing method
-			void* InitializeFieldOverride(Stream<char> tag, Stream<char> name);
+			// Can optionally give a user defined allocator to be used for allocations inside the user defined fields.
+			// By default it will pass on the allocator of this UIReflectionDrawer
+			void* InitializeFieldOverride(Stream<char> tag, Stream<char> name, AllocatorPolymorphic allocator = { nullptr });
 
 			void OmitTypeField(Stream<char> type_name, Stream<char> field_name);
 			void OmitTypeField(UIReflectionType* type, Stream<char> field_name);

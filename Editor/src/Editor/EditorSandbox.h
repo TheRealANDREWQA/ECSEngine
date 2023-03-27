@@ -9,6 +9,7 @@
 struct EditorState;
 
 #define EDITOR_SCENE_EXTENSION L".scene"
+#define EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT ECS_CONSTANT_REFLECT(8)
 
 enum EDITOR_SANDBOX_STATE {
 	EDITOR_SANDBOX_SCENE,
@@ -40,6 +41,24 @@ struct ECS_REFLECT EditorSandboxModule {
 
 // -------------------------------------------------------------------------------------------------------------
 
+enum EDITOR_SANDBOX_VIEWPORT : unsigned char {
+	EDITOR_SANDBOX_VIEWPORT_SCENE,
+	EDITOR_SANDBOX_VIEWPORT_RUNTIME,
+	EDITOR_SANDBOX_VIEWPORT_COUNT
+};
+
+// It will map the paused state to the runtime viewport
+inline EDITOR_SANDBOX_VIEWPORT EditorViewportTextureFromState(EDITOR_SANDBOX_STATE sandbox_state) {
+	switch (sandbox_state) {
+	case EDITOR_SANDBOX_SCENE:
+		return EDITOR_SANDBOX_VIEWPORT_SCENE;
+	case EDITOR_SANDBOX_RUNNING:
+		return EDITOR_SANDBOX_VIEWPORT_RUNTIME;
+	case EDITOR_SANDBOX_PAUSED:
+		return EDITOR_SANDBOX_VIEWPORT_RUNTIME;
+	}
+}
+
 struct ECS_REFLECT EditorSandbox {
 	inline ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
 		return (ECSEngine::GlobalMemoryManager*)modules_in_use.allocator.allocator;
@@ -69,6 +88,9 @@ struct ECS_REFLECT EditorSandbox {
 	// When the step button is clicked, if this sandbox should step
 	bool should_step;
 
+	ECSEngine::CameraParametersFOV camera_parameters;
+	ECSEngine::OrientedPoint camera_saved_orientations[EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT];
+
 	ECS_FIELDS_END_REFLECT;
 
 	EDITOR_SANDBOX_STATE run_state;
@@ -79,10 +101,8 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::WorldDescriptor runtime_descriptor;
 	ECSEngine::AssetDatabaseReference database;
 
-	ECSEngine::ResourceView viewport_texture;
-	ECSEngine::DepthStencilView viewport_texture_depth;
-	ECSEngine::RenderTargetView viewport_render_target;
-	ECSEngine::TaskScheduler task_dependencies;
+	ECSEngine::RenderDestination viewport_render_destination[EDITOR_SANDBOX_VIEWPORT_COUNT];
+	ECSEngine::ResourceView viewport_transferred_texture[EDITOR_SANDBOX_VIEWPORT_COUNT];
 
 	ECSEngine::EntityManager scene_entities;
 	ECSEngine::World sandbox_world;
@@ -106,6 +126,10 @@ void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_index, uns
 // Returns true when all the modules that are currently used by the sandbox are compiled
 // Else false
 bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void BindSandboxGraphicsCamera(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -147,6 +171,10 @@ void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_
 
 // -------------------------------------------------------------------------------------------------------------
 
+void ClearSandboxTaskScheduler(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
@@ -158,6 +186,24 @@ bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index
 
 // Can delay the initialization of the runtime for later on. It must be done manually to a call with InitializeSandboxRuntime
 void CreateSandbox(EditorState* editor_state, bool initialize_runtime = true);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if it succeeded in creating the scheduling order for the sandbox. Can disable the automatic
+// printing of the error message if it fails.
+bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_index, bool disable_error_message = false);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if it succeeded in creating the scheduling order for the sandbox using the given mask for the modules to schedule.
+// The module mask must index into the sandbox editor module indices, not into ProjectModules
+// Can disable the automatic printing of the error message if it fails.
+bool ConstructSandboxSchedulingOrder(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ECSEngine::Stream<unsigned int> module_indices, 
+	bool disable_error_message = false
+);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -179,11 +225,29 @@ void DestroySandbox(EditorState* editor_state, unsigned int index);
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Checks to see that the textures are actually created before freeing
+// If the viewport is left unspecified, it will call this function for all viewports
+void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
+
+// -------------------------------------------------------------------------------------------------------------
+
 EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
 const EditorSandbox* GetSandbox(const EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+EditorSandboxModule* GetSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+const EditorSandboxModule* GetSandboxModule(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+const EditorModuleInfo* GetSandboxModuleInfo(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -245,6 +309,13 @@ ECSEngine::WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state,
 // -------------------------------------------------------------------------------------------------------------
 
 void GetSandboxGraphicsModules(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>& indices);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns the index inside the modules stream of the sandbox of the graphics module. If it doesn't exist or
+// there are multiple graphics modules it returns -1. If the fail reason is set, it will make it false if there
+// are no graphics, else true since there are multiple modules
+unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned int sandbox_index, bool* multiple_modules = nullptr);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -357,6 +428,15 @@ void ReinitializeSandboxRuntime(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Records the current position of the camera into the given slot
+void RegisterSandboxCameraTransform(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	unsigned int camera_index
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // If there is an out-of-date runtime settings then it will try to update it
 void ReloadSandboxRuntimeSettings(
 	EditorState* editor_state
@@ -376,6 +456,28 @@ void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox
 // All sandboxes will remove the given module from being used and deallocate any entities data stored
 // that was coming from that module
 void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Sets all the required graphics options needed to run the given viewport
+// Returns the current snapshot of the runtime graphics. It is allocated from the EditorAllocator()
+ECSEngine::GraphicsResourceSnapshot RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// The snapshot must be given from the Initialize call
+void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::GraphicsResourceSnapshot snapshot);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if the render was successful. It can fail if there is no graphics module, there are multiple of them or the
+// task scheduling failed for the graphics module.
+bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// The new size needs to be specified in texels
+void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, ECSEngine::uint2 new_size);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -432,6 +534,10 @@ void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_index)
 
 // Doesn't save to the file after the change. Must manually call the save function
 void SetSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index, const ECSEngine::WorldDescriptor& descriptor);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 

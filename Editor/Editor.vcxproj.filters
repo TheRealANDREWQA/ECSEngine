@@ -60,6 +60,7 @@
     <ClInclude Include="src\UI\Inspector\InspectorMiscFile.h" />
     <ClInclude Include="src\Editor\EditorEventDef.h" />
     <ClInclude Include="src\Assets\AssetTick.h" />
+    <ClInclude Include="src\UI\Common.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -112,6 +113,7 @@
     <ClCompile Include="src\UI\Inspector\InspectorMaterialFile.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorMiscFile.cpp" />
     <ClCompile Include="src\Assets\AssetTick.cpp" />
+    <ClCompile Include="src\UI\Common.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

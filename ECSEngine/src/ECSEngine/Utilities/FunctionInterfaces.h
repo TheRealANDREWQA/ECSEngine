@@ -44,7 +44,7 @@ string_name.AssertCapacity();
 (string).AssertCapacity();
 
 #define ECS_FORMAT_ERROR_MESSAGE(error_message, base_characters, ...) if (error_message != nullptr) { \
-	error_message->size = function::FormatString(error_message->buffer, base_characters, __VA_ARGS__); \
+	error_message->size += function::FormatString(error_message->buffer + error_message->size, base_characters, __VA_ARGS__); \
 }
 
 	namespace function {
@@ -651,191 +651,106 @@ string_name.AssertCapacity();
 			characters[characters.size] = '\0';
 		}
 
-		// returns the number of characters written
-		template<typename Parameter>
-		ulong2 FormatStringInternal(
-			char* end_characters,
-			const char* base_characters,
-			Parameter parameter
-		) {
-			const char* string_ptr = strstr(base_characters, "{#}");
-			if (string_ptr != nullptr) {
-				size_t copy_count = (uintptr_t)string_ptr - (uintptr_t)base_characters;
-				memcpy(end_characters, base_characters, copy_count);
+		namespace Internal {
+			// Returns how many total characters have been written in the x component
+		// and in the y component the offset into the base characters where the string was found
+			template<typename Parameter>
+			ulong2 FormatStringInternal(
+				char* end_characters,
+				const char* base_characters,
+				Parameter parameter
+			) {
+				const char* string_ptr = strstr(base_characters, "{#}");
+				if (string_ptr != nullptr) {
+					size_t copy_count = (uintptr_t)string_ptr - (uintptr_t)base_characters;
+					memcpy(end_characters, base_characters, copy_count);
 
-				Stream<char> temp_stream = Stream<char>(end_characters, copy_count);
-				if constexpr (std::is_floating_point_v<Parameter>) {
-					if constexpr (std::is_same_v<Parameter, float>) {
-						function::ConvertFloatToChars(temp_stream, parameter, 3);
+					Stream<char> temp_stream = Stream<char>(end_characters, copy_count);
+					if constexpr (std::is_floating_point_v<Parameter>) {
+						if constexpr (std::is_same_v<Parameter, float>) {
+							function::ConvertFloatToChars(temp_stream, parameter, 3);
+						}
+						else if constexpr (std::is_same_v<Parameter, double>) {
+							function::ConvertDoubleToChars(temp_stream, parameter, 3);
+						}
 					}
-					else if constexpr (std::is_same_v<Parameter, double>) {
-						function::ConvertDoubleToChars(temp_stream, parameter, 3);
+					else if constexpr (std::is_integral_v<Parameter>) {
+						function::ConvertIntToChars(temp_stream, static_cast<int64_t>(parameter));
 					}
-				}
-				else if constexpr (std::is_integral_v<Parameter>) {
-					function::ConvertIntToChars(temp_stream, static_cast<int64_t>(parameter));
-				}
-				else if constexpr (std::is_pointer_v<Parameter>) {
-					if constexpr (std::is_same_v<Parameter, const char*>) {
-						size_t substring_size = strlen(parameter);
-						memcpy(temp_stream.buffer + temp_stream.size, parameter, substring_size);
-						temp_stream.size += substring_size;
+					else if constexpr (std::is_pointer_v<Parameter>) {
+						if constexpr (std::is_same_v<Parameter, const char*>) {
+							size_t substring_size = strlen(parameter);
+							memcpy(temp_stream.buffer + temp_stream.size, parameter, substring_size);
+							temp_stream.size += substring_size;
+							temp_stream[temp_stream.size] = '\0';
+						}
+						else if constexpr (std::is_same_v<Parameter, const wchar_t*>) {
+							size_t wide_count = wcslen(parameter);
+							function::ConvertWideCharsToASCII(parameter, temp_stream.buffer + temp_stream.size, wide_count, wide_count + 1);
+							temp_stream.size += wide_count;
+							temp_stream[temp_stream.size] = '\0';
+						}
+						else {
+							function::ConvertIntToHex(temp_stream, (int64_t)parameter);
+						}
+					}
+					else if constexpr (std::is_same_v<Parameter, CapacityStream<wchar_t>> || std::is_same_v<Parameter, Stream<wchar_t>>) {
+						CapacityStream<char> placeholder_stream(temp_stream.buffer, temp_stream.size, temp_stream.size + parameter.size + 1);
+						function::ConvertWideCharsToASCII(parameter, placeholder_stream);
+						temp_stream.size += parameter.size;
 						temp_stream[temp_stream.size] = '\0';
 					}
-					else if constexpr (std::is_same_v<Parameter, const wchar_t*>) {
-						size_t wide_count = wcslen(parameter);
-						function::ConvertWideCharsToASCII(parameter, temp_stream.buffer + temp_stream.size, wide_count, wide_count + 1);
-						temp_stream.size += wide_count;
-						temp_stream[temp_stream.size] = '\0';
+					else if constexpr (std::is_same_v<Parameter, CapacityStream<char>> || std::is_same_v<Parameter, Stream<char>>) {
+						temp_stream.AddStream(parameter);
 					}
-					else {
-						function::ConvertIntToHex(temp_stream, (int64_t)parameter);
-					}
+					return { temp_stream.size, copy_count };
 				}
-				else if constexpr (std::is_same_v<Parameter, CapacityStream<wchar_t>> || std::is_same_v<Parameter, Stream<wchar_t>>) {
-					CapacityStream<char> placeholder_stream(temp_stream.buffer, temp_stream.size, temp_stream.size + parameter.size + 1);
-					function::ConvertWideCharsToASCII(parameter, placeholder_stream);
-					temp_stream.size += parameter.size;
-					temp_stream[temp_stream.size] = '\0';
-				}
-				else if constexpr (std::is_same_v<Parameter, CapacityStream<char>> || std::is_same_v<Parameter, Stream<char>>) {
-					temp_stream.AddStream(parameter);
-				}
-				return { temp_stream.size, copy_count };
+
+				return { 0, 0 };
 			}
 
-			return { 0, 0 };
+			extern template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*);
+			extern template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*);
+			extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>);
+			extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>);
+			extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>);
+			extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>);
+			extern template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int);
+			extern template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*);
+			extern template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float);
+			extern template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double);
+
+			template<typename FirstParameter, typename... Parameters>
+			void FormatStringImpl(char* destination, const char* base_characters, ulong2& written_characters, const FirstParameter& first_parameter, Parameters... parameters) {
+				ulong2 current_written_characters = FormatStringInternal(destination + written_characters.x, base_characters + written_characters.y, first_parameter);
+				written_characters.x += current_written_characters.x;
+				written_characters.y += current_written_characters.y + 3;
+
+				if constexpr (sizeof...(Parameters) > 0) {
+					FormatStringImpl(destination, base_characters, written_characters, parameters...);
+				}
+			}
+
 		}
 
-		extern template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double);
+		// Returns the count of the characters written
+		template<typename... Parameters>
+		size_t FormatString(char* destination, const char* base_characters, Parameters... parameters) {
+			ulong2 written_characters = { 0, 0 };
+			Internal::FormatStringImpl(destination, base_characters, written_characters, parameters...);
 
-#define FORMAT_STRING_START ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1); \
-							characters_written.y += 3;
-#define FORMAT_STRING_HELPER(index) characters_written += FormatStringInternal(destination +  characters_written.x, base_characters + characters_written.y, parameter##index); \
-									characters_written.y += 3;
-
-#define FORMAT_STRING_END	size_t base_character_count = strlen(base_characters); \
-							memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y); \
-							characters_written.x += base_character_count - characters_written.y; \
-							destination[characters_written.x] = '\0'; \
-							return characters_written.x;
-
-		// returns the count of the characters written;
-		template<typename Parameter1>
-		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1) {
-			FORMAT_STRING_START;
-			FORMAT_STRING_END;
+			// The remaining characters still need to be copied
+			size_t base_character_count = strlen(base_characters);
+			memcpy(destination + written_characters.x, base_characters + written_characters.y, base_character_count - written_characters.y);
+			written_characters.x += base_character_count - written_characters.y;
+			destination[written_characters.x] = '\0';
+			return written_characters.x;
 		}
-
-		// returns the count of the characters written
-		template<typename Parameter1, typename Parameter2>
-		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2) {
-			FORMAT_STRING_START;
-			FORMAT_STRING_HELPER(2);
-			FORMAT_STRING_END;
-		}
-
-		// returns the count of the characters written
-		template<typename Parameter1, typename Parameter2, typename Parameter3>
-		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3) {
-			FORMAT_STRING_START;
-			FORMAT_STRING_HELPER(2);
-			FORMAT_STRING_HELPER(3);
-			FORMAT_STRING_END;
-		}
-
-		// returns the count of the characters written
-		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4>
-		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4) {
-			FORMAT_STRING_START;
-			FORMAT_STRING_HELPER(2);
-			FORMAT_STRING_HELPER(3);
-			FORMAT_STRING_HELPER(4);
-			FORMAT_STRING_END;
-		}
-
-		// returns the count of the characters written
-		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4, typename Parameter5>
-		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5) {
-			FORMAT_STRING_START;
-			FORMAT_STRING_HELPER(2);
-			FORMAT_STRING_HELPER(3);
-			FORMAT_STRING_HELPER(3);
-			FORMAT_STRING_HELPER(5);
-			FORMAT_STRING_END;
-		}
-
-		// returns the count of the characters written
-		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4, typename Parameter5, typename Parameter6>
-		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5, Parameter6 parameter6) {
-			FORMAT_STRING_START;
-			FORMAT_STRING_HELPER(2);
-			FORMAT_STRING_HELPER(3);
-			FORMAT_STRING_HELPER(4);
-			FORMAT_STRING_HELPER(3);
-			FORMAT_STRING_HELPER(6);
-			FORMAT_STRING_END;
-		}
-
-		// returns the count of the characters written
-		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4, typename Parameter5, typename Parameter6, typename Parameter7>
-		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5, Parameter6 parameter6, Parameter7 parameter7) {
-			FORMAT_STRING_START;
-			FORMAT_STRING_HELPER(2);
-			FORMAT_STRING_HELPER(3);
-			FORMAT_STRING_HELPER(4);
-			FORMAT_STRING_HELPER(5);
-			FORMAT_STRING_HELPER(6);
-			FORMAT_STRING_HELPER(7);
-			FORMAT_STRING_END;
-		}
-
-		// returns the count of the characters written
-		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4, typename Parameter5, typename Parameter6, typename Parameter7, typename Parameter8>
-		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5, Parameter6 parameter6, Parameter7 parameter7, Parameter8 parameter8) {
-			FORMAT_STRING_START;
-			FORMAT_STRING_HELPER(2);
-			FORMAT_STRING_HELPER(3);
-			FORMAT_STRING_HELPER(4);
-			FORMAT_STRING_HELPER(5);
-			FORMAT_STRING_HELPER(6);
-			FORMAT_STRING_HELPER(7);
-			FORMAT_STRING_HELPER(8);
-			FORMAT_STRING_END;
-		}
-
-		// returns the count of the characters written
-		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4, typename Parameter5, typename Parameter6, typename Parameter7, typename Parameter8, typename Parameter9>
-		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5, Parameter6 parameter6, Parameter7 parameter7, Parameter8 parameter8, Parameter9 parameter9) {
-			FORMAT_STRING_START;
-			FORMAT_STRING_HELPER(2);
-			FORMAT_STRING_HELPER(3);
-			FORMAT_STRING_HELPER(4);
-			FORMAT_STRING_HELPER(5);
-			FORMAT_STRING_HELPER(6);
-			FORMAT_STRING_HELPER(7);
-			FORMAT_STRING_HELPER(8);
-			FORMAT_STRING_HELPER(9);
-			FORMAT_STRING_END;
-		}
-
-#undef FORMAT_STRING_HELPER
-#undef FORMAT_STRING_START
-#undef FORMAT_STRING_END
 
 		// Idiot C++ thingy, char and int8_t does not equal to the same according to the compiler, only signed char
 		// and int8_t; So make all the signed version separately
 		template<typename Integer>
-		void IntegerRange(Integer& min, Integer& max) {
+		ECS_INLINE void IntegerRange(Integer& min, Integer& max) {
 			if constexpr (std::is_same_v<Integer, char>) {
 				min = CHAR_MIN;
 				max = CHAR_MAX;
@@ -884,6 +799,46 @@ string_name.AssertCapacity();
 				min = 0;
 				max = ULLONG_MAX;
 			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
+		// Returns a + b
+		// If it overflows, it will set it to the maximum value for that integer
+		template<typename Integer>
+		ECS_INLINE Integer SaturateAdd(Integer a, Integer b) {
+			Integer new_value = a + b;
+			Integer min, max;
+			function::IntegerRange(min, max);
+			return new_value < a ? max : new_value;
+		}
+
+		// Stores the result in the given pointer and returns the previous value at that pointer
+		// If it overflows, it will set it to the maximum value for that integer
+		template<typename Integer>
+		ECS_INLINE Integer SaturateAdd(Integer* a, Integer b) {
+			Integer old_value = *a;
+			*a = SaturateAdd(*a, b);
+			return old_value;
+		}
+
+		// Returns a - b
+		// If it overflows, it will set it to the min value for that integer
+		template<typename Integer>
+		ECS_INLINE Integer SaturateSub(Integer a, Integer b) {
+			Integer new_value = a - b;
+			Integer min, max;
+			function::IntegerRange(min, max);
+			return new_value > a ? min : new_value;
+		}
+
+		// Stores the result in the given pointer and returns the previous value at that pointer
+		// If it overflows, it will set it to the min value for that integer
+		template<typename Integer>
+		ECS_INLINE Integer SaturateSub(Integer* a, Integer b) {
+			Integer old_value = *a;
+			*a = SaturateSub(*a, b);
+			return old_value;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------
@@ -942,120 +897,61 @@ string_name.AssertCapacity();
 
 		// -----------------------------------------------------------------------------------------------------------------------
 
-		// Allocates a single chunk of memory and then partitions the buffer to each stream
-		// without copying the data from the streams
-		template<typename Stream0, typename Stream1>
-		void CoallesceStreamsEmpty(AllocatorPolymorphic allocator, Stream0& stream0, Stream1& stream1) {
-			size_t total_size = stream0.MemoryOf(stream0.size) + stream1.MemoryOf(stream1.size);
-			void* allocation = AllocateEx(allocator, total_size);
-
-			// Because we don't know the type of the buffer, we cannot cast it
-			// But we can memcpy into it
-			memcpy(&stream0, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream0.MemoryOf(stream0.size));
-			memcpy(&stream1, &allocation, sizeof(allocation));
+		template<typename FirstStream, typename... Streams>
+		size_t StreamsTotalSize(FirstStream first_stream, Streams... streams) {
+			size_t total_size = 0;
+			if constexpr (std::is_pointer_v<FirstStream>) {
+				total_size = first_stream->MemoryOf(first_stream->size);
+			}
+			else {
+				total_size = first_stream.MemoryOf(first_stream.size);
+			}
+			
+			if constexpr (sizeof...(Streams) > 0) {
+				total_size += StreamsTotalSize(streams...);
+			}
+			return total_size;
 		}
 
-		// Allocates a single chunk of memory and then partitions the buffer to each stream
-		// without copying the data from the streams
-		template<typename Stream0, typename Stream1, typename Stream2>
-		void CoallesceStreamsEmpty(AllocatorPolymorphic allocator, Stream0& stream0, Stream1& stream1, Stream2& stream2) {
-			size_t total_size = stream0.MemoryOf(stream0.size) + stream1.MemoryOf(stream1.size) + stream2.MemoryOf(stream2.size);
-			void* allocation = AllocateEx(allocator, total_size);
+		template<typename FirstStream, typename... Streams>
+		void CoallesceStreamsEmptyImplementation(void* allocation, FirstStream* first_stream, Streams... streams) {
+			// Use memcpy to assign the pointer since in this case we don't need to cast to the stream type
+			memcpy(&first_stream->buffer, &allocation, sizeof(allocation));
 
-			// Because we don't know the type of the buffer, we cannot cast it
-			// But we can memcpy into it
-			memcpy(&stream0, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream0.MemoryOf(stream0.size));
-			memcpy(&stream1, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream1.MemoryOf(stream1.size));
-			memcpy(&stream2, &allocation, sizeof(allocation));
+			if constexpr (sizeof...(Streams) > 0) {
+				allocation = function::OffsetPointer(allocation, first_stream->MemoryOf(first_stream->size));
+				CoallesceStreamsEmptyImplementation(allocation, streams...);
+			}
 		}
 
-		// Allocates a single chunk of memory and then partitions the buffer to each stream
-		// without copying the data from the streams
-		template<typename Stream0, typename Stream1, typename Stream2, typename Stream3>
-		void CoallesceStreamsEmpty(AllocatorPolymorphic allocator, Stream0& stream0, Stream1& stream1, Stream2& stream2, Stream3& stream3) {
-			size_t total_size = stream0.MemoryOf(stream0.size) + stream1.MemoryOf(stream1.size) + stream2.MemoryOf(stream2.size) + stream3.MemoryOf(stream3.size);
+		template<typename FirstStream, typename... Streams>
+		void CoallesceStreamsEmpty(AllocatorPolymorphic allocator, FirstStream* first_stream, Streams... streams) {
+			size_t total_size = StreamsTotalSize(first_stream, streams...);
 			void* allocation = AllocateEx(allocator, total_size);
 
-			// Because we don't know the type of the buffer, we cannot cast it
-			// But we can memcpy into it
-			memcpy(&stream0, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream0.MemoryOf(stream0.size));
-			memcpy(&stream1, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream1.MemoryOf(stream1.size));
-			memcpy(&stream2, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream2.MemoryOf(stream2.size));
-			memcpy(&stream3, &allocation, sizeof(allocation));
+			CoallesceStreamsEmptyImplementation(allocastion, first_stream, streams...);
 		}
-
+		
 		// -----------------------------------------------------------------------------------------------------------------------
 
-		// Allocates a single chunk of memory, partitions the buffer to each stream, and the copies the data into it
-		template<typename Stream0, typename Stream1>
-		void CoallesceStreams(AllocatorPolymorphic allocator, Stream0& stream0, Stream1& stream1) {
+		template<typename FirstStream, typename... Streams>
+		void CoallesceStreamsImplementation(void* allocation, FirstStream* first_stream, Streams... streams) {
+			// Use memcpy to assign the pointer since in this case we don't need to cast to the stream type
+			first_stream->CopyTo(allocation);
+			memcpy(&first_stream->buffer, &allocation, sizeof(allocation));
+
+			if constexpr (sizeof...(Streams) > 0) {
+				allocation = function::OffsetPointer(allocation, first_stream->MemoryOf(first_stream->size));
+				CoallesceStreamsImplementation(allocation, streams...);
+			}
+		}
+
+		template<typename FirstStream, typename... Streams>
+		void CoallesceStreams(AllocatorPolymorphic allocator, FirstStream* first_stream, Streams... streams) {
 			size_t total_size = stream0.MemoryOf(stream0.size) + stream1.MemoryOf(stream1.size);
 			void* allocation = AllocateEx(allocator, total_size);
-			
-			// Because we don't know the type of the buffer, we cannot cast it
-			// But we can memcpy into it
-			stream0.CopyTo(allocation);
-			memcpy(&stream0, &allocation, sizeof(allocation));
 
-			allocation = function::OffsetPointer(allocation, stream0.MemoryOf(stream0.size));
-			stream1.CopyTo(allocation);
-			memcpy(&stream1, &allocation, sizeof(allocation));
-		}
-
-		// Allocates a single chunk of memory, partitions the buffer to each stream, and the copies the data into it
-		template<typename Stream0, typename Stream1, typename Stream2>
-		void CoallesceStreams(AllocatorPolymorphic allocator, Stream0& stream0, Stream1& stream1, Stream2& stream2) {
-			size_t total_size = stream0.MemoryOf(stream0.size) + stream1.MemoryOf(stream1.size) + stream2.MemoryOf(stream2.size);
-			void* allocation = AllocateEx(allocator, total_size);
-
-			// Because we don't know the type of the buffer, we cannot cast it
-			// But we can memcpy into it
-			stream0.CopyTo(allocation);
-			memcpy(&stream0, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream0.MemoryOf(stream0.size));
-			stream1.CopyTo(allocation);
-			memcpy(&stream1, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream1.MemoryOf(stream1.size));
-			stream2.CopyTo(allocation);
-			memcpy(&stream2, &allocation, sizeof(allocation));
-		}
-
-		// Allocates a single chunk of memory, partitions the buffer to each stream, and the copies the data into it
-		template<typename Stream0, typename Stream1, typename Stream2, typename Stream3>
-		void CoallesceStreams(AllocatorPolymorphic allocator, Stream0& stream0, Stream1& stream1, Stream2& stream2, Stream3& stream3) {
-			size_t total_size = stream0.MemoryOf(stream0.size) + stream1.MemoryOf(stream1.size) + stream2.MemoryOf(stream2.size) + stream3.MemoryOf(stream3.size);
-			void* allocation = AllocateEx(allocator, total_size);
-
-			// Because we don't know the type of the buffer, we cannot cast it
-			// But we can memcpy into it
-			stream0.CopyTo(allocation);
-			memcpy(&stream0, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream0.MemoryOf(stream0.size));
-			stream1.CopyTo(allocation);
-			memcpy(&stream1, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream1.MemoryOf(stream1.size));
-			stream2.CopyTo(allocation);
-			memcpy(&stream2, &allocation, sizeof(allocation));
-
-			allocation = function::OffsetPointer(allocation, stream2.MemoryOf(stream2.size));
-			stream3.CopyTo(allocation);
-			memcpy(&stream3, &allocation, sizeof(allocation));
+			CoallesceStreamsImplementation(allocation, first_stream, streams...);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------

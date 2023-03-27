@@ -11,6 +11,7 @@
 #include "../../Modules/Module.h"
 #include "../../Project/ProjectFolders.h"
 #include "../../Editor/EditorPalette.h"
+#include "InspectorShaderFile.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;

@@ -134,8 +134,6 @@ void FileExplorerResetSelectedFiles(FileExplorerData* data) {
 }
 
 void FileExplorerResetSelectedFiles(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	FileExplorerData* data = editor_state->file_explorer_data;
 	FileExplorerResetSelectedFiles(data);
 }
@@ -164,8 +162,6 @@ void FileExplorerSetShiftIndices(EditorState* editor_state, unsigned int index) 
 }
 
 void ChangeFileExplorerDirectory(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
-	EDITOR_STATE(editor_state);
-
 	FileExplorerData* data = editor_state->file_explorer_data;
 	data->current_directory.Copy(path);
 	data->current_directory[path.size] = L'\0';
@@ -176,8 +172,6 @@ void ChangeFileExplorerDirectory(EditorState* editor_state, Stream<wchar_t> path
 }
 
 void ChangeFileExplorerFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
-	EDITOR_STATE(editor_state);
-
 	FileExplorerData* data = editor_state->file_explorer_data;
 	FileExplorerResetSelectedFiles(data);
 	FileExplorerAllocateSelectedFile(data, path);
@@ -459,6 +453,7 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 		}
 		else {
 			success = RemoveFile(data->selected_files[index]);
+			// If this is a thunk/forwarding asset file, remove the metadata as well
 		}
 		if (!success) {
 			invalid_files.Add(index);
@@ -951,7 +946,7 @@ struct FileExplorerSelectOverwriteFilesData {
 	Stream<wchar_t> destination;
 };
 
-void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void FileExplorerSelectOverwriteFilesDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	constexpr const char* DATA_NAME = "Data";
 	constexpr const char* STATE_NAME = "State";
 
@@ -1151,8 +1146,9 @@ struct FileExplorerPreloadTextureThreadTaskData {
 
 ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 	FileExplorerPreloadTextureThreadTaskData* data = (FileExplorerPreloadTextureThreadTaskData*)_data;
-	EDITOR_STATE(data->editor_state);
-	ResourceManager* resource_manager = ui_system->m_resource_manager;
+	
+	UISystem* ui_system = data->editor_state->ui_system;
+	ResourceManager* resource_manager = data->editor_state->UIResourceManager();
 	FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
 
 	// Create a temporary global allocator
@@ -1259,7 +1255,7 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 
 	// The last thread deallocates the shared resources and set the preload end flag
 	if (count == data->semaphore->target - 1) {
-		editor_allocator->Deallocate(data->semaphore);
+		Deallocate(data->editor_state->EditorAllocator(), data->semaphore);
 
 		// Signal that processing ended
 		explorer_data->preload_flags = function::SetFlag(explorer_data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_ENDED);
@@ -1267,7 +1263,7 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 }
 
 void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
+	UISystem* ui_system = editor_state->ui_system;
 	FileExplorerData* data = editor_state->file_explorer_data;
 	ResourceManager* resource_manager = ui_system->m_resource_manager;
 
@@ -1302,7 +1298,7 @@ void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
 }
 
 void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
+	UISystem* ui_system = editor_state->ui_system;
 	FileExplorerData* data = editor_state->file_explorer_data;
 	ResourceManager* resource_manager = ui_system->m_resource_manager;
 
@@ -1324,7 +1320,6 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 
 	auto functor = [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
-		EDITOR_STATE(data->editor_state);
 
 		uint2 texture_dimensions = GetTextureDimensions(path);
 
@@ -1350,7 +1345,7 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 				if (data->explorer_data->staging_preloaded_textures.size < data->explorer_data->staging_preloaded_textures.capacity) {
 					FileExplorerPreloadTexture preload_texture;
 					preload_texture.last_write_time = file_last_write;
-					preload_texture.path = function::StringCopy(GetAllocatorPolymorphic(editor_allocator), stream_path);
+					preload_texture.path = function::StringCopy(data->editor_state->EditorAllocator(), stream_path);
 					preload_texture.texture = nullptr;
 					data->explorer_data->staging_preloaded_textures.Add(preload_texture);
 				}
@@ -1378,7 +1373,7 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 			ResourceIdentifier identifier(texture_path);
 
 			// Deallocate the path
-			editor_allocator->Deallocate(texture_path);
+			Deallocate(editor_state->EditorAllocator(), texture_path);
 
 			if (resource_manager->Exists(identifier, ResourceType::Texture)) {
 				// Remove the texture from the resource manager - it will be released now
@@ -1400,8 +1395,7 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 }
 
 void FileExplorerLaunchPreloadTextures(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
+	TaskManager* task_manager = editor_state->task_manager;
 	FileExplorerData* data = editor_state->file_explorer_data;
 
 	unsigned int thread_count = task_manager->GetThreadCount();
@@ -1412,7 +1406,7 @@ void FileExplorerLaunchPreloadTextures(EditorState* editor_state) {
 	if (per_thread_textures > 0 || per_thread_remainder > 0) {
 		data->preload_flags = function::SetFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
 
-		Semaphore* semaphore = (Semaphore*)editor_allocator->Allocate(sizeof(Semaphore));
+		Semaphore* semaphore = (Semaphore*)Allocate(editor_state->EditorAllocator(), sizeof(Semaphore));
 		semaphore->ClearCount();
 		unsigned int launch_thread_count = per_thread_textures > 0 ? thread_count : per_thread_remainder;
 		semaphore->target.store(launch_thread_count, ECS_RELAXED);
@@ -1450,14 +1444,13 @@ void FileExplorerReleaseMeshThumbnail(EditorState* editor_state, FileExplorerDat
 	// Release the resources only if the thumbnail could be loaded
 	if (thumbnail.could_be_read) {
 		Graphics* graphics = editor_state->UIGraphics();
-		graphics->FreeResourceView(thumbnail.texture);
+		graphics->FreeView(thumbnail.texture);
 	}
 
 	explorer_data->mesh_thumbnails.EraseFromIndex(table_index);
 }
 
 void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
 	FileExplorerData* data = editor_state->file_explorer_data;
 
 	// Evict out of data thumbnails
@@ -1482,7 +1475,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 		unsigned char thumbnail_count = 0;
 	};
 
-	FunctorData functor_data = { editor_allocator, editor_state->ui_resource_manager, data };
+	FunctorData functor_data = { editor_state->editor_allocator, editor_state->ui_resource_manager, data };
 
 	auto functor = [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
@@ -1561,12 +1554,11 @@ struct CreateAssetFileStruct {
 };
 
 // window_data is EditorState*
-void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	Timer stack_timer;
 
 	UI_PREPARE_DRAWER(initialize);
 
-	EDITOR_STATE(window_data);
 	EditorState* editor_state = (EditorState*)window_data;
 	FileExplorerData* data = editor_state->file_explorer_data;
 
@@ -1721,7 +1713,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		// Reduce the next roy y offset
 		drawer.layout.next_row_y_offset *= 0.5f;
 
-		EditorStateLazyEvaluationSetMax(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_TEXTURES);
+		EditorStateLazyEvaluationTrigger(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_TEXTURES);
 	}
 
 #pragma region Deselection Menu
@@ -2294,19 +2286,17 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 void InitializeFileExplorer(EditorState* editor_state)
 {
-	EDITOR_STATE(editor_state);
-
 	FileExplorerData* data = editor_state->file_explorer_data;
 
-	AllocatorPolymorphic polymorphic_allocator = GetAllocatorPolymorphic(editor_allocator);
+	AllocatorPolymorphic polymorphic_allocator = editor_state->EditorAllocator();
 	// Copied files must not be initialied since only Cut/Copy will set the appropriate stream
-	data->current_directory.Initialize(editor_allocator, 0, FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY);
+	data->current_directory.Initialize(polymorphic_allocator, 0, FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY);
 	data->selected_files.Initialize(polymorphic_allocator, FILE_EXPLORER_CURRENT_SELECTED_CAPACITY);
-	data->filter_stream.Initialize(editor_allocator, 0, FILE_EXPLORER_FILTER_CAPACITY);
+	data->filter_stream.Initialize(polymorphic_allocator, 0, FILE_EXPLORER_FILTER_CAPACITY);
 	data->preloaded_textures.Initialize(polymorphic_allocator, FILE_EXPLORER_PRELOAD_TEXTURE_INITIAL_COUNT);
 	data->staging_preloaded_textures.Initialize(polymorphic_allocator, 0, FILE_EXPLORER_STAGING_PRELOAD_TEXTURE_COUNT);
 
-	data->mesh_thumbnails.Initialize(editor_allocator, FILE_EXPLORER_MESH_THUMBNAILS_INITIAL_SIZE);
+	data->mesh_thumbnails.Initialize(polymorphic_allocator, FILE_EXPLORER_MESH_THUMBNAILS_INITIAL_SIZE);
 
 	data->right_click_stream.buffer = nullptr;
 	data->right_click_stream.size = 0;
@@ -2374,9 +2364,7 @@ unsigned int CreateFileExplorerWindow(EditorState* editor_state) {
 	size_t stack_memory[128];
 	FileExplorerSetDescriptor(descriptor, editor_state, stack_memory);
 
-	EDITOR_STATE(editor_state);
-
-	return ui_system->Create_Window(descriptor);
+	return editor_state->ui_system->Create_Window(descriptor);
 }
 
 void CreateFileExplorerAction(ActionData* action_data) {

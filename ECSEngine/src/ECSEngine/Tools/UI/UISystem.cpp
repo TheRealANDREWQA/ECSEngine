@@ -5,9 +5,9 @@
 #include "../../Rendering/Graphics.h"
 #include "../../Rendering/Compression/TextureCompression.h"
 #include "../../Rendering/ColorUtilities.h"
-#include "../../Internal/Multithreading/TaskManager.h"
-#include "../../Internal/Resources/ResourceManager.h"
-#include "../../Internal/InternalStructures.h"
+#include "../../Multithreading/TaskManager.h"
+#include "../../Resources/ResourceManager.h"
+#include "../../ECS/InternalStructures.h"
 #include "../../Utilities/File.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
 
@@ -2341,6 +2341,11 @@ namespace ECSEngine {
 
 				temp_descriptor.initial_size_x = 0.5f;
 				temp_descriptor.initial_size_y = 0.5f;
+
+				// If the position is out of whack, reposition the window in the center of the viewport
+				// If this is a pop up with CENTER, it should be fine if it has random values since they will get clamped
+				temp_descriptor.initial_position_x = function::Clamp(temp_descriptor.initial_position_x, -2.5f, 2.5f);
+				temp_descriptor.initial_position_y = function::Clamp(temp_descriptor.initial_position_y, -2.5f, 2.5f);
 			}
 
 			// create window normally
@@ -2964,6 +2969,14 @@ namespace ECSEngine {
 			m_memory->Deallocate(m_windows[window_index].descriptors);
 			
 			return RepairWindowReferences(window_index);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::DestroyWindowEx(unsigned int window_index)
+		{
+			RemoveWindowFromDockspaceRegion(window_index);
+			DestroyWindow(window_index);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -4716,8 +4729,8 @@ namespace ECSEngine {
 				}
 
 				while (temp_stream[index] == temp_stream[index + 1] - 1) {
-					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 					max_bounds.x = std::max(max_bounds.x, position.x);
+					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 					max_bounds.y = std::max(max_bounds.y, position.y);
 					index++;
 				}
@@ -4733,10 +4746,10 @@ namespace ECSEngine {
 					current_color = data->font_color;
 				}
 
+				max_bounds.x = std::max(max_bounds.x, position.x);
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 				row_position = position;
 				row_index++;
-				max_bounds.x = std::max(max_bounds.x, position.x);
 				max_bounds.y = std::max(max_bounds.y, position.y);
 				word_start_index = temp_stream[index] + 1;
 			}
@@ -6332,7 +6345,7 @@ namespace ECSEngine {
 
 		unsigned int UISystem::GetDockspaceRegionFromMouse(float2 mouse_position, UIDockspace** dockspace, DockspaceType& type) const {
 			unsigned int floating_dockspace_index = GetFloatingDockspaceIndexFromMouseCoordinates(mouse_position, type);
-			if (floating_dockspace_index != 0xFFFFFFFF) {
+			if (floating_dockspace_index != -1) {
 				unsigned int index = GetDockspaceRegionFromDockspace(
 					mouse_position,
 					dockspace,
@@ -6342,7 +6355,7 @@ namespace ECSEngine {
 				);
 				return index;
 			}
-			return 0xFFFFFFFF;
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7155,21 +7168,21 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		UIDefaultWindowHandler* UISystem::GetDefaultWindowHandlerData(unsigned int window_index)
+		UIDefaultWindowHandler* UISystem::GetDefaultWindowHandlerData(unsigned int window_index) const
 		{
 			return (UIDefaultWindowHandler*)m_windows[window_index].default_handler.data;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void* UISystem::GetWindowPrivateHandlerData(unsigned int window_index)
+		void* UISystem::GetWindowPrivateHandlerData(unsigned int window_index) const
 		{
 			return m_windows[window_index].private_handler.data;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void* UISystem::GetWindowData(unsigned int window_index)
+		void* UISystem::GetWindowData(unsigned int window_index) const
 		{
 			return m_windows[window_index].window_data;
 		}
@@ -7197,21 +7210,21 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		float2 UISystem::GetWindowPosition(unsigned int window_index)
+		float2 UISystem::GetWindowPosition(unsigned int window_index) const
 		{
 			return m_windows[window_index].transform.position;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		float2 UISystem::GetWindowScale(unsigned int window_index)
+		float2 UISystem::GetWindowScale(unsigned int window_index) const
 		{
 			return m_windows[window_index].transform.scale;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		float2 UISystem::GetWindowRenderRegion(unsigned int window_index)
+		float2 UISystem::GetWindowRenderRegion(unsigned int window_index) const
 		{
 			return { 
 				m_windows[window_index].render_region_offset.x, 
@@ -7225,6 +7238,14 @@ namespace ECSEngine {
 		{
 			unsigned int uv_index = FindCharacterType(character);
 			return float4(m_font_character_uvs[uv_index * 2].x, m_font_character_uvs[uv_index * 2].y, m_font_character_uvs[uv_index * 2 + 1].x, m_font_character_uvs[uv_index * 2 + 1].y);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		uint2 UISystem::GetWindowTexelSize(unsigned int window_index) const
+		{
+			float2 window_scale = GetWindowScale(window_index);
+			return { (unsigned int)(window_scale.x * m_window_os_size.x * 0.5f), (unsigned int)(window_scale.y * m_window_os_size.y * 0.5f) };
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10452,6 +10473,10 @@ namespace ECSEngine {
 			dockspace->borders[border_index].window_indices.RemoveSwapBack(in_border_index);
 			if (dockspace->borders[border_index].active_window == in_border_index)
 				dockspace->borders[border_index].active_window = 0;
+			else if (dockspace->borders[border_index].active_window == dockspace->borders[border_index].window_indices.size) {
+				// This window was swapped, we need to change it as well
+				dockspace->borders[border_index].active_window = in_border_index;
+			}
 
 			if constexpr (destroy_dockspace_if_last) {
 				if (dockspace->borders[border_index].window_indices.size == 0) {

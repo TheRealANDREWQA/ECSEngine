@@ -167,27 +167,23 @@ namespace ECSEngine {
 				size_t initial_size = chars.size;
 
 				if (value < 0) {
-					chars[chars.size] = '-';
-					chars.size++;
+					chars.Add('-');
 					value = -value;
 				}
 
 				size_t starting_swap_index = chars.size;
 
 				if (value == 0) {
-					chars[chars.size++] = '0';
+					chars.Add('0');
 				}
 				else {
 					while (value != 0) {
-						chars[chars.size] = value % 10 + '0';
-						chars.size++;
+						chars.Add(value % 10 + '0');
 						value /= 10;
 					}
 				}
 				for (size_t index = 0; index < (chars.size - starting_swap_index) >> 1; index++) {
-					char temp = chars[index + starting_swap_index];
-					chars[index + starting_swap_index] = chars[chars.size - 1 - index];
-					chars[chars.size - 1 - index] = temp;
+					chars.Swap(index + starting_swap_index, chars.size - 1 - index);
 				}
 				chars[chars.size] = '\0';
 
@@ -934,18 +930,20 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*);
-		template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>);
-		template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>);
-		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>);
-		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>);
-		template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int);
-		template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*);
-		template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float);
-		template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double);
+		namespace Internal {
 
-		// ----------------------------------------------------------------------------------------------------------
+			template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*);
+			template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*);
+			template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>);
+			template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>);
+			template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>);
+			template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>);
+			template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int);
+			template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*);
+			template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float);
+			template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double);
+
+		}
 
 		// ----------------------------------------------------------------------------------------------------------
 

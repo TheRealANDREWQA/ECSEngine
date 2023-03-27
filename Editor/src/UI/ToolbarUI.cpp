@@ -86,7 +86,7 @@ void LoadProjectUITemplateClickable(ActionData* action_data) {
 
 // ------------------------------------------------------------------------------------------------
 
-void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	ToolbarData* data = (ToolbarData*)window_data;
@@ -99,7 +99,6 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			handlers[index] = { SkipAction, nullptr, 0 };
 		}
 
-		EDITOR_STATE(data->editor_state);
 		ProjectFile* project_file = editor_state->project_file;
 
 #pragma region File
@@ -460,8 +459,6 @@ void ToolbarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_st
 // ------------------------------------------------------------------------------------------------
 
 void CreateToolbarUI(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	UIWindowDescriptor toolbar_window;
 	toolbar_window.initial_position_x = -1.0f;
 	toolbar_window.initial_position_y = -1.0f;
@@ -471,7 +468,7 @@ void CreateToolbarUI(EditorState* editor_state) {
 	size_t stack_memory[128];
 	ToolbarSetDescriptor(toolbar_window, editor_state, stack_memory);
 
-	ui_system->CreateWindowAndDockspace(toolbar_window, UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING 
+	editor_state->ui_system->CreateWindowAndDockspace(toolbar_window, UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING 
 		| UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X | UI_DOCKSPACE_BORDER_FLAG_NO_TITLE);
 }
 

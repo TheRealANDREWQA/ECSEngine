@@ -1,2 +1,2 @@
 #pragma once
-#include "../ECSEngine/Internal/Resources/AssetMetadataMacros.h"
+#include "../ECSEngine/Resources/AssetMetadataMacros.h"

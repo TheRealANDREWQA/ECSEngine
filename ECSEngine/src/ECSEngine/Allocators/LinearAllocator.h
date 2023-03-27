@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
-#include "../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../Multithreading/ConcurrentPrimitives.h"
+#include "AllocatorTypes.h"
 
 namespace ECSEngine {
 
@@ -12,7 +13,8 @@ namespace ECSEngine {
 		LinearAllocator() : m_buffer(nullptr), m_capacity(0), m_top(0), m_marker(0) {}
 		LinearAllocator(void* buffer, size_t capacity) : m_buffer(buffer), m_capacity(capacity), m_top(0), 
 			m_marker(0), m_spin_lock() {}
-		
+		LinearAllocator(AllocatorPolymorphic allocator, size_t capacity);
+
 		void* Allocate(size_t size, size_t alignment = 8);
 
 		void Deallocate(const void* block);

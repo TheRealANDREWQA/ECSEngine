@@ -177,8 +177,7 @@ unsigned int ChangeInspectorDrawFunction(
 	unsigned int sandbox_index
 )
 {
-	EDITOR_STATE(editor_state);
-
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	if (inspector_index == -1) {
 		inspector_index = GetMatchingIndexFromRobin(editor_state, sandbox_index);
 	}
@@ -188,7 +187,7 @@ unsigned int ChangeInspectorDrawFunction(
 		inspector_data->clean_function(editor_state, inspector_index, inspector_data->draw_data);
 
 		if (inspector_data->data_size > 0) {
-			editor_allocator->Deallocate(inspector_data->draw_data);
+			Deallocate(editor_allocator, inspector_data->draw_data);
 		}
 		inspector_data->draw_data = function::CopyNonZero(editor_allocator, data, data_size);
 		inspector_data->draw_function = functions.draw_function;

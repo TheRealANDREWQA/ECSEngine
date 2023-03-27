@@ -55,6 +55,10 @@ inline ECS_MATERIAL_SHADER GetMaterialShader(ORDER order) {
 }
 
 struct InspectorDrawMaterialFileData {
+	inline AllocatorPolymorphic MaterialAssetAlllocator() const {
+		return editor_state->EditorAllocator();
+	}
+
 	MaterialAsset material_asset;
 	Stream<wchar_t> path;
 	EditorState* editor_state;
@@ -143,6 +147,8 @@ void DeallocateCBuffers(
 			draw_data->editor_state->ui_reflection->DestroyType(ui_type_name);
 		}
 		draw_data->cbuffers[order].size = 0;
+
+		draw_data->material_asset.ResizeBufferNewValue(0, GetMaterialShader(order), draw_data->MaterialAssetAlllocator());
 	}
 }
 
@@ -154,6 +160,8 @@ void DeallocateTextures(InspectorDrawMaterialFileData* draw_data, ORDER order) {
 			draw_data->editor_state->module_reflection->DeallocateFieldOverride(TEXTURE_TAG, draw_data->texture_override_data[order][index]);
 		}
 		draw_data->textures[order].size = 0;
+
+		draw_data->material_asset.ResizeTexturesNewValue(0, GetMaterialShader(order), draw_data->MaterialAssetAlllocator());
 	}
 }
 
@@ -165,6 +173,8 @@ void DeallocateSamplers(InspectorDrawMaterialFileData* draw_data, ORDER order) {
 			draw_data->editor_state->module_reflection->DeallocateFieldOverride(SAMPLER_TAG, draw_data->sampler_override_data[order][index]);
 		}
 		draw_data->samplers[order].size = 0;
+
+		draw_data->material_asset.ResizeSamplersNewValue(0, GetMaterialShader(order), draw_data->MaterialAssetAlllocator());
 	}
 }
 
@@ -266,12 +276,10 @@ void RegisterNewCBuffers(
 		}
 	}
 
-	AllocatorPolymorphic editor_allocator = draw_data->editor_state->EditorAllocator();
-
 	unsigned int counts[ECS_MATERIAL_SHADER_COUNT * 3];
 	draw_data->material_asset.WriteCounts(true, true, true, counts);
 	counts[ECS_MATERIAL_SHADER_COUNT * 2 + material_shader_type] = new_cbuffers.size;
-	draw_data->material_asset.Resize(counts, editor_allocator);
+	draw_data->material_asset.Resize(counts, draw_data->MaterialAssetAlllocator());
 	draw_data->material_asset.buffers[material_shader_type].Copy(new_buffers);
 
 	draw_data->cbuffers[order].InitializeAndCopy(current_allocator, new_cbuffers);
@@ -353,6 +361,7 @@ void RegisterNewTextures(
 		override_data[index] = draw_data->editor_state->module_reflection->InitializeFieldOverride(TEXTURE_TAG, new_textures[index].name);
 		AssetOverrideSetAllData set_all_data;
 		set_all_data.callback.handler = { BaseModifyCallback, draw_data, 0 };
+		set_all_data.callback.callback_before_handle_update = false;
 		set_all_data.set_index.sandbox_index = -1;
 		set_all_data.new_database.database = &draw_data->temporary_database;
 		draw_data->editor_state->module_reflection->BindInstanceFieldOverride(override_data[index], TEXTURE_TAG, AssetOverrideSetAll, &set_all_data);
@@ -363,7 +372,7 @@ void RegisterNewTextures(
 	unsigned int counts[ECS_MATERIAL_SHADER_COUNT * 3];
 	draw_data->material_asset.WriteCounts(true, true, true, counts);
 	counts[material_shader_type] = new_textures.size;
-	draw_data->material_asset.Resize(counts, draw_data->editor_state->EditorAllocator());
+	draw_data->material_asset.Resize(counts, draw_data->MaterialAssetAlllocator());
 	draw_data->material_asset.textures[material_shader_type].Copy(textures);
 	draw_data->texture_override_data[order] = override_data;
 
@@ -424,6 +433,7 @@ void RegisterNewSamplers(
 		new_override_data[index] = draw_data->editor_state->module_reflection->InitializeFieldOverride(SAMPLER_TAG, new_samplers[index].name);
 		AssetOverrideSetAllData set_all_data;
 		set_all_data.callback.handler = { BaseModifyCallback, draw_data, 0 };
+		set_all_data.callback.callback_before_handle_update = false;
 		set_all_data.set_index.sandbox_index = -1;
 		set_all_data.new_database.database = &draw_data->temporary_database;
 		draw_data->editor_state->module_reflection->BindInstanceFieldOverride(new_override_data[index], SAMPLER_TAG, AssetOverrideSetAll, &set_all_data);
@@ -434,7 +444,7 @@ void RegisterNewSamplers(
 	unsigned int counts[ECS_MATERIAL_SHADER_COUNT * 3];
 	draw_data->material_asset.WriteCounts(true, true, true, counts);
 	counts[ECS_MATERIAL_SHADER_COUNT + material_shader_type] = new_samplers.size;
-	draw_data->material_asset.Resize(counts, draw_data->editor_state->EditorAllocator());
+	draw_data->material_asset.Resize(counts, draw_data->MaterialAssetAlllocator());
 	draw_data->material_asset.samplers[material_shader_type].Copy(samplers);
 	draw_data->sampler_override_data[order] = new_override_data;
 
@@ -528,8 +538,6 @@ void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_i
 			else {
 				if (data->cbuffers[order].size > 0) {
 					DeallocateCBuffers(data, inspector_index, order);
-					data->cbuffers[order].size = 0;
-					// We could do a resize here, but it's probably not worth
 				}
 			}
 
@@ -541,7 +549,6 @@ void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_i
 			}
 			else {
 				DeallocateTextures(data, order);
-				// We could do a resize here, but it's probably not worth
 			}
 
 			ECS_STACK_CAPACITY_STREAM(ShaderReflectedSampler, shader_samplers, MAX_SAMPLER_SLOT_COUNT);
@@ -552,7 +559,6 @@ void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_i
 			}
 			else {
 				DeallocateSamplers(data, order);
-				// We could do a resize here, but it's probably not worth
 			}
 
 			Deallocate(editor_allocator, source_code.buffer);
@@ -569,6 +575,7 @@ void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_i
 	GetProjectAssetsFolder(editor_state, assets_folder);
 
 	for (size_t index = 0; index < ORDER_COUNT; index++) {
+		ORDER order = (ORDER)index;
 		if (data->timer[index].GetDuration(ECS_TIMER_DURATION_MS) >= SHADER_LAZY_RELOAD_MS) {
 			unsigned int current_handle = GetShaderHandle(data, (ORDER)index);
 
@@ -580,7 +587,7 @@ void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_i
 				size_t new_shader_stamp = OS::GetFileLastWrite(shader_path);
 
 				if (data->shader_stamp[index] == 0 || data->shader_stamp[index] == -1 || new_shader_stamp > data->shader_stamp[index]) {
-					bool read_success = reload_shader(shader_path, (ORDER)index);
+					bool read_success = reload_shader(shader_path, order);
 					if (!read_success) {
 						data->shader_stamp[index] == -1;
 					}
@@ -606,14 +613,44 @@ void ShaderModifyCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ShaderModifyCallbackData* data = (ShaderModifyCallbackData*)_data;
+	AssetOverrideCallbackAdditionalInfo* additional_data = (AssetOverrideCallbackAdditionalInfo*)_additional_data;
+
 	// Delay the timer for that shader
 	data->data->timer[data->order].DelayStart(-SHADER_LAZY_RELOAD_MS, ECS_TIMER_DURATION_MS);
+
+	// If it was removed
+	if (!additional_data->is_selection) {
+		memset(data->data->success[data->order], 0, sizeof(data->data->success[data->order]));
+
+		DeallocateCBuffers(data->data, data->inspector_index, data->order);
+		DeallocateSamplers(data->data, data->order);
+		DeallocateTextures(data->data, data->order);
+
+		// Also update the shader time stamp to 0 such that it can be reloaded again
+		data->data->shader_stamp[data->order] = 0;
+
+		// The handle will get updated afterwards to -1
+		// Update it manually here to -1
+		if (data->order == VERTEX_ORDER) {
+			data->data->material_asset.vertex_shader_handle = -1;
+		}
+		else {
+			data->data->material_asset.pixel_shader_handle = -1;
+		}
+
+		unsigned int resize_counts[ECS_MATERIAL_SHADER_COUNT * 3];
+		data->data->material_asset.WriteCounts(true, true, true, resize_counts);
+		for (size_t index = 0; index < 3; index++) {
+			resize_counts[data->order + index * ECS_MATERIAL_SHADER_COUNT] = 0;
+		}
+
+		data->data->material_asset.Resize(resize_counts, data->data->MaterialAssetAlllocator());
+	}
 
 	ReloadShaders(data->data, data->inspector_index);
 	action_data->data = data->data;
 	BaseModifyCallback(action_data);
 }
-
 
 // ------------------------------------------------------------------------------------------------------------
 
@@ -688,28 +725,53 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 	is_loaded_desc.error_string = &error_message;
 	is_loaded_desc.segmented_error_string = &failed_strings;
 
+	ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 128);
+	GetAssetDependencies(&data->material_asset, ECS_ASSET_MATERIAL, &dependencies);
+
+	bool is_material_loaded = true;
+
 	// Check to see if this material is being used in the editor
 	unsigned int main_database_handle = FindAsset(editor_state, data->material_asset.name, {}, ECS_ASSET_MATERIAL);
 	if (main_database_handle != -1) {
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 64, ECS_MB);
-		MaterialAsset temporary_retarget_material;
-		ConvertMaterialFromDatabaseToDatabase(
-			&data->material_asset,
-			&data->temporary_database,
-			editor_state->asset_database,
-			&temporary_retarget_material,
-			GetAllocatorPolymorphic(&temporary_allocator)
-		);
-		temporary_retarget_material.material_pointer = (Material*)GetAssetFromMetadata(data->editor_state->asset_database->GetMaterialConst(main_database_handle), ECS_ASSET_MATERIAL).buffer;
+		// Copy the texture and sampler pointers from the main database into the temporary database
+		for (unsigned int index = 0; index < dependencies.size; index++) {
+			if (dependencies[index].type == ECS_ASSET_TEXTURE || dependencies[index].type == ECS_ASSET_GPU_SAMPLER) {
+				void* current_asset = data->temporary_database.GetAsset(dependencies[index].handle, dependencies[index].type);
+				Stream<char> asset_name = GetAssetName(current_asset, dependencies[index].type);
+				Stream<wchar_t> asset_file = GetAssetFile(current_asset, dependencies[index].type);
+				unsigned int handle = data->editor_state->asset_database->FindAsset(asset_name, asset_file, dependencies[index].type);
+				if (handle != -1) {
+					SetAssetToMetadata(
+						current_asset, 
+						dependencies[index].type, 
+						GetAssetFromMetadata(data->editor_state->asset_database->GetAssetConst(handle, dependencies[index].type), dependencies[index].type)
+					);
+				}
+			}
+		}
+		const MaterialAsset* main_material = editor_state->asset_database->GetMaterialConst(main_database_handle);
+		// Set the pointer for the material
+		SetAssetToMetadata(&data->material_asset, ECS_ASSET_MATERIAL, GetAssetFromMetadata(main_material, ECS_ASSET_MATERIAL));
 
-		bool is_material_loaded = IsMaterialFromMetadataLoadedEx(&temporary_retarget_material, editor_state->RuntimeResourceManager(), editor_state->asset_database, &is_loaded_desc);
-		if (!is_material_loaded) {
-			drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
-			drawer->LabelList(failed_strings[0], { failed_strings.buffer + 1, failed_strings.size - 1 });
-			drawer->CrossLine();
+		is_material_loaded = IsMaterialFromMetadataLoadedEx(&data->material_asset, editor_state->RuntimeResourceManager(), &data->temporary_database, &is_loaded_desc);
+	}
+	else {
+		// Set a pointer value to the material such that it will "appear" as loaded. Since it is only in edit mode and
+		// not actually used yet, it shouldn't generate a warning. The same for all internal dependencies
+		SetValidAssetToMetadata(&data->material_asset, ECS_ASSET_MATERIAL);
+
+		for (unsigned int index = 0; index < dependencies.size; index++) {
+			void* current_dependency = data->temporary_database.GetAsset(dependencies[index].handle, dependencies[index].type);
+			SetValidAssetToMetadata(current_dependency, dependencies[index].type);
 		}
 
-		temporary_allocator.ClearBackup();
+		is_material_loaded = IsMaterialFromMetadataLoadedEx(&data->material_asset, &data->temporary_database, &is_loaded_desc);
+	}
+	
+	if (!is_material_loaded) {
+		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
+		drawer->LabelList(failed_strings[0], { failed_strings.buffer + 1, failed_strings.size - 1 });
+		drawer->CrossLine();
 	}
 
 	// Draw the settings
@@ -774,6 +836,11 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 				
 				ECS_STACK_VOID_STREAM(stack_allocation, ECS_KB * 4);
 				UIReflectionDrawConfig reflection_config[15];
+
+				for (size_t index = 0; index < std::size(reflection_config); index++) {
+					reflection_config[index].index_count = 0;
+				}
+
 				size_t slots_used = UIReflectionDrawConfigSplatCallback(
 					{ reflection_config, std::size(reflection_config) }, 
 					{ BaseModifyCallback, data, 0 }, 
@@ -781,7 +848,11 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 					stack_allocation.buffer
 				);
 
-				if (data->cbuffers[order].size > 0) {
+				if (!data->success[order][SUCCESS_CBUFFER]) {
+					drawer->Text("Failed to reflect the constant buffers for this shader.");
+					drawer->NextRow();
+				}
+				else if (data->cbuffers[order].size > 0) {
 					ECS_STACK_CAPACITY_STREAM(char, ui_instance_name, 512);
 
 					unsigned int shader_handle = GetShaderHandle(data, order);
@@ -798,12 +869,12 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 						editor_state->ui_reflection->DrawInstance(ui_instance_name, &options);
 					}
 				}
-				else if (!data->success[order][SUCCESS_CBUFFER]) {
-					drawer->Text("Failed to reflect the constant buffers for this shader.");
+
+				if (!data->success[order][SUCCESS_TEXTURE]) {
+					drawer->Text("Failed to reflect the textures for this shader.");
 					drawer->NextRow();
 				}
-
-				if (data->textures[order].size > 0) {
+				else if (data->textures[order].size > 0) {
 					for (size_t index = 0; index < data->textures[order].size; index++) {
 						editor_state->module_reflection->DrawFieldOverride(
 							TEXTURE_TAG,
@@ -817,12 +888,12 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 						drawer->NextRow();
 					}
 				}
-				else if (!data->success[order][SUCCESS_TEXTURE]) {
-					drawer->Text("Failed to reflect the textures for this shader.");
+
+				if (!data->success[order][SUCCESS_SAMPLER]) {
+					drawer->Text("Failed to reflect the samplers for this shader.");
 					drawer->NextRow();
 				}
-
-				if (data->samplers[order].size > 0) {
+				else if (data->samplers[order].size > 0) {
 					for (size_t index = 0; index < data->samplers[order].size; index++) {
 						editor_state->module_reflection->DrawFieldOverride(
 							SAMPLER_TAG,
@@ -835,10 +906,6 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 						);
 						drawer->NextRow();
 					}
-				}
-				else if (!data->success[order][SUCCESS_SAMPLER]) {
-					drawer->Text("Failed to reflect the samplers for this shader.");
-					drawer->NextRow();
 				}
 			});		
 			return true;

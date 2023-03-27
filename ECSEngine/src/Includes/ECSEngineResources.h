@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../ECSEngine/Internal/Resources/ResourceManager.h"
-#include "../ECSEngine/Internal/Resources/AssetDatabase.h"
-#include "../ECSEngine/Internal/Resources/AssetDatabaseReference.h"
-#include "../ECSEngine/Internal/Resources/AssetLoading.h"
+#include "../ECSEngine/Resources/ResourceManager.h"
+#include "../ECSEngine/Resources/AssetDatabase.h"
+#include "../ECSEngine/Resources/AssetDatabaseReference.h"
+#include "../ECSEngine/Resources/AssetLoading.h"

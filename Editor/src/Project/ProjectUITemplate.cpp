@@ -24,8 +24,7 @@ ECS_TOOLS;
 // -------------------------------------------------------------------------------------------------------
 
 void CreateProjectDefaultUI(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
+	UISystem* ui_system = editor_state->ui_system;
 	ui_system->Clear();
 
 	CreateToolbarUI(editor_state);
@@ -55,8 +54,6 @@ UIDockspace* CreateProjectBackgroundDockspace(UISystem* system)
 
 bool OpenProjectUI(ProjectOperationData data)
 {
-	EDITOR_STATE(data.editor_state);
-
 	ECS_TEMP_STRING(template_path, 256);
 	GetProjectCurrentUI(template_path, data.file_data);
 	return LoadProjectUITemplate(data.editor_state, { template_path }, data.error_message);
@@ -73,11 +70,9 @@ void OpenProjectUIAction(ActionData* action_data) {
 
 bool SaveProjectUI(ProjectOperationData data)
 {
-	EDITOR_STATE(data.editor_state);
-
 	ECS_TEMP_STRING(template_path, 256);
 	GetProjectCurrentUI(template_path, data.file_data);
-	return SaveProjectUITemplate(ui_system, { template_path }, data.error_message);
+	return SaveProjectUITemplate(data.editor_state->ui_system, { template_path }, data.error_message);
 }
 
 // -------------------------------------------------------------------------------------------------------
@@ -172,7 +167,7 @@ unsigned int VerifyIndexedWindow(
 
 bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _template, CapacityStream<char>& error_message)
 {
-	EDITOR_STATE(editor_state);
+	UISystem* ui_system = editor_state->ui_system;
 
 	Stream<char> _file_window_names[64];
 	Stream<Stream<char>> file_window_names(_file_window_names, 0);
@@ -267,6 +262,10 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 		}
 		ui_system->RemoveUnrestoredWindows();
 	}
+
+	// Destroy invalid windows - like Scene and Game with invalid sandbox index
+	DestroyInvalidGameUIWindows(editor_state);
+	DestroyInvalidSceneUIWindows(editor_state);
 
 	SaveProjectUIAutomaticallyData save_data;
 	save_data.editor_state = editor_state;

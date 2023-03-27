@@ -967,6 +967,15 @@ namespace ECSEngine {
 		ID3D11UnorderedAccessView* view;
 	};
 
+	// Releases the target resource as well
+	// This function does not take into account the graphics object bookkeeping
+	template<typename View>
+	ECS_INLINE void ReleaseGraphicsView(View view) {
+		ID3D11Resource* resource = view.GetResource();
+		view.Release();
+		resource->Release();
+	}
+
 	struct ECSENGINE_API ConstantBuffer {
 		ECS_INLINE ConstantBuffer() : buffer(nullptr) {}
 		ECS_INLINE ConstantBuffer(ID3D11Buffer* buffer) : buffer(buffer) {}
@@ -1328,17 +1337,72 @@ namespace ECSEngine {
 		ID3D11CommandList* list;
 	};
 
+	struct GraphicsViewport {
+		float width;
+		float height;
+		float top_left_x = 0.0f;
+		float top_left_y = 0.0f;
+		float min_depth = 0.0f;
+		float max_depth = 1.0f;
+	};
+
+	struct RenderDestination {
+		// Does not take into account the graphics object bookkeeping
+		inline void Release() {
+			ReleaseGraphicsView(render_view);
+			ReleaseGraphicsView(depth_view);
+			// The resource view interface needs to be released solo
+			// because the underlying texture will be released with the previous
+			// render view call
+			output_view.Release();
+		}
+
+		// This can be used to use the render as input for other phases
+		ResourceView output_view;
+		RenderTargetView render_view;
+		DepthStencilView depth_view;
+	};
+
+	struct ECS_REFLECT OrientedPoint {
+		float3 position;
+		float3 rotation;
+	};
+
+	struct ECS_REFLECT CameraParameters {
+		float width;
+		float height;
+		float near_z;
+		float far_z;
+		float3 translation;
+		float3 rotation;
+
+		bool is_orthographic = false;
+	};
+
+	struct ECS_REFLECT CameraParametersFOV {
+		// The angle needs to be specified in degrees
+		float fov;
+		float aspect_ratio;
+		float near_z;
+		float far_z;
+		float3 translation;
+		float3 rotation;
+	};
+
 	struct ECSENGINE_API Camera {
 		Camera();
 		Camera(float3 translation, float3 rotation);
 		Camera(Matrix projection, float3 translation, float3 rotation);
+		Camera(const CameraParameters& camera_parameters);
+		Camera(const CameraParametersFOV& camera_parameters);
 
 		Camera(const Camera& other) = default;
 		Camera& operator = (const Camera& other) = default;
 
 		void SetPerspectiveProjection(float width, float height, float near_z, float far_z);
 
-		void SetPerspectiveProjectionFOV(float angle_y, float aspect_ratio, float near_z, float far_z);
+		// The FOV angle needs to be expressed in angles
+		void SetPerspectiveProjectionFOV(float fov, float aspect_ratio, float near_z, float far_z);
 
 		void SetOrthographicProjection(float width, float height, float near_z, float far_z);
 
@@ -1398,6 +1462,56 @@ namespace ECSEngine {
 
 		bool ContainsSampler(SamplerState sampler_state) const;
 
+		// Copies the values that pertain to the vertex shader
+		void CopyVertexShader(const Material* other);
+
+		// Copies the values that pertain to the pixel shader
+		void CopyPixelShader(const Material* other);
+
+		// Copies the values that pertain to textures
+		void CopyTextures(const Material* other);
+
+		// Copies the values that pertain to unordered views
+		void CopyUnorderedViews(const Material* other);
+
+		// Copies the values that pertain to constant buffers
+		void CopyConstantBuffers(const Material* other);
+
+		// Copies the values that pertain to samplers
+		void CopySamplers(const Material* other);
+
+		// Copies all the fields
+		void Copy(const Material* other);
+
+		ECS_INLINE void ResetVertexShader() {
+			layout = {};
+			vertex_shader = {};
+			vertex_buffer_mapping_count = 0;
+		}
+
+		ECS_INLINE void ResetPixelShader() {
+			pixel_shader = {};
+		}
+
+		ECS_INLINE void ResetTextures() {
+			v_texture_count = 0;
+			p_texture_count = 0;
+		}
+
+		ECS_INLINE void ResetSamplers() {
+			v_sampler_count = 0;
+			p_sampler_count = 0;
+		}
+
+		ECS_INLINE void ResetConstantBuffers() {
+			v_buffer_count = 0;
+			p_buffer_count = 0;
+		}
+
+		ECS_INLINE void ResetUnorderedViews() {
+			unordered_view_count = 0;
+		}
+
 		InputLayout layout;
 		VertexShader vertex_shader;
 		PixelShader pixel_shader;
@@ -1445,6 +1559,10 @@ namespace ECSEngine {
 		// Fills in the suffix based on the settings to uniquely identify the texture
 		void GenerateSettingsSuffix(CapacityStream<void>& suffix) const;
 
+		// The name is used only to generate a settings suffix.
+		// Otherwise it serves no use
+		Stream<char> name = { nullptr, 0 };
+
 		Stream<wchar_t> filename;
 		ECS_SHADER_TYPE shader_type;
 		unsigned char slot;
@@ -1469,10 +1587,12 @@ namespace ECSEngine {
 	};
 
 	// Generates an identifier that can be used to uniquely identify a shader based on its options
-	// Useful for the resource manager
-	ECSENGINE_API void GenerateShaderCompileOptionsSuffix(ShaderCompileOptions compile_options, CapacityStream<void>& suffix);
+	// Useful for the resource manager.
+	ECSENGINE_API void GenerateShaderCompileOptionsSuffix(ShaderCompileOptions compile_options, CapacityStream<void>& suffix, Stream<void> optional_addition = { nullptr, 0 });
 
 	// A user material which is based only on textures and constant buffers
+	// If a texture filename is not filled in then it will bind a nullptr texture
+	// If a buffer data is not specified it will bind a nullptr buffer
 	struct UserMaterial {
 		Stream<UserMaterialTexture> textures;
 		Stream<UserMaterialBuffer> buffers;
@@ -1481,10 +1601,17 @@ namespace ECSEngine {
 		Stream<wchar_t> pixel_shader;
 		ShaderCompileOptions vertex_compile_options;
 		ShaderCompileOptions pixel_compile_options;
+
 		// If set, it will generate a suffix for each texture
 		// based upon the settings such that it won't return a texture
 		// that already exists on the same target but with different settings
 		bool generate_unique_name_from_setting;
+
+		// These are optional. Only needed when generating unique identifiers from settings
+		// Can optionally tag the setting such that a new shader is created even tho there is one
+		// with the same settings
+		Stream<char> vertex_shader_name = { nullptr, 0 };
+		Stream<char> pixel_shader_name = { nullptr, 0 };
 	};
 
 	enum PBRMaterialTextureIndex : unsigned char {

@@ -1,5 +1,5 @@
 #pragma once
-#include "../../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../../Multithreading/ConcurrentPrimitives.h"
 #include "UIReflection.h"
 #include "UIResourcePaths.h"
 #include "../../Utilities/Console.h"
@@ -55,7 +55,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void WindowParameterDraw(void* window_data, void* drawer_descriptor, bool initializer);
+		ECSENGINE_API void WindowParameterDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -91,7 +91,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void SystemParametersDraw(void* window_data, void* drawer_descriptor, bool initializer);
+		ECSENGINE_API void SystemParametersDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -107,17 +107,17 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void DrawNothing(void* window_data, void* drawer_descriptor, bool initialize);
+		ECSENGINE_API void DrawNothing(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void ErrorMessageWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
+		ECSENGINE_API void ErrorMessageWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 		ECSENGINE_API unsigned int CreateErrorMessageWindow(UISystem* system, Stream<char> description);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void ConfirmWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
+		ECSENGINE_API void ConfirmWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 		ECSENGINE_API unsigned int CreateConfirmWindow(UISystem* system, Stream<char> description, UIActionHandler handler);
 
@@ -132,7 +132,7 @@ namespace ECSEngine {
 
 		ECSENGINE_API unsigned int CreateChooseOptionWindow(UISystem* system, ChooseOptionWindowData data);
 
-		ECSENGINE_API void ChooseOptionWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
+		ECSENGINE_API void ChooseOptionWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -146,7 +146,7 @@ namespace ECSEngine {
 			CapacityStream<char> input_stream = { nullptr, 0, 0 }; // Does not need to be initialized - it is used internally
 		};
 
-		ECSENGINE_API void TextInputWizard(void* window_data, void* drawer_descriptor, bool initialize);
+		ECSENGINE_API void TextInputWizard(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 		// The callback receives the char stream through the additional_data parameter
 		ECSENGINE_API unsigned int CreateTextInputWizard(const TextInputWizardData* data, UISystem* system);
@@ -166,7 +166,7 @@ namespace ECSEngine {
 			float next_row_y_offset = 0.01f;
 		};
 
-		ECSENGINE_API void TextFileDraw(void* window_data, void* drawer_descriptor, bool initialize);
+		ECSENGINE_API void TextFileDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 		ECSENGINE_API unsigned int CreateTextFileWindow(TextFileDrawData data, UISystem* system, Stream<char> window_name);
 		
@@ -179,7 +179,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void ConsoleWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
+		ECSENGINE_API void ConsoleWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 		#define CONSOLE_WINDOW_NAME "Console"	
 
@@ -248,7 +248,7 @@ namespace ECSEngine {
 			UIReflectionDrawer* ui_reflection;
 		};
 
-		ECSENGINE_API void InjectValuesWindowDraw(void* drawer_descriptor, void* window_data, bool initialize);
+		ECSENGINE_API void InjectValuesWindowDraw(UIDrawerDescriptor* drawer_descriptor, void* window_data, bool initialize);
 
 		ECSENGINE_API unsigned int CreateInjectValuesWindow(UISystem* system, InjectWindowData data, Stream<char> window_name, bool is_pop_up_window = true);
 		

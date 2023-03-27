@@ -301,16 +301,18 @@ namespace ECSEngine {
 			
 			// Determine whether or not it is a file or directory
 			HANDLE handle = INVALID_HANDLE_VALUE;
+
+			// Open the handle to the file/directory with delete, read and write sharing options enabled such that it doesn't interfere
+			// with other read/write operations
 			if (function::PathExtensionSize(path) == 0) {
 				// Open a handle to a directory
 				handle = CreateFile(path.buffer, GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
 			}
 			else {
 				// Open a handle to the file
-				handle = CreateFile(path.buffer, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+				handle = CreateFile(path.buffer, GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 			}
 
-			DWORD error = GetLastError();
 			if (handle == INVALID_HANDLE_VALUE) {
 				return false;
 			}

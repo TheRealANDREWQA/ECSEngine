@@ -228,7 +228,7 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIDrawerColorInput {
-			void Callback(ActionData* action_data);
+			void Callback(ActionData* action_data, bool released);
 
 			float2* TextPosition();
 			float2* TextScale();
@@ -263,7 +263,9 @@ namespace ECSEngine {
 			Color color_picker_initial_color;
 			Color default_color;
 			UIDrawerTextElement name;
+
 			UIActionHandler callback;
+			UIActionHandler final_callback;
 		};
 
 		struct ColorInputHSVGradientInfo {
@@ -304,7 +306,7 @@ namespace ECSEngine {
 
 		struct UIDrawerColorInputWindowData {
 			UIDrawerColorInput* input;
-			Color color;
+			Color initial_color;
 		};
 
 		struct UIDrawerColorInputSliderCallback {

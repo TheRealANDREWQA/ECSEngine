@@ -18,7 +18,7 @@ void TickAsset(EditorState* editor_state) {
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 96, ECS_MB);
 			AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&_stack_allocator);
 
-			Stream<Stream<unsigned int>> metadata_out_of_date_assets = GetOutOfDateAssetsMetadata(editor_state, allocator);
+			Stream<Stream<unsigned int>> metadata_out_of_date_assets = GetOutOfDateAssetsMetadata(editor_state, allocator, true, false);
 			ReloadAssetsMetadataChange(editor_state, metadata_out_of_date_assets);
 			_stack_allocator.Clear();
 

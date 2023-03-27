@@ -1,7 +1,10 @@
 #pragma once
+#include "ECSEngineThreadTaskExport.h"
 
-#ifdef Graphics_BUILD_DLL
-#define	Graphics_API __declspec(dllexport)
+#ifdef GRAPHICS_BUILD_DLL
+#define	GRAPHICS_API __declspec(dllexport)
 #else
-#define Graphics_API __declspec(dllimport)
+#define GRAPHICS_API __declspec(dllimport)
 #endif 
+
+#define GRAPHICS_THREAD_TASK_TEMPLATE_EXPORT(name) ECS_THREAD_TASK_TEMPLATE_BOOL_EXPORT(GRAPHICS_API, name)

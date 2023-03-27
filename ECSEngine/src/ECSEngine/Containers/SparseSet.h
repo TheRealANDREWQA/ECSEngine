@@ -118,6 +118,12 @@ namespace ECSEngine {
 			return -1;
 		}
 
+		// Returns true if the handle has associated an element
+		ECS_INLINE bool Exists(unsigned int handle) const {
+			// If it is occupied then the indirection is less than the capacity
+			return indirection_buffer[handle].x < capacity;
+		}
+
 		unsigned int GetIndexFromHandle(unsigned int handle) const {
 			return indirection_buffer[handle].x;
 		}

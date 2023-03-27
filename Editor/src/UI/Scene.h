@@ -10,7 +10,7 @@ struct EditorState;
 // In the stack memory the first 4 bytes need to be the sandbox index
 void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
-void SceneUIWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
+void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 // It creates the dockspace and the window
 void CreateSceneUIWindow(EditorState* editor_state, unsigned int index);
@@ -26,6 +26,9 @@ void CreateSceneUIWindowAction(ActionData* action_data);
 
 // It only creates the window, it will not be assigned to any dockspace and returns the window index
 unsigned int CreateSceneUIWindowOnly(EditorState* editor_state, unsigned int index);
+
+// Destroys all scenes whose sandbox no longer exists
+void DestroyInvalidSceneUIWindows(EditorState* editor_state);
 
 void GetSceneUIWindowName(unsigned int index, ECSEngine::CapacityStream<char>& name);
 

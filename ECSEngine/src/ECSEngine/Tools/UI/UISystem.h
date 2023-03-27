@@ -7,7 +7,7 @@
 #include "../../Utilities/Mouse.h"
 #include "../../Utilities/Keyboard.h"
 #include "../../Rendering/ColorUtilities.h"
-#include "../../Internal/Multithreading/ThreadTask.h"
+#include "../../Multithreading/ThreadTask.h"
 
 namespace ECSEngine {
 
@@ -29,7 +29,7 @@ namespace ECSEngine {
 	namespace Tools {
 
 		// Bool acts as a placeholder, only interested to see if the resource existed previously
-		using UISystemAddDynamicWindowElementTable = HashTableDefault<bool>;
+		typedef HashTableDefault<bool> UISystemAddDynamicWindowElementTable;
 
 		ECSENGINE_API UIToolsAllocator DefaultUISystemAllocator(GlobalMemoryManager* global_manager);
 
@@ -684,8 +684,11 @@ namespace ECSEngine {
 
 			// it returns wheter or not it found a match; if using delete non referenced this can lead to
 			// swapping deleted windows and advancing to the next window even tho this one should be deleted 
-			// aswell
+			// as well
 			bool DestroyWindow(unsigned int window_index);
+
+			// This version removes it from its dockspace and then destroys it
+			void DestroyWindowEx(unsigned int window_index);
 
 			// Returns whether or not the window was found
 			template<bool destroy_dockspace_if_fixed = true>
@@ -1038,8 +1041,10 @@ namespace ECSEngine {
 				float2& scale
 			);
 
+			// Returns the border index of the region, -1 if it doesn't exist
 			unsigned int GetDockspaceRegionFromMouse(float2 mouse_position, UIDockspace** dockspace, DockspaceType& type) const;
 
+			// Returns the border index of the region, -1 if it doesn't exist
 			unsigned int GetDockspaceRegionFromDockspace(
 				float2 mouse_position, 
 				UIDockspace** dockspace, 
@@ -1163,11 +1168,11 @@ namespace ECSEngine {
 
 			UIWindow* GetWindowPointer(unsigned int window_index);
 
-			UIDefaultWindowHandler* GetDefaultWindowHandlerData(unsigned int window_index);
+			UIDefaultWindowHandler* GetDefaultWindowHandlerData(unsigned int window_index) const;
 
-			void* GetWindowPrivateHandlerData(unsigned int window_index);
+			void* GetWindowPrivateHandlerData(unsigned int window_index) const;
 
-			void* GetWindowData(unsigned int window_index);
+			void* GetWindowData(unsigned int window_index) const;
 
 			unsigned int GetActiveWindowIndexInBorder(const UIDockspace* dockspace, unsigned int border_index) const;
 
@@ -1176,13 +1181,15 @@ namespace ECSEngine {
 
 			unsigned int GetWindowIndexFromBorder(const UIDockspace* dockspace, unsigned int border_index) const;
 
-			float2 GetWindowPosition(unsigned int window_index);
+			float2 GetWindowPosition(unsigned int window_index) const;
 
-			float2 GetWindowScale(unsigned int window_index);
+			float2 GetWindowScale(unsigned int window_index) const;
 
-			float2 GetWindowRenderRegion(unsigned int window_index);
+			float2 GetWindowRenderRegion(unsigned int window_index) const;
 			
 			float4 GetUVForCharacter(char character) const;
+
+			uint2 GetWindowTexelSize(unsigned int window_index) const;
 
 			// Advances the next sprite texture
 			UISpriteTexture* GetNextSpriteTextureToDraw(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type);

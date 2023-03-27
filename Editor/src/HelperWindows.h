@@ -46,7 +46,7 @@ struct ChooseDirectoryOrFileNameData {
 	CapacityStream<wchar_t>* wide = nullptr;
 };
 
-void ChooseDirectoryOrFileName(void* window_data, void* drawer_descriptor, bool initialize);
+void ChooseDirectoryOrFileName(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 // Returns the window index
 // The callback can access this parameter through additional_data in ActionData*

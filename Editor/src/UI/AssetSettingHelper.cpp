@@ -249,8 +249,10 @@ void AssetSettingsHelperChangedAction(ActionData* action_data)
 	AssetSettingsHelperChangedActionData* data = (AssetSettingsHelperChangedActionData*)_data;
 	Stream<wchar_t> file = GetAssetFile(data->helper_data->metadata, data->asset_type);
 	Stream<char> name = data->helper_data->SelectedName();
-	unsigned int handle = data->target_database->FindAsset(name, file, data->asset_type);
 	bool success = true;
+	
+	/*
+	unsigned int handle = data->target_database->FindAsset(name, file, data->asset_type);
 	if (handle != -1) {
 		// Add an event to deallocate the asset based on its old values
 		const void* old_asset = data->editor_state->asset_database->GetAssetConst(handle, data->asset_type);
@@ -260,6 +262,10 @@ void AssetSettingsHelperChangedAction(ActionData* action_data)
 	else {
 		success = data->target_database->WriteAssetFile(data->helper_data->metadata, data->asset_type);
 	}
+	*/
+	success = data->target_database->WriteAssetFile(data->helper_data->metadata, data->asset_type);
+	// Let the asset trigger do the deallocation of the asset if it exists and its reconstruction
+	EditorStateLazyEvaluationTrigger(data->editor_state, EDITOR_LAZY_EVALUATION_METADATA_FOR_ASSETS);
 
 	if (!success) {
 		ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", name, file, ConvertAssetTypeString(data->asset_type));
@@ -281,21 +287,24 @@ void AssetSettingsHelperChangedWithFileAction(ActionData* action_data)
 	bool same_file_and_name = function::CompareStrings(current_name, previous_name) && function::CompareStrings(current_file, previous_file);
 	// If the file is empty, then the target is not yet asigned, so can't do anything
 	if (current_file.size > 0) {
-		unsigned int handle = data->target_database->FindAsset(previous_name, previous_file, data->asset_type);
 		bool success = true;
-		if (handle != -1) {
-			// Unload the asset
-			// Add an event to deallocate the asset based on its old values
-			const void* old_asset = data->editor_state->asset_database->GetAssetConst(handle, data->asset_type);
-			DeallocateAssetWithRemapping(data->editor_state, handle, data->asset_type, old_asset);
-			success = data->target_database->UpdateAsset(handle, data->asset, data->asset_type);
-			if (!success) {
-				ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
-				EditorSetConsoleWarn(error_message);
-			}
-		}
-		else {
+		
+		//unsigned int handle = data->target_database->FindAsset(previous_name, previous_file, data->asset_type);
+		//if (handle != -1) {
+		//	// Unload the asset
+		//	// Add an event to deallocate the asset based on its old values
+		//	const void* old_asset = data->editor_state->asset_database->GetAssetConst(handle, data->asset_type);
+		//	DeallocateAssetWithRemapping(data->editor_state, handle, data->asset_type, old_asset);
+		//	success = data->target_database->UpdateAsset(handle, data->asset, data->asset_type);
+		//	if (!success) {
+		//		ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
+		//		EditorSetConsoleWarn(error_message);
+		//	}
+		//}
+		//else {
 			success = data->target_database->WriteAssetFile(data->asset, data->asset_type);
+			// Let the asset trigger do the deallocation of the asset if it exists and its reconstruction
+			EditorStateLazyEvaluationTrigger(data->editor_state, EDITOR_LAZY_EVALUATION_METADATA_FOR_ASSETS);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
 				EditorSetConsoleWarn(error_message);
@@ -314,11 +323,11 @@ void AssetSettingsHelperChangedWithFileAction(ActionData* action_data)
 					}
 				}
 			}
-		}
+		//}
 
 		// Check the thunk file - only if the write succeeded
 		if (data->thunk_file_path.size > 0 && success && !same_file_and_name) {
-			// Write the thunk file
+			// Write the thunk/forwarding file
 			success = WriteForwardingFile(data->thunk_file_path, current_file);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(console_message, "Failed to write forwarding file for asset {#} with target {#}.", current_name, current_file);
@@ -334,8 +343,9 @@ void AssetSettingsHelperChangedNoFileAction(ActionData* action_data) {
 	AssetSettingsHelperChangedNoFileActionData* data = (AssetSettingsHelperChangedNoFileActionData*)_data;
 	Stream<char> name = GetAssetName(data->asset, data->asset_type);
 	unsigned int handle = data->target_database->FindAsset(name, { nullptr, 0 }, data->asset_type);
+	
 	bool success = true;
-	if (handle != -1) {
+	/*if (handle != -1) {
 		// Add an event to deallocate the asset based on its old values
 		const void* old_asset = data->editor_state->asset_database->GetAssetConst(handle, data->asset_type);
 		DeallocateAssetWithRemapping(data->editor_state, handle, data->asset_type, old_asset);
@@ -343,7 +353,11 @@ void AssetSettingsHelperChangedNoFileAction(ActionData* action_data) {
 	}
 	else {
 		success = data->target_database->WriteAssetFile(data->asset, data->asset_type);
-	}
+	}*/
+
+	// Let the asset trigger do the deallocation of the asset if it exists and its reconstruction
+	EditorStateLazyEvaluationTrigger(data->editor_state, EDITOR_LAZY_EVALUATION_METADATA_FOR_ASSETS);
+	success = data->target_database->WriteAssetFile(data->asset, data->asset_type);
 
 	if (!success) {
 		ECS_FORMAT_TEMP_STRING(error_message, "Failed to write asset file for {#}, type {#}.", name, ConvertAssetTypeString(data->asset_type));

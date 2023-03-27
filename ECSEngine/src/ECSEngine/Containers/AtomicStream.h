@@ -134,16 +134,17 @@ namespace ECSEngine {
 			buffer[index] = buffer[current_size - 1];
 		}
 
-		void SetSize(unsigned int new_size) {
+		ECS_INLINE void SetSize(unsigned int new_size) {
 			size.store(new_size, std::memory_order_relaxed);
 			write_index.store(new_size, std::memory_order_release);
 		}
 
 		// It will wait until all writes are commited into the stream
-		// (i.e. size becomes equal to write index)
-		void SpinWaitWrites() const {
+		// (i.e. size becomes equal to write index). Returns the size at that point
+		ECS_INLINE unsigned int SpinWaitWrites() const {
 			unsigned int write_count = write_index.load(ECS_RELAXED);
 			SpinWait<'<'>(size, write_count);
+			return write_count;
 		}
 
 		void Swap(unsigned int first, unsigned int second) {
@@ -181,6 +182,12 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// Performs an action for all elements - including those which are pending to be written
+		template<typename Functor>
+		void PerformAction(unsigned int starting_index, Functor&& functor) {
+			unsigned int previous_write_index = Spinw
+		}
+
 		ECS_INLINE T& operator [](size_t index) {
 			return buffer[index];
 		}
@@ -191,6 +198,11 @@ namespace ECSEngine {
 
 		ECS_INLINE const void* GetAllocatedBuffer() const {
 			return buffer;
+		}
+
+		// Returns the size at the current moment - not the write index
+		ECS_INLINE unsigned int Size() const {
+			return size.load(ECS_RELAXED);
 		}
 
 		static size_t MemoryOf(size_t number) {

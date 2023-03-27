@@ -7,8 +7,10 @@
 #define ECS_FIELDS_END_REFLECT
 
 // Used to skip fields for determination of byte size and alignment
-// Use a static assert in order to be sure that the size is correct
-#define ECS_SKIP_REFLECTION(byte_size) byte_size;
+// Use a static assert in order to be sure that the size/alignment is correct
+// The alignment is optional - it is assumed to be the maximal alignment of the platform
+// if left unspecified
+#define ECS_SKIP_REFLECTION(static_assert_byte_size, ...) static_assert_byte_size; __VA_ARGS__;
 
 // Used to omit fields which are user defined types but don't want to reflect these
 // but at the same time want to keep them. Use static assert in order to be

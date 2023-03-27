@@ -60,7 +60,7 @@ void StepProjectAction(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------
 
-void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	drawer.DisablePaddingForRenderRegion();
@@ -168,7 +168,7 @@ void MiscellaneousBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* 
 }
 
 void CreateMiscellaneousBar(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
+	UISystem* ui_system = editor_state->ui_system;
 	UIWindowDescriptor descriptor;
 
 	descriptor.initial_position_y = -1.0f + TOOLBAR_SIZE_Y;

@@ -27,6 +27,8 @@ struct BaseDrawData {
 	Action callback_action;
 	void* callback_action_data;
 	bool callback_verify;
+	// Used only for deselection
+	bool callback_before_handle_update;
 
 	EditorState* editor_state;
 	AssetDatabase* target_database;
@@ -123,7 +125,7 @@ bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 				else {
 					Stream<Stream<char>>* settings = hash_table.GetValuePtrFromIndex(table_index);			
 					settings_count = settings->size;
-					settings->AddResize(allocator_polymorphic, 1);
+					settings->Expand(allocator_polymorphic, 1, true);
 					settings_buffer = settings->buffer;
 				}
 				settings_buffer[settings_count] = allocated_name;
@@ -162,6 +164,9 @@ struct SelectActionData {
 	Action action;
 	void* action_data;
 	bool verify_action;
+
+	// Used only for deselection
+	bool callback_before_handle_update;
 };
 
 void SelectAction(ActionData* action_data) {
@@ -197,10 +202,12 @@ void SelectAction(ActionData* action_data) {
 	else {
 		*data->handle = data->target_database->AddAsset(data->name, data->file, data->type);
 		if (data->action != nullptr) {
-			CreateAssetAsyncCallbackInfo info;
+			AssetOverrideCallbackAdditionalInfo info;
 			info.handle = *data->handle;
 			info.type = data->type;
 			info.success = *data->handle != -1;
+			info.is_selection = true;
+			info.previous_asset = nullptr;
 
 			ActionData dummy_data;
 			dummy_data.data = data->action_data;
@@ -230,12 +237,34 @@ struct DeselectActionData {
 	Action callback_action;
 	void* callback_action_data;
 	bool verify_action;
+	// Used only for deselection
+	bool callback_before_handle_update;
 };
 
 void DeselectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	DeselectActionData* data = (DeselectActionData*)_data;
+
+	unsigned int handle_value = *data->handle;
+	alignas(alignof(size_t)) char previous_asset[AssetMetadataMaxByteSize()];
+	const void* previous_asset_database = data->target_database->GetAssetConst(handle_value, data->asset_type);
+	memcpy(previous_asset, previous_asset_database, AssetMetadataByteSize(data->asset_type));
+
+	auto trigger_callback = [&]() {
+		AssetOverrideCallbackAdditionalInfo info;
+		info.handle = handle_value;
+		info.type = data->asset_type;
+		info.success = true;
+		info.is_selection = false;
+		info.previous_asset = previous_asset;
+
+		ActionData dummy_data;
+		dummy_data.system = nullptr;
+		dummy_data.data = data->callback_action_data;
+		dummy_data.additional_data = &info;
+		data->callback_action(&dummy_data);
+	};
 
 	// Only if the target database matches the editor database
 	if (data->target_database == data->editor_state->asset_database) {
@@ -264,14 +293,11 @@ void DeselectAction(ActionData* action_data) {
 		}
 	}
 	else {
-		data->target_database->RemoveAsset(*data->handle, data->asset_type);
-		if (data->callback_action != nullptr) {
-			ActionData dummy_data;
-			dummy_data.system = nullptr;
-			dummy_data.data = data->callback_action_data;
-			dummy_data.additional_data = data->handle;
-			data->callback_action(&dummy_data);
+		// The handle can be modified inside - use the stored handle value
+		if (data->callback_action != nullptr && data->callback_before_handle_update) {
+			trigger_callback();
 		}
+		data->target_database->RemoveAsset(handle_value, data->asset_type);
 	}
 
 	unsigned int selection_input = system->GetWindowFromName(SELECTION_INPUT_WINDOW_NAME);
@@ -280,6 +306,10 @@ void DeselectAction(ActionData* action_data) {
 	}
 	
 	*data->handle = -1;
+
+	if (data->callback_action != nullptr && !data->callback_before_handle_update && !data->verify_action) {
+		trigger_callback();
+	}
 }
 
 // Returns the total written size
@@ -292,6 +322,7 @@ void CreateSelectActionData(SelectActionData* select_data, const BaseDrawData* b
 	select_data->action_data = base_data->callback_action_data;
 	select_data->verify_action = base_data->callback_verify;
 	select_data->target_database = base_data->target_database;
+	select_data->callback_before_handle_update = base_data->callback_before_handle_update;
 }
 
 // The stack allocation must be at least ECS_KB * 4 large
@@ -384,8 +415,6 @@ bool DrawBaseSelectionInput(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET
 
 	bool trigger_lazy_evaluation = LazyRetrievalOfPaths(base_data, type);
 
-	drawer.SetDrawMode(ECS_UI_DRAWER_COLUMN_DRAW_FIT_SPACE, 2, 0.01f * drawer.zoom_ptr->y);
-
 	const float RELATIVE_FACTOR = 3.5f;
 
 	UIConfigRelativeTransform transform;
@@ -426,11 +455,16 @@ void DrawDeselectButton(UIDrawer& drawer, DrawBaseReturn* base_return, ECS_ASSET
 		deselect_data.callback_action_data = base_return->select_data->action_data;
 		deselect_data.verify_action = base_return->select_data->verify_action;
 		deselect_data.target_database = base_return->select_data->target_database;
+		deselect_data.callback_before_handle_update = base_return->select_data->callback_before_handle_update;
 
 		// Draw a none button
 		const size_t BASE_CONFIGURATION = UI_CONFIG_MAKE_SQUARE | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
 		drawer.Button(BASE_CONFIGURATION, base_return->config, "Deselect", { DeselectAction, &deselect_data, sizeof(deselect_data) });
 	}
+}
+
+void SetColumnDrawFitSpace(UIDrawer& drawer) {
+	drawer.SetDrawMode(ECS_UI_DRAWER_COLUMN_DRAW_FIT_SPACE, 2, 0.01f * drawer.zoom_ptr->y);
 }
 
 // The GetTexture must take in as parameters a Stream<wchar_t>* and a ResourceView* and set the one it wants to use
@@ -446,6 +480,9 @@ void DrawFileAndName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE t
 	if (trigger_lazy_evaluation) {
 		lazy_evaluation();
 	}
+
+	DrawDeselectButton(drawer, &base_return, type);
+	SetColumnDrawFitSpace(drawer);
 
 	unsigned int base_size = base_return.absolute_path.size;
 
@@ -501,7 +538,7 @@ void DrawFileAndName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE t
 				}
 
 				size_t stack_allocation[ECS_KB];
-				UIDrawerMenuState menu_state = GetMenuForSelection(base_data, ECS_ASSET_MESH, index, stack_allocation);
+				UIDrawerMenuState menu_state = GetMenuForSelection(base_data, type, index, stack_allocation);
 
 				float2 menu_position;
 				float2 menu_scale;
@@ -531,8 +568,6 @@ void DrawFileAndName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE t
 			drawer.TextLabel(UI_CONFIG_WINDOW_DEPENDENT_SIZE, base_return.label_config, base_return.converted_filename);
 		}
 	}
-
-	DrawDeselectButton(drawer, &base_return, type);
 }
 
 // The GetTexture must take in as parameter a Stream<wchar_t>*
@@ -544,6 +579,9 @@ void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE type
 	DrawBaseReturn base_return;
 	base_return.stack_allocation = _stack_allocation;
 	DrawBaseSelectionInput(drawer, base_data, type, &base_return);
+
+	DrawDeselectButton(drawer, &base_return, type);
+	SetColumnDrawFitSpace(drawer);
 
 	unsigned int base_size = base_return.absolute_path.size;
 
@@ -563,7 +601,7 @@ void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE type
 		Stream<wchar_t> texture = { nullptr, 0 };
 		get_texture(base_return.absolute_path, index, &texture);
 
-		Stream<char> stem = function::PathStem(base_return.converted_filename);
+		Stream<char> stem = function::PathStemBoth(base_return.converted_filename);
 
 		base_return.select_data->file = { nullptr, 0 };
 		// The name will be deduced from the relative part
@@ -591,8 +629,6 @@ void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE type
 		// Draw the name
 		drawer.TextLabel(UI_CONFIG_WINDOW_DEPENDENT_SIZE, base_return.label_config, base_return.converted_filename);
 	}
-
-	DrawDeselectButton(drawer, &base_return, type);
 }
 
 #pragma region Mesh Draw
@@ -601,7 +637,7 @@ struct MeshDrawData {
 	BaseDrawData base_data;
 };
 
-void MeshDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void MeshDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	MeshDrawData* data = (MeshDrawData*)window_data;
@@ -629,7 +665,7 @@ struct TextureDrawData {
 	BaseDrawData base_data;
 };
 
-void TextureDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void TextureDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	TextureDrawData* data = (TextureDrawData*)window_data;
@@ -651,7 +687,7 @@ struct GPUSamplerDrawData {
 	BaseDrawData base_data;
 };
 
-void GPUSamplerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void GPUSamplerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	GPUSamplerDrawData* data = (GPUSamplerDrawData*)window_data;
@@ -674,7 +710,7 @@ struct ShaderDrawData {
 	ECS_SHADER_TYPE shader_type;
 };
 
-void ShaderDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void ShaderDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	ShaderDrawData* data = (ShaderDrawData*)window_data;
@@ -711,7 +747,7 @@ struct MaterialDrawData {
 	BaseDrawData base_data;
 };
 
-void MaterialDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void MaterialDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	MaterialDrawData* data = (MaterialDrawData*)window_data;
@@ -729,7 +765,7 @@ struct MiscDrawData {
 	BaseDrawData base_data;
 };
 
-void MiscDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void MiscDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	MiscDrawData* data = (MiscDrawData*)window_data;
@@ -753,6 +789,8 @@ struct OverrideBaseData {
 	bool callback_is_ptr;
 	Action callback;
 	bool callback_verify;
+	// Used for deselection
+	bool callback_before_handle_update;
 
 	union {
 		// Embedd the data directly into it
@@ -784,6 +822,7 @@ void OverrideAssetHandle(
 	base_window_data->callback_action = base_data->callback;
 	base_window_data->callback_action_data = base_data->callback_is_ptr ? base_data->callback_data_ptr : base_data->callback_data;
 	base_window_data->callback_verify = base_data->callback_verify;
+	base_window_data->callback_before_handle_update = base_data->callback_before_handle_update;
 	base_window_data->target_database = base_data->database;
 
 	UIWindowDescriptor window_descriptor;
@@ -910,13 +949,14 @@ ECS_UI_REFLECTION_INSTANCE_INITIALIZE_OVERRIDE(AssetInitialize) {
 
 	const size_t capacity = 256;
 
-	data->selection.buffer = (char*)drawer->allocator->Allocate(sizeof(char) * capacity, alignof(char));
+	data->selection.buffer = (char*)Allocate(allocator, sizeof(char) * capacity, alignof(char));
 	data->selection.size = 0;
 	data->selection.capacity = capacity;
 	data->database = global_data->editor_state->asset_database;
 
 	data->editor_state = global_data->editor_state;
 	data->callback_verify = false;
+	data->callback_before_handle_update = true;
 }
 
 #pragma endregion
@@ -927,7 +967,8 @@ ECS_UI_REFLECTION_INSTANCE_DEALLOCATE_OVERRIDE(AssetDeallocate) {
 	// Every asset has a OverrideBaseData as the first field
 	OverrideBaseData* data = (OverrideBaseData*)_data;
 	if (data->selection.capacity > 0) {
-		Deallocate(allocator, data->selection.buffer);
+		data->selection.Deallocate(allocator);
+		data->selection = { nullptr, 0, 0 };
 	}
 }
 
@@ -957,6 +998,7 @@ ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback) {
 		data->callback_is_ptr = false;
 	}
 	data->callback_verify = modify_data->verify_handler;
+	data->callback_before_handle_update = modify_data->callback_before_handle_update;
 }
 
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindNewDatabase) {

@@ -37,33 +37,6 @@ void InspectorDrawGPUSamplerFile(EditorState* editor_state, unsigned int inspect
 		return;
 	}
 
-	if (data->sampler_metadata.name.size == 0) {
-		// Retrieve the name
-		ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
-		GetAssetNameFromThunkOrForwardingFile(editor_state, data->path, asset_name);
-		data->sampler_metadata.name = function::StringCopy(editor_state->EditorAllocator(), asset_name);
-
-		CapacityStream<char> anisotropic_chars(data->anisotropic_label_storage, 0, ANISOTROPIC_CHAR_STORAGE);
-
-		// Initialize the anisotropic mapping
-		unsigned char anisotropic_start = 1;
-		for (size_t index = 0; index < ANISOTROPIC_LEVELS; index++) {
-			data->anisotropic_mapping[index] = anisotropic_start;
-			anisotropic_start *= 2;
-			
-			unsigned int anisotropic_offset = anisotropic_chars.size;
-			size_t write_size = function::ConvertIntToChars(anisotropic_chars, data->anisotropic_mapping[index]);
-			data->anisotropic_labels[index] = { anisotropic_chars.buffer + anisotropic_offset, write_size };
-		}
-
-		// Retrieve the data from the file, if any
-		bool success = editor_state->asset_database->ReadGPUSamplerFile(data->sampler_metadata.name, &data->sampler_metadata);
-		if (!success) {
-			// Set the default for the metadata
-			data->sampler_metadata.Default(data->sampler_metadata.name, { nullptr, 0 });
-		}
-	}
-
 	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_GPU_SAMPLER_ICON, drawer->color_theme.text, drawer->color_theme.theme);
 
 	InspectorIconNameAndPath(drawer, data->path);
@@ -155,6 +128,31 @@ void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> 
 		InspectorDrawGPUSamplerFileData* draw_data = (InspectorDrawGPUSamplerFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.Copy(path);
+
+		// Retrieve the name
+		ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
+		GetAssetNameFromThunkOrForwardingFile(editor_state, draw_data->path, asset_name);
+		draw_data->sampler_metadata.name = function::StringCopy(editor_state->EditorAllocator(), asset_name);
+
+		CapacityStream<char> anisotropic_chars(draw_data->anisotropic_label_storage, 0, ANISOTROPIC_CHAR_STORAGE);
+
+		// Initialize the anisotropic mapping
+		unsigned char anisotropic_start = 1;
+		for (size_t index = 0; index < ANISOTROPIC_LEVELS; index++) {
+			draw_data->anisotropic_mapping[index] = anisotropic_start;
+			anisotropic_start *= 2;
+
+			unsigned int anisotropic_offset = anisotropic_chars.size;
+			size_t write_size = function::ConvertIntToChars(anisotropic_chars, draw_data->anisotropic_mapping[index]);
+			draw_data->anisotropic_labels[index] = { anisotropic_chars.buffer + anisotropic_offset, write_size };
+		}
+
+		// Retrieve the data from the file, if any
+		bool success = editor_state->asset_database->ReadGPUSamplerFile(draw_data->sampler_metadata.name, &draw_data->sampler_metadata);
+		if (!success) {
+			// Set the default for the metadata
+			draw_data->sampler_metadata.Default(draw_data->sampler_metadata.name, { nullptr, 0 });
+		}
 	}
 }
 

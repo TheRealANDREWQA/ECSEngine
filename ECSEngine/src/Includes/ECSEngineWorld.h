@@ -1,2 +1,2 @@
 #pragma once
-#include "..\ECSEngine\Internal\World.h"
+#include "../ECSEngine/ECS/World.h"

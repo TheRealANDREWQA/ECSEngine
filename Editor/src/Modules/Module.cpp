@@ -5,6 +5,7 @@
 #include "..\Editor\EditorEvent.h"
 #include "..\Project\ProjectOperations.h"
 #include "ECSEngineWorld.h"
+#include "ECSEngineLinkComponents.h"
 #include "ModuleSettings.h"
 #include "..\UI\Inspector.h"
 
@@ -53,23 +54,24 @@ constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 200;
 // -------------------------------------------------------------------------------------------------------------------------
 
 bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path) {
-	EDITOR_STATE(editor_state);
-	Stream<char> contents = ReadWholeFileText(log_path, GetAllocatorPolymorphic(editor_allocator, ECS_ALLOCATION_MULTI));
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+	editor_allocator.allocation_type = ECS_ALLOCATION_MULTI;
+
+	Stream<char> contents = ReadWholeFileText(log_path, editor_allocator);
 
 	if (contents.buffer != nullptr) {
-		contents[contents.size - 1] = '\0';
-		const char* build_FAILED = strstr(contents.buffer, "Build FAILED.");
+		Stream<char> build_FAILED = function::FindFirstToken(contents, "Build FAILED.");
 
-		editor_allocator->Deallocate_ts(contents.buffer);
-		if (build_FAILED != nullptr) {
+		Deallocate(editor_allocator, contents.buffer);
+		if (build_FAILED.size > 0) {
 			// Extract the module name from the log path
-			const wchar_t* debug_ptr = wcsstr(log_path.buffer, CMD_BUILD_SYSTEM_LOG_FILE_PATH);
-			if (debug_ptr != nullptr) {
-				debug_ptr += wcslen(CMD_BUILD_SYSTEM_LOG_FILE_PATH);
-				const wchar_t* underscore_after_library_name = wcschr(debug_ptr, L'_');
-				if (underscore_after_library_name != nullptr) {
+			Stream<wchar_t> debug_ptr = function::FindFirstToken(log_path, CMD_BUILD_SYSTEM_LOG_FILE_PATH);
+			if (debug_ptr.size > 0) {
+				debug_ptr.Advance(wcslen(CMD_BUILD_SYSTEM_LOG_FILE_PATH));
+				Stream<wchar_t> underscore_after_library_name = function::FindFirstCharacter(debug_ptr, L'_');
+				if (underscore_after_library_name.size > 0) {
 					ECS_FORMAT_TEMP_STRING(error_message, "Module {#} have failed to build. Check the {#} log.",
-						Stream<wchar_t>(debug_ptr, underscore_after_library_name - debug_ptr), CMD_BUILD_SYSTEM);
+						Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer), CMD_BUILD_SYSTEM);
 					EditorSetConsoleError(error_message);
 					return false;
 				}
@@ -133,13 +135,12 @@ void SetCrashHandlerPDBPaths(const EditorState* editor_state) {
 // -------------------------------------------------------------------------------------------------------------------------
 
 void AddProjectModuleToLaunchedCompilation(EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration) {
-	EDITOR_STATE(editor_state);
 	// Allocate the string from the multithreaded because the deallocate would have interfered with the normal allocations
 	// since the deallocation would be done from a different thread
 	// Concatenate the library_name with _ and then the configuration string
 	Stream<wchar_t> configuration_string = MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration];
 
-	void* allocation = multithreaded_editor_allocator->Allocate_ts(sizeof(wchar_t) * (library_name.size + configuration_string.size + 1));
+	void* allocation = Allocate(editor_state->MultithreadedEditorAllocator(), sizeof(wchar_t) * (library_name.size + configuration_string.size + 1));
 	uintptr_t buffer = (uintptr_t)allocation;
 	library_name.CopyTo(buffer);
 	wchar_t* underscore = (wchar_t*)buffer;
@@ -156,7 +157,7 @@ void AddProjectModuleToLaunchedCompilation(EditorState* editor_state, Stream<wch
 // -------------------------------------------------------------------------------------------------------------------------
 
 bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name, bool is_graphics_module) {
-	EDITOR_STATE(editor_state);
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	ProjectModules* project_modules = editor_state->project_modules;
 
 	if (!ExistsFileOrFolder(solution_path)) {
@@ -181,7 +182,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 	EditorModule* module = project_modules->buffer + module_index;
 
 	size_t total_size = (solution_path.size + library_name.size + 2) * sizeof(wchar_t);
-	void* allocation = editor_allocator->Allocate(total_size, alignof(wchar_t));
+	void* allocation = Allocate(editor_allocator, total_size, alignof(wchar_t));
 	uintptr_t buffer = (uintptr_t)allocation;
 	module->solution_path.InitializeFromBuffer(buffer, solution_path.size);
 	buffer += sizeof(wchar_t);
@@ -358,8 +359,6 @@ void ForEachProjectModule(
 	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS(*build_function)(EditorState*, unsigned int, EDITOR_MODULE_CONFIGURATION, EDITOR_FINISH_BUILD_COMMAND_STATUS*)
 ) {
-	EDITOR_STATE(editor_state);
-
 	// Clear the log file first
 	const ProjectModules* project_modules = (const ProjectModules*)editor_state->project_modules;
 
@@ -620,7 +619,6 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 	EDITOR_MODULE_CONFIGURATION configuration,
 	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status
 ) {
-	EDITOR_STATE(editor_state);
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
 
 	// First check that the module is not executing another build command - it doesn't necessarly 
@@ -686,11 +684,11 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		// Log the command status
 		CheckBuildStatusThreadData check_data;
 		check_data.editor_state = editor_state;
-		check_data.path.buffer = (wchar_t*)multithreaded_editor_allocator->Allocate_ts(sizeof(wchar_t) * flag_file.size);
+		check_data.path.buffer = (wchar_t*)Allocate(editor_state->MultithreadedEditorAllocator(), sizeof(wchar_t) * flag_file.size);
 		check_data.path.Copy(flag_file);
 		check_data.report_status = report_status;
 
-		task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(CheckBuildStatusThreadTask, &check_data, sizeof(check_data)));
+		editor_state->task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(CheckBuildStatusThreadTask, &check_data, sizeof(check_data)));
 	}
 	return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
 #endif
@@ -920,8 +918,6 @@ bool IsGraphicsModule(const EditorState* editor_state, unsigned int index)
 
 unsigned int GetModuleIndex(const EditorState* editor_state, Stream<wchar_t> solution_path)
 {
-	EDITOR_STATE(editor_state);
-
 	ProjectModules* modules = editor_state->project_modules;
 	for (size_t index = 0; index < modules->size; index++) {
 		if (function::CompareStrings(modules->buffer[index].solution_path, solution_path)) {
@@ -934,8 +930,6 @@ unsigned int GetModuleIndex(const EditorState* editor_state, Stream<wchar_t> sol
 // -------------------------------------------------------------------------------------------------------------------------
 
 unsigned int GetModuleIndexFromName(const EditorState* editor_state, Stream<wchar_t> library_name) {
-	EDITOR_STATE(editor_state);
-
 	ProjectModules* modules = editor_state->project_modules;
 	for (size_t index = 0; index < modules->size; index++) {
 		if (function::CompareStrings(modules->buffer[index].library_name, library_name)) {
@@ -977,8 +971,6 @@ void GetModuleBuildLogPath(
 	Stream<wchar_t>& log_path
 )
 {
-	EDITOR_STATE(editor_state);
-
 	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 	log_path.Copy(project_file->path);
@@ -1003,8 +995,6 @@ EditorModuleInfo* GetModuleInfo(const EditorState* editor_state, unsigned int in
 // -------------------------------------------------------------------------------------------------------------------------
 
 void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path) {
-	EDITOR_STATE(editor_state);
-
 	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
 	path.Copy(project_file->path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
@@ -1308,12 +1298,14 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 {
 	EditorModule* module = editor_state->project_modules->buffer + index;
 
+	Reflection::ReflectionManager* module_reflection = editor_state->ModuleReflectionManager();
+
 	ECS_TEMP_STRING(source_path, 512);
 	bool success = GetModuleReflectSolutionPath(editor_state, index, source_path);
 	if (success) {
-		unsigned int folder_hierarchy = editor_state->module_reflection->reflection->GetHierarchyIndex(source_path);
+		unsigned int folder_hierarchy = module_reflection->GetHierarchyIndex(source_path);
 		if (folder_hierarchy == -1) {
-			folder_hierarchy = editor_state->module_reflection->reflection->CreateFolderHierarchy(source_path);
+			folder_hierarchy = module_reflection->CreateFolderHierarchy(source_path);
 		}
 		else {
 			ReleaseModuleReflection(editor_state, index);
@@ -1322,7 +1314,7 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 2048);
 
 		// Launch thread tasks to process this new entry
-		success = editor_state->module_reflection->reflection->ProcessFolderHierarchy(folder_hierarchy, editor_state->task_manager, &error_message);
+		success = module_reflection->ProcessFolderHierarchy(folder_hierarchy, /*editor_state->task_manager,*/ &error_message);
 
 		if (!success) {
 			ECS_FORMAT_TEMP_STRING(
@@ -1335,6 +1327,9 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			EditorSetConsoleWarn(console_message);
 		}
 		else {
+			// Create all the link types for the components inside the reflection manager
+			CreateLinkTypesForComponents(module_reflection, folder_hierarchy);
+
 			// Don't create the UI types here for components because they might contain references to assets and fail
 			UIReflectionDrawerTag component_tags[] = {
 				{ ECS_COMPONENT_TAG, false },
@@ -1343,13 +1338,13 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			};
 			ECS_STACK_CAPACITY_STREAM(unsigned int, type_indices, 512);
 			UIReflectionDrawerSearchOptions search_options;
-			search_options.exclude_tags = { component_tags, std::size(component_tags) };
+			//search_options.exclude_tags = { component_tags, std::size(component_tags) };
 			search_options.indices = &type_indices;
 			unsigned int types_created = editor_state->module_reflection->CreateTypesForHierarchy(folder_hierarchy, search_options);
 
 			// Convert all stream types to resizable
 			for (unsigned int index = 0; index < type_indices.size; index++) {
-				UIReflectionType* type = editor_state->module_reflection->GetTypePtr(type_indices[index]);
+				UIReflectionType* type = editor_state->module_reflection->GetType(type_indices[index]);
 				editor_state->module_reflection->ConvertTypeStreamsToResizable(type);
 			}
 
@@ -1359,7 +1354,7 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			// Update the engine components
 			ECS_STACK_CAPACITY_STREAM(char, ascii_name, 512);
 			function::ConvertWideCharsToASCII(module->library_name, ascii_name);
-			editor_state->editor_components.UpdateComponents(editor_state->module_reflection->reflection, folder_hierarchy, ascii_name);
+			editor_state->editor_components.UpdateComponents(module_reflection, folder_hierarchy, ascii_name);
 		}
 	}
 	else {
@@ -1538,10 +1533,8 @@ bool UpdateModuleLibraryLastWrite(EditorState* editor_state, unsigned int index,
 // -------------------------------------------------------------------------------------------------------------------------
 
 void ReleaseModule(EditorState* editor_state, unsigned int index) {
-	EDITOR_STATE(editor_state);
-
 	ProjectModules* modules = editor_state->project_modules;
-	editor_allocator->Deallocate(modules->buffer[index].solution_path.buffer);
+	Deallocate(editor_state->EditorAllocator(), modules->buffer[index].solution_path.buffer);
 
 	for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
 		if (IsEditorModuleLoaded(editor_state, index, (EDITOR_MODULE_CONFIGURATION)configuration_index)) {
@@ -1577,10 +1570,13 @@ void ReleaseModuleReflection(EditorState* editor_state, unsigned int index)
 // -------------------------------------------------------------------------------------------------------------------------
 
 void RemoveModule(EditorState* editor_state, unsigned int index) {
-	EDITOR_STATE(editor_state);
-
 	ProjectModules* modules = editor_state->project_modules;
 	ReleaseModule(editor_state, index);
+
+	// Remove the module from the editor components as well
+	unsigned int editor_component_index = editor_state->editor_components.ModuleIndexFromReflection(editor_state, index);
+	editor_state->editor_components.RemoveModule(editor_state, editor_component_index);
+
 	modules->Remove(index);
 }
 
@@ -1588,8 +1584,6 @@ void RemoveModule(EditorState* editor_state, unsigned int index) {
 
 void RemoveModule(EditorState* editor_state, Stream<wchar_t> solution_path)
 {
-	EDITOR_STATE(editor_state);
-
 	unsigned int module_index = GetModuleIndex(editor_state, solution_path);
 	if (module_index != -1) {
 		RemoveModule(editor_state, module_index);
@@ -1604,7 +1598,6 @@ void RemoveModule(EditorState* editor_state, Stream<wchar_t> solution_path)
 
 void RemoveModuleAssociatedFiles(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
 {
-	EDITOR_STATE(editor_state);
 	ProjectModules* modules = editor_state->project_modules;
 
 	// Delete the associated files
@@ -1640,8 +1633,6 @@ void RemoveModuleAssociatedFiles(EditorState* editor_state, Stream<wchar_t> solu
 
 void ResetModules(EditorState* editor_state)
 {
-	EDITOR_STATE(editor_state);
-
 	ProjectModules* project_modules = editor_state->project_modules;
 	for (size_t index = 0; index < project_modules->size; index++) {
 		ReleaseModule(editor_state, index);

@@ -27,7 +27,7 @@ constexpr float2 SAVE_LAYOUT_WINDOW_SIZE = { 0.5f, 0.25f };
 
 // --------------------------------------------------------------------------------------------------------
 
-void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor, bool initialize) {
+void MiscellaneousBarNoActions(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	drawer.DisablePaddingForRenderRegion();
@@ -110,8 +110,6 @@ void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor, bool 
 // --------------------------------------------------------------------------------------------------------
 
 void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	UIWindowDescriptor descriptor;
 
 	size_t stack_memory[128];
@@ -126,7 +124,7 @@ void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
 
 	descriptor.draw = MiscellaneousBarNoActions;
 
-	ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BACKGROUND | UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING
+	editor_state->ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BACKGROUND | UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING
 	 | UI_DOCKSPACE_BORDER_NOTHING);
 }
 
@@ -142,7 +140,7 @@ void DeferredSystemClear(ActionData* action_data) {
 
 // --------------------------------------------------------------------------------------------------------
 
-void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void SaveLayoutWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	auto exit = [](ActionData* action_data) {
@@ -183,20 +181,18 @@ void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor, bool initi
 
 // --------------------------------------------------------------------------------------------------------
 
-void CreateSaveLayoutWindow(void* _editor_state) {
+void CreateSaveLayoutWindow(EditorState* editor_state) {
 	UIWindowDescriptor descriptor;
 	
 	CenterWindowDescriptor(descriptor, SAVE_LAYOUT_WINDOW_SIZE);
 
 	descriptor.window_name = SAVE_LAYOUT_WINDOW_NAME;
-	descriptor.window_data = _editor_state;
+	descriptor.window_data = editor_state;
 	descriptor.window_data_size = 0;
 
 	descriptor.draw = SaveLayoutWindowDraw;
 
-	EDITOR_STATE(_editor_state);
-
-	ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X);
+	editor_state->ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X);
 }
 
 // --------------------------------------------------------------------------------------------------------
@@ -217,14 +213,13 @@ unsigned int CreatePlaceholderWindow(EditorState* editor_state, const char* wind
 	descriptor.window_data = nullptr;
 	descriptor.window_data_size = 0;
 
-	EDITOR_STATE(editor_state);
-	return ui_system->Create_Window(descriptor);
+	return editor_state->ui_system->Create_Window(descriptor);
 }
 
 // --------------------------------------------------------------------------------------------------------
 
 void CreatePlaceholderWindowAndDockspace(EditorState* editor_state, const char* window_name, float2 size) {
-	EDITOR_STATE(editor_state);
+	UISystem* ui_system = editor_state->ui_system;
 	unsigned int window_index = CreatePlaceholderWindow(editor_state, window_name, size);
 	UIElementTransform window_transform = { ui_system->GetWindowPosition(window_index), ui_system->GetWindowScale(window_index) };
 	ui_system->CreateDockspace(window_transform, DockspaceType::FloatingVertical, window_index, false);
@@ -257,7 +252,7 @@ void CreatePlaceholderDockspaceAction(ActionData* action_data) {
 
 // --------------------------------------------------------------------------------------------------------
 
-void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void ToolbarUIPlaceholderWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	drawer.DisablePaddingForRenderRegion();
@@ -333,8 +328,6 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 }
 
 void CreateToolbarUIPlaceholder(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	UIWindowDescriptor descriptor;
 	size_t stack_memory[128];
 	ToolbarSetDescriptor(descriptor, editor_state, stack_memory);
@@ -352,15 +345,14 @@ void CreateToolbarUIPlaceholder(EditorState* editor_state) {
 
 	descriptor.draw = ToolbarUIPlaceholderWindowDraw;
 
-	ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BACKGROUND | UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING
+	editor_state->ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BACKGROUND | UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING
 		| UI_DOCKSPACE_BORDER_NOTHING);
 }
 
 // --------------------------------------------------------------------------------------------------------
 
 void CreateProjectUITemplatePreview(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
+	UISystem* ui_system = editor_state->ui_system;
 	ui_system->Clear();
 
 	CreateToolbarUIPlaceholder(editor_state);

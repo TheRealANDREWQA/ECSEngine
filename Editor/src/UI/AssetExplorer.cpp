@@ -6,15 +6,15 @@
 #include "../HelperWindows.h"
 #include "ECSEngineAssets.h"
 #include "../Project/ProjectFolders.h"
+#include "Inspector.h"
 
 struct AssetExplorerData {
 	EditorState* editor_state;
-	bool opened_headers[ECS_ASSET_TYPE_COUNT];
-	CapacityStream<char> selected_asset;
-	ECS_ASSET_TYPE selected_asset_type;
+	bool asset_opened_headers[ECS_ASSET_TYPE_COUNT];
+	bool resource_manager_opened_headers[(unsigned char)ResourceType::TypeCount];
 };
 
-void AssetExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void AssetExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	AssetExplorerData* data = (AssetExplorerData*)window_data;
@@ -23,123 +23,134 @@ void AssetExplorerDraw(void* window_data, void* drawer_descriptor, bool initiali
 	ResourceManager* resource_manager = editor_state->RuntimeResourceManager();
 	AssetDatabase* database = editor_state->asset_database;
 
-	if (initialize) {
-		size_t BUFFER_CAPACITY = 256;
-		void* allocation = drawer.GetMainAllocatorBuffer(sizeof(char) * BUFFER_CAPACITY);
-		data->selected_asset.InitializeFromBuffer(allocation, 0, BUFFER_CAPACITY);
-		data->selected_asset_type = ECS_ASSET_TYPE_COUNT;
-	}
-	else {
-		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
-		GetProjectAssetsFolder(editor_state, assets_folder);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+	GetProjectAssetsFolder(editor_state, assets_folder);
 
-		auto iterate_asset_type = [&](ECS_ASSET_TYPE asset_type, auto stream) {
-			const char* string = ConvertAssetTypeString(asset_type);
-			drawer.CollapsingHeader(string, &data->opened_headers[asset_type], [&]() {
-				struct SelectData {
-					inline unsigned int* Size() {
-						return &label_size;
-					}
+	auto iterate_asset_type = [&](ECS_ASSET_TYPE asset_type, auto stream) {
+		const char* string = ConvertAssetTypeString(asset_type);
+		drawer.CollapsingHeader(string, &data->asset_opened_headers[asset_type], [&]() {
+			struct SelectData {
+				EditorState* editor_state;
+				const void* metadata;
+				ECS_ASSET_TYPE asset_type;
+			};
 
-					AssetExplorerData* data;
-					unsigned int label_size;
-					ECS_ASSET_TYPE type;
-				};
+			auto select_action = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
 
-				auto select_action = [](ActionData* action_data) {
-					UI_UNPACK_ACTION_DATA;
+				SelectData* data = (SelectData*)_data;
+				ChangeInspectorToAsset(data->editor_state, data->metadata, data->asset_type);
+			};
 
-					SelectData* data = (SelectData*)_data;
-					Stream<char> label = function::GetCoallescedStreamFromType(data).As<char>();
-					data->data->selected_asset.Copy(label);
-					data->data->selected_asset_type = data->type;
-				};
+			for (size_t index = 0; index < stream.size; index++) {
+				const void* asset = stream.buffer + index;
+				Stream<char> asset_name = GetAssetName(asset, asset_type);
 
-				for (size_t index = 0; index < stream.size; index++) {
-					const void* asset = stream.buffer + index;
-					Stream<char> asset_name = GetAssetName(asset, asset_type);
+				SelectData select_data;
+				select_data.asset_type = asset_type;
+				select_data.editor_state = editor_state;
+				select_data.metadata = &stream[index].value;
 
-					size_t select_storage[512];
-					unsigned int write_size = 0;
-					SelectData* select_data = function::CreateCoallescedStreamIntoType<SelectData>(select_storage, asset_name, &write_size);
-					select_data->data = data;
-					select_data->type = asset_type;
+				ECS_STACK_CAPACITY_STREAM(char, reference_count_characters, 16);
+				unsigned int current_asset_reference_count = stream[index].reference_count;
+				function::ConvertIntToChars(reference_count_characters, current_asset_reference_count);
 
-					UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
-					row_layout.IndentRow(drawer.layout.node_indentation);
-					row_layout.AddSquareLabel();
-					row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+				UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+				row_layout.IndentRow(drawer.layout.node_indentation);
+				row_layout.AddSquareLabel();
+				row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+				row_layout.AddLabel(reference_count_characters);
 
-					UIDrawConfig config;
-					size_t configuration = 0;
+				UIDrawConfig config;
+				size_t configuration = 0;
 
-					bool is_asset_loaded = IsAssetFromMetadataLoaded(editor_state->RuntimeResourceManager(), asset, asset_type, assets_folder, true);
-					row_layout.GetTransform(config, configuration);
+				bool is_asset_loaded = IsAssetFromMetadataLoaded(editor_state->RuntimeResourceManager(), asset, asset_type, assets_folder, true);
+				row_layout.GetTransform(config, configuration);
 
-					const wchar_t* texture_to_use = nullptr;
-					Color color_to_use;
-					if (is_asset_loaded) {
-						texture_to_use = ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK;
-						color_to_use = EDITOR_GREEN_COLOR;
-					}
-					else {
-						texture_to_use = ECS_TOOLS_UI_TEXTURE_X;
-						color_to_use = EDITOR_RED_COLOR;
-					}
-
-					drawer.SpriteRectangle(configuration, config, texture_to_use, color_to_use);
-					configuration = 0;
-					config.flag_count = 0;
-
-					row_layout.GetTransform(config, configuration);
-					
-					ECS_STACK_CAPACITY_STREAM(char, asset_string, 256);
-					AssetToString(asset, asset_type, asset_string);
-
-					ECS_STACK_CAPACITY_STREAM(char, long_asset_string, 256);
-					AssetToString(asset, asset_type, long_asset_string, true);
-
-					if (long_asset_string.size != asset_string.size) {
-						UIConfigToolTip tooltip_config;
-						tooltip_config.characters = long_asset_string;
-						config.AddFlag(tooltip_config);
-						configuration |= UI_CONFIG_RECTANGLE_TOOL_TIP;
-					}
-					
-					bool is_asset_referenced = IsAssetReferencedInSandboxEntities(editor_state, asset, asset_type);
-					UIConfigActiveState active_state;
-					active_state.state = is_asset_referenced;
-					config.AddFlag(active_state);
-					configuration |= UI_CONFIG_ACTIVE_STATE;
-
-					drawer.Button(configuration, config, asset_string, { select_action, select_data, write_size });
-					drawer.NextRow();
+				const wchar_t* texture_to_use = nullptr;
+				Color color_to_use;
+				if (is_asset_loaded) {
+					texture_to_use = ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK;
+					color_to_use = EDITOR_GREEN_COLOR;
 				}
-			});
-		};
+				else {
+					texture_to_use = ECS_TOOLS_UI_TEXTURE_X;
+					color_to_use = EDITOR_RED_COLOR;
+				}
 
-		drawer.Text("Assets");
-		drawer.NextRow();
+				drawer.SpriteRectangle(configuration, config, texture_to_use, color_to_use);
+				configuration = 0;
+				config.flag_count = 0;
 
-		// Display the metadata active in the database
-		iterate_asset_type(ECS_ASSET_MESH, database->mesh_metadata.ToStream());
-		iterate_asset_type(ECS_ASSET_TEXTURE, database->texture_metadata.ToStream());
-		iterate_asset_type(ECS_ASSET_GPU_SAMPLER, database->gpu_sampler_metadata.ToStream());
-		iterate_asset_type(ECS_ASSET_SHADER, database->shader_metadata.ToStream());
-		iterate_asset_type(ECS_ASSET_MATERIAL, database->material_asset.ToStream());
-		iterate_asset_type(ECS_ASSET_MISC, database->misc_asset.ToStream());
+				row_layout.GetTransform(config, configuration);
+					
+				ECS_STACK_CAPACITY_STREAM(char, asset_string, 256);
+				AssetToString(asset, asset_type, asset_string);
 
-		drawer.NextRow();
-		drawer.CrossLine();
-		drawer.NextRow();
+				ECS_STACK_CAPACITY_STREAM(char, long_asset_string, 256);
+				AssetToString(asset, asset_type, long_asset_string, true);
 
-		drawer.Text("Resources in Resource Manager");
-		auto iterate_resource_type = [&](ResourceType resource_type) {
+				if (long_asset_string.size != asset_string.size) {
+					UIConfigToolTip tooltip_config;
+					tooltip_config.characters = long_asset_string;
+					config.AddFlag(tooltip_config);
+					configuration |= UI_CONFIG_RECTANGLE_TOOL_TIP;
+				}
+					
+				bool is_asset_referenced = IsAssetReferencedInSandboxEntities(editor_state, asset, asset_type);
+				UIConfigActiveState active_state;
+				active_state.state = is_asset_referenced;
+				config.AddFlag(active_state);
+				configuration |= UI_CONFIG_ACTIVE_STATE;
+
+				drawer.Button(configuration, config, asset_string, { select_action, &select_data, sizeof(select_data) });
+
+				config.flag_count = 0;
+				configuration = 0;
+				row_layout.GetTransform(config, configuration);
+				drawer.TextLabel(configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y, config, reference_count_characters);
+
+				drawer.NextRow();
+			}
+		});
+	};
+
+	drawer.Text("Assets");
+	drawer.NextRow();
+
+	// Display the metadata active in the database
+	iterate_asset_type(ECS_ASSET_MESH, database->mesh_metadata.ToStream());
+	iterate_asset_type(ECS_ASSET_TEXTURE, database->texture_metadata.ToStream());
+	iterate_asset_type(ECS_ASSET_GPU_SAMPLER, database->gpu_sampler_metadata.ToStream());
+	iterate_asset_type(ECS_ASSET_SHADER, database->shader_metadata.ToStream());
+	iterate_asset_type(ECS_ASSET_MATERIAL, database->material_asset.ToStream());
+	iterate_asset_type(ECS_ASSET_MISC, database->misc_asset.ToStream());
+
+	drawer.NextRow();
+	drawer.CrossLine();
+	drawer.NextRow();
+
+	drawer.Text("Resources in Resource Manager");
+	drawer.NextRow();
+	auto iterate_resource_type = [&](ResourceType resource_type) {
+		const char* resource_string = ResourceTypeString(resource_type);
+
+		drawer.CollapsingHeader(resource_string, data->resource_manager_opened_headers + (unsigned char)resource_type, [&]() {
+			UIDrawConfig config;
+			UIConfigWindowDependentSize window_dependent_size;
+			config.AddFlag(window_dependent_size);
+
 			ResourceManager* resource_manager = editor_state->RuntimeResourceManager();
-			resource_manager->ForEachResourceIdentifier(resource_type, [](ResourceIdentifier identifier) {
+			resource_manager->ForEachResourceIdentifierNoSuffix(resource_type, [&](ResourceIdentifier identifier, unsigned short suffix_size) {
+				Stream<wchar_t> path = { identifier.ptr, identifier.size / sizeof(wchar_t) };
+				drawer.TextLabelWide(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, path);
+				drawer.NextRow();
+				});
+		});
+	};
 
-			});
-		};
+	for (unsigned int index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
+		iterate_resource_type((ResourceType)index);
 	}
 
 }
@@ -150,9 +161,8 @@ void AssetExplorerSetDecriptor(UIWindowDescriptor& descriptor, EditorState* edit
 
 	AssetExplorerData* data = (AssetExplorerData*)function::OffsetPointer(stack_memory, sizeof(unsigned int));
 	data->editor_state = editor_state;
-	data->selected_asset_type = ECS_ASSET_TYPE_COUNT;
-	data->selected_asset = { nullptr, 0, 0 };
-	memset(data->opened_headers, 0, sizeof(data->opened_headers));
+	memset(data->asset_opened_headers, 0, sizeof(data->asset_opened_headers));
+	memset(data->resource_manager_opened_headers, 0, sizeof(data->resource_manager_opened_headers));
 
 	descriptor.draw = AssetExplorerDraw;
 

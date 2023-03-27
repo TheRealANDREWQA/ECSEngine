@@ -17,9 +17,8 @@
 								ECSEngine::HID::Mouse* mouse = action_data->mouse; \
 								ECSEngine::float2 mouse_delta = system != nullptr ? system->GetMouseDelta(mouse_position) : ECSEngine::float2(0.0f, 0.0f);
 
-#define UI_PREPARE_DRAWER(initializer)	ECSEngine::Tools::UIDrawerDescriptor* descriptor = (ECSEngine::Tools::UIDrawerDescriptor*)drawer_descriptor; \
-							ECSEngine::Tools::UIDrawer drawer = ECSEngine::Tools::UIDrawer( \
-								*descriptor, \
+#define UI_PREPARE_DRAWER(initializer) ECSEngine::Tools::UIDrawer drawer = ECSEngine::Tools::UIDrawer( \
+								*drawer_descriptor, \
 								window_data, \
 								initializer \
 							); 

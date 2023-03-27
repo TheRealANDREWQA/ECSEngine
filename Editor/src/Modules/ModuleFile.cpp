@@ -20,8 +20,7 @@ enum SERIALIZE_ORDER {
 
 // Uses the project file to determine the path
 bool LoadModuleFile(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	constexpr size_t TEMP_STREAMS = 64;
 
 	SerializeMultisectionData multisection_datas[TEMP_STREAMS];
@@ -33,7 +32,7 @@ bool LoadModuleFile(EditorState* editor_state) {
 	ECS_TEMP_STRING(module_path, 256);
 	GetProjectModulesFilePath(editor_state, module_path);
 
-	Stream<void> file_contents = ReadWholeFileBinary(module_path, GetAllocatorPolymorphic(editor_allocator));
+	Stream<void> file_contents = ReadWholeFileBinary(module_path, editor_allocator);
 
 	bool success = true;
 	if (file_contents.buffer != nullptr) {
@@ -81,7 +80,7 @@ bool LoadModuleFile(EditorState* editor_state) {
 				editor_state->task_manager->AddDynamicTaskAndWake(rewrite_module_file);
 			}
 		}
-		editor_allocator->Deallocate(file_contents.buffer);
+		Deallocate(editor_allocator, file_contents.buffer);
 	}
 	else {
 		success = false;
@@ -96,8 +95,6 @@ bool LoadModuleFile(EditorState* editor_state) {
 
 // Uses the project file to determine the path
 bool SaveModuleFile(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	ProjectModules* project_modules = editor_state->project_modules;
 
 	ECS_ASSERT(project_modules->size < 64);

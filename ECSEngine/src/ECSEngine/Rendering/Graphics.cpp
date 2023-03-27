@@ -125,7 +125,7 @@ namespace ECSEngine {
 	}
 
 	Graphics::Graphics(const GraphicsDescriptor* descriptor) 
-		: m_target_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator),
+		: m_target_view(nullptr), m_depth_stencil_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator),
 		m_bound_render_target_count(1)
 	{
 		// The internal resources
@@ -221,6 +221,11 @@ namespace ECSEngine {
 				CreateWindowRenderTargetView(descriptor->gamma_corrected);
 				BindRenderTargetView(m_target_view, m_depth_stencil_view);
 			}
+		}
+
+		if (m_target_view.Interface() != nullptr) {
+			AddInternalResource(m_target_view);
+			AddInternalResource(m_depth_stencil_view);
 		}
 
 		DepthStencilState depth_stencil_state = CreateDepthStencilStateDefault(true);
@@ -1578,6 +1583,15 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::FreeRenderDestination(RenderDestination destination)
+	{
+		FreeView(destination.render_view);
+		FreeView(destination.depth_view);
+		FreeResource(destination.output_view);
+	}
+	
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::RemoveResourceFromTracking(void* resource)
 	{
 		RemoveResourceFromTrackingImplementation<true>(this, resource);
@@ -1592,34 +1606,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::FreeResourceView(ResourceView view)
-	{
-		ID3D11Resource* resource = view.GetResource();
-		FreeResource(view);
-		// It doesn't matter what the type is - only the interface
-		FreeResource(Texture2D(resource));
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	void Graphics::FreeUAView(UAView view)
-	{
-		ID3D11Resource* resource = view.GetResource();
-		FreeResource(view);
-		FreeResource(Texture2D(resource));
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	void Graphics::FreeRenderView(RenderTargetView view)
-	{
-		ID3D11Resource* resource = view.GetResource();
-		FreeResource(view);
-		FreeResource(Texture2D(resource));
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
 	void Graphics::CreateWindowRenderTargetView(bool gamma_corrected)
 	{
 		// gain access to the texture subresource of the back buffer
@@ -1630,6 +1616,38 @@ namespace ECSEngine {
 
 		Texture2D texture = CreateTexture(&descriptor);
 		m_target_view = CreateRenderTargetView(texture);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	RenderDestination Graphics::CreateRenderDestination(uint2 texture_size, GraphicsRenderDestinationOptions options) {
+		RenderDestination render_destination;
+
+		// Create the 2 textures
+		GraphicsTexture2DDescriptor render_texture_descriptor;
+		render_texture_descriptor.size = texture_size;
+		render_texture_descriptor.format = options.gamma_corrected ? ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB : ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		render_texture_descriptor.mip_levels = 1;
+		render_texture_descriptor.bind_flag = ECS_GRAPHICS_BIND_RENDER_TARGET | ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		render_texture_descriptor.misc_flag = options.render_misc;
+
+		Texture2D render_texture = CreateTexture(&render_texture_descriptor);
+
+		GraphicsTexture2DDescriptor depth_texture_descriptor;
+		depth_texture_descriptor.size = texture_size;
+		depth_texture_descriptor.format = options.no_stencil ? ECS_GRAPHICS_FORMAT_D32_FLOAT : ECS_GRAPHICS_FORMAT_D24_UNORM_S8_UINT;
+		depth_texture_descriptor.mip_levels = 1;
+		depth_texture_descriptor.bind_flag = ECS_GRAPHICS_BIND_DEPTH_STENCIL;
+		depth_texture_descriptor.misc_flag = options.depth_misc;
+
+		Texture2D depth_texture = CreateTexture(&depth_texture_descriptor);
+
+		// Create the views now
+		render_destination.render_view = CreateRenderTargetView(render_texture);
+		render_destination.depth_view = CreateDepthStencilView(depth_texture);
+		render_destination.output_view = CreateTextureShaderView(render_texture);
+
+		return render_destination;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2745,6 +2763,17 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::ChangeInitialRenderTarget(RenderTargetView render_target, DepthStencilView depth_stencil, bool bind) {
+		m_depth_stencil_view = depth_stencil;
+		m_target_view = render_target;
+
+		if (bind) {
+			BindRenderTargetView(render_target, depth_stencil);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::CommitInternalResourcesToBeFreed()
 	{
 		int32_t last_index = m_internal_resources.size.load(ECS_RELAXED);
@@ -2764,6 +2793,27 @@ namespace ECSEngine {
 
 		// Commit the new size to the other threads
 		m_internal_resources.SetSize(last_index);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::FreeTrackedResources()
+	{
+		// First commit the releases
+		CommitInternalResourcesToBeFreed();
+
+		unsigned int resource_count = m_internal_resources.size.load(ECS_RELAXED);
+
+		for (unsigned int index = 0; index < resource_count; index++) {
+			void* pointer = m_internal_resources[index].interface_pointer;
+			ECS_GRAPHICS_RESOURCE_TYPE type = (ECS_GRAPHICS_RESOURCE_TYPE)m_internal_resources[index].type;
+
+			const char* file = m_internal_resources[index].debug_info.file;
+			const char* function = m_internal_resources[index].debug_info.function;
+			unsigned int line = m_internal_resources[index].debug_info.line;
+
+			FreeGraphicsResourceInterface(pointer, type);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2880,6 +2930,32 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	GraphicsResourceSnapshot Graphics::GetResourceSnapshot(AllocatorPolymorphic allocator) const {
+		GraphicsResourceSnapshot snapshot;
+
+		unsigned int resource_count = m_internal_resources.size.load(ECS_RELAXED);
+		size_t total_size_to_allocate = snapshot.interface_pointers.MemoryOf(resource_count) + snapshot.types.MemoryOf(resource_count);
+
+		void* allocation = Allocate(allocator, total_size_to_allocate);
+		uintptr_t allocation_ptr = (uintptr_t)allocation;
+		snapshot.interface_pointers.InitializeFromBuffer(allocation_ptr, resource_count);
+		snapshot.types.InitializeFromBuffer(allocation_ptr, resource_count);
+
+		// There might be pending resources to be removed
+		snapshot.interface_pointers.size = 0;
+		snapshot.types.size = 0;
+		for (unsigned int index = 0; index < resource_count; index++) {
+			if (!m_internal_resources[index].is_deleted.load(ECS_RELAXED)) {
+				snapshot.interface_pointers.Add(m_internal_resources[index].interface_pointer);
+				snapshot.types.Add(m_internal_resources[index].type);
+			}
+		}
+
+		return snapshot;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	RenderTargetView Graphics::GetBoundRenderTarget() const
 	{
 		ECS_ASSERT(m_bound_render_target_count > 0);
@@ -2972,6 +3048,20 @@ namespace ECSEngine {
 		m_window_size.x = width;
 		m_window_size.y = height;
 		ResizeSwapChainSize(hWnd, width, height);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	template<typename Resource>
+	Resource Graphics::TransferGPUResource(Resource resource, bool temporary) {
+		return resource;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	template<typename View>
+	View Graphics::TransferGPUView(View view, bool temporary) {
+		return view;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3128,6 +3218,49 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	bool Graphics::RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot) {
+		unsigned int current_resource_count = m_internal_resources.size.load(ECS_RELAXED);
+		if (current_resource_count < snapshot.interface_pointers.size) {
+			return false;
+		}
+
+		// Keep a boolean record of all the resources in the snapshot that have been identified
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(bool, was_found, snapshot.interface_pointers.size);
+		memset(was_found.buffer, 0, was_found.MemoryOf(snapshot.interface_pointers.size));
+
+		for (unsigned int index = 0; index < current_resource_count; index++) {
+			// Locate the value in the snapshot.
+			if (!m_internal_resources[index].is_deleted.load(ECS_RELAXED)) {
+				void* interface_pointer = m_internal_resources[index].interface_pointer;
+				size_t snapshot_index = function::SearchBytes(
+					snapshot.interface_pointers.buffer,
+					snapshot.interface_pointers.size,
+					(size_t)interface_pointer,
+					sizeof(interface_pointer)
+				);
+
+				// It doesn't exist, it means it was added in the meantime
+				if (snapshot_index == -1) {
+					// Free the type and mark the current slot as deleted
+					m_internal_resources[index].is_deleted.store(true, ECS_RELAXED);
+
+					// For debugging
+					DebugInfo debug_info = m_internal_resources[index].debug_info;
+					FreeGraphicsResourceInterface(interface_pointer, m_internal_resources[index].type);
+				}
+				else {
+					was_found[snapshot_index] = true;
+				}
+			}
+		}
+
+		// Now check for all the old resources to see if they have been accidentally removed
+		// If there is a false value then it means that an old resources was removed
+		return function::SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool)) == -1;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::UpdateBuffer(ID3D11Buffer* buffer, const void* data, size_t data_size, ECS_GRAPHICS_MAP_TYPE map_type, unsigned int map_flags, unsigned int subresource_index)
 	{
 		ECSEngine::UpdateBuffer(buffer, data, data_size, m_context, map_type, map_flags, subresource_index);
@@ -3245,65 +3378,59 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void FreeGraphicsResourceInterface(void* interface_pointer, ECS_GRAPHICS_RESOURCE_TYPE type)
+	{
+#define CASE(type, pointer_type) case type: { pointer_type* resource = (pointer_type*)interface_pointer; ref_count = resource->Release(); } break;
+#define CASE2(type0, type1, pointer_type) case type0: case type1: { pointer_type* resource = (pointer_type*)interface_pointer; ref_count = resource->Release(); } break;
+#define CASE3(type0, type1, type2, pointer_type) case type0: case type1: case type2: { pointer_type* resource = (pointer_type*)interface_pointer; ref_count = resource->Release(); } break;
+
+		unsigned int ref_count = 0;
+
+		switch (type) {
+			CASE(ECS_GRAPHICS_RESOURCE_VERTEX_SHADER, ID3D11VertexShader);
+			CASE(ECS_GRAPHICS_RESOURCE_PIXEL_SHADER, ID3D11PixelShader);
+			CASE(ECS_GRAPHICS_RESOURCE_HULL_SHADER, ID3D11HullShader);
+			CASE(ECS_GRAPHICS_RESOURCE_GEOMETRY_SHADER, ID3D11GeometryShader);
+			CASE(ECS_GRAPHICS_RESOURCE_DOMAIN_SHADER, ID3D11DomainShader);
+			CASE(ECS_GRAPHICS_RESOURCE_COMPUTE_SHADER, ID3D11ComputeShader);
+			CASE3(ECS_GRAPHICS_RESOURCE_INDEX_BUFFER, ECS_GRAPHICS_RESOURCE_CONSTANT_BUFFER, ECS_GRAPHICS_RESOURCE_VERTEX_BUFFER, ID3D11Buffer);
+			CASE3(ECS_GRAPHICS_RESOURCE_STANDARD_BUFFER, ECS_GRAPHICS_RESOURCE_STRUCTURED_BUFFER, ECS_GRAPHICS_RESOURCE_UA_BUFFER, ID3D11Buffer);
+			CASE3(ECS_GRAPHICS_RESOURCE_INDIRECT_BUFFER, ECS_GRAPHICS_RESOURCE_APPEND_BUFFER, ECS_GRAPHICS_RESOURCE_CONSUME_BUFFER, ID3D11Buffer);
+			CASE(ECS_GRAPHICS_RESOURCE_INPUT_LAYOUT, ID3D11InputLayout);
+			CASE(ECS_GRAPHICS_RESOURCE_RESOURCE_VIEW, ID3D11ShaderResourceView);
+			CASE(ECS_GRAPHICS_RESOURCE_SAMPLER_STATE, ID3D11SamplerState);
+			CASE(ECS_GRAPHICS_RESOURCE_UA_VIEW, ID3D11UnorderedAccessView);
+			CASE(ECS_GRAPHICS_RESOURCE_GRAPHICS_CONTEXT, ID3D11DeviceContext);
+			CASE(ECS_GRAPHICS_RESOURCE_RENDER_TARGET_VIEW, ID3D11RenderTargetView);
+			CASE(ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_VIEW, ID3D11DepthStencilView);
+			CASE(ECS_GRAPHICS_RESOURCE_TEXTURE_1D, ID3D11Texture1D);
+			CASE(ECS_GRAPHICS_RESOURCE_TEXTURE_2D, ID3D11Texture2D);
+			CASE(ECS_GRAPHICS_RESOURCE_TEXTURE_3D, ID3D11Texture3D);
+			CASE(ECS_GRAPHICS_RESOURCE_TEXTURE_CUBE, ID3D11Texture2D);
+			CASE(ECS_GRAPHICS_RESOURCE_BLEND_STATE, ID3D11BlendState);
+			CASE(ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_STATE, ID3D11DepthStencilState);
+			CASE(ECS_GRAPHICS_RESOURCE_RASTERIZER_STATE, ID3D11RasterizerState);
+			CASE(ECS_GRAPHICS_RESOURCE_COMMAND_LIST, ID3D11CommandList);
+		default:
+			ECS_ASSERT(false);
+
+#undef CASE
+#undef CASE2
+#undef CASE3
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void DestroyGraphics(Graphics* graphics)
 	{
 		// Walk through the list of resources that the graphic stores and free them
 		// Use a switch case to handle the pointer identification
 		
 		// Unbind the resource bound to the pipeline
-		graphics->m_context->ClearState();
+		graphics->m_context->ClearState();	
 
-		// First commit the releases
-		graphics->CommitInternalResourcesToBeFreed();
-
-		unsigned int resource_count = graphics->m_internal_resources.size.load(ECS_RELAXED);
-
-#define CASE(type, pointer_type) case type: { pointer_type* resource = (pointer_type*)pointer; ref_count = resource->Release(); } break;
-#define CASE2(type0, type1, pointer_type) case type0: case type1: { pointer_type* resource = (pointer_type*)pointer; ref_count = resource->Release(); } break;
-#define CASE3(type0, type1, type2, pointer_type) case type0: case type1: case type2: { pointer_type* resource = (pointer_type*)pointer; ref_count = resource->Release(); } break;
-
-		unsigned int ref_count = 0;
-		for (unsigned int index = 0; index < resource_count; index++) {
-			void* pointer = graphics->m_internal_resources[index].interface_pointer;
-			ECS_GRAPHICS_RESOURCE_TYPE type = (ECS_GRAPHICS_RESOURCE_TYPE)graphics->m_internal_resources[index].type;
-
-			const char* file = graphics->m_internal_resources[index].debug_info.file;
-			const char* function = graphics->m_internal_resources[index].debug_info.function;
-			unsigned int line = graphics->m_internal_resources[index].debug_info.line;
-
-			switch (type) {
-				CASE(ECS_GRAPHICS_RESOURCE_VERTEX_SHADER, ID3D11VertexShader);
-				CASE(ECS_GRAPHICS_RESOURCE_PIXEL_SHADER, ID3D11PixelShader);
-				CASE(ECS_GRAPHICS_RESOURCE_HULL_SHADER, ID3D11HullShader);
-				CASE(ECS_GRAPHICS_RESOURCE_GEOMETRY_SHADER, ID3D11GeometryShader);
-				CASE(ECS_GRAPHICS_RESOURCE_DOMAIN_SHADER, ID3D11DomainShader);
-				CASE(ECS_GRAPHICS_RESOURCE_COMPUTE_SHADER, ID3D11ComputeShader);
-				CASE3(ECS_GRAPHICS_RESOURCE_INDEX_BUFFER, ECS_GRAPHICS_RESOURCE_CONSTANT_BUFFER, ECS_GRAPHICS_RESOURCE_VERTEX_BUFFER, ID3D11Buffer);
-				CASE3(ECS_GRAPHICS_RESOURCE_STANDARD_BUFFER, ECS_GRAPHICS_RESOURCE_STRUCTURED_BUFFER, ECS_GRAPHICS_RESOURCE_UA_BUFFER, ID3D11Buffer);
-				CASE3(ECS_GRAPHICS_RESOURCE_INDIRECT_BUFFER, ECS_GRAPHICS_RESOURCE_APPEND_BUFFER, ECS_GRAPHICS_RESOURCE_CONSUME_BUFFER, ID3D11Buffer);
-				CASE(ECS_GRAPHICS_RESOURCE_INPUT_LAYOUT, ID3D11InputLayout);
-				CASE(ECS_GRAPHICS_RESOURCE_RESOURCE_VIEW, ID3D11ShaderResourceView);
-				CASE(ECS_GRAPHICS_RESOURCE_SAMPLER_STATE, ID3D11SamplerState);
-				CASE(ECS_GRAPHICS_RESOURCE_UA_VIEW, ID3D11UnorderedAccessView);
-				CASE(ECS_GRAPHICS_RESOURCE_GRAPHICS_CONTEXT, ID3D11DeviceContext);
-				CASE(ECS_GRAPHICS_RESOURCE_RENDER_TARGET_VIEW, ID3D11RenderTargetView);
-				CASE(ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_VIEW, ID3D11DepthStencilView);
-				CASE(ECS_GRAPHICS_RESOURCE_TEXTURE_1D, ID3D11Texture1D);
-				CASE(ECS_GRAPHICS_RESOURCE_TEXTURE_2D, ID3D11Texture2D);
-				CASE(ECS_GRAPHICS_RESOURCE_TEXTURE_3D, ID3D11Texture3D);
-				CASE(ECS_GRAPHICS_RESOURCE_TEXTURE_CUBE, ID3D11Texture2D);
-				CASE(ECS_GRAPHICS_RESOURCE_BLEND_STATE, ID3D11BlendState);
-				CASE(ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_STATE, ID3D11DepthStencilState);
-				CASE(ECS_GRAPHICS_RESOURCE_RASTERIZER_STATE, ID3D11RasterizerState);
-				CASE(ECS_GRAPHICS_RESOURCE_COMMAND_LIST, ID3D11CommandList);
-			default:
-				ECS_ASSERT(false);
-			}
-		}
-		
-#undef CASE
-#undef CASE2
-#undef CASE3
+		graphics->FreeTrackedResources();
 
 		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
 			graphics->m_shader_helpers[index].vertex.Release();
@@ -3323,12 +3450,6 @@ namespace ECSEngine {
 		// Deallocate the buffer for the resource tracking
 		graphics->m_allocator->Deallocate(graphics->m_internal_resources.buffer);
 
-		if (graphics->m_depth_stencil_view.view != nullptr) {
-			count = graphics->m_depth_stencil_view.Release();
-		}
-		if (graphics->m_target_view.view != nullptr) {
-			count = graphics->m_target_view.Release();
-		}
 		if (graphics->m_swap_chain != nullptr) {
 			count = graphics->m_swap_chain->Release();
 		}
@@ -4380,6 +4501,8 @@ namespace ECSEngine {
 		return View::RawCopy(device, copied_resource, view);
 	}
 
+#define EXPORT_TRANSFER_GPU(resource) template ECSENGINE_API resource TransferGPUView(resource, GraphicsDevice*);
+
 	EXPORT_TRANSFER_GPU(RenderTargetView);
 	EXPORT_TRANSFER_GPU(DepthStencilView);
 	EXPORT_TRANSFER_GPU(ResourceView);
@@ -4522,16 +4645,16 @@ namespace ECSEngine {
 		// Same as constant buffers, their reference count was incremented upon
 		// assignment alongside the resource that they view
 		for (size_t index = 0; index < material->v_texture_count; index++) {
-			graphics->FreeResourceView(material->v_textures[index]);
+			graphics->FreeView(material->v_textures[index]);
 		}
 
 		for (size_t index = 0; index < material->p_texture_count; index++) {
-			graphics->FreeResourceView(material->p_textures[index]);
+			graphics->FreeView(material->p_textures[index]);
 		}
 
 		// Release the UAVs
 		for (size_t index = 0; index < material->unordered_view_count; index++) {
-			graphics->FreeUAView(material->unordered_views[index]);
+			graphics->FreeView(material->unordered_views[index]);
 		}
 	}
 

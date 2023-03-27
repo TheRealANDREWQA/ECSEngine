@@ -8,25 +8,19 @@ ECS_TOOLS;
 #define WAIT_FOR_QUEUE_SPACE_SLEEP_TICK 5
 
 void AllocateMemory(EditorState* editor_state, EditorEvent& editor_event, void* data, size_t data_size) {
-	EDITOR_STATE(editor_state);
-
-	editor_event.data = function::CopyNonZero(editor_allocator, data, data_size);
+	editor_event.data = function::CopyNonZero(editor_state->EditorAllocator(), data, data_size);
 	editor_event.data_size = data_size;
 }
 
-void DeallocateMemory(EditorState* _editor_state, EditorEvent editor_event) {
-	EDITOR_STATE(_editor_state);
-
+void DeallocateMemory(EditorState* editor_state, EditorEvent editor_event) {
 	if (editor_event.data_size > 0) {
-		editor_allocator->Deallocate(editor_event.data);
+		Deallocate(editor_state->EditorAllocator(), editor_event.data);
 	}
 }
 
 void* AllocateErrorMessage(EditorState* editor_state, Stream<char> error_message) {
-	EDITOR_STATE(editor_state);
-
 	size_t total_size = sizeof(error_message) + error_message.size;
-	void* allocation = editor_allocator->Allocate(total_size);
+	void* allocation = Allocate(editor_state->EditorAllocator(), total_size);
 	Stream<char>* new_error_message = (Stream<char>*)allocation;
 	new_error_message->size = 0;
 	new_error_message->buffer = (char*)function::OffsetPointer(allocation, sizeof(error_message));
@@ -36,8 +30,6 @@ void* AllocateErrorMessage(EditorState* editor_state, Stream<char> error_message
 }
 
 void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, void* event_data, size_t event_data_size) {
-	EDITOR_STATE(editor_state);
-
 	EditorEvent editor_event;
 	editor_event.function = function;
 	AllocateMemory(editor_state, editor_event, event_data, event_data_size);
@@ -52,8 +44,6 @@ void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, vo
 }
 
 void EditorAddEventWithPointer(EditorState* editor_state, EditorEventFunction function, void* event_data) {
-	EDITOR_STATE(editor_state);
-
 	EditorEvent editor_event;
 	editor_event.data_size = 1;
 	editor_event.data = event_data;

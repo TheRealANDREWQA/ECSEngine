@@ -9,6 +9,6 @@ struct EditorState;
 // Stack memory size should be at least 512
 void MiscellaneousBarSetDescriptor(ECSEngine::Tools::UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
-void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initialize);
+void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 void CreateMiscellaneousBar(EditorState* editor_state);

@@ -52,13 +52,23 @@ namespace ECSEngine {
 
 	typedef StackScope<NullTerminateWide> ScopedNullTerminateWide;
 
+	struct StackClearAllocator {
+		void operator() () {
+			ClearAllocator(allocator);
+		}
+
+		AllocatorPolymorphic allocator;
+	};
+
+	typedef StackScope<StackClearAllocator> ScopedClearAllocator;
+
 	// Do a test before writing because for const char* from source code
 	// it will produce a SEG fault when trying to write
 #define NULL_TERMINATE(stream) char _null_terminator_before##stream = stream[stream.size]; \
 								if (stream[stream.size] != '\0') { \
 									stream[stream.size] = '\0'; \
 								} \
-								ScopedNullTerminate scope##stream({ _null_terminator_before##stream, stream });
+								ECSEngine::ScopedNullTerminate scope##stream({ _null_terminator_before##stream, stream });
 
 	// Do a test before writing because for const wchar_t* from source code
 	// it will produce a SEG fault when trying to write
@@ -66,6 +76,6 @@ namespace ECSEngine {
 								if (stream[stream.size] != L'\0') { \
 									stream[stream.size] = L'\0'; \
 								} \
-								ScopedNullTerminateWide scope##stream({ _null_terminator_before##stream, stream });
+								ECSEngine::ScopedNullTerminateWide scope##stream({ _null_terminator_before##stream, stream });
 
 }

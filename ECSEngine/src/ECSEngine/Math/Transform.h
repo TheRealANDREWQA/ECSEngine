@@ -30,6 +30,13 @@ namespace ECSEngine {
 		ECS_INLINE ECS_VECTORCALL VectorTransform(Vector4 _position, Vector4 _scale, Quaternion _rotation) : position(_position),
 			scale(_scale), rotation(_rotation) {}
 
+		// Translation - 0.0f, 0.0f, 0.0f
+		// Scale - 1.0f, 1.0f, 1.0f
+		// Rotation - Quaternion Identity
+		ECS_INLINE void Default() {
+
+		}
+
 		ECS_INLINE Transform ToTransform() const {
 			Transform transform;
 			position.StorePartialConstant<3>(&transform.position);

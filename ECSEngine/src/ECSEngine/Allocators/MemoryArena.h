@@ -1,6 +1,6 @@
 #pragma once
 #include "../Core.h"
-#include "../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../Multithreading/ConcurrentPrimitives.h"
 #include "MemoryManager.h"
 
 #define ECS_MEMORY_ARENA_DEFAULT_STREAM_SIZE 4

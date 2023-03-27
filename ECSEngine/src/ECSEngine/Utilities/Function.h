@@ -7,6 +7,9 @@
 #include "../Allocators/AllocatorTypes.h"
 
 #define ECS_ASSERT_TRIGGER
+#define ECS_C_FILE_SINGLE_LINE_COMMENT_TOKEN "//"
+#define ECS_C_FILE_MULTI_LINE_COMMENT_OPENED_TOKEN "/*"
+#define ECS_C_FILE_MULTI_LINE_COMMENT_CLOSED_TOKEN "*/"
 
 namespace ECSEngine {
 
@@ -45,6 +48,10 @@ namespace ECSEngine {
 
 			size_t mask = alignment - 1;
 			return (pointer + mask) & ~mask;
+		}
+
+		ECS_INLINE void* AlignPointer(const void* pointer, size_t alignment) {
+			return (void*)AlignPointer((uintptr_t)pointer, alignment);
 		}
 
 		// Determines how many slots are needed to hold the given count with the chunk size
@@ -331,6 +338,25 @@ namespace ECSEngine {
 			return (value >= L'a' && value <= L'z') || (value >= L'A' && value <= L'Z');
 		}
 
+		// Spaces and tabs
+		ECS_INLINE bool IsWhitespace(char value) {
+			return value == ' ' || value == '\t';
+		}
+
+		// Spaces and tabs
+		ECS_INLINE bool IsWhitespace(wchar_t value) {
+			return value == L' ' || value == L'\t';
+		}
+
+		// Spaces, tabs and new lines
+		ECS_INLINE bool IsWhitespaceEx(char value) {
+			return IsWhitespace(value) || value == '\n';
+		}
+
+		ECS_INLINE bool IsWhitespaceEx(wchar_t value) {
+			return IsWhitespace(value) || value == L'\n';
+		}
+
 		ECS_INLINE bool IsCodeIdentifierCharacter(char value) {
 			return IsNumberCharacter(value) || IsAlphabetCharacter(value) || value == '_';
 		}
@@ -424,6 +450,14 @@ namespace ECSEngine {
 			errno_t status = wcstombs_s(&written_chars, ascii_chars.buffer + ascii_chars.size, ascii_chars.capacity - ascii_chars.size, wide_chars.buffer, wide_chars.size);
 			ECS_ASSERT(status == 0);
 			ascii_chars.size += written_chars - 1;
+		}
+
+		template<typename CharacterType>
+		ECS_INLINE const CharacterType* SkipCharacter(const CharacterType* pointer, CharacterType character, int increment = 1) {
+			while (*pointer == character) {
+				pointer += increment;
+			}
+			return pointer;
 		}
 
 		// Tabs and spaces
@@ -609,11 +643,25 @@ namespace ECSEngine {
 			unsigned int opened_count = 1
 		);
 
+		ECSENGINE_API Stream<char> FindMatchingParenthesis(
+			Stream<char> range,
+			char opened_char,
+			char closed_char,
+			unsigned int opened_count = 1
+		);
+
 		// Returns nullptr if it doesn't find a match or there is an invalid number of parenthesis
 		ECSENGINE_API const wchar_t* FindMatchingParenthesis(
 			const wchar_t* start_character, 
 			const wchar_t* end_character, 
 			wchar_t opened_char, 
+			wchar_t closed_char,
+			unsigned int opened_count = 1
+		);
+
+		ECSENGINE_API Stream<wchar_t> FindMatchingParenthesis(
+			Stream<wchar_t> range,
+			wchar_t opened_char,
 			wchar_t closed_char,
 			unsigned int opened_count = 1
 		);
@@ -715,11 +763,11 @@ namespace ECSEngine {
 
 		// Verifies if the characters form a valid floating point number: 
 		// consisting of at maximum a dot and only number characters and at max a minus or plus as the first character
-		ECSENGINE_API bool IsFloatingPointNumber(Stream<char> characters);
+		ECSENGINE_API bool IsFloatingPointNumber(Stream<char> characters, bool skip_whitespace = false);
 
 		// Verifies if the characters form a valid number: 
 		// only number characters and at max a minus or plus as the first character
-		ECSENGINE_API bool IsIntegerNumber(Stream<char> characters);
+		ECSENGINE_API bool IsIntegerNumber(Stream<char> characters, bool skip_whitespace = false);
 
 		// If the increment is negative, it will start from the last character to the first
 		// and return the value into stream.buffer + stream.size. Example |value   | ->

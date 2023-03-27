@@ -1,6 +1,6 @@
 #pragma once
 #include "editorpch.h"
-#include "ECSEngineInternal.h"
+#include "ECSEngineRuntime.h"
 #include "ECSEngineUI.h"
 #include "ProjectFile.h"
 #include "ProjectFolders.h"
@@ -27,7 +27,7 @@ void CreateProjectAction(ActionData* action_data);
 
 void CreateProjectWizardAction(ActionData* action_data);
 
-void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool initialize);
+void CreateProjectWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data);
 

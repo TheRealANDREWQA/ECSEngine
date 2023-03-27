@@ -39,7 +39,7 @@ struct DrawSandboxSelectionWindowData {
 	EDITOR_MODULE_CONFIGURATION configuration;
 };
 
-void DrawSandboxSelectionWindow(void* window_data, void* drawer_descriptor, bool initialize) {
+void DrawSandboxSelectionWindow(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	DrawSandboxSelectionWindowData* data = (DrawSandboxSelectionWindowData*)window_data;
@@ -173,7 +173,7 @@ void CreateAddSandboxWindow(ActionData* action_data) {
 }
 
 void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
-	EDITOR_STATE(editor_state);
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 
 	DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
 	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
@@ -192,13 +192,13 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		unsigned int current_index = 0;
 		get_name(current_index, ui_reflection_name);
 		// Try the UI reflection instance indices until we get a free slot
-		UIReflectionInstance* instance = ui_drawer->GetInstancePtr(ui_reflection_name.buffer);
+		UIReflectionInstance* instance = ui_drawer->GetInstance(ui_reflection_name.buffer);
 		while (instance != nullptr) {
 			// Try again with the current_index
 			ui_reflection_name.size = 0;
 			get_name(current_index, ui_reflection_name);
 
-			instance = ui_drawer->GetInstancePtr(ui_reflection_name.buffer);
+			instance = ui_drawer->GetInstance(ui_reflection_name.buffer);
 			current_index++;
 		}
 
@@ -217,7 +217,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		ui_drawer->BindInstancePtrs(instance, &data->ui_descriptor);
 
 		const size_t ALLOCATOR_SIZE = ECS_KB;
-		data->runtime_settings_allocator = LinearAllocator(editor_allocator->Allocate(ALLOCATOR_SIZE), ALLOCATOR_SIZE);
+		data->runtime_settings_allocator = LinearAllocator(editor_allocator, ALLOCATOR_SIZE);
 
 		data->last_write_descriptor = 0;
 		data->collapsing_runtime_state = false;

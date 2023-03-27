@@ -298,7 +298,7 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 
 // -------------------------------------------------------------------------------------------------------------
 
-void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
+void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize)
 {
 	UI_PREPARE_DRAWER(initialize);
 
@@ -498,8 +498,8 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 
 void CreateEntitiesUI(EditorState* editor_state)
 {
-	EDITOR_STATE(editor_state);
-	
+	UISystem* ui_system = editor_state->ui_system;
+
 	unsigned int last_entities_index = GetEntitiesUILastWindowIndex(editor_state);
 	// This works even for the case when last entities is -1
 	ECS_ASSERT(last_entities_index + 1 < MAX_ENTITIES_UI_WINDOWS);

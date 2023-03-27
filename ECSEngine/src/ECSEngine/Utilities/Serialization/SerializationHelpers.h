@@ -50,7 +50,7 @@ namespace ECSEngine {
 #define ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(name) ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name); \
 														ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name);
 
-#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name), SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, version, nullptr } 
+#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name), SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, version, STRING(name), nullptr } 
 
 #define ECS_SERIALIZE_CUSTOM_TYPE_SWITCH_CAPACITY 8
 
@@ -59,6 +59,9 @@ namespace ECSEngine {
 		SerializeCustomTypeWriteFunction write;
 		SerializeCustomTypeReadFunction read;
 		unsigned int version;
+		// This is used to restore the mapping for the serialization in case 
+		// new serialization types are added or some are removed
+		Stream<char> name;
 
 		// Can modify the behaviour of the serializer
 		void* user_data;
@@ -598,6 +601,7 @@ namespace ECSEngine {
 				size_t byte_size = 0;
 				Read<true>(&stream, &byte_size, sizeof(byte_size));
 
+				bool update_stream_capacity = false;
 				if constexpr (read_data) {
 					if (allocator.allocator != nullptr) {
 						void** pointer = (void**)data;
@@ -607,6 +611,7 @@ namespace ECSEngine {
 
 							*pointer = allocation;
 						}
+						update_stream_capacity = true;
 					}
 					else {
 						if constexpr (!force_allocation) {
@@ -620,6 +625,7 @@ namespace ECSEngine {
 
 								*pointer = allocation;
 							}
+							update_stream_capacity = true;
 						}
 					}
 				}
@@ -649,6 +655,10 @@ namespace ECSEngine {
 				else if (info.stream_type == Reflection::ReflectionStreamFieldType::CapacityStream || info.stream_type == Reflection::ReflectionStreamFieldType::ResizableStream) {
 					CapacityStream<void>* field_stream = (CapacityStream<void>*)data;
 					field_stream->size = (unsigned int)byte_size / info.stream_byte_size;
+
+					if (update_stream_capacity) {
+						field_stream->capacity = field_stream->size;
+					}
 
 					if (info.basic_type == Reflection::ReflectionBasicFieldType::Int8) {
 						char* characters = (char*)field_stream->buffer;

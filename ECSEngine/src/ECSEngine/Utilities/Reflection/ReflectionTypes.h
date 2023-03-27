@@ -145,7 +145,12 @@ namespace ECSEngine {
 			// Returns the tag isolated from others
 			Stream<char> GetTag(Stream<char> string) const;
 
+			// Each buffer will be allocated separately. To deallocate call DeallocateSeparate
+			ReflectionField Copy(AllocatorPolymorphic allocator) const;
+
 			ReflectionField CopyTo(uintptr_t& ptr) const;
+
+			void DeallocateSeparate(AllocatorPolymorphic allocator) const;
 
 			// Only the buffer size is needed
 			size_t CopySize() const;
@@ -170,6 +175,8 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API ReflectionType {
+			void DeallocateCoallesced(AllocatorPolymorphic allocator) const;
+
 			// It will try to deallocate anything that can be deallocated (when using
 			// non coallesced allocations). It uses IfBelongs deallocations
 			void Deallocate(AllocatorPolymorphic allocator) const;
@@ -188,6 +195,8 @@ namespace ECSEngine {
 			// Every buffer will be individually allocated
 			ReflectionType Copy(AllocatorPolymorphic allocator) const;
 
+			ReflectionType CopyCoallesced(AllocatorPolymorphic allocator) const;
+
 			// Copies everything that needs to be copied into this buffer
 			ReflectionType CopyTo(uintptr_t& ptr) const;
 
@@ -201,6 +210,7 @@ namespace ECSEngine {
 			unsigned int byte_size;
 			unsigned int alignment;
 			bool is_blittable;
+			bool is_blittable_with_pointer;
 		};
 
 		struct ECSENGINE_API ReflectionEnum {
@@ -277,12 +287,24 @@ namespace ECSEngine {
 
 #define ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(name) void ReflectionCustomTypeCopy_##name(Reflection::ReflectionCustomTypeCopyData* data)
 
+		struct ReflectionCustomTypeCompareData {
+			const Reflection::ReflectionManager* reflection_manager;
+			Stream<char> definition;
+			const void* first;
+			const void* second;
+		};
+
+		typedef bool (*ReflectionCustomTypeCompare)(ReflectionCustomTypeCompareData* data);
+
+#define ECS_REFLECTION_CUSTOM_TYPE_COMPARE_FUNCTION(name) bool ReflectionCustomTypeCompare_##name(Reflection::ReflectionCustomTypeCompareData* data)
+
 		struct ReflectionCustomType {
 			ReflectionCustomTypeMatch match;
 			ReflectionCustomTypeDependentTypes dependent_types;
 			ReflectionCustomTypeByteSize byte_size;
 			ReflectionCustomTypeIsBlittable is_blittable;
 			ReflectionCustomTypeCopy copy;
+			ReflectionCustomTypeCompare compare;
 		};
 
 		// Uses a jump table
@@ -292,6 +314,9 @@ namespace ECSEngine {
 		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type);
 
 		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type);
+
+		// Works only for non user-defined types
+		ECSENGINE_API size_t GetFieldTypeAlignment(const ReflectionFieldInfo* info);
 
 		// Returns a stable value
 		ECSENGINE_API Stream<char> GetBasicFieldDefinition(ReflectionBasicFieldType basic_type);
@@ -312,6 +337,10 @@ namespace ECSEngine {
 
 		inline bool IsBlittable(const ReflectionType* type) {
 			return type->is_blittable;
+		}
+
+		inline bool IsBlittableWithPointer(const ReflectionType* type) {
+			return type->is_blittable_with_pointer;
 		}
 
 		inline bool IsBoolBasicTypeMultiComponent(ReflectionBasicFieldType type) {
@@ -372,10 +401,11 @@ namespace ECSEngine {
 															ECSENGINE_API ulong2 ReflectionCustomTypeByteSize_##name(Reflection::ReflectionCustomTypeByteSizeData* data); \
 															ECSENGINE_API void ReflectionCustomTypeDependentTypes_##name(Reflection::ReflectionCustomTypeDependentTypesData* data); \
 															ECSENGINE_API bool ReflectionCustomTypeIsBlittable_##name(Reflection::ReflectionCustomTypeIsBlittableData* data); \
-															ECSENGINE_API void ReflectionCustomTypeCopy_##name(Reflection::ReflectionCustomTypeCopyData* data);
+															ECSENGINE_API void ReflectionCustomTypeCopy_##name(Reflection::ReflectionCustomTypeCopyData* data); \
+															ECSENGINE_API bool ReflectionCustomTypeCompare_##name(Reflection::ReflectionCustomTypeCompareData* data);
 
 #define ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name) { ReflectionCustomTypeMatch_##name, ReflectionCustomTypeDependentTypes_##name, ReflectionCustomTypeByteSize_##name, \
-		ReflectionCustomTypeIsBlittable_##name, ReflectionCustomTypeCopy_##name }
+		ReflectionCustomTypeIsBlittable_##name, ReflectionCustomTypeCopy_##name, ReflectionCustomTypeCompare_##name }
 
 	}
 

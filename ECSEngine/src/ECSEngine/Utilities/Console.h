@@ -1,7 +1,8 @@
 #pragma once
 #include "../Core.h"
-#include "../Internal/Multithreading/TaskManager.h"
+#include "../Multithreading/TaskManager.h"
 #include "File.h"
+#include "../Containers/AtomicStream.h"
 
 namespace ECSEngine {
 
@@ -54,6 +55,8 @@ namespace ECSEngine {
 
 		size_t GetFormatCharacterCount() const;
 
+		void CommitPendingMessages();
+
 		void ConvertToMessage(Stream<char> message, ConsoleMessage& console_message);
 
 		void ChangeDumpPath(Stream<wchar_t> new_path);
@@ -79,26 +82,27 @@ namespace ECSEngine {
 		void SetDumpType(ECS_CONSOLE_DUMP_TYPE type, unsigned int count = 1);
 
 		void SetFormat(size_t format);
+
 		void SetVerbosity(unsigned char new_level);
 
-		MemoryManager* allocator;
-		TaskManager* task_manager;
-		ResizableStream<ConsoleMessage> messages;
-		ResizableStream<Stream<char>> system_filter_strings;
-		size_t format;
-		SpinLock lock;
+		SpinLock commit_lock;
 		bool pause_on_error;
 		unsigned char verbosity_level;
 		ECS_CONSOLE_DUMP_TYPE dump_type;
 		unsigned int last_dumped_message;
 		unsigned int dump_count_for_commit;
+		ECS_FILE_HANDLE dump_file;
+		
+		// Messages will be put firstly into this buffer such that they won't have to wait too much
+		// On each other 
+		AtomicStream<ConsoleMessage> pending_messages;
+		MemoryManager* allocator;
+		TaskManager* task_manager;
+		ResizableStream<ConsoleMessage> messages;
+		ResizableStream<Stream<char>> system_filter_strings;
+		size_t format;
 		Stream<wchar_t> dump_path;
 		SpinLock dump_lock;
-	};
-
-	struct ConsoleDumpData {
-		Console* console;
-		unsigned int starting_index;
 	};
 
 	ECSENGINE_API bool ConsoleAppendMessageToDump(ECS_FILE_HANDLE file, unsigned int index, Console* console);

@@ -5,14 +5,40 @@ using namespace ECSEngine;
 
 struct EditorState;
 
+struct CreateAssetInternalDependenciesElement {
+	// Returns true if the asset was actually created and the pointer was changed
+	ECS_INLINE bool WasChanged() const {
+		return success && (old_asset.buffer != new_asset.buffer || old_asset.size != new_asset.size);
+	}
+
+	unsigned int handle;
+	ECS_ASSET_TYPE type;
+	bool success;
+	Stream<void> old_asset;
+	Stream<void> new_asset;
+};
+
+// Mirrors AssetOverrideCallbackAdditionalInfo in AssetOverrides.h
+struct RegisterAssetEventCallbackInfo {
+	unsigned int handle;
+	ECS_ASSET_TYPE type;
+	bool success;
+};
+
 struct UnregisterSandboxAssetElement {
+	unsigned int handle;
+	ECS_ASSET_TYPE type;
+};
+
+struct UnregisterAssetEventCallbackInfo {
 	unsigned int handle;
 	ECS_ASSET_TYPE type;
 };
 
 // The sandbox_assets boolean should be true if the assets belong to a sandbox
 // If they belong to sandboxes and the sandbox_index is -1 then it will remove it
-// from every sandbox that contains it
+// from every sandbox that contains it. The callback receives in the additional info field
+// a structure of type UnregisterAssetEventCallbackInfo
 void AddUnregisterAssetEvent(
 	EditorState* editor_state,
 	Stream<UnregisterSandboxAssetElement> elements,
@@ -23,7 +49,8 @@ void AddUnregisterAssetEvent(
 
 // The sandbox_assets boolean should be true if the assets belong to a sandbox
 // If they belong to sandboxes and the sandbox_index is -1 then it will remove it
-// from every sandbox that contains it
+// from every sandbox that contains it. The callback receives in the additional info field
+// a structure of type UnregisterAssetEventCallbackInfo
 void AddUnregisterAssetEventHomogeneous(
 	EditorState* editor_state,
 	Stream<Stream<unsigned int>> elements,
@@ -69,15 +96,27 @@ bool CreateAssetSetting(const EditorState* editor_state, Stream<char> name, Stre
 // This doesn't check the prevent resource load flag and wait until is cleared
 bool CreateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
-struct CreateAssetAsyncCallbackInfo {
-	unsigned int handle;
-	ECS_ASSET_TYPE type;
-	bool success;
-};
-
 // This will run on a background thread. The callback receives as additional_data a structure
 // of type CreateAssetAsyncCallbackInfo.
 void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback = {});
+
+// Returns true if all internal dependencies were successfully created, else false. You can optionally request
+// the dependency elements to be filled in
+bool CreateAssetInternalDependencies(
+	EditorState* editor_state, 
+	unsigned int handle, 
+	ECS_ASSET_TYPE type, 
+	CapacityStream<CreateAssetInternalDependenciesElement>* dependency_elements = nullptr
+);
+
+// Returns true if all internal dependencies were successfully created, else false. If a dependency is already loaded
+// it will simply skip it You can optionally request the dependency elements to be filled in. 
+bool CreateAssetInternalDependencies(
+	EditorState* editor_state,
+	const void* metadata,
+	ECS_ASSET_TYPE type,
+	CapacityStream<CreateAssetInternalDependenciesElement>* dependency_elements = nullptr
+);
 
 // If an asset like a mesh or a texture doesn't have a default setting, it creates one
 void CreateAssetDefaultSetting(const EditorState* editor_state);
@@ -101,13 +140,15 @@ struct DeallocateAssetDependency {
 	ECS_ASSET_TYPE type;
 	// This is the previous value of the built asset
 	Stream<void> previous_pointer;
+	// The new randomized pointer value
+	Stream<void> new_pointer;
 };
 
 // Returns true if it succeeded, else false. It can fail if the resource doesn't exist
 // This doesn't check the prevent resource load flag and wait until is cleared.
 // If the recurse flag is set to true, then it will deallocate all assets that depend on it
 // If the recurse flag is true and the dependent_assets is given it will fill in the assets that were deallocated
-// during the recursion (those deallocations that were successful)
+// during the recursion (those deallocations that were successful, including the current handle)
 bool DeallocateAsset(
 	EditorState* editor_state, 
 	unsigned int handle, 
@@ -120,7 +161,7 @@ bool DeallocateAsset(
 // This doesn't check the prevent resource load flag and wait until is cleared
 // If the recurse flag is set to true, then it will deallocate all assets that depend on it
 // If the recurse flag is true and the dependent_assets is given it will fill in the assets that were deallocated
-// during the recursion (those deallocations that were successful)
+// during the recursion (those deallocations that were successful, including the current metadata (if the metadata doesn't exist in the database it will have the handle as -1))
 bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type, bool recurse = true, CapacityStream<DeallocateAssetDependency>* dependent_assets = nullptr);
 
 // It may not run immediately since it may be prevented from loading resources
@@ -128,6 +169,10 @@ void DeleteAssetSetting(EditorState* editor_state, Stream<char> name, Stream<wch
 
 // Deletes all asset metadata files which have their asset missing
 void DeleteMissingAssetSettings(const EditorState* editor_state);
+
+// Returns true if the asset was successfully decremented. It can fail if it is evicted and it could not be deallocated
+// If the sandbox index is different from -1, it will also remove a reference from the given sandbox
+bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
 
 // Returns true if the asset already exists in the asset database or not. For materials and samplers the file parameter is ignored
 bool ExistsAsset(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
@@ -164,6 +209,14 @@ void GetAssetNameFromThunkOrForwardingFileRelative(const EditorState* editor_sta
 // Returns true if it managed to read the file. A target path of size 0 but with a return of true it means that the target is not yet assigned
 bool GetAssetFileFromForwardingFile(Stream<wchar_t> absolute_path, CapacityStream<wchar_t>& target_path);
 
+// Returns true if it finds a file that targets the given metadata. If the absolute_path is set to true, then it will give the absolute path
+// to the file (e.g. C:\ProjectPath\Assets\Texture.jpg), else it will only write the relative path to the assets folder
+bool GetAssetFileFromAssetMetadata(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, CapacityStream<wchar_t>& path, bool absolute_path = true);
+
+// Returns true if it finds a file that targets the given metadata. If the absolute_path is set to true, then it will give the absolute path
+// to the file (e.g. C:\ProjectPath\Assets\Texture.jpg), else it will only write the relative path to the assets folder
+bool GetAssetFileFromAssetMetadata(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, CapacityStream<wchar_t>& path, bool absolute_path = true);
+
 // This is used only for meshes and textures (these are a special case. They are not thunk files nor forwarding files)
 Stream<Stream<char>> GetAssetCorrespondingMetadata(const EditorState* editor_state, Stream<wchar_t> file, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
 
@@ -185,7 +238,7 @@ Stream<Stream<unsigned int>> GetOutOfDateAssetsMetadata(EditorState* editor_stat
 // outdated list of assets
 Stream<Stream<unsigned int>> GetOutOfDateAssetsTargetFile(EditorState* editor_state, AllocatorPolymorphic allocator, bool update_stamp = true, bool include_dependencies = true);
 
-Stream<Stream<unsigned int>> GetDependentAssetsFor(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
+Stream<Stream<unsigned int>> GetDependentAssetsFor(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator, bool include_itself = false);
 
 // For meshes, textures, shaders and misc assets it will get the time stamp for both the metadata and the 
 // actual target file and return the maximum of both. It returns the time stamp stored in the resource manager
@@ -210,11 +263,17 @@ size_t GetAssetTargetFileTimeStamp(const void* metadata, ECS_ASSET_TYPE type, St
 
 unsigned int GetAssetReferenceCount(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
-// Inserts a time stamp into the resource manager
-void InsertAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
+bool HasAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
-// Inserts a time stamp into the resource manager
-void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+bool HasAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+// Inserts a time stamp into the resource manager. If the is_missing flag is set to true it will only
+// insert the time stamp if it doesn't exist
+void InsertAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, bool if_is_missing = false);
+
+// Inserts a time stamp into the resource manager. If the is_missing flag is set to true it will only
+// insert the time stamp if it doesn't exist
+void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, bool if_is_missing = false);
 
 // The file is ignored for materials and samplers
 // It writes the handle of the asset. If the deserialization failed, it will write -1
@@ -244,6 +303,9 @@ bool RemoveAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type)
 // asset database. If the recurse flag is set to true, then it will recursively called for each dependency
 // that is maintained alive only by this asset
 bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, bool recurse = true);
+
+// Removes the dependencies and also the time stamps
+void RemoveAssetDependencies(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
 
 // Returns true if it managed to write
 bool WriteForwardingFile(Stream<wchar_t> absolute_path, Stream<wchar_t> target_path);

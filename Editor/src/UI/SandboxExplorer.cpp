@@ -135,12 +135,11 @@ void OpenSandboxInspectorSettings(ActionData* action_data) {
 
 // --------------------------------------------------------------------------------------------
 
-void SandboxExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	SandboxExplorerData* data = (SandboxExplorerData*)window_data;
 
-	EDITOR_STATE(data->editor_state);
 	EditorState* editor_state = data->editor_state;
 
 	if (initialize) {
@@ -459,8 +458,6 @@ void SandboxExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* e
 // --------------------------------------------------------------------------------------------
 
 unsigned int CreateSandboxExplorerWindow(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
 	constexpr float window_size_x = 0.8f;
 	constexpr float window_size_y = 0.8f;
 	float2 window_size = { window_size_x, window_size_y };
@@ -474,7 +471,7 @@ unsigned int CreateSandboxExplorerWindow(EditorState* editor_state) {
 	size_t stack_memory[128];
 	SandboxExplorerSetDescriptor(descriptor, editor_state, stack_memory);
 
-	return ui_system->Create_Window(descriptor);
+	return editor_state->ui_system->Create_Window(descriptor);
 }
 
 // --------------------------------------------------------------------------------------------

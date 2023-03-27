@@ -131,7 +131,7 @@
 //}
 //
 //template<bool initializer>
-//void DrawSomething2(void* window_data, void* drawer_descriptor) {
+//void DrawSomething2(void* window_data, UIDrawerDescriptor* drawer_descriptor) {
 //	using namespace ECSEngine::Tools;
 //	using namespace ECSEngine;
 //
