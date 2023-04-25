@@ -17,7 +17,7 @@ ECS_THREAD_TASK(RenderTask) {
 		
 	//});
 	//world->task_manager->AddDynamicTaskGroup(WITH_NAME(PerformTask), nullptr, std::thread::hardware_concurrency(), 0);
-	world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.7f, 0.2f, 0.3f, 1.0f));
+	world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.7f, 0.5f, 1.0f, 1.0f));
 	world->graphics->GetContext()->Flush();
 }
 

@@ -37,9 +37,15 @@ EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandb
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void AddSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
+void AddSandboxEntityComponent(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<char> component_name,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	Component component = editor_state->editor_components.GetComponentID(component_name);
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
@@ -55,25 +61,32 @@ void AddSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_i
 			// Destroy the old archetype if it no longer has entities
 			entity_manager->DestroyArchetypeBaseEmptyCommit(previous_info.main_archetype, previous_info.base_archetype, true);
 			
-			SetSandboxSceneDirty(editor_state, sandbox_index);
+			SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 		}
 	}
 	else {
-		ECS_FORMAT_TEMP_STRING(console_message, "Failed to add component {#} to entity {#}.", component_name, entity.value);
+		ECS_FORMAT_TEMP_STRING(console_message, "Failed to add component {#} to entity {#} for {#}.", component_name, entity.value, ViewportString(viewport));
 		EditorSetConsoleError(console_message);
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name, SharedInstance instance)
+void AddSandboxEntitySharedComponent(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<char> component_name, 
+	SharedInstance instance,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	Component component = editor_state->editor_components.GetComponentID(component_name);
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
 			if (instance.value == -1) {
-				instance = GetSharedComponentDefaultInstance(editor_state, sandbox_index, component);
+				instance = GetSharedComponentDefaultInstance(editor_state, sandbox_index, component, viewport);
 			}
 
 			EntityInfo previous_info = entity_manager->GetEntityInfo(entity);
@@ -81,47 +94,65 @@ void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int san
 			entity_manager->AddSharedComponentCommit(entity, component, instance);
 			entity_manager->DestroyArchetypeBaseEmptyCommit(previous_info.main_archetype, previous_info.base_archetype, true);
 
-			SetSandboxSceneDirty(editor_state, sandbox_index);
+			SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 		}
 	}
 	else {
-		ECS_FORMAT_TEMP_STRING(console_message, "Failed to add shared component {#} to entity {#}.", component_name, entity.value);
+		ECS_FORMAT_TEMP_STRING(console_message, "Failed to add shared component {#} to entity {#} for {#}.", component_name, entity.value, ViewportString(viewport));
 		EditorSetConsoleError(console_message);
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void AddSandboxEntityComponentEx(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
+void AddSandboxEntityComponentEx(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<char> component_name,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
 	if (editor_state->editor_components.IsUniqueComponent(component_name)) {
-		AddSandboxEntityComponent(editor_state, sandbox_index, entity, component_name);
+		AddSandboxEntityComponent(editor_state, sandbox_index, entity, component_name, viewport);
 	}
 	else {
-		AddSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name);
+		AddSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name, { -1 }, viewport);
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void AttachEntityName(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> name)
+void AttachEntityName(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<char> name,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (entity_manager->ExistsEntity(entity)) {
 		Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
 		AllocatorPolymorphic allocator = entity_manager->GetComponentAllocatorPolymorphic(name_component);
 
 		Name name_data = { function::StringCopy(allocator, name) };
 		entity_manager->AddComponentCommit(entity, name_component, &name_data);
-		SetSandboxSceneDirty(editor_state, sandbox_index);
+		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void ChangeEntityName(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> new_name)
+void ChangeEntityName(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<char> new_name,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (entity_manager->ExistsEntity(entity)) {
 		Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
 		if (entity_manager->HasComponent(entity, name_component)) {
@@ -131,21 +162,27 @@ void ChangeEntityName(EditorState* editor_state, unsigned int sandbox_index, Ent
 				Deallocate(allocator, name_data->name.buffer);
 			}
 			name_data->name = function::StringCopy(allocator, new_name);
-			SetSandboxSceneDirty(editor_state, sandbox_index);
+			SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 		}
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index)
+Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	return CreateSandboxEntity(editor_state, sandbox_index, {}, {});
+	return CreateSandboxEntity(editor_state, sandbox_index, {}, {}, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, ComponentSignature unique, SharedComponentSignature shared)
+Entity CreateSandboxEntity(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ComponentSignature unique, 
+	SharedComponentSignature shared,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
 	Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
 	ECS_ASSERT(unique.count < ECS_ARCHETYPE_MAX_COMPONENTS);
@@ -156,7 +193,7 @@ Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index
 	unique[unique.count] = name_component;
 	unique.count++;
 
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
 	Entity entity = entity_manager->CreateEntityCommit(unique, shared);
 	
 	for (size_t index = 0; index < unique.count; index++) {
@@ -177,22 +214,27 @@ Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index
 
 	ECS_STACK_CAPACITY_STREAM(char, entity_name, 512);
 	EntityToString(entity, entity_name);
-	ChangeEntityName(editor_state, sandbox_index, entity, entity_name);
-	SetSandboxSceneDirty(editor_state, sandbox_index);
+	ChangeEntityName(editor_state, sandbox_index, entity, entity_name, viewport);
+	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 
 	return entity;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-Entity CopySandboxEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+Entity CopySandboxEntity(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 
 	if (entity_manager->ExistsEntity(entity)) {
 		Entity destination_entity;
 		entity_manager->CopyEntityCommit(entity, 1, true, &destination_entity);
-		SetSandboxSceneDirty(editor_state, sandbox_index);
+		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 		return destination_entity;
 	}
 	else {
@@ -202,13 +244,20 @@ Entity CopySandboxEntity(EditorState* editor_state, unsigned int sandbox_index, 
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-bool CopySandboxEntities(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int count, Entity* copied_entities)
+bool CopySandboxEntities(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	unsigned int count, 
+	Entity* copied_entities,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 
 	if (entity_manager->ExistsEntity(entity)) {
 		entity_manager->CopyEntityCommit(entity, count, copied_entities);
-		SetSandboxSceneDirty(editor_state, sandbox_index);
+		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 		return true;
 	}
 	else {
@@ -241,7 +290,7 @@ ConvertToOrFromLinkData GetConvertToOrFromLinkData(
 	const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_component);
 	const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target);
 
-	bool is_shared = Reflection::IsReflectionTypeSharedComponent(target_type);
+	bool is_shared = IsReflectionTypeSharedComponent(target_type);
 
 	Component target_id = { (short)target_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
@@ -265,11 +314,12 @@ bool ConvertTargetToLinkComponent(
 	Stream<char> link_component,
 	Entity entity,
 	void* link_data, 
-	AllocatorPolymorphic allocator
+	AllocatorPolymorphic allocator,
+	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
 	ConvertToOrFromLinkData convert_data = GetConvertToOrFromLinkData(editor_state, link_component, allocator);
-	const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	const EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	const void* target_data = nullptr;
 	if (convert_data.is_shared_component) {
 		target_data = active_entity_manager->GetSharedData(convert_data.component, active_entity_manager->GetSharedComponentInstance(convert_data.component, entity));
@@ -289,7 +339,6 @@ bool ConvertTargetToLinkComponent(
 
 bool ConvertTargetToLinkComponent(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
 	Stream<char> link_component,
 	const void* target_data,
 	void* link_data,
@@ -307,11 +356,12 @@ bool ConvertLinkComponentToTarget(
 	Stream<char> link_component, 
 	Entity entity, 
 	const void* link_data, 
-	AllocatorPolymorphic allocator
+	AllocatorPolymorphic allocator,
+	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
 	ConvertToOrFromLinkData convert_data = GetConvertToOrFromLinkData(editor_state, link_component, allocator);
-	EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	void* target_data = nullptr;
 	if (convert_data.is_shared_component) {
 		target_data = active_entity_manager->GetSharedData(convert_data.component, active_entity_manager->GetSharedComponentInstance(convert_data.component, entity));
@@ -342,22 +392,32 @@ bool ConvertLinkComponentToTarget(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void DeleteSandboxUnreferencedSharedInstances(EditorState* editor_state, unsigned int sandbox_index, Component shared_component)
+void DeleteSandboxUnreferencedSharedInstances(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component shared_component,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	ActiveEntityManager(editor_state, sandbox_index)->UnregisterUnreferencedSharedInstancesCommit(shared_component);
+	GetSandboxEntityManager(editor_state, sandbox_index, viewport)->UnregisterUnreferencedSharedInstancesCommit(shared_component);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void DeleteSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+void DeleteSandboxEntity(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 
 	// Be safe. If for some reason the UI lags behind and the runtime might delete the entity before us
 	if (entity_manager->ExistsEntity(entity)) {
 		// We also need to remove the references to all the assets that this entity is using
 		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, entity_assets, 128);
-		GetSandboxEntityAssets(editor_state, sandbox_index, entity, &entity_assets);
+		GetSandboxEntityAssets(editor_state, sandbox_index, entity, &entity_assets, viewport);
 
 		ECS_STACK_CAPACITY_STREAM(UnregisterSandboxAssetElement, unregister_elements, 128);
 		for (unsigned int index = 0; index < entity_assets.size; index++) {
@@ -368,15 +428,20 @@ void DeleteSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, 
 		UnregisterSandboxAsset(editor_state, sandbox_index, unregister_elements);
 
 		entity_manager->DeleteEntityCommit(entity);
-		SetSandboxSceneDirty(editor_state, sandbox_index);
+		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-ComponentSignature EntityUniqueComponents(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+ComponentSignature EntityUniqueComponents(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (entity_manager->ExistsEntity(entity)) {
 		return entity_manager->GetEntitySignatureStable(entity);
 	}
@@ -385,9 +450,14 @@ ComponentSignature EntityUniqueComponents(const EditorState* editor_state, unsig
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-ComponentSignature EntitySharedComponents(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+ComponentSignature EntitySharedComponents(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (entity_manager->ExistsEntity(entity)) {
 		SharedComponentSignature signature = entity_manager->GetEntitySharedSignatureStable(entity);
 		return { signature.indices, signature.count };
@@ -397,9 +467,14 @@ ComponentSignature EntitySharedComponents(const EditorState* editor_state, unsig
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-SharedComponentSignature EntitySharedInstances(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+SharedComponentSignature EntitySharedInstances(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (entity_manager->ExistsEntity(entity)) {
 		SharedComponentSignature signature = entity_manager->GetEntitySharedSignatureStable(entity);
 		return signature;
@@ -409,9 +484,15 @@ SharedComponentSignature EntitySharedInstances(const EditorState* editor_state, 
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-SharedInstance EntitySharedInstance(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, Component component)
+SharedInstance EntitySharedInstance(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	SharedComponentSignature signature = EntitySharedInstances(editor_state, sandbox_index, entity);
+	SharedComponentSignature signature = EntitySharedInstances(editor_state, sandbox_index, entity, viewport);
 	for (unsigned char index = 0; index < signature.count; index++) {
 		if (signature.indices[index] == component) {
 			return signature.instances[index];
@@ -422,21 +503,33 @@ SharedInstance EntitySharedInstance(const EditorState* editor_state, unsigned in
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-SharedInstance FindOrCreateSharedComponentInstance(EditorState* editor_state, unsigned int sandbox_index, Component component, const void* data)
+SharedInstance FindOrCreateSharedComponentInstance(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component component, 
+	const void* data,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	SharedInstance instance = entity_manager->GetSharedComponentInstance(component, data);
 	if (instance.value == -1) {
 		instance = entity_manager->RegisterSharedInstanceCommit(component, data);
+		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	}
 	return instance;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-Entity GetSandboxEntity(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> name)
+Entity GetSandboxEntity(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Stream<char> name,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 
 	Entity entity = StringToEntity(name);
 	// Check to see that the entity exists in that sandbox
@@ -449,25 +542,42 @@ Entity GetSandboxEntity(const EditorState* editor_state, unsigned int sandbox_in
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-SharedInstance GetSharedComponentDefaultInstance(EditorState* editor_state, unsigned int sandbox_index, Component component)
+SharedInstance GetSharedComponentDefaultInstance(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
 	size_t component_storage[ECS_KB * 8];
 	editor_state->editor_components.ResetComponent(component, component_storage, true);
-	return FindOrCreateSharedComponentInstance(editor_state, sandbox_index, component, component_storage);
+	return FindOrCreateSharedComponentInstance(editor_state, sandbox_index, component, component_storage, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void* GetSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Component component)
+void* GetSandboxEntityComponent(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	return (void*)GetSandboxEntityComponent((const EditorState*)editor_state, sandbox_index, entity, component);
+	return (void*)GetSandboxEntityComponent((const EditorState*)editor_state, sandbox_index, entity, component, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-const void* GetSandboxEntityComponent(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, Component component)
+const void* GetSandboxEntityComponent(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (entity_manager->ExistsEntity(entity) && entity_manager->ExistsComponent(component)) {
 		if (entity_manager->HasComponent(entity, component)) {
 			return entity_manager->GetComponent(entity, component);
@@ -478,16 +588,28 @@ const void* GetSandboxEntityComponent(const EditorState* editor_state, unsigned 
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void* GetSandboxSharedInstance(EditorState* editor_state, unsigned int sandbox_index, Component component, SharedInstance instance)
+void* GetSandboxSharedInstance(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component component, 
+	SharedInstance instance,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	return (void*)GetSandboxSharedInstance((const EditorState*)editor_state, sandbox_index, component, instance);
+	return (void*)GetSandboxSharedInstance((const EditorState*)editor_state, sandbox_index, component, instance, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-const void* GetSandboxSharedInstance(const EditorState* editor_state, unsigned int sandbox_index, Component component, SharedInstance instance)
+const void* GetSandboxSharedInstance(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component component, 
+	SharedInstance instance,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	// Already checks to see if the component exists
 	if (entity_manager->ExistsSharedInstance(component, instance)) {
 		return entity_manager->GetSharedData(component, instance);
@@ -497,16 +619,30 @@ const void* GetSandboxSharedInstance(const EditorState* editor_state, unsigned i
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void* GetSandboxEntityComponentEx(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Component component, bool shared)
+void* GetSandboxEntityComponentEx(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Component component, 
+	bool shared,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
 	// The cast should be fine here
-	return (void*)GetSandboxEntityComponentEx((const EditorState*)editor_state, sandbox_index, entity, component, shared);
+	return (void*)GetSandboxEntityComponentEx((const EditorState*)editor_state, sandbox_index, entity, component, shared, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-const void* GetSandboxEntityComponentEx(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, Component component, bool shared) {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+const void* GetSandboxEntityComponentEx(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Component component, 
+	bool shared,
+	EDITOR_SANDBOX_VIEWPORT viewport
+) {
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (entity_manager->ExistsEntity(entity)) {
 		if (shared) {
 			if (entity_manager->ExistsSharedComponent(component)) {
@@ -528,23 +664,39 @@ const void* GetSandboxEntityComponentEx(const EditorState* editor_state, unsigne
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-MemoryArena* GetComponentAllocator(EditorState* editor_state, unsigned int sandbox_index, Component component)
+MemoryArena* GetComponentAllocator(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	return ActiveEntityManager(editor_state, sandbox_index)->GetComponentAllocator(component);
+	return GetSandboxEntityManager(editor_state, sandbox_index, viewport)->GetComponentAllocator(component);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-MemoryArena* GetSharedComponentAllocator(EditorState* editor_state, unsigned int sandbox_index, Component component)
+MemoryArena* GetSharedComponentAllocator(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	return ActiveEntityManager(editor_state, sandbox_index)->GetSharedComponentAllocator(component);
+	return GetSandboxEntityManager(editor_state, sandbox_index)->GetSharedComponentAllocator(component);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-Stream<char> GetEntityName(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, CapacityStream<char> storage)
+Stream<char> GetEntityName(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	CapacityStream<char> storage,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	const void* name_component = GetSandboxEntityComponent(editor_state, sandbox_index, entity, editor_state->editor_components.GetComponentID(STRING(Name)));
+	const void* name_component = GetSandboxEntityComponent(editor_state, sandbox_index, entity, editor_state->editor_components.GetComponentID(STRING(Name)), viewport);
 	if (name_component != nullptr) {
 		Name* name = (Name*)name_component;
 		return name->name;
@@ -557,30 +709,41 @@ Stream<char> GetEntityName(const EditorState* editor_state, unsigned int sandbox
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+void GetSandboxComponentAssetsImplementation(
+	const EditorState* editor_state,
+	const void* component_data,
+	Component component,
+	bool shared,
+	CapacityStream<AssetTypedHandle>* handles
+) {
+	if (component_data != nullptr) {
+		const Reflection::ReflectionType* component_type = editor_state->editor_components.GetType(component, shared);
+
+		ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 128);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, int_handles, 128);
+
+		GetAssetFieldsFromLinkComponentTarget(component_type, asset_fields);
+		GetLinkComponentTargetHandles(component_type, editor_state->asset_database, component_data, asset_fields, int_handles.buffer);
+
+		for (unsigned int index = 0; index < asset_fields.size; index++) {
+			handles->AddSafe({ int_handles[index], asset_fields[index].type.type });
+		}
+	}
+}
+
 void GetSandboxEntityComponentAssetsImplementation(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	Entity entity,
 	Component component,
 	CapacityStream<AssetTypedHandle>* handles,
-	bool shared
+	bool shared,
+	EDITOR_SANDBOX_VIEWPORT viewport
 ) {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (entity_manager->ExistsEntity(entity)) {
-		const void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, shared);
-		if (component_data != nullptr) {
-			const Reflection::ReflectionType* component_type = editor_state->editor_components.GetType(component, shared);
-
-			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 128);
-			ECS_STACK_CAPACITY_STREAM(unsigned int, int_handles, 128);
-
-			GetAssetFieldsFromLinkComponentTarget(component_type, asset_fields);
-			GetLinkComponentTargetHandles(component_type, editor_state->asset_database, component_data, asset_fields, int_handles.buffer);
-
-			for (unsigned int index = 0; index < asset_fields.size; index++) {
-				handles->AddSafe({ int_handles[index], asset_fields[index].type });
-			}
-		}
+		const void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, shared, viewport);
+		GetSandboxComponentAssetsImplementation(editor_state, component_data, component, shared, handles);
 	}
 }
 
@@ -589,10 +752,11 @@ void GetSandboxEntityComponentAssets(
 	unsigned int sandbox_index, 
 	Entity entity, 
 	Component component, 
-	CapacityStream<AssetTypedHandle>* handles
+	CapacityStream<AssetTypedHandle>* handles,
+	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
-	GetSandboxEntityComponentAssetsImplementation(editor_state, sandbox_index, entity, component, handles, false);
+	GetSandboxEntityComponentAssetsImplementation(editor_state, sandbox_index, entity, component, handles, false, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -602,33 +766,91 @@ void GetSandboxEntitySharedComponentAssets(
 	unsigned int sandbox_index, 
 	Entity entity, 
 	Component component, 
-	CapacityStream<AssetTypedHandle>* handles
+	CapacityStream<AssetTypedHandle>* handles,
+	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
-	GetSandboxEntityComponentAssetsImplementation(editor_state, sandbox_index, entity, component, handles, true);
+	GetSandboxEntityComponentAssetsImplementation(editor_state, sandbox_index, entity, component, handles, true, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxEntityAssets(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, CapacityStream<AssetTypedHandle>* handles)
+void GetSandboxSharedInstanceComponentAssets(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component component, 
+	SharedInstance shared_instance, 
+	CapacityStream<AssetTypedHandle>* handles,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	ComponentSignature unique_signature = EntityUniqueComponents(editor_state, sandbox_index, entity);
-	ComponentSignature shared_signature = EntitySharedComponents(editor_state, sandbox_index, entity);
+	const void* instance_data = GetSandboxSharedInstance(editor_state, sandbox_index, component, shared_instance, viewport);
+	GetSandboxComponentAssetsImplementation(editor_state, instance_data, component, true, handles);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxEntityAssets(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	CapacityStream<AssetTypedHandle>* handles,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	ComponentSignature unique_signature = EntityUniqueComponents(editor_state, sandbox_index, entity, viewport);
+	ComponentSignature shared_signature = EntitySharedComponents(editor_state, sandbox_index, entity, viewport);
 
 	for (unsigned char index = 0; index < unique_signature.count; index++) {
-		GetSandboxEntityComponentAssets(editor_state, sandbox_index, entity, unique_signature[index], handles);
+		GetSandboxEntityComponentAssets(editor_state, sandbox_index, entity, unique_signature[index], handles, viewport);
 	}
 
 	for (unsigned char index = 0; index < shared_signature.count; index++) {
-		GetSandboxEntitySharedComponentAssets(editor_state, sandbox_index, entity, shared_signature[index], handles);
+		GetSandboxEntitySharedComponentAssets(editor_state, sandbox_index, entity, shared_signature[index], handles, viewport);
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void ParentSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, Entity child, Entity parent)
+EntityManager* GetSandboxEntityManager(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	switch (viewport) {
+	case EDITOR_SANDBOX_VIEWPORT_SCENE:
+		return &sandbox->scene_entities;
+	case EDITOR_SANDBOX_VIEWPORT_RUNTIME:
+		return sandbox->sandbox_world.entity_manager;
+	case EDITOR_SANDBOX_VIEWPORT_COUNT:
+		return ActiveEntityManager(editor_state, sandbox_index);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	switch (viewport) {
+	case EDITOR_SANDBOX_VIEWPORT_SCENE:
+		return &sandbox->scene_entities;
+	case EDITOR_SANDBOX_VIEWPORT_RUNTIME:
+		return sandbox->sandbox_world.entity_manager;
+	case EDITOR_SANDBOX_VIEWPORT_COUNT:
+		return ActiveEntityManager(editor_state, sandbox_index);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void ParentSandboxEntity(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity child, 
+	Entity parent,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	bool child_exists = entity_manager->ExistsEntity(child);
 	if (child_exists) {
 		if (parent.value != -1) {
@@ -642,95 +864,110 @@ void ParentSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, 
 		pair.parent = parent;
 		pair.child = child;
 		entity_manager->ChangeOrSetEntityParentCommit({ &pair, 1 });
-		SetSandboxSceneDirty(editor_state, sandbox_index);
+		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void ParentSandboxEntities(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> children, Entity parent)
+void ParentSandboxEntities(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Stream<Entity> children, 
+	Entity parent,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
 	for (size_t index = 0; index < children.size; index++) {
-		ParentSandboxEntity(editor_state, sandbox_index, children[index], parent);
+		ParentSandboxEntity(editor_state, sandbox_index, children[index], parent, viewport);
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void RemoveSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
+void RemoveSandboxEntityComponent(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<char> component_name,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 
 	if (entity_manager->ExistsEntity(entity)) {
 		Component component = editor_state->editor_components.GetComponentID(component_name);
 		if (entity_manager->HasComponent(entity, component)) {
-			ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, component_asset_handles, 128);
-			GetSandboxEntityComponentAssets(editor_state, sandbox_index, entity, component, &component_asset_handles);
-			
-			ECS_STACK_CAPACITY_STREAM(UnregisterSandboxAssetElement, unregister_elements, 128);
-			for (unsigned int index = 0; index < component_asset_handles.size; index++) {
-				unregister_elements[index].handle = component_asset_handles[index].handle;
-				unregister_elements[index].type = component_asset_handles[index].type;
-			}
-			unregister_elements.size = component_asset_handles.size;
-			// Unregister these assets
-			UnregisterSandboxAsset(editor_state, sandbox_index, unregister_elements);
+			const void* data = GetSandboxEntityComponent(editor_state, sandbox_index, entity, component, viewport);
+			RemoveSandboxComponentAssets(editor_state, sandbox_index, component, data, false);
 
 			EntityInfo previous_info = entity_manager->GetEntityInfo(entity);
 			entity_manager->RemoveComponentCommit(entity, { &component, 1 });
 			entity_manager->DestroyArchetypeBaseEmptyCommit(previous_info.main_archetype, previous_info.base_archetype, true);
-			SetSandboxSceneDirty(editor_state, sandbox_index);
+			SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 		}
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void RemoveSandboxEntitySharedComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
+void RemoveSandboxEntitySharedComponent(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<char> component_name,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 
 	if (entity_manager->ExistsEntity(entity)) {
 		Component component = editor_state->editor_components.GetComponentID(component_name);
 		if (entity_manager->HasSharedComponent(entity, component)) {
-			ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, component_asset_handles, 128);
-			GetSandboxEntitySharedComponentAssets(editor_state, sandbox_index, entity, component, &component_asset_handles);
-
-			ECS_STACK_CAPACITY_STREAM(UnregisterSandboxAssetElement, unregister_elements, 128);
-			for (unsigned int index = 0; index < component_asset_handles.size; index++) {
-				unregister_elements[index].handle = component_asset_handles[index].handle;
-				unregister_elements[index].type = component_asset_handles[index].type;
-			}
-			unregister_elements.size = component_asset_handles.size;
-			// Unregister these assets
-			UnregisterSandboxAsset(editor_state, sandbox_index, unregister_elements);
-
 			EntityInfo previous_info = entity_manager->GetEntityInfo(entity);
-			SharedInstance previous_instance = EntitySharedInstance(editor_state, sandbox_index, entity, component);
+			SharedInstance previous_instance = EntitySharedInstance(editor_state, sandbox_index, entity, component, viewport);
 			entity_manager->RemoveSharedComponentCommit(entity, { &component, 1 });
 			entity_manager->DestroyArchetypeBaseEmptyCommit(previous_info.main_archetype, previous_info.base_archetype, true);
-			entity_manager->UnregisterUnreferencedSharedInstanceCommit(component, previous_instance);
-			SetSandboxSceneDirty(editor_state, sandbox_index);
+
+			bool is_unreferenced = entity_manager->IsUnreferencedSharedInstance(component, previous_instance);
+			if (is_unreferenced) {
+				const void* instance_data = entity_manager->GetSharedData(component, previous_instance);
+				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, instance_data, true);
+				entity_manager->UnregisterSharedInstanceCommit(component, previous_instance);
+			}
+
+			SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 		}
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void RemoveSandboxEntityComponentEx(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name) {
+void RemoveSandboxEntityComponentEx(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<char> component_name,
+	EDITOR_SANDBOX_VIEWPORT viewport
+) {
 	if (editor_state->editor_components.IsUniqueComponent(component_name)) {
-		RemoveSandboxEntityComponent(editor_state, sandbox_index, entity, component_name);
+		RemoveSandboxEntityComponent(editor_state, sandbox_index, entity, component_name, viewport);
 	}
 	else {
-		RemoveSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name);
+		RemoveSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name, viewport);
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void RemoveSandboxEntityFromHierarchy(EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+void RemoveSandboxEntityFromHierarchy(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 
 	if (entity_manager->ExistsEntity(entity)) {
 		entity_manager->RemoveEntityFromHierarchyCommit({ &entity, 1 });
@@ -739,9 +976,53 @@ void RemoveSandboxEntityFromHierarchy(EditorState* editor_state, unsigned int sa
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void ResetSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
+void RemoveSandboxComponentAssets(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component component, 
+	const void* data, 
+	bool shared,
+	Stream<LinkComponentAssetField> asset_fields
+) {
+	ECS_STACK_CAPACITY_STREAM(UnregisterSandboxAssetElement, unregister_elements, 512);
+
+	if (asset_fields.size == 0) {
+		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, component_asset_handles, 512);
+		GetSandboxComponentAssetsImplementation(editor_state, data, component, shared, &component_asset_handles);
+
+		for (unsigned int index = 0; index < component_asset_handles.size; index++) {
+			unregister_elements[index].handle = component_asset_handles[index].handle;
+			unregister_elements[index].type = component_asset_handles[index].type;
+		}
+		unregister_elements.size = component_asset_handles.size;
+	}
+	else {
+		const Reflection::ReflectionType* component_type = editor_state->editor_components.GetType(component, shared);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, handles, 512);
+		GetLinkComponentTargetHandles(component_type, editor_state->asset_database, data, asset_fields, handles.buffer);
+
+		for (unsigned int index = 0; index < asset_fields.size; index++) {
+			unregister_elements[index].handle = handles[index];
+			unregister_elements[index].type = asset_fields[index].type.type;
+		}
+		unregister_elements.size = asset_fields.size;
+	}
+
+	// Unregister these assets
+	UnregisterSandboxAsset(editor_state, sandbox_index, unregister_elements);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void ResetSandboxEntityComponent(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<char> component_name,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 
 	Stream<char> target = editor_state->editor_components.GetComponentFromLink(component_name);
 	bool is_shared = editor_state->editor_components.IsSharedComponent(target.size > 0 ? target : component_name);
@@ -756,10 +1037,12 @@ void ResetSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox
 	}
 	else {
 		// Remove it and then add it again with the default component
-		RemoveSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name);
-		AddSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name);
+		RemoveSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name, viewport);
+		AddSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name, { -1 }, viewport);
 	}
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
 
 void SandboxForEachEntity(
 	EditorState* editor_state, 
@@ -769,13 +1052,14 @@ void SandboxForEachEntity(
 	ComponentSignature unique_signature, 
 	ComponentSignature shared_signature, 
 	ComponentSignature unique_exclude_signature, 
-	ComponentSignature shared_exclude_signature
+	ComponentSignature shared_exclude_signature,
+	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
 	World temp_world;
 	memcpy(&temp_world, &GetSandbox(editor_state, sandbox_index)->sandbox_world, sizeof(temp_world));
 
-	temp_world.entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	temp_world.entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	ForEachEntityCommitFunctor(&temp_world, functor, functor_data, unique_signature, shared_signature, unique_exclude_signature, shared_exclude_signature);
 }
 
@@ -791,7 +1075,13 @@ struct SplatLinkComponentBasicData {
 void SplatLinkComponentBasic(ForEachEntityFunctorData* functor_data) {
 	SplatLinkComponentBasicData* data = (SplatLinkComponentBasicData*)functor_data->data;
 	for (size_t index = 0; index < data->asset_fields.size; index++) {
-		SetAssetTargetFieldFromReflection(data->target_type, data->asset_fields[index].field_index, functor_data->unique_components[0], data->assets[index], data->asset_fields[index].type);
+		SetAssetTargetFieldFromReflection(
+			data->target_type, 
+			data->asset_fields[index].field_index, 
+			functor_data->unique_components[0], 
+			data->assets[index], 
+			data->asset_fields[index].type.type
+		);
 	}
 }
 
@@ -818,7 +1108,8 @@ bool SandboxSplatLinkComponentAssetFields(
 	unsigned int sandbox_index, 
 	const void* link_component, 
 	Stream<char> component_name, 
-	bool give_error_when_failing
+	bool give_error_when_failing,
+	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
 	const Reflection::ReflectionType* type = editor_state->editor_components.GetType(component_name);
@@ -841,7 +1132,7 @@ bool SandboxSplatLinkComponentAssetFields(
 
 	GetLinkComponentAssetData(type, link_component, editor_state->asset_database, asset_fields, &assets);
 
-	if (Reflection::GetReflectionTypeLinkComponentNeedsDLL(type)) {
+	if (GetReflectionTypeLinkComponentNeedsDLL(type)) {
 		unsigned int module_index = editor_state->editor_components.FindComponentModuleInReflection(editor_state, component_name);
 		if (module_index == -1) {
 			if (give_error_when_failing) {
@@ -863,7 +1154,7 @@ bool SandboxSplatLinkComponentAssetFields(
 		splat_data.link_component = link_component;
 		splat_data.assets = assets;
 		splat_data.link_function = link_target.build_function;
-		SandboxForEachEntity(editor_state, sandbox_index, SplatLinkComponentBuild, &splat_data, { &component, 1 }, { nullptr, 0 });
+		SandboxForEachEntity(editor_state, sandbox_index, SplatLinkComponentBuild, &splat_data, { &component, 1 }, { nullptr, 0 }, {}, {}, viewport);
 		return true;
 	}
 
@@ -888,7 +1179,7 @@ bool SandboxSplatLinkComponentAssetFields(
 		}
 		return false;
 	}
-	SandboxForEachEntity(editor_state, sandbox_index, SplatLinkComponentBasic, &splat_data, { &component, 1 }, { nullptr, 0 });
+	SandboxForEachEntity(editor_state, sandbox_index, SplatLinkComponentBasic, &splat_data, { &component, 1 }, { nullptr, 0 }, {}, {}, viewport);
 	return true;
 }
 
@@ -969,14 +1260,16 @@ bool SandboxUpdateLinkComponentSharedInstance(
 	const void* link_component, 
 	Stream<char> component_name,
 	SharedInstance instance,
-	bool give_error_when_failing
+	bool give_error_when_failing,
+	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
 	return UpdateLinkComponentBase(editor_state, sandbox_index, link_component, component_name, give_error_when_failing, [=](Component component) {
-		void* shared_data = GetSandboxSharedInstance(editor_state, sandbox_index, component, instance);
+		void* shared_data = GetSandboxSharedInstance(editor_state, sandbox_index, component, instance, viewport);
 		if (shared_data == nullptr) {
 			if (give_error_when_failing) {
-				ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The given shared instance {#} is invalid.", component_name, instance.value);
+				ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The given shared instance {#} is invalid for {#}.", 
+					component_name, instance.value, ViewportString(viewport));
 				EditorSetConsoleError(error_message);
 			}
 		}
@@ -992,7 +1285,8 @@ bool SandboxUpdateLinkComponentForEntity(
 	const void* link_component, 
 	Stream<char> component_name, 
 	Entity entity,
-	bool give_error_when_failing
+	bool give_error_when_failing,
+	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
 	size_t converted_link_storage[ECS_KB * 4];
@@ -1001,7 +1295,8 @@ bool SandboxUpdateLinkComponentForEntity(
 		if (give_error_when_failing) {
 			ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 256);
 			Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, entity, entity_name_storage);
-			ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert linked component {#} to target for entity {#} in sandbox {#}.", component_name, entity_name, sandbox_index);
+			ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert linked component {#} to target for entity {#} in sandbox {#} for {#}.", 
+				component_name, entity_name, sandbox_index, ViewportString(viewport));
 			EditorSetConsoleError(error_message);
 		}
 		return false;
@@ -1009,11 +1304,11 @@ bool SandboxUpdateLinkComponentForEntity(
 
 	// Find or create the shared instance that matches this data
 	Component target_component = editor_state->editor_components.GetComponentIDWithLink(component_name);
-	SharedInstance new_shared_instance = FindOrCreateSharedComponentInstance(editor_state, sandbox_index, target_component, converted_link_storage);
-	SharedInstance current_instance = EntitySharedInstance(editor_state, sandbox_index, entity, target_component);
+	SharedInstance new_shared_instance = FindOrCreateSharedComponentInstance(editor_state, sandbox_index, target_component, converted_link_storage, viewport);
+	SharedInstance current_instance = EntitySharedInstance(editor_state, sandbox_index, entity, target_component, viewport);
 
 	if (new_shared_instance != current_instance) {
-		EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+		EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 		SharedInstance old_instance = entity_manager->ChangeEntitySharedInstanceCommit(entity, target_component, new_shared_instance, true);
 
 		// Unregister the shared instance if it longer is referenced

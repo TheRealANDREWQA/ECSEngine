@@ -85,6 +85,10 @@ namespace ECSEngine {
 
 		void SetVerbosity(unsigned char new_level);
 
+		ECS_INLINE static size_t MaxMessageCount() {
+			return 25'000;
+		}
+
 		SpinLock commit_lock;
 		bool pause_on_error;
 		unsigned char verbosity_level;

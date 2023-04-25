@@ -22,13 +22,19 @@ namespace ECSEngine {
 		ECS_ASSET_TYPE_COUNT
 	};
 
-	inline ECS_ASSET_TYPE ECS_ASSET_TYPES_REFERENCEABLE[] = {
+	inline const ECS_ASSET_TYPE ECS_ASSET_TYPES_REFERENCEABLE[] = {
 		ECS_ASSET_TEXTURE,
 		ECS_ASSET_GPU_SAMPLER,
 		ECS_ASSET_SHADER
 	};
 
-	inline ECS_ASSET_TYPE ECS_ASSET_TYPES_WITH_DEPENDENCIES[] = {
+	inline const ECS_ASSET_TYPE ECS_ASSET_TYPES_NOT_REFERENCEABLE[] = {
+		ECS_ASSET_MESH,
+		ECS_ASSET_MATERIAL,
+		ECS_ASSET_MISC
+	};
+
+	inline const ECS_ASSET_TYPE ECS_ASSET_TYPES_WITH_DEPENDENCIES[] = {
 		ECS_ASSET_MATERIAL
 	};
 
@@ -84,13 +90,19 @@ namespace ECSEngine {
 
 	ECSENGINE_API ResourceType AssetTypeToResourceType(ECS_ASSET_TYPE type);
 
-	// The shader_type can be used to narrow down the selection of shaders when the asset type is a shader
-	struct AssetFieldTarget {
-		Stream<char> name;
-		ECS_ASSET_TYPE asset_type;
+	struct AssetTypeEx {
+		ECS_ASSET_TYPE type;
+
+		// Useful only for shaders 
 		union {
 			ECS_SHADER_TYPE shader_type;
 		};
+	};
+
+	// The shader_type can be used to narrow down the selection of shaders when the asset type is a shader
+	struct AssetFieldTarget {
+		Stream<char> name;
+		AssetTypeEx type;
 	};
 
 	ECSENGINE_API extern AssetFieldTarget ECS_ASSET_METADATA_MACROS[];
@@ -101,9 +113,11 @@ namespace ECSEngine {
 
 	ECSENGINE_API size_t ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
 
-	ECSENGINE_API ECS_ASSET_TYPE FindAssetMetadataMacro(Stream<char> string);
+	// Returns ECS_ASSET_TYPE_COUNT if it is not matching any macro definition
+	ECSENGINE_API AssetTypeEx FindAssetMetadataMacro(Stream<char> string);
 
-	ECSENGINE_API ECS_ASSET_TYPE FindAssetTargetField(Stream<char> string);
+	// Returns ECS_ASSET_TYPE_COUNT if it is not matching any asset definition
+	ECSENGINE_API AssetTypeEx FindAssetTargetField(Stream<char> string);
 
 	// The string is read-only from the global memory (it is a constant)
 	ECSENGINE_API const char* ConvertAssetTypeString(ECS_ASSET_TYPE type);
@@ -620,20 +634,22 @@ namespace ECSEngine {
 
 	// The functor receives as arguments the handle and the asset type of the dependency
 	// When early_exit is desired, return true to exit.
+	// Returns true if it early exited, else false
 	template<bool early_exit = false, typename Functor>
-	void ForEachAssetDependency(const void* metadata, ECS_ASSET_TYPE type, Functor&& functor) {
+	bool ForEachAssetDependency(const void* metadata, ECS_ASSET_TYPE type, Functor&& functor) {
 		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
 		GetAssetDependencies(metadata, type, &dependencies);
 		for (unsigned int index = 0; index < dependencies.size; index++) {
 			if constexpr (early_exit) {
 				if (functor(dependencies[index].handle, dependencies[index].type)) {
-					break;
+					return true;
 				}
 			}
 			else {
 				functor(dependencies[index].handle, dependencies[index].type);
 			}
 		}
+		return false;
 	}
 
 	struct ValidateAssetMetadataOptionsDesc {

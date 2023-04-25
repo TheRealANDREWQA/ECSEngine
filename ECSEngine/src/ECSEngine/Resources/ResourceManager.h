@@ -115,6 +115,10 @@ namespace ECSEngine {
 		Stream<wchar_t> filename = { nullptr, 0 };
 		size_t time_stamp = 0;
 		SpinLock* push_lock = nullptr;
+
+		// Can optionally specify the reference count for the resource to be inserted
+		// If it is left at default, it will be non-reference counted
+		unsigned int reference_count = USHORT_MAX;
 	};
 
 	// Defining ECS_RESOURCE_MANAGER_CHECK_RESOURCE will make AddResource check if the resource exists already 
@@ -197,9 +201,10 @@ namespace ECSEngine {
 
 		// The functor will receive as parameter the ResourceIdentifier of the resource. If the resource was added
 		// with a suffix, the identifier includes the suffix. For early exit it must return true to exit
+		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEachResourceIdentifier(ResourceType resource_type, Functor&& functor) const {
-			m_resource_types[(unsigned int)resource_type].ForEachConst<early_exit>([&](ResourceManagerEntry entry, ResourceIdentifier identifier) {
+		bool ForEachResourceIdentifier(ResourceType resource_type, Functor&& functor) const {
+			return m_resource_types[(unsigned int)resource_type].ForEachConst<early_exit>([&](ResourceManagerEntry entry, ResourceIdentifier identifier) {
 				if constexpr (early_exit) {
 					return functor(identifier);
 				}
@@ -210,10 +215,10 @@ namespace ECSEngine {
 		}
 
 		// The functor will receive as parameter the ResourceIdentifier of the resource without the suffix and a second unsigned short
-		// describing the suffix size. For early exit it must return true to exit
+		// describing the suffix size. For early exit it must return true to exit. Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEachResourceIdentifierNoSuffix(ResourceType resource_type, Functor&& functor) const {
-			m_resource_types[(unsigned int)resource_type].ForEachConst<early_exit>([&](ResourceManagerEntry entry, ResourceIdentifier identifier) {
+		bool ForEachResourceIdentifierNoSuffix(ResourceType resource_type, Functor&& functor) const {
+			return m_resource_types[(unsigned int)resource_type].ForEachConst<early_exit>([&](ResourceManagerEntry entry, ResourceIdentifier identifier) {
 				identifier.size -= entry.suffix_size;
 				if constexpr (early_exit) {
 					return functor(identifier, entry.suffix_size);
@@ -225,9 +230,10 @@ namespace ECSEngine {
 		}
 
 		// The functor will receive as parameter a void* with the resource. For early exit it must return true to exit.
+		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEachResource(ResourceType resource_type, Functor&& functor) const {
-			m_resource_types[(unsigned int)resource_type].ForEachConst<early_exit>([&](ResourceManagerEntry entry, ResourceIdentifier identifier) {
+		bool ForEachResource(ResourceType resource_type, Functor&& functor) const {
+			return m_resource_types[(unsigned int)resource_type].ForEachConst<early_exit>([&](ResourceManagerEntry entry, ResourceIdentifier identifier) {
 				if constexpr (early_exit) {
 					return functor(entry.data_pointer.GetPointer());
 				}

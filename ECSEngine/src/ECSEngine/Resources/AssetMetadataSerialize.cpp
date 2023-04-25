@@ -205,9 +205,9 @@ namespace ECSEngine {
 		size_t read_size = 0;
 		AllocatorPolymorphic allocator = data->options->field_allocator;
 
-		if (asset->reflection_manager == nullptr) {
+		if (data->read_data && (asset->reflection_manager == nullptr || data->was_allocated)) {
 			asset->reflection_manager = (Reflection::ReflectionManager*)Allocate(allocator, sizeof(Reflection::ReflectionManager));
-			*asset->reflection_manager = Reflection::ReflectionManager(allocator, 32, 0);
+			*asset->reflection_manager = Reflection::ReflectionManager(allocator, 0, 0);
 		}
 
 		Stream<char> asset_name = { nullptr, 0 };

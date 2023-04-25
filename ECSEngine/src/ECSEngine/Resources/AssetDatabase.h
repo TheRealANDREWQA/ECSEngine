@@ -186,6 +186,9 @@ namespace ECSEngine {
 		// For shaders, textures and gpu samplers the data.buffer needs to be the interface
 		unsigned int FindAssetEx(Stream<void> data, ECS_ASSET_TYPE type) const;
 
+		// Searches an asset based upon asset name and asset file. Returns -1 if it doesn't find it.
+		unsigned int FindAssetEx(const AssetDatabase* other, unsigned int other_handle, ECS_ASSET_TYPE type) const;
+
 		void FileLocationMesh(Stream<char> name, Stream<wchar_t> file, CapacityStream<wchar_t>& path) const;
 
 		void FileLocationTexture(Stream<char> name, Stream<wchar_t> file, CapacityStream<wchar_t>& path) const;
@@ -209,26 +212,46 @@ namespace ECSEngine {
 		void FillAssetPaths(ECS_ASSET_TYPE type, CapacityStream<Stream<wchar_t>>& paths) const;
 
 		// The functor will be called with the handle as a parameter
-		template<typename Functor>
-		void ForEachAsset(ECS_ASSET_TYPE type, Functor&& functor) {
+		// Return true in the functor to early exit
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEachAsset(ECS_ASSET_TYPE type, Functor&& functor) {
 			unsigned int count = GetAssetCount(type);
 			for (unsigned int index = 0; index < count; index++) {
 				unsigned int handle = GetAssetHandleFromIndex(index, type);
-				functor(handle);
+				if constexpr (early_exit) {
+					if (functor(handle)) {
+						return true;
+					}
+				}
+				else {
+					functor(handle);
+				}
 			}
+			return false;
 		}
 
 		// The functor will be called with the handle as a parameter and the asset type
-		template<typename Functor>
-		void ForEachAsset(Functor&& functor) {
+		// Return true in the functor to early exit
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEachAsset(Functor&& functor) {
 			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 				ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
 				unsigned int count = GetAssetCount(current_type);
 				for (unsigned int subindex = 0; subindex < count; subindex++) {
 					unsigned int handle = GetAssetHandleFromIndex(subindex, current_type);
-					functor(handle, current_type);
+					if constexpr (early_exit) {
+						if (functor(handle, current_type)) {
+							return true;
+						}
+					}
+					else {
+						functor(handle, current_type);
+					}
 				}
 			}
+			return false;
 		}
 
 		MeshMetadata* GetMesh(unsigned int handle);
@@ -278,6 +301,8 @@ namespace ECSEngine {
 
 		unsigned int GetAssetCount(ECS_ASSET_TYPE type) const;
 
+		unsigned int GetMaxAssetCount() const;
+
 		unsigned int GetAssetHandleFromIndex(unsigned int index, ECS_ASSET_TYPE type) const;
 
 		unsigned int GetIndexFromAssetHandle(unsigned int handle, ECS_ASSET_TYPE type) const;
@@ -318,6 +343,9 @@ namespace ECSEngine {
 		// An allocator can be given to allocate the assets from or, if left as default, it will allocate
 		// from the database allocator.
 		void RandomizePointers(AssetDatabaseSnapshot snapshot);
+
+		// Remaps the dependencies of the assets that have them to respect the dependencies in the given database
+		void RemapAssetDependencies(const AssetDatabase* other);
 
 		// It does not set the name or the file
 		bool ReadMeshFile(Stream<char> name, Stream<wchar_t> file, MeshMetadata* metadata) const;
@@ -638,6 +666,11 @@ namespace ECSEngine {
 
 	enum ECS_DESERIALIZE_CODE : unsigned char;
 
+	struct DeserializeAssetDatabaseOptions {
+		// This flag will set to 0 all the fields which are not loaded
+		bool default_initialize_other_fields = true;
+	};
+
 	// It writes only the names and the paths of the resources that need to be written
 	ECSENGINE_API ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, Stream<wchar_t> file);
 
@@ -645,10 +678,13 @@ namespace ECSEngine {
 
 	ECSENGINE_API size_t SerializeAssetDatabaseSize(const AssetDatabase* database);
 
-	// The corresponding metadata files are not loaded
-	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file, bool reference_count_zero = false);
+	// The corresponding metadata files are not loaded - only the necessary information to load them
+	// Is actually loaded (file and name mostly, materials are different)
+	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file, DeserializeAssetDatabaseOptions options = {});
 
-	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, uintptr_t& ptr, bool reference_count_zero = false);
+	// The corresponding metadata files are not loaded - only the necessary information to load them
+	// Is actually loaded (file and name mostly, materials are different)
+	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, uintptr_t& ptr, DeserializeAssetDatabaseOptions options = {});
 
 	ECSENGINE_API size_t DeserializeAssetDatabaseSize(const Reflection::ReflectionManager* reflection_manager, uintptr_t ptr);
 

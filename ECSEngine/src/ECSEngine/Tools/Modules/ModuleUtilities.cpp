@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "ModuleUtilities.h"
 #include "../../ECS/LinkComponents.h"
+#include "../../ECS/ComponentHelpers.h"
 #include "../../Utilities/Reflection/Reflection.h"
 #include "../../ECS/EntityManagerSerialize.h"
 
@@ -96,7 +97,7 @@ namespace ECSEngine {
 
 		auto iterate = [applied_modules](Stream<const Reflection::ReflectionType*> link_types, CapacityStream<ModuleLinkComponentTarget>& link_type_targets) {
 			for (size_t index = 0; index < link_types.size; index++) {
-				bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(link_types[index]);
+				bool needs_dll = GetReflectionTypeLinkComponentNeedsDLL(link_types[index]);
 				if (needs_dll) {
 					ModuleLinkComponentTarget target = GetModuleLinkComponentTarget(applied_modules, link_types[index]->name);
 					if (target.build_function == nullptr || target.reverse_function == nullptr) {

@@ -103,6 +103,9 @@ bool LoadEditorSceneCore(
 	bool success = LoadScene(&load_data);
 
 	if (success) {
+		// Update the asset database to reflect the assets from the entity manager
+		GetAssetReferenceCountsFromEntities(entity_manager, load_data.reflection_manager, load_data.database);
+
 		// Now we need to convert from standalone database to the reference one
 		database->FromStandalone(load_data.database, { nullptr, pointer_remap });
 	}
@@ -122,15 +125,23 @@ bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_index, 
 	bool success = LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, filename, pointer_remapping.buffer);
 	if (success) {
 		// Check the pointer remap - we need to update the link components
+		size_t total_remapping_count = 0;
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			total_remapping_count += pointer_remapping[index].size;
+		}
+
+		CapacityStream<UpdateAssetToComponentElement> update_elements;
+		update_elements.Initialize(editor_state->EditorAllocator(), 0, total_remapping_count);
+
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			for (unsigned int subindex = 0; subindex < pointer_remapping[index].size; subindex++) {
-				auto remapping = pointer_remapping[index][subindex];
-				if (remapping.new_index != remapping.old_index) {
-					// Update the link components
-					UpdateAssetToComponents(editor_state, { (void*)remapping.old_index, 0 }, { (void*)remapping.new_index, 0 }, (ECS_ASSET_TYPE)index);
-				}
+				const auto remapping = pointer_remapping[index][subindex];
+				// Update the link components
+				update_elements.Add({ { remapping.old_pointer, 0 }, { remapping.new_pointer, 0 }, (ECS_ASSET_TYPE)index });
 			}
 		}
+
+		UpdateAssetsToComponents(editor_state, update_elements, sandbox_index);
 	}
 
 	return success;

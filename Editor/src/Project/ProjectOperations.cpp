@@ -459,17 +459,26 @@ void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data)
 
 // -------------------------------------------------------------------------------------------------------------------
 
-bool OpenProjectFile(ProjectOperationData data) {
+bool OpenProjectFile(ProjectOperationData data, bool info_only) {
 	ECS_TEMP_STRING(project_path, 256);
 	GetProjectFilePath(data.file_data, project_path);
 
+	ProjectFile temp_project_file;
 	ProjectFile* file_data = data.file_data;
+
+	// If we want to extract only the information then don't reset the project file
+	// because we'll lose the path
+	if (!info_only) {
+		// Set the file data to 0. If a field could not be deserialized, it will be 0
+		memset(file_data, 0, sizeof(*file_data));
+	}
+	else {
+		file_data = &temp_project_file;
+	}
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_allocator, ECS_KB * 16, ECS_MB);
 	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&_allocator);
 
-	// Set the file data to 0. If a field could not be deserialized, it will be 0
-	memset(file_data, 0, sizeof(*file_data));
 	bool success = true;
 
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
@@ -537,10 +546,21 @@ bool OpenProjectFile(ProjectOperationData data) {
 		return false;
 	}
 
-	void* allocation = Allocate(data.editor_state->EditorAllocator(), sizeof(wchar_t) * (file_data->path.size + file_data->project_name.size));
-	uintptr_t ptr = (uintptr_t)allocation;
-	file_data->path.InitializeAndCopy(ptr, file_data->path);
-	file_data->project_name.InitializeAndCopy(ptr, file_data->project_name);
+	if (!info_only) {
+		void* allocation = Allocate(data.editor_state->EditorAllocator(), sizeof(wchar_t) * (file_data->path.size + file_data->project_name.size));
+		uintptr_t ptr = (uintptr_t)allocation;
+		file_data->path.InitializeAndCopy(ptr, file_data->path);
+		file_data->project_name.InitializeAndCopy(ptr, file_data->project_name);
+	}
+	else {
+		Stream<wchar_t> previous_path = data.file_data->path;
+		Stream<wchar_t> previous_name = data.file_data->project_name;
+
+		// Keep the path and the name
+		memcpy(data.file_data, &temp_project_file, sizeof(*data.file_data));
+		data.file_data->path = previous_path;
+		data.file_data->project_name = previous_name;
+	}
 	return true;
 }
 

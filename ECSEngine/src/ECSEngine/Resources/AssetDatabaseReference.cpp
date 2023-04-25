@@ -305,8 +305,17 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::Reset()
+	void AssetDatabaseReference::Reset(bool decrement_reference_counts)
 	{
+		if (decrement_reference_counts) {
+			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+				for (unsigned int handle_index = 0; handle_index < streams[index].size; handle_index++) {
+					database->RemoveAsset(streams[index][handle_index], (ECS_ASSET_TYPE)index);
+				}
+			}
+		}
+
 		mesh_metadata.FreeBuffer();
 		texture_metadata.FreeBuffer();
 		gpu_sampler_metadata.FreeBuffer();
@@ -445,6 +454,10 @@ namespace ECSEngine {
 				if (database->GetReferenceCount(reference_metadata[last_index], asset_type) == 1) {
 					// Copy the pointer
 					Stream<void> standalone_asset = GetAssetFromMetadata(&stream[index].value, asset_type);
+					if (!IsAssetFromMetadataValid(standalone_asset)) {
+						// Get a randomized pointer value
+						standalone_asset.buffer = (void*)database->GetRandomizedPointer(asset_type);
+					}
 					SetAssetToMetadata(database->GetAsset(added_handle, asset_type), asset_type, standalone_asset);
 				}
 
@@ -470,83 +483,46 @@ namespace ECSEngine {
 		set_values(standalone_database->material_asset, material_asset, ECS_ASSET_MATERIAL);
 		SetSerializeCustomMaterialDoNotIncrementDependencies(false);
 
-		// For assets that are being referenced by other assets, we need to remove the count of
-		// external references from other assets
-		ECS_ASSET_TYPE referenceable_assets[] = {
-			ECS_ASSET_TEXTURE,
-			ECS_ASSET_GPU_SAMPLER,
-			ECS_ASSET_SHADER
-		};
+		set_values(standalone_database->misc_asset, misc_asset, ECS_ASSET_MISC);
+
 		ECS_STACK_CAPACITY_STREAM(uint2, external_references, 1024);
 		ResizableStream<unsigned int>* asset_streams = (ResizableStream<unsigned int>*)this;
-		for (size_t type = 0; type < std::size(referenceable_assets); type++) {
+		for (size_t type = 0; type < std::size(ECS_ASSET_TYPES_REFERENCEABLE); type++) {
 			external_references.size = 0;
-			standalone_database->GetReferenceCountsStandalone(referenceable_assets[type], &external_references);
+			standalone_database->GetReferenceCountsStandalone(ECS_ASSET_TYPES_REFERENCEABLE[type], &external_references);
 			for (unsigned int index = 0; index < external_references.size; index++) {
-				unsigned int reference_count = standalone_database->GetReferenceCount(external_references[index].x, referenceable_assets[type]);
+				unsigned int reference_count = standalone_database->GetReferenceCount(external_references[index].x, ECS_ASSET_TYPES_REFERENCEABLE[type]);
 				unsigned int difference = reference_count - external_references[index].y;
-				for (unsigned int diff_index = 0; diff_index < difference; diff_index++) {
-					unsigned int existing_index = function::SearchBytes(
-						asset_streams[referenceable_assets[type]].buffer,
-						asset_streams[referenceable_assets[type]].size,
-						external_references[index].x,
-						sizeof(unsigned int)
-					);
-					ECS_ASSERT(existing_index != -1);
-					asset_streams[referenceable_assets[type]].RemoveSwapBack(existing_index);
+
+				if (difference > 0) {
+					unsigned int this_database_handle = database->FindAssetEx(standalone_database, external_references[index].x, ECS_ASSET_TYPES_REFERENCEABLE[type]);
+					for (unsigned int diff_index = 0; diff_index < difference; diff_index++) {
+						unsigned int existing_index = function::SearchBytes(
+							asset_streams[ECS_ASSET_TYPES_REFERENCEABLE[type]].buffer,
+							asset_streams[ECS_ASSET_TYPES_REFERENCEABLE[type]].size,
+							this_database_handle,
+							sizeof(unsigned int)
+						);
+						ECS_ASSERT(existing_index != -1);
+						asset_streams[ECS_ASSET_TYPES_REFERENCEABLE[type]].RemoveSwapBack(existing_index);
+					}
 				}
 			}
 		}
-		
-		set_values(standalone_database->misc_asset, misc_asset, ECS_ASSET_MISC);
 
-		// If it has pointer remapping, iterate the master database and report the changed values
+		// If it has pointer remapping report the changed values
 		if (options.pointer_remapping != nullptr) {
-			auto pointer_remap = [&](const auto& standalone_metadata, ECS_ASSET_TYPE asset_type) {
-				auto stream = standalone_metadata.ToStream();
-				// Create a mask of indices which were not yet taken
-				// And then remove it when an asset is found to have that index
-				ECS_STACK_CAPACITY_STREAM(unsigned int, free_indices, ECS_ASSET_RANDOMIZED_ASSET_LIMIT);
-				free_indices.size = ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
-				function::MakeSequence(free_indices, 1);
+			database->ForEachAsset([&](unsigned int handle, ECS_ASSET_TYPE type) {
+				const void* current_asset = database->GetAssetConst(handle, type);
+				unsigned int standalone_handle = standalone_database->FindAssetEx(database, handle, type);
+				const void* standalone_asset = standalone_database->GetAssetConst(standalone_handle, type);
 
-				for (size_t index = 0; index < stream.size; index++) {
-					unsigned int current_handle = database->GetAssetHandleFromIndex(index, asset_type);
-					void* asset = database->GetAsset(current_handle, asset_type);
-					Stream<void> asset_pointer = GetAssetFromMetadata(asset, asset_type);
-
-					unsigned int old_randomized_index = ExtractRandomizedAssetValue(asset_pointer.buffer, asset_type);
-					
-					if (old_randomized_index <= ECS_ASSET_RANDOMIZED_ASSET_LIMIT) {
-						unsigned int found_index = function::SearchBytes(free_indices.buffer, free_indices.size, old_randomized_index, sizeof(old_randomized_index));
-
-						// The index has not yet been found
-						if (found_index != -1) {
-							free_indices.RemoveSwapBack(found_index);
-						}
-						else {
-							ECS_ASSERT(free_indices.size > 0);
-
-							// The index is already in use
-							// Choose the last index to be the new index
-							free_indices.size--;
-							unsigned int new_index = free_indices[free_indices.size];
-							options.pointer_remapping[asset_type].AddSafe({ old_randomized_index, new_index, current_handle });
-
-							// Change the mapping for this asset
-							SetRandomizedAssetToMetadata(asset, asset_type, new_index);
-						}
-					}
+				Stream<void> current_pointer = GetAssetFromMetadata(current_asset, type);
+				Stream<void> standalone_pointer = GetAssetFromMetadata(standalone_asset, type);
+				if (current_pointer.buffer != standalone_pointer.buffer) {
+					options.pointer_remapping[type].AddSafe({ standalone_pointer.buffer, current_pointer.buffer, handle });
 				}
-				
-			};
-
-			pointer_remap(database->mesh_metadata, ECS_ASSET_MESH);
-			pointer_remap(database->texture_metadata, ECS_ASSET_TEXTURE);
-			pointer_remap(database->gpu_sampler_metadata, ECS_ASSET_GPU_SAMPLER);
-			pointer_remap(database->shader_metadata, ECS_ASSET_SHADER);
-			pointer_remap(database->material_asset, ECS_ASSET_MATERIAL);
-			pointer_remap(database->misc_asset, ECS_ASSET_MISC);
+			});
 		}
 	}
 

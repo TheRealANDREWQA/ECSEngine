@@ -13,3 +13,6 @@ void EditorAddEventWithPointer(EditorState* editor_state, EditorEventFunction fu
 
 // Returns the last event data
 void* EditorEventLastData(const EditorState* editor_state);
+
+// Returns true if it founds an event with the given function
+bool EditorHasEvent(EditorState* editor_state, EditorEventFunction function);

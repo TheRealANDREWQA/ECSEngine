@@ -15,16 +15,15 @@ namespace ECSEngine {
 	}
 	
 	struct AssetDatabaseReferencePointerRemap {
-		unsigned int old_index;
-		unsigned int new_index;
+		void* old_pointer;
+		void* new_pointer;
 		unsigned int handle;
 	};
 
 	// A handle_remapping can be specified. When adding the assets from the given database
 	// into the master database that this reference is referring to, the handle can change their values
 	// The pairs are { original_handle, new_handle_value }.
-	// Alternatively, if there are randomized pointers and you want to make sure that they are unique when inserting
-	// them into the master database, this will report the handles that needed to be changed.
+	// The pointer remap gives the values for the assets whose pointer values are different between the 2 asset databases
 	// There needs to be specified ECS_ASSET_TYPE_COUNT for each remapping (each asset type has its own stream)
 	struct AssetDatabaseReferenceFromStandaloneOptions {
 		CapacityStream<uint2>* handle_remapping = nullptr;
@@ -147,10 +146,8 @@ namespace ECSEngine {
 			return database->RemoveAssetWithAction<only_main_asset, before_removal>(handle, type, functor);
 		}
 
-		// Clears all the assets that are inside. It doesn't decrement the reference count of the assets
-		// that are alive inside.
-		// All of them should be evicted from memory before calling this function
-		void Reset();
+		// Clears all the assets that are inside.
+		void Reset(bool decrement_reference_counts = false);
 
 		// Increases the reference count of all assets by one
 		void IncrementReferenceCounts();

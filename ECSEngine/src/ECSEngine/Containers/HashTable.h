@@ -92,14 +92,15 @@ namespace ECSEngine {
 		// It will be called with a single argument - the index of the element
 		// For the early exit it must return true when to exit, else false.
 		// For non early exit it must return true if the current element is being deleted, else false.
+		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEachIndex(Functor&& functor) {
+		bool ForEachIndex(Functor&& functor) {
 			unsigned int extended_capacity = GetExtendedCapacity();
 			for (int index = 0; index < (int)extended_capacity; index++) {
 				if (IsItemAt(index)) {
 					if constexpr (early_exit) {
 						if (functor(index)) {
-							break;
+							return true;
 						}
 					}
 					else {
@@ -107,18 +108,20 @@ namespace ECSEngine {
 					}
 				}
 			}
+			return false;
 		}
 
 		// For the early exit it must return true when to exit, else false.
 		// Else void return
+		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEachIndexConst(Functor&& functor) const {
+		bool ForEachIndexConst(Functor&& functor) const {
 			unsigned int extended_capacity = GetExtendedCapacity();
 			for (unsigned int index = 0; index < extended_capacity; index++) {
 				if (IsItemAt(index)) {
 					if constexpr (early_exit) {
 						if (functor(index)) {
-							break;
+							return true;
 						}
 					}
 					else {
@@ -126,13 +129,15 @@ namespace ECSEngine {
 					}
 				}
 			}
+			return false;
 		}
 
 		// For the early exit it must return true when to exit, else false.
 		// Else void return.
 		// First parameter - the value, the second one - the identifier
+		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEach(Functor&& functor) {
+		bool ForEach(Functor&& functor) {
 			unsigned int extended_capacity = GetExtendedCapacity();
 			Identifier* identifiers = nullptr;
 			T* values = nullptr;
@@ -151,7 +156,7 @@ namespace ECSEngine {
 					if constexpr (SoA) {
 						if constexpr (early_exit) {
 							if (functor(values[index], identifiers[index])) {
-								break;
+								return true;
 							}
 						}
 						else {
@@ -161,7 +166,7 @@ namespace ECSEngine {
 					else {
 						if constexpr (early_exit) {
 							if (functor(pairs[index].value, pairs[index].identifier)) {
-								break;
+								return true;
 							}
 						}
 						else {
@@ -170,14 +175,16 @@ namespace ECSEngine {
 					}
 				}
 			}
+			return false;
 		}
 
 		// Const variant
 		// For the early exit it must return true when to exit, else false.
 		// Else void return.
 		// First parameter - the value, the second one - the identifier
+		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEachConst(Functor&& functor) const {
+		bool ForEachConst(Functor&& functor) const {
 			unsigned int extended_capacity = GetExtendedCapacity();
 			const Identifier* identifiers = nullptr;
 			const T* values = nullptr;
@@ -196,7 +203,7 @@ namespace ECSEngine {
 					if constexpr (SoA) {
 						if constexpr (early_exit) {
 							if (functor(values[index], identifiers[index])) {
-								break;
+								return true;
 							}
 						}
 						else {
@@ -206,7 +213,7 @@ namespace ECSEngine {
 					else {
 						if constexpr (early_exit) {
 							if (functor(pairs[index].value, pairs[index].identifier)) {
-								break;
+								return true;
 							}
 						}
 						else {
@@ -215,6 +222,7 @@ namespace ECSEngine {
 					}
 				}
 			}
+			return false;
 		}
 
 		// the return value tells the caller if the hash table needs to grow or allocate another hash table
@@ -640,6 +648,15 @@ namespace ECSEngine {
 
 			m_capacity = capacity;
 			m_count = 0;
+		}
+
+		// Buffers will be nullptr, count and capacity 0
+		void Reset() {
+			m_buffer = nullptr;
+			m_metadata = nullptr;
+			m_identifiers = nullptr;
+			m_count = 0;
+			m_capacity = 0;
 		}
 
 		void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {

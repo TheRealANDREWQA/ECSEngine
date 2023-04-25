@@ -41,8 +41,13 @@ namespace ECSEngine {
 			current_last_in_use = last_in_use.load(ECS_RELAXED);
 		}
 
-		void* allocation = function::OffsetPointer(buffer, size);
 		lock.lock();
+		// Recheck again if the size + the allocation size exceed the capacity
+		if (size + allocation_size > capacity) {
+			size = 0;
+		}
+
+		void* allocation = function::OffsetPointer(buffer, size);
 		size += allocation_size;
 		lock.unlock();
 

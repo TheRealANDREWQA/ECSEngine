@@ -461,8 +461,8 @@ namespace ECSEngine {
 
 	void TaskScheduler::SetTaskManagerWrapper(TaskManager* task_manager)
 	{
-		task_manager->ChangeDynamicWrapperMode(DynamicTaskSchedulerWrapper);
-		task_manager->ChangeStaticWrapperMode(StaticTaskSchedulerWrapper);
+		task_manager->ChangeDynamicWrapperMode({ DynamicTaskSchedulerWrapper });
+		task_manager->ChangeStaticWrapperMode({ StaticTaskSchedulerWrapper });
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

@@ -71,6 +71,46 @@ namespace ECSEngine {
 			}
 		}
 
+		// The functor receives as parameter a T or T&/const T&
+		// Return true inside the functor if you want to exit from the loop.
+		// Returns the true when an early exit was done, else false
+		template<bool early_exit = false, typename Functor, typename T, size_t size>
+		ECS_INLINE bool ForEach(const T(&static_array)[size], Functor&& functor) {
+			for (size_t index = 0; index < size; index++) {
+				if constexpr (early_exit) {
+					if (functor(static_array[index])) {
+						return true;
+					}
+				}
+				else {
+					functor(static_array[index]);
+				}
+			}
+			return false;
+		}
+
+		// Returns true if the element is found in the static array, else false
+		template<typename T, size_t size>
+		ECS_INLINE bool ExistsStaticArray(T element, const T(&static_array)[size]) {
+			for (size_t index = 0; index < size; index++) {
+				if (static_array[index] == element) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		// Returns true if the element is found in the static array, else false
+		template<typename T, size_t size>
+		ECS_INLINE bool ExistsStaticArray(const T* element, const T(&static_array)[size]) {
+			for (size_t index = 0; index < size; index++) {
+				if (static_array[index] == *element) {
+					return true;
+				}
+			}
+			return false;
+		}
+
 		// Used to copy data into a pointer passed by its address
 		struct CopyPointer {
 			void** destination;

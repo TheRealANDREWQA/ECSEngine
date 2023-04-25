@@ -125,9 +125,11 @@ struct InspectorDrawEntityData {
 					editor_state->module_reflection->DestroyInstance(created_instances[index].name);
 				}
 				else {
-					// It must be from the engine side
-					ECS_ASSERT(editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr);
-					editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
+					// It must be from the engine side - or it was removed entirely from source code
+					// In that case, we don't have to destroy the instance
+					if (editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr) {
+						editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
+					}
 				}
 				editor_state->editor_allocator->Deallocate(created_instances[index].name.buffer);
 			}
@@ -173,7 +175,13 @@ struct InspectorDrawEntityData {
 		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_components[index].name);
 		ECSEngine::ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[index].data);
 	}
-	
+
+	Stream<char> CreatedInstanceComponentName(unsigned int index) const {
+		Stream<char> separator = function::FindFirstToken(created_instances[index].name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+		ECS_ASSERT(separator.size > 0);
+		return { created_instances[index].name.buffer, created_instances[index].name.size - separator.size };
+	}
+
 	unsigned int FindMatchingInput(Stream<char> component_name) const {
 		return function::FindString(component_name, matching_inputs, [](MatchingInputs input) { return input.component_name; });
 	}
@@ -186,21 +194,39 @@ struct InspectorDrawEntityData {
 		return function::FindString(name, link_components, [](LinkComponent component) { return component.name; });
 	}
 
+	bool IsCreatedInstanceValid(EditorState* editor_state, unsigned int index) const {
+		if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
+			return true;
+		}
+
+		if (editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr) {
+			return true;
+		}
+
+		return false;
+	}
+
+	void RemoveCreatedInstance(EditorState* editor_state, unsigned int index) {
+		if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
+			// It is from the module side
+			editor_state->module_reflection->DestroyInstance(created_instances[index].name);
+		}
+		else {
+			// It must be from the engine side - or it was removed entirely from source code
+			// In that case, we don't need to destroy any instance
+			if (editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr) {
+				editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
+			}
+		}
+		editor_state->editor_allocator->Deallocate(created_instances[index].name.buffer);
+		created_instances.RemoveSwapBack(index);
+	}
+
 	void RemoveCreatedInstance(EditorState* editor_state, Stream<char> component_name) {
 		for (size_t index = 0; index < created_instances.size; index++) {
 			// The name of the component is at the beginning of each instance name
 			if (memcmp(created_instances[index].name.buffer, component_name.buffer, component_name.size * sizeof(char)) == 0) {
-				if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
-					// It is from the module side
-					editor_state->module_reflection->DestroyInstance(created_instances[index].name);
-				}
-				else {
-					// It must be from the engine side
-					ECS_ASSERT(editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr);
-					editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
-				}
-				editor_state->editor_allocator->Deallocate(created_instances[index].name.buffer);
-				created_instances.RemoveSwapBack(index);
+				RemoveCreatedInstance(editor_state, index);
 				break;
 			}
 		}
@@ -380,7 +406,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 
 	const Reflection::ReflectionType* info_type = target_type != nullptr ? target_type : type;
 
-	bool is_shared = Reflection::IsReflectionTypeSharedComponent(info_type);
+	bool is_shared = IsReflectionTypeSharedComponent(info_type);
 	Component component = { (short)info_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
 	EntityManager* active_manager = ActiveEntityManager(data->editor_state, data->sandbox_index);
@@ -391,7 +417,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 		unsigned int ui_input_count = data->draw_data->matching_inputs[matching_index].capacity_inputs.size;
 		if (ui_input_count > 0) {
 			ECS_STACK_CAPACITY_STREAM(ComponentBuffer, runtime_buffers, 64);
-			Reflection::GetReflectionTypeRuntimeBuffers(type, runtime_buffers);
+			GetReflectionTypeRuntimeBuffers(type, runtime_buffers);
 			if (runtime_buffers.size != ui_input_count) {
 				// Give a warning
 				ECS_STACK_CAPACITY_STREAM(char, entity_string, 512);
@@ -501,6 +527,23 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	if (!entity_manager->ExistsEntity(data->entity)) {
 		ChangeInspectorToNothing(editor_state, inspector_index);
 		return;
+	}
+
+	// For each created instance, verify that its instance still exists - it can happen that the reflection
+	// type was removed and we haven't picked up on that yet
+	for (unsigned int index = 0; index < data->created_instances.size; index++) {
+		if (!data->IsCreatedInstanceValid(editor_state, index)) {
+			Stream<char> component_name = data->CreatedInstanceComponentName(index);
+			unsigned int link_index = data->FindLinkComponent(component_name);
+			// If it is a link component, remove it as such, else as a normal component
+			if (link_index != -1) {
+				data->RemoveLinkComponent(editor_state, component_name);
+			}
+			else {
+				data->RemoveComponent(editor_state, component_name);
+			}
+			index--;
+		}
 	}
 
 	Color icon_color = drawer->color_theme.theme;
@@ -770,7 +813,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				set_instance_inputs();
 			}
 
-			void* button_stack_allocation = ECS_STACK_ALLOC(ECS_KB);
+			ECS_STACK_VOID_STREAM(button_stack_allocation, ECS_KB);
 			UIConfigCollapsingHeaderButton header_buttons[HEADER_BUTTON_COUNT];
 			InspectorEntityHeaderConstructButtons(
 				data,
@@ -780,7 +823,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				data->entity,
 				current_component_name,
 				header_buttons,
-				button_stack_allocation
+				button_stack_allocation.buffer
 			);
 
 			UIDrawConfig collapsing_config;
@@ -791,7 +834,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			Stream<char> component_name_to_display = instance->name;
 			if (link_component.size > 0) {
 				// Try to display it without the _Link if it has one
-				component_name_to_display = Reflection::GetReflectionTypeLinkNamePretty(component_name_to_display);
+				component_name_to_display = GetReflectionTypeLinkNameBase(component_name_to_display);
 			}
 
 			drawer->CollapsingHeader(UI_CONFIG_COLLAPSING_HEADER_BUTTONS, collapsing_config, component_name_to_display, data->header_state + index + header_state_offset, [&]() {
@@ -896,7 +939,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				Stream<char> initial_name = component_name;
 				// If it is a link component, prettify it
 				if (editor_state->editor_components.IsLinkComponent(component_name)) {
-					component_name = Reflection::GetReflectionTypeLinkNamePretty(component_name);
+					component_name = GetReflectionTypeLinkNameBase(component_name);
 				}
 
 				left_characters.AddStream(component_name);

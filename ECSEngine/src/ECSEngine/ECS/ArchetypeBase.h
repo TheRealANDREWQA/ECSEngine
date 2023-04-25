@@ -105,6 +105,10 @@ namespace ECSEngine {
 		// It will set the value to UCHAR_MAX for the components that are missing
 		void FindComponents(ComponentSignature components) const;
 
+		ECS_INLINE Entity GetEntityAtIndex(unsigned int stream_index) const {
+			return m_entities[stream_index];
+		}
+
 		// It will fill in the buffers array
 		void GetBuffers(void** buffers, ComponentSignature components);
 
@@ -113,14 +117,22 @@ namespace ECSEngine {
 		const void* GetComponent(EntityInfo info, Component component) const;
 
 		// The component index will be used to directly index into the buffers
-		void* GetComponentByIndex(EntityInfo info, unsigned char component_index);
+		ECS_INLINE void* GetComponentByIndex(EntityInfo info, unsigned char component_index) {
+			return GetComponentByIndex(info.stream_index, component_index);
+		}
 
 		// The component index will be used to directly index into the buffers
-		void* GetComponentByIndex(unsigned int stream_index, unsigned char component_index);
+		ECS_INLINE void* GetComponentByIndex(unsigned int stream_index, unsigned char component_index) {
+			return function::OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
+		}
 
-		const void* GetComponentByIndex(EntityInfo info, unsigned char component_index) const;
+		ECS_INLINE const void* GetComponentByIndex(EntityInfo info, unsigned char component_index) const {
+			return GetComponentByIndex(info.stream_index, component_index);
+		}
 
-		const void* GetComponentByIndex(unsigned int stream_index, unsigned char component_index) const;
+		ECS_INLINE const void* GetComponentByIndex(unsigned int stream_index, unsigned char component_index) const {
+			return function::OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
+		}
 
 		// It will copy the entities - consider using the other variant since it will alias the 
 		// values inside the chunks and no copies are needed

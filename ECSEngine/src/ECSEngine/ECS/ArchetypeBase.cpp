@@ -360,34 +360,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void* ArchetypeBase::GetComponentByIndex(EntityInfo info, unsigned char component_index)
-	{
-		return GetComponentByIndex(info.stream_index, component_index);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void* ArchetypeBase::GetComponentByIndex(unsigned int stream_index, unsigned char component_index)
-	{
-		return function::OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	const void* ArchetypeBase::GetComponentByIndex(EntityInfo info, unsigned char component_index) const
-	{
-		return GetComponentByIndex(info.stream_index, component_index);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	const void* ArchetypeBase::GetComponentByIndex(unsigned int stream_index, unsigned char component_index) const
-	{
-		return function::OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
 	void ArchetypeBase::GetEntitiesCopy(Entity* entities) const
 	{
 		memcpy(entities, m_entities, sizeof(Entity) * m_size);

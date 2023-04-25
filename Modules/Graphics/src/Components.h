@@ -31,7 +31,7 @@ struct ECS_REFLECT_SHARED_COMPONENT GraphicsMesh {
 	}
 
 	constexpr static inline bool IsShared() {
-		return false;
+		return true;
 	}
 
 	ECSEngine::Stream<char> name;

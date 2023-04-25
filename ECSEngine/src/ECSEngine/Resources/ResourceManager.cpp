@@ -359,7 +359,7 @@ namespace ECSEngine {
 	void AddResourceEx(ResourceManager* resource_manager, ResourceType type, void* data, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc) {
 		if (ex_desc != nullptr && ex_desc->HasFilename()) {
 			ex_desc->Lock();
-			resource_manager->AddResource(ex_desc->filename, type, data, ex_desc->time_stamp, load_descriptor.identifier_suffix);
+			resource_manager->AddResource(ex_desc->filename, type, data, ex_desc->time_stamp, load_descriptor.identifier_suffix, ex_desc->reference_count);
 			ex_desc->Unlock();
 		}
 	}
@@ -1986,7 +1986,14 @@ namespace ECSEngine {
 				storage->shader = (ID3D11VertexShader*)shader;
 				storage->source_code = { nullptr, 0 };
 				storage->byte_code = { nullptr, 0 };
-				manager->AddResource(ex_desc->filename, ResourceType::Shader, allocation, ex_desc->time_stamp, load_descriptor.identifier_suffix);
+				manager->AddResource(
+					ex_desc->filename, 
+					ResourceType::Shader, 
+					allocation, 
+					ex_desc->time_stamp, 
+					load_descriptor.identifier_suffix, 
+					ex_desc->reference_count
+				);
 
 				ex_desc->Unlock();
 			}

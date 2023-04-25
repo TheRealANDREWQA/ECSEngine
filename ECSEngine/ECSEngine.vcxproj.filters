@@ -201,6 +201,7 @@
     <ClInclude Include="src\Includes\ECSEngineECSRuntimeResources.h" />
     <ClInclude Include="src\Includes\ECSEngineThreadTaskExport.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTaskExport.h" />
+    <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -310,6 +311,7 @@
     <ClCompile Include="src\ECSEngine\Containers\SparseSet.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeResources.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\ComponentHelpers.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

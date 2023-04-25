@@ -3,8 +3,67 @@
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Resources/AssetDatabase.h"
 #include "../Utilities/Serialization/SerializationHelpers.h"
+#include "ComponentHelpers.h"
 
 namespace ECSEngine {
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	bool GetReflectionTypeLinkComponentNeedsDLL(const Reflection::ReflectionType* type)
+	{
+		return function::FindFirstCharacter(type->tag, ',').size > 0;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	Stream<char> GetReflectionTypeLinkComponentTarget(const Reflection::ReflectionType* type)
+	{
+		Stream<char> opened_parenthese = function::FindFirstCharacter(type->tag, '(');
+		if (opened_parenthese.size == 0) {
+			return { nullptr, 0 };
+		}
+
+		opened_parenthese.buffer += 1;
+		opened_parenthese.size -= 1;
+		opened_parenthese = function::SkipWhitespace(opened_parenthese);
+
+		Stream<char> comma = function::FindFirstCharacter(opened_parenthese, ',');
+		if (comma.size > 0) {
+			opened_parenthese.size = comma.buffer - opened_parenthese.buffer;
+			opened_parenthese = function::SkipWhitespace(opened_parenthese, -1);
+		}
+		else {
+			if (opened_parenthese[opened_parenthese.size - 1] == ')') {
+				opened_parenthese.size--;
+			}
+			opened_parenthese = function::SkipWhitespace(opened_parenthese, -1);
+		}
+		return opened_parenthese;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+#define LINK_COMPONENT_SUFFIX "_Link"
+
+	Stream<char> GetReflectionTypeLinkNameBase(Stream<char> name)
+	{
+		if (name.size > 0) {
+			Stream<char> found_token = function::FindFirstToken(name, LINK_COMPONENT_SUFFIX);
+			if (found_token.size > 0) {
+				return { name.buffer, name.size - found_token.size };
+			}
+		}
+		return name;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	Stream<char> GetReflectionTypeLinkComponentName(Stream<char> name, CapacityStream<char>& link_name)
+	{
+		link_name.Copy(name);
+		link_name.AddStream(LINK_COMPONENT_SUFFIX);
+		return link_name;
+	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
@@ -73,7 +132,7 @@ namespace ECSEngine {
 #define TAG(handle_name) result.fields[index].tag = coallesced_allocation ? Stream<char>(STRING(handle_name)) : function::StringCopy(allocator, Stream<char>(STRING(handle_name)));
 
 				// It is an asset field
-				switch (asset_fields[subindex].type) {
+				switch (asset_fields[subindex].type.type) {
 				case ECS_ASSET_MESH:
 					TAG(ECS_MESH_HANDLE);
 					break;
@@ -84,7 +143,7 @@ namespace ECSEngine {
 					TAG(ECS_GPU_SAMPLER_HANDLE);
 					break;
 				case ECS_ASSET_SHADER:
-					switch (asset_fields[subindex].shader_type) {
+					switch (asset_fields[subindex].type.shader_type) {
 					case ECS_SHADER_VERTEX:
 						TAG(ECS_VERTEX_SHADER_HANDLE);
 						break;
@@ -146,12 +205,61 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	bool IsLinkTypeDefaultGeneratedForComponent(
+		const Reflection::ReflectionType* target_type, 
+		const Reflection::ReflectionType* link_type
+	)
+	{
+		if (link_type->fields.size != target_type->fields.size) {
+			return false;
+		}
+
+		ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, target_asset_fields, 512);
+		ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, link_asset_fields, 512);
+		
+		GetAssetFieldsFromLinkComponentTarget(target_type, target_asset_fields);
+		GetAssetFieldsFromLinkComponent(link_type, link_asset_fields);
+
+		if (target_asset_fields.size != link_asset_fields.size) {
+			return false;
+		}
+
+		// Same asset fields
+		for (unsigned int index = 0; index < target_asset_fields.size; index++) {
+			if (target_asset_fields[index].field_index != link_asset_fields[index].field_index ||
+				target_asset_fields[index].type.type != link_asset_fields[index].type.type) {
+				return false;
+			}
+		}
+
+		// Now check the other fields
+		for (size_t index = 0; index < target_type->fields.size; index++) {
+			unsigned int subindex = 0;
+			for (; subindex < target_asset_fields.size; subindex++) {
+				if (target_asset_fields[subindex].field_index == (unsigned int)index) {
+					break;
+				}
+			}
+
+			if (subindex == target_asset_fields.size) {
+				// Test the fields to be the same
+				if (target_type->fields[index].definition != link_type->fields[index].definition) {
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	void CreateLinkTypesForComponents(Reflection::ReflectionManager* reflection_manager, unsigned int folder_index, CreateLinkTypesForComponentsOptions* options)
 	{
 		ECS_STACK_CAPACITY_STREAM(unsigned int, unique_indices, 1024);
 		ECS_STACK_CAPACITY_STREAM(unsigned int, shared_indices, 1024);
 
-		reflection_manager->GetHierarchyComponentTypes(folder_index, &unique_indices, &shared_indices);
+		GetHierarchyComponentTypes(reflection_manager, folder_index, &unique_indices, &shared_indices);
 
 		// Determine the unique and shared components that actually require a link type
 		auto reduce_loop = [=](CapacityStream<unsigned int>& indices) {
@@ -273,7 +381,7 @@ namespace ECSEngine {
 
 			for (unsigned int index = 0; index < link_indices.size; index++) {
 				const Reflection::ReflectionType* reflection_type = reflection_manager->GetType(link_indices[index]);
-				Stream<char> link_target = Reflection::GetReflectionTypeLinkComponentTarget(reflection_type);
+				Stream<char> link_target = GetReflectionTypeLinkComponentTarget(reflection_type);
 				for (size_t subindex = 0; subindex < targets.size; subindex++) {
 					if (link_names[subindex].size == 0 && link_target == targets[subindex]) {
 						link_names[subindex] = reflection_type->name;
@@ -285,11 +393,57 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	// The functor takes as parameter a size_t for the field index and must return AssetTypeEx
+	template<typename Functor>
+	void GetLinkComponentMissingAssetFieldsImplementation(
+		const Reflection::ReflectionType* previous_type,
+		const Reflection::ReflectionType* new_type,
+		CapacityStream<LinkComponentAssetField>* missing_fields,
+		Functor&& functor
+	) {
+		ECS_STACK_CAPACITY_STREAM(size_t, missing_field_indices, 512);
+		Reflection::GetReflectionTypesDifferentFields(previous_type, new_type, &missing_field_indices);
+
+		for (unsigned int index = 0; index < missing_field_indices.size; index++) {
+			AssetTypeEx asset_type = functor(missing_field_indices[index]);
+			if (asset_type.type != ECS_ASSET_TYPE_COUNT) {
+				missing_fields->AddSafe({ (unsigned int)missing_field_indices[index], asset_type });
+			}
+		}
+	}
+
+	void GetLinkComponentMissingAssetFields(
+		const Reflection::ReflectionType* previous_type, 
+		const Reflection::ReflectionType* new_type, 
+		CapacityStream<LinkComponentAssetField>* missing_fields
+	)
+	{
+		GetLinkComponentMissingAssetFieldsImplementation(previous_type, new_type, missing_fields, [previous_type](size_t field_index) {
+			return FindAssetMetadataMacro(previous_type->fields[field_index].tag);
+		});
+	}
+
+	void GetLinkComponentTargetMissingAssetFields(
+		const Reflection::ReflectionType* previous_type, 
+		const Reflection::ReflectionType* new_type, 
+		CapacityStream<LinkComponentAssetField>* missing_fields
+	)
+	{
+		GetLinkComponentMissingAssetFieldsImplementation(previous_type, new_type, missing_fields, [previous_type](size_t field_index) {
+			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(previous_type, field_index, nullptr);
+			AssetTypeEx missing_type_ex;
+			missing_type_ex.type = ECS_ASSET_TYPE_COUNT;
+			return asset_field.success ? asset_field.type : missing_type_ex;
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	void GetAssetFieldsFromLinkComponent(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& field_indices)
 	{
 		for (size_t index = 0; index < type->fields.size; index++) {
-			ECS_ASSET_TYPE asset_type = FindAssetMetadataMacro(type->fields[index].tag);
-			if (asset_type != ECS_ASSET_TYPE_COUNT) {
+			AssetTypeEx asset_type = FindAssetMetadataMacro(type->fields[index].tag);
+			if (asset_type.type != ECS_ASSET_TYPE_COUNT) {
 				field_indices.AddSafe({ (unsigned int)index, asset_type });
 			}
 		}
@@ -305,8 +459,38 @@ namespace ECSEngine {
 			if (!asset_field.success) {
 				return false;
 			}
-			else if (asset_field.type != ECS_ASSET_TYPE_COUNT) {
-				field_indices.Add({ (unsigned int)index, asset_field.type, asset_field.shader_type });
+			else if (asset_field.type.type != ECS_ASSET_TYPE_COUNT) {
+				field_indices.Add({ (unsigned int)index, asset_field.type });
+			}
+		}
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool HasAssetFieldsLinkComponent(const Reflection::ReflectionType* type)
+	{
+		for (size_t index = 0; index < type->fields.size; index++) {
+			AssetTypeEx asset_type = FindAssetMetadataMacro(type->fields[index].tag);
+			if (asset_type.type != ECS_ASSET_TYPE_COUNT) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool HasAssetFieldsTargetComponent(const Reflection::ReflectionType* type)
+	{
+		for (size_t index = 0; index < type->fields.size; index++) {
+			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(type, index, nullptr);
+
+			if (!asset_field.success) {
+				return false;
+			}
+			else if (asset_field.type.type != ECS_ASSET_TYPE_COUNT) {
+				return true;
 			}
 		}
 		return true;
@@ -322,7 +506,7 @@ namespace ECSEngine {
 	{
 		AssetTargetFieldFromReflection result;
 
-		ECS_ASSET_TYPE asset_type = ECS_ASSET_TYPE_COUNT;
+		result.type.type = ECS_ASSET_TYPE_COUNT;
 
 		// 2 means there is no match. It will be set to 1 if there is a match with a succesful
 		// type or 0 if there is match but incorrect field type
@@ -334,10 +518,9 @@ namespace ECSEngine {
 		size_t mapping_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
 		for (size_t index = 0; index < mapping_count; index++) {
 			if (function::CompareStrings(definition, ECS_ASSET_TARGET_FIELD_NAMES[index].name)) {
-				asset_type = ECS_ASSET_TARGET_FIELD_NAMES[index].asset_type;
-				result.shader_type = ECS_ASSET_TARGET_FIELD_NAMES[index].shader_type;
+				result.type = ECS_ASSET_TARGET_FIELD_NAMES[index].type;
 				if (data != nullptr) {
-					result.asset = GetAssetTargetFieldFromReflection(type, field, data, asset_type);
+					result.asset = GetAssetTargetFieldFromReflection(type, field, data, result.type.type);
 					success = result.asset.size != -1;
 				}
 				else {
@@ -348,8 +531,6 @@ namespace ECSEngine {
 		}
 		
 		result.success = success;
-
-		result.type = asset_type;
 		return result;
 	}
 
@@ -414,8 +595,8 @@ namespace ECSEngine {
 	)
 	{
 		for (size_t index = 0; index < asset_fields.size; index++) {
-			Stream<void> field_data = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, data, asset_fields[index].type);
-			unsigned int handle = asset_database->FindAssetEx(field_data, asset_fields[index].type);
+			Stream<void> field_data = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, data, asset_fields[index].type.type);
+			unsigned int handle = asset_database->FindAssetEx(field_data, asset_fields[index].type.type);
 			handles[index] = handle;
 		}
 	}
@@ -431,7 +612,7 @@ namespace ECSEngine {
 		ECS_ASSET_TYPE field_type,
 		Comparator&& comparator
 	) {
-		ECS_ASSET_TYPE current_field_type = FindAssetTargetField(type->fields[field].definition);
+		ECS_ASSET_TYPE current_field_type = FindAssetTargetField(type->fields[field].definition).type;
 		if (field_type != current_field_type) {
 			return ECS_SET_ASSET_TARGET_FIELD_NONE;
 		}
@@ -680,9 +861,9 @@ namespace ECSEngine {
 				metadata = empty_metadata;
 			}
 			else {
-				metadata = database->GetAssetConst(handle, asset_fields[index].type);
+				metadata = database->GetAssetConst(handle, asset_fields[index].type.type);
 			}
-			Stream<void> asset_data = GetAssetFromMetadata(metadata, asset_fields[index].type);
+			Stream<void> asset_data = GetAssetFromMetadata(metadata, asset_fields[index].type.type);
 			field_data->Add(asset_data);
 		}
 	}
@@ -700,7 +881,7 @@ namespace ECSEngine {
 
 		for (size_t index = 0; index < asset_fields.size; index++) {
 			AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, target);
-			ECS_ASSERT(target_field.type == asset_fields[index].type && target_field.success);
+			ECS_ASSERT(target_field.type.type == asset_fields[index].type.type && target_field.success);
 			field_data->Add(target_field.asset);
 		}
 	}
@@ -717,20 +898,20 @@ namespace ECSEngine {
 	) {
 		for (size_t index = 0; index < asset_fields.size; index++) {
 			AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, target);
-			ECS_ASSERT(target_field.type == asset_fields[index].type && target_field.success);
-			if (asset_fields[index].type == asset_type) {
+			ECS_ASSERT(target_field.type.type == asset_fields[index].type.type && target_field.success);
+			if (asset_fields[index].type.type == asset_type) {
 				field_data->AddSafe(target_field.asset);
 			}
 			else {
 				// If the asset type is a texture or gpu sampler or shader, it can be referenced by a material
-				if (IsAssetTypeReferenceable(asset_type) && IsAssetTypeWithDependencies(asset_fields[index].type)) {
-					unsigned int handle = database->FindAssetEx(target_field.asset, target_field.type);
+				if (IsAssetTypeReferenceable(asset_type) && IsAssetTypeWithDependencies(asset_fields[index].type.type)) {
+					unsigned int handle = database->FindAssetEx(target_field.asset, target_field.type.type);
 					if (handle != -1) {
 						// Normally, if the asset is created, all handles should be valid (aka -1)
 						// But let's be conservative and still check for it. Also if it is set and the asset
 						// doesn't exist in the database skip it
 						ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
-						GetAssetDependencies(database->GetAssetConst(handle, target_field.type), target_field.type, &dependencies);
+						GetAssetDependencies(database->GetAssetConst(handle, target_field.type.type), target_field.type.type, &dependencies);
 
 						for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
 							unsigned int current_handle = dependencies[subindex].handle;
@@ -750,7 +931,7 @@ namespace ECSEngine {
 
 	bool ValidateLinkComponent(const Reflection::ReflectionType* link_type, const Reflection::ReflectionType* target_type)
 	{
-		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(link_type);
+		bool needs_dll = GetReflectionTypeLinkComponentNeedsDLL(link_type);
 		if (needs_dll) {
 			// If user supplied then assume true
 			return true;
@@ -761,11 +942,11 @@ namespace ECSEngine {
 		}
 
 		for (size_t index = 0; index < link_type->fields.size; index++) {
-			ECS_ASSET_TYPE asset_type = FindAssetMetadataMacro(link_type->fields[index].tag);
-			if (asset_type != ECS_ASSET_TYPE_COUNT) {
+			AssetTypeEx asset_type = FindAssetMetadataMacro(link_type->fields[index].tag);
+			if (asset_type.type != ECS_ASSET_TYPE_COUNT) {
 				// We have an asset handle - verify that the corresponding asset is in the target
 				AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(target_type, index, nullptr);
-				if (!target_field.success || target_field.type != asset_type) {
+				if (!target_field.success || target_field.type.type != asset_type.type) {
 					return false;
 				}
 			}
@@ -791,7 +972,7 @@ namespace ECSEngine {
 		reflection_manager->SetInstanceDefaultData(type, link_component);
 		// Make all handles -1
 		for (size_t index = 0; index < type->fields.size; index++) {
-			if (FindAssetMetadataMacro(type->fields[index].tag) != ECS_ASSET_TYPE_COUNT) {
+			if (FindAssetMetadataMacro(type->fields[index].tag).type != ECS_ASSET_TYPE_COUNT) {
 				// It is a handle
 				unsigned int* handle = (unsigned int*)function::OffsetPointer(link_component, type->fields[index].info.pointer_offset);
 				*handle = -1;
@@ -822,11 +1003,11 @@ namespace ECSEngine {
 
 		for (unsigned int index = 0; index < link_type_indices.size; index++) {
 			const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_type_indices[index]);
-			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_type);
+			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_type);
 
 			Reflection::ReflectionType target_type;
 			if (reflection_manager->TryGetType(target, target_type)) {
-				if (Reflection::IsReflectionTypeComponent(&target_type)) {
+				if (IsReflectionTypeComponent(&target_type)) {
 					link_types.AddSafe(link_type);
 				}
 			}
@@ -842,11 +1023,11 @@ namespace ECSEngine {
 
 		for (unsigned int index = 0; index < link_type_indices.size; index++) {
 			const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_type_indices[index]);
-			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_type);
+			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_type);
 
 			Reflection::ReflectionType target_type;
 			if (reflection_manager->TryGetType(target, target_type)) {
-				if (Reflection::IsReflectionTypeSharedComponent(&target_type)) {
+				if (IsReflectionTypeSharedComponent(&target_type)) {
 					link_types.AddSafe(link_type);
 				}
 			}
@@ -865,14 +1046,14 @@ namespace ECSEngine {
 
 		for (unsigned int index = 0; index < link_type_indices.size; index++) {
 			const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_type_indices[index]);
-			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_type);
+			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_type);
 
 			Reflection::ReflectionType target_type;
 			if (reflection_manager->TryGetType(target, target_type)) {
-				if (Reflection::IsReflectionTypeSharedComponent(&target_type)) {
+				if (IsReflectionTypeSharedComponent(&target_type)) {
 					shared_link_types.AddSafe(link_type);
 				}
-				else if (Reflection::IsReflectionTypeComponent(&target_type)) {
+				else if (IsReflectionTypeComponent(&target_type)) {
 					unique_link_types.AddSafe(link_type);
 				}
 			}
@@ -888,7 +1069,7 @@ namespace ECSEngine {
 	)
 	{
 		// Determine if the link component has a DLL function
-		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(base_data->link_type);
+		bool needs_dll = GetReflectionTypeLinkComponentNeedsDLL(base_data->link_type);
 		if (needs_dll && (base_data->module_link.build_function == nullptr || base_data->module_link.reverse_function == nullptr)) {
 			// Fail
 			return false;
@@ -913,7 +1094,8 @@ namespace ECSEngine {
 				}
 
 				for (size_t index = 0; index < asset_fields.size; index++) {
-					if (link_asset_fields[index].field_index != asset_fields[index].field_index || link_asset_fields[index].type != asset_fields[index].type) {
+					if (link_asset_fields[index].field_index != asset_fields[index].field_index 
+						|| link_asset_fields[index].type.type != asset_fields[index].type.type) {
 						return false;
 					}
 				}
@@ -957,10 +1139,22 @@ namespace ECSEngine {
 
 			StackScope<RestoreLinkData> restore_link({ link_data, link_type_storage, link_type_size });
 
-			// If different count of fields, fail
-			if (base_data->link_type->fields.size != base_data->target_type->fields.size) {
+			// Fail if they have a different number of fields
+			if (base_data->target_type->fields.size != base_data->link_type->fields.size) {
 				return false;
 			}
+
+			//// Create map of the fields that should be restored - if the types are changed and some fields
+			//// are missing, then copy only those that are matching and the rest default initialize
+			//ECS_STACK_CAPACITY_STREAM(unsigned int, same_field_mask, 512);
+
+			//for (size_t index = 0; index < base_data->link_type->fields.size; index++) {
+			//	// Determine which fields are the same
+			//	unsigned int target_index = base_data->target_type->FindField(base_data->link_type->fields[index].name);
+			//	if (target_index != -1) {
+			//		same_field_mask.AddSafe(target_index);
+			//	}
+			//}
 
 			// Go through the link target and try to copy the fields
 			ECS_STACK_CAPACITY_STREAM(unsigned int*, link_handle_ptrs, 512);
@@ -1025,7 +1219,7 @@ namespace ECSEngine {
 		Functor&& functor
 	) {
 		// Determine if the link component has a DLL function
-		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(base_data->link_type);
+		bool needs_dll = GetReflectionTypeLinkComponentNeedsDLL(base_data->link_type);
 		if (needs_dll && (base_data->module_link.build_function == nullptr || base_data->module_link.reverse_function == nullptr)) {
 			// Fail
 			return false;
@@ -1047,7 +1241,8 @@ namespace ECSEngine {
 				}
 
 				for (unsigned int index = 0; index < asset_fields.size; index++) {
-					if (asset_fields[index].field_index != target_asset_fields[index].field_index || asset_fields[index].type != target_asset_fields[index].type) {
+					if (asset_fields[index].field_index != target_asset_fields[index].field_index ||
+						asset_fields[index].type.type != target_asset_fields[index].type.type) {
 						return false;
 					}
 				}
@@ -1093,7 +1288,13 @@ namespace ECSEngine {
 			StackScope<RestoreTarget> restore_stack({ target_data, target_data_storage, target_size });
 
 			for (unsigned int index = 0; index < asset_fields.size; index++) {
-				ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflection(base_data->target_type, asset_fields[index].field_index, target_data, assets[index], asset_fields[index].type);
+				ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflection(
+					base_data->target_type,
+					asset_fields[index].field_index, 
+					target_data, 
+					assets[index], 
+					asset_fields[index].type.type
+				);
 				if (result != ECS_SET_ASSET_TARGET_FIELD_OK && result != ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
 					return false;
 				}
@@ -1163,6 +1364,154 @@ namespace ECSEngine {
 	bool ConvertLinkComponentToTargetAssetsOnly(const ConvertToAndFromLinkBaseData* base_data, const void* link_data, void* target_data)
 	{
 		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, [](size_t index) { return true; });
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetAssetReferenceCountsFromEntities(
+		const EntityManager* entity_manager, 
+		const Reflection::ReflectionManager* reflection_manager, 
+		AssetDatabase* asset_database
+	)
+	{
+		// Allocate space for the reference counts and initialize them to 0
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+		
+		ECS_STACK_CAPACITY_STREAM(Stream<unsigned int>, asset_reference_counts, ECS_ASSET_TYPE_COUNT);
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			asset_reference_counts[index].Initialize(&stack_allocator, asset_database->GetAssetCount((ECS_ASSET_TYPE)index));
+			memset(asset_reference_counts[index].buffer, 0, asset_reference_counts[index].MemoryOf(asset_reference_counts[index].size));
+		}
+
+		// Get the reference counts
+		GetAssetReferenceCountsFromEntities(entity_manager, reflection_manager, asset_database, asset_reference_counts.buffer);
+
+		unsigned int max_asset_count = asset_database->GetMaxAssetCount();
+
+		CapacityStream<unsigned int> handles_to_be_removed;
+		handles_to_be_removed.Initialize(&stack_allocator, 0, max_asset_count);
+
+		// Perform the reference count change for those assets that are still in use
+		// Those that need to be removed cache them in separate buffer and perform the removal afterwards
+		for (size_t asset_type_index = 0; asset_type_index < ECS_ASSET_TYPE_COUNT; asset_type_index++) {
+			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)asset_type_index;
+			handles_to_be_removed.size = 0;
+			for (unsigned int index = 0; index < asset_reference_counts[asset_type].size; index++) {
+				unsigned int handle = asset_database->GetAssetHandleFromIndex(index, asset_type);
+
+				// Get the standalone reference count - subtract the difference between these 2 counts
+				unsigned int standalone_reference_count = asset_database->GetReferenceCountStandalone(handle, asset_type);
+				unsigned int difference = standalone_reference_count - asset_reference_counts[asset_type][index];
+
+				if (difference == standalone_reference_count) {
+					unsigned int reference_count = asset_database->GetReferenceCount(handle, asset_type);
+					if (reference_count == standalone_reference_count) {
+						// Add it to the removal buffer - can be safely removed
+						handles_to_be_removed.Add(handle);
+					}
+					else {
+						// Reduce the reference count
+						asset_database->SetAssetReferenceCount(handle, asset_type, reference_count - difference);
+					}
+				}
+				else {
+					// Update the reference count
+					asset_database->SetAssetReferenceCount(handle, asset_type, asset_reference_counts[asset_type][index]);
+				}
+			}
+
+			// Remove the handles now
+			AssetDatabaseRemoveInfo remove_info;
+			remove_info.remove_dependencies = true;
+			for (unsigned int index = 0; index < handles_to_be_removed.size; index++) {
+				asset_database->RemoveAssetForced(handles_to_be_removed[index], asset_type, &remove_info);
+			}
+		}
+
+		stack_allocator.ClearBackup();
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetAssetReferenceCountsFromEntities(
+		const EntityManager* entity_manager, 
+		const Reflection::ReflectionManager* reflection_manager, 
+		const AssetDatabase* asset_database, 
+		Stream<unsigned int>* asset_fields_reference_count
+	)
+	{
+		// Make sure that there are enough slots for each asset type
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			ECS_ASSERT(asset_fields_reference_count[index].size >= asset_database->GetAssetCount((ECS_ASSET_TYPE)index));
+		}
+
+		ECS_STACK_CAPACITY_STREAM(unsigned int, unique_types, ECS_KB * 16);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, shared_types, ECS_KB * 16);
+
+		GetHierarchyComponentTypes(reflection_manager, -1, &unique_types, &shared_types);
+
+		auto increment_reference_counts = [&](Stream<LinkComponentAssetField> asset_fields, const Reflection::ReflectionType* reflection_type, const void* data) {
+			ECS_STACK_CAPACITY_STREAM(unsigned int, handles, 512);
+			GetLinkComponentTargetHandles(reflection_type, asset_database, data, asset_fields, handles.buffer);
+
+			// For each handle increase the reference count for that asset type
+			for (unsigned int index = 0; index < asset_fields.size; index++) {
+				if (handles[index] != -1) {
+					unsigned int asset_index = asset_database->GetIndexFromAssetHandle(handles[index], asset_fields[index].type.type);
+					asset_fields_reference_count[asset_fields[index].type.type][asset_index]++;
+				}
+			}
+		};
+
+		auto get_corresponding_reflection_type = [&](Component component, Stream<unsigned int> type_indices) {
+			const Reflection::ReflectionType* reflection_type = nullptr;
+			for (unsigned int index = 0; index < type_indices.size; index++) {
+				const Reflection::ReflectionType* current_reflection_type = reflection_manager->GetType(type_indices[index]);
+				Component reflection_component = GetReflectionTypeComponent(current_reflection_type);
+				if (reflection_component == component) {
+					reflection_type = current_reflection_type;
+					break;
+				}
+			}
+
+			return reflection_type;
+		};
+
+		// Unique components
+		entity_manager->ForEachComponent([&](Component component) {
+			// For each component determine its reflection type and the asset fields
+			const Reflection::ReflectionType* reflection_type = get_corresponding_reflection_type(component, unique_types);
+
+			ECS_ASSERT(reflection_type != nullptr);
+
+			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
+			GetAssetFieldsFromLinkComponentTarget(reflection_type, asset_fields);
+
+			if (asset_fields.size > 0) {
+				// If it has asset fields, then retrieve them and keep the count of reference counts
+				entity_manager->ForEachEntityComponent(component, [&](Entity entity, const void* data) {
+					increment_reference_counts(asset_fields, reflection_type, data);
+				});
+			}
+		});
+
+		// Shared components
+		entity_manager->ForEachSharedComponent([&](Component component) {
+			// For each component determine its reflection type and the asset fields
+			const Reflection::ReflectionType* reflection_type = get_corresponding_reflection_type(component, shared_types);
+			ECS_ASSERT(reflection_type != nullptr);
+
+			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
+			GetAssetFieldsFromLinkComponentTarget(reflection_type, asset_fields);
+
+			if (asset_fields.size > 0) {
+				// Now go for each shared instance
+				entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
+					const void* data = entity_manager->GetSharedData(component, instance);
+					increment_reference_counts(asset_fields, reflection_type, data);
+				});
+			}
+		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

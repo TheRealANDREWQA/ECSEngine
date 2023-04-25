@@ -278,14 +278,15 @@ bool LoadModuleSettings(
 		const Reflection::ReflectionManager* reflection = editor_state->module_reflection->reflection;
 		uintptr_t file_ptr = (uintptr_t)file_data.buffer;
 
+		// Need the deserialize table in order to determine the setting index
+		ECS_STACK_CAPACITY_STREAM(char, table_memory, ECS_KB * 8);
+		const size_t STACK_ALLOCATION = ECS_KB * 8;
+		LinearAllocator stack_allocator(ECS_STACK_ALLOC(STACK_ALLOCATION), STACK_ALLOCATION);
+
 		// Need to continue deserializing while the file_ptr is smaller than the limit of the file
 		uintptr_t file_ptr_limit = file_ptr + file_data.size;
 		while (file_ptr < file_ptr_limit) {
-			// Need the deserialize table in order to determine the setting index
-			ECS_STACK_CAPACITY_STREAM(char, table_memory, ECS_KB * 8);
-			const size_t STACK_ALLOCATION = ECS_KB * 8;
-			LinearAllocator stack_allocator(ECS_STACK_ALLOC(STACK_ALLOCATION), STACK_ALLOCATION);
-
+			stack_allocator.Clear();
 			DeserializeFieldTable field_table = DeserializeFieldTableFromData(file_ptr, GetAllocatorPolymorphic(&stack_allocator));
 			// It failed
 			if (field_table.types.size == 0) {

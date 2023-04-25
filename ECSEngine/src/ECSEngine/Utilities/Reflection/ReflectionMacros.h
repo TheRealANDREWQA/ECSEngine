@@ -48,3 +48,7 @@
 
 #define ECS_COMPONENT_ID_FUNCTION "ID"
 #define ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION "AllocatorSize"
+// Adding this function to a type tells the scene deserializer to not try and
+// deserialize the data if the file contains a link type and the new type is not a link
+// or the other way around
+#define ECS_COMPONENT_STRICT_DESERIALIZE "StrictDeserialize"

@@ -284,10 +284,10 @@ namespace ECSEngine {
 #pragma region For Each Bit
 
 	// The functor can return true in order to early exit from the function
-	// Can toggle reverse search, which will start from the high positions of
-	// the bit vector
+	// Can toggle reverse search, which will start from the high positions of the bit vector
+	// Returns true if it early exited, else false
 	template<bool reverse_search = false, typename BitMaskVector, typename Functor>
-	void ECS_VECTORCALL ForEachBit(BitMaskVector bit_mask, Functor&& functor) {
+	bool ECS_VECTORCALL ForEachBit(BitMaskVector bit_mask, Functor&& functor) {
 		if (horizontal_or(bit_mask)) {
 			unsigned int match_bits = to_bits(bit_mask);
 			unsigned long offset = 0;
@@ -313,7 +313,7 @@ namespace ECSEngine {
 				}
 
 				if (functor(bit_index)) {
-					return;
+					return true;
 				}
 
 				bool is_last = false;
@@ -327,7 +327,7 @@ namespace ECSEngine {
 				// Can't shift by 32, hardware does modulo % 32 shift amount and results in shifting 0 positions
 				// If it is the last bit, aka vector index == 31, then quit
 				if (is_last) {
-					return;
+					return false;
 				}
 
 				if constexpr (reverse_search) {
@@ -351,6 +351,7 @@ namespace ECSEngine {
 				}
 			}
 		}
+		return false;
 	}
 
 #pragma endregion

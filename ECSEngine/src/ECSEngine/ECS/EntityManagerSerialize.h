@@ -12,6 +12,7 @@ namespace ECSEngine {
 
 	struct ModuleLinkComponentTarget;
 	struct AssetDatabase;
+	struct DeserializeFieldTable;
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
@@ -189,6 +190,14 @@ namespace ECSEngine {
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
+
+	// For all component types that previously had a link type and now they don't or if they previously lacked
+	// a link type and now they do have we will convert the type from the deserialize table into the according type 
+	// in order to deserialize all the fields that can be read. The names will reference already existing strings
+	ECSENGINE_API void MirrorDeserializeEntityManagerLinkTypes(
+		const Reflection::ReflectionManager* current_reflection_manager, 
+		DeserializeFieldTable* field_table
+	);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 	

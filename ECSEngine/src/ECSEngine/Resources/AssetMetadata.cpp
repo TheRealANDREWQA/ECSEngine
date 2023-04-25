@@ -75,7 +75,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	ECS_ASSET_TYPE FindAssetMetadataMacro(Stream<char> string) {
+	AssetTypeEx FindAssetMetadataMacro(Stream<char> string) {
 		size_t count = std::size(ECS_ASSET_METADATA_MACROS);
 		for (size_t index = 0; index < count; index++) {
 			if (string.size == ECS_ASSET_METADATA_MACROS[index].name.size && memcmp(
@@ -83,24 +83,24 @@ namespace ECSEngine {
 					ECS_ASSET_METADATA_MACROS[index].name.buffer, 
 					string.size * sizeof(char)
 				) == 0) {
-				return ECS_ASSET_METADATA_MACROS[index].asset_type;
+				return ECS_ASSET_METADATA_MACROS[index].type;
 			}
 		}
-		return ECS_ASSET_TYPE_COUNT;
+		return { ECS_ASSET_TYPE_COUNT };
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	ECS_ASSET_TYPE FindAssetTargetField(Stream<char> string)
+	AssetTypeEx FindAssetTargetField(Stream<char> string)
 	{
 		size_t count = std::size(ECS_ASSET_TARGET_FIELD_NAMES);
 		for (size_t index = 0; index < count; index++) {
 			if (string.size == ECS_ASSET_TARGET_FIELD_NAMES[index].name.size &&
 				memcmp(string.buffer, ECS_ASSET_TARGET_FIELD_NAMES[index].name.buffer, ECS_ASSET_TARGET_FIELD_NAMES[index].name.size) == 0) {
-				return ECS_ASSET_TARGET_FIELD_NAMES[index].asset_type;
+				return ECS_ASSET_TARGET_FIELD_NAMES[index].type;
 			}
 		}
-		return ECS_ASSET_TYPE_COUNT;
+		return { ECS_ASSET_TYPE_COUNT };
 	}
 
 	// ------------------------------------------------------------------------------------------------------

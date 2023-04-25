@@ -9,6 +9,7 @@
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
 #include "LinkComponents.h"
+#include "ComponentHelpers.h"
 
 #include "../Utilities/CrashHandler.h"
 #include "../Utilities/Crash.h"
@@ -2215,6 +2216,7 @@ namespace ECSEngine {
 			options.verify_dependent_types = false;
 			options.field_allocator = data->component_allocator;
 			options.backup_allocator = data->component_allocator;
+			options.default_initialize_missing_fields = true;
 
 			uintptr_t ptr = (uintptr_t)data->file_data;
 			void* current_component = data->components;
@@ -2244,7 +2246,21 @@ namespace ECSEngine {
 		}
 
 		unsigned int type_index = functor_data->field_table.TypeIndex(functor_data->type->name);
-		// If cannot find this type, then the table is corrupted
+		// If cannot find this type, then there might be a link type mismatch
+		if (type_index == -1) {
+			// Check if strict deserialization is enabled
+			if (functor_data->type->GetEvaluation(ECS_COMPONENT_STRICT_DESERIALIZE) != DBL_MAX) {
+				// Abort
+				return false;
+			}
+
+			// Perform the mirroring
+			MirrorDeserializeEntityManagerLinkTypes(functor_data->reflection_manager, &functor_data->field_table);
+
+			// Now retest the name
+			type_index = functor_data->field_table.TypeIndex(functor_data->type->name);
+		}
+
 		if (type_index == -1) {
 			return false;
 		}
@@ -2579,7 +2595,7 @@ namespace ECSEngine {
 		if (overrides.size > 0) {
 			for (unsigned int index = 0; index < type_indices.size; index++) {
 				const Reflection::ReflectionType* type = reflection_manager->GetType(type_indices[index]);
-				if (Reflection::IsReflectionTypeComponent(type) || Reflection::IsReflectionTypeSharedComponent(type)) {
+				if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
 					// Check to see if it is overwritten
 					if (override_components != nullptr) {
 						// Check the component
@@ -2608,7 +2624,7 @@ namespace ECSEngine {
 			// No overrides, can add these directly
 			for (unsigned int index = 0; index < type_indices.size; index++) {
 				const Reflection::ReflectionType* type = reflection_manager->GetType(type_indices[index]);
-				if (Reflection::IsReflectionTypeComponent(type) || Reflection::IsReflectionTypeSharedComponent(type)) {
+				if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
 					functor(type);
 				}
 			}
@@ -2627,7 +2643,7 @@ namespace ECSEngine {
 	)
 	{
 		for (size_t index = 0; index < link_types.size; index++) {
-			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_types[index]);
+			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_types[index]);
 			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
 
 			SerializeEntityManagerComponentInfo info;
@@ -2667,7 +2683,7 @@ namespace ECSEngine {
 	)
 	{
 		CreateSerializeDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, overrides, override_components, hierarchy_indices, [&](const Reflection::ReflectionType* type) {
-			if (Reflection::IsReflectionTypeComponent(type)) {
+			if (IsReflectionTypeComponent(type)) {
 				SerializeEntityManagerComponentInfo info;
 				info.function = ReflectionSerializeEntityManagerComponent;
 				info.header_function = ReflectionSerializeEntityManagerHeaderComponent;
@@ -2693,8 +2709,8 @@ namespace ECSEngine {
 	void AddEntityManagerComponentTableOverridesImpl(TableType& table, const Reflection::ReflectionManager* reflection_manager, Stream<InfoType> overrides) {
 		for (size_t index = 0; index < overrides.size; index++) {
 			const Reflection::ReflectionType* type = reflection_manager->GetType(overrides[index].name);
-			if (Reflection::IsReflectionTypeLinkComponent(type)) {
-				Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(type);
+			if (IsReflectionTypeLinkComponent(type)) {
+				Stream<char> target = GetReflectionTypeLinkComponentTarget(type);
 				if (target.size > 0) {
 					type = reflection_manager->GetType(target);
 				}
@@ -2731,7 +2747,7 @@ namespace ECSEngine {
 	)
 	{
 		for (size_t index = 0; index < link_types.size; index++) {
-			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_types[index]);
+			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_types[index]);
 			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
 
 			SerializeEntityManagerSharedComponentInfo info;
@@ -2771,7 +2787,7 @@ namespace ECSEngine {
 	)
 	{
 		CreateSerializeDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, overrides, override_components, hierarchy_indices, [&](const Reflection::ReflectionType* type) {
-			if (Reflection::IsReflectionTypeSharedComponent(type)) {
+			if (IsReflectionTypeSharedComponent(type)) {
 				SerializeEntityManagerSharedComponentInfo info;
 				info.function = ReflectionSerializeEntityManagerSharedComponent;
 				info.header_function = ReflectionSerializeEntityManagerHeaderSharedComponent;
@@ -2812,7 +2828,7 @@ namespace ECSEngine {
 	)
 	{
 		for (size_t index = 0; index < link_types.size; index++) {
-			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_types[index]);
+			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_types[index]);
 			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
 
 			DeserializeEntityManagerComponentInfo info;
@@ -2842,7 +2858,7 @@ namespace ECSEngine {
 			if (info.component_fixup.allocator_size > 0) {
 				// Look for the buffers
 				CapacityStream<ComponentBuffer> component_buffers = { info.component_fixup.component_buffers, 0, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT };
-				Reflection::GetReflectionTypeRuntimeBuffers(target_type, component_buffers);
+				GetReflectionTypeRuntimeBuffers(target_type, component_buffers);
 				info.component_fixup.component_buffer_count = component_buffers.size;
 			}
 
@@ -2860,7 +2876,7 @@ namespace ECSEngine {
 	)
 	{
 		CreateSerializeDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, overrides, override_components, hierarchy_indices, [&](const Reflection::ReflectionType* type) {
-			if (Reflection::IsReflectionTypeComponent(type)) {
+			if (IsReflectionTypeComponent(type)) {
 				DeserializeEntityManagerComponentInfo info;
 				info.function = ReflectionDeserializeEntityManagerComponent;
 				info.header_function = ReflectionDeserializeEntityManagerHeaderComponent;
@@ -2877,7 +2893,7 @@ namespace ECSEngine {
 				if (info.component_fixup.allocator_size > 0) {
 					// Look for the buffers
 					CapacityStream<ComponentBuffer> component_buffers = { info.component_fixup.component_buffers, 0, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT };
-					Reflection::GetReflectionTypeRuntimeBuffers(type, component_buffers);
+					GetReflectionTypeRuntimeBuffers(type, component_buffers);
 					info.component_fixup.component_buffer_count = component_buffers.size;
 				}
 				Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
@@ -2908,7 +2924,7 @@ namespace ECSEngine {
 	)
 	{
 		for (size_t index = 0; index < link_types.size; index++) {
-			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_types[index]);
+			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_types[index]);
 			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
 
 			DeserializeEntityManagerSharedComponentInfo info;
@@ -2939,7 +2955,7 @@ namespace ECSEngine {
 			if (info.component_fixup.allocator_size > 0) {
 				// Look for the buffers
 				CapacityStream<ComponentBuffer> component_buffers = { info.component_fixup.component_buffers, 0, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT };
-				Reflection::GetReflectionTypeRuntimeBuffers(target_type, component_buffers);
+				GetReflectionTypeRuntimeBuffers(target_type, component_buffers);
 				info.component_fixup.component_buffer_count = component_buffers.size;
 			}
 			
@@ -2957,7 +2973,7 @@ namespace ECSEngine {
 	)
 	{
 		CreateSerializeDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, overrides, override_components, hierarchy_indices, [&](const Reflection::ReflectionType* type) {
-			if (Reflection::IsReflectionTypeSharedComponent(type)) {
+			if (IsReflectionTypeSharedComponent(type)) {
 				DeserializeEntityManagerSharedComponentInfo info;
 				info.function = ReflectionDeserializeEntityManagerSharedComponent;
 				info.header_function = ReflectionDeserializeEntityManagerHeaderSharedComponent;
@@ -2974,7 +2990,7 @@ namespace ECSEngine {
 				if (info.component_fixup.allocator_size > 0) {
 					// Look for the buffers
 					CapacityStream<ComponentBuffer> component_buffers = { info.component_fixup.component_buffers, 0, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT };
-					Reflection::GetReflectionTypeRuntimeBuffers(type, component_buffers);
+					GetReflectionTypeRuntimeBuffers(type, component_buffers);
 					info.component_fixup.component_buffer_count = component_buffers.size;
 				}
 				Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
@@ -2994,5 +3010,53 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
+
+	void MirrorDeserializeEntityManagerLinkTypes(
+		const Reflection::ReflectionManager* current_reflection_manager, 
+		DeserializeFieldTable* deserialize_field_table
+	)
+	{
+		for (size_t index = 0; index < deserialize_field_table->types.size; index++) {
+			// If the type table doesn't exist then proceed with the proxy
+			Stream<char> current_name = deserialize_field_table->types[index].name;
+			Reflection::ReflectionType current_type;
+			if (!current_reflection_manager->TryGetType(current_name, current_type)) {
+				// Check to see if the file type was a link type and now it's not
+				Stream<char> target_type_name = GetReflectionTypeLinkNameBase(current_name);
+				if (target_type_name.size < current_name.size) {
+					// It was a link type - check to see if the target exists
+					Reflection::ReflectionType target_type;
+					if (current_reflection_manager->TryGetType(target_type_name, target_type)) {
+						// Convert the name of the file type to this name
+						// No need for an allocation since it fits into the already allocated name
+						deserialize_field_table->types[index].name = target_type_name;
+					}
+					else {
+						// The type might not exist at all - don't do anything
+					}
+				}
+				else {
+					// Check to see if now it has a link and previously it didn't
+					ECS_STACK_CAPACITY_STREAM(char, link_type_name_storage, 512);
+					Stream<char> link_type_name = GetReflectionTypeLinkComponentName(current_name, link_type_name_storage);
+					Reflection::ReflectionType link_type;
+					if (current_reflection_manager->TryGetType(link_type_name, link_type)) {
+						// Get the target of this link type - if it is the same proceed
+						target_type_name = GetReflectionTypeLinkComponentTarget(&link_type);
+						if (target_type_name == current_name) {
+							// Reference the link type name
+							deserialize_field_table->types[index].name = link_type.name;
+						}
+					}
+					else {
+						// The type might not exist at all - don't do anything
+					}
+				}
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------------------------
+
 
 }

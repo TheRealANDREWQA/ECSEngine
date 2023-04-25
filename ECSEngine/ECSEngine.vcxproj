@@ -152,6 +152,7 @@
       <ImportLibrary>..\bin\$(Configuration)\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
       <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
@@ -186,6 +187,7 @@
       <ExceptionHandling>false</ExceptionHandling>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <AdditionalOptions>/Zo %(AdditionalOptions)</AdditionalOptions>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -194,6 +196,7 @@
       <ImportLibrary>..\bin\$(Configuration)\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
       <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
@@ -226,6 +229,7 @@
     <ClInclude Include="src\ECSEngine\Containers\ResizableStableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
     <ClInclude Include="src\ECSEngine\Containers\StableReferenceStream.h" />
+    <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />
     <ClInclude Include="src\ECSEngine\ECS\RuntimeResources.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFThumbnail.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFLoader.h" />
@@ -406,6 +410,7 @@
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AnySuitable</InlineFunctionExpansion>
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Containers\SparseSet.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\ComponentHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeResources.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\cgtlf.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>

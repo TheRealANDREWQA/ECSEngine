@@ -614,6 +614,13 @@ void GetSandboxScenePath(const EditorState* editor_state, unsigned int sandbox_i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+unsigned int GetSandboxCount(const EditorState* editor_state)
+{
+	return editor_state->sandboxes.size;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state, unsigned int sandbox_index)
 {
 	return &GetSandbox(editor_state, sandbox_index)->runtime_descriptor;
@@ -1207,14 +1214,12 @@ void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_in
 		// And also update its scene to have any components from the given module be removed
 		for (unsigned int index = 0; index < sandbox_indices.size; index++) {
 			// Remove the module from the entity manager
-			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_indices[index]);
-			
 			// Do it for the scene entities and also for the runtime entities
-			editor_state->editor_components.RemoveModuleFromManager(&sandbox->scene_entities, loaded_module_index);
-			editor_state->editor_components.RemoveModuleFromManager(sandbox->sandbox_world.entity_manager, loaded_module_index);
+			editor_state->editor_components.RemoveModuleFromManager(editor_state, sandbox_indices[index], EDITOR_SANDBOX_VIEWPORT_SCENE, loaded_module_index);
+			editor_state->editor_components.RemoveModuleFromManager(editor_state, sandbox_indices[index], EDITOR_SANDBOX_VIEWPORT_RUNTIME, loaded_module_index);
 			
 			// Set the scene dirty for that sandbox
-			SetSandboxSceneDirty(editor_state, sandbox_indices[index]);
+			SetSandboxSceneDirty(editor_state, sandbox_indices[index], EDITOR_SANDBOX_VIEWPORT_SCENE);
 
 			RemoveSandboxModule(editor_state, sandbox_indices[index], module_index);
 		}
@@ -1254,56 +1259,112 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	// We assume that the Graphics module won't modify any entities
+struct RenderSandboxEventData {
+	unsigned int sandbox_index;
+	EDITOR_SANDBOX_VIEWPORT viewport;
+};
 
+EDITOR_EVENT(RenderSandboxEvent) {
+	RenderSandboxEventData* data = (RenderSandboxEventData*)_data;
+
+	// We assume that the Graphics module won't modify any entities
+	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, data->sandbox_index);
+	if (in_stream_module_index != -1) {
+		EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, data->sandbox_index, in_stream_module_index);
+		bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
+		if (!is_being_compiled) {
+			RenderSandbox(editor_state, data->sandbox_index, data->viewport);
+			return false;
+		}
+		return true;
+	}
+	return false;
+}
+
+bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, bool disable_logging)
+{
+	// Check to see if we already have a pending event - if we do, skip the call
+	bool pending_event = EditorHasEvent(editor_state, RenderSandboxEvent);
+	if (pending_event) {
+		return true;
+	}
+
+	// We assume that the Graphics module won't modify any entities
 	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index);
 	if (in_stream_module_index == -1) {
 		return false;
 	}
 
-	// Prepare a task scheduler
-	bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, { &in_stream_module_index, 1 });
-	if (!success) {
-		return false;
-	}
-
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
-	ECS_TASK_MANAGER_WAIT_TYPE initial_wait_type = sandbox->sandbox_world.task_manager->m_wait_type;
-
-	// Prepare and run the world once
-	PrepareWorld(&sandbox->sandbox_world);
-
-	GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);
-
-	EntityManager* viewport_entity_manager = sandbox->sandbox_world.entity_manager;
-	EntityManager* runtime_entity_manager = sandbox->sandbox_world.entity_manager;
-	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
-		viewport_entity_manager = &sandbox->scene_entities;
-		// Bind to the sandbox the scene entity manager
-		sandbox->sandbox_world.entity_manager = viewport_entity_manager;
-	}
-
-	DoFrame(&sandbox->sandbox_world);
-
-	sandbox->sandbox_world.entity_manager = runtime_entity_manager;
+	// Check to see if the module is being compiled right now - if it is, then push an event to try re-render after
+	// it has finished compiling
+	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_module_index);
+	bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
 	
-	// Change the wait type for the task manager to the previous sleep type
-	ECS_TASK_MANAGER_WAIT_TYPE current_wait_type = sandbox->sandbox_world.task_manager->m_wait_type;
-	if (current_wait_type != initial_wait_type) {
-		sandbox->sandbox_world.task_manager->SetWaitType(initial_wait_type);
+	if (!is_being_compiled) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+		GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);
+
+		EntityManager* viewport_entity_manager = sandbox->sandbox_world.entity_manager;
+		EntityManager* runtime_entity_manager = sandbox->sandbox_world.entity_manager;
+
+		// Create a temporary task scheduler that will be bound to the sandbox world
+		MemoryManager viewport_task_scheduler_allocator = TaskScheduler::DefaultAllocator(editor_state->GlobalMemoryManager());
+		TaskScheduler viewport_task_scheduler(&viewport_task_scheduler_allocator);
+
+		// Use the editor state task_manage in order to run the commands - at the end reset the static tasks
+		TaskScheduler* runtime_task_scheduler = sandbox->sandbox_world.task_scheduler;
+		TaskManager* runtime_task_manager = sandbox->sandbox_world.task_manager;
+
+		sandbox->sandbox_world.task_manager = editor_state->render_task_manager;
+		sandbox->sandbox_world.task_scheduler = &viewport_task_scheduler;
+
+		MemoryManager runtime_query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(editor_state->GlobalMemoryManager());
+		ArchetypeQueryCache runtime_query_cache;
+
+		if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+			viewport_entity_manager = &sandbox->scene_entities;
+
+			// Bind to the sandbox the scene entity manager
+			sandbox->sandbox_world.entity_manager = viewport_entity_manager;
+		}
+
+		// We need to record the query cache to restore it later
+		sandbox->sandbox_world.entity_manager->CopyQueryCache(&runtime_query_cache, GetAllocatorPolymorphic(&runtime_query_cache_allocator));
+
+		// Prepare the task scheduler
+		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, { &in_stream_module_index, 1 }, disable_logging);
+		if (!success) {
+			return false;
+		}
+
+		// Prepare and run the world once
+		PrepareWorld(&sandbox->sandbox_world);
+
+		DoFrame(&sandbox->sandbox_world);
+
+		sandbox->sandbox_world.entity_manager = runtime_entity_manager;
+		sandbox->sandbox_world.task_manager = runtime_task_manager;
+		sandbox->sandbox_world.task_scheduler = runtime_task_scheduler;
+
+		// Deallocate the task scheduler and the entity manager query cache
+		// Reset the task manager static tasks
+		viewport_task_scheduler_allocator.Free();
+		runtime_query_cache_allocator.Free();
+		editor_state->render_task_manager->ClearTemporaryAllocators();
+		editor_state->render_task_manager->ResetStaticTasks();
+
+		RenderSandboxFinishGraphics(editor_state, sandbox_index, graphics_snapshot);
+
+		return true;
 	}
-
-	// Clear the task scheduler, the task manager and the entity manager query cache
-	sandbox->sandbox_world.task_manager->Reset();
-	viewport_entity_manager->ClearCache();
-	ClearSandboxTaskScheduler(editor_state, sandbox_index);
-
-	RenderSandboxFinishGraphics(editor_state, sandbox_index, graphics_snapshot);
-
-	return true;
+	else {
+		// Wait for the compilation
+		RenderSandboxEventData event_data;
+		event_data.sandbox_index = sandbox_index;
+		event_data.viewport = viewport;
+		EditorAddEvent(editor_state, RenderSandboxEvent, &event_data, sizeof(event_data));
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1431,11 +1492,11 @@ bool SaveEditorSandboxFile(const EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_index)
+void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	// If it is paused, then we don't need to make the scene dirty since the change is made on the runtime sandbox world
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	if (GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE) {
+	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE || GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE) {
 		sandbox->is_scene_dirty = true;
 	}
 }

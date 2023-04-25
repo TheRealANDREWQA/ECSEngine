@@ -47,7 +47,7 @@ void GetProjectCurrentUI(CapacityStream<wchar_t>& characters, const ProjectFile*
 ProjectFile GetProjectFileDefaultConfiguration();
 
 // Error message needs to have memory allocated or nullptr to skip it
-bool OpenProjectFile(ProjectOperationData data);
+bool OpenProjectFile(ProjectOperationData data, bool info_only = false);
 
 void OpenProjectFileAction(ActionData* action_data);
 

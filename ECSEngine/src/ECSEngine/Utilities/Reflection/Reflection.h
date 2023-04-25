@@ -167,9 +167,6 @@ namespace ECSEngine {
 			unsigned int GetHierarchyCount() const;
 			unsigned int GetTypeCount() const;
 
-			// Make a helper for components and shared components
-			void GetHierarchyComponentTypes(unsigned int hierarchy_index, CapacityStream<unsigned int>* component_indices, CapacityStream<unsigned int>* shared_indices) const;
-
 			void* GetTypeInstancePointer(Stream<char> name, void* instance, unsigned int pointer_index = 0) const;
 			void* GetTypeInstancePointer(const ReflectionType* type, void* instance, unsigned int pointer_index = 0) const;
 
@@ -586,18 +583,6 @@ namespace ECSEngine {
 		// Returns true if the type references in any of its fields the subtype
 		ECSENGINE_API bool DependsUpon(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<char> subtype);
 
-		// Returns { nullptr, 0 } if there is no target specified
-		ECSENGINE_API Stream<char> GetReflectionTypeLinkComponentTarget(const ReflectionType* type);
-
-		// If it ends in _Link, it will return the name without that end
-		ECSENGINE_API Stream<char> GetReflectionTypeLinkNamePretty(Stream<char> name);
-
-		// Returns true if the link component needs to be built using DLL functions
-		ECSENGINE_API bool GetReflectionTypeLinkComponentNeedsDLL(const ReflectionType* type);
-
-		// Determines all the buffers that the ECS runtime can use
-		ECSENGINE_API void GetReflectionTypeRuntimeBuffers(const ReflectionType* type, CapacityStream<ComponentBuffer>& component_buffers);
-
 		// Returns the byte size and the alignment for the field
 		ECSENGINE_API ulong2 GetReflectionTypeGivenFieldTag(const ReflectionField* field);
 
@@ -610,24 +595,21 @@ namespace ECSEngine {
 
 		ECSENGINE_API void GetReflectionFieldDependentTypes(Stream<char> definition, CapacityStream<Stream<char>>& dependencies);
 
-		// Walks through the fields and returns the component buffer and optionally the index of the field that
-		// corresponds to that buffer index
-		// Example struct { int, Stream<>, Stream<>, int, Stream<> }
-		// buffer_index: 0 -> 1; 1 -> 2, 2 -> 4
-		ECSENGINE_API ComponentBuffer GetReflectionTypeRuntimeBufferIndex(const ReflectionType* type, unsigned int buffer_index, unsigned int* field_index = nullptr);
-
 		ECSENGINE_API size_t GetReflectionDataPointerElementByteSize(const ReflectionManager* manager, Stream<char> tag);
 
 		ECSENGINE_API void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependent_types);
 
-		ECSENGINE_API bool IsReflectionTypeComponent(const ReflectionType* type);
-
-		ECSENGINE_API bool IsReflectionTypeSharedComponent(const ReflectionType* type);
-
-		ECSENGINE_API bool IsReflectionTypeLinkComponent(const ReflectionType* type);
-
 		// Returns true if the field was tagged with ECS_REFLECTION_SKIP
 		ECSENGINE_API bool IsReflectionFieldSkipped(const ReflectionField* field);
+
+		// One of the surplus fields needs to be specified. It will write the indices of the fields
+		// that the respective type has and the other does not
+		ECSENGINE_API void GetReflectionTypesDifferentFields(
+			const ReflectionType* first,
+			const ReflectionType* second,
+			CapacityStream<size_t>* first_surplus_fields = nullptr,
+			CapacityStream<size_t>* second_surplus_fields = nullptr
+		);
 
 		// Determines the dependency graph for these reflection types. The first types are those ones
 		// that have no dependencies, the second group depends only on the first and so on.

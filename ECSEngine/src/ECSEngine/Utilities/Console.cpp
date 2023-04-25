@@ -108,6 +108,12 @@ namespace ECSEngine {
 		if (file_buffering.size > 0 && success) {
 			success = WriteFile(console->dump_file, file_buffering);
 		}
+
+		// Separated these for debugging
+		bool write_success = success;
+		bool flush_success = FlushFileToDisk(console->dump_file);
+		
+		success &= flush_success;
 		ECS_ASSERT(success);
 
 #ifdef ENABLE_PENDING_MESSAGES
@@ -131,7 +137,7 @@ namespace ECSEngine {
 #ifdef ENABLE_PENDING_MESSAGES
 		console->dump_lock.lock();
 #else
-		console->commit_lock.lock();
+		console->allocator->Lock();
 #endif
 		
 		ECS_STACK_VOID_STREAM(file_buffering, FILE_BUFFERING_STACK_SIZE);
@@ -144,6 +150,7 @@ namespace ECSEngine {
 		if (write_success && file_buffering.size > 0) {
 			write_success = WriteFile(console->dump_file, file_buffering);
 		}
+		write_success &= FlushFileToDisk(console->dump_file);
 		console->last_dumped_message = console->messages.size;
 
 		ECS_ASSERT(write_success);
@@ -151,7 +158,7 @@ namespace ECSEngine {
 #ifdef ENABLE_PENDING_MESSAGES
 		console->dump_lock.unlock();
 #else
-		console->commit_lock.unlock();
+		console->allocator->Unlock();
 #endif
 	}
 
@@ -159,7 +166,7 @@ namespace ECSEngine {
 
 	MemoryManager DefaultConsoleAllocator(GlobalMemoryManager* global_manager)
 	{
-		return MemoryManager(500'000, 1024, 500'000, global_manager);
+		return MemoryManager(1'000'000, ECS_KB * 16, 1'000'000, global_manager);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
@@ -204,9 +211,11 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------
 
 	void Console::AddSystemFilterString(Stream<char> string) {
-		char* new_string = (char*)function::Copy(messages.allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char));
+		allocator->Lock();
+		char* new_string = (char*)function::Copy(GetAllocatorPolymorphic(allocator), string.buffer, (string.size + 1) * sizeof(char), alignof(char));
 		new_string[string.size] = '\0';
 		system_filter_strings.Add(new_string);
+		allocator->Unlock();
 	}
 
 	// -------------------------------------------------------------------------------------------------------
@@ -294,13 +303,11 @@ namespace ECSEngine {
 		console_message.verbosity = verbosity;
 		console_message.type = type;
 
-		ConvertToMessage(message, console_message);
-
 		// Get the system string index if the message is different from nullptr.
 		if (system.size > 0) {
 			unsigned int system_index = function::FindString(system, Stream<Stream<char>>(system_filter_strings.buffer, system_filter_strings.size));
 			if (system_index != -1) {
-				console_message.system_filter = 1 << (size_t)system_index;
+				console_message.system_filter = (size_t)1 << (size_t)system_index;
 			}
 			else {
 				console_message.system_filter = CONSOLE_SYSTEM_FILTER_ALL;
@@ -333,9 +340,15 @@ namespace ECSEngine {
 		}	
 		pending_messages[write_location] = console_message;
 #else
-		commit_lock.lock();
+		allocator->Lock();
+		if (messages.size == messages.capacity && messages.capacity > MaxMessageCount()) {
+			// Return - too many messages
+			allocator->Unlock();
+			return;
+		}
+		ConvertToMessage(message, console_message);
 		messages.Add(console_message);
-		commit_lock.unlock();
+		allocator->Unlock();
 #endif
 
 		if (dump_type == ECS_CONSOLE_DUMP_COUNT) {

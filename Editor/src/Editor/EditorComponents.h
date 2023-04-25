@@ -1,5 +1,6 @@
 #pragma once
 #include "ECSEngineContainers.h"
+#include "EditorSandboxTypes.h"
 
 namespace ECSEngine {
 	struct EntityManager;
@@ -79,6 +80,28 @@ struct EditorComponents {
 		ECSEngine::Stream<char> target;
 	};
 
+	struct ResolveEventOptions {
+		ECS_INLINE ECSEngine::SpinLock* EntityManagerLock() {
+			return EntityManagerLock(archetype_locks);
+		}
+		
+		ECS_INLINE static ECSEngine::SpinLock* EntityManagerLock(ECSEngine::Stream<ECSEngine::SpinLock> archetype_locks) {
+			return archetype_locks.buffer + archetype_locks.size - 1;
+		}
+
+		// These locks are used to prevents multiple threads on performing actions on the same archetypes
+		ECSEngine::Stream<ECSEngine::SpinLock> archetype_locks = { nullptr, 0 };
+		// These locks are used to indicate which components have already had their data recovered
+		ECSEngine::Stream<ECSEngine::SpinLock> component_recover_data_locks = { nullptr, 0 };
+		// These locks are used to indicate which shared components have already had their data recovered
+		ECSEngine::Stream<ECSEngine::SpinLock> shared_component_recover_data_locks = { nullptr, 0 };
+	};
+
+	// Extra options used by the event
+	union FinalizeEventOptions {
+		bool IS_REMOVED_should_remove_type = true;
+	};
+
 	void AddType(const ECSEngine::Reflection::ReflectionType* type, unsigned int module_index);
 
 	// Registers a new component to the entity manager
@@ -95,8 +118,8 @@ struct EditorComponents {
 	void FinalizeEvent(
 		EditorState* editor_state,
 		const ECSEngine::Reflection::ReflectionManager* reflection_manager, 
-		ECSEngine::Tools::UIReflectionDrawer* ui_drawer, 
-		EditorComponentEvent event
+		EditorComponentEvent event,
+		FinalizeEventOptions options = { true }
 	);
 
 	// Returns the index inside the loaded_modules if the module has components recorded here, else -1.
@@ -192,6 +215,12 @@ struct EditorComponents {
 	// Returns true if all the component (unique and/or shared) which have link components have
 	// their DLL function ready
 	bool HasLinkComponentDLLFunction(const EditorState* modules, const ECSEngine::EntityManager* entity_manager, ECSEngine::bool2 select_unique_shared = { true, true }) const;
+	
+	// Returns true if the unique/shared component has assets, else false
+	bool HasComponentAssets(ECSEngine::Stream<char> component_name) const;
+
+	// Returns true if the unique/shared component has assets, else false
+	bool HasComponentAssets(ECSEngine::Component component, bool shared) const;
 
 	// Returns true if the component (unique or shared) exists or not
 	bool IsComponent(ECSEngine::Stream<char> name) const;
@@ -233,24 +262,78 @@ struct EditorComponents {
 	// to syncronize operations on the whole entity manager like changing the ID of a component)
 	// It doesn't not update the type to the new one
 	void RecoverData(
-		ECSEngine::EntityManager* entity_manager,
+		EditorState* editor_state,
+		unsigned int sandbox_index,
+		EDITOR_SANDBOX_VIEWPORT viewport,
 		const ECSEngine::Reflection::ReflectionManager* reflection_manager,
 		ECSEngine::Stream<char> component_name,
-		ECSEngine::Stream<ECSEngine::SpinLock> archetype_locks = { nullptr, 0 }
+		ResolveEventOptions* options = nullptr
 	);
+
+	// Allocates the spinlocks needed to be used with RecoverData (archetype count + 1 spin locks) 
+	// (the last one is used in order to syncronize operations on the whole entity manager like changing the ID of a component)
+	static ECSEngine::Stream<ECSEngine::SpinLock> RecoverDataLocks(
+		const ECSEngine::EntityManager* entity_manager, 
+		ECSEngine::AllocatorPolymorphic allocator
+	);
+
+	static ECSEngine::Stream<ECSEngine::SpinLock> RecoverComponentLocks(
+		const ECSEngine::EntityManager* entity_manager, 
+		ECSEngine::AllocatorPolymorphic allocator
+	);
+
+	static ECSEngine::Stream<ECSEngine::SpinLock> RecoverSharedComponentLocks(
+		const ECSEngine::EntityManager* entity_manager,
+		ECSEngine::AllocatorPolymorphic allocator
+	);
+
+	// Returns the total byte size needed to allocate the spin locks for this entity manager
+	static size_t RecoverDataLocksSize(const ECSEngine::EntityManager* entity_manager);
+
+	// Returns the total byte size needed to allocate the spin locks for this entity manager
+	static size_t RecoverComponentLocksSize(const ECSEngine::EntityManager* entity_manager);
+
+	// Returns the total byte size needed to allocate the spin locks for this entity manager
+	static size_t RecoverSharedComponentLocksSize(const ECSEngine::EntityManager* entity_manager);
+
+	// Returns the total byte size needed to allocate the spin locks for this entity manager
+	// (all 3 spin lock streams)
+	static size_t ResolveEventOptionsSize(const ECSEngine::EntityManager* entity_manager);
+
+	// Initializes spinlocks needed to be used with RecoverData from a given buffer
+	static ECSEngine::Stream<ECSEngine::SpinLock> RecoverDataLocks(const ECSEngine::EntityManager* entity_manager, uintptr_t& ptr);
+
+	static ECSEngine::Stream<ECSEngine::SpinLock> RecoverComponentLocks(const ECSEngine::EntityManager* entity_manager, uintptr_t& ptr);
+
+	static ECSEngine::Stream<ECSEngine::SpinLock> RecoverSharedComponentLocks(const ECSEngine::EntityManager* entity_manager, uintptr_t& ptr);
+
+	static ResolveEventOptions ResolveEventOptionsFromBuffer(const ECSEngine::EntityManager* entity_manager, uintptr_t& ptr);
+
 	// Removes all internal types that were associated with the given module. Also, it will update the entity managers
 	// in order to remove all the components and systems that were associated with that module
 	void RemoveModule(EditorState* editor_state, unsigned int loaded_module_index);
 
 	// Removes all the components that came from the given module
-	void RemoveModuleFromManager(ECSEngine::EntityManager* entity_manager, unsigned int loaded_module_index) const;
+	void RemoveModuleFromManager(
+		EditorState* editor_state, 
+		unsigned int sandbox_index, 
+		EDITOR_SANDBOX_VIEWPORT viewport, 
+		unsigned int loaded_module_index
+	) const;
 
 	// Removes it only from the internal storage, not from the entity managers
 	// User ResolveEvent if it is a component alongside the entity managers to be updated
 	void RemoveType(ECSEngine::Stream<char> name);
 
 	// Removes the component from the manager.
-	void RemoveTypeFromManager(ECSEngine::EntityManager* entity_manager, ECSEngine::Component component, bool shared, ECSEngine::SpinLock* lock = nullptr) const;
+	void RemoveTypeFromManager(
+		EditorState* editor_state,
+		unsigned int sandbox_index,
+		EDITOR_SANDBOX_VIEWPORT viewport, 
+		ECSEngine::Component component, 
+		bool shared, 
+		ECSEngine::SpinLock* lock = nullptr
+	) const;
 
 	// Does not deallocate any buffers. It will only set the default values.
 	void ResetComponent(ECSEngine::Stream<char> component_name, void* component_data) const;
@@ -273,10 +356,12 @@ struct EditorComponents {
 	// Tries to maintain the data already stored.
 	// The archetype locks needs to have the archetype count spin locks allocated for the events that require recovering the data
 	bool ResolveEvent(
-		ECSEngine::EntityManager* entity_manager,
+		EditorState* editor_state,
+		unsigned int sandbox_index,
+		EDITOR_SANDBOX_VIEWPORT viewport,
 		const ECSEngine::Reflection::ReflectionManager* reflection_manager, 
 		EditorComponentEvent event,
-		ECSEngine::Stream<ECSEngine::SpinLock> archetype_locks = { nullptr, 0 }
+		ResolveEventOptions* options = nullptr
 	);
 
 	// Registers all unique and shared components alongisde their respective allocators
@@ -290,6 +375,7 @@ struct EditorComponents {
 	// The conflict will refer to the name already stored in the EditorComponents
 	// or in the reflection_manager for the same_id component conflict
 	void UpdateComponents(
+		EditorState* editor_state,
 		const ECSEngine::Reflection::ReflectionManager* reflection_manager,
 		unsigned int hierarchy_index,
 		ECSEngine::Stream<char> module_name

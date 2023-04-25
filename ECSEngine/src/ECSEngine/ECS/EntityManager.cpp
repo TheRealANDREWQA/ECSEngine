@@ -1568,15 +1568,16 @@ namespace ECSEngine {
 
 		// If no component is allocated at that slot, fail
 		unsigned int component_size = manager->m_shared_components[data->component.value].info.size;
-		ECS_CRASH_RETURN(component_size != -1, "EntityManager: Trying to create a shared instance of shared component {#} failed. There is no such component.",
-			manager->GetSharedComponentName(data->component));
+		ECS_CRASH_RETURN(component_size != -1, "EntityManager: Trying to create a shared instance of shared component {#} failed. "
+			"There is no such component.", manager->GetSharedComponentName(data->component));
 
 		// Allocate the memory
 		void* allocation = manager->m_small_memory_manager.Allocate(component_size);
 		memcpy(allocation, data->data, component_size);
 
 		unsigned int instance_index = manager->m_shared_components[data->component.value].instances.Add(allocation);
-		ECS_CRASH_RETURN(instance_index < SHORT_MAX, "EntityManager: Too many shared instances created for component {#}.", manager->GetSharedComponentName(data->component));
+		ECS_CRASH_RETURN(instance_index < ECS_SHARED_INSTANCE_MAX_VALUE, "EntityManager: Too many shared instances created for component {#}.", 
+			manager->GetSharedComponentName(data->component));
 		
 		if (data->copy_buffers) {
 			MemoryArena* arena = manager->GetSharedComponentAllocator(data->component);
@@ -2030,11 +2031,12 @@ namespace ECSEngine {
 		*m_hierarchy_allocator = DefaultEntityHierarchyAllocator(m_memory_manager->m_backup);
 		m_hierarchy = EntityHierarchy(m_hierarchy_allocator, 0, 0, 0);
 
-		// Allocate the query cache now
+		// Allocate the query cache now - use a separate allocation
 		// Get a default allocator for it for the moment
-		AllocatorPolymorphic query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(descriptor.memory_manager->m_backup);
+		MemoryManager* query_cache_allocator = (MemoryManager*)m_memory_manager->m_backup->Allocate(sizeof(MemoryManager));
+		*query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(descriptor.memory_manager->m_backup);
 		m_query_cache = (ArchetypeQueryCache*)m_memory_manager->Allocate(sizeof(ArchetypeQueryCache));
-		*m_query_cache = ArchetypeQueryCache(this, query_cache_allocator);
+		*m_query_cache = ArchetypeQueryCache(this, GetAllocatorPolymorphic(query_cache_allocator));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2798,6 +2800,14 @@ namespace ECSEngine {
 		m_hierarchy.CopyOther(&entity_manager->m_hierarchy);
 
 		m_query_cache->CopyOther(entity_manager->m_query_cache);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::CopyQueryCache(ArchetypeQueryCache* query_cache, AllocatorPolymorphic allocator)
+	{
+		*query_cache = ArchetypeQueryCache(this, allocator);
+		query_cache->CopyOther(m_query_cache);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4684,6 +4694,12 @@ namespace ECSEngine {
 		return RegisterQueryImplementation(this, query);
 	}
 
+	void EntityManager::RestoreQueryCache(const ArchetypeQueryCache* query_cache)
+	{
+		ClearCache();
+		m_query_cache->CopyOther(query_cache);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::RegisterPendingCommandStream(EntityManagerCommandStream command_stream)
@@ -5035,6 +5051,17 @@ namespace ECSEngine {
 		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_DESTROY_UNREFERENCED_SHARED_SINGLE_INSTANCE), debug_info });
 	}
 
+	bool EntityManager::IsUnreferencedSharedInstance(Component component, SharedInstance instance) const {
+		ECS_CRASH_RETURN_VALUE(ExistsSharedComponent(component), false, "EntityManager: Shared component {#} is invalid when trying to determine "
+			"unreferenced shared instance {#}.", GetSharedComponentName(component), instance.value);
+
+		unsigned int max_instance_count = m_shared_components[component].instances.stream.capacity;
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(bool, instance_bitmask, max_instance_count);
+		UnreferencedSharedInstanceBitmask(component, instance_bitmask);
+
+		return !instance_bitmask[instance.value];
+	}
+
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::UnregisterUnreferencedSharedInstancesCommit(Component component)
@@ -5054,6 +5081,40 @@ namespace ECSEngine {
 
 		DeferredActionParameters parameters = { command_stream };
 		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_DESTROY_UNREFERENCED_SHARED_INSTANCES), debug_info });
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::UnreferencedSharedInstanceBitmask(Component component, CapacityStream<bool> bitmask) const {
+		memset(bitmask.buffer, 0, bitmask.MemoryOf(bitmask.capacity));
+
+		unsigned int archetype_count = GetArchetypeCount();
+		VectorComponentSignature vector_component;
+		vector_component.ConvertComponents({ &component, 1 });
+		for (unsigned int index = 0; index < archetype_count; index++) {
+			VectorComponentSignature archetype_shared = GetArchetypeSharedComponents(index);
+			if (archetype_shared.HasComponents(vector_component)) {
+				const Archetype* archetype = GetArchetype(index);
+				unsigned char component_index = archetype->FindSharedComponentIndex(component);
+				unsigned int base_count = archetype->GetBaseCount();
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					const SharedInstance* instances = archetype->GetBaseInstances(base_index);
+					bitmask[instances[component_index].value] = true;
+				}
+			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::GetUnreferencedSharedInstances(Component component, CapacityStream<SharedInstance>* instances) const
+	{
+		ECS_CRASH_RETURN(ExistsSharedComponent(component), "EntityManager: Shared component {#} is invalid when trying to determine "
+			"unreferenced shared instances.", GetSharedComponentName(component));
+
+		ForEachUnreferencedSharedInstance(component, [&](SharedInstance instance, const void* data) {
+			instances->AddSafe(instance);
+		});
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
