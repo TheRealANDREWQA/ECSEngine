@@ -35,8 +35,7 @@ void GetProjectOrganizationFolder(const EditorState* editor_state, CapacityStrea
 void GetProjectFilePath(const ProjectFile* project_file, CapacityStream<wchar_t>& characters) {
 	characters.AddStream(project_file->path);
 	characters.Add(ECS_OS_PATH_SEPARATOR);
-	characters.AddStream(project_file->project_name);
-	Stream<wchar_t> extension = Stream<wchar_t>(PROJECT_EXTENSION, std::size(PROJECT_EXTENSION) - 1);
+	Stream<wchar_t> extension = PROJECT_EXTENSION;
 	characters.AddStreamSafe(extension);
 	characters[characters.size] = L'\0';
 	characters.AssertCapacity();
@@ -62,7 +61,6 @@ void GetProjectSandboxFile(const EditorState* editor_state, ECSEngine::CapacityS
 {
 	characters.AddStream(editor_state->project_file->path);
 	characters.Add(ECS_OS_PATH_SEPARATOR);
-	characters.AddStream(editor_state->project_file->project_name);
 	characters.AddStream(PROJECT_SANDBOX_FILE_EXTENSION);
 	characters[characters.size] = L'\0';
 	characters.AssertCapacity();
@@ -82,7 +80,6 @@ void GetProjectModulesFilePath(const EditorState* editor_state, ECSEngine::Capac
 	const ProjectFile* project_file = editor_state->project_file;
 	path.Copy(project_file->path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
-	path.AddStream(project_file->project_name);
 	path.AddStreamSafe(PROJECT_MODULES_FILE_EXTENSION);
 	path[path.size] = L'\0';
 	path.AssertCapacity();

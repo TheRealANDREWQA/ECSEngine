@@ -196,10 +196,13 @@ namespace ECSEngine {
 		auto* meshes = &data->control_block->meshes[data->write_index];
 		unsigned int handle = meshes->different_handles[data->subhandle_index];
 		MeshMetadata* metadata = data->control_block->database->GetMesh(handle);
+
+		// Use the reference count from the database
 		CreateAssetFromMetadataExData ex_data = {
 			&data->control_block->manager_lock,
 			meshes->time_stamp,
-			data->control_block->load_info.mount_point
+			data->control_block->load_info.mount_point,
+			data->control_block->database->GetReferenceCountStandalone(handle, ECS_ASSET_MESH)
 		};
 
 		CreateMeshFromMetadataEx(
@@ -237,10 +240,12 @@ namespace ECSEngine {
 		unsigned int handle = textures->different_handles[data->subhandle_index];
 		TextureMetadata* metadata = data->control_block->database->GetTexture(handle);
 
+		// Use the reference count from the database
 		CreateAssetFromMetadataExData ex_data = {
 			&data->control_block->manager_lock,
 			textures->time_stamp,
-			data->control_block->load_info.mount_point
+			data->control_block->load_info.mount_point,
+			data->control_block->database->GetReferenceCountStandalone(handle, ECS_ASSET_TEXTURE)
 		};
 
 		bool success = CreateTextureFromMetadataEx(
@@ -277,10 +282,12 @@ namespace ECSEngine {
 		unsigned int handle = shaders->different_handles[data->subhandle_index];
 		ShaderMetadata* metadata = data->control_block->database->GetShader(handle);
 
+		// Use the reference count from the database
 		CreateAssetFromMetadataExData ex_data = {
 			&data->control_block->manager_lock,
 			shaders->time_stamp,
-			data->control_block->load_info.mount_point
+			data->control_block->load_info.mount_point,
+			data->control_block->database->GetReferenceCountStandalone(handle, ECS_ASSET_SHADER)
 		};
 
 		bool success = CreateShaderFromMetadataEx(

@@ -9,11 +9,14 @@ struct EditorState;
 
 void AddHubProject(EditorState* editor_state, Stream<wchar_t> path);
 
-void DeallocateHubProject(EditorState* editor_state, size_t project_hub_index);
+void DeallocateHubProject(EditorState* editor_state, unsigned int project_hub_index);
 
 void DeallocateHubProjects(EditorState* editor_state);
 
-void LoadHubProjects(EditorState* editor_state);
+// Returns true if it succeeded, else false
+bool LoadHubProjectInfo(EditorState* editor_state, unsigned int index);
+
+void LoadHubProjectsInfo(EditorState* editor_state);
 
 void ReloadHubProjects(EditorState* editor_state);
 
@@ -30,3 +33,6 @@ void HubTick(EditorState* editor_state);
 void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 void Hub(EditorState* editor_state);
+
+// Returns true if the given path is a valid ECS project
+bool ValidateProjectPath(Stream<wchar_t> path);

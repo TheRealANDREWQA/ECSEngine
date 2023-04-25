@@ -94,7 +94,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Reset() {
 			m_first_item = 0;
-			m_queue.Reset();
+			m_queue.Clear();
 		}
 
 		ECS_INLINE void* GetAllocatedBuffer() const {
@@ -122,7 +122,27 @@ namespace ECSEngine {
 			InitializeFromBuffer(allocation, capacity);
 		}
 
-	//private:
+		// Return true in the functor to early exit, if desired. The functor takes as parameter a T or T&
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) {
+			unsigned int size = GetSize();
+			unsigned int capacity = GetCapacity();
+			unsigned int current_index = m_first_item;
+			for (unsigned int index = 0; index < size; index++) {
+				if constexpr (early_exit) {
+					if (functor(m_queue[current_index])) {
+						return true;
+					}
+				}
+				else {
+					functor(m_queue[current_index]);
+				}
+				current_index = current_index == capacity - 1 ? 0 : current_index + 1;
+			}
+			return false;
+		}
+
 		CapacityStream<T> m_queue;
 		unsigned int m_first_item;
 	};

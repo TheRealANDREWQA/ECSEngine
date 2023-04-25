@@ -400,7 +400,7 @@ namespace ECSEngine {
 
 				// Reset the stack buffers and the segmented allocations
 				temporary_stack_values.size = 0;
-				segmented_allocations.Reset();
+				segmented_allocations.Clear();
 
 				bool closed_bracket_found = false;
 				const void* array_data = nullptr;

@@ -35,7 +35,8 @@ void BuildModules(
 	Stream<unsigned int> module_indices,
 	EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses = nullptr
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses = nullptr,
+	bool disable_logging = false
 );
 
 // Editor state is needed in order to print to console
@@ -46,14 +47,16 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr,
+	bool disable_logging = false
 );
 
 // Returns true if the projects were built and the modules could be successfully loaded
 bool BuildModulesAndLoad(
 	EditorState* editor_state,
 	Stream<unsigned int> module_indices,
-	EDITOR_MODULE_CONFIGURATION* configurations
+	EDITOR_MODULE_CONFIGURATION* configurations,
+	bool disable_logging = false
 );
 
 // Runs on multiple threads
@@ -63,7 +66,8 @@ void CleanModules(
 	Stream<unsigned int> module_indices,
 	EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses = nullptr
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses = nullptr,
+	bool disable_logging = false
 );
 
 // Editor state is needed in order to print to console
@@ -73,7 +77,8 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr,
+	bool disable_logging = false
 );
 
 // Runs on multiple threads
@@ -83,7 +88,8 @@ void RebuildModules(
 	Stream<unsigned int> indices,
 	EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses = nullptr
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses = nullptr,
+	bool disable_logging = false
 );
 
 // Editor state is needed in order to print to console
@@ -93,7 +99,8 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr,
+	bool disable_logging = false
 );
 
 void DeleteModuleFlagFiles(EditorState* editor_state);
@@ -101,6 +108,21 @@ void DeleteModuleFlagFiles(EditorState* editor_state);
 bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
 
 bool IsGraphicsModule(const EditorState* editor_state, unsigned int index);
+
+bool IsModuleBeingCompiled(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
+
+// Returns true if the given configuration of the module is being used in at least one sandbox, else false
+// If the configuration is left to COUNT, then it will look for all configurations
+bool IsModuleUsedBySandboxes(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_COUNT);
+
+// Fills in all the sandboxes that reference the given module configuration
+// Returns true if at least a sandbox reference was added
+bool GetSandboxesForModule(
+	const EditorState* editor_state, 
+	unsigned int module_index, 
+	EDITOR_MODULE_CONFIGURATION configuration, 
+	CapacityStream<unsigned int>* sandboxes
+);
 
 unsigned int GetModuleIndex(const EditorState* editor_state, Stream<wchar_t> solution_path);
 

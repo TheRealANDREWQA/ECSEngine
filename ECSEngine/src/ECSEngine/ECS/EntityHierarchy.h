@@ -64,23 +64,46 @@ namespace ECSEngine {
 		// Returns true if the entity is a root or a child of another entity
 		bool Exists(Entity entity);
 
-		template<typename Functor>
-		void ForEachImpl(Entity current_entity, Entity parent, Functor&& functor) {
+		// Return true in the functor to early exit.
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEachImpl(Entity current_entity, Entity parent, Functor&& functor) {
 			Stream<Entity> children = GetChildren(current_entity);
-			functor(current_entity, parent, children);
+			if constexpr (early_exit) {
+				if (functor(current_entity, parent, children)) {
+					return true;
+				}
+			}
+			else {
+				functor(current_entity, parent, children);
+			}
 
 			for (size_t index = 0; index < children.size; index++) {
-				ForEachImpl(children[index], current_entity, functor);
+				bool should_early_exit = ForEachImpl<early_exit>(children[index], current_entity, functor);
+				if constexpr (early_exit) {
+					if (should_early_exit) {
+						return true;
+					}
+				}
 			}
+			return false;
 		}
 
+		// Return true in the functor to early exit.
 		// Top down traversal. The functor receives as parameters the current entity, its parent (-1 if it doesn't have one)
 		// and the its children as a Stream<Entity> (size = 0 if it doesn't have any)
-		template<typename Functor>
-		void ForEach(Functor&& functor) {
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) {
 			for (unsigned int index = 0; index < roots.size; index++) {
-				ForEachImpl(roots[index], Entity(-1), functor);
+				bool should_early_exit = ForEachImpl<early_exit>(roots[index], Entity(-1), functor);
+				if constexpr (early_exit) {
+					if (should_early_exit) {
+						return true;
+					}
+				}
 			}
+			return false;
 		}
 
 		// Preferably a temporary allocator. If nullptr it uses the internal allocator

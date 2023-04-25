@@ -569,12 +569,12 @@ LinkComponentWithAssetFields GetLinkComponentWithAssetFieldForComponent(
 	for (unsigned int index = 0; index < asset_fields.size; index++) {
 		size_t asset_index = 0;
 		for (; asset_index < asset_types.size; asset_index++) {
-			if (asset_types[asset_index] == asset_fields[index].type) {
+			if (asset_types[asset_index] == asset_fields[index].type.type) {
 				break;
 			}
 		}
 
-		if (is_material_dependency && asset_fields[index].type == ECS_ASSET_MATERIAL) {
+		if (is_material_dependency && asset_fields[index].type.type == ECS_ASSET_MATERIAL) {
 			// Make it such that the asset index is different from asset_types.size
 			asset_index = -1;
 		}
@@ -1279,7 +1279,7 @@ void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sand
 	for (unsigned int index = 0; index < handles.size; index++) {
 		if (handles[index] != -1) {
 			// Unload it
-			unload_elements.Add({ handles[index], asset_fields[index].type });
+			unload_elements.Add({ handles[index], asset_fields[index].type.type });
 		}
 	}
 
@@ -1289,8 +1289,10 @@ void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sand
 // -----------------------------------------------------------------------------------------------------------------------------
 
 struct UnloadSandboxAssetsEventData {
+	// The asset database reference will be copied here such that the external one on call can still be utilized
+	AssetDatabaseReference sandbox_reference_copy;
+
 	unsigned int sandbox_index;
-	bool clear_database_reference;
 	Stream<unsigned int> asset_mask[ECS_ASSET_TYPE_COUNT];
 };
 
@@ -1302,7 +1304,7 @@ EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 		GetProjectAssetsFolder(editor_state, assets_folder);
 
-		DeallocateAssetsWithRemapping(editor_state->asset_database, editor_state->runtime_resource_manager, assets_folder, data->asset_mask);
+		DeallocateAssetsWithRemapping(&data->sandbox_reference_copy, editor_state->runtime_resource_manager, assets_folder, data->asset_mask);
 
 		// Deallocate the streams
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
@@ -1311,10 +1313,8 @@ EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 			}
 		}
 
-		if (data->clear_database_reference) {
-			EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
-			sandbox->database.Reset();
-		}
+		// Frees all the memory used
+		data->sandbox_reference_copy.Reset();
 
 		return false;
 	}
@@ -1327,12 +1327,12 @@ EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 
 void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, bool clear_database_reference)
 {
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
 	UnloadSandboxAssetsEventData event_data;
 	event_data.sandbox_index = sandbox_index;
-	event_data.clear_database_reference = clear_database_reference;
+	event_data.sandbox_reference_copy = sandbox->database.Copy(editor_state->EditorAllocator());
 	EditorAddEvent(editor_state, UnloadSandboxAssetsEvent, &event_data, sizeof(event_data));
-	
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 	// Copy the asset handles into separate allocations
 	UnloadSandboxAssetsEventData* event_data_ptr = (UnloadSandboxAssetsEventData*)EditorEventLastData(editor_state);
@@ -1387,7 +1387,7 @@ void UpdateAssetToComponents(EditorState* editor_state, Stream<void> old_asset, 
 
 		// Go through the asset fields. If the component doesn't have the given asset type, then don't bother with it
 		for (unsigned int index = 0; index < asset_fields.size; index++) {
-			if (asset_fields[index].type != asset_type) {
+			if (asset_fields[index].type.type != asset_type) {
 				asset_fields.RemoveSwapBack(index);
 				index--;
 			}

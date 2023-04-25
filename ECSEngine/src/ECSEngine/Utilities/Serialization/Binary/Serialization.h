@@ -9,6 +9,8 @@ namespace ECSEngine {
 		struct ReflectionManager;
 	}
 
+	struct DeserializeTypeNameRemapping;
+
 	// Return true if the header is valid and the deserialization can continue
 	typedef bool (*DeserializeValidateHeader)(Stream<void> header, void* data);
 
@@ -38,7 +40,14 @@ namespace ECSEngine {
 		unsigned int FieldIndex(unsigned int type_index, Stream<char> field_name) const;
 
 		// Returns true if the reflected type is the same as the one in the file
-		bool IsUnchanged(unsigned int type_index, const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type) const;
+		// The name_remapping is applied to the type's field definitions such that they can be mapped
+		// to previous definitions
+ 		bool IsUnchanged(
+			unsigned int type_index, 
+			const Reflection::ReflectionManager* reflection_manager, 
+			const Reflection::ReflectionType* type,
+			Stream<DeserializeTypeNameRemapping> name_remappings = { nullptr, 0 }
+		) const;
 
 		// Writes all types into the reflection manager. A stack allocator should be passed such that small allocations can be made
 		// Can optionally specify if the byte size, alignment and the is_blittable status are calculated afterwards or if the names
@@ -100,13 +109,14 @@ namespace ECSEngine {
 	// Fail_If_Field_Mismatch: the read will fail if one of the fields has a mismatched type inside the type table
 	// Verify_Dependent_Types: if you want to disable this check, set this to false
 	// Use_Resizable_Stream_Allocator: use the allocator set for that stream instead of the given field_allocator
+	// Default_Initialize_Missing_Fields: if a field is not found in the file, it will be default initialized
 	// Validate_Header: a function that can reject the data if the header is not valid
 	// Validate_Header_Data: data transmitted to the function
 	// OmitFields: optionally tell the deserializer to ignore certain fields
 	// File_Allocator: an allocator to be used to read the whole file into memory
 	// Field_Allocator: an allocator to be used to read off streams of data into the fields
 	// Backup Allocator: an allocator to be used if there are incompatible user defined types
-	// or streams who's data type has changed
+	// or streams whose data type has changed
 	// Error_Message: a stream where an error message will be written if one occurs
 	struct DeserializeOptions {
 		// It returns the field allocator according to the given options
@@ -122,6 +132,7 @@ namespace ECSEngine {
 		bool fail_if_field_mismatch = false;
 		bool verify_dependent_types = true;
 		bool use_resizable_stream_allocator = false;
+		bool default_initialize_missing_fields = false;
 
 		DeserializeValidateHeader validate_header = nullptr;
 		void* validate_header_data = nullptr;
@@ -261,11 +272,12 @@ namespace ECSEngine {
 
 	// It will ignore the current type. It must be placed after the deserialize table has been called on the
 	// the data. If the deserialized manager is not available, it will create it inside (useful for ignoring
-	// multiple elements from the same time)
+	// multiple elements from the same time). Can optionally give an array of name_remappings
 	ECSENGINE_API void IgnoreDeserialize(
 		uintptr_t& data,
 		DeserializeFieldTable field_table,
-		const Reflection::ReflectionManager* deserialized_manager = nullptr 
+		const Reflection::ReflectionManager* deserialized_manager = nullptr,
+		Stream<DeserializeTypeNameRemapping> name_remapping = { nullptr, 0 }
 	);
 
 #pragma region String versions

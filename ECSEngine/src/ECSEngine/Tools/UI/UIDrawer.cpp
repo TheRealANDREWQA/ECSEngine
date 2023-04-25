@@ -4209,6 +4209,8 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::ColorInputDrawer(size_t configuration, UIDrawConfig& config, UIDrawerColorInput* data, float2 position, float2 scale, Color* color) {
+			data->rgb = color;
+			
 			Color initial_frame_color = *color;
 
 			UIDrawConfig label_config;
@@ -11174,11 +11176,9 @@ namespace ECSEngine {
 				ptr += sizeof(UIDrawerFilterMenuSinglePointerData);
 
 				data->states = states;
-				char* window_name = (char*)ptr;
+				data->window_name = { (char*)ptr, window_name_size };
 				identifier.CopyTo(ptr);
 				filter_string.CopyTo(ptr);
-				data->window_name = window_name;
-				ptr += window_name_size;
 
 				if (~configuration & UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES) {
 					data->labels = label_names;

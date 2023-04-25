@@ -63,3 +63,10 @@ void* EditorEventLastData(const EditorState* editor_state)
 	}
 	return nullptr;
 }
+
+bool EditorHasEvent(EditorState* editor_state, EditorEventFunction function)
+{
+	return editor_state->event_queue.ForEach<true>([function](EditorEvent event_) {
+		return event_.function == function;
+	});
+}

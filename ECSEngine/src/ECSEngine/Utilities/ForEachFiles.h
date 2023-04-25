@@ -20,7 +20,7 @@ namespace ECSEngine {
 	);
 
 	// the return tells the for loop to terminate early if found something
-	using ForEachFolderFunction = bool (*)(Stream<wchar_t> path, void* data);
+	typedef bool (*ForEachFolderFunction)(Stream<wchar_t> path, void* data);
 
 	// Must take as arguments const wchar_t* and void* and return a bool
 	// True to continue the iteration or false to stop

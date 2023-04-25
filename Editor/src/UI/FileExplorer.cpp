@@ -1290,8 +1290,8 @@ void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
 		}
 	}
 
-	// Free the buffer
-	data->staging_preloaded_textures.Reset();
+	// Clear the buffer
+	data->staging_preloaded_textures.Clear();
 
 	// The flags need to be reset
 	data->preload_flags = 0;

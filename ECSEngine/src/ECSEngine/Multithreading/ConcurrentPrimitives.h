@@ -12,7 +12,16 @@
 namespace ECSEngine {
 
 	struct ECSENGINE_API SpinLock {
-		SpinLock& operator = (const SpinLock& other);
+		ECS_INLINE SpinLock() {
+			value.store(0, ECS_RELAXED);
+		}
+		ECS_INLINE SpinLock(const SpinLock& other) {
+			value.store(other.value.load(ECS_RELAXED), ECS_RELAXED);
+		}
+		ECS_INLINE SpinLock& operator = (const SpinLock& other) {
+			value.store(other.value.load(ECS_ACQUIRE), ECS_RELEASE);
+			return *this;
+		}
 
 		void lock();
 		
@@ -28,7 +37,27 @@ namespace ECSEngine {
 		// the lock doesn't get once locked
 		void wait_signaled();
 
-		std::atomic<unsigned char> value = { 0 };
+		std::atomic<unsigned char> value;
+	};
+
+	struct ECSENGINE_API AtomicFlag {
+		ECS_INLINE AtomicFlag(const AtomicFlag& other) {
+			value.store(other.value.load(ECS_RELAXED), ECS_RELAXED);
+		}
+		ECS_INLINE AtomicFlag& operator = (const AtomicFlag& other) {
+			value.store(other.value.load(ECS_RELAXED), ECS_RELAXED);
+			return *this;
+		}
+
+		void wait();
+
+		ECS_INLINE bool is_waiting() const {
+			return value.load(ECS_RELAXED);
+		}
+
+		void signal();
+
+		std::atomic<bool> value = false;
 	};
 
 	ECSENGINE_API void BitLock(std::atomic<unsigned char>& byte, unsigned char bit_index);
@@ -55,11 +84,18 @@ namespace ECSEngine {
 	ECSENGINE_API void BitWaitUnlocked(std::atomic<unsigned char>& byte, unsigned char bit_index, bool sleep_wait = false);
 
 	struct ECSENGINE_API Semaphore {
-		Semaphore();
-		Semaphore(unsigned int target);
+		ECS_INLINE Semaphore() : count(0), target(0) {}
+		ECS_INLINE Semaphore(unsigned int _target) : count(0), target(_target) {}
 
-		Semaphore(const Semaphore& other);
-		Semaphore& operator = (const Semaphore& other);
+		ECS_INLINE Semaphore(const Semaphore& other) {
+			count.store(other.count.load(ECS_RELAXED), ECS_RELAXED);
+			target.store(other.target.load(ECS_RELAXED), ECS_RELAXED);
+		}
+		ECS_INLINE Semaphore& operator = (const Semaphore& other) {
+			count.store(other.count.load(ECS_RELAXED), ECS_RELAXED);
+			target.store(other.target.load(ECS_RELAXED), ECS_RELAXED);
+			return *this;
+		}
 
 		unsigned int Enter(unsigned int count = 1);
 
@@ -93,8 +129,16 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API ConditionVariable {
-		ConditionVariable();
-		ConditionVariable(int signal_count);
+		ECS_INLINE ConditionVariable() : signal_count(0) {}
+		ECS_INLINE ConditionVariable(int _signal_count) : signal_count(_signal_count) {}
+
+		ECS_INLINE ConditionVariable(const ConditionVariable& other) {
+			signal_count.store(other.signal_count.load(ECS_RELAXED), ECS_RELAXED);
+		}
+		ECS_INLINE ConditionVariable& operator = (const ConditionVariable& other) {
+			signal_count.store(other.signal_count.load(ECS_RELAXED), ECS_RELAXED);
+			return *this;
+		}
 
 		// You can wait to be notified count times
 		// If multiple wait are issued with counts different from 1, the order in which they are woken up is
@@ -121,7 +165,17 @@ namespace ECSEngine {
 
 	// There can be at max 256 concurrent readers
 	struct ECSENGINE_API ReadWriteLock {
-		ReadWriteLock() : reader_count(0), lock() {}
+		ECS_INLINE ReadWriteLock() : reader_count(0), lock() {}
+
+		ECS_INLINE ReadWriteLock(const ReadWriteLock& other) {
+			reader_count.store(other.reader_count.load(ECS_RELAXED), ECS_RELAXED);
+			lock = other.lock;
+		}
+		ECS_INLINE ReadWriteLock& operator = (const ReadWriteLock& other) {
+			reader_count.store(other.reader_count.load(ECS_RELAXED), ECS_RELAXED);
+			lock = other.lock;
+			return *this;
+		}
 
 		void Clear();
 
@@ -157,7 +211,15 @@ namespace ECSEngine {
 	// It still uses the WaitOnAddress Win32 function for sleep resolution upon spinning too much
 	// There can be at max 128 concurrent readers
 	struct ECSENGINE_API ByteReadWriteLock {
-		ByteReadWriteLock() : count(0) {}
+		ECS_INLINE ByteReadWriteLock() : count(0) {}
+
+		ECS_INLINE ByteReadWriteLock(const ByteReadWriteLock& other) {
+			count.store(other.count.load(ECS_RELAXED), ECS_RELAXED);
+		}
+		ECS_INLINE ByteReadWriteLock& operator = (const ByteReadWriteLock& other) {
+			count.store(other.count.load(ECS_RELAXED), ECS_RELAXED);
+			return *this;
+		}
 
 		void Clear();
 

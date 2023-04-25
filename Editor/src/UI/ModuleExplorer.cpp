@@ -437,7 +437,8 @@ void ModuleExplorerCommandAll(ActionData* action_data, void (*function)
 		Stream<unsigned int>,
 		EDITOR_MODULE_CONFIGURATION*,
 		EDITOR_LAUNCH_BUILD_COMMAND_STATUS*,
-		EDITOR_FINISH_BUILD_COMMAND_STATUS*
+		EDITOR_FINISH_BUILD_COMMAND_STATUS*,
+		bool
 	)
 ) {
 	UI_UNPACK_ACTION_DATA;
@@ -464,7 +465,7 @@ void ModuleExplorerCommandAll(ActionData* action_data, void (*function)
 		}
 	}
 
-	function(data->editor_state, indices, configurations, statuses, nullptr);
+	function(data->editor_state, indices, configurations, statuses, nullptr, false);
 	//ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(data->editor_state, statuses);
 }
 

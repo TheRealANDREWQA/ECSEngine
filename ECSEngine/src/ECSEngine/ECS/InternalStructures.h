@@ -14,6 +14,7 @@
 
 #define ECS_ARCHETYPE_MAX_COMPONENTS 15
 #define ECS_ARCHETYPE_MAX_SHARED_COMPONENTS 15
+#define ECS_SHARED_INSTANCE_MAX_VALUE SHORT_MAX
 
 
 namespace ECSEngine {
@@ -273,18 +274,18 @@ namespace ECSEngine {
 		void DeallocatePool(unsigned int pool_index);
 		
 		// Receives as parameter the entity and its entity info
+		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEach(Functor&& functor) {
+		bool ForEach(Functor&& functor) {
 			bool should_continue = true;
 			for (unsigned int index = 0; index < m_entity_infos.size && should_continue; index++) {
 				if (m_entity_infos[index].is_in_use) {
-					m_entity_infos[index].stream.ForEachIndex<early_exit>([&](unsigned int stream_index) {
+					should_continue = !m_entity_infos[index].stream.ForEachIndex<early_exit>([&](unsigned int stream_index) {
 						Entity entity = GetEntityFromPosition(index, stream_index);
 						EntityInfo info = m_entity_infos[index].stream[stream_index];
 						entity.generation_count = info.generation_count;
 						if constexpr (early_exit) {
 							if (functor(entity, info)) {
-								should_continue = false;
 								return true;
 							}
 							else {
@@ -297,6 +298,7 @@ namespace ECSEngine {
 					});
 				}
 			}
+			return !should_continue;
 		}
 
 		Entity GetEntityFromPosition(unsigned int chunk_index, unsigned int stream_index) const;

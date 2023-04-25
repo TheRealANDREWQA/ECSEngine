@@ -210,7 +210,7 @@ namespace ECSEngine {
 			unsigned int warn_count;
 			unsigned int error_count;
 			unsigned int trace_count;
-			ResizableStream<unsigned int> filtered_message_indices;
+			CapacityStream<unsigned int> filtered_message_indices;
 			HashTableDefault<UniqueConsoleMessage> unique_messages;
 			Stream<bool> system_filter;
 		};

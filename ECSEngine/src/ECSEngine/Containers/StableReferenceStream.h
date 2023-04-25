@@ -155,9 +155,10 @@ namespace ECSEngine {
 			}
 		}
 
-		// Return true to early exit, else false
+		// Return true in the functor to early exit, else false
+		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEachIndex(Functor&& functor) const {
+		bool ForEachIndex(Functor&& functor) const {
 			for (unsigned int index = 0; index < size; index++) {
 				unsigned int current_index = 0;
 				if constexpr (!queue_indirection_list) {
@@ -169,19 +170,21 @@ namespace ECSEngine {
 				}
 				if constexpr (early_exit) {
 					if (functor(current_index)) {
-						return;
+						return true;
 					}
 				}
 				else {
 					functor(current_index);
 				}
 			}
+			return false;
 		}
 
 		// Return true to early exit, else false
+		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEach(Functor&& functor) {
-			ForEachIndex<early_exit>([&](unsigned int index) {
+		bool ForEach(Functor&& functor) {
+			return ForEachIndex<early_exit>([&](unsigned int index) {
 				if constexpr (early_exit) {
 					return functor(buffer[index]);
 				}
@@ -192,9 +195,10 @@ namespace ECSEngine {
 		}
 
 		// Return true to early exit, else false
+		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		void ForEachConst(Functor&& functor) const {
-			ForEachIndex<early_exit>([&](unsigned int index) {
+		bool ForEachConst(Functor&& functor) const {
+			return ForEachIndex<early_exit>([&](unsigned int index) {
 				if constexpr (early_exit) {
 					return functor(buffer[index]);
 				}

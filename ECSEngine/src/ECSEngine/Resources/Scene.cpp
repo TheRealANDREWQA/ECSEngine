@@ -77,7 +77,7 @@ namespace ECSEngine {
 
 		// Try to load the asset database first
 		if (load_data->database != nullptr) {
-			success = DeserializeAssetDatabase(load_data->database, ptr, true) == ECS_DESERIALIZE_OK;
+			success = DeserializeAssetDatabase(load_data->database, ptr) == ECS_DESERIALIZE_OK;
 		}
 		else {
 			AssetDatabaseReferenceFromStandaloneOptions options = { load_data->handle_remapping, load_data->pointer_remapping };

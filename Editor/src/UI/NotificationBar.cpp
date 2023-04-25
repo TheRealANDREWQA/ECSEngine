@@ -59,7 +59,11 @@ void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		if (console_data != nullptr) {
 			// Tick the console filtering process since it may not be called when it is not visible
 			if (!initialize && !drawer.system->IsWindowDrawing(console_window)) {
+				// Temporarly assign the winodw index for the drawer to that of the console window
+				unsigned int previous_window_index = drawer.window_index;
+				drawer.window_index = console_window;
 				ConsoleFilterMessages(console_data, drawer);
+				drawer.window_index = previous_window_index;
 			}
 
 			if (console_data->filtered_message_indices.size > 0 && console->messages.size > 0) {

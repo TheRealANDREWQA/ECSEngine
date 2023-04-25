@@ -13,8 +13,6 @@
 
 #define STATIC_TASK_ALLOCATOR_SIZE (10'000)
 
-#define DISABLE_MULTITHREADING_FRAME
-
 namespace ECSEngine {
 
 	inline AllocatorPolymorphic StaticTaskAllocator(TaskManager* manager) {
@@ -63,18 +61,19 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	// Returns the old value of the thread wrapper
 	void TaskManagerChangeWrapperMode(
 		TaskManager* task_manager,
-		ThreadFunctionWrapper new_custom_function,
-		void* new_wrapper_data,
-		size_t new_wrapper_data_size,
-		ThreadFunctionWrapper* wrapper,
-		void** wrapper_data,
-		size_t* wrapper_data_size
+		ThreadFunctionWrapperData new_wrapper,
+		ThreadFunctionWrapperData* old_wrapper
 	) {
-		*wrapper = new_custom_function;
-		*wrapper_data = function::CopyNonZero(GetAllocatorPolymorphic(&task_manager->m_static_task_data_allocator), new_wrapper_data, new_wrapper_data_size);
-		*wrapper_data_size = new_wrapper_data_size;
+		ECS_ASSERT(new_wrapper.data_size <= sizeof(task_manager->m_static_wrapper_data_storage));
+
+		old_wrapper->function = new_wrapper.function;
+		old_wrapper->data_size = new_wrapper.data_size;
+		if (new_wrapper.data_size > 0) {
+			memcpy(old_wrapper->data, new_wrapper.data, new_wrapper.data_size);
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -93,8 +92,8 @@ namespace ECSEngine {
 		size_t max_dynamic_tasks
 	) : m_last_thread_index(0), m_world(nullptr)
 #ifdef ECS_TASK_MANAGER_WRAPPER 
-		, m_static_wrapper(ThreadWrapperNone), m_static_wrapper_data(nullptr), m_static_wrapper_data_size(0)
-		, m_dynamic_wrapper(ThreadWrapperNone), m_dynamic_wrapper_data(nullptr), m_dynamic_wrapper_data_size(0)
+		, m_static_wrapper({ ThreadWrapperNone, &m_static_wrapper_data_storage, 0 })
+		, m_dynamic_wrapper({ ThreadWrapperNone, &m_dynamic_wrapper_data_storage, 0 })
 #endif
 	{
 		thread_linear_allocator_size = thread_linear_allocator_size == 0 ? ECS_TASK_MANAGER_THREAD_LINEAR_ALLOCATOR_SIZE : thread_linear_allocator_size;
@@ -114,6 +113,10 @@ namespace ECSEngine {
 
 		// thread handles
 		total_memory += sizeof(void*) * thread_count;
+
+		// Atomic counters / 2 cache lines are needed but multiply by 2 again to account for the padding
+		// necessary to align these fields
+		total_memory += ECS_CACHE_LINE_SIZE * 2 * 2;
 
 		// additional bytes for alignment
 		total_memory += ECS_CACHE_LINE_SIZE * thread_count * 2;
@@ -144,7 +147,16 @@ namespace ECSEngine {
 			buffer_start += sizeof(ThreadQueue);
 		}
 
-		m_thread_task_index.store(0, ECS_RELEASE);
+		buffer_start = function::AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
+		m_thread_task_index = (std::atomic<unsigned int>*)buffer_start;
+		buffer_start += sizeof(std::atomic<unsigned int>);
+		buffer_start = function::AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
+		m_last_thread_index = (std::atomic<unsigned int>*)buffer_start;
+		buffer_start += sizeof(std::atomic<unsigned int>);
+		buffer_start = function::AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
+
+		m_thread_task_index->store(0, ECS_RELAXED);
+		m_last_thread_index->store(0, ECS_RELAXED);
 
 		// sleep variables
 		buffer_start = function::AlignPointer(buffer_start, alignof(ConditionVariable));
@@ -164,7 +176,8 @@ namespace ECSEngine {
 		buffer_start += sizeof(RingBuffer*) * thread_count;
 
 		for (size_t index = 0; index < thread_count; index++) {
-			m_dynamic_task_allocators[index] = (RingBuffer*)function::AlignPointer(buffer_start, alignof(RingBuffer));
+			buffer_start = function::AlignPointer(buffer_start, alignof(RingBuffer));
+			m_dynamic_task_allocators[index] = (RingBuffer*)buffer_start;
 			buffer_start += sizeof(RingBuffer);
 
 			m_dynamic_task_allocators[index]->InitializeFromBuffer(buffer_start, DYNAMIC_TASK_ALLOCATOR_SIZE);
@@ -234,10 +247,12 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	unsigned int TaskManager::AddDynamicTask(ThreadTask task, bool can_be_stolen) {
-		AddDynamicTaskWithAffinity(task, m_last_thread_index, can_be_stolen);
-		unsigned int thread_index = m_last_thread_index;
-		m_last_thread_index = m_last_thread_index == m_thread_queue.size - 1 ? (unsigned int)0 : m_last_thread_index + 1;
-		return thread_index;
+		unsigned int thread_count = GetThreadCount();
+
+		unsigned int last_thread_index = m_last_thread_index->fetch_add(1, ECS_RELAXED);
+		last_thread_index = last_thread_index % thread_count;
+		AddDynamicTaskWithAffinity(task, last_thread_index, can_be_stolen);
+		return last_thread_index;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -303,6 +318,7 @@ namespace ECSEngine {
 
 				if (remainder > 0) {
 					functor(extract_functor(task_index++), index);
+					remainder--;
 				}
 			}
 		}
@@ -365,15 +381,15 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::ChangeStaticWrapperMode(ThreadFunctionWrapper custom_function, void* wrapper_data, size_t wrapper_data_size)
+	void TaskManager::ChangeStaticWrapperMode(ThreadFunctionWrapperData wrapper_data)
 	{
-		TaskManagerChangeWrapperMode(this, custom_function, wrapper_data, wrapper_data_size, &m_static_wrapper, &m_static_wrapper_data, &m_static_wrapper_data_size);
+		TaskManagerChangeWrapperMode(this, wrapper_data, &m_static_wrapper);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::ChangeDynamicWrapperMode(ThreadFunctionWrapper custom_function, void* wrapper_data, size_t wrapper_data_size) {
-		TaskManagerChangeWrapperMode(this, custom_function, wrapper_data, wrapper_data_size, &m_dynamic_wrapper, &m_dynamic_wrapper_data, &m_dynamic_wrapper_data_size);
+	void TaskManager::ChangeDynamicWrapperMode(ThreadFunctionWrapperData wrapper_data) {
+		TaskManagerChangeWrapperMode(this, wrapper_data, &m_dynamic_wrapper);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -395,7 +411,11 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::ClearTaskIndex() {
-		m_thread_task_index.store(0, ECS_RELEASE);
+		m_thread_task_index->store(0, ECS_RELEASE);
+		// Make all initialize locks to 0 again
+		for (unsigned int index = 0; index < m_tasks.size; index++) {
+			m_tasks[index].initialize_lock.unlock();
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -442,7 +462,7 @@ namespace ECSEngine {
 
 	void TaskManager::DecrementThreadTaskIndex()
 	{
-		m_thread_task_index.fetch_sub(1, ECS_ACQ_REL);
+		m_thread_task_index->fetch_sub(1, ECS_ACQ_REL);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -451,6 +471,8 @@ namespace ECSEngine {
 
 	void TaskManager::DoFrame(bool wait_frame)
 	{
+		m_thread_task_index->store(0, ECS_RELAXED);
+
 		// Reset the is_frame_done condition_variable
 		if (wait_frame) {
 			m_is_frame_done.Reset();
@@ -462,25 +484,15 @@ namespace ECSEngine {
 			WakeThreads(true);
 		}
 		else {
-#ifdef DISABLE_MULTITHREADING_FRAME
-			m_sleep_wait[0].Notify();
-			AddDynamicTaskWithAffinity(ECS_THREAD_TASK_NAME(EmptyTask, nullptr, 0), 0, false);
-#else
 			// Push an empty task such that the threads will wake up and start doing the static tasks
 			for (unsigned int index = 0; index < thread_count; index++) {
-				m_sleep_wait[index].Notify();
-				AddDynamicTaskWithAffinity(ECS_THREAD_TASK_NAME(EmptyTask, nullptr, 0), index, false);
+				AddDynamicTaskAndWakeWithAffinity(ECS_THREAD_TASK_NAME(EmptyTask, nullptr, 0), index, false);
 			}
-#endif
 		}
 
 		if (wait_frame) {
-#ifdef DISABLE_MULTITHREADING_FRAME
-			m_is_frame_done.Wait(1);
-#else
 			m_is_frame_done.Wait(thread_count);
 			ECS_ASSERT(m_is_frame_done.signal_count.load(ECS_RELAXED) == 0);
-#endif
 		}
 	}
 
@@ -498,7 +510,7 @@ namespace ECSEngine {
 			// We managed to get the lock - we should do the initialization
 			// We will anounce to the other threads that we finished the serial
 			// part by setting the high bit
-			m_static_wrapper(thread_id, thread_id, m_world, m_tasks[task_index].task, m_static_wrapper_data);
+			m_static_wrapper.function(thread_id, thread_id, m_world, m_tasks[task_index].task, m_static_wrapper.data);
 			// Increment the static index and then set the high bit
 			IncrementThreadTaskIndex();
 
@@ -508,7 +520,7 @@ namespace ECSEngine {
 			// Wait while the serial part is being finished
 			BitWaitUnlocked(m_tasks[task_index].initialize_lock.value, 7, true);
 		}
-		
+
 		return true;
 	}
 
@@ -516,7 +528,7 @@ namespace ECSEngine {
 
 	void TaskManager::ExecuteDynamicTask(ThreadTask task, unsigned int thread_id, unsigned int task_thread_id)
 	{
-		m_dynamic_wrapper(thread_id, task_thread_id, m_world, task, m_dynamic_wrapper_data);
+		m_dynamic_wrapper.function(thread_id, task_thread_id, m_world, task, m_dynamic_wrapper.data);
 
 		size_t allocation_size = task.data_size + task.name.size * sizeof(char);
 
@@ -532,26 +544,14 @@ namespace ECSEngine {
 
 	ECS_THREAD_TASK(FinishFrameTaskDynamic) {
 		world->task_manager->m_is_frame_done.Notify();
-
-#ifdef DISABLE_MULTITHREADING_FRAME
-		
-#else
-		ECS_FORMAT_TEMP_STRING(my_string, "Thread id: {#}\n", thread_id);	
-		ECSEngine::GetConsole()->Trace(my_string);
-#endif
 	}
 
 	ECS_THREAD_TASK(FinishFrameTask) {
 		// Flush the entity manager as well
 		world->entity_manager->EndFrame();
 
-#ifdef DISABLE_MULTITHREADING_FRAME
-		world->task_manager->m_is_frame_done.Notify();
-#else
 		unsigned int thread_count = world->task_manager->GetThreadCount();
-		ECSEngine::GetConsole()->Trace("New Finish");
 		world->task_manager->AddDynamicTaskGroup(WITH_NAME(FinishFrameTaskDynamic), nullptr, thread_count, 0, false);
-#endif
 	}
 
 	void TaskManager::FinishStaticTasks()
@@ -562,7 +562,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::IncrementThreadTaskIndex() {
-		m_thread_task_index.fetch_add(1, ECS_ACQ_REL);
+		m_thread_task_index->fetch_add(1, ECS_ACQ_REL);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -600,7 +600,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	unsigned int TaskManager::GetThreadTaskIndex() const {
-		return m_thread_task_index.load(ECS_ACQUIRE);
+		return m_thread_task_index->load(ECS_ACQUIRE);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -608,6 +608,30 @@ namespace ECSEngine {
 	AllocatorPolymorphic TaskManager::GetThreadTempAllocator(unsigned int thread_id) const
 	{
 		return GetAllocatorPolymorphic(m_thread_linear_allocators[thread_id]);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	ThreadFunctionWrapperData TaskManager::GetStaticThreadWrapper(CapacityStream<void>* data) const
+	{
+		ThreadFunctionWrapperData wrapper = m_static_wrapper;
+		if (data != nullptr) {
+			data->Add(Stream<void>(m_static_wrapper.data, m_static_wrapper.data_size));
+			wrapper.data = data->buffer;
+		}
+		return wrapper;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	ThreadFunctionWrapperData TaskManager::GetDynamicThreadWrapper(CapacityStream<void>* data) const
+	{
+		ThreadFunctionWrapperData wrapper = m_dynamic_wrapper;
+		if (data != nullptr) {
+			data->Add(Stream<void>(m_dynamic_wrapper.data, m_dynamic_wrapper.data_size));
+			wrapper.data = data->buffer;
+		}
+		return wrapper;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -686,7 +710,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::SetThreadTaskIndex(int value) {
-		m_thread_task_index.store(value, ECS_RELEASE);
+		m_thread_task_index->store(value, ECS_RELEASE);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -706,6 +730,7 @@ namespace ECSEngine {
 	void TaskManager::SleepThreads(bool wait_until_all_sleep) {
 		unsigned int thread_count = GetThreadCount();
 		ConditionVariable* condition_variable = (ConditionVariable*)m_dynamic_task_allocators[0]->Allocate(sizeof(ConditionVariable));
+		condition_variable->Reset();
 
 		AddDynamicTaskGroupAndWake(WITH_NAME(SleepTask), condition_variable, thread_count, 0, false);
 		if (wait_until_all_sleep) {
@@ -717,12 +742,12 @@ namespace ECSEngine {
 
 	void TaskManager::SleepUntilDynamicTasksFinish(size_t max_period) {
 #ifdef ECS_TASK_MANAGER_WRAPPER
-		ECS_ASSERT(m_dynamic_wrapper == ThreadWrapperCountTasks);
+		ECS_ASSERT(m_dynamic_wrapper.function == ThreadWrapperCountTasks);
 
 		Timer timer;
 		timer.SetMarker();
 
-		ThreadWrapperCountTasksData* data = (ThreadWrapperCountTasksData*)m_dynamic_wrapper_data;
+		ThreadWrapperCountTasksData* data = (ThreadWrapperCountTasksData*)m_dynamic_wrapper.data;
 		TickWait<'!'>(SLEEP_UNTIL_DYNAMIC_TASKS_FINISH_INTERVAL, data->count, (unsigned int)0);
 #endif
 	}
@@ -738,18 +763,16 @@ namespace ECSEngine {
 
 	ThreadTask TaskManager::StealTask(unsigned int& thread_index)
 	{
-		// Try to go to the next index
-		// Because going from a fixed index will cause multiple threads
-		// trying to steal a job into waiting for each other instead of
-		// exploring multiple queues
 		DynamicThreadTask task;
 		task.task.function = nullptr;
 
+		// Try to go to the next index
+		// Because going from a fixed index will cause multiple threads
+		// trying to steal a job into waiting for each other instead of exploring multiple queues
 		// Use a different increment in order to avoid convoying - if threads
 		// 4 and 5 would want to steal tasks and 5 gets stuck then 4 will fight for stealing tasks
 		// with the 5th thread. If they have different increments this avoid this problem - especially in different
-		// directions. With this method the thread 4 decrements and goes downwards meanwhile the thread 5
-		// will go upwards
+		// directions. With this method the thread 4 decrements and goes downwards meanwhile the thread 5 will go upwards
 		bool direction = thread_index & 0x1;
 
 		unsigned int thread_count = GetThreadCount();
@@ -927,6 +950,18 @@ namespace ECSEngine {
 					}
 				};
 
+				auto go_to_sleep_dynamic_task_check = [&]() {
+					// We need to recheck before going to sleep if there is something on the dynamic task queue
+					bool was_executed = false;
+					if (thread_queue->Pop(thread_task)) {
+						was_executed = true;
+						task_manager->ExecuteDynamicTask(thread_task.task, thread_id, thread_id);
+					}
+					if (!was_executed) {
+						go_to_sleep();
+					}
+				};
+
 				// We failed to get a thread task from our queue.
 				// If the stealing is enabled, try to do it
 				if (function::HasFlag(task_manager->m_wait_type, ECS_TASK_MANAGER_WAIT_STEAL)) {
@@ -939,13 +974,13 @@ namespace ECSEngine {
 					else {
 						// There is nothing to be stolen - either try to get the next static task or go to wait if overpassed
 						if (!task_manager->ExecuteStaticTask(thread_id)) {
-							go_to_sleep();
+							go_to_sleep_dynamic_task_check();
 						}
 					}
 				}
 				else {
 					if (!task_manager->ExecuteStaticTask(thread_id)) {
-						go_to_sleep();
+						go_to_sleep_dynamic_task_check();
 					}
 				}
 			}

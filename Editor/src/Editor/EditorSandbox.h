@@ -5,17 +5,12 @@
 #include "editorpch.h"
 #include "../Modules/ModuleDefinition.h"
 #include "ECSEngineReflectionMacros.h"
+#include "EditorSandboxTypes.h"
 
 struct EditorState;
 
 #define EDITOR_SCENE_EXTENSION L".scene"
 #define EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT ECS_CONSTANT_REFLECT(8)
-
-enum EDITOR_SANDBOX_STATE {
-	EDITOR_SANDBOX_SCENE,
-	EDITOR_SANDBOX_RUNNING,
-	EDITOR_SANDBOX_PAUSED
-};
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -40,24 +35,6 @@ struct ECS_REFLECT EditorSandboxModule {
 };
 
 // -------------------------------------------------------------------------------------------------------------
-
-enum EDITOR_SANDBOX_VIEWPORT : unsigned char {
-	EDITOR_SANDBOX_VIEWPORT_SCENE,
-	EDITOR_SANDBOX_VIEWPORT_RUNTIME,
-	EDITOR_SANDBOX_VIEWPORT_COUNT
-};
-
-// It will map the paused state to the runtime viewport
-inline EDITOR_SANDBOX_VIEWPORT EditorViewportTextureFromState(EDITOR_SANDBOX_STATE sandbox_state) {
-	switch (sandbox_state) {
-	case EDITOR_SANDBOX_SCENE:
-		return EDITOR_SANDBOX_VIEWPORT_SCENE;
-	case EDITOR_SANDBOX_RUNNING:
-		return EDITOR_SANDBOX_VIEWPORT_RUNTIME;
-	case EDITOR_SANDBOX_PAUSED:
-		return EDITOR_SANDBOX_VIEWPORT_RUNTIME;
-	}
-}
 
 struct ECS_REFLECT EditorSandbox {
 	inline ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
@@ -304,6 +281,10 @@ void GetSandboxScenePath(
 
 // -------------------------------------------------------------------------------------------------------------
 
+unsigned int GetSandboxCount(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
 ECSEngine::WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
@@ -413,6 +394,10 @@ bool LaunchSandboxRuntime(EditorState* editor_state, unsigned int index);
 
 // -------------------------------------------------------------------------------------------------------------
 
+void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_for_pause = true);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Some objects need to be created just once and used accros runtime executions
 void PreinitializeSandboxRuntime(
 	EditorState* editor_state,
@@ -472,12 +457,16 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 
 // Returns true if the render was successful. It can fail if there is no graphics module, there are multiple of them or the
 // task scheduling failed for the graphics module.
-bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, bool disable_logging = false);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // The new size needs to be specified in texels
 void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, ECSEngine::uint2 new_size);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -528,7 +517,8 @@ bool SaveEditorSandboxFile(const EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_index);
+// If the viewport is specified it will override the selection based on the sandbox state
+void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
 
 // -------------------------------------------------------------------------------------------------------------
 

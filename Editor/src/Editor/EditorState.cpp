@@ -105,6 +105,25 @@ void TickModuleStatus(EditorState* editor_state) {
 			bool is_solution_updated = UpdateModuleSolutionLastWrite(editor_state, index);
 			if (is_solution_updated) {
 				ReflectModule(editor_state, index);
+				bool is_graphics_module = IsGraphicsModule(editor_state, index);
+				if (is_graphics_module) {
+					// For each configuration determine if it is used by sandboxes to see if we need to recompile
+					ECS_STACK_CAPACITY_STREAM(unsigned int, dependency_sandboxes, 512);
+					for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
+						EDITOR_MODULE_CONFIGURATION current_configuration = (EDITOR_MODULE_CONFIGURATION)configuration_index;
+						if (GetSandboxesForModule(editor_state, index, current_configuration, &dependency_sandboxes)) {
+							// Launch the build command for that module and configuration, if not already being compiled
+							if (!IsModuleBeingCompiled(editor_state, index, current_configuration)) {
+								BuildModule(editor_state, index, current_configuration);
+							}
+
+							// Re-render the sandboxes that depend on this module
+							for (unsigned int sandbox_index = 0; sandbox_index < dependency_sandboxes.size; sandbox_index++) {
+								RenderSandbox(editor_state, dependency_sandboxes[sandbox_index], EDITOR_SANDBOX_VIEWPORT_SCENE, true);
+							}
+						}
+					}
+				}
 			}
 
 			for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
@@ -348,8 +367,12 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->multithreaded_editor_allocator = multithreaded_editor_allocator;
 
 	TaskManager* editor_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
-	new (editor_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1000, 100'000);
+	new (editor_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1'000, 100);
 	editor_state->task_manager = editor_task_manager;
+
+	TaskManager* render_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
+	new (render_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1'000, 100);
+	editor_state->render_task_manager = render_task_manager;
 
 	// Make a wrapper world that only references this task manager
 	World* task_manager_world = (World*)calloc(1, sizeof(World));
@@ -365,8 +388,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	ThreadWrapperCountTasksData wrapper_data;
 	wrapper_data.count.store(0, ECS_RELAXED);
-	editor_task_manager->ChangeDynamicWrapperMode(ThreadWrapperCountTasks, &wrapper_data, sizeof(wrapper_data));
+	editor_task_manager->ChangeDynamicWrapperMode({ ThreadWrapperCountTasks, &wrapper_data, sizeof(wrapper_data) });
 	editor_task_manager->CreateThreads();
+	render_task_manager->CreateThreads();
 
 	editor_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_LOW);
 
@@ -415,10 +439,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->event_queue.InitializeFromBuffer(editor_events, EDITOR_EVENT_QUEUE_CAPACITY);
 
 	// Update the editor components
-	editor_state->editor_components.UpdateComponents(editor_reflection_manager, 0, "ECSEngine");
+	editor_state->editor_components.UpdateComponents(editor_state, editor_reflection_manager, 0, "ECSEngine");
 	// Finalize every event
 	for (unsigned int index = 0; index < editor_state->editor_components.events.size; index++) {
-		editor_state->editor_components.FinalizeEvent(editor_state, editor_reflection_manager, editor_ui_reflection, editor_state->editor_components.events[index]);
+		editor_state->editor_components.FinalizeEvent(editor_state, editor_reflection_manager, editor_state->editor_components.events[index]);
 	}
 	editor_state->editor_components.EmptyEventStream();
 
@@ -445,7 +469,6 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	HubData* hub_data = (HubData*)malloc(sizeof(HubData));
 	hub_data->projects.Initialize(editor_allocator, 0, EDITOR_HUB_PROJECT_CAPACITY);
 	hub_data->projects.size = 0;
-	hub_data->ui_reflection = editor_ui_reflection;
 	editor_state->hub_data = hub_data;
 	
 	ProjectFile* project_file = (ProjectFile*)malloc(sizeof(ProjectFile));

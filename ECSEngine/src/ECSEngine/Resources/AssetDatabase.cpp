@@ -268,7 +268,8 @@ namespace ECSEngine {
 			sparse_set.ResizeNoCopy(stream.size);
 
 			for (size_t index = 0; index < stream.size; index++) {
-				result.AddFindAssetInternal(database->GetAssetConst(stream[index], type), type);
+				unsigned int standalone_reference_count = database->GetReferenceCountStandalone(stream[index], type);
+				result.AddFindAssetInternal(database->GetAssetConst(stream[index], type), type, standalone_reference_count);
 			}
 		};
 
@@ -589,6 +590,17 @@ namespace ECSEngine {
 			ECS_ASSERT(false, "Invalid asset type.");
 		}
 		return -1;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::FindAssetEx(const AssetDatabase* other, unsigned int other_handle, ECS_ASSET_TYPE type) const
+	{
+		const void* other_asset = other->GetAssetConst(other_handle, type);
+		Stream<char> name = ECSEngine::GetAssetName(other_asset, type);
+		Stream<wchar_t> file = GetAssetFile(other_asset, type);
+
+		return FindAsset(name, file, type);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -953,6 +965,19 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
+	unsigned int AssetDatabase::GetMaxAssetCount() const
+	{
+		unsigned int max = 0;
+
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			max = std::max(max, GetAssetCount((ECS_ASSET_TYPE)index));
+		}
+
+		return max;
+	}
+
+	// --------------------------------------------------------------------------------------
+
 	unsigned int AssetDatabase::GetAssetHandleFromIndex(unsigned int index, ECS_ASSET_TYPE type) const
 	{
 		switch (type) {
@@ -1025,24 +1050,26 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::GetReferenceCountStandalone(unsigned int handle, ECS_ASSET_TYPE type) const
 	{
 		unsigned int reference_count = GetReferenceCount(handle, type);
-		if (type == ECS_ASSET_MESH || type == ECS_ASSET_MATERIAL || type == ECS_ASSET_MISC) {
+		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
 			return reference_count;
 		}
 
 		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 128);
-		// Potential references from materials
-		unsigned int material_count = GetAssetCount(ECS_ASSET_MATERIAL);
-		for (unsigned int index = 0; index < material_count; index++) {
-			dependencies.size = 0;
-			const MaterialAsset* material = GetMaterialConst(GetAssetHandleFromIndex(index, ECS_ASSET_MATERIAL));
-			material->GetDependencies(&dependencies);
+		function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE current_type) {
+			// Potential references from other asset types
+			unsigned int count = GetAssetCount(current_type);
+			for (unsigned int index = 0; index < count; index++) {
+				dependencies.size = 0;
+				GetAssetDependencies(GetAssetConst(GetAssetHandleFromIndex(index, current_type), current_type), current_type, &dependencies);
 
-			for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
-				if (dependencies[subindex].type == type && dependencies[subindex].handle == handle) {
-					reference_count--;
+				for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
+					if (dependencies[subindex].type == type && dependencies[subindex].handle == handle) {
+						reference_count--;
+					}
 				}
 			}
-		}
+		});
+
 		return reference_count;
 	}
 
@@ -1056,24 +1083,28 @@ namespace ECSEngine {
 			unsigned int current_handle = GetAssetHandleFromIndex(index, type);
 			counts->AddSafe({ current_handle, GetReferenceCount(current_handle, type) });
 		}
-		if (type == ECS_ASSET_MESH || type == ECS_ASSET_MATERIAL || type == ECS_ASSET_MISC) {
+
+		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
 			return;
 		}
 
+		// Possibly referenced by others
 		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 128);
-		// Possibly referenced by materials
-		unsigned int material_count = GetAssetCount(ECS_ASSET_MATERIAL);
-		for (unsigned int index = 0; index < material_count; index++) {
-			dependencies.size = 0;
-			const MaterialAsset* material = GetMaterialConst(GetAssetHandleFromIndex(index, ECS_ASSET_MATERIAL));
-			material->GetDependencies(&dependencies);
-			for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
-				if (dependencies[subindex].type == type) {
-					unsigned int current_index = GetIndexFromAssetHandle(dependencies[subindex].handle, type);
-					counts->buffer[current_index].y--;
+		function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
+			unsigned int count = GetAssetCount(asset_type);
+			for (unsigned int index = 0; index < count; index++) {
+				dependencies.size = 0;
+				const void* metadata = GetAssetConst(GetAssetHandleFromIndex(index, asset_type), asset_type);
+				GetAssetDependencies(metadata, asset_type, &dependencies);
+
+				for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
+					if (dependencies[subindex].type == type) {
+						unsigned int current_index = GetIndexFromAssetHandle(dependencies[subindex].handle, type);
+						counts->buffer[current_index].y--;
+					}
 				}
 			}
-		}
+		});
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -1093,27 +1124,27 @@ namespace ECSEngine {
 			}
 		}
 
-		if (type == ECS_ASSET_MESH || type == ECS_ASSET_MISC || type == ECS_ASSET_MATERIAL) {
+		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
 			return handles;
 		}
 
-		if (type != ECS_ASSET_TEXTURE && type != ECS_ASSET_GPU_SAMPLER && type != ECS_ASSET_SHADER) {
-			ECS_ASSERT(false, "Invalid asset type");
-		}
+		// Verify that it is a referenceable type
+		ECS_ASSERT(function::ExistsStaticArray(type, ECS_ASSET_TYPES_REFERENCEABLE), "Invalid asset type");
 
 		unsigned int current_handle = FindAssetEx(GetAssetFromMetadata(metadata, type), type);
 
-		unsigned int material_count = GetAssetCount(ECS_ASSET_MATERIAL);
-		handles[ECS_ASSET_MATERIAL].Initialize(allocator, material_count);
-		handles[ECS_ASSET_MATERIAL].size = 0;
-		for (unsigned int index = 0; index < material_count; index++) {
-			unsigned int material_handle = GetAssetHandleFromIndex(index, ECS_ASSET_MATERIAL);
-			const MaterialAsset* material = GetMaterialConst(material_handle);
-
-			if (DoesAssetReferenceOtherAsset(current_handle, type, material, ECS_ASSET_MATERIAL)) {
-				handles[ECS_ASSET_MATERIAL].Add(material_handle);
+		function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE with_dependency_type) {
+			unsigned int count = GetAssetCount(with_dependency_type);
+			handles[with_dependency_type].Initialize(allocator, count);
+			handles[with_dependency_type].size = 0;
+			for (unsigned int index = 0; index < count; index++) {
+				unsigned int handle = GetAssetHandleFromIndex(index, with_dependency_type);
+				const void* asset = GetAssetConst(handle, with_dependency_type);
+				if (DoesAssetReferenceOtherAsset(current_handle, type, asset, with_dependency_type)) {
+					handles[with_dependency_type].Add(handle);
+				}
 			}
-		}
+		});
 
 		return handles;
 	}
@@ -1152,23 +1183,25 @@ namespace ECSEngine {
 
 	bool AssetDatabase::IsAssetReferencedByOtherAsset(unsigned int handle, ECS_ASSET_TYPE type) const
 	{
-		if (type == ECS_ASSET_MESH || type == ECS_ASSET_MATERIAL || type == ECS_ASSET_MISC) {
+		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
 			return false;
 		}
 
 		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
-		unsigned int material_count = GetAssetCount(ECS_ASSET_MATERIAL);
-		for (unsigned int index = 0; index < material_count; index++) {
-			dependencies.size = 0;
-			const MaterialAsset* material = GetMaterialConst(GetAssetHandleFromIndex(index, ECS_ASSET_MATERIAL));
-			material->GetDependencies(&dependencies);
-			for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
-				if (handle == dependencies[subindex].handle && type == dependencies[subindex].type) {
-					return true;
+		return function::ForEach<true>(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
+			unsigned int count = GetAssetCount(asset_type);
+			for (unsigned int index = 0; index < count; index++) {
+				dependencies.size = 0;
+				const void* asset = GetAssetConst(GetAssetHandleFromIndex(index, asset_type), asset_type);
+				GetAssetDependencies(asset, asset_type, &dependencies);
+				for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
+					if (handle == dependencies[subindex].handle && type == dependencies[subindex].type) {
+						return true;
+					}
 				}
+				return false;
 			}
-		}
-		return false;
+		});
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -1265,15 +1298,47 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
+	void AssetDatabase::RemapAssetDependencies(const AssetDatabase* other)
+	{
+		function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [this, other](ECS_ASSET_TYPE type) {
+			unsigned int asset_count = GetAssetCount(type);
+			for (unsigned int index = 0; index < asset_count; index++) {
+				ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
+
+				void* current_asset = GetAsset(GetAssetHandleFromIndex(index, type), type);
+				Stream<char> asset_name = ECSEngine::GetAssetName(current_asset, type);
+				Stream<wchar_t> asset_file = GetAssetFile(current_asset, type);
+
+				unsigned int other_handle = other->FindAsset(asset_name, asset_file, type);
+				ECS_ASSERT(other_handle != -1);
+
+				const void* other_asset = other->GetAssetConst(other_handle, type);
+				GetAssetDependencies(other_asset, type, &dependencies);
+
+				for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
+					const void* other_dependency = other->GetAssetConst(dependencies[subindex].handle, dependencies[subindex].type);
+					Stream<char> dependency_name = ECSEngine::GetAssetName(other_dependency, dependencies[subindex].type);
+					Stream<wchar_t> dependency_file = GetAssetFile(other_dependency, dependencies[subindex].type);
+					dependencies[subindex].handle = FindAsset(dependency_name, dependency_file, dependencies[subindex].type);
+				}
+
+				ECSEngine::RemapAssetDependencies(current_asset, type, dependencies);
+			}
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
 	// It will fill in the structures and perform the needed operations for the options selected in the remove_info
 	void ExecuteAssetDatabaseRemoveInfo(AssetDatabase* database, const void* metadata, ECS_ASSET_TYPE asset_type, AssetDatabaseRemoveInfo* remove_info) {
 		bool has_info = remove_info != nullptr;
 
 		if (has_info) {
-			unsigned int starting_dependency_size = remove_info->dependencies->size;
+			unsigned int starting_dependency_size = 0;
 
 			if (remove_info->dependencies != nullptr) {
 				GetAssetDependencies(metadata, asset_type, remove_info->dependencies);
+				starting_dependency_size = remove_info->dependencies->size;
 			}
 
 			if (remove_info->remove_dependencies) {
@@ -1283,10 +1348,13 @@ namespace ECSEngine {
 				}
 
 				ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, temp_dependencies, 512);
-				Stream<AssetTypedHandle> dependencies = *remove_info->dependencies;
+				Stream<AssetTypedHandle> dependencies;
 				if (remove_info->dependencies == nullptr) {
 					GetAssetDependencies(metadata, asset_type, &temp_dependencies);
 					dependencies = temp_dependencies;
+				}
+				else {
+					dependencies = *remove_info->dependencies;
 				}
 
 				for (unsigned int index = starting_dependency_size; index < dependencies.size; index++) {
@@ -2155,18 +2223,10 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	ECS_DESERIALIZE_CODE DeserializeAssetDatabaseImpl(AssetDatabase* database, bool reference_count_zero, Functor&& functor) {
-		reference_count_zero = !reference_count_zero;
-
-		const size_t STACK_CAPACITY = ECS_KB * 128;
-		void* stack_allocation = ECS_STACK_ALLOC(STACK_CAPACITY);
-
-		ResizableLinearAllocator _allocator(stack_allocation, STACK_CAPACITY, ECS_MB, { nullptr });
-		AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&_allocator);
-
+	ECS_DESERIALIZE_CODE DeserializeAssetDatabaseImpl(AssetDatabase* database, DeserializeAssetDatabaseOptions database_options, Functor&& functor) {
 		DeserializeOptions options;
-		options.backup_allocator = allocator;
 		options.file_allocator = database->Allocator();
+		options.backup_allocator = database->Allocator();
 		options.field_allocator = database->Allocator();
 
 		SetSerializeCustomMaterialAssetDatabase(database);
@@ -2177,28 +2237,52 @@ namespace ECSEngine {
 		ClearSerializeCustomTypeUserData(Reflection::ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET);
 		SetSerializeCustomMaterialDoNotIncrementDependencies(false);
 
-		// If it failed, just exit
-		if (code != ECS_DESERIALIZE_OK) {
-			_allocator.ClearBackup();
-			return code;
+		if (database_options.default_initialize_other_fields) {
+			ECS_ASSET_TYPE current_type = ECS_ASSET_MESH;
+			auto basic_functor = [&](unsigned int handle) {
+				void* asset = database->GetAsset(handle, current_type);
+				Stream<wchar_t> path = GetAssetFile(asset, current_type);
+				Stream<char> name = GetAssetName(asset, current_type);
+				CreateDefaultAsset(asset, name, path, current_type);
+				SetAssetToMetadata(asset, current_type, { nullptr, 0 });
+			};
+
+			ECS_ASSET_TYPE basic_functor_types[] = {
+				ECS_ASSET_MESH,
+				ECS_ASSET_TEXTURE,
+				ECS_ASSET_GPU_SAMPLER,
+				ECS_ASSET_SHADER,
+				ECS_ASSET_MISC
+			};
+
+			function::ForEach(basic_functor_types, [&](ECS_ASSET_TYPE type) {
+				current_type = type;
+				database->ForEachAsset(current_type, basic_functor);
+			});
+
+			// For materials we need to keep all the related information like shader handles,
+			// texture handles, reflection manager. Only the pointer needs to be set to nullptr
+			database->ForEachAsset(ECS_ASSET_MATERIAL, [&](unsigned int handle) {
+				MaterialAsset* material = database->GetMaterial(handle);
+				material->material_pointer = nullptr;
+			});
 		}
 
-		_allocator.ClearBackup();
 		return code;
 	}
 
-	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file, bool reference_count_zero)
+	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file, DeserializeAssetDatabaseOptions options)
 	{
-		return DeserializeAssetDatabaseImpl(database, reference_count_zero, [&](DeserializeOptions* options) {
+		return DeserializeAssetDatabaseImpl(database, options, [&](DeserializeOptions* options) {
 			return Deserialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, file, options);
 		});
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, uintptr_t& ptr, bool reference_count_zero)
+	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, uintptr_t& ptr, DeserializeAssetDatabaseOptions options)
 	{
-		return DeserializeAssetDatabaseImpl(database, reference_count_zero, [&](DeserializeOptions* options) {
+		return DeserializeAssetDatabaseImpl(database, options, [&](DeserializeOptions* options) {
 			return Deserialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, ptr, options);
 		});
 	}

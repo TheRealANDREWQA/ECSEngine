@@ -116,6 +116,9 @@ struct EditorState {
 	ECSEngine::MemoryManager* editor_allocator;
 	ECSEngine::MemoryManager* multithreaded_editor_allocator;
 	ECSEngine::TaskManager* task_manager;
+	// For rendering of scenes use a separate task manager such that no static tasks
+	// or wrappers are changed for the existing ones
+	ECSEngine::TaskManager* render_task_manager;
 
 	// All sandboxes will refer to these. Cannot make a separate GPU runtime for each 
 	// sandbox because of technical D3D issues which don't allow resource sharing

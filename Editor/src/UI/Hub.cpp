@@ -18,28 +18,35 @@ void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
 	HubData* hub = editor_state->hub_data;
 	ECS_ASSERT(hub->projects.size < hub->projects.capacity);
 
-	hub->projects[hub->projects.size].error_message = { nullptr, 0 };
-	hub->projects[hub->projects.size].path = function::StringCopy(editor_state->EditorAllocator(), path);
+	unsigned int index = hub->projects.size;
+	hub->projects[index].error_message = { nullptr, 0 };
+	hub->projects[index].data.path = function::StringCopy(editor_state->EditorAllocator(), path);
+
+	// The project name will only reference the filename of the path
+	Stream<wchar_t> project_name = function::PathFilename(hub->projects[hub->projects.size].data.path);
+	hub->projects[index].data.project_name = project_name;
 	hub->projects.size++;
 
 	if (!SaveEditorFile(editor_state)) {
 		EditorSetConsoleError("Error when saving editor file after project addition");
 	}
+
+	LoadHubProjectInfo(editor_state, index);
 }
 
-void DeallocateHubProject(EditorState* editor_state, size_t project_hub_index)
+void DeallocateHubProject(EditorState* editor_state, unsigned int project_hub_index)
 {
 	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	HubData* data = editor_state->hub_data;
 
+	data->projects[project_hub_index].data.path.Deallocate(editor_allocator);
 	data->projects[project_hub_index].error_message.Deallocate(editor_allocator);
-	data->projects[project_hub_index].path.Deallocate(editor_allocator);
 }
 
 void DeallocateHubProjects(EditorState* editor_state)
 {
 	HubData* data = editor_state->hub_data;
-	for (size_t index = 0; index < data->projects.size; index++) {
+	for (unsigned int index = 0; index < data->projects.size; index++) {
 		DeallocateHubProject(editor_state, index);
 	}
 }
@@ -64,37 +71,44 @@ void AddExistingProjectAction(ActionData* action_data) {
 	}
 	else {
 		if (get_data.path.size > 0) {
-			AddHubProject((EditorState*)_data, get_data.path);
+			AddHubProject((EditorState*)_data, function::PathParent(get_data.path));
 		}
 	}
 }
 
-void LoadHubProjects(EditorState* editor_state) {
+bool LoadHubProjectInfo(EditorState* editor_state, unsigned int index) {
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+
+	ProjectOperationData open_data;
+	char error_message[256];
+	open_data.error_message.InitializeFromBuffer(error_message, 0, 256);
+	open_data.file_data = &editor_state->hub_data->projects[index].data;
+	open_data.editor_state = editor_state;
+
+	bool success = OpenProjectFile(open_data, true);
+
+	if (!success) {
+		editor_state->hub_data->projects[index].error_message.Deallocate(editor_allocator);
+		editor_state->hub_data->projects[index].error_message.InitializeAndCopy(editor_allocator, error_message);
+	}
+
+	return success;
+}
+
+void LoadHubProjectsInfo(EditorState* editor_state)
+{
 	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	HubData* hub_data = editor_state->hub_data;
 
 	for (size_t index = 0; index < hub_data->projects.size; index++) {
-		hub_data->projects[index].data.path = function::PathParent(hub_data->projects[index].path);
-		hub_data->projects[index].data.project_name = function::PathStem(hub_data->projects[index].path);
-
-		ProjectOperationData open_data;
-		char error_message[256];
-		open_data.error_message.InitializeFromBuffer(error_message, 0, 256);
-		open_data.file_data = &hub_data->projects[index].data;
-		open_data.editor_state = editor_state;
-
-		bool success = OpenProjectFile(open_data);
-
-		if (!success) {
-			hub_data->projects[index].error_message.InitializeAndCopy(editor_allocator, error_message);
-		}
+		LoadHubProjectInfo(editor_state, index);
 	}
 }
 
 void ReloadHubProjects(EditorState* editor_state) {
 	ResetHubData(editor_state);
 	LoadEditorFile(editor_state);
-	LoadHubProjects(editor_state);
+	LoadHubProjectsInfo(editor_state);
 	SortHubProjects(editor_state);
 }
 
@@ -117,7 +131,7 @@ void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
 	
 	HubData* hub_data = editor_state->hub_data;
 	for (size_t index = 0; index < hub_data->projects.size; index++) {
-		if (function::CompareStrings(path, hub_data->projects[index].path)) {
+		if (function::CompareStrings(path, hub_data->projects[index].data.path)) {
 			DeallocateHubProject(editor_state, index);
 			hub_data->projects.Remove(index);
 			task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(SaveEditorFileThreadTask, editor_state, 0));
@@ -150,7 +164,6 @@ bool RestoreHubProject(EditorState* editor_state, Stream<wchar_t> path, Stream<w
 		ECS_STACK_CAPACITY_STREAM(wchar_t, complete_file_path, 512);
 		GetProjectFilePath(&project_file, complete_file_path);
 		AddHubProject(editor_state, complete_file_path);
-		ReloadHubProjects(editor_state);
 	}
 
 	return true;
@@ -330,7 +343,7 @@ void SortHubProjects(EditorState* editor_state)
 		sort_elements[index].project = data->projects[index];
 	}
 	for (size_t index = 0; index < data->projects.size; index++) {
-		OS::GetRelativeFileTimes(data->projects[index].path, nullptr, nullptr, &sort_elements[index].file_time);
+		OS::GetRelativeFileTimes(data->projects[index].data.path, nullptr, nullptr, &sort_elements[index].file_time);
 	}
 
 	function::insertion_sort(sort_elements, data->projects.size);
@@ -494,7 +507,7 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 
 		auto row_project_name = [&](UIDrawConfig& config, UIConfigAbsoluteTransform& transform, size_t index) {
 			ECS_STACK_CAPACITY_STREAM(char, temp_characters, 256);
-			function::ConvertWideCharsToASCII(data->projects[index].path, temp_characters);
+			function::ConvertWideCharsToASCII(data->projects[index].data.path, temp_characters);
 
 			transform.position = row_start_position;
 			transform.scale = { FIRST_COLUMN_SCALE, COLUMN_Y_SCALE };
@@ -506,7 +519,7 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 			config.AddFlag(alignment);
 
 			char ascii_name[256];
-			Stream<wchar_t> path_stem = function::PathStem(data->projects[index].path);
+			Stream<wchar_t> path_stem = function::PathStem(data->projects[index].data.path);
 			function::ConvertWideCharsToASCII(path_stem.buffer, ascii_name, path_stem.size, 256);
 			drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, ascii_name);
 
@@ -555,7 +568,7 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 		if (data->projects[index].error_message.size == 0) {
 			char last_write_time[128];
 			last_write_time[0] = '\0';
-			bool succeeded = OS::GetRelativeFileTimes(data->projects[index].path, nullptr, nullptr, last_write_time);
+			bool succeeded = OS::GetRelativeFileTimes(data->projects[index].data.path, nullptr, nullptr, last_write_time);
 
 			if (succeeded) {
 				UIDrawConfig config;
@@ -599,7 +612,12 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 			open_data.error_message.buffer = nullptr;
 			open_data.file_data = &data->projects[index].data;
 			open_data.editor_state = editor_state;
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y, config, "", { OpenProjectAction, &open_data, sizeof(open_data) });
+			drawer.Button(
+				UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y, 
+				config, 
+				"", 
+				{ OpenProjectAction, &open_data, sizeof(open_data) }
+			);
 		}
 		else {
 			UIDrawConfig config;
@@ -643,7 +661,7 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 			RemoveHubProject(data->editor_state, data->project_file);
 		};
 
-		RemoveProjectData remove_data = { editor_state, data->projects[index].path };
+		RemoveProjectData remove_data = { editor_state, data->projects[index].data.path };
 		drawer.SpriteButton(UI_CONFIG_ABSOLUTE_TRANSFORM, config, { remove_project_action, &remove_data, sizeof(remove_data) }, ECS_TOOLS_UI_TEXTURE_X, drawer.color_theme.text);
 	};
 
@@ -683,7 +701,7 @@ void Hub(EditorState* editor_state) {
 	window_descriptor.initial_size_y = 2.0f;
 
 	bool success = LoadEditorFile(editor_state);
-	LoadHubProjects(editor_state);
+	LoadHubProjectsInfo(editor_state);
 	SortHubProjects(editor_state);
 
 	window_descriptor.resource_count = 8192 * 4;
@@ -699,3 +717,15 @@ void Hub(EditorState* editor_state) {
 }
 
 void HubTick(EditorState* editor_state) {}
+
+bool ValidateProjectPath(Stream<wchar_t> path)
+{
+	ProjectFile temp_project_file;
+	temp_project_file.path = path;
+
+	ECS_STACK_CAPACITY_STREAM(wchar_t, project_file_path, 512);
+	GetProjectFilePath(&temp_project_file, project_file_path);
+
+	return ExistsFileOrFolder(project_file_path);
+}
+

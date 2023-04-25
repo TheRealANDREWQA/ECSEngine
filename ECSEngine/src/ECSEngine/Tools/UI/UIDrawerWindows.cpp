@@ -1522,8 +1522,11 @@ namespace ECSEngine {
 			drawer.layout.next_row_padding = 0.005f;
 
 			if (initialize) {
-				const size_t unique_message_default_capacity = 256;
-				data->unique_messages.Initialize(drawer.system->m_memory, unique_message_default_capacity);
+				const size_t unique_message_default_capacity = 128;
+				size_t hash_table_byte_size = data->unique_messages.MemoryOf(unique_message_default_capacity);
+				void* hash_table_allocation = drawer.GetMainAllocatorBuffer(hash_table_byte_size);
+				data->unique_messages.InitializeFromBuffer(hash_table_allocation, unique_message_default_capacity);
+
 				data->system_filter.buffer = (bool*)drawer.GetMainAllocatorBuffer(sizeof(bool) * data->console->system_filter_strings.size);
 				memset(data->system_filter.buffer, 1, sizeof(bool) * data->console->system_filter_strings.size);
 				data->system_filter.size = data->console->system_filter_strings.size;
@@ -1665,6 +1668,13 @@ namespace ECSEngine {
 #pragma region Messages
 			
 			drawer.NextRow();
+
+			// Display a warning if there are too many messages
+			if (data->console->messages.size == data->console->messages.capacity && data->console->messages.capacity > data->console->MaxMessageCount()) {
+				drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[ECS_CONSOLE_WARN], CONSOLE_COLORS[ECS_CONSOLE_WARN]);
+				drawer.Text("Too many console messages - the console should be cleared otherwise incoming messages will be ignored");
+				drawer.NextRow();
+			}
 
 			UIConfigTextParameters parameters;
 			float2 icon_scale = drawer.GetSquareScale(drawer.layout.default_element_y);
@@ -1916,12 +1926,21 @@ namespace ECSEngine {
 
 						int message_index = data->unique_messages.Find(identifier);
 						if (message_index == -1) {
-							bool grow = data->unique_messages.Insert({ data->console->messages[index], 1 }, identifier);
-							if (grow) {
-								size_t new_capacity = static_cast<size_t>(data->unique_messages.GetCapacity() * 1.5f + 1);
+							auto grow_unique_messages = [&](size_t new_capacity) {
 								void* new_allocation = drawer.GetMainAllocatorBuffer(data->unique_messages.MemoryOf(new_capacity));
 								const void* old_allocation = data->unique_messages.Grow(new_allocation, new_capacity);
-								drawer.RemoveAllocation(old_allocation);
+								if (old_allocation != nullptr) {
+									drawer.RemoveAllocation(old_allocation);
+								}
+							};
+							if (data->unique_messages.GetCapacity() == 0) {
+								grow_unique_messages(16);
+							}
+
+							bool grow = data->unique_messages.Insert({ data->console->messages[index], 1 }, identifier);
+							if (grow) {
+								size_t new_capacity = data->unique_messages.NextCapacity(data->unique_messages.GetCapacity());
+								grow_unique_messages(new_capacity);
 							}
 						}
 						else {
@@ -1933,6 +1952,14 @@ namespace ECSEngine {
 						bool is_type_valid = type_ptrs[(unsigned int)data->console->messages[index].type];
 						bool is_verbosity_valid = data->console->messages[index].verbosity <= data->console->verbosity_level;
 						if (is_system_valid && is_type_valid && is_verbosity_valid) {
+							if (data->filtered_message_indices.IsFull()) {
+								size_t new_capacity = (size_t)(data->filtered_message_indices.capacity * 1.5f + 1);
+								void* new_buffer = drawer.GetMainAllocatorBuffer(data->filtered_message_indices.MemoryOf(new_capacity));
+								void* old_buffer = data->filtered_message_indices.Expand(new_buffer, new_capacity);
+								if (old_buffer != nullptr) {
+									drawer.RemoveAllocation(old_buffer);
+								}
+							}
 							data->filtered_message_indices.Add(index);
 						}
 
@@ -1947,8 +1974,16 @@ namespace ECSEngine {
 				// or system filter changed
 				else {
 					*ptrs[0] = *ptrs[1] = *ptrs[2] = *ptrs[3] = 0;
-					data->unique_messages.Clear();
-					data->filtered_message_indices.FreeBuffer();
+					// Remove the allocations and reinitialize with 0
+					if (data->filtered_message_indices.size > 0) {
+						drawer.RemoveAllocation(data->filtered_message_indices.buffer);
+					}
+					if (data->unique_messages.GetCapacity() > 0) {
+						drawer.RemoveAllocation(data->unique_messages.GetAllocatedBuffer());
+					}
+
+					data->unique_messages.Reset();
+					data->filtered_message_indices.Reset();
 
 					update_kernel(0);
 				}
@@ -2032,7 +2067,7 @@ namespace ECSEngine {
 			data.warn_count = 0;
 			data.trace_count = 0;
 			data.last_frame_message_count = 0;
-			data.filtered_message_indices = ResizableStream<unsigned int>(GetConsole()->messages.allocator, 0);
+			data.filtered_message_indices.InitializeFromBuffer(nullptr, 0, 0);
 		}
 
 		// -------------------------------------------------------------------------------------------------------

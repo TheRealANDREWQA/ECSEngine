@@ -37,15 +37,15 @@ namespace ECSEngine {
 
 	// This describes how the thread should behave when their dynamic queue is finished
 	enum ECS_TASK_MANAGER_WAIT_TYPE : unsigned char {
-		ECS_TASK_MANAGER_WAIT_SLEEP  = 0,
-		ECS_TASK_MANAGER_WAIT_SPIN   = 1,
+		ECS_TASK_MANAGER_WAIT_SLEEP  = 1,
+		ECS_TASK_MANAGER_WAIT_SPIN   = 2,
 		/*
 			This flag can be combined with the other two
 			When the thread finishes its queue, it will try
 			to steal a task and if there is nothing to be stolen,
 			then it will go to the wait type specified
 		*/
-		ECS_TASK_MANAGER_WAIT_STEAL  = 2 
+		ECS_TASK_MANAGER_WAIT_STEAL  = 4 
 	};
 
 	ECS_ENUM_BITWISE_OPERATIONS(ECS_TASK_MANAGER_WAIT_TYPE);
@@ -127,9 +127,9 @@ namespace ECSEngine {
 
 		void* AllocateTempBuffer(unsigned int thread_id, size_t size, size_t alignment = 8);
 
-		void ChangeStaticWrapperMode(ThreadFunctionWrapper custom_function, void* wrapper_data = nullptr, size_t wrapper_data_size = 0);
+		void ChangeStaticWrapperMode(ThreadFunctionWrapperData wrapper_data);
 
-		void ChangeDynamicWrapperMode(ThreadFunctionWrapper custom_function, void* wrapper_data = nullptr, size_t wrapper_data_size = 0);
+		void ChangeDynamicWrapperMode(ThreadFunctionWrapperData wrapper_data);
 
 		void ClearThreadAllocators();
 
@@ -183,6 +183,14 @@ namespace ECSEngine {
 		unsigned int GetThreadTaskIndex() const;
 
 		AllocatorPolymorphic GetThreadTempAllocator(unsigned int thread_id) const;
+
+		// Returns the current static thread wrapper. If the data pointer is specified, it will copy the thread
+		// wrapper data into it (it must have a byte size of at least 64 bytes)
+		ThreadFunctionWrapperData GetStaticThreadWrapper(CapacityStream<void>* data = nullptr) const;
+
+		// Returns the current dynamic thread wrapper. If the data pointer is specified, it will copy the thread
+		// wrapper data into it (it must have a byte size of at least 64 bytes)
+		ThreadFunctionWrapperData GetDynamicThreadWrapper(CapacityStream<void>* data = nullptr) const;
 
 		// Returns true if the thread is sleeping/spinning (ran out of tasks to perform) else false
 		bool IsSleeping(unsigned int thread_id) const;
@@ -267,9 +275,14 @@ namespace ECSEngine {
 		};
 
 		ResizableStream<StaticThreadTask> m_tasks;
-		std::atomic<unsigned int> m_thread_task_index;
+		// Allocated on a separate cache line in order to not affect other
+		// fields when modifying this
+		std::atomic<unsigned int>* m_thread_task_index;
+
+		// Allocated on a separate cache line in order to not affect other
+		// fields when modidying this
 		// Used by the dynamic add to know where to insert the new task
-		unsigned int m_last_thread_index;
+		std::atomic<unsigned int>* m_last_thread_index;
 		
 		ECS_TASK_MANAGER_WAIT_TYPE m_wait_type;
 
@@ -291,12 +304,11 @@ namespace ECSEngine {
 
 
 #ifdef ECS_TASK_MANAGER_WRAPPER
-		ThreadFunctionWrapper m_static_wrapper;
-		void* m_static_wrapper_data;
-		size_t m_static_wrapper_data_size;
-		ThreadFunctionWrapper m_dynamic_wrapper;
-		void* m_dynamic_wrapper_data;
-		size_t m_dynamic_wrapper_data_size;
+		// Embed the data directly here
+		size_t m_static_wrapper_data_storage[8];
+		size_t m_dynamic_wrapper_data_storage[8];
+		ThreadFunctionWrapperData m_static_wrapper;
+		ThreadFunctionWrapperData m_dynamic_wrapper;
 #endif
 	};
 

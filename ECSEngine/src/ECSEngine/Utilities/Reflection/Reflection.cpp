@@ -72,6 +72,7 @@ namespace ECSEngine {
 			{ STRING(VertexShader), 8 },
 			{ STRING(PixelShader), 8 },
 			{ STRING(ComputeShader), 8 },
+			{ STRING(Material), 8 },
 			{ STRING(Stream<void>), 8 }
 		};
 
@@ -1373,7 +1374,7 @@ namespace ECSEngine {
 			bool evaluate_success = true;
 			// And evaluate the expressions. This must be done in the end such that all types are reflected when we come to evaluate
 			for (unsigned int data_index = 0; data_index < data_count; data_index++) {
-				data[data_index].expressions.ForEachConst<true>([&](Stream<ReflectionExpression> expressions, ResourceIdentifier identifier) {
+				if (data[data_index].expressions.ForEachConst<true>([&](Stream<ReflectionExpression> expressions, ResourceIdentifier identifier) {
 					// Set the stream first
 					ReflectionType* type_ptr = type_definitions.GetValuePtr(identifier);
 					type_ptr->evaluations.InitializeFromBuffer(ptr, expressions.size);
@@ -1395,7 +1396,9 @@ namespace ECSEngine {
 						type_ptr->evaluations[expression_index].value = result;
 					}
 					return false;
-				});
+				})) {
+					return false;
+				}
 			}
 
 			size_t difference = function::PointerDifference((void*)ptr, allocation);
@@ -1855,32 +1858,6 @@ namespace ECSEngine {
 		unsigned int ReflectionManager::GetTypeCount() const
 		{
 			return type_definitions.GetCount();
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void ReflectionManager::GetHierarchyComponentTypes(unsigned int hierarchy_index, CapacityStream<unsigned int>* component_indices, CapacityStream<unsigned int>* shared_indices) const
-		{
-			ECS_STACK_CAPACITY_STREAM(CapacityStream<unsigned int>, stream_of_indices, 2);
-			stream_of_indices[0] = *component_indices;
-			stream_of_indices[1] = *shared_indices;
-			stream_of_indices.size = 2;
-
-			Stream<char> tags[] = {
-				ECS_COMPONENT_TAG,
-				ECS_SHARED_COMPONENT_TAG
-			};
-
-			ReflectionManagerGetQuery query_options;
-			query_options.tags = { tags, std::size(tags) };
-			query_options.stream_indices = stream_of_indices;
-			query_options.strict_compare = true;
-			query_options.use_stream_indices = true;
-
-			GetHierarchyTypes(query_options, hierarchy_index);
-
-			component_indices->size = stream_of_indices[0].size;
-			shared_indices->size = stream_of_indices[1].size;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -3344,7 +3321,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			// Fail if there were no fields to be reflected
 			if (type.fields.size == 0 && !omitted_fields) {
-				WriteErrorMessage(data, "There were no fields to reflect.", file_index);
+				WriteErrorMessage(data, "There were no fields to reflect: ", file_index);
 				return;
 			}
 
@@ -4447,53 +4424,47 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 				else {
 					// Check blittable exception
-					size_t blittable_exception_size = reflection_manager->FindBlittableException(definition).x;
-					if (blittable_exception_size != -1) {
-						memcpy(destination, source, blittable_exception_size);
+					ReflectionType reflection_type;
+					if (reflection_manager->TryGetType(definition, reflection_type)) {
+						// Forward the call
+						CopyReflectionType(reflection_manager, &reflection_type, source, destination, field_allocator);
 					}
 					else {
-						ReflectionType reflection_type;
-						if (reflection_manager->TryGetType(definition, reflection_type)) {
-							// Forward the call
-							CopyReflectionType(reflection_manager, &reflection_type, source, destination, field_allocator);
-						}
-						else {
-							// Check to see if it is a custom type
-							unsigned int custom_index = FindReflectionCustomType(definition);
-							if (custom_index != -1) {
-								ReflectionCustomTypeIsBlittableData trivially_data;
-								trivially_data.definition = definition;
-								trivially_data.reflection_manager = reflection_manager;
-								bool trivially_copyable = ECS_REFLECTION_CUSTOM_TYPES[custom_index].is_blittable(&trivially_data);
-								if (trivially_copyable) {
-									ReflectionCustomTypeByteSizeData byte_size_data;
-									byte_size_data.definition = definition;
-									byte_size_data.reflection_manager = reflection_manager;
-									size_t byte_size = ECS_REFLECTION_CUSTOM_TYPES[custom_index].byte_size(&byte_size_data).x;
+						// Check to see if it is a custom type
+						unsigned int custom_index = FindReflectionCustomType(definition);
+						if (custom_index != -1) {
+							ReflectionCustomTypeIsBlittableData trivially_data;
+							trivially_data.definition = definition;
+							trivially_data.reflection_manager = reflection_manager;
+							bool trivially_copyable = ECS_REFLECTION_CUSTOM_TYPES[custom_index].is_blittable(&trivially_data);
+							if (trivially_copyable) {
+								ReflectionCustomTypeByteSizeData byte_size_data;
+								byte_size_data.definition = definition;
+								byte_size_data.reflection_manager = reflection_manager;
+								size_t byte_size = ECS_REFLECTION_CUSTOM_TYPES[custom_index].byte_size(&byte_size_data).x;
 
-									memcpy(destination, source, byte_size);
-								}
-								else {
-									ReflectionCustomTypeCopyData copy_data;
-									copy_data.allocator = field_allocator;
-									copy_data.definition = definition;
-									copy_data.destination = destination;
-									copy_data.source = source;
-									copy_data.reflection_manager = reflection_manager;
-
-									ECS_REFLECTION_CUSTOM_TYPES[custom_index].copy(&copy_data);
-								}
+								memcpy(destination, source, byte_size);
 							}
 							else {
-								// Try with an enum
-								ReflectionEnum enum_;
-								if (reflection_manager->TryGetEnum(definition, enum_)) {
-									memcpy(destination, source, sizeof(unsigned char));
-								}
-								else {
-									// Error - no type matched
-									ECS_ASSERT(false, "Copy reflection type unexpected error.");
-								}
+								ReflectionCustomTypeCopyData copy_data;
+								copy_data.allocator = field_allocator;
+								copy_data.definition = definition;
+								copy_data.destination = destination;
+								copy_data.source = source;
+								copy_data.reflection_manager = reflection_manager;
+
+								ECS_REFLECTION_CUSTOM_TYPES[custom_index].copy(&copy_data);
+							}
+						}
+						else {
+							// Try with an enum
+							ReflectionEnum enum_;
+							if (reflection_manager->TryGetEnum(definition, enum_)) {
+								memcpy(destination, source, sizeof(unsigned char));
+							}
+							else {
+								// Error - no type matched
+								ECS_ASSERT(false, "Copy reflection type unexpected error.");
 							}
 						}
 					}
@@ -5598,30 +5569,38 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool IsReflectionTypeComponent(const ReflectionType* type)
-		{
-			return type->IsTag(ECS_COMPONENT_TAG);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool IsReflectionTypeSharedComponent(const ReflectionType* type)
-		{
-			return type->IsTag(ECS_SHARED_COMPONENT_TAG);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool IsReflectionTypeLinkComponent(const ReflectionType* type)
-		{
-			return type->HasTag(ECS_LINK_COMPONENT_TAG);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
 		bool IsReflectionFieldSkipped(const ReflectionField* field)
 		{
 			return field->Has(STRING(ECS_SKIP_REFLECTION));
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void GetReflectionTypesDifferentFields(
+			const ReflectionType* first, 
+			const ReflectionType* second, 
+			CapacityStream<size_t>* first_surplus_fields, 
+			CapacityStream<size_t>* second_surplus_fields
+		)
+		{
+			ECS_ASSERT(first_surplus_fields != nullptr || second_surplus_fields != nullptr);
+
+			auto loop = [](const ReflectionType* first, const ReflectionType* second, CapacityStream<size_t>* surplus) {
+				for (size_t index = 0; index < first->fields.size; index++) {
+					unsigned int field = second->FindField(first->fields[index].name);
+					if (field == -1) {
+						surplus->AddSafe(index);
+					}
+				}
+			};
+
+			if (first_surplus_fields != nullptr) {
+				loop(first, second, first_surplus_fields);
+			}
+
+			if (second_surplus_fields != nullptr) {
+				loop(second, first, second_surplus_fields);
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -5670,53 +5649,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		Stream<char> GetReflectionTypeLinkComponentTarget(const ReflectionType* type)
-		{
-			Stream<char> opened_parenthese = function::FindFirstCharacter(type->tag, '(');
-			if (opened_parenthese.size == 0) {
-				return { nullptr, 0 };
-			}
-
-			opened_parenthese.buffer += 1;
-			opened_parenthese.size -= 1;
-			opened_parenthese = function::SkipWhitespace(opened_parenthese);
-
-			Stream<char> comma = function::FindFirstCharacter(opened_parenthese, ',');
-			if (comma.size > 0) {
-				opened_parenthese.size = comma.buffer - opened_parenthese.buffer;
-				opened_parenthese = function::SkipWhitespace(opened_parenthese, -1);
-			}
-			else {
-				if (opened_parenthese[opened_parenthese.size - 1] == ')') {
-					opened_parenthese.size--;
-				}
-				opened_parenthese = function::SkipWhitespace(opened_parenthese, -1);
-			}
-			return opened_parenthese;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		Stream<char> GetReflectionTypeLinkNamePretty(Stream<char> name)
-		{
-			if (name.size > 0) {
-				Stream<char> found_token = function::FindFirstToken(name, "_Link");
-				if (found_token.size > 0) {
-					return { name.buffer, name.size - found_token.size };
-				}
-			}
-			return name;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool GetReflectionTypeLinkComponentNeedsDLL(const ReflectionType* type)
-		{
-			return function::FindFirstCharacter(type->tag, ',').size > 0;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
 		bool DependsUpon(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<char> subtype)
 		{
 			for (size_t index = 0; index < type->fields.size; index++) {
@@ -5730,7 +5662,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 						// Check blittable exception
 						if (reflection_manager->FindBlittableException(field->definition).x != -1) {
-							return true;
+							if (field->definition == subtype) {
+								return true;
+							}
 						}
 						else {
 							// Check to see if it has the give size tag - if it has it ignore the field
@@ -5774,33 +5708,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			return false;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void GetReflectionTypeRuntimeBuffers(const ReflectionType* type, CapacityStream<ComponentBuffer>& component_buffers)
-		{
-			// Get the buffers and the data_pointers
-			for (size_t index = 0; index < type->fields.size; index++) {
-				if (IsStream(type->fields[index].info.stream_type) && type->fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
-					ComponentBuffer component_buffer;
-					component_buffer.element_byte_size = type->fields[index].info.stream_byte_size;
-					component_buffer.is_data_pointer = false;
-					component_buffer.pointer_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, buffer);
-					component_buffer.size_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, size);
-					component_buffers.Add(component_buffer);
-				}
-				else if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
-					// TODO: Add a reflection field tag such that it can specify the stream byte size
-					ComponentBuffer component_buffer;
-					component_buffer.element_byte_size = 1;
-					component_buffer.is_data_pointer = true;
-					component_buffer.pointer_offset = type->fields[index].info.pointer_offset;
-					component_buffer.size_offset = 0;
-					component_buffers.Add(component_buffer);
-				}
-			}
-			component_buffers.AssertCapacity();
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -5892,49 +5799,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				ECS_REFLECTION_CUSTOM_TYPES[custom_type].dependent_types(&dependent_types);
 				dependencies.size += dependent_types.dependent_types.size;
 			}
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		ComponentBuffer GetReflectionTypeRuntimeBufferIndex(const ReflectionType* type, unsigned int buffer_index, unsigned int* field_index)
-		{
-			unsigned int index = 0;
-			unsigned int current_buffer_index = 0;
-			for (; index < type->fields.size && current_buffer_index <= buffer_index; index++) {
-				if (IsStream(type->fields[index].info.stream_type) && type->fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
-					current_buffer_index++;
-				}
-				else if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
-					current_buffer_index++;
-				}
-			}
-
-			if (current_buffer_index <= buffer_index) {
-				// Invalid buffer index
-				if (field_index != nullptr) {
-					*field_index = -1;
-				}
-				return {};
-			}
-
-			ComponentBuffer component_buffer;
-			// TODO: Add a reflection field tag such that it can specify the stream byte size
-			if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
-				component_buffer.element_byte_size = 1;
-				component_buffer.is_data_pointer = true;
-				component_buffer.pointer_offset = type->fields[index].info.pointer_offset;
-				component_buffer.size_offset = 0;
-			}
-			else {
-				component_buffer.element_byte_size = type->fields[index].info.stream_byte_size;
-				component_buffer.is_data_pointer = false;
-				component_buffer.pointer_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, buffer);
-				component_buffer.size_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, size);
-			}
-			if (field_index != nullptr) {
-				*field_index = index;
-			}
-			return component_buffer;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

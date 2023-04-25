@@ -950,10 +950,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ArchetypeQuery::ArchetypeQuery() {}
-
-	ArchetypeQuery::ArchetypeQuery(VectorComponentSignature _unique, VectorComponentSignature _shared) : unique(_unique), shared(_shared) {}
-
 	bool ECS_VECTORCALL ArchetypeQuery::Verifies(VectorComponentSignature unique_to_compare, VectorComponentSignature shared_to_compare) const
 	{
 		return VerifiesUnique(unique_to_compare) && VerifiesShared(shared_to_compare);
@@ -970,15 +966,6 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
-
-	ArchetypeQueryExclude::ArchetypeQueryExclude() {}
-
-	ArchetypeQueryExclude::ArchetypeQueryExclude(
-		VectorComponentSignature _unique,
-		VectorComponentSignature _shared,
-		VectorComponentSignature _exclude_unique,
-		VectorComponentSignature _exclude_shared
-	) : unique(_unique), shared(_shared), unique_excluded(_exclude_unique), shared_excluded(_exclude_shared) {}
 
 	bool ECS_VECTORCALL ArchetypeQueryExclude::Verifies(VectorComponentSignature unique_to_compare, VectorComponentSignature shared_to_compare) const
 	{

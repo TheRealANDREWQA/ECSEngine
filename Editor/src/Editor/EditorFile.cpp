@@ -89,12 +89,12 @@ bool SaveEditorFile(EditorState* editor_state) {
 		unsigned short project_count = hub_data->projects.size;
 		bool success = WriteFile(file, { &project_count, sizeof(project_count) });
 		for (size_t index = 0; index < hub_data->projects.size && success; index++) {
-			unsigned short project_path_size = (unsigned short)hub_data->projects[index].path.size;
+			unsigned short project_path_size = (unsigned short)hub_data->projects[index].data.path.size;
 			success &= WriteFile(file, { &project_path_size, sizeof(project_path_size) });
-			success &= WriteFile(file, { hub_data->projects[index].path.buffer, sizeof(wchar_t) * project_path_size });
+			success &= WriteFile(file, { hub_data->projects[index].data.path.buffer, sizeof(wchar_t) * project_path_size });
 		}
 
-		success &= FlushFileToDisk(file);
+		//success &= FlushFileToDisk(file);
 		return success;
 	}
 	return false;
@@ -130,22 +130,19 @@ bool LoadEditorFile(EditorState* editor_state) {
 				return false;
 			}
 
-			// If the file doesn't exist, it means it has been destroyed before hand in the OS
+			// If the file doesn't exist, it means it has been destroyed beforehand in the OS
 			// So add it to the invalid stream
 			success &= ReadFile(file, { temp_path, sizeof(wchar_t) * path_size });
 			Path current_path(temp_path, path_size);
 			current_path[path_size] = L'\0';
-			if (!ExistsFileOrFolder(current_path)) {
+			if (!ValidateProjectPath(current_path)) {
 				void* allocation = Allocate(editor_state->EditorAllocator(), sizeof(char) * (current_path.size + 1), alignof(char));
 				CapacityStream<char> allocated_path(allocation, 0, current_path.size + 1);
 				function::ConvertWideCharsToASCII(current_path, allocated_path);
 				invalid_file_paths.Add(allocated_path.buffer);
 			}
 			else {
-				unsigned int project_index = hub_data->projects.size;
-				hub_data->projects[project_index].error_message = { nullptr, 0 };
-				hub_data->projects[project_index].path = function::StringCopy(editor_state->EditorAllocator(), current_path);
-				hub_data->projects.size++;
+				AddHubProject(editor_state, current_path);
 			}
 		}
 

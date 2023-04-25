@@ -50,6 +50,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size = wcslen(string);
 		}
 
+		// Cannot use this because Intellisense freaks out and gives false alarms that are really annoying
+		//template<size_t static_size, typename = std::enable_if_t<std::negation_v<std::disjunction<std::is_same<wchar_t, T>, std::is_same<char, T>>>>>
+		//ECS_INLINE Stream(const T(&static_array)[static_size]) : buffer((T*)static_array), size(static_size) {}
+
 		ECS_INLINE Stream(const Stream& other) = default;
 		ECS_INLINE Stream<T>& operator = (const Stream<T>& other) = default;
 
@@ -202,6 +206,15 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size_t old_size = size;
 			void* old_buffer = Resize(allocator, size + new_elements.size, true, deallocate_old);
 			new_elements.CopyTo(buffer + old_size);
+			return old_buffer;
+		}
+
+		// Returns the previous buffer (the size is also updated)
+		void* Expand(void* new_buffer, size_t new_size) {
+			void* old_buffer = buffer;
+			size_t old_size = size;
+			InitializeFromBuffer(new_buffer, new_size);
+			memcpy(new_buffer, old_buffer, MemoryOf(old_size));
 			return old_buffer;
 		}
 
@@ -438,6 +451,11 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			capacity -= unsigned_amount;
 		}
 
+		// Sets the size to 0
+		ECS_INLINE void Clear() {
+			size = 0;
+		}
+
 		// it will set the size
 		ECS_INLINE void Copy(const void* memory, unsigned int count) {
 			ECS_ASSERT(count <= capacity);
@@ -522,6 +540,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return nullptr;
 		}
 
+		// Returns the previous buffer
+		void* Expand(void* new_buffer, unsigned int new_capacity) {
+			void* old_buffer = buffer;
+			InitializeFromBuffer(new_buffer, size, new_capacity);
+			memcpy(new_buffer, old_buffer, MemoryOf(size));
+			return old_buffer;
+		}
+
 		ECS_INLINE bool IsFull() const {
 			return size == capacity;
 		}
@@ -561,7 +587,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}*/
 
 		ECS_INLINE void Reset() {
-			size = 0;
+			InitializeFromBuffer(nullptr, 0, 0);
 		}
 
 		// Set the count to the number of elements that you want to be removed

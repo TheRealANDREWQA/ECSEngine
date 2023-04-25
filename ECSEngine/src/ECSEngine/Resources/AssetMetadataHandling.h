@@ -13,6 +13,9 @@ namespace ECSEngine {
 		SpinLock* manager_lock = nullptr;
 		size_t time_stamp = 0;
 		Stream<wchar_t> mount_point = { nullptr, 0 };
+		
+		// If the reference count is left at default it means that the resource is not reference counted
+		unsigned short reference_count = USHORT_MAX;
 	};
 
 

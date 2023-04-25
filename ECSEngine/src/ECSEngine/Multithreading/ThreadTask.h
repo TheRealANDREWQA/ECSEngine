@@ -30,4 +30,10 @@ namespace ECSEngine {
 	typedef void (*ThreadFunctionWrapper)(unsigned int thread_id, unsigned int task_thread_id, World* world, ThreadTask task, void* wrapper_data);
 #define ECS_THREAD_WRAPPER_TASK(name) void name(unsigned int thread_id, unsigned int task_thread_id, ECSEngine::World* world, ECSEngine::ThreadTask task, void* _wrapper_data)
 
+	struct ThreadFunctionWrapperData {
+		ThreadFunctionWrapper function;
+		void* data = nullptr;
+		size_t data_size = 0;
+	};
+
 }

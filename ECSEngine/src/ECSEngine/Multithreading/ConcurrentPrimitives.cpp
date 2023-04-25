@@ -11,11 +11,6 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------
 
-	SpinLock& SpinLock::operator=(const SpinLock& other) {
-		value.store(other.value.load(ECS_ACQUIRE), ECS_RELEASE);
-		return *this;
-	}
-
 	void SpinLock::lock() {
 		while (true) {
 			// Optimistically assume the lock is free on the first try
@@ -44,7 +39,7 @@ namespace ECSEngine {
 		// Wait for lock to be released without generating cache misses
 		while (is_locked()) {
 			for (size_t index = 0; index < SPIN_COUNT_UNTIL_WAIT; index++) {
-				if (is_locked()) {
+				if (!is_locked()) {
 					return;
 				}
 				// pause instruction to help multithreading
@@ -65,7 +60,7 @@ namespace ECSEngine {
 
 		while (!is_locked()) {
 			for (size_t index = 0; index < SPIN_COUNT_UNTIL_WAIT; index++) {
-				if (!is_locked()) {
+				if (is_locked()) {
 					return;
 				}
 				_mm_pause();
@@ -91,7 +86,6 @@ namespace ECSEngine {
 	void BitLock(std::atomic<unsigned char>& byte, unsigned char bit_index)
 	{
 		while (true) {
-			// Optimistically assume the lock is free on the first try
 			unsigned char before = byte.fetch_or(ECS_BIT(bit_index), ECS_ACQUIRE);
 
 			// The lock is free if the bit is cleared
@@ -113,7 +107,6 @@ namespace ECSEngine {
 	{
 		// First do a relaxed load to check if lock is free in order to prevent
 		// unnecessary cache misses in while(!try_lock())
-
 		unsigned char load_value = byte.load(ECS_RELAXED);
 		if (IsBitUnlocked(load_value, bit_index)) {
 			// Try setting the bit now
@@ -146,9 +139,9 @@ namespace ECSEngine {
 		const size_t SPIN_COUNT_UNTIL_WAIT = GLOBAL_SPIN_COUNT;
 
 		// Wait for lock to be released without generating cache misses
-		while (check_bit(byte, bit_index)) {
+		while (check_bit(byte.load(ECS_RELAXED), bit_index)) {
 			for (size_t index = 0; index < SPIN_COUNT_UNTIL_WAIT; index++) {
-				if (check_bit(byte, bit_index)) {
+				if (!check_bit(byte.load(ECS_RELAXED), bit_index)) {
 					return;
 				}
 				// pause instruction to help multithreading
@@ -160,6 +153,7 @@ namespace ECSEngine {
 				unsigned char current_value = byte.load(ECS_RELAXED);
 				while (check_bit(current_value, bit_index)) {
 					BOOL success = WaitOnAddress(&byte, &current_value, sizeof(unsigned char), INFINITE);
+					current_value = byte.load(ECS_RELAXED);
 				}
 			}
 		}
@@ -182,23 +176,6 @@ namespace ECSEngine {
 	}
 
 	// ----------------------------------------------------------------------------------------------
-
-	Semaphore::Semaphore() : count(0), target(0) {}
-
-	Semaphore::Semaphore(unsigned int _target) : count(0), target(_target) {}
-
-	Semaphore::Semaphore(const Semaphore& other)
-	{
-		count.store(other.count.load(ECS_RELAXED), ECS_RELAXED);
-		target.store(other.target.load(ECS_RELAXED), ECS_RELAXED);
-	}
-
-	Semaphore& Semaphore::operator=(const Semaphore& other)
-	{
-		count.store(other.count.load(ECS_RELAXED), ECS_RELAXED);
-		target.store(other.target.load(ECS_RELAXED), ECS_RELAXED);
-		return *this;
-	}
 
 	unsigned int Semaphore::Exit(unsigned int exit_count) {
 		return count.fetch_sub(exit_count, ECS_RELEASE);
@@ -274,6 +251,7 @@ namespace ECSEngine {
 				unsigned int current_value = wait_address->load(ECS_RELAXED);
 				while (condition()) {
 					BOOL success = WaitOnAddress(wait_address, &current_value, sizeof(unsigned int), INFINITE);
+					current_value = wait_address->load(ECS_RELAXED);
 				}
 			}
 		};
@@ -314,15 +292,11 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------
 
-	ConditionVariable::ConditionVariable() : signal_count(0) {}
-
-	ConditionVariable::ConditionVariable(int _signal_count) : signal_count(_signal_count) {}
-
 	void ConditionVariable::Wait(int count) {
 		int initial_count = signal_count.fetch_sub(count, ECS_ACQ_REL);
 		int current_count = initial_count - count;
-		while (signal_count.load(ECS_RELAXED) < 0) {
-			WaitOnAddress(&signal_count, &current_count, sizeof(unsigned int), INFINITE);
+		while (current_count < 0) {
+			WaitOnAddress(&signal_count, &current_count, sizeof(int), INFINITE);
 			current_count = signal_count.load(ECS_RELAXED);
 		}
 	}
@@ -342,10 +316,11 @@ namespace ECSEngine {
 	}
 
 	void ConditionVariable::ResetAndNotify() {
-		if (signal_count.load(ECS_RELAXED) < 0) {
+		int previous_value = signal_count.load(ECS_RELAXED);
+		Reset();
+		if (previous_value < 0) {
 			WakeByAddressAll(&signal_count);
 		}
-		Reset();
 	}
 
 	unsigned int ConditionVariable::WaitingThreadCount()
@@ -510,6 +485,25 @@ namespace ECSEngine {
 			// Store ECS_BIT(7) instead
 			count.store(ECS_BIT(7), ECS_RELEASE);
 		}
+	}
+
+	// ----------------------------------------------------------------------------------------------
+
+	void AtomicFlag::wait()
+	{
+		value.store(true, ECS_RELAXED);
+
+		// Do this in a loop since the WaitOnAddress can wake the thread spuriously
+		bool current_value = true;
+		while (current_value) {
+			BOOL success = WaitOnAddress(&value, &current_value, sizeof(unsigned char), INFINITE);
+			current_value = value.load(ECS_RELAXED);
+		}
+	}
+
+	void AtomicFlag::signal()
+	{
+		value.store(false, ECS_RELAXED);
 	}
 
 	// ----------------------------------------------------------------------------------------------

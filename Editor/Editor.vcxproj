@@ -192,6 +192,7 @@
     <ClInclude Include="src\editorpch.h" />
     <ClInclude Include="src\Editor\EditorSandbox.h" />
     <ClInclude Include="src\Editor\EditorSandboxEntityOperations.h" />
+    <ClInclude Include="src\Editor\EditorSandboxTypes.h" />
     <ClInclude Include="src\Editor\EditorScene.h" />
     <ClInclude Include="src\Editor\EditorState.h" />
     <ClInclude Include="src\Editor\EditorComponents.h" />

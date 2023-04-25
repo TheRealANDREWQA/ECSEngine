@@ -32,12 +32,15 @@ namespace ECSEngine {
 
 	struct SerializeCustomTypeReadFunctionData {
 		unsigned int version;
+		bool read_data;
+		// This can be used by custom serializers to take into consideration that this field
+		// was allocated prior - fields should be considered invalid
+		bool was_allocated;
 
 		uintptr_t* stream;
 		const Reflection::ReflectionManager* reflection_manager;
 		void* data;
 		Stream<char> definition;
-		bool read_data;
 
 		DeserializeOptions* options;
 	};
@@ -72,7 +75,7 @@ namespace ECSEngine {
 
 	struct SerializeCustomTypeDeduceTypeHelperData {
 		Stream<char>* template_type;
-		const Reflection::ReflectionManager* reflection_manager;		
+		const Reflection::ReflectionManager* reflection_manager;
 	};
 
 	struct SerializeCustomTypeDeduceTypeHelperResult {

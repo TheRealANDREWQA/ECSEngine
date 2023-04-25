@@ -15,7 +15,7 @@ namespace ECSEngine {
 			return horizontal_and(value == other.value);
 		}
 
-		inline operator Vec16us() {
+		ECS_INLINE operator Vec16us() {
 			return value;
 		}
 
@@ -67,8 +67,8 @@ namespace ECSEngine {
 	);
 
 	struct ECSENGINE_API ArchetypeQuery {
-		ArchetypeQuery();
-		ArchetypeQuery(VectorComponentSignature unique, VectorComponentSignature shared);
+		ECS_INLINE ArchetypeQuery() {}
+		ECS_INLINE ArchetypeQuery(VectorComponentSignature _unique, VectorComponentSignature _shared) : unique(_unique), shared(_shared) {}
 
 		bool ECS_VECTORCALL Verifies(VectorComponentSignature unique, VectorComponentSignature shared) const;
 
@@ -81,13 +81,13 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API ArchetypeQueryExclude {
-		ArchetypeQueryExclude();
-		ArchetypeQueryExclude(
-			VectorComponentSignature unique,
-			VectorComponentSignature shared,
-			VectorComponentSignature exclude_unique,
-			VectorComponentSignature exclude_shared
-		);
+		ECS_INLINE ArchetypeQueryExclude() {}
+		ECS_INLINE ArchetypeQueryExclude(
+			VectorComponentSignature _unique,
+			VectorComponentSignature _shared,
+			VectorComponentSignature _exclude_unique,
+			VectorComponentSignature _exclude_shared
+		) : unique(_unique), shared(_shared), unique_excluded(_exclude_unique), shared_excluded(_exclude_shared) {}
 
 		bool ECS_VECTORCALL Verifies(VectorComponentSignature unique, VectorComponentSignature shared) const;
 

@@ -11,14 +11,23 @@ namespace ECSEngine {
 
 	struct AssetDatabase;
 
+	// Returns true if the link component needs to be built using DLL functions
+	ECSENGINE_API bool GetReflectionTypeLinkComponentNeedsDLL(const Reflection::ReflectionType* type);
+
+	// Returns { nullptr, 0 } if there is no target specified
+	ECSENGINE_API Stream<char> GetReflectionTypeLinkComponentTarget(const Reflection::ReflectionType* type);
+
+	// If it ends in _Link, it will return the name without that end
+	ECSENGINE_API Stream<char> GetReflectionTypeLinkNameBase(Stream<char> name);
+
+	// Returns the name for the link component (e.g. Translation -> Translation_Link)
+	ECSENGINE_API Stream<char> GetReflectionTypeLinkComponentName(Stream<char> name, CapacityStream<char>& link_name);
+
 	// When searching for asset fields in a target type and the type is a shader, the shader_type can narrow down the
 	// shader type that it can accept (it can also be ECS_SHADER_TYPE_COUNT when it can accept all)
 	struct LinkComponentAssetField {
 		unsigned int field_index;
-		ECS_ASSET_TYPE type;
-		union {
-			ECS_SHADER_TYPE shader_type;
-		};
+		AssetTypeEx type;
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -31,6 +40,13 @@ namespace ECSEngine {
 		const Reflection::ReflectionType* type, 
 		AllocatorPolymorphic allocator, 
 		bool coallesced_allocation = false
+	);
+
+	// Returns true if the link_type is default generated - mirros the target type with unsigned int handles
+	// instead of pointers
+	ECSENGINE_API bool IsLinkTypeDefaultGeneratedForComponent(
+		const Reflection::ReflectionType* target_type,
+		const Reflection::ReflectionType* link_type
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -76,6 +92,22 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	// Fills in the asset fields that cannot be found in the new_type from the previous_type
+	ECSENGINE_API void GetLinkComponentMissingAssetFields(
+		const Reflection::ReflectionType* previous_type,
+		const Reflection::ReflectionType* new_type,
+		CapacityStream<LinkComponentAssetField>* missing_fields
+	);
+
+	// Fills in the asset fields that cannot be found in the new_type from the previous_type
+	ECSENGINE_API void GetLinkComponentTargetMissingAssetFields(
+		const Reflection::ReflectionType* previous_type,
+		const Reflection::ReflectionType* new_type,
+		CapacityStream<LinkComponentAssetField>* missing_fields
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	// Fills in the field indices of the fields that contain asset handles
 	ECSENGINE_API void GetAssetFieldsFromLinkComponent(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& typed_handles);
 
@@ -84,13 +116,16 @@ namespace ECSEngine {
 
 	// When type is SHADER the shader_type can be used to narrow down the selection of shaders that it can accept
 	struct AssetTargetFieldFromReflection {
-		ECS_ASSET_TYPE type;
 		bool success;
-		union {
-			ECS_SHADER_TYPE shader_type;
-		};
+		AssetTypeEx type;
 		Stream<void> asset;
 	};
+	
+	// Returns true if the link component has any asset fields, else false
+	ECSENGINE_API bool HasAssetFieldsLinkComponent(const Reflection::ReflectionType* type);
+
+	// Returns true if the target component has any asset fields, else false
+	ECSENGINE_API bool HasAssetFieldsTargetComponent(const Reflection::ReflectionType* type);
 
 	// ------------------------------------------------------------------------------------------------------------
 
@@ -341,6 +376,32 @@ namespace ECSEngine {
 		const ConvertToAndFromLinkBaseData* base_data,
 		const void* link_data,
 		void* target_data
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	struct EntityManager;
+
+	// Determines the reference counts of the assets from the data stored in the entity manager's components
+	// using the reflection types from the reflection manager. It does not convert the target data into link components
+	// using DLL functions or the implicit conversion (TODO: Determine if there is a use case for this)
+	// It will change the reference count for the assets accordingly in the asset database (it will also remove them if they reach 0)
+	ECSENGINE_API void GetAssetReferenceCountsFromEntities(
+		const EntityManager* entity_manager,
+		const Reflection::ReflectionManager* reflection_manager,
+		AssetDatabase* asset_database
+	);
+
+	// Determines the reference counts of the assets from the data stored in the entity manager's components
+	// using the reflection types from the reflection manager. It does not convert the target data into link components
+	// using DLL functions or the implicit conversion (TODO: Determine if there is a use case for this)
+	// There must be a Stream<unsigned int> for each asset type (ECS_ASSET_TYPE_COUNT in total)
+	// and each entry symbolizes the reference count for the asset at the given index
+	ECSENGINE_API void GetAssetReferenceCountsFromEntities(
+		const EntityManager* entity_manager,
+		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* asset_database,
+		Stream<unsigned int>* asset_fields_reference_count
 	);
 
 	// ------------------------------------------------------------------------------------------------------------

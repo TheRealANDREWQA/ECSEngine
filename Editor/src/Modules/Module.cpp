@@ -53,7 +53,7 @@ constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 200;
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path) {
+bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, bool disable_logging) {
 	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	editor_allocator.allocation_type = ECS_ALLOCATION_MULTI;
 
@@ -70,28 +70,36 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path) {
 				debug_ptr.Advance(wcslen(CMD_BUILD_SYSTEM_LOG_FILE_PATH));
 				Stream<wchar_t> underscore_after_library_name = function::FindFirstCharacter(debug_ptr, L'_');
 				if (underscore_after_library_name.size > 0) {
-					ECS_FORMAT_TEMP_STRING(error_message, "Module {#} have failed to build. Check the {#} log.",
-						Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer), CMD_BUILD_SYSTEM);
-					EditorSetConsoleError(error_message);
+					if (!disable_logging) {
+						ECS_FORMAT_TEMP_STRING(error_message, "Module {#} have failed to build. Check the {#} log.",
+							Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer), CMD_BUILD_SYSTEM);
+						EditorSetConsoleError(error_message);
+					}
 					return false;
 				}
 				else {
-					ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name (it's missing the underscore)."
-						" Check the {#} log.", CMD_BUILD_SYSTEM);
-					EditorSetConsoleError(error_message);
+					if (!disable_logging) {
+						ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name (it's missing the underscore)."
+							" Check the {#} log.", CMD_BUILD_SYSTEM);
+						EditorSetConsoleError(error_message);
+					}
 					return false;
 				}
 			}
 			else {
-				ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name. Check the {#} log.", CMD_BUILD_SYSTEM);
-				EditorSetConsoleError(error_message);
+				if (!disable_logging) {
+					ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name. Check the {#} log.", CMD_BUILD_SYSTEM);
+					EditorSetConsoleError(error_message);
+				}
 				return false;
 			}
 		}
 	}
 	else {
-		ECS_FORMAT_TEMP_STRING(error_message, "Could not open {#} to read the log. Open the file externally to check the command status.", log_path);
-		EditorSetConsoleWarn(error_message);
+		if (!disable_logging) {
+			ECS_FORMAT_TEMP_STRING(error_message, "Could not open {#} to read the log. Open the file externally to check the command status.", log_path);
+			EditorSetConsoleWarn(error_message);
+		}
 		return false;
 	}
 
@@ -134,24 +142,33 @@ void SetCrashHandlerPDBPaths(const EditorState* editor_state) {
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+// Only the implementation part, no locking
+void AddProjectModuleToLaunchedCompilationNoLock(EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration) {
+	editor_state->launched_module_compilation[configuration].Add(function::StringCopy(editor_state->MultithreadedEditorAllocator(), library_name));
+}
+
 void AddProjectModuleToLaunchedCompilation(EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration) {
 	// Allocate the string from the multithreaded because the deallocate would have interfered with the normal allocations
 	// since the deallocation would be done from a different thread
-	// Concatenate the library_name with _ and then the configuration string
-	Stream<wchar_t> configuration_string = MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration];
-
-	void* allocation = Allocate(editor_state->MultithreadedEditorAllocator(), sizeof(wchar_t) * (library_name.size + configuration_string.size + 1));
-	uintptr_t buffer = (uintptr_t)allocation;
-	library_name.CopyTo(buffer);
-	wchar_t* underscore = (wchar_t*)buffer;
-	*underscore = L'_';
-	buffer += sizeof(wchar_t);
-
-	configuration_string.CopyTo(buffer);
-
 	editor_state->launched_module_compilation_lock.lock();
-	editor_state->launched_module_compilation[configuration].Add({ allocation, library_name.size + configuration_string.size + 1 });
+	AddProjectModuleToLaunchedCompilationNoLock(editor_state, library_name, configuration);
 	editor_state->launched_module_compilation_lock.unlock();
+}
+
+// Returns true if it was found, else false
+bool RemoveProjectModuleFromLaunchedCompilation(EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration) {
+	editor_state->launched_module_compilation_lock.lock();
+
+	AllocatorPolymorphic multithreaded_allocator = editor_state->MultithreadedEditorAllocator();
+	unsigned int string_index = function::FindString(library_name, editor_state->launched_module_compilation[configuration]);
+	if (string_index != -1) {
+		Deallocate(multithreaded_allocator, editor_state->launched_module_compilation[configuration][string_index].buffer);
+		editor_state->launched_module_compilation[configuration].RemoveSwapBack(string_index);
+	}
+
+	editor_state->launched_module_compilation_lock.unlock();
+
+	return string_index != -1;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -239,6 +256,7 @@ struct CheckBuildStatusThreadData {
 	EditorState* editor_state;
 	Stream<wchar_t> path;
 	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status;
+	bool disable_logging;
 };
 
 ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
@@ -257,7 +275,7 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 	log_extension[0] = L'_';
 	log_path.AddStream(CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION);
 
-	bool succeded = PrintCommandStatus(data->editor_state, log_path);
+	bool succeded = PrintCommandStatus(data->editor_state, log_path, data->disable_logging);
 	// Extract the library name and the configuration
 	Stream<wchar_t> filename = function::PathFilename(data->path);
 	const wchar_t* underscore = wcschr(filename.buffer, '_');
@@ -276,8 +294,10 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 		int_configuration = EDITOR_MODULE_CONFIGURATION_DISTRIBUTION;
 	}
 	else {
-		ECS_FORMAT_TEMP_STRING(console_string, "An error has occured when determining the configuration of module {#}.", library_name);
-		EditorSetConsoleError(console_string);
+		if (!data->disable_logging) {
+			ECS_FORMAT_TEMP_STRING(console_string, "An error has occured when determining the configuration of module {#}.", library_name);
+			EditorSetConsoleError(console_string);
+		}
 	}
 
 	if (succeded) {
@@ -289,27 +309,35 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 			}
 		}
 		else {
-			ECS_FORMAT_TEMP_STRING(console_string, "An error has occured when checking status of module {#}, configuration {#}. Could not locate module."
-				"(was it removed?)", library_name, configuration);
-			EditorSetConsoleError(console_string);
+			if (!data->disable_logging) {
+				ECS_FORMAT_TEMP_STRING(console_string, "An error has occured when checking status of module {#}, configuration {#}. Could not locate module."
+					"(was it removed?)", library_name, configuration);
+				EditorSetConsoleError(console_string);
+			}
 		}
 
 		if (underscore != nullptr) {
 			Stream<wchar_t> command(extension.buffer + 1, extension.size - 1);
 
-			ECS_FORMAT_TEMP_STRING(console_string, "Command {#} for module {#} with configuration {#} completed successfully.", command, library_name, configuration);
-			EditorSetConsoleInfo(console_string);
+			if (!data->disable_logging) {
+				ECS_FORMAT_TEMP_STRING(console_string, "Command {#} for module {#} with configuration {#} completed successfully.", command, library_name, configuration);
+				EditorSetConsoleInfo(console_string);
+			}
 			if (function::CompareStrings(command, L"build") || function::CompareStrings(command, L"rebuild")) {
 				bool success = LoadEditorModule(data->editor_state, module_index, int_configuration);
 				if (!success) {
-					ECS_FORMAT_TEMP_STRING(error_message, "Could not reload module {#} with configuration {#}, command {#} after successfully executing the command.", library_name, configuration, command);
-					EditorSetConsoleError(error_message);
+					if (!data->disable_logging) {
+						ECS_FORMAT_TEMP_STRING(error_message, "Could not reload module {#} with configuration {#}, command {#} after successfully executing the command.", library_name, configuration, command);
+						EditorSetConsoleError(error_message);
+					}
 				}
 			}
 		}
 		else {
-			EditorSetConsoleWarn("Could not deduce build command type, library name or configuration for a module compilation.");
-			EditorSetConsoleInfo("A module finished building successfully.");
+			if (!data->disable_logging) {
+				EditorSetConsoleWarn("Could not deduce build command type, library name or configuration for a module compilation.");
+				EditorSetConsoleInfo("A module finished building successfully.");
+			}
 		}
 
 		if (data->report_status != nullptr) {
@@ -322,23 +350,12 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 	}
 
 	if (int_configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
-		Stream<wchar_t> launched_compilation_string(library_name.buffer, configuration.buffer + configuration.size - library_name.buffer);
+		Stream<wchar_t> launched_compilation_string(library_name.buffer, configuration.buffer - library_name.buffer - 1);
 		// Remove the module from the launched compilation stream
-		data->editor_state->launched_module_compilation_lock.lock();
-		unsigned int index = 0;
-		unsigned int launched_module_count = data->editor_state->launched_module_compilation[int_configuration].size;
-		for (; index < launched_module_count; index++) {
-			if (function::CompareStrings(launched_compilation_string, data->editor_state->launched_module_compilation[int_configuration][index])) {
-				// Deallocate the string
-				data->editor_state->multithreaded_editor_allocator->Deallocate_ts(data->editor_state->launched_module_compilation[int_configuration][index].buffer);
-				data->editor_state->launched_module_compilation[int_configuration].RemoveSwapBack(index);
-				break;
-			}
-		}
-		data->editor_state->launched_module_compilation_lock.unlock();
+		bool was_found = RemoveProjectModuleFromLaunchedCompilation(data->editor_state, launched_compilation_string, int_configuration);
 
 		// Warn if the module could not be found in the launched module compilation
-		if (index == launched_module_count) {
+		if (!was_found && !data->disable_logging) {
 			ECS_FORMAT_TEMP_STRING(console_string, "Module {#} with configuration {#} could not be found in the compilation list.", library_name, configuration);
 			EditorSetConsoleWarn(console_string);
 		}
@@ -357,7 +374,8 @@ void ForEachProjectModule(
 	EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses,
 	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses,
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS(*build_function)(EditorState*, unsigned int, EDITOR_MODULE_CONFIGURATION, EDITOR_FINISH_BUILD_COMMAND_STATUS*)
+	bool disable_logging,
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS(*build_function)(EditorState*, unsigned int, EDITOR_MODULE_CONFIGURATION, EDITOR_FINISH_BUILD_COMMAND_STATUS*, bool)
 ) {
 	// Clear the log file first
 	const ProjectModules* project_modules = (const ProjectModules*)editor_state->project_modules;
@@ -365,7 +383,7 @@ void ForEachProjectModule(
 	if (build_statuses) {
 		for (unsigned int index = 0; index < indices.size; index++) {
 			build_statuses[index] = EDITOR_FINISH_BUILD_COMMAND_WAITING;
-			statuses[index] = build_function(editor_state, indices[index], configurations[index], build_statuses + index);
+			statuses[index] = build_function(editor_state, indices[index], configurations[index], build_statuses + index, disable_logging);
 		}
 
 		auto have_finished = [build_statuses, indices]() {
@@ -383,7 +401,7 @@ void ForEachProjectModule(
 	}
 	else {
 		for (unsigned int index = 0; index < indices.size; index++) {
-			statuses[index] = build_function(editor_state, indices[index], configurations[index], nullptr);
+			statuses[index] = build_function(editor_state, indices[index], configurations[index], nullptr, disable_logging);
 		}
 	}
 
@@ -480,7 +498,8 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 	unsigned int index,
 	Stream<wchar_t> command,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status,
+	bool disable_logging
 );
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -494,6 +513,7 @@ struct RunCmdCommandDLLImportData {
 
 	unsigned int module_index;
 	EDITOR_MODULE_CONFIGURATION configuration;
+	bool disable_logging;
 	Stream<wchar_t> command;
 	Stream<Dependency> dependencies;
 	EDITOR_FINISH_BUILD_COMMAND_STATUS* original_status;
@@ -516,7 +536,7 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 				const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index].module_index, data->configuration);
 				if (info->load_status != EDITOR_MODULE_LOAD_GOOD) {
 					editor_state->launched_module_compilation_lock.unlock();
-					BuildModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status);
+					BuildModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
 					editor_state->launched_module_compilation_lock.lock();
 					have_not_finished = true;
 				}
@@ -541,7 +561,7 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 	if (!have_not_finished) {
 		// If all the build finished with ok status, then continue
 		if (!has_failed) {
-			RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->original_status);
+			RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->original_status, data->disable_logging);
 		}
 
 		editor_state->editor_allocator->Deallocate(data->dependencies.buffer);
@@ -555,6 +575,7 @@ struct RunCmdCommandAfterExternalDependencyData {
 	unsigned int module_index;
 	Stream<wchar_t> command;
 	EDITOR_MODULE_CONFIGURATION configuration;
+	bool disable_logging;
 	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status;
 	Stream<unsigned int> dependencies;
 	ResizableStream<unsigned int> unloaded_dependencies;
@@ -594,7 +615,7 @@ EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 			*data->report_status = EDITOR_FINISH_BUILD_COMMAND_WAITING;
 			allocated_report_status = true;
 		}
-		RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->report_status);
+		RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->report_status, data->disable_logging);
 		
 		if (!function::CompareStrings(data->command, CLEAN_PROJECT_STRING_WIDE)) {
 			ReloadModuleEventData reload_data;
@@ -612,29 +633,16 @@ EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+// The project needs to be added to the launched compilation registry before this function call
 EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 	EditorState* editor_state,
 	unsigned int index,
 	Stream<wchar_t> command,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status,
+	bool disable_logging
 ) {
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
-
-	// First check that the module is not executing another build command - it doesn't necessarly 
-	// have to be the same type. A clean cannot be executed while a build is running
-	// The lock must be acquired so a thread that wants to remove an element 
-	// does not interfere with this reading.
-	editor_state->launched_module_compilation_lock.lock();
-	unsigned int already_launched_index = function::FindString(library_name, editor_state->launched_module_compilation[configuration]);
-	if (already_launched_index != -1) {
-		editor_state->launched_module_compilation_lock.unlock();
-		return EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING;
-	}
-	editor_state->launched_module_compilation_lock.unlock();
-
-	// Add the module to the launched module compilation
-	AddProjectModuleToLaunchedCompilation(editor_state, library_name, configuration);
 
 	// Construct the system string
 #ifdef MODULE_BUILD_USING_CRT
@@ -672,7 +680,9 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 #else
 	HINSTANCE value = ShellExecute(NULL, L"runas", L"C:\\Windows\\System32\\cmd.exe", command_string.buffer, L"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\MSBuild\\Current\\Bin", SW_HIDE);
 	if ((uint64_t)value < 32) {
-		EditorSetConsoleError("An error occured when creating the command prompt that builds the module.");
+		if (!disable_logging) {
+			EditorSetConsoleError("An error occured when creating the command prompt that builds the module.");
+		}
 		return EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING;
 	}
 	else {
@@ -687,6 +697,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		check_data.path.buffer = (wchar_t*)Allocate(editor_state->MultithreadedEditorAllocator(), sizeof(wchar_t) * flag_file.size);
 		check_data.path.Copy(flag_file);
 		check_data.report_status = report_status;
+		check_data.disable_logging = disable_logging;
 
 		editor_state->task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(CheckBuildStatusThreadTask, &check_data, sizeof(check_data)));
 	}
@@ -701,7 +712,8 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	unsigned int index,
 	Stream<wchar_t> command,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status = nullptr
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status,
+	bool disable_logging
 ) {
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
 
@@ -715,6 +727,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 		editor_state->launched_module_compilation_lock.unlock();
 		return EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING;
 	}
+	AddProjectModuleToLaunchedCompilationNoLock(editor_state, library_name, configuration);
 	editor_state->launched_module_compilation_lock.unlock();
 
 	ECS_STACK_CAPACITY_STREAM(unsigned int, external_references, 512);
@@ -734,6 +747,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 			import_data.module_index = index;
 			import_data.original_status = report_status;
 			import_data.dependencies.Initialize(editor_state->EditorAllocator(), import_references.size);
+			import_data.disable_logging = disable_logging;
 			for (unsigned int subindex = 0; subindex < import_references.size; subindex++) {
 				import_data.dependencies[subindex].module_index = import_references[subindex];
 				import_data.dependencies[subindex].verified_once = false;
@@ -753,6 +767,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 		wait_data.report_status = report_status;
 		wait_data.unloaded_dependencies.Initialize(editor_state->EditorAllocator(), 0);
 		wait_data.dependencies.InitializeAndCopy(editor_state->EditorAllocator(), external_references);
+		wait_data.disable_logging = disable_logging;
 		EditorAddEvent(editor_state, RunCmdCommandAfterExternalDependency, &wait_data, sizeof(wait_data));
 
 		execute_import();
@@ -763,7 +778,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 		return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
 	}
 
-	return RunCmdCommand(editor_state, index, command, configuration, report_status);
+	return RunCmdCommand(editor_state, index, command, configuration, report_status, disable_logging);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -772,14 +787,15 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status,
+	bool disable_logging
 ) {
 	ProjectModules* modules = editor_state->project_modules;
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 
 	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status != EDITOR_MODULE_LOAD_GOOD) {
 		ReleaseModuleStreamsAndHandle(editor_state, index, configuration);
-		return RunBuildCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status);
+		return RunBuildCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status, disable_logging);
 	}
 	if (report_status != nullptr) {
 		*report_status = EDITOR_FINISH_BUILD_COMMAND_OK;
@@ -790,12 +806,12 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool BuildModulesAndLoad(EditorState* editor_state, Stream<unsigned int> module_indices, EDITOR_MODULE_CONFIGURATION* configurations)
+bool BuildModulesAndLoad(EditorState* editor_state, Stream<unsigned int> module_indices, EDITOR_MODULE_CONFIGURATION* configurations, bool disable_logging)
 {
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * module_indices.size);
 	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = (EDITOR_FINISH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_FINISH_BUILD_COMMAND_STATUS) * module_indices.size);
 
-	BuildModules(editor_state, module_indices, configurations, launch_statuses, build_status);
+	BuildModules(editor_state, module_indices, configurations, launch_statuses, build_status, disable_logging);
 
 	for (size_t index = 0; index < module_indices.size; index++) {
 		if (launch_statuses[index] == EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING || build_status[index] == 0) {
@@ -821,10 +837,11 @@ void BuildModules(
 	Stream<unsigned int> indices,
 	EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses,
+	bool disable_logging
 )
 {
-	ForEachProjectModule(editor_state, indices, configurations, launch_statuses, build_statuses, BuildModule);
+	ForEachProjectModule(editor_state, indices, configurations, launch_statuses, build_statuses, disable_logging, BuildModule);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -833,11 +850,12 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status,
+	bool disable_logging
 ) {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 	info->load_status = EDITOR_MODULE_LOAD_STATUS::EDITOR_MODULE_LOAD_FAILED;
-	return RunBuildCommand(editor_state, index, CLEAN_PROJECT_STRING_WIDE, configuration);
+	return RunBuildCommand(editor_state, index, CLEAN_PROJECT_STRING_WIDE, configuration, build_status, disable_logging);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -847,9 +865,10 @@ void CleanModules(
 	Stream<unsigned int> indices,
 	EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses,
+	bool disable_logging
 ) {
-	ForEachProjectModule(editor_state, indices, configurations, launch_statuses, build_statuses, CleanModule);
+	ForEachProjectModule(editor_state, indices, configurations, launch_statuses, build_statuses, disable_logging, CleanModule);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -858,11 +877,12 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status,
+	bool disable_logging
 ) {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 	info->load_status = EDITOR_MODULE_LOAD_FAILED;
-	return RunBuildCommand(editor_state, index, REBUILD_PROJECT_STRING_WIDE, configuration);
+	return RunBuildCommand(editor_state, index, REBUILD_PROJECT_STRING_WIDE, configuration, build_status, disable_logging);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -872,9 +892,10 @@ void RebuildModules(
 	Stream<unsigned int> indices,
 	EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses,
+	bool disable_logging
 ) {
-	ForEachProjectModule(editor_state, indices, configurations, launch_statuses, build_statuses, RebuildModule);
+	ForEachProjectModule(editor_state, indices, configurations, launch_statuses, build_statuses, disable_logging, RebuildModule);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -912,6 +933,54 @@ bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index, E
 bool IsGraphicsModule(const EditorState* editor_state, unsigned int index)
 {
 	return editor_state->project_modules->buffer[index].is_graphics_module;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool IsModuleBeingCompiled(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
+{
+	editor_state->launched_module_compilation_lock.lock();
+	const EditorModule* module = editor_state->project_modules->buffer + module_index;
+	bool is_compiled = function::FindString(module->library_name, editor_state->launched_module_compilation[configuration].ToStream()) != -1;
+	editor_state->launched_module_compilation_lock.unlock();
+	return is_compiled;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool IsModuleUsedBySandboxes(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
+{
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		EDITOR_MODULE_CONFIGURATION configuration_used = IsModuleUsedBySandbox(editor_state, index, module_index);
+		if (configuration_used != EDITOR_MODULE_CONFIGURATION_COUNT) {
+			if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT || configuration_used == configuration) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool GetSandboxesForModule(
+	const EditorState* editor_state, 
+	unsigned int module_index, 
+	EDITOR_MODULE_CONFIGURATION configuration, 
+	CapacityStream<unsigned int>* sandboxes
+)
+{
+	unsigned int initial_size = sandboxes->size;
+
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		EDITOR_MODULE_CONFIGURATION configuration_used = IsModuleUsedBySandbox(editor_state, index, module_index);
+		if (configuration_used == configuration) {
+			sandboxes->AddSafe(index);
+		}
+	}
+	return sandboxes->size > initial_size;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1316,6 +1385,10 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 		// Launch thread tasks to process this new entry
 		success = module_reflection->ProcessFolderHierarchy(folder_hierarchy, /*editor_state->task_manager,*/ &error_message);
 
+		// We'll need the name for the editor components module
+		ECS_STACK_CAPACITY_STREAM(char, ascii_name, 512);
+		function::ConvertWideCharsToASCII(module->library_name, ascii_name);
+
 		if (!success) {
 			ECS_FORMAT_TEMP_STRING(
 				console_message, 
@@ -1325,6 +1398,12 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 				error_message
 			);
 			EditorSetConsoleWarn(console_message);
+
+			// Remove the module from the editor components - if it was already loaded
+			unsigned int editor_component_module_index = editor_state->editor_components.FindModule(ascii_name);
+			if (editor_component_module_index != -1) {
+				editor_state->editor_components.RemoveModule(editor_state, editor_component_module_index);
+			}
 		}
 		else {
 			// Create all the link types for the components inside the reflection manager
@@ -1352,9 +1431,7 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			UpdateInspectorUIModuleSettings(editor_state, index);
 
 			// Update the engine components
-			ECS_STACK_CAPACITY_STREAM(char, ascii_name, 512);
-			function::ConvertWideCharsToASCII(module->library_name, ascii_name);
-			editor_state->editor_components.UpdateComponents(module_reflection, folder_hierarchy, ascii_name);
+			editor_state->editor_components.UpdateComponents(editor_state, module_reflection, folder_hierarchy, ascii_name);
 		}
 	}
 	else {

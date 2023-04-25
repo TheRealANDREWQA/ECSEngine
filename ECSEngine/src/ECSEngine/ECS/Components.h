@@ -10,7 +10,7 @@
 
 // The base of the ECSEngine unique components
 #define ECS_COMPONENT_BASE ECS_CONSTANT_REFLECT(0)
-// The base of the ECSEngine unique components
+// The base of the ECSEngine shared components
 #define ECS_SHARED_COMPONENT_BASE ECS_CONSTANT_REFLECT(0)
 
 namespace ECSEngine {

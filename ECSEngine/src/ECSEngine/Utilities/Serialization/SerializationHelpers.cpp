@@ -348,6 +348,9 @@ namespace ECSEngine {
 			if (data->read_data->read_data) {
 				// Allocate the data before
 				if (!single_instance) {
+					bool previous_was_allocated = data->read_data->was_allocated;
+					data->read_data->was_allocated = true;
+
 					void* buffer = data->elements_to_allocate > 0 ? AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size) : nullptr;
 					*data->allocated_buffer = buffer;
 					deserialize_size += data->elements_to_allocate * data->element_byte_size;
@@ -376,6 +379,8 @@ namespace ECSEngine {
 					else {
 						return_val =loop(std::true_type{});
 					}
+
+					data->read_data->was_allocated = previous_was_allocated;
 					if (return_val == -1) {
 						return -1;
 					}
@@ -388,6 +393,8 @@ namespace ECSEngine {
 				}
 			}
 			else {
+				bool previous_was_allocated = data->read_data->was_allocated;
+				data->read_data->was_allocated = true;
 				size_t iterate_count = single_instance ? 1 : data->element_count;
 				for (size_t index = 0; index < iterate_count; index++) {
 					size_t byte_size = DeserializeSize(data->read_data->reflection_manager, data->reflection_type, *data->read_data->stream, &options);
@@ -396,10 +403,13 @@ namespace ECSEngine {
 					}
 					deserialize_size += byte_size;
 				}
+				data->read_data->was_allocated = previous_was_allocated;
 			}
 		}
 		else if (data->custom_serializer_index != -1) {
 			if (!single_instance) {
+				bool previous_was_allocated = data->read_data->was_allocated;
+				data->read_data->was_allocated = true;
 				if (data->read_data->read_data) {
 					void* buffer = AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size);
 					*data->allocated_buffer = buffer;
@@ -435,6 +445,8 @@ namespace ECSEngine {
 				else {
 					return_val = loop(std::true_type{});
 				}
+
+				data->read_data->was_allocated = previous_was_allocated;
 				if (return_val == -1) {
 					return -1;
 				}
@@ -461,6 +473,7 @@ namespace ECSEngine {
 
 				if (data->read_data->read_data) {
 					if (!single_instance) {
+						// We don't need to modify the was_allocated field since we are reading fundamental types
 						*data->allocated_buffer = data->elements_to_allocate > 0 ? AllocateEx(backup_allocator, data->elements_to_allocate * stream_size) : nullptr;
 						deserialize_size += data->elements_to_allocate * stream_size;
 
@@ -504,6 +517,7 @@ namespace ECSEngine {
 			else {
 				if (data->read_data->read_data) {
 					if (!single_instance) {
+						// No need to change the was_allocated field since we are reading blittable types
 						*data->allocated_buffer = AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size);
 
 						if (data->indices.buffer == nullptr) {
