@@ -45,8 +45,8 @@ namespace ECSEngine {
 		void SetPBRVertexConstants(void* data, Matrix object_matrix, Matrix world_view_projection_matrix, float2 uv_tiling, float2 uv_offsets)
 		{
 			PBRVertexConstants* constants = (PBRVertexConstants*)data;
-			constants->object_matrix = object_matrix;
-			constants->world_view_projection_matrix = world_view_projection_matrix;
+			constants->object_matrix = MatrixTranspose(object_matrix);
+			constants->world_view_projection_matrix = MatrixTranspose(world_view_projection_matrix);
 			constants->uv_tiling = uv_tiling;
 			constants->uv_offsets = uv_offsets;
 		}

@@ -196,9 +196,9 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 
 // -------------------------------------------------------------------------------------------------------------
 
-// This does not check to see if the sandbox is locked - you must ensure that before calling this function
-// that the sandbox is unlocked
-void DestroySandbox(EditorState* editor_state, unsigned int index);
+// Can optionally disable the wait for the unlocking - by default you should leave this on
+// unless you have a very specific reason to ignore the value
+void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool wait_unlocking = true);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -315,6 +315,10 @@ bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_index
 
 // Returns the given configuration of the module if it is being used, else COUNT to signal that it is not being used
 EDITOR_MODULE_CONFIGURATION IsModuleUsedBySandbox(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxIndexValid(const EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

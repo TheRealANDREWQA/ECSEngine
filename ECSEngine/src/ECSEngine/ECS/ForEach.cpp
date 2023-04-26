@@ -266,12 +266,21 @@ namespace ECSEngine {
 		ForEachEntityBatchImplementationTaskData task_data;
 		task_data.functor_data = data;
 		task_data.thread_function = functor;
+		task_data.component_map_count = unique_signature.count;
+		task_data.shared_component_map_count = shared_signature.count;
+
+		VectorComponentSignature vector_unique(unique_signature);
+		VectorComponentSignature vector_shared(shared_signature);
 
 		for (unsigned int index = 0; index < archetype_indices.size; index++) {
 			Archetype* archetype = entity_manager->GetArchetype(archetype_indices[index]);
 			unsigned int base_count = archetype->GetBaseCount();
 
 			task_data.archetype_indices.x = archetype_indices[index];
+
+			entity_manager->FindArchetypeUniqueComponentVector(archetype_indices[index], vector_unique, task_data.component_map);
+			entity_manager->FindArchetypeSharedComponentVector(archetype_indices[index], vector_shared, task_data.shared_component_map);
+
 			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
 				ArchetypeBase* base = archetype->GetBase(base_index);
 				task_data.command_stream = nullptr;

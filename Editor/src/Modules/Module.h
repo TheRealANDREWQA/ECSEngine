@@ -156,6 +156,8 @@ void GetModuleFilenameNoConfig(Stream<wchar_t> library_name, CapacityStream<wcha
 
 void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path);
 
+Stream<wchar_t> GetModuleLibraryName(const EditorState* editor_state, unsigned int module_index);
+
 // This will go through the .vcxproj file to read the imports
 void GetModuleDLLImports(EditorState* editor_state, unsigned int index);
 

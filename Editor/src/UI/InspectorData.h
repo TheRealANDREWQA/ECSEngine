@@ -50,7 +50,7 @@ void GetInspectorName(unsigned int inspector_index, ECSEngine::CapacityStream<ch
 // It will resize the round robin index - can be used both when removing or adding
 // And reroute any inspector pointing to an invalid sandbox (when removing)
 // to the 0 sandbox
-void RegisterInspectorSandbox(EditorState* editor_state);
+void RegisterInspectorSandboxChange(EditorState* editor_state);
 
 // All inspectors that point to old_sandbox_index will be rerouted to new_sandbox_index
 // It will also change the name of the sandbox window if there is one with that index

@@ -327,6 +327,7 @@
     <ClInclude Include="src\Includes\ECSEngineBasics.h" />
     <ClInclude Include="src\Includes\ECSEngineBenchmark.h" />
     <ClInclude Include="src\Includes\ECSEngineComponents.h" />
+    <ClInclude Include="src\Includes\ECSEngineComponentsAll.h" />
     <ClInclude Include="src\Includes\ECSEngineConcurrentPrimitives.h" />
     <ClInclude Include="src\Includes\ECSEngineConsole.h" />
     <ClInclude Include="src\Includes\ECSEngineContainers.h" />
@@ -336,6 +337,7 @@
     <ClInclude Include="src\Includes\ECSEngineEntities.h" />
     <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
     <ClInclude Include="src\Includes\ECSEngineForEach.h" />
+    <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />
     <ClInclude Include="src\Includes\ECSEngineThreadTaskExport.h" />
     <ClInclude Include="src\Includes\ECSEngineRuntime.h" />
     <ClInclude Include="src\Includes\ECSEngineLinkComponents.h" />

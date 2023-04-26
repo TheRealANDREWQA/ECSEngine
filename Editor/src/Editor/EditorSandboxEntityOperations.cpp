@@ -5,7 +5,7 @@
 #include "../Modules/Module.h"
 #include "../Assets/EditorSandboxAssets.h"
 
-#include "ECSEngineComponents.h"
+#include "ECSEngineComponentsAll.h"
 #include "ECSEngineForEach.h"
 
 using namespace ECSEngine;

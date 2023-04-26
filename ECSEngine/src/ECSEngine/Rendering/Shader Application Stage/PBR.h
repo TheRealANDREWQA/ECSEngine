@@ -48,6 +48,7 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------
 
+		// The matrices will be transposed inside here (they need to be row major when giving them as parameters)
 		ECSENGINE_API void SetPBRVertexConstants(
 			void* data,
 			Matrix object_matrix, 
@@ -56,6 +57,7 @@ namespace ECSEngine {
 			float2 uv_offsets = {0.0f, 0.0f}
 		);
 
+		// The matrices will be transposed inside here (they need to be row major when giving them as parameters)
 		ECSENGINE_API void SetPBRVertexConstants(
 			ConstantBuffer buffer, 
 			Graphics* graphics, 

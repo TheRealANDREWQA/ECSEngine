@@ -1,5 +1,6 @@
 #pragma once
 #include "EditorEventDef.h"
+#include "ECSEngineContainers.h"
 
 // Single threaded. It returns the pointer of data allocated or given if the event_data_size is 0
 // Cannot place these inside a Editor namespace because it will conflict with the Editor class in Editor.cpp
@@ -14,5 +15,11 @@ void EditorAddEventWithPointer(EditorState* editor_state, EditorEventFunction fu
 // Returns the last event data
 void* EditorEventLastData(const EditorState* editor_state);
 
-// Returns true if it founds an event with the given function
-bool EditorHasEvent(EditorState* editor_state, EditorEventFunction function);
+// Returns true if it finds an event with the given function
+bool EditorHasEvent(const EditorState* editor_state, EditorEventFunction function);
+
+// Returns the data for an event if it finds the givne function else nullptr
+void* EditorGetEventData(const EditorState* editor_state, EditorEventFunction function);
+
+// Fills in the stream with the data pointers for all events currently stored with the given function
+void EditorGetEventTypeData(const EditorState* editor_state, EditorEventFunction function, ECSEngine::CapacityStream<void*>* data);

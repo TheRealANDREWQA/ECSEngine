@@ -26,8 +26,8 @@ void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 	GameData* data = (GameData*)window_data;
 	EditorState* editor_state = data->editor_state;
 
+	// Destroy the window if the sandbox index is invalid
 	unsigned int sandbox_index = GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
-
 	if (!initialize) {
 		//drawer.system->SetSprite(drawer.dockspace, drawer.border_index, data->editor_state->viewport_texture, drawer.region_position, drawer.region_scale, drawer.buffers, drawer.counts);
 	}

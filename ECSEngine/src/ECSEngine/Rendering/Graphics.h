@@ -877,6 +877,15 @@ namespace ECSEngine {
 
 		void DrawInstancedIndirect(IndirectBuffer buffer);
 
+		// Single mesh drawing - very inefficient, just use for small number of draws
+		void DrawMesh(const Mesh& mesh, const Material& material);
+
+		// Single mesh drawing - very inefficient, just use for small number of draws
+		void DrawMesh(const CoallescedMesh& mesh, unsigned int submesh_index, const Material& material);
+
+		// This will issue only a DrawIndexed command, does not bind any mesh/material
+		void DrawSubmeshCommand(Submesh submesh);
+
 		void EnableAlphaBlending();
 
 		void EnableAlphaBlending(GraphicsContext* context);
@@ -1423,6 +1432,13 @@ namespace ECSEngine {
 	ECSENGINE_API void DrawIndexedInstancedIndirect(IndirectBuffer buffer, GraphicsContext* context);
 
 	ECSENGINE_API void DrawInstancedIndirect(IndirectBuffer buffer, GraphicsContext* context);
+
+	ECSENGINE_API void DrawMesh(const Mesh& mesh, const Material& material, GraphicsContext* context);
+
+	ECSENGINE_API void DrawMesh(const CoallescedMesh& coallesced_mesh, unsigned int submesh_index, const Material& material, GraphicsContext* context);
+
+	// It will only issue the draw command, it will not bind material/mesh
+	ECSENGINE_API void DrawSubmeshCommand(Submesh submesh, GraphicsContext* context);
 
 	ECSENGINE_API GraphicsPipelineBlendState GetBlendState(GraphicsContext* context);
 

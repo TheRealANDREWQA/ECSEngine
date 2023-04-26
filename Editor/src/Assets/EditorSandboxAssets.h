@@ -1,7 +1,7 @@
 #pragma once
 #include "ECSEngineContainers.h"
 #include "ECSEngineAssets.h"
-#include "ECSEngineComponents.h"
+#include "ECSEngineComponentsAll.h"
 #include "../Editor/EditorEvent.h"
 #include "Assets/AssetManagement.h"
 

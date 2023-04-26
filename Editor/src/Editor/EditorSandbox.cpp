@@ -16,6 +16,7 @@
 #include "../UI/Game.h"
 #include "../UI/Scene.h"
 #include "../UI/EntitiesUI.h"
+#include "../UI/Common.h"
 
 using namespace ECSEngine;
 
@@ -388,7 +389,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	}
 
 	sandbox->copy_world_status.unlock();
-	RegisterInspectorSandbox(editor_state);
+	RegisterInspectorSandboxChange(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -461,10 +462,12 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index) {
+void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool wait_unlocking) {
 	ECS_ASSERT(!IsSandboxLocked(editor_state, sandbox_index));
 
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	WaitSandboxUnlock(editor_state, sandbox_index);
 	
 	// Unload the sandbox assets
 	UnloadSandboxAssets(editor_state, sandbox_index);
@@ -498,13 +501,15 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index) {
 
 	// Notify the UI and the inspector
 	if (editor_state->sandboxes.size > 0) {
+		// Destroy the associated windows first
+		DestroySandboxWindows(editor_state, sandbox_index);
 		FixInspectorSandboxReference(editor_state, previous_count, sandbox_index);
 		UpdateGameUIWindowIndex(editor_state, previous_count, sandbox_index);
 		UpdateSceneUIWindowIndex(editor_state, previous_count, sandbox_index);
 		UpdateEntitiesUITargetSandbox(editor_state, previous_count, sandbox_index);
 	}
 
-	RegisterInspectorSandbox(editor_state);
+	RegisterInspectorSandboxChange(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -692,6 +697,13 @@ EDITOR_MODULE_CONFIGURATION IsModuleUsedBySandbox(const EditorState* editor_stat
 		}
 	}
 	return EDITOR_MODULE_CONFIGURATION_COUNT;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxIndexValid(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	return sandbox_index < GetSandboxCount(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1259,13 +1271,13 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-struct RenderSandboxEventData {
+struct WaitCompilationRenderSandboxEventData {
 	unsigned int sandbox_index;
 	EDITOR_SANDBOX_VIEWPORT viewport;
 };
 
-EDITOR_EVENT(RenderSandboxEvent) {
-	RenderSandboxEventData* data = (RenderSandboxEventData*)_data;
+EDITOR_EVENT(WaitCompilationRenderSandboxEvent) {
+	WaitCompilationRenderSandboxEventData* data = (WaitCompilationRenderSandboxEventData*)_data;
 
 	// We assume that the Graphics module won't modify any entities
 	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, data->sandbox_index);
@@ -1274,25 +1286,60 @@ EDITOR_EVENT(RenderSandboxEvent) {
 		bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
 		if (!is_being_compiled) {
 			RenderSandbox(editor_state, data->sandbox_index, data->viewport);
+			// Unlock the sandbox
+			UnlockSandbox(editor_state, data->sandbox_index);
 			return false;
 		}
 		return true;
 	}
+
+	// Unlock the sandbox
+	UnlockSandbox(editor_state, data->sandbox_index);
 	return false;
+}
+
+struct WaitResourceLoadingRenderSandboxEventData {
+	unsigned int sandbox_index;
+	EDITOR_SANDBOX_VIEWPORT viewport;
+};
+
+EDITOR_EVENT(WaitResourceLoadingRenderSandboxEvent) {
+	WaitResourceLoadingRenderSandboxEventData* data = (WaitResourceLoadingRenderSandboxEventData*)_data;
+
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		RenderSandbox(editor_state, data->sandbox_index, data->viewport);
+		// Unlock the sandbox
+		UnlockSandbox(editor_state, data->sandbox_index);
+		return false;
+	}
+	return true;
 }
 
 bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, bool disable_logging)
 {
-	// Check to see if we already have a pending event - if we do, skip the call
-	bool pending_event = EditorHasEvent(editor_state, RenderSandboxEvent);
-	if (pending_event) {
-		return true;
-	}
-
 	// We assume that the Graphics module won't modify any entities
 	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index);
 	if (in_stream_module_index == -1) {
 		return false;
+	}
+
+	// Check to see if we already have a pending event - if we do, skip the call
+	bool pending_event = EditorHasEvent(editor_state, WaitCompilationRenderSandboxEvent);
+	if (pending_event) {
+		return true;
+	}
+
+	// Check for the prevent loading resource flag
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		// Push an event to wait for the resource loading
+		WaitResourceLoadingRenderSandboxEventData event_data;
+		event_data.sandbox_index = sandbox_index;
+		event_data.viewport = viewport;
+
+		// Lock the sandbox such that it cannot be destroyed while we try to render to it
+		LockSandbox(editor_state, sandbox_index);
+		EditorAddEvent(editor_state, WaitResourceLoadingRenderSandboxEvent, &event_data, sizeof(event_data));
+		return true;
 	}
 
 	// Check to see if the module is being compiled right now - if it is, then push an event to try re-render after
@@ -1360,10 +1407,13 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	}
 	else {
 		// Wait for the compilation
-		RenderSandboxEventData event_data;
+		WaitCompilationRenderSandboxEventData event_data;
 		event_data.sandbox_index = sandbox_index;
 		event_data.viewport = viewport;
-		EditorAddEvent(editor_state, RenderSandboxEvent, &event_data, sizeof(event_data));
+
+		// Also lock this sandbox such that it cannot be destroyed while we try to render to it
+		LockSandbox(editor_state, sandbox_index);
+		EditorAddEvent(editor_state, WaitCompilationRenderSandboxEvent, &event_data, sizeof(event_data));
 	}
 }
 

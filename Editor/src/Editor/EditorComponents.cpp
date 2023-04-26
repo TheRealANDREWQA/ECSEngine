@@ -6,7 +6,7 @@
 #include "../Modules/Module.h"
 #include "ECSEngineSerialization.h"
 #include "ECSEngineSerializationHelpers.h"
-#include "ECSEngineComponents.h"
+#include "ECSEngineComponentsAll.h"
 #include "../Editor/EditorEvent.h"
 #include "EditorSandboxEntityOperations.h"
 

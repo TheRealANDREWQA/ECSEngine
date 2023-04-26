@@ -50,7 +50,6 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	EditorState* editor_state = data->editor_state;
 
 	unsigned int sandbox_index = GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
-
 	if (initialize) {
 		data->previous_texel_size = { 0, 0 };
 	}
@@ -68,7 +67,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 				// Resize the textures
 				data->previous_texel_size = current_texel_size;
 				ResizeSandboxRenderTextures(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, current_texel_size);
-				
+
 				// Now render the sandbox
 				RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 			}
@@ -107,8 +106,6 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			drawer.Text(configuration, config, message);
 		}
 	}
-
-
 }
 
 void CreateSceneUIWindow(EditorState* editor_state, unsigned int index) {

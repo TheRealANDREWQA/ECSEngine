@@ -1,6 +1,8 @@
 #include "editorpch.h"
 #include "Common.h"
 #include "../Editor/EditorState.h"
+#include "Game.h"
+#include "Scene.h"
 
 using namespace ECSEngine;
 
@@ -17,4 +19,11 @@ void DestroyIndexedWindows(EditorState* editor_state, Stream<char> window_root, 
 			editor_state->ui_system->DestroyWindowEx(window_index);
 		}
 	}
+}
+
+void DestroySandboxWindows(EditorState* editor_state, unsigned int sandbox_index)
+{
+	// Destroy only the windows for that sandbox index
+	DestroyIndexedWindows(editor_state, GAME_WINDOW_NAME, sandbox_index, sandbox_index + 1);
+	DestroyIndexedWindows(editor_state, SCENE_WINDOW_NAME, sandbox_index, sandbox_index + 1);
 }
