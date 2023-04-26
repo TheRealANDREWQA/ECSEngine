@@ -49,7 +49,7 @@ namespace ECSEngine {
 	}
 
 	inline Matrix ViewMatrixTextureCube(TextureCubeFace face) {
-		using view_function = Matrix(*)();
+		typedef Matrix(*view_function)();
 		view_function functions[6] = {
 			ViewMatrixTextureCubeXPositive,
 			ViewMatrixTextureCubeXNegative,

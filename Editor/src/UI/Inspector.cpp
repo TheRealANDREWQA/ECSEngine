@@ -471,7 +471,7 @@ void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sa
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void RegisterInspectorSandbox(EditorState* editor_state) {
+void RegisterInspectorSandboxChange(EditorState* editor_state) {
 	unsigned int sandbox_count = editor_state->sandboxes.size;
 	if (sandbox_count > editor_state->inspector_manager.round_robin_index.size) {
 		// An addition was done - just copy to a new buffer

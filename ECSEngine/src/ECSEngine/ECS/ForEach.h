@@ -236,7 +236,7 @@ namespace ECSEngine {
 
 		template<bool is_batch, typename Functor, typename... T>
 		void ForEachEntityBatchTypeSafeWrapper(ForEachEntityFunctorData* data) {
-			Functor* functor = (Functor*)data->data;
+			std::remove_reference_t<Functor>* functor = (std::remove_reference_t<Functor>*)data->data;
 			
 			constexpr size_t component_count = sizeof...(T);
 			
@@ -253,8 +253,10 @@ namespace ECSEngine {
 			size_t total_index = 0;
 			size_t component_index[2] = { 0 };
 
-			for (size_t index = 0; index < 2; index++) {
-				current_components[total_index++] = components[component_index[is_shared[index]]++];
+			for (size_t index = 0; index < component_count; index++) {
+				void** component_ptrs = components[is_shared[index]];
+				size_t ptr_index = component_index[is_shared[index]]++;
+				current_components[total_index++] = component_ptrs[ptr_index];
 			}
 
 			// The parameters need to be indexed backwards
@@ -298,7 +300,7 @@ namespace ECSEngine {
 		template<bool is_batch, typename... Components>
 		struct ForEachEntityBatchCommit {
 			template<typename... ExcludeComponents, typename Functor>
-			static void Function(World* world, unsigned short batch_size, Functor&& functor) {
+			static void Function(World* world, unsigned short batch_size, Functor& functor) {
 				Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
 				Component shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
 				Component unique_exclude_components[ECS_ARCHETYPE_MAX_COMPONENTS];
@@ -319,7 +321,7 @@ namespace ECSEngine {
 						batch_size,
 						unique_signature,
 						shared_signature,
-						unique_exclude_components,
+						unique_exclude_signature,
 						shared_exclude_signature
 					);
 				}
@@ -330,7 +332,7 @@ namespace ECSEngine {
 						&functor,
 						unique_signature,
 						shared_signature,
-						unique_exclude_components,
+						unique_exclude_signature,
 						shared_exclude_signature
 					);
 				}
@@ -339,10 +341,11 @@ namespace ECSEngine {
 
 	}
 
+	// The functor must take as first parameter a [const] ForEachEntityData*
 	template<bool get_query, typename... Components>
 	struct ForEachEntity {
 		template<typename... ExcludeComponents, typename Functor>
-		static void Function(unsigned int thread_id, World* world, Functor&& functor, const char* function_name = __builtin_FUNCTION()) {
+		static void Function(unsigned int thread_id, World* world, Functor& functor, const char* function_name = __builtin_FUNCTION()) {
 			if constexpr (get_query) {
 				Internal::RegisterForEachInfo* info = (Internal::RegisterForEachInfo*)world;
 				Internal::AddQueryComponents<Components...>(info);
@@ -354,18 +357,20 @@ namespace ECSEngine {
 		}
 	};
 
+	// The functor must take as first parameter a [const] ForEachEntityData*
 	template<typename... Components>
 	struct ForEachEntityCommit {
 		template<typename... ExcludeComponents, typename Functor>
-		static void Function(World* world, Functor&& functor) {
+		static void Function(World* world, Functor& functor) {
 			Internal::ForEachEntityBatchCommit<false, Components...>::Function<ExcludeComponents...>(world, 0, functor);
 		}
 	};
 
+	// The functor must take as first parameter a [const] ForEachBatchData*
 	template<bool get_query, typename... Components>
 	struct ForEachEntityBatch {
 		template<typename... ExcludeComponents, typename Functor>
-		static void Function(unsigned int thread_id, World* world, Functor&& functor, const char* function_name = __builtin_FUNCTION()) {
+		static void Function(unsigned int thread_id, World* world, Functor& functor, const char* function_name = __builtin_FUNCTION()) {
 			if constexpr (get_query) {
 				Internal::RegisterForEachInfo* info = (Internal::RegisterForEachInfo*)world;
 				Internal::AddQueryComponents<Components...>(info);
@@ -377,10 +382,11 @@ namespace ECSEngine {
 		}
 	};
 
+	// The functor must take as first parameter a [const] ForEachBatchData*
 	template<typename... Components>
 	struct ForEachBatchCommit {
 		template<typename... ExcludeComponents, typename Functor>
-		static void Function(World* world, unsigned short batch_size, Functor&& functor) {
+		static void Function(World* world, unsigned short batch_size, Functor& functor) {
 			Internal::ForEachEntityBatchCommit<true, Components...>::Function<ExcludeComponents...>(world, batch_size, functor);
 		}
 	};

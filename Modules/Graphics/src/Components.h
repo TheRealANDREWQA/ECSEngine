@@ -47,6 +47,7 @@ struct ECS_REFLECT_SHARED_COMPONENT RenderMesh {
 	}
 
 	ECSEngine::CoallescedMesh* mesh;
+	ECSEngine::Material* material;
 	unsigned int count;
 	unsigned int new_count;
 	ECSEngine::Color color;

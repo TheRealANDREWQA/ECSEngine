@@ -64,9 +64,31 @@ void* EditorEventLastData(const EditorState* editor_state)
 	return nullptr;
 }
 
-bool EditorHasEvent(EditorState* editor_state, EditorEventFunction function)
+bool EditorHasEvent(const EditorState* editor_state, EditorEventFunction function)
 {
 	return editor_state->event_queue.ForEach<true>([function](EditorEvent event_) {
 		return event_.function == function;
+	});
+}
+
+void* EditorGetEventData(const EditorState* editor_state, EditorEventFunction function)
+{
+	void* ptr = nullptr;
+	editor_state->event_queue.ForEach<true>([&ptr, function](EditorEvent event_) {
+		if (event_.function == function) {
+			ptr = event_.data;
+			return true;
+		}
+		return false;
+	});
+	return ptr;
+}
+
+void EditorGetEventTypeData(const EditorState* editor_state, EditorEventFunction function, ECSEngine::CapacityStream<void*>* data)
+{
+	editor_state->event_queue.ForEach([data, function](EditorEvent event_) {
+		if (event_.function == function) {
+			data->AddSafe(event_.data);
+		}
 	});
 }

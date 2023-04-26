@@ -70,10 +70,24 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, boo
 				debug_ptr.Advance(wcslen(CMD_BUILD_SYSTEM_LOG_FILE_PATH));
 				Stream<wchar_t> underscore_after_library_name = function::FindFirstCharacter(debug_ptr, L'_');
 				if (underscore_after_library_name.size > 0) {
-					if (!disable_logging) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Module {#} have failed to build. Check the {#} log.",
-							Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer), CMD_BUILD_SYSTEM);
-						EditorSetConsoleError(error_message);
+					Stream<wchar_t> configuration_start = underscore_after_library_name.AdvanceReturn();
+					Stream<wchar_t> underscore_after_configuration = function::FindFirstCharacter(configuration_start, L'_');
+					if (underscore_after_configuration.size > 0) {
+						if (!disable_logging) {
+							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} with configuration {#} has failed to build. Check the {#} log.",
+								Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer),
+								Stream<wchar_t>(configuration_start.buffer, underscore_after_configuration.buffer - configuration_start.buffer),
+								CMD_BUILD_SYSTEM
+							);
+							EditorSetConsoleError(error_message);
+						}
+					}
+					else {
+						if (!disable_logging) {
+							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} has failed to build. Check the {#} log.",
+								Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer), CMD_BUILD_SYSTEM);
+							EditorSetConsoleError(error_message);
+						}
 					}
 					return false;
 				}
@@ -561,6 +575,8 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 	if (!have_not_finished) {
 		// If all the build finished with ok status, then continue
 		if (!has_failed) {
+			// We need to push the project to the compilation list
+			AddProjectModuleToLaunchedCompilation(editor_state, GetModuleLibraryName(editor_state, data->module_index), data->configuration);
 			RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->original_status, data->disable_logging);
 		}
 
@@ -753,6 +769,12 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 				import_data.dependencies[subindex].verified_once = false;
 				import_data.dependencies[subindex].status = EDITOR_FINISH_BUILD_COMMAND_WAITING;
 			}
+
+			// Remove the project from compilation list since it will make the dependencies deadlock waiting
+			// for this to finish compiling such that they can unload the module while this will wait for them
+			// to finish compiling
+			RemoveProjectModuleFromLaunchedCompilation(editor_state, library_name, configuration);
+
 			EditorAddEvent(editor_state, RunCmdCommandDLLImport, &import_data, sizeof(import_data));
 			return true;
 		}
@@ -793,7 +815,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	ProjectModules* modules = editor_state->project_modules;
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 
-	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status != EDITOR_MODULE_LOAD_GOOD) {
+	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
 		ReleaseModuleStreamsAndHandle(editor_state, index, configuration);
 		return RunBuildCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status, disable_logging);
 	}
@@ -943,6 +965,28 @@ bool IsModuleBeingCompiled(EditorState* editor_state, unsigned int module_index,
 	const EditorModule* module = editor_state->project_modules->buffer + module_index;
 	bool is_compiled = function::FindString(module->library_name, editor_state->launched_module_compilation[configuration].ToStream()) != -1;
 	editor_state->launched_module_compilation_lock.unlock();
+
+	if (!is_compiled) {
+		// Check for events as well
+		ECS_STACK_CAPACITY_STREAM(void*, events_data, 512);
+		EditorGetEventTypeData(editor_state, RunCmdCommandDLLImport, &events_data);
+
+		for (unsigned int index = 0; index < events_data.size; index++) {
+			RunCmdCommandDLLImportData* data = (RunCmdCommandDLLImportData*)events_data[index];
+			if (data->module_index == module_index && data->configuration == configuration) {
+				return true;
+			}
+		}
+
+		events_data.size = 0;
+		EditorGetEventTypeData(editor_state, RunCmdCommandAfterExternalDependency, &events_data);
+		for (unsigned int index = 0; index < events_data.size; index++) {
+			RunCmdCommandAfterExternalDependencyData* data = (RunCmdCommandAfterExternalDependencyData*)events_data[index];
+			if (data->module_index == module_index && data->configuration == configuration) {
+				return true;
+			}
+		}
+	}
 	return is_compiled;
 }
 
@@ -1106,6 +1150,13 @@ void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name
 	GetModulesFolder(editor_state, module_path);
 	module_path.Add(ECS_OS_PATH_SEPARATOR);
 	GetModuleFilename(library_name, configuration, module_path);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+Stream<wchar_t> GetModuleLibraryName(const EditorState* editor_state, unsigned int module_index)
+{
+	return editor_state->project_modules->buffer[module_index].library_name;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

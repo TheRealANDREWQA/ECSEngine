@@ -143,6 +143,28 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// CONST VARIANT
+		// Return true in the functor to early exit, if desired. The functor takes as parameter a T or const T&
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) const {
+			unsigned int size = GetSize();
+			unsigned int capacity = GetCapacity();
+			unsigned int current_index = m_first_item;
+			for (unsigned int index = 0; index < size; index++) {
+				if constexpr (early_exit) {
+					if (functor(m_queue[current_index])) {
+						return true;
+					}
+				}
+				else {
+					functor(m_queue[current_index]);
+				}
+				current_index = current_index == capacity - 1 ? 0 : current_index + 1;
+			}
+			return false;
+		}
+
 		CapacityStream<T> m_queue;
 		unsigned int m_first_item;
 	};

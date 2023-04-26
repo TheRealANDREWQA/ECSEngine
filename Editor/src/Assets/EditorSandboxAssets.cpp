@@ -1,6 +1,6 @@
 #include "editorpch.h"
 #include "ECSEngineAssets.h"
-#include "ECSEngineComponents.h"
+#include "ECSEngineComponentsAll.h"
 
 #include "../Editor/EditorEvent.h"
 #include "../Editor/EditorState.h"

@@ -202,6 +202,8 @@
     <ClInclude Include="src\Includes\ECSEngineThreadTaskExport.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTaskExport.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />
+    <ClInclude Include="src\Includes\ECSEngineComponentsAll.h" />
+    <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

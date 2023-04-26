@@ -2627,6 +2627,27 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::DrawMesh(const Mesh& mesh, const Material& material)
+	{
+		ECSEngine::DrawMesh(mesh, material, GetContext());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::DrawMesh(const CoallescedMesh& mesh, unsigned int submesh_index, const Material& material)
+	{
+		ECSEngine::DrawMesh(mesh, submesh_index, material, GetContext());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::DrawSubmeshCommand(Submesh submesh)
+	{
+		ECSEngine::DrawSubmeshCommand(submesh, GetContext());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::EnableAlphaBlending() {
 		EnableAlphaBlending(m_context);
 	}
@@ -4192,6 +4213,32 @@ namespace ECSEngine {
 
 	void DrawInstancedIndirect(IndirectBuffer buffer, GraphicsContext* context) {
 		context->DrawInstancedIndirect(buffer.buffer, 0u);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void DrawMesh(const Mesh& mesh, const Material& material, GraphicsContext* context)
+	{
+		BindMesh(mesh, context);
+		BindMaterial(material, context);
+		DrawIndexed(mesh.index_buffer.count, context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void DrawMesh(const CoallescedMesh& coallesced_mesh, unsigned int submesh_index, const Material& material, GraphicsContext* context)
+	{
+		BindMesh(coallesced_mesh.mesh, context);
+		BindMaterial(material, context);
+		Submesh submesh = coallesced_mesh.submeshes[submesh_index];
+		DrawSubmeshCommand(submesh, context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void DrawSubmeshCommand(Submesh submesh, GraphicsContext* context)
+	{
+		DrawIndexed(submesh.index_count, context, submesh.index_buffer_offset, submesh.vertex_buffer_offset);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
