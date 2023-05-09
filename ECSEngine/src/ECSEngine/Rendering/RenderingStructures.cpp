@@ -1166,6 +1166,31 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	void CameraParameters::Default()
+	{
+		translation = { 0.0f, 0.0f, 0.0f };
+		rotation = { 0.0f, 0.0f, 0.0f };
+
+		is_orthographic = false;
+		width = 0.0f;
+		height = 0.0f;
+		near_z = Camera::DefaultNearZ();
+		far_z = Camera::DefaultFarZ();
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	void CameraParametersFOV::Default()
+	{
+		translation = { 0.0f, 0.0f, 0.0f };
+		rotation = { 0.0f, 0.0f, 0.0f };
+
+		fov = 60.0f;
+		aspect_ratio = 16.0f / 9.0f;
+		near_z = Camera::DefaultNearZ();
+		far_z = Camera::DefaultFarZ();
+	}
+
 	// --------------------------------------------------------------------------------------------------------------------------------
 
 }

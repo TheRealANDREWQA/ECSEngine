@@ -218,6 +218,28 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return old_buffer;
 		}
 
+		// Returns -1 if it doesn't find it
+		template<typename Value, typename ProjectionFunctor>
+		ECS_INLINE size_t Find(Value value, ProjectionFunctor&& functor) const {
+			for (size_t index = 0; index < size; index++) {
+				if (value == functor(buffer[index])) {
+					return index;
+				}
+			}
+			return -1;
+		}
+
+		// Returns -1 if it doesn't find it
+		template<typename Value, typename ProjectionFunctor>
+		ECS_INLINE size_t Find(const Value* value, ProjectionFunctor&& functor) const {
+			for (size_t index = 0; index < size; index++) {
+				if (value == functor(buffer[index])) {
+					return index;
+				}
+			}
+			return -1;
+		}
+
 		ECS_INLINE void Insert(size_t index, T value) {
 			DisplaceElements(index, 1);
 			buffer[index] = value;
@@ -524,6 +546,22 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
+		// Does not update the size
+		void DisplaceElements(unsigned int starting_index, int32_t displacement) {
+			// If the displacement is negative, start from the bottom up
+			// Else start from the up downwards
+			if (displacement < 0) {
+				for (int32_t index = (int32_t)starting_index; index < (int32_t)size; index++) {
+					buffer[index + displacement] = buffer[index];
+				}
+			}
+			else {
+				for (int64_t index = (int32_t)size - 1; index >= (int32_t)starting_index; index--) {
+					buffer[index + displacement] = buffer[index];
+				}
+			}
+		}
+
 		// Returns the old buffer if a resize was performed, else nullptr. Can select the amount by which it grows with the growth_count
 		// (the capacity will be necessary_elements + growth_count). 
 		void* Expand(AllocatorPolymorphic allocator, unsigned int expand_count, unsigned int growth_count = 0, bool deallocate_previous = true) {
@@ -548,6 +586,28 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return old_buffer;
 		}
 
+		// Returns -1 if it doesn't find it
+		template<typename Value, typename ProjectionFunctor>
+		ECS_INLINE unsigned int Find(Value value, ProjectionFunctor&& functor) const {
+			for (unsigned int index = 0; index < size; index++) {
+				if (value == functor(buffer[index])) {
+					return index;
+				}
+			}
+			return -1;
+		}
+
+		// Returns -1 if it doesn't find it
+		template<typename Value, typename ProjectionFunctor>
+		ECS_INLINE unsigned int Find(const Value* value, ProjectionFunctor&& functor) const {
+			for (unsigned int index = 0; index < size; index++) {
+				if (value == functor(buffer[index])) {
+					return index;
+				}
+			}
+			return -1;
+		}
+
 		ECS_INLINE bool IsFull() const {
 			return size == capacity;
 		}
@@ -557,22 +617,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			buffer[index] = value;
 			size++;
 			AssertCapacity();
-		}
-
-		// Does not update the size
-		void DisplaceElements(unsigned int starting_index, int32_t displacement) {
-			// If the displacement is negative, start from the bottom up
-			// Else start from the up downwards
-			if (displacement < 0) {
-				for (int32_t index = (int32_t)starting_index; index < (int32_t)size; index++) {
-					buffer[index + displacement] = buffer[index];
-				}
-			}
-			else {
-				for (int64_t index = (int32_t)size - 1; index >= (int32_t)starting_index; index--) {
-					buffer[index + displacement] = buffer[index];
-				}
-			}
 		}
 
 		// The new_elements value will be added to the capacity, not to the current size
@@ -794,22 +838,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return sizeof(T) * size;
 		}
 
-		void FreeBuffer() {
-			if (buffer != nullptr) {
-				Deallocate(allocator, buffer);
-				buffer = nullptr;
-				size = 0;
-				capacity = 0;
-			}
-		}
-
-		ECS_INLINE void Insert(unsigned int index, T value) {
-			ReserveNewElement();
-			DisplaceElements(index, 1);
-			buffer[index] = value;
-			size++;
-		}
-
 		// Does not update the size
 		// Make sure you have enough space before doing this!
 		void DisplaceElements(unsigned int starting_index, int32_t displacement) {
@@ -825,6 +853,44 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 					buffer[index + displacement] = buffer[index];
 				}
 			}
+		}
+
+		void FreeBuffer() {
+			if (buffer != nullptr) {
+				Deallocate(allocator, buffer);
+				buffer = nullptr;
+				size = 0;
+				capacity = 0;
+			}
+		}
+
+		// Returns -1 if it doesn't find it
+		template<typename Value, typename ProjectionFunctor>
+		ECS_INLINE unsigned int Find(Value value, ProjectionFunctor&& functor) const {
+			for (unsigned int index = 0; index < size; index++) {
+				if (value == functor(buffer[index])) {
+					return index;
+				}
+			}
+			return -1;
+		}
+
+		// Returns -1 if it doesn't find it
+		template<typename Value, typename ProjectionFunctor>
+		ECS_INLINE unsigned int Find(const Value* value, ProjectionFunctor&& functor) const {
+			for (unsigned int index = 0; index < size; index++) {
+				if (value == functor(buffer[index])) {
+					return index;
+				}
+			}
+			return -1;
+		}
+
+		ECS_INLINE void Insert(unsigned int index, T value) {
+			ReserveNewElement();
+			DisplaceElements(index, 1);
+			buffer[index] = value;
+			size++;
 		}
 
 		ECS_INLINE void Reset() {
@@ -1415,11 +1481,51 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		Stream result;
 
 		result.Initialize(allocator, input.size);
-		for (size_t index = 0; index < input.size; index++) {
+		for (size_t index = 0; index < (size_t)input.size; index++) {
 			result[index] = input[index].Copy(allocator);
 		}
 
 		return result;
+	}
+
+	// The template parameter of the stream must have as functions
+	// Type CopyTo(uintptr_t& ptr) const;
+	// size_t CopySize() const;
+	template<typename Stream>
+	Stream StreamDeepCopyTo(Stream input, AllocatorPolymorphic allocator) {
+		Stream result;
+
+		result.Initialize(allocator, input.size);
+		for (size_t index = 0; index < (size_t)input.size; index++) {
+			size_t copy_size = input[index].CopySize();
+			void* allocation = AllocateEx(allocator, copy_size);
+			uintptr_t ptr = (uintptr_t)allocation;
+			result[index] = input[index].CopyTo(ptr);
+		}
+
+		return result;
+	}
+
+	// The template parameter of the stream must have as functions
+	// Type Copy(AllocatorPolymorphic allocator) const;
+	template<typename Stream>
+	void StreamInPlaceDeepCopy(Stream input, AllocatorPolymorphic allocator) {
+		for (size_t index = 0; index < (size_t)input.size; index++) {
+			input[index] = input[index].Copy(allocator);
+		}
+	}
+
+	// The template parameter of the stream must have as functions
+	// Type CopyTo(uintptr_t& ptr) const;
+	// size_t CopySize() const;
+	template<typename Stream>
+	Stream StreamInPlaceDeepCopyTo(Stream input, AllocatorPolymorphic allocator) {
+		for (size_t index = 0; index < (size_t)input.size; index++) {
+			size_t copy_size = input[index].CopySize();
+			void* allocation = AllocateEx(allocator, copy_size);
+			uintptr_t ptr = (uintptr_t)allocation;
+			input[index] = input[index].CopyTo(ptr);
+		}
 	}
 
 	// The template parameter of the stream must have as functions
@@ -1502,6 +1608,49 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		return total_size;
+	}
+
+	// It will write the elements in place
+	// The template parameter of the stream must have as functions
+	// size_t CopySize() const;
+	// T CopyTo(uintptr_t& ptr);
+	// If copy size returns 0, it assumes it needs no buffers and does not call
+	// the copy function.
+	template<typename Stream>
+	void StreamCoallescedInplaceDeepCopy(Stream input, uintptr_t& ptr) {
+		for (size_t index = 0; index < (size_t)input.size; index++) {
+			size_t copy_size = input[index].CopySize();
+			if (copy_size > 0) {
+				input[index] = input[index].CopyTo(ptr);
+			}
+		}
+	}
+
+	// The template parameter of the stream must have as functions
+	// size_t CopySize() const;
+	template<typename Stream>
+	size_t StreamCoallescedInplaceDeepCopySize(Stream input) {
+		size_t total_size = 0;
+
+		for (size_t index = 0; index < (size_t)input.size; index++) {
+			total_size += input[index].CopySize();
+		}
+
+		return total_size;
+	}
+
+	// It will write the elements in place
+	// The template parameter of the stream must have as functions
+	// size_t CopySize() const;
+	// T CopyTo(uintptr_t& ptr);
+	// If copy size returns 0, it assumes it needs no buffers and does not call
+	// the copy function.
+	template<typename Stream>
+	void StreamCoallescedInplaceDeepCopy(Stream input, AllocatorPolymorphic allocator) {
+		size_t allocation_size = StreamCoallescedInplaceDeepCopySize(input);
+		void* allocation = AllocateEx(allocator, allocation_size);
+		uintptr_t ptr = (uintptr_t)allocation;
+		return StreamCoallescedInplaceDeepCopy(input, ptr);
 	}
 
 	ECS_INLINE bool operator == (Stream<char> left, Stream<char> right) {

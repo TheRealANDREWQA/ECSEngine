@@ -21,7 +21,7 @@ namespace ECSEngine {
 		GLTFMesh(const GLTFMesh& other) = default;
 		GLTFMesh& operator = (const GLTFMesh& other) = default;
 
-		const char* name;
+		Stream<char> name = { nullptr, 0 };
 		Stream<float3> positions;
 		Stream<float3> normals;
 		Stream<float2> uvs;
@@ -69,6 +69,8 @@ namespace ECSEngine {
 	struct GLTFMeshBufferSizes {
 		unsigned int count[ECS_MESH_BUFFER_COUNT] = { 0 };
 		unsigned int index_count = 0;
+		unsigned int name_count = 0;
+		unsigned int submesh_name_count = 0;
 	};
 
 	// Returns true if the sizes could be determined.
@@ -78,18 +80,26 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message = nullptr
 	);
 
+	struct LoadCoallescedMeshFromGLTFOptions {
+		AllocatorPolymorphic temporary_buffer_allocator = { nullptr };
+		AllocatorPolymorphic permanent_allocator = { nullptr };
+		CapacityStream<char>* error_message = nullptr;
+		bool allocate_submesh_name = false;
+		bool coallesce_submesh_name_allocations = true;
+	};
+
 	// Coallesces on the CPU side the values to be directly copied to the GPU
 	// This allows to have no synchronization when loading multithreadely multiple resources
 	// There must be data.mesh_count meshes allocated. It will deallocate the buffer allocated
-	// if it fails
+	// if it fails. The permanent allocator is used for submesh name allocations. If that is not desired,
+	// then it will simply skip the allocator
 	ECSENGINE_API bool LoadCoallescedMeshFromGLTF(
 		GLTFData data,
 		const GLTFMeshBufferSizes* sizes,
 		GLTFMesh* mesh,
 		Submesh* submeshes,
-		AllocatorPolymorphic allocator,
 		bool invert_z_axis = true,
-		CapacityStream<char>* error_message = nullptr
+		LoadCoallescedMeshFromGLTFOptions* options = nullptr
 	);
 
 	// Coallesces on the CPU side the values to be directly copied to the GPU
@@ -100,9 +110,8 @@ namespace ECSEngine {
 		GLTFData data,
 		GLTFMesh* mesh,
 		Submesh* submeshes,
-		AllocatorPolymorphic allocator,
 		bool invert_z_axis = true,
-		CapacityStream<char>* error_message = nullptr
+		LoadCoallescedMeshFromGLTFOptions* options = nullptr
 	);
 		
 	// For each mesh it will create a separate material
@@ -183,8 +192,7 @@ namespace ECSEngine {
 		GLTFData gltf_data,
 		AllocatorPolymorphic coallesced_mesh_allocator,
 		bool invert_z_axis,
-		AllocatorPolymorphic temporary_buffer_allocator = { nullptr },
-		CapacityStream<char>* error_message = nullptr
+		LoadCoallescedMeshFromGLTFOptions* options = nullptr
 	);
 
 	// Fills in the given coallesced_mesh and its submeshes
@@ -195,8 +203,7 @@ namespace ECSEngine {
 		GLTFData gltf_data,
 		CoallescedMesh* coallesced_mesh,
 		bool invert_z_axis,
-		AllocatorPolymorphic temporary_buffer_allocator = { nullptr },
-		CapacityStream<char>* error_message = nullptr
+		LoadCoallescedMeshFromGLTFOptions* options = nullptr
 	);
 
 	ECSENGINE_API void FreeGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator);

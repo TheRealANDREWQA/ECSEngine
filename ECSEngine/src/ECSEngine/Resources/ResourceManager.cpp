@@ -272,7 +272,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < data->mesh.submeshes.size; index++) {
 			FreePBRMaterial(data->materials[index], allocator);
 		}
-		FreeCoallescedMesh(resource_manager->m_graphics, &data->mesh);
+		FreeCoallescedMesh(resource_manager->m_graphics, &data->mesh, true, allocator);
 	}
 
 	void DeletePBRMesh(ResourceManager* manager, unsigned int index, size_t flags) {
@@ -284,7 +284,7 @@ namespace ECSEngine {
 	void UnloadCoallescedMeshHandler(void* parameter, ResourceManager* resource_manager) {
 		// Free the coallesced mesh - the submeshes get the deallocated at the same time as this resource
 		CoallescedMesh* mesh = (CoallescedMesh*)parameter;
-		FreeCoallescedMesh(resource_manager->m_graphics, mesh);
+		FreeCoallescedMesh(resource_manager->m_graphics, mesh, true, resource_manager->Allocator());
 	}
 
 	void DeleteCoallescedMesh(ResourceManager* manager, unsigned int index, size_t flags) {
@@ -724,6 +724,36 @@ namespace ECSEngine {
 			return nullptr;
 		}
 		return m_resource_types[(unsigned int)type].GetValuePtrFromIndex(index);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	ResourceManagerSnapshot ResourceManager::GetSnapshot(AllocatorPolymorphic snapshot_allocator) const
+	{
+		ResourceManagerSnapshot snapshot;
+
+		size_t total_size_to_allocate = 0;
+		// Determine the total byte size first
+		for (unsigned int index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
+			total_size_to_allocate += snapshot.resources[0].MemoryOf(m_resource_types[index].GetCount()) + alignof(void*);
+			m_resource_types[index].ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+				total_size_to_allocate += identifier.size;
+			});
+		}
+
+		void* allocation = ECSEngine::Allocate(snapshot_allocator, total_size_to_allocate);
+		uintptr_t ptr = (uintptr_t)allocation;
+		for (unsigned int index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
+			ptr = function::AlignPointer(ptr, alignof(ResourceManagerSnapshot::Resource));
+			snapshot.resources[index].InitializeFromBuffer(ptr, m_resource_types[index].GetCount());
+			snapshot.resources[index].size = 0;
+			m_resource_types[index].ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+				identifier = identifier.CopyTo(ptr);
+				snapshot.resources[index].Add({ entry.data, identifier, entry.reference_count, entry.suffix_size });
+			});
+		}
+
+		return snapshot;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1170,23 +1200,19 @@ namespace ECSEngine {
 	{
 		bool has_invert = !function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
 
-		AllocatorPolymorphic buffer_allocator = { nullptr };
-		// Determine how much memory do the buffers take. If they fit the under a small amount, use the normal allocator.
-		// Else use the global allocator
-		if (data->data->bin_size <= ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE || data->data->json_size <= ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE) {
-			buffer_allocator = GetAllocatorPolymorphic(m_memory->m_backup);
-		}
-
 		// Calculate the allocation size
 		size_t allocation_size = sizeof(CoallescedMesh) + sizeof(Submesh) * data->mesh_count;
 		// Allocate the needed memory
-		void* allocation = Allocate(allocation_size);
+		void* allocation = AllocateTs(allocation_size);
 		CoallescedMesh* mesh = (CoallescedMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
 		buffer += sizeof(CoallescedMesh);
 		mesh->submeshes.InitializeFromBuffer(buffer, data->mesh_count);
 
-		bool success = LoadCoallescedMeshFromGLTFToGPU(m_graphics, *data, mesh, has_invert, buffer_allocator);
+		LoadCoallescedMeshFromGLTFOptions options;
+		options.allocate_submesh_name = true;
+		options.permanent_allocator = Allocator();
+		bool success = LoadCoallescedMeshFromGLTFToGPU(m_graphics, *data, mesh, has_invert, &options);
 		if (!success) {
 			Deallocate(allocation);
 			mesh = nullptr;
@@ -1207,7 +1233,7 @@ namespace ECSEngine {
 		// Calculate the allocation size
 		size_t allocation_size = sizeof(CoallescedMesh) + sizeof(Submesh) * gltf_meshes.size;
 		// Allocate the needed memory
-		void* allocation = Allocate(allocation_size);
+		void* allocation = AllocateTs(allocation_size);
 		CoallescedMesh* mesh = (CoallescedMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
 		buffer += sizeof(CoallescedMesh);
@@ -1248,7 +1274,7 @@ namespace ECSEngine {
 		// Calculate the allocation size
 		size_t allocation_size = sizeof(CoallescedMesh) + sizeof(Submesh) * submeshes.size;
 		// Allocate the needed memory
-		void* allocation = Allocate(allocation_size);
+		void* allocation = AllocateTs(allocation_size);
 		CoallescedMesh* mesh = (CoallescedMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
 		buffer += sizeof(CoallescedMesh);
@@ -1982,6 +2008,7 @@ namespace ECSEngine {
 
 				void* allocation = manager->Allocate(sizeof(VertexShaderStorage));
 				VertexShaderStorage* storage = (VertexShaderStorage*)allocation;
+
 				// Doesn't matter the type here
 				storage->shader = (ID3D11VertexShader*)shader;
 				storage->source_code = { nullptr, 0 };
@@ -2018,7 +2045,7 @@ namespace ECSEngine {
 		bool* is_loaded_first_time = load_descriptor.reference_counted_is_loaded != nullptr ? load_descriptor.reference_counted_is_loaded : &_is_loaded_first_time;
 
 		// Use as allocation the biggest storage type - that is the one of the vertex shader
-		void* shader = LoadResource<reference_counted>(
+		VertexShaderStorage* shader = (VertexShaderStorage*)LoadResource<reference_counted>(
 			this,
 			filename,
 			ResourceType::Shader,
@@ -2051,32 +2078,31 @@ namespace ECSEngine {
 			if (shader_source_code != nullptr || byte_code != nullptr) {
 				if (!*is_loaded_first_time) {
 					// Need to get the source code or the byte code
-					VertexShaderStorage* storage = (VertexShaderStorage*)shader;
-					if (storage != nullptr) {
+					if (shader != nullptr) {
 						// For byte code we need the source code as well
 						if (shader_source_code != nullptr || byte_code != nullptr) {
-							if (storage->source_code.size == 0) {
+							if (shader->source_code.size == 0) {
 								// Load the file and store it inside the current storage
 								Stream<char> source_code = ReadWholeFileText(filename, Allocator());
-								storage->source_code = source_code;
+								shader->source_code = source_code;
 							}
 							if (shader_source_code != nullptr) {
-								*shader_source_code = storage->source_code;
+								*shader_source_code = shader->source_code;
 							}
 						}
 						if (byte_code != nullptr) {
-							if (storage->byte_code.size == 0) {
+							if (shader->byte_code.size == 0) {
 								ShaderIncludeFiles include_files(m_memory, m_shader_directory);
-								storage->byte_code = m_graphics->CompileShaderToByteCode(storage->source_code, ECS_SHADER_VERTEX, &include_files, Allocator(), options);
+								shader->byte_code = m_graphics->CompileShaderToByteCode(shader->source_code, ECS_SHADER_VERTEX, &include_files, Allocator(), options);
 							}
-							*byte_code = storage->byte_code;
+							*byte_code = shader->byte_code;
 						}
 					}
 				}
 			}
 		}
 
-		return { shader };
+		return { shader->shader.Interface() };
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(ShaderInterface, ResourceManager::LoadShader, Stream<wchar_t>, ECS_SHADER_TYPE, Stream<char>*, Stream<void>*, ShaderCompileOptions, ResourceManagerLoadDesc);
@@ -2138,6 +2164,71 @@ namespace ECSEngine {
 		resizable_data.capacity = data.size;
 		resizable_data.allocator = allocator;
 		return resizable_data;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	bool ResourceManager::RestoreSnapshot(const ResourceManagerSnapshot& snapshot, CapacityStream<char>* mismatch_string)
+	{
+		// This will hold a boolean value that tells the runtime if the resource in the snapshot was found
+		ECS_STACK_CAPACITY_STREAM(bool, is_valid, ECS_KB * 64);
+
+		bool return_value = true;
+		for (unsigned int index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
+			ResourceType current_type = (ResourceType)index;
+			Stream<char> current_type_string = ResourceTypeString(current_type);
+			is_valid.size = 0;
+			// Mark all resources as false at the beginning
+			memset(is_valid.buffer, 0, is_valid.MemoryOf(is_valid.capacity));
+
+			m_resource_types[index].ForEachIndex([&](unsigned int resource_index) {
+				ResourceManagerEntry* entry = m_resource_types[index].GetValuePtrFromIndex(resource_index);
+				ResourceIdentifier identifier = m_resource_types[index].GetIdentifierFromIndex(resource_index);
+
+				ResourceIdentifier identifier_without_suffix = { identifier.ptr, identifier.size - entry->suffix_size };
+
+				// Check to see if the table resource is found in the snapshot.
+				// If it doesn't exist, then it was added in the meantime and must be deleted
+				size_t snapshot_index = snapshot.Find(identifier, current_type);
+				if (snapshot_index == -1) {
+					if (mismatch_string != nullptr) {
+						ECS_FORMAT_STRING(
+							*mismatch_string, 
+							"Resource {#}, type {#}, was added in between snapshots and deleted\n", 
+							identifier_without_suffix.AsASCII(), 
+							current_type_string
+						);
+					}
+					UnloadResource(resource_index, current_type);
+					return_value = false;
+					return true;
+				}
+				else {
+					// Mark the snapshot entry is valid
+					is_valid[snapshot_index] = true;
+				}
+				return false;
+			});
+
+			// Now verify the snapshot entries to see which are missing
+			for (size_t subindex = 0; subindex < snapshot.resources[index].size; subindex++) {
+				if (!is_valid[subindex]) {
+					if (mismatch_string != nullptr) {
+						ResourceIdentifier identifier_without_suffix = snapshot.resources[index][subindex].identifier;
+						identifier_without_suffix.size -= snapshot.resources[index][subindex].suffix_size;
+						ECS_FORMAT_STRING(
+							*mismatch_string, 
+							"Resource {#}, type {#}, was removed in between snapshots\n", 
+							identifier_without_suffix.AsASCII(), 
+							current_type_string
+						);
+					}
+					return_value = false;
+				}
+			}
+		}
+
+		return return_value;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------

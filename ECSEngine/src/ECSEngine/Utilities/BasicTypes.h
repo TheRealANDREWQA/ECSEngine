@@ -167,82 +167,82 @@ namespace ECSEngine {
 		constexpr Base2(Base _x, Base _y) : x(_x), y(_y) {}
 
 		// assumes all components
-		Base2(const Base* ptr) : x(*ptr), y(*(ptr + 1)) {}
+		ECS_INLINE Base2(const Base* ptr) : x(*ptr), y(*(ptr + 1)) {}
 
-		Base2(const Base2& other) = default;
-		Base2& operator =(const Base2& other) = default;
+		ECS_INLINE Base2(const Base2& other) = default;
+		ECS_INLINE Base2& operator =(const Base2& other) = default;
 
-		bool operator == (const Base2& other) const {
+		ECS_INLINE bool operator == (const Base2& other) const {
 			return x == other.x && y == other.y;
 		}
 
-		bool operator != (const Base2& other) const {
+		ECS_INLINE bool operator != (const Base2& other) const {
 			return x != other.x || y != other.y;
 		}
 
-		Base2 operator + (const Base2& other) const {
+		ECS_INLINE Base2 operator + (const Base2& other) const {
 			return { x + other.x, y + other.y };
 		}
 
-		Base2& operator += (const Base2& other) {
+		ECS_INLINE Base2& operator += (const Base2& other) {
 			x += other.x;
 			y += other.y;
 			return *this;
 		}
 
-		Base2 operator - (const Base2& other) const {
+		ECS_INLINE Base2 operator - (const Base2& other) const {
 			return { x - other.x, y - other.y };
 		}
 
-		Base2& operator -= (const Base2& other) {
+		ECS_INLINE Base2& operator -= (const Base2& other) {
 			x -= other.x;
 			y -= other.y;
 			return *this;
 		}
 
-		Base2 operator * (const Base2& other) const {
+		ECS_INLINE Base2 operator * (const Base2& other) const {
 			return { x * other.x, y * other.y };
 		}
 
-		Base2& operator *= (const Base2& other) {
+		ECS_INLINE Base2& operator *= (const Base2& other) {
 			x *= other.x;
 			y *= other.y;
 			return *this;
 		}
 
-		Base2 operator * (float factor) const {
+		ECS_INLINE Base2 operator * (float factor) const {
 			return *this * Splat(factor);
 		}
 
-		Base2 operator *= (float factor) {
+		ECS_INLINE Base2 operator *= (float factor) {
 			x *= factor;
 			y *= factor;
 			return *this;
 		}
 
-		Base2 operator / (const Base2& other) const {
+		ECS_INLINE Base2 operator / (const Base2& other) const {
 			return { x / other.x, y / other.y };
 		}
 
-		Base2& operator /= (const Base2& other) {
+		ECS_INLINE Base2& operator /= (const Base2& other) {
 			x /= other.x;
 			y /= other.y;
 			return *this;
 		}
 
-		Base2 operator -() const {
+		ECS_INLINE Base2 operator -() const {
 			return { -x, -y };
 		}
 
-		Base& operator [](unsigned int index) {
+		ECS_INLINE Base& operator [](unsigned int index) {
 			return *((Base*)this + index);
 		}
 
-		const Base& operator [](unsigned int index) const {
+		ECS_INLINE const Base& operator [](unsigned int index) const {
 			return *((const Base*)this + index);
 		}
 		
-		static Base2 Splat(Base value) {
+		ECS_INLINE static Base2 Splat(Base value) {
 			return Base2(value, value);
 		}
 
@@ -268,87 +268,87 @@ namespace ECSEngine {
 		constexpr Base3(Base _x, Base _y, Base _z) : x(_x), y(_y), z(_z) {}
 
 		// assumes all components
-		Base3(const Base* ptr) : x(*ptr), y(*(ptr + 1)), z(*(ptr + 2)) {}
+		ECS_INLINE Base3(const Base* ptr) : x(*ptr), y(*(ptr + 1)), z(*(ptr + 2)) {}
 
 		Base3(const Base3& other) = default;
 		Base3& operator =(const Base3& other) = default;
 
-		bool operator == (const Base3& other) const {
+		ECS_INLINE bool operator == (const Base3& other) const {
 			return x == other.x && y == other.y && z == other.z;
 		}
 
-		bool operator != (const Base3& other) const {
+		ECS_INLINE bool operator != (const Base3& other) const {
 			return x != other.x || y != other.y || z != other.z;
 		}
 
-		Base3 operator + (const Base3& other) const {
+		ECS_INLINE Base3 operator + (const Base3& other) const {
 			return { x + other.x, y + other.y, z + other.z };
 		}
 
-		Base3& operator += (const Base3& other) {
+		ECS_INLINE Base3& operator += (const Base3& other) {
 			x += other.x;
 			y += other.y;
 			z += other.z;
 			return *this;
 		}
 
-		Base3 operator - (const Base3& other) const {
+		ECS_INLINE Base3 operator - (const Base3& other) const {
 			return { x - other.x, y - other.y, z - other.z };
 		}
 
-		Base3& operator -= (const Base3& other) {
+		ECS_INLINE Base3& operator -= (const Base3& other) {
 			x -= other.x;
 			y -= other.y;
 			z -= other.z;
 			return *this;
 		}
 
-		Base3 operator * (const Base3& other) const {
+		ECS_INLINE Base3 operator * (const Base3& other) const {
 			return { x * other.x, y * other.y, z * other.z };
 		}
 
-		Base3& operator *= (const Base3& other) {
+		ECS_INLINE Base3& operator *= (const Base3& other) {
 			x *= other.x;
 			y *= other.y;
 			z *= other.z;
 			return *this;
 		}
 
-		Base3 operator * (float factor) const {
+		ECS_INLINE Base3 operator * (float factor) const {
 			return *this * Splat(factor);
 		}
 
-		Base3 operator *= (float factor) {
+		ECS_INLINE Base3 operator *= (float factor) {
 			x *= factor;
 			y *= factor;
 			z *= factor;
 			return *this;
 		}
 
-		Base3 operator / (const Base3& other) const {
+		ECS_INLINE Base3 operator / (const Base3& other) const {
 			return { x / other.x, y / other.y, z / other.z };
 		}
 
-		Base3& operator /= (const Base3& other) {
+		ECS_INLINE Base3& operator /= (const Base3& other) {
 			x /= other.x;
 			y /= other.y;
 			z /= other.z;
 			return *this;
 		}
 
-		Base3 operator -() const {
+		ECS_INLINE Base3 operator -() const {
 			return Base3(-x, -y, -z);
 		}
 
-		Base& operator [](unsigned int index) {
+		ECS_INLINE Base& operator [](unsigned int index) {
 			return *((Base*)this + index);
 		}
 
-		const Base& operator[](unsigned int index) const {
+		ECS_INLINE const Base& operator[](unsigned int index) const {
 			return *((const Base*)this + index);
 		}
 
-		static Base3 Splat(Base value) {
+		ECS_INLINE static Base3 Splat(Base value) {
 			return Base3(value, value, value);
 		}
 
@@ -376,24 +376,24 @@ namespace ECSEngine {
 		constexpr Base4(Base _x, Base _y, Base _z, Base _w) : x(_x), y(_y), z(_z), w(_w) {}
 
 		// assumes all components
-		Base4(const Base* ptr) : x(*ptr), y(*(ptr + 1)), z(*(ptr + 2)), w(*(ptr + 3)) {}
+		ECS_INLINE Base4(const Base* ptr) : x(*ptr), y(*(ptr + 1)), z(*(ptr + 2)), w(*(ptr + 3)) {}
 
 		Base4(const Base4& other) = default;
 		Base4& operator =(const Base4& other) = default;
 
-		bool operator == (const Base4& other) const {
+		ECS_INLINE bool operator == (const Base4& other) const {
 			return x == other.x && y == other.y && z == other.z && w == other.w;
 		}
 
-		bool operator != (const Base4& other) const {
+		ECS_INLINE bool operator != (const Base4& other) const {
 			return x != other.x || y != other.y || z != other.z || w != other.w;
 		}
 
-		Base4 operator + (const Base4& other) const {
+		ECS_INLINE Base4 operator + (const Base4& other) const {
 			return { x + other.x, y + other.y, z + other.z, w + other.w };
 		}
 
-		Base4& operator += (const Base4& other) {
+		ECS_INLINE Base4& operator += (const Base4& other) {
 			x += other.x;
 			y += other.y;
 			z += other.z;
@@ -401,11 +401,11 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		Base4 operator - (const Base4& other) const {
+		ECS_INLINE Base4 operator - (const Base4& other) const {
 			return { x - other.x, y - other.y, z - other.z, w - other.w };
 		}
 
-		Base4& operator -= (const Base4& other) {
+		ECS_INLINE Base4& operator -= (const Base4& other) {
 			x -= other.x;
 			y -= other.y;
 			z -= other.z;
@@ -413,11 +413,11 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		Base4 operator * (const Base4& other) const {
+		ECS_INLINE Base4 operator * (const Base4& other) const {
 			return { x * other.x, y * other.y, z * other.z, w * other.w };
 		}
 
-		Base4& operator *= (const Base4& other) {
+		ECS_INLINE Base4& operator *= (const Base4& other) {
 			x *= other.x;
 			y *= other.y;
 			z *= other.z;
@@ -425,11 +425,11 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		Base4 operator * (float factor) const {
+		ECS_INLINE Base4 operator * (float factor) const {
 			return *this * Splat(factor);
 		}
 
-		Base4 operator *= (float factor) {
+		ECS_INLINE Base4 operator *= (float factor) {
 			x *= factor;
 			y *= factor;
 			z *= factor;
@@ -437,11 +437,11 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		Base4 operator / (const Base4& other) const {
+		ECS_INLINE Base4 operator / (const Base4& other) const {
 			return { x / other.x, y / other.y, z / other.z, w / other.w };
 		}
 
-		Base4& operator /= (const Base4& other) {
+		ECS_INLINE Base4& operator /= (const Base4& other) {
 			x /= other.x;
 			y /= other.y;
 			z /= other.z;
@@ -449,19 +449,19 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		Base4 operator -() const {
+		ECS_INLINE Base4 operator -() const {
 			return { -x, -y, -z, -w };
 		}
 
-		Base& operator [](unsigned int index) {
+		ECS_INLINE Base& operator [](unsigned int index) {
 			return *((Base*)this + index);
 		}
 
-		const Base& operator[](unsigned int index) const {
+		ECS_INLINE const Base& operator[](unsigned int index) const {
 			return *((const Base*)this + index);
 		}
 
-		static Base4 Splat(Base value) {
+		ECS_INLINE static Base4 Splat(Base value) {
 			return Base4(value, value, value, value);
 		}
 

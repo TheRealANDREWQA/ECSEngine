@@ -158,6 +158,7 @@ namespace ECSEngine {
 		ECS_GRAPHICS_DEVICE_ERROR_INVALID_CALL
 	};
 
+	// Must be String matched with ECS_GRAPHICS_RESOURCE_TYPE_STRING
 	enum ECS_GRAPHICS_RESOURCE_TYPE : unsigned char {
 		ECS_GRAPHICS_RESOURCE_VERTEX_SHADER,
 		ECS_GRAPHICS_RESOURCE_PIXEL_SHADER,
@@ -189,8 +190,15 @@ namespace ECSEngine {
 		ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_STATE,
 		ECS_GRAPHICS_RESOURCE_RASTERIZER_STATE,
 		ECS_GRAPHICS_RESOURCE_COMMAND_LIST,
-		ECS_GRAPHICS_RESOURCE_DX_RESOURCE_INTERFACE
+		ECS_GRAPHICS_RESOURCE_DX_RESOURCE_INTERFACE,
+		ECS_GRAPHICS_RESOURCE_TYPE_COUNT
 	};
+
+	extern const char* ECS_GRAPHICS_RESOURCE_TYPE_STRING[];
+
+	ECS_INLINE Stream<char> GraphicsResourceTypeString(ECS_GRAPHICS_RESOURCE_TYPE type) {
+		return ECS_GRAPHICS_RESOURCE_TYPE_STRING[type];
+	}
 
 	struct GraphicsInternalResource {
 		inline GraphicsInternalResource& operator = (const GraphicsInternalResource& other) {
@@ -217,6 +225,7 @@ namespace ECSEngine {
 		// These are maintained as SoA buffers
 		Stream<void*> interface_pointers;
 		Stream<ECS_GRAPHICS_RESOURCE_TYPE> types;
+		Stream<DebugInfo> debug_infos;
 	};
 
 #define ECS_GRAPHICS_ASSERT_GRAPHICS_RESOURCE static_assert(std::is_same_v<Resource, VertexBuffer> || std::is_same_v<Resource, IndexBuffer> || std::is_same_v<Resource, VertexShader> \
@@ -832,9 +841,6 @@ namespace ECSEngine {
 		// Releases the graphics resources and the name if it has one
 		void FreeMesh(const Mesh& mesh);
 
-		// Releases the name if it has one
-		void FreeSubmesh(const Submesh& submesh);
-
 #pragma endregion
 
 #pragma region Pipeline State Changes
@@ -1143,8 +1149,9 @@ namespace ECSEngine {
 
 		// It will remove the resources which have been added in between the snapshot and the current state.
 		// Returns true if all the resources from the previous snapshot are still valid else it returns false. 
+		// Can optionally give a string to be built with the mismatches that are between the two states
 		// It doesn't deallocate the snapshot (it must be done outside)!
-		bool RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot);
+		bool RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot, CapacityStream<char>* mismatch_string = nullptr);
 
 		void ResizeSwapChainSize(HWND hWnd, float width, float height);
 
@@ -1557,7 +1564,7 @@ namespace ECSEngine {
 	ECSENGINE_API void FreeMaterial(Graphics* graphics, const Material* material);
 
 	// Releases the mesh GPU resources and the names of the submeshes if any
-	ECSENGINE_API void FreeCoallescedMesh(Graphics* graphics, const CoallescedMesh* mesh);
+	ECSENGINE_API void FreeCoallescedMesh(Graphics* graphics, CoallescedMesh* mesh, bool coallesced_allocation, AllocatorPolymorphic allocator);
 
 	// SINGLE THREADED - It uses the CopyResource which requires the immediate context
 	// Merges the vertex buffers and the index buffers into a single resource that can reduce 

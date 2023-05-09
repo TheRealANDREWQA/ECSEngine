@@ -969,6 +969,17 @@ string_name.AssertCapacity();
 
 		// -----------------------------------------------------------------------------------------------------------------------
 
+		ECS_INLINE void DebugLocationString(DebugInfo debug_info, CapacityStream<char>* string) {
+			string->AddStreamAssert("File: ");
+			string->AddStreamAssert(debug_info.file);
+			string->AddStreamAssert(", function: ");
+			string->AddStreamAssert(debug_info.function);
+			string->AddStreamAssert(", line: ");
+			function::ConvertIntToChars(*string, debug_info.line);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
 	}
 
 }

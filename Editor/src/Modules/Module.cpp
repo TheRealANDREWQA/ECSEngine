@@ -815,7 +815,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	ProjectModules* modules = editor_state->project_modules;
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 
-	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
+	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status != EDITOR_MODULE_LOAD_GOOD) {
 		ReleaseModuleStreamsAndHandle(editor_state, index, configuration);
 		return RunBuildCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status, disable_logging);
 	}
@@ -905,6 +905,38 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildModule(
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 	info->load_status = EDITOR_MODULE_LOAD_FAILED;
 	return RunBuildCommand(editor_state, index, REBUILD_PROJECT_STRING_WIDE, configuration, build_status, disable_logging);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void PrintConsoleMessageForBuildCommand(
+	EditorState* editor_state, 
+	unsigned int module_index, 
+	EDITOR_MODULE_CONFIGURATION configuration, 
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status
+)
+{
+	Stream<wchar_t> library_name = editor_state->project_modules->buffer[module_index].library_name;
+	Stream<char> configuration_string = MODULE_CONFIGURATIONS[configuration];
+	ECS_TEMP_ASCII_STRING(console_message, 256);
+	switch (command_status) {
+	case EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING:
+		ECS_FORMAT_STRING(console_message, "Command for module {#} with configuration {#} launched successfully.", library_name, configuration_string);
+		EditorSetConsoleInfo(console_message);
+		break;
+	case EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED:
+		ECS_FORMAT_STRING(console_message, "The module {#} with configuration {#} is up to date. The command is skipped", library_name, configuration_string);
+		EditorSetConsoleInfo(console_message);
+		break;
+	case EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING:
+		ECS_FORMAT_STRING(console_message, "An error has occured when launching the command line for module {#} with configuration {#}. The command is aborted.", library_name, configuration_string);
+		EditorSetConsoleError(console_message);
+		break;
+	case EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING:
+		ECS_FORMAT_STRING(console_message, "The module {#} with configuration {#} is already executing a command.", library_name, configuration_string);
+		EditorSetConsoleError(console_message);
+		break;
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1103,6 +1135,13 @@ void GetModuleBuildLogPath(
 EditorModuleInfo* GetModuleInfo(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration)
 {
 	return &editor_state->project_modules->buffer[index].infos[configuration];
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration)
+{
+	return GetModuleInfo(editor_state, index, configuration)->load_status;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

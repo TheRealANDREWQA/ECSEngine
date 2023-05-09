@@ -201,6 +201,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		if (!temporary) {
 			graphics->AddInternalResource(new_buffer, ECS_DEBUG_INFO);
 		}
+
 		return new_buffer;
 	}
 

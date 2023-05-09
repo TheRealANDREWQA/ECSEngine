@@ -91,6 +91,23 @@ EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+EDITOR_SANDBOX_VIEWPORT GetSandboxCurrentViewport(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
+	if (state == EDITOR_SANDBOX_SCENE) {
+		return EDITOR_SANDBOX_VIEWPORT_SCENE;
+	}
+	else if (state == EDITOR_SANDBOX_PAUSED || state == EDITOR_SANDBOX_RUNNING) {
+		return EDITOR_SANDBOX_VIEWPORT_RUNTIME;
+	}
+	else {
+		ECS_ASSERT(false);
+		return EDITOR_SANDBOX_VIEWPORT_COUNT;
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool IsSandboxRuntimePreinitialized(const EditorState* editor_state, unsigned int sandbox_index) {
 	return GetSandbox(editor_state, sandbox_index)->runtime_descriptor.graphics != nullptr;
 }
@@ -151,7 +168,7 @@ bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_i
 void BindSandboxGraphicsCamera(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	
+	SetSandboxCameraAspectRatio(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	Camera camera = Camera(sandbox->camera_parameters);
 	SetRuntimeCamera(sandbox->sandbox_world.system_manager, camera);
 }
@@ -377,6 +394,8 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->runtime_settings_last_write = 0;
 
 	sandbox->scene_path.Initialize(editor_state->EditorAllocator(), 0, SCENE_PATH_STRING_CAPACITY);
+
+	ResetSandboxCamera(editor_state, sandbox_index);
 
 	if (initialize_runtime) {
 		PreinitializeSandboxRuntime(editor_state, sandbox_index);
@@ -629,6 +648,14 @@ unsigned int GetSandboxCount(const EditorState* editor_state)
 WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state, unsigned int sandbox_index)
 {
 	return &GetSandbox(editor_state, sandbox_index)->runtime_descriptor;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+OrientedPoint GetSandboxCameraPoint(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return { sandbox->camera_parameters.translation, sandbox->camera_parameters.rotation };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1004,7 +1031,9 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 				ChangeSandboxScenePath(editor_state, index, { nullptr, 0 });
 			}
 
-			//sandbox->database = AssetDatabaseReference(editor_state->asset_database, GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
+			// Copy the camera positions and parameters
+			sandbox->camera_parameters = sandboxes[index].camera_parameters;
+			memcpy(sandbox->camera_saved_orientations, sandboxes[index].camera_saved_orientations, sizeof(sandbox->camera_saved_orientations));
 
 			// Now the modules
 			for (unsigned int subindex = 0; subindex < sandboxes[index].modules_in_use.size; subindex++) {
@@ -1350,6 +1379,8 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	if (!is_being_compiled) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
+		// Get the resource manager and graphics snapshot
+		ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(editor_state->EditorAllocator());
 		GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);
 
 		EntityManager* viewport_entity_manager = sandbox->sandbox_world.entity_manager;
@@ -1379,9 +1410,18 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		// We need to record the query cache to restore it later
 		sandbox->sandbox_world.entity_manager->CopyQueryCache(&runtime_query_cache, GetAllocatorPolymorphic(&runtime_query_cache_allocator));
 
+		auto deallocate_temp_resources = [&]() {
+			AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+			resource_snapshot.Deallocate(editor_allocator);
+			graphics_snapshot.Deallocate(editor_allocator);
+			viewport_task_scheduler_allocator.Free();
+			runtime_query_cache_allocator.Free();
+		};
+
 		// Prepare the task scheduler
 		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, { &in_stream_module_index, 1 }, disable_logging);
 		if (!success) {
+			deallocate_temp_resources();
 			return false;
 		}
 
@@ -1401,6 +1441,11 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		editor_state->render_task_manager->ClearTemporaryAllocators();
 		editor_state->render_task_manager->ResetStaticTasks();
 
+		// Restore the resource manager first
+		editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot);
+		resource_snapshot.Deallocate(editor_state->EditorAllocator());
+
+		// Now the graphics snapshot will be restored as well
 		RenderSandboxFinishGraphics(editor_state, sandbox_index, graphics_snapshot);
 
 		return true;
@@ -1433,6 +1478,27 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 
 	// Now transfer the texture from the RuntimeGraphics to the UIGraphics
 	sandbox->viewport_transferred_texture[viewport] = TransferGPUView(sandbox->viewport_render_destination[viewport].output_view, editor_state->UIGraphics()->GetDevice());
+
+	runtime_graphics->m_window_size = new_size;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void RotateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 rotation)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->camera_parameters.rotation += rotation;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void ResetSandboxCamera(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->camera_parameters.Default();
+	for (size_t index = 0; index < EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT; index++) {
+		sandbox->camera_saved_orientations[index].ToOrigin();
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1542,6 +1608,17 @@ bool SaveEditorSandboxFile(const EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void SetSandboxCameraAspectRatio(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	ResourceView view = sandbox->viewport_render_destination[viewport].output_view;
+
+	uint2 dimensions = GetTextureDimensions(view.AsTexture2D());
+	sandbox->camera_parameters.aspect_ratio = (float)dimensions.x / (float)dimensions.y;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	// If it is paused, then we don't need to make the scene dirty since the change is made on the runtime sandbox world
@@ -1596,6 +1673,14 @@ void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_
 	// Get the texel size for the textures and bind a viewport according to that
 	GraphicsViewport graphics_viewport = GetGraphicsViewportForTexture(sandbox->viewport_render_destination[viewport].render_view.GetResource());
 	sandbox->sandbox_world.graphics->BindViewport(graphics_viewport);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void TranslateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 translation)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->camera_parameters.translation += translation;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

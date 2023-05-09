@@ -103,6 +103,13 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildModule(
 	bool disable_logging = false
 );
 
+void PrintConsoleMessageForBuildCommand(
+	EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status
+);
+
 void DeleteModuleFlagFiles(EditorState* editor_state);
 
 bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
@@ -145,6 +152,8 @@ void GetModuleBuildLogPath(
 );
 
 EditorModuleInfo* GetModuleInfo(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
+
+EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
 
 void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& module_folder_path);
 

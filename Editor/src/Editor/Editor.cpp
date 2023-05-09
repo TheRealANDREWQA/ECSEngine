@@ -106,33 +106,6 @@ public:
 		VertexBuffer vertex_buffer;
 		IndexBuffer index_buffer;
 
-		//ECS_TEMP_ASCII_STRING(ERROR_MESSAGE, 256);
-		//GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2material.glb", &ERROR_MESSAGE);
-		////GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Cerberus.glb", &ERROR_MESSAGE);
-		////GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2_flipped.glb", &ERROR_MESSAGE);
-		////GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\Resources\\DebugPrimitives\\Alphabet.glb", &ERROR_MESSAGE);
-		//GLTFMesh gltf_meshes[128];
-		//Mesh meshes[128];
-		//PBRMaterial _materials[128];
-		//unsigned int _submesh_material_index[128];
-		//Submesh _submeshes[128];
-		//Submesh _normal_submeshes[128];
-
-		//AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state.GlobalMemoryManager());
-		//bool success = LoadMeshesFromGLTF(gltf_data, gltf_meshes, allocator, &ERROR_MESSAGE);
-		///*GLTFMeshesToMeshes(&graphics, gltf_meshes, meshes, gltf_data.mesh_count);*/
-
-		//Stream<PBRMaterial> materials(_materials, 0);
-		//Stream<unsigned int> submesh_material_index(_submesh_material_index, 0);
-		//success = LoadDisjointMaterialsFromGLTF(gltf_data, materials, submesh_material_index, allocator, &ERROR_MESSAGE);
-		//GLTFMeshesToMeshes(graphics, gltf_meshes, meshes, gltf_data.mesh_count);
-		//memset(submesh_material_index.buffer, 0, sizeof(unsigned int) * gltf_data.mesh_count);
-		//materials.size = 1;
-		//Mesh merged_mesh = GLTFMeshesToMergedMesh(graphics, gltf_meshes, _submeshes, _submesh_material_index, materials.size, gltf_data.mesh_count);
-		//Mesh normal_merged_mesh = MeshesToSubmeshes(graphics, Stream<Mesh>(meshes, gltf_data.mesh_count), _normal_submeshes);
-		//FreeGLTFMeshes(gltf_meshes, gltf_data.mesh_count, allocator);
-		//FreeGLTFFile(gltf_data);
-
 		//PBRMaterial created_material = CreatePBRMaterialFromName("Cerberus"), ToStream("Cerberus"), ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets"), allocator;
 		////PBRMaterial cerberus_material = PBRToMaterial(resource_manager, created_material, L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets");
 		//PBRMesh* cerberus = resource_manager->LoadPBRMesh(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\cerberus_textures.glb");
@@ -769,13 +742,13 @@ public:
 							CAMERA_CHANGED = true;
 						}
 
-						HID::MouseTracker* mouse_tracker = mouse.GetTracker();
+						/*HID::MouseTracker* mouse_tracker = mouse.GetTracker();
 						if (mouse_tracker->RightButton() == MBPRESSED || mouse_tracker->MiddleButton() == MBPRESSED || mouse_tracker->LeftButton() == MBPRESSED) {
 							mouse.EnableRawInput();
 						}
 						else if (mouse_tracker->RightButton() == MBRELEASED || mouse_tracker->MiddleButton() == MBRELEASED || mouse_tracker->LeftButton() == MBRELEASED) {
 							mouse.DisableRawInput();
-						}
+						}*/
 
 						//if (CAMERA_CHANGED) {
 							//graphics->m_context->ClearDepthStencilView(editor_state.viewport_texture_depth.view, D3D11_CLEAR_DEPTH, 1.0f, 0);

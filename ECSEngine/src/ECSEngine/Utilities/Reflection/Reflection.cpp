@@ -3106,6 +3106,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				const char* function_body_start = strchr(start, '{');
 				const char* closed_bracket = nullptr;
 
+
 				while (function_body_start != nullptr) {
 					// Get the first character before the bracket. If it is ), then we have a function declaration
 					const char* first_character_before = function_body_start - 1;
@@ -3180,12 +3181,18 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							}
 						}
 
-						// Now remove the semicolons in between
+						// Now remove the semicolons and new lines in between
 						unsigned int body_start_offset = function_body_start - start;
 						unsigned int body_end_offset = closed_bracket - start;
 						for (unsigned int index = 0; index < semicolon_positions.size; index++) {
 							if (body_start_offset < semicolon_positions[index] && semicolon_positions[index] < body_end_offset) {
 								semicolon_positions.Remove(index);
+								index--;
+							}
+						}
+						for (unsigned int index = 0; index < next_line_positions.size; index++) {
+							if (body_start_offset < next_line_positions[index] && next_line_positions[index] < body_end_offset) {
+								next_line_positions.Remove(index);
 								index--;
 							}
 						}
@@ -3384,9 +3391,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							colons = strstr(definition_start, "::");
 						}
 
-						if (type.name == "RenderMesh") {
-							__debugbreak();
-						}
 						const char* definition_end = function::SkipCodeIdentifier(definition_start);
 						// Include the pointer asterisk
 						while (*definition_end == '*') {
