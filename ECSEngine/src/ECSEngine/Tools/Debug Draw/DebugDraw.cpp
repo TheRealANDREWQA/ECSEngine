@@ -10,7 +10,7 @@ constexpr size_t PER_THREAD_RESOURCES = 128;
 #define POINT_SIZE 0.3f
 #define CIRCLE_TESSELATION 32
 #define ARROW_HEAD_DARKEN_COLOR 0.9f
-#define AXES_X_SCALE 3.5f
+#define AXES_X_SCALE 3.0f
 
 #define STRING_SPACE_SIZE 0.2f
 #define STRING_TAB_SIZE STRING_SPACE_SIZE * 4
@@ -295,8 +295,9 @@ namespace ECSEngine {
 		// The X axis
 		SetInstancedColor(instanced_data, buffer_index, axes->color_x * ARROW_HEAD_DARKEN_COLOR);
 
-		Matrix arrow_head_scale = MatrixScale(float3::Splat(axes->size));
-		float3 splatted_length = float3::Splat(AXES_X_SCALE * axes->size);
+		float size = axes->size;
+		Matrix arrow_head_scale = MatrixScale(float3::Splat(size));
+		float3 splatted_length = float3::Splat(AXES_X_SCALE * size);
 
 		float3 direction_x_3 = GetRightVector(axes->rotation);
 		Matrix matrix_x = arrow_head_scale * MatrixRotation(axes->rotation) * MatrixTranslation(axes->translation + splatted_length * direction_x_3);
@@ -765,6 +766,9 @@ namespace ECSEngine {
 		// Draw 3 separate arrows - but batch the cylinder and head draws - in order to avoid 3 times the draw calls
 		InstancedTransformData* instanced = MapInstancedVertex(this);
 
+		// Magic constant to make it consistent in measurement units - if setting a sphere of radius 1.0f and axes of size 1.0f
+		// then the axes should be radiuses for that sphere
+		size *= 0.28f;
 		DebugAxes axes = { translation, rotation, size, color_x, color_y, color_z, options };
 		FillInstancedAxesArrowCylinders(instanced, 0, &axes, camera_matrix);
 
@@ -779,9 +783,8 @@ namespace ECSEngine {
 		FillInstancedAxesArrowHead(instanced, 0, &axes, camera_matrix);
 		
 		UnmapInstancedVertex(this);
-		BindArrowHeadBuffers(instanced_small_vertex_buffer);
 		SetArrowHeadState(options);
-
+		BindArrowHeadBuffers(instanced_small_vertex_buffer);
 		DrawCallArrowHead(3);
 	}
 
@@ -2966,7 +2969,7 @@ namespace ECSEngine {
 
 		// The string meshes - in the gltf mesh they are stored in reverse order.
 		// Change their order
-		string_mesh = resource_manager->LoadCoallescedMesh(STRING_MESH_FILE);
+		string_mesh = resource_manager->LoadCoallescedMesh<true>(STRING_MESH_FILE);
 
 		size_t submesh_count = string_mesh->submeshes.size;
 		// Change the order of the submeshes such that they mirror alphabet index
@@ -3050,7 +3053,7 @@ namespace ECSEngine {
 		staging_buffer.Release();
 
 		for (size_t index = 0; index < ECS_DEBUG_VERTEX_BUFFER_COUNT; index++) {
-			primitive_meshes[index] = ((Stream<Mesh>*)resource_manager->LoadMeshes(ECS_DEBUG_PRIMITIVE_MESH_FILE[index]))->buffer;
+			primitive_meshes[index] = ((Stream<Mesh>*)resource_manager->LoadMeshes<true>(ECS_DEBUG_PRIMITIVE_MESH_FILE[index]))->buffer;
 		}
 
 		float3 circle_positions[CIRCLE_TESSELATION + 1];
@@ -3058,14 +3061,16 @@ namespace ECSEngine {
 		// The circle
 		float step = 2.0f * PI / CIRCLE_TESSELATION;
 		size_t index = 0;
+		float float_index = 0.0f;
 		for (; index < CIRCLE_TESSELATION; index++) {
-			float float_index = index * step;
 			float z = cos(float_index);
 			float x = sin(float_index);
 
 			circle_positions[index].x = x;
 			circle_positions[index].y = 0.0f;
 			circle_positions[index].z = z;
+
+			float_index += step;
 		}
 		// Last point must be the same as the first
 		circle_positions[index] = circle_positions[0];
@@ -3214,6 +3219,12 @@ namespace ECSEngine {
 	void DebugDrawer::RestorePreviousRenderState(GraphicsPipelineRenderState state)
 	{
 		graphics->RestorePipelineRenderState(state);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	MemoryManager DebugDrawer::DefaultAllocator(GlobalMemoryManager* global_memory) {
+		return MemoryManager(ECS_MB, ECS_KB * 16, ECS_MB * 4, global_memory);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

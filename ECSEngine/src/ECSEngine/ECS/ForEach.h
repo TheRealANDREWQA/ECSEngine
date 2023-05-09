@@ -107,16 +107,16 @@ namespace ECSEngine {
 	
 	struct ForEachEntityData {
 		unsigned int thread_id;
-		World* world;
 		Entity entity;
+		World* world;
 		EntityManagerCommandStream* command_stream;
 	};
 
 	struct ForEachBatchData {
 		unsigned int thread_id;
+		unsigned short count;
 		World* world;
 		Entity* entities;
-		unsigned short count;
 		EntityManagerCommandStream* command_stream;
 	};
 

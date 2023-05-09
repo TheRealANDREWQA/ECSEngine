@@ -846,7 +846,7 @@ namespace ECSEngine {
 		ResourceView(const ResourceView& other) = default;
 		ResourceView& operator = (const ResourceView& other) = default;
 
-		inline GraphicsDevice* GetDevice() const {
+		ECS_INLINE GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			view->GetDevice(&device);
 			device->Release();
@@ -855,12 +855,24 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11ShaderResourceView* Interface() const {
+		ECS_INLINE ID3D11ShaderResourceView* Interface() const {
 			return view;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return view->Release();
+		}
+
+		ECS_INLINE Texture1D AsTexture1D() const {
+			return Texture1D(GetResource());
+		}
+
+		ECS_INLINE Texture2D AsTexture2D() const {
+			return Texture2D(GetResource());
+		}
+
+		ECS_INLINE Texture3D AsTexture3D() const {
+			return Texture3D(GetResource());
 		}
 
 		static ResourceView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_SHADER_RESOURCE_VIEW_DESC* descriptor);
@@ -1364,11 +1376,19 @@ namespace ECSEngine {
 	};
 
 	struct ECS_REFLECT OrientedPoint {
+		// Sets the position and the rotation to 0.0f
+		ECS_INLINE void ToOrigin() {
+			position = { 0.0f, 0.0f, 0.0f };
+			rotation = { 0.0f, 0.0f, 0.0f };
+		}
+
 		float3 position;
 		float3 rotation;
 	};
 
-	struct ECS_REFLECT CameraParameters {
+	struct ECSENGINE_API ECS_REFLECT CameraParameters {
+		void Default();
+
 		float width;
 		float height;
 		float near_z;
@@ -1379,7 +1399,9 @@ namespace ECSEngine {
 		bool is_orthographic = false;
 	};
 
-	struct ECS_REFLECT CameraParametersFOV {
+	struct ECSENGINE_API ECS_REFLECT CameraParametersFOV {
+		void Default();
+
 		// The angle needs to be specified in degrees
 		float fov;
 		float aspect_ratio;
@@ -1408,6 +1430,14 @@ namespace ECSEngine {
 
 		Matrix GetViewProjectionMatrix() const;
 
+		ECS_INLINE static float DefaultNearZ() {
+			return 0.3f;
+		}
+
+		ECS_INLINE static float DefaultFarZ() {
+			return 1000.0f;
+		}
+
 		Matrix projection;
 		float3 translation;
 		float3 rotation;
@@ -1434,6 +1464,29 @@ namespace ECSEngine {
 
 		Submesh(const Submesh& other) = default;
 		Submesh& operator = (const Submesh& other) = default;
+
+		ECS_INLINE size_t CopySize() const {
+			return name.CopySize();
+		}
+
+		ECS_INLINE Submesh Copy(AllocatorPolymorphic allocator) const {
+			void* allocation = AllocateEx(allocator, CopySize());
+			uintptr_t ptr = (uintptr_t)allocation;
+			return CopyTo(ptr);
+		}
+
+		ECS_INLINE Submesh CopyTo(uintptr_t& ptr) const {
+			Submesh submesh;
+			memcpy(&submesh, this, sizeof(submesh));
+			submesh.name = name.CopyTo(ptr);
+			return submesh;
+		}
+
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+			if (name.size > 0) {
+				DeallocateEx(allocator, name.buffer);
+			}
+		}
 
 		Stream<char> name;
 		unsigned int index_buffer_offset;

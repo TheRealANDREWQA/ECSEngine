@@ -14,6 +14,18 @@ namespace ECSEngine {
 
 	typedef float3 DebugVertex;
 
+	inline ColorFloat AxisXColor() {
+		return ColorFloat(1.0f, 0.0f, 0.0f);
+	}
+
+	inline ColorFloat AxisYColor() {
+		return ColorFloat(0.0f, 1.0f, 0.0f);
+	}
+
+	inline ColorFloat AxisZColor() {
+		return ColorFloat(0.0f, 0.0f, 1.0f);
+	}
+
 	struct DebugDrawCallOptions {
 		bool wireframe = true;
 		bool ignore_depth = false;
@@ -514,6 +526,8 @@ namespace ECSEngine {
 		GraphicsPipelineRenderState GetPreviousRenderState() const;
 
 		void RestorePreviousRenderState(GraphicsPipelineRenderState state);
+
+		static MemoryManager DefaultAllocator(GlobalMemoryManager* global_memory);
 
 		MemoryManager* allocator;
 		Graphics* graphics;

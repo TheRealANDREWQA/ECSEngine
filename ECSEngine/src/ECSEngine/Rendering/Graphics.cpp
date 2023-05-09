@@ -54,6 +54,42 @@ namespace ECSEngine {
 		ECS_PIXEL_SHADER_SOURCE(GLTFThumbnail)
 	};
 
+	const char* ECS_GRAPHICS_RESOURCE_TYPE_STRING[] = {
+		"VertexShader",
+		"PixelShader",
+		"DomainShader",
+		"HullShader",
+		"GeometryShader",
+		"ComputeShader",
+		"IndexBuffer",
+		"InputLayout",
+		"ConstantBuffer",
+		"VertexBuffer",
+		"ResourceView",
+		"SamplerState",
+		"UnorderedView",
+		"GraphicsContext",
+		"RenderTargetView",
+		"DepthStencilView",
+		"StandardBuffer",
+		"StructuredBuffer",
+		"UnorderedBuffer",
+		"IndirectBuffer",
+		"AppendBuffer",
+		"ConsumeBuffer",
+		"Texture1D",
+		"Texture2D",
+		"Texture3D",
+		"TextureCube",
+		"BlendState",
+		"DepthStencilState",
+		"RasterizerState",
+		"CommandList",
+		"DXResourceInterface"
+	};
+
+	static_assert(std::size(ECS_GRAPHICS_RESOURCE_TYPE_STRING) == ECS_GRAPHICS_RESOURCE_TYPE_COUNT);
+
 #define GRAPHICS_INTERNAL_RESOURCE_STARTING_COUNT 1024
 
 	void InitializeGraphicsHelpers(Graphics* graphics) {
@@ -235,7 +271,7 @@ namespace ECSEngine {
 		BindDepthStencilState(depth_stencil_state);
 		BindRasterizerState(rasterizer_state);
 		BindBlendState(blend_state);
-
+		
 		depth_stencil_state.Release();
 		rasterizer_state.Release();
 		blend_state.Release();
@@ -2451,14 +2487,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::FreeSubmesh(const Submesh& submesh) {
-		if (submesh.name.buffer != nullptr) {
-			m_allocator->Deallocate(submesh.name.buffer);
-		}
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
 	void Graphics::ClearRenderTarget(RenderTargetView target, ColorFloat color)
 	{
 		ECSEngine::ClearRenderTarget(target, GetContext(), color);
@@ -2489,8 +2517,6 @@ namespace ECSEngine {
 
 	void Graphics::DisableAlphaBlending(GraphicsContext* context) {
 		GraphicsPipelineBlendState state = GetBlendState();
-		// The call increases the reference count - must balance it out
-		state.blend_state.Release();
 
 		D3D11_BLEND_DESC blend_desc = {};
 		state.blend_state.state->GetDesc(&blend_desc);
@@ -2525,10 +2551,10 @@ namespace ECSEngine {
 	{
 		D3D11_DEPTH_STENCIL_DESC depth_desc = {};
 		GraphicsPipelineDepthStencilState depth_stencil_state = GetDepthStencilState();
-		// The call increases the reference count - must balance it out
-		depth_stencil_state.depth_stencil_state.Release();
 
-		depth_stencil_state.depth_stencil_state.state->GetDesc(&depth_desc);
+		if (depth_stencil_state.depth_stencil_state.Interface() != nullptr) {
+			depth_stencil_state.depth_stencil_state.state->GetDesc(&depth_desc);
+		}
 		depth_desc.DepthEnable = FALSE;
 
 		/*unsigned int count = depth_stencil_state.depth_stencil_state.Release();
@@ -2656,8 +2682,6 @@ namespace ECSEngine {
 
 	void Graphics::EnableAlphaBlending(GraphicsContext* context) {
 		GraphicsPipelineBlendState state = GetBlendState();
-		// The call increases the reference count - must balance it out
-		unsigned int ref_count = state.blend_state.Release();
 
 		D3D11_BLEND_DESC blend_desc = {};
 		state.blend_state.state->GetDesc(&blend_desc);
@@ -2692,11 +2716,11 @@ namespace ECSEngine {
 	void Graphics::EnableDepth(GraphicsContext* context)
 	{
 		D3D11_DEPTH_STENCIL_DESC depth_desc = {};
-		GraphicsPipelineDepthStencilState depth_stencil_state = GetDepthStencilState();
-		// The call increases the reference count - must balance it out
-		unsigned int ref_count = depth_stencil_state.depth_stencil_state.Release();
+		GraphicsPipelineDepthStencilState depth_stencil_state = ECSEngine::GetDepthStencilState(context);
 
-		depth_stencil_state.depth_stencil_state.state->GetDesc(&depth_desc);
+		if (depth_stencil_state.depth_stencil_state.Interface() != nullptr) {
+			depth_stencil_state.depth_stencil_state.state->GetDesc(&depth_desc);
+		}
 		depth_desc.DepthEnable = TRUE;
 		depth_desc.DepthFunc = D3D11_COMPARISON_LESS;
 		depth_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
@@ -2724,8 +2748,6 @@ namespace ECSEngine {
 		D3D11_RASTERIZER_DESC rasterizer_desc = {};
 
 		GraphicsPipelineRasterizerState raster_state = GetRasterizerState();
-		// The call increases the reference count - must balance it out
-		raster_state.rasterizer_state.Release();
 		
 		raster_state.rasterizer_state.state->GetDesc(&rasterizer_desc);
 		rasterizer_desc.CullMode = D3D11_CULL_BACK;
@@ -2955,20 +2977,24 @@ namespace ECSEngine {
 		GraphicsResourceSnapshot snapshot;
 
 		unsigned int resource_count = m_internal_resources.size.load(ECS_RELAXED);
-		size_t total_size_to_allocate = snapshot.interface_pointers.MemoryOf(resource_count) + snapshot.types.MemoryOf(resource_count);
+		size_t total_size_to_allocate = snapshot.interface_pointers.MemoryOf(resource_count) + snapshot.types.MemoryOf(resource_count) 
+			+ snapshot.debug_infos.MemoryOf(resource_count);
 
 		void* allocation = Allocate(allocator, total_size_to_allocate);
 		uintptr_t allocation_ptr = (uintptr_t)allocation;
 		snapshot.interface_pointers.InitializeFromBuffer(allocation_ptr, resource_count);
 		snapshot.types.InitializeFromBuffer(allocation_ptr, resource_count);
+		snapshot.debug_infos.InitializeFromBuffer(allocation_ptr, resource_count);
 
 		// There might be pending resources to be removed
 		snapshot.interface_pointers.size = 0;
 		snapshot.types.size = 0;
+		snapshot.debug_infos.size = 0;
 		for (unsigned int index = 0; index < resource_count; index++) {
 			if (!m_internal_resources[index].is_deleted.load(ECS_RELAXED)) {
 				snapshot.interface_pointers.Add(m_internal_resources[index].interface_pointer);
 				snapshot.types.Add(m_internal_resources[index].type);
+				snapshot.debug_infos.Add(m_internal_resources[index].debug_info);
 			}
 		}
 
@@ -3239,10 +3265,12 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	bool Graphics::RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot) {
+	bool Graphics::RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot, CapacityStream<char>* mismatch_string) {
 		unsigned int current_resource_count = m_internal_resources.size.load(ECS_RELAXED);
 		if (current_resource_count < snapshot.interface_pointers.size) {
-			return false;
+			if (mismatch_string == nullptr) {
+				return false;
+			}
 		}
 
 		// Keep a boolean record of all the resources in the snapshot that have been identified
@@ -3265,8 +3293,16 @@ namespace ECSEngine {
 					// Free the type and mark the current slot as deleted
 					m_internal_resources[index].is_deleted.store(true, ECS_RELAXED);
 
-					// For debugging
+					// For debugging purposes
 					DebugInfo debug_info = m_internal_resources[index].debug_info;
+
+					if (mismatch_string != nullptr) {
+						Stream<char> resource_type = GraphicsResourceTypeString(m_internal_resources[index].type);
+						ECS_STACK_CAPACITY_STREAM(char, location_string, 512);
+						function::DebugLocationString(m_internal_resources[index].debug_info, &location_string);
+						ECS_FORMAT_STRING(*mismatch_string, "Graphics resource with type {#} was added in between snapshots. {#}\n", resource_type, location_string);
+					}
+
 					FreeGraphicsResourceInterface(interface_pointer, m_internal_resources[index].type);
 				}
 				else {
@@ -3275,9 +3311,27 @@ namespace ECSEngine {
 			}
 		}
 
-		// Now check for all the old resources to see if they have been accidentally removed
-		// If there is a false value then it means that an old resources was removed
-		return function::SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool)) == -1;
+		if (mismatch_string == nullptr) {
+			// Now check for all the old resources to see if they have been accidentally removed
+			// If there is a false value then it means that an old resources was removed
+			size_t first_missing = function::SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool));
+			return first_missing == -1;
+		}
+		else {
+			bool is_missing = false;
+			size_t missing = function::SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool));
+			while (missing < snapshot.interface_pointers.size) {
+				is_missing = true;
+				Stream<char> resource_type = GraphicsResourceTypeString(snapshot.types[missing]);
+				ECS_STACK_CAPACITY_STREAM(char, location_string, 512);
+				function::DebugLocationString(snapshot.debug_infos[missing], &location_string);
+				ECS_FORMAT_STRING(*mismatch_string, "Graphics resource with type {#} was removed in between snapshots. {#}\n", resource_type, location_string);
+
+				missing += function::SearchBytes(was_found.buffer + missing, snapshot.interface_pointers.size - missing, (size_t)false, sizeof(bool));
+			}
+
+			return is_missing;
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3817,6 +3871,9 @@ namespace ECSEngine {
 
 	void BindDepthStencilState(DepthStencilState state, GraphicsContext* context, unsigned int stencil_ref)
 	{
+		if (state.state == nullptr) {
+			__debugbreak();
+		}
 		context->OMSetDepthStencilState(state.state, stencil_ref);
 	}
 
@@ -4289,7 +4346,10 @@ namespace ECSEngine {
 		GraphicsPipelineRasterizerState state;
 
 		context->RSGetState(&state.rasterizer_state.state);
-		//unsigned int count = state.rasterizer_state.Release();
+		unsigned int count = -1;
+		if (state.rasterizer_state.state != nullptr) {
+			count = state.rasterizer_state.Release();
+		}
 
 		return state;
 	}
@@ -4301,7 +4361,10 @@ namespace ECSEngine {
 		GraphicsPipelineDepthStencilState state;
 
 		context->OMGetDepthStencilState(&state.depth_stencil_state.state, &state.stencil_ref);
-		//unsigned int count = state.depth_stencil_state.Release();
+		unsigned int count = -1;
+		if (state.depth_stencil_state.Interface() != nullptr) {
+			count = state.depth_stencil_state.Release();
+		}
 		
 		// ECS_ASSERT(ref_count > 0);
 
@@ -4315,7 +4378,10 @@ namespace ECSEngine {
 		GraphicsPipelineBlendState state;
 
 		context->OMGetBlendState(&state.blend_state.state, state.blend_factors, &state.sample_mask);
-		//unsigned int count = state.blend_state.Release();
+		unsigned int count = -1;
+		if (state.blend_state.Interface() != nullptr) {
+			count = state.blend_state.Release();
+		}
 
 		return state;
 	}
@@ -4432,7 +4498,7 @@ namespace ECSEngine {
 	void RestoreBlendState(GraphicsContext* context, GraphicsPipelineBlendState blend_state)
 	{
 		context->OMSetBlendState(blend_state.blend_state.state, blend_state.blend_factors, blend_state.sample_mask);
-		blend_state.blend_state.Release();
+		//blend_state.blend_state.Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4440,7 +4506,7 @@ namespace ECSEngine {
 	void RestoreRasterizerState(GraphicsContext* context, GraphicsPipelineRasterizerState rasterizer_state)
 	{
 		BindRasterizerState(rasterizer_state.rasterizer_state, context);
-		rasterizer_state.rasterizer_state.Release();
+		//rasterizer_state.rasterizer_state.Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4448,7 +4514,7 @@ namespace ECSEngine {
 	void RestoreDepthStencilState(GraphicsContext* context, GraphicsPipelineDepthStencilState depth_stencil_state)
 	{
 		BindDepthStencilState(depth_stencil_state.depth_stencil_state, context, depth_stencil_state.stencil_ref);
-		depth_stencil_state.depth_stencil_state.Release();
+		//depth_stencil_state.depth_stencil_state.Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4707,11 +4773,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void FreeCoallescedMesh(Graphics* graphics, const CoallescedMesh* mesh)
+	void FreeCoallescedMesh(Graphics* graphics, CoallescedMesh* mesh, bool coallesced_allocation, AllocatorPolymorphic allocator)
 	{
 		graphics->FreeMesh(mesh->mesh);
-		for (size_t index = 0; index < mesh->submeshes.size; index++) {
-			graphics->FreeSubmesh(mesh->submeshes[index]);
+		if (coallesced_allocation) {
+			Deallocate(allocator, mesh->submeshes[0].name.buffer);
+		}
+		else {
+			for (size_t index = 0; index < mesh->submeshes.size; index++) {
+				mesh->submeshes[index].Deallocate(allocator);
+			}
 		}
 	}
 

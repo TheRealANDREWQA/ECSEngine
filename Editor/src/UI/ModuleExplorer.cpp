@@ -332,30 +332,6 @@ struct ModuleExplorerRunModuleBuildCommandData {
 	EDITOR_MODULE_CONFIGURATION configuration;
 };
 
-void ModuleExplorerPrintConsoleMessageAfterBuildCommand(ModuleExplorerRunModuleBuildCommandData* data, EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status) {
-	Stream<wchar_t> library_name = data->editor_state->project_modules->buffer[data->module_index].library_name;
-	Stream<char> configuration_string = MODULE_CONFIGURATIONS[data->configuration];
-	ECS_TEMP_ASCII_STRING(console_message, 256);
-	switch (command_status) {
-	case EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING:
-		ECS_FORMAT_STRING(console_message, "Command for module {#} with configuration {#} launched successfully.", library_name, configuration_string);
-		EditorSetConsoleInfo(console_message);
-		break;
-	case EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED:
-		ECS_FORMAT_STRING(console_message, "The module {#} with configuration {#} is up to date. The command is skipped", library_name, configuration_string);
-		EditorSetConsoleInfo(console_message);
-		break;
-	case EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING:
-		ECS_FORMAT_STRING(console_message, "An error has occured when launching the command line for module {#} with configuration {#}. The command is aborted.", library_name, configuration_string);
-		EditorSetConsoleError(console_message);
-		break;
-	case EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING:
-		ECS_FORMAT_STRING(console_message, "The module {#} with configuration {#} is already executing a command.", library_name, configuration_string);
-		EditorSetConsoleError(console_message);
-		break;
-	}
-}
-
 // --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* command_statuses) {
@@ -406,7 +382,7 @@ void ModuleExplorerBuildModule(ActionData* action_data) {
 
 	ModuleExplorerRunModuleBuildCommandData* data = (ModuleExplorerRunModuleBuildCommandData*)_data;
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = BuildModule(data->editor_state, data->module_index, data->configuration);
-	ModuleExplorerPrintConsoleMessageAfterBuildCommand(data, command_status);
+	PrintConsoleMessageForBuildCommand(data->editor_state, data->module_index, data->configuration, command_status);
 }
 
 // --------------------------------------------------------------------------------------------------------
@@ -416,7 +392,7 @@ void ModuleExplorerCleanModule(ActionData* action_data) {
 
 	ModuleExplorerRunModuleBuildCommandData* data = (ModuleExplorerRunModuleBuildCommandData*)_data;
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = CleanModule(data->editor_state, data->module_index, data->configuration);
-	ModuleExplorerPrintConsoleMessageAfterBuildCommand(data, command_status);
+	PrintConsoleMessageForBuildCommand(data->editor_state, data->module_index, data->configuration, command_status);
 }
 
 // --------------------------------------------------------------------------------------------------------
@@ -426,7 +402,7 @@ void ModuleExplorerRebuildModule(ActionData* action_data) {
 
 	ModuleExplorerRunModuleBuildCommandData* data = (ModuleExplorerRunModuleBuildCommandData*)_data;
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = RebuildModule(data->editor_state, data->module_index, data->configuration);
-	ModuleExplorerPrintConsoleMessageAfterBuildCommand(data, command_status);
+	PrintConsoleMessageForBuildCommand(data->editor_state, data->module_index, data->configuration, command_status);
 }
 
 // --------------------------------------------------------------------------------------------------------

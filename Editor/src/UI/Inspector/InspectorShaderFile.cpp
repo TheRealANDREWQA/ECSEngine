@@ -204,8 +204,10 @@ void DrawShaderMacro(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayD
 
 void InspectorCleanShader(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawShaderFileData* data = (InspectorDrawShaderFileData*)_data;
-	editor_state->editor_allocator->Deallocate(data->shader_metadata.name.buffer);
-	editor_state->editor_allocator->Deallocate(data->target_file.buffer);
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+
+	data->shader_metadata.name.Deallocate(editor_allocator);
+	data->target_file.Deallocate(editor_allocator);
 	for (unsigned int index = 0; index < data->shader_macros.size; index++) {
 		editor_state->editor_allocator->Deallocate(data->shader_macros[index].definition_stream.buffer);
 		editor_state->editor_allocator->Deallocate(data->shader_macros[index].name_stream.buffer);

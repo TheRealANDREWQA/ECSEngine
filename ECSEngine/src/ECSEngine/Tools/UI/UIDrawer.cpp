@@ -11900,7 +11900,7 @@ namespace ECSEngine {
 		float2 UIDrawer::GetAlignedToRight(float x_scale, float target_position) const {
 			const float EPSILON = 0.0005f;
 
-			target_position = target_position == -5.0f ? region_limit.x : target_position;
+			target_position = target_position == DBL_MAX ? region_limit.x : target_position;
 			target_position = export_scale != nullptr ? current_x + x_scale : target_position;
 
 			// Move the position by a small offset so as to not have floating point calculation errors that would result
@@ -11921,13 +11921,43 @@ namespace ECSEngine {
 		float2 UIDrawer::GetAlignedToBottom(float y_scale, float target_position) const {
 			const float EPSILON = 0.0003f;
 
-			target_position = target_position == -5.0f ? region_limit.y : target_position;
+			target_position = target_position == DBL_MAX ? region_limit.y : target_position;
 			target_position = export_scale != nullptr ? current_y + y_scale : target_position;
 			
 			// Move the position by a small offset so as to not have floating point calculation errors that would result
 			// In an increased render span even tho it supposed to not contribute to it
 			target_position -= EPSILON;
 			return { current_x, function::ClampMin(target_position - y_scale, current_y) };
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		float2 UIDrawer::GetAlignedToBottomOverLimit(float y_scale) const
+		{
+			float horizontal_slider_offset = system->m_windows[window_index].is_horizontal_render_slider * system->m_descriptors.misc.render_slider_horizontal_size;
+			return { current_x, function::ClampMin(region_position.y + region_scale.y - y_scale - horizontal_slider_offset, current_y) };
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		float2 UIDrawer::GetCornerRectangle(ECS_UI_ALIGN horizontal_alignment, ECS_UI_ALIGN vertical_alignment, float2 dimensions, float2 padding) const 
+		{
+			float2 position = { 0.0f, 0.0f };
+			if (horizontal_alignment == ECS_UI_ALIGN_LEFT) {
+				position.x = region_position.x + padding.x;
+			}
+			else {
+				position.x = region_position.x + region_scale.x - padding.x - dimensions.x;
+			}
+
+			if (vertical_alignment == ECS_UI_ALIGN_TOP) {
+				position.y = region_position.y + padding.y;
+			}
+			else {
+				position.y = region_position.y + region_scale.y - padding.y - dimensions.y;
+			}
+
+			return position;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

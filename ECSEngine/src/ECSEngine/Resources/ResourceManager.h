@@ -121,6 +121,28 @@ namespace ECSEngine {
 		unsigned int reference_count = USHORT_MAX;
 	};
 
+	struct ResourceManagerSnapshot {
+		struct Resource {
+			void* data;
+			ResourceIdentifier identifier;
+			unsigned short reference_count;
+			unsigned short suffix_size;
+		};
+
+		ECS_INLINE size_t Find(ResourceIdentifier identifier, ResourceType type) const {
+			return resources[(unsigned int)type].Find(identifier, [](const Resource& resource) {
+				return resource.identifier;
+			});
+		}
+
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+			// Everything is allocated in a single coallesced allocation
+			ECSEngine::Deallocate(allocator, resources[0].buffer);
+		}
+
+		Stream<Resource> resources[(unsigned int)ResourceType::TypeCount];
+	};
+
 	// Defining ECS_RESOURCE_MANAGER_CHECK_RESOURCE will make AddResource check if the resource exists already 
 	struct ECSENGINE_API ResourceManager
 	{
@@ -262,6 +284,9 @@ namespace ECSEngine {
 
 		// Returns nullptr if the identifier doesn't exist
 		ResourceManagerEntry* GetEntryPtr(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 });
+
+		// Returns the current state of the resources inside - including identifiers and suffix sizes
+		ResourceManagerSnapshot GetSnapshot(AllocatorPolymorphic allocator) const;
 
 		// Returns true whether or not the given stamp is greater than the stamp currently registered. If the entry doesn't exist,
 		// it returns false. The suffix is optional (can either bake it into the identifier or give it to the function to do it)
@@ -480,6 +505,11 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 		
+		// Brings back the state of the resource manager to the recorded snapshot. Can optionally give a string to be built with the
+		// mismatches that are between the two states. Returns true if there are no mismatches, else false
+		// It doesn't deallocate the snapshot (it must be done outside)!
+		bool RestoreSnapshot(const ResourceManagerSnapshot& snapshot, CapacityStream<char>* mismatch_string = nullptr);
+
 		// Reassigns a value to a resource that has been loaded; the resource is first destroyed then reassigned
 		void RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix = { nullptr, 0 });
 

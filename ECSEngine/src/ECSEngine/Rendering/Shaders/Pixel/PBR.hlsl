@@ -2,10 +2,12 @@
 #include "../PBRBase.hlsli"
 #include "../Utilities.hlsli"
 
+#ifdef ENVIRONMENT_TEXTURE
 TextureCube environment_diffuse : register(t0);
 TextureCube environment_specular : register(t1);
 Texture2D<float2> brdf_lut : register(t2);
 SamplerState environment_sampler : register(s0);
+#endif
 
 #ifdef COLOR_TEXTURE
 Texture2D ColorMap : register(t3);
@@ -41,12 +43,16 @@ cbuffer CameraPosition : register(b0)
     float3 camera_position;
 };
 
+#ifdef ENVIRONMENT_TEXTURE
+
 cbuffer Environment : register(b1)
 {
     float environment_specular_max_mip : packoffset(c0.x);
     float environment_diffuse_factor : packoffset(c0.y);
     float environment_specular_factor : packoffset(c0.z);
 };
+
+#endif
 
 cbuffer Modifiers : register(b2)
 {
@@ -123,9 +129,11 @@ float4 main(in PS_INPUT input) : SV_TARGET
     }
     L0 += CalculateDirectionalLight(directional_light.xyz, view_direction, directional_color.rgb, pixel_color, pixel_normal, F0, metallic, roughness);
     
+    #ifdef ENVIRONMENT_TEXTURE
     float3 ambient = CalculateAmbient(view_direction, pixel_normal, pixel_color, F0, roughness, metallic, environment_diffuse, environment_specular,
     brdf_lut, environment_sampler, environment_specular_max_mip, environment_diffuse_factor, environment_specular_factor);
     L0 += ambient * ambient_occlusion;
+    #endif
     
     //L0 = TonemapLottes(L0);
     

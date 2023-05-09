@@ -233,6 +233,11 @@ EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned i
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns which viewport is currently displayed by the scene window
+EDITOR_SANDBOX_VIEWPORT GetSandboxCurrentViewport(const EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Returns -1 if it doesn't find the module
 unsigned int GetSandboxModuleInStreamIndex(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
 
@@ -286,6 +291,10 @@ unsigned int GetSandboxCount(const EditorState* editor_state);
 // -------------------------------------------------------------------------------------------------------------
 
 ECSEngine::WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+ECSEngine::OrientedPoint GetSandboxCameraPoint(const EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -470,7 +479,16 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 
 // -------------------------------------------------------------------------------------------------------------
 
+void RotateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::float3 rotation);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Defaults the values for the camera and saved positions
+void ResetSandboxCamera(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -521,6 +539,11 @@ bool SaveEditorSandboxFile(const EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Determines the aspect ration of the camera given size of the textures
+void SetSandboxCameraAspectRatio(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // If the viewport is specified it will override the selection based on the sandbox state
 void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
 
@@ -532,6 +555,10 @@ void SetSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_i
 // -------------------------------------------------------------------------------------------------------------
 
 void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void TranslateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::float3 translation);
 
 // -------------------------------------------------------------------------------------------------------------
 

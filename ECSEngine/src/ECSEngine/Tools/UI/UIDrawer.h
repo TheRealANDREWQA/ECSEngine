@@ -3694,7 +3694,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 			
-			float2 GetAlignedToRight(float x_scale, float target_position = -5.0f) const;
+			float2 GetAlignedToRight(float x_scale, float target_position = DBL_MAX) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3702,7 +3702,17 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 GetAlignedToBottom(float y_scale, float target_position = -5.0f) const;
+			float2 GetAlignedToBottom(float y_scale, float target_position = DBL_MAX) const;
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			float2 GetAlignedToBottomOverLimit(float y_scale) const;
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Returns the position of a rectangle aligned to the corners of the window - it doesn't take into account the renderable
+			// region - only the true window corners. Can optionally add padding to the position
+			float2 GetCornerRectangle(ECS_UI_ALIGN horizontal_alignment, ECS_UI_ALIGN vertical_alignment, float2 dimensions, float2 padding = { 0.0f, 0.0f }) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
