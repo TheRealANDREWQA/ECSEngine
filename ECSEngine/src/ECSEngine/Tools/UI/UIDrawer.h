@@ -3694,7 +3694,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 			
-			float2 GetAlignedToRight(float x_scale, float target_position = DBL_MAX) const;
+			float2 GetAlignedToRight(float x_scale, float target_position = FLT_MAX) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3702,7 +3702,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 GetAlignedToBottom(float y_scale, float target_position = DBL_MAX) const;
+			float2 GetAlignedToBottom(float y_scale, float target_position = FLT_MAX) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

@@ -529,6 +529,10 @@ namespace ECSEngine {
 
 		static MemoryManager DefaultAllocator(GlobalMemoryManager* global_memory);
 
+		ECS_INLINE static size_t DefaultAllocatorSize() {
+			return ECS_MB;
+		}
+
 		MemoryManager* allocator;
 		Graphics* graphics;
 		DeckPowerOfTwo<DebugLine> lines;

@@ -215,8 +215,49 @@ namespace ECSEngine {
 		return false;
 	}
 
+	struct LinearAllocator;
+	struct StackAllocator;
+	struct MultipoolAllocator;
+	struct MemoryManager;
+	struct GlobalMemoryManager;
+	struct MemoryArena;
+	struct ResizableMemoryArena;
+	struct ResizableLinearAllocator;
+
 	template<typename Allocator>
-	ECSENGINE_API AllocatorPolymorphic GetAllocatorPolymorphic(Allocator* allocator, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE);
+	ECS_INLINE AllocatorPolymorphic GetAllocatorPolymorphic(Allocator* allocator, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE) {
+		ECS_ALLOCATOR_TYPE allocator_type = ECS_ALLOCATOR_LINEAR;
+
+		if constexpr (std::is_same_v<Allocator, LinearAllocator>) {
+			allocator_type = ECS_ALLOCATOR_LINEAR;
+		}
+		else if constexpr (std::is_same_v<Allocator, StackAllocator>) {
+			allocator_type = ECS_ALLOCATOR_STACK;
+		}
+		else if constexpr (std::is_same_v<Allocator, MultipoolAllocator>) {
+			allocator_type = ECS_ALLOCATOR_MULTIPOOL;
+		}
+		else if constexpr (std::is_same_v<Allocator, MemoryManager>) {
+			allocator_type = ECS_ALLOCATOR_MANAGER;
+		}
+		else if constexpr (std::is_same_v<Allocator, GlobalMemoryManager>) {
+			allocator_type = ECS_ALLOCATOR_GLOBAL_MANAGER;
+		}
+		else if constexpr (std::is_same_v<Allocator, MemoryArena>) {
+			allocator_type = ECS_ALLOCATOR_ARENA;
+		}
+		else if constexpr (std::is_same_v<Allocator, ResizableMemoryArena>) {
+			allocator_type = ECS_ALLOCATOR_RESIZABLE_ARENA;
+		}
+		else if constexpr (std::is_same_v<Allocator, ResizableLinearAllocator>) {
+			allocator_type = ECS_ALLOCATOR_RESIZABLE_LINEAR;
+		}
+		else {
+			static_assert(false, "Incorrect allocator type for GetAllocatorPolymorphic");
+		}
+
+		return { allocator, allocator_type, allocation_type };
+	}
 
 	ECSENGINE_API void SetInternalImageAllocator(DirectX::ScratchImage* image, AllocatorPolymorphic allocator);
 

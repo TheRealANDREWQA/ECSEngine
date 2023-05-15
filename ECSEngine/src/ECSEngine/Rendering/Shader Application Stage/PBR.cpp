@@ -60,7 +60,7 @@ namespace ECSEngine {
 			float2 uv_offsets
 		)
 		{
-			SetPBRVertexConstants(buffer, graphics, { object_matrix, world_view_projection_matrix, uv_tiling, uv_offsets });
+			SetPBRVertexConstants(buffer, graphics, { MatrixTranspose(object_matrix), MatrixTranspose(world_view_projection_matrix), uv_tiling, uv_offsets });
 		}
 
 		void SetPBRVertexConstants(ConstantBuffer buffer, Graphics* graphics, PBRVertexConstants constants)

@@ -2470,6 +2470,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	GPUQuery Graphics::CreateQuery(bool temporary) {
+		GPUQuery query;
+
+		//GetDevice()->CreateQuery()
+
+		return query;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::FreeMesh(const Mesh& mesh)
 	{
 		if (mesh.name.buffer != nullptr) {
@@ -2674,6 +2684,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::DrawCoallescedMeshCommand(const CoallescedMesh& mesh)
+	{
+		ECSEngine::DrawCoallescedMeshCommand(mesh, GetContext());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::EnableAlphaBlending() {
 		EnableAlphaBlending(m_context);
 	}
@@ -2861,6 +2878,64 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::AddInternalResource(void* interface_ptr, ECS_GRAPHICS_RESOURCE_TYPE resource_type, DebugInfo debug_info)
+	{
+		GraphicsInternalResource internal_res = {
+				interface_ptr,
+				debug_info,
+				resource_type,
+				false
+		};
+
+		unsigned int write_index = m_internal_resources.RequestInt(1);
+		if (write_index >= m_internal_resources.capacity) {
+			bool do_resizing = m_internal_resources_lock.try_lock();
+			// The first one to acquire the lock - do the resizing or the flush of removals
+			if (do_resizing) {
+				// Spin wait while there are still readers
+				SpinWait<'>'>(m_internal_resources_reader_count, (unsigned int)0);
+
+				// Commit the removals
+				CommitInternalResourcesToBeFreed();
+
+				// Do the resizing if no resources were deleted from the main array
+				if (m_internal_resources.size.load(ECS_RELAXED) >= m_internal_resources.capacity) {
+					void* allocation = m_allocator->Allocate(sizeof(GraphicsInternalResource) * (m_internal_resources.capacity * ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR));
+					memcpy(allocation, m_internal_resources.buffer, sizeof(GraphicsInternalResource) * m_internal_resources.capacity);
+					m_allocator->Deallocate(m_internal_resources.buffer);
+					m_internal_resources.InitializeFromBuffer(allocation, m_internal_resources.capacity, m_internal_resources.capacity * ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR);
+				}
+				write_index = m_internal_resources.RequestInt(1);
+				m_internal_resources[write_index] = internal_res;
+				m_internal_resources.FinishRequest(1);
+
+				m_internal_resources_lock.unlock();
+			}
+			// Other thread got to do the resizing or freeing of the resources - stall until it finishes
+			else {
+				m_internal_resources_lock.wait_locked();
+				// Rerequest the position
+				write_index = m_internal_resources.RequestInt(1);
+				if (write_index >= m_internal_resources.capacity) {
+					// Retry again
+					AddInternalResource(interface_ptr, resource_type, debug_info);
+					return;
+				}
+				else {
+					m_internal_resources[write_index] = internal_res;
+					m_internal_resources.FinishRequest(1);
+				}
+			}
+		}
+		// Write into the internal resources
+		else {
+			m_internal_resources[write_index] = internal_res;
+			m_internal_resources.FinishRequest(1);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::GenerateMips(ResourceView view)
 	{
 		m_context->GenerateMips(view.view);
@@ -2973,10 +3048,11 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	GraphicsResourceSnapshot Graphics::GetResourceSnapshot(AllocatorPolymorphic allocator) const {
+	GraphicsResourceSnapshot Graphics::GetResourceSnapshot(AllocatorPolymorphic allocator) {
 		GraphicsResourceSnapshot snapshot;
 
-		unsigned int resource_count = m_internal_resources.size.load(ECS_RELAXED);
+		m_internal_resources_lock.lock();
+		unsigned int resource_count = m_internal_resources.SpinWaitWrites();
 		size_t total_size_to_allocate = snapshot.interface_pointers.MemoryOf(resource_count) + snapshot.types.MemoryOf(resource_count) 
 			+ snapshot.debug_infos.MemoryOf(resource_count);
 
@@ -2997,6 +3073,7 @@ namespace ECSEngine {
 				snapshot.debug_infos.Add(m_internal_resources[index].debug_info);
 			}
 		}
+		m_internal_resources_lock.unlock();
 
 		return snapshot;
 	}
@@ -3266,9 +3343,11 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	bool Graphics::RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot, CapacityStream<char>* mismatch_string) {
-		unsigned int current_resource_count = m_internal_resources.size.load(ECS_RELAXED);
+		m_internal_resources_lock.lock();
+		unsigned int current_resource_count = m_internal_resources.SpinWaitWrites();
 		if (current_resource_count < snapshot.interface_pointers.size) {
 			if (mismatch_string == nullptr) {
+				m_internal_resources_lock.unlock();
 				return false;
 			}
 		}
@@ -3280,6 +3359,8 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < current_resource_count; index++) {
 			// Locate the value in the snapshot.
 			if (!m_internal_resources[index].is_deleted.load(ECS_RELAXED)) {
+				// DirectX can return the same pointer when resources are created with the same parameters.
+				// So keep looking for places that were also not yet checked
 				void* interface_pointer = m_internal_resources[index].interface_pointer;
 				size_t snapshot_index = function::SearchBytes(
 					snapshot.interface_pointers.buffer,
@@ -3287,6 +3368,17 @@ namespace ECSEngine {
 					(size_t)interface_pointer,
 					sizeof(interface_pointer)
 				);
+				while (snapshot_index != -1 && (snapshot_index < snapshot.interface_pointers.size - 1) && was_found[snapshot_index]) {
+					size_t current_offset = function::SearchBytes(
+						snapshot.interface_pointers.buffer + snapshot_index + 1,
+						snapshot.interface_pointers.size - snapshot_index - 1,
+						(size_t)interface_pointer,
+						sizeof(interface_pointer)
+					);
+					if (current_offset != -1) {
+						snapshot_index += current_offset + 1;
+					}
+				}
 
 				// It doesn't exist, it means it was added in the meantime
 				if (snapshot_index == -1) {
@@ -3310,6 +3402,8 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		m_internal_resources_lock.unlock();
 
 		if (mismatch_string == nullptr) {
 			// Now check for all the old resources to see if they have been accidentally removed
@@ -3871,9 +3965,6 @@ namespace ECSEngine {
 
 	void BindDepthStencilState(DepthStencilState state, GraphicsContext* context, unsigned int stencil_ref)
 	{
-		if (state.state == nullptr) {
-			__debugbreak();
-		}
 		context->OMSetDepthStencilState(state.state, stencil_ref);
 	}
 
@@ -4296,6 +4387,13 @@ namespace ECSEngine {
 	void DrawSubmeshCommand(Submesh submesh, GraphicsContext* context)
 	{
 		DrawIndexed(submesh.index_count, context, submesh.index_buffer_offset, submesh.vertex_buffer_offset);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void DrawCoallescedMeshCommand(const CoallescedMesh& coallesced_mesh, GraphicsContext* context)
+	{
+		DrawIndexed(coallesced_mesh.mesh.index_buffer.count, context);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

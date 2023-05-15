@@ -11900,7 +11900,7 @@ namespace ECSEngine {
 		float2 UIDrawer::GetAlignedToRight(float x_scale, float target_position) const {
 			const float EPSILON = 0.0005f;
 
-			target_position = target_position == DBL_MAX ? region_limit.x : target_position;
+			target_position = target_position == FLT_MAX ? region_limit.x : target_position;
 			target_position = export_scale != nullptr ? current_x + x_scale : target_position;
 
 			// Move the position by a small offset so as to not have floating point calculation errors that would result
@@ -11921,7 +11921,7 @@ namespace ECSEngine {
 		float2 UIDrawer::GetAlignedToBottom(float y_scale, float target_position) const {
 			const float EPSILON = 0.0003f;
 
-			target_position = target_position == DBL_MAX ? region_limit.y : target_position;
+			target_position = target_position == FLT_MAX ? region_limit.y : target_position;
 			target_position = export_scale != nullptr ? current_y + y_scale : target_position;
 			
 			// Move the position by a small offset so as to not have floating point calculation errors that would result

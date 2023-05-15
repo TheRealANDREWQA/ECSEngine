@@ -205,7 +205,7 @@ namespace ECSEngine {
 			interface_pointer = other.interface_pointer;
 			type = other.type;
 			debug_info = other.debug_info;
-			is_deleted.store(other.is_deleted.load(std::memory_order_acquire), std::memory_order_release);
+			is_deleted.store(other.is_deleted.load(ECS_ACQUIRE), ECS_RELEASE);
 
 			return *this;
 		}
@@ -240,7 +240,7 @@ namespace ECSEngine {
 		|| std::is_same_v<Resource, DepthStencilState> || std::is_same_v<Resource, CommandList>);
 
 	template<typename Resource>
-	ECS_GRAPHICS_RESOURCE_TYPE GetGraphicsResourceType(Resource resource) {
+	ECS_INLINE ECS_GRAPHICS_RESOURCE_TYPE GetGraphicsResourceType(Resource resource) {
 		if constexpr (std::is_same_v<Resource, BlendState>) {
 			return ECS_GRAPHICS_RESOURCE_BLEND_STATE;
 		}
@@ -834,6 +834,8 @@ namespace ECSEngine {
 
 		BlendState CreateBlendStateDefault(bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
+		GPUQuery CreateQuery(bool temporary = false);
+
 #pragma endregion
 
 #pragma region Resource release
@@ -891,6 +893,9 @@ namespace ECSEngine {
 
 		// This will issue only a DrawIndexed command, does not bind any mesh/material
 		void DrawSubmeshCommand(Submesh submesh);
+
+		// This only issues the draw command for the coallesced mesh, it does not bind the mesh itself or the material
+		void DrawCoallescedMeshCommand(const CoallescedMesh& mesh);
 
 		void EnableAlphaBlending();
 
@@ -983,63 +988,14 @@ namespace ECSEngine {
 
 		void FreeTrackedResources();
 
+		void AddInternalResource(void* interface_ptr, ECS_GRAPHICS_RESOURCE_TYPE resource_type, DebugInfo debug_info = ECS_DEBUG_INFO);
+
 		template<typename Resource>
 		void AddInternalResource(Resource resource, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			ECS_GRAPHICS_RESOURCE_TYPE resource_type = GetGraphicsResourceType(resource);
 			void* interface_ptr = GetGraphicsResourceInterface(resource);
 
-			GraphicsInternalResource internal_res = { 
-				interface_ptr,
-				debug_info,
-				resource_type,
-				false
-			};
-
-			unsigned int write_index = m_internal_resources.RequestInt(1);
-			if (write_index >= m_internal_resources.capacity) {
-				bool do_resizing = m_internal_resources_lock.try_lock();
-				// The first one to acquire the lock - do the resizing or the flush of removals
-				if (do_resizing) {
-					// Spin wait while there are still readers
-					SpinWait<'>'>(m_internal_resources_reader_count, (unsigned int)0);
-
-					// Commit the removals
-					CommitInternalResourcesToBeFreed();
-
-					// Do the resizing if no resources were deleted from the main array
-					if (m_internal_resources.size.load(ECS_RELAXED) >= m_internal_resources.capacity) {
-						void* allocation = m_allocator->Allocate(sizeof(GraphicsInternalResource) * (m_internal_resources.capacity * ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR));
-						memcpy(allocation, m_internal_resources.buffer, sizeof(GraphicsInternalResource) * m_internal_resources.capacity);
-						m_allocator->Deallocate(m_internal_resources.buffer);
-						m_internal_resources.InitializeFromBuffer(allocation, m_internal_resources.capacity, m_internal_resources.capacity * ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR);
-					}
-					write_index = m_internal_resources.RequestInt(1);
-					m_internal_resources[write_index] = internal_res;
-					m_internal_resources.FinishRequest(1);
-
-					m_internal_resources_lock.unlock();
-				}
-				// Other thread got to do the resizing or freeing of the resources - stall until it finishes
-				else {
-					m_internal_resources_lock.wait_locked();
-					// Rerequest the position
-					write_index = m_internal_resources.RequestInt(1);
-					if (write_index >= m_internal_resources.capacity) {
-						// Retry again
-						AddInternalResource(resource, debug_info);
-						return;
-					}
-					else {
-						m_internal_resources[write_index] = internal_res;
-						m_internal_resources.FinishRequest(1);
-					}
-				}
-			}
-			// Write into the internal resources
-			else {
-				m_internal_resources[write_index] = internal_res;
-				m_internal_resources.FinishRequest(1);
-			}
+			AddInternalResource(interface_ptr, resource_type, debug_info);
 		}
 
 		template<typename Resource>
@@ -1129,7 +1085,7 @@ namespace ECSEngine {
 
 		GraphicsPipelineState GetPipelineState() const;
 
-		GraphicsResourceSnapshot GetResourceSnapshot(AllocatorPolymorphic allocator) const;
+		GraphicsResourceSnapshot GetResourceSnapshot(AllocatorPolymorphic allocator);
 
 		void GetWindowSize(unsigned int& width, unsigned int& height) const;
 
@@ -1446,6 +1402,8 @@ namespace ECSEngine {
 
 	// It will only issue the draw command, it will not bind material/mesh
 	ECSENGINE_API void DrawSubmeshCommand(Submesh submesh, GraphicsContext* context);
+
+	ECSENGINE_API void DrawCoallescedMeshCommand(const CoallescedMesh& coallesced_mesh, GraphicsContext* context);
 
 	ECSENGINE_API GraphicsPipelineBlendState GetBlendState(GraphicsContext* context);
 

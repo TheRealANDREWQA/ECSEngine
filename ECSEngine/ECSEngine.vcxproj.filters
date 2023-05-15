@@ -204,6 +204,7 @@
     <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />
     <ClInclude Include="src\Includes\ECSEngineComponentsAll.h" />
     <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\Profiling.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -314,6 +315,7 @@
     <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeResources.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\ComponentHelpers.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

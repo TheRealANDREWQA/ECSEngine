@@ -1143,7 +1143,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->modules_in_use.Initialize(sandbox_allocator, 0);
 	sandbox->database = AssetDatabaseReference(editor_state->asset_database, sandbox_allocator);
 
-	// Create a graphics object that will inherit all the resources
+	// Create a graphics object
 	sandbox->runtime_descriptor.graphics = editor_state->RuntimeGraphics();
 	sandbox->runtime_descriptor.resource_manager = editor_state->RuntimeResourceManager();
 
@@ -1177,6 +1177,10 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	new (task_scheduler) TaskScheduler(task_scheduler_allocator);
 
 	sandbox->runtime_descriptor.task_scheduler = task_scheduler;
+
+	// Wait until the graphics initialization is finished, otherwise the debug drawer can fail
+	EditorStateWaitFlag(50, editor_state, EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED);
+
 	// Create the sandbox world
 	sandbox->sandbox_world = World(sandbox->runtime_descriptor);
 	sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);

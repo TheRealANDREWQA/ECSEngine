@@ -5,7 +5,7 @@
 #include "../../Rendering/GraphicsHelpers.h"
 
 constexpr size_t SMALL_VERTEX_BUFFER_CAPACITY = 8;
-constexpr size_t PER_THREAD_RESOURCES = 128;
+constexpr size_t PER_THREAD_RESOURCES = 32;
 
 #define POINT_SIZE 0.3f
 #define CIRCLE_TESSELATION 32
@@ -249,15 +249,21 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+#define AXES_SIZE_REDUCE_FACTOR 0.28f
+
 	void ECS_VECTORCALL FillInstancedAxesArrowCylinders(void* instanced_data, size_t buffer_index, const DebugAxes* axes, Matrix camera_matrix) {
+		// Magic constant to make it consistent in measurement units - if setting a sphere of radius 1.0f and axes of size 1.0f
+		// then the axes should be radiuses for that sphere
+		float size = axes->size * AXES_SIZE_REDUCE_FACTOR;
+		
 		// The X axis
 		SetInstancedColor(instanced_data, buffer_index, axes->color_x);
 
 		float3 direction_x_3 = GetRightVector(axes->rotation);
 
-		float cylinder_x_scale = AXES_X_SCALE * axes->size / 2.0f;
+		float cylinder_x_scale = AXES_X_SCALE * size / 2.0f;
 		float3 splatted_cylinder_scale = float3::Splat(cylinder_x_scale);
-		Matrix arrow_cylinder_scale_matrix = MatrixScale(cylinder_x_scale, axes->size, axes->size);
+		Matrix arrow_cylinder_scale_matrix = MatrixScale(cylinder_x_scale, size, size);
 
 		float3 old_translation = axes->translation;
 		float3 current_translation = axes->translation + splatted_cylinder_scale * direction_x_3;
@@ -292,10 +298,13 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void ECS_VECTORCALL FillInstancedAxesArrowHead(void* instanced_data, size_t buffer_index, const DebugAxes* axes, Matrix camera_matrix) {
+		// Magic constant to make it consistent in measurement units - if setting a sphere of radius 1.0f and axes of size 1.0f
+		// then the axes should be radiuses for that sphere
+		float size = axes->size * AXES_SIZE_REDUCE_FACTOR;
+		
 		// The X axis
 		SetInstancedColor(instanced_data, buffer_index, axes->color_x * ARROW_HEAD_DARKEN_COLOR);
 
-		float size = axes->size;
 		Matrix arrow_head_scale = MatrixScale(float3::Splat(size));
 		float3 splatted_length = float3::Splat(AXES_X_SCALE * size);
 
@@ -766,9 +775,6 @@ namespace ECSEngine {
 		// Draw 3 separate arrows - but batch the cylinder and head draws - in order to avoid 3 times the draw calls
 		InstancedTransformData* instanced = MapInstancedVertex(this);
 
-		// Magic constant to make it consistent in measurement units - if setting a sphere of radius 1.0f and axes of size 1.0f
-		// then the axes should be radiuses for that sphere
-		size *= 0.28f;
 		DebugAxes axes = { translation, rotation, size, color_x, color_y, color_z, options };
 		FillInstancedAxesArrowCylinders(instanced, 0, &axes, camera_matrix);
 
@@ -3224,7 +3230,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	MemoryManager DebugDrawer::DefaultAllocator(GlobalMemoryManager* global_memory) {
-		return MemoryManager(ECS_MB, ECS_KB * 16, ECS_MB * 4, global_memory);
+		return MemoryManager(DefaultAllocatorSize(), ECS_KB * 16, DefaultAllocatorSize(), global_memory);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

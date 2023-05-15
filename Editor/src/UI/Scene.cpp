@@ -50,6 +50,10 @@ void SceneHoverableAction(ActionData* action_data) {
 		mouse->DisableRawInput();
 	}
 
+	if (mouse_tracker->RightButton() == MBHELD) {
+		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+	}
+
 	EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxCurrentViewport(data->editor_state, data->sandbox_index);
 
 	if (mouse_tracker->RightButton() == MBHELD) {
