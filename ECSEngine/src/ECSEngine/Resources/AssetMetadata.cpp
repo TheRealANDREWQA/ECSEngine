@@ -1416,30 +1416,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	bool IsAssetFromMetadataValid(const void* metadata, ECS_ASSET_TYPE type)
-	{
-		void* pointer = GetAssetFromMetadata(metadata, type).buffer;
-		return (size_t)pointer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
-	}
-
-	// ------------------------------------------------------------------------------------------------------
-
-	bool IsAssetFromMetadataValid(Stream<void> asset_pointer) {
-		return (size_t)asset_pointer.buffer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
-	}
-
-	// ------------------------------------------------------------------------------------------------------
-
-	unsigned int ExtractRandomizedAssetValue(const void* asset_pointer, ECS_ASSET_TYPE type)
-	{
-		if (type >= ECS_ASSET_TYPE_COUNT) {
-			ECS_ASSERT(false, "Invalid asset type");
-		}
-		return (unsigned int)asset_pointer;
-	}
-
-	// ------------------------------------------------------------------------------------------------------
-
 	bool CompareAssetPointers(const void* first, const void* second, ECS_ASSET_TYPE type) {
 		return CompareAssetPointers(first, second, AssetMetadataByteSize(type));
 	}

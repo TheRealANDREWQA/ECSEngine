@@ -11,8 +11,11 @@
 #include "../Utilities/Keyboard.h"
 #include "SystemManager.h"
 #include "../Multithreading/TaskScheduler.h"
+#include "../Tools/Debug Draw/DebugDraw.h"
 
 namespace ECSEngine {
+
+	struct DebugDrawer;
 
 	struct ECS_REFLECT WorldDescriptor {
 		size_t global_memory_size; 
@@ -22,6 +25,9 @@ namespace ECSEngine {
 		size_t entity_manager_memory_pool_count;
 		size_t entity_manager_memory_new_allocation_size;
 		unsigned int entity_pool_power_of_two;
+		// If this is specified and the debug drawer is not given, then it will assume
+		// that you want to create a debug drawer with the given allocation_size
+		unsigned int debug_drawer_allocator_size = 0;
 
 		// If these values are 0, then the default from the task manager will be used
 		size_t per_thread_temporary_memory_size = 0;
@@ -39,6 +45,8 @@ namespace ECSEngine {
 		// The resource manager is optional. If you want to give one from the outside can do.
 		// If it is nullptr then it will create an internal one
 		ResourceManager* resource_manager = nullptr; ECS_SKIP_REFLECTION()
+		// This is optional. If you want 
+		DebugDrawer* debug_drawer = nullptr; ECS_SKIP_REFLECTION()
 	};
 
 	struct ECSENGINE_API World
@@ -51,7 +59,8 @@ namespace ECSEngine {
 			TaskManager* _task_manager,
 			TaskScheduler* _task_scheduler,
 			HID::Mouse* mouse,
-			HID::Keyboard* keyboard
+			HID::Keyboard* keyboard,
+			DebugDrawer* debug_drawer
 		);
 		World(const WorldDescriptor& descriptor);
 
@@ -66,6 +75,7 @@ namespace ECSEngine {
 		SystemManager* system_manager;
 		HID::Mouse* mouse;
 		HID::Keyboard* keyboard;
+		DebugDrawer* debug_drawer;
 	};
 
 	// Destroys the graphics object if it was created internally, deallocates the global memory manager

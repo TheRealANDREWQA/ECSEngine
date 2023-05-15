@@ -1157,8 +1157,7 @@ namespace ECSEngine {
 
 			descriptor.destroy_action = ReleaseLockedWindow;
 
-			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_LOCK_WINDOW
-				| UI_DOCKSPACE_POP_UP_WINDOW | UI_POP_UP_WINDOW_FIT_TO_CONTENT | UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER);
+			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL);
 			system->AddWindowMemoryResource(sentence, window_index);
 			if (handler_memory != nullptr) {
 				system->AddWindowMemoryResource(handler_memory, window_index);

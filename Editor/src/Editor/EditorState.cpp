@@ -337,12 +337,14 @@ ECS_THREAD_TASK(InitializeRuntimeGraphicsTask) {
 	*editor_state->runtime_graphics = Graphics(&graphics_descriptor);
 	editor_state->runtime_resource_manager->m_graphics = editor_state->runtime_graphics;
 
+	OutputDebugStringA("Reached it\n");
+
 	EditorStateSetFlag(editor_state, EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED);
 }
 
 void InitializeRuntime(EditorState* editor_state) {
 	PreinitializeRuntime(editor_state);
-	editor_state->task_manager->AddDynamicTaskAndWake({ InitializeRuntimeGraphicsTask, editor_state, 0 });
+	EditorStateAddBackgroundTask(editor_state, { InitializeRuntimeGraphicsTask, editor_state, 0 });
 }
 
 // -----------------------------------------------------------------------------------------------------------------

@@ -202,41 +202,4 @@ namespace ECSEngine {
         }
     }
 
-	template<typename Allocator>
-	AllocatorPolymorphic GetAllocatorPolymorphic(Allocator* allocator, ECS_ALLOCATION_TYPE allocation_type) {
-		ECS_ALLOCATOR_TYPE allocator_type = ECS_ALLOCATOR_LINEAR;
-
-		if constexpr (std::is_same_v<Allocator, LinearAllocator>) {
-			allocator_type = ECS_ALLOCATOR_LINEAR;
-		}
-		else if constexpr (std::is_same_v<Allocator, StackAllocator>) {
-			allocator_type = ECS_ALLOCATOR_STACK;
-		}
-		else if constexpr (std::is_same_v<Allocator, MultipoolAllocator>) {
-			allocator_type = ECS_ALLOCATOR_MULTIPOOL;
-		}
-		else if constexpr (std::is_same_v<Allocator, MemoryManager>) {
-			allocator_type = ECS_ALLOCATOR_MANAGER;
-		}
-		else if constexpr (std::is_same_v<Allocator, GlobalMemoryManager>) {
-			allocator_type = ECS_ALLOCATOR_GLOBAL_MANAGER;
-		}
-		else if constexpr (std::is_same_v<Allocator, MemoryArena>) {
-			allocator_type = ECS_ALLOCATOR_ARENA;
-		}
-		else if constexpr (std::is_same_v<Allocator, ResizableMemoryArena>) {
-			allocator_type = ECS_ALLOCATOR_RESIZABLE_ARENA;
-		}
-		else if constexpr (std::is_same_v<Allocator, ResizableLinearAllocator>) {
-			allocator_type = ECS_ALLOCATOR_RESIZABLE_LINEAR;
-		}
-		else {
-			static_assert(false, "Incorrect allocator type for GetAllocatorPolymorphic");
-		}
-
-		return { allocator, allocator_type, allocation_type };
-	}
-
-	ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(AllocatorPolymorphic, GetAllocatorPolymorphic, ECS_ALLOCATION_TYPE);
-
 }

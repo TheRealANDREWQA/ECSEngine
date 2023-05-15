@@ -15,9 +15,10 @@ namespace ECSEngine {
 		TaskManager* _task_manager,
 		TaskScheduler* _task_scheduler,
 		HID::Mouse* _mouse,
-		HID::Keyboard* _keyboard
+		HID::Keyboard* _keyboard,
+		DebugDrawer* _debug_drawer
 	) : memory(_memory), entity_manager(_entity_manager), resource_manager(_resource_manager), task_manager(_task_manager),
-		graphics(_resource_manager->m_graphics), mouse(_mouse), keyboard(_keyboard), task_scheduler(_task_scheduler) {};
+		graphics(_resource_manager->m_graphics), mouse(_mouse), keyboard(_keyboard), task_scheduler(_task_scheduler), debug_drawer(_debug_drawer) {};
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
@@ -64,6 +65,10 @@ namespace ECSEngine {
 			resource_manager = descriptor.resource_manager;
 		}
 
+		if (descriptor.debug_drawer == nullptr && descriptor.debug_drawer_allocator_size > 0) {
+			coallesced_allocation_size += sizeof(MemoryManager) + sizeof(DebugDrawer);
+		}
+
 		void* allocation = memory->Allocate(coallesced_allocation_size);
 
 		MemoryManager* entity_manager_memory = (MemoryManager*)allocation;
@@ -85,6 +90,9 @@ namespace ECSEngine {
 			new (resource_manager) ResourceManager(resource_manager_allocator, graphics);
 			allocation = function::OffsetPointer(allocation, sizeof(ResourceManager));
 		}
+		if (resource_manager->m_graphics == nullptr) {
+			__debugbreak();
+		}
 
 		EntityPool* entity_pool = (EntityPool*)allocation;
 		new (entity_pool) EntityPool(entity_manager_memory, descriptor.entity_pool_power_of_two);
@@ -104,12 +112,29 @@ namespace ECSEngine {
 
 		// task manager - if needed
 		if (descriptor.task_manager == nullptr) {
-			unsigned int thread_count = std::thread::hardware_concurrency();
+			size_t thread_count = std::thread::hardware_concurrency();
 
 			task_manager = (TaskManager*)allocation;
 			new (task_manager) TaskManager(thread_count, memory, descriptor.per_thread_temporary_memory_size);
 			task_manager->SetWorld(this);
 			allocation = function::OffsetPointer(allocation, sizeof(TaskManager));
+		}
+
+		// Debug drawer - if needed
+		if (descriptor.debug_drawer == nullptr && descriptor.debug_drawer_allocator_size > 0) {
+			size_t thread_count = std::thread::hardware_concurrency();
+
+			MemoryManager* debug_drawer_allocator = (MemoryManager*)allocation;
+			allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
+			*debug_drawer_allocator = DebugDrawer::DefaultAllocator(memory);
+
+			debug_drawer = (DebugDrawer*)allocation;
+			allocation = function::OffsetPointer(allocation, sizeof(DebugDrawer));
+
+			*debug_drawer = DebugDrawer(debug_drawer_allocator, resource_manager, thread_count);		
+		}
+		else {
+			debug_drawer = descriptor.debug_drawer;
 		}
 	}
 
@@ -155,6 +180,7 @@ namespace ECSEngine {
 		world_descriptor.global_memory_size = ECS_GB_10;
 
 		world_descriptor.per_thread_temporary_memory_size = ECS_TASK_MANAGER_THREAD_LINEAR_ALLOCATOR_SIZE;
+		world_descriptor.debug_drawer_allocator_size = DebugDrawer::DefaultAllocatorSize();
 
 		return world_descriptor;
 	}
@@ -175,6 +201,7 @@ namespace ECSEngine {
 		descriptor.global_memory_size = ECS_MB_10 * 10;
 
 		descriptor.per_thread_temporary_memory_size = 0; // Use the default
+		descriptor.debug_drawer_allocator_size = 0; // Disable the debug drawer
 		
 		return descriptor;
 	}
@@ -197,6 +224,7 @@ namespace ECSEngine {
 		descriptor.global_memory_new_allocation_size = ECS_GB * 4; // Block range limit
 
 		descriptor.per_thread_temporary_memory_size = ECS_GB; // At the moment a GB should be enough
+		descriptor.debug_drawer_allocator_size = ECS_GB; // One GB should be more than enough
 
 		return descriptor;
 	}

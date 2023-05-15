@@ -605,11 +605,24 @@ namespace ECSEngine {
 
 	ECSENGINE_API void SetRandomizedAssetToMetadata(void* metadata, ECS_ASSET_TYPE type, unsigned int index);
 
-	ECSENGINE_API bool IsAssetFromMetadataValid(const void* metadata, ECS_ASSET_TYPE type);
+	ECS_INLINE bool IsAssetPointerValid(const void* pointer) {
+		return (size_t)pointer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
+	}
 
-	ECSENGINE_API bool IsAssetFromMetadataValid(Stream<void> asset_pointer);
+	ECS_INLINE bool IsAssetFromMetadataValid(Stream<void> asset_pointer) {
+		return IsAssetPointerValid(asset_pointer.buffer);
+	}
 
-	ECSENGINE_API unsigned int ExtractRandomizedAssetValue(const void* asset_pointer, ECS_ASSET_TYPE type);
+	ECS_INLINE bool IsAssetFromMetadataValid(const void* metadata, ECS_ASSET_TYPE type) {
+		return IsAssetFromMetadataValid(GetAssetFromMetadata(metadata, type));
+	}
+
+	ECS_INLINE unsigned int ExtractRandomizedAssetValue(const void* asset_pointer, ECS_ASSET_TYPE type) {
+		if (type >= ECS_ASSET_TYPE_COUNT) {
+			ECS_ASSERT(false, "Invalid asset type");
+		}
+		return (unsigned int)asset_pointer;
+	}
 
 	ECSENGINE_API bool CompareAssetPointers(const void* first, const void* second, ECS_ASSET_TYPE type);
 

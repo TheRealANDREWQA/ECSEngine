@@ -1009,10 +1009,10 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 
 		// Retrieve the data from the file, if any
 		bool success = draw_data->temporary_database.ReadMaterialFile(asset_name, &draw_data->material_asset, GetAllocatorPolymorphic(&temporary_allocator));
+		draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
 		if (!success) {
 			// Set the default for the metadata
 			draw_data->material_asset.Default(asset_name, { nullptr, 0 });
-			draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
 		}
 		else {
 			// The buffers and the material are allocated from the asset database
