@@ -403,7 +403,7 @@ void DirectoryExplorerTick(EditorState* editor_state)
 				Stream<char> folder_path_stream(data->allocator.Allocate(256 * sizeof(char), alignof(char)), folder_path_wide_stream.size);
 				function::ConvertWideCharsToASCII(folder_path_wide_stream.buffer, folder_path_stream.buffer, folder_path_wide_stream.size + 1, 256);
 
-				data->directories_ptrs.AddSafe(folder_path_stream.buffer + project_file->path.size + 1);
+				data->directories_ptrs.AddAssert(folder_path_stream.buffer + project_file->path.size + 1);
 
 				struct ForEachData {
 					DirectoryExplorerData* data;
@@ -420,7 +420,7 @@ void DirectoryExplorerTick(EditorState* editor_state)
 					size_t current_path_size = path.size + 1;
 					char* ascii_current_path = (char*)for_each_data->data->allocator.Allocate(sizeof(char) * current_path_size, alignof(char));
 					function::ConvertWideCharsToASCII(path.buffer, ascii_current_path, current_path_size, current_path_size);
-					for_each_data->data->directories_ptrs.AddSafe(ascii_current_path + for_each_data->project_file->path.size + 1);
+					for_each_data->data->directories_ptrs.AddAssert(ascii_current_path + for_each_data->project_file->path.size + 1);
 
 					return true;
 				}, true);

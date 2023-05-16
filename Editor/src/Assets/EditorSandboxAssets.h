@@ -46,6 +46,11 @@ void DeallocateAssetsWithRemappingMetadataChange(EditorState* editor_state, Stre
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Fills in the sandboxes which use this asset
+void GetAssetSandboxesInUse(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, CapacityStream<unsigned int>* sandboxes);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // It fills in assets which are missing. There must be ECS_ASSET_TYPE_COUNT missing assets streams, one for each type
 void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* missing_assets);
 
@@ -83,6 +88,11 @@ void GetLinkComponentWithAssetFieldsShared(
 
 // This check the database associated with the sandbox to see if the asset appears in that database
 bool IsAssetReferencedInSandbox(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// This check the database associated with the sandbox to see if the asset appears in that database
+bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
 
 // -------------------------------------------------------------------------------------------------------------
 

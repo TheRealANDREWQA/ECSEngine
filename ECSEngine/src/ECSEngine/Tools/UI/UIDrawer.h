@@ -2437,7 +2437,7 @@ namespace ECSEngine {
 					ECS_TEMP_ASCII_STRING(temp_input_name, 256);
 					temp_input_name.Copy(name);
 					temp_input_name.AddStream("Size input");
-					temp_input_name.AddSafe('\0');
+					temp_input_name.AddAssert('\0');
 
 					// Eliminate the get transform
 					header_config.flag_count--;

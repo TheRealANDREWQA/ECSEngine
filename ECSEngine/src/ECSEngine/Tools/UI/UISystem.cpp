@@ -1298,7 +1298,7 @@ namespace ECSEngine {
 		void UISystem::AddFrameHandler(UIActionHandler handler)
 		{
 			handler.data = function::CopyNonZero(GetAllocatorPolymorphic(m_memory), handler.data, handler.data_size);
-			m_frame_handlers.AddSafe(handler);
+			m_frame_handlers.AddAssert(handler);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1976,7 +1976,7 @@ namespace ECSEngine {
 			// flags
 			dockspace_stream[dockspace_index].allow_docking = (flags & UI_DOCKSPACE_NO_DOCKING) == 0;
 			if (function::HasFlag(flags, UI_DOCKSPACE_BACKGROUND)) {
-				m_background_dockspaces.AddSafe({ static_cast<unsigned int>(dockspace_index), type });
+				m_background_dockspaces.AddAssert({ static_cast<unsigned int>(dockspace_index), type });
 			}
 
 			// creating borders
@@ -2076,7 +2076,7 @@ namespace ECSEngine {
 			ECS_ASSERT(dockspace_stream.buffer == m_floating_vertical_dockspaces.buffer || dockspace_stream.buffer == m_floating_horizontal_dockspaces.buffer);
 
 			unsigned int dockspace_index = CreateDockspace(transform, dockspace_stream, border_position, element, is_dock, type, flags);
-			m_fixed_dockspaces.AddSafe({ dockspace_index, type });
+			m_fixed_dockspaces.AddAssert({ dockspace_index, type });
 			return dockspace_index;
 		}
 
@@ -2133,7 +2133,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < m_fixed_dockspaces.size; index++) {
 				ECS_ASSERT(m_fixed_dockspaces[index].index != layer.index || m_fixed_dockspaces[index].type != layer.type)
 			}
-			m_fixed_dockspaces.AddSafe(layer);
+			m_fixed_dockspaces.AddAssert(layer);
 			return dockspace_index;
 		}
 
@@ -2202,7 +2202,7 @@ namespace ECSEngine {
 			ECS_ASSERT(type_to_create == DockspaceType::FloatingHorizontal || type_to_create == DockspaceType::FloatingVertical);
 
 			unsigned int dockspace_index = CreateDockspace(dockspace_to_copy, type_to_create);
-			m_fixed_dockspaces.AddSafe({ dockspace_index, type_to_create });
+			m_fixed_dockspaces.AddAssert({ dockspace_index, type_to_create });
 			return dockspace_index;
 		}
 

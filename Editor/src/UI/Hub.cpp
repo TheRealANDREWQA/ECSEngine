@@ -142,13 +142,12 @@ void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
 
 // The path is the parent directory
 // Creates an error message window if it fails
-bool RestoreHubProject(EditorState* editor_state, Stream<wchar_t> path, Stream<wchar_t> name) {
+bool RestoreHubProject(EditorState* editor_state, Stream<wchar_t> path) {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, project_file_path, 512);
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 
 	ProjectFile project_file = GetProjectFileDefaultConfiguration();
 	project_file.path = path;
-	project_file.project_name = name;
 
 	GetProjectFilePath(&project_file, project_file_path);
 	ProjectOperationData operation_data;
@@ -161,115 +160,13 @@ bool RestoreHubProject(EditorState* editor_state, Stream<wchar_t> path, Stream<w
 		return false;
 	}
 	else {
-		ECS_STACK_CAPACITY_STREAM(wchar_t, complete_file_path, 512);
-		GetProjectFilePath(&project_file, complete_file_path);
-		AddHubProject(editor_state, complete_file_path);
+		AddHubProject(editor_state, project_file.path);
 	}
 
 	return true;
 }
 
-struct RestoreHubProjectWizardData {
-	inline Stream<wchar_t> Path() const {
-		return { (wchar_t*)function::OffsetPointer(this, sizeof(RestoreHubProjectWizardData)), path_size };
-	}
-
-	EditorState* editor_state;
-	size_t path_size;
-	CapacityStream<char> name;
-	bool name_deduced;
-};
-
-void RestoreHubProjectWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
-	UI_PREPARE_DRAWER(initialize);
-
-	RestoreHubProjectWizardData* data = (RestoreHubProjectWizardData*)window_data;
-	if (initialize) {
-		// Allocate space for the name
-		const size_t MAX_NAME_SIZE = 128;
-		data->name.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * MAX_NAME_SIZE, alignof(char)), 0, MAX_NAME_SIZE);
-		data->name_deduced = false;
-
-		// Determine if the name can be deduced. It can be deduced from the modules or sandbox files
-		Stream<wchar_t> extensions[] = {
-			PROJECT_MODULES_FILE_EXTENSION,
-			PROJECT_SANDBOX_FILE_EXTENSION
-		};
-
-		struct FunctorData {
-			RestoreHubProjectWizardData* data;
-		};
-
-		FunctorData functor_data;
-		functor_data.data = data;
-		ForEachFileInDirectoryWithExtension(data->Path(), { extensions, std::size(extensions) }, &functor_data, [](Stream<wchar_t> path, void* _data) {
-			FunctorData* data = (FunctorData*)_data;
-			
-			// We got a match. Get the name from the path and save it
-			Stream<wchar_t> project_name = function::PathStem(path);
-			function::ConvertWideCharsToASCII(project_name, data->data->name);
-			data->data->name_deduced = true;
-
-			return false;
-		});
-	}
-
-	// Print the current project folder
-	drawer.Text("Project To Be Restored: ");
-	drawer.TextWide(data->Path());
-	drawer.NextRow(2.0f);
-
-	if (data->name_deduced) {
-		drawer.Text("Project's name is (deduced): ");
-		drawer.Text(data->name);
-	}
-	else {
-		UIConfigRelativeTransform transform;
-		UIDrawConfig config;
-
-		transform.scale.x = 5.0f;
-		config.AddFlag(transform);
-		drawer.TextInput(UI_CONFIG_RELATIVE_TRANSFORM, config, "Project Name", &data->name);
-	}
-	drawer.NextRow(2.0f);
-
-	drawer.CrossLine();
-
-	drawer.NextRow(2.0f);
-
-	auto confirm_action = [](ActionData* action_data) {
-		UI_UNPACK_ACTION_DATA;
-
-		RestoreHubProjectWizardData* data = (RestoreHubProjectWizardData*)_data;
-		ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
-		function::ConvertASCIIToWide(wide_name, data->name);
-
-		RestoreHubProject(data->editor_state, data->Path(), wide_name);
-		DestroyCurrentActionWindow(action_data);
-	};
-
-	UIDrawConfig config;
-
-	UIConfigAbsoluteTransform transform;
-	transform.scale = drawer.GetLabelScale("Confirm");
-	transform.position = drawer.GetAlignedToBottom(transform.scale.y);
-	config.AddFlag(transform);
-
-	UIConfigActiveState active_state;
-	active_state.state = data->name.size > 0;
-	config.AddFlag(active_state);
-
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_ACTIVE_STATE, config, "Confirm", { confirm_action, data, 0, ECS_UI_DRAW_SYSTEM });
-	config.flag_count = 0;
-
-	transform.scale = drawer.GetLabelScale("Cancel");
-	transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
-	config.AddFlag(transform);
-
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
-}
-
-void CreateRestoreHubProjectWizard(ActionData* action_data) {
+void RestoreHubProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
@@ -283,32 +180,10 @@ void CreateRestoreHubProjectWizard(ActionData* action_data) {
 	get_directory.error_message = error_message;
 
 	if (OS::FileExplorerGetDirectory(&get_directory)) {
-		UIWindowDescriptor wizard_descriptor;
-		
-		size_t STACK_MEMORY[512];
-		RestoreHubProjectWizardData* data = (RestoreHubProjectWizardData*)STACK_MEMORY;
-		data->editor_state = editor_state;
-
-		wchar_t* path_buffer = (wchar_t*)function::OffsetPointer(data, sizeof(RestoreHubProjectWizardData));
-		get_directory.path.CopyTo(path_buffer);
-		data->path_size = get_directory.path.size;
-		data->name = { nullptr, 0 };
-
-		wizard_descriptor.window_name = "Restore Project";
-		wizard_descriptor.window_data = data;
-		wizard_descriptor.window_data_size = sizeof(RestoreHubProjectWizardData) + get_directory.path.size * sizeof(wchar_t);
-
-		wizard_descriptor.draw = RestoreHubProjectWizardDraw;
-
-		wizard_descriptor.destroy_action = ReleaseLockedWindow;
-
-		wizard_descriptor.initial_size_x = 0.7f;
-		wizard_descriptor.initial_position_y = 1.0f;
-
-		system->CreateWindowAndDockspace(wizard_descriptor, UI_POP_UP_WINDOW_ALL);
+		RestoreHubProject(editor_state, get_directory.path);
 	}
 	else {
-		CreateErrorMessageWindow(system, "Could not get project parent folder.");
+		CreateErrorMessageWindow(system, "Could not get retrieve project path.");
 	}
 }
 
@@ -425,7 +300,7 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 
 	drawer.Button(BUTTON_CONFIGURATION, config, "Create Project", { CreateProjectWizardAction, wizard_data, 0, ECS_UI_DRAW_SYSTEM });
 	drawer.Button(BUTTON_CONFIGURATION, config, "Add existing Project", { AddExistingProjectAction, editor_state, 0, ECS_UI_DRAW_SYSTEM });
-	drawer.Button(BUTTON_CONFIGURATION, config, "Restore existing Project", { CreateRestoreHubProjectWizard, editor_state, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(BUTTON_CONFIGURATION, config, "Restore existing Project", { RestoreHubProjectAction, editor_state, 0, ECS_UI_DRAW_SYSTEM });
 	drawer.Button(BUTTON_CONFIGURATION, config, "Reload Projects", { ReloadHubProjectsAction, editor_state, 0 });
 
 	drawer.Button(BUTTON_CONFIGURATION, config, "Default Project UI", { CreateProjectUITemplatePreviewAction, editor_state, 0, ECS_UI_DRAW_SYSTEM });

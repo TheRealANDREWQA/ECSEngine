@@ -376,6 +376,8 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	unsigned int sandbox_index = editor_state->sandboxes.ReserveNewElement();
 	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
 	editor_state->sandboxes.size++;
+	// Zero out the memory since most fields require zero initialization
+	memset(sandbox, 0, sizeof(*sandbox));
 
 	sandbox->should_pause = true;
 	sandbox->should_play = true;
@@ -533,6 +535,20 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool 
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void DisableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport] = false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport] = true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_COUNT) {
@@ -624,7 +640,7 @@ void GetSandboxAvailableRuntimeSettings(
 	ForEachFileInDirectory(runtime_settings_folder, &functor_data, [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 		Stream<wchar_t> stem = function::PathStem(path);
-		data->paths->AddSafe(function::StringCopy(data->allocator, stem));
+		data->paths->AddAssert(function::StringCopy(data->allocator, stem));
 		return true;
 	});
 }
@@ -761,12 +777,12 @@ bool IsModuleInfoUsed(
 					if (running_state) {
 						if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
 							is_used = true;
-							sandbox_indices->AddSafe(index);
+							sandbox_indices->AddAssert(index);
 						}
 					}
 					else {
 						is_used = true;
-						sandbox_indices->AddSafe(index);
+						sandbox_indices->AddAssert(index);
 					}
 				}
 			}
@@ -829,6 +845,13 @@ void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_in
 		sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
 		editor_state->editor_components.SetManagerComponents(sandbox->sandbox_world.entity_manager);
 	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	return GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1185,6 +1208,12 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->sandbox_world = World(sandbox->runtime_descriptor);
 	sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
 	editor_state->editor_components.SetManagerComponents(sandbox->sandbox_world.entity_manager);
+
+	// Resize the textures for the viewport to a 1x1 texture such that rendering commands will fallthrough even
+	// when the UI has not yet run to resize them
+	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
+		ResizeSandboxRenderTextures(editor_state, sandbox_index, (EDITOR_SANDBOX_VIEWPORT)index, { 1, 1 });
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1350,6 +1379,12 @@ EDITOR_EVENT(WaitResourceLoadingRenderSandboxEvent) {
 
 bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, bool disable_logging)
 {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	// If the rendering is disabled skip
+	if (!IsSandboxViewportRendering(editor_state, sandbox_index, viewport)) {
+		return true;
+	}
+
 	// We assume that the Graphics module won't modify any entities
 	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index);
 	if (in_stream_module_index == -1) {
@@ -1381,8 +1416,6 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
 	
 	if (!is_being_compiled) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
 		// Get the resource manager and graphics snapshot
 		ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(editor_state->EditorAllocator());
 		GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);

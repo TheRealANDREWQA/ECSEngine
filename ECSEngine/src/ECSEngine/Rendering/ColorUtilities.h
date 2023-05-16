@@ -66,8 +66,8 @@ namespace ECSEngine {
 		Color operator * (const Color& other) const;
 		Color operator * (float percentage) const;
 
-		static constexpr float GetRange() {
-			return (float)255;
+		ECS_INLINE static constexpr float GetRange() {
+			return 255.0f;
 		}
 
 		void Normalize(float* values) const;
@@ -113,7 +113,7 @@ namespace ECSEngine {
 		ColorFloat operator + (const ColorFloat& other) const;
 		ColorFloat operator - (const ColorFloat& other) const;
 
-		static constexpr float GetRange() {
+		ECS_INLINE static constexpr float GetRange() {
 			return 1.0f;
 		}
 		void Normalize(float* values) const;
@@ -134,12 +134,12 @@ namespace ECSEngine {
 	};
 
 	template<typename Color>
-	Color LightenColor(Color color, float percentage) {
+	ECS_INLINE Color LightenColor(Color color, float percentage) {
 		return Color(color.red * percentage, color.green * percentage, color.blue * percentage);
 	}
 
 	template<typename Color>
-	Color DarkenColor(Color color, float percentage) {
+	ECS_INLINE Color DarkenColor(Color color, float percentage) {
 		return Color(color.red * percentage, color.green * percentage, color.blue * percentage);
 	}
 
@@ -157,7 +157,7 @@ namespace ECSEngine {
 
 	// basically the same as LightenColorClamp but to express intent that could lighten or darken
 	template<typename Color>
-	Color ToneColor(Color color, float percentage) {
+	ECS_INLINE Color ToneColor(Color color, float percentage) {
 		return LightenColorClamp(color, percentage);
 	}
 
@@ -172,7 +172,7 @@ namespace ECSEngine {
 	// it will omit characters that are not valid 
 	ECSENGINE_API Color HexToRGB(Stream<char> characters);
 
-	inline Color HexToRGB(char* characters) {
+	ECS_INLINE Color HexToRGB(char* characters) {
 		size_t character_count = strlen(characters);
 		return HexToRGB(Stream<char>(characters, character_count));
 	}

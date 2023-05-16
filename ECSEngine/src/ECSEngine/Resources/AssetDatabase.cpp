@@ -889,7 +889,7 @@ namespace ECSEngine {
 			unsigned int handle = sparse_sets[type].GetHandleFromIndex(index);
 			Stream<wchar_t> current_file = GetAssetPath(handle, type);
 			if (function::CompareStrings(file, current_file)) {
-				handles.AddSafe(handle);
+				handles.AddAssert(handle);
 			}
 		}
 	}
@@ -1081,7 +1081,7 @@ namespace ECSEngine {
 		ECS_ASSERT(counts->capacity - counts->size >= asset_count);
 		for (unsigned int index = 0; index < asset_count; index++) {
 			unsigned int current_handle = GetAssetHandleFromIndex(index, type);
-			counts->AddSafe({ current_handle, GetReferenceCount(current_handle, type) });
+			counts->AddAssert({ current_handle, GetReferenceCount(current_handle, type) });
 		}
 
 		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
@@ -1226,7 +1226,7 @@ namespace ECSEngine {
 
 			const void* metadata = GetAssetConst(current_handle, type);
 			Stream<void> asset_value = GetAssetFromMetadata(metadata, type);
-			if (asset_value.buffer != nullptr && !IsAssetFromMetadataValid(asset_value)) {
+			if (asset_value.buffer != nullptr && !IsAssetPointerFromMetadataValid(asset_value)) {
 				// It is a randomized asset
 				unsigned int randomized_value = ExtractRandomizedAssetValue(asset_value.buffer, type);
 				size_t valid_index = function::SearchBytes(
@@ -1365,7 +1365,7 @@ namespace ECSEngine {
 					}
 					bool evicted = database->RemoveAsset(dependencies[index].handle, dependencies[index].type, remove_info);
 					if (evicted && has_storage_dependencies) {
-						remove_info->storage_dependencies->AddSafe({ remove_info->storage, dependencies[index].type });
+						remove_info->storage_dependencies->AddAssert({ remove_info->storage, dependencies[index].type });
 					}
 				}
 			}
@@ -1751,7 +1751,7 @@ namespace ECSEngine {
 
 			// If it passed all attemps
 			if (subindex < 0) {
-				handles.AddSafe(sparse.GetHandleFromIndex(index));
+				handles.AddAssert(sparse.GetHandleFromIndex(index));
 			}
 		}
 	}

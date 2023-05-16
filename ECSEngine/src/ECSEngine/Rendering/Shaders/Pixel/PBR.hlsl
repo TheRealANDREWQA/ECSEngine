@@ -29,6 +29,7 @@ Texture2D RoughnessMap : register(t6);
 Texture2D AmbientOcclusion : register(t7);
 #endif
 
+
 SamplerState pbr_texture_sampler : register(s1);
 
 struct PS_INPUT
@@ -64,6 +65,8 @@ cbuffer Modifiers : register(b2)
     float3 emissive_factor : packoffset(c2);
 }
 
+#ifdef POINT_LIGHTS
+
 cbuffer PointLights : register(b3)
 {
     float4 light_positions[4];
@@ -71,11 +74,13 @@ cbuffer PointLights : register(b3)
     float light_range[4];
 };
 
+#endif
+
 
 cbuffer DirectionalLight : register(b4)
 {
-    float4 directional_light;
-    float4 directional_color;
+    float3 directional_light;
+    float4 directional_color; ECS_REFLECT_AS_FLOAT_COLOR
 }
 
 float4 main(in PS_INPUT input) : SV_TARGET
@@ -119,15 +124,21 @@ float4 main(in PS_INPUT input) : SV_TARGET
     
     float3 F0 = FresnelBaseReflectivity(pixel_color, metallic);
     
+    float3 L0 = float3(0.0f, 0.0f, 0.0f);
+    
+    
+    #ifdef POINT_LIGHTS
     uint index = 0;
     // The total radiance
-    float3 L0 = float3(0.0f, 0.0f, 0.0f);
+    
+    
     for (; index < 4; index++)
     {
         L0 += CalculatePointLight(light_positions[index].xyz, light_colors[index].rgb, light_range[index], input.world_position, pixel_color,
         pixel_normal, view_direction, F0, metallic, roughness);
     }
-    L0 += CalculateDirectionalLight(directional_light.xyz, view_direction, directional_color.rgb, pixel_color, pixel_normal, F0, metallic, roughness);
+    #endif
+    L0 += CalculateDirectionalLight(directional_light, view_direction, directional_color, pixel_color, pixel_normal, F0, metallic, roughness);
     
     #ifdef ENVIRONMENT_TEXTURE
     float3 ambient = CalculateAmbient(view_direction, pixel_normal, pixel_color, F0, roughness, metallic, environment_diffuse, environment_specular,

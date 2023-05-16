@@ -4096,7 +4096,7 @@ namespace ECSEngine {
 
 		void CreateForHierarchyAddIndex(unsigned int index, UIReflectionDrawerSearchOptions options) {
 			if (options.indices != nullptr) {
-				options.indices->AddSafe(index);
+				options.indices->AddAssert(index);
 			}
 		}
 
@@ -4761,7 +4761,7 @@ namespace ECSEngine {
 				const ReflectionType* type = reflection->GetType(ui_type.name);
 				if (type->folder_hierarchy_index == hierarchy_index) {
 					if (CreateForHierarchyVerifyIncludeExclude(type, options)) {
-						options.indices->AddSafe(index);
+						options.indices->AddAssert(index);
 					}
 				}
 			});
@@ -4785,7 +4785,7 @@ namespace ECSEngine {
 				const ReflectionType* type = reflection->GetType(instance.type_name);
 				if (type->folder_hierarchy_index == hierarchy_index && CreateForHierarchyVerifyIncludeExclude(type, options)) {
 					if (options.suffix.size == 0) {
-						options.indices->AddSafe(index);
+						options.indices->AddAssert(index);
 					}
 					else {
 						ECS_STACK_CAPACITY_STREAM(char, full_name, 256);
@@ -4793,7 +4793,7 @@ namespace ECSEngine {
 						instance_name = CreateForHierarchyGetSuffixName(full_name, instance_name, options);
 
 						if (function::CompareStrings(full_name, instance.name)) {
-							options.indices->AddSafe(index);
+							options.indices->AddAssert(index);
 						}
 					}
 				}
@@ -4874,7 +4874,7 @@ namespace ECSEngine {
 		void UIReflectionDrawer::GetTypeMatchingFields(const UIReflectionType* type, UIReflectionIndex reflection_index, CapacityStream<unsigned int>& indices) const {
 			for (unsigned int index = 0; index < type->fields.size; index++) {
 				if (type->fields[index].reflection_index == reflection_index) {
-					indices.AddSafe(index);
+					indices.AddAssert(index);
 				}
 			}
 		}
@@ -4884,7 +4884,7 @@ namespace ECSEngine {
 		void UIReflectionDrawer::GetTypeMatchingFields(const UIReflectionType* type, UIReflectionStreamType stream_type, CapacityStream<unsigned int>& indices) const {
 			for (unsigned int index = 0; index < type->fields.size; index++) {
 				if (type->fields[index].stream_type == stream_type) {
-					indices.AddSafe(index);
+					indices.AddAssert(index);
 				}
 			}
 		}

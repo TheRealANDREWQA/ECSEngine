@@ -60,7 +60,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 	CapacityStream<wchar_t> new_directory_path(temp_characters, 0, 512);
 
 	new_directory_path.Copy(data->file_data->path);
-	new_directory_path.AddSafe(ECS_OS_PATH_SEPARATOR);
+	new_directory_path.AddAssert(ECS_OS_PATH_SEPARATOR);
 
 	size_t predirectory_size = new_directory_path.size;
 	for (size_t index = 0; index < PROJECT_DIRECTORIES_SIZE(); index++) {

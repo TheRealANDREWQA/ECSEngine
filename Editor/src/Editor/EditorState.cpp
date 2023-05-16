@@ -393,7 +393,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_task_manager->ChangeDynamicWrapperMode({ ThreadWrapperCountTasks, &wrapper_data, sizeof(wrapper_data) });
 	editor_task_manager->CreateThreads();
 	render_task_manager->CreateThreads();
-
+	render_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_VERY_LOW);
 	editor_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_LOW);
 
 	ResizableMemoryArena* resizable_arena = (ResizableMemoryArena*)malloc(sizeof(ResizableMemoryArena));

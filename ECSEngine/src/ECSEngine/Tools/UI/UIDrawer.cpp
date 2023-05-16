@@ -60,13 +60,13 @@ namespace ECSEngine {
 		ECS_INLINE void AddLateOrSystemAction(UIDrawer* drawer, size_t configuration, bool hoverable, bool clickable, bool general) {
 			if (IsLateOrSystemConfiguration(configuration)) {
 				if (hoverable) {
-					drawer->late_hoverables.AddSafe(drawer->system->GetLastHoverableIndex(drawer->dockspace, drawer->border_index));
+					drawer->late_hoverables.AddAssert(drawer->system->GetLastHoverableIndex(drawer->dockspace, drawer->border_index));
 				}
 				if (clickable) {
-					drawer->late_clickables.AddSafe(drawer->system->GetLastClickableIndex(drawer->dockspace, drawer->border_index));
+					drawer->late_clickables.AddAssert(drawer->system->GetLastClickableIndex(drawer->dockspace, drawer->border_index));
 				}
 				if (general) {
-					drawer->late_generals.AddSafe(drawer->system->GetLastGeneralIndex(drawer->dockspace, drawer->border_index));
+					drawer->late_generals.AddAssert(drawer->system->GetLastGeneralIndex(drawer->dockspace, drawer->border_index));
 				}
 			}
 		}
@@ -9424,7 +9424,7 @@ namespace ECSEngine {
 			ECS_TEMP_ASCII_STRING(data_name, 256);
 			data_name.Copy(name);
 			data_name.AddStream(" data");
-			data_name.AddSafe('\0');
+			data_name.AddAssert('\0');
 
 			// Begin recording allocations and table resources for dynamic resources
 			if (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {

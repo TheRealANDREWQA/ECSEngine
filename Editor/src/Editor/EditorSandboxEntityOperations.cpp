@@ -726,7 +726,7 @@ void GetSandboxComponentAssetsImplementation(
 		GetLinkComponentTargetHandles(component_type, editor_state->asset_database, component_data, asset_fields, int_handles.buffer);
 
 		for (unsigned int index = 0; index < asset_fields.size; index++) {
-			handles->AddSafe({ int_handles[index], asset_fields[index].type.type });
+			handles->AddAssert({ int_handles[index], asset_fields[index].type.type });
 		}
 	}
 }

@@ -397,7 +397,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		layout_state_stream.AddStream(layout_project_string);
 		layout_state_stream.Add(index + '1');
 	}
-	layout_state_stream.AddSafe('\0');
+	layout_state_stream.AddAssert('\0');
 
 	current_state.left_characters = layout_state_characters;
 	current_state.separation_lines[0] = 0;

@@ -457,7 +457,7 @@ namespace ECSEngine {
 
 	//	for (size_t index = 0; index < entity_manager->m_archetypes.size; index++) {
 	//		if (entity_manager->GetArchetypeSharedComponents(index).HasComponents(vector_component)) {
-	//			matched_archetypes.AddSafe(index);
+	//			matched_archetypes.AddAssert(index);
 	//		}
 	//	}
 

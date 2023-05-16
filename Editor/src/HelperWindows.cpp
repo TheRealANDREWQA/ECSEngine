@@ -111,6 +111,11 @@ unsigned int GetWindowNameIndex(Stream<char> name)
 	return function::ConvertCharactersToInt(name);
 }
 
+unsigned int GetWindowNameIndex(const UIDrawer& drawer)
+{
+	return GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
+}
+
 void ChooseDirectoryOrFileNameButtonAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 

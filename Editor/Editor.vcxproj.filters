@@ -62,6 +62,7 @@
     <ClInclude Include="src\Assets\AssetTick.h" />
     <ClInclude Include="src\UI\Common.h" />
     <ClInclude Include="src\Editor\EditorSandboxTypes.h" />
+    <ClInclude Include="src\UI\RenderingCommon.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -115,6 +116,7 @@
     <ClCompile Include="src\UI\Inspector\InspectorMiscFile.cpp" />
     <ClCompile Include="src\Assets\AssetTick.cpp" />
     <ClCompile Include="src\UI\Common.cpp" />
+    <ClCompile Include="src\UI\RenderingCommon.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

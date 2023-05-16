@@ -27,7 +27,7 @@ namespace ECSEngine {
 			temp_stream.AddStream(Stream<wchar_t>(L"explorer.exe /select,\"", std::size(L"explorer.exe /select,\"") - 1));
 			temp_stream.AddStream(folder);
 			temp_stream.Add(L'\"');
-			temp_stream.AddSafe(L'\0');
+			temp_stream.AddAssert(L'\0');
 
 			STARTUPINFO startup_info;
 			memset(&startup_info, 0, sizeof(startup_info));
@@ -658,7 +658,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, search_paths, ECS_KB * 8);
 			for (size_t index = 0; index < module_paths.size; index++) {
 				search_paths.AddStream(module_paths[index]);
-				search_paths.AddSafe(L':');
+				search_paths.AddAssert(L':');
 			}
 			search_paths[search_paths.size - 1] = L'\0';
 
@@ -681,7 +681,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, search_paths, ECS_KB * 16);
 			for (size_t index = 0; index < module_paths.size; index++) {
 				search_paths.AddStream(module_paths[index]);
-				search_paths.AddSafe(L':');
+				search_paths.AddAssert(L':');
 			}
 			search_paths[search_paths.size - 1] = L'\0';
 

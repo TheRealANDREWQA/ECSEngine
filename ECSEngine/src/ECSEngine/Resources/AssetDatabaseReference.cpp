@@ -149,6 +149,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
+	AssetTypedHandle AssetDatabaseReference::FindDeep(const void* metadata, ECS_ASSET_TYPE type) const
+	{
+		return FindDeep(GetAssetName(metadata, type), GetAssetFile(metadata, type), type);
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
 	MeshMetadata* AssetDatabaseReference::GetMesh(unsigned int index)
 	{
 		return (MeshMetadata*)GetAsset(index, ECS_ASSET_MESH);
@@ -454,7 +461,7 @@ namespace ECSEngine {
 				if (database->GetReferenceCount(reference_metadata[last_index], asset_type) == 1) {
 					// Copy the pointer
 					Stream<void> standalone_asset = GetAssetFromMetadata(&stream[index].value, asset_type);
-					if (!IsAssetFromMetadataValid(standalone_asset)) {
+					if (!IsAssetPointerFromMetadataValid(standalone_asset)) {
 						// Get a randomized pointer value
 						standalone_asset.buffer = (void*)database->GetRandomizedPointer(asset_type);
 					}
@@ -469,7 +476,7 @@ namespace ECSEngine {
 
 				if (options.handle_remapping != nullptr) {
 					// Add the remapping even when the values are identical
-					options.handle_remapping[asset_type].AddSafe({ original_handle, reference_metadata[last_index] });
+					options.handle_remapping[asset_type].AddAssert({ original_handle, reference_metadata[last_index] });
 				}
 			}
 		};
@@ -520,7 +527,7 @@ namespace ECSEngine {
 				Stream<void> current_pointer = GetAssetFromMetadata(current_asset, type);
 				Stream<void> standalone_pointer = GetAssetFromMetadata(standalone_asset, type);
 				if (current_pointer.buffer != standalone_pointer.buffer) {
-					options.pointer_remapping[type].AddSafe({ standalone_pointer.buffer, current_pointer.buffer, handle });
+					options.pointer_remapping[type].AddAssert({ standalone_pointer.buffer, current_pointer.buffer, handle });
 				}
 			});
 		}

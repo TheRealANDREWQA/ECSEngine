@@ -1726,7 +1726,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(SharedInstance, component_instances, ECS_KB * 32);
 		manager->m_shared_components[data->component].instances.stream.ForEachIndex([&](unsigned int index) {
 			SharedInstance current_instance = { (short)index };
-			component_instances.AddSafe(current_instance);
+			component_instances.AddAssert(current_instance);
 		});
 
 		// Go through the archetypes and pop the shared instances which are matched
@@ -4168,7 +4168,7 @@ namespace ECSEngine {
 	{
 		m_shared_components[component.value].instances.stream.ForEachIndex([&](unsigned int index) {
 			SharedInstance instance = { (short)index };
-			shared_instances.AddSafe(instance);
+			shared_instances.AddAssert(instance);
 		});
 	}
 
@@ -5113,7 +5113,7 @@ namespace ECSEngine {
 			"unreferenced shared instances.", GetSharedComponentName(component));
 
 		ForEachUnreferencedSharedInstance(component, [&](SharedInstance instance, const void* data) {
-			instances->AddSafe(instance);
+			instances->AddAssert(instance);
 		});
 	}
 

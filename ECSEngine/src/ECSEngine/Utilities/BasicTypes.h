@@ -543,7 +543,7 @@ namespace ECSEngine {
 	}
 
 	template<typename BasicType>
-	ECS_INLINE BasicType Abs(BasicType first, BasicType second) {
+	ECS_INLINE BasicType AbsoluteDifference(BasicType first, BasicType second) {
 		return BasicTypeAction(first, second, [](auto first, auto second) {
 			return first > second ? first - second : second - first;
 		});

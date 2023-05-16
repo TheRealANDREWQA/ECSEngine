@@ -1013,6 +1013,8 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 		if (!success) {
 			// Set the default for the metadata
 			draw_data->material_asset.Default(asset_name, { nullptr, 0 });
+			// The default will make this nullptr
+			draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
 		}
 		else {
 			// The buffers and the material are allocated from the asset database
@@ -1023,7 +1025,6 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 			// Try to match the serialized data with the current buffers
 			draw_data->material_asset.CopyMatchingNames(&staging_asset);
 		}
-
 		draw_data->material_asset.name = function::StringCopy(editor_state->EditorAllocator(), asset_name);
 	}
 }

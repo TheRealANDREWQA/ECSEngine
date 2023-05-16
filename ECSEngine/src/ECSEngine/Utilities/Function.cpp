@@ -856,7 +856,7 @@ namespace ECSEngine {
 				previous_block.y = current_token.buffer - characters.buffer - previous_block.x;
 
 				ranges[ranges.size - 1] = previous_block;
-				ranges.AddSafe(new_block);
+				ranges.AddAssert(new_block);
 
 				current_token.Advance(remove_count);
 				current_parse_range = current_token;
@@ -902,7 +902,7 @@ namespace ECSEngine {
 				previous_block.y = current_token.buffer - characters.buffer - previous_block.x;
 
 				ranges[ranges.size - 1] = previous_block;
-				ranges.AddSafe(new_block);
+				ranges.AddAssert(new_block);
 
 				closing_token.Advance(closed_token.size);
 				current_parse_range = closing_token;
@@ -1043,19 +1043,19 @@ namespace ECSEngine {
 
 					if (function::FindString(current_macro_definition, macros) != -1) {
 						// The if block needs to be added
-						ranges.AddSafe(current_block);
+						ranges.AddAssert(current_block);
 					}
 					else {
 						// The else if block, if there is
 						if (matched_elseif_index != -1) {
-							ranges.AddSafe(elseif_block);
+							ranges.AddAssert(elseif_block);
 						}
 						else {
 							// Add the else block
 							current_block.x = next_line.buffer + 1 - characters.buffer;
 							current_block.y = end_directive.buffer - characters.buffer - current_block.x;
 							current_block.z = current_block.x - (current_if_directive.buffer - characters.buffer);
-							ranges.AddSafe(current_block);
+							ranges.AddAssert(current_block);
 						}
 					}
 				}
@@ -1063,11 +1063,11 @@ namespace ECSEngine {
 					// Now check the ifdef macro
 					if (function::FindString(current_macro_definition, macros) != -1) {
 						// Add the current block
-						ranges.AddSafe(current_block);
+						ranges.AddAssert(current_block);
 					}
 					else {
 						if (elseif_block.y > 0) {
-							ranges.AddSafe(elseif_block);
+							ranges.AddAssert(elseif_block);
 						}
 					}
 				}
@@ -1090,7 +1090,7 @@ namespace ECSEngine {
 					characters.size += ranges[ranges.size - 1].y;
 				}
 
-				ranges.AddSafe(new_block);
+				ranges.AddAssert(new_block);
 
 				characters.size -= previous_block_y - previous_block->y - new_block.y;
 				
@@ -1144,7 +1144,7 @@ namespace ECSEngine {
 						if (allocator.allocator != nullptr) {
 							current_macro_definition = function::StringCopy(allocator, current_macro_definition);
 						}
-						macros->AddSafe(current_macro_definition);
+						macros->AddAssert(current_macro_definition);
 					}
 
 					current_parse_range = next_line;
@@ -1861,7 +1861,7 @@ namespace ECSEngine {
 			auto insert_occurences = [&](uint2 occurence) {
 				for (; insert_index < replacement_positions.size && replacement_positions[insert_index].x < occurence.x; insert_index++) {}
 				if (insert_index == replacement_positions.size) {
-					replacement_positions.AddSafe(occurence);
+					replacement_positions.AddAssert(occurence);
 				}
 				else {
 					replacement_positions.Insert(insert_index, occurence);
@@ -2167,7 +2167,7 @@ namespace ECSEngine {
 				for (size_t index = 0; index < operators.size; index++) {
 					for (size_t op_index = 0; op_index < OPERATOR_ORDER[precedence].size; op_index++) {
 						if (operators[index].operator_index == OPERATOR_ORDER[precedence][op_index]) {
-							order.AddSafe(index);
+							order.AddAssert(index);
 						}
 					}
 				}
@@ -2248,7 +2248,7 @@ namespace ECSEngine {
 			opened_braces.Add((unsigned int)0);
 			FindToken(characters, Character<CharacterType>('('), opened_braces);
 			FindToken(characters, Character<CharacterType>(')'), closed_braces);
-			closed_braces.AddSafe(characters.size + 1);
+			closed_braces.AddAssert(characters.size + 1);
 
 			auto get_matching_brace = [=](size_t closed_index) {
 				size_t subindex = 0;
@@ -2455,7 +2455,7 @@ namespace ECSEngine {
 				unsigned int start_index = index;
 				double value = EvaluateExpressionValue(characters, index);
 				if (value != DBL_MAX) {
-					numbers.AddSafe({ value, start_index });
+					numbers.AddAssert({ value, start_index });
 				}
 			}
 		}

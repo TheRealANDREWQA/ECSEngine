@@ -205,7 +205,7 @@ string_name.AssertCapacity();
 		template<typename Integer, typename CharacterType>
 		void ParseIntegers(Stream<CharacterType> characters, CharacterType delimiter, CapacityStream<Integer>& values) {
 			while (characters.size > 0) {
-				values.AddSafe(ParseInteger<Integer>(&characters, delimiter));
+				values.AddAssert(ParseInteger<Integer>(&characters, delimiter));
 			}
 		}
 
@@ -965,6 +965,62 @@ string_name.AssertCapacity();
 				}
 			}
 			return -1;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
+		// It will add all elements from the additions into the base which are not already found in base
+		// It uses the comparison operator
+		template<typename CapacityStream>
+		void StreamAddUnique(CapacityStream& base, CapacityStream additions) {
+			for (unsigned int index = 0; index < additions.size; index++) {
+				unsigned int subindex = 0;
+				for (; subindex < base.size; subindex++) {
+					if (base[subindex] == additions[index]) {
+						break;
+					}
+				}
+
+				if (subindex == base.size) {
+					base.AddAssert(additions[index]);
+				}
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
+		// It will add all elements from the additions into the base which are not already found in base
+		// It uses the provided functor. The functor must take as parameters the elements (T a, T b)
+		// and return true if they match
+		template<typename CapacityStream, typename Functor>
+		void StreamAddUniqueFunctor(CapacityStream& base, CapacityStream additions, Functor&& functor) {
+			for (unsigned int index = 0; index < additions.size; index++) {
+				unsigned int subindex = 0;
+				for (; subindex < base.size; subindex++) {
+					if (functor(base[subindex], additions[index])) {
+						break;
+					}
+				}
+
+				if (subindex == base.size) {
+					base.AddAssert(additions[index]);
+				}
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
+		// It will add all elements from the additions into the base which are not already found in base
+		// It uses SearchBytes to locate the element
+		template<typename CapacityStream>
+		void StreamAddUniqueSearchBytes(CapacityStream& base, CapacityStream additions) {
+			size_t element_byte_size = additions.MemoryOf(1);
+			for (unsigned int index = 0; index < additions.size; index++) {
+				size_t existing_index = SearchBytes(base.buffer, base.size, *(size_t*)(&additions[index]), element_byte_size);
+				if (existing_index == -1) {
+					base.AddAssert(additions[index]);
+				}
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------

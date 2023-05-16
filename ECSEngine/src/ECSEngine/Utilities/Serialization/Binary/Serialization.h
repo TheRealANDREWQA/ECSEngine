@@ -27,6 +27,7 @@ namespace ECSEngine {
 		// such that the deserializer will know not to treat this as a user defined type and try to
 		// find its definition in the deserialization table
 		bool user_defined_as_blittable;
+		unsigned short pointer_offset;
 	};
 
 	struct ECSENGINE_API DeserializeFieldTable {

@@ -166,7 +166,7 @@ namespace ECSEngine {
 			return function::ConvertDoubleToChars(characters, *(double*)address, 4);
 		}
 
-#define COMMA_SEPARATE characters.Add(','); characters.AddSafe(' ');
+#define COMMA_SEPARATE characters.Add(','); characters.AddAssert(' ');
 
 		template<ConvertFunction basic_convert, int byte_size>
 		size_t ConvertBasic2(const void* address, CapacityStream<char>& characters) {
@@ -206,7 +206,7 @@ namespace ECSEngine {
 		
 		size_t ConvertBool(const void* address, CapacityStream<char>& characters) {
 			const bool* state = (const bool*)address;
-			characters.AddSafe(*state ? '1' : '0');
+			characters.AddAssert(*state ? '1' : '0');
 			return 1;
 		}
 		
@@ -675,7 +675,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(const char*, comma_positions, 64);
 			const char* comma_position = strchr(initial_characters, ',');
 			while (comma_position != nullptr) {
-				comma_positions.AddSafe(comma_position);
+				comma_positions.AddAssert(comma_position);
 				comma_position = strchr(comma_position + 1, ',');
 			}
 			

@@ -140,6 +140,7 @@ namespace ECSEngine {
 					total_size += Write<write_data>(&stream, &field->info.byte_size, sizeof(field->info.byte_size));
 					total_size += Write<write_data>(&stream, &custom_serializer_index, sizeof(custom_serializer_index));
 					total_size += Write<write_data>(&stream, &blittable_user_defined, sizeof(blittable_user_defined));
+					total_size += Write<write_data>(&stream, &field->info.pointer_offset, sizeof(field->info.pointer_offset));
 
 					// If user defined, write the definition aswell
 					if (field->info.basic_type == ReflectionBasicFieldType::UserDefined || field->info.basic_type == ReflectionBasicFieldType::Enum) {
@@ -1508,6 +1509,7 @@ namespace ECSEngine {
 			Read<true>(&data, &type->fields[index].byte_size, sizeof(type->fields[index].byte_size));
 			Read<true>(&data, &type->fields[index].custom_serializer_index, sizeof(type->fields[index].custom_serializer_index));
 			Read<true>(&data, &type->fields[index].user_defined_as_blittable, sizeof(type->fields[index].user_defined_as_blittable));
+			Read<true>(&data, &type->fields[index].pointer_offset, sizeof(type->fields[index].pointer_offset));
 
 			bool is_valid = ValidateDeserializeFieldInfo(type->fields[index]);
 			if (!is_valid) {
@@ -2023,7 +2025,6 @@ namespace ECSEngine {
 			type.fields.Initialize(allocator, types[index].fields.size);
 			type.tag = { nullptr, 0 };
 			type.evaluations = { nullptr, 0 };
-			unsigned short field_offset = 0;
 			for (size_t field_index = 0; field_index < types[index].fields.size; field_index++) {
 				type.fields[field_index].name = types[index].fields[field_index].name;
 				type.fields[field_index].definition = types[index].fields[field_index].definition;
@@ -2032,14 +2033,13 @@ namespace ECSEngine {
 				type.fields[field_index].info.byte_size = types[index].fields[field_index].byte_size;
 				type.fields[field_index].info.stream_type = types[index].fields[field_index].stream_type;
 				type.fields[field_index].info.stream_byte_size = types[index].fields[field_index].stream_byte_size;
-				type.fields[field_index].info.pointer_offset = field_offset;
+				type.fields[field_index].info.pointer_offset = types[index].fields[field_index].pointer_offset;
 				type.fields[field_index].tag = { nullptr, 0 };
 
 				if (allocate_all) {
 					type.fields[field_index].name = function::StringCopy(allocator, type.fields[field_index].name);
 					type.fields[field_index].definition = function::StringCopy(allocator, type.fields[field_index].definition);
 				}
-				field_offset += type.fields[field_index].info.byte_size;
 			}
 
 			InsertIntoDynamicTable(reflection_manager->type_definitions, reflection_manager->Allocator(), type, type.name);
@@ -2075,7 +2075,7 @@ namespace ECSEngine {
 	) const
 	{
 		for (size_t index = 0; index < types.size; index++) {
-			reflection_types.AddSafe(reflection_manager->type_definitions.GetValuePtr(types[index].name));
+			reflection_types.AddAssert(reflection_manager->type_definitions.GetValuePtr(types[index].name));
 		}
 	}
 

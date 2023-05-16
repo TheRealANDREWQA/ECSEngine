@@ -244,11 +244,11 @@ void FindInspectorWithDrawFunction(
 		if (editor_state->inspector_manager.data[index].draw_function == draw_function) {
 			if (sandbox_index != -1) {
 				if (GetInspectorTargetSandbox(editor_state, index) == sandbox_index) {
-					inspector_indices->AddSafe(index);
+					inspector_indices->AddAssert(index);
 				}
 			}
 			else {
-				inspector_indices->AddSafe(index);
+				inspector_indices->AddAssert(index);
 			}
 		}
 	}

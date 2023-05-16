@@ -358,18 +358,29 @@ namespace ECSEngine {
 		Color sdr_color;
 
 		color.alpha = function::Clamp(color.alpha, 0.0f, 1.0f);
-		Vector4 vector_color;
-		vector_color.Load(&color);
-
 		unsigned char alpha = color.alpha * 255.0f;
-		Vector4 intensity_vector = Length3(vector_color);
-		if (intensity != nullptr) {
-			*intensity = intensity_vector.First();
+		if (color.red <= 1.0f && color.green <= 1.0f && color.blue <= 1.0f) {
+			// Let the intensity be 1.0f and the values the quantized 8bit values
+			if (intensity != nullptr) {
+				*intensity = 1.0f;
+			}
+
+			// It will do the correct transformation
+			sdr_color = color;
 		}
-		Vector4 normalized_vector_color = vector_color / intensity_vector;
-		ColorFloat normalized_color;
-		normalized_vector_color.Store(&normalized_color);
-		sdr_color = normalized_color;
+		else {
+			Vector4 vector_color;
+			vector_color.Load(&color);
+
+			Vector4 intensity_vector = Length3(vector_color);
+			if (intensity != nullptr) {
+				*intensity = intensity_vector.First();
+			}
+			Vector4 normalized_vector_color = vector_color / intensity_vector;
+			ColorFloat normalized_color;
+			normalized_vector_color.Store(&normalized_color);
+			sdr_color = normalized_color;
+		}
 		sdr_color.alpha = alpha;
 
 		return sdr_color;

@@ -2,7 +2,7 @@
 #include "ECSEngineUI.h"
 
 #define GAME_WINDOW_NAME "Game "
-#define MAX_GAME_WINDOWS 8
+#define MAX_GAME_WINDOWS 8u
 
 struct EditorState;
 
