@@ -763,22 +763,22 @@ namespace ECSEngine {
 	void MaterialAsset::GetDependencies(CapacityStream<AssetTypedHandle>* handles) const
 	{
 		if (vertex_shader_handle != -1) {
-			handles->AddSafe({ vertex_shader_handle, ECS_ASSET_SHADER });
+			handles->AddAssert({ vertex_shader_handle, ECS_ASSET_SHADER });
 		}
 
 		if (pixel_shader_handle != -1) {
-			handles->AddSafe({ pixel_shader_handle, ECS_ASSET_SHADER });
+			handles->AddAssert({ pixel_shader_handle, ECS_ASSET_SHADER });
 		}
 
 		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
 			for (size_t index = 0; index < textures[type].size; index++) {
 				if (textures[type][index].metadata_handle != -1) {
-					handles->AddSafe({ textures[type][index].metadata_handle, ECS_ASSET_TEXTURE });
+					handles->AddAssert({ textures[type][index].metadata_handle, ECS_ASSET_TEXTURE });
 				}
 			}
 			for (size_t index = 0; index < samplers[type].size; index++) {
 				if (samplers[type][index].metadata_handle != -1) {
-					handles->AddSafe({ samplers[type][index].metadata_handle, ECS_ASSET_GPU_SAMPLER });
+					handles->AddAssert({ samplers[type][index].metadata_handle, ECS_ASSET_GPU_SAMPLER });
 				}
 			}
 		}
@@ -1427,7 +1427,7 @@ namespace ECSEngine {
 			return true;
 		}
 
-		if (IsAssetFromMetadataValid({ first, 0 }) && IsAssetFromMetadataValid({ second, 0 })) {
+		if (IsAssetPointerValid(first) && IsAssetPointerValid(second)) {
 			if (compare_size > 0 && memcmp(first, second, compare_size) == 0) {
 				return true;
 			}

@@ -14,7 +14,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<SerializeEntityManagerComponentInfo> current_infos = applied_modules[index]->serialize_streams.serialize_components;
 			for (size_t subindex = 0; subindex < current_infos.size; subindex++) {
-				infos.AddSafe(current_infos[index]);
+				infos.AddAssert(current_infos[index]);
 			}
 		}
 	}
@@ -26,7 +26,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<SerializeEntityManagerSharedComponentInfo> current_infos = applied_modules[index]->serialize_streams.serialize_shared_components;
 			for (size_t subindex = 0; subindex < current_infos.size; subindex++) {
-				infos.AddSafe(current_infos[index]);
+				infos.AddAssert(current_infos[index]);
 			}
 		}
 	}
@@ -38,7 +38,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<DeserializeEntityManagerComponentInfo> current_infos = applied_modules[index]->serialize_streams.deserialize_components;
 			for (size_t subindex = 0; subindex < current_infos.size; subindex++) {
-				infos.AddSafe(current_infos[index]);
+				infos.AddAssert(current_infos[index]);
 			}
 		}
 	}
@@ -50,7 +50,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<DeserializeEntityManagerSharedComponentInfo> current_infos = applied_modules[index]->serialize_streams.deserialize_shared_components;
 			for (size_t subindex = 0; subindex < current_infos.size; subindex++) {
-				infos.AddSafe(current_infos[index]);
+				infos.AddAssert(current_infos[index]);
 			}
 		}
 	}
@@ -103,10 +103,10 @@ namespace ECSEngine {
 					if (target.build_function == nullptr || target.reverse_function == nullptr) {
 						return false;
 					}
-					link_type_targets.AddSafe(target);
+					link_type_targets.AddAssert(target);
 				}
 				else {
-					link_type_targets.AddSafe({ nullptr, nullptr });
+					link_type_targets.AddAssert({ nullptr, nullptr });
 				}
 			}
 			return true;

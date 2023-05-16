@@ -234,6 +234,7 @@
     <ClInclude Include="src\UI\MiscellaneousBar.h" />
     <ClInclude Include="src\UI\ModuleExplorer.h" />
     <ClInclude Include="src\UI\NotificationBar.h" />
+    <ClInclude Include="src\UI\RenderingCommon.h" />
     <ClInclude Include="src\UI\SandboxExplorer.h" />
     <ClInclude Include="src\UI\CreateScene.h" />
     <ClInclude Include="src\UI\Scene.h" />
@@ -295,6 +296,7 @@
     <ClCompile Include="src\UI\MiscellaneousBar.cpp" />
     <ClCompile Include="src\UI\ModuleExplorer.cpp" />
     <ClCompile Include="src\UI\NotificationBar.cpp" />
+    <ClCompile Include="src\UI\RenderingCommon.cpp" />
     <ClCompile Include="src\UI\SandboxExplorer.cpp" />
     <ClCompile Include="src\UI\CreateScene.cpp" />
     <ClCompile Include="src\UI\Scene.cpp" />

@@ -161,7 +161,7 @@ namespace ECSEngine {
 
 					if (find_data.attrib & _A_SUBDIR) {
 						Stream<wchar_t> copied_string = function::StringCopy(GetAllocatorPolymorphic(&allocator), temp_string);
-						subdirectories.AddSafe(copied_string.buffer);
+						subdirectories.AddAssert(copied_string.buffer);
 					}
 				}
 				int next = _wfindnext64(find_handle, &find_data);
@@ -240,7 +240,7 @@ namespace ECSEngine {
 
 				if (find_data.attrib & _A_SUBDIR) {
 					Stream<wchar_t> copied_string = function::StringCopy(GetAllocatorPolymorphic(&allocator), temp_string);
-					subdirectories.AddSafe(copied_string.buffer);
+					subdirectories.AddAssert(copied_string.buffer);
 				}
 			}
 		}
@@ -399,7 +399,7 @@ namespace ECSEngine {
 				ForData* data = (ForData*)_data;
 
 				Stream<wchar_t> allocated_path = function::StringCopy(data->allocator, path);
-				data->paths->AddSafe(allocated_path);
+				data->paths->AddAssert(allocated_path);
 				return true;
 			}, depth_traversal);
 
@@ -454,7 +454,7 @@ namespace ECSEngine {
 			status = function(root, &copy_data, [](Stream<wchar_t> path, void* _data) {
 				BatchedCopyStringsData* data = (BatchedCopyStringsData*)_data;
 				void* buffer = *data->allocation;			
-				data->paths->AddSafe(Stream<wchar_t>(buffer, path.size));
+				data->paths->AddAssert(Stream<wchar_t>(buffer, path.size));
 				
 				// Increase the path size with 1 to include the '\0'
 				path.size++;
@@ -496,7 +496,7 @@ namespace ECSEngine {
 			bool status = function(root, extensions, &for_data, [](Stream<wchar_t> path, void* _data) {
 				ForData* data = (ForData*)_data;
 
-				data->paths->AddSafe(function::StringCopy(data->allocator, path));
+				data->paths->AddAssert(function::StringCopy(data->allocator, path));
 				return true;
 			}, depth_traversal);
 
@@ -555,7 +555,7 @@ namespace ECSEngine {
 			status = function(root, extensions, &copy_data, [](Stream<wchar_t> path, void* _data) {
 				BatchedCopyStringsData* data = (BatchedCopyStringsData*)_data;
 				void* buffer = *data->allocation;
-				data->paths->AddSafe(Stream<wchar_t>(buffer, path.size));
+				data->paths->AddAssert(Stream<wchar_t>(buffer, path.size));
 
 				// Increase the path size with 1 to include the '\0'
 				path.size++;

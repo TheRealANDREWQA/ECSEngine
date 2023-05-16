@@ -609,12 +609,12 @@ namespace ECSEngine {
 		return (size_t)pointer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
 	}
 
-	ECS_INLINE bool IsAssetFromMetadataValid(Stream<void> asset_pointer) {
+	ECS_INLINE bool IsAssetPointerFromMetadataValid(Stream<void> asset_pointer) {
 		return IsAssetPointerValid(asset_pointer.buffer);
 	}
 
 	ECS_INLINE bool IsAssetFromMetadataValid(const void* metadata, ECS_ASSET_TYPE type) {
-		return IsAssetFromMetadataValid(GetAssetFromMetadata(metadata, type));
+		return IsAssetPointerFromMetadataValid(GetAssetFromMetadata(metadata, type));
 	}
 
 	ECS_INLINE unsigned int ExtractRandomizedAssetValue(const void* asset_pointer, ECS_ASSET_TYPE type) {

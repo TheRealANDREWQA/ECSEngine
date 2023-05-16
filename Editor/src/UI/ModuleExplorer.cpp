@@ -506,7 +506,7 @@ void ModuleExplorerOpenModuleFolder(ActionData* action_data) {
 	path.Copy(project_file->path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
 	path.AddStream(PROJECT_MODULES_RELATIVE_PATH);
-	path.AddSafe(L'\\');
+	path.AddAssert(L'\\');
 	OS::LaunchFileExplorerWithError(path, system);
 }
 
@@ -625,7 +625,7 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 		ECS_TEMP_ASCII_STRING(set_module_configuration_menu_characters, 256);
 		for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
 			set_module_configuration_menu_characters.AddStream(MODULE_CONFIGURATIONS[index]);
-			set_module_configuration_menu_characters.AddSafe('\n');
+			set_module_configuration_menu_characters.AddAssert('\n');
 		}
 		set_module_configuration_menu_characters[set_module_configuration_menu_characters.size - 1] = '\0';
 

@@ -272,8 +272,10 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		unsigned short basic_array_count;
 		// Can be 1, 2, 3 or 4 - for matrix types
 		unsigned char basic_component_count;
-		unsigned short pointer_offset;
 		Reflection::ReflectionBasicFieldType basic_type;
+		// This is used to align fields that cross alignment boundaries
+		unsigned char alignment;
+		unsigned short pointer_offset;
 		// Matrices can have only default values, not min and max values
 		double4 default_value[4];
 		double4 min_value;
@@ -402,8 +404,21 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		if (shader_reflection->cb_mapping_table.TryGetValue(type_identifier, mapping)) {
 			field->basic_type = mapping.basic_type;
 			field->basic_component_count = mapping.component_count;
+
+			unsigned short basic_type_byte_size = Reflection::GetReflectionBasicFieldTypeByteSize(mapping.basic_type);
 			unsigned short packoffset = ParsePackoffset(type_start, new_line);
-			field->pointer_offset = packoffset == USHORT_MAX ? *current_pointer_offset : packoffset;
+			if (packoffset == USHORT_MAX) {
+				// We need to align this field if it crosses the 16 byte alignment boundary
+				field->pointer_offset = *current_pointer_offset;
+				unsigned short upper_boundary = function::AlignPointerStack(field->pointer_offset, 16);
+				if (field->pointer_offset + basic_type_byte_size > upper_boundary) {
+					// Align it to the next boundary
+					field->pointer_offset = upper_boundary;			
+				}
+			}
+			else {
+				field->pointer_offset = packoffset;
+			}
 			field->definition = Reflection::GetBasicFieldDefinition(mapping.basic_type);
 
 			const char* name_start = function::SkipWhitespace(type_end);
@@ -419,7 +434,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 			// Determine the array count;
 			field->basic_array_count = ParseBasicTypeArrayCount(name_end + 1, new_line);
-			size_t basic_byte_size = Reflection::GetReflectionBasicFieldTypeByteSize(mapping.basic_type) * (size_t)mapping.component_count;
+			size_t basic_byte_size = (size_t)basic_type_byte_size * (size_t)mapping.component_count;
 			size_t total_byte_size = field->basic_array_count == 0 ? basic_byte_size : basic_byte_size * field->basic_array_count;
 			*current_pointer_offset = (unsigned short)(field->pointer_offset + total_byte_size);
 
@@ -1188,6 +1203,55 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
+	// The assign functor receives as parameters the following
+	//	size_t index - describes the index of the keyword that is currently matched
+	//	Stream<char> name - already allocated
+	//	unsigned short register_index - no need to check for defaulted value
+	template<typename AssignFunctor>
+	bool ReflectShaderBasicStructure(Stream<char> source_code, AllocatorPolymorphic allocator, Stream<const char*> keywords, AssignFunctor&& assign_functor) {
+		// Make the last character \0 - it will be a non important character
+		source_code[source_code.size - 1] = '\0';
+
+		// Look for the sampler keywords
+		Stream<char> initial_source_code = source_code;
+		unsigned short current_register = 0;
+
+		const char* omit_string = STRING(ECS_REFLECT_OMIT);
+		size_t omit_string_size = strlen(omit_string);
+		for (size_t index = 0; index < keywords.size; index++) {
+			Stream<char> current_parse_range = source_code;
+			Stream<char> keyword = function::FindFirstToken(current_parse_range, keywords[index]);
+			while (keyword.size > 0) {
+				// Check for omit macro
+				Stream<char> before_end_line = function::SkipUntilCharacterReverse(keyword.buffer, current_parse_range.buffer, '\n');
+				before_end_line = function::SkipWhitespace(before_end_line);
+				// Get the semicolon. If it is missing then error
+				Stream<char> semicolon = function::FindFirstCharacter(keyword, ';');
+				if (semicolon.size == 0) {
+					// An error
+					return false;
+				}
+
+				if (memcmp(before_end_line.buffer, omit_string, omit_string_size) != 0) {
+					Stream<char> name = { nullptr, 0 };
+					unsigned short register_index = 0;
+					bool default_value = ParseNameAndRegister(keyword.buffer, allocator, name, register_index);
+
+					if (default_value) {
+						register_index = current_register;
+					}
+					assign_functor(index, name, register_index);
+					current_register++;
+				}
+
+				current_parse_range = semicolon;
+				keyword = function::FindFirstToken(current_parse_range, keywords[index]);
+			}
+		}
+
+		return true;
+	}
+
 	bool ShaderReflection::ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const
 	{
 		return ReflectProperty(this, path, [&](Stream<char> data) {
@@ -1197,44 +1261,11 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	bool ShaderReflection::ReflectShaderTexturesSource(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const
 	{
-		// Make the last character \0 - it will be a non important character
-		source_code[source_code.size - 1] = '\0';
-
-		const char* omit_string = STRING(ECS_REFLECT_OMIT);
-		size_t omit_string_size = strlen(omit_string);
-
-		// Linearly iterate through all keywords and add each texture accordingly
-		for (size_t index = 0; index < std::size(TEXTURE_KEYWORDS); index++) {
-			Stream<char> current_parse_range = source_code;
-			const char* texture_ptr = strstr(current_parse_range.buffer, TEXTURE_KEYWORDS[index]);
-			while (texture_ptr != nullptr) {
-				const char* semicolon = strchr(texture_ptr, ';');
-				if (semicolon == nullptr) {
-					return false;
-				}
-
-				// Check for omit macro
-				Stream<char> before_end_line = function::SkipUntilCharacterReverse(texture_ptr, current_parse_range.buffer, '\n');
-				before_end_line = function::SkipWhitespace(before_end_line);
-
-				if (memcmp(before_end_line.buffer, omit_string, omit_string_size) != 0) {
-					Stream<char> name;
-					unsigned short register_index;
-					bool default_value = ParseNameAndRegister(texture_ptr, allocator, name, register_index);
-
-					size_t current_index = textures.size;
-					textures[current_index].name = name;
-					textures[current_index].type = (ECS_SHADER_TEXTURE_TYPE)index;
-					textures[current_index].register_index = default_value ? current_index : register_index;
-					textures.size++;
-				}
-
-				current_parse_range = { semicolon + 1, function::PointerDifference(source_code.buffer + source_code.size, semicolon + 1) };
-				texture_ptr = strstr(current_parse_range.buffer, TEXTURE_KEYWORDS[index]);
+		return ReflectShaderBasicStructure(source_code, allocator, { TEXTURE_KEYWORDS, std::size(TEXTURE_KEYWORDS) },
+			[&](size_t index, Stream<char> name, unsigned short register_index) {
+				textures.AddAssert({ name, (ECS_SHADER_TEXTURE_TYPE)index, register_index });
 			}
-		}
-
-		return true;
+		);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -1250,44 +1281,11 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	bool ShaderReflection::ReflectShaderSamplersSource(Stream<char> source_code, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator) const 
 	{
-		// Make the last character \0 - it will be a non important character
-		source_code[source_code.size - 1] = '\0';
-
-		// Look for the sampler keywords
-		Stream<char> initial_source_code = source_code;
-		unsigned short current_register = 0;
-
-		const char* omit_string = STRING(ECS_REFLECT_OMIT);
-		size_t omit_string_size = strlen(omit_string);
-		for (size_t index = 0; index < std::size(SAMPLER_KEYWORDS); index++) {
-			Stream<char> current_parse_range = source_code;
-			Stream<char> keyword = function::FindFirstToken(current_parse_range, SAMPLER_KEYWORDS[index]);
-			while (keyword.size > 0) {
-				// Check for omit macro
-				Stream<char> before_end_line = function::SkipUntilCharacterReverse(keyword.buffer, current_parse_range.buffer, '\n');
-				before_end_line = function::SkipWhitespace(before_end_line);
-				// Get the semicolon. If it is missing then error
-				Stream<char> semicolon = function::FindFirstCharacter(keyword, ';');
-				if (semicolon.size == 0) {
-					// An error
-					return false;
-				}
-
-				if (memcmp(before_end_line.buffer, omit_string, omit_string_size) != 0) {
-					unsigned short register_index = ParsePackoffset(keyword.buffer, semicolon.buffer);
-					// Parse the name;
-					const char* keyword_end = function::SkipCodeIdentifier(keyword.buffer);
-					const char* name_start = function::SkipWhitespace(keyword_end);
-					const char* name_end = function::SkipCodeIdentifier(name_start);
-					Stream<char> name = { name_start, function::PointerDifference(name_end, name_start) / sizeof(char) };
-					samplers.AddSafe({ function::StringCopy(allocator, name), register_index == 0 ? current_register : register_index });
-					current_register = register_index != 0 ? register_index + 1 : current_register + 1;
-				}
-
-				current_parse_range = semicolon;
-				keyword = function::FindFirstToken(current_parse_range, SAMPLER_KEYWORDS[index]);
+		return ReflectShaderBasicStructure(source_code, allocator, { SAMPLER_KEYWORDS, std::size(SAMPLER_KEYWORDS) },
+			[&](size_t index, Stream<char> name, unsigned short register_index) {
+				samplers.AddAssert({ name, register_index });
 			}
-		}
+		);
 
 		return true;
 	}
@@ -1611,13 +1609,14 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					// We need to record other properties
 					ShaderReflectionConstantBufferField buffer_field;
 					ParseShaderReflectionConstantBufferField(shader_reflection, &buffer_field, identifier.buffer, next_new_line, &current_offset);
+					unsigned int previous_offset = buffer_field.pointer_offset;
 					unsigned int field_count = ConvertConstantBufferFieldToReflectionField(
 						&buffer_field, 
 						reflected_fields.buffer + reflected_fields.size, 
 						allocator, 
 						matrix_type_name_storage, 
 						matrix_types
-					);
+					); 
 					if (field_count > 1) {
 						if (matrix_types != nullptr) {
 							matrix_types->buffer[matrix_types->size].position = { reflected_fields.size, field_count };

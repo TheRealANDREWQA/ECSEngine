@@ -268,7 +268,7 @@ namespace ECSEngine {
 
 				for (char* character = null_character; character < new_line; character++) {
 					if (*character == '\0') {
-						modified_ascii_string_indices.AddSafe(character - characters);
+						modified_ascii_string_indices.AddAssert(character - characters);
 						*character = 1;
 					}
 				}
@@ -454,7 +454,7 @@ namespace ECSEngine {
 								void* allocation = allocate(temporary_stack_values.size);
 								memcpy(allocation, temporary_stack_values.buffer, temporary_stack_values.size);
 								// Add this allocation to the segmented ones
-								segmented_allocations.AddSafe({ allocation, temporary_stack_values.size });
+								segmented_allocations.AddAssert({ allocation, temporary_stack_values.size });
 								temporary_stack_values.size = 0;
 
 								// Use again the stack buffer
@@ -527,7 +527,7 @@ namespace ECSEngine {
 						field.name = (const char*)name_allocation;
 						field.in_file_field_index = in_file_field_index;
 						field.pointer_data = { array_data, array_entries };
-						fields.AddSafe(&field);
+						fields.AddAssert(&field);
 					}
 				}
 			}
@@ -578,7 +578,7 @@ namespace ECSEngine {
 							field.wide_characters.buffer = (wchar_t*)wide_string;
 						}
 
-						fields.AddSafe(&field);
+						fields.AddAssert(&field);
 					}
 				}
 				else {

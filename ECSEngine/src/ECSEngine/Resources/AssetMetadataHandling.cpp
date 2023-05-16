@@ -277,7 +277,7 @@ namespace ECSEngine {
 					continue;
 				}
 				GPUSamplerMetadata* metadata = asset_database->GetGPUSampler(material->samplers[type][index].metadata_handle);
-				if (!IsAssetFromMetadataValid({ metadata->Pointer(), 0 })) {
+				if (!IsAssetPointerValid(metadata->Pointer())) {
 					// Create the pointer
 					CreateSamplerFromMetadata(resource_manager, metadata);
 				}
@@ -295,7 +295,7 @@ namespace ECSEngine {
 
 		if (success) {
 			AllocatorPolymorphic database_allocator = asset_database->Allocator();
-			if (!IsAssetFromMetadataValid({ material->material_pointer, 0 })) {
+			if (!IsAssetPointerValid(material->material_pointer)) {
 				database_allocator.allocation_type = ECS_ALLOCATION_MULTI;
 				material->material_pointer = (Material*)Allocate(database_allocator, sizeof(Material));
 			}
@@ -312,7 +312,7 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < typed_handles.size; index++) {
 				void* metadata = asset_database->GetAsset(typed_handles[index].handle, typed_handles[index].type);
 				Stream<void> current_asset = GetAssetFromMetadata(metadata, typed_handles[index].type);
-				if (!IsAssetFromMetadataValid(current_asset)) {
+				if (!IsAssetPointerFromMetadataValid(current_asset)) {
 					current_asset = AssetFromResourceManager(resource_manager, metadata, typed_handles[index].type, mount_point);
 					// Update the pointer
 					SetAssetToMetadata(metadata, typed_handles[index].type, current_asset);
@@ -381,6 +381,7 @@ namespace ECSEngine {
 
 			for (size_t subindex = 0; subindex < material->samplers[index].size; subindex++) {
 				user_material->samplers[sampler_total_count].shader_type = shader_type;
+				user_material->samplers[sampler_total_count].slot = material->samplers[index][subindex].slot;
 				if (material->samplers[index][subindex].metadata_handle != -1) {
 					const GPUSamplerMetadata* gpu_sampler = database->GetGPUSamplerConst(material->samplers[index][subindex].metadata_handle);
 					user_material->samplers[sampler_total_count].state = gpu_sampler->sampler;
@@ -669,16 +670,16 @@ namespace ECSEngine {
 		auto fail = [&](unsigned int handle, ECS_ASSET_TYPE type, const char* not_loaded_string, const char* invalid_handle_string, Stream<char> asset_name = { nullptr, 0 }) {
 			success = false;
 			if (has_typed_handles) {
-				load_desc->missing_handles->AddSafe({ handle, type });
+				load_desc->missing_handles->AddAssert({ handle, type });
 			}
 
 			Stream<char> previous_error_string = *load_desc->error_string;
 			if (has_error_string) {
 				if (load_desc->error_string->size == 0) {
 					// Add a basic message
-					load_desc->error_string->AddStreamSafe("The material has missing/unspecified referenced assets:\n");
+					load_desc->error_string->AddStreamAssert("The material has missing/unspecified referenced assets:\n");
 					if (has_segmened_error_string) {
-						load_desc->segmented_error_string->AddSafe(*load_desc->error_string);
+						load_desc->segmented_error_string->AddAssert(*load_desc->error_string);
 						load_desc->segmented_error_string->buffer[0].size--;
 					}
 					previous_error_string = *load_desc->error_string;
@@ -686,7 +687,7 @@ namespace ECSEngine {
 
 				if (handle == -1) {
 					if (asset_name.size == 0) {
-						load_desc->error_string->AddStreamSafe(invalid_handle_string);
+						load_desc->error_string->AddStreamAssert(invalid_handle_string);
 					}
 					else {
 						ECS_FORMAT_STRING(*load_desc->error_string, invalid_handle_string, asset_name);
@@ -697,11 +698,11 @@ namespace ECSEngine {
 					AssetToString(database->GetAssetConst(handle, type), type, asset_string);
 					ECS_FORMAT_STRING(*load_desc->error_string, not_loaded_string, asset_string);
 				}
-				load_desc->error_string->AddSafe('\n');
+				load_desc->error_string->AddAssert('\n');
 			}
 
 			if (has_segmened_error_string) {
-				load_desc->segmented_error_string->AddSafe({ previous_error_string.buffer + previous_error_string.size, load_desc->error_string->size - previous_error_string.size - 1 });
+				load_desc->segmented_error_string->AddAssert({ previous_error_string.buffer + previous_error_string.size, load_desc->error_string->size - previous_error_string.size - 1 });
 			}
 		};
 
@@ -759,12 +760,12 @@ namespace ECSEngine {
 			if (success && !is_loaded) {
 				if (load_desc != nullptr) {
 					load_desc->dependencies_are_ready = true;
-					load_desc->error_string->AddStream("The material is not created but dependencies are ready");
+					load_desc->error_string->AddStreamAssert("The material is not created but dependencies are ready");
 					if (has_segmened_error_string) {
-						load_desc->segmented_error_string->AddSafe(*load_desc->error_string);
+						load_desc->segmented_error_string->AddAssert(*load_desc->error_string);
 					}
 					if (has_typed_handles) {
-						load_desc->missing_handles->AddSafe({ 0, ECS_ASSET_MATERIAL });
+						load_desc->missing_handles->AddAssert({ 0, ECS_ASSET_MATERIAL });
 					}
 				}
 			}
@@ -863,7 +864,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < stream_type.size; index++) {
 				unsigned int handle = sparse_set.GetHandleFromIndex(index);
 				if (!IsAssetFromMetadataLoaded(resource_manager, database->GetAssetConst(handle, type), type, mount_point, randomized_assets)) {
-					missing_handles[type].AddSafe(handle);
+					missing_handles[type].AddAssert(handle);
 				}
 			}
 		};
@@ -895,7 +896,7 @@ namespace ECSEngine {
 				// Check to see if the handle was already added
 				unsigned int existing_index = function::SearchBytes(missing_handles[type].buffer, missing_handles[type].size, handle, sizeof(handle));
 				if (existing_index == -1 && !IsAssetFromMetadataLoaded(resource_manager, current_asset, type, mount_point, randomized_assets)) {
-					missing_handles[type].AddSafe(handle);
+					missing_handles[type].AddAssert(handle);
 					// Add its dependencies as well if they don't exist already
 					ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
 					GetAssetDependencies(current_asset, type, &dependencies);
@@ -909,7 +910,7 @@ namespace ECSEngine {
 						);
 						current_asset = main_database->GetAssetConst(dependencies[subindex].handle, dependencies[subindex].type);
 						if (existing_index == -1 && !IsAssetFromMetadataLoaded(resource_manager, current_asset, dependencies[subindex].type, mount_point, randomized_assets)) {
-							current_handles->AddSafe(dependencies[subindex].handle);
+							current_handles->AddAssert(dependencies[subindex].handle);
 						}
 					}
 				}
@@ -1109,27 +1110,32 @@ namespace ECSEngine {
 			Material temporary_material;
 			temporary.material_pointer = &temporary_material;
 
-			bool success = CreateAssetFromMetadata(resource_manager, database, &temporary, ECS_ASSET_MATERIAL, mount_point);
-			if (success) {
-				DeallocateAssetFromMetadataOptions options;
-				options.material_check_resource = true;
-				bool deallocation_success = DeallocateAssetFromMetadata(resource_manager, database, metadata, type, mount_point, options);
-				if (deallocation_success) {
-					// Copy the material contents
-					memcpy(current_material->material_pointer, &temporary_material, sizeof(temporary_material));
-					return { true, true };
+			DeallocateAssetFromMetadataOptions options;
+			options.material_check_resource = true;
+			bool success = CreateAssetFromMetadata(resource_manager, database, &temporary, ECS_ASSET_MATERIAL, mount_point);		
+			bool deallocation_success = DeallocateAssetFromMetadata(resource_manager, database, metadata, type, mount_point, options);
+			if (deallocation_success) {
+				// Copy the material contents
+				// If the material pointer is not yet allocated because the material previously failed creating
+				// then allocate the pointer now
+				if (!IsAssetPointerValid(current_material->material_pointer)) {
+					current_material->material_pointer = (Material*)Allocate(database->Allocator(), sizeof(Material));
 				}
-				else {
-					// Try to deallocate the newly created asset
-					ECS_ASSERT(DeallocateAssetFromMetadata(resource_manager, database, &temporary, type, mount_point, options));
-				}
+				memcpy(current_material->material_pointer, &temporary_material, sizeof(temporary_material));
 			}
+			else {
+				// Try to deallocate the newly created asset since we couldn't deallocate the previous one
+				ECS_ASSERT(DeallocateAssetFromMetadata(resource_manager, database, &temporary, type, mount_point, options));
+			}
+
+			return { deallocation_success, success };
 		}
 			break;
 		default:
 			ECS_ASSERT(false, "Invalid asset type.");
 		}
 		
+		ECS_ASSERT(false);
 		return { false, false };
 	}
 
@@ -1168,25 +1174,26 @@ namespace ECSEngine {
 		case ECS_ASSET_MATERIAL:
 			reload_result.is_different = compare_result.material_result.is_different;
 			if (reload_result.is_different) {
-				ReloadUserMaterialOptions reload_material;
-				reload_material.reload_buffers = compare_result.material_result.buffers_different;
-				reload_material.reload_pixel_shader = compare_result.material_result.pixel_shader_different;
-				reload_material.reload_vertex_shader = compare_result.material_result.vertex_shader_different;
-				reload_material.reload_samplers = compare_result.material_result.samplers_different;
-				reload_material.reload_textures = compare_result.material_result.textures_different;
-
 				MaterialAsset* current_material = (MaterialAsset*)current_metadata;
 				const MaterialAsset* previous_material = (const MaterialAsset*)previous_metadata;
-				
+
 				// Write into a temporary material first the old contents and then use the reload function
 				// At last copy into the current material pointers
 				Material temporary_material;
-				if (IsAssetFromMetadataValid({ previous_material->material_pointer, 0 })) {
+				ReloadUserMaterialOptions reload_material;
+				if (IsAssetPointerValid(previous_material->material_pointer)) {
+					reload_material.reload_buffers = compare_result.material_result.buffers_different;
+					reload_material.reload_pixel_shader = compare_result.material_result.pixel_shader_different;
+					reload_material.reload_vertex_shader = compare_result.material_result.vertex_shader_different;
+					reload_material.reload_samplers = compare_result.material_result.samplers_different;
+					reload_material.reload_textures = compare_result.material_result.textures_different;
 					memcpy(&temporary_material, previous_material->material_pointer, sizeof(temporary_material));
 				}
 				else {
 					// Zero out the temporary material if the previous pointer is nullptr
 					memset(&temporary_material, 0, sizeof(temporary_material));
+					// Also signal to the reload that all GPU resources need to be reloaded
+					memset(&reload_material, 1, sizeof(reload_material));
 				}
 
 				// If a GPU sampler is not created from the newly added one, create it
@@ -1195,7 +1202,7 @@ namespace ECSEngine {
 						unsigned int handle = current_material->samplers[shader][index].metadata_handle;
 						if (handle != -1) {
 							GPUSamplerMetadata* metadata = database->GetGPUSampler(handle);
-							if (!IsAssetFromMetadataValid({ metadata->Pointer(), 0 })) {
+							if (!IsAssetPointerValid(metadata->Pointer())) {
 								CreateSamplerFromMetadata(resource_manager, metadata);
 							}
 						}
@@ -1216,7 +1223,7 @@ namespace ECSEngine {
 
 				if (reload_result.success.x) {
 					// If the current pointer is not allocated, allocate it
-					if (!IsAssetFromMetadataValid({ current_material->material_pointer, 0 })) {
+					if (!IsAssetPointerValid(current_material->material_pointer)) {
 						current_material->material_pointer = (Material*)Allocate(database->Allocator(), sizeof(Material));
 					}
 					memcpy(current_material->material_pointer, &temporary_material, sizeof(temporary_material));

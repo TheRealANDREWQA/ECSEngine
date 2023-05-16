@@ -1053,7 +1053,7 @@ bool GetSandboxesForModule(
 	for (unsigned int index = 0; index < sandbox_count; index++) {
 		EDITOR_MODULE_CONFIGURATION configuration_used = IsModuleUsedBySandbox(editor_state, index, module_index);
 		if (configuration_used == configuration) {
-			sandboxes->AddSafe(index);
+			sandboxes->AddAssert(index);
 		}
 	}
 	return sandboxes->size > initial_size;
@@ -1255,7 +1255,7 @@ void GetModuleDLLImports(const EditorState* editor_state, unsigned int index, Ca
 			ECS_STACK_CAPACITY_STREAM(wchar_t, dll_library_name, 512);
 			GetModuleFilenameNoConfig(editor_state->project_modules->buffer[subindex].library_name, dll_library_name);
 			if (function::FindString(dll_library_name, wide_imports) != -1) {
-				dll_imports.AddSafe(subindex);
+				dll_imports.AddAssert(subindex);
 			}
 		}
 	}
@@ -1279,7 +1279,7 @@ void GetModuleDLLExternalReferences(
 	for (unsigned int subindex = 0; subindex < editor_state->project_modules->size; subindex++) {
 		if (subindex != index) {
 			if (function::FindString(ascii_library_name, editor_state->project_modules->buffer[subindex].dll_imports) != -1) {
-				external_references.AddSafe(subindex);
+				external_references.AddAssert(subindex);
 			}
 		}
 	}
@@ -1319,7 +1319,7 @@ size_t GetModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 
 	ECS_TEMP_STRING(null_terminated_path, 256);
 	null_terminated_path.Copy(solution_path);
-	null_terminated_path.AddSafe(L'\0');
+	null_terminated_path.AddAssert(L'\0');
 	size_t solution_last_write = 0;
 
 	bool success = OS::GetFileTimes(null_terminated_path.buffer, nullptr, nullptr, &solution_last_write);
@@ -1595,7 +1595,7 @@ void ModulesToAppliedModules(const EditorState* editor_state, CapacityStream<con
 	for (unsigned int index = 0; index < count; index++) {
 		EDITOR_MODULE_CONFIGURATION configuration = GetModuleLoadedConfiguration(editor_state, index);
 		if (configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
-			applied_modules.AddSafe(&GetModuleInfo(editor_state, index, configuration)->ecs_module);
+			applied_modules.AddAssert(&GetModuleInfo(editor_state, index, configuration)->ecs_module);
 		}
 	}
 }

@@ -144,7 +144,7 @@ namespace ECSEngine {
 				continue;
 			}
 
-			adapters.AddSafe(adapter);
+			adapters.AddAssert(adapter);
 		}
 
 		if (factory != nullptr) {
@@ -3881,26 +3881,24 @@ namespace ECSEngine {
 	{
 		switch (type) {
 		case ECS_SHADER_PIXEL:
-			context->PSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			context->PSSetSamplers(start_slot, samplers.size, (ID3D11SamplerState**)samplers.buffer);
 			break;
 		case ECS_SHADER_VERTEX:
-			context->VSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			context->VSSetSamplers(start_slot, samplers.size, (ID3D11SamplerState**)samplers.buffer);
 			break;
 		case ECS_SHADER_COMPUTE:
-			context->CSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			context->CSSetSamplers(start_slot, samplers.size, (ID3D11SamplerState**)samplers.buffer);
 			break;
 		case ECS_SHADER_HULL:
-			context->HSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			context->HSSetSamplers(start_slot, samplers.size, (ID3D11SamplerState**)samplers.buffer);
 			break;
 		case ECS_SHADER_DOMAIN:
-			context->DSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			context->DSSetSamplers(start_slot, samplers.size, (ID3D11SamplerState**)samplers.buffer);
 			break;
 		case ECS_SHADER_GEOMETRY:
-			context->GSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			context->GSSetSamplers(start_slot, samplers.size, (ID3D11SamplerState**)samplers.buffer);
 			break;
 		}
-
-		context->PSSetSamplers(start_slot, samplers.size, (ID3D11SamplerState**)samplers.buffer);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

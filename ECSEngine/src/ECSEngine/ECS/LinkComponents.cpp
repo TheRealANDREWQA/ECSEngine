@@ -407,7 +407,7 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < missing_field_indices.size; index++) {
 			AssetTypeEx asset_type = functor(missing_field_indices[index]);
 			if (asset_type.type != ECS_ASSET_TYPE_COUNT) {
-				missing_fields->AddSafe({ (unsigned int)missing_field_indices[index], asset_type });
+				missing_fields->AddAssert({ (unsigned int)missing_field_indices[index], asset_type });
 			}
 		}
 	}
@@ -444,7 +444,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < type->fields.size; index++) {
 			AssetTypeEx asset_type = FindAssetMetadataMacro(type->fields[index].tag);
 			if (asset_type.type != ECS_ASSET_TYPE_COUNT) {
-				field_indices.AddSafe({ (unsigned int)index, asset_type });
+				field_indices.AddAssert({ (unsigned int)index, asset_type });
 			}
 		}
 	}
@@ -768,7 +768,7 @@ namespace ECSEngine {
 	) {
 		for (size_t index = 0; index < count; index++) {
 			unsigned int field = functor(index);
-			handles.AddSafe((unsigned int*)function::OffsetPointer(link_components, type->fields[field].info.pointer_offset));
+			handles.AddAssert((unsigned int*)function::OffsetPointer(link_components, type->fields[field].info.pointer_offset));
 		}
 	}
 
@@ -810,7 +810,7 @@ namespace ECSEngine {
 	) {
 		for (size_t index = 0; index < count; index++) {
 			unsigned int field_index = functor(index);
-			pointers.AddSafe((unsigned int*)function::OffsetPointer(link_component, type->fields[field_index].info.pointer_offset));
+			pointers.AddAssert((unsigned int*)function::OffsetPointer(link_component, type->fields[field_index].info.pointer_offset));
 		}
 	}
 
@@ -900,7 +900,7 @@ namespace ECSEngine {
 			AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, target);
 			ECS_ASSERT(target_field.type.type == asset_fields[index].type.type && target_field.success);
 			if (asset_fields[index].type.type == asset_type) {
-				field_data->AddSafe(target_field.asset);
+				field_data->AddAssert(target_field.asset);
 			}
 			else {
 				// If the asset type is a texture or gpu sampler or shader, it can be referenced by a material
@@ -917,7 +917,7 @@ namespace ECSEngine {
 							unsigned int current_handle = dependencies[subindex].handle;
 							if (dependencies[subindex].type == asset_type && current_handle != -1) {
 								if (database->Exists(current_handle, asset_type)) {
-									field_data->AddSafe(GetAssetFromMetadata(database->GetAssetConst(current_handle, asset_type), asset_type));
+									field_data->AddAssert(GetAssetFromMetadata(database->GetAssetConst(current_handle, asset_type), asset_type));
 								}
 							}
 						}
@@ -1008,7 +1008,7 @@ namespace ECSEngine {
 			Reflection::ReflectionType target_type;
 			if (reflection_manager->TryGetType(target, target_type)) {
 				if (IsReflectionTypeComponent(&target_type)) {
-					link_types.AddSafe(link_type);
+					link_types.AddAssert(link_type);
 				}
 			}
 		}
@@ -1028,7 +1028,7 @@ namespace ECSEngine {
 			Reflection::ReflectionType target_type;
 			if (reflection_manager->TryGetType(target, target_type)) {
 				if (IsReflectionTypeSharedComponent(&target_type)) {
-					link_types.AddSafe(link_type);
+					link_types.AddAssert(link_type);
 				}
 			}
 		}
@@ -1051,10 +1051,10 @@ namespace ECSEngine {
 			Reflection::ReflectionType target_type;
 			if (reflection_manager->TryGetType(target, target_type)) {
 				if (IsReflectionTypeSharedComponent(&target_type)) {
-					shared_link_types.AddSafe(link_type);
+					shared_link_types.AddAssert(link_type);
 				}
 				else if (IsReflectionTypeComponent(&target_type)) {
-					unique_link_types.AddSafe(link_type);
+					unique_link_types.AddAssert(link_type);
 				}
 			}
 		}
@@ -1152,7 +1152,7 @@ namespace ECSEngine {
 			//	// Determine which fields are the same
 			//	unsigned int target_index = base_data->target_type->FindField(base_data->link_type->fields[index].name);
 			//	if (target_index != -1) {
-			//		same_field_mask.AddSafe(target_index);
+			//		same_field_mask.AddAssert(target_index);
 			//	}
 			//}
 

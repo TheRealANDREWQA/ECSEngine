@@ -224,7 +224,7 @@ void GetModuleAvailableSettings(const EditorState* editor_state, unsigned int mo
 	ForEachFileInDirectory(module_folder, &functor_data, [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 		Stream<wchar_t> stem = function::PathStem(path);
-		data->paths->AddSafe(function::StringCopy(data->allocator, stem));
+		data->paths->AddAssert(function::StringCopy(data->allocator, stem));
 		return true;
 	});
 }

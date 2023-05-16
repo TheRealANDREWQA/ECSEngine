@@ -88,7 +88,7 @@ void EditorGetEventTypeData(const EditorState* editor_state, EditorEventFunction
 {
 	editor_state->event_queue.ForEach([data, function](EditorEvent event_) {
 		if (event_.function == function) {
-			data->AddSafe(event_.data);
+			data->AddAssert(event_.data);
 		}
 	});
 }

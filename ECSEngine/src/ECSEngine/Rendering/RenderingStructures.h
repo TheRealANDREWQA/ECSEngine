@@ -1255,7 +1255,7 @@ namespace ECSEngine {
 		Matrix GetViewProjectionMatrix() const;
 
 		ECS_INLINE static float DefaultNearZ() {
-			return 0.3f;
+			return 0.025f;
 		}
 
 		ECS_INLINE static float DefaultFarZ() {

@@ -105,7 +105,7 @@ namespace ECSEngine {
 			section_data.data.size = data_size;
 			Ignore(&stream, data_size);
 
-			sections.AddSafe(section_data);
+			sections.AddAssert(section_data);
 		}
 
 		return total_size;

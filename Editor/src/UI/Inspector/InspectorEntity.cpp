@@ -461,6 +461,10 @@ void InspectorComponentCallback(ActionData* action_data) {
 			SandboxSplatLinkComponentAssetFields(data->editor_state, data->sandbox_index, data->draw_data->link_components[linked_index].data, component_name);
 		}
 	}
+
+	// Re-render the sandbox - for the scene and the game as well
+	RenderSandbox(data->editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	RenderSandbox(data->editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -647,7 +651,8 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			{ ui_draw_configs, std::size(ui_draw_configs) }, 
 			modify_value_handler, 
 			ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ALL,
-			ui_draw_configs_stack_memory
+			ui_draw_configs_stack_memory,
+			false
 		);
 
 		Stream<UIReflectionDrawConfig> valid_ui_draw_configs = { ui_draw_configs, written_configs };
@@ -943,7 +948,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				}
 
 				left_characters.AddStream(component_name);
-				left_characters.AddSafe('\n');
+				left_characters.AddAssert('\n');
 				handler_data[subindex + write_offset] = { editor_state, sandbox_index, initial_name, data->entity };
 				handlers[subindex + write_offset] = { AddComponentCallback, handler_data + subindex + write_offset, sizeof(AddComponentCallbackData), ECS_UI_DRAW_NORMAL };
 			}

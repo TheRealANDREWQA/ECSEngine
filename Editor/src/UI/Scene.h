@@ -2,7 +2,7 @@
 #include "ECSEngineUI.h"
 
 #define SCENE_WINDOW_NAME "Scene "
-#define MAX_SCENE_WINDOWS 8
+#define MAX_SCENE_WINDOWS 8u
 
 struct EditorState;
 

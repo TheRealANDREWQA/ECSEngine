@@ -69,6 +69,12 @@ namespace ECSEngine {
 		// Returns -1 if it doesn't appear at all in the database
 		AssetTypedHandle FindDeep(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type) const;
 
+		// If it finds the asset in the original type, it returns its index inside the stream.
+		// If it doesn't, it will search other types of assets that can reference it and return the handle
+		// and the type of the asset that references it (at the moment only materials reference other assets)
+		// Returns -1 if it doesn't appear at all in the database
+		AssetTypedHandle FindDeep(const void* metadata, ECS_ASSET_TYPE type) const;
+
 		MeshMetadata* GetMesh(unsigned int index);
 
 		TextureMetadata* GetTexture(unsigned int index);

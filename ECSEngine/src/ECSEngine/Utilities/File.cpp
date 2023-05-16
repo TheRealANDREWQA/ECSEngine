@@ -549,7 +549,7 @@ namespace ECSEngine {
 		new_name_stream.Copy(folder_parent);
 		new_name_stream.Add(ECS_OS_PATH_SEPARATOR);
 		new_name_stream.AddStream(new_name);
-		new_name_stream.AddSafe(L'\0');
+		new_name_stream.AddAssert(L'\0');
 
 		return _wrename(path.buffer, new_name_stream.buffer) == 0;
 	}
@@ -595,7 +595,7 @@ namespace ECSEngine {
 		Stream<wchar_t> original_extension = function::PathExtensionBoth(file);
 		new_name.Copy(Stream<wchar_t>(file.buffer, original_extension.buffer - file.buffer));
 		new_name.AddStream(extension);
-		new_name.AddSafe(L'\0');
+		new_name.AddAssert(L'\0');
 		return RenameFolderOrFile(file, new_name.buffer);
 	}
 

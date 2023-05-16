@@ -354,7 +354,7 @@ namespace ECSEngine {
 			const TaskSchedulerElement* other_element = elements->buffer + index - 1;
 			bool conflicts = element->Conflicts(other_element);
 			if (conflicts) {
-				conflicting_queries->AddSafe({ index - 1, index });
+				conflicting_queries->AddAssert({ index - 1, index });
 			}
 		}
 	}

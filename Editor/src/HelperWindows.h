@@ -38,6 +38,9 @@ unsigned int UpdateUIWindowIndex(EditorState* editor_state, const char* base_nam
 // Returns the number from the name
 unsigned int GetWindowNameIndex(Stream<char> name);
 
+// Returns the number from the name
+unsigned int GetWindowNameIndex(const UIDrawer& drawer);
+
 // The callback can access this parameter through additional_data in ActionData*
 // The callback can be omitted by making it nullptr
 struct ChooseDirectoryOrFileNameData {

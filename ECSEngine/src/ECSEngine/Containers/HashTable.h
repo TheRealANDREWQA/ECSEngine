@@ -489,7 +489,7 @@ namespace ECSEngine {
 		void GetElementIndices(CapacityStream<unsigned int>& indices) const {
 			for (unsigned int index = 0; index < GetExtendedCapacity(); index++) {
 				if (IsItemAt(index)) {
-					indices.AddSafe(index);
+					indices.AddAssert(index);
 				}
 			}
 		}

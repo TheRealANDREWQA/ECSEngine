@@ -49,7 +49,7 @@ struct ECS_REFLECT EditorSandbox {
 	ECS_FIELDS_START_REFLECT;
 
 	ECSEngine::ResizableStream<EditorSandboxModule> modules_in_use;
-	
+
 	// Stored as relative path from the assets folder
 	ECSEngine::CapacityStream<wchar_t> scene_path;
 
@@ -58,7 +58,7 @@ struct ECS_REFLECT EditorSandbox {
 
 	// When the play button is clicked, if this sandbox should run
 	bool should_play;
-	
+
 	// When the pause button is clicked, if this sandbox should pause
 	bool should_pause;
 
@@ -80,6 +80,9 @@ struct ECS_REFLECT EditorSandbox {
 
 	ECSEngine::RenderDestination viewport_render_destination[EDITOR_SANDBOX_VIEWPORT_COUNT];
 	ECSEngine::ResourceView viewport_transferred_texture[EDITOR_SANDBOX_VIEWPORT_COUNT];
+	// These are set used to make calls to RenderSandbox ignore the request if the output is
+	// not going to be visualized
+	bool viewport_enable_rendering[EDITOR_SANDBOX_VIEWPORT_COUNT];
 
 	ECSEngine::EntityManager scene_entities;
 	ECSEngine::World sandbox_world;
@@ -199,6 +202,14 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 // Can optionally disable the wait for the unlocking - by default you should leave this on
 // unless you have a very specific reason to ignore the value
 void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool wait_unlocking = true);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void DisableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -355,6 +366,10 @@ void InitializeSandboxRuntime(
 	EditorState* editor_state,
 	unsigned int sandbox_index
 );
+
+// -------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 

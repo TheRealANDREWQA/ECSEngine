@@ -2,7 +2,7 @@
 #include "ECSEngineUI.h"
 
 #define ENTITIES_UI_WINDOW_NAME "Entities "
-#define MAX_ENTITIES_UI_WINDOWS 8
+#define MAX_ENTITIES_UI_WINDOWS 8u
 
 struct EditorState;
 

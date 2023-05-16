@@ -1406,14 +1406,14 @@ void EditorComponents::GetModuleTypesDependencies(unsigned int loaded_module_ind
 					ECS_ASSERT(reflection_index != -1);
 					bool exists = function::SearchBytes(module_indices->buffer, module_indices->size, reflection_index, sizeof(reflection_index)) != -1;
 					if (!exists) {
-						module_indices->AddSafe(reflection_index);
+						module_indices->AddAssert(reflection_index);
 					}
 				}
 			}
 			else {
 				bool exists = function::SearchBytes(module_indices->buffer, module_indices->size, module_index, sizeof(module_index)) != -1;
 				if (!exists) {
-					module_indices->AddSafe(module_index);
+					module_indices->AddAssert(module_index);
 				}
 			}
 		}
@@ -1436,7 +1436,7 @@ void EditorComponents::GetModulesTypesDependentUpon(unsigned int loaded_module_i
 				if (editor_state != nullptr) {
 					index_to_add = ReflectionModuleIndex(editor_state, index);
 				}
-				module_indices->AddSafe(index_to_add);
+				module_indices->AddAssert(index_to_add);
 			}
 		}
 	}
@@ -2016,7 +2016,7 @@ void EditorComponents::UpdateComponents(
 	for (int32_t index = 0; index < (int32_t)hierarchy_types.size; index++) {
 		const ReflectionType* type = reflection_manager->GetType(hierarchy_types[index]);
 		if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
-			component_indices.AddSafe(hierarchy_types[index]);
+			component_indices.AddAssert(hierarchy_types[index]);
 			hierarchy_types.RemoveSwapBack(index);
 			index--;
 		}

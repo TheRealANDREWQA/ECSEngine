@@ -702,7 +702,7 @@ bool CreateAssetInternalDependencies(
 		Stream<void> previous_pointer = GetAssetFromMetadata(current_dependency, internal_dependencies[index].type);
 
 		bool current_success = true;
-		if (!IsAssetFromMetadataValid(previous_pointer) || !IsAssetFromMetadataLoaded(
+		if (!IsAssetPointerFromMetadataValid(previous_pointer) || !IsAssetFromMetadataLoaded(
 			editor_state->RuntimeResourceManager(), 
 			current_dependency, 
 			internal_dependencies[index].type, 
@@ -715,7 +715,7 @@ bool CreateAssetInternalDependencies(
 		Stream<void> new_pointer = GetAssetFromMetadata(current_dependency, internal_dependencies[index].type);
 
 		if (dependency_elements != nullptr) {
-			dependency_elements->AddSafe({ internal_dependencies[index].handle, internal_dependencies[index].type, current_success, previous_pointer, new_pointer });
+			dependency_elements->AddAssert({ internal_dependencies[index].handle, internal_dependencies[index].type, current_success, previous_pointer, new_pointer });
 		}
 	}
 
@@ -935,7 +935,7 @@ bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE t
 					bool recurse_success = DeallocateAsset(editor_state, current_metadata, current_type, true, dependent_assets);
 					success &= recurse_success;
 					//if (recurse_success && dependent_assets != nullptr) {
-						//dependent_assets->AddSafe({ current_dependent_assets[index][subindex], current_type, previous_data, GetAssetFromMetadata(current_metadata, current_type) });
+						//dependent_assets->AddAssert({ current_dependent_assets[index][subindex], current_type, previous_data, GetAssetFromMetadata(current_metadata, current_type) });
 					//}
 				}
 			}

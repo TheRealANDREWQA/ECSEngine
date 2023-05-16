@@ -457,7 +457,7 @@ namespace ECSEngine {
 			Stream<char> closed_bracket = function::FindCharacterReverse(opened_bracket, '>');
 			ECS_ASSERT(closed_bracket.buffer != nullptr);
 
-			data->dependent_types.AddSafe({ opened_bracket.buffer + 1, function::PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 });
+			data->dependent_types.AddAssert({ opened_bracket.buffer + 1, function::PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 });
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1035,10 +1035,10 @@ namespace ECSEngine {
 							byte_size_alignment.y = byte_size_alignment.y == 0 ? -1 : byte_size_alignment.y;
 
 							if (field_index == -1) {
-								current_skipped_fields.AddSafe({ (unsigned int)-1, (unsigned int)byte_size_alignment.y, byte_size_alignment.x, data_type->fields[field_index].definition });
+								current_skipped_fields.AddAssert({ (unsigned int)-1, (unsigned int)byte_size_alignment.y, byte_size_alignment.x, data_type->fields[field_index].definition });
 							}
 							else {
-								current_skipped_fields.AddSafe({ (unsigned int)field_index - 1, (unsigned int)byte_size_alignment.y, byte_size_alignment.x, data_type->fields[field_index].definition });
+								current_skipped_fields.AddAssert({ (unsigned int)field_index - 1, (unsigned int)byte_size_alignment.y, byte_size_alignment.x, data_type->fields[field_index].definition });
 							}
 
 							// Remove the field
@@ -1246,9 +1246,7 @@ namespace ECSEngine {
 						else {
 							size_t field_index = 0;
 							for (; field_index < type->fields.size; field_index++) {
-								if (type->fields[field_index].info.basic_type == ReflectionBasicFieldType::UserDefined
-									&& (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Basic ||
-									type->fields[field_index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray)) {
+								if (type->fields[field_index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 									break;
 								}
 							}
@@ -1303,6 +1301,7 @@ namespace ECSEngine {
 															byte_size = sizeof(Stream<void>);
 														}
 														else {
+															// This will get determined when using the container custom Stream
 															/*char* new_definition = (char*)function::SkipWhitespace(template_start.buffer + 1);
 															field->definition.size = function::PointerDifference(function::SkipWhitespace(template_end.buffer - 1, -1), new_definition) + 1;
 															field->definition.buffer = new_definition;*/
@@ -1785,11 +1784,11 @@ namespace ECSEngine {
 						const ReflectionType* type = type_definitions.GetValuePtrFromIndex(index);
 						if constexpr (check_index.value) {
 							if (type->folder_hierarchy_index == hierarchy_index) {
-								options.indices->AddSafe(index);
+								options.indices->AddAssert(index);
 							}
 						}
 						else {
-							options.indices->AddSafe(index);
+							options.indices->AddAssert(index);
 						}
 					});
 				};
@@ -1827,10 +1826,10 @@ namespace ECSEngine {
 
 							if (tag_index < options.tags.size) {
 								if (options.use_stream_indices) {
-									options.stream_indices[tag_index].AddSafe(index);
+									options.stream_indices[tag_index].AddAssert(index);
 								}
 								else {
-									options.indices->AddSafe(index);
+									options.indices->AddAssert(index);
 								}
 							}
 						}
@@ -3614,7 +3613,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					embedded_size.reflection_type = type.name;
 					embedded_size.body = embedded_array_size_body;
 
-					data->embedded_array_size.AddSafe(embedded_size);
+					data->embedded_array_size.AddAssert(embedded_size);
 				}
 			}
 			return success ? ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS : ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
@@ -5593,7 +5592,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				for (size_t index = 0; index < first->fields.size; index++) {
 					unsigned int field = second->FindField(first->fields[index].name);
 					if (field == -1) {
-						surplus->AddSafe(index);
+						surplus->AddAssert(index);
 					}
 				}
 			};
@@ -5638,7 +5637,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 						if (dependency_index == current_dependencies.size) {
 							// All dependencies are met - can add it
-							ordered_types.AddSafe(types[index].name);
+							ordered_types.AddAssert(types[index].name);
 							valid_mask.RemoveSwapBack(index);
 							index--;
 							added_types++;
@@ -5775,7 +5774,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void GetReflectionFieldDependentTypes(const ReflectionField* field, CapacityStream<Stream<char>>& dependencies)
 		{
-			// Only user defined or custom types can have dependencies.
+			// Only user defined or custom types can have dependencies
 			if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
 				unsigned int custom_type = FindReflectionCustomType(field->definition);
 				if (custom_type != -1) {
@@ -5786,7 +5785,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					dependencies.size += dependent_types.dependent_types.size;
 				}
 				else {
-					dependencies.AddSafe(field->definition);
+					dependencies.AddAssert(field->definition);
 				}
 			}
 		}
@@ -5841,7 +5840,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							// Try nested type, then custom type
 							ReflectionType nested_type;
 							if (manager->TryGetType(type->fields[index].definition, nested_type)) {
-								dependent_types.AddSafe(nested_type.name);
+								dependent_types.AddAssert(nested_type.name);
 								// Retrieve its dependent types as well
 								GetReflectionTypeDependentTypes(manager, &nested_type, dependent_types);
 							}

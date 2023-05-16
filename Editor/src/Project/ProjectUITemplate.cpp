@@ -242,19 +242,22 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 					continue;
 				}
 
+				// We need to prevent creating UI scenes and game windows if their respective sandbox doesn't exist
+				unsigned int sandbox_count = GetSandboxCount(editor_state);
+
 				// Now the game/scene
-				matched_index = get_indexed_window(GAME_WINDOW_NAME, MAX_GAME_WINDOWS, GameSetDecriptor);
+				matched_index = get_indexed_window(GAME_WINDOW_NAME, std::min(sandbox_count, MAX_GAME_WINDOWS), GameSetDecriptor);
 				if (matched_index != -1) {
 					continue;
 				}
 
-				matched_index = get_indexed_window(SCENE_WINDOW_NAME, MAX_SCENE_WINDOWS, SceneUISetDecriptor);
+				matched_index = get_indexed_window(SCENE_WINDOW_NAME, std::min(sandbox_count, MAX_SCENE_WINDOWS), SceneUISetDecriptor);
 				if (matched_index != -1) {
 					continue;
 				}
 
 				// If this fails as well, then check for entitites UI
-				matched_index = get_indexed_window(ENTITIES_UI_WINDOW_NAME, MAX_ENTITIES_UI_WINDOWS, EntitiesUISetDescriptor);
+				matched_index = get_indexed_window(ENTITIES_UI_WINDOW_NAME, sandbox_count, EntitiesUISetDescriptor);
 				if (matched_index != -1) {
 					continue;
 				}
@@ -313,7 +316,7 @@ bool SaveProjectUITemplate(UISystem* system, ProjectUITemplate _template, Capaci
 	else {
 		ECS_TEMP_STRING(temp_string, 256);
 		temp_string.Copy(_template.ui_file);
-		temp_string.AddSafe(L'\0');
+		temp_string.AddAssert(L'\0');
 		_template.ui_file.buffer = temp_string.buffer;
 	}
 

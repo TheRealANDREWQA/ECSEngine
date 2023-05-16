@@ -398,7 +398,7 @@ namespace ECSEngine {
 	thread_task_function<true>(0, (ECSEngine::World*)&__register_info##thread_task, nullptr); \
 	schedule_element.task_function = thread_task_function<false>; \
 	schedule_element.task_name = STRING(thread_task_function); \
-	module_function_data->tasks->AddSafe(schedule_element)
+	module_function_data->tasks->AddAssert(schedule_element)
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 

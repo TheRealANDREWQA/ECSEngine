@@ -1569,8 +1569,8 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 
 			ProjectFile* project_file = editor_state->project_file;
 			data->current_directory.Copy(project_file->path);
-			data->current_directory.AddSafe(ECS_OS_PATH_SEPARATOR);
-			data->current_directory.AddStreamSafe(Path(PROJECT_ASSETS_RELATIVE_PATH, wcslen(PROJECT_ASSETS_RELATIVE_PATH)));
+			data->current_directory.AddAssert(ECS_OS_PATH_SEPARATOR);
+			data->current_directory.AddStreamAssert(Path(PROJECT_ASSETS_RELATIVE_PATH, wcslen(PROJECT_ASSETS_RELATIVE_PATH)));
 			data->current_directory[data->current_directory.size] = L'\0';
 
 			void* allocation = drawer.GetMainAllocatorBuffer(ALLOCATOR_CAPACITY);
@@ -2250,8 +2250,8 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 							}
 							else {
 								error_file_count++;
-								error_files.AddSafe('\n');
-								error_files.Add('\t');
+								error_files.AddAssert('\n');
+								error_files.AddAssert('\t');
 								function::ConvertWideCharsToASCII(current_file, error_files);
 							}
 						}

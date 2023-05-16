@@ -40,12 +40,12 @@ ECS_THREAD_TASK(RenderTask) {
 
 			debug_drawer->UpdateCameraMatrix(camera_matrix);
 			
-			debug_drawer->AddAxes({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
+			/*debug_drawer->AddAxes({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
 			debug_drawer->AddAxes({ 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
 			debug_drawer->AddAxes({ 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
 			debug_drawer->AddAxes({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
 			debug_drawer->AddAxes({ 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-			debug_drawer->DrawAxesDeck(1.0f);
+			debug_drawer->DrawAxesDeck(1.0f);*/
 			
 			/*debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 1.0f, ColorFloat(0.5f, 0.2f, 1.0f));
 			debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 2.0f, ColorFloat(0.5f, 0.5f, 1.0f));
@@ -54,16 +54,17 @@ ECS_THREAD_TASK(RenderTask) {
 			debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 5.0f, ColorFloat(0.5f, 0.2f, 0.5f));
 			debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 6.0f, ColorFloat(0.5f, 0.2f, 0.0f));*/
 
-			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 1.0f, ColorFloat(0.5f, 0.2f, 1.0f));
+			/*debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 1.0f, ColorFloat(0.5f, 0.2f, 1.0f));
 			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 2.0f, ColorFloat(0.5f, 0.5f, 1.0f));
 			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 3.0f, ColorFloat(0.5f, 0.8f, 1.0f));
 			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 4.0f, ColorFloat(0.8f, 0.2f, 1.0f));
 			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 5.0f, ColorFloat(0.5f, 0.2f, 0.5f));
 			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 6.0f, ColorFloat(0.5f, 0.2f, 0.0f));
-			debug_drawer->DrawSphereDeck(1.0f);
+			debug_drawer->DrawSphereDeck(1.0f);*/
 
 			Graphics* graphics = for_each_data->world->graphics;
 			if (IsAssetPointerValid(mesh.material) && IsAssetPointerValid(mesh.mesh)) {
+				graphics->BindRasterizerState(debug_drawer->rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID]);
 				Matrix object_matrix = MatrixTranslation(translation.value);
 				ConstantBuffer temp_buffer = Shaders::CreatePBRVertexConstants(graphics, true);
 				Matrix mvp_matrix = object_matrix * camera_matrix;
@@ -73,6 +74,7 @@ ECS_THREAD_TASK(RenderTask) {
 				graphics->BindMaterial(*mesh.material);
 
 				graphics->BindVertexConstantBuffer(temp_buffer);
+				graphics->EnableDepth();
 				graphics->DrawCoallescedMeshCommand(*mesh.mesh);
 				
 				temp_buffer.Release();

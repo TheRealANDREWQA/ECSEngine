@@ -3,22 +3,25 @@
 #include "..\Editor\EditorState.h"
 #include "..\HelperWindows.h"
 #include "Common.h"
+#include "RenderingCommon.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 
-constexpr size_t GAME_CAMERA_COUNT = 5;
-constexpr const char* GAME_RESOURCE_STRING = "RESOURCE STRING";
-
-constexpr ECSEngine::float2 GAME_ROTATE_SENSITIVITY = { 30.0f, 30.0f };
-constexpr float GAME_SCROLL_SENSITIVITY = 0.015f;
-constexpr ECSEngine::float2 GAME_PAN_SENSITIVITY = { 10.0f, 10.0f };
-
 struct GameData {
 	EditorState* editor_state;
-	Camera cameras[GAME_CAMERA_COUNT];
-	unsigned int active_camera;
+	uint2 previous_size;
 };
+
+void GameWindowDestroy(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
+	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+}
+
+#define RESIZE_THRESHOLD 1
 
 void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
@@ -28,36 +31,28 @@ void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 	// Destroy the window if the sandbox index is invalid
 	unsigned int sandbox_index = GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
-	if (!initialize) {
-		//drawer.system->SetSprite(drawer.dockspace, drawer.border_index, data->editor_state->viewport_texture, drawer.region_position, drawer.region_scale, drawer.buffers, drawer.counts);
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_RUNTIME;
+	UIDrawConfig config;
+
+	if (initialize) {
+		// Enable the viewport for this window
+		data->previous_size = { 0,0 };
+		EnableSandboxViewportRendering(editor_state, sandbox_index, viewport);
 	}
-}
+	else {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-void GamePrivateAction(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	GameData* data = (GameData*)_additional_data;
-	
-	Camera* camera = data->cameras + data->active_camera;
-	const HID::MouseState* mouse_state = mouse->GetState();
-
-	if (mouse_state->MiddleButton()) {
-		float3 right_vector = GetRightVector(camera->rotation);
-		float3 up_vector = GetUpVector(camera->rotation);
-
-		camera->translation -= right_vector * float3::Splat(mouse_delta.x) * float3::Splat(GAME_PAN_SENSITIVITY.x) - up_vector * float3::Splat(mouse_delta.y) * float3::Splat(GAME_PAN_SENSITIVITY.y);
-	}
-
-	if (mouse_state->RightButton()) {
-		camera->rotation.x += mouse_delta.y * GAME_ROTATE_SENSITIVITY.y;
-		camera->rotation.y += mouse_delta.x * GAME_ROTATE_SENSITIVITY.x;
-	}
-
-	int scroll_delta = mouse_state->ScrollDelta();
-	if (scroll_delta != 0) {
-		float3 forward_vector = GetForwardVector(camera->rotation);
-
-		camera->translation += forward_vector * float3::Splat(scroll_delta * GAME_SCROLL_SENSITIVITY);
+		bool multiple_graphics_module = false;
+		unsigned int sandbox_graphics_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index, &multiple_graphics_module);
+		bool has_graphics = sandbox_graphics_module_index != -1 && !multiple_graphics_module;
+		if (has_graphics) {
+			ResizeSandboxTextures(editor_state, drawer, viewport, &data->previous_size, 1, sandbox_index);
+			DisplaySandboxTexture(editor_state, drawer, viewport, sandbox_index);
+			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_index, sandbox_graphics_module_index, drawer);
+		}
+		else {
+			DisplayNoGraphicsModule(drawer, multiple_graphics_module);
+		}
 	}
 }
 
@@ -71,7 +66,9 @@ void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state,
 	game_data->editor_state = editor_state;
 
 	descriptor.draw = GameWindowDraw;
-	descriptor.private_action = GamePrivateAction;
+
+	descriptor.destroy_action = GameWindowDestroy;
+	descriptor.destroy_action_data = editor_state;
 
 	CapacityStream<char> window_name(function::OffsetPointer(game_data, sizeof(*game_data)), 0, 128);
 	GetGameUIWindowName(index, window_name);

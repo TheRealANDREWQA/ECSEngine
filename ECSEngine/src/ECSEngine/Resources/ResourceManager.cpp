@@ -1211,7 +1211,7 @@ namespace ECSEngine {
 
 		LoadCoallescedMeshFromGLTFOptions options;
 		options.allocate_submesh_name = true;
-		options.permanent_allocator = Allocator();
+		options.permanent_allocator = AllocatorTs();
 		bool success = LoadCoallescedMeshFromGLTFToGPU(m_graphics, *data, mesh, has_invert, &options);
 		if (!success) {
 			Deallocate(allocation);
@@ -1279,6 +1279,9 @@ namespace ECSEngine {
 		uintptr_t buffer = (uintptr_t)allocation;
 		buffer += sizeof(CoallescedMesh);
 		mesh->submeshes.InitializeAndCopy(buffer, submeshes);
+
+		// We also need to coallesce the names of the submeshes
+		StreamCoallescedInplaceDeepCopy(mesh->submeshes, AllocatorTs());
 
 		ScaleGLTFMeshes(gltf_mesh, 1, scale_factor);
 
@@ -1664,6 +1667,8 @@ namespace ECSEngine {
 		ECS_SHADER_TYPE shader_type,
 		ResourceManagerLoadDesc load_descriptor
 	) {
+		bool check_resource_before_unload = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
+
 		// It can happen that the material does not have a shader assigned (for varying reasons)
 		if (shader_path.size > 0) {
 			bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
@@ -1679,7 +1684,9 @@ namespace ECSEngine {
 					GenerateShaderCompileOptionsSuffix(compile_options, suffix, shader_name);
 				}
 				current_desc.identifier_suffix = suffix;
-				resource_manager->UnloadShader<true>(shader_path, current_desc);
+				if (!check_resource_before_unload || resource_manager->Exists(shader_path, ResourceType::Shader, suffix)) {
+					resource_manager->UnloadShader<true>(shader_path, current_desc);
+				}
 			}
 		}
 	}
@@ -2074,11 +2081,11 @@ namespace ECSEngine {
 				return (void*)nullptr;
 		});
 
-		if constexpr (reference_counted) {
-			if (shader_source_code != nullptr || byte_code != nullptr) {
-				if (!*is_loaded_first_time) {
-					// Need to get the source code or the byte code
-					if (shader != nullptr) {
+		if (shader != nullptr) {
+			if constexpr (reference_counted) {
+				if (shader_source_code != nullptr || byte_code != nullptr) {
+					if (!*is_loaded_first_time) {
+						// Need to get the source code or the byte code
 						// For byte code we need the source code as well
 						if (shader_source_code != nullptr || byte_code != nullptr) {
 							if (shader->source_code.size == 0) {
@@ -2100,9 +2107,10 @@ namespace ECSEngine {
 					}
 				}
 			}
-		}
 
-		return { shader->shader.Interface() };
+			return { shader->shader.Interface() };
+		}
+		return { nullptr };
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(ShaderInterface, ResourceManager::LoadShader, Stream<wchar_t>, ECS_SHADER_TYPE, Stream<char>*, Stream<void>*, ShaderCompileOptions, ResourceManagerLoadDesc);

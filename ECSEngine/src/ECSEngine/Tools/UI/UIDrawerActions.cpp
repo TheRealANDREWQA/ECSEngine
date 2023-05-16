@@ -2846,7 +2846,7 @@ namespace ECSEngine {
 						system->CreateWindowAndDockspace(submenu_descriptor,
 							UI_DOCKSPACE_FIXED | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X | UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER
 							| UI_DOCKSPACE_BORDER_FLAG_NO_TITLE | UI_DOCKSPACE_POP_UP_WINDOW);
-						state->windows->AddSafe({ submenu_descriptor.window_name, {submenu_descriptor.initial_position_x, submenu_descriptor.initial_position_y}, window_size });
+						state->windows->AddAssert({ submenu_descriptor.window_name, {submenu_descriptor.initial_position_x, submenu_descriptor.initial_position_y}, window_size });
 					}
 				}
 
@@ -3458,7 +3458,7 @@ namespace ECSEngine {
 
 				converted_path.size = 0;
 				function::ConvertWideCharsToASCII(data->files[filtered_files[index]], converted_path);
-				converted_path.AddSafe('\0');
+				converted_path.AddAssert('\0');
 
 				SelectLabelActionData action_data;
 				action_data.active_index = active_index;

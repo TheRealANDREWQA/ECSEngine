@@ -290,7 +290,7 @@ namespace ECSEngine {
 					name_buffer.size = name_size / sizeof(char);
 
 					unsigned int handle = -1;
-					if (name_buffer.size > 0 && file_buffer.size > 0) {
+					if (name_buffer.size > 0) {
 						if (do_not_increment_dependencies) {
 							handle = database->FindGPUSampler(name_buffer);
 						}

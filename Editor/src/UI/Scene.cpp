@@ -7,14 +7,22 @@
 #include "ECSEngineMath.h"
 #include "ECSEngineForEach.h"
 #include "../Modules/Module.h"
-
-// Have a threshold for resizing such that small resizes are not triggered when dragging the window
-#define RESIZE_THRESHOLD 25
+#include "RenderingCommon.h"
 
 struct SceneDrawData {
 	EditorState* editor_state;
 	uint2 previous_texel_size;
 };
+
+void SceneUIDestroy(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	// Determine the sandbox index
+	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
+	// Disable the viewport rendering
+	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+}
 
 void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
 	unsigned int index = *(unsigned int*)stack_memory;
@@ -25,6 +33,9 @@ void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_sta
 	data->editor_state = editor_state;
 
 	descriptor.draw = SceneUIWindowDraw;
+
+	descriptor.destroy_action = SceneUIDestroy;
+	descriptor.destroy_action_data = editor_state;
 
 	CapacityStream<char> window_name(function::OffsetPointer(data, sizeof(*data)), 0, 128);
 	GetSceneUIWindowName(index, window_name);
@@ -62,7 +73,10 @@ void SceneHoverableAction(ActionData* action_data) {
 		float2 delta = system->GetMouseDelta(mouse_position);
 
 		if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
-			rotation_factor = 10.0f;
+			rotation_factor = 15.0f;
+		}
+		else if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+			rotation_factor = 200.0f;
 		}
 
 		float3 rotation = { delta.y * rotation_factor, delta.x * rotation_factor, 0.0f };
@@ -86,6 +100,9 @@ void SceneHoverableAction(ActionData* action_data) {
 		if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
 			translation_factor = 2.5f;
 		}
+		else if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+			translation_factor = 30.0f;
+		}
 
 		float3 translation = right_vector * float3::Splat(-delta.x * translation_factor) + up_vector * float3::Splat(delta.y * translation_factor);
 		if (translation.x != 0.0f || translation.y != 0.0f || translation.z != 0.0f) {
@@ -99,7 +116,10 @@ void SceneHoverableAction(ActionData* action_data) {
 		float factor = 0.015f;
 
 		if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
-			factor = 0.005f;
+			factor = 0.004f;
+		}
+		else if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+			factor = 0.06f;
 		}
 
 		float3 camera_rotation = GetSandboxCameraPoint(data->editor_state, data->sandbox_index).rotation;
@@ -118,43 +138,19 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 
 	unsigned int sandbox_index = GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
 	EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxCurrentViewport(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	if (initialize) {
 		data->previous_texel_size = { 0, 0 };
+		// Enable the rendering of the viewport
+		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	}
 	else {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		UIDrawConfig config;
-
 		bool multiple_graphics_module = false;
 		unsigned int sandbox_graphics_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index, &multiple_graphics_module);
-		bool has_graphics = sandbox_graphics_module_index != -1;
+		bool has_graphics = sandbox_graphics_module_index != -1 && !multiple_graphics_module;
 		if (has_graphics) {
-			// Determine if the destination needs to be resized
-			uint2 current_texel_size = drawer.system->GetWindowTexelSize(drawer.window_index);
-			uint2 difference = Abs(current_texel_size, data->previous_texel_size);
-			if (difference.x >= RESIZE_THRESHOLD || difference.y >= RESIZE_THRESHOLD) {
-				// Resize the textures
-				data->previous_texel_size = current_texel_size;
-				ResizeSandboxRenderTextures(editor_state, sandbox_index, current_viewport, current_texel_size);
-
-				// Now render the sandbox
-				RenderSandbox(editor_state, sandbox_index, current_viewport);
-			}
-
-			UIConfigAbsoluteTransform output_transform = drawer.GetWholeRegionTransform();
-
-			config.AddFlag(output_transform);
-
-			D3D11_TEXTURE2D_DESC texture_desc;
-			Texture2D viewport_texture = sandbox->viewport_transferred_texture[current_viewport].GetResource();
-			viewport_texture.tex->GetDesc(&texture_desc);
-
-			// Draw the output texture
-			drawer.SpriteRectangle(
-				UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,
-				config,
-				sandbox->viewport_transferred_texture[current_viewport]
-			);
+			ResizeSandboxTextures(editor_state, drawer, current_viewport, &data->previous_texel_size);
+			DisplaySandboxTexture(editor_state, drawer, current_viewport);
 
 			SceneHoverableActionData hoverable_data;
 			hoverable_data.editor_state = editor_state;
@@ -164,63 +160,10 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			// This is for translation and rotation
 			drawer.SetWindowHoverable(&click_handler);
 
-			config.flag_count = 0;
-
-			// Determine if the graphics module is out of date to display a warning
-			bool is_out_of_date = GetSandboxModuleInfo(editor_state, sandbox_index, sandbox_graphics_module_index)->load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE;
-			if (is_out_of_date) {
-				float2 warning_scale = drawer.GetSquareScale(0.1f);
-
-				// Display a warning in the bottom right corner
-				float2 warning_position = drawer.GetCornerRectangle(ECS_UI_ALIGN_RIGHT, ECS_UI_ALIGN_BOTTOM, warning_scale);
-
-				UIConfigAbsoluteTransform warning_transform;
-				warning_transform.position = warning_position;
-				warning_transform.scale = warning_scale;
-
-				config.AddFlag(warning_transform);
-
-				struct ClickableData {
-					EditorState* editor_state;
-					unsigned int module_index;
-					EDITOR_MODULE_CONFIGURATION configuration;
-				};
-
-				auto warning_clickable = [](ActionData* action_data) {
-					UI_UNPACK_ACTION_DATA;
-
-					ClickableData* data = (ClickableData*)_data;
-					EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = BuildModule(data->editor_state, data->module_index, data->configuration);
-					PrintConsoleMessageForBuildCommand(data->editor_state, data->module_index, data->configuration, command_status);
-				};
-
-				ClickableData clickable_data;
-				clickable_data.editor_state = editor_state;
-				clickable_data.module_index = sandbox->modules_in_use[sandbox_graphics_module_index].module_index;
-				clickable_data.configuration = sandbox->modules_in_use[sandbox_graphics_module_index].module_configuration;
-				drawer.SpriteButton(
-					UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_VALIDATE_POSITION,
-					config,
-					{ warning_clickable, &clickable_data, sizeof(clickable_data) },
-					ECS_TOOLS_UI_TEXTURE_WARN_ICON,
-					EDITOR_YELLOW_COLOR
-				);
-
-				config.flag_count = 0;
-			}
+			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_index, sandbox_graphics_module_index, drawer);
 		}
 		else {
-			UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
-			row_layout.SetHorizontalAlignment(ECS_UI_ALIGN_MIDDLE);
-			row_layout.SetVerticalAlignment(ECS_UI_ALIGN_MIDDLE);
-
-			Stream<char> message = multiple_graphics_module ? "Multiple Graphics Modules Assigned" : "No Graphics Module Assigned";
-			row_layout.AddLabel(message);
-
-			size_t configuration = 0;
-			row_layout.GetTransform(config, configuration);
-
-			drawer.Text(configuration, config, message);
+			DisplayNoGraphicsModule(drawer, multiple_graphics_module);
 		}
 	}
 }

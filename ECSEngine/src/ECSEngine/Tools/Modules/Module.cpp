@@ -39,7 +39,7 @@ namespace ECSEngine {
 			while (dll.size > 0) {
 				Stream<char> dll_name = function::SkipUntilCharacterReverse(dll.buffer + token.size - 1, last_dll.buffer, '\0');
 				if (function::FindString(dll_name, dependencies) == -1) {
-					dependencies.AddSafe(dll_name);
+					dependencies.AddAssert(dll_name);
 				}
 
 				dll.Advance(token.size);

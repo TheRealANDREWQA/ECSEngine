@@ -749,7 +749,7 @@ namespace ECSEngine {
 			CapacityStream<float>& values
 		) {
 			while (characters.size > 0) {
-				values.AddSafe(ParseFloat(&characters, delimiter));
+				values.AddAssert(ParseFloat(&characters, delimiter));
 				if (characters.size > 0) {
 					characters.Advance();
 				}
@@ -768,7 +768,7 @@ namespace ECSEngine {
 			CapacityStream<double>& values
 		) {
 			while (characters.size > 0) {
-				values.AddSafe(ParseDouble(&characters, delimiter));
+				values.AddAssert(ParseDouble(&characters, delimiter));
 				if (characters.size > 0) {
 					characters.Advance();
 				}
@@ -798,7 +798,7 @@ namespace ECSEngine {
 			}
 
 			while (characters.size > 0) {
-				values.AddSafe(ParseBool(&characters, delimiter));
+				values.AddAssert(ParseBool(&characters, delimiter));
 				if (characters.size > 0) {
 					characters.Advance();
 				}
@@ -831,7 +831,7 @@ namespace ECSEngine {
 		)
 		{
 			while (characters.size > 0) {
-				values.AddSafe(ParseDouble4(&characters, external_delimiter, internal_delimiter, ignore_tag));
+				values.AddAssert(ParseDouble4(&characters, external_delimiter, internal_delimiter, ignore_tag));
 				if (characters.size > 0) {
 					characters.Advance();
 				}

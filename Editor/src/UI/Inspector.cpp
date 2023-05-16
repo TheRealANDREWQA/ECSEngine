@@ -60,7 +60,7 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 void GetInspectorsForModule(const EditorState* editor_state, unsigned int target_sandbox, CapacityStream<unsigned int>& inspector_indices) {
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
 		if (editor_state->inspector_manager.data[index].target_sandbox == target_sandbox) {
-			inspector_indices.AddSafe(index);
+			inspector_indices.AddAssert(index);
 		}
 	}
 }
