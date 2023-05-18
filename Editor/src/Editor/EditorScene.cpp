@@ -103,6 +103,9 @@ bool LoadEditorSceneCore(
 	bool success = LoadScene(&load_data);
 
 	if (success) {
+		// Now update the assets that have dependencies or that could have changed in the meantime
+		load_data.database->UpdateAssetsWithDependenciesFromFiles();
+
 		// Update the asset database to reflect the assets from the entity manager
 		GetAssetReferenceCountsFromEntities(entity_manager, load_data.reflection_manager, load_data.database);
 

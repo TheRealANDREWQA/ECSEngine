@@ -880,6 +880,19 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void ReflectionManager::AddType(const ReflectionType* type, AllocatorPolymorphic allocator, bool coallesced)
+		{
+			ReflectionType copied_type;
+			const ReflectionType* final_type = type;
+			if (allocator.allocator != nullptr) {
+				copied_type = coallesced ? type->CopyCoallesced(allocator) : type->Copy(allocator);
+				final_type = &copied_type;
+			}
+			InsertIntoDynamicTable(type_definitions, Allocator(), *final_type, ResourceIdentifier(final_type->name));
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::AddTypeToHierarchy(const ReflectionType* type, unsigned int folder_hierarchy, AllocatorPolymorphic allocator, bool coallesced)
 		{
 			InsertIntoDynamicTable(type_definitions, Allocator(), *type, ResourceIdentifier(type->name));

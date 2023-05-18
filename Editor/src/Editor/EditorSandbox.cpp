@@ -400,7 +400,19 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	ResetSandboxCamera(editor_state, sandbox_index);
 
 	if (initialize_runtime) {
-		PreinitializeSandboxRuntime(editor_state, sandbox_index);
+		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+			// Lock the sandbox and put the preinitialization on an editor event
+			LockSandbox(editor_state, sandbox_index);
+			EditorAddEventFunctorWaitFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, false, [&]() {
+				PreinitializeSandboxRuntime(editor_state, sandbox_index);
+				// We also need to unlock the sandbox
+				UnlockSandbox(editor_state, sandbox_index);
+			});
+		}
+		else {
+			// Can preinitialize now
+			PreinitializeSandboxRuntime(editor_state, sandbox_index);
+		}
 	}
 	else {
 		sandbox->runtime_descriptor.graphics = nullptr;
@@ -1336,6 +1348,7 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 struct WaitCompilationRenderSandboxEventData {
 	unsigned int sandbox_index;
 	EDITOR_SANDBOX_VIEWPORT viewport;
+	uint2 new_texture_size;
 };
 
 EDITOR_EVENT(WaitCompilationRenderSandboxEvent) {
@@ -1347,7 +1360,7 @@ EDITOR_EVENT(WaitCompilationRenderSandboxEvent) {
 		EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, data->sandbox_index, in_stream_module_index);
 		bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
 		if (!is_being_compiled) {
-			RenderSandbox(editor_state, data->sandbox_index, data->viewport);
+			RenderSandbox(editor_state, data->sandbox_index, data->viewport, data->new_texture_size);
 			// Unlock the sandbox
 			UnlockSandbox(editor_state, data->sandbox_index);
 			return false;
@@ -1363,13 +1376,14 @@ EDITOR_EVENT(WaitCompilationRenderSandboxEvent) {
 struct WaitResourceLoadingRenderSandboxEventData {
 	unsigned int sandbox_index;
 	EDITOR_SANDBOX_VIEWPORT viewport;
+	uint2 new_texture_size;
 };
 
 EDITOR_EVENT(WaitResourceLoadingRenderSandboxEvent) {
 	WaitResourceLoadingRenderSandboxEventData* data = (WaitResourceLoadingRenderSandboxEventData*)_data;
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		RenderSandbox(editor_state, data->sandbox_index, data->viewport);
+		RenderSandbox(editor_state, data->sandbox_index, data->viewport, data->new_texture_size);
 		// Unlock the sandbox
 		UnlockSandbox(editor_state, data->sandbox_index);
 		return false;
@@ -1377,7 +1391,7 @@ EDITOR_EVENT(WaitResourceLoadingRenderSandboxEvent) {
 	return true;
 }
 
-bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, bool disable_logging)
+bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, uint2 new_texture_size, bool disable_logging)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// If the rendering is disabled skip
@@ -1403,6 +1417,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		WaitResourceLoadingRenderSandboxEventData event_data;
 		event_data.sandbox_index = sandbox_index;
 		event_data.viewport = viewport;
+		event_data.new_texture_size = new_texture_size;
 
 		// Lock the sandbox such that it cannot be destroyed while we try to render to it
 		LockSandbox(editor_state, sandbox_index);
@@ -1416,6 +1431,11 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
 	
 	if (!is_being_compiled) {
+		// Check to see if we need to resize the textures
+		if (new_texture_size.x != 0 && new_texture_size.y != 0) {
+			ResizeSandboxRenderTextures(editor_state, sandbox_index, viewport, new_texture_size);
+		}
+
 		// Get the resource manager and graphics snapshot
 		ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(editor_state->EditorAllocator());
 		GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);
@@ -1492,11 +1512,14 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		WaitCompilationRenderSandboxEventData event_data;
 		event_data.sandbox_index = sandbox_index;
 		event_data.viewport = viewport;
+		event_data.new_texture_size = new_texture_size;
 
 		// Also lock this sandbox such that it cannot be destroyed while we try to render to it
 		LockSandbox(editor_state, sandbox_index);
 		EditorAddEvent(editor_state, WaitCompilationRenderSandboxEvent, &event_data, sizeof(event_data));
 	}
+
+	return true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1505,6 +1528,9 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	
+	// If the resource loading is active we need to wait
+	EditorStateWaitFlag(25, editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, false);
+
 	Graphics* runtime_graphics = editor_state->RuntimeGraphics();
 	// Free the current render destination and create a new one
 	FreeSandboxRenderTextures(editor_state, sandbox_index, viewport);

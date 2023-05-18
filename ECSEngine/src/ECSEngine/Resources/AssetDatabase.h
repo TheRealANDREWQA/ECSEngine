@@ -322,6 +322,10 @@ namespace ECSEngine {
 		// For example if a texture is being used and a material references it, then it will fill in the material that references it
 		Stream<Stream<unsigned int>> GetDependentAssetsFor(const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator, bool include_itself = false) const;
 
+		// Determines all assets that use the given asset whose metadata changes when the target file contents
+		// For example material metadata is dependent on shaders - if a shader file changes the material might need to change
+		Stream<Stream<unsigned int>> GetMetadataDependentAssetsFor(const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator, bool include_itself = false) const;
+
 		// Fills in the dependencies that the given asset has
 		void GetDependencies(unsigned int handle, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* dependencies) const;
 
@@ -596,6 +600,13 @@ namespace ECSEngine {
 		// In case it fails, the in memory version will be the update one. If changing the name,
 		// this does not verify that the new name doesn't exist previously
 		bool UpdateAsset(unsigned int handle, const void* asset, ECS_ASSET_TYPE type, bool update_files = true);
+
+		// It will read all assets that have dependencies from files that are currently loaded and
+		// reload them - if they have changed, they will be reflected afterwards
+		// Can optionally give a stream of typed handles to be filled in for those assets whose
+		// content has changed
+		// Returns true if all file reads were successful, else false (at least one failed)
+		bool UpdateAssetsWithDependenciesFromFiles(CapacityStream<AssetTypedHandle>* modified_assets = nullptr);
 
 		// Writes the file for that asset. Returns true if it suceedded, else false
 		// In case it fails, the previous version of that file (if it exists) will be restored

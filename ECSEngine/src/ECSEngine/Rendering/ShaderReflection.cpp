@@ -1384,6 +1384,110 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
+	bool ShaderReflection::ReflectShader(Stream<char> source_code, const ReflectedShader* reflected_shader) const
+	{
+		bool has_input_layout_descriptor = false;
+		bool has_input_layout_mapping = false;
+		bool has_buffers = false;
+		bool has_textures = false;
+		bool has_samplers = false;
+		bool has_macros = false;
+
+		AllocatorPolymorphic main_allocator = reflected_shader->allocator;
+		AllocatorPolymorphic macro_allocator = reflected_shader->macro_allocator;
+
+		auto deallocate = [&]() {
+			if (has_input_layout_descriptor) {
+				ShaderInputLayoutDeallocate(*reflected_shader->input_layout_descriptor, main_allocator);
+			}
+
+			if (has_input_layout_mapping) {
+
+			}
+
+			if (has_buffers) {
+				Stream<Reflection::ReflectionType> constant_buffers = reflected_shader->buffer_options.constant_buffer_reflection != nullptr ? 
+					reflected_shader->buffer_options.constant_buffer_reflection->ToStream() : Stream<Reflection::ReflectionType>(nullptr, 0);
+				ShaderReflectedBuffersDeallocate(*reflected_shader->buffers, main_allocator, constant_buffers);
+			}
+
+			if (has_textures) {
+				ShaderReflectedTexturesDeallocate(*reflected_shader->textures, main_allocator);
+			}
+
+			if (has_samplers) {
+				ShaderReflectedSamplersDeallocate(*reflected_shader->samplers, main_allocator);
+			}
+
+			if (has_macros) {
+
+			}
+		};
+
+		if (reflected_shader->input_layout_descriptor != nullptr) {
+			if (!ReflectVertexShaderInputSource(source_code, *reflected_shader->input_layout_descriptor, main_allocator)) {
+				return false;
+			}
+			else {
+				has_input_layout_descriptor = true;
+			}
+		}
+
+		if (reflected_shader->input_layout_mapping != nullptr) {
+			if (!ReflectVertexBufferMappingSource(source_code, *reflected_shader->input_layout_mapping)) {
+				deallocate();
+				return false;
+			}
+			else {
+				has_input_layout_mapping = true;
+			}
+		}
+
+		if (reflected_shader->buffers != nullptr) {
+			if (!ReflectShaderBuffersSource(source_code, *reflected_shader->buffers, main_allocator, reflected_shader->buffer_options)) {
+				deallocate();
+				return false;
+			}
+			else {
+				has_buffers = true;
+			}
+		}
+
+		if (reflected_shader->textures != nullptr) {
+			if (!ReflectShaderTexturesSource(source_code, *reflected_shader->textures, main_allocator)) {
+				deallocate();
+				return false;
+			}
+			else {
+				has_textures = true;
+			}
+		}
+
+		if (reflected_shader->samplers != nullptr) {
+			if (!ReflectShaderSamplersSource(source_code, *reflected_shader->samplers, main_allocator)) {
+				deallocate();
+				return false;
+			}
+			else {
+				has_samplers = true;
+			}
+		}
+
+		if (reflected_shader->conditional_macros != nullptr || reflected_shader->defined_macros != nullptr) {
+			if (!ReflectShaderMacros(source_code, reflected_shader->defined_macros, reflected_shader->conditional_macros, macro_allocator)) {
+				deallocate();
+				return false;
+			}
+			else {
+				has_macros = true;
+			}
+		}
+
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------------------------
+
 	Stream<char> VERTEX_SHADER_TYPE_KEYWORDS[] = {
 		STRING(SV_Position),
 		STRING(SV_POSITION),
@@ -1657,6 +1761,15 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		}
 
 		return reflected_buffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------------------------
+
+	void ShaderInputLayoutDeallocate(Stream<D3D11_INPUT_ELEMENT_DESC> elements, AllocatorPolymorphic allocator)
+	{
+		for (size_t index = 0; index < elements.size; index++) {
+			DeallocateIfBelongs(allocator, elements[index].SemanticName);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------

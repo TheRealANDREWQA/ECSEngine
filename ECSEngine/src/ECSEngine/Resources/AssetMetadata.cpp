@@ -218,6 +218,21 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	// The functor takes as parameter the ECS_MATERIAL_SHADER to apply the functor to
+	template<typename Functor>
+	void ForEachShaderType(ECS_MATERIAL_SHADER shader, Functor&& functor) {
+		if (shader == ECS_MATERIAL_SHADER_COUNT) {
+			for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
+				functor((ECS_MATERIAL_SHADER)type);
+			}
+		}
+		else {
+			functor(shader);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	MaterialAsset::MaterialAsset(Stream<char> _name, AllocatorPolymorphic allocator)
 	{
 		name = function::StringCopy(allocator, _name);
@@ -378,6 +393,24 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	void MaterialAsset::CopyOptions(const MaterialAsset* other, AllocatorPolymorphic allocator)
+	{
+		Stream<char> previous_name = name;
+		Material* previous_material = material_pointer;
+
+		// Make the name empty such that it will not be deallocated when calling DeallocateMemory
+		name = { nullptr, 0 };
+		DeallocateMemory(allocator);
+		*this = other->Copy(allocator);
+		Deallocate(allocator, name.buffer);
+
+		// Also restore the previous pointer
+		name = previous_name;
+		material_pointer = previous_material;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	void MaterialAsset::CopyAndResize(const MaterialAsset* asset, AllocatorPolymorphic allocator, bool allocate_name)
 	{
 		Resize(asset, allocator, true);
@@ -403,9 +436,9 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::CopyMatchingNames(const MaterialAsset* asset) {
-		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
-			ECS_MATERIAL_SHADER material_shader = (ECS_MATERIAL_SHADER)type;
+	void MaterialAsset::CopyMatchingNames(const MaterialAsset* asset, ECS_MATERIAL_SHADER shader) {
+		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
+			ECS_MATERIAL_SHADER material_shader = shader;
 			for (size_t index = 0; index < textures[material_shader].size; index++) {
 				unsigned int matching_index = function::FindString(textures[material_shader][index].name, asset->textures[material_shader], [](auto value) {
 					return value.name;
@@ -427,12 +460,12 @@ namespace ECSEngine {
 			for (size_t index = 0; index < buffers[material_shader].size; index++) {
 				unsigned int matching_index = function::FindString(buffers[material_shader][index].name, asset->buffers[material_shader], [](auto value) {
 					return value.name;
-				});
+					});
 
 				if (matching_index != -1) {
 					buffers[material_shader][index].dynamic = asset->buffers[material_shader][matching_index].dynamic;
 					buffers[material_shader][index].slot = asset->buffers[material_shader][matching_index].slot;
-					
+
 					if (asset->buffers[material_shader][matching_index].reflection_type != nullptr &&
 						buffers[material_shader][index].reflection_type != nullptr && reflection_manager != nullptr
 						&& asset->reflection_manager != nullptr) {
@@ -447,7 +480,7 @@ namespace ECSEngine {
 					}
 				}
 			}
-		}
+		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -488,44 +521,82 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::DeallocateBufferReflectionTypes(AllocatorPolymorphic allocator) const
+	void MaterialAsset::DeallocateBufferReflectionTypes(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader) const
 	{
-		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
-			for (size_t index = 0; index < buffers[type].size; index++) {
-				if (buffers[type][index].reflection_type != nullptr) {
-					buffers[type][index].reflection_type->Deallocate(allocator);
+		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
+			for (size_t index = 0; index < buffers[shader].size; index++) {
+				if (buffers[shader][index].reflection_type != nullptr) {
+					buffers[shader][index].reflection_type->Deallocate(allocator);
 				}
 			}
-		}
+		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::DeallocateBufferPointers(AllocatorPolymorphic allocator) const {
-		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
-			for (size_t index = 0; index < buffers[type].size; index++) {
-				DeallocateIfBelongs(allocator, buffers[type][index].data.buffer);
+	void MaterialAsset::DeallocateBufferPointers(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader) const {
+		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
+			for (size_t index = 0; index < buffers[shader].size; index++) {
+				DeallocateIfBelongs(allocator, buffers[shader][index].data.buffer);
 			}
-		}
+		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::DeallocateNames(AllocatorPolymorphic allocator) const
+	void MaterialAsset::DeallocateNames(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader) const
 	{
-		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
-			ECS_MATERIAL_SHADER shader_type = (ECS_MATERIAL_SHADER)type;
-			for (size_t index = 0; index < textures[shader_type].size; index++) {
-				DeallocateIfBelongs(allocator, textures[shader_type][index].name.buffer);
+		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
+			for (size_t index = 0; index < textures[shader].size; index++) {
+				DeallocateIfBelongs(allocator, textures[shader][index].name.buffer);
 			}
-			for (size_t index = 0; index < samplers[shader_type].size; index++) {
-				DeallocateIfBelongs(allocator, samplers[shader_type][index].name.buffer);
+			for (size_t index = 0; index < samplers[shader].size; index++) {
+				DeallocateIfBelongs(allocator, samplers[shader][index].name.buffer);
 			}
-			for (size_t index = 0; index < buffers[shader_type].size; index++) {
-				DeallocateIfBelongs(allocator, buffers[shader_type][index].name.buffer);
+			for (size_t index = 0; index < buffers[shader].size; index++) {
+				DeallocateIfBelongs(allocator, buffers[shader][index].name.buffer);
 			}
-		}
+		});
+	}
 
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::DeallocateBuffers(AllocatorPolymorphic allocator, bool include_reflection_type, ECS_MATERIAL_SHADER shader) const
+	{
+		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
+			for (size_t index = 0; index < buffers[shader].size; index++) {
+				DeallocateIfBelongs(allocator, buffers[shader][index].name.buffer);
+				DeallocateIfBelongs(allocator, buffers[shader][index].data.buffer);
+				if (include_reflection_type) {
+					if (buffers[shader][index].reflection_type != nullptr) {
+						buffers[shader][index].reflection_type->Deallocate(allocator);
+						DeallocateIfBelongs(allocator, buffers[shader][index].reflection_type);
+					}
+				}
+			}
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::DeallocateTextures(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader) const
+	{
+		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
+			for (size_t index = 0; index < textures[shader].size; index++) {
+				DeallocateIfBelongs(allocator, textures[shader][index].name.buffer);
+			}
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::DeallocateSamplers(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader) const
+	{
+		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
+			for (size_t index = 0; index < samplers[shader].size; index++) {
+				DeallocateIfBelongs(allocator, samplers[shader][index].name.buffer);
+			}
+		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -558,22 +629,10 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	size_t MaterialAsset::FindTexture(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const
+	size_t MaterialAsset::FindBuffer(Stream<char> name, ECS_MATERIAL_SHADER shader) const
 	{
-		for (size_t index = 0; index < textures[shader].size; index++) {
-			if (textures[shader][index].name == name && textures[shader][index].slot == slot) {
-				return index;
-			}
-		}
-		return -1;
-	}
-
-	// ------------------------------------------------------------------------------------------------------
-
-	size_t MaterialAsset::FindSampler(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const
-	{
-		for (size_t index = 0; index < samplers[shader].size; index++) {
-			if (samplers[shader][index].name == name && samplers[shader][index].slot == slot) {
+		for (size_t index = 0; index < buffers[shader].size; index++) {
+			if (buffers[shader][index].name == name) {
 				return index;
 			}
 		}
@@ -586,6 +645,54 @@ namespace ECSEngine {
 	{
 		for (size_t index = 0; index < buffers[shader].size; index++) {
 			if (buffers[shader][index].name == name && buffers[shader][index].slot == slot) {
+				return index;
+			}
+		}
+		return -1;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	size_t MaterialAsset::FindTexture(Stream<char> name, ECS_MATERIAL_SHADER shader) const
+	{
+		for (size_t index = 0; index < textures[shader].size; index++) {
+			if (textures[shader][index].name == name) {
+				return index;
+			}
+		}
+		return -1;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	size_t MaterialAsset::FindTexture(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const
+	{
+		for (size_t index = 0; index < textures[shader].size; index++) {
+			if (textures[shader][index].name == name && textures[shader][index].slot == slot) {
+				return index;
+			}
+		}
+		return -1;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	size_t MaterialAsset::FindSampler(Stream<char> name, ECS_MATERIAL_SHADER shader) const
+	{
+		for (size_t index = 0; index < samplers[shader].size; index++) {
+			if (samplers[shader][index].name == name) {
+				return index;
+			}
+		}
+		return -1;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	size_t MaterialAsset::FindSampler(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const
+	{
+		for (size_t index = 0; index < samplers[shader].size; index++) {
+			if (samplers[shader][index].name == name && samplers[shader][index].slot == slot) {
 				return index;
 			}
 		}
@@ -719,6 +826,36 @@ namespace ECSEngine {
 				WriteSamplerCount(samplers[ECS_MATERIAL_SHADER_VERTEX].size, value, resize_counts);
 			}
 		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::RetrieveBufferData(
+		size_t current_index, 
+		ECS_MATERIAL_SHADER shader, 
+		const Reflection::ReflectionType* other_type, 
+		const void* data,
+		AllocatorPolymorphic allocator
+	)
+	{
+		const MaterialAssetBuffer* current_buffer = &buffers[shader][current_index];
+
+		if (Reflection::CompareReflectionTypes(reflection_manager, reflection_manager, other_type, current_buffer->reflection_type)) {
+			memcpy(current_buffer->data.buffer, data, current_buffer->data.size);
+		}
+		else {
+			// It has changed. We need to convert the old type to the new type
+			Reflection::CopyReflectionTypeToNewVersion(
+				reflection_manager,
+				reflection_manager,
+				other_type,
+				current_buffer->reflection_type,
+				data,
+				current_buffer->data.buffer,
+				allocator,
+				true
+			);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1233,6 +1370,53 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	void CopyAssetOptions(void* destination, const void* source, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator)
+	{
+		switch (type) {
+		case ECS_ASSET_MESH:
+		{
+			MeshMetadata* metadata = (MeshMetadata*)destination;
+			metadata->CopyOptions((MeshMetadata*)source);
+		}
+		break;
+		case ECS_ASSET_TEXTURE:
+		{
+			TextureMetadata* metadata = (TextureMetadata*)destination;
+			metadata->CopyOptions((TextureMetadata*)source);
+		}
+		break;
+		case ECS_ASSET_GPU_SAMPLER:
+		{
+			GPUSamplerMetadata* metadata = (GPUSamplerMetadata*)destination;
+			metadata->CopyOptions((GPUSamplerMetadata*)source);
+		}
+		break;
+		case ECS_ASSET_SHADER:
+		{
+			ShaderMetadata* metadata = (ShaderMetadata*)destination;
+			metadata->CopyOptions((ShaderMetadata*)source, allocator);
+		}
+		break;
+		case ECS_ASSET_MATERIAL:
+		{
+			MaterialAsset* metadata = (MaterialAsset*)destination;
+			metadata->CopyOptions((MaterialAsset*)source, allocator);
+		}
+		break;
+		case ECS_ASSET_MISC:
+		{
+			MiscAsset* metadata = (MiscAsset*)destination;
+			metadata->CopyOptions((MiscAsset*)source, allocator);
+		}
+		break;
+		default:
+			ECS_ASSERT(false);
+		}
+	}
+
+
+	// ------------------------------------------------------------------------------------------------------
+
 	void DeallocateAssetBase(const void* asset, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator)
 	{
 #define CASE(asset_type, metadata_type) ((metadata_type*)asset)->DeallocateMemory(allocator);
@@ -1475,15 +1659,12 @@ namespace ECSEngine {
 
 	bool DoesAssetReferenceOtherAsset(unsigned int handle, ECS_ASSET_TYPE handle_type, const void* asset, ECS_ASSET_TYPE type) 
 	{
-		if (type == ECS_ASSET_MATERIAL) {
-			if (handle_type == ECS_ASSET_TEXTURE || handle_type == ECS_ASSET_GPU_SAMPLER || handle_type == ECS_ASSET_SHADER) {
-				ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
-				const MaterialAsset* material = (const MaterialAsset*)asset;
-				material->GetDependencies(&dependencies);
-				for (unsigned int index = 0; index < dependencies.size; index++) {
-					if (dependencies[index].handle == handle && dependencies[index].type == handle_type) {
-						return true;
-					}
+		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_WITH_DEPENDENCIES) && function::ExistsStaticArray(handle_type, ECS_ASSET_TYPES_REFERENCEABLE)) {
+			ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
+			GetAssetDependencies(asset, type, &dependencies);
+			for (unsigned int index = 0; index < dependencies.size; index++) {
+				if (dependencies[index].handle == handle && dependencies[index].type == handle_type) {
+					return true;
 				}
 			}
 		}

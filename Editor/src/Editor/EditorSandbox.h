@@ -484,8 +484,15 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns true if the render was successful. It can fail if there is no graphics module, there are multiple of them or the
-// task scheduling failed for the graphics module.
-bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, bool disable_logging = false);
+// task scheduling failed for the graphics module. If the new size is specified, it will also resize the textures before rendering
+// (it will take into account if it cannot right now because of the resource loading)
+bool RenderSandbox(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	EDITOR_SANDBOX_VIEWPORT viewport, 
+	ECSEngine::uint2 new_size = { 0, 0 }, 
+	bool disable_logging = false
+);
 
 // -------------------------------------------------------------------------------------------------------------
 

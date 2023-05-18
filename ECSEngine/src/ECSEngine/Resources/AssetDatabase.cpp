@@ -1109,8 +1109,17 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	Stream<Stream<unsigned int>> AssetDatabase::GetDependentAssetsFor(const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator, bool include_itself) const
-	{
+	// The functor takes as parameter a (size_t index) which returns the current ECS_ASSET_TYPE
+	template<typename TypeFunctor>
+	Stream<Stream<unsigned int>> GetDependentAssetsForImpl(
+		const AssetDatabase* database,
+		const void* metadata,
+		ECS_ASSET_TYPE type,
+		AllocatorPolymorphic allocator,
+		bool include_itself,
+		size_t asset_types_to_check,
+		TypeFunctor&& type_functor
+	) {
 		Stream<Stream<unsigned int>> handles;
 		handles.Initialize(allocator, ECS_ASSET_TYPE_COUNT);
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
@@ -1118,7 +1127,7 @@ namespace ECSEngine {
 		}
 
 		if (include_itself) {
-			unsigned int current_handle = FindAssetEx(GetAssetFromMetadata(metadata, type), type);
+			unsigned int current_handle = database->FindAssetEx(GetAssetFromMetadata(metadata, type), type);
 			if (current_handle != -1) {
 				handles[type].AddResize(current_handle, allocator);
 			}
@@ -1131,22 +1140,50 @@ namespace ECSEngine {
 		// Verify that it is a referenceable type
 		ECS_ASSERT(function::ExistsStaticArray(type, ECS_ASSET_TYPES_REFERENCEABLE), "Invalid asset type");
 
-		unsigned int current_handle = FindAssetEx(GetAssetFromMetadata(metadata, type), type);
+		unsigned int current_handle = database->FindAssetEx(GetAssetFromMetadata(metadata, type), type);
 
-		function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE with_dependency_type) {
-			unsigned int count = GetAssetCount(with_dependency_type);
-			handles[with_dependency_type].Initialize(allocator, count);
-			handles[with_dependency_type].size = 0;
+		for (size_t index = 0; index < asset_types_to_check; index++) {
+			ECS_ASSET_TYPE current_type = type_functor(index);
+
+			unsigned int count = database->GetAssetCount(current_type);
+			handles[current_type].Initialize(allocator, count);
+			handles[current_type].size = 0;
 			for (unsigned int index = 0; index < count; index++) {
-				unsigned int handle = GetAssetHandleFromIndex(index, with_dependency_type);
-				const void* asset = GetAssetConst(handle, with_dependency_type);
-				if (DoesAssetReferenceOtherAsset(current_handle, type, asset, with_dependency_type)) {
-					handles[with_dependency_type].Add(handle);
+				unsigned int handle = database->GetAssetHandleFromIndex(index, current_type);
+				const void* asset = database->GetAssetConst(handle, current_type);
+				if (DoesAssetReferenceOtherAsset(current_handle, type, asset, current_type)) {
+					handles[current_type].Add(handle);
 				}
 			}
-		});
+		}
 
 		return handles;
+	}
+
+	Stream<Stream<unsigned int>> AssetDatabase::GetDependentAssetsFor(
+		const void* metadata, 
+		ECS_ASSET_TYPE type, 
+		AllocatorPolymorphic allocator, 
+		bool include_itself
+	) const
+	{
+		return GetDependentAssetsForImpl(this, metadata, type, allocator, include_itself, std::size(ECS_ASSET_TYPES_WITH_DEPENDENCIES), [&](size_t index) {
+			return ECS_ASSET_TYPES_WITH_DEPENDENCIES[index];
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	Stream<Stream<unsigned int>> AssetDatabase::GetMetadataDependentAssetsFor(
+		const void* metadata, 
+		ECS_ASSET_TYPE type, 
+		AllocatorPolymorphic allocator, 
+		bool include_itself
+	) const
+	{
+		return GetDependentAssetsForImpl(this, metadata, type, allocator, include_itself, std::size(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY), [&](size_t index) {
+			return ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[index].main_type;
+		});
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -1906,6 +1943,56 @@ namespace ECSEngine {
 		}
 
 		return false;
+	}
+
+	// --------------------------------------------------------------------------------------
+	
+	bool AssetDatabase::UpdateAssetsWithDependenciesFromFiles(CapacityStream<AssetTypedHandle>* modified_assets)
+	{
+		bool success = true;
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+		function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
+			ForEachAsset(asset_type, [&](unsigned int handle) {
+				void* current_metadata = GetAsset(handle, asset_type);
+
+				// Load the asset into a temporary and then get its dependencies
+				size_t temporary_asset[AssetMetadataMaxSizetSize()];
+				bool current_success = ReadAssetFile(
+					ECSEngine::GetAssetName(current_metadata, asset_type), 
+					GetAssetFile(current_metadata, asset_type), 
+					temporary_asset, 
+					asset_type, 
+					GetAllocatorPolymorphic(&stack_allocator)
+				);
+				if (current_success) {
+					// Now we only need to remove the old dependencies
+					ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, current_dependencies, 512);
+					GetAssetDependencies(current_metadata, asset_type, &current_dependencies);
+
+					// Before finishing we must remove the dependencies for the pre-existing entry
+					for (unsigned int index = 0; index < current_dependencies.size; index++) {
+						RemoveAsset(current_dependencies[index].handle, current_dependencies[index].type);
+					}
+
+					if (modified_assets != nullptr) {
+						// Determine if they are different
+						if (!CompareAssetOptions(current_metadata, temporary_asset, asset_type)) {
+							modified_assets->AddAssert({ handle, asset_type });
+						}
+					}
+
+					// Now update the asset to contain the new data - this will also deallocate
+					// the previous data
+					CopyAssetOptions(current_metadata, temporary_asset, asset_type, Allocator());
+				}
+				else {
+					success = false;
+				}
+			});	
+		});
+
+		stack_allocator.ClearBackup();
+		return success;
 	}
 
 	// --------------------------------------------------------------------------------------

@@ -114,8 +114,7 @@ void ResizeSandboxTextures(
 		*previous_size = new_size;
 		sandbox_index = sandbox_index == -1 ? GetWindowNameIndex(drawer) : sandbox_index;
 
-		ResizeSandboxRenderTextures(editor_state, sandbox_index, viewport, new_size);
-		RenderSandbox(editor_state, sandbox_index, viewport);
+		RenderSandbox(editor_state, sandbox_index, viewport, new_size);
 	}
 }
 

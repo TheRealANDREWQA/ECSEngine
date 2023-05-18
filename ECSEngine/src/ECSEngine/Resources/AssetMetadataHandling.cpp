@@ -1239,6 +1239,74 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
+	ECS_RELOAD_ASSET_METADATA_STATUS ReloadMaterialMetadataFromShader(
+		ResourceManager* resource_manager, 
+		AssetDatabase* database, 
+		MaterialAsset* material, 
+		const ShaderMetadata* shader, 
+		Stream<wchar_t> mount_point
+	)
+	{
+		if (material->vertex_shader_handle != -1) {
+			const ShaderMetadata* vertex_shader = database->GetShaderConst(material->vertex_shader_handle);
+			if (vertex_shader == shader) {
+				// Reflect the shader again
+				return ReflectMaterialShaderParameters(resource_manager, material, ECS_MATERIAL_SHADER_VERTEX, vertex_shader->file, database->Allocator(), mount_point);
+			}
+		}
+
+		if (material->pixel_shader_handle != -1) {
+			const ShaderMetadata* pixel_shader = database->GetShaderConst(material->pixel_shader_handle);
+			if (pixel_shader == shader) {
+				return ReflectMaterialShaderParameters(resource_manager, material, ECS_MATERIAL_SHADER_PIXEL, pixel_shader->file, database->Allocator(), mount_point);
+			}
+		}
+
+		return ECS_RELOAD_ASSET_METADATA_NO_CHANGE;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	ECS_RELOAD_ASSET_METADATA_STATUS ReloadAssetMetadataFromTargetDependency(
+		ResourceManager* resource_manager, 
+		AssetDatabase* database, 
+		void* metadata, 
+		ECS_ASSET_TYPE type, 
+		const void* changed_metadata, 
+		ECS_ASSET_TYPE changed_metadata_type, 
+		Stream<wchar_t> mount_point
+	)
+	{
+		if (IsAssetTypeMetadataWithDependencies(type)) {
+			ECS_STACK_CAPACITY_STREAM(ECS_ASSET_TYPE, dependent_types, 16);
+			FillAssetTypeMetadataWithDependencies(type, &dependent_types);
+
+			unsigned int index = 0;
+			for (; index < dependent_types.size; index++) {
+				if (dependent_types[index] == changed_metadata_type) {
+					break;
+				}
+			}
+
+			if (index < dependent_types.size) {
+				// The types are conformant - check now the values
+				if (type == ECS_ASSET_MATERIAL) {
+					MaterialAsset* material = (MaterialAsset*)metadata;
+					const ShaderMetadata* shader = (const ShaderMetadata*)changed_metadata;
+
+					return ReloadMaterialMetadataFromShader(resource_manager, database, material, shader, mount_point);
+				}
+				else {
+					ECS_ASSERT(false);
+				}
+			}
+			return ECS_RELOAD_ASSET_METADATA_NO_CHANGE;
+		}
+		return ECS_RELOAD_ASSET_METADATA_NO_CHANGE;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
 	void ConvertMaterialFromDatabaseToDatabase(
 		const MaterialAsset* material, 
 		MaterialAsset* output_material,
@@ -1383,23 +1451,261 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code)
+	bool ChangeMaterialBuffersFromReflectedParameters(
+		MaterialAsset* material, 
+		const ReflectedShader* reflected_shader, 
+		ECS_MATERIAL_SHADER shader, 
+		AllocatorPolymorphic allocator
+	)
 	{
-		metadata->source_code = source_code;
+		Stream<Reflection::ReflectionType> cbuffers = *reflected_shader->buffer_options.constant_buffer_reflection;
+
+		bool are_different = false;
+		if (cbuffers.size != material->buffers[shader].size) {
+			are_different = true;
+		}
+		else {
+			for (size_t index = 0; index < cbuffers.size && !are_different; index++) {
+				size_t existing_index = material->FindBuffer(cbuffers[index].name, shader);
+				if (existing_index == -1) {
+					are_different = true;
+				}
+				else {
+					if (reflected_shader->buffers->buffer[index].register_index != material->buffers[shader][existing_index].slot) {
+						are_different = true;
+					}
+					else {
+						// Compare the byte size
+						if (Reflection::GetReflectionTypeByteSize(cbuffers.buffer + index) != material->buffers[shader][existing_index].data.size) {
+							are_different = true;
+						}
+						else {
+							// Compare the reflection type now
+							if (material->buffers[shader][existing_index].reflection_type == nullptr) {
+								are_different = true;
+							}
+							else {
+								// At the moment they cannot have nested structures - use the same reflection manager
+								if (!Reflection::CompareReflectionTypes(
+									material->reflection_manager,
+									material->reflection_manager,
+									cbuffers.buffer + index,
+									material->buffers[shader][existing_index].reflection_type
+								)) {
+									are_different = true;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if (are_different) {
+			MaterialAsset temporary_material;
+			memcpy(material, &temporary_material, sizeof(temporary_material));
+			material->ResizeBufferNewValue(cbuffers.size, shader, allocator, true);
+
+			for (unsigned int index = 0; index < reflected_shader->buffers->size; index++) {
+				Stream<char> current_name = cbuffers[index].name;
+				size_t type_byte_size = Reflection::GetReflectionTypeByteSize(cbuffers.buffer + index);
+				material->buffers[shader][index].data.buffer = Allocate(allocator, type_byte_size);
+				material->buffers[shader][index].data.size = type_byte_size;
+				material->buffers[shader][index].slot = reflected_shader->buffers->buffer[index].register_index;
+				material->buffers[shader][index].dynamic = true;
+				material->buffers[shader][index].name = function::StringCopy(allocator, current_name);
+
+				// Search to see if it exists before
+				size_t existing_index = temporary_material.FindBuffer(current_name, shader);
+				if (existing_index != -1) {
+					material->RetrieveBufferData(
+						index,
+						shader,
+						temporary_material.buffers[shader][existing_index].reflection_type,
+						temporary_material.buffers[shader][existing_index].data.buffer,
+						allocator
+					);
+				}
+				else {
+					material->reflection_manager->SetInstanceDefaultData(cbuffers.buffer + index, material->buffers[shader][index].data.buffer);
+				}
+			}
+
+			// Now deallocate the previous buffer
+			temporary_material.DeallocateBuffers(allocator, true, shader);
+		}
+
+		return are_different;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	void SetShaderMetadataByteCode(ShaderMetadata* metadata, Stream<void> byte_code)
+	bool ChangeMaterialTexturesFromReflectedParameters(
+		MaterialAsset* material, 
+		const ReflectedShader* reflected_shader, 
+		ECS_MATERIAL_SHADER shader, 
+		AllocatorPolymorphic allocator
+	)
 	{
-		metadata->byte_code = byte_code;
+		Stream<ShaderReflectedTexture> textures = *reflected_shader->textures;
+
+		bool are_different = false;
+		if (textures.size != material->textures[shader].size) {
+			are_different = true;
+		}
+		else {
+			for (size_t index = 0; index < textures.size && !are_different; index++) {
+				size_t existing_index = material->FindTexture(textures[index].name, shader);
+				if (existing_index == -1) {
+					are_different = true;
+				}
+				else {
+					if (textures[index].register_index != material->textures[shader][existing_index].slot) {
+						are_different = true;
+					}
+				}
+			}
+		}
+
+		if (are_different) {
+			MaterialAsset temporary_material;
+			memcpy(material, &temporary_material, sizeof(temporary_material));
+			material->ResizeTexturesNewValue(textures.size, shader, allocator, true);
+
+			for (size_t index = 0; index < textures.size; index++) {
+				material->textures[shader][index].metadata_handle = -1;
+				material->textures[shader][index].slot = textures[index].register_index;
+				material->textures[shader][index].name = function::StringCopy(allocator, textures[index].name);
+
+				size_t existing_index = temporary_material.FindSampler(textures[index].name, shader);
+				if (existing_index != -1) {
+					material->textures[shader][index].metadata_handle = temporary_material.textures[shader][existing_index].metadata_handle;
+				}
+			}
+
+			// Now deallocate the previous data
+			temporary_material.DeallocateTextures(allocator, shader);
+		}
+
+		return are_different;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	void SetMiscData(MiscAsset* misc_asset, Stream<void> data)
+	bool ChangeMaterialSamplersFromReflectedParameters(
+		MaterialAsset* material, 
+		const ReflectedShader* reflected_shader, 
+		ECS_MATERIAL_SHADER shader, 
+		AllocatorPolymorphic allocator
+	)
 	{
-		misc_asset->data = data;
+		Stream<ShaderReflectedSampler> samplers = *reflected_shader->samplers;
+
+		bool are_different = false;
+		if (samplers.size != material->samplers[shader].size) {
+			are_different = true;
+		}
+		else {
+			for (size_t index = 0; index < samplers.size && !are_different; index++) {
+				size_t existing_index = material->FindSampler(samplers[index].name, shader);
+				if (existing_index == -1) {
+					are_different = true;
+				}
+				else {
+					if (samplers[index].register_index != material->samplers[shader][existing_index].slot) {
+						are_different = true;
+					}
+				}
+			}
+		}
+
+		if (are_different) {
+			MaterialAsset temporary_material;
+			memcpy(material, &temporary_material, sizeof(temporary_material));
+			material->ResizeSamplersNewValue(samplers.size, shader, allocator, true);
+
+			for (size_t index = 0; index < samplers.size; index++) {
+				material->samplers[shader][index].metadata_handle = -1;
+				material->samplers[shader][index].slot = samplers[index].register_index;
+				material->samplers[shader][index].name = function::StringCopy(allocator, samplers[index].name);
+
+				size_t existing_index = temporary_material.FindSampler(samplers[index].name, shader);
+				if (existing_index != -1) {
+					material->samplers[shader][index].metadata_handle = temporary_material.samplers[shader][existing_index].metadata_handle;
+				}
+			}
+
+			// Now deallocate the previous data
+			temporary_material.DeallocateSamplers(allocator, shader);
+		}
+		
+		return are_different;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	bool ChangeMaterialFromReflectedShader(
+		MaterialAsset* material, 
+		const ReflectedShader* reflected_shader, 
+		ECS_MATERIAL_SHADER shader,
+		AllocatorPolymorphic allocator
+	)
+	{
+		bool changed = ChangeMaterialBuffersFromReflectedParameters(material, reflected_shader, shader, allocator);
+		changed |= ChangeMaterialTexturesFromReflectedParameters(material, reflected_shader, shader, allocator);
+		changed |= ChangeMaterialSamplersFromReflectedParameters(material, reflected_shader, shader, allocator);
+		return changed;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	ECS_RELOAD_ASSET_METADATA_STATUS ReflectMaterialShaderParameters(
+		const ResourceManager* resource_manager, 
+		MaterialAsset* material, 
+		ECS_MATERIAL_SHADER shader_type, 
+		Stream<wchar_t> shader_file,
+		AllocatorPolymorphic allocator,
+		Stream<wchar_t> mount_point
+	)
+	{
+		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path_storage, 512);
+		Stream<wchar_t> absolute_path = function::MountPathOnlyRel(shader_file, mount_point, absolute_path_storage);
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+
+		Stream<char> source_code = ReadWholeFileText(absolute_path, GetAllocatorPolymorphic(&stack_allocator));
+		ECS_RELOAD_ASSET_METADATA_STATUS status = ECS_RELOAD_ASSET_METADATA_NO_CHANGE;
+		if (source_code.size > 0) {
+			ECS_STACK_CAPACITY_STREAM(ShaderReflectedBuffer, reflected_buffers, ECS_SHADER_MAX_CONSTANT_BUFFER_SLOT);
+			ECS_STACK_CAPACITY_STREAM(ShaderReflectedSampler, reflected_samplers, ECS_SHADER_MAX_SAMPLER_SLOT);
+			ECS_STACK_CAPACITY_STREAM(ShaderReflectedTexture, reflected_textures, ECS_SHADER_MAX_TEXTURE_SLOT);
+			ECS_STACK_CAPACITY_STREAM(Reflection::ReflectionType, reflected_constant_buffer_types, ECS_SHADER_MAX_CONSTANT_BUFFER_SLOT);
+
+			// Load the new values
+			ReflectedShader reflected_shader;
+			reflected_shader.allocator = GetAllocatorPolymorphic(&stack_allocator);
+
+			reflected_shader.buffers = &reflected_buffers;
+			reflected_shader.buffer_options.only_constant_buffers = true;
+			reflected_shader.buffer_options.constant_buffer_reflection = &reflected_constant_buffer_types;
+
+			reflected_shader.textures = &reflected_textures;
+			reflected_shader.samplers = &reflected_samplers;
+
+			bool success = resource_manager->m_graphics->ReflectShader(source_code, &reflected_shader);
+			if (success) {
+				bool changed = ChangeMaterialFromReflectedShader(material, &reflected_shader, shader_type, allocator);
+				status = changed ? ECS_RELOAD_ASSET_METADATA_CHANGED : ECS_RELOAD_ASSET_METADATA_NO_CHANGE;
+			}
+			else {
+				status = ECS_RELOAD_ASSET_METADATA_FAILED_READING;
+			}
+		}
+
+		stack_allocator.ClearBackup();
+		// We could deallocate the material - but it will result in data loss
+		// on subsequent calls - so let it the same
+		return status;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------

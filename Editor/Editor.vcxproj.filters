@@ -63,6 +63,7 @@
     <ClInclude Include="src\UI\Common.h" />
     <ClInclude Include="src\Editor\EditorSandboxTypes.h" />
     <ClInclude Include="src\UI\RenderingCommon.h" />
+    <ClInclude Include="src\Editor\EditorStateTypes.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
