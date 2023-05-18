@@ -1133,8 +1133,14 @@ ECS_THREAD_TASK(ReloadAssetsMetadataChangeTask) {
 									// If an asset was removed from the dependency list and is being kept alive
 									// only by this reference it will cause an unnecessary unload. So update the metadata
 									// in the database first before proceeding
-									DeallocateAssetBase(metadata, asset_type, editor_state->asset_database->Allocator());
+									
+									// Copy the asset into a temporary, copy the new asset fields and then deallocate the old one
+									// otherwise the old data can be deallocated and when reallocating the values to be overwritten
+									size_t temporary_metadata[AssetMetadataMaxSizetSize()];
+									memcpy(temporary_metadata, metadata, AssetMetadataByteSize(asset_type));								
 									CopyAssetBase(metadata, file_metadata, asset_type, editor_state->asset_database->Allocator());
+									DeallocateAssetBase(temporary_metadata, asset_type, editor_state->asset_database->Allocator());
+									
 									SetAssetToMetadata(metadata, asset_type, GetAssetFromMetadata(file_metadata, asset_type));
 									modified_database_metadata = true;
 

@@ -38,6 +38,17 @@ namespace ECSEngine {
 		ECS_ASSET_MATERIAL
 	};
 
+	struct AssetTypePair {
+		ECS_ASSET_TYPE main_type;
+		ECS_ASSET_TYPE dependency_type;
+	};
+
+	// Describes all asset types which have their metadata changed when the underlying file
+	// of another dependency type is changed
+	inline const AssetTypePair ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[] = {
+		{ ECS_ASSET_MATERIAL, ECS_ASSET_SHADER }
+	};
+
 	struct AssetTypedHandle {
 		unsigned int handle;
 		ECS_ASSET_TYPE type;
@@ -68,7 +79,7 @@ namespace ECSEngine {
 		CompareMaterialsResult material_result;
 	};
 
-	inline bool IsAssetTypeReferenceable(ECS_ASSET_TYPE type) {
+	ECS_INLINE bool IsAssetTypeReferenceable(ECS_ASSET_TYPE type) {
 		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_REFERENCEABLE); index++) {
 			if (type == ECS_ASSET_TYPES_REFERENCEABLE[index]) {
 				return true;
@@ -77,13 +88,40 @@ namespace ECSEngine {
 		return false;
 	}
 
-	inline bool IsAssetTypeWithDependencies(ECS_ASSET_TYPE type) {
+	ECS_INLINE bool IsAssetTypeWithDependencies(ECS_ASSET_TYPE type) {
 		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_WITH_DEPENDENCIES); index++) {
 			if (type == ECS_ASSET_TYPES_WITH_DEPENDENCIES[index]) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	ECS_INLINE bool IsAssetTypeMetadataWithDependencies(ECS_ASSET_TYPE type) {
+		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY); index++) {
+			if (type == ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[index].main_type) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	ECS_INLINE bool IsAssetTypeDependencyForMetadataChange(ECS_ASSET_TYPE type) {
+		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY); index++) {
+			if (type == ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[index].dependency_type) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Fills in all the types which are metadata dependencies for the given main_type (for the moment only materials)
+	ECS_INLINE void FillAssetTypeMetadataWithDependencies(ECS_ASSET_TYPE main_type, CapacityStream<ECS_ASSET_TYPE>* types) {
+		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY); index++) {
+			if (ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[index].main_type == main_type) {
+				types->AddAssert(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY[index].dependency_type);
+			}
+		}
 	}
 
 	ECSENGINE_API bool AssetHasFile(ECS_ASSET_TYPE type);
@@ -293,6 +331,7 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// Daellocates the current options and allocates them accordingly
 		void CopyOptions(const ShaderMetadata* other, AllocatorPolymorphic allocator);
 
 		ShaderMetadata Copy(AllocatorPolymorphic allocator) const;
@@ -376,6 +415,9 @@ namespace ECSEngine {
 		// Returns true if the parameters besides the name, target file and the asset pointer are the same
 		bool CompareOptions(const MaterialAsset* other) const;
 
+		// Daellocates the current options and allocates them accordingly
+		void CopyOptions(const MaterialAsset* other, AllocatorPolymorphic allocator);
+
 		// Does not allocate the names for the textures, samplers or buffers, neither it allocates
 		// the reflection type with the given allocator
 		void CopyAndResize(const MaterialAsset* asset, AllocatorPolymorphic allocator, bool allocate_name = false);
@@ -383,7 +425,8 @@ namespace ECSEngine {
 		// It will copy the buffer/texture/sampler information from the other asset for those resources
 		// that match names. For textures/samplers it will only copy the slot, for the buffers it will copy
 		// the slot, the dynamic status and the data. The reflection manager must be set
-		void CopyMatchingNames(const MaterialAsset* asset);
+		// If the shader is left at default then it will deallocate all shader types
+		void CopyMatchingNames(const MaterialAsset* asset, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT);
 
 		// This asset can only be copied with an allocator - the difference between this function
 		// and the CopyAndResize is that this function does copy the name for textures, samplers or buffers and
@@ -391,27 +434,52 @@ namespace ECSEngine {
 		MaterialAsset Copy(AllocatorPolymorphic allocator) const;
 
 		// Deallocates everything that can be deallocated from the buffer reflection types
-		void DeallocateBufferReflectionTypes(AllocatorPolymorphic allocator) const;
+		// If the shader is left at default then it will deallocate all shader types
+		void DeallocateBufferReflectionTypes(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT) const;
 
 		// Deallocates the data.buffer pointer of each buffer
-		void DeallocateBufferPointers(AllocatorPolymorphic allocator) const;
+		// If the shader is left at default then it will deallocate all shader types
+		void DeallocateBufferPointers(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT) const;
 
 		// Deallocates the names of the textures, samplers and buffers
-		void DeallocateNames(AllocatorPolymorphic allocator) const;
+		// If the shader is left at default then it will deallocate all shader types
+		void DeallocateNames(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT) const;
+
+		// Deallocates all the possible allocations from the MaterialAssetBuffer structures. By default it will
+		// also deallocate the reflection type
+		// If the shader is left at default then it will deallocate all shader types
+		void DeallocateBuffers(AllocatorPolymorphic allocator, bool include_reflection_type = true, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT) const;
+
+		// Deallocates the name from the textures
+		// If the shader is left at default then it will deallocate all shader types
+		void DeallocateTextures(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT) const;
+
+		// Deallocates the name from the samplers
+		// If the shader is left at default then it will deallocate all shader types
+		void DeallocateSamplers(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT) const;
 
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
 		// Sets default values and aliases the name and the file
 		void Default(Stream<char> name, Stream<wchar_t> file);
 
-		// Returns the index of the texture if it finds it at the given slot with the given name else -1
-		size_t FindTexture(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const;
-
-		// Returns the index of the sampler if it finds it at the given slot with the given name else -1
-		size_t FindSampler(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const;
+		// Returns the index of the buffer if it finds it else -1
+		size_t FindBuffer(Stream<char> name, ECS_MATERIAL_SHADER shader) const;
 
 		// Returns the index of the buffer if it finds it at the given slot with the given name else -1
 		size_t FindBuffer(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const;
+
+		// Returns the index of the buffer if it finds it else -1
+		size_t FindTexture(Stream<char> name, ECS_MATERIAL_SHADER shader) const;
+
+		// Returns the index of the texture if it finds it at the given slot with the given name else -1
+		size_t FindTexture(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const;
+
+		// Returns the index of the buffer if it finds it else -1
+		size_t FindSampler(Stream<char> name, ECS_MATERIAL_SHADER shader) const;
+
+		// Returns the index of the sampler if it finds it at the given slot with the given name else -1
+		size_t FindSampler(Stream<char> name, unsigned char slot, ECS_MATERIAL_SHADER shader) const;
 
 		// The textures can be iterated as if from a single stream
 		size_t GetTextureTotalCount() const;
@@ -485,6 +553,16 @@ namespace ECSEngine {
 			bool do_not_copy = false
 		);
 
+		// Tries to retrieve the data for the given buffer from an existing source
+		// The allocator is needed only when the types do not match
+		void RetrieveBufferData(
+			size_t current_index, 
+			ECS_MATERIAL_SHADER shader, 
+			const Reflection::ReflectionType* other_type, 
+			const void* data,
+			AllocatorPolymorphic allocator
+		);
+
 		void WriteCounts(bool write_texture, bool write_sampler, bool write_buffers, unsigned int* counts) const;
 
 		// The counts is a contiguous array with all the counts for textures, samplers and buffers
@@ -540,6 +618,9 @@ namespace ECSEngine {
 			return true;
 		}
 
+		// This is just for interface uniformity
+		ECS_INLINE void CopyOptions(const MiscAsset* other, AllocatorPolymorphic allocator) {}
+
 		MiscAsset Copy(AllocatorPolymorphic allocator) const;
 
 		// Returns true if they have the same target
@@ -570,10 +651,16 @@ namespace ECSEngine {
 		return std::max(max3, max4);
 	}
 
+	constexpr size_t AssetMetadataMaxSizetSize() {
+		return AssetMetadataMaxByteSize() / sizeof(size_t) + (AssetMetadataMaxByteSize() % sizeof(size_t) != 0);
+	}
+
 	// If long format is specified then it will print the full file path for absolute paths instead of only the filename
 	ECSENGINE_API void AssetToString(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<char>& string, bool long_format = false);
 
 	ECSENGINE_API void CopyAssetBase(void* destination, const void* source, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
+
+	ECSENGINE_API void CopyAssetOptions(void* destination, const void* source, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
 
 	ECSENGINE_API void DeallocateAssetBase(const void* asset, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
 

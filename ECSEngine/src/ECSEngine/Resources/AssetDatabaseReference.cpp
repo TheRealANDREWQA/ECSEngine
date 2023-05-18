@@ -353,7 +353,7 @@ namespace ECSEngine {
 		out_database->SetAllocator(allocator);
 
 		out_database->reflection_manager = database->reflection_manager;
-		out_database->SetFileLocation({ nullptr, 0 });
+		out_database->SetFileLocation(database->metadata_file_location);
 		out_database->mesh_metadata.ResizeNoCopy(mesh_metadata.size);
 		out_database->texture_metadata.ResizeNoCopy(texture_metadata.size);
 		out_database->gpu_sampler_metadata.ResizeNoCopy(gpu_sampler_metadata.size);

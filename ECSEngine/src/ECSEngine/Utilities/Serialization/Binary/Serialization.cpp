@@ -2042,7 +2042,8 @@ namespace ECSEngine {
 				}
 			}
 
-			InsertIntoDynamicTable(reflection_manager->type_definitions, reflection_manager->Allocator(), type, type.name);
+			// Just copy it
+			reflection_manager->AddType(&type);
 		};
 
 		for (size_t index = 0; index < types.size; index++) {

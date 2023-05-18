@@ -228,7 +228,7 @@ void RegisterNewCBuffers(
 		new_buffers[index].name = function::StringCopy(current_allocator, new_cbuffers[index].name);
 
 		// Set the default values for that type
-		draw_data->editor_state->ui_reflection->reflection->SetInstanceDefaultData(new_cbuffers.buffer + index, new_buffers[index].data.buffer);
+		draw_data->material_asset.reflection_manager->SetInstanceDefaultData(new_cbuffers.buffer + index, new_buffers[index].data.buffer);
 	}
 	new_buffers.size = new_cbuffers.size;
 
@@ -845,7 +845,8 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 					{ reflection_config, std::size(reflection_config) }, 
 					{ BaseModifyCallback, data, 0 }, 
 					ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ALL, 
-					stack_allocation.buffer
+					stack_allocation.buffer,
+					false
 				);
 
 				if (!data->success[order][SUCCESS_CBUFFER]) {

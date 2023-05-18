@@ -119,7 +119,7 @@ void TickModuleStatus(EditorState* editor_state) {
 
 							// Re-render the sandboxes that depend on this module
 							for (unsigned int sandbox_index = 0; sandbox_index < dependency_sandboxes.size; sandbox_index++) {
-								RenderSandbox(editor_state, dependency_sandboxes[sandbox_index], EDITOR_SANDBOX_VIEWPORT_SCENE, true);
+								RenderSandbox(editor_state, dependency_sandboxes[sandbox_index], EDITOR_SANDBOX_VIEWPORT_SCENE, { 0,0 }, true);
 							}
 						}
 					}

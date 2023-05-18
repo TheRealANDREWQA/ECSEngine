@@ -196,6 +196,7 @@
     <ClInclude Include="src\Editor\EditorScene.h" />
     <ClInclude Include="src\Editor\EditorState.h" />
     <ClInclude Include="src\Editor\EditorComponents.h" />
+    <ClInclude Include="src\Editor\EditorStateTypes.h" />
     <ClInclude Include="src\Modules\Module.h" />
     <ClInclude Include="src\Modules\ModuleDefinition.h" />
     <ClInclude Include="src\Modules\ModuleFile.h" />

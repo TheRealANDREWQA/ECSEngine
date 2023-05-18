@@ -105,7 +105,11 @@ namespace ECSEngine {
 
 			void AddBlittableException(Stream<char> definition, size_t byte_size, size_t alignment);
 
-			// Adds a type to a certain hierarchy. It will be deallocated when the hierarchy is freed using the allocator given
+			// Adds a type which is not bound to any folder hierarchy. If the allocator is nullptr
+			// then it will only reference the type streams, not actually copy
+			void AddType(const ReflectionType* type, AllocatorPolymorphic allocator = { nullptr }, bool coallesced = true);
+
+			// Adds a type to a certain hierarchy. It will add it as is, it will be deallocated when the hierarchy is freed using the allocator given
 			void AddTypeToHierarchy(const ReflectionType* type, unsigned int folder_hierarchy, AllocatorPolymorphic allocator, bool coallesced);
 
 			ECS_INLINE AllocatorPolymorphic Allocator() const {

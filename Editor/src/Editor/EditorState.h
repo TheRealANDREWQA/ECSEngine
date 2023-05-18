@@ -9,45 +9,13 @@
 #include "EditorSandbox.h"
 #include "EditorComponents.h"
 #include "EditorEventDef.h"
+#include "EditorStateTypes.h"
 
 #define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
 
 struct EditorState;
 
 typedef void (*EditorStateTick)(EditorState*);
-
-enum EDITOR_LAZY_EVALUATION_COUNTERS : unsigned char {
-	EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER,
-	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_TEXTURES,
-	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MESH_THUMBNAIL,
-	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MATERIAL_THUMBNAIL,
-	EDITOR_LAZY_EVALUATION_UPDATE_MODULE_STATUS,
-	EDITOR_LAZY_EVALUATION_UPDATE_GRAPHICS_MODULE_STATUS,
-	EDITOR_LAZY_EVALUATION_RESET_TASK_MANAGER,
-	EDITOR_LAZY_EVALUATION_RUNTIME_SETTINGS,
-	EDITOR_LAZY_EVALUATION_METADATA_FOR_ASSETS,
-	EDITOR_LAZY_EVALUATION_UPDATE_MODULE_DLL_IMPORTS,
-	EDITOR_LAZY_EVALUATION_COUNTERS_COUNT,
-};
-
-enum EDITOR_STATE_FLAGS : unsigned char {
-	EDITOR_STATE_DO_NOT_ADD_TASKS,
-	EDITOR_STATE_IS_PLAYING,
-	EDITOR_STATE_IS_PAUSED,
-	EDITOR_STATE_IS_STEP,
-	EDITOR_STATE_FREEZE_TICKS,
-	EDITOR_STATE_PREVENT_LAUNCH,
-	// This is for runtime only - it doesn't affect the UI loads
-	EDITOR_STATE_PREVENT_RESOURCE_LOADING,
-	// This is a one off flag. Used when creating the dedicated GPU device
-	// such that if it is the first time a device is created on a dedicated GPU
-	// and it is asleep (like it a laptop) then it will do the creation deferred
-	// in another thread and this signals when that creation has finished (this
-	// usually takes 1 second and if the user doesn't open up a project quicker than
-	// this then there should be no problem.
-	EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED,
-	EDITOR_STATE_FLAG_COUNT
-};
 
 struct EditorState {
 	inline void Tick() {
@@ -169,17 +137,6 @@ void EditorSetConsoleWarn(ECSEngine::Stream<char> error_message, ECSEngine::ECS_
 void EditorSetConsoleInfo(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MINIMAL);
 
 void EditorSetConsoleTrace(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MINIMAL);
-
-// These are reference counted, can be called multiple times
-void EditorStateSetFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
-
-// These are reference counted, can be called multiple times
-void EditorStateClearFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
-
-bool EditorStateHasFlag(const EditorState* editor_state, EDITOR_STATE_FLAGS flag);
-
-// Waits until the flag is set or cleared
-void EditorStateWaitFlag(size_t sleep_milliseconds, const EditorState* editor_state, EDITOR_STATE_FLAGS flag, bool set = true);
 
 void EditorStateProjectTick(EditorState* editor_state);
 

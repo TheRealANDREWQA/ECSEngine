@@ -205,57 +205,57 @@ namespace ECSEngine {
 		ECS_GRAPHICS_MAP_READ_WRITE = D3D11_MAP_READ_WRITE
 	};
 
-	inline DXGI_FORMAT GetGraphicsNativeFormat(ECS_GRAPHICS_FORMAT format) {
+	ECS_INLINE DXGI_FORMAT GetGraphicsNativeFormat(ECS_GRAPHICS_FORMAT format) {
 		// Can return as is for the moment
 		return (DXGI_FORMAT)format;
 	}
 
-	inline ECS_GRAPHICS_FORMAT GetGraphicsFormatFromNative(DXGI_FORMAT format) {
+	ECS_INLINE ECS_GRAPHICS_FORMAT GetGraphicsFormatFromNative(DXGI_FORMAT format) {
 		return (ECS_GRAPHICS_FORMAT)format;
 	}
 
-	inline D3D11_BIND_FLAG GetGraphicsNativeBind(ECS_GRAPHICS_BIND_TYPE bind_type) {
+	ECS_INLINE D3D11_BIND_FLAG GetGraphicsNativeBind(ECS_GRAPHICS_BIND_TYPE bind_type) {
 		// Can return as is for the moment
 		return (D3D11_BIND_FLAG)bind_type;
 	}
 
-	inline ECS_GRAPHICS_BIND_TYPE GetGraphicsBindFromNative(D3D11_BIND_FLAG bind_type) {
+	ECS_INLINE ECS_GRAPHICS_BIND_TYPE GetGraphicsBindFromNative(D3D11_BIND_FLAG bind_type) {
 		return (ECS_GRAPHICS_BIND_TYPE)bind_type;
 	}
 
-	inline ECS_GRAPHICS_BIND_TYPE GetGraphicsBindFromNative(int bind_type) {
+	ECS_INLINE ECS_GRAPHICS_BIND_TYPE GetGraphicsBindFromNative(int bind_type) {
 		return (ECS_GRAPHICS_BIND_TYPE)bind_type;
 	}
 
-	inline D3D11_CPU_ACCESS_FLAG GetGraphicsNativeCPUAccess(ECS_GRAPHICS_CPU_ACCESS cpu_access) {
+	ECS_INLINE D3D11_CPU_ACCESS_FLAG GetGraphicsNativeCPUAccess(ECS_GRAPHICS_CPU_ACCESS cpu_access) {
 		return (D3D11_CPU_ACCESS_FLAG)cpu_access;
 	}
 
-	inline ECS_GRAPHICS_CPU_ACCESS GetGraphicsCPUAccessFromNative(unsigned int cpu_flag) {
+	ECS_INLINE ECS_GRAPHICS_CPU_ACCESS GetGraphicsCPUAccessFromNative(unsigned int cpu_flag) {
 		return (ECS_GRAPHICS_CPU_ACCESS)cpu_flag;
 	}
 
-	inline D3D11_USAGE GetGraphicsNativeUsage(ECS_GRAPHICS_USAGE usage) {
+	ECS_INLINE D3D11_USAGE GetGraphicsNativeUsage(ECS_GRAPHICS_USAGE usage) {
 		return (D3D11_USAGE)usage;
 	}
 
-	inline ECS_GRAPHICS_USAGE GetGraphicsUsageFromNative(D3D11_USAGE usage) {
+	ECS_INLINE ECS_GRAPHICS_USAGE GetGraphicsUsageFromNative(D3D11_USAGE usage) {
 		return (ECS_GRAPHICS_USAGE)usage;
 	}
 
-	inline D3D11_MAP GetGraphicsNativeMapType(ECS_GRAPHICS_MAP_TYPE map_type) {
+	ECS_INLINE D3D11_MAP GetGraphicsNativeMapType(ECS_GRAPHICS_MAP_TYPE map_type) {
 		return (D3D11_MAP)map_type;
 	}
 
-	inline ECS_GRAPHICS_MAP_TYPE GetGraphicsMapTypeFromNative(D3D11_MAP map_type) {
+	ECS_INLINE ECS_GRAPHICS_MAP_TYPE GetGraphicsMapTypeFromNative(D3D11_MAP map_type) {
 		return (ECS_GRAPHICS_MAP_TYPE)map_type;
 	}
 
-	inline unsigned int GetGraphicsNativeMiscFlags(ECS_GRAPHICS_MISC_FLAGS flags) {
+	ECS_INLINE unsigned int GetGraphicsNativeMiscFlags(ECS_GRAPHICS_MISC_FLAGS flags) {
 		return (unsigned int)flags;
 	}
 
-	inline ECS_GRAPHICS_MISC_FLAGS GetGraphicsMiscFlagsFromNative(unsigned int flags) {
+	ECS_INLINE ECS_GRAPHICS_MISC_FLAGS GetGraphicsMiscFlagsFromNative(unsigned int flags) {
 		return (ECS_GRAPHICS_MISC_FLAGS)flags;
 	}
 

@@ -3493,13 +3493,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	bool Graphics::ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers, AllocatorPolymorphic allocator) {
+	bool Graphics::ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers, AllocatorPolymorphic allocator) const {
 		return m_shader_reflection->ReflectShaderBuffersSource(source_code, buffers, allocator);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	bool Graphics::ReflectShaderTextures(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator)
+	bool Graphics::ReflectShaderTextures(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const
 	{
 		return m_shader_reflection->ReflectShaderTexturesSource(source_code, textures, allocator);
 	}
@@ -3511,20 +3511,27 @@ namespace ECSEngine {
 		CapacityStream<Stream<char>>* defined_macros, 
 		CapacityStream<Stream<char>>* conditional_macros, 
 		AllocatorPolymorphic allocator
-	) {
+	) const {
 		return m_shader_reflection->ReflectShaderMacros(source_code, defined_macros, conditional_macros, allocator);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 	
-	bool Graphics::ReflectVertexBufferMapping(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping) {
+	bool Graphics::ReflectVertexBufferMapping(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping) const {
 		return m_shader_reflection->ReflectVertexBufferMappingSource(source_code, mapping);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	bool Graphics::ReflectShaderSamplers(Stream<char> source_code, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator) {
+	bool Graphics::ReflectShaderSamplers(Stream<char> source_code, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator) const {
 		return m_shader_reflection->ReflectShaderSamplersSource(source_code, samplers, allocator);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	bool Graphics::ReflectShader(Stream<char> source_code, const ReflectedShader* reflected_shader) const
+	{
+		return m_shader_reflection->ReflectShader(source_code, reflected_shader);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

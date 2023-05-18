@@ -960,18 +960,20 @@ namespace ECSEngine {
 		);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
-		bool ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers, AllocatorPolymorphic allocator);
+		bool ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers, AllocatorPolymorphic allocator) const;
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
-		bool ReflectShaderTextures(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator);
+		bool ReflectShaderTextures(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const;
 
-		bool ReflectShaderMacros(Stream<char> source_code, CapacityStream<Stream<char>>* defined_macros, CapacityStream<Stream<char>>* conditional_macros, AllocatorPolymorphic allocator);
+		bool ReflectShaderMacros(Stream<char> source_code, CapacityStream<Stream<char>>* defined_macros, CapacityStream<Stream<char>>* conditional_macros, AllocatorPolymorphic allocator) const;
 		
 		// No memory needs to be allocated
-		bool ReflectVertexBufferMapping(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping);
+		bool ReflectVertexBufferMapping(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping) const;
 
 		// The memory for the names will be allocated from the given allocator
-		bool ReflectShaderSamplers(Stream<char> source_code, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator);
+		bool ReflectShaderSamplers(Stream<char> source_code, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator) const;
+
+		bool ReflectShader(Stream<char> source_code, const ReflectedShader* reflected_shader) const;
 
 #pragma endregion
 

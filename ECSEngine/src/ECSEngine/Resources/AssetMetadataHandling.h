@@ -320,6 +320,35 @@ namespace ECSEngine {
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
 
+	enum ECS_RELOAD_ASSET_METADATA_STATUS : unsigned char {
+		ECS_RELOAD_ASSET_METADATA_NO_CHANGE,
+		ECS_RELOAD_ASSET_METADATA_FAILED_READING, // Failed to read the target file
+		ECS_RELOAD_ASSET_METADATA_CHANGED,
+		ECS_RELOAD_ASSET_METADATA_STATUS_COUNT
+	};
+
+	// Reloads the buffers, textures and samplers to conform to the new shader file
+	// Returns the status of the reload
+	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReloadMaterialMetadataFromShader(
+		ResourceManager* resource_manager,
+		AssetDatabase* database,
+		MaterialAsset* material,
+		const ShaderMetadata* shader,
+		Stream<wchar_t> mount_point = { nullptr, 0 }
+	);
+		
+	// Updates the metadata to conform to the changed_metadata target file content
+	// Returns the status of the reload
+	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReloadAssetMetadataFromTargetDependency(
+		ResourceManager* resource_manager,
+		AssetDatabase* database,
+		void* metadata,
+		ECS_ASSET_TYPE type,
+		const void* changed_metadata,
+		ECS_ASSET_TYPE changed_metadata_type,
+		Stream<wchar_t> mount_point = { nullptr, 0 }
+	);
+
 #pragma endregion
 
 	// When force addition is set to false it will set the handle to -1 if it doesn't find it
@@ -358,10 +387,62 @@ namespace ECSEngine {
 		ConvertAssetFromDatabaseToDatabaseOptions options = {}
 	);
 
-	ECSENGINE_API void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code);
+	// Returns true if there is any difference between the two versions of the buffers, else false
+	// If there is no difference, no allocation will take place
+	ECSENGINE_API bool ChangeMaterialBuffersFromReflectedParameters(
+		MaterialAsset* material,
+		const ReflectedShader* reflected_shader,
+		ECS_MATERIAL_SHADER shader,
+		AllocatorPolymorphic allocator
+	);
 
-	ECSENGINE_API void SetShaderMetadataByteCode(ShaderMetadata* metadata, Stream<void> byte_code);
+	// Returns true if there is any difference between the two versions of the textures, else false
+	// If there is no difference, no allocation will take place
+	ECSENGINE_API bool ChangeMaterialTexturesFromReflectedParameters(
+		MaterialAsset* material,
+		const ReflectedShader* reflected_shader,
+		ECS_MATERIAL_SHADER shader,
+		AllocatorPolymorphic allocator
+	);
 
-	ECSENGINE_API void SetMiscData(MiscAsset* misc_asset, Stream<void> data);
+	// Returns true if there is any difference between the two versions of the samplers, else false
+	// If there is no difference, no allocation will take place
+	ECSENGINE_API bool ChangeMaterialSamplersFromReflectedParameters(
+		MaterialAsset* material,
+		const ReflectedShader* reflected_shader,
+		ECS_MATERIAL_SHADER shader,
+		AllocatorPolymorphic allocator
+	);
+
+	// Returns true if there is any difference between the two versions of the buffers, textures or samplers, else false
+	// If there is no difference, no allocation will take place
+	ECSENGINE_API bool ChangeMaterialFromReflectedShader(
+		MaterialAsset* material, 
+		const ReflectedShader* reflected_shader,
+		ECS_MATERIAL_SHADER shader,
+		AllocatorPolymorphic allocator
+	);
+
+	// Returns the status of the reload
+	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReflectMaterialShaderParameters(
+		const ResourceManager* resource_manager, 
+		MaterialAsset* material,
+		ECS_MATERIAL_SHADER shader_type,
+		Stream<wchar_t> shader_file,
+		AllocatorPolymorphic allocator,
+		Stream<wchar_t> mount_point = { nullptr, 0 }
+	);
+
+	ECS_INLINE void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code) {
+		metadata->source_code = source_code;
+	}
+
+	ECS_INLINE void SetShaderMetadataByteCode(ShaderMetadata* metadata, Stream<void> byte_code) {
+		metadata->byte_code = byte_code;
+	}
+
+	ECS_INLINE void SetMiscData(MiscAsset* misc_asset, Stream<void> data) {
+		misc_asset->data = data;
+	}
 
 }

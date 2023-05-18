@@ -4,10 +4,13 @@
 #include "../Containers/HashTable.h"
 #include "../ECS/InternalStructures.h"
 #include "RenderingStructures.h"
-#include "ecspch.h"
 #include "../Utilities/Reflection/ReflectionTypes.h"
 
 namespace ECSEngine {
+
+#define ECS_SHADER_MAX_CONSTANT_BUFFER_SLOT 16
+#define ECS_SHADER_MAX_SAMPLER_SLOT 16
+#define ECS_SHADER_MAX_TEXTURE_SLOT 128
 
 	enum ShaderReflectionFloatFormatTableType : unsigned char {
 		ECS_SHADER_REFLECTION_FLOAT,
@@ -112,6 +115,31 @@ namespace ECSEngine {
 		Stream<ShaderReflectionBufferMatrixField>* matrix_types = nullptr;
 	};
 
+	struct ReflectedShader {
+		// Vertex input layout descriptor
+		CapacityStream<D3D11_INPUT_ELEMENT_DESC>* input_layout_descriptor = nullptr;
+
+		// Vertex buffer binding types
+		CapacityStream<ECS_MESH_INDEX>* input_layout_mapping = nullptr;
+	
+		// Buffers
+		CapacityStream<ShaderReflectedBuffer>* buffers = nullptr;
+		ShaderReflectionBuffersOptions buffer_options = {};
+
+		// Textures
+		CapacityStream<ShaderReflectedTexture>* textures = nullptr;
+
+		// Samplers
+		CapacityStream<ShaderReflectedSampler>* samplers = nullptr;
+
+		// Used for all allocations except macros
+		AllocatorPolymorphic allocator;
+
+		CapacityStream<Stream<char>>* defined_macros = nullptr;
+		CapacityStream<Stream<char>>* conditional_macros = nullptr;
+		AllocatorPolymorphic macro_allocator = { nullptr };
+	};
+
 	struct ECSENGINE_API ShaderReflection {
 		ShaderReflection();
 		ShaderReflection(void* allocation);
@@ -119,10 +147,10 @@ namespace ECSEngine {
 		ShaderReflection(const ShaderReflection& other) = default;
 		ShaderReflection& operator = (const ShaderReflection& other) = default;
 
-		// Returns whether or not it succeded
+		// Returns whether or not it succeded. Only the name is allocated
 		bool ReflectVertexShaderInput(Stream<wchar_t> path, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, AllocatorPolymorphic allocator) const;
 
-		// Returns whether or not it succeded
+		// Returns whether or not it succeded. Only the name is allocated
 		bool ReflectVertexShaderInputSource(Stream<char> source_code, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, AllocatorPolymorphic allocator) const;
 
 		// Returns whether or not it succeded
@@ -173,6 +201,8 @@ namespace ECSEngine {
 		// Returns whether or not it succeded
 		bool ReflectVertexBufferMappingSource(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping) const;
 
+		bool ReflectShader(Stream<char> source_code, const ReflectedShader* reflected_shader) const;
+
 		// It will try to determine the type of the shader from source code
 		ECS_SHADER_TYPE DetermineShaderType(Stream<char> source_code) const;
 
@@ -203,6 +233,11 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator = { nullptr },
 		Stream<ShaderReflectionBufferMatrixField>* matrix_types = nullptr,
 		CapacityStream<char>* matrix_type_name_storage = nullptr
+	);
+
+	ECSENGINE_API void ShaderInputLayoutDeallocate(
+		Stream<D3D11_INPUT_ELEMENT_DESC> elements,
+		AllocatorPolymorphic allocator
 	);
 
 	ECSENGINE_API void ShaderConstantBufferReflectionTypeCopy(
