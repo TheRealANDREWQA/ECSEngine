@@ -18,59 +18,59 @@ struct EditorState;
 typedef void (*EditorStateTick)(EditorState*);
 
 struct EditorState {
-	inline void Tick() {
+	ECS_INLINE void Tick() {
 		editor_tick(this);
 	}
 
-	inline ECSEngine::Graphics* UIGraphics() {
+	ECS_INLINE ECSEngine::Graphics* UIGraphics() {
 		return ui_system->m_graphics;
 	}
 
-	inline ECSEngine::Graphics* RuntimeGraphics() {
+	ECS_INLINE ECSEngine::Graphics* RuntimeGraphics() {
 		return runtime_graphics;
 	}
 
-	inline ECSEngine::ResourceManager* RuntimeResourceManager() {
+	ECS_INLINE ECSEngine::ResourceManager* RuntimeResourceManager() {
 		return runtime_resource_manager;
 	}
 
-	inline ECSEngine::ResourceManager* UIResourceManager() {
+	ECS_INLINE ECSEngine::ResourceManager* UIResourceManager() {
 		return ui_system->m_resource_manager;
 	}
 
-	inline ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
+	ECS_INLINE ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
 		return editor_allocator->m_backup;
 	}
 
-	inline ECSEngine::Reflection::ReflectionManager* ReflectionManager() {
+	ECS_INLINE ECSEngine::Reflection::ReflectionManager* ReflectionManager() {
 		return ui_reflection->reflection;
 	}
 
-	inline ECSEngine::Reflection::ReflectionManager* ModuleReflectionManager() {
+	ECS_INLINE ECSEngine::Reflection::ReflectionManager* ModuleReflectionManager() {
 		return module_reflection->reflection;
 	}
 
-	inline ECSEngine::Reflection::ReflectionManager* GlobalReflectionManager() {
+	ECS_INLINE ECSEngine::Reflection::ReflectionManager* GlobalReflectionManager() {
 		return editor_components.internal_manager;
 	}
 
-	inline const ECSEngine::Reflection::ReflectionManager* GlobalReflectionManager() const {
+	ECS_INLINE const ECSEngine::Reflection::ReflectionManager* GlobalReflectionManager() const {
 		return editor_components.internal_manager;
 	}
 
-	inline ECSEngine::HID::Mouse* Mouse() {
+	ECS_INLINE ECSEngine::HID::Mouse* Mouse() {
 		return ui_system->m_mouse;
 	}
 
-	inline ECSEngine::HID::Keyboard* Keyboard() {
+	ECS_INLINE ECSEngine::HID::Keyboard* Keyboard() {
 		return ui_system->m_keyboard;
 	}
 
-	inline ECSEngine::AllocatorPolymorphic EditorAllocator() const {
+	ECS_INLINE ECSEngine::AllocatorPolymorphic EditorAllocator() const {
 		return ECSEngine::GetAllocatorPolymorphic(editor_allocator);
 	}
 
-	inline ECSEngine::AllocatorPolymorphic MultithreadedEditorAllocator() const {
+	ECS_INLINE ECSEngine::AllocatorPolymorphic MultithreadedEditorAllocator() const {
 		return ECSEngine::GetAllocatorPolymorphic(multithreaded_editor_allocator, ECSEngine::ECS_ALLOCATION_MULTI);
 	}
 
@@ -111,8 +111,9 @@ struct EditorState {
 	EditorComponents editor_components;
 
 	// These will be played back on the main thread. If multithreaded tasks are desired,
-	// use the AddBackgroundTask function
-	ECSEngine::Queue<EditorEvent> event_queue;
+	// use the AddBackgroundTask function. It is used in a multithreaded context
+	ECSEngine::ResizableQueue<EditorEvent> event_queue;
+	ECSEngine::SpinLock event_queue_lock;
 
 	ECSEngine::ResizableStream<EditorSandbox> sandboxes;
 	

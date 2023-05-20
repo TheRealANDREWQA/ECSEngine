@@ -831,11 +831,12 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	bool ReflectProperty(const ShaderReflection* reflection, Stream<wchar_t> path, Functor&& functor) {
+	bool ReflectProperty(const ShaderReflection* reflection, Stream<wchar_t> path, Stream<Stream<char>> external_macros, Functor&& functor) {
 		Stream<char> file_contents = ReadWholeFileText(path);
 		if (file_contents.buffer != nullptr) {
 			// Make \0 the last character
 			file_contents[file_contents.size - 1] = '\0';
+			file_contents = function::PreprocessCFile(file_contents, external_macros);
 			bool status = functor(file_contents);
 			free(file_contents.buffer);
 			return status;
@@ -844,9 +845,14 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		return false;
 	}
 
-	bool ShaderReflection::ReflectVertexShaderInput(Stream<wchar_t> path, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, AllocatorPolymorphic allocator) const
+	bool ShaderReflection::ReflectVertexShaderInput(
+		Stream<wchar_t> path, 
+		CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, 
+		AllocatorPolymorphic allocator,
+		Stream<Stream<char>> external_macros
+	) const
 	{
-		return ReflectProperty(this, path, [&](Stream<char> data) {
+		return ReflectProperty(this, path, external_macros, [&](Stream<char> data) {
 			return ReflectVertexShaderInputSource(data, elements, allocator);
 		});
 	}
@@ -1086,9 +1092,10 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		Stream<wchar_t> path, 
 		CapacityStream<ShaderReflectedBuffer>& buffers, 
 		AllocatorPolymorphic allocator,
-		ShaderReflectionBuffersOptions options
+		ShaderReflectionBuffersOptions options,
+		Stream<Stream<char>> external_macros
 	) const {
-		return ReflectProperty(this, path, [&](Stream<char> data) {
+		return ReflectProperty(this, path, external_macros, [&](Stream<char> data) {
 			return ReflectShaderBuffersSource(data, buffers, allocator, options);
 		});
 	}
@@ -1155,6 +1162,9 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					options.matrix_types_storage.AssertCapacity();
 				}
 				buffers.size++;
+				if (reflection_type != nullptr) {
+					options.constant_buffer_reflection->size++;
+				}
 			}
 
 			current_parse_range.buffer = parse_buffer_code.buffer + parse_buffer_code.size;
@@ -1252,9 +1262,14 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		return true;
 	}
 
-	bool ShaderReflection::ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const
+	bool ShaderReflection::ReflectShaderTextures(
+		Stream<wchar_t> path, 
+		CapacityStream<ShaderReflectedTexture>& textures, 
+		AllocatorPolymorphic allocator,
+		Stream<Stream<char>> external_macros
+	) const
 	{
-		return ReflectProperty(this, path, [&](Stream<char> data) {
+		return ReflectProperty(this, path, external_macros, [&](Stream<char> data) {
 			return ReflectShaderTexturesSource(data, textures, allocator);
 		});
 	}
@@ -1270,9 +1285,14 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	bool ShaderReflection::ReflectShaderSamplers(Stream<wchar_t> path, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator) const 
+	bool ShaderReflection::ReflectShaderSamplers(
+		Stream<wchar_t> path, 
+		CapacityStream<ShaderReflectedSampler>& samplers, 
+		AllocatorPolymorphic allocator,
+		Stream<Stream<char>> external_macros
+	) const 
 	{
-		return ReflectProperty(this, path, [&](Stream<char> data) {
+		return ReflectProperty(this, path, external_macros, [&](Stream<char> data) {
 			return ReflectShaderSamplersSource(data, samplers, allocator);
 		});
 	}
@@ -1311,9 +1331,9 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	bool ShaderReflection::ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping) const
+	bool ShaderReflection::ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping, Stream<Stream<char>> external_macros) const
 	{
-		return ReflectProperty(this, path, [&](Stream<char> data) {
+		return ReflectProperty(this, path, external_macros, [&](Stream<char> data) {
 			return ReflectVertexBufferMappingSource(data, mapping);
 		});
 	}

@@ -3,10 +3,10 @@
 #include "ECSEngineContainers.h"
 #include "EditorStateTypes.h"
 
-// Single threaded. It returns the pointer of data allocated or given if the event_data_size is 0
+// Can be called from multiple threads. It returns the pointer of data allocated or given if the event_data_size is 0
 void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, void* event_data, size_t event_data_size = 0);
 
-// Single threaded.
+// Can be called from multiple threads
 // It will take the pointer as is but will set the event data size different from 0
 // in order to be deallocated; useful for example when the data is coallesced from the editor
 // allocator and it must still be deallocated

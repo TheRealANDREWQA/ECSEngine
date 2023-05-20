@@ -135,6 +135,7 @@ namespace ECSEngine {
 		// Used for all allocations except macros
 		AllocatorPolymorphic allocator;
 
+		// Used to extract macros from the file
 		CapacityStream<Stream<char>>* defined_macros = nullptr;
 		CapacityStream<Stream<char>>* conditional_macros = nullptr;
 		AllocatorPolymorphic macro_allocator = { nullptr };
@@ -148,19 +149,27 @@ namespace ECSEngine {
 		ShaderReflection& operator = (const ShaderReflection& other) = default;
 
 		// Returns whether or not it succeded. Only the name is allocated
-		bool ReflectVertexShaderInput(Stream<wchar_t> path, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, AllocatorPolymorphic allocator) const;
+		// The macros are used to preprocess the file
+		bool ReflectVertexShaderInput(
+			Stream<wchar_t> path, 
+			CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, 
+			AllocatorPolymorphic allocator,
+			Stream<Stream<char>> external_macros = {}
+		) const;
 
 		// Returns whether or not it succeded. Only the name is allocated
 		bool ReflectVertexShaderInputSource(Stream<char> source_code, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, AllocatorPolymorphic allocator) const;
 
 		// Returns whether or not it succeded
 		// If the reflection_types is specified, it will create a reflection equivalent for constant buffers
-		// There must be at least buffers.capacity these reflection_types available in that pointer
+		// There must be at least buffers.capacity these reflection_types available in that pointer. The macros
+		// are used to preprocess the file
 		bool ReflectShaderBuffers(
-			Stream<wchar_t> path, 
+			Stream<wchar_t> path,
 			CapacityStream<ShaderReflectedBuffer>& buffers, 
 			AllocatorPolymorphic allocator,
-			ShaderReflectionBuffersOptions options = {}
+			ShaderReflectionBuffersOptions options = {},
+			Stream<Stream<char>> external_macros = {}
 		) const;
 
 		// Returns whether or not it succeded
@@ -173,14 +182,24 @@ namespace ECSEngine {
 			ShaderReflectionBuffersOptions options = {}
 		) const;
 
-		// Returns whether or not it succeded
-		bool ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const;
+		// Returns whether or not it succeded. The macros are used to preprocess the file
+		bool ReflectShaderTextures(
+			Stream<wchar_t> path, 
+			CapacityStream<ShaderReflectedTexture>& textures, 
+			AllocatorPolymorphic allocator, 
+			Stream<Stream<char>> external_macros = {}
+		) const;
 
 		// Returns whether or not it succeded
 		bool ReflectShaderTexturesSource(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const;
 
-		// Returns whether or not it succeeded
-		bool ReflectShaderSamplers(Stream<wchar_t> path, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator) const;
+		// Returns whether or not it succeeded. The macros are used to preprocess the file
+		bool ReflectShaderSamplers(
+			Stream<wchar_t> path, 
+			CapacityStream<ShaderReflectedSampler>& samplers, 
+			AllocatorPolymorphic allocator,
+			Stream<Stream<char>> external_macros = {}
+		) const;
 
 		// Returns whether or not it succeeded
 		bool ReflectShaderSamplersSource(Stream<char> source_code, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator) const;
@@ -195,12 +214,14 @@ namespace ECSEngine {
 			AllocatorPolymorphic allocator
 		) const;
 
-		// Returns whether or not it succeded
-		bool ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping) const;
+		// Returns whether or not it succeeded. The macros are used to preprocess the file
+		bool ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping, Stream<Stream<char>> external_macros = {}) const;
 
-		// Returns whether or not it succeded
+		// Returns whether or not it succeeded
 		bool ReflectVertexBufferMappingSource(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping) const;
 
+		// Returns whether or not it succeeded
+		// The macros are used to preprocess the file
 		bool ReflectShader(Stream<char> source_code, const ReflectedShader* reflected_shader) const;
 
 		// It will try to determine the type of the shader from source code

@@ -54,7 +54,7 @@ namespace ECSEngine {
 		bool Pop(T& element) {
 			if (m_queue.size > 0) {
 				unsigned int element_index = m_first_item;
-				m_first_item = m_first_item == m_queue.capacity - 1 ? 0 : m_first_item + 1;
+				m_first_item = m_first_item + 1 == m_queue.capacity ? 0 : m_first_item + 1;
 				m_queue.size--;
 				element = m_queue[element_index];
 				return true;
@@ -67,7 +67,7 @@ namespace ECSEngine {
 				unsigned int index = m_first_item + m_queue.size;
 				bool is_greater = index >= m_queue.capacity;
 				m_queue[is_greater ? index - m_queue.capacity : index] = element;
-				m_first_item = m_first_item == m_queue.capacity - 1 ? 0 : m_first_item + 1;
+				m_first_item = m_first_item + 1 == m_queue.capacity ? 0 : m_first_item + 1;
 			}
 			else {
 				unsigned int index = m_first_item + m_queue.size;
@@ -82,7 +82,7 @@ namespace ECSEngine {
 				unsigned int index = m_first_item + m_queue.size;
 				bool is_greater = index >= m_queue.capacity;
 				m_queue[is_greater ? index - m_queue.capacity : index] = *element;
-				m_first_item = m_first_item == m_queue.capacity - 1 ? 0 : m_first_item + 1;
+				m_first_item = m_first_item + 1 == m_queue.capacity ? 0 : m_first_item + 1;
 			}
 			else {
 				unsigned int index = m_first_item + m_queue.size;
@@ -190,7 +190,7 @@ namespace ECSEngine {
 			return m_queue.capacity;
 		}
 
-		ECS_INLINE ResizableStream<T>* GetQueue() const {
+		ECS_INLINE ResizableStream<T>* GetQueue() {
 			return &m_queue;
 		}
 
@@ -214,7 +214,7 @@ namespace ECSEngine {
 		bool Pop(T& element) {
 			if (m_queue.size > 0) {
 				unsigned int element_index = m_first_item;
-				m_first_item = m_first_item == m_queue.capacity ? 0 : m_first_item + 1;
+				m_first_item = m_first_item + 1 == m_queue.capacity ? 0 : m_first_item + 1;
 				m_queue.size--;
 				element = m_queue[element_index];
 				return true;
@@ -283,6 +283,49 @@ namespace ECSEngine {
 
 		ECS_INLINE const void* GetAllocatedBuffer() const {
 			return m_queue.buffer;
+		}
+
+		// Return true in the functor to early exit, if desired. The functor takes as parameter a T or T&
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) {
+			unsigned int size = GetSize();
+			unsigned int capacity = GetCapacity();
+			unsigned int current_index = m_first_item;
+			for (unsigned int index = 0; index < size; index++) {
+				if constexpr (early_exit) {
+					if (functor(m_queue[current_index])) {
+						return true;
+					}
+				}
+				else {
+					functor(m_queue[current_index]);
+				}
+				current_index = current_index == capacity - 1 ? 0 : current_index + 1;
+			}
+			return false;
+		}
+
+		// CONST VARIANT
+		// Return true in the functor to early exit, if desired. The functor takes as parameter a T or const T&
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) const {
+			unsigned int size = GetSize();
+			unsigned int capacity = GetCapacity();
+			unsigned int current_index = m_first_item;
+			for (unsigned int index = 0; index < size; index++) {
+				if constexpr (early_exit) {
+					if (functor(m_queue[current_index])) {
+						return true;
+					}
+				}
+				else {
+					functor(m_queue[current_index]);
+				}
+				current_index = current_index == capacity - 1 ? 0 : current_index + 1;
+			}
+			return false;
 		}
 
 		ResizableStream<T> m_queue;

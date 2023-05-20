@@ -168,6 +168,8 @@ void TickSandboxRuntimeSettings(EditorState* editor_state) {
 // -----------------------------------------------------------------------------------------------------------------
 
 void TickEvents(EditorState* editor_state) {
+	editor_state->event_queue_lock.lock();
+
 	// Get the event count and do the events that are now in the queue. Because some events might push them back
 	// in the event queue and doing that will generate an infinite loop
 	unsigned int event_count = editor_state->event_queue.GetSize();
@@ -183,6 +185,8 @@ void TickEvents(EditorState* editor_state) {
 		}
 		event_index++;
 	}
+
+	editor_state->event_queue_lock.unlock();
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -337,8 +341,6 @@ ECS_THREAD_TASK(InitializeRuntimeGraphicsTask) {
 	*editor_state->runtime_graphics = Graphics(&graphics_descriptor);
 	editor_state->runtime_resource_manager->m_graphics = editor_state->runtime_graphics;
 
-	OutputDebugStringA("Reached it\n");
-
 	EditorStateSetFlag(editor_state, EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED);
 }
 
@@ -437,8 +439,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	*editor_ui_reflection = UIReflectionDrawer(resizable_arena, editor_reflection_manager);
 	editor_state->ui_reflection = editor_ui_reflection;
 
-	EditorEvent* editor_events = (EditorEvent*)calloc(EDITOR_EVENT_QUEUE_CAPACITY, sizeof(EditorEvent));
-	editor_state->event_queue.InitializeFromBuffer(editor_events, EDITOR_EVENT_QUEUE_CAPACITY);
+	editor_state->event_queue.GetQueue()->Initialize(editor_state->EditorAllocator(), EDITOR_EVENT_QUEUE_CAPACITY);
 
 	// Update the editor components
 	editor_state->editor_components.UpdateComponents(editor_state, editor_reflection_manager, 0, "ECSEngine");
