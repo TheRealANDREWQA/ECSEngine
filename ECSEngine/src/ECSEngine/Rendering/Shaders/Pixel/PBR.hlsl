@@ -132,6 +132,7 @@ float4 main(in PS_INPUT input) : SV_TARGET
     // The total radiance
     
     
+    
     for (; index < 4; index++)
     {
         L0 += CalculatePointLight(light_positions[index].xyz, light_colors[index].rgb, light_range[index], input.world_position, pixel_color,

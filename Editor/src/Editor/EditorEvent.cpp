@@ -8,25 +8,14 @@ ECS_TOOLS;
 #define WAIT_FOR_QUEUE_SPACE_SLEEP_TICK 5
 
 void AllocateMemory(EditorState* editor_state, EditorEvent& editor_event, void* data, size_t data_size) {
-	editor_event.data = function::CopyNonZero(editor_state->EditorAllocator(), data, data_size);
+	editor_event.data = function::CopyNonZero(editor_state->MultithreadedEditorAllocator(), data, data_size);
 	editor_event.data_size = data_size;
 }
 
 void DeallocateMemory(EditorState* editor_state, EditorEvent editor_event) {
 	if (editor_event.data_size > 0) {
-		Deallocate(editor_state->EditorAllocator(), editor_event.data);
+		Deallocate(editor_state->MultithreadedEditorAllocator(), editor_event.data);
 	}
-}
-
-void* AllocateErrorMessage(EditorState* editor_state, Stream<char> error_message) {
-	size_t total_size = sizeof(error_message) + error_message.size;
-	void* allocation = Allocate(editor_state->EditorAllocator(), total_size);
-	Stream<char>* new_error_message = (Stream<char>*)allocation;
-	new_error_message->size = 0;
-	new_error_message->buffer = (char*)function::OffsetPointer(allocation, sizeof(error_message));
-	new_error_message->Copy(error_message);
-
-	return allocation;
 }
 
 void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, void* event_data, size_t event_data_size) {
@@ -35,10 +24,9 @@ void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, vo
 	AllocateMemory(editor_state, editor_event, event_data, event_data_size);
 	editor_event.data_size = event_data_size;
 
-	while (editor_state->event_queue.GetSize() == editor_state->event_queue.GetCapacity()) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_FOR_QUEUE_SPACE_SLEEP_TICK));
-	}
+	editor_state->event_queue_lock.lock();
 	editor_state->event_queue.Push(editor_event);
+	editor_state->event_queue_lock.unlock();
 
 	return editor_event.data;
 }

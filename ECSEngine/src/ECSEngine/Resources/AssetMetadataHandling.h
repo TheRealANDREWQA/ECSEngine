@@ -427,8 +427,8 @@ namespace ECSEngine {
 	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReflectMaterialShaderParameters(
 		const ResourceManager* resource_manager, 
 		MaterialAsset* material,
+		const ShaderMetadata* shader_metadata,
 		ECS_MATERIAL_SHADER shader_type,
-		Stream<wchar_t> shader_file,
 		AllocatorPolymorphic allocator,
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);

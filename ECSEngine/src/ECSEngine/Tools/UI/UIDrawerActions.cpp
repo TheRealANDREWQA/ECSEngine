@@ -927,7 +927,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		constexpr float INPUT_DRAG_FACTOR = 60.0f;
+		constexpr float INPUT_DRAG_FACTOR = 40.0f;
 
 		template<typename FloatingPoint, typename DataType>
 		void FloatingPointInputDragValue(ActionData* action_data) {

@@ -1099,11 +1099,36 @@ namespace ECSEngine {
 			break;
 		case ECS_ASSET_MATERIAL:
 		{
+			MaterialAsset* current_material = (MaterialAsset*)metadata;
+
+			// Reload the shader dependencies - they will check to see if anything has changed and only perform
+			// modifications if they have actually changed. Don't check the result of the reloading of parameters
+			// If it fails then the parameters will stay the same.
+			if (current_material->vertex_shader_handle != -1) {
+				const ShaderMetadata* vertex_shader = database->GetShaderConst(current_material->vertex_shader_handle);
+				ReloadMaterialMetadataFromShader(
+					resource_manager, 
+					database, 
+					current_material, 
+					vertex_shader, 
+					mount_point
+				);
+			}
+			if (current_material->pixel_shader_handle != -1) {
+				const ShaderMetadata* pixel_shader = database->GetShaderConst(current_material->pixel_shader_handle);
+				ReloadMaterialMetadataFromShader(
+					resource_manager,
+					database,
+					current_material,
+					pixel_shader,
+					mount_point
+				);
+			}
+
 			// For materials do the creation into a temporary and then do the deallocation.
 			// This is in order to have the material increment textures and shaders that are still in use
 			// without deloading them and having them to be reloaded
 			MaterialAsset temporary;
-			MaterialAsset* current_material = (MaterialAsset*)metadata;
 			memcpy(&temporary, current_material, sizeof(temporary));
 			// Change the pointer value such that it will not in case the creation fails
 
@@ -1251,14 +1276,14 @@ namespace ECSEngine {
 			const ShaderMetadata* vertex_shader = database->GetShaderConst(material->vertex_shader_handle);
 			if (vertex_shader == shader) {
 				// Reflect the shader again
-				return ReflectMaterialShaderParameters(resource_manager, material, ECS_MATERIAL_SHADER_VERTEX, vertex_shader->file, database->Allocator(), mount_point);
+				return ReflectMaterialShaderParameters(resource_manager, material, vertex_shader, ECS_MATERIAL_SHADER_VERTEX, database->Allocator(), mount_point);
 			}
 		}
 
 		if (material->pixel_shader_handle != -1) {
 			const ShaderMetadata* pixel_shader = database->GetShaderConst(material->pixel_shader_handle);
 			if (pixel_shader == shader) {
-				return ReflectMaterialShaderParameters(resource_manager, material, ECS_MATERIAL_SHADER_PIXEL, pixel_shader->file, database->Allocator(), mount_point);
+				return ReflectMaterialShaderParameters(resource_manager, material, pixel_shader, ECS_MATERIAL_SHADER_PIXEL, database->Allocator(), mount_point);
 			}
 		}
 
@@ -1662,20 +1687,30 @@ namespace ECSEngine {
 	ECS_RELOAD_ASSET_METADATA_STATUS ReflectMaterialShaderParameters(
 		const ResourceManager* resource_manager, 
 		MaterialAsset* material, 
-		ECS_MATERIAL_SHADER shader_type, 
-		Stream<wchar_t> shader_file,
+		const ShaderMetadata* shader_metadata,
+		ECS_MATERIAL_SHADER shader_type,
 		AllocatorPolymorphic allocator,
 		Stream<wchar_t> mount_point
 	)
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path_storage, 512);
-		Stream<wchar_t> absolute_path = function::MountPathOnlyRel(shader_file, mount_point, absolute_path_storage);
+		Stream<wchar_t> absolute_path = function::MountPathOnlyRel(shader_metadata->file, mount_point, absolute_path_storage);
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 
 		Stream<char> source_code = ReadWholeFileText(absolute_path, GetAllocatorPolymorphic(&stack_allocator));
 		ECS_RELOAD_ASSET_METADATA_STATUS status = ECS_RELOAD_ASSET_METADATA_NO_CHANGE;
 		if (source_code.size > 0) {
+			// Preprocess the file - taking into account the shader macro definitions
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, macro_names, 128);
+			ECS_ASSERT(macro_names.capacity >= shader_metadata->macros.size);
+
+			for (size_t index = 0; index < shader_metadata->macros.size; index++) {
+				macro_names[index] = shader_metadata->macros[index].name;
+			}
+			macro_names.size = shader_metadata->macros.size;
+			source_code = function::PreprocessCFile(source_code, macro_names);
+
 			ECS_STACK_CAPACITY_STREAM(ShaderReflectedBuffer, reflected_buffers, ECS_SHADER_MAX_CONSTANT_BUFFER_SLOT);
 			ECS_STACK_CAPACITY_STREAM(ShaderReflectedSampler, reflected_samplers, ECS_SHADER_MAX_SAMPLER_SLOT);
 			ECS_STACK_CAPACITY_STREAM(ShaderReflectedTexture, reflected_textures, ECS_SHADER_MAX_TEXTURE_SLOT);
