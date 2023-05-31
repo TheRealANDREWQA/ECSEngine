@@ -75,6 +75,41 @@ namespace ECSEngine {
 		// Returns -1 if it doesn't appear at all in the database
 		AssetTypedHandle FindDeep(const void* metadata, ECS_ASSET_TYPE type) const;
 
+		// The functor is called as (unsigned int handle)
+		// Return true in the functor to early exit
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEachAsset(ECS_ASSET_TYPE type, Functor&& functor) {
+			unsigned int count = GetCount(type);
+			// We need to prune the entries - if there are multiple reference counts they will appear
+			// multiple times and we need to call the functor only once for each handle
+
+			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, temporary_values, count);
+			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+			temporary_values.size = count;
+			temporary_values.Copy(streams[type].ToStream());
+
+			for (unsigned int index = 0; index < temporary_values.size; index++) {
+				unsigned int handle = GetHandle(index, type);
+				if constexpr (early_exit) {
+					if (functor(handle)) {
+						return true;
+					}
+				}
+				else {
+					functor(handle);
+				}
+
+				// Now we need to eliminate all identical handles as this one
+				size_t next_value_index = function::SearchBytes(temporary_values.buffer + index + 1, temporary_values.size - index - 1, handle, sizeof(handle));
+				while (next_value_index != -1) {
+					temporary_values.RemoveSwapBack(index + 1);
+					next_value_index = function::SearchBytes(temporary_values.buffer + index + 1, temporary_values.size - index - 1, handle, sizeof(handle));
+				}
+			}
+			return false;
+		}
+
 		MeshMetadata* GetMesh(unsigned int index);
 
 		TextureMetadata* GetTexture(unsigned int index);

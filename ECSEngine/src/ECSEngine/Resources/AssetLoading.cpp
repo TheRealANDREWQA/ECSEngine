@@ -357,7 +357,7 @@ namespace ECSEngine {
 		unsigned int mesh_handle = mesh_block_pointer->different_handles[0];
 		MeshMetadata* metadata = data->control_block->database->GetMesh(mesh_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPath(metadata->file, data->control_block->load_info.mount_point, absolute_path);
+		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
 
 		AllocatorPolymorphic allocator = data->control_block->GetThreadAllocator(thread_index);
 		GLTFData gltf_data = functor(file_path, allocator, data->control_block);
@@ -421,7 +421,7 @@ namespace ECSEngine {
 		unsigned int texture_handle = texture_block_pointer->different_handles[0];
 		TextureMetadata* metadata = data->control_block->database->GetTexture(texture_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPath(metadata->file, data->control_block->load_info.mount_point, absolute_path);
+		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
 
 		AllocatorPolymorphic allocator = data->control_block->GetThreadAllocator(thread_index);
 		Stream<void> file_data = functor(file_path, allocator, data->control_block);
@@ -437,7 +437,9 @@ namespace ECSEngine {
 			data->control_block->load_info.finish_semaphore->ExitEx();
 			return;
 		}
-		DecodedTexture decoded_texture = DecodeTexture(file_data, file_path, allocator);
+
+		size_t decode_flags = metadata->sRGB ? ECS_DECODE_TEXTURE_FORCE_SRGB : ECS_DECODE_TEXTURE_NO_SRGB;
+		DecodedTexture decoded_texture = DecodeTexture(file_data, file_path, allocator, decode_flags);
 		Deallocate(allocator, file_data.buffer);
 
 		if (decoded_texture.data.size == 0) {

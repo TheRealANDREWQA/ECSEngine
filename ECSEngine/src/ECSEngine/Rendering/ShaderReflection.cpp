@@ -608,9 +608,16 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
+	// Returns USHORT_MAX if there is an error
 	unsigned short GetRegisterIndex(const char* register_ptr) {
 		const char* number_start = strchr(register_ptr, '(');
+		if (number_start == nullptr) {
+			return USHORT_MAX;
+		}
 		const char* number_end = strchr(number_start, ')');
+		if (number_end == nullptr) {
+			return USHORT_MAX;
+		}
 		return function::ConvertCharactersToInt(Stream<char>(number_start, number_end - number_start));
 	}
 
@@ -718,6 +725,25 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			return DXGI_FORMAT_FORCE_UINT;
 		}
 		return extended_format.formats[modifier_index];
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------------------------
+
+	Stream<char> ShaderReflectedBuffer::GetTag(Stream<char> tag) const
+	{
+		if (tags.size > 0) {
+			Stream<char> found_tag = function::FindFirstToken(tags, tag);
+			if (found_tag.size > 0) {
+				Stream<char> separator = function::FindFirstToken(found_tag, ECS_SHADER_REFLECTION_CONSTANT_BUFFER_TAG_DELIMITER);
+				if (separator.size > 0) {
+					return { found_tag.buffer, found_tag.size - separator.size };
+				}
+				else {
+					return found_tag;
+				}
+			}
+		}
+		return { nullptr, 0 };
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -1706,7 +1732,50 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			reflected_buffer.register_index = GetRegisterIndex(register_ptr);
 		}
 
+		if (reflected_buffer.register_index == USHORT_MAX) {
+			reflected_buffer.byte_size = -1;
+			return reflected_buffer;
+		}
+
 		const char* end_line = strchr(starting_pointer, '\n');
+		
+		ECS_STACK_CAPACITY_STREAM(char, current_type_tag, 1024);
+		// Get the tags, if it has any
+		if (register_ptr != nullptr) {
+			// Skip the register_ptr 
+			starting_pointer = function::FindFirstCharacter({ register_ptr, function::PointerDifference(end_line, register_ptr) / sizeof(char) }, ')').buffer;
+			starting_pointer++;
+		}
+		Stream<char> tag_search_space = { starting_pointer, function::PointerDifference(end_line, starting_pointer) / sizeof(char) };
+		Stream<char> current_tag = function::SkipWhitespace(tag_search_space);
+		while (current_tag.size > 0) {
+			Stream<char> current_tag_end = function::SkipCodeIdentifier(current_tag);
+			Stream<char> tag_paranthesis = function::FindFirstCharacter(current_tag_end, '(');
+			if (tag_paranthesis.size > 0) {
+				// Check to see if it is immediately after this current tag
+				Stream<char> skipped_whitespace = function::SkipWhitespace(current_tag_end);
+				if (skipped_whitespace.buffer == tag_paranthesis.buffer) {
+					// They match - get the end of the tag
+					Stream<char> closed_tag_paranthesis = function::FindFirstCharacter(tag_paranthesis, ')');
+					if (closed_tag_paranthesis.size == 0) {
+						// Fail
+						reflected_buffer.byte_size = -1;
+						return reflected_buffer;
+					}
+
+					current_tag_end = closed_tag_paranthesis.AdvanceReturn();
+				}
+			}
+
+			if (current_type_tag.size > 0) {
+				current_type_tag.AddStreamAssert(ECS_SHADER_REFLECTION_CONSTANT_BUFFER_TAG_DELIMITER);
+			}
+			current_type_tag.AddStreamAssert({ current_tag.buffer, function::PointerDifference(current_tag_end.buffer, current_tag.buffer) / sizeof(char) });
+			current_tag = function::SkipWhitespace(current_tag_end);
+		}
+
+		reflected_buffer.tags = current_type_tag.size > 0 ? function::StringCopy(allocator, current_type_tag) : Stream<char>(nullptr, 0);
+
 		const char* current_character = end_line + 1;
 		current_character += *current_character == '{';
 
@@ -1771,12 +1840,13 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		if (reflection_type != nullptr) {
 			reflection_type->fields.InitializeAndCopy(allocator, reflected_fields);
 			reflection_type->name.InitializeAndCopy(allocator, reflected_buffer.name);
-			reflection_type->tag = { nullptr, 0 };
+			reflection_type->tag = reflected_buffer.tags.size > 0 ? function::StringCopy(allocator, reflected_buffer.tags) : Stream<char>();
 			reflection_type->evaluations = { nullptr, 0 };
 			reflection_type->alignment = 8;
 			reflection_type->byte_size = reflected_buffer.byte_size;
 			// At the moment it is blittable
 			reflection_type->is_blittable = true;
+			reflection_type->is_blittable_with_pointer = true;
 			reflection_type->folder_hierarchy_index = -1;
 		}
 

@@ -331,18 +331,24 @@ namespace ECSEngine {
 
 		// It will copy the null termination character
 		ECS_INLINE Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string) {
-			Stream<char> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
-			result.Copy(string);
-			result[string.size] = '\0';
-			return result;
+			if (string.size > 0) {
+				Stream<char> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
+				result.Copy(string);
+				result[string.size] = '\0';
+				return result;
+			}
+			return { nullptr, 0 };
 		}
 
 		// It will copy the null termination character
 		ECS_INLINE Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string) {
-			Stream<wchar_t> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
-			result.Copy(string);
-			result[string.size] = L'\0';
-			return result;
+			if (string.size > 0) {
+				Stream<wchar_t> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
+				result.Copy(string);
+				result[string.size] = L'\0';
+				return result;
+			}
+			return { nullptr, 0 };
 		}
 
 		// The type must have as its first field a size_t describing the stream size
@@ -636,6 +642,12 @@ namespace ECSEngine {
 
 		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<unsigned int>& tokens);
 
+		// Convenience function - the more efficient is the unsigned int version that returns offsets into the string
+		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, CapacityStream<Stream<char>>& tokens);
+
+		// Convenience function - the more efficient is the unsigned int version that returns offsets into the string
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<Stream<wchar_t>>& tokens);
+
 		// It will return the first appereance of the token inside the character stream
 		// It will not call strstr, it uses a SIMD search, this function being well suited if searching a large string
 		// Returns { nullptr, 0 } if it doesn't exist, else a string that starts with the token
@@ -729,6 +741,10 @@ namespace ECSEngine {
 
 		// Generates the string variants of the given numbers
 		ECSENGINE_API void FromNumbersToStrings(size_t count, CapacityStream<char>& storage, Stream<char>* strings, size_t offset = 0);
+
+		// Returns the string enclosed in a set of paranthesis. If there are no paranthesis, it returns { nullptr, 0 }
+		// Example AAAA(BBB) returns BBB
+		ECSENGINE_API Stream<char> GetStringParameter(Stream<char> string);
 
 		// Returns the string after the count'th character. If there are less than count characters of that type,
 		// it will return { nullptr, 0 }
@@ -885,6 +901,24 @@ namespace ECSEngine {
 		// If the output_string is nullptr, it will do the replacement in-place
 		// Else it will use the output string
 		ECSENGINE_API void ReplaceOccurences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string = nullptr);
+
+		// These splits will only reference the content inside the string
+		ECSENGINE_API void SplitString(Stream<char> string, char delimiter, CapacityStream<Stream<char>>& splits);
+		
+		// These splits will only reference the content inside the string
+		ECSENGINE_API void SplitString(Stream<wchar_t> string, wchar_t delimiter, CapacityStream<Stream<wchar_t>>& splits);
+
+		// These splits will only reference the content inside the string
+		ECSENGINE_API void SplitString(Stream<char> string, Stream<char> delimiter, CapacityStream<Stream<char>>& splits);
+
+		// These splits will only reference the content inside the string
+		ECSENGINE_API void SplitString(Stream<wchar_t> string, Stream<wchar_t> delimiter, CapacityStream<Stream<wchar_t>>& splits);
+
+		// Returns the string isolated from other strings delimited using the given delimiter
+		ECSENGINE_API Stream<char> IsolateString(Stream<char> string, Stream<char> token, Stream<char> delimiter);
+
+		// Returns the string isolated from other strings delimited using the given delimiter
+		ECSENGINE_API Stream<wchar_t> IsolateString(Stream<wchar_t> string, Stream<wchar_t> token, Stream<wchar_t> delimiter);
 
 		enum ECS_EVALUATE_EXPRESSION_OPERATORS : unsigned char {
 			ECS_EVALUATE_EXPRESSION_ADD,

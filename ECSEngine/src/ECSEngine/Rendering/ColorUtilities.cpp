@@ -369,17 +369,17 @@ namespace ECSEngine {
 			sdr_color = color;
 		}
 		else {
-			Vector4 vector_color;
-			vector_color.Load(&color);
+			float largest_component = std::max(color.red, color.blue);
+			largest_component = std::max(largest_component, color.green);
+			float largest_component_inverse = 1.0f / largest_component;
 
-			Vector4 intensity_vector = Length3(vector_color);
+			sdr_color.red = color.red * largest_component_inverse * sdr_color.GetRange();
+			sdr_color.green = color.green * largest_component_inverse * sdr_color.GetRange();
+			sdr_color.blue = color.blue * largest_component_inverse * sdr_color.GetRange();
+
 			if (intensity != nullptr) {
-				*intensity = intensity_vector.First();
+				*intensity = largest_component;
 			}
-			Vector4 normalized_vector_color = vector_color / intensity_vector;
-			ColorFloat normalized_color;
-			normalized_vector_color.Store(&normalized_color);
-			sdr_color = normalized_color;
 		}
 		sdr_color.alpha = alpha;
 

@@ -7,6 +7,9 @@ namespace ECSEngine {
 
 	namespace Reflection {
 
+#define ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR '~'
+#define ECS_REFLECTION_TYPE_TAG_DELIMITER_STRING "~"
+
 		struct ReflectionManager;
 
 		enum class ReflectionBasicFieldType : unsigned char {
@@ -186,6 +189,9 @@ namespace ECSEngine {
 
 			// Does a CompareStrings, not a FindFirstToken
 			bool IsTag(Stream<char> string) const;
+
+			// In case the tag has multiple separated elements it will return the value separated
+			Stream<char> GetTag(Stream<char> string, Stream<char> separator) const;
 
 			unsigned int FindField(Stream<char> name) const;
 

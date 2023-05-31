@@ -1255,7 +1255,7 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 
 	// The last thread deallocates the shared resources and set the preload end flag
 	if (count == data->semaphore->target - 1) {
-		Deallocate(data->editor_state->EditorAllocator(), data->semaphore);
+		Deallocate(data->editor_state->MultithreadedEditorAllocator(), data->semaphore);
 
 		// Signal that processing ended
 		explorer_data->preload_flags = function::SetFlag(explorer_data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_ENDED);
@@ -1406,7 +1406,7 @@ void FileExplorerLaunchPreloadTextures(EditorState* editor_state) {
 	if (per_thread_textures > 0 || per_thread_remainder > 0) {
 		data->preload_flags = function::SetFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
 
-		Semaphore* semaphore = (Semaphore*)Allocate(editor_state->EditorAllocator(), sizeof(Semaphore));
+		Semaphore* semaphore = (Semaphore*)Allocate(editor_state->MultithreadedEditorAllocator(), sizeof(Semaphore));
 		semaphore->ClearCount();
 		unsigned int launch_thread_count = per_thread_textures > 0 ? thread_count : per_thread_remainder;
 		semaphore->target.store(launch_thread_count, ECS_RELAXED);
@@ -1985,6 +1985,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 				UIDrawerMenuRightClickData right_click_data;
 				right_click_data.action = OnRightClickCallback;
+				right_click_data.is_action_data_ptr = false;
 				memcpy(right_click_data.action_data, &selectable_data, sizeof(selectable_data));
 				right_click_data.name = "Folder File Explorer Menu";
 				right_click_data.window_index = 0;
@@ -1994,7 +1995,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 				right_click_data.state.submenu_index = 0;
 
 				UIConfigHoverableAction hoverable_action;
-				hoverable_action.handler = { RightClickMenu, &right_click_data, sizeof(right_click_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+				hoverable_action.handler = { RightClickMenu, &right_click_data, sizeof(right_click_data), ECS_UI_DRAW_SYSTEM };
 				config->AddFlag(hoverable_action);
 
 				constexpr size_t RECTANGLE_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_RECTANGLE_HOVERABLE_ACTION

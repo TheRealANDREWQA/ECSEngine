@@ -943,8 +943,7 @@ bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE t
 		}
 
 		// Randomize the asset
-		unsigned int randomized_value = editor_state->asset_database->GetRandomizedPointer(type);
-		SetRandomizedAssetToMetadata(metadata, type, randomized_value);
+		editor_state->asset_database->RandomizePointer(metadata, type);
 
 		if (dependent_assets != nullptr) {
 			dependent_assets->buffer[previous_dependent_assets_size].new_pointer = GetAssetFromMetadata(metadata, type);

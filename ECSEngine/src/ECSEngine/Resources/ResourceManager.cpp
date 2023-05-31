@@ -176,12 +176,12 @@ namespace ECSEngine {
 	void DeleteResource(ResourceManager* resource_manager, unsigned int index, ResourceType type, size_t flags) {
 		unsigned int type_int = (unsigned int)type;
 
-		ResourceManagerEntry entry = resource_manager->m_resource_types[type_int].GetValueFromIndex(index);
+		ResourceManagerEntry* entry = resource_manager->m_resource_types[type_int].GetValuePtrFromIndex(index);
 
 		void (*handler)(void*, ResourceManager*) = UNLOAD_FUNCTIONS[type_int];
 
 		auto delete_resource = [=]() {
-			void* data = entry.data;
+			void* data = entry->data;
 			handler(data, resource_manager);
 			resource_manager->Deallocate(resource_manager->m_resource_types[type_int].GetIdentifierFromIndex(index).ptr);
 			resource_manager->m_resource_types[type_int].EraseFromIndex(index);
@@ -191,8 +191,8 @@ namespace ECSEngine {
 		}
 		else {
 			unsigned short increment_count = flags & ECS_RESOURCE_MANAGER_MASK_INCREMENT_COUNT;
-			entry.reference_count = function::SaturateSub(entry.reference_count, increment_count);
-			if (entry.reference_count == 0) {
+			entry->reference_count = function::SaturateSub(entry->reference_count, increment_count);
+			if (entry->reference_count == 0) {
 				delete_resource();
 			}
 		}
@@ -1385,6 +1385,208 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
+#pragma region Unload User Material Individual Functions
+
+// ---------------------------------------------------------------------------------------------------------------------------
+
+	void UnloadUserMaterialShader(
+		ResourceManager* resource_manager,
+		const UserMaterial* user_material,
+		Stream<wchar_t> shader_path,
+		void* shader_interface,
+		ShaderCompileOptions compile_options,
+		Stream<char> shader_name,
+		ECS_SHADER_TYPE shader_type,
+		ResourceManagerLoadDesc load_descriptor
+	) {
+		bool check_resource_before_unload = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
+
+		// It can happen that the material does not have a shader assigned (for varying reasons)
+		if (shader_path.size > 0) {
+			bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
+
+			// Deallocate the vertex shader
+			if (dont_load) {
+				resource_manager->UnloadShaderImplementation(shader_interface, shader_type);
+			}
+			else {
+				ResourceManagerLoadDesc current_desc;
+				ECS_STACK_VOID_STREAM(suffix, 512);
+				if (user_material->generate_unique_name_from_setting) {
+					GenerateShaderCompileOptionsSuffix(compile_options, suffix, shader_name);
+				}
+				current_desc.identifier_suffix = suffix;
+				if (!check_resource_before_unload || resource_manager->Exists(shader_path, ResourceType::Shader, suffix)) {
+					resource_manager->UnloadShader<true>(shader_path, current_desc);
+				}
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void UnloadUserMaterialVertexShader(
+		ResourceManager* resource_manager,
+		const UserMaterial* user_material,
+		Material* material,
+		ResourceManagerLoadDesc load_descriptor
+	) {
+		UnloadUserMaterialShader(
+			resource_manager,
+			user_material,
+			user_material->vertex_shader,
+			material->vertex_shader.Interface(),
+			user_material->vertex_compile_options,
+			user_material->vertex_shader_name,
+			ECS_SHADER_VERTEX,
+			load_descriptor
+		);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void UnloadUserMaterialPixelShader(
+		ResourceManager* resource_manager,
+		const UserMaterial* user_material,
+		Material* material,
+		ResourceManagerLoadDesc load_descriptor
+	) {
+		UnloadUserMaterialShader(
+			resource_manager,
+			user_material,
+			user_material->pixel_shader,
+			material->pixel_shader.Interface(),
+			user_material->pixel_compile_options,
+			user_material->pixel_shader_name,
+			ECS_SHADER_PIXEL,
+			load_descriptor
+		);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	template<typename Entry, typename Entries, typename Slots>
+	Entry RemoveUserMaterialEntry(unsigned char slot, Entries& entries, Slots& slots) {
+		unsigned char index = 0;
+
+		// When using decltype(*buffers), the compiler actually generates a reference type instead of a value type
+		// Extremely annoying bug since it is counter intuitive. Has to do this work around
+		auto entry = entries[0];
+		for (; index < entries.size; index++) {
+			if (slots[index] == slot) {
+				entry = entries[index];
+				entries.RemoveSwapBack(index);
+				slots.RemoveSwapBack(index);
+				return entry;
+			}
+		}
+
+		// Return a nullptr resource - it wasn't created last time
+		return { nullptr };
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void UnloadUserMaterialTextures(
+		ResourceManager* resource_manager,
+		const UserMaterial* user_material,
+		Material* material,
+		ResourceManagerLoadDesc load_descriptor
+	) {
+		bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
+		bool check_resource_before_unload = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
+
+		// Use temporaries as to not modify the material
+		ECS_STACK_CAPACITY_STREAM(ResourceView, temporary_p_textures, 16);
+		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_p_texture_slots, 16);
+		ECS_STACK_CAPACITY_STREAM(ResourceView, temporary_v_textures, 16);
+		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_v_texture_slots, 16);
+		temporary_p_textures.Copy(Stream<ResourceView>(material->p_textures, material->p_texture_count));
+		temporary_p_texture_slots.Copy(Stream<unsigned char>(material->p_texture_slot, material->p_texture_count));
+		temporary_v_textures.Copy(Stream<ResourceView>(material->v_textures, material->v_texture_count));
+		temporary_v_texture_slots.Copy(Stream<unsigned char>(material->v_texture_slot, material->v_texture_count));
+
+		for (size_t index = 0; index < user_material->textures.size; index++) {
+			ResourceView resource_view;
+			if (user_material->textures[index].shader_type == ECS_SHADER_VERTEX) {
+				resource_view = RemoveUserMaterialEntry<ResourceView>(user_material->textures[index].slot, temporary_v_textures, temporary_v_texture_slots);
+			}
+			else {
+				resource_view = RemoveUserMaterialEntry<ResourceView>(user_material->textures[index].slot, temporary_p_textures, temporary_p_texture_slots);
+			}
+
+			// Only if the resource view is specified
+			if (resource_view.Interface() != nullptr) {
+				if (dont_load) {
+					resource_manager->UnloadTextureImplementation(resource_view);
+				}
+				else {
+					ResourceManagerLoadDesc manager_desc;
+					ECS_STACK_VOID_STREAM(settings_suffix, 512);
+					Stream<void> suffix = load_descriptor.identifier_suffix;
+					if (user_material->generate_unique_name_from_setting) {
+						user_material->textures[index].GenerateSettingsSuffix(settings_suffix);
+						suffix = settings_suffix;
+					}
+					manager_desc.identifier_suffix = suffix;
+					if (!check_resource_before_unload || resource_manager->Exists(user_material->textures[index].filename, ResourceType::Texture, suffix)) {
+						resource_manager->UnloadTexture<true>(user_material->textures[index].filename, manager_desc);
+					}
+				}
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void UnloadUserMaterialSamplers(
+		ResourceManager* resource_manager,
+		const UserMaterial* user_material
+	) {
+		for (size_t index = 0; index < user_material->samplers.size; index++) {
+			if (user_material->samplers[index].state.Interface() != nullptr) {
+				resource_manager->m_graphics->FreeResource(user_material->samplers[index].state);
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void UnloadUserMaterialBuffers(
+		ResourceManager* resource_manager,
+		const UserMaterial* user_material,
+		Material* material,
+		ResourceManagerLoadDesc load_descriptor
+	) {
+		ECS_STACK_CAPACITY_STREAM(ConstantBuffer, temporary_p_buffers, 16);
+		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_p_buffer_slots, 16);
+		ECS_STACK_CAPACITY_STREAM(ConstantBuffer, temporary_v_buffers, 16);
+		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_v_buffer_slots, 16);
+		temporary_p_buffers.Copy(Stream<ConstantBuffer>(material->p_buffers, material->p_buffer_count));
+		temporary_p_buffer_slots.Copy(Stream<unsigned char>(material->p_buffer_slot, material->p_buffer_count));
+		temporary_v_buffers.Copy(Stream<ConstantBuffer>(material->v_buffers, material->v_buffer_count));
+		temporary_v_buffer_slots.Copy(Stream<unsigned char>(material->v_buffer_slot, material->v_buffer_count));
+
+		for (size_t index = 0; index < user_material->buffers.size; index++) {
+			ConstantBuffer buffer;
+			if (user_material->buffers[index].shader_type == ECS_SHADER_VERTEX) {
+				buffer = RemoveUserMaterialEntry<ConstantBuffer>(user_material->buffers[index].slot, temporary_v_buffers, temporary_v_buffer_slots);
+			}
+			else {
+				buffer = RemoveUserMaterialEntry<ConstantBuffer>(user_material->buffers[index].slot, temporary_p_buffers, temporary_p_buffer_slots);
+			}
+
+			// Only if the buffer is specified
+			if (buffer.Interface() != nullptr) {
+				resource_manager->m_graphics->FreeResource(buffer);
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
 #pragma region Load User Material Individual Functions
 
 	// Returns true if it succeded else false
@@ -1436,6 +1638,8 @@ namespace ECSEngine {
 		bool success = resource_manager->m_graphics->ReflectVertexBufferMapping(source_code, mesh_indices);
 		if (!success) {
 			resource_manager->Deallocate(source_code.buffer);
+			// Unload the vertex shader
+			UnloadUserMaterialVertexShader(resource_manager, user_material, converted_material, load_descriptor);
 			return false;
 		}
 
@@ -1446,6 +1650,8 @@ namespace ECSEngine {
 		if (input_layout.layout == nullptr) {
 			// Release the source code before
 			resource_manager->Deallocate(source_code.buffer);
+			// Unload the vertex shader
+			UnloadUserMaterialVertexShader(resource_manager, user_material, converted_material, load_descriptor);
 			return false;
 		}
 		converted_material->layout = input_layout;
@@ -1646,207 +1852,20 @@ namespace ECSEngine {
 				converted_material->p_buffer_count++;
 				ECS_ASSERT(converted_material->p_buffer_count <= ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT);
 			}
-		}
-	}
 
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Unload User Material Individual Functions
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void UnloadUserMaterialShader(
-		ResourceManager* resource_manager,
-		const UserMaterial* user_material,
-		Stream<wchar_t> shader_path,
-		void* shader_interface,
-		ShaderCompileOptions compile_options,
-		Stream<char> shader_name,
-		ECS_SHADER_TYPE shader_type,
-		ResourceManagerLoadDesc load_descriptor
-	) {
-		bool check_resource_before_unload = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
-
-		// It can happen that the material does not have a shader assigned (for varying reasons)
-		if (shader_path.size > 0) {
-			bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
-
-			// Deallocate the vertex shader
-			if (dont_load) {
-				resource_manager->UnloadShaderImplementation(shader_interface, shader_type);
-			}
-			else {
-				ResourceManagerLoadDesc current_desc;
-				ECS_STACK_VOID_STREAM(suffix, 512);
-				if (user_material->generate_unique_name_from_setting) {
-					GenerateShaderCompileOptionsSuffix(compile_options, suffix, shader_name);
-				}
-				current_desc.identifier_suffix = suffix;
-				if (!check_resource_before_unload || resource_manager->Exists(shader_path, ResourceType::Shader, suffix)) {
-					resource_manager->UnloadShader<true>(shader_path, current_desc);
-				}
-			}
-		}
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void UnloadUserMaterialVertexShader(
-		ResourceManager* resource_manager,
-		const UserMaterial* user_material,
-		Material* material,
-		ResourceManagerLoadDesc load_descriptor
-	) {
-		UnloadUserMaterialShader(
-			resource_manager, 
-			user_material, 
-			user_material->vertex_shader, 
-			material->vertex_shader.Interface(),
-			user_material->vertex_compile_options, 
-			user_material->vertex_shader_name, 
-			ECS_SHADER_VERTEX, 
-			load_descriptor
-		);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void UnloadUserMaterialPixelShader(
-		ResourceManager* resource_manager,
-		const UserMaterial* user_material,
-		Material* material,
-		ResourceManagerLoadDesc load_descriptor
-	) {
-		UnloadUserMaterialShader(
-			resource_manager,
-			user_material,
-			user_material->pixel_shader,
-			material->pixel_shader.Interface(),
-			user_material->pixel_compile_options,
-			user_material->pixel_shader_name,
-			ECS_SHADER_PIXEL,
-			load_descriptor
-		);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<typename Entry, typename Entries, typename Slots>
-	Entry RemoveUserMaterialEntry(unsigned char slot, Entries& entries, Slots& slots) {
-		unsigned char index = 0;
-
-		// When using decltype(*buffers), the compiler actually generates a reference type instead of a value type
-		// Extremely annoying bug since it is counter intuitive. Has to do this work around
-		auto entry = entries[0];
-		for (; index < entries.size; index++) {
-			if (slots[index] == slot) {
-				entry = entries[index];
-				entries.RemoveSwapBack(index);
-				slots.RemoveSwapBack(index);
-				return entry;
-			}
-		}
-
-		// Return a nullptr resource - it wasn't created last time
-		return { nullptr };
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void UnloadUserMaterialTextures(
-		ResourceManager* resource_manager,
-		const UserMaterial* user_material,
-		Material* material,
-		ResourceManagerLoadDesc load_descriptor
-	) {
-		bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
-		bool check_resource_before_unload = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
-
-		// Use temporaries as to not modify the material
-		ECS_STACK_CAPACITY_STREAM(ResourceView, temporary_p_textures, 16);
-		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_p_texture_slots, 16);
-		ECS_STACK_CAPACITY_STREAM(ResourceView, temporary_v_textures, 16);
-		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_v_texture_slots, 16);
-		temporary_p_textures.Copy(Stream<ResourceView>(material->p_textures, material->p_texture_count));
-		temporary_p_texture_slots.Copy(Stream<unsigned char>(material->p_texture_slot, material->p_texture_count));
-		temporary_v_textures.Copy(Stream<ResourceView>(material->v_textures, material->v_texture_count));
-		temporary_v_texture_slots.Copy(Stream<unsigned char>(material->v_texture_slot, material->v_texture_count));
-
-		for (size_t index = 0; index < user_material->textures.size; index++) {
-			ResourceView resource_view;
-			if (user_material->textures[index].shader_type == ECS_SHADER_VERTEX) {
-				resource_view = RemoveUserMaterialEntry<ResourceView>(user_material->textures[index].slot, temporary_v_textures, temporary_v_texture_slots);
-			}
-			else {
-				resource_view = RemoveUserMaterialEntry<ResourceView>(user_material->textures[index].slot, temporary_p_textures, temporary_p_texture_slots);
-			}
-
-			// Only if the resource view is specified
-			if (resource_view.Interface() != nullptr) {
-				if (dont_load) {
-					resource_manager->UnloadTextureImplementation(resource_view);
+			// Check for tags
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, separated_tags, 16);
+			if (user_material->buffers[index].tags.size > 0) {
+				if (user_material->buffers[index].tag_separator.size > 0) {
+					function::SplitString(user_material->buffers[index].tags, user_material->buffers[index].tag_separator, separated_tags);
 				}
 				else {
-					ResourceManagerLoadDesc manager_desc;
-					ECS_STACK_VOID_STREAM(settings_suffix, 512);
-					Stream<void> suffix = load_descriptor.identifier_suffix;
-					if (user_material->generate_unique_name_from_setting) {
-						user_material->textures[index].GenerateSettingsSuffix(settings_suffix);
-						suffix = settings_suffix;
-					}
-					manager_desc.identifier_suffix = suffix;
-					if (!check_resource_before_unload || resource_manager->Exists(user_material->textures[index].filename, ResourceType::Texture, suffix)) {
-						resource_manager->UnloadTexture<true>(user_material->textures[index].filename, manager_desc);
-					}
+					separated_tags.Add(user_material->buffers[index].tags);
 				}
 			}
-		}
-	}
 
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void UnloadUserMaterialSamplers(
-		ResourceManager* resource_manager,
-		const UserMaterial* user_material
-	) {
-		for (size_t index = 0; index < user_material->samplers.size; index++) {
-			if (user_material->samplers[index].state.Interface() != nullptr) {
-				resource_manager->m_graphics->FreeResource(user_material->samplers[index].state);
-			}
-		}
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void UnloadUserMaterialBuffers(
-		ResourceManager* resource_manager,
-		const UserMaterial* user_material,
-		Material* material,
-		ResourceManagerLoadDesc load_descriptor
-	) {
-		ECS_STACK_CAPACITY_STREAM(ConstantBuffer, temporary_p_buffers, 16);
-		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_p_buffer_slots, 16);
-		ECS_STACK_CAPACITY_STREAM(ConstantBuffer, temporary_v_buffers, 16);
-		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_v_buffer_slots, 16);
-		temporary_p_buffers.Copy(Stream<ConstantBuffer>(material->p_buffers, material->p_buffer_count));
-		temporary_p_buffer_slots.Copy(Stream<unsigned char>(material->p_buffer_slot, material->p_buffer_count));
-		temporary_v_buffers.Copy(Stream<ConstantBuffer>(material->v_buffers, material->v_buffer_count));
-		temporary_v_buffer_slots.Copy(Stream<unsigned char>(material->v_buffer_slot, material->v_buffer_count));
-
-		for (size_t index = 0; index < user_material->buffers.size; index++) {
-			ConstantBuffer buffer;
-			if (user_material->buffers[index].shader_type == ECS_SHADER_VERTEX) {
-				buffer = RemoveUserMaterialEntry<ConstantBuffer>(user_material->buffers[index].slot, temporary_v_buffers, temporary_v_buffer_slots);
-			}
-			else {
-				buffer = RemoveUserMaterialEntry<ConstantBuffer>(user_material->buffers[index].slot, temporary_p_buffers, temporary_p_buffer_slots);
-			}
-
-			// Only if the buffer is specified
-			if (buffer.Interface() != nullptr) {
-				resource_manager->m_graphics->FreeResource(buffer);
+			for (unsigned int subindex = 0; subindex < separated_tags.size; subindex++) {
+				converted_material->AddTag(separated_tags[subindex], user_material->buffers[index].shader_type == ECS_SHADER_VERTEX);
 			}
 		}
 	}

@@ -321,6 +321,7 @@ namespace ECSEngine {
 					asset->buffers[type][index].name = ReadAllocateDataShort<true>(data->stream, allocator).As<char>();
 					asset->buffers[type][index].dynamic = dynamic;
 					asset->buffers[type][index].slot = slot;
+					asset->buffers[type][index].tags = { nullptr, 0 };
 
 					read_size += asset->buffers[type][index].name.size;
 				}
@@ -370,8 +371,7 @@ namespace ECSEngine {
 						if (type_to_be_deserialized != nullptr) {
 							asset->buffers[type][index].reflection_type = (Reflection::ReflectionType*)Allocate(allocator, sizeof(Reflection::ReflectionType));
 							// Copy the type - we can store the type as is directly because in the hash table it
-							// can change positions when inserting - we'll take the pointer to the hash table entry
-							// after all types have been inserted
+							// can change positions when inserting
 							*asset->buffers[type][index].reflection_type = *type_to_be_deserialized;
 						}
 					}
@@ -420,17 +420,6 @@ namespace ECSEngine {
 		}
 
 		if (data->read_data) {
-			// Remap the reflection types to the hash tables entries
-			for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
-				for (size_t index = 0; index < asset->buffers[type].size; index++) {
-					if (asset->buffers[type][index].reflection_type != nullptr) {
-						Stream<char> name = asset->buffers[type][index].reflection_type->name;
-						Deallocate(allocator, asset->buffers[type][index].reflection_type);
-						asset->buffers[type][index].reflection_type = asset->reflection_manager->GetType(name);
-					}
-				}
-			}
-
 			unsigned short vertex_shader_name_size = 0;
 			read_size += ReadWithSizeShort<true>(data->stream, name_buffer.buffer, vertex_shader_name_size);
 			name_buffer.size = vertex_shader_name_size / sizeof(char);

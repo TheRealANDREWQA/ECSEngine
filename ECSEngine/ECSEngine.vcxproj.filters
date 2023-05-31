@@ -205,6 +205,7 @@
     <ClInclude Include="src\Includes\ECSEngineComponentsAll.h" />
     <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Profiling.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -316,6 +317,7 @@
     <ClCompile Include="src\ECSEngine\ECS\RuntimeResources.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\ComponentHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />
@@ -331,5 +333,6 @@
     <None Include="src\ECSEngine\Rendering\Shaders\Utilities.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\PBRBase.hlsli" />
     <None Include="cpp.hint" />
+    <None Include="src\ECSEngine\Rendering\Shaders\CBufferTags.hlsli" />
   </ItemGroup>
 </Project>

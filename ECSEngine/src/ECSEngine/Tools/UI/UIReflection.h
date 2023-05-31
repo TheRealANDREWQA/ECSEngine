@@ -304,6 +304,11 @@ namespace ECSEngine {
 			Stream<char> default_value_button = { nullptr, 0 };
 		};
 
+		struct UIReflectionDrawerCreateTypeOptions {
+			Stream<char> identifier_name = { nullptr, 0 };
+			Stream<unsigned int> ignore_fields = { nullptr, 0 };
+		};
+
 		struct ECSENGINE_API UIReflectionDrawer {
 			UIReflectionDrawer(
 				UIToolsAllocator* allocator,
@@ -426,9 +431,9 @@ namespace ECSEngine {
 			void ChangeDirectoryToFile(UIReflectionType* type, Stream<char> field_name);
 
 			// Gets the type from the internal reflection
-			UIReflectionType* CreateType(Stream<char> name);
+			UIReflectionType* CreateType(Stream<char> name, UIReflectionDrawerCreateTypeOptions* options = nullptr);
 			// Can optionally specify a name by which it will be identified
-			UIReflectionType* CreateType(const Reflection::ReflectionType* type, Stream<char> identifier_name = { nullptr, 0 });
+			UIReflectionType* CreateType(const Reflection::ReflectionType* type, UIReflectionDrawerCreateTypeOptions* options = nullptr);
 
 			// Can optionally give a user defined allocator to be used for allocations inside the user defined fields.
 			// By default it will pass on the allocator of this UIReflectionDrawer. It will store this allocator and give

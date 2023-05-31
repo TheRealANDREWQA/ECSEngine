@@ -279,8 +279,9 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		template<typename VectorType, typename CharacterType>
-		void FindTokenImpl(Stream<CharacterType> string, Stream<CharacterType> token, CapacityStream<unsigned int>& tokens) {
+		// The functor receives a (unsigned int index) as parameters when a new entry should be added
+		template<typename VectorType, typename CharacterType, typename Functor>
+		void FindTokenImpl(Stream<CharacterType> string, Stream<CharacterType> token, Functor&& functor) {
 			// Could use the FindFirstToken function but the disadvantage to that function is
 			// that we cannot cache the SIMD vectors
 			// So unroll that manually here
@@ -337,12 +338,12 @@ namespace ECSEngine {
 								simd_current_characters.load_partial(simd_remainder, current_characters);
 								if (horizontal_and(simd_token[simd_token_count] == simd_current_characters)) {
 									// Found a match
-									tokens.Add(index + bit_index);
+									functor(index + bit_index);
 								}
 							}
 							else {
 								// Found a match
-								tokens.Add(index + bit_index);
+								functor(index + bit_index);
 							}
 						}
 
@@ -358,7 +359,7 @@ namespace ECSEngine {
 					unsigned int found_match = -1;
 					ForEachBit(match, [&](unsigned int bit_index) {
 						if (memcmp(string.buffer + index + bit_index, token.buffer, token.size * sizeof(CharacterType)) == 0) {
-							tokens.Add(index + bit_index);
+							functor(index + bit_index);
 						}
 						return false;
 					});
@@ -367,10 +368,10 @@ namespace ECSEngine {
 
 			// For the remaining slots, just call memcmp for each index
 			for (size_t index = simd_count; index < iteration_count; index++) {
+				// Do a precull with the first character
 				if (string[index] == token[0]) {
-					// Do a precull with the first character
 					if (memcmp(string.buffer + index, token.buffer, sizeof(CharacterType) * token.size) == 0) {
-						tokens.Add(index);
+						functor(index);
 					}
 				}
 			}
@@ -417,7 +418,9 @@ namespace ECSEngine {
 
 		void FindToken(Stream<char> string, Stream<char> token, CapacityStream<unsigned int>& tokens)
 		{
-			FindTokenImpl<Vec32c>(string, token, tokens);
+			FindTokenImpl<Vec32c>(string, token, [&](unsigned int index) {
+				tokens.AddAssert(index);
+			});
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -430,7 +433,25 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<unsigned int>& tokens) {
-			FindTokenImpl<Vec16s>(string, token, tokens);
+			FindTokenImpl<Vec16s>(string, token, [&](unsigned int index) {
+				tokens.AddAssert(index);
+			});
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void FindToken(Stream<char> string, Stream<char> token, CapacityStream<Stream<char>>& tokens) {
+			FindTokenImpl<Vec32c>(string, token, [&](unsigned int index) {
+				tokens.AddAssert({ string.buffer + index, string.size - index });
+			});
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<Stream<wchar_t>>& tokens) {
+			FindTokenImpl<Vec16s>(string, token, [&](unsigned int index) {
+				tokens.AddAssert({ string.buffer + index, string.size - index });
+			});
 		}
 		
 		// --------------------------------------------------------------------------------------------------
@@ -788,6 +809,22 @@ namespace ECSEngine {
 				strings[index].buffer = storage.buffer + storage.size;
 				strings[index].size = function::ConvertIntToChars(storage, index + offset);
 			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<char> GetStringParameter(Stream<char> string)
+		{
+			Stream<char> opened_paranthesis = function::FindFirstCharacter(string, '(');
+			if (opened_paranthesis.size > 0) {
+				Stream<char> closed_paranthesis = function::FindFirstCharacter(opened_paranthesis, ')');
+				if (closed_paranthesis.size > 0) {
+					opened_paranthesis = function::SkipWhitespace(opened_paranthesis);
+					closed_paranthesis = function::SkipWhitespace(closed_paranthesis, -1);
+					return { opened_paranthesis.buffer, function::PointerDifference(closed_paranthesis.buffer, opened_paranthesis.buffer) };
+				}
+			}
+			return { nullptr, 0 };
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -1932,6 +1969,96 @@ namespace ECSEngine {
 		void ReplaceOccurences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string)
 		{
 			ReplaceOccurencesImpl(string, occurences, output_string);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		void SplitStringImpl(Stream<CharacterType> string, CharacterType delimiter, CapacityStream<Stream<CharacterType>>& splits)
+		{
+			Stream<CharacterType> found_delimiter = function::FindFirstCharacter(string, delimiter);
+			while (found_delimiter.size > 0) {
+				splits.AddAssert({ string.buffer, string.size - found_delimiter.size });
+				found_delimiter.Advance();
+				string = found_delimiter;
+				found_delimiter = function::FindFirstCharacter(string, delimiter);
+			}
+
+			if (string.size > 0) {
+				splits.AddAssert(string);
+			}
+		}
+
+		template<typename CharacterType>
+		void SplitStringImpl(Stream<CharacterType> string, Stream<CharacterType> delimiter, CapacityStream<Stream<CharacterType>>& splits)
+		{
+			Stream<CharacterType> found_delimiter = function::FindFirstToken(string, delimiter);
+			while (found_delimiter.size > 0) {
+				splits.AddAssert({ string.buffer, string.size - found_delimiter.size });
+				found_delimiter.Advance(delimiter.size);
+				string = found_delimiter;
+				found_delimiter = function::FindFirstToken(string, delimiter);
+			}
+
+			if (string.size > 0) {
+				splits.AddAssert(string);
+			}
+		}
+
+		void SplitString(Stream<char> string, char delimiter, CapacityStream<Stream<char>>& splits)
+		{
+			SplitStringImpl<char>(string, delimiter, splits);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void SplitString(Stream<wchar_t> string, wchar_t delimiter, CapacityStream<Stream<wchar_t>>& splits)
+		{
+			SplitStringImpl<wchar_t>(string, delimiter, splits);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void SplitString(Stream<char> string, Stream<char> delimiter, CapacityStream<Stream<char>>& splits)
+		{
+			SplitStringImpl<char>(string, delimiter, splits);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void SplitString(Stream<wchar_t> string, Stream<wchar_t> delimiter, CapacityStream<Stream<wchar_t>>& splits)
+		{
+			SplitStringImpl<wchar_t>(string, delimiter, splits);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		Stream<CharacterType> IsolateStringImpl(Stream<CharacterType> string, Stream<CharacterType> token, Stream<CharacterType> delimiter) {
+			Stream<CharacterType> existing_string = function::FindFirstToken(string, token);
+			if (existing_string.size > 0) {
+				Stream<CharacterType> next_delimiter = function::FindFirstToken(existing_string, delimiter);
+				if (next_delimiter.size > 0) {
+					return Stream<CharacterType>(
+						existing_string.buffer,
+						function::PointerDifference(next_delimiter.buffer, existing_string.buffer) / sizeof(CharacterType)
+						);
+				}
+				return existing_string;
+			}
+			return {};
+		}
+
+		Stream<char> IsolateString(Stream<char> string, Stream<char> token, Stream<char> delimiter)
+		{
+			return IsolateStringImpl(string, token, delimiter);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<wchar_t> IsolateString(Stream<wchar_t> string, Stream<wchar_t> token, Stream<wchar_t> delimiter)
+		{
+			return IsolateStringImpl(string, token, delimiter);
 		}
 
 		// --------------------------------------------------------------------------------------------------

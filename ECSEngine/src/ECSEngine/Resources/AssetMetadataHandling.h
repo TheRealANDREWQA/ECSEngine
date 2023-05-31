@@ -433,6 +433,58 @@ namespace ECSEngine {
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
 
+	// Returns the status of the reload
+	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReloadMaterialShaderParameters(
+		const ResourceManager* resource_manager,
+		const AssetDatabase* database,
+		MaterialAsset* material,
+		AllocatorPolymorphic allocator,
+		Stream<wchar_t> mount_point = { nullptr, 0 }
+	);
+
+	// Returns the status of the reload
+	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReloadMaterialMetadataFromFilesParameters(
+		const ResourceManager* resource_manager,
+		const AssetDatabase* database,
+		MaterialAsset* material,
+		AllocatorPolymorphic allocator,
+		Stream<wchar_t> mount_point = { nullptr, 0 }
+	);
+
+	// Returns the status of the reload
+	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReloadAssetMetadataFromFilesParameters(
+		const ResourceManager* resource_manager,
+		const AssetDatabase* database,
+		void* metadata,
+		ECS_ASSET_TYPE type,
+		AllocatorPolymorphic allocator,
+		Stream<wchar_t> mount_point = { nullptr, 0 }
+	);
+
+	// It will read all assets whose metadata depeneds on target files that are currently loaded and
+	// reload them - if they have changed, they will be reflected afterwards
+	// Can optionally give a stream of typed handles to be filled in for those assets whose
+	// content has changed.
+	// Returns true if all file reads were successful, else false (at least one failed)
+	ECSENGINE_API bool ReloadAssetMetadataFromFilesParameters(
+		const ResourceManager* resource_manager,
+		AssetDatabase* database,
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		CapacityStream<AssetTypedHandle>* modified_assets = nullptr
+	);
+
+	// It will read all assets whose metadata depeneds on target files that are currently loaded and
+	// reload them - if they have changed, they will be reflected afterwards
+	// Can optionally give a stream of typed handles to be filled in for those assets whose
+	// content has changed.
+	// Returns true if all file reads were successful, else false (at least one failed)
+	ECSENGINE_API bool ReloadAssetMetadataFromFilesParameters(
+		const ResourceManager* resource_manager,
+		AssetDatabaseReference* database_reference,
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		CapacityStream<AssetTypedHandle>* modified_assets = nullptr
+	);
+
 	ECS_INLINE void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code) {
 		metadata->source_code = source_code;
 	}

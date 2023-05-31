@@ -3227,7 +3227,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		UIReflectionType* UIReflectionDrawer::CreateType(Stream<char> name)
+		UIReflectionType* UIReflectionDrawer::CreateType(Stream<char> name, UIReflectionDrawerCreateTypeOptions* options)
 		{
 			ResourceIdentifier identifier(name);
 			ECS_ASSERT(type_definition.Find(identifier) == -1);
@@ -3340,8 +3340,15 @@ namespace ECSEngine {
 			field.configuration = 0;
 		}
 
-		UIReflectionType* UIReflectionDrawer::CreateType(const ReflectionType* reflected_type, Stream<char> identifier_name)
+		UIReflectionType* UIReflectionDrawer::CreateType(const ReflectionType* reflected_type, UIReflectionDrawerCreateTypeOptions* options)
 		{
+			Stream<char> identifier_name = {};
+			Stream<unsigned int> ignore_fields = {};
+			if (options != nullptr) {
+				identifier_name = options->identifier_name;
+				ignore_fields = options->ignore_fields;
+			}
+
 			auto integer_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
 				UIReflectionIntInputData* data = (UIReflectionIntInputData*)allocator->Allocate(sizeof(UIReflectionIntInputData));
 				field.data = data;
@@ -3778,120 +3785,128 @@ namespace ECSEngine {
 				}
 			};
 
-			for (size_t index = 0; index < reflected_type->fields.size; index++) {
-				const ReflectionFieldInfo& field_info = reflected_type->fields[index].info;
+			auto is_field_omitted = [&](unsigned int index) {
+				return function::SearchBytes(ignore_fields.buffer, ignore_fields.size, (size_t)index, sizeof(index)) != -1;
+			};
 
-				bool value_written = false;
-				type.fields[index].name = reflected_type->fields[index].name;
-				type.fields[type.fields.size].pointer_offset = reflected_type->fields[index].info.pointer_offset;
-				if (field_info.stream_type == ReflectionStreamFieldType::Pointer) {
-					// The basic type count tells the indirection count: e.g void* - indirection 1; void** indirection 2
-					// Only reflect single indirection pointers
-					if (field_info.basic_type_count == 1) {
+			for (size_t index = 0; index < reflected_type->fields.size; index++) {
+				bool is_omitted = is_field_omitted(index);
+
+				if (!is_omitted) {
+					const ReflectionFieldInfo& field_info = reflected_type->fields[index].info;
+
+					bool value_written = false;
+					type.fields[index].name = reflected_type->fields[index].name;
+					type.fields[type.fields.size].pointer_offset = reflected_type->fields[index].info.pointer_offset;
+					if (field_info.stream_type == ReflectionStreamFieldType::Pointer) {
+						// The basic type count tells the indirection count: e.g void* - indirection 1; void** indirection 2
+						// Only reflect single indirection pointers
+						if (field_info.basic_type_count == 1) {
+							test_stream_type(index, field_info, value_written);
+						}
+					}
+					else if (field_info.stream_type != Reflection::ReflectionStreamFieldType::Basic && field_info.stream_type != Reflection::ReflectionStreamFieldType::Unknown) {
 						test_stream_type(index, field_info, value_written);
 					}
-				}
-				else if (field_info.stream_type != Reflection::ReflectionStreamFieldType::Basic && field_info.stream_type != Reflection::ReflectionStreamFieldType::Unknown) {
-					test_stream_type(index, field_info, value_written);
-				}
-				else {
-					test_basic_type(index, field_info, value_written);
-				}
-
-				if (value_written) {
-					UIReflectionIndex ui_reflection_index = type.fields[type.fields.size].reflection_index;
-					if (field_info.has_default_value && ui_reflection_index != UIReflectionIndex::Override) {
-						UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)ui_reflection_index](type.fields.buffer + type.fields.size, &field_info.default_bool);
-					}
-
-					// Check the range tag first
-					Stream<char> range_tag = reflected_type->fields[index].GetTag(STRING(ECS_UI_RANGE_REFLECT));
-					unsigned int reflection_index = (unsigned int)ui_reflection_index;
-					ReflectionBasicFieldType basic_type = field_info.basic_type;
-
-					auto parse_default = [&](Stream<char>* parse_tag) {
-						ECS_STACK_VOID_STREAM(conversion_storage, sizeof(double4));
-						double4 default_value = function::ParseDouble4(parse_tag, ',', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
-
-						if (default_value.x != DBL_MAX) {
-							if (ui_reflection_index == UIReflectionIndex::Color) {
-								if (default_value.x < 1.0 || default_value.y < 1.0 || default_value.z < 1.0 || default_value.w < 1.0) {
-									// The values need to be in the 0 - 255 range
-									double range = 255;
-									default_value.x *= range;
-									default_value.y *= range;
-									default_value.z *= range;
-									default_value.w *= range;
-								}
-
-								Color color_value = (double*)&default_value;
-								UI_REFLECTION_SET_DEFAULT_DATA[reflection_index](type.fields.buffer + index, &color_value);
-							}
-							else if (ui_reflection_index == UIReflectionIndex::ColorFloat) {
-								ColorFloat color_value = (double*)&default_value;
-								UI_REFLECTION_SET_DEFAULT_DATA[reflection_index](type.fields.buffer + index, &color_value);
-							}
-							else {
-								// Convert to the corresponding type
-								ConvertFromDouble4ToBasic(basic_type, default_value, conversion_storage.buffer);
-								UI_REFLECTION_SET_DEFAULT_DATA[reflection_index](type.fields.buffer + index, conversion_storage.buffer);
-							}
-						}
-					};
-
-					auto parse_lower_upper_bound = [&](Stream<char>* range_tag) {
-						ECS_STACK_VOID_STREAM(conversion_storage, sizeof(double4));
-						double4 lower_bound = function::ParseDouble4(range_tag, ',', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
-						double4 upper_bound = function::ParseDouble4(range_tag, ')', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
-
-						if (lower_bound.x != DBL_MAX) {
-							ConvertFromDouble4ToBasic(basic_type, lower_bound, conversion_storage.buffer);
-							UI_REFLECTION_SET_LOWER_BOUND[reflection_index](
-								type.fields.buffer + index,
-								conversion_storage.buffer
-								);
-						}
-
-						if (upper_bound.x != DBL_MAX) {
-							ConvertFromDouble4ToBasic(basic_type, upper_bound, conversion_storage.buffer);
-							UI_REFLECTION_SET_UPPER_BOUND[reflection_index](
-								type.fields.buffer + index,
-								conversion_storage.buffer
-							);
-						}
-					};
-
-					if (range_tag.size > 0) {
-						if (reflection_index < std::size(UI_REFLECTION_SET_LOWER_BOUND)) {
-							range_tag = function::FindFirstCharacter(range_tag, '(');
-							range_tag.Advance();
-							parse_lower_upper_bound(&range_tag);
-						}
-					}
 					else {
-						Stream<char> parameters_tag = reflected_type->fields[index].GetTag(STRING(ECS_UI_PARAMETERS_REFLECT));
-						if (parameters_tag.size > 0) {
-							// Get the default, lower bound and upper bound values
-							parameters_tag = function::FindFirstCharacter(parameters_tag, '(');
-							parameters_tag.Advance();
+						test_basic_type(index, field_info, value_written);
+					}
 
-							parse_default(&parameters_tag);
+					if (value_written) {
+						UIReflectionIndex ui_reflection_index = type.fields[type.fields.size].reflection_index;
+						if (field_info.has_default_value && ui_reflection_index != UIReflectionIndex::Override) {
+							UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)ui_reflection_index](type.fields.buffer + type.fields.size, &field_info.default_bool);
+						}
+
+						// Check the range tag first
+						Stream<char> range_tag = reflected_type->fields[index].GetTag(STRING(ECS_UI_RANGE_REFLECT));
+						unsigned int reflection_index = (unsigned int)ui_reflection_index;
+						ReflectionBasicFieldType basic_type = field_info.basic_type;
+
+						auto parse_default = [&](Stream<char>* parse_tag) {
+							ECS_STACK_VOID_STREAM(conversion_storage, sizeof(double4));
+							double4 default_value = function::ParseDouble4(parse_tag, ',', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
+
+							if (default_value.x != DBL_MAX) {
+								if (ui_reflection_index == UIReflectionIndex::Color) {
+									if (default_value.x < 1.0 || default_value.y < 1.0 || default_value.z < 1.0 || default_value.w < 1.0) {
+										// The values need to be in the 0 - 255 range
+										double range = 255;
+										default_value.x *= range;
+										default_value.y *= range;
+										default_value.z *= range;
+										default_value.w *= range;
+									}
+
+									Color color_value = (double*)&default_value;
+									UI_REFLECTION_SET_DEFAULT_DATA[reflection_index](type.fields.buffer + index, &color_value);
+								}
+								else if (ui_reflection_index == UIReflectionIndex::ColorFloat) {
+									ColorFloat color_value = (double*)&default_value;
+									UI_REFLECTION_SET_DEFAULT_DATA[reflection_index](type.fields.buffer + index, &color_value);
+								}
+								else {
+									// Convert to the corresponding type
+									ConvertFromDouble4ToBasic(basic_type, default_value, conversion_storage.buffer);
+									UI_REFLECTION_SET_DEFAULT_DATA[reflection_index](type.fields.buffer + index, conversion_storage.buffer);
+								}
+							}
+						};
+
+						auto parse_lower_upper_bound = [&](Stream<char>* range_tag) {
+							ECS_STACK_VOID_STREAM(conversion_storage, sizeof(double4));
+							double4 lower_bound = function::ParseDouble4(range_tag, ',', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
+							double4 upper_bound = function::ParseDouble4(range_tag, ')', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
+
+							if (lower_bound.x != DBL_MAX) {
+								ConvertFromDouble4ToBasic(basic_type, lower_bound, conversion_storage.buffer);
+								UI_REFLECTION_SET_LOWER_BOUND[reflection_index](
+									type.fields.buffer + index,
+									conversion_storage.buffer
+									);
+							}
+
+							if (upper_bound.x != DBL_MAX) {
+								ConvertFromDouble4ToBasic(basic_type, upper_bound, conversion_storage.buffer);
+								UI_REFLECTION_SET_UPPER_BOUND[reflection_index](
+									type.fields.buffer + index,
+									conversion_storage.buffer
+								);
+							}
+						};
+
+						if (range_tag.size > 0) {
 							if (reflection_index < std::size(UI_REFLECTION_SET_LOWER_BOUND)) {
-								parse_lower_upper_bound(&parameters_tag);
+								range_tag = function::FindFirstCharacter(range_tag, '(');
+								range_tag.Advance();
+								parse_lower_upper_bound(&range_tag);
 							}
 						}
 						else {
-							// Try the default tag now
-							Stream<char> default_tag = reflected_type->fields[index].GetTag(STRING(ECS_UI_DEFAULT_REFLECT));
-							if (default_tag.size > 0) {
-								default_tag = function::FindFirstCharacter(default_tag, '(');
-								default_tag.Advance();
-								parse_default(&default_tag);
+							Stream<char> parameters_tag = reflected_type->fields[index].GetTag(STRING(ECS_UI_PARAMETERS_REFLECT));
+							if (parameters_tag.size > 0) {
+								// Get the default, lower bound and upper bound values
+								parameters_tag = function::FindFirstCharacter(parameters_tag, '(');
+								parameters_tag.Advance();
+
+								parse_default(&parameters_tag);
+								if (reflection_index < std::size(UI_REFLECTION_SET_LOWER_BOUND)) {
+									parse_lower_upper_bound(&parameters_tag);
+								}
+							}
+							else {
+								// Try the default tag now
+								Stream<char> default_tag = reflected_type->fields[index].GetTag(STRING(ECS_UI_DEFAULT_REFLECT));
+								if (default_tag.size > 0) {
+									default_tag = function::FindFirstCharacter(default_tag, '(');
+									default_tag.Advance();
+									parse_default(&default_tag);
+								}
 							}
 						}
-					}
 
-					type.fields.size++;
+						type.fields.size++;
+					}
 				}
 			}
 

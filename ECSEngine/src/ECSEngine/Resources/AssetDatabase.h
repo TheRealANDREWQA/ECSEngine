@@ -6,6 +6,7 @@
 #include "AssetMetadata.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Utilities/Reflection/Reflection.h"
+//#include "../Multithreading/ConcurrentPrimitives.h"
 
 namespace ECSEngine {
 
@@ -139,6 +140,22 @@ namespace ECSEngine {
 		// a referenceable asset (like textures, samplers, shaders). It uses the handle values in order to determine
 		// if the asset is referenced or not
 		bool DependsUpon(const void* main_asset, ECS_ASSET_TYPE type, const void* referenced_asset, ECS_ASSET_TYPE referenced_type) const;
+
+		/*ECS_INLINE void EnterReadLock() {
+			read_write_lock.EnterRead();
+		}
+
+		ECS_INLINE void EnterWriteLock() {
+			read_write_lock.EnterWrite();
+		}
+
+		ECS_INLINE void ExitReadLock() {
+			read_write_lock.ExitRead();
+		}
+
+		ECS_INLINE void ExitWriteLock() {
+			read_write_lock.ExitWrite();
+		}*/
 
 		// Returns true if there is an asset associated to that slot
 		bool Exists(unsigned int handle, ECS_ASSET_TYPE type) const;
@@ -342,6 +359,10 @@ namespace ECSEngine {
 		// Makes the pointer unique for each asset such that it can be uniquely identified by its pointer
 		// It returns the new pointer value
 		unsigned int RandomizePointer(unsigned int handle, ECS_ASSET_TYPE type);
+
+		// Makes the pointer unique for each asset such that it can be uniquely identified by its pointer
+		// It returns the pointer value - if the asset is already randomized, then it won't do anything
+		unsigned int RandomizePointer(void* metadata, ECS_ASSET_TYPE type) const;
 
 		// Makes the pointer unique for each asset such that it can be uniquely identified by its pointer
 		// An allocator can be given to allocate the assets from or, if left as default, it will allocate
@@ -601,38 +622,39 @@ namespace ECSEngine {
 		// this does not verify that the new name doesn't exist previously
 		bool UpdateAsset(unsigned int handle, const void* asset, ECS_ASSET_TYPE type, bool update_files = true);
 
-		// It will read all assets that have dependencies from files that are currently loaded and
+		// It will read all assets from files which have dependencies that are currently loaded and
 		// reload them - if they have changed, they will be reflected afterwards
 		// Can optionally give a stream of typed handles to be filled in for those assets whose
-		// content has changed
+		// content has changed. It does not update the assets whose metadata depends on the target files
+		// For that use the function from AssetMetadataHandling.h ReloadAssetMetadataFromFilesParameters
 		// Returns true if all file reads were successful, else false (at least one failed)
 		bool UpdateAssetsWithDependenciesFromFiles(CapacityStream<AssetTypedHandle>* modified_assets = nullptr);
 
-		// Writes the file for that asset. Returns true if it suceedded, else false
+		// Writes the file for that asset. Returns true if it succeeded, else false
 		// In case it fails, the previous version of that file (if it exists) will be restored
 		bool WriteMeshFile(const MeshMetadata* metadata) const;
 
-		// Writes the file for that asset. Returns true if it suceedded, else false
+		// Writes the file for that asset. Returns true if it succeeded, else false
 		// In case it fails, the previous version of that file (if it exists) will be restored
 		bool WriteTextureFile(const TextureMetadata* metadata) const;
 
-		// Writes the file for that asset. Returns true if it suceedded, else false
+		// Writes the file for that asset. Returns true if it succeeded, else false
 		// In case it fails, the previous version of that file (if it exists) will be restored
 		bool WriteGPUSamplerFile(const GPUSamplerMetadata* metadata) const;
 
-		// Writes the file for that asset. Returns true if it suceedded, else false
+		// Writes the file for that asset. Returns true if it succeeded, else false
 		// In case it fails, the previous version of that file (if it exists) will be restored
 		bool WriteShaderFile(const ShaderMetadata* metadata) const;
 
-		// Writes the file for that asset. Returns true if it suceedded, else false
+		// Writes the file for that asset. Returns true if it succeeded, else false
 		// In case it fails, the previous version of that file (if it exists) will be restored
 		bool WriteMaterialFile(const MaterialAsset* metadata) const;
 
-		// Writes the file for that asset. Returns true if it suceedded, else false
+		// Writes the file for that asset. Returns true if it succeeded, else false
 		// In case it fails, the previous version of that file (if it exists) will be restored
 		bool WriteMiscFile(const MiscAsset* metadata) const;
 
-		// Writes the file for that asset. Returns true if it suceedded, else false
+		// Writes the file for that asset. Returns true if it succeeded, else false
 		// In case it fails, the previous version of that file (if it exists) will be restored
 		bool WriteAssetFile(const void* asset, ECS_ASSET_TYPE type) const;
 
@@ -669,6 +691,7 @@ namespace ECSEngine {
 		// In that directory the metadata folders will be created
 		Stream<wchar_t> metadata_file_location;
 		const Reflection::ReflectionManager* reflection_manager;
+		//ReadWriteLock read_write_lock;
 	};
 
 	// ------------------------------------------------------------------------------------------------------------

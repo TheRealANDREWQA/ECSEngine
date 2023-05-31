@@ -316,11 +316,8 @@ namespace ECSEngine {
 	}
 
 	void ConditionVariable::ResetAndNotify() {
-		int previous_value = signal_count.load(ECS_RELAXED);
 		Reset();
-		if (previous_value < 0) {
-			WakeByAddressAll(&signal_count);
-		}
+		WakeByAddressAll(&signal_count);
 	}
 
 	unsigned int ConditionVariable::WaitingThreadCount()

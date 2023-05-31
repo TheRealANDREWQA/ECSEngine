@@ -30,7 +30,7 @@ namespace ECSEngine {
 	}
 
 	template<bool trigger_error_if_not_found>
-	void MultipoolAllocator::Deallocate(const void* block) {
+	bool MultipoolAllocator::Deallocate(const void* block) {
 		// Calculating the start index of the block by reading the byte metadata 
 
 		uintptr_t byte_offset_position = (uintptr_t)block - (uintptr_t)m_buffer - 1;
@@ -40,13 +40,13 @@ namespace ECSEngine {
 		else {
 			if (m_buffer[byte_offset_position] >= ECS_CACHE_LINE_SIZE) {
 				// Exit if the alignment is very high
-				return;
+				return false;
 			}
 		}
-		m_range.Free<trigger_error_if_not_found>((unsigned int)(byte_offset_position - m_buffer[byte_offset_position]));
+		return m_range.Free<trigger_error_if_not_found>((unsigned int)(byte_offset_position - m_buffer[byte_offset_position]));
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, MultipoolAllocator::Deallocate, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, MultipoolAllocator::Deallocate, const void*);
 
 	void MultipoolAllocator::Clear() {
 		m_range.Clear();
@@ -91,11 +91,12 @@ namespace ECSEngine {
 	}
 
 	template<bool trigger_error_if_not_found>
-	void MultipoolAllocator::Deallocate_ts(const void* block) {
+	bool MultipoolAllocator::Deallocate_ts(const void* block) {
 		m_spin_lock.lock();
-		Deallocate<trigger_error_if_not_found>(block);
+		bool was_deallocated = Deallocate<trigger_error_if_not_found>(block);
 		m_spin_lock.unlock();
+		return was_deallocated;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, MultipoolAllocator::Deallocate_ts, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, MultipoolAllocator::Deallocate_ts, const void*);
 }

@@ -21,8 +21,10 @@ namespace ECSEngine {
 		
 		void* Allocate(size_t size, size_t alignment = 8);
 
+		// The return value is only useful when using assert_if_not_found set to false
+		// in which case it will return true if the deallocation was performed, else false
 		template<bool trigger_error_if_not_found = true>
-		void Deallocate(const void* block);
+		bool Deallocate(const void* block);
 
 		void Clear();
 
@@ -39,8 +41,10 @@ namespace ECSEngine {
 
 		void* Allocate_ts(size_t size, size_t alignment = 8);
 
+		// The return value is only useful when using assert_if_not_found set to false
+		// in which case it will return true if the deallocation was performed, else false
 		template<bool trigger_error_if_not_found = true>
-		void Deallocate_ts(const void* block);
+		bool Deallocate_ts(const void* block);
 
 		static size_t MemoryOf(unsigned int pool_count);
 		static size_t MemoryOf(unsigned int pool_count, unsigned int size);

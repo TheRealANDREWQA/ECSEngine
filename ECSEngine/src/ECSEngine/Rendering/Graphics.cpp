@@ -784,8 +784,13 @@ namespace ECSEngine {
 
 	ID3DBlob* ShaderByteCode(GraphicsDevice* device, Stream<char> source_code, ShaderCompileOptions options, ID3DInclude* include_policy, ECS_SHADER_TYPE type) {
 		D3D_SHADER_MACRO macros[64];
-		ECS_ASSERT(options.macros.size <= 64 - 2);
-		memcpy(macros, options.macros.buffer, sizeof(const char*) * 2 * options.macros.size);
+		// For strings that are nullptr or of size 0, redirect them to this
+		char empty_string = '\0';
+		ECS_ASSERT(options.macros.size <= std::size(macros) - 1);
+		for (size_t index = 0; index < options.macros.size; index++) {
+			macros[index].Name = options.macros[index].name.buffer;
+			macros[index].Definition = options.macros[index].definition.size == 0 ? &empty_string : options.macros[index].definition.buffer;
+		}
 		macros[options.macros.size] = { NULL, NULL };
 
 		const char* target = SHADER_COMPILE_TARGET[type * ECS_SHADER_TARGET_COUNT + options.target];

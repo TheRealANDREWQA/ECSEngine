@@ -583,6 +583,10 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE static size_t MemoryOf(unsigned int number) {
+			if (number == 0) {
+				return 0;
+			}
+
 			if constexpr (SoA) {
 				return (sizeof(unsigned char) + sizeof(T) + sizeof(Identifier)) * (number + 31);
 			}
@@ -677,15 +681,25 @@ namespace ECSEngine {
 
 		template<typename Allocator>
 		void Initialize(Allocator* allocator, unsigned int capacity, size_t additional_info = 0) {
-			size_t memory_size = MemoryOf(capacity);
-			void* allocation = allocator->Allocate(memory_size, 8);
-			InitializeFromBuffer(allocation, capacity, additional_info);
+			if (capacity > 0) {
+				size_t memory_size = MemoryOf(capacity);
+				void* allocation = allocator->Allocate(memory_size, 8);
+				InitializeFromBuffer(allocation, capacity, additional_info);
+			}
+			else {
+				InitializeFromBuffer(nullptr, 0, additional_info);
+			}
 		}
 
 		void Initialize(AllocatorPolymorphic allocator, unsigned int capacity, size_t additional_info = 0) {
-			size_t memory_size = MemoryOf(capacity);
-			void* allocation = Allocate(allocator, memory_size, 8);
-			InitializeFromBuffer(allocation, capacity, additional_info);
+			if (capacity > 0) {
+				size_t memory_size = MemoryOf(capacity);
+				void* allocation = Allocate(allocator, memory_size, 8);
+				InitializeFromBuffer(allocation, capacity, additional_info);
+			}
+			else {
+				InitializeFromBuffer(nullptr, 0, additional_info);
+			}
 		}
 
 		// The buffer given must be allocated with MemoryOf

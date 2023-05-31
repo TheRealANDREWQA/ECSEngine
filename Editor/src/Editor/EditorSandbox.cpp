@@ -1197,7 +1197,6 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	new (task_manager) TaskManager(
 		std::thread::hardware_concurrency(),
 		allocator,
-		sandbox->runtime_descriptor.per_thread_temporary_memory_size,
 		sandbox->runtime_descriptor.per_thread_temporary_memory_size
 	);
 	sandbox->runtime_descriptor.task_manager = task_manager;

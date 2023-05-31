@@ -67,6 +67,22 @@ namespace ECSEngine {
 	}
 
 	template<typename Allocator>
+	bool DeallocateIfBelongsAllocator(void* ECS_RESTRICT _allocator, const void* ECS_RESTRICT buffer) {
+		Allocator* allocator = (Allocator*)_allocator;
+		if (BelongsToAllocator<Allocator>(_allocator, buffer)) {
+			if constexpr (std::is_same_v<Allocator, LinearAllocator> || std::is_same_v<Allocator, StackAllocator>
+				|| std::is_same_v<Allocator, ResizableLinearAllocator>) {
+				// These are special cases of deallocation and for them it doesn't make sense - so handle it here
+				allocator->Deallocate(buffer);
+				return true;
+			}
+			else {
+				return allocator->Deallocate<false>(buffer);
+			}
+		}
+	}
+
+	template<typename Allocator>
 	void ClearAllocator(void* _allocator) {
 		Allocator* allocator = (Allocator*)_allocator;
 		allocator->Clear();
@@ -175,6 +191,10 @@ namespace ECSEngine {
 
 	BelongsToAllocatorFunction ECS_BELONGS_TO_ALLOCATOR_FUNCTIONS[] = {
 		ECS_JUMP_TABLE(BelongsToAllocator)
+	};
+
+	DeallocateIfBelongsFunction ECS_DEALLOCATE_IF_BELONGS_FUNCTIONS[] = {
+		ECS_JUMP_TABLE(DeallocateIfBelongsAllocator)
 	};
 
 	ClearAllocatorFunction ECS_CLEAR_ALLOCATOR_FUNCTIONS[] = {

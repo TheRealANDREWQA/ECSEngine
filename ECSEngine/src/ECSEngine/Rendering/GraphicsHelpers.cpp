@@ -575,6 +575,15 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		new_data.height = metadata.height;
 		new_data.width = metadata.width;
 		image.DetachPixels();
+
+		if (function::HasFlag(flags, ECS_DECODE_TEXTURE_NO_SRGB)) {
+			new_data.format = GetGraphicsFormatNoSRGB(new_data.format);
+		}
+
+		if (function::HasFlag(flags, ECS_DECODE_TEXTURE_FORCE_SRGB)) {
+			new_data.format = GetGraphicsFormatWithSRGB(new_data.format);
+		}
+
 		return new_data;
 	}
 

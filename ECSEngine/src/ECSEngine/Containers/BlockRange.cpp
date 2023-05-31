@@ -16,7 +16,7 @@ namespace ECSEngine {
 	}
 
 	template<bool assert_if_not_found>
-	void BlockRange::Free(unsigned int start) {
+	bool BlockRange::Free(unsigned int start) {
 		Vec8ui section, temp = start;
 		Vec8ib match;
 		int flag = -1;
@@ -34,7 +34,7 @@ namespace ECSEngine {
 		}
 		else {
 			if (flag == -1) {
-				return;
+				return false;
 			}
 		}
 
@@ -45,7 +45,7 @@ namespace ECSEngine {
 		}
 		else {
 			if (index < m_free_block_count || index >= m_used_block_count + m_free_block_count) {
-				return;
+				return false;
 			}
 		}
 
@@ -110,9 +110,11 @@ namespace ECSEngine {
 			ECS_ASSERT(GetStart(next_block_index) > start);
 			SetStart(next_block_index, start);
 		}
+
+		return true;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, BlockRange::Free, unsigned int);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, BlockRange::Free, unsigned int);
 
 	unsigned int BlockRange::Request(unsigned int size) {
 		ECS_ASSERT(size > 0, "Block range: zero allocation not allowed");

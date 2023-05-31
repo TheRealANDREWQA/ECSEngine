@@ -137,15 +137,32 @@ void AssetExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 
 		drawer.CollapsingHeader(resource_string, data->resource_manager_opened_headers + (unsigned char)resource_type, [&]() {
 			UIDrawConfig config;
-			UIConfigWindowDependentSize window_dependent_size;
-			config.AddFlag(window_dependent_size);
 
 			ResourceManager* resource_manager = editor_state->RuntimeResourceManager();
 			resource_manager->ForEachResourceIdentifierNoSuffix(resource_type, [&](ResourceIdentifier identifier, unsigned short suffix_size) {
+				Stream<void> suffix = { function::OffsetPointer(identifier.ptr, identifier.size), suffix_size };
+				unsigned short reference_count = resource_manager->GetEntry(identifier, resource_type, suffix).reference_count;
+				ECS_STACK_CAPACITY_STREAM(char, reference_count_chars, 16);
+				function::ConvertIntToChars(reference_count_chars, reference_count);
+
+				UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+				row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+				row_layout.AddLabel(reference_count_chars);
+				
+				config.flag_count = 0;
+				size_t configuration = 0;
+				row_layout.GetTransform(config, configuration);
+
 				Stream<wchar_t> path = { identifier.ptr, identifier.size / sizeof(wchar_t) };
-				drawer.TextLabelWide(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, path);
+				drawer.TextLabelWide(configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, path);
+
+				config.flag_count = 0;
+				configuration = 0;
+				row_layout.GetTransform(config, configuration);
+				drawer.TextLabel(configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, reference_count_chars);
+
 				drawer.NextRow();
-				});
+			});
 		});
 	};
 

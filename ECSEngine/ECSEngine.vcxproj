@@ -245,6 +245,7 @@
     <ClInclude Include="src\ECSEngine\Multithreading\TaskStealing.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTaskExport.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Profiling.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabase.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabaseReference.h" />
@@ -433,6 +434,7 @@
     <ClCompile Include="src\ECSEngine\Multithreading\TaskScheduler.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\TaskSchedulerTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\ThreadTask.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabase.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabaseReference.cpp" />
@@ -490,7 +492,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\RenderingStructures.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\ConcurrentPrimitives.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\BlockRange.cpp">
-      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Disabled</Optimization>
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -567,6 +569,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />
+    <None Include="src\ECSEngine\Rendering\Shaders\CBufferTags.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\LightingUtilities.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\Macros.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\PBRBase.hlsli" />
