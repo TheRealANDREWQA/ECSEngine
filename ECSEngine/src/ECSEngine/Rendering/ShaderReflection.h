@@ -5,6 +5,7 @@
 #include "../ECS/InternalStructures.h"
 #include "RenderingStructures.h"
 #include "../Utilities/Reflection/ReflectionTypes.h"
+#include "CBufferTags.h"
 
 namespace ECSEngine {
 
@@ -67,8 +68,20 @@ namespace ECSEngine {
 
 	// Byte size is useful only for constant buffers in order to create them directly
 	// on the Graphics object
-	struct ShaderReflectedBuffer {
+	// Also tags can be added to buffer descriptions - they can be parameterized tags as well
+	struct ECSENGINE_API ShaderReflectedBuffer {
+		// Returns { nullptr, 0 } if it doesn't exist
+		Stream<char> GetTag(Stream<char> tag) const;
+
+		ECS_INLINE bool HasTag(Stream<char> tag) const {
+			if (tag.size > 0) {
+				return function::FindFirstToken(tags, tag).size > 0;
+			}
+			return false;
+		}
+
 		Stream<char> name;
+		Stream<char> tags;
 		unsigned int byte_size;
 		ECS_SHADER_BUFFER_TYPE type;
 		unsigned short register_index;
@@ -98,6 +111,8 @@ namespace ECSEngine {
 		unsigned short register_index;
 	};
 
+	// The x position indicates the offset inside the reflection type where it starts and 
+	// the y component how many rows there are
 	struct ShaderReflectionBufferMatrixField {
 		uint2 position;
 		Stream<char> name;

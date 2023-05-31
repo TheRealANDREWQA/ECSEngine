@@ -166,7 +166,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		// Does not change the size or the pointer
 		// It only deallocates if the size is greater than 0
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
-			if (size > 0) {
+			if (size > 0 && buffer != nullptr) {
 				ECSEngine::Deallocate(allocator, buffer);
 			}
 		}
@@ -178,6 +178,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			if (size > 0 && buffer != nullptr) {
 				allocator->Deallocate(buffer);
 			}
+		}
+
+		ECS_INLINE bool DeallocateIfBelongs(AllocatorPolymorphic allocator) const {
+			if (size > 0 && buffer != nullptr) {
+				return ECSEngine::DeallocateIfBelongs(allocator, buffer);
+			}
+			return false;
 		}
 
 		// Does not update the size
@@ -544,6 +551,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			if (size > 0) {
 				allocator->Deallocate(buffer);
 			}
+		}
+
+		ECS_INLINE bool DeallocateIfBelongs(AllocatorPolymorphic allocator) const {
+			if (size > 0 && buffer != nullptr) {
+				return ECSEngine::DeallocateIfBelongs(allocator, buffer);
+			}
+			return false;
 		}
 
 		// Does not update the size

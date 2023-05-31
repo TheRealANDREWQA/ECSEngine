@@ -174,6 +174,9 @@ void TickEvents(EditorState* editor_state) {
 	// in the event queue and doing that will generate an infinite loop
 	unsigned int event_count = editor_state->event_queue.GetSize();
 
+	editor_state->event_queue_lock.unlock();
+
+
 	EditorEvent editor_event;
 	unsigned int event_index = 0;
 	while (event_index < event_count) {
@@ -186,7 +189,6 @@ void TickEvents(EditorState* editor_state) {
 		event_index++;
 	}
 
-	editor_state->event_queue_lock.unlock();
 }
 
 // -----------------------------------------------------------------------------------------------------------------

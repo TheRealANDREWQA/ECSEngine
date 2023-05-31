@@ -22,8 +22,10 @@ namespace ECSEngine {
 		// size will be 0 if all the blocks have been allocated or there is no memory left
 		void RequestBiggestBlock(unsigned int& buffer_offset, unsigned int& size);
 
+		// The return value is only useful when using assert_if_not_found set to false
+		// in which case it will return true if the deallocation was performed, else false
 		template<bool assert_if_not_found = true>
-		void Free(unsigned int start);
+		bool Free(unsigned int start);
 
 		void Clear();
 

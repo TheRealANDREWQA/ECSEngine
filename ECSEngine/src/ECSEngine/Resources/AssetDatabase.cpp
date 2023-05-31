@@ -1289,15 +1289,21 @@ namespace ECSEngine {
 	{
 		// Pick the remaining randomized asset value
 		void* metadata = GetAsset(handle, type);
-		// Make the asset metadata pointer a valid values such that it will be excluded from the list generation
-		SetRandomizedAssetToMetadata(metadata, type, ECS_ASSET_RANDOMIZED_ASSET_LIMIT + 1);
+		return RandomizePointer(metadata, type);
+	}
 
-		unsigned int count = GetAssetCount(type);
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, valid_indices, count);
-		RandomizedPointerList(count, type, valid_indices);
-		SetRandomizedAssetToMetadata(metadata, type, valid_indices[0]);
+	// --------------------------------------------------------------------------------------
 
-		return valid_indices[0];
+	unsigned int AssetDatabase::RandomizePointer(void* metadata, ECS_ASSET_TYPE type) const {
+		if (IsAssetPointerFromMetadataValid(GetAssetFromMetadata(metadata, type))) {
+			unsigned int count = GetAssetCount(type);
+			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, valid_indices, count);
+			RandomizedPointerList(count, type, valid_indices);
+			SetRandomizedAssetToMetadata(metadata, type, valid_indices[0]);
+
+			return valid_indices[0];
+		}
+		return (unsigned int)GetAssetFromMetadata(metadata, type).buffer;
 	}
 
 	// --------------------------------------------------------------------------------------

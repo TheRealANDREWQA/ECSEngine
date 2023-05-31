@@ -27,6 +27,9 @@ ECS_GRAPHICS_BUFFERS(function);
 #define ECS_MATERIAL_VERTEX_TEXTURES_COUNT 2
 #define ECS_MATERIAL_PIXEL_TEXTURES_COUNT 8
 #define ECS_MATERIAL_UAVIEW_COUNT 4
+#define ECS_MATERIAL_TAG_STORAGE_CAPACITY 256
+#define ECS_MATERIAL_VERTEX_TAG_COUNT 4
+#define ECS_MATERIAL_PIXEL_TAG_COUNT 4
 
 namespace ECSEngine {
 
@@ -281,6 +284,12 @@ namespace ECSEngine {
 	// Returns the byte size of an element of the given type (for position is sizeof(float3))
 	ECSENGINE_API size_t GetMeshIndexElementByteSize(ECS_MESH_INDEX type);
 
+	// If the format is an srgb one, it will make it non srgb
+	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatNoSRGB(ECS_GRAPHICS_FORMAT format);
+	
+	// If the format can have an srgb format, it will make it srgb
+	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatWithSRGB(ECS_GRAPHICS_FORMAT format);
+
 	enum ECS_REFLECT ECS_SAMPLER_FILTER_TYPE : unsigned char {
 		ECS_SAMPLER_FILTER_POINT,
 		ECS_SAMPLER_FILTER_LINEAR,
@@ -305,15 +314,15 @@ namespace ECSEngine {
 
 	struct ECS_REFLECT ShaderMacro {
 		ECS_INLINE bool Compare(ShaderMacro other) const {
-			return function::CompareStrings(Stream<char>(name), other.name) && function::CompareStrings(Stream<char>(definition), other.definition);
+			return function::CompareStrings(name, other.name) && function::CompareStrings(definition, other.definition);
 		}
 
 		ECS_INLINE ShaderMacro Copy(AllocatorPolymorphic allocator) const {
-			return { function::StringCopy(allocator, name).buffer, function::StringCopy(allocator, definition).buffer };
+			return { function::StringCopy(allocator, name), function::StringCopy(allocator, definition) };
 		}
 
-		const char* name;
-		const char* definition;
+		Stream<char> name;
+		Stream<char> definition;
 	};
 
 	enum ECS_SHADER_TARGET : unsigned char {
@@ -1327,6 +1336,27 @@ namespace ECSEngine {
 		Material(const Material& other) = default;
 		Material& operator = (const Material& other) = default;
 
+	private:
+		void AddTag(Stream<char> tag, unsigned char* tag_count, uchar2* tags);
+	public:
+
+		ECS_INLINE void AddVertexTag(Stream<char> tag) {
+			AddTag(tag, &v_tag_count, v_tags);
+		}
+
+		ECS_INLINE void AddPixelTag(Stream<char> tag) {
+			AddTag(tag, &p_tag_count, p_tags);
+		}
+
+		ECS_INLINE void AddTag(Stream<char> tag, bool is_vertex) {
+			if (is_vertex) {
+				AddVertexTag(tag);
+			}
+			else {
+				AddPixelTag(tag);
+			}
+		}
+
 		bool ContainsTexture(ResourceView texture) const;
 
 		ECS_INLINE bool ContainsShader(VertexShader _vertex_shader) const {
@@ -1359,6 +1389,18 @@ namespace ECSEngine {
 
 		// Copies all the fields
 		void Copy(const Material* other);
+
+		ECS_INLINE Stream<char> GetTag(unsigned char index, const uchar2* tags) const {
+			return { tag_storage + tags[index].x, tags[index].y };
+		}
+
+		ECS_INLINE Stream<char> GetVertexTag(unsigned char index) const {
+			return GetTag(index, v_tags);
+		}
+
+		ECS_INLINE Stream<char> GetPixelTag(unsigned char index) const {
+			return GetTag(index, p_tags);
+		}
 
 		ECS_INLINE void ResetVertexShader() {
 			layout = {};
@@ -1408,12 +1450,18 @@ namespace ECSEngine {
 		unsigned char p_texture_count = 0;
 		unsigned char v_sampler_count = 0;
 		unsigned char p_sampler_count = 0;
+		unsigned char v_tag_count = 0;
+		unsigned char p_tag_count = 0;
+		unsigned char tag_storage_size = 0;
 		unsigned char v_buffer_slot[ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT];
 		unsigned char p_buffer_slot[ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT];
 		unsigned char v_texture_slot[ECS_MATERIAL_VERTEX_TEXTURES_COUNT];
 		unsigned char p_texture_slot[ECS_MATERIAL_PIXEL_TEXTURES_COUNT];
 		unsigned char v_sampler_slot[ECS_MATERIAL_VERTEX_TEXTURES_COUNT];
 		unsigned char p_sampler_slot[ECS_MATERIAL_PIXEL_TEXTURES_COUNT];
+		char tag_storage[ECS_MATERIAL_TAG_STORAGE_CAPACITY];
+		uchar2 v_tags[ECS_MATERIAL_VERTEX_TAG_COUNT];
+		uchar2 p_tags[ECS_MATERIAL_PIXEL_TAG_COUNT];
 	};
 
 	struct PBRMaterial {
@@ -1455,6 +1503,10 @@ namespace ECSEngine {
 		unsigned char slot;
 		bool dynamic;
 		ECS_SHADER_TYPE shader_type;
+		// This can be an aggregate list of tags that can be split using the tag_separator
+		Stream<char> tags = {};
+		// If this is left at {nullptr, 0}, then it will assume that there are no separators
+		Stream<char> tag_separator = {};
 	};
 
 	struct UserMaterialSampler {

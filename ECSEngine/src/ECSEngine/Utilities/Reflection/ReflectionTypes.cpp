@@ -85,18 +85,7 @@ namespace ECSEngine {
 
 		Stream<char> ReflectionField::GetTag(Stream<char> string) const
 		{
-			Stream<char> token = function::FindFirstToken(tag, string);
-			if (token.size == 0) {
-				return token;
-			}
-
-			// Find the separation character
-			Stream<char> separator = function::FindFirstCharacter(token, '~');
-			if (separator.size == 0) {
-				return token;
-			}
-
-			return { token.buffer, token.size - (separator.buffer - token.buffer) };
+			return function::IsolateString(tag, string, ECS_REFLECTION_TYPE_TAG_DELIMITER_STRING);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -548,6 +537,13 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		Stream<char> ReflectionType::GetTag(Stream<char> string, Stream<char> separator) const
+		{
+			return function::IsolateString(tag, string, separator);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int ReflectionType::FindField(Stream<char> name) const
 		{
 			for (size_t index = 0; index < fields.size; index++) {
@@ -578,7 +574,7 @@ namespace ECSEngine {
 			ReflectionType copy;
 
 			copy.name.InitializeAndCopy(allocator, name);
-			copy.fields.InitializeAndCopy(allocator, fields);
+			copy.fields.Initialize(allocator, fields.size);
 			copy.evaluations.InitializeAndCopy(allocator, evaluations);
 			copy.tag.InitializeAndCopy(allocator, tag);
 			copy.byte_size = byte_size;
@@ -590,6 +586,7 @@ namespace ECSEngine {
 				copy.fields[index].name.InitializeAndCopy(allocator, fields[index].name);
 				copy.fields[index].tag.InitializeAndCopy(allocator, fields[index].tag);
 				copy.fields[index].definition.InitializeAndCopy(allocator, fields[index].definition);
+				copy.fields[index].info = fields[index].info;
 			}
 
 			return copy;

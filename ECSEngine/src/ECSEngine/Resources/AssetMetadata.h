@@ -384,12 +384,14 @@ namespace ECSEngine {
 
 	// Constant buffer description
 	// If it is dynamic, the data can be missing (the size must still be specified,
-	// the pointer can be nullptr then).
+	// the pointer can be nullptr then). The tags is optional and is used to be passed
+	// down to the material that this buffer needs some special treatment
 	// The reflection type can be missing
 	struct MaterialAssetBuffer {
 		Reflection::ReflectionType* reflection_type = nullptr;
 		Stream<char> name;
 		Stream<void> data;
+		Stream<char> tags = { nullptr, 0 };
 		bool dynamic;
 		unsigned char slot;
 	};
@@ -435,7 +437,12 @@ namespace ECSEngine {
 
 		// Deallocates everything that can be deallocated from the buffer reflection types
 		// If the shader is left at default then it will deallocate all shader types
-		void DeallocateBufferReflectionTypes(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT) const;
+		// If the deallocate_pointer is left at true, then it will deallocate the ReflectionType* pointer itself
+		void DeallocateBufferReflectionTypes(
+			AllocatorPolymorphic allocator, 
+			bool deallocate_pointer = true, 
+			ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT
+		) const;
 
 		// Deallocates the data.buffer pointer of each buffer
 		// If the shader is left at default then it will deallocate all shader types
@@ -584,6 +591,8 @@ namespace ECSEngine {
 
 		void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const;
 
+		void GetDependenciesForMetadata(CapacityStream<AssetTypedHandle>* handles) const;
+
 		// After retrieving the dependencies using GetDependencies, you can change the handle values
 		// inside the stream and call this function to change the handle values for these assets in their corresponding order
 		void RemapDependencies(Stream<AssetTypedHandle> handles);
@@ -729,6 +738,8 @@ namespace ECSEngine {
 	ECSENGINE_API bool DoesAssetReferenceOtherAsset(unsigned int handle, ECS_ASSET_TYPE handle_type, const void* asset, ECS_ASSET_TYPE type);
 
 	ECSENGINE_API void GetAssetDependencies(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* handles);
+
+	ECSENGINE_API void GetAssetDependenciesForMetadata(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* handles);
 
 	ECSENGINE_API void RemapAssetDependencies(void* metadata, ECS_ASSET_TYPE type, Stream<AssetTypedHandle> handles);
 

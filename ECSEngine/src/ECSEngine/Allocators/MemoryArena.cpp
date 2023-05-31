@@ -69,16 +69,28 @@ namespace ECSEngine {
 		return (const void*)(ptr - MemoryOfArenas(m_allocator_count, m_allocators[0].m_range.GetCapacity()));
 	}
 
+	bool MemoryArena::IsEmpty() const
+	{
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			if (!m_allocators[index].IsEmpty()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// ---------------------------------------------- Thread safe variants ---------------------------------------------------
+
 	template<bool trigger_error_if_not_found>
-	void MemoryArena::Deallocate(const void* block)
+	bool MemoryArena::Deallocate(const void* block)
 	{
 		uintptr_t block_reinterpretation = (uintptr_t)block;
 		size_t offset = block_reinterpretation - (uintptr_t)m_initial_buffer;
 		size_t index = offset / m_size_per_allocator;
-		m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
+		return m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, MemoryArena::Deallocate, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryArena::Deallocate, const void*);
 
 	// ---------------------------------------------- Thread safe variants ---------------------------------------------------
 
@@ -90,13 +102,14 @@ namespace ECSEngine {
 	}
 
 	template<bool trigger_error_if_not_found>
-	void MemoryArena::Deallocate_ts(const void* block) {
+	bool MemoryArena::Deallocate_ts(const void* block) {
 		m_lock.lock();
-		Deallocate<trigger_error_if_not_found>(block);
+		bool was_deallocated = Deallocate<trigger_error_if_not_found>(block);
 		m_lock.unlock();
+		return was_deallocated;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, MemoryArena::Deallocate_ts, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryArena::Deallocate_ts, const void*);
 
 	size_t MemoryArena::MemoryOfArenas(size_t allocator_count, size_t blocks_per_allocator) {
 		return (sizeof(MultipoolAllocator) + MultipoolAllocator::MemoryOf(blocks_per_allocator) + 16) * allocator_count + 16;
@@ -151,21 +164,30 @@ namespace ECSEngine {
 	}
 
 	template<bool trigger_error_if_not_found>
-	void ResizableMemoryArena::Deallocate(const void* block) {
+	bool ResizableMemoryArena::Deallocate(const void* block) {
 		uintptr_t block_reinterpretation = (uintptr_t)block;
 		for (int64_t index = m_arena_size - 1; index >= 0; index--) {
 			uintptr_t arena_buffer = (uintptr_t)m_arenas[index].m_initial_buffer;
 			if (m_arenas[index].Belongs(block)) {
-				m_arenas[index].Deallocate<trigger_error_if_not_found>(block);
-				return;
+				bool was_deallocated = m_arenas[index].Deallocate<trigger_error_if_not_found>(block);
+				if (was_deallocated) {
+					if (m_arenas[index].IsEmpty()) {
+						DeallocateArena(index);
+					}
+					return true;
+				}
+				else {
+					return false;
+				}
 			}
 		}
 		if constexpr (trigger_error_if_not_found) {
 			ECS_ASSERT(false);
 		}
+		return false;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, ResizableMemoryArena::Deallocate, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, ResizableMemoryArena::Deallocate, const void*);
 
 	bool ResizableMemoryArena::Belongs(const void* buffer) const
 	{
@@ -213,7 +235,7 @@ namespace ECSEngine {
 
 	void ResizableMemoryArena::DeallocateArena(size_t index)
 	{
-		m_backup->Deallocate(m_arenas[index].GetAllocatedBuffer());
+		m_backup->Deallocate_ts(m_arenas[index].GetAllocatedBuffer());
 	}
 
 	void ResizableMemoryArena::Free()
@@ -248,18 +270,18 @@ namespace ECSEngine {
 	}
 
 	template<bool trigger_error_if_not_found>
-	void ResizableMemoryArena::Deallocate_ts(const void* block)
+	bool ResizableMemoryArena::Deallocate_ts(const void* block)
 	{
 		uintptr_t block_reinterpretation = (uintptr_t)block;
 		for (int64_t index = m_arena_size - 1; index >= 0; index--) {
 			uintptr_t arena_buffer = (uintptr_t)m_arenas[index].m_initial_buffer;
 			if (arena_buffer <= block_reinterpretation && arena_buffer + m_arenas[index].m_allocator_count * m_arenas[index].m_size_per_allocator >= block_reinterpretation) {
-				m_arenas[index].Deallocate_ts<trigger_error_if_not_found>(block);
-				break;
+				return m_arenas[index].Deallocate_ts<trigger_error_if_not_found>(block);
 			}
 		}
+		return false;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, ResizableMemoryArena::Deallocate_ts, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, ResizableMemoryArena::Deallocate_ts, const void*);
 
 }

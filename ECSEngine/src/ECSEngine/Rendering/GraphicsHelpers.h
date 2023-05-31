@@ -182,17 +182,19 @@ namespace ECSEngine {
 	);
 
 #define ECS_DECODE_TEXTURE_HDR_TONEMAP (1 << 0)
+#define ECS_DECODE_TEXTURE_NO_SRGB (1 << 1)
+#define ECS_DECODE_TEXTURE_FORCE_SRGB (1 << 2)
 
 	// Returns the section of the texture without the header - it will do internally another allocation for the 
 	// decompressed data;
 	// If it fails it returns a { nullptr, 0 } 
-	// FLAGS: ECS_DECODE_TEXTURE_HDR_TONEMAP
+	// FLAGS: ECS_DECODE_TEXTURE_HDR_TONEMAP, ECS_DECODE_TEXTURE_NO_SRGB, ECS_DECODE_TEXTURE_FORCE_SRGB
 	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, TextureExtension extension, AllocatorPolymorphic allocator, size_t flags = 0);
 
 	// Returns the section of the texture without the header - it will do internally another allocation for the 
 	// decompressed data; The filename is needed in for the texture extension
 	// If it fails it returns a { nullptr, 0 } 
-	// FLAGS: ECS_DECODE_TEXTURE_HDR_TONEMAP
+	// FLAGS: ECS_DECODE_TEXTURE_HDR_TONEMAP, ECS_DECODE_TEXTURE_NO_SRGB, ECS_DECODE_TEXTURE_FORCE_SRGB
 	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, Stream<wchar_t> filename, AllocatorPolymorphic allocator, size_t flags = 0);
 
 	// It will invert the mesh on the Z axis

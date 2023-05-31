@@ -1421,7 +1421,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::ClearFromAllocator(bool isolated_use, bool isolated_use_deallocate_types)
+		void ReflectionManager::ClearTypesFromAllocator(bool isolated_use, bool isolated_use_deallocate_types)
 		{
 			AllocatorPolymorphic allocator = folders.allocator;
 
@@ -1451,6 +1451,7 @@ namespace ECSEngine {
 				for (unsigned int index = 0; index < constants.size; index++) {
 					DeallocateIfBelongs(allocator, constants[index].name.buffer);
 				}
+				constants.FreeBuffer();
 			}
 			else {
 				for (unsigned int index = 0; index < folders.size; index++) {
@@ -1459,6 +1460,15 @@ namespace ECSEngine {
 					}
 				}
 			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::ClearFromAllocator(bool isolated_use, bool isolated_use_deallocate_types)
+		{
+			AllocatorPolymorphic allocator = folders.allocator;
+
+			ClearTypesFromAllocator(isolated_use, isolated_use_deallocate_types);
 
 			constants.FreeBuffer();
 			field_table.Deallocate(allocator);
@@ -1480,8 +1490,7 @@ namespace ECSEngine {
 
 		void ReflectionManager::CopyTypes(ReflectionManager* other) const
 		{
-			AllocatorPolymorphic other_allocator = other->Allocator();
-			HashTableCopy<true, false>(type_definitions, other->type_definitions, other_allocator, [](const ReflectionType* type, ResourceIdentifier identifier) {
+			HashTableCopy<true, false>(type_definitions, other->type_definitions, other->Allocator(), [](const ReflectionType* type, ResourceIdentifier identifier) {
 				return type->name;
 			});
 		}
@@ -2058,16 +2067,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void ReflectionManager::InitializeTypeTable(size_t count)
 		{
-			void* allocation = Allocate(folders.allocator, ReflectionTypeTable::MemoryOf(count));
-			type_definitions.InitializeFromBuffer(allocation, count);
+			type_definitions.Initialize(folders.allocator, count);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::InitializeEnumTable(size_t count)
 		{
-			void* allocation = Allocate(folders.allocator, ReflectionEnumTable::MemoryOf(count));
-			enum_definitions.InitializeFromBuffer(allocation, count);
+			enum_definitions.Initialize(folders.allocator, count);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -3447,7 +3454,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 
 						while (ending_tag_character < skipped_ending_tag_character) {
-							*ending_tag_character = '~';
+							*ending_tag_character = ECS_REFLECTION_TYPE_TAG_DELIMITER_CHAR;
 							ending_tag_character++;
 						}
 

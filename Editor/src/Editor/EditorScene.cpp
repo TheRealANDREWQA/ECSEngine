@@ -105,12 +105,16 @@ bool LoadEditorSceneCore(
 	if (success) {
 		// Now update the assets that have dependencies or that could have changed in the meantime
 		load_data.database->UpdateAssetsWithDependenciesFromFiles();
-
+		
 		// Update the asset database to reflect the assets from the entity manager
 		GetAssetReferenceCountsFromEntities(entity_manager, load_data.reflection_manager, load_data.database);
 
 		// Now we need to convert from standalone database to the reference one
 		database->FromStandalone(load_data.database, { nullptr, pointer_remap });
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+		GetProjectAssetsFolder(editor_state, assets_folder);
+		ReloadAssetMetadataFromFilesParameters(editor_state->RuntimeResourceManager(), database, assets_folder);
 	}
 
 	_stack_allocator.ClearBackup();

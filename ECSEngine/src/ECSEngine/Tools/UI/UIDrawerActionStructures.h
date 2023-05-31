@@ -403,7 +403,7 @@ namespace ECSEngine {
 			Action action = nullptr;
 
 			unsigned int window_index;
-			bool is_action_data_ptr;
+			bool is_action_data_ptr = false;
 
 			union {
 				char action_data[64];

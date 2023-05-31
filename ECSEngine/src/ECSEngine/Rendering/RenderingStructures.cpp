@@ -860,10 +860,8 @@ namespace ECSEngine {
 		suffix.Add(&compile_options.compile_flags);
 		suffix.Add(&compile_options.target);
 		for (size_t index = 0; index < compile_options.macros.size; index++) {
-			size_t name_size = strlen(compile_options.macros[index].name);
-			size_t definition_size = strlen(compile_options.macros[index].definition);
-			suffix.Add({ compile_options.macros[index].name, name_size });
-			suffix.Add({ compile_options.macros[index].definition, definition_size });
+			suffix.Add(compile_options.macros[index].name);
+			suffix.Add(compile_options.macros[index].definition);
 		}
 
 		suffix.Add(optional_addition);
@@ -989,6 +987,42 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	ECS_GRAPHICS_FORMAT GetGraphicsFormatNoSRGB(ECS_GRAPHICS_FORMAT format)
+	{
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB:
+			return ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		case ECS_GRAPHICS_FORMAT_BC1_SRGB:
+			return ECS_GRAPHICS_FORMAT_BC1;
+		case ECS_GRAPHICS_FORMAT_BC3_SRGB:
+			return ECS_GRAPHICS_FORMAT_BC3;
+		case ECS_GRAPHICS_FORMAT_BC7_SRGB:
+			return ECS_GRAPHICS_FORMAT_BC7;
+		}
+
+		return format;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ECS_GRAPHICS_FORMAT GetGraphicsFormatWithSRGB(ECS_GRAPHICS_FORMAT format)
+	{
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_RGBA8_UNORM:
+			return ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB;
+		case ECS_GRAPHICS_FORMAT_BC1:
+			return ECS_GRAPHICS_FORMAT_BC1_SRGB;
+		case ECS_GRAPHICS_FORMAT_BC3:
+			return ECS_GRAPHICS_FORMAT_BC3_SRGB;
+		case ECS_GRAPHICS_FORMAT_BC7:
+			return ECS_GRAPHICS_FORMAT_BC7_SRGB;
+		}
+
+		return format;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	D3D11_FILTER GetGraphicsNativeFilter(ECS_SAMPLER_FILTER_TYPE filter) {
 		switch (filter) {
 		case ECS_SAMPLER_FILTER_POINT:
@@ -1053,6 +1087,18 @@ namespace ECSEngine {
 
 		ECS_ASSERT(false);
 		return ECS_SAMPLER_ADDRESS_WRAP;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	void Material::AddTag(Stream<char> tag, unsigned char* tag_count, uchar2* tags)
+	{
+		ECS_ASSERT(*tag_count < ECS_MATERIAL_VERTEX_TAG_COUNT);
+		ECS_ASSERT((size_t)tag_storage_size + tag.size < ECS_MATERIAL_TAG_STORAGE_CAPACITY);
+		tags[*tag_count].x = tag_storage_size;
+		tags[*tag_count].y = (unsigned char)tag.size;
+		(*tag_count)++;
+		tag_storage_size += tag.size;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------

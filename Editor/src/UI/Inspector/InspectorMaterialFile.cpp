@@ -226,6 +226,7 @@ void RegisterNewCBuffers(
 		new_buffers[index].slot = new_reflected_buffers[index].register_index;
 		new_buffers[index].dynamic = true;
 		new_buffers[index].name = function::StringCopy(current_allocator, new_cbuffers[index].name);
+		new_buffers[index].tags = function::StringCopy(current_allocator, new_reflected_buffers[index].tags);
 
 		// Set the default values for that type
 		draw_data->material_asset.reflection_manager->SetInstanceDefaultData(new_cbuffers.buffer + index, new_buffers[index].data.buffer);
@@ -294,7 +295,14 @@ void RegisterNewCBuffers(
 			draw_data->cbuffers[order].buffer + index,
 			ui_type_name
 		);
-		UIReflectionType* ui_type = draw_data->editor_state->ui_reflection->CreateType(draw_data->cbuffers[order].buffer + index, ui_type_name);
+
+		ECS_STACK_CAPACITY_STREAM(unsigned int, ignore_type_fields, 512);
+		GetConstantBufferInjectTagFieldsFromTypeTag(new_cbuffers.buffer + index, &ignore_type_fields);
+
+		UIReflectionDrawerCreateTypeOptions create_options;
+		create_options.identifier_name = ui_type_name;
+		create_options.ignore_fields = ignore_type_fields;
+		UIReflectionType* ui_type = draw_data->editor_state->ui_reflection->CreateType(draw_data->cbuffers[order].buffer + index, &create_options);
 		// Add matrix types if any
 		for (size_t subindex = 0; subindex < matrix_types[index].size; subindex++) {
 			UIReflectionTypeFieldGrouping grouping;

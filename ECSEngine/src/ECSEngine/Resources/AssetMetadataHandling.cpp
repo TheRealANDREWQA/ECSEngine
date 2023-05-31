@@ -376,6 +376,15 @@ namespace ECSEngine {
 				user_material->buffers[buffer_total_count].dynamic = material->buffers[index][subindex].dynamic;
 				user_material->buffers[buffer_total_count].shader_type = shader_type;
 				user_material->buffers[buffer_total_count].slot = material->buffers[index][subindex].slot;
+
+				if (material->buffers[index][subindex].tags.size > 0) {
+					user_material->buffers[buffer_total_count].tags = material->buffers[index][subindex].tags;
+					user_material->buffers[buffer_total_count].tag_separator = ECS_SHADER_REFLECTION_CONSTANT_BUFFER_TAG_DELIMITER;
+				}
+				else {
+					user_material->buffers[buffer_total_count].tags = { nullptr, 0 };
+				}
+
 				buffer_total_count++;
 			}
 
@@ -887,7 +896,7 @@ namespace ECSEngine {
 		bool randomized_assets
 	) {
 		auto get_missing_assets = [&](ECS_ASSET_TYPE type) {
-			const AssetDatabase* main_database = database->GetDatabase();
+			AssetDatabase* main_database = database->GetDatabase();
 			unsigned int count = database->GetCount(type);
 
 			for (unsigned int index = 0; index < count; index++) {
@@ -1528,8 +1537,13 @@ namespace ECSEngine {
 
 		if (are_different) {
 			MaterialAsset temporary_material;
-			memcpy(material, &temporary_material, sizeof(temporary_material));
-			material->ResizeBufferNewValue(cbuffers.size, shader, allocator, true);
+			memcpy(&temporary_material, material, sizeof(temporary_material));
+			ECS_STACK_CAPACITY_STREAM(MaterialAssetBuffer, previous_material_buffers, 512);
+			previous_material_buffers.Copy(material->buffers[shader]);
+
+			material->ResizeBufferNewValue(cbuffers.size, shader, allocator);
+			material->reflection_manager->ClearTypesFromAllocator();
+			temporary_material.buffers[shader] = previous_material_buffers;
 
 			for (unsigned int index = 0; index < reflected_shader->buffers->size; index++) {
 				Stream<char> current_name = cbuffers[index].name;
@@ -1539,6 +1553,11 @@ namespace ECSEngine {
 				material->buffers[shader][index].slot = reflected_shader->buffers->buffer[index].register_index;
 				material->buffers[shader][index].dynamic = true;
 				material->buffers[shader][index].name = function::StringCopy(allocator, current_name);
+				// Allocate the pointer again
+				material->buffers[shader][index].reflection_type = (Reflection::ReflectionType*)Allocate(allocator, sizeof(Reflection::ReflectionType));
+				*material->buffers[shader][index].reflection_type = cbuffers[index].Copy(allocator);
+
+				material->reflection_manager->AddType(material->buffers[shader][index].reflection_type);
 
 				// Search to see if it exists before
 				size_t existing_index = temporary_material.FindBuffer(current_name, shader);
@@ -1594,8 +1613,8 @@ namespace ECSEngine {
 
 		if (are_different) {
 			MaterialAsset temporary_material;
-			memcpy(material, &temporary_material, sizeof(temporary_material));
-			material->ResizeTexturesNewValue(textures.size, shader, allocator, true);
+			memcpy(&temporary_material, material, sizeof(temporary_material));
+			material->ResizeTexturesNewValue(textures.size, shader, allocator);
 
 			for (size_t index = 0; index < textures.size; index++) {
 				material->textures[shader][index].metadata_handle = -1;
@@ -1646,8 +1665,8 @@ namespace ECSEngine {
 
 		if (are_different) {
 			MaterialAsset temporary_material;
-			memcpy(material, &temporary_material, sizeof(temporary_material));
-			material->ResizeSamplersNewValue(samplers.size, shader, allocator, true);
+			memcpy(&temporary_material, material, sizeof(temporary_material));
+			material->ResizeSamplersNewValue(samplers.size, shader, allocator);
 
 			for (size_t index = 0; index < samplers.size; index++) {
 				material->samplers[shader][index].metadata_handle = -1;
@@ -1741,6 +1760,170 @@ namespace ECSEngine {
 		// We could deallocate the material - but it will result in data loss
 		// on subsequent calls - so let it the same
 		return status;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	ECS_RELOAD_ASSET_METADATA_STATUS ReloadMaterialShaderParameters(
+		const ResourceManager* resource_manager, 
+		const AssetDatabase* database, 
+		MaterialAsset* material, 
+		AllocatorPolymorphic allocator, 
+		Stream<wchar_t> mount_point
+	)
+	{
+		ECS_RELOAD_ASSET_METADATA_STATUS status = ECS_RELOAD_ASSET_METADATA_NO_CHANGE;
+
+		auto change_status = [&](ECS_RELOAD_ASSET_METADATA_STATUS new_status) {
+			if (new_status == ECS_RELOAD_ASSET_METADATA_CHANGED) {
+				if (status != ECS_RELOAD_ASSET_METADATA_FAILED_READING) {
+					status = ECS_RELOAD_ASSET_METADATA_CHANGED;
+				}
+			}
+			else if (new_status == ECS_RELOAD_ASSET_METADATA_FAILED_READING) {
+				status = ECS_RELOAD_ASSET_METADATA_FAILED_READING;
+			}
+		};
+
+		auto apply_shader = [&](unsigned int shader_handle, ECS_MATERIAL_SHADER shader_type) {
+			if (shader_handle != -1) {
+				const ShaderMetadata* shader_metadata = database->GetShaderConst(shader_handle);
+				ECS_RELOAD_ASSET_METADATA_STATUS shader_status = ReflectMaterialShaderParameters(
+					resource_manager,
+					material,
+					shader_metadata,
+					shader_type,
+					allocator,
+					mount_point
+				);
+				change_status(shader_status);
+			}
+		};
+
+		apply_shader(material->vertex_shader_handle, ECS_MATERIAL_SHADER_VERTEX);
+		apply_shader(material->pixel_shader_handle, ECS_MATERIAL_SHADER_PIXEL);
+
+		return status;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	ECS_RELOAD_ASSET_METADATA_STATUS ReloadMaterialMetadataFromFilesParameters(
+		const ResourceManager* resource_manager, 
+		const AssetDatabase* database, 
+		MaterialAsset* material, 
+		AllocatorPolymorphic allocator, 
+		Stream<wchar_t> mount_point
+	)
+	{
+		// At the moment just forward the call
+		return ReloadMaterialShaderParameters(resource_manager, database, material, allocator, mount_point);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	ECS_RELOAD_ASSET_METADATA_STATUS ReloadAssetMetadataFromFilesParameters(
+		const ResourceManager* resource_manager, 
+		const AssetDatabase* database, 
+		void* metadata, 
+		ECS_ASSET_TYPE type, 
+		AllocatorPolymorphic allocator, 
+		Stream<wchar_t> mount_point
+	)
+	{
+		switch (type) {
+		case ECS_ASSET_MESH:
+		case ECS_ASSET_TEXTURE:
+		case ECS_ASSET_GPU_SAMPLER:
+		case ECS_ASSET_SHADER:
+		case ECS_ASSET_MISC:
+			// Nothing to do for these assets
+			break;
+		case ECS_ASSET_MATERIAL:
+		{
+			MaterialAsset* material_metadata = (MaterialAsset*)metadata;
+			return ReloadMaterialMetadataFromFilesParameters(resource_manager, database, material_metadata, allocator, mount_point);
+		}
+		break;
+		default:
+			ECS_ASSERT(false);
+		}
+
+		return ECS_RELOAD_ASSET_METADATA_NO_CHANGE;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	template<typename DatabaseType>
+	bool ReloadAssetMetadataFromFilesParametersImpl(
+		const ResourceManager* resource_manager,
+		DatabaseType* database,
+		Stream<wchar_t> mount_point,
+		CapacityStream<AssetTypedHandle>* modified_assets
+	) {
+		bool success = true;
+
+		AllocatorPolymorphic allocator;
+		const AssetDatabase* database_ptr;
+
+		if constexpr (std::is_same_v<DatabaseType, AssetDatabase>) {
+			allocator = database->Allocator();
+			database_ptr = database;
+		}
+		else {
+			allocator = database->database->Allocator();
+			database_ptr = database->database;
+		}
+
+		function::ForEach(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY, [&](AssetTypePair type_pair)
+			{
+				ECS_ASSET_TYPE asset_type = type_pair.main_type;
+				database->ForEachAsset(asset_type, [&](unsigned int handle) {
+					void* current_metadata = database->GetAsset(handle, asset_type);
+					ECS_RELOAD_ASSET_METADATA_STATUS status = ReloadAssetMetadataFromFilesParameters(
+						resource_manager,
+						database_ptr,
+						current_metadata,
+						asset_type,
+						allocator,
+						mount_point
+					);
+					if (status == ECS_RELOAD_ASSET_METADATA_CHANGED) {
+						if (modified_assets != nullptr) {
+							modified_assets->AddAssert({ handle, asset_type });
+						}
+					}
+					else if (status == ECS_RELOAD_ASSET_METADATA_FAILED_READING) {
+						success = false;
+					}
+					});
+			}
+		);
+		return success;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	bool ReloadAssetMetadataFromFilesParameters(
+		const ResourceManager* resource_manager, 
+		AssetDatabase* database, 
+		Stream<wchar_t> mount_point, 
+		CapacityStream<AssetTypedHandle>* modified_assets
+	)
+	{
+		return ReloadAssetMetadataFromFilesParametersImpl(resource_manager, database, mount_point, modified_assets);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	bool ReloadAssetMetadataFromFilesParameters(
+		const ResourceManager* resource_manager, 
+		AssetDatabaseReference* database_reference, 
+		Stream<wchar_t> mount_point, 
+		CapacityStream<AssetTypedHandle>* modified_assets
+	)
+	{
+		return ReloadAssetMetadataFromFilesParametersImpl(resource_manager, database_reference, mount_point, modified_assets);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------

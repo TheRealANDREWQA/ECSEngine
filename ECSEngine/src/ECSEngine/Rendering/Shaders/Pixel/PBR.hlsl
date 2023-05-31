@@ -1,6 +1,7 @@
 #include "../Macros.hlsli"
 #include "../PBRBase.hlsli"
 #include "../Utilities.hlsli"
+#include "../CBufferTags.hlsli"
 
 #ifdef ENVIRONMENT_TEXTURE
 TextureCube environment_diffuse : register(t0);
@@ -39,7 +40,7 @@ struct PS_INPUT
     float3 world_position : WORLD_POSITION;
 };
 
-cbuffer CameraPosition : register(b0)
+cbuffer CameraPosition : register(b0) ECS_INJECT_CAMERA_POSITION(0)
 {
     float3 camera_position;
 };
@@ -126,13 +127,9 @@ float4 main(in PS_INPUT input) : SV_TARGET
     
     float3 L0 = float3(0.0f, 0.0f, 0.0f);
     
-    
     #ifdef POINT_LIGHTS
     uint index = 0;
     // The total radiance
-    
-    
-    
     for (; index < 4; index++)
     {
         L0 += CalculatePointLight(light_positions[index].xyz, light_colors[index].rgb, light_range[index], input.world_position, pixel_color,

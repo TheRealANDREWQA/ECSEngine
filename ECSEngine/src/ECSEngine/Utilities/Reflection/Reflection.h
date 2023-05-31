@@ -124,6 +124,12 @@ namespace ECSEngine {
 				unsigned int folder_index
 			);
 
+			// Clears all allocations made by reflection types and frees the hash table. If the isolated_use is set to true,
+			// then will assume that the types have been added manually. Can optionally specify if the
+			// types need to be deallocated (they can be omitted if they reference types stable from outside). 
+			// For the normal use it will use the folder hierarchy allocation.
+			void ClearTypesFromAllocator(bool isolated_use = false, bool isolated_use_deallocate_types = true);
+
 			// Clears any allocations from the allocator. If the isolated_use is set to true,
 			// then will assume that the types have been added manually. Can optionally specify if the
 			// types need to be deallocated (they can be omitted if they reference types stable from outside). 

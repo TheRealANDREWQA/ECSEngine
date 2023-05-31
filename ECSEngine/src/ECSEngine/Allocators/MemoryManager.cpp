@@ -95,26 +95,27 @@ namespace ECSEngine {
 	}
 
 	template<bool trigger_error_if_not_found>
-	void GlobalMemoryManager::Deallocate(const void* block) {
+	bool GlobalMemoryManager::Deallocate(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			const void* buffer = m_allocators[index].GetAllocatedBuffer();
 			size_t capacity = m_allocators[index].GetSize();
 			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
-				m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
+				bool was_deallocated = m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
 				if (index > 0 && m_allocators[index].IsEmpty()) {
 					free(m_allocators[index].GetAllocatedBuffer());
 					m_allocator_count--;
 					m_allocators[index] = m_allocators[m_allocator_count];
 				}
-				return;
+				return was_deallocated;
 			}
 		}
 		if constexpr (trigger_error_if_not_found) {
 			ECS_ASSERT(false);
 		}
+		return false;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, GlobalMemoryManager::Deallocate, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, GlobalMemoryManager::Deallocate, const void*);
 
 	// ---------------------- Thread safe variants -----------------------------
 
@@ -132,21 +133,23 @@ namespace ECSEngine {
 	}
 
 	template<bool trigger_error_if_not_found>
-	void GlobalMemoryManager::Deallocate_ts(const void* block) {
+	bool GlobalMemoryManager::Deallocate_ts(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			const void* buffer = m_allocators[index].GetAllocatedBuffer();
 			size_t capacity = m_allocators[index].GetSize();
 			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
-				m_allocators[index].Deallocate_ts<trigger_error_if_not_found>(block);
-				return;
+				// We cannot deallocate the allocator if it is empty because it will cause a swap back
+				// and that would mean acquiring the lock before the iteration
+				return m_allocators[index].Deallocate_ts<trigger_error_if_not_found>(block);
 			}
 		}
 		if constexpr (trigger_error_if_not_found) {
 			ECS_ASSERT(false);
 		}
+		return false;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, GlobalMemoryManager::Deallocate_ts, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, GlobalMemoryManager::Deallocate_ts, const void*);
 
 	// ----------------------------------------------------- Memory Manager ---------------------------------------------------
 
@@ -201,18 +204,18 @@ namespace ECSEngine {
 	}
 
 	template<bool trigger_error_if_not_found>
-	void MemoryManager::Deallocate(const void* block) {
+	bool MemoryManager::Deallocate(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			const void* buffer = m_allocators[index].GetAllocatedBuffer();
 			size_t capacity = m_allocators[index].GetSize();
 			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
-				m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
+				bool was_deallocated = m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
 				if (index > 0 && m_allocators[index].IsEmpty()) {
 					m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
 					m_allocator_count--;
 					m_allocators[index] = m_allocators[m_allocator_count];
 				}
-				return;
+				return was_deallocated;
 			}
 		}
 		if constexpr (trigger_error_if_not_found) {
@@ -220,7 +223,7 @@ namespace ECSEngine {
 		}
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, MemoryManager::Deallocate, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryManager::Deallocate, const void*);
 
 	bool MemoryManager::DeallocateIfBelongs(const void* block)
 	{
@@ -280,20 +283,28 @@ namespace ECSEngine {
 	}
 
 	template<bool trigger_error_if_not_found>
-	void MemoryManager::Deallocate_ts(const void* block) {
+	bool MemoryManager::Deallocate_ts(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			const void* buffer = m_allocators[index].GetAllocatedBuffer();
 			size_t capacity = m_allocators[index].GetSize();
 			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
-				m_allocators[index].Deallocate_ts<trigger_error_if_not_found>(block);
-				return;
+				bool was_deallocated = m_allocators[index].Deallocate_ts<trigger_error_if_not_found>(block);
+				m_spin_lock.lock();
+				if (index > 0 && m_allocators[index].IsEmpty()) {
+					m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
+					m_allocator_count--;
+					m_allocators[index] = m_allocators[m_allocator_count];
+				}
+				m_spin_lock.unlock();
+				return was_deallocated;
 			}
 		}
 		if constexpr (trigger_error_if_not_found) {
 			ECS_ASSERT(false);
 		}
+		return false;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, MemoryManager::Deallocate_ts, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryManager::Deallocate_ts, const void*);
 
 }
