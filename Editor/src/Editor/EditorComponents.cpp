@@ -15,8 +15,8 @@ using namespace ECSEngine::Reflection;
 
 #define HASH_TABLE_DEFAULT_CAPACITY 64
 
-#define ARENA_CAPACITY 50'000
-#define ARENA_COUNT 2
+#define ARENA_CAPACITY 75'000
+#define ARENA_COUNT 3
 #define ARENA_BLOCK_COUNT 1024
 
 // ----------------------------------------------------------------------------------------------

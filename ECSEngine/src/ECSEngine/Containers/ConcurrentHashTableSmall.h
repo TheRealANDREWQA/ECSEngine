@@ -33,28 +33,28 @@ namespace ECSEngine {
 
 			// The count is stored in the alignment bits of the pointer
 			// So in the last 6 bits
-			unsigned char GetCount() const {
+			ECS_INLINE unsigned char GetCount() const {
 				return count_bits;
 			}
 
-			void SetCount(unsigned char count) {
+			ECS_INLINE void SetCount(unsigned char count) {
 				count_bits = count;
 			}
 
-			unsigned int GetNextIndex() const {
+			ECS_INLINE unsigned int GetNextIndex() const {
 				return (unsigned int)pointer_bits;
 			}
 
-			void SetNextIndex(unsigned int index) {
+			ECS_INLINE void SetNextIndex(unsigned int index) {
 				pointer_bits = index;
 			}
 
-			void* GetPointer() const {
+			ECS_INLINE void* GetPointer() const {
 				// The pointer bits must be moved 6 bits to the left
 				return function::SignExtendPointer((void*)(pointer_bits << 6));
 			}
 
-			void SetPointer(void* pointer) {
+			ECS_INLINE void SetPointer(void* pointer) {
 				uintptr_t ptr = (uintptr_t)pointer;
 				ptr >>= 6;
 

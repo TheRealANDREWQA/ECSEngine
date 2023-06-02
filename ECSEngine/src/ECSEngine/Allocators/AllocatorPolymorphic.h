@@ -33,6 +33,8 @@ namespace ECSEngine {
 
 	typedef void (*FreeAllocatorFromFunction)(void* allocator_to_deallocate, AllocatorPolymorphic initial_allocator);
 
+	typedef void* (*ReallocateFunction)(void* allocator, const void* block, size_t size, size_t alignment);
+
 	ECSENGINE_API extern AllocateFunction ECS_ALLOCATE_FUNCTIONS[];
 
 	ECSENGINE_API extern AllocateSizeFunction ECS_ALLOCATE_SIZE_FUNCTIONS[];
@@ -61,6 +63,10 @@ namespace ECSEngine {
 
 	ECSENGINE_API extern FreeAllocatorFromFunction ECS_FREE_ALLOCATOR_FROM_FUNCTIONS[];
 
+	ECSENGINE_API extern ReallocateFunction ECS_REALLOCATE_FUNCTIONS[];
+
+	ECSENGINE_API extern ReallocateFunction ECS_REALLOCATE_TS_FUNCTIONS[];
+
 	// Single threaded
 	ECS_INLINE void* Allocate(void* allocator, ECS_ALLOCATOR_TYPE type, size_t size, size_t alignment = 8) {
 		return ECS_ALLOCATE_FUNCTIONS[(unsigned int)type](allocator, size, alignment);
@@ -73,7 +79,7 @@ namespace ECSEngine {
 
 	// Dynamic allocation type
 	ECS_INLINE void* Allocate(void* allocator, ECS_ALLOCATOR_TYPE allocator_type, ECS_ALLOCATION_TYPE allocation_type, size_t size, size_t alignment = 8) {
-		if (allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
+		if (allocation_type == ECS_ALLOCATION_SINGLE) {
 			return Allocate(allocator, allocator_type, size, alignment);
 		}
 		else {
@@ -112,7 +118,7 @@ namespace ECSEngine {
 
 	// Dynamic allocation type
 	ECS_INLINE void Deallocate(void* ECS_RESTRICT allocator, ECS_ALLOCATOR_TYPE allocator_type, const void* ECS_RESTRICT buffer, ECS_ALLOCATION_TYPE allocation_type) {
-		if (allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
+		if (allocation_type == ECS_ALLOCATION_SINGLE) {
 			Deallocate(allocator, allocator_type, buffer);
 		}
 		else {
@@ -150,6 +156,15 @@ namespace ECSEngine {
 	// It finds the suitable to deallocate the memory allocated from the initial allocator
 	ECS_INLINE void FreeAllocatorFrom(AllocatorPolymorphic allocator_to_deallocate, AllocatorPolymorphic initial_allocator) {
 		ECS_FREE_ALLOCATOR_FROM_FUNCTIONS[allocator_to_deallocate.allocator_type](allocator_to_deallocate.allocator, initial_allocator);
+	}
+
+	ECS_INLINE void* Reallocate(AllocatorPolymorphic allocator, const void* block, size_t new_size, size_t alignment = 8) {
+		if (allocator.allocation_type == ECS_ALLOCATION_SINGLE) {
+			return ECS_REALLOCATE_FUNCTIONS[allocator.allocator_type](allocator.allocator, block, new_size, alignment);
+		}
+		else {
+			return ECS_REALLOCATE_TS_FUNCTIONS[allocator.allocator_type](allocator.allocator, block, new_size, alignment);
+		}
 	}
 
 	ECS_INLINE AllocateFunction GetAllocateFunction(ECS_ALLOCATOR_TYPE type, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE) {

@@ -297,7 +297,8 @@ namespace ECSEngine {
 		AssetDatabase* database,
 		void* metadata,
 		ECS_ASSET_TYPE type,
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		CapacityStream<AssetTypedHandle>* remove_dependencies = nullptr
 	);
 
 	// In the x component of the success is the success state for deallocation
@@ -311,13 +312,16 @@ namespace ECSEngine {
 	// (For assets that have dependencies if they have not changed then it will not unload them
 	// and then reload them). It returns the compare result and the success status (this is valid
 	// only when the assets are different, if they are the same nothing will be performed)
+	// Remove dependencies can be specified such that when an asset with dependencies has one of
+	// its dependencies removed they will be filled in instead of removed directly
 	ECSENGINE_API ReloadAssetResult ReloadAssetFromMetadata(
 		ResourceManager* resource_manager,
 		AssetDatabase* database,
 		const void* previous_metadata,
 		void* current_metadata,
 		ECS_ASSET_TYPE type,
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		CapacityStream<AssetTypedHandle>* remove_dependencies = nullptr
 	);
 
 	enum ECS_RELOAD_ASSET_METADATA_STATUS : unsigned char {
@@ -327,18 +331,31 @@ namespace ECSEngine {
 		ECS_RELOAD_ASSET_METADATA_STATUS_COUNT
 	};
 
+	struct ChangeMaterialDependencies {
+		// The database is mandatory
+		AssetDatabase* database;
+		// If this is specified, instead of removing the dependencies right then,
+		// it will fill in this buffer instead
+		CapacityStream<AssetTypedHandle>* handles = nullptr;
+	};
+
 	// Reloads the buffers, textures and samplers to conform to the new shader file
-	// Returns the status of the reload
+	// Returns the status of the reload.
+	// Remove dependencies can be specified such that when an asset with dependencies has one of
+	// its dependencies removed they will be filled in instead of removed directly
 	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReloadMaterialMetadataFromShader(
 		ResourceManager* resource_manager,
 		AssetDatabase* database,
 		MaterialAsset* material,
 		const ShaderMetadata* shader,
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		CapacityStream<AssetTypedHandle>* remove_dependencies = nullptr
 	);
 		
 	// Updates the metadata to conform to the changed_metadata target file content
 	// Returns the status of the reload
+	// Remove dependencies can be specified such that when an asset with dependencies has one of
+	// its dependencies removed they will be filled in instead of removed directly
 	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReloadAssetMetadataFromTargetDependency(
 		ResourceManager* resource_manager,
 		AssetDatabase* database,
@@ -346,7 +363,8 @@ namespace ECSEngine {
 		ECS_ASSET_TYPE type,
 		const void* changed_metadata,
 		ECS_ASSET_TYPE changed_metadata_type,
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		CapacityStream<AssetTypedHandle>* remove_handles = nullptr
 	);
 
 #pragma endregion
@@ -397,8 +415,10 @@ namespace ECSEngine {
 	);
 
 	// Returns true if there is any difference between the two versions of the textures, else false
-	// If there is no difference, no allocation will take place
+	// If there is no difference, no allocation will take place. The database is needed to remove
+	// existing textures that are no longer in use 
 	ECSENGINE_API bool ChangeMaterialTexturesFromReflectedParameters(
+		ChangeMaterialDependencies* change_dependencies,
 		MaterialAsset* material,
 		const ReflectedShader* reflected_shader,
 		ECS_MATERIAL_SHADER shader,
@@ -406,8 +426,10 @@ namespace ECSEngine {
 	);
 
 	// Returns true if there is any difference between the two versions of the samplers, else false
-	// If there is no difference, no allocation will take place
+	// If there is no difference, no allocation will take place. The database is needed to remove
+	// existing samplers that are no longer in use
 	ECSENGINE_API bool ChangeMaterialSamplersFromReflectedParameters(
+		ChangeMaterialDependencies* change_dependencies,
 		MaterialAsset* material,
 		const ReflectedShader* reflected_shader,
 		ECS_MATERIAL_SHADER shader,
@@ -417,7 +439,8 @@ namespace ECSEngine {
 	// Returns true if there is any difference between the two versions of the buffers, textures or samplers, else false
 	// If there is no difference, no allocation will take place
 	ECSENGINE_API bool ChangeMaterialFromReflectedShader(
-		MaterialAsset* material, 
+		ChangeMaterialDependencies* change_dependencies,
+		MaterialAsset* material,
 		const ReflectedShader* reflected_shader,
 		ECS_MATERIAL_SHADER shader,
 		AllocatorPolymorphic allocator
@@ -425,7 +448,8 @@ namespace ECSEngine {
 
 	// Returns the status of the reload
 	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReflectMaterialShaderParameters(
-		const ResourceManager* resource_manager, 
+		const ResourceManager* resource_manager,
+		ChangeMaterialDependencies* change_dependencies,
 		MaterialAsset* material,
 		const ShaderMetadata* shader_metadata,
 		ECS_MATERIAL_SHADER shader_type,
@@ -436,7 +460,7 @@ namespace ECSEngine {
 	// Returns the status of the reload
 	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReloadMaterialShaderParameters(
 		const ResourceManager* resource_manager,
-		const AssetDatabase* database,
+		ChangeMaterialDependencies* change_dependencies,
 		MaterialAsset* material,
 		AllocatorPolymorphic allocator,
 		Stream<wchar_t> mount_point = { nullptr, 0 }
@@ -445,11 +469,17 @@ namespace ECSEngine {
 	// Returns the status of the reload
 	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReloadMaterialMetadataFromFilesParameters(
 		const ResourceManager* resource_manager,
-		const AssetDatabase* database,
+		ChangeMaterialDependencies* change_dependencies,
 		MaterialAsset* material,
 		AllocatorPolymorphic allocator,
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
+
+	struct ReloadAssetMetadataFromFilesOptions {
+		ChangeMaterialDependencies material_change_dependencies;
+		Stream<wchar_t> mount_point = { nullptr, 0 };
+		CapacityStream<AssetTypedHandle>* modified_assets = nullptr;
+	};
 
 	// Returns the status of the reload
 	ECSENGINE_API ECS_RELOAD_ASSET_METADATA_STATUS ReloadAssetMetadataFromFilesParameters(
@@ -458,7 +488,7 @@ namespace ECSEngine {
 		void* metadata,
 		ECS_ASSET_TYPE type,
 		AllocatorPolymorphic allocator,
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		ReloadAssetMetadataFromFilesOptions* options
 	);
 
 	// It will read all assets whose metadata depeneds on target files that are currently loaded and
@@ -469,8 +499,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool ReloadAssetMetadataFromFilesParameters(
 		const ResourceManager* resource_manager,
 		AssetDatabase* database,
-		Stream<wchar_t> mount_point = { nullptr, 0 },
-		CapacityStream<AssetTypedHandle>* modified_assets = nullptr
+		ReloadAssetMetadataFromFilesOptions* options
 	);
 
 	// It will read all assets whose metadata depeneds on target files that are currently loaded and
@@ -481,8 +510,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool ReloadAssetMetadataFromFilesParameters(
 		const ResourceManager* resource_manager,
 		AssetDatabaseReference* database_reference,
-		Stream<wchar_t> mount_point = { nullptr, 0 },
-		CapacityStream<AssetTypedHandle>* modified_assets = nullptr
+		ReloadAssetMetadataFromFilesOptions* options
 	);
 
 	ECS_INLINE void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code) {

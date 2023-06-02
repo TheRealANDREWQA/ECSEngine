@@ -2119,7 +2119,7 @@ namespace ECSEngine {
 						if (byte_code != nullptr) {
 							if (shader->byte_code.size == 0) {
 								ShaderIncludeFiles include_files(m_memory, m_shader_directory);
-								shader->byte_code = m_graphics->CompileShaderToByteCode(shader->source_code, ECS_SHADER_VERTEX, &include_files, Allocator(), options);
+								shader->byte_code = m_graphics->CompileShaderToByteCode(shader->source_code, shader_type, &include_files, Allocator(), options);
 							}
 							*byte_code = shader->byte_code;
 						}

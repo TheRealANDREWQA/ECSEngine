@@ -336,4 +336,19 @@ namespace ECSEngine {
 		}
 	}
 
+	template<typename Functor>
+	void ThreadSafeFunctor(SpinLock* spin_lock, Functor&& functor) {
+		spin_lock->lock();
+		functor();
+		spin_lock->unlock();
+	}
+
+	template<typename Functor>
+	auto ThreadSafeFunctorReturn(SpinLock* spin_lock, Functor&& functor) {
+		spin_lock->lock();
+		auto return_value = functor();
+		spin_lock->unlock();
+		return return_value;
+	}
+
 }
