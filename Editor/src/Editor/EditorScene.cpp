@@ -114,7 +114,10 @@ bool LoadEditorSceneCore(
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 		GetProjectAssetsFolder(editor_state, assets_folder);
-		ReloadAssetMetadataFromFilesParameters(editor_state->RuntimeResourceManager(), database, assets_folder);
+		ReloadAssetMetadataFromFilesOptions reload_options;
+		reload_options.mount_point = assets_folder;
+		reload_options.material_change_dependencies.database = database->database;
+		ReloadAssetMetadataFromFilesParameters(editor_state->RuntimeResourceManager(), database, &reload_options);
 	}
 
 	_stack_allocator.ClearBackup();

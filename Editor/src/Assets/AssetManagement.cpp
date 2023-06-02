@@ -1082,7 +1082,7 @@ void DeleteMissingAssetSettings(const EditorState* editor_state)
 
 // ----------------------------------------------------------------------------------------------
 
-bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index)
+bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index, bool* was_removed)
 {
 	auto remove_from_reference = [=]() {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -1098,12 +1098,18 @@ bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS
 		if (success && sandbox_index != -1) {
 			remove_from_reference();
 		}
+		if (was_removed != nullptr) {
+			*was_removed = true;
+		}
 		return success;
 	}
 	else {
 		editor_state->asset_database->RemoveAsset(handle, type);
 		if (sandbox_index != -1) {
 			remove_from_reference();
+		}
+		if (was_removed != nullptr) {
+			*was_removed = false;
 		}
 		return true;
 	}

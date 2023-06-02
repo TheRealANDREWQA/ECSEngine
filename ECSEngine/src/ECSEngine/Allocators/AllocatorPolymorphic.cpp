@@ -119,6 +119,30 @@ namespace ECSEngine {
 		Deallocate(initial_allocator, allocator->GetAllocatedBuffer());
 	}
 
+	template<typename Allocator>
+	void* ReallocateFunctionAllocator(void* _allocator, const void* block, size_t new_size, size_t alignment) {
+		Allocator* allocator = (Allocator*)_allocator;
+		if constexpr (std::is_same_v<Allocator, LinearAllocator> || std::is_same_v<Allocator, StackAllocator>
+			|| std::is_same_v<Allocator, ResizableLinearAllocator>) {
+			return allocator->Allocate(new_size, alignment);
+		}
+		else {
+			return allocator->Reallocate(block, new_size, alignment);
+		}
+	}
+
+	template<typename Allocator>
+	void* ReallocateFunctionAllocatorTs(void* _allocator, const void* block, size_t new_size, size_t alignment) {
+		Allocator* allocator = (Allocator*)_allocator;
+		if constexpr (std::is_same_v<Allocator, LinearAllocator> || std::is_same_v<Allocator, StackAllocator>
+			|| std::is_same_v<Allocator, ResizableLinearAllocator>) {
+			return allocator->Allocate(new_size, alignment);
+		}
+		else {
+			return allocator->Reallocate_ts(block, new_size, alignment);
+		}
+	}
+
 #define ECS_JUMP_TABLE(function_name)	function_name<LinearAllocator>, \
 										function_name<StackAllocator>, \
 										function_name<MultipoolAllocator>, \
@@ -211,6 +235,14 @@ namespace ECSEngine {
 
 	FreeAllocatorFromFunction ECS_FREE_ALLOCATOR_FROM_FUNCTIONS[] = {
 		ECS_JUMP_TABLE_FOR_FIXED_AND_RESIZABLE(FreeAllocatorFromOtherWithBuffer, FreeAllocatorFromOtherResizable)
+	};
+
+	ReallocateFunction ECS_REALLOCATE_FUNCTIONS[] = {
+		ECS_JUMP_TABLE(ReallocateFunctionAllocator)
+	};
+
+	ReallocateFunction ECS_REALLOCATE_TS_FUNCTIONS[] = {
+		ECS_JUMP_TABLE(ReallocateFunctionAllocatorTs)
 	};
 
 #undef ECS_JUMP_TABLE

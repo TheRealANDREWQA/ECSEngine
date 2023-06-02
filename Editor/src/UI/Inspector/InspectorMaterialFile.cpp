@@ -743,18 +743,16 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 	if (main_database_handle != -1) {
 		// Copy the texture and sampler pointers from the main database into the temporary database
 		for (unsigned int index = 0; index < dependencies.size; index++) {
-			if (dependencies[index].type == ECS_ASSET_TEXTURE || dependencies[index].type == ECS_ASSET_GPU_SAMPLER) {
-				void* current_asset = data->temporary_database.GetAsset(dependencies[index].handle, dependencies[index].type);
-				Stream<char> asset_name = GetAssetName(current_asset, dependencies[index].type);
-				Stream<wchar_t> asset_file = GetAssetFile(current_asset, dependencies[index].type);
-				unsigned int handle = data->editor_state->asset_database->FindAsset(asset_name, asset_file, dependencies[index].type);
-				if (handle != -1) {
-					SetAssetToMetadata(
-						current_asset, 
-						dependencies[index].type, 
-						GetAssetFromMetadata(data->editor_state->asset_database->GetAssetConst(handle, dependencies[index].type), dependencies[index].type)
-					);
-				}
+			void* current_asset = data->temporary_database.GetAsset(dependencies[index].handle, dependencies[index].type);
+			Stream<char> asset_name = GetAssetName(current_asset, dependencies[index].type);
+			Stream<wchar_t> asset_file = GetAssetFile(current_asset, dependencies[index].type);
+			unsigned int handle = data->editor_state->asset_database->FindAsset(asset_name, asset_file, dependencies[index].type);
+			if (handle != -1) {
+				SetAssetToMetadata(
+					current_asset, 
+					dependencies[index].type, 
+					GetAssetFromMetadata(data->editor_state->asset_database->GetAssetConst(handle, dependencies[index].type), dependencies[index].type)
+				);
 			}
 		}
 		const MaterialAsset* main_material = editor_state->asset_database->GetMaterialConst(main_database_handle);

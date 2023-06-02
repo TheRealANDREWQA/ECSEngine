@@ -16608,7 +16608,7 @@ namespace ECSEngine {
 			}
 
 			if (data->is_resizable_data) {
-				data->resizable_data->Resize(data->new_size);
+				data->resizable_data->Resize(data->new_size, data->element_byte_size);
 				data->resizable_data->size = data->new_size;
 			}
 			else {

@@ -1,4 +1,5 @@
 #include "../Macros.hlsli"
+#include "../CBufferTags.hlsli"
 
 cbuffer Matrices : register(b0)
 {

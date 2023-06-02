@@ -163,11 +163,9 @@ namespace ECSEngine {
 
 	void* ResizableLinearAllocator::Allocate_ts(size_t size, size_t alignment)
 	{
-		m_spin_lock.lock();
-		void* allocation = Allocate(size, alignment);
-		m_spin_lock.unlock();
-
-		return allocation;
+		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+			return Allocate(size, alignment);
+		});
 	}
 
 	// ---------------------------------------------------------------------------------
@@ -179,9 +177,9 @@ namespace ECSEngine {
 
 	void ResizableLinearAllocator::SetMarker_ts()
 	{
-		m_spin_lock.lock();
-		SetMarker();
-		m_spin_lock.unlock();
+		return ThreadSafeFunctor(&m_spin_lock, [&]() {
+			SetMarker();
+		});
 	}
 
 	// ---------------------------------------------------------------------------------

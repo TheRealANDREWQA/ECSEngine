@@ -26,6 +26,10 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate(const void* block);
 
+		void* Reallocate(const void* block, size_t new_size, size_t alignment = 8);
+
+		void* ReallocateAndCopy(const void* block, size_t new_size, size_t alignment = 8);
+
 		void Clear();
 
 		// Returns whether or not there is something currently allocated from this allocator
@@ -45,6 +49,10 @@ namespace ECSEngine {
 		// in which case it will return true if the deallocation was performed, else false
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate_ts(const void* block);
+
+		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = 8);
+
+		void* ReallocateAndCopy_ts(const void* block, size_t new_size, size_t alignment = 8);
 
 		static size_t MemoryOf(unsigned int pool_count);
 		static size_t MemoryOf(unsigned int pool_count, unsigned int size);

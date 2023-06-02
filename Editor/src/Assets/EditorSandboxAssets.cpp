@@ -847,7 +847,13 @@ UpdateAssetToComponentElement ReloadAssetTaskIteration(EditorState* editor_state
 	void* metadata = editor_state->asset_database->GetAsset(handle, asset_type);
 	Stream<void> old_asset = GetAssetFromMetadata(metadata, asset_type);
 
-	bool2 success = ReloadAssetFromMetadata(editor_state->RuntimeResourceManager(), editor_state->asset_database, metadata, asset_type, assets_folder);
+	ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, assets_to_be_removed, 512);
+	bool2 success = ReloadAssetFromMetadata(editor_state->RuntimeResourceManager(), editor_state->asset_database, metadata, asset_type, assets_folder, &assets_to_be_removed);
+	
+	for (size_t index = 0; index < assets_to_be_removed.size; index++) {
+		DecrementAssetReference(editor_state, assets_to_be_removed[index].handle, assets_to_be_removed[index].type);
+	}
+
 	if (!success.x || !success.y) {
 		Stream<char> asset_name = GetAssetName(metadata, asset_type);
 		Stream<wchar_t> asset_file = GetAssetFile(metadata, asset_type);

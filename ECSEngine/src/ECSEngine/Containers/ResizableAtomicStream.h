@@ -2,7 +2,7 @@
 #include "ecspch.h"
 #include "Stream.h"
 #include "../Utilities/Assert.h"
-#include "../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../Multithreading/ConcurrentPrimitives.h"
 
 namespace ECSEngine {
 
@@ -78,27 +78,33 @@ namespace ECSEngine {
 			stream.CopyTo(memory);
 		}
 
+		// It does not lock
 		ECS_INLINE void Reset() {
 			stream.Reset();
 		}
 
-		void Resize(unsigned int new_capacity) {
+		// It does not lock
+		ECS_INLINE void Resize(unsigned int new_capacity) {
 			stream.Resize(new_capacity);
 		}
 
-		void Remove(unsigned int index) {
+		// It does not lock
+		ECS_INLINE void Remove(unsigned int index) {
 			stream.Remove(index);
 		}
 
+		// It does not lock
 		ECS_INLINE void RemoveSwapBack(unsigned int index) {
 			stream.RemoveSwapBack(index);
 		}
 
-		void Swap(unsigned int first, unsigned int second) {
+		// It does not lock
+		ECS_INLINE void Swap(unsigned int first, unsigned int second) {
 			stream.Swap(first, second);
 		}
 
-		void SwapContents() {
+		// It does not lock
+		ECS_INLINE void SwapContents() {
 			stream.SwapContents();
 		}
 
@@ -114,7 +120,7 @@ namespace ECSEngine {
 			return sizeof(T) * number;
 		}
 
-		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity) {
+		ECS_INLINE void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity) {
 			stream.Initialize(_allocator, _capacity);
 			lock.unlock();
 		}

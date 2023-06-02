@@ -13,7 +13,7 @@ namespace ECSEngine {
 		a normal AssetDatabase first using the ToStandalone() call and then forward to the
 		appropriate calls. The asset database needs to be persistent so the allocator with
 		which is allocated needs to be stored by the caller and when the Semaphore is signaled
-		for the finish then the caller can proceed to deallocate the allocator/database
+		then the caller can proceed to deallocate the allocator/database
 	*/
 
 	struct ResourceManager;

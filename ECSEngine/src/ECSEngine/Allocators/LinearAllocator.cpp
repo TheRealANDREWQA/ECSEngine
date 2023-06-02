@@ -60,17 +60,16 @@ namespace ECSEngine {
 	// ---------------------- Thread safe variants -----------------------------
 
 	void* LinearAllocator::Allocate_ts(size_t size, size_t alignment) {
-		m_spin_lock.lock();
-		void* pointer = Allocate(size, alignment);
-		m_spin_lock.unlock();
-		return pointer;
+		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+			return Allocate(size, alignment);
+		});
 	}
 
 	void LinearAllocator::Deallocate_ts(const void* block) {}
 
 	void LinearAllocator::SetMarker_ts() {
-		m_spin_lock.lock();
-		SetMarker();
-		m_spin_lock.unlock();
+		ThreadSafeFunctor(&m_spin_lock, [&]() {
+			SetMarker();
+		});
 	}
 }

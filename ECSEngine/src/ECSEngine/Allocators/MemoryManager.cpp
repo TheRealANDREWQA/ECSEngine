@@ -97,9 +97,7 @@ namespace ECSEngine {
 	template<bool trigger_error_if_not_found>
 	bool GlobalMemoryManager::Deallocate(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			const void* buffer = m_allocators[index].GetAllocatedBuffer();
-			size_t capacity = m_allocators[index].GetSize();
-			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
+			if (m_allocators[index].Belongs(block)) {
 				bool was_deallocated = m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
 				if (index > 0 && m_allocators[index].IsEmpty()) {
 					free(m_allocators[index].GetAllocatedBuffer());
@@ -117,27 +115,47 @@ namespace ECSEngine {
 
 	ECS_TEMPLATE_FUNCTION_BOOL(bool, GlobalMemoryManager::Deallocate, const void*);
 
+	void* GlobalMemoryManager::Reallocate(const void* block, size_t new_size, size_t alignment)
+	{
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			if (m_allocators[index].Belongs(block)) {
+				void* reallocation = m_allocators[index].Reallocate(block, new_size, alignment);
+				if (reallocation == nullptr) {
+					reallocation = Allocate(new_size, alignment);
+					m_allocators[index].Deallocate(block);
+				}
+				return reallocation;
+			}
+		}
+		ECS_ASSERT(false);
+		return nullptr;
+	}
+
 	// ---------------------- Thread safe variants -----------------------------
 
 	void* GlobalMemoryManager::Allocate_ts(size_t size, size_t alignment) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			void* allocation = m_allocators[index].Allocate_ts(size, alignment);
-			if ( allocation != nullptr )
+			if (allocation != nullptr)
 				return allocation;
 		}
-		m_spin_lock.lock();
-		CreateAllocator(m_new_allocation_size, m_maximum_pool_count);
-		void* allocation = m_allocators[m_allocator_count - 1].Allocate(size, alignment);
-		m_spin_lock.unlock();
+		void* allocation = nullptr;
+		bool was_acquired = m_spin_lock.try_lock();
+		if (was_acquired) {
+			CreateAllocator(m_new_allocation_size, m_maximum_pool_count);
+			m_spin_lock.unlock();
+		}
+		else {
+			m_spin_lock.wait_locked();
+		}
+		allocation = m_allocators[m_allocator_count - 1].Allocate_ts(size, alignment);
 		return allocation;
 	}
 
 	template<bool trigger_error_if_not_found>
 	bool GlobalMemoryManager::Deallocate_ts(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			const void* buffer = m_allocators[index].GetAllocatedBuffer();
-			size_t capacity = m_allocators[index].GetSize();
-			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
+			if (m_allocators[index].Belongs(block)) {
 				// We cannot deallocate the allocator if it is empty because it will cause a swap back
 				// and that would mean acquiring the lock before the iteration
 				return m_allocators[index].Deallocate_ts<trigger_error_if_not_found>(block);
@@ -150,6 +168,22 @@ namespace ECSEngine {
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(bool, GlobalMemoryManager::Deallocate_ts, const void*);
+
+	void* GlobalMemoryManager::Reallocate_ts(const void* block, size_t new_size, size_t alignment)
+	{
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			if (m_allocators[index].Belongs(block)) {
+				void* reallocation = m_allocators[index].Reallocate_ts(block, new_size, alignment);
+				if (reallocation == nullptr) {
+					reallocation = Allocate_ts(new_size, alignment);
+					m_allocators[index].Deallocate_ts(block);
+				}
+				return reallocation;
+			}
+		}
+		ECS_ASSERT(false);
+		return nullptr;
+	}
 
 	// ----------------------------------------------------- Memory Manager ---------------------------------------------------
 
@@ -206,9 +240,7 @@ namespace ECSEngine {
 	template<bool trigger_error_if_not_found>
 	bool MemoryManager::Deallocate(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			const void* buffer = m_allocators[index].GetAllocatedBuffer();
-			size_t capacity = m_allocators[index].GetSize();
-			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
+			if (m_allocators[index].Belongs(block)) {
 				bool was_deallocated = m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
 				if (index > 0 && m_allocators[index].IsEmpty()) {
 					m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
@@ -224,6 +256,23 @@ namespace ECSEngine {
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryManager::Deallocate, const void*);
+
+	void* MemoryManager::Reallocate(const void* block, size_t new_size, size_t alignment)
+	{
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			if (m_allocators[index].Belongs(block)) {
+				void* reallocation = m_allocators[index].Reallocate(block, new_size, alignment);
+				if (reallocation == nullptr) {
+					// Allocate and deallocate
+					reallocation = Allocate(new_size, alignment);
+					m_allocators[index].Deallocate(block);
+				}
+				return reallocation;
+			}
+		}
+		ECS_ASSERT(false);
+		return nullptr;
+	}
 
 	bool MemoryManager::DeallocateIfBelongs(const void* block)
 	{
@@ -275,19 +324,22 @@ namespace ECSEngine {
 			if (allocation != nullptr)
 				return allocation;
 		}
-		m_spin_lock.lock();
-		CreateAllocator(m_new_allocation_size, m_maximum_pool_count);
+		bool was_acquired = m_spin_lock.try_lock();
+		if (was_acquired) {
+			CreateAllocator(m_new_allocation_size, m_maximum_pool_count);
+			m_spin_lock.unlock();
+		}
+		else {
+			m_spin_lock.wait_locked();
+		}
 		void* allocation = m_allocators[m_allocator_count - 1].Allocate(size, alignment);
-		m_spin_lock.unlock();
 		return allocation;
 	}
 
 	template<bool trigger_error_if_not_found>
 	bool MemoryManager::Deallocate_ts(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			const void* buffer = m_allocators[index].GetAllocatedBuffer();
-			size_t capacity = m_allocators[index].GetSize();
-			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
+			if (m_allocators[index].Belongs(block)) {
 				bool was_deallocated = m_allocators[index].Deallocate_ts<trigger_error_if_not_found>(block);
 				m_spin_lock.lock();
 				if (index > 0 && m_allocators[index].IsEmpty()) {
@@ -306,5 +358,21 @@ namespace ECSEngine {
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(bool, MemoryManager::Deallocate_ts, const void*);
+
+	void* MemoryManager::Reallocate_ts(const void* block, size_t new_size, size_t alignment)
+	{
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			if (m_allocators[index].Belongs(block)) {
+				void* reallocation = m_allocators[index].Reallocate_ts(block, new_size, alignment);
+				if (reallocation == nullptr) {
+					reallocation = Allocate_ts(new_size, alignment);
+					m_allocators[index].Deallocate_ts(block);
+				}
+				return reallocation;
+			}
+		}
+		ECS_ASSERT(false);
+		return nullptr;
+	}
 
 }

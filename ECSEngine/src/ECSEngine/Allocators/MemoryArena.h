@@ -41,6 +41,8 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate(const void* block);
 
+		void* Reallocate(const void* block, size_t new_size, size_t alignment = 8);
+
 		// ----------------------------------------  Thread safe --------------------------------------------------------
 
 		void* Allocate_ts(size_t size, size_t alignment = 8);
@@ -49,6 +51,8 @@ namespace ECSEngine {
 		// in which case it will return true if the deallocation was performed, else false
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate_ts(const void* block);
+
+		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = 8);
 
 		static size_t MemoryOfArenas(size_t allocator_count, size_t blocks_per_allocator);
 
@@ -85,6 +89,8 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate(const void* block);
 
+		void* Reallocate(const void* block, size_t new_size, size_t alignment = 8);
+
 		bool Belongs(const void* buffer) const;
 
 		// Deallocates all arenas besides the first one.
@@ -105,6 +111,8 @@ namespace ECSEngine {
 
 		template<bool trigger_error_if_not_found = true>
 		bool Deallocate_ts(const void* block);
+
+		void* Reallocate_ts(const void* block, size_t new_size, size_t alignment = 8);
 
 	//private:
 		GlobalMemoryManager* m_backup;

@@ -1329,7 +1329,7 @@ namespace ECSEngine {
 		}
 
 		// TODO: is it worth trimming? The memory saving is small and might induce fragmentation
-		bool has_trimmed = manager->m_archetypes.TrimThreshold(10);
+		bool has_trimmed = manager->m_archetypes.Trim(10);
 		if (has_trimmed) {
 			// Resize the vector components
 			size_t new_size = sizeof(VectorComponentSignature) * 2 * manager->m_archetypes.size;
