@@ -10,6 +10,8 @@
 
 namespace ECSEngine {
 
+#define ECS_ASSET_DATABASE_FILE_EXTENSION L".meta"
+
 	// Other_handles contains the handle as the first element
 	struct AssetDatabaseSameTargetAsset {
 		unsigned int handle;
@@ -621,6 +623,11 @@ namespace ECSEngine {
 		// In case it fails, the in memory version will be the update one. If changing the name,
 		// this does not verify that the new name doesn't exist previously
 		bool UpdateAsset(unsigned int handle, const void* asset, ECS_ASSET_TYPE type, bool update_files = true);
+
+		// Reloads the information of the asset from the metadata file.
+		// Returns true if it succeeded, else false (when it fails, the asset is maintained
+		// in its previous state)
+		bool UpdateAssetFromFile(unsigned int handle, ECS_ASSET_TYPE type);
 
 		// It will read all assets from files which have dependencies that are currently loaded and
 		// reload them - if they have changed, they will be reflected afterwards

@@ -10,7 +10,6 @@
 
 #include "AssetMetadataSerialize.h"
 
-#define EXTENSION L".meta"
 #define PATH_SEPARATOR L"___"
 
 #define SEPARATOR_CHAR '~'
@@ -681,7 +680,7 @@ namespace ECSEngine {
 		function::ConvertASCIIToWide(path, name);
 		Stream<wchar_t> converted_name = { path.buffer + path_size, name.size };
 		function::ReplaceCharacter(converted_name, ECS_OS_PATH_SEPARATOR_REL, SEPARATOR_CHAR);
-		path.AddStreamSafe(EXTENSION);
+		path.AddStreamSafe(ECS_ASSET_DATABASE_FILE_EXTENSION);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -1949,6 +1948,38 @@ namespace ECSEngine {
 		}
 
 		return false;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::UpdateAssetFromFile(unsigned int handle, ECS_ASSET_TYPE type)
+	{
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+		AllocatorPolymorphic stack_allocator_polymorphic = GetAllocatorPolymorphic(&stack_allocator);
+
+		size_t temporary_asset[AssetMetadataMaxSizetSize()];
+		Stream<char> asset_name = GetAssetName(handle, type);
+		Stream<wchar_t> asset_file = GetAssetPath(handle, type);
+
+		ECS_STACK_CAPACITY_STREAM(char, temporary_name, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, temporary_file, 512);
+		temporary_name = function::StringCopy(stack_allocator_polymorphic, asset_name);
+		temporary_file = function::StringCopy(stack_allocator_polymorphic, asset_file);
+
+		CreateDefaultAsset(temporary_asset, temporary_name, temporary_file, type);
+		bool success = ReadAssetFile(asset_name, asset_file, temporary_asset, type, stack_allocator_polymorphic);
+		if (success) {
+			// Remove the old dependencies
+			RemoveAssetDependencies(handle, type);
+
+			// Now copy the new data into the stable allocator
+			void* metadata = GetAsset(handle, type);
+			DeallocateAssetBase(metadata, type, Allocator());
+			CopyAssetBase(metadata, temporary_asset, type, Allocator());
+		}
+
+		stack_allocator.ClearBackup();
+		return success;
 	}
 
 	// --------------------------------------------------------------------------------------

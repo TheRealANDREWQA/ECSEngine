@@ -8,11 +8,8 @@ void ModuleTaskFunction(ModuleTaskFunctionData* data) {
 	TaskSchedulerElement element;
 	element.initialize_task_function = RenderTaskInitialize;
 	element.task_group = ECS_THREAD_TASK_FINALIZE_LATE;
-	element.task_function = RenderTask<false>;
-	element.task_name = STRING(RenderTask);
 
-	data->tasks->Add(element);
-	//ECS_REGISTER_FOR_EACH_TASK(element, RenderTask, data);
+	ECS_REGISTER_FOR_EACH_TASK(element, RenderTask, data);
 }
 
 #if 0

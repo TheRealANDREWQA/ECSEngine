@@ -40,9 +40,9 @@ struct PS_INPUT
     float3 world_position : WORLD_POSITION;
 };
 
-cbuffer CameraPosition : register(b0) ECS_INJECT_CAMERA_POSITION(0)
+cbuffer CameraPosition : register(b0)
 {
-    float3 camera_position;
+    float3 camera_position; ECS_INJECT_CAMERA_POSITION
 };
 
 #ifdef ENVIRONMENT_TEXTURE

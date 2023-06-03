@@ -689,20 +689,20 @@ namespace ECSEngine {
 			return type == UIReflectionStreamType::Capacity || type == UIReflectionStreamType::Resizable;
 		}
 
-		inline bool IsStreamInput(UIReflectionIndex index) {
-			return index == UIReflectionIndex::TextInput || index == UIReflectionIndex::FileInput || index == UIReflectionIndex::DirectoryInput;
+		inline bool IsStreamInput(UIReflectionElement index) {
+			return index == UIReflectionElement::TextInput || index == UIReflectionElement::FileInput || index == UIReflectionElement::DirectoryInput;
 		}
 
 		size_t GetTypeByteSize(const UIReflectionType* type, unsigned int field_index) {
-			switch (type->fields[field_index].reflection_index) {
-			case UIReflectionIndex::FloatInput:
-			case UIReflectionIndex::FloatSlider:
+			switch (type->fields[field_index].element_index) {
+			case UIReflectionElement::FloatInput:
+			case UIReflectionElement::FloatSlider:
 				return sizeof(float);
-			case UIReflectionIndex::DoubleInput:
-			case UIReflectionIndex::DoubleSlider:
+			case UIReflectionElement::DoubleInput:
+			case UIReflectionElement::DoubleSlider:
 				return sizeof(double);
-			case UIReflectionIndex::IntegerInput:
-			case UIReflectionIndex::IntegerSlider:
+			case UIReflectionElement::IntegerInput:
+			case UIReflectionElement::IntegerSlider:
 			{
 				if (type->fields[field_index].stream_type == UIReflectionStreamType::None) {
 					UIReflectionIntInputData* data = (UIReflectionIntInputData*)type->fields[field_index].data;
@@ -714,22 +714,22 @@ namespace ECSEngine {
 				}
 			}
 			break;
-			case UIReflectionIndex::CheckBox:
+			case UIReflectionElement::CheckBox:
 				return sizeof(bool);
-			case UIReflectionIndex::Color:
+			case UIReflectionElement::Color:
 				return sizeof(Color);
-			case UIReflectionIndex::ColorFloat:
+			case UIReflectionElement::ColorFloat:
 				return sizeof(ColorFloat);
-			case UIReflectionIndex::ComboBox:
+			case UIReflectionElement::ComboBox:
 				return sizeof(unsigned char);
-			case UIReflectionIndex::TextInput:
+			case UIReflectionElement::TextInput:
 				return sizeof(CapacityStream<char>);
-			case UIReflectionIndex::FloatInputGroup:
-			case UIReflectionIndex::FloatSliderGroup:
-			case UIReflectionIndex::DoubleInputGroup:
-			case UIReflectionIndex::DoubleSliderGroup:
-			case UIReflectionIndex::IntegerInputGroup:
-			case UIReflectionIndex::IntegerSliderGroup:
+			case UIReflectionElement::FloatInputGroup:
+			case UIReflectionElement::FloatSliderGroup:
+			case UIReflectionElement::DoubleInputGroup:
+			case UIReflectionElement::DoubleSliderGroup:
+			case UIReflectionElement::IntegerInputGroup:
+			case UIReflectionElement::IntegerSliderGroup:
 			{
 				if (type->fields[field_index].stream_type == UIReflectionStreamType::None) {
 					UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)type->fields[field_index].data;
@@ -738,15 +738,15 @@ namespace ECSEngine {
 				else {
 					UIReflectionStreamInputGroupData* data = (UIReflectionStreamInputGroupData*)type->fields[field_index].data;
 					size_t base_count = data->basic_type_count;
-					/*switch (type.fields[field_index].reflection_index) {
-					case UIReflectionIndex::FloatInputGroup:
-					case UIReflectionIndex::FloatSliderGroup:
+					/*switch (type.fields[field_index].element_index) {
+					case UIReflectionElement::FloatInputGroup:
+					case UIReflectionElement::FloatSliderGroup:
 						return base_count * sizeof(float);
-					case UIReflectionIndex::DoubleInputGroup:
-					case UIReflectionIndex::DoubleSliderGroup:
+					case UIReflectionElement::DoubleInputGroup:
+					case UIReflectionElement::DoubleSliderGroup:
 						return base_count * sizeof(double);
-					case UIReflectionIndex::IntegerInputGroup:
-					case UIReflectionIndex::IntegerSliderGroup:
+					case UIReflectionElement::IntegerInputGroup:
+					case UIReflectionElement::IntegerSliderGroup:
 					}*/
 					return base_count * data->base_data.stream.element_byte_size;
 
@@ -802,7 +802,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(size_t, used_indices, 32);
 			size_t last_index = 0;
 
-			auto find_index = [&](Stream<UIReflectionIndex> indices) {
+			auto find_index = [&](Stream<UIReflectionElement> indices) {
 				size_t count_type = -1;
 				for (size_t config_index = 0; config_index < ui_config.size; config_index++) {
 					if (ui_config[config_index].index_count > 0) {
@@ -824,11 +824,11 @@ namespace ECSEngine {
 			};
 
 			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_ADD)) {
-				UIReflectionIndex indices[] = {
-					UIReflectionIndex::Count
+				UIReflectionElement indices[] = {
+					UIReflectionElement::Count
 				};
 				size_t count_type = find_index({ indices, std::size(indices) });
-				ui_config[count_type].index[0] = UIReflectionIndex::Count;
+				ui_config[count_type].index[0] = UIReflectionElement::Count;
 				ui_config[count_type].index_count = 1;
 
 				UIConfigArrayAddCallback* add_callback = (UIConfigArrayAddCallback*)stack_memory;
@@ -846,11 +846,11 @@ namespace ECSEngine {
 			}
 
 			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE)) {
-				UIReflectionIndex indices[] = {
-					UIReflectionIndex::Count
+				UIReflectionElement indices[] = {
+					UIReflectionElement::Count
 				};
 				size_t count_type = find_index({ indices, std::size(indices) });
-				ui_config[count_type].index[0] = UIReflectionIndex::Count;
+				ui_config[count_type].index[0] = UIReflectionElement::Count;
 				ui_config[count_type].index_count = 1;
 
 				UIConfigArrayRemoveCallback* remove_callback = (UIConfigArrayRemoveCallback*)stack_memory;
@@ -861,11 +861,11 @@ namespace ECSEngine {
 			}
 
 			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_CHECK_BOX)) {
-				UIReflectionIndex indices[] = {
-					UIReflectionIndex::CheckBox
+				UIReflectionElement indices[] = {
+					UIReflectionElement::CheckBox
 				};
 				size_t count_type = find_index({ indices, std::size(indices) });
-				ui_config[count_type].index[0] = UIReflectionIndex::CheckBox;
+				ui_config[count_type].index[0] = UIReflectionElement::CheckBox;
 				ui_config[count_type].index_count = 1;
 				
 				UIConfigCheckBoxCallback* callback = (UIConfigCheckBoxCallback*)stack_memory;
@@ -876,12 +876,12 @@ namespace ECSEngine {
 			}
 
 			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COLOR_FLOAT)) {
-				UIReflectionIndex indices[] = {
-					UIReflectionIndex::ColorFloat
+				UIReflectionElement indices[] = {
+					UIReflectionElement::ColorFloat
 				};
 
 				size_t count_type = find_index({ indices, std::size(indices) });
-				ui_config[count_type].index[0] = UIReflectionIndex::ColorFloat;
+				ui_config[count_type].index[0] = UIReflectionElement::ColorFloat;
 				ui_config[count_type].index_count = 1;
 
 				UIConfigColorFloatCallback* callback = (UIConfigColorFloatCallback*)stack_memory;
@@ -892,12 +892,12 @@ namespace ECSEngine {
 			}
 
 			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COLOR_INPUT)) {
-				UIReflectionIndex indices[] = {
-					UIReflectionIndex::Color
+				UIReflectionElement indices[] = {
+					UIReflectionElement::Color
 				};
 
 				size_t count_type = find_index({ indices, std::size(indices) });
-				ui_config[count_type].index[0] = UIReflectionIndex::Color;
+				ui_config[count_type].index[0] = UIReflectionElement::Color;
 				ui_config[count_type].index_count = 1;
 
 				UIConfigColorInputCallback* callback = (UIConfigColorInputCallback*)stack_memory;
@@ -909,12 +909,12 @@ namespace ECSEngine {
 			}
 
 			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COMBO_BOX)) {
-				UIReflectionIndex indices[] = {
-					UIReflectionIndex::ComboBox
+				UIReflectionElement indices[] = {
+					UIReflectionElement::ComboBox
 				};
 
 				size_t count_type = find_index({ indices, std::size(indices) });
-				ui_config[count_type].index[0] = UIReflectionIndex::ComboBox;
+				ui_config[count_type].index[0] = UIReflectionElement::ComboBox;
 				ui_config[count_type].index_count = 1;
 
 				UIConfigComboBoxCallback* callback = (UIConfigComboBoxCallback*)stack_memory;
@@ -925,13 +925,13 @@ namespace ECSEngine {
 			}
 
 			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_NUMBER_INPUTS)) {
-				UIReflectionIndex indices[] = {
-					UIReflectionIndex::IntegerInput,
-					UIReflectionIndex::FloatInput,
-					UIReflectionIndex::DoubleInput,
-					UIReflectionIndex::IntegerInputGroup,
-					UIReflectionIndex::FloatInputGroup,
-					UIReflectionIndex::DoubleInputGroup
+				UIReflectionElement indices[] = {
+					UIReflectionElement::IntegerInput,
+					UIReflectionElement::FloatInput,
+					UIReflectionElement::DoubleInput,
+					UIReflectionElement::IntegerInputGroup,
+					UIReflectionElement::FloatInputGroup,
+					UIReflectionElement::DoubleInputGroup
 				};
 
 				size_t count_type = find_index({ indices, std::size(indices) });
@@ -947,13 +947,13 @@ namespace ECSEngine {
 			}
 
 			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_SLIDERS)) {
-				UIReflectionIndex indices[] = {
-					UIReflectionIndex::IntegerSlider,
-					UIReflectionIndex::FloatSlider,
-					UIReflectionIndex::DoubleSlider,
-					UIReflectionIndex::IntegerSliderGroup,
-					UIReflectionIndex::FloatSliderGroup,
-					UIReflectionIndex::DoubleSliderGroup
+				UIReflectionElement indices[] = {
+					UIReflectionElement::IntegerSlider,
+					UIReflectionElement::FloatSlider,
+					UIReflectionElement::DoubleSlider,
+					UIReflectionElement::IntegerSliderGroup,
+					UIReflectionElement::FloatSliderGroup,
+					UIReflectionElement::DoubleSliderGroup
 				};
 
 				size_t count_type = find_index({ indices, std::size(indices) });
@@ -968,9 +968,9 @@ namespace ECSEngine {
 			}
 
 			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_PATH_INPUT)) {
-				UIReflectionIndex indices[] = {
-					UIReflectionIndex::DirectoryInput,
-					UIReflectionIndex::FileInput
+				UIReflectionElement indices[] = {
+					UIReflectionElement::DirectoryInput,
+					UIReflectionElement::FileInput
 				};
 
 				size_t count_type = find_index({ indices, std::size(indices) });
@@ -986,8 +986,8 @@ namespace ECSEngine {
 			}
 
 			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_TEXT_INPUT)) {
-				UIReflectionIndex indices[] = {
-					UIReflectionIndex::TextInput,
+				UIReflectionElement indices[] = {
+					UIReflectionElement::TextInput,
 				};
 
 				size_t count_type = find_index({ indices, std::size(indices) });
@@ -1011,11 +1011,11 @@ namespace ECSEngine {
 			size_t configuration,
 			Stream<char> name,
 			void* data,
-			UIReflectionIndex reflection_index,
+			UIReflectionElement element_index,
 			UIReflectionStreamType stream_type
 		) {
 			if (stream_type == UIReflectionStreamType::None) {
-				UI_REFLECTION_FIELD_BASIC_DRAW[(unsigned int)reflection_index](
+				UI_REFLECTION_FIELD_BASIC_DRAW[(unsigned int)element_index](
 					drawer,
 					config,
 					configuration,
@@ -1027,7 +1027,7 @@ namespace ECSEngine {
 				UIReflectionStreamBaseData* base_data = (UIReflectionStreamBaseData*)data;
 				base_data->stream.CopyTarget();
 
-				UI_REFLECTION_FIELD_STREAM_DRAW[(unsigned int)reflection_index](
+				UI_REFLECTION_FIELD_STREAM_DRAW[(unsigned int)element_index](
 					drawer,
 					config,
 					configuration,
@@ -1717,7 +1717,7 @@ namespace ECSEngine {
 			auto field_ptr = (UIReflectionFloatSliderData*)field->data;
 			field_ptr->lower_bound = *(float*)data;
 
-			field->configuration |= field->reflection_index == UIReflectionIndex::FloatInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
+			field->configuration |= field->element_index == UIReflectionElement::FloatInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -1727,7 +1727,7 @@ namespace ECSEngine {
 			auto field_ptr = (UIReflectionDoubleSliderData*)field->data;
 			field_ptr->lower_bound = *(double*)data;
 
-			field->configuration |= field->reflection_index == UIReflectionIndex::DoubleInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
+			field->configuration |= field->element_index == UIReflectionElement::DoubleInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -1737,7 +1737,7 @@ namespace ECSEngine {
 			auto field_ptr = (UIReflectionIntSliderData*)field->data;
 			memcpy(field_ptr->lower_bound, data, field_ptr->byte_size);
 
-			field->configuration |= field->reflection_index == UIReflectionIndex::IntegerInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
+			field->configuration |= field->element_index == UIReflectionElement::IntegerInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -1764,7 +1764,7 @@ namespace ECSEngine {
 			auto field_ptr = (UIReflectionFloatSliderData*)field->data;
 			field_ptr->upper_bound = *(float*)data;
 
-			field->configuration |= field->reflection_index == UIReflectionIndex::FloatInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
+			field->configuration |= field->element_index == UIReflectionElement::FloatInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -1774,7 +1774,7 @@ namespace ECSEngine {
 			auto field_ptr = (UIReflectionDoubleSliderData*)field->data;
 			field_ptr->upper_bound = *(double*)data;
 
-			field->configuration |= field->reflection_index == UIReflectionIndex::DoubleInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
+			field->configuration |= field->element_index == UIReflectionElement::DoubleInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -1784,7 +1784,7 @@ namespace ECSEngine {
 			auto field_ptr = (UIReflectionIntSliderData*)field->data;
 			memcpy(field_ptr->upper_bound, data, field_ptr->byte_size);
 
-			field->configuration |= field->reflection_index == UIReflectionIndex::IntegerInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
+			field->configuration |= field->element_index == UIReflectionElement::IntegerInput ? UI_CONFIG_NUMBER_INPUT_RANGE : 0;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -1946,31 +1946,31 @@ namespace ECSEngine {
 #if 1
 			// get a mask with the valid configurations
 			size_t mask = 0;
-			switch (type->fields[field_index].reflection_index) {
-			case UIReflectionIndex::FloatSlider:
-			case UIReflectionIndex::DoubleSlider:
-			case UIReflectionIndex::IntegerSlider:
+			switch (type->fields[field_index].element_index) {
+			case UIReflectionElement::FloatSlider:
+			case UIReflectionElement::DoubleSlider:
+			case UIReflectionElement::IntegerSlider:
 				mask = UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 				break;
-			case UIReflectionIndex::Color:
+			case UIReflectionElement::Color:
 				mask = UI_CONFIG_COLOR_INPUT_CALLBACK;
 				break;
-			case UIReflectionIndex::DoubleInput:
-			case UIReflectionIndex::FloatInput:
-			case UIReflectionIndex::IntegerInput:
+			case UIReflectionElement::DoubleInput:
+			case UIReflectionElement::FloatInput:
+			case UIReflectionElement::IntegerInput:
 				mask = 0;
 				break;
-			case UIReflectionIndex::TextInput:
+			case UIReflectionElement::TextInput:
 				mask = UI_CONFIG_TEXT_INPUT_HINT | UI_CONFIG_TEXT_INPUT_CALLBACK;
 				break;
-			case UIReflectionIndex::FloatSliderGroup:
-			case UIReflectionIndex::DoubleSliderGroup:
-			case UIReflectionIndex::IntegerSliderGroup:
+			case UIReflectionElement::FloatSliderGroup:
+			case UIReflectionElement::DoubleSliderGroup:
+			case UIReflectionElement::IntegerSliderGroup:
 				mask = UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 				break;
-			case UIReflectionIndex::FloatInputGroup:
-			case UIReflectionIndex::DoubleInputGroup:
-			case UIReflectionIndex::IntegerInputGroup:
+			case UIReflectionElement::FloatInputGroup:
+			case UIReflectionElement::DoubleInputGroup:
+			case UIReflectionElement::IntegerInputGroup:
 				mask = 0;
 				break;
 			}
@@ -2015,8 +2015,8 @@ namespace ECSEngine {
 
 			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < type->fields.size; index++) {
-				if (type->fields[index].reflection_index == UIReflectionIndex::DirectoryInput || type->fields[index].reflection_index == UIReflectionIndex::FileInput
-					|| type->fields[index].reflection_index == UIReflectionIndex::TextInput) 
+				if (type->fields[index].element_index == UIReflectionElement::DirectoryInput || type->fields[index].element_index == UIReflectionElement::FileInput
+					|| type->fields[index].element_index == UIReflectionElement::TextInput) 
 				{
 					UIReflectionStreamBaseData* data = (UIReflectionStreamBaseData*)instance->data[index];
 					if (data->stream.is_resizable) {
@@ -2075,28 +2075,28 @@ namespace ECSEngine {
 			memcpy(instance_data->upper_bound, data->upper_bound, instance_data->byte_size); \
 			memcpy(instance_data->lower_bound, data->lower_bound, instance_data->byte_size); \
 
-			switch (type->fields[field_index].reflection_index) {
-			case UIReflectionIndex::CheckBox:
+			switch (type->fields[field_index].element_index) {
+			case UIReflectionElement::CheckBox:
 			{
 				POINTERS(UIReflectionCheckBoxData);
 				instance_data->value = data->value;
 				break;
 			}
-			case UIReflectionIndex::Color:
+			case UIReflectionElement::Color:
 			{
 				POINTERS(UIReflectionColorData);
 				instance_data->color = data->color;
 				instance_data->default_color = data->default_color;
 				break;
 			}
-			case UIReflectionIndex::ComboBox:
+			case UIReflectionElement::ComboBox:
 			{
 				POINTERS(UIReflectionComboBoxData);
 				instance_data->active_label = data->active_label;
 				instance_data->default_label = data->default_label;
 				break;
 			}
-			case UIReflectionIndex::DoubleInput:
+			case UIReflectionElement::DoubleInput:
 			{
 				POINTERS(UIReflectionDoubleInputData);
 				instance_data->default_value = data->default_value;
@@ -2105,7 +2105,7 @@ namespace ECSEngine {
 				instance_data->value = data->value;
 				break;
 			}
-			case UIReflectionIndex::FloatInput:
+			case UIReflectionElement::FloatInput:
 			{
 				POINTERS(UIReflectionFloatInputData);
 				instance_data->default_value = data->default_value;
@@ -2114,14 +2114,14 @@ namespace ECSEngine {
 				instance_data->value = data->value;
 				break;
 			}
-			case UIReflectionIndex::IntegerInput:
+			case UIReflectionElement::IntegerInput:
 			{
 				POINTERS(UIReflectionIntInputData);
 				COPY_VALUES_BASIC;
 				instance_data->value_to_modify = data->value_to_modify;
 				break;
 			}
-			case UIReflectionIndex::DoubleSlider:
+			case UIReflectionElement::DoubleSlider:
 			{
 				POINTERS(UIReflectionDoubleSliderData);
 				instance_data->default_value = data->default_value;
@@ -2131,7 +2131,7 @@ namespace ECSEngine {
 				instance_data->precision = data->precision;
 				break;
 			}
-			case UIReflectionIndex::FloatSlider:
+			case UIReflectionElement::FloatSlider:
 			{
 				POINTERS(UIReflectionFloatSliderData);
 				instance_data->default_value = data->default_value;
@@ -2141,14 +2141,14 @@ namespace ECSEngine {
 				instance_data->precision = data->precision;
 				break;
 			}
-			case UIReflectionIndex::IntegerSlider:
+			case UIReflectionElement::IntegerSlider:
 			{
 				POINTERS(UIReflectionIntSliderData);
 				COPY_VALUES_BASIC;
 				instance_data->value_to_modify = data->value_to_modify;
 				break;
 			}
-			case UIReflectionIndex::TextInput:
+			case UIReflectionElement::TextInput:
 			{
 				ECS_ASSERT(false, "Decide what to do here");
 
@@ -2156,12 +2156,12 @@ namespace ECSEngine {
 				//instance_data->stream.capacity = data->characters;
 				break;
 			}
-			case UIReflectionIndex::DoubleInputGroup:
-			case UIReflectionIndex::FloatInputGroup:
-			case UIReflectionIndex::IntegerInputGroup:
-			case UIReflectionIndex::DoubleSliderGroup:
-			case UIReflectionIndex::FloatSliderGroup:
-			case UIReflectionIndex::IntegerSliderGroup:
+			case UIReflectionElement::DoubleInputGroup:
+			case UIReflectionElement::FloatInputGroup:
+			case UIReflectionElement::IntegerInputGroup:
+			case UIReflectionElement::DoubleSliderGroup:
+			case UIReflectionElement::FloatSliderGroup:
+			case UIReflectionElement::IntegerSliderGroup:
 			{
 				POINTERS(UIReflectionGroupData<void>);
 
@@ -2200,14 +2200,14 @@ namespace ECSEngine {
 		void UIReflectionDrawer::BindTypeDefaultData(UIReflectionType* type, Stream<UIReflectionBindDefaultValue> data) {
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, ExtractTypedFieldName(data[index].field_name));
-				UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)type->fields[field_index].reflection_index](type->fields.buffer + field_index, data[index].value);
+				UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)type->fields[field_index].element_index](type->fields.buffer + field_index, data[index].value);
 			}
 		}
 
 		void UIReflectionDrawer::BindTypeDefaultData(UIReflectionType* type, const void* data) {
 			for (size_t index = 0; index < type->fields.size; index++) {
 				if (type->fields[index].stream_type == UIReflectionStreamType::None) {
-					UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)type->fields[index].reflection_index](
+					UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)type->fields[index].element_index](
 						type->fields.buffer + index,
 						function::OffsetPointer(data, type->fields[index].pointer_offset)
 					);
@@ -2229,7 +2229,7 @@ namespace ECSEngine {
 		{
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, ExtractTypedFieldName(data[index].field_name));
-				UI_REFLECTION_SET_RANGE[(unsigned int)type->fields[field_index].reflection_index](type->fields.buffer + field_index, data[index].min, data[index].max);
+				UI_REFLECTION_SET_RANGE[(unsigned int)type->fields[field_index].element_index](type->fields.buffer + field_index, data[index].min, data[index].max);
 			}
 		}
 
@@ -2247,22 +2247,22 @@ namespace ECSEngine {
 		{
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, ExtractTypedFieldName(data[index].field_name));
-				switch (type->fields[field_index].reflection_index)
+				switch (type->fields[field_index].element_index)
 				{
-				case UIReflectionIndex::FloatSlider:
+				case UIReflectionElement::FloatSlider:
 				{
 					UIReflectionFloatSliderData* field_data = (UIReflectionFloatSliderData*)type->fields[field_index].data;
 					field_data->precision = data[index].precision;
 					break;
 				}
-				case UIReflectionIndex::DoubleSlider:
+				case UIReflectionElement::DoubleSlider:
 				{
 					UIReflectionDoubleSliderData* field_data = (UIReflectionDoubleSliderData*)type->fields[field_index].data;
 					field_data->precision = data[index].precision;
 					break;
 				}
-				case UIReflectionIndex::FloatSliderGroup:
-				case UIReflectionIndex::DoubleSliderGroup:
+				case UIReflectionElement::FloatSliderGroup:
+				case UIReflectionElement::DoubleSliderGroup:
 				{
 					UIReflectionGroupData<float>* field_data = (UIReflectionGroupData<float>*)type->fields[field_index].data;
 					field_data->precision = data[index].precision;
@@ -2376,76 +2376,77 @@ namespace ECSEngine {
 			for (size_t index = 0; index < type->fields.size; index++) {
 				ptr = (uintptr_t)data + type->fields[index].pointer_offset;
 
-				UIReflectionIndex reflected_index = type->fields[index].reflection_index;
+				UIReflectionElement element_index = type->fields[index].element_index;
+				unsigned short reflected_type_index = type->fields[index].reflection_type_index;
 
 				bool is_stream = IsStream(type->fields[index].stream_type);
 
 				if (!is_stream) {
-					bool is_group = reflected_index == UIReflectionIndex::IntegerInputGroup || reflected_index == UIReflectionIndex::IntegerSliderGroup
-						|| reflected_index == UIReflectionIndex::FloatInputGroup || reflected_index == UIReflectionIndex::FloatSliderGroup
-						|| reflected_index == UIReflectionIndex::DoubleInputGroup || reflected_index == UIReflectionIndex::DoubleSliderGroup;
+					bool is_group = element_index == UIReflectionElement::IntegerInputGroup || element_index == UIReflectionElement::IntegerSliderGroup
+						|| element_index == UIReflectionElement::FloatInputGroup || element_index == UIReflectionElement::FloatSliderGroup
+						|| element_index == UIReflectionElement::DoubleInputGroup || element_index == UIReflectionElement::DoubleSliderGroup;
 
 					if (!is_group) {
 						void** reinterpretation = (void**)instance->data[index];
 						*reinterpretation = (void*)ptr;
 
-						switch (reflected_index) {
-						case UIReflectionIndex::IntegerInput:
-						case UIReflectionIndex::IntegerSlider:
+						switch (element_index) {
+						case UIReflectionElement::IntegerInput:
+						case UIReflectionElement::IntegerSlider:
 						{
 							UIReflectionIntInputData* field_data = (UIReflectionIntInputData*)instance->data[index];
 							memcpy(field_data->default_value, field_data->value_to_modify, field_data->byte_size);
 						}
 						break;
-						case UIReflectionIndex::FloatInput:
-						case UIReflectionIndex::FloatSlider:
+						case UIReflectionElement::FloatInput:
+						case UIReflectionElement::FloatSlider:
 						{
 							UIReflectionFloatInputData* field_data = (UIReflectionFloatInputData*)instance->data[index];
 							field_data->default_value = *field_data->value;
 						}
 						break;
-						case UIReflectionIndex::DoubleInput:
-						case UIReflectionIndex::DoubleSlider:
+						case UIReflectionElement::DoubleInput:
+						case UIReflectionElement::DoubleSlider:
 						{
 							UIReflectionDoubleInputData* field_data = (UIReflectionDoubleInputData*)instance->data[index];
 							field_data->default_value = *field_data->value;
 						}
 						break;
-						case UIReflectionIndex::Color:
+						case UIReflectionElement::Color:
 						{
 							UIReflectionColorData* field_data = (UIReflectionColorData*)instance->data[index];
 							field_data->default_color = *field_data->color;
 						}
 						break;
-						case UIReflectionIndex::ColorFloat:
+						case UIReflectionElement::ColorFloat:
 						{
 							UIReflectionColorFloatData* field_data = (UIReflectionColorFloatData*)instance->data[index];
 							field_data->default_color = *field_data->color;
 						}
 						break;
-						case UIReflectionIndex::ComboBox:
+						case UIReflectionElement::ComboBox:
 						{
 							UIReflectionComboBoxData* field_data = (UIReflectionComboBoxData*)instance->data[index];
 							field_data->default_label = *field_data->active_label;
 						}
 						break;
-						case UIReflectionIndex::DirectoryInput:
-						case UIReflectionIndex::FileInput:
-						case UIReflectionIndex::TextInput:
+						case UIReflectionElement::DirectoryInput:
+						case UIReflectionElement::FileInput:
+						case UIReflectionElement::TextInput:
 						{
-							ReflectionStreamFieldType reflect_stream_type = reflect->fields[index].info.stream_type;
+							ReflectionStreamFieldType reflect_stream_type = reflect->fields[reflected_type_index].info.stream_type;
 							UIInstanceFieldStream* field_value = (UIInstanceFieldStream*)instance->data[index];
 							*field_value = UIReflectionDrawerCreateCapacityUIInstanceFieldStream(
 								this, 
 								reflect_stream_type,
 								ptr, 
-								reflect->fields[index].info.basic_type_count,
+								reflect->fields[reflected_type_index].info.basic_type_count,
 								field_value->element_byte_size,
 								function::HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
 							);
 						}
 						break;
-						case UIReflectionIndex::Override:
+						case UIReflectionElement::Override:
 						{
 							OverrideAllocationData* allocated_data = (OverrideAllocationData*)instance->data[index];
 							// Initialize the field
@@ -2471,7 +2472,7 @@ namespace ECSEngine {
 						void* allocation = allocator->Allocate(sizeof(void*) * data->count);
 						data->values = (void**)allocation;
 		
-						unsigned int type_byte_size = reflect->fields[index].info.byte_size / data->count;
+						unsigned int type_byte_size = reflect->fields[reflected_type_index].info.byte_size / data->count;
 						for (size_t subindex = 0; subindex < data->count; subindex++) {
 							data->values[subindex] = (void*)ptr;
 							memcpy((void*)((uintptr_t)data->default_values + subindex * type_byte_size), (const void*)ptr, type_byte_size);
@@ -2480,7 +2481,7 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					ReflectionStreamFieldType reflect_stream_type = reflect->fields[index].info.stream_type;
+					ReflectionStreamFieldType reflect_stream_type = reflect->fields[reflected_type_index].info.stream_type;
 
 					// There are other structs that contain this as the first member variable
 					UIInstanceFieldStream* field_value = (UIInstanceFieldStream*)instance->data[index];
@@ -2490,7 +2491,7 @@ namespace ECSEngine {
 							this, 
 							reflect_stream_type,
 							ptr, 
-							reflect->fields[index].info.basic_type_count,
+							reflect->fields[reflected_type_index].info.basic_type_count,
 							field_value->element_byte_size,
 							function::HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
 						);
@@ -2544,7 +2545,7 @@ namespace ECSEngine {
 			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, data[index].field_name);
-				if (type->fields[field_index].reflection_index == UIReflectionIndex::TextInput) {
+				if (type->fields[field_index].element_index == UIReflectionElement::TextInput) {
 					CapacityStream<char>** input_data = (CapacityStream<char>**)instance->data[field_index];
 					*input_data = data[index].stream;
 				}
@@ -2558,7 +2559,7 @@ namespace ECSEngine {
 			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < field_indices.size; index++) {
 				unsigned int field_index = field_indices[index];
-				if (type->fields[field_indices[index]].reflection_index == UIReflectionIndex::TextInput) {
+				if (type->fields[field_indices[index]].element_index == UIReflectionElement::TextInput) {
 					CapacityStream<char>** input_data = (CapacityStream<char>**)instance->data[field_index];
 					*input_data = inputs + index;
 				}
@@ -2577,7 +2578,7 @@ namespace ECSEngine {
 			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, data[index].field_name);
-				if (type->fields[field_index].reflection_index == UIReflectionIndex::DirectoryInput) {
+				if (type->fields[field_index].element_index == UIReflectionElement::DirectoryInput) {
 					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)instance->data[field_index];
 					*input_data = data[index].stream;
 				}
@@ -2591,7 +2592,7 @@ namespace ECSEngine {
 			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < field_indices.size; index++) {
 				unsigned int field_index = field_indices[index];
-				if (type->fields[field_index].reflection_index == UIReflectionIndex::DirectoryInput) {
+				if (type->fields[field_index].element_index == UIReflectionElement::DirectoryInput) {
 					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)instance->data[field_index];
 					*input_data = inputs + index;
 				}
@@ -2610,7 +2611,7 @@ namespace ECSEngine {
 			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, data[index].field_name);
-				if (type->fields[field_index].reflection_index == UIReflectionIndex::FileInput) {
+				if (type->fields[field_index].element_index == UIReflectionElement::FileInput) {
 					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)instance->data[field_index];
 					*input_data = data[index].stream;
 				}
@@ -2624,7 +2625,7 @@ namespace ECSEngine {
 			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < field_indices.size; index++) {
 				unsigned int field_index = field_indices[index];
-				if (type->fields[field_index].reflection_index == UIReflectionIndex::FileInput) {
+				if (type->fields[field_index].element_index == UIReflectionElement::FileInput) {
 					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)instance->data[field_index];
 					*input_data = inputs + index;
 				}
@@ -2646,7 +2647,7 @@ namespace ECSEngine {
 			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, data[index].field_name);
-				ECS_ASSERT(IsStream(type->fields[field_index].stream_type) || IsStreamInput(type->fields[field_index].reflection_index));
+				ECS_ASSERT(IsStream(type->fields[field_index].stream_type) || IsStreamInput(type->fields[field_index].element_index));
 
 				// It is ok to alias the resizable stream with the capacity stream, same layout
 				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
@@ -2662,7 +2663,7 @@ namespace ECSEngine {
 			const UIReflectionType* type = GetType(instance->type_name);
 			for (size_t index = 0; index < field_indices.size; index++) {
 				unsigned int field_index = field_indices[index];
-				ECS_ASSERT(IsStream(type->fields[field_index].stream_type) || IsStreamInput(type->fields[field_index].reflection_index));
+				ECS_ASSERT(IsStream(type->fields[field_index].stream_type) || IsStreamInput(type->fields[field_index].element_index));
 
 				// It is ok to alias the resizable stream with the capacity stream, same layout
 				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
@@ -2867,7 +2868,7 @@ namespace ECSEngine {
 			const UIReflectionType* type = GetType(instance->type_name);
 
 			for (size_t index = 0; index < type->fields.size; index++) {
-				if (type->fields[index].reflection_index == UIReflectionIndex::Override) {
+				if (type->fields[index].element_index == UIReflectionElement::Override) {
 					OverrideAllocationData* data = (OverrideAllocationData*)instance->data[index];
 					if (data->override_index == override_index) {
 						// Same type, can proceed
@@ -2958,8 +2959,8 @@ namespace ECSEngine {
 			unsigned int field_index = GetTypeFieldIndex(type, field_name);
 
 			void* field_data = type->fields[field_index].data;
-			switch (type->fields[field_index].reflection_index) {
-			case UIReflectionIndex::DoubleInput:
+			switch (type->fields[field_index].element_index) {
+			case UIReflectionElement::DoubleInput:
 			{
 				UIReflectionDoubleInputData* data = (UIReflectionDoubleInputData*)field_data;
 				auto new_allocation = (UIReflectionDoubleSliderData*)allocator->Allocate(sizeof(UIReflectionDoubleSliderData));
@@ -2970,12 +2971,12 @@ namespace ECSEngine {
 				allocator->Deallocate(data);
 				type->fields[field_index].data = new_allocation;
 
-				type->fields[field_index].reflection_index = UIReflectionIndex::DoubleSlider;
+				type->fields[field_index].element_index = UIReflectionElement::DoubleSlider;
 				// Remove the number range flag if present for the configuration
 				type->fields[field_index].configuration = function::ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
 			}
 			break;
-			case UIReflectionIndex::FloatInput:
+			case UIReflectionElement::FloatInput:
 			{
 				UIReflectionFloatInputData* data = (UIReflectionFloatInputData*)field_data;
 				auto new_allocation = (UIReflectionFloatSliderData*)allocator->Allocate(sizeof(UIReflectionFloatSliderData));
@@ -2986,29 +2987,29 @@ namespace ECSEngine {
 				allocator->Deallocate(data);
 				type->fields[field_index].data = new_allocation;
 
-				type->fields[field_index].reflection_index = UIReflectionIndex::FloatSlider;
+				type->fields[field_index].element_index = UIReflectionElement::FloatSlider;
 				// Remove the number range flag if present for the configuration
 				type->fields[field_index].configuration = function::ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
 			}
 			break;// Remove the number range flag if present for the configuration
 			type->fields[field_index].configuration = function::ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
-			// integer_convert input needs no correction, except reflection_index
-			case UIReflectionIndex::IntegerInput:
-				type->fields[field_index].reflection_index = UIReflectionIndex::IntegerSlider;
+			// integer_convert input needs no correction, except element_index
+			case UIReflectionElement::IntegerInput:
+				type->fields[field_index].element_index = UIReflectionElement::IntegerSlider;
 				// Remove the number range flag if present for the configuration
 				type->fields[field_index].configuration = function::ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
 				break;
-				// groups needs no correction, except reflection_index
-			case UIReflectionIndex::DoubleInputGroup:
-				type->fields[field_index].reflection_index = UIReflectionIndex::DoubleSliderGroup;
+				// groups needs no correction, except element_index
+			case UIReflectionElement::DoubleInputGroup:
+				type->fields[field_index].element_index = UIReflectionElement::DoubleSliderGroup;
 				break;
-				// groups needs no correction, except reflection_index
-			case UIReflectionIndex::FloatInputGroup:
-				type->fields[field_index].reflection_index = UIReflectionIndex::FloatSliderGroup;
+				// groups needs no correction, except element_index
+			case UIReflectionElement::FloatInputGroup:
+				type->fields[field_index].element_index = UIReflectionElement::FloatSliderGroup;
 				break;
-				// groups needs no correction, except reflection_index
-			case UIReflectionIndex::IntegerInputGroup:
-				type->fields[field_index].reflection_index = UIReflectionIndex::IntegerSliderGroup;
+				// groups needs no correction, except element_index
+			case UIReflectionElement::IntegerInputGroup:
+				type->fields[field_index].element_index = UIReflectionElement::IntegerSliderGroup;
 				break;
 			}
 		}
@@ -3032,28 +3033,28 @@ namespace ECSEngine {
 			memcpy(instance_data->upper_bound, data->upper_bound, instance_data->byte_size); \
 			memcpy(instance_data->lower_bound, data->lower_bound, instance_data->byte_size); \
 
-			switch (type->fields[field_index].reflection_index) {
-			case UIReflectionIndex::CheckBox:
+			switch (type->fields[field_index].element_index) {
+			case UIReflectionElement::CheckBox:
 			{
 				POINTERS(UIReflectionCheckBoxData);
 				instance_data->value = data->value;
 			}
 			break;
-			case UIReflectionIndex::Color:
+			case UIReflectionElement::Color:
 			{
 				POINTERS(UIReflectionColorData);
 				instance_data->color = data->color;
 				instance_data->default_color = data->default_color;
 			}
 			break;
-			case UIReflectionIndex::ComboBox:
+			case UIReflectionElement::ComboBox:
 			{
 				POINTERS(UIReflectionComboBoxData);
 				instance_data->active_label = data->active_label;
 				instance_data->default_label = data->default_label;
 			}
 			break;
-			case UIReflectionIndex::DoubleInput:
+			case UIReflectionElement::DoubleInput:
 			{
 				POINTERS(UIReflectionDoubleInputData);
 				instance_data->default_value = data->default_value;
@@ -3062,7 +3063,7 @@ namespace ECSEngine {
 				instance_data->value = data->value;
 			}
 			break;
-			case UIReflectionIndex::FloatInput:
+			case UIReflectionElement::FloatInput:
 			{
 				POINTERS(UIReflectionFloatInputData);
 				instance_data->default_value = data->default_value;
@@ -3071,14 +3072,14 @@ namespace ECSEngine {
 				instance_data->value = data->value;
 			}
 			break;
-			case UIReflectionIndex::IntegerInput:
+			case UIReflectionElement::IntegerInput:
 			{
 				POINTERS(UIReflectionIntInputData);
 				COPY_VALUES_BASIC;
 				instance_data->value_to_modify = data->value_to_modify;
 			}
 			break;
-			case UIReflectionIndex::DoubleSlider:
+			case UIReflectionElement::DoubleSlider:
 			{
 				POINTERS(UIReflectionDoubleSliderData);
 				instance_data->default_value = data->default_value;
@@ -3088,7 +3089,7 @@ namespace ECSEngine {
 				instance_data->precision = data->precision;
 			}
 			break;
-			case UIReflectionIndex::FloatSlider:
+			case UIReflectionElement::FloatSlider:
 			{
 				POINTERS(UIReflectionFloatSliderData);
 				instance_data->default_value = data->default_value;
@@ -3098,16 +3099,16 @@ namespace ECSEngine {
 				instance_data->precision = data->precision;
 			}
 			break;
-			case UIReflectionIndex::IntegerSlider:
+			case UIReflectionElement::IntegerSlider:
 			{
 				POINTERS(UIReflectionIntSliderData);
 				COPY_VALUES_BASIC;
 				instance_data->value_to_modify = data->value_to_modify;
 			}
 			break;
-			case UIReflectionIndex::TextInput:
-			case UIReflectionIndex::FileInput:
-			case UIReflectionIndex::DirectoryInput:
+			case UIReflectionElement::TextInput:
+			case UIReflectionElement::FileInput:
+			case UIReflectionElement::DirectoryInput:
 			{
 				ECS_ASSERT(false, "Decide what to do here");
 
@@ -3115,12 +3116,12 @@ namespace ECSEngine {
 				//instance_data->characters = data->characters;
 			}
 			break;
-			case UIReflectionIndex::DoubleInputGroup:
-			case UIReflectionIndex::FloatInputGroup:
-			case UIReflectionIndex::IntegerInputGroup:
-			case UIReflectionIndex::DoubleSliderGroup:
-			case UIReflectionIndex::FloatSliderGroup:
-			case UIReflectionIndex::IntegerSliderGroup:
+			case UIReflectionElement::DoubleInputGroup:
+			case UIReflectionElement::FloatInputGroup:
+			case UIReflectionElement::IntegerInputGroup:
+			case UIReflectionElement::DoubleSliderGroup:
+			case UIReflectionElement::FloatSliderGroup:
+			case UIReflectionElement::IntegerSliderGroup:
 			{
 				POINTERS(UIReflectionGroupData<void>);
 
@@ -3167,7 +3168,7 @@ namespace ECSEngine {
 		{
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, ExtractTypedFieldName(data[index].field_name));
-				UI_REFLECTION_SET_LOWER_BOUND[(unsigned int)type->fields[field_index].reflection_index](type->fields.buffer + field_index, data[index].value);
+				UI_REFLECTION_SET_LOWER_BOUND[(unsigned int)type->fields[field_index].element_index](type->fields.buffer + field_index, data[index].value);
 			}
 		}
 
@@ -3175,7 +3176,7 @@ namespace ECSEngine {
 
 		void UIReflectionDrawer::BindTypeLowerBounds(UIReflectionType* type, const void* data) {
 			for (size_t index = 0; index < type->fields.size; index++) {
-				unsigned int int_index = (unsigned int)type->fields[index].reflection_index;
+				unsigned int int_index = (unsigned int)type->fields[index].element_index;
 				if (int_index < std::size(UI_REFLECTION_SET_LOWER_BOUND) && type->fields[index].stream_type == UIReflectionStreamType::None) {
 					UI_REFLECTION_SET_LOWER_BOUND[int_index](type->fields.buffer + index, function::OffsetPointer(data, type->fields[index].pointer_offset));
 				}
@@ -3196,7 +3197,7 @@ namespace ECSEngine {
 		{
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, ExtractTypedFieldName(data[index].field_name));
-				UI_REFLECTION_SET_UPPER_BOUND[(unsigned int)type->fields[field_index].reflection_index](type->fields.buffer + field_index, data[index].value);
+				UI_REFLECTION_SET_UPPER_BOUND[(unsigned int)type->fields[field_index].element_index](type->fields.buffer + field_index, data[index].value);
 			}
 		}
 
@@ -3204,7 +3205,7 @@ namespace ECSEngine {
 
 		void UIReflectionDrawer::BindTypeUpperBounds(UIReflectionType* type, const void* data) {
 			for (size_t index = 0; index < type->fields.size; index++) {
-				unsigned int int_index = (unsigned int)type->fields[index].reflection_index;
+				unsigned int int_index = (unsigned int)type->fields[index].element_index;
 				if (int_index < std::size(UI_REFLECTION_SET_UPPER_BOUND) && type->fields[index].stream_type == UIReflectionStreamType::None) {
 					UI_REFLECTION_SET_UPPER_BOUND[int_index](type->fields.buffer + index, function::OffsetPointer(data, type->fields[index].pointer_offset));
 				}
@@ -3221,8 +3222,8 @@ namespace ECSEngine {
 		void UIReflectionDrawer::ChangeDirectoryToFile(UIReflectionType* type, Stream<char> field_name)
 		{
 			unsigned int field_index = GetTypeFieldIndex(type, field_name);
-			ECS_ASSERT(type->fields[field_index].reflection_index == UIReflectionIndex::DirectoryInput);
-			type->fields[field_index].reflection_index = UIReflectionIndex::FileInput;
+			ECS_ASSERT(type->fields[field_index].element_index == UIReflectionElement::DirectoryInput);
+			type->fields[field_index].element_index = UIReflectionElement::FileInput;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -3265,12 +3266,12 @@ namespace ECSEngine {
 			ReflectionField reflection_field,
 			UIReflectionTypeField& field,
 			unsigned int type_byte_size,
-			UIReflectionIndex reflection_index,
+			UIReflectionElement element_index,
 			unsigned int int_flags = 0
 		) {
 			UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)reflection->allocator->Allocate(sizeof(UIReflectionGroupData<void>));
 			field.data = data;
-			field.reflection_index = reflection_index;
+			field.element_index = element_index;
 			field.byte_size = sizeof(*data);
 
 			data->count = Reflection::BasicTypeComponentCount(reflection_field.info.basic_type);
@@ -3294,7 +3295,7 @@ namespace ECSEngine {
 			UIReflectionDrawer* reflection, 
 			const ReflectionField& reflection_field, 
 			UIReflectionTypeField& field, 
-			UIReflectionIndex reflection_index,
+			UIReflectionElement element_index,
 			unsigned int int_flags = 0
 		) {
 			size_t size_to_allocate = int_flags == 0 ? sizeof(UIReflectionStreamBaseData) : sizeof(UIReflectionStreamIntInputData);
@@ -3302,7 +3303,7 @@ namespace ECSEngine {
 			memset(data, 0, sizeof(*data));
 
 			field.data = data;
-			field.reflection_index = reflection_index;
+			field.element_index = element_index;
 			field.byte_size = sizeof(*data);
 
 			data->stream.element_byte_size = reflection_field.info.stream_byte_size;
@@ -3321,14 +3322,14 @@ namespace ECSEngine {
 			UIReflectionDrawer* reflection,
 			ReflectionField reflection_field,
 			UIReflectionTypeField& field,
-			UIReflectionIndex reflection_index,
+			UIReflectionElement element_index,
 			unsigned int int_flags = 0
 		) {
 			UIReflectionStreamInputGroupData* data = (UIReflectionStreamInputGroupData*)reflection->allocator->Allocate(sizeof(UIReflectionStreamInputGroupData));
 			memset(data, 0, sizeof(*data));
 
 			field.data = data;
-			field.reflection_index = reflection_index;
+			field.element_index = element_index;
 			field.byte_size = sizeof(*data);
 
 			data->basic_type_count = Reflection::BasicTypeComponentCount(reflection_field.info.basic_type);
@@ -3352,7 +3353,7 @@ namespace ECSEngine {
 			auto integer_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
 				UIReflectionIntInputData* data = (UIReflectionIntInputData*)allocator->Allocate(sizeof(UIReflectionIntInputData));
 				field.data = data;
-				field.reflection_index = UIReflectionIndex::IntegerInput;
+				field.element_index = UIReflectionElement::IntegerInput;
 				field.byte_size = sizeof(*data);
 				data->byte_size = reflection_field.info.byte_size;
 
@@ -3394,7 +3395,7 @@ namespace ECSEngine {
 					reflection_field,
 					field, 
 					1 << ((unsigned int)reflection_field.info.basic_type / 2),
-					UIReflectionIndex::IntegerInputGroup, 
+					UIReflectionElement::IntegerInputGroup, 
 					1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type)
 				);
 			};
@@ -3402,7 +3403,7 @@ namespace ECSEngine {
 			auto float_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
 				UIReflectionFloatInputData* data = (UIReflectionFloatInputData*)allocator->Allocate(sizeof(UIReflectionFloatInputData));
 				field.data = data;
-				field.reflection_index = UIReflectionIndex::FloatInput;
+				field.element_index = UIReflectionElement::FloatInput;
 				field.byte_size = sizeof(*data);
 
 				// defaults
@@ -3416,13 +3417,13 @@ namespace ECSEngine {
 			};
 
 			auto float_convert_group = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertGroupForType(this, reflection_field, field, sizeof(float), UIReflectionIndex::FloatInputGroup);
+				ConvertGroupForType(this, reflection_field, field, sizeof(float), UIReflectionElement::FloatInputGroup);
 			};
 
 			auto double_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
 				UIReflectionDoubleInputData* data = (UIReflectionDoubleInputData*)allocator->Allocate(sizeof(UIReflectionDoubleInputData));
 				field.data = data;
-				field.reflection_index = UIReflectionIndex::DoubleInput;
+				field.element_index = UIReflectionElement::DoubleInput;
 				field.byte_size = sizeof(*data);
 
 				// defaults
@@ -3436,13 +3437,13 @@ namespace ECSEngine {
 			};
 
 			auto double_convert_group = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertGroupForType(this, reflection_field, field, sizeof(double), UIReflectionIndex::DoubleInputGroup);
+				ConvertGroupForType(this, reflection_field, field, sizeof(double), UIReflectionElement::DoubleInputGroup);
 			};
 
 			auto enum_convert = [this](const ReflectionEnum& reflection_enum, UIReflectionTypeField& field) {
 				UIReflectionComboBoxData* data = (UIReflectionComboBoxData*)this->allocator->Allocate(sizeof(UIReflectionComboBoxData));
 				field.data = data;
-				field.reflection_index = UIReflectionIndex::ComboBox;
+				field.element_index = UIReflectionElement::ComboBox;
 				field.byte_size = sizeof(*data);
 				data->labels = reflection_enum.fields;
 				data->label_display_count = reflection_enum.fields.size;
@@ -3452,19 +3453,19 @@ namespace ECSEngine {
 			};
 
 			auto text_input_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::TextInput);
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::TextInput);
 				field.stream_type = UIReflectionStreamType::None;
 			};
 
 			auto directory_input_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::DirectoryInput);
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::DirectoryInput);
 				field.stream_type = UIReflectionStreamType::None;
 			};
 
 			auto bool_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
 				UIReflectionCheckBoxData* data = (UIReflectionCheckBoxData*)allocator->Allocate(sizeof(UIReflectionCheckBoxData));
 				field.data = data;
-				field.reflection_index = UIReflectionIndex::CheckBox;
+				field.element_index = UIReflectionElement::CheckBox;
 				field.byte_size = sizeof(*data);
 
 				data->value = nullptr;
@@ -3476,7 +3477,7 @@ namespace ECSEngine {
 			auto color_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
 				UIReflectionColorData* data = (UIReflectionColorData*)allocator->Allocate(sizeof(UIReflectionColorData));
 				field.data = data;
-				field.reflection_index = UIReflectionIndex::Color;
+				field.element_index = UIReflectionElement::Color;
 				field.byte_size = sizeof(*data);
 
 				data->color = nullptr;
@@ -3489,7 +3490,7 @@ namespace ECSEngine {
 			auto color_float_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
 				UIReflectionColorFloatData* data = (UIReflectionColorFloatData*)allocator->Allocate(sizeof(UIReflectionColorFloatData));
 				field.data = data;
-				field.reflection_index = UIReflectionIndex::ColorFloat;
+				field.element_index = UIReflectionElement::ColorFloat;
 				field.byte_size = sizeof(*data);
 
 				data->color = nullptr;
@@ -3502,7 +3503,7 @@ namespace ECSEngine {
 			auto user_defined_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
 				UIReflectionUserDefinedData* data = (UIReflectionUserDefinedData*)allocator->Allocate(sizeof(UIReflectionUserDefinedData));
 				field.data = data;
-				field.reflection_index = UIReflectionIndex::UserDefined;
+				field.element_index = UIReflectionElement::UserDefined;
 
 				const ReflectionType* user_defined_type = reflection->GetType(reflection_field.definition);
 				field.byte_size = Reflection::GetReflectionTypeByteSize(user_defined_type);
@@ -3546,7 +3547,7 @@ namespace ECSEngine {
 						allocated_data->field_data = nullptr;
 						allocated_data->draw_function = overrides[index].draw_function;
 
-						field.reflection_index = UIReflectionIndex::Override;
+						field.element_index = UIReflectionElement::Override;
 						field.byte_size = sizeof(OverrideAllocationData) + overrides[index].draw_data_size;
 						field.configuration = 0;
 						field.stream_type = UIReflectionStreamType::None;
@@ -3557,27 +3558,27 @@ namespace ECSEngine {
 			};
 
 			auto integer_stream_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::IntegerInput, 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::IntegerInput, 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
 			};
 
 			auto integer_stream_convert_group = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamGroupForType(this, reflection_field, field, UIReflectionIndex::IntegerInputGroup, 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
+				ConvertStreamGroupForType(this, reflection_field, field, UIReflectionElement::IntegerInputGroup, 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
 			};
 
 			auto float_stream_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::FloatInput);
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::FloatInput);
 			};
 
 			auto float_stream_convert_group = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamGroupForType(this, reflection_field, field, UIReflectionIndex::FloatInputGroup);
+				ConvertStreamGroupForType(this, reflection_field, field, UIReflectionElement::FloatInputGroup);
 			};
 
 			auto double_stream_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::DoubleInput);
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::DoubleInput);
 			};
 
 			auto double_stream_convert_group = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamGroupForType(this, reflection_field, field, UIReflectionIndex::DoubleInputGroup);
+				ConvertStreamGroupForType(this, reflection_field, field, UIReflectionElement::DoubleInputGroup);
 			};
 
 			auto enum_stream_convert = [this](const ReflectionEnum& reflection_enum, UIReflectionTypeField& field) {
@@ -3585,7 +3586,7 @@ namespace ECSEngine {
 				memset(data, 0, sizeof(*data));
 
 				field.data = data;
-				field.reflection_index = UIReflectionIndex::ComboBox;
+				field.element_index = UIReflectionElement::ComboBox;
 				field.byte_size = sizeof(*data);
 
 				data->label_names = nullptr;
@@ -3596,23 +3597,23 @@ namespace ECSEngine {
 			};
 
 			auto text_input_stream_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::TextInput);
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::TextInput);
 			};
 
 			auto directory_input_stream_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::DirectoryInput);
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::DirectoryInput);
 			};
 
 			auto bool_stream_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::CheckBox);
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::CheckBox);
 			};
 
 			auto color_stream_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::Color);
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::Color);
 			};
 
 			auto color_float_stream_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::ColorFloat);
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionElement::ColorFloat);
 			};
 
 			auto user_defined_stream_convert = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
@@ -3620,7 +3621,7 @@ namespace ECSEngine {
 				memset(data, 0, sizeof(*data));
 
 				field.data = data;
-				field.reflection_index = UIReflectionIndex::UserDefined;
+				field.element_index = UIReflectionElement::UserDefined;
 				field.byte_size = sizeof(*data);
 
 				data->ui_drawer = this;
@@ -3796,8 +3797,9 @@ namespace ECSEngine {
 					const ReflectionFieldInfo& field_info = reflected_type->fields[index].info;
 
 					bool value_written = false;
-					type.fields[index].name = reflected_type->fields[index].name;
+					type.fields[type.fields.size].name = reflected_type->fields[index].name;
 					type.fields[type.fields.size].pointer_offset = reflected_type->fields[index].info.pointer_offset;
+					type.fields[type.fields.size].reflection_type_index = index;
 					if (field_info.stream_type == ReflectionStreamFieldType::Pointer) {
 						// The basic type count tells the indirection count: e.g void* - indirection 1; void** indirection 2
 						// Only reflect single indirection pointers
@@ -3813,14 +3815,14 @@ namespace ECSEngine {
 					}
 
 					if (value_written) {
-						UIReflectionIndex ui_reflection_index = type.fields[type.fields.size].reflection_index;
-						if (field_info.has_default_value && ui_reflection_index != UIReflectionIndex::Override) {
+						UIReflectionElement ui_reflection_index = type.fields[type.fields.size].element_index;
+						if (field_info.has_default_value && ui_reflection_index != UIReflectionElement::Override) {
 							UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)ui_reflection_index](type.fields.buffer + type.fields.size, &field_info.default_bool);
 						}
 
 						// Check the range tag first
 						Stream<char> range_tag = reflected_type->fields[index].GetTag(STRING(ECS_UI_RANGE_REFLECT));
-						unsigned int reflection_index = (unsigned int)ui_reflection_index;
+						unsigned int element_index = (unsigned int)ui_reflection_index;
 						ReflectionBasicFieldType basic_type = field_info.basic_type;
 
 						auto parse_default = [&](Stream<char>* parse_tag) {
@@ -3828,7 +3830,7 @@ namespace ECSEngine {
 							double4 default_value = function::ParseDouble4(parse_tag, ',', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
 
 							if (default_value.x != DBL_MAX) {
-								if (ui_reflection_index == UIReflectionIndex::Color) {
+								if (ui_reflection_index == UIReflectionElement::Color) {
 									if (default_value.x < 1.0 || default_value.y < 1.0 || default_value.z < 1.0 || default_value.w < 1.0) {
 										// The values need to be in the 0 - 255 range
 										double range = 255;
@@ -3839,16 +3841,16 @@ namespace ECSEngine {
 									}
 
 									Color color_value = (double*)&default_value;
-									UI_REFLECTION_SET_DEFAULT_DATA[reflection_index](type.fields.buffer + index, &color_value);
+									UI_REFLECTION_SET_DEFAULT_DATA[element_index](type.fields.buffer + index, &color_value);
 								}
-								else if (ui_reflection_index == UIReflectionIndex::ColorFloat) {
+								else if (ui_reflection_index == UIReflectionElement::ColorFloat) {
 									ColorFloat color_value = (double*)&default_value;
-									UI_REFLECTION_SET_DEFAULT_DATA[reflection_index](type.fields.buffer + index, &color_value);
+									UI_REFLECTION_SET_DEFAULT_DATA[element_index](type.fields.buffer + index, &color_value);
 								}
 								else {
 									// Convert to the corresponding type
 									ConvertFromDouble4ToBasic(basic_type, default_value, conversion_storage.buffer);
-									UI_REFLECTION_SET_DEFAULT_DATA[reflection_index](type.fields.buffer + index, conversion_storage.buffer);
+									UI_REFLECTION_SET_DEFAULT_DATA[element_index](type.fields.buffer + index, conversion_storage.buffer);
 								}
 							}
 						};
@@ -3860,7 +3862,7 @@ namespace ECSEngine {
 
 							if (lower_bound.x != DBL_MAX) {
 								ConvertFromDouble4ToBasic(basic_type, lower_bound, conversion_storage.buffer);
-								UI_REFLECTION_SET_LOWER_BOUND[reflection_index](
+								UI_REFLECTION_SET_LOWER_BOUND[element_index](
 									type.fields.buffer + index,
 									conversion_storage.buffer
 									);
@@ -3868,7 +3870,7 @@ namespace ECSEngine {
 
 							if (upper_bound.x != DBL_MAX) {
 								ConvertFromDouble4ToBasic(basic_type, upper_bound, conversion_storage.buffer);
-								UI_REFLECTION_SET_UPPER_BOUND[reflection_index](
+								UI_REFLECTION_SET_UPPER_BOUND[element_index](
 									type.fields.buffer + index,
 									conversion_storage.buffer
 								);
@@ -3876,7 +3878,7 @@ namespace ECSEngine {
 						};
 
 						if (range_tag.size > 0) {
-							if (reflection_index < std::size(UI_REFLECTION_SET_LOWER_BOUND)) {
+							if (element_index < std::size(UI_REFLECTION_SET_LOWER_BOUND)) {
 								range_tag = function::FindFirstCharacter(range_tag, '(');
 								range_tag.Advance();
 								parse_lower_upper_bound(&range_tag);
@@ -3890,7 +3892,7 @@ namespace ECSEngine {
 								parameters_tag.Advance();
 
 								parse_default(&parameters_tag);
-								if (reflection_index < std::size(UI_REFLECTION_SET_LOWER_BOUND)) {
+								if (element_index < std::size(UI_REFLECTION_SET_LOWER_BOUND)) {
 									parse_lower_upper_bound(&parameters_tag);
 								}
 							}
@@ -3980,19 +3982,19 @@ namespace ECSEngine {
 				memcpy(instance.data[index], type->fields[index].data, type->fields[index].byte_size);
 
 				if (type->fields[index].stream_type == UIReflectionStreamType::None) {
-					switch (type->fields[index].reflection_index) {
-					case UIReflectionIndex::DoubleInputGroup:
-					case UIReflectionIndex::DoubleSliderGroup:
-					case UIReflectionIndex::FloatInputGroup:
-					case UIReflectionIndex::FloatSliderGroup:
-					case UIReflectionIndex::IntegerInputGroup:
-					case UIReflectionIndex::IntegerSliderGroup:
+					switch (type->fields[index].element_index) {
+					case UIReflectionElement::DoubleInputGroup:
+					case UIReflectionElement::DoubleSliderGroup:
+					case UIReflectionElement::FloatInputGroup:
+					case UIReflectionElement::FloatSliderGroup:
+					case UIReflectionElement::IntegerInputGroup:
+					case UIReflectionElement::IntegerSliderGroup:
 					{
 						UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)instance.data[index];
 						data->values = (void**)allocator->Allocate(sizeof(void*) * data->count);
 					}
 					break;
-					case UIReflectionIndex::UserDefined:
+					case UIReflectionElement::UserDefined:
 					{
 						UIReflectionUserDefinedData* data = (UIReflectionUserDefinedData*)instance.data[index];
 						// Must create an instance of that user defined type here
@@ -4010,7 +4012,7 @@ namespace ECSEngine {
 						CreateInstance(instance_name, type_name);
 					}
 					break;
-					case UIReflectionIndex::Override:
+					case UIReflectionElement::Override:
 					{
 						OverrideAllocationData* allocated_data = (OverrideAllocationData*)instance.data[index];
 						allocated_data->initialize_allocator = user_defined_allocator;
@@ -4217,9 +4219,9 @@ namespace ECSEngine {
 		void UIReflectionDrawer::DisableInputWrites(UIReflectionType* type, bool all_writes)
 		{
 			for (size_t index = 0; index < type->fields.size; index++) {
-				UIReflectionIndex reflection_index = type->fields[index].reflection_index;
-				if (reflection_index == UIReflectionIndex::TextInput || reflection_index == UIReflectionIndex::DirectoryInput
-					|| reflection_index == UIReflectionIndex::FileInput) {
+				UIReflectionElement element_index = type->fields[index].element_index;
+				if (element_index == UIReflectionElement::TextInput || element_index == UIReflectionElement::DirectoryInput
+					|| element_index == UIReflectionElement::FileInput) {
 					type->fields[index].configuration |= UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM;
 				}
 				else if (all_writes) {
@@ -4263,21 +4265,21 @@ namespace ECSEngine {
 			for (size_t index = 0; index < type->fields.size; index++) {
 				bool is_stream = IsStream(type->fields[index].stream_type);
 				if (!is_stream) {
-					switch (type->fields[index].reflection_index) {
-					case UIReflectionIndex::IntegerInputGroup:
-					case UIReflectionIndex::IntegerSliderGroup:
-					case UIReflectionIndex::DoubleInputGroup:
-					case UIReflectionIndex::DoubleSliderGroup:
-					case UIReflectionIndex::FloatInputGroup:
-					case UIReflectionIndex::FloatSliderGroup:
+					switch (type->fields[index].element_index) {
+					case UIReflectionElement::IntegerInputGroup:
+					case UIReflectionElement::IntegerSliderGroup:
+					case UIReflectionElement::DoubleInputGroup:
+					case UIReflectionElement::DoubleSliderGroup:
+					case UIReflectionElement::FloatInputGroup:
+					case UIReflectionElement::FloatSliderGroup:
 					{
 						UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)instance->data[index];
 						allocator->Deallocate(data->values);
 					}
 					break;
-					case UIReflectionIndex::FileInput:
-					case UIReflectionIndex::DirectoryInput:
-					case UIReflectionIndex::TextInput:
+					case UIReflectionElement::FileInput:
+					case UIReflectionElement::DirectoryInput:
+					case UIReflectionElement::TextInput:
 					{
 						UIInstanceFieldStream* data = (UIInstanceFieldStream*)instance->data[index];
 						if (data->capacity != (CapacityStream<void>*)data->target_memory) {
@@ -4291,7 +4293,7 @@ namespace ECSEngine {
 						}
 					}
 					break;
-					case UIReflectionIndex::Override:
+					case UIReflectionElement::Override:
 					{
 						OverrideAllocationData* data = (OverrideAllocationData*)instance->data[index];
 						if (overrides[data->override_index].deallocate_function != nullptr) {
@@ -4373,29 +4375,29 @@ namespace ECSEngine {
 			for (size_t index = 0; index < type.fields.size; index++) {
 				bool is_stream = IsStream(type.fields[index].stream_type);
 
-				UIReflectionIndex reflect_index = type.fields[index].reflection_index;
+				UIReflectionElement reflect_index = type.fields[index].element_index;
 				if (!is_stream) {
 					switch (reflect_index) {
-					case UIReflectionIndex::IntegerInput:
-					case UIReflectionIndex::IntegerSlider:
+					case UIReflectionElement::IntegerInput:
+					case UIReflectionElement::IntegerSlider:
 					{
 						UIReflectionIntInputData* data = (UIReflectionIntInputData*)type.fields[index].data;
 						allocator->Deallocate(data->default_value);
 					}
 					break;
-					case UIReflectionIndex::FloatInputGroup:
-					case UIReflectionIndex::FloatSliderGroup:
-					case UIReflectionIndex::DoubleInputGroup:
-					case UIReflectionIndex::DoubleSliderGroup:
-					case UIReflectionIndex::IntegerInputGroup:
-					case UIReflectionIndex::IntegerSliderGroup:
+					case UIReflectionElement::FloatInputGroup:
+					case UIReflectionElement::FloatSliderGroup:
+					case UIReflectionElement::DoubleInputGroup:
+					case UIReflectionElement::DoubleSliderGroup:
+					case UIReflectionElement::IntegerInputGroup:
+					case UIReflectionElement::IntegerSliderGroup:
 					{
 						UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)type.fields[index].data;
 						// The boolean is prefixing this
 						allocator->Deallocate(function::OffsetPointer(data->default_values, -sizeof(bool)));
 					}
 					break;
-					case UIReflectionIndex::UserDefined: 
+					case UIReflectionElement::UserDefined: 
 					{
 						UIReflectionUserDefinedData* data = (UIReflectionUserDefinedData*)type.fields[index].data;
 						allocator->Deallocate(data->instance_name.buffer);
@@ -4404,7 +4406,7 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					if (reflect_index == UIReflectionIndex::UserDefined) {
+					if (reflect_index == UIReflectionElement::UserDefined) {
 						UIReflectionStreamUserDefinedData* data = (UIReflectionStreamUserDefinedData*)type.fields[index].data;
 						allocator->Deallocate(data->type_name.buffer);
 					}
@@ -4489,8 +4491,8 @@ namespace ECSEngine {
 
 				if (options->custom_draw != nullptr) {
 					// Check to see if a custom functor is provided for the type
-					if (options->custom_draw->functions[(unsigned char)type->fields[index].reflection_index] != nullptr) {
-						custom_drawer = options->custom_draw->functions[(unsigned char)type->fields[index].reflection_index];
+					if (options->custom_draw->functions[(unsigned char)type->fields[index].element_index] != nullptr) {
+						custom_drawer = options->custom_draw->functions[(unsigned char)type->fields[index].element_index];
 						custom_draw_data = options->custom_draw->extra_data;
 					}
 				}
@@ -4505,9 +4507,9 @@ namespace ECSEngine {
 						}
 
 						if (custom_drawer != nullptr) {
-							UIReflectionIndex reflection_index = type->fields[index].reflection_index;
+							UIReflectionElement element_index = type->fields[index].element_index;
 
-							bool is_instance_field_stream = type->fields[index].stream_type != UIReflectionStreamType::None || IsStreamInput(reflection_index);
+							bool is_instance_field_stream = type->fields[index].stream_type != UIReflectionStreamType::None || IsStreamInput(element_index);
 							if (is_instance_field_stream)
 							{
 								UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[index];
@@ -4537,14 +4539,14 @@ namespace ECSEngine {
 							continue;
 						}
 
-						UIReflectionIndex reflection_index = type->fields[index].reflection_index;
+						UIReflectionElement element_index = type->fields[index].element_index;
 
 						size_t config_flag_count = options->config->flag_count;
 						size_t current_configuration = type->fields[index].configuration;
 						for (size_t subindex = 0; subindex < options->additional_configs.size; subindex++) {
 							for (size_t type_index = 0; type_index < options->additional_configs[subindex].index_count; type_index++) {
-								if (options->additional_configs[subindex].index[type_index] == reflection_index ||
-									options->additional_configs[subindex].index[type_index] == UIReflectionIndex::Count) {
+								if (options->additional_configs[subindex].index[type_index] == element_index ||
+									options->additional_configs[subindex].index[type_index] == UIReflectionElement::Count) {
 									current_configuration |= options->additional_configs[subindex].configurations;
 
 									UIReflectionDrawConfigCopyToNormalConfig(options->additional_configs.buffer + subindex, *options->config);
@@ -4552,7 +4554,7 @@ namespace ECSEngine {
 							}
 						}
 
-						if (type->fields[index].reflection_index == UIReflectionIndex::Override && options->override_additional_configs.size > 0) {
+						if (type->fields[index].element_index == UIReflectionElement::Override && options->override_additional_configs.size > 0) {
 							OverrideAllocationData* override_data = (OverrideAllocationData*)instance->data[index];
 							Stream<char> override_tag = overrides[override_data->override_index].tag;
 							for (size_t subindex = 0; subindex < options->override_additional_configs.size; subindex++) {
@@ -4575,7 +4577,7 @@ namespace ECSEngine {
 							current_configuration,
 							current_field_name,
 							instance->data[index],
-							type->fields[index].reflection_index,
+							type->fields[index].element_index,
 							type->fields[index].stream_type
 						);
 
@@ -4886,9 +4888,9 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::GetTypeMatchingFields(const UIReflectionType* type, UIReflectionIndex reflection_index, CapacityStream<unsigned int>& indices) const {
+		void UIReflectionDrawer::GetTypeMatchingFields(const UIReflectionType* type, UIReflectionElement element_index, CapacityStream<unsigned int>& indices) const {
 			for (unsigned int index = 0; index < type->fields.size; index++) {
-				if (type->fields[index].reflection_index == reflection_index) {
+				if (type->fields[index].element_index == element_index) {
 					indices.AddAssert(index);
 				}
 			}
@@ -4910,9 +4912,9 @@ namespace ECSEngine {
 		{
 			const UIReflectionType* type = GetType(instance->type_name);
 			ECS_ASSERT(
-				type->fields[field_index].reflection_index == UIReflectionIndex::TextInput ||
-				type->fields[field_index].reflection_index == UIReflectionIndex::DirectoryInput ||
-				type->fields[field_index].reflection_index == UIReflectionIndex::FileInput
+				type->fields[field_index].element_index == UIReflectionElement::TextInput ||
+				type->fields[field_index].element_index == UIReflectionElement::DirectoryInput ||
+				type->fields[field_index].element_index == UIReflectionElement::FileInput
 			);
 
 			CapacityStream<void>* field_stream = *(CapacityStream<void>**)instance->data[field_index];
@@ -5031,11 +5033,11 @@ namespace ECSEngine {
 
 			UIReflectionDefaultValueData* default_data = (UIReflectionDefaultValueData*)_data;
 
-#define CASE_START(type, data_type) case UIReflectionIndex::type: { data_type* data = (data_type*)default_data->instance.data[index]; 
+#define CASE_START(type, data_type) case UIReflectionElement::type: { data_type* data = (data_type*)default_data->instance.data[index]; 
 #define CASE_END } break;
 
 			for (size_t index = 0; index < default_data->type.fields.size; index++) {
-				switch (default_data->type.fields[index].reflection_index) {
+				switch (default_data->type.fields[index].element_index) {
 					CASE_START(Color, UIReflectionColorData);
 					*data->color = data->default_color;
 					CASE_END

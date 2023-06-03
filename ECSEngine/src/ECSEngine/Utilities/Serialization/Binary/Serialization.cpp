@@ -8,6 +8,8 @@
 
 #define DESERIALIZE_FIELD_TABLE_MAX_TYPES (32)
 
+#define SERIALIZE_VERSION 0
+
 namespace ECSEngine {
 
 	using namespace Reflection;
@@ -81,13 +83,19 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager, 
 		const ReflectionType* type, 
 		uintptr_t& stream, 
-		Stream<SerializeOmitField> omit_fields
+		Stream<SerializeOmitField> omit_fields,
+		bool write_tags
 	) {
 		size_t total_size = 0;
 
 		// Write the name of the type first
 		unsigned short type_name_size = (unsigned short)type->name.size;
 		total_size += WriteWithSizeShort<write_data>(&stream, type->name.buffer, type_name_size);
+
+		if (write_tags) {
+			unsigned short tag_size = (unsigned short)type->tag.size;
+			total_size += WriteWithSizeShort<write_data>(&stream, type->tag.buffer, tag_size);
+		}
 
 		// Get the count of fields that want to be serialized
 		size_t serializable_field_count = type->fields.size;
@@ -116,6 +124,11 @@ namespace ECSEngine {
 					// Write the field name
 					unsigned short field_name_size = (unsigned short)field->name.size;
 					total_size += WriteWithSizeShort<write_data>(&stream, field->name.buffer, field_name_size);
+
+					if (write_tags) {
+						unsigned short field_tag_size = (unsigned short)field->tag.size;
+						total_size += WriteWithSizeShort<write_data>(&stream, field->tag.buffer, field_tag_size);
+					}
 
 					// Write the field type - the stream type, basic type, basic type count, stream byte size and the byte size all
 					// need to be written or the custom serializer index with its version if a match was found
@@ -165,7 +178,8 @@ namespace ECSEngine {
 		const ReflectionType* type, 
 		uintptr_t& stream,
 		CapacityStream<Stream<char>>& deserialized_type_names,
-		Stream<SerializeOmitField> omit_fields
+		Stream<SerializeOmitField> omit_fields,
+		bool write_tags
 	) {
 		size_t write_total = 0;
 
@@ -173,7 +187,7 @@ namespace ECSEngine {
 		deserialized_type_names.Add(type->name);
 
 		// Write the top most type first
-		write_total += WriteTypeTable<write_data>(reflection_manager, type, stream, omit_fields);
+		write_total += WriteTypeTable<write_data>(reflection_manager, type, stream, omit_fields, write_tags);
 
 		const size_t STACK_STORAGE = 128;
 		Stream<char> _custom_dependent_types_storage[STACK_STORAGE];
@@ -230,7 +244,7 @@ namespace ECSEngine {
 			if (reflection_manager->TryGetType(current_dependent_type, nested_type)) {
 				bool is_missing = function::FindString(current_dependent_type, deserialized_type_names) == -1;
 				if (is_missing) {
-					write_total += WriteTypeTable<write_data>(reflection_manager, &nested_type, stream, deserialized_type_names, omit_fields);
+					write_total += WriteTypeTable<write_data>(reflection_manager, &nested_type, stream, deserialized_type_names, omit_fields, write_tags);
 				}
 			}
 			else {
@@ -266,9 +280,14 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
 		uintptr_t& stream,
-		Stream<SerializeOmitField> omit_fields
+		Stream<SerializeOmitField> omit_fields,
+		bool write_tags
 	) {
 		size_t write_total = 0;
+
+		// Write the version first
+		unsigned int serialize_version = SERIALIZE_VERSION;
+		write_total += Write<write_data>(&stream, &serialize_version, sizeof(serialize_version));
 
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, deserialized_type_names, DESERIALIZE_FIELD_TABLE_MAX_TYPES);
 
@@ -281,7 +300,7 @@ namespace ECSEngine {
 			write_total += Write<write_data>(&stream, &ECS_SERIALIZE_CUSTOM_TYPES[index].version, sizeof(unsigned int));
 		}
 
-		write_total += WriteTypeTable<write_data>(reflection_manager, type, stream, deserialized_type_names, omit_fields);
+		write_total += WriteTypeTable<write_data>(reflection_manager, type, stream, deserialized_type_names, omit_fields, write_tags);
 
 		return write_total;
 	}
@@ -465,7 +484,12 @@ namespace ECSEngine {
 	) {
 		bool has_options = options != nullptr;
 
-		Stream<SerializeOmitField> omit_fields = has_options ? options->omit_fields : Stream<SerializeOmitField>(nullptr, 0);
+		bool write_tags = false;
+		Stream<SerializeOmitField> omit_fields = Stream<SerializeOmitField>(nullptr, 0);
+		if (has_options) {
+			write_tags = options->write_type_table_tags;
+			omit_fields = options->omit_fields;
+		}
 
 		if (!has_options || (has_options && options->verify_dependent_types)) {
 			// Check that the type has all its dependencies met
@@ -485,7 +509,7 @@ namespace ECSEngine {
 
 		if (!has_options || (has_options && options->write_type_table)) {
 			// The type table must be written
-			*total_size += WriteTypeTableWithSerializers<write_data>(reflection_manager, type, stream, omit_fields);
+			*total_size += WriteTypeTableWithSerializers<write_data>(reflection_manager, type, stream, omit_fields, write_tags);
 		}
 
 		SerializeOptions _nested_options;
@@ -657,17 +681,28 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	void SerializeFieldTable(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type, uintptr_t& stream, Stream<SerializeOmitField> omit_fields)
+	void SerializeFieldTable(
+		const Reflection::ReflectionManager* reflection_manager, 
+		const Reflection::ReflectionType* type, 
+		uintptr_t& stream, 
+		Stream<SerializeOmitField> omit_fields,
+		bool write_tags
+	)
 	{
-		WriteTypeTableWithSerializers<true>(reflection_manager, type, stream, omit_fields);
+		WriteTypeTableWithSerializers<true>(reflection_manager, type, stream, omit_fields, write_tags);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	size_t SerializeFieldTableSize(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type, Stream<SerializeOmitField> omit_fields)
+	size_t SerializeFieldTableSize(
+		const Reflection::ReflectionManager* reflection_manager, 
+		const Reflection::ReflectionType* type, 
+		Stream<SerializeOmitField> omit_fields,
+		bool write_tags
+	)
 	{
 		uintptr_t dummy = 0;
-		return WriteTypeTableWithSerializers<false>(reflection_manager, type, dummy, omit_fields);
+		return WriteTypeTableWithSerializers<false>(reflection_manager, type, dummy, omit_fields, write_tags);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -904,6 +939,7 @@ namespace ECSEngine {
 		DeserializeOptions _nested_options;
 		DeserializeOptions* nested_options = &_nested_options;
 		nested_options->field_table = &deserialize_table;
+		nested_options->version = -1;
 
 		if (has_options) {
 			nested_options = &_nested_options;
@@ -915,6 +951,7 @@ namespace ECSEngine {
 			nested_options->read_type_table = false;
 			nested_options->verify_dependent_types = false;
 			nested_options->omit_fields = omit_fields;
+			nested_options->version = options->version;
 		}
 
 		auto deserialize_incompatible_basic = [](uintptr_t& data, void* field_data, const DeserializeFieldInfo& file_info, const ReflectionFieldInfo& type_info) {
@@ -1477,7 +1514,8 @@ namespace ECSEngine {
 	size_t DeserializeFieldTableFromDataImplementation(
 		uintptr_t& data,
 		DeserializeFieldTable::Type* type,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		const DeserializeFieldTableOptions* options
 	) {
 		uintptr_t initial_data = data;
 
@@ -1486,8 +1524,18 @@ namespace ECSEngine {
 
 		// Read the type name
 		ReferenceDataWithSizeShort<true>(&data, &main_type_name, main_type_name_size);
+		type->name = { main_type_name, main_type_name_size / sizeof(char) };
 
-		type->name = { main_type_name, main_type_name_size };
+		if (options->read_type_tags) {
+			unsigned short main_type_tag_size = 0;
+			void* main_type_tag = nullptr;
+			ReferenceDataWithSizeShort<true>(&data, &main_type_tag, main_type_tag_size);
+			type->tag = { main_type_tag, main_type_tag_size / sizeof(char) };
+		}
+		else {
+			type->tag = { nullptr, 0 };
+		}
+
 		// The field count
 		size_t field_count = 0;
 		Read<true>(&data, &field_count, sizeof(field_count));
@@ -1500,7 +1548,17 @@ namespace ECSEngine {
 			// The name first
 			unsigned short field_name_size = 0;
 			ReferenceDataWithSizeShort<true>(&data, (void**)&type->fields[index].name.buffer, field_name_size);
-			type->fields[index].name.size = field_name_size;
+			type->fields[index].name.size = field_name_size / sizeof(char);
+
+			// The tag now
+			if (options->read_type_tags) {
+				unsigned short tag_name_size = 0;
+				ReferenceDataWithSizeShort<true>(&data, (void**)&type->fields[index].tag.buffer, tag_name_size);
+				type->fields[index].tag.size = tag_name_size / sizeof(char);
+			}
+			else {
+				type->fields[index].tag = { nullptr, 0 };
+			}
 
 			Read<true>(&data, &type->fields[index].stream_type, sizeof(type->fields[index].stream_type));
 			Read<true>(&data, &type->fields[index].stream_byte_size, sizeof(type->fields[index].stream_byte_size));
@@ -1539,7 +1597,8 @@ namespace ECSEngine {
 	template<bool read_data>
 	DeserializeFieldTable DeserializeFieldTableFromDataRecursive(
 		uintptr_t& data, 
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		const DeserializeFieldTableOptions* options
 	)
 	{
 		DeserializeFieldTable field_table;
@@ -1548,6 +1607,10 @@ namespace ECSEngine {
 
 		// Allocate DESERIALIZE_FIELD_TABLE_MAX_TYPES and fail if there are more
 		field_table.types.buffer = (DeserializeFieldTable::Type*)Allocate(allocator, sizeof(DeserializeFieldTable::Type) * DESERIALIZE_FIELD_TABLE_MAX_TYPES);
+
+		// Firstly the serialize version
+		Read<true>(&data, &field_table.serialize_version, sizeof(field_table.serialize_version));
+		field_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
 
 		unsigned int custom_serializer_count = 0;
 		Read<true>(&data, &custom_serializer_count, sizeof(custom_serializer_count));
@@ -1599,8 +1662,12 @@ namespace ECSEngine {
 			}
 		}
 
+		DeserializeFieldTableOptions temp_options;
+		temp_options.version = field_table.serialize_version;
+		temp_options.read_type_tags = DeserializeFieldTableReadTags(options);
+
 		field_table.types.size = 1;
-		size_t read_size = DeserializeFieldTableFromDataImplementation<read_data>(data, field_table.types.buffer, allocator);
+		size_t read_size = DeserializeFieldTableFromDataImplementation<read_data>(data, field_table.types.buffer, allocator, &temp_options);
 		if (read_size == -1) {
 			field_table.types.size = 0;
 			return field_table;
@@ -1683,7 +1750,7 @@ namespace ECSEngine {
 
 			// Only if the type was not yet read do it
 			if (index == field_table.types.size) {
-				size_t read_size = DeserializeFieldTableFromDataImplementation<read_data>(data, field_table.types.buffer + field_table.types.size, allocator);
+				size_t read_size = DeserializeFieldTableFromDataImplementation<read_data>(data, field_table.types.buffer + field_table.types.size, allocator, &temp_options);
 				if (read_size == -1) {
 					field_table.types.size = -1;
 					return field_table;
@@ -1709,32 +1776,32 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	DeserializeFieldTable DeserializeFieldTableFromData(uintptr_t& data, AllocatorPolymorphic allocator)
+	DeserializeFieldTable DeserializeFieldTableFromData(uintptr_t& data, AllocatorPolymorphic allocator, const DeserializeFieldTableOptions* options)
 	{
-		return DeserializeFieldTableFromDataRecursive<true>(data, allocator);
+		return DeserializeFieldTableFromDataRecursive<true>(data, allocator, options);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeFieldTableFromDataSize(uintptr_t data)
+	size_t DeserializeFieldTableFromDataSize(uintptr_t data, const DeserializeFieldTableOptions* options)
 	{
 		const size_t STACK_ALLOCATION_CAPACITY = ECS_KB * 8;
 
 		void* stack_allocation = ECS_STACK_ALLOC(sizeof(char) * STACK_ALLOCATION_CAPACITY);
 		LinearAllocator allocator(stack_allocation, STACK_ALLOCATION_CAPACITY);
 
-		return DeserializeFieldTableFromDataRecursive<false>(data, GetAllocatorPolymorphic(&allocator)).types.size;
+		return DeserializeFieldTableFromDataRecursive<false>(data, GetAllocatorPolymorphic(&allocator), options).types.size;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	void IgnoreDeserialize(uintptr_t& data)
+	void IgnoreDeserialize(uintptr_t& data, const DeserializeFieldTableOptions* options)
 	{
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 
 		DeserializeFieldTable field_table;
 		field_table = DeserializeFieldTableFromData(data, GetAllocatorPolymorphic(&stack_allocator));
-		IgnoreDeserialize(data, field_table);
+		IgnoreDeserialize(data, field_table, options);
 
 		stack_allocator.ClearBackup();
 	}
@@ -1743,11 +1810,14 @@ namespace ECSEngine {
 
 	void IgnoreDeserialize(
 		uintptr_t& data, 
-		DeserializeFieldTable field_table, 
+		DeserializeFieldTable field_table,
+		const DeserializeFieldTableOptions* options,
 		const ReflectionManager* deserialized_manager, 
 		Stream<DeserializeTypeNameRemapping> name_remappings
 	)
 	{
+		field_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
+
 		ReflectionManager temp_manager;
 		size_t stack_allocation_size = deserialized_manager == nullptr ? ECS_KB * 32 : 0;
 		void* stack_allocation = ECS_STACK_ALLOC(stack_allocation_size);
@@ -2078,16 +2148,6 @@ namespace ECSEngine {
 		for (size_t index = 0; index < types.size; index++) {
 			reflection_types.AddAssert(reflection_manager->type_definitions.GetValuePtr(types[index].name));
 		}
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	AllocatorPolymorphic DeserializeOptions::GetFieldAllocator(ReflectionStreamFieldType field_type, const void* data) const
-	{
-		if (field_type == ReflectionStreamFieldType::ResizableStream && use_resizable_stream_allocator) {
-			return ((ResizableStream<void>*)data)->allocator;
-		}
-		return field_allocator;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------

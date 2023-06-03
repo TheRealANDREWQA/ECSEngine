@@ -1531,7 +1531,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 
 #pragma endregion
 
-template<bool (*CreateFunction)(const EditorState*, Stream<wchar_t>)>
+template<bool (*CreateFunction)(const EditorState*, Stream<wchar_t>, WindowTable*)>
 struct CreateAssetFileStruct {
 	static void Function(ActionData* action_data) {
 		UI_UNPACK_ACTION_DATA;
@@ -1543,9 +1543,12 @@ struct CreateAssetFileStruct {
 		absolute_path.Add(ECS_OS_PATH_SEPARATOR);
 		function::ConvertASCIIToWide(absolute_path, *additional_data);
 
+		unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+		WindowTable* window_table = system->GetWindowTable(window_index);
+
 		Stream<wchar_t> relative_path = GetProjectAssetRelativePath(editor_state, absolute_path);
 
-		bool success = CreateFunction(editor_state, relative_path);
+		bool success = CreateFunction(editor_state, relative_path, window_table);
 		if (!success) {
 			ECS_FORMAT_TEMP_STRING(error_message, "Failed to create asset file {#}.", absolute_path);
 			EditorSetConsoleError(error_message);
@@ -1605,16 +1608,62 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 			
 #pragma endregion
 
-#pragma region Deslection Handlers - Create submenu
+#pragma region Deselection Handlers - Create submenu
 
 			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
 			data->deselection_create_menu_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
 
+			constexpr auto create_sampler_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
+				return CreateSamplerFile(editor_state, relative_path);
+			};
+
+#define SHADER_INPUT_RESOURCE_NAME "SHADER_TYPE_INPUT"
+
+			constexpr auto create_shader_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
+				ECS_SHADER_TYPE shader_type = *(ECS_SHADER_TYPE*)window_table->GetValue(SHADER_INPUT_RESOURCE_NAME);
+				return CreateShaderFile(editor_state, relative_path, shader_type);
+			};
+
+			constexpr auto create_material_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
+				return CreateMaterialFile(editor_state, relative_path);
+			};
+
+			constexpr auto create_misc_file = [](const EditorState* editor_state, Stream<wchar_t> relative_path, WindowTable* window_table) {
+				return CreateMiscFile(editor_state, relative_path);
+			};
+
 			data->deselection_create_menu_handler_data = (TextInputWizardData*)drawer.GetMainAllocatorBuffer(sizeof(TextInputWizardData) * FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
-			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SAMPLER] = { "Sampler name", "Choose a name", CreateAssetFileStruct<CreateSamplerFile>::Function, editor_state, 0 };
-			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER] = { "Shader name", "Choose a name", CreateAssetFileStruct<CreateShaderFile>::Function, editor_state, 0 };
-			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_MATERIAL] = { "Material name", "Choose a name", CreateAssetFileStruct<CreateMaterialFile>::Function, editor_state, 0 };
-			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_MISC] = { "Misc name", "Choose a name", CreateAssetFileStruct<CreateMiscFile>::Function, editor_state, 0 };;
+			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SAMPLER] = { "Sampler name", "Choose a name", CreateAssetFileStruct<create_sampler_file>::Function, editor_state, 0 };
+			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER] = { "Shader name", "Choose a name", CreateAssetFileStruct<create_shader_file>::Function, editor_state, 0 };
+			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_MATERIAL] = { "Material name", "Choose a name", CreateAssetFileStruct<create_material_file>::Function, editor_state, 0 };
+			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_MISC] = { "Misc name", "Choose a name", CreateAssetFileStruct<create_misc_file>::Function, editor_state, 0 };;
+			
+			auto shader_file_input = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				UIDrawer* drawer = (UIDrawer*)_data;
+				EditorState* editor_state = (EditorState*)_additional_data;
+				ECS_SHADER_TYPE* shader_type = nullptr;
+				if (drawer->initializer) {
+					shader_type = drawer->GetMainAllocatorBufferAndStoreAsResource<ECS_SHADER_TYPE>(SHADER_INPUT_RESOURCE_NAME);
+					*shader_type = ECS_SHADER_TYPE_COUNT;
+				}
+				else {
+					shader_type = (ECS_SHADER_TYPE*)drawer->GetResource(SHADER_INPUT_RESOURCE_NAME);
+				}
+
+				UIConfigWindowDependentSize window_dependent_size;
+				UIDrawConfig config;
+				config.AddFlag(window_dependent_size);
+
+				ECS_STACK_CAPACITY_STREAM(Stream<char>, labels, ECS_ASSET_TYPE_COUNT + 1);
+				Stream<Stream<char>> shader_type_labels = editor_state->ReflectionManager()->GetEnum(STRING(ECS_SHADER_TYPE))->fields;
+				labels.Copy(shader_type_labels);
+				labels.Add("Unspecified");
+				drawer->ComboBox(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Shader Type", labels, labels.size, (unsigned char*)shader_type);
+			};
+
+			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER].AddExtraElement(shader_file_input, editor_state, 0);
 
 			data->deselection_create_menu_handlers[DESELECTION_MENU_CREATE_SCENE] = { CreateEmptySceneAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 

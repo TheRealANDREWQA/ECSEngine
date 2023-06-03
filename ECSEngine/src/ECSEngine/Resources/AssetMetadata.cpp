@@ -282,22 +282,27 @@ namespace ECSEngine {
 										other->buffers[shader][buffer_index].reflection_type
 									);
 									if (same_reflection_type) {
-										// Compare the instance data
-										bool same_instance_data = Reflection::CompareReflectionTypeInstances(
-											reflection_manager,
+										bool same_tags = Reflection::CompareReflectionTypesTags(
 											buffers[shader][index].reflection_type,
-											buffers[shader][index].data.buffer,
-											other->buffers[shader][buffer_index].data.buffer
+											other->buffers[shader][buffer_index].reflection_type,
+											true,
+											true
 										);
-										if (!same_instance_data) {
-											result.buffers_different = true;
-										}
-										else {
-											// Test the tags now
-											if (buffers[shader][index].tags != other->buffers[shader][buffer_index].tags) {
+										if (same_tags) {
+											// Compare the instance data
+											bool same_instance_data = Reflection::CompareReflectionTypeInstances(
+												reflection_manager,
+												buffers[shader][index].reflection_type,
+												buffers[shader][index].data.buffer,
+												other->buffers[shader][buffer_index].data.buffer
+											);
+											if (!same_instance_data) {
 												result.buffers_different = true;
 											}
-										}									
+										}
+										else {
+											result.buffers_different = true;
+										}
 									}
 									else {
 										result.buffers_different = true;
@@ -390,11 +395,6 @@ namespace ECSEngine {
 
 					// If they have different byte representation, then they are different
 					if (memcmp(buffer->data.buffer, other_buffer->data.buffer, buffer->data.size) != 0) {
-						return false;
-					}
-
-					// If their tags are different, then they are different
-					if (buffer->tags != other_buffer->tags) {
 						return false;
 					}
 				}
@@ -520,7 +520,6 @@ namespace ECSEngine {
 			}
 			for (size_t index = 0; index < buffers[type].size; index++) {
 				material.buffers[type][index].name = function::StringCopy(allocator, buffers[type][index].name);
-				material.buffers[type][index].tags = function::StringCopy(allocator, buffers[type][index].tags);
 				material.buffers[type][index].data.buffer = Allocate(allocator, buffers[type][index].data.size);
 				// At the moment consider everything blittable
 				memcpy(material.buffers[type][index].data.buffer, buffers[type][index].data.buffer, buffers[type][index].data.size);
@@ -590,7 +589,6 @@ namespace ECSEngine {
 			for (size_t index = 0; index < buffers[shader].size; index++) {
 				ECS_ASSERT(buffers[shader][index].name.DeallocateIfBelongs(allocator));
 				ECS_ASSERT(DeallocateIfBelongs(allocator, buffers[shader][index].data.buffer));
-				buffers[shader][index].tags.DeallocateIfBelongs(allocator);
 				if (include_reflection_type) {
 					if (buffers[shader][index].reflection_type != nullptr) {
 						buffers[shader][index].reflection_type->Deallocate(allocator);

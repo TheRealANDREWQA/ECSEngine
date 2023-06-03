@@ -71,6 +71,7 @@ struct InspectorDrawMaterialFileData {
 	Timer timer[ORDER_COUNT];
 	void* shader_override_data[ORDER_COUNT];
 	size_t shader_stamp[ORDER_COUNT];
+	size_t metadata_shader_stamp[ORDER_COUNT];
 
 	// This is kept in sync with material_asset.buffers
 	Stream<Reflection::ReflectionType> cbuffers[ORDER_COUNT];
@@ -226,7 +227,6 @@ void RegisterNewCBuffers(
 		new_buffers[index].slot = new_reflected_buffers[index].register_index;
 		new_buffers[index].dynamic = true;
 		new_buffers[index].name = function::StringCopy(current_allocator, new_cbuffers[index].name);
-		new_buffers[index].tags = function::StringCopy(current_allocator, new_reflected_buffers[index].tags);
 
 		// Set the default values for that type
 		draw_data->material_asset.reflection_manager->SetInstanceDefaultData(new_cbuffers.buffer + index, new_buffers[index].data.buffer);
@@ -297,20 +297,28 @@ void RegisterNewCBuffers(
 		);
 
 		ECS_STACK_CAPACITY_STREAM(unsigned int, ignore_type_fields, 512);
-		GetConstantBufferInjectTagFieldsFromTypeTag(new_cbuffers.buffer + index, &ignore_type_fields);
+		GetConstantBufferInjectTagFieldsFromType(new_cbuffers.buffer + index, &ignore_type_fields);
 
 		UIReflectionDrawerCreateTypeOptions create_options;
 		create_options.identifier_name = ui_type_name;
 		create_options.ignore_fields = ignore_type_fields;
 		UIReflectionType* ui_type = draw_data->editor_state->ui_reflection->CreateType(draw_data->cbuffers[order].buffer + index, &create_options);
-		// Add matrix types if any
+		// Add matrix types if any - if they are not skipped by the inject fields
 		for (size_t subindex = 0; subindex < matrix_types[index].size; subindex++) {
-			UIReflectionTypeFieldGrouping grouping;
-			grouping.field_index = matrix_types[index][subindex].position.x;
-			grouping.range = matrix_types[index][subindex].position.y;
-			grouping.name = matrix_types[index][subindex].name;
-			grouping.per_element_name = "row";
-			draw_data->editor_state->ui_reflection->AddTypeGrouping(ui_type, grouping);
+			bool is_injected = function::SearchBytes(
+				ignore_type_fields.buffer, 
+				ignore_type_fields.size, 
+				matrix_types[index][subindex].position.x, 
+				sizeof(matrix_types[index][subindex].position.x)
+			) != -1;
+			if (!is_injected) {
+				UIReflectionTypeFieldGrouping grouping;
+				grouping.field_index = matrix_types[index][subindex].position.x;
+				grouping.range = matrix_types[index][subindex].position.y;
+				grouping.name = matrix_types[index][subindex].name;
+				grouping.per_element_name = "row";
+				draw_data->editor_state->ui_reflection->AddTypeGrouping(ui_type, grouping);
+			}
 		}
 
 		UIReflectionInstance* instance = draw_data->editor_state->ui_reflection->CreateInstance(ui_type_name, ui_type, ui_type_name);
@@ -597,10 +605,34 @@ void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_i
 				if (data->shader_stamp[index] == 0 || data->shader_stamp[index] == -1 || new_shader_stamp > data->shader_stamp[index]) {
 					bool read_success = reload_shader(shader_path, order);
 					if (!read_success) {
-						data->shader_stamp[index] == -1;
+						data->shader_stamp[index] = -1;
 					}
 					else {
 						data->shader_stamp[index] = new_shader_stamp;
+					}
+				}
+				else {
+					// Verify the metadata file now
+					ECS_STACK_CAPACITY_STREAM(wchar_t, metadata_file, 512);
+					Stream<char> asset_name = data->temporary_database.GetAssetName(current_handle, ECS_ASSET_SHADER);
+					data->temporary_database.FileLocationShader(asset_name, shader_file, metadata_file);
+					size_t new_metadata_time_stamp = OS::GetFileLastWrite(metadata_file);
+					if (data->metadata_shader_stamp[index] == 0 || data->metadata_shader_stamp[index] == -1 || new_metadata_time_stamp > data->metadata_shader_stamp[index]) {
+						// Reload the shader
+						bool success = data->temporary_database.UpdateAssetFromFile(GetShaderHandle(data, order), ECS_ASSET_SHADER);
+						if (success) {
+							bool read_success = reload_shader(shader_path, order);
+							if (!read_success) {
+								data->metadata_shader_stamp[index] = -1;
+							}
+							else {
+								data->metadata_shader_stamp[index] = new_metadata_time_stamp;
+							}
+						}
+						else {
+							// If it failed, at the moment, don't do anything
+							data->metadata_shader_stamp[index] = -1;
+						}
 					}
 				}
 			}
@@ -835,7 +867,7 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 
 				UIDrawConfig config;
 				UIConfigNamePadding name_padding;
-				name_padding.total_length = 0.25f;
+				name_padding.total_length = 0.22f;
 				config.AddFlag(name_padding);
 				UIConfigWindowDependentSize window_dependent;
 				config.AddFlag(window_dependent);
@@ -940,7 +972,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 
 	// Allocate the data and embedd the path in it
 	// Later on. It is fine to read from the stack more bytes
-	inspector_index = ChangeInspectorDrawFunctionWithSearch(
+	uint3 found_inspector_index = ChangeInspectorDrawFunctionWithSearchEx(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawMaterialFile, InspectorCleanMaterial },
@@ -953,7 +985,8 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 		}
 	);
 
-	if (inspector_index != -1) {
+	if (found_inspector_index.x == -1 && found_inspector_index.y != -1) {
+		inspector_index = found_inspector_index.y;
 		// Get the data and set the path
 		AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 		
@@ -980,6 +1013,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 			draw_data->textures[index].size = 0;
 			draw_data->samplers[index].size = 0;
 			draw_data->shader_stamp[index] = 0;
+			draw_data->metadata_shader_stamp[index] = 0;
 			draw_data->shader_collapsing_header_state[index] = false;
 
 			// Create the shader allocators

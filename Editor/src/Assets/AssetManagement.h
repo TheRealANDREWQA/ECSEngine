@@ -82,7 +82,7 @@ bool CreateSamplerFile(const EditorState* editor_state, Stream<wchar_t> relative
 
 // The path does not need to have the extension. It will be appended automatically
 // This is a forwarding file (it contains the path to the target)
-bool CreateShaderFile(const EditorState* editor_state, Stream<wchar_t> relative_path);
+bool CreateShaderFile(const EditorState* editor_state, Stream<wchar_t> relative_path, ECS_SHADER_TYPE shader_type = ECS_SHADER_TYPE_COUNT);
 
 // The path does not need to have the extension. It will be appended automatically
 // This is a forwarding file (it contains the path to the target)
@@ -91,6 +91,10 @@ bool CreateMiscFile(const EditorState* editor_state, Stream<wchar_t> relative_pa
 // This only creates the disk file for the new setting. It does not add it to the database
 // Returns true if it succeeded else false
 bool CreateAssetSetting(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
+
+// This only creates the disk file for the new setting. It does not add it to the database
+// Returns true if it succeeded else false
+bool CreateShaderSetting(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_SHADER_TYPE shader_type);
 
 // Returns true if it succeeded, else false.
 // This doesn't check the prevent resource load flag and wait until is cleared

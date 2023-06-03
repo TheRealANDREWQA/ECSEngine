@@ -1361,6 +1361,29 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		Stream<char> SkipTag(Stream<char> characters)
+		{
+			Stream<char> code_identifier = SkipWhitespace(characters);
+			Stream<char> code_identifier_end = SkipCodeIdentifier(code_identifier);
+			if (code_identifier_end.size > 0) {
+				Stream<char> opened_parenthesis = SkipWhitespace(code_identifier_end);
+				if (opened_parenthesis.size > 0) {
+					if (opened_parenthesis.buffer[0] == '(') {
+						Stream<char> closing_parenthesis = FindMatchingParenthesis(opened_parenthesis, '(', ')', 0);
+						if (closing_parenthesis.size > 0) {
+							return closing_parenthesis.AdvanceReturn();
+						}
+					}
+					else {
+						return opened_parenthesis;
+					}
+				}
+			}
+			return { nullptr, 0 };
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		Stream<char> SkipUntilCharacterReverse(const char* string, const char* bound, char character)
 		{
 			const char* initial_string = string;

@@ -19,7 +19,7 @@ namespace ECSEngine {
 		// Can tell the UI the default value + the bounds for that element(ints, floats and doubles)
 #define ECS_UI_PARAMETERS_REFLECT(default_value, lower_bound, upper_bound)
 
-		enum class UIReflectionIndex : unsigned char {
+		enum class UIReflectionElement : unsigned char {
 			FloatSlider,
 			DoubleSlider,
 			IntegerSlider,
@@ -59,9 +59,10 @@ namespace ECSEngine {
 			void* data;
 			Stream<char> name;
 			UIReflectionStreamType stream_type;
-			UIReflectionIndex reflection_index;
+			UIReflectionElement element_index;
 			unsigned short byte_size;
-			unsigned int pointer_offset;
+			unsigned short pointer_offset;
+			unsigned short reflection_type_index;
 		};
 
 		// Only drawer will be called, the initializer is not involved
@@ -159,7 +160,7 @@ namespace ECSEngine {
 #define ECS_UI_REFLECTION_DRAW_CONFIG_MAX_COUNT 8
 
 		struct UIReflectionDrawConfig {
-			UIReflectionIndex index[ECS_UI_REFLECTION_DRAW_CONFIG_MAX_COUNT];
+			UIReflectionElement index[ECS_UI_REFLECTION_DRAW_CONFIG_MAX_COUNT];
 			void* configs[ECS_UI_REFLECTION_DRAW_CONFIG_MAX_COUNT];
 			size_t config_size[ECS_UI_REFLECTION_DRAW_CONFIG_MAX_COUNT];
 			size_t associated_bits[ECS_UI_REFLECTION_DRAW_CONFIG_MAX_COUNT];
@@ -235,9 +236,9 @@ namespace ECSEngine {
 		void* extra_data \
 		)
 
-		// These replace a certain UIReflectionIndex default draw
+		// These replace a certain UIReflectionElement default draw
 		struct UIReflectionInstanceDrawCustomFunctors {
-			UIReflectionInstanceDrawCustom functions[(unsigned char)UIReflectionIndex::Count] = { nullptr };
+			UIReflectionInstanceDrawCustom functions[(unsigned char)UIReflectionElement::Count] = { nullptr };
 			void* extra_data = nullptr;
 		};
 
@@ -585,7 +586,7 @@ namespace ECSEngine {
 			unsigned int GetTypeCount() const;
 			unsigned int GetInstanceCount() const;
 
-			void GetTypeMatchingFields(const UIReflectionType* type, UIReflectionIndex index, CapacityStream<unsigned int>& indices) const;
+			void GetTypeMatchingFields(const UIReflectionType* type, UIReflectionElement index, CapacityStream<unsigned int>& indices) const;
 			void GetTypeMatchingFields(const UIReflectionType* type, UIReflectionStreamType stream_type, CapacityStream<unsigned int>& indices) const;
 
 			// Returns the current bound stream for the TextInput/DirectoryInput/FileInput

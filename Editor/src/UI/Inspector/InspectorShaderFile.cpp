@@ -162,6 +162,7 @@ void MacroInputCallback(ActionData* action_data) {
 	changed_data.asset = &data->data->shader_metadata;
 	changed_data.previous_name = data->data->shader_metadata.name;
 	changed_data.previous_target_file = data->data->shader_metadata.file;
+	changed_data.target_database = data->editor_state->asset_database;
 	// The thunk file is not needed
 	action_data->data = &changed_data;
 	AssetSettingsHelperChangedWithFileAction(action_data);
@@ -257,6 +258,14 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 					data->shader_macros[index].definition_stream.Copy(data->shader_metadata.macros[index].definition);
 				}
 				data->shader_macros.size = data->shader_metadata.macros.size;
+			}		
+		}
+
+		// Determine the shader type
+		ECS_SHADER_TYPE shader_type = AssetExtensionTypeShader(function::PathExtension(data->path));
+		if (shader_type != ECS_SHADER_TYPE_COUNT) {
+			if (shader_type != data->shader_metadata.shader_type) {
+				data->shader_metadata.shader_type = shader_type;
 			}
 		}
 
@@ -418,8 +427,12 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 	combo_callback.handler = modified_callback;
 	config.AddFlag(combo_callback);
 
+	UIConfigActiveState active_state;
+	active_state.state = false;
+	config.AddFlag(active_state);
+
 	drawer->ComboBox(
-		BASE_CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK,
+		BASE_CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK | UI_CONFIG_ACTIVE_STATE,
 		config,
 		"Shader Type",
 		shader_type_enum_->fields,
@@ -427,6 +440,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 		(unsigned char*)&data->shader_metadata.shader_type
 	);
 	drawer->NextRow();
+	config.flag_count--;
 
 	drawer->ComboBox(
 		BASE_CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK,
@@ -652,7 +666,7 @@ void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path
 
 	// Allocate the data and embedd the path in it
 	// Later on. It is fine to read from the stack more bytes
-	inspector_index = ChangeInspectorDrawFunctionWithSearch(
+	uint3 inspector_indices = ChangeInspectorDrawFunctionWithSearchEx(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawShaderFile, InspectorCleanShader },
@@ -665,9 +679,9 @@ void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path
 		}
 	);
 
-	if (inspector_index != -1) {
+	if (inspector_indices.x == -1 && inspector_indices.y != -1) {
 		// Get the data and set the path
-		InspectorDrawShaderFileData* draw_data = (InspectorDrawShaderFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
+		InspectorDrawShaderFileData* draw_data = (InspectorDrawShaderFileData*)GetInspectorDrawFunctionData(editor_state, inspector_indices.y);
 		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.Copy(path);
 	}

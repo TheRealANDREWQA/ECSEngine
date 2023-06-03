@@ -1320,6 +1320,19 @@ namespace ECSEngine {
 			drawer.TextInput(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, data->input_name, &data->input_stream);
 			drawer.NextRow();
 
+			ActionData extra_action_data = drawer.GetDummyActionData();
+			for (unsigned char index = 0; index < data->extra_draw_element_count; index++) {
+				extra_action_data.data = &drawer;
+				if (data->extra_draw_elements_data[index] == nullptr) {
+					extra_action_data.additional_data = function::OffsetPointer(data->extra_draw_elements_storage, data->extra_draw_elements_data_offset[index]);
+				}
+				else {
+					extra_action_data.additional_data = data->extra_draw_elements_data[index];
+				}
+				data->extra_draw_elements[index](&extra_action_data);
+				drawer.NextRow();
+			}
+
 			UIConfigAbsoluteTransform absolute_transform;
 			absolute_transform.scale = drawer.GetLabelScale("OK");
 			absolute_transform.position = drawer.GetAlignedToBottom(absolute_transform.scale.y);
@@ -2281,6 +2294,24 @@ namespace ECSEngine {
 		}
 
 		// -------------------------------------------------------------------------------------------------------
+
+		void TextInputWizardData::AddExtraElement(Action extra_element, void* data, size_t data_size)
+		{
+			ECS_ASSERT(extra_draw_element_count < ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_CAPACITY);
+
+			extra_draw_elements[extra_draw_element_count] = extra_element;
+			if (data_size == 0) {
+				extra_draw_elements_data[extra_draw_element_count] = data;
+			}
+			else {
+				extra_draw_elements_data[extra_draw_element_count] = nullptr;
+				memcpy(function::OffsetPointer(extra_draw_elements_storage, extra_draw_element_storage_offset), data, data_size);
+				extra_draw_elements_data_offset[extra_draw_element_count] = extra_draw_element_storage_offset;
+				extra_draw_element_storage_offset += data_size;
+				ECS_ASSERT(extra_draw_element_storage_offset <= ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_STORAGE_CAPACITY);
+			}
+			extra_draw_element_count++;
+		}
 
 	}
 

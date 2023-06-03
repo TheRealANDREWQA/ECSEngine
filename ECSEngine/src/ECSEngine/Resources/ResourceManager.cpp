@@ -1854,18 +1854,12 @@ namespace ECSEngine {
 			}
 
 			// Check for tags
-			ECS_STACK_CAPACITY_STREAM(Stream<char>, separated_tags, 16);
-			if (user_material->buffers[index].tags.size > 0) {
-				if (user_material->buffers[index].tag_separator.size > 0) {
-					function::SplitString(user_material->buffers[index].tags, user_material->buffers[index].tag_separator, separated_tags);
-				}
-				else {
-					separated_tags.Add(user_material->buffers[index].tags);
-				}
-			}
-
-			for (unsigned int subindex = 0; subindex < separated_tags.size; subindex++) {
-				converted_material->AddTag(separated_tags[subindex], user_material->buffers[index].shader_type == ECS_SHADER_VERTEX);
+			for (unsigned int subindex = 0; subindex < user_material->buffers[index].tags.size; subindex++) {
+				converted_material->AddTag(
+					user_material->buffers[index].tags[subindex].string, 
+					user_material->buffers[index].tags[subindex].byte_offset, 
+					user_material->buffers[index].shader_type == ECS_SHADER_VERTEX
+				);
 			}
 		}
 	}

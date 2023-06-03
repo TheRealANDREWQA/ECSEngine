@@ -12,20 +12,15 @@ const char* INJECT_TAGS[] = {
 
 namespace ECSEngine {
 
-	void GetConstantBufferInjectTagFieldsFromTypeTag(const Reflection::ReflectionType* type, CapacityStream<unsigned int>* fields)
+	void GetConstantBufferInjectTagFieldsFromType(const Reflection::ReflectionType* type, CapacityStream<unsigned int>* fields)
 	{
-		if (type->tag.size > 0) {
-			function::ForEach(INJECT_TAGS, [&](const char* tag) {
-				Stream<char> existing_tag = type->GetTag(tag, ECS_SHADER_REFLECTION_CONSTANT_BUFFER_TAG_DELIMITER);
-				if (existing_tag.size > 0) {
-					Stream<char> parentheses = function::GetStringParameter(existing_tag);
-					unsigned short byte_offset = (unsigned short)function::ConvertCharactersToInt(parentheses);
-					for (size_t index = 0; index < type->fields.size; index++) {
-						if (type->fields[index].info.pointer_offset == byte_offset) {
-							fields->AddAssert(index);
-						}
-					}
+		for (size_t index = 0; index < type->fields.size; index++) {
+			function::ForEach<true>(INJECT_TAGS, [&](const char* inject_tag) {
+				if (type->fields[index].Has(inject_tag)) {
+					fields->AddAssert(index);
+					return true;
 				}
+				return false;
 			});
 		}
 	}
