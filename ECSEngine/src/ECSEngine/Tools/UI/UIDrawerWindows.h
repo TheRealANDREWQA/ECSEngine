@@ -136,14 +136,29 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+#define ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_CAPACITY 2
+#define ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_STORAGE_CAPACITY 16
+
 		// The callback receives the char stream through the additional_data parameter
-		struct TextInputWizardData {
+		// The extra draw elements receive the drawer in the _data argument and in the _additional_data
+		// the data that was passed in at creation time
+		struct ECSENGINE_API TextInputWizardData {
+			void AddExtraElement(Action extra_element, void* data, size_t data_size);
+
 			const char* input_name;
 			const char* window_name;
 			Action callback;
 			void* callback_data;
 			size_t callback_data_size;
 			CapacityStream<char> input_stream = { nullptr, 0, 0 }; // Does not need to be initialized - it is used internally
+
+			Action extra_draw_elements[ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_CAPACITY];
+			void* extra_draw_elements_data[ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_CAPACITY];
+			unsigned char extra_draw_elements_data_offset[ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_CAPACITY];
+			unsigned char extra_draw_element_count = 0;
+			unsigned short extra_draw_element_storage_offset = 0;
+
+			size_t extra_draw_elements_storage[ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_STORAGE_CAPACITY];
 		};
 
 		ECSENGINE_API void TextInputWizard(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);

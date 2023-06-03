@@ -17,6 +17,7 @@ namespace ECSEngine {
 	struct DeserializeFieldInfo {
 		Stream<char> name;
 		Stream<char> definition;
+		Stream<char> tag;
 		Reflection::ReflectionBasicFieldType basic_type;
 		Reflection::ReflectionStreamFieldType stream_type;
 		unsigned short stream_byte_size;
@@ -34,6 +35,7 @@ namespace ECSEngine {
 		struct Type {
 			Stream<DeserializeFieldInfo> fields;
 			Stream<char> name;
+			Stream<char> tag;
 		};
 
 		unsigned int TypeIndex(Stream<char> type_name) const;
@@ -64,6 +66,7 @@ namespace ECSEngine {
 		// Fills in the types that came from this deserialize table
 		void ExtractTypesFromReflection(Reflection::ReflectionManager* reflection_manager, CapacityStream<Reflection::ReflectionType*> types) const;
 
+		unsigned int serialize_version;
 		Stream<Type> types;
 		// Each serializer has the version written at the beginning
 		Stream<unsigned int> custom_serializers;
@@ -88,6 +91,7 @@ namespace ECSEngine {
 
 	// Header: optionally write a header into the serialization
 	// Write_Type_Table: write at the beginning of the section the field names and the corresponding types
+	// Write_Type_Table_Tags: write type tags and fields tags to the file in the header table
 	// Verify_Dependent_Types: if you want to skip the check, set this to false
 	// Allocator: an allocator to be used for writing the whole data in memory for commiting then into a file
 	// OmitFields: optionally tell the serializer to omit fields of certain types
@@ -95,6 +99,7 @@ namespace ECSEngine {
 	struct SerializeOptions {
 		Stream<void> header = { nullptr, 0 };
 		bool write_type_table = true;
+		bool write_type_table_tags = false;
 		bool verify_dependent_types = true;
 
 		AllocatorPolymorphic allocator = { nullptr };
@@ -103,10 +108,12 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message = nullptr;
 	};
 
+	// Version: If left at -1, it will deserialize based on the version in the file, else it will use the version given
 	// Header: optionally read a header from the data
 	// Field_Table: it is used to validate that the data inside the file conforms and to help patch up the read
 	// if the data layout has changed. Can also be used to force the read of incompatible types
 	// Read_Type_Table: read the table at the beginning and read off the fields that match the signature
+	// Read_Type_Table_Tags: if the file was written with tags, this will make sure to parse them correctly
 	// Fail_If_Field_Mismatch: the read will fail if one of the fields has a mismatched type inside the type table
 	// Verify_Dependent_Types: if you want to disable this check, set this to false
 	// Use_Resizable_Stream_Allocator: use the allocator set for that stream instead of the given field_allocator
@@ -121,7 +128,14 @@ namespace ECSEngine {
 	// Error_Message: a stream where an error message will be written if one occurs
 	struct DeserializeOptions {
 		// It returns the field allocator according to the given options
-		AllocatorPolymorphic GetFieldAllocator(Reflection::ReflectionStreamFieldType field_type, const void* data) const;
+		ECS_INLINE AllocatorPolymorphic GetFieldAllocator(Reflection::ReflectionStreamFieldType field_type, const void* data) const {
+			if (field_type == Reflection::ReflectionStreamFieldType::ResizableStream && use_resizable_stream_allocator) {
+				return ((ResizableStream<void>*)data)->allocator;
+			}
+			return field_allocator;
+		}
+
+		unsigned int version = -1;
 
 		Stream<void> header = { nullptr, 0 };
 
@@ -130,6 +144,7 @@ namespace ECSEngine {
 		Reflection::ReflectionManager* deserialized_field_manager = nullptr;
 
 		bool read_type_table = true;
+		bool read_type_table_tags = false;
 		bool fail_if_field_mismatch = false;
 		bool verify_dependent_types = true;
 		bool use_resizable_stream_allocator = false;
@@ -202,13 +217,15 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
 		uintptr_t& stream,
-		Stream<SerializeOmitField> omit_fields = { nullptr, 0 }
+		Stream<SerializeOmitField> omit_fields = { nullptr, 0 },
+		bool write_tags = false
 	); 
 
 	ECSENGINE_API size_t SerializeFieldTableSize(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
-		Stream<SerializeOmitField> omit_fields = { nullptr, 0 }
+		Stream<SerializeOmitField> omit_fields = { nullptr, 0 },
+		bool write_tags = false
 	);
 
 	// It reads the whole file into a temporary buffer and then deserializes from memory
@@ -251,24 +268,45 @@ namespace ECSEngine {
 		ECS_DESERIALIZE_CODE* code = nullptr
 	);
 
+	struct DeserializeFieldTableOptions {
+		unsigned int version = -1;
+		bool read_type_tags = false;
+	};
+
+	ECS_INLINE unsigned int DeserializeFieldTableVersion(unsigned int file_version, const DeserializeFieldTableOptions* options) {
+		unsigned int version = -1;
+		if (options != nullptr) {
+			version = options->version;
+		}
+		return version == -1 ? file_version : version;
+	}
+
+	ECS_INLINE bool DeserializeFieldTableReadTags(const DeserializeFieldTableOptions* options) {
+		return options != nullptr ? options->read_type_tags : false;
+	}
+
 	// Streams will be written into the memory allocator
 	// A good default capacity should be ECS_KB * 8 for it
 	// If the type size is 0 it means that the table has been corrupted
 	ECSENGINE_API DeserializeFieldTable DeserializeFieldTableFromData(
 		uintptr_t& data,
-		AllocatorPolymorphic memory
+		AllocatorPolymorphic memory,
+		const DeserializeFieldTableOptions* options = nullptr
 	);
 
 	// Returns how many bytes from the data are occupied by the type table in order to skip it
 	// If it returns -1 then the field table is corrupted and the data size cannot be determined
 	ECSENGINE_API size_t DeserializeFieldTableFromDataSize(
-		uintptr_t data
+		uintptr_t data,
+		const DeserializeFieldTableOptions* options = nullptr
 	);
 
 	// It will ignore the current type + the deserialize field table
 	// Suitable for ignoring a single type at a time
+	// If the version is left at -1, it will use the version from the field table
 	ECSENGINE_API void IgnoreDeserialize(
-		uintptr_t& data
+		uintptr_t& data,
+		const DeserializeFieldTableOptions* options = nullptr
 	);
 
 	// It will ignore the current type. It must be placed after the deserialize table has been called on the
@@ -277,6 +315,7 @@ namespace ECSEngine {
 	ECSENGINE_API void IgnoreDeserialize(
 		uintptr_t& data,
 		DeserializeFieldTable field_table,
+		const DeserializeFieldTableOptions* options = nullptr,
 		const Reflection::ReflectionManager* deserialized_manager = nullptr,
 		Stream<DeserializeTypeNameRemapping> name_remapping = { nullptr, 0 }
 	);

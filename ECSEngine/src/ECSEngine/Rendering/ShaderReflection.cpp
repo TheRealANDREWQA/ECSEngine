@@ -283,6 +283,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	};
 
 	// It will parse the color tags as well
+	// If it contains miscellaneous tags, it will reference the string in the file
 	void ParseShaderReflectionConstantBufferFieldTags(
 		ShaderReflectionConstantBufferField* field,
 		const char* semicolon,
@@ -291,99 +292,111 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		Stream<char> ignore_tag = "_";
 
 		Stream<char> parse_range = { semicolon + 1, function::PointerDifference(new_line, semicolon + 1) / sizeof(char) };
+		parse_range = function::SkipWhitespace(parse_range);
 
-		// Get the default value and mins first.
-		// If it is a color afterwards we need to modify the default value
+		while (parse_range.size > 0) {
+			Stream<char> current_tag = parse_range;
+			Stream<char> current_tag_end = function::SkipTag(current_tag);
+			current_tag.size -= current_tag_end.size;
+			parse_range = current_tag_end;
 
-		Stream<char> current_token = STRING(ECS_REFLECT_RANGE);
-		Stream<char> token = function::FindFirstToken(parse_range, current_token);
-		if (token.size > 0) {
-			// Consider this for integers and floats only that are vectors of at max 4 components
-			if (field->basic_type != Reflection::ReflectionBasicFieldType::UserDefined && field->basic_component_count == 1) {
-				token.Advance(current_token.size + 1);
-				token.size--;
+			// Get the default value and mins first.
+			// If it is a color afterwards we need to modify the default value
+			Stream<char> current_token = STRING(ECS_REFLECT_RANGE);
+			if (current_tag == current_token) {
+				// Consider this for integers and floats only that are vectors of at max 4 components
+				if (field->basic_type != Reflection::ReflectionBasicFieldType::UserDefined && field->basic_component_count == 1) {
+					current_tag.Advance(current_token.size + 1);
+					current_tag.size--;
 
-				ECS_STACK_CAPACITY_STREAM(double4, parsed_values, 2);
-				function::ParseDouble4s(token, parsed_values, ',', ',', ignore_tag);
-				field->min_value = parsed_values[0];
-				field->max_value = parsed_values[1];
-			}
-		}
-
-		current_token = STRING(ECS_REFLECT_DEFAULT);
-		token = function::FindFirstToken(parse_range, current_token);
-		if (token.size > 0) {
-			token.Advance(current_token.size + 1);
-			token.size--;
-
-			CapacityStream<double4> default_values;
-			default_values.InitializeFromBuffer(field->default_value, 0, 4);
-			function::ParseDouble4s(token, default_values, ',', ',', ignore_tag);
-			ECS_ASSERT(default_values.size == field->basic_component_count);
-		}
-
-		current_token = STRING(ECS_REFLECT_PARAMETERS);
-		token = function::FindFirstToken(parse_range, current_token);
-		if (token.size > 0) {
-			// Consider this only for integers and floats that are vectors of at max 4 components
-			if (field->basic_type != Reflection::ReflectionBasicFieldType::UserDefined && field->basic_component_count == 1) {
-				token.Advance(current_token.size + 1);
-				token.size--;
-
-				ECS_STACK_CAPACITY_STREAM(double4, all_values, 3);
-				function::ParseDouble4s(token, all_values, ',', ',', ignore_tag);
-				field->default_value[0] = all_values[0];
-				field->min_value = all_values[1];
-				field->max_value = all_values[2];
-			}
-		}
-
-		token = function::FindFirstToken(parse_range, STRING(ECS_REFLECT_AS_COLOR));
-		if (token.size > 0) {
-			// Consider this only if a float3 or float4
-			if ((field->basic_type == Reflection::ReflectionBasicFieldType::Float3 || field->basic_type == Reflection::ReflectionBasicFieldType::Float4)
-				&& field->basic_component_count == 1) {
-
-				// If the field is a float3, then also add the float3 color tag
-				if (field->basic_type == Reflection::ReflectionBasicFieldType::Float3) {
-					field->tag = COLOR_FLOAT3_TAG;
+					ECS_STACK_CAPACITY_STREAM(double4, parsed_values, 2);
+					function::ParseDouble4s(current_tag, parsed_values, ',', ',', ignore_tag);
+					field->min_value = parsed_values[0];
+					field->max_value = parsed_values[1];
 				}
+			}
+			else {
+				current_token = STRING(ECS_REFLECT_DEFAULT);
+				if (current_tag == current_token) {
+					current_tag.Advance(current_token.size + 1);
+					current_tag.size--;
 
-				field->basic_type = Reflection::ReflectionBasicFieldType::UserDefined;
-				field->definition = STRING(Color);
+					CapacityStream<double4> default_values;
+					default_values.InitializeFromBuffer(field->default_value, 0, 4);
+					function::ParseDouble4s(current_tag, default_values, ',', ',', ignore_tag);
+					ECS_ASSERT(default_values.size == field->basic_component_count);
+				}
+				else {
+					current_token = STRING(ECS_REFLECT_PARAMETERS);
+					if (current_tag == current_token) {
+						// Consider this only for integers and floats that are vectors of at max 4 components
+						if (field->basic_type != Reflection::ReflectionBasicFieldType::UserDefined && field->basic_component_count == 1) {
+							current_token.Advance(current_token.size + 1);
+							current_token.size--;
 
-				// Convert the default value, if any
-				if (field->default_value[0].x != DBL_MAX) {
-					if (field->default_value[0].x < 1.0 || field->default_value[0].y < 1.0 || field->default_value[0].z < 1.0 || field->default_value[0].w < 1.0) {
-						// Bring the values into the 0 - 255 range
-						double range = 255.0;
-						field->default_value[0].x *= range;
-						field->default_value[0].y *= range;
-						field->default_value[0].z *= range;
-						field->default_value[0].w *= range;
+							ECS_STACK_CAPACITY_STREAM(double4, all_values, 3);
+							function::ParseDouble4s(current_token, all_values, ',', ',', ignore_tag);
+							field->default_value[0] = all_values[0];
+							field->min_value = all_values[1];
+							field->max_value = all_values[2];
+						}
 					}
+					else {
+						current_token = STRING(ECS_REFLECT_AS_COLOR);
+						if (current_tag == current_token) {
+							// Consider this only if a float3 or float4
+							if ((field->basic_type == Reflection::ReflectionBasicFieldType::Float3 || field->basic_type == Reflection::ReflectionBasicFieldType::Float4)
+								&& field->basic_component_count == 1) {
 
-					// We need to copy this value back into the field default value
-					Color color_value = (double*)field->default_value;
-					memcpy(field->default_value, &color_value, sizeof(Color));
-				}
-			}
-		}
-		
-		token = function::FindFirstToken(parse_range, STRING(ECS_REFLECT_AS_FLOAT_COLOR));
-		if (token.size > 0) {
-			if ((field->basic_type == Reflection::ReflectionBasicFieldType::Float3 || field->basic_type == Reflection::ReflectionBasicFieldType::Float4)
-				&& field->basic_component_count == 1) {
-				if (field->basic_type == Reflection::ReflectionBasicFieldType::Float3) {
-					field->tag = COLOR_FLOAT3_TAG;
-				}
+								// If the field is a float3, then also add the float3 color tag
+								if (field->basic_type == Reflection::ReflectionBasicFieldType::Float3) {
+									field->tag = COLOR_FLOAT3_TAG;
+								}
 
-				field->basic_type = Reflection::ReflectionBasicFieldType::UserDefined;
-				field->definition = STRING(ColorFloat);
+								field->basic_type = Reflection::ReflectionBasicFieldType::UserDefined;
+								field->definition = STRING(Color);
 
-				if (field->default_value[0].x != DBL_MAX) {
-					ColorFloat color_float = (double*)field->default_value;
-					memcpy(field->default_value, &color_float, sizeof(ColorFloat));
+								// Convert the default value, if any
+								if (field->default_value[0].x != DBL_MAX) {
+									if (field->default_value[0].x < 1.0 || field->default_value[0].y < 1.0 || field->default_value[0].z < 1.0 || field->default_value[0].w < 1.0) {
+										// Bring the values into the 0 - 255 range
+										double range = 255.0;
+										field->default_value[0].x *= range;
+										field->default_value[0].y *= range;
+										field->default_value[0].z *= range;
+										field->default_value[0].w *= range;
+									}
+
+									// We need to copy this value back into the field default value
+									Color color_value = (double*)field->default_value;
+									memcpy(field->default_value, &color_value, sizeof(Color));
+								}
+							}
+						}
+						else {
+							current_token = STRING(ECS_REFLECT_AS_FLOAT_COLOR);
+							if (current_tag == current_token) {
+								if ((field->basic_type == Reflection::ReflectionBasicFieldType::Float3 || field->basic_type == Reflection::ReflectionBasicFieldType::Float4)
+									&& field->basic_component_count == 1) {
+									if (field->basic_type == Reflection::ReflectionBasicFieldType::Float3) {
+										field->tag = COLOR_FLOAT3_TAG;
+									}
+
+									field->basic_type = Reflection::ReflectionBasicFieldType::UserDefined;
+									field->definition = STRING(ColorFloat);
+
+									if (field->default_value[0].x != DBL_MAX) {
+										ColorFloat color_float = (double*)field->default_value;
+										memcpy(field->default_value, &color_float, sizeof(ColorFloat));
+									}
+								}
+							}
+							else {
+								// Miscellaneous tag
+								field->tag = current_tag;
+							}
+						}
+					}
 				}
 			}
 		}
@@ -513,6 +526,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			shader_field->name.CopyTo(reflection_fields[0].name.buffer);
 			reflection_fields[0].name.size = shader_field->name.size;
 			reflection_fields[0].name.Add(' ');
+			reflection_fields[0].tag = function::StringCopy(allocator, shader_field->tag);
 			function::ConvertIntToChars(reflection_fields[0].name, 0);
 
 			// Copy the first field to all the other
@@ -523,8 +537,9 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				reflection_fields[index].name.size = shader_field->name.size;
 				reflection_fields[index].name.Add(' ');
 				function::ConvertIntToChars(reflection_fields[index].name, index);
-				// Copy the definition such that on deallocation everything is homogeneous
+				// Copy the definition and the tag such that on deallocation everything is homogeneous
 				reflection_fields[index].definition = function::StringCopy(allocator, shader_field->definition);
+				reflection_fields[index].tag = function::StringCopy(allocator, shader_field->tag);
 
 				// Check to see if it has a default value
 				if (shader_field->default_value[0].x != DBL_MAX) {
@@ -1882,6 +1897,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			memcpy(copy->fields.buffer + index, reflection_type->fields.buffer + index, sizeof(Reflection::ReflectionField));
 			copy->fields[index].name.InitializeAndCopy(allocator, reflection_type->fields[index].name);
 			copy->fields[index].definition.InitializeAndCopy(allocator, reflection_type->fields[index].definition);
+			copy->fields[index].tag.InitializeAndCopy(allocator, reflection_type->fields[index].tag);
 		}
 	}
 

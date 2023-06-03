@@ -384,14 +384,12 @@ namespace ECSEngine {
 
 	// Constant buffer description
 	// If it is dynamic, the data can be missing (the size must still be specified,
-	// the pointer can be nullptr then). The tags is optional and is used to be passed
-	// down to the material that this buffer needs some special treatment
+	// the pointer can be nullptr then).
 	// The reflection type can be missing
 	struct MaterialAssetBuffer {
 		Reflection::ReflectionType* reflection_type = nullptr;
 		Stream<char> name;
 		Stream<void> data;
-		Stream<char> tags = { nullptr, 0 };
 		bool dynamic;
 		unsigned char slot;
 	};

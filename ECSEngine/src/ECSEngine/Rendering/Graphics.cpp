@@ -787,8 +787,13 @@ namespace ECSEngine {
 		// For strings that are nullptr or of size 0, redirect them to this
 		char empty_string = '\0';
 		ECS_ASSERT(options.macros.size <= std::size(macros) - 1);
+		ECS_STACK_CAPACITY_STREAM(char, null_terminated_strings, ECS_KB * 8);
+
 		for (size_t index = 0; index < options.macros.size; index++) {
-			macros[index].Name = options.macros[index].name.buffer;
+			// Write the strings into a temp buffer and null terminate them
+			macros[index].Name = null_terminated_strings.buffer + null_terminated_strings.size;
+			null_terminated_strings.AddStreamAssert(options.macros[index].name);
+			null_terminated_strings.Add('\0');
 			macros[index].Definition = options.macros[index].definition.size == 0 ? &empty_string : options.macros[index].definition.buffer;
 		}
 		macros[options.macros.size] = { NULL, NULL };

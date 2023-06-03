@@ -1091,12 +1091,13 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	void Material::AddTag(Stream<char> tag, unsigned char* tag_count, uchar2* tags)
+	void Material::AddTag(Stream<char> tag, unsigned short byte_offset, unsigned char* tag_count, uchar2* tags, unsigned short* byte_offsets)
 	{
 		ECS_ASSERT(*tag_count < ECS_MATERIAL_VERTEX_TAG_COUNT);
 		ECS_ASSERT((size_t)tag_storage_size + tag.size < ECS_MATERIAL_TAG_STORAGE_CAPACITY);
 		tags[*tag_count].x = tag_storage_size;
 		tags[*tag_count].y = (unsigned char)tag.size;
+		byte_offsets[*tag_count] = byte_offset;
 		(*tag_count)++;
 		tag_storage_size += tag.size;
 	}

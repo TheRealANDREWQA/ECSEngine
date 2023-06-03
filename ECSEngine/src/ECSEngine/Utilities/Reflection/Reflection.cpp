@@ -4871,6 +4871,31 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		bool CompareReflectionTypesTags(const ReflectionType* first, const ReflectionType* second, bool type_tags, bool field_tags)
+		{
+			if (type_tags) {
+				if (first->tag != second->tag) {
+					return false;
+				}
+			}
+
+			if (field_tags) {
+				if (first->fields.size != second->fields.size) {
+					return false;
+				}
+
+				for (size_t index = 0; index < first->fields.size; index++) {
+					if (first->fields[index].tag != second->fields[index].tag) {
+						return false;
+					}
+				}
+			}
+
+			return true;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool CompareReflectionFieldInfoInstances(const ReflectionFieldInfo* info, const void* first, const void* second, bool offset_into_data)
 		{
 			if (info->basic_type != ReflectionBasicFieldType::UserDefined) {

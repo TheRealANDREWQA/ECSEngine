@@ -830,15 +830,13 @@ void FinishReloadAsset(EditorState* editor_state, Stream<UpdateAssetToComponentE
 		// Proceed with the re-rendering of the sandboxes which use these assets
 		// Re-render both the scene and the runtime
 		for (unsigned int index = 0; index < update_dirty_sandboxes.size; index++) {
-			RenderSandbox(editor_state, update_dirty_sandboxes[index], EDITOR_SANDBOX_VIEWPORT_SCENE);
-			RenderSandbox(editor_state, update_dirty_sandboxes[index], EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+			RenderSandboxViewports(editor_state, update_dirty_sandboxes[index]);
 		}
 	}
 	
 	// Now re-render the external dirty sandboxes
 	for (unsigned int index = 0; index < dirty_sandboxes.size; index++) {
-		RenderSandbox(editor_state, dirty_sandboxes[index], EDITOR_SANDBOX_VIEWPORT_SCENE);
-		RenderSandbox(editor_state, dirty_sandboxes[index], EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		RenderSandboxViewports(editor_state, dirty_sandboxes[index]);
 	}
 }
 

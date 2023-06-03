@@ -138,10 +138,12 @@ namespace ECSEngine {
 			SerializeOptions options;
 			options.write_type_table = false;
 			options.verify_dependent_types = false;
+			options.write_type_table_tags = false;
 
 			if (data->write_data->options != nullptr) {
 				options.error_message = data->write_data->options->error_message;
 				options.omit_fields = data->write_data->options->omit_fields;
+				options.write_type_table_tags = data->write_data->options->write_type_table_tags;
 			}
 
 			if (data->write_data->write_data) {
@@ -343,6 +345,7 @@ namespace ECSEngine {
 				options.field_table = data->read_data->options->field_table;
 				options.omit_fields = data->read_data->options->omit_fields;
 				options.deserialized_field_manager = data->read_data->options->deserialized_field_manager;
+				options.version = data->read_data->options->version;
 			}
 
 			if (data->read_data->read_data) {

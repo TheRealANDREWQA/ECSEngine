@@ -1337,23 +1337,23 @@ namespace ECSEngine {
 		Material& operator = (const Material& other) = default;
 
 	private:
-		void AddTag(Stream<char> tag, unsigned char* tag_count, uchar2* tags);
+		void AddTag(Stream<char> tag, unsigned short byte_offset, unsigned char* tag_count, uchar2* tags, unsigned short* byte_offsets);
 	public:
 
-		ECS_INLINE void AddVertexTag(Stream<char> tag) {
-			AddTag(tag, &v_tag_count, v_tags);
+		ECS_INLINE void AddVertexTag(Stream<char> tag, unsigned short byte_offset) {
+			AddTag(tag, byte_offset, &v_tag_count, v_tags, v_tag_byte_offset);
 		}
 
-		ECS_INLINE void AddPixelTag(Stream<char> tag) {
-			AddTag(tag, &p_tag_count, p_tags);
+		ECS_INLINE void AddPixelTag(Stream<char> tag, unsigned short byte_offset) {
+			AddTag(tag, byte_offset, &p_tag_count, p_tags, p_tag_byte_offset);
 		}
 
-		ECS_INLINE void AddTag(Stream<char> tag, bool is_vertex) {
+		ECS_INLINE void AddTag(Stream<char> tag, unsigned short byte_offset, bool is_vertex) {
 			if (is_vertex) {
-				AddVertexTag(tag);
+				AddVertexTag(tag, byte_offset);
 			}
 			else {
-				AddPixelTag(tag);
+				AddPixelTag(tag, byte_offset);
 			}
 		}
 
@@ -1400,6 +1400,14 @@ namespace ECSEngine {
 
 		ECS_INLINE Stream<char> GetPixelTag(unsigned char index) const {
 			return GetTag(index, p_tags);
+		}
+		
+		ECS_INLINE unsigned short GetVertexTagByteOffset(unsigned char index) const {
+			return v_tag_byte_offset[index];
+		}
+
+		ECS_INLINE unsigned short GetPixelTagByteOffset(unsigned char index) const {
+			return p_tag_byte_offset[index];
 		}
 
 		ECS_INLINE void ResetVertexShader() {
@@ -1462,6 +1470,8 @@ namespace ECSEngine {
 		char tag_storage[ECS_MATERIAL_TAG_STORAGE_CAPACITY];
 		uchar2 v_tags[ECS_MATERIAL_VERTEX_TAG_COUNT];
 		uchar2 p_tags[ECS_MATERIAL_PIXEL_TAG_COUNT];
+		unsigned short v_tag_byte_offset[ECS_MATERIAL_VERTEX_TAG_COUNT];
+		unsigned short p_tag_byte_offset[ECS_MATERIAL_PIXEL_TAG_COUNT];
 	};
 
 	struct PBRMaterial {
@@ -1496,6 +1506,11 @@ namespace ECSEngine {
 		ECS_TEXTURE_COMPRESSION_EX compression = (ECS_TEXTURE_COMPRESSION_EX)0;
 	};
 
+	struct UserMaterialBufferTag {
+		Stream<char> string;
+		unsigned short byte_offset;
+	};
+
 	// The data size needs to be know in order to allocate correctly the buffer. If the
 	// data buffer is nullptr then there will be no copy of the data (so it cannot be static)
 	struct UserMaterialBuffer {
@@ -1503,10 +1518,7 @@ namespace ECSEngine {
 		unsigned char slot;
 		bool dynamic;
 		ECS_SHADER_TYPE shader_type;
-		// This can be an aggregate list of tags that can be split using the tag_separator
-		Stream<char> tags = {};
-		// If this is left at {nullptr, 0}, then it will assume that there are no separators
-		Stream<char> tag_separator = {};
+		Stream<UserMaterialBufferTag> tags = { nullptr, 0 };
 	};
 
 	struct UserMaterialSampler {

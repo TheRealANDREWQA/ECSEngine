@@ -324,6 +324,8 @@ void AddComponentCallback(ActionData* action_data) {
 	AddComponentCallbackData* data = (AddComponentCallbackData*)_data;
 	Stream<char> link_target = data->editor_state->editor_components.GetComponentFromLink(data->component_name);
 	AddSandboxEntityComponentEx(data->editor_state, data->sandbox_index, data->entity, link_target.size > 0 ? link_target : data->component_name);
+	// Re-render the sandbox as well
+	RenderSandboxViewports(data->editor_state, data->sandbox_index);
 };
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -348,6 +350,8 @@ void RemoveComponentCallback(ActionData* action_data) {
 		data->draw_data->RemoveComponent(data->editor_state, data->component_name);
 	}
 	RemoveSandboxEntityComponentEx(data->editor_state, data->sandbox_index, data->draw_data->entity, data->component_name);
+	// Re-render the sandbox as well
+	RenderSandboxViewports(data->editor_state, data->sandbox_index);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -637,7 +641,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	};
 
 	auto draw_component = [&](ComponentSignature signature, bool shared, unsigned int header_state_offset, auto get_current_data) {
-		UIReflectionDrawConfig ui_draw_configs[(unsigned int)UIReflectionIndex::Count];
+		UIReflectionDrawConfig ui_draw_configs[(unsigned int)UIReflectionElement::Count];
 		memset(ui_draw_configs, 0, sizeof(ui_draw_configs));
 
 		void* ui_draw_configs_stack_memory = ECS_STACK_ALLOC(ECS_KB);
@@ -720,11 +724,11 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 					const UIReflectionType* ui_type = ui_drawer->GetType(instance->type_name);
 
 					ECS_STACK_CAPACITY_STREAM(unsigned int, input_indices, 64);
-					ui_drawer->GetTypeMatchingFields(ui_type, UIReflectionIndex::TextInput, input_indices);
+					ui_drawer->GetTypeMatchingFields(ui_type, UIReflectionElement::TextInput, input_indices);
 					unsigned int text_input_count = input_indices.size;
-					ui_drawer->GetTypeMatchingFields(ui_type, UIReflectionIndex::DirectoryInput, input_indices);
+					ui_drawer->GetTypeMatchingFields(ui_type, UIReflectionElement::DirectoryInput, input_indices);
 					unsigned int directory_input_count = input_indices.size - text_input_count;
-					ui_drawer->GetTypeMatchingFields(ui_type, UIReflectionIndex::FileInput, input_indices);
+					ui_drawer->GetTypeMatchingFields(ui_type, UIReflectionElement::FileInput, input_indices);
 					unsigned int file_input_count = input_indices.size - text_input_count - directory_input_count;
 					data->SetComponentInputCount(editor_state, current_component_name, input_indices.size);
 

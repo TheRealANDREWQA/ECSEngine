@@ -20,76 +20,78 @@ ECS_THREAD_TASK(PerformTask) {
 
 template<bool schedule_element>
 ECS_THREAD_TASK(RenderTask) {
-	world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.5f, 0.6f, 1.0f, 1.0f));
+	if constexpr (!schedule_element) {
+		world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.5f, 0.6f, 1.0f, 1.0f));
 
-	Camera camera;
+		Camera camera;
 
-	if (GetRuntimeCamera(world->system_manager, camera)) {
-		camera.translation.z -= 5.0f;
-		Matrix camera_matrix = camera.GetViewProjectionMatrix();
+		if (GetRuntimeCamera(world->system_manager, camera)) {
+			camera.translation.z -= 5.0f;
+			Matrix camera_matrix = camera.GetViewProjectionMatrix();
 
-		ForEachEntityCommit<QueryRead<RenderMesh>, QueryRead<Translation>>::Function(world, [camera_matrix](
-			ForEachEntityData* for_each_data, 
-			const RenderMesh& mesh, 
-			Translation translation
-		) {
-			Timer timer;
+			ForEachEntityCommit<QueryRead<RenderMesh>, QueryRead<Translation>>::Function(world, [camera_matrix](
+				ForEachEntityData* for_each_data,
+				const RenderMesh& mesh,
+				Translation translation
+				) {
+					Timer timer;
 
-			World* world = for_each_data->world;
-			DebugDrawer* debug_drawer = world->debug_drawer;
+					World* world = for_each_data->world;
+					DebugDrawer* debug_drawer = world->debug_drawer;
 
-			debug_drawer->UpdateCameraMatrix(camera_matrix);
-			
-			/*debug_drawer->AddAxes({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-			debug_drawer->AddAxes({ 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-			debug_drawer->AddAxes({ 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-			debug_drawer->AddAxes({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-			debug_drawer->AddAxes({ 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-			debug_drawer->DrawAxesDeck(1.0f);*/
-			
-			/*debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 1.0f, ColorFloat(0.5f, 0.2f, 1.0f));
-			debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 2.0f, ColorFloat(0.5f, 0.5f, 1.0f));
-			debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 3.0f, ColorFloat(0.5f, 0.8f, 1.0f));
-			debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 4.0f, ColorFloat(0.8f, 0.2f, 1.0f));
-			debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 5.0f, ColorFloat(0.5f, 0.2f, 0.5f));
-			debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 6.0f, ColorFloat(0.5f, 0.2f, 0.0f));*/
+					debug_drawer->UpdateCameraMatrix(camera_matrix);
 
-			/*debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 1.0f, ColorFloat(0.5f, 0.2f, 1.0f));
-			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 2.0f, ColorFloat(0.5f, 0.5f, 1.0f));
-			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 3.0f, ColorFloat(0.5f, 0.8f, 1.0f));
-			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 4.0f, ColorFloat(0.8f, 0.2f, 1.0f));
-			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 5.0f, ColorFloat(0.5f, 0.2f, 0.5f));
-			debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 6.0f, ColorFloat(0.5f, 0.2f, 0.0f));
-			debug_drawer->DrawSphereDeck(1.0f);*/
+					/*debug_drawer->AddAxes({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
+					debug_drawer->AddAxes({ 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
+					debug_drawer->AddAxes({ 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
+					debug_drawer->AddAxes({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
+					debug_drawer->AddAxes({ 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
+					debug_drawer->DrawAxesDeck(1.0f);*/
 
-			Graphics* graphics = for_each_data->world->graphics;
-			if (IsAssetPointerValid(mesh.material) && IsAssetPointerValid(mesh.mesh)) {
-				graphics->BindRasterizerState(debug_drawer->rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID]);
-				Matrix object_matrix = MatrixTranslation(translation.value);
-				ConstantBuffer temp_buffer = Shaders::CreatePBRVertexConstants(graphics, true);
-				Matrix mvp_matrix = object_matrix * camera_matrix;
-				Shaders::SetPBRVertexConstants(temp_buffer, graphics, object_matrix, mvp_matrix);
+					/*debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 1.0f, ColorFloat(0.5f, 0.2f, 1.0f));
+					debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 2.0f, ColorFloat(0.5f, 0.5f, 1.0f));
+					debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 3.0f, ColorFloat(0.5f, 0.8f, 1.0f));
+					debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 4.0f, ColorFloat(0.8f, 0.2f, 1.0f));
+					debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 5.0f, ColorFloat(0.5f, 0.2f, 0.5f));
+					debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 6.0f, ColorFloat(0.5f, 0.2f, 0.0f));*/
 
-				graphics->BindMesh(mesh.mesh->mesh);
-				graphics->BindMaterial(*mesh.material);
+					/*debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 1.0f, ColorFloat(0.5f, 0.2f, 1.0f));
+					debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 2.0f, ColorFloat(0.5f, 0.5f, 1.0f));
+					debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 3.0f, ColorFloat(0.5f, 0.8f, 1.0f));
+					debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 4.0f, ColorFloat(0.8f, 0.2f, 1.0f));
+					debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 5.0f, ColorFloat(0.5f, 0.2f, 0.5f));
+					debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 6.0f, ColorFloat(0.5f, 0.2f, 0.0f));
+					debug_drawer->DrawSphereDeck(1.0f);*/
 
-				graphics->BindVertexConstantBuffer(temp_buffer);
-				graphics->EnableDepth();
-				graphics->DrawCoallescedMeshCommand(*mesh.mesh);
-				
-				temp_buffer.Release();
-			}
+					Graphics* graphics = for_each_data->world->graphics;
+					if (IsAssetPointerValid(mesh.material) && IsAssetPointerValid(mesh.mesh)) {
+						graphics->BindRasterizerState(debug_drawer->rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID]);
+						Matrix object_matrix = MatrixTranslation(translation.value);
+						ConstantBuffer temp_buffer = Shaders::CreatePBRVertexConstants(graphics, true);
+						Matrix mvp_matrix = object_matrix * camera_matrix;
+						Shaders::SetPBRVertexConstants(temp_buffer, graphics, object_matrix, mvp_matrix);
 
-			//size_t duration = timer.GetDuration(ECS_TIMER_DURATION_US);
-			//ECS_FORMAT_TEMP_STRING(message, "Duration: {#}", duration);
-			//GetConsole()->Info(message);
-			//OutputDebugStringA()
-		});
-		//world->task_manager->AddDynamicTaskGroup(WITH_NAME(PerformTask), nullptr, std::thread::hardware_concurrency(), 0);
-		//world->graphics->GetContext()->Flush();
+						graphics->BindMesh(mesh.mesh->mesh);
+						graphics->BindMaterial(*mesh.material);
+
+						graphics->BindVertexConstantBuffer(temp_buffer);
+						graphics->EnableDepth();
+						graphics->DrawCoallescedMeshCommand(*mesh.mesh);
+
+						temp_buffer.Release();
+					}
+
+					//size_t duration = timer.GetDuration(ECS_TIMER_DURATION_US);
+					//ECS_FORMAT_TEMP_STRING(message, "Duration: {#}", duration);
+					//GetConsole()->Info(message);
+					//OutputDebugStringA()
+				});
+			//world->task_manager->AddDynamicTaskGroup(WITH_NAME(PerformTask), nullptr, std::thread::hardware_concurrency(), 0);
+			//world->graphics->GetContext()->Flush();
+		}
+
+		world->graphics->GetContext()->Flush();
 	}
-
-	world->graphics->GetContext()->Flush();
 }
 
 ECS_THREAD_TASK_TEMPLATE_BOOL(RenderTask);

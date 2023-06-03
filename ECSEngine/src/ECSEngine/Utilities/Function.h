@@ -125,7 +125,7 @@ namespace ECSEngine {
 		}
 
 		// Given a fresh buffer, it will set the destinations accordingly
-		inline void CopyPointersFromBuffer(Stream<CopyPointer> copy_data, void* data) {
+		ECS_INLINE void CopyPointersFromBuffer(Stream<CopyPointer> copy_data, void* data) {
 			uintptr_t ptr = (uintptr_t)data;
 			for (size_t index = 0; index < copy_data.size; index++) {
 				*copy_data[index].destination = (void*)ptr;
@@ -220,7 +220,7 @@ namespace ECSEngine {
 		// This is an implementation version because if use this version then we can't have
 		// conversions between capacity streams and normal streams.
 		template<typename CharacterType>
-		inline bool StringIsLessImpl(Stream<CharacterType> string, Stream<CharacterType> comparator) {
+		ECS_INLINE bool StringIsLessImpl(Stream<CharacterType> string, Stream<CharacterType> comparator) {
 			for (size_t index = 0; index < string.size && index < comparator.size; index++) {
 				if (string[index] < comparator[index]) {
 					return true;
@@ -844,6 +844,9 @@ namespace ECSEngine {
 		// and return the value into stream.buffer + stream.size. Example |hey   value| ->
 		// will be returned as |hey   | -> stream.buffer = 'h', stream.buffer + stream.size = ' '
 		ECSENGINE_API Stream<char> SkipCodeIdentifier(Stream<char> characters, int increment = 1);
+
+		// It will skip both parameterized and non-parameterized tags
+		ECSENGINE_API Stream<char> SkipTag(Stream<char> characters);
 
 		// Returns the string that is delimited by the character in reverse order
 		ECSENGINE_API Stream<char> SkipUntilCharacterReverse(const char* string, const char* bound, char character);

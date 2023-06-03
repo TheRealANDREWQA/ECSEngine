@@ -496,6 +496,16 @@ bool RenderSandbox(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns true if all renders were successful, else false. It will render all viewports of that sandbox
+bool RenderSandboxViewports(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::uint2 new_size = { 0, 0 },
+	bool disable_logging = false
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // The new size needs to be specified in texels
 void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, ECSEngine::uint2 new_size);
 

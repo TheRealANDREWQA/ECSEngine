@@ -13,6 +13,8 @@ namespace ECSEngine {
 #define ECS_SHADER_MAX_SAMPLER_SLOT 16
 #define ECS_SHADER_MAX_TEXTURE_SLOT 128
 
+#define ECS_SHADER_REFLECTION_CONSTANT_BUFFER_TAG_DELIMITER "___"
+
 	enum ShaderReflectionFloatFormatTableType : unsigned char {
 		ECS_SHADER_REFLECTION_FLOAT,
 		ECS_SHADER_REFLECTION_UNORM_8,
@@ -66,8 +68,7 @@ namespace ECSEngine {
 		ECS_SHADER_BUFFER_COUNT
 	};
 
-	// Byte size is useful only for constant buffers in order to create them directly
-	// on the Graphics object
+	// Byte size is useful only for constant buffers in order to create them directly on the Graphics object
 	// Also tags can be added to buffer descriptions - they can be parameterized tags as well
 	struct ECSENGINE_API ShaderReflectedBuffer {
 		// Returns { nullptr, 0 } if it doesn't exist

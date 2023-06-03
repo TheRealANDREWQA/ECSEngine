@@ -6,6 +6,6 @@
 // For all of these macros there needs to be specified the byte offset
 // At the moment in hlsl there are no variadic macros to make this optional
 
-#define ECS_INJECT_CAMERA_POSITION(offset)
-#define ECS_INJECT_OBJECT_MATRIX(offset)
-#define ECS_INJECT_MVP_MATRIX(offset)
+#define ECS_INJECT_CAMERA_POSITION
+#define ECS_INJECT_OBJECT_MATRIX
+#define ECS_INJECT_MVP_MATRIX

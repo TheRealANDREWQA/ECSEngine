@@ -498,11 +498,21 @@ namespace ECSEngine {
 		ECSENGINE_API void SetReflectionFieldResizableStreamVoidEx(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data, bool offset_into_data = true);
 
 		// Returns true if both types are the same in their respective reflection managers
+		// (It does not compare tags)
 		ECSENGINE_API bool CompareReflectionTypes(
 			const ReflectionManager* first_reflection_manager,
 			const ReflectionManager* second_reflection_manager,
 			const ReflectionType* first, 
 			const ReflectionType* second
+		);
+
+		// Returns true if the tags in both types are the same. Can choose which tags to compare
+		// If they have different number of fields and testing for field tags it will return false
+		ECSENGINE_API bool CompareReflectionTypesTags(
+			const ReflectionType* first,
+			const ReflectionType* second,
+			bool type_tags,
+			bool field_tags
 		);
 
 		// Returns true if the instances of the reflection field match. Does not work for user defined types that are

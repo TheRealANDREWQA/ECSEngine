@@ -4,7 +4,7 @@
 cbuffer Matrices : register(b0)
 {
     float4x4 object_matrix : packoffset(c0);
-    float4x4 world_view_projection_matrix : packoffset(c4);
+    float4x4 world_view_projection_matrix : packoffset(c4); ECS_INJECT_MVP_MATRIX
     float2 uv_tiling : packoffset(c8.x);
     float2 uv_offset : packoffset(c8.z);
 }

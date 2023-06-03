@@ -101,16 +101,18 @@ namespace ECSEngine {
 			// Returns -1 if it fails, else 0
 			auto write_buffer_data = [&](size_t index) {
 				MaterialAssetBuffer buffer = asset->buffers[type][index];
+				SerializeOptions serialize_options;
+				serialize_options.write_type_table_tags = true;
 				
 				auto serialize = [&]() {
 					if (data->write_data) {
-						ECS_SERIALIZE_CODE code = Serialize(asset->reflection_manager, buffer.reflection_type, buffer.data.buffer, *data->stream);
+						ECS_SERIALIZE_CODE code = Serialize(asset->reflection_manager, buffer.reflection_type, buffer.data.buffer, *data->stream, &serialize_options);
 						if (code != ECS_SERIALIZE_OK) {
 							return -1;
 						}
 					}
 					else {
-						write_size += SerializeSize(asset->reflection_manager, buffer.reflection_type, buffer.data.buffer);
+						write_size += SerializeSize(asset->reflection_manager, buffer.reflection_type, buffer.data.buffer, &serialize_options);
 					}
 					return 0;
 				};
@@ -321,7 +323,6 @@ namespace ECSEngine {
 					asset->buffers[type][index].name = ReadAllocateDataShort<true>(data->stream, allocator).As<char>();
 					asset->buffers[type][index].dynamic = dynamic;
 					asset->buffers[type][index].slot = slot;
-					asset->buffers[type][index].tags = { nullptr, 0 };
 
 					read_size += asset->buffers[type][index].name.size;
 				}
@@ -336,7 +337,9 @@ namespace ECSEngine {
 				auto read_data_with_reflection_type = [&]() {
 					if (data->read_data) {
 						// Read the deserialize field table
-						DeserializeFieldTable field_table = DeserializeFieldTableFromData(*data->stream, temp_allocator);
+						DeserializeFieldTableOptions field_options;
+						field_options.read_type_tags = true;
+						DeserializeFieldTable field_table = DeserializeFieldTableFromData(*data->stream, temp_allocator, &field_options);
 						void* allocation = nullptr;
 						size_t byte_size = ECS_KB * 64;
 						Reflection::ReflectionType* type_to_be_deserialized = nullptr;

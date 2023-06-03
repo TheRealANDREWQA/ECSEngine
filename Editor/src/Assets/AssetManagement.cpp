@@ -600,9 +600,9 @@ bool CreateSamplerFile(const EditorState* editor_state, Stream<wchar_t> relative
 
 // ----------------------------------------------------------------------------------------------
 
-bool CreateShaderFile(const EditorState* editor_state, Stream<wchar_t> relative_path)
+bool CreateShaderFile(const EditorState* editor_state, Stream<wchar_t> relative_path, ECS_SHADER_TYPE shader_type)
 {
-	return CreateAssetFileImpl(editor_state, relative_path, ASSET_SHADER_EXTENSIONS[0]);
+	return CreateAssetFileImpl(editor_state, relative_path, AssetExtensionFromType(shader_type));
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -617,12 +617,32 @@ bool CreateMiscFile(const EditorState* editor_state, Stream<wchar_t> relative_pa
 bool CreateAssetSetting(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type)
 {
 	// Just create the default file
-	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-	// Big enough to hold any metadata type
-	size_t storage[128];
-	CreateDefaultAsset(storage, name, file, type);
+	size_t storage[AssetMetadataMaxSizetSize()];
+
+	bool has_file = AssetHasFile(type);
+	if (has_file) {
+		CreateDefaultAsset(storage, name, file, type);
+	}
+	else {
+		// Convert the file to a name - since it will be ignored
+		ECS_STACK_CAPACITY_STREAM(char, converted_file, 512);
+		file = function::PathStem(file);
+		function::ConvertWideCharsToASCII(file, converted_file);
+		CreateDefaultAsset(storage, converted_file, file, type);
+	}
 
 	return editor_state->asset_database->WriteAssetFile(storage, type);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool CreateShaderSetting(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_SHADER_TYPE shader_type)
+{
+	ShaderMetadata storage;
+	storage.Default(name, file);
+	storage.shader_type = shader_type;
+
+	return editor_state->asset_database->WriteShaderFile(&storage);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -726,29 +746,66 @@ bool CreateAssetInternalDependencies(
 
 void CreateAssetDefaultSetting(const EditorState* editor_state)
 {
+	enum CREATE_ASSET_TYPE {
+		MESH,
+		TEXTURE,
+		GPU_SAMPLER,
+		COUNT
+	};
+
+	ECS_ASSET_TYPE mapping[COUNT] = {
+		ECS_ASSET_MESH,
+		ECS_ASSET_TEXTURE,
+		ECS_ASSET_GPU_SAMPLER
+	};
+
 	// At the moment only meshes and textures need this.
-	Stream<wchar_t> mesh_extensions[std::size(ASSET_MESH_EXTENSIONS)];
-	Stream<wchar_t> texture_extensions[std::size(ASSET_TEXTURE_EXTENSIONS)];
+	ECS_STACK_CAPACITY_STREAM(Stream<Stream<wchar_t>>, extensions, COUNT);
+	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, mesh_extensions, std::size(ASSET_MESH_EXTENSIONS));
+	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, texture_extensions, std::size(ASSET_TEXTURE_EXTENSIONS));
+	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, gpu_sampler_extensions, std::size(ASSET_GPU_SAMPLER_EXTENSIONS));
 	
 	for (size_t index = 0; index < std::size(ASSET_MESH_EXTENSIONS); index++) {
 		mesh_extensions[index] = ASSET_MESH_EXTENSIONS[index];
 	}
+	mesh_extensions.size = mesh_extensions.capacity;
 
 	for (size_t index = 0; index < std::size(ASSET_TEXTURE_EXTENSIONS); index++) {
 		texture_extensions[index] = ASSET_TEXTURE_EXTENSIONS[index];
 	}
+	texture_extensions.size = texture_extensions.capacity;
+
+	for (size_t index = 0; index < std::size(ASSET_GPU_SAMPLER_EXTENSIONS); index++) {
+		gpu_sampler_extensions[index] = ASSET_GPU_SAMPLER_EXTENSIONS[index];
+	}
+	gpu_sampler_extensions.size = gpu_sampler_extensions.capacity;
+
+	extensions[MESH] = mesh_extensions;
+	extensions[TEXTURE] = texture_extensions;
+	extensions[GPU_SAMPLER] = gpu_sampler_extensions;
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&stack_allocator);
 
-	ResizableStream<Stream<wchar_t>> mesh_files(allocator, 0);
-	ResizableStream<Stream<wchar_t>> texture_files(allocator, 0);
+	ECS_STACK_CAPACITY_STREAM(ResizableStream<Stream<wchar_t>>, files, COUNT);
+	for (size_t index = 0; index < COUNT; index++) {
+		files[index].Initialize(allocator, 0);
+	}
 
 	auto get_functor = [](Stream<wchar_t> path, void* _data) {
 		ResizableStream<Stream<wchar_t>>* data = (ResizableStream<Stream<wchar_t>>*)_data;
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, current_file, 512);
 		AssetDatabase::ExtractFileFromFile(path, current_file);
+
+		if (current_file.size == 0) {
+			ECS_STACK_CAPACITY_STREAM(char, current_name, 512);
+			AssetDatabase::ExtractNameFromFile(path, current_name);
+			if (current_name.size > 0) {
+				function::ConvertASCIIToWide(current_file, current_name);
+			}
+		}
+
 		if (current_file.size > 0) {
 			unsigned int index = function::FindString(current_file, data->ToStream());
 			if (index == -1) {
@@ -762,64 +819,65 @@ void CreateAssetDefaultSetting(const EditorState* editor_state)
 	};
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, metadata_directory, 512);
-	AssetDatabaseFileDirectory(editor_state->asset_database->metadata_file_location, metadata_directory, ECS_ASSET_MESH);
-	// It has a final backslash
-	metadata_directory.size--;
-
-	ForEachFileInDirectory(metadata_directory, &mesh_files, get_functor);
-
-	metadata_directory.size = 0;
-	AssetDatabaseFileDirectory(editor_state->asset_database->metadata_file_location, metadata_directory, ECS_ASSET_TEXTURE);
-	// It has a final backslash
-	metadata_directory.size--;
-	ForEachFileInDirectory(metadata_directory, &texture_files, get_functor);
+	for (size_t index = 0; index < COUNT; index++) {
+		metadata_directory.size = 0;
+		AssetDatabaseFileDirectory(editor_state->asset_database->metadata_file_location, metadata_directory, mapping[index]);
+		// It has a final backslash
+		metadata_directory.size--;
+		ForEachFileInDirectory(metadata_directory, &files[index], get_functor);
+	}
 
 	struct FunctorData {
 		const EditorState* editor_state;
 		Stream<wchar_t> base_path;
-		Stream<Stream<wchar_t>> mesh_extensions;
-		Stream<Stream<wchar_t>> texture_extensions;
-		Stream<Stream<wchar_t>> existing_mesh_files;
-		Stream<Stream<wchar_t>> existing_texture_files;
+		Stream<Stream<Stream<wchar_t>>> extensions;
+		Stream<Stream<wchar_t>> existing_files[COUNT];
+		ECS_ASSET_TYPE* mapping;
 	};
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 	GetProjectAssetsFolder(editor_state, assets_folder);
 
-	FunctorData functor_data = { 
-		editor_state, 
-		assets_folder,
-		{mesh_extensions, std::size(mesh_extensions)},
-		{texture_extensions, std::size(texture_extensions)},
-		mesh_files,
-		texture_files 
-	};
+	FunctorData functor_data;
+	functor_data.editor_state = editor_state;
+	functor_data.base_path = assets_folder;
+	functor_data.extensions = extensions;
+	functor_data.mapping = mapping;
+	for (size_t index = 0; index < COUNT; index++) {
+		functor_data.existing_files[index] = files[index];
+	}
+
 	auto functor = [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 
 		Stream<wchar_t> extension = function::PathExtension(path);
-		unsigned int mesh_index = function::FindString(extension, data->mesh_extensions);
-		if (mesh_index != -1) {
-			Stream<wchar_t> relative_path = function::PathRelativeToAbsolute(path, data->base_path);
-
-			// Check to see if it doesn't exist in the mesh stream
-			mesh_index = function::FindString(relative_path, data->existing_mesh_files);
-			if (mesh_index == -1) {
-				// Create a default setting for it
-				CreateAssetSetting(data->editor_state, "Default", relative_path, ECS_ASSET_MESH);
-			}
-		}
-		else {
-			unsigned int texture_index = function::FindString(extension, data->texture_extensions);
-			if (texture_index != -1) {
+		for (size_t index = 0; index < COUNT; index++) {
+			unsigned int extension_index = function::FindString(extension, data->extensions[index]);
+			if (extension_index != -1) {
 				Stream<wchar_t> relative_path = function::PathRelativeToAbsolute(path, data->base_path);
-				texture_index = function::FindString(relative_path, data->existing_texture_files);
-				if (texture_index == -1) {
-					// Create a default setting for it
-					CreateAssetSetting(data->editor_state, "Default", relative_path, ECS_ASSET_TEXTURE);
+				ECS_ASSET_TYPE asset_type = data->mapping[index];
+				unsigned int existing_index = -1;
+				if (asset_type == ECS_ASSET_GPU_SAMPLER) {
+					// Convert the gpu sampler extension into the default .meta extension
+					ECS_STACK_CAPACITY_STREAM(wchar_t, changed_relative_path, 512);
+					Stream<wchar_t> extension = function::PathExtensionBoth(relative_path);
+					changed_relative_path.Copy(relative_path);
+					changed_relative_path.size -= extension.size;
+					changed_relative_path.AddStreamAssert(ECS_ASSET_DATABASE_FILE_EXTENSION);
+					existing_index = function::FindString(changed_relative_path, data->existing_files[index]);
 				}
+				else {
+					existing_index = function::FindString(relative_path, data->existing_files[index]);
+				}
+				if (existing_index == -1) {
+					// Create a default setting for it
+					// Don't check for failure - this is not a critical operation
+					CreateAssetSetting(data->editor_state, "Default", relative_path, asset_type);
+				}
+				break;
 			}
 		}
+
 		return true;
 	};
 

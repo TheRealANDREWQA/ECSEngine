@@ -9,9 +9,7 @@ namespace ECSEngine {
 		struct ReflectionType;
 	}
 
-#define ECS_SHADER_REFLECTION_CONSTANT_BUFFER_TAG_DELIMITER "___"
-
-	// This will retrieve the fields from the reflection type tag
-	ECSENGINE_API void GetConstantBufferInjectTagFieldsFromTypeTag(const Reflection::ReflectionType* type, CapacityStream<unsigned int>* fields);
+	// This will retrieve the fields from the reflection type field tags
+	ECSENGINE_API void GetConstantBufferInjectTagFieldsFromType(const Reflection::ReflectionType* type, CapacityStream<unsigned int>* fields);
 
 }

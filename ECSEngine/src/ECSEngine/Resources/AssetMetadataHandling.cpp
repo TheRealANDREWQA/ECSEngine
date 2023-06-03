@@ -377,12 +377,14 @@ namespace ECSEngine {
 				user_material->buffers[buffer_total_count].shader_type = shader_type;
 				user_material->buffers[buffer_total_count].slot = material->buffers[index][subindex].slot;
 
-				if (material->buffers[index][subindex].tags.size > 0) {
-					user_material->buffers[buffer_total_count].tags = material->buffers[index][subindex].tags;
-					user_material->buffers[buffer_total_count].tag_separator = ECS_SHADER_REFLECTION_CONSTANT_BUFFER_TAG_DELIMITER;
-				}
-				else {
-					user_material->buffers[buffer_total_count].tags = { nullptr, 0 };
+				user_material->buffers[buffer_total_count].tags = { nullptr, 0 };
+				if (material->buffers[index][subindex].reflection_type != nullptr) {
+					Stream<Reflection::ReflectionField> fields = material->buffers[index][subindex].reflection_type->fields;
+					for (size_t index = 0; index < fields.size; index++) {
+						if (fields[index].tag.size > 0) {
+							user_material->buffers[buffer_total_count].tags.AddResize({ fields[index].tag, fields[index].info.pointer_offset }, allocator, true);
+						}
+					}
 				}
 
 				buffer_total_count++;
@@ -1552,6 +1554,16 @@ namespace ECSEngine {
 									material->buffers[shader][existing_index].reflection_type
 								)) {
 									are_different = true;
+								}
+								else {
+									if (!Reflection::CompareReflectionTypesTags(
+										cbuffers.buffer + index,
+										material->buffers[shader][existing_index].reflection_type,
+										true,
+										true
+									)) {
+										are_different = true;
+									}
 								}
 							}
 						}

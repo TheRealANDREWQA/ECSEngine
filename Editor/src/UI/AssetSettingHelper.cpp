@@ -315,11 +315,13 @@ void AssetSettingsHelperChangedWithFileAction(ActionData* action_data)
 				// Only remove it if the target file or the name has changed				
 				if (!same_file_and_name) {
 					// Remove the previous asset file
-					ECS_STACK_CAPACITY_STREAM(wchar_t, previous_metadata_file, 512);
-					data->target_database->FileLocationShader(previous_name, previous_file, previous_metadata_file);
-					if (!RemoveFile(previous_metadata_file)) {
-						ECS_FORMAT_TEMP_STRING(console_message, "Failed to remove metadata file {#}.", previous_metadata_file);
-						EditorSetConsoleWarn(console_message);
+					if (previous_file.size > 0) {
+						ECS_STACK_CAPACITY_STREAM(wchar_t, previous_metadata_file, 512);
+						data->target_database->FileLocationShader(previous_name, previous_file, previous_metadata_file);
+						if (!RemoveFile(previous_metadata_file)) {
+							ECS_FORMAT_TEMP_STRING(console_message, "Failed to remove metadata file {#}.", previous_metadata_file);
+							EditorSetConsoleWarn(console_message);
+						}
 					}
 				}
 			}

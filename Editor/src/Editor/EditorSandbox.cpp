@@ -1523,6 +1523,17 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool RenderSandboxViewports(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::uint2 new_size, bool disable_logging)
+{
+	bool success = true;
+	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
+		success &= RenderSandbox(editor_state, sandbox_index, (EDITOR_SANDBOX_VIEWPORT)index, new_size, disable_logging);
+	}
+	return success;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, uint2 new_size)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
