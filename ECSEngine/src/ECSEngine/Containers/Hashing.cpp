@@ -1,5 +1,6 @@
 #include "ecspch.h"
 #include "Hashing.h"
+#include "../Utilities/Function.h"
 
 namespace ECSEngine {
 

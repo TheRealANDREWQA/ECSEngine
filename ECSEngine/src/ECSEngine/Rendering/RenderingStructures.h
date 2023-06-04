@@ -1337,24 +1337,127 @@ namespace ECSEngine {
 		Material& operator = (const Material& other) = default;
 
 	private:
-		void AddTag(Stream<char> tag, unsigned short byte_offset, unsigned char* tag_count, uchar2* tags, unsigned short* byte_offsets);
+		// Returns the index where it was written
+		unsigned char AddTag(
+			Stream<char> tag, 
+			unsigned short byte_offset, 
+			unsigned char buffer_index, 
+			unsigned char* tag_count, 
+			uchar2* tags, 
+			unsigned short* byte_offsets,
+			unsigned char* buffer_indices,
+			unsigned char max_count
+		);
+
+		// Returns the index where it was written
+		unsigned char AddConstantBuffer(
+			ConstantBuffer buffer,
+			unsigned char slot,
+			unsigned char* current_count,
+			ConstantBuffer* buffers,
+			unsigned char* slots,
+			unsigned char max_count
+		);
+
+		// Returns the index where it was written
+		unsigned char AddSampler(
+			SamplerState sampler,
+			unsigned char slot,
+			unsigned char* current_count,
+			SamplerState* samplers,
+			unsigned char* slots,
+			unsigned char max_count
+		);
+
+		// Returns the index where it was written
+		unsigned char AddResourceView(
+			ResourceView resource_view,
+			unsigned char slot,
+			unsigned char* current_count,
+			ResourceView* resource_views,
+			unsigned char* slots,
+			unsigned char max_count
+		);
+
 	public:
-
-		ECS_INLINE void AddVertexTag(Stream<char> tag, unsigned short byte_offset) {
-			AddTag(tag, byte_offset, &v_tag_count, v_tags, v_tag_byte_offset);
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddVertexTag(Stream<char> tag, unsigned short byte_offset, unsigned char buffer_index) {
+			return AddTag(tag, byte_offset, buffer_index, &v_tag_count, v_tags, v_tag_byte_offset, v_tag_buffer_index, ECS_MATERIAL_VERTEX_TAG_COUNT);
 		}
 
-		ECS_INLINE void AddPixelTag(Stream<char> tag, unsigned short byte_offset) {
-			AddTag(tag, byte_offset, &p_tag_count, p_tags, p_tag_byte_offset);
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddPixelTag(Stream<char> tag, unsigned short byte_offset, unsigned char buffer_index) {
+			return AddTag(tag, byte_offset, buffer_index, &p_tag_count, p_tags, p_tag_byte_offset, p_tag_buffer_index, ECS_MATERIAL_PIXEL_TAG_COUNT);
 		}
 
-		ECS_INLINE void AddTag(Stream<char> tag, unsigned short byte_offset, bool is_vertex) {
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddTag(Stream<char> tag, unsigned short byte_offset, unsigned char buffer_index, bool is_vertex) {
 			if (is_vertex) {
-				AddVertexTag(tag, byte_offset);
+				return AddVertexTag(tag, byte_offset, buffer_index);
 			}
 			else {
-				AddPixelTag(tag, byte_offset);
+				return AddPixelTag(tag, byte_offset, buffer_index);
 			}
+		}
+
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddConstantBuffer(ConstantBuffer buffer, unsigned char slot, bool is_vertex) {
+			if (is_vertex) {
+				return AddConstantBufferVertex(buffer, slot);
+			}
+			else {
+				return AddConstantBufferPixel(buffer, slot);
+			}
+		}
+
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddConstantBufferVertex(ConstantBuffer buffer, unsigned char slot) {
+			return AddConstantBuffer(buffer, slot, &v_buffer_count, v_buffers, v_buffer_slot, ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT);
+		}
+
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddConstantBufferPixel(ConstantBuffer buffer, unsigned char slot) {
+			return AddConstantBuffer(buffer, slot, &p_buffer_count, p_buffers, p_buffer_slot, ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT);
+		}
+
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddSampler(SamplerState sampler, unsigned char slot, bool is_vertex) {
+			if (is_vertex) {
+				return AddSamplerVertex(sampler, slot);
+			}
+			else {
+				return AddSamplerPixel(sampler, slot);
+			}
+		}
+
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddSamplerVertex(SamplerState sampler, unsigned char slot) {
+			return AddSampler(sampler, slot, &v_sampler_count, v_samplers, v_sampler_slot, ECS_MATERIAL_VERTEX_TEXTURES_COUNT);
+		}
+
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddSamplerPixel(SamplerState sampler, unsigned char slot) {
+			return AddSampler(sampler, slot, &p_sampler_count, p_samplers, p_sampler_slot, ECS_MATERIAL_PIXEL_TEXTURES_COUNT);
+		}
+
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddResourceView(ResourceView resource_view, unsigned char slot, bool is_vertex) {
+			if (is_vertex) {
+				return AddResourceViewVertex(resource_view, slot);
+			}
+			else {
+				return AddResourceViewPixel(resource_view, slot);
+			}
+		}
+
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddResourceViewVertex(ResourceView resource_view, unsigned char slot) {
+			return AddResourceView(resource_view, slot, &v_texture_count, v_textures, v_texture_slot, ECS_MATERIAL_VERTEX_TEXTURES_COUNT);
+		}
+
+		// Returns the index where it was written
+		ECS_INLINE unsigned char AddResourceViewPixel(ResourceView resource_view, unsigned char slot) {
+			return AddResourceView(resource_view, slot, &p_texture_count, p_textures, p_texture_slot, ECS_MATERIAL_PIXEL_TEXTURES_COUNT);
 		}
 
 		bool ContainsTexture(ResourceView texture) const;
@@ -1389,6 +1492,10 @@ namespace ECSEngine {
 
 		// Copies all the fields
 		void Copy(const Material* other);
+
+		// The x component contains the index of the buffer and the y component the byte offset inside that buffer
+		// If it doesn't find the tag, it returns { -1, -1 }
+		uint2 FindTag(Stream<char> tag, bool vertex_shader) const;
 
 		ECS_INLINE Stream<char> GetTag(unsigned char index, const uchar2* tags) const {
 			return { tag_storage + tags[index].x, tags[index].y };
@@ -1472,6 +1579,8 @@ namespace ECSEngine {
 		uchar2 p_tags[ECS_MATERIAL_PIXEL_TAG_COUNT];
 		unsigned short v_tag_byte_offset[ECS_MATERIAL_VERTEX_TAG_COUNT];
 		unsigned short p_tag_byte_offset[ECS_MATERIAL_PIXEL_TAG_COUNT];
+		unsigned char v_tag_buffer_index[ECS_MATERIAL_VERTEX_TAG_COUNT];
+		unsigned char p_tag_buffer_index[ECS_MATERIAL_PIXEL_TAG_COUNT];
 	};
 
 	struct PBRMaterial {

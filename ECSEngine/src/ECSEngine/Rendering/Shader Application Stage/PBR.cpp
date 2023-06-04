@@ -42,25 +42,21 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void SetPBRVertexConstants(void* data, Matrix object_matrix, Matrix world_view_projection_matrix, float2 uv_tiling, float2 uv_offsets)
+		void SetPBRVertexConstants(void* data, Matrix object_matrix, Matrix world_view_projection_matrix)
 		{
 			PBRVertexConstants* constants = (PBRVertexConstants*)data;
 			constants->object_matrix = MatrixTranspose(object_matrix);
 			constants->world_view_projection_matrix = MatrixTranspose(world_view_projection_matrix);
-			constants->uv_tiling = uv_tiling;
-			constants->uv_offsets = uv_offsets;
 		}
 
 		void SetPBRVertexConstants(
 			ConstantBuffer buffer, 
 			Graphics* graphics, 
 			Matrix object_matrix, 
-			Matrix world_view_projection_matrix, 
-			float2 uv_tiling,
-			float2 uv_offsets
+			Matrix world_view_projection_matrix
 		)
 		{
-			SetPBRVertexConstants(buffer, graphics, { MatrixTranspose(object_matrix), MatrixTranspose(world_view_projection_matrix), uv_tiling, uv_offsets });
+			SetPBRVertexConstants(buffer, graphics, { MatrixTranspose(object_matrix), MatrixTranspose(world_view_projection_matrix) });
 		}
 
 		void SetPBRVertexConstants(ConstantBuffer buffer, Graphics* graphics, PBRVertexConstants constants)

@@ -1838,26 +1838,14 @@ namespace ECSEngine {
 				}
 			}
 
-			if (user_material->buffers[index].shader_type == ECS_SHADER_VERTEX) {
-				unsigned char v_index = converted_material->v_buffer_count;
-				converted_material->v_buffers[v_index] = buffer;
-				converted_material->v_buffer_slot[v_index] = user_material->buffers[index].slot;
-				converted_material->v_buffer_count++;
-				ECS_ASSERT(converted_material->v_buffer_count <= ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT);
-			}
-			else {
-				unsigned char p_index = converted_material->p_buffer_count;
-				converted_material->p_buffers[p_index] = buffer;
-				converted_material->p_buffer_slot[p_index] = user_material->buffers[index].slot;
-				converted_material->p_buffer_count++;
-				ECS_ASSERT(converted_material->p_buffer_count <= ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT);
-			}
+			unsigned char add_index = converted_material->AddConstantBuffer(buffer, user_material->buffers[index].slot, user_material->buffers[index].shader_type == ECS_SHADER_VERTEX);
 
 			// Check for tags
 			for (unsigned int subindex = 0; subindex < user_material->buffers[index].tags.size; subindex++) {
 				converted_material->AddTag(
 					user_material->buffers[index].tags[subindex].string, 
-					user_material->buffers[index].tags[subindex].byte_offset, 
+					user_material->buffers[index].tags[subindex].byte_offset,
+					add_index,
 					user_material->buffers[index].shader_type == ECS_SHADER_VERTEX
 				);
 			}

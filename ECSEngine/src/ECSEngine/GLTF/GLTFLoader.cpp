@@ -316,6 +316,11 @@ namespace ECSEngine {
 			size_t node_count,
 			CapacityStream<char>* error_message
 		) {
+			if (strcmp(attribute->name, "TEXCOORD_1") == 0) {
+				// Ignore multiple sets of UVs
+				return true;
+			}
+
 			unsigned int accessor_count = MeshBufferSizeFromAttribute(attribute, error_message);
 			if (accessor_count == -1) {
 				return false;

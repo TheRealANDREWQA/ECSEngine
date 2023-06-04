@@ -467,7 +467,11 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(EmptyTask) {}
+	std::atomic<size_t> THREAD_COUNTS_TEST[16] = { 0 };
+
+	ECS_THREAD_TASK(EmptyTask) {
+		THREAD_COUNTS_TEST[thread_id].fetch_add(1);
+	}
 
 	void TaskManager::DoFrame(bool wait_frame)
 	{
@@ -544,6 +548,7 @@ namespace ECSEngine {
 
 	ECS_THREAD_TASK(FinishFrameTaskDynamic) {
 		world->task_manager->m_is_frame_done.Notify();
+		THREAD_COUNTS_TEST[thread_id].fetch_add(1);
 	}
 
 	ECS_THREAD_TASK(FinishFrameTask) {

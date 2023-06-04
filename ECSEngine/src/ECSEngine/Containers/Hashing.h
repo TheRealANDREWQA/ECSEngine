@@ -2,7 +2,6 @@
 #include "../Core.h"
 #include "Stream.h"
 #include "../Math/VCLExtensions.h"
-#include "../Utilities/Function.h"
 
 namespace ECSEngine {
 
@@ -61,16 +60,20 @@ namespace ECSEngine {
 	public:
 		HashFunctionPowerOfTwo() {}
 		HashFunctionPowerOfTwo(size_t additional_info) {}
-		unsigned int operator ()(unsigned int key, unsigned int capacity) const {
+		ECS_INLINE unsigned int operator ()(unsigned int key, unsigned int capacity) const {
 			return key & (capacity - 1);
 		}
 
-		static unsigned int Next(unsigned int capacity) {
+		ECS_INLINE static unsigned int Next(unsigned int capacity) {
 			// If the value is really small make it to 16
 			if (capacity < 16) {
 				return 16;
 			}
-			return function::PowerOfTwoGreater(capacity);
+			unsigned long value = 0;
+			unsigned int index = _BitScanReverse(&value, capacity) == 0 ? -1 : value;
+			// This works out even when index is -1 (that is number is 0, index + 1 will be 0 so the returned value will be 1)
+			return (size_t)1 << (index + 1);
+			//return function::PowerOfTwoGreater(capacity);
 		}
 	};
 
@@ -427,11 +430,11 @@ namespace ECSEngine {
 	public:
 		HashFunctionFibonacci() : m_shift_amount(64) {}
 		HashFunctionFibonacci(size_t additional_info) : m_shift_amount(64 - additional_info) {}
-		unsigned int operator () (unsigned int key, unsigned int capacity) const {
+		ECS_INLINE unsigned int operator () (unsigned int key, unsigned int capacity) const {
 			return (key * 11400714819323198485llu) >> m_shift_amount;
 		}
 
-		static unsigned int Next(unsigned int capacity) {
+		ECS_INLINE static unsigned int Next(unsigned int capacity) {
 			return (unsigned int)((float)capacity * ECS_HASHTABLE_DYNAMIC_GROW_FACTOR + 2);
 		}
 
@@ -442,12 +445,12 @@ namespace ECSEngine {
 	public:
 		HashFunctionXORFibonacci() : m_shift_amount(64) {}
 		HashFunctionXORFibonacci(size_t additional_info) : m_shift_amount(64 - additional_info) {}
-		unsigned int operator() (unsigned int key, unsigned int capacity) const {
+		ECS_INLINE unsigned int operator() (unsigned int key, unsigned int capacity) const {
 			key ^= key >> m_shift_amount;
 			return (key * 11400714819323198485llu) >> m_shift_amount;
 		}
 
-		static unsigned int Next(unsigned int capacity) {
+		ECS_INLINE static unsigned int Next(unsigned int capacity) {
 			return (unsigned int)((float)capacity * ECS_HASHTABLE_DYNAMIC_GROW_FACTOR + 2);
 		}
 
@@ -458,7 +461,7 @@ namespace ECSEngine {
 	public:
 		HashFunctionFolding() {}
 		HashFunctionFolding(size_t additional_info) {}
-		unsigned int operator() (unsigned int key, unsigned int capacity) const {
+		ECS_INLINE unsigned int operator() (unsigned int key, unsigned int capacity) const {
 			return (key & 0x0000FFFF + (key & 0xFFFF0000) >> 16) & (capacity - 1);
 		}
 
@@ -467,13 +470,18 @@ namespace ECSEngine {
 			if (capacity < 16) {
 				return 16;
 			}
-			return function::PowerOfTwoGreater(capacity);
+			unsigned long value = 0;
+			unsigned int index = _BitScanReverse(&value, capacity) == 0 ? -1 : value;
+			// This works out even when index is -1 (that is number is 0, index + 1 will be 0 so the returned value will be 1)
+			return (size_t)1 << (index + 1);
+
+			//return function::PowerOfTwoGreater(capacity);
 		}
 	};
 
 	struct ObjectHashFallthrough {
 		template<typename T>
-		static inline unsigned int Hash(T identifier) {
+		ECS_INLINE static unsigned int Hash(T identifier) {
 			if constexpr (std::is_arithmetic_v<T> || std::is_pointer_v<T>) {
 				return (unsigned int)identifier;
 			}

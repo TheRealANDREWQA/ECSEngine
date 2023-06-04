@@ -11,8 +11,6 @@ namespace ECSEngine {
 		struct PBRVertexConstants {
 			Matrix object_matrix;
 			Matrix world_view_projection_matrix;
-			float2 uv_tiling = { 1.0f, 1.0f };
-			float2 uv_offsets = { 0.0f, 0.0f };
 		};
 
 		struct PBRPixelConstants {
@@ -52,9 +50,7 @@ namespace ECSEngine {
 		ECSENGINE_API void SetPBRVertexConstants(
 			void* data,
 			Matrix object_matrix, 
-			Matrix world_view_projection_matrix, 
-			float2 uv_tiling = {1.0f, 1.0f},
-			float2 uv_offsets = {0.0f, 0.0f}
+			Matrix world_view_projection_matrix
 		);
 
 		// The matrices will be transposed inside here (they need to be row major when giving them as parameters)
@@ -62,9 +58,7 @@ namespace ECSEngine {
 			ConstantBuffer buffer, 
 			Graphics* graphics, 
 			Matrix object_matrix, 
-			Matrix world_view_projection_matrix, 
-			float2 uv_tiling = {1.0f, 1.0f},
-			float2 uv_offsets = {0.0f, 0.0f}
+			Matrix world_view_projection_matrix
 		);
 
 		ECSENGINE_API void SetPBRVertexConstants(ConstantBuffer buffer, Graphics* graphics, PBRVertexConstants constants);

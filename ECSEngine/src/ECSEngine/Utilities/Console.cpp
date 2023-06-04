@@ -111,6 +111,9 @@ namespace ECSEngine {
 
 		// Separated these for debugging
 		bool write_success = success;
+		if (!write_success) {
+			__debugbreak();
+		}
 		bool flush_success = FlushFileToDisk(console->dump_file);
 		
 		success &= flush_success;
