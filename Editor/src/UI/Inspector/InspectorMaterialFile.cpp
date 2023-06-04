@@ -297,7 +297,7 @@ void RegisterNewCBuffers(
 		);
 
 		ECS_STACK_CAPACITY_STREAM(unsigned int, ignore_type_fields, 512);
-		GetConstantBufferInjectTagFieldsFromType(new_cbuffers.buffer + index, &ignore_type_fields);
+		GetConstantBufferInjectTagFieldsFromType(new_cbuffers.buffer + index, &ignore_type_fields, false);
 
 		UIReflectionDrawerCreateTypeOptions create_options;
 		create_options.identifier_name = ui_type_name;

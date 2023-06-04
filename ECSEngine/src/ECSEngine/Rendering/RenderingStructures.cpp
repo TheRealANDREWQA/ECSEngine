@@ -1091,15 +1091,88 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	void Material::AddTag(Stream<char> tag, unsigned short byte_offset, unsigned char* tag_count, uchar2* tags, unsigned short* byte_offsets)
+	unsigned char Material::AddTag(
+		Stream<char> tag, 
+		unsigned short byte_offset,
+		unsigned char buffer_index,
+		unsigned char* tag_count, 
+		uchar2* tags, 
+		unsigned short* byte_offsets,
+		unsigned char* buffer_indices,
+		unsigned char max_count
+	)
 	{
-		ECS_ASSERT(*tag_count < ECS_MATERIAL_VERTEX_TAG_COUNT);
+		unsigned char current_index = *tag_count;
+		ECS_ASSERT(current_index < max_count);
 		ECS_ASSERT((size_t)tag_storage_size + tag.size < ECS_MATERIAL_TAG_STORAGE_CAPACITY);
-		tags[*tag_count].x = tag_storage_size;
-		tags[*tag_count].y = (unsigned char)tag.size;
-		byte_offsets[*tag_count] = byte_offset;
+		tags[current_index].x = tag_storage_size;
+		tags[current_index].y = (unsigned char)tag.size;
+		byte_offsets[current_index] = byte_offset;
+		buffer_indices[current_index] = buffer_index;
 		(*tag_count)++;
 		tag_storage_size += tag.size;
+
+		return current_index;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	unsigned char Material::AddConstantBuffer(
+		ConstantBuffer buffer, 
+		unsigned char slot, 
+		unsigned char* current_count, 
+		ConstantBuffer* buffers, 
+		unsigned char* slots,
+		unsigned char max_count
+	)
+	{
+		unsigned char current_index = *current_count;
+		ECS_ASSERT(current_index < max_count);
+
+		buffers[current_index] = buffer;
+		slots[current_index] = slot;
+		(*current_count)++;
+		return current_index;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	unsigned char Material::AddSampler(
+		SamplerState sampler, 
+		unsigned char slot, 
+		unsigned char* current_count, 
+		SamplerState* samplers, 
+		unsigned char* slots,
+		unsigned char max_count
+	)
+	{
+		unsigned char current_index = *current_count;
+		ECS_ASSERT(current_index < max_count);
+
+		samplers[current_index] = sampler;
+		slots[current_index] = slot;
+		(*current_count)++;
+		return current_index;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	unsigned char Material::AddResourceView(
+		ResourceView resource_view, 
+		unsigned char slot, 
+		unsigned char* current_count, 
+		ResourceView* resource_views, 
+		unsigned char* slots,
+		unsigned char max_count
+	)
+	{
+		unsigned char current_index = *current_count;
+		ECS_ASSERT(current_index < max_count);
+
+		resource_views[current_index] = resource_view;
+		slots[current_index] = slot;
+		(*current_count)++;
+		return current_index;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -1209,6 +1282,36 @@ namespace ECSEngine {
 		CopySamplers(other);
 		CopyConstantBuffers(other);
 		CopyUnorderedViews(other);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	uint2 Material::FindTag(Stream<char> tag, bool vertex_shader) const
+	{
+		auto find = [&](unsigned char count, const uchar2* tags) {
+			for (unsigned char index = 0; index < count; index++) {
+				Stream<char> current_tag = GetTag(index, tags);
+				if (current_tag == tag) {
+					return index;
+				}
+			}
+			return (unsigned char)UCHAR_MAX;
+		};
+
+		if (vertex_shader) {
+			unsigned char found_index = find(v_tag_count, v_tags);
+			if (found_index != UCHAR_MAX) {
+				return { v_tag_buffer_index[found_index], v_tag_byte_offset[found_index] };
+			}
+		}
+		else {
+			unsigned char found_index = find(p_tag_count, p_tags);
+			if (found_index != UCHAR_MAX) {
+				return { p_tag_buffer_index[found_index], p_tag_byte_offset[found_index] };
+			}
+		}
+
+		return uint2(-1, -1);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------

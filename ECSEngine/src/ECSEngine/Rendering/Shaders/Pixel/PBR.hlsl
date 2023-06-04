@@ -99,8 +99,8 @@ float4 main(in PS_INPUT input) : SV_TARGET
     float3 view_direction = normalize(camera_position - input.world_position);
     
     #ifdef COLOR_TEXTURE
-    float3 pixel_color = SRGBToLinear(ColorMap.SampleGrad(pbr_texture_sampler, input.uv, uv_derivatives_x, uv_derivatives_y).rgb) * tint;
-    //float3 pixel_color = ColorMap.SampleGrad(pbr_texture_sampler, input.uv, uv_derivatives_x, uv_derivatives_y).rgb * tint;
+    //float3 pixel_color = SRGBToLinear(ColorMap.SampleGrad(pbr_texture_sampler, input.uv, uv_derivatives_x, uv_derivatives_y).rgb) * tint;
+    float3 pixel_color = ColorMap.SampleGrad(pbr_texture_sampler, input.uv, uv_derivatives_x, uv_derivatives_y).rgb * tint;
     #else 
     float3 pixel_color = tint;
     #endif

@@ -385,6 +385,16 @@ namespace ECSEngine {
 							user_material->buffers[buffer_total_count].tags.AddResize({ fields[index].tag, fields[index].info.pointer_offset }, allocator, true);
 						}
 					}
+					if (user_material->buffers[buffer_total_count].tags.size > 0) {
+						// Now remove all tags that come from compound elements
+						for (size_t index = 0; index < user_material->buffers[buffer_total_count].tags.size - 1; index++) {
+							if (user_material->buffers[buffer_total_count].tags[index].string ==
+								user_material->buffers[buffer_total_count].tags[index + 1].string) {
+								user_material->buffers[buffer_total_count].tags.RemoveSwapBack(index + 1);
+								index--;
+							}
+						}
+					}
 				}
 
 				buffer_total_count++;

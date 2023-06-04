@@ -75,7 +75,7 @@ ECS_THREAD_TASK(RenderTask) {
 						graphics->BindMaterial(*mesh.material);
 
 						graphics->BindVertexConstantBuffer(temp_buffer);
-						graphics->EnableDepth();
+						//graphics->EnableDepth();
 						graphics->DrawCoallescedMeshCommand(*mesh.mesh);
 
 						temp_buffer.Release();

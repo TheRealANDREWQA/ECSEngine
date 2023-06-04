@@ -3,6 +3,7 @@
 #include "../Utilities/FunctionInterfaces.h"
 #include "../Utilities/Crash.h"
 #include "../Allocators/MemoryManager.h"
+#include "../Utilities/Function.h"
 
 #define MEMORY_MANAGER_SIZE 10'000
 #define MEMORY_MANAGER_CHUNK_COUNT 512

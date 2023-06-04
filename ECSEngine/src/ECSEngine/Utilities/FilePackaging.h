@@ -3,6 +3,7 @@
 #include "../Containers/Stream.h"
 #include "../Containers/HashTable.h"
 #include "File.h"
+#include "../Utilities/BasicTypes.h"
 
 namespace ECSEngine {
 
