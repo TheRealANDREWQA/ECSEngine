@@ -1515,12 +1515,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 
 	ECS_TEMP_STRING(assests_folder, 256);
 	GetProjectAssetsFolder(editor_state, assests_folder);
-	Stream<wchar_t> extensions[std::size(ASSET_MESH_EXTENSIONS)];
-	for (size_t index = 0; index < std::size(ASSET_MESH_EXTENSIONS); index++) {
-		extensions[index] = ASSET_MESH_EXTENSIONS[index];
-	}
-	
-	ForEachFileInDirectoryRecursiveWithExtension(assests_folder, { extensions, std::size(extensions) }, &functor_data, functor);
+	ForEachFileInDirectoryRecursiveWithExtension(assests_folder, { ASSET_MESH_EXTENSIONS, std::size(ASSET_MESH_EXTENSIONS) }, &functor_data, functor);
 
 	if (functor_data.thumbnail_count == MAX_MESH_THUMBNAILS_PER_FRAME) {
 		// In another 30 ms the lazy evaluation should be triggered again (there might be more thumbnails to generate). 

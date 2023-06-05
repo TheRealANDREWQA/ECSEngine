@@ -271,6 +271,10 @@ bool HasAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET
 
 bool HasAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
 
+ECS_INLINE bool IsThunkOrForwardingFile(ECS_ASSET_TYPE type) {
+	return type == ECS_ASSET_GPU_SAMPLER || type == ECS_ASSET_SHADER || type == ECS_ASSET_MATERIAL || type == ECS_ASSET_MISC;
+}
+
 // Inserts a time stamp into the resource manager. If the is_missing flag is set to true it will only
 // insert the time stamp if it doesn't exist
 void InsertAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, bool if_is_missing = false);

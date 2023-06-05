@@ -1001,6 +1001,7 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message = nullptr;
 		AllocatorPolymorphic temporary_allocator = { nullptr };
 		AllocatorPolymorphic permanent_allocator = { nullptr };
+		float scale_factor = 1.0f;
 
 		if (options != nullptr) {
 			allocate_names = options->allocate_submesh_name;
@@ -1008,6 +1009,7 @@ namespace ECSEngine {
 			error_message = options->error_message;
 			temporary_allocator = options->temporary_buffer_allocator;
 			permanent_allocator = options->permanent_allocator;
+			scale_factor = options->scale_factor;
 		}
 
 		// Preallocate the buffers
@@ -1075,6 +1077,11 @@ namespace ECSEngine {
 				for (unsigned int index_index = 0; index_index < submeshes[index].index_count; index_index++) {
 					mesh->indices[submeshes[index].index_buffer_offset + index_index] += submeshes[index].vertex_buffer_offset;
 				}
+			}
+
+			// We also need to scale the gltf mesh, if required
+			if (scale_factor != 1.0f) {
+				ScaleGLTFMeshes(mesh, 1, scale_factor);
 			}
 		}
 		return success;

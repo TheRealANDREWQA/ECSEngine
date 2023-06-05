@@ -270,7 +270,7 @@ bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorFunc
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void AddInspectorTableFunction(InspectorTable* table, InspectorFunctions function, const wchar_t* _identifier) {
+void AddInspectorTableFunction(InspectorTable* table, InspectorFunctions function, Stream<wchar_t> _identifier) {
 	ResourceIdentifier identifier(_identifier);
 
 	ECS_ASSERT(table->Find(identifier) == -1);

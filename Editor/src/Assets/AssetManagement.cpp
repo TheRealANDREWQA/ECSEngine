@@ -744,145 +744,140 @@ bool CreateAssetInternalDependencies(
 
 // ----------------------------------------------------------------------------------------------
 
-void CreateAssetDefaultSetting(const EditorState* editor_state)
-{
-	enum CREATE_ASSET_TYPE {
-		MESH,
-		TEXTURE,
-		GPU_SAMPLER,
-		COUNT
-	};
-
-	ECS_ASSET_TYPE mapping[COUNT] = {
-		ECS_ASSET_MESH,
-		ECS_ASSET_TEXTURE,
-		ECS_ASSET_GPU_SAMPLER
-	};
-
+// The functor receives as arguments (Stream<Stream<wchar_t>>* extensions, ResizableStream<Stream<wchar_t>>* existing_files)
+// which correspond to the asset types in the mapping
+// For materials, gpu samplers, shaders and misc files it returns the file path without extension
+template<typename ExecuteFunctor>
+void ForEachAssetMetadata(const EditorState* editor_state, Stream<ECS_ASSET_TYPE> asset_type_mapping, bool retrieve_existing_files, ExecuteFunctor&& functor) {
 	// At the moment only meshes and textures need this.
-	ECS_STACK_CAPACITY_STREAM(Stream<Stream<wchar_t>>, extensions, COUNT);
-	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, mesh_extensions, std::size(ASSET_MESH_EXTENSIONS));
-	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, texture_extensions, std::size(ASSET_TEXTURE_EXTENSIONS));
-	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, gpu_sampler_extensions, std::size(ASSET_GPU_SAMPLER_EXTENSIONS));
-	
-	for (size_t index = 0; index < std::size(ASSET_MESH_EXTENSIONS); index++) {
-		mesh_extensions[index] = ASSET_MESH_EXTENSIONS[index];
-	}
-	mesh_extensions.size = mesh_extensions.capacity;
+	ECS_STACK_CAPACITY_STREAM(Stream<Stream<wchar_t>>, extensions, ECS_ASSET_TYPE_COUNT);
 
-	for (size_t index = 0; index < std::size(ASSET_TEXTURE_EXTENSIONS); index++) {
-		texture_extensions[index] = ASSET_TEXTURE_EXTENSIONS[index];
+	for (size_t index = 0; index < asset_type_mapping.size; index++) {
+		extensions[index] = ASSET_EXTENSIONS[asset_type_mapping[index]];
 	}
-	texture_extensions.size = texture_extensions.capacity;
-
-	for (size_t index = 0; index < std::size(ASSET_GPU_SAMPLER_EXTENSIONS); index++) {
-		gpu_sampler_extensions[index] = ASSET_GPU_SAMPLER_EXTENSIONS[index];
-	}
-	gpu_sampler_extensions.size = gpu_sampler_extensions.capacity;
-
-	extensions[MESH] = mesh_extensions;
-	extensions[TEXTURE] = texture_extensions;
-	extensions[GPU_SAMPLER] = gpu_sampler_extensions;
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&stack_allocator);
 
-	ECS_STACK_CAPACITY_STREAM(ResizableStream<Stream<wchar_t>>, files, COUNT);
-	for (size_t index = 0; index < COUNT; index++) {
-		files[index].Initialize(allocator, 0);
-	}
-
-	auto get_functor = [](Stream<wchar_t> path, void* _data) {
-		ResizableStream<Stream<wchar_t>>* data = (ResizableStream<Stream<wchar_t>>*)_data;
-
-		ECS_STACK_CAPACITY_STREAM(wchar_t, current_file, 512);
-		AssetDatabase::ExtractFileFromFile(path, current_file);
-
-		if (current_file.size == 0) {
-			ECS_STACK_CAPACITY_STREAM(char, current_name, 512);
-			AssetDatabase::ExtractNameFromFile(path, current_name);
-			if (current_name.size > 0) {
-				function::ConvertASCIIToWide(current_file, current_name);
-			}
+	ECS_STACK_CAPACITY_STREAM(ResizableStream<Stream<wchar_t>>, files, ECS_ASSET_TYPE_COUNT);
+	if (retrieve_existing_files) {
+		for (size_t index = 0; index < asset_type_mapping.size; index++) {
+			files[index].Initialize(allocator, 0);
 		}
 
-		if (current_file.size > 0) {
-			unsigned int index = function::FindString(current_file, data->ToStream());
-			if (index == -1) {
-				Stream<wchar_t> copy = function::StringCopy(data->allocator, current_file);
-				// Change the relative path separator into an absolute path separator
-				function::ReplaceCharacter(copy, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
-				data->Add(copy);
-			}
-		}
-		return true;
-	};
+		struct FunctorData {
+			ECS_ASSET_TYPE asset_type;
+			ResizableStream<Stream<wchar_t>>* files;
+		};
 
-	ECS_STACK_CAPACITY_STREAM(wchar_t, metadata_directory, 512);
-	for (size_t index = 0; index < COUNT; index++) {
-		metadata_directory.size = 0;
-		AssetDatabaseFileDirectory(editor_state->asset_database->metadata_file_location, metadata_directory, mapping[index]);
-		// It has a final backslash
-		metadata_directory.size--;
-		ForEachFileInDirectory(metadata_directory, &files[index], get_functor);
+		auto get_functor = [](Stream<wchar_t> path, void* _data) {
+			FunctorData* data = (FunctorData*)_data;
+
+			ECS_STACK_CAPACITY_STREAM(wchar_t, current_file, 512);
+			AssetDatabase::ExtractFileFromFile(path, current_file);
+
+			if (current_file.size == 0) {
+				ECS_STACK_CAPACITY_STREAM(char, current_name, 512);
+				AssetDatabase::ExtractNameFromFile(path, current_name);
+				if (current_name.size > 0) {
+					function::ConvertASCIIToWide(current_file, current_name);
+				}
+			}
+
+			if (current_file.size > 0) {
+				unsigned int index = function::FindString(current_file, data->files->ToStream());
+				if (index == -1) {
+					if (IsThunkOrForwardingFile(data->asset_type))
+					{
+						current_file = function::PathNoExtensionBoth(current_file);
+					}
+					Stream<wchar_t> copy = function::StringCopy(data->files->allocator, current_file);
+					// Change the relative path separator into an absolute path separator
+					function::ReplaceCharacter(copy, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+					data->files->Add(copy);
+				}
+			}
+			return true;
+		};
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, metadata_directory, 512);
+		for (size_t index = 0; index < asset_type_mapping.size; index++) {
+			metadata_directory.size = 0;
+			AssetDatabaseFileDirectory(editor_state->asset_database->metadata_file_location, metadata_directory, asset_type_mapping[index]);
+			// It has a final backslash
+			metadata_directory.size--;
+
+			FunctorData functor_data;
+			functor_data.asset_type = asset_type_mapping[index];
+			functor_data.files = &files[index];
+			ForEachFileInDirectory(metadata_directory, &functor_data, get_functor);
+		}
 	}
 
-	struct FunctorData {
-		const EditorState* editor_state;
-		Stream<wchar_t> base_path;
-		Stream<Stream<Stream<wchar_t>>> extensions;
-		Stream<Stream<wchar_t>> existing_files[COUNT];
-		ECS_ASSET_TYPE* mapping;
-	};
+	functor(extensions.buffer, files.buffer);
 
-	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
-	GetProjectAssetsFolder(editor_state, assets_folder);
-
-	FunctorData functor_data;
-	functor_data.editor_state = editor_state;
-	functor_data.base_path = assets_folder;
-	functor_data.extensions = extensions;
-	functor_data.mapping = mapping;
-	for (size_t index = 0; index < COUNT; index++) {
-		functor_data.existing_files[index] = files[index];
-	}
-
-	auto functor = [](Stream<wchar_t> path, void* _data) {
-		FunctorData* data = (FunctorData*)_data;
-
-		Stream<wchar_t> extension = function::PathExtension(path);
-		for (size_t index = 0; index < COUNT; index++) {
-			unsigned int extension_index = function::FindString(extension, data->extensions[index]);
-			if (extension_index != -1) {
-				Stream<wchar_t> relative_path = function::PathRelativeToAbsolute(path, data->base_path);
-				ECS_ASSET_TYPE asset_type = data->mapping[index];
-				unsigned int existing_index = -1;
-				if (asset_type == ECS_ASSET_GPU_SAMPLER) {
-					// Convert the gpu sampler extension into the default .meta extension
-					ECS_STACK_CAPACITY_STREAM(wchar_t, changed_relative_path, 512);
-					Stream<wchar_t> extension = function::PathExtensionBoth(relative_path);
-					changed_relative_path.Copy(relative_path);
-					changed_relative_path.size -= extension.size;
-					changed_relative_path.AddStreamAssert(ECS_ASSET_DATABASE_FILE_EXTENSION);
-					existing_index = function::FindString(changed_relative_path, data->existing_files[index]);
-				}
-				else {
-					existing_index = function::FindString(relative_path, data->existing_files[index]);
-				}
-				if (existing_index == -1) {
-					// Create a default setting for it
-					// Don't check for failure - this is not a critical operation
-					CreateAssetSetting(data->editor_state, "Default", relative_path, asset_type);
-				}
-				break;
-			}
-		}
-
-		return true;
-	};
-
-	ForEachFileInDirectoryRecursive(assets_folder, &functor_data, functor);
 	stack_allocator.ClearBackup();
+}
+
+void CreateAssetDefaultSetting(const EditorState* editor_state)
+{
+	ECS_ASSET_TYPE mapping[] = {
+		ECS_ASSET_MESH,
+		ECS_ASSET_TEXTURE,
+		ECS_ASSET_GPU_SAMPLER,
+		ECS_ASSET_MATERIAL,
+		ECS_ASSET_MISC
+	};
+
+	ForEachAssetMetadata(editor_state, { mapping, std::size(mapping) }, true, [&](Stream<Stream<wchar_t>>* extensions, ResizableStream<Stream<wchar_t>>* existing_files) {
+		struct FunctorData {
+			const EditorState* editor_state;
+			Stream<wchar_t> base_path;
+			Stream<Stream<Stream<wchar_t>>> extensions;
+			Stream<Stream<wchar_t>> existing_files[_countof(mapping)];
+			ECS_ASSET_TYPE* mapping;
+		};
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+		GetProjectAssetsFolder(editor_state, assets_folder);
+
+		FunctorData functor_data;
+		functor_data.editor_state = editor_state;
+		functor_data.base_path = assets_folder;
+		functor_data.extensions = { extensions, _countof(mapping) };
+		functor_data.mapping = mapping;
+		for (size_t index = 0; index < std::size(mapping); index++) {
+			functor_data.existing_files[index] = existing_files[index];
+		}
+
+		auto functor = [](Stream<wchar_t> path, void* _data) {
+			FunctorData* data = (FunctorData*)_data;
+
+			Stream<wchar_t> extension = function::PathExtension(path);
+			for (size_t index = 0; index < _countof(mapping); index++) {
+				unsigned int extension_index = function::FindString(extension, data->extensions[index]);
+				if (extension_index != -1) {
+					Stream<wchar_t> relative_path = function::PathRelativeToAbsolute(path, data->base_path);
+					ECS_ASSET_TYPE asset_type = data->mapping[index];
+					unsigned int existing_index = -1;
+					if (IsThunkOrForwardingFile(asset_type)) {
+						relative_path = function::PathNoExtensionBoth(relative_path);
+					}
+					existing_index = function::FindString(relative_path, data->existing_files[index]);
+					if (existing_index == -1) {
+						// Create a default setting for it
+						// Don't check for failure - this is not a critical operation
+						CreateAssetSetting(data->editor_state, "Default", relative_path, asset_type);
+					}
+					break;
+				}
+			}
+
+			return true;
+		};
+
+		ForEachFileInDirectoryRecursive(assets_folder, &functor_data, functor);
+	});
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1088,54 +1083,69 @@ void DeleteAssetSetting(EditorState* editor_state, Stream<char> name, Stream<wch
 
 void DeleteMissingAssetSettings(const EditorState* editor_state)
 {
-	// At the moment only meshes and textures don't need thunks/forwarding files
-	Stream<wchar_t> mesh_extensions[std::size(ASSET_MESH_EXTENSIONS)];
-	Stream<wchar_t> texture_extensions[std::size(ASSET_TEXTURE_EXTENSIONS)];
-
-	for (size_t index = 0; index < std::size(ASSET_MESH_EXTENSIONS); index++) {
-		mesh_extensions[index] = ASSET_MESH_EXTENSIONS[index];
-	}
-
-	for (size_t index = 0; index < std::size(ASSET_TEXTURE_EXTENSIONS); index++) {
-		texture_extensions[index] = ASSET_TEXTURE_EXTENSIONS[index];
-	}
+	ECS_ASSET_TYPE mapping[] = {
+		ECS_ASSET_MESH,
+		ECS_ASSET_TEXTURE,
+		ECS_ASSET_GPU_SAMPLER,
+		ECS_ASSET_SHADER,
+		ECS_ASSET_MATERIAL,
+		ECS_ASSET_MISC
+	};
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 	GetProjectAssetsFolder(editor_state, assets_folder);
 	assets_folder.Add(ECS_OS_PATH_SEPARATOR);
 
-	auto functor = [](Stream<wchar_t> path, void* _data) {
-		CapacityStream<wchar_t>* assets_folder = (CapacityStream<wchar_t>*)_data;
+	struct FunctorData {
+		Stream<Stream<wchar_t>> extensions;
+		CapacityStream<wchar_t>* assets_folder;
+	};
 
-		unsigned int original_size = assets_folder->size;
+	auto functor = [](Stream<wchar_t> path, void* _data) {
+		FunctorData* data = (FunctorData*)_data;
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, current_file, 512);
 		AssetDatabase::ExtractFileFromFile(path, current_file);
+
+		if (current_file.size == 0) {
+			current_file = function::PathFilename(path);
+		}
+
 		if (current_file.size > 0) {
 			function::ReplaceCharacter(current_file, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
-			assets_folder->AddStream(current_file);
-			if (!ExistsFileOrFolder(*assets_folder)) {
+			ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path_storage, 512);
+			Stream<wchar_t> absolute_path = function::MountPathOnlyRel(current_file, *data->assets_folder, absolute_path_storage);
+			bool exists = ExistsFileOrFolder(absolute_path);
+			if (!exists) {
+				// Now try by replacing the extension
+				for (size_t index = 0; index < data->extensions.size && !exists; index++) {
+					absolute_path = function::PathNoExtension(absolute_path);
+					absolute_path.AddStream(data->extensions[index]);
+					exists = ExistsFileOrFolder(absolute_path);
+				}
+			}
+
+			if (!exists) {
 				// Destroy the current setting
 				RemoveFile(path);
 			}
 		}
 
-		assets_folder->size = original_size;
 		return true;
 	};
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, metadata_directory, 512);
-	AssetDatabaseFileDirectory(editor_state->asset_database->metadata_file_location, metadata_directory, ECS_ASSET_MESH);
-	// It has a final backslash
-	metadata_directory.size--;
+	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		metadata_directory.size = 0;
+		AssetDatabaseFileDirectory(editor_state->asset_database->metadata_file_location, metadata_directory, (ECS_ASSET_TYPE)index);
+		// It has a final backslash
+		metadata_directory.size--;
 
-	ForEachFileInDirectory(metadata_directory, &assets_folder, functor);
-
-	metadata_directory.size = 0;
-	AssetDatabaseFileDirectory(editor_state->asset_database->metadata_file_location, metadata_directory, ECS_ASSET_TEXTURE);
-	// It has a final backslash
-	metadata_directory.size--;
-	ForEachFileInDirectory(metadata_directory, &assets_folder, functor);
+		FunctorData functor_data;
+		functor_data.assets_folder = &assets_folder;
+		functor_data.extensions = ASSET_EXTENSIONS[index];
+		ForEachFileInDirectory(metadata_directory, &functor_data, functor);
+	}
 }
 
 // ----------------------------------------------------------------------------------------------

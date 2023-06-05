@@ -86,6 +86,7 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message = nullptr;
 		bool allocate_submesh_name = false;
 		bool coallesce_submesh_name_allocations = true;
+		float scale_factor = 1.0f;
 	};
 
 	// Coallesces on the CPU side the values to be directly copied to the GPU

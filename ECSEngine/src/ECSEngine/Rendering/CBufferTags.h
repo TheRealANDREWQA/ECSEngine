@@ -3,6 +3,7 @@
 #include "../Core.h"
 #include "../Containers/Stream.h"
 #include "../Utilities/BasicTypes.h"
+#include "../Math/Matrix.h"
 
 namespace ECSEngine {
 
@@ -69,18 +70,63 @@ namespace ECSEngine {
 	// Fills in the stream with the buffer indices and their respective types that have injected fields
 	ECSENGINE_API void GetConstantBufferInjectedCB(const Material* material, CapacityStream<MaterialInjectedCB>* injected_cbs, bool vertex_shader);
 
+	// Returns the index inside the injected_cbs where the tag was found, if it is missing it returns -1
+	ECS_INLINE size_t FindConstantBufferInjectedTag(Stream<MaterialInjectedCB> injected_cbs, ECS_CB_INJECT_TAG tag) {
+		return injected_cbs.Find(tag, [](MaterialInjectedCB cb) {
+			return cb.type;
+		});
+	}
+
 	ECSENGINE_API void BindConstantBufferInjectedCamera(Stream<MaterialInjectedCB> injected_cbs, void* data, float3 camera_position);
 
-	ECSENGINE_API void BindConstantBufferInjectedMVPMatrix(Stream<MaterialInjectedCB> injected_cbs, void* data, Matrix mvp_matrix);
+	ECSENGINE_API void BindConstantBufferInjectedMVPMatrix(Stream<MaterialInjectedCB> injected_cbs, void* data, const Matrix* mvp_matrix);
 
-	ECSENGINE_API void BindConstantBufferInjectedObjectMatrix(Stream<MaterialInjectedCB> injected_cbs, void* data, Matrix object_matrix);
+	ECSENGINE_API void BindConstantBufferInjectedObjectMatrix(Stream<MaterialInjectedCB> injected_cbs, void* data, const Matrix* object_matrix);
 
+	ECSENGINE_API void BindConstantBufferInjectedTag(
+		Stream<MaterialInjectedCB> injected_cbs, 
+		void* data, 
+		const void* data_to_write, 
+		size_t data_size, 
+		ECS_CB_INJECT_TAG tag
+	);
+
+	// It uses the immediate context to map the constant buffers
+	// Pending values needs to be an array with all the possible inject values
+	// The entries should be populated using ECS_CB_INJECT_TAG
 	ECSENGINE_API void BindConstantBufferInjectedCB(
 		Graphics* graphics, 
-		Stream<MaterialInjectedCB> injected_cbs, 
-		float3 camera_position, 
-		Matrix mvp_matrix, 
-		Matrix object_matrix
+		Material* material,
+		Stream<MaterialInjectedCB> injected_cbs,
+		bool vertex_shader,
+		const void** pending_values
+	);
+
+	// It uses the immediate context to map the constant buffers
+	// Pending values needs to be an array with all the possible inject values
+	// The entries should be populated using ECS_CB_INJECT_TAG
+	ECSENGINE_API void BindConstantBufferInjectedCB(
+		Graphics* graphics,
+		Material* material,
+		const void** pending_values
+	);
+
+	// It uses the immediate context to map the constant buffers
+	// There needs to be injected_cbs.size elements in mapped_buffers
+	ECSENGINE_API void MapConstantBufferInjectedTags(
+		Graphics* graphics,
+		const Material* material,
+		Stream<MaterialInjectedCB> injected_cbs,
+		bool vertex_shader,
+		void** mapped_buffers
+	);
+
+	// It uses the immediate context to map the constant buffers
+	ECSENGINE_API void UnmapConstantbufferInjectedTags(
+		Graphics* graphics,
+		const Material* material,
+		Stream<MaterialInjectedCB> injected_cbs,
+		bool vertex_shader
 	);
 
 }

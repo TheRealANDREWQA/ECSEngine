@@ -68,6 +68,20 @@ namespace ECSEngine {
 		// -------------------------------------------------------------------------------------------------
 
 		// The separator specifies the character by which the delimitation is made
+		ECSENGINE_API Path PathNoExtension(Path path, wchar_t separator = ECS_OS_PATH_SEPARATOR);
+		
+		// Uses both separators
+		ECSENGINE_API Path PathNoExtensionBoth(Path path);
+
+		// The separator specifies the character by which the delimitation is made
+		ECSENGINE_API ASCIIPath PathNoExtension(ASCIIPath path, char separator = ECS_OS_PATH_SEPARATOR_ASCII);
+
+		// Uses both separators
+		ECSENGINE_API ASCIIPath PathNoExtensionBoth(ASCIIPath path);
+
+		// -------------------------------------------------------------------------------------------------
+
+		// The separator specifies the character by which the delimitation is made
 		ECSENGINE_API Path PathStem(Path path, wchar_t separator = ECS_OS_PATH_SEPARATOR);
 
 		// Uses both separators

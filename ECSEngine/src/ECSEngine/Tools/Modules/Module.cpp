@@ -475,7 +475,9 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------
 
 	void ReleaseModule(Module* module) {
-		ReleaseModuleHandle(module->os_module_handle);
+		if (module->code != ECS_GET_MODULE_FAULTY_PATH) {
+			ReleaseModuleHandle(module->os_module_handle);
+		}
 		module->code = ECS_GET_MODULE_FAULTY_PATH;
 	}
 

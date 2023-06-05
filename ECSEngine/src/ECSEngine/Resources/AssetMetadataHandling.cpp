@@ -380,18 +380,18 @@ namespace ECSEngine {
 				user_material->buffers[buffer_total_count].tags = { nullptr, 0 };
 				if (material->buffers[index][subindex].reflection_type != nullptr) {
 					Stream<Reflection::ReflectionField> fields = material->buffers[index][subindex].reflection_type->fields;
-					for (size_t index = 0; index < fields.size; index++) {
-						if (fields[index].tag.size > 0) {
-							user_material->buffers[buffer_total_count].tags.AddResize({ fields[index].tag, fields[index].info.pointer_offset }, allocator, true);
+					for (size_t field_index = 0; field_index < fields.size; field_index++) {
+						if (fields[field_index].tag.size > 0) {
+							user_material->buffers[buffer_total_count].tags.AddResize({ fields[field_index].tag, fields[field_index].info.pointer_offset }, allocator, true);
 						}
 					}
 					if (user_material->buffers[buffer_total_count].tags.size > 0) {
 						// Now remove all tags that come from compound elements
-						for (size_t index = 0; index < user_material->buffers[buffer_total_count].tags.size - 1; index++) {
-							if (user_material->buffers[buffer_total_count].tags[index].string ==
-								user_material->buffers[buffer_total_count].tags[index + 1].string) {
-								user_material->buffers[buffer_total_count].tags.RemoveSwapBack(index + 1);
-								index--;
+						for (size_t tag_index = 0; tag_index < user_material->buffers[buffer_total_count].tags.size - 1; tag_index++) {
+							if (user_material->buffers[buffer_total_count].tags[tag_index].string ==
+								user_material->buffers[buffer_total_count].tags[tag_index + 1].string) {
+								user_material->buffers[buffer_total_count].tags.Remove(tag_index + 1);
+								tag_index--;
 							}
 						}
 					}
