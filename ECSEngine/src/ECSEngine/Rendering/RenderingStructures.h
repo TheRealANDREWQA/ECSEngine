@@ -1540,6 +1540,9 @@ namespace ECSEngine {
 		ECS_INLINE void ResetConstantBuffers() {
 			v_buffer_count = 0;
 			p_buffer_count = 0;
+			v_tag_count = 0;
+			p_tag_count = 0;
+			tag_storage_size = 0;
 		}
 
 		ECS_INLINE void ResetUnorderedViews() {

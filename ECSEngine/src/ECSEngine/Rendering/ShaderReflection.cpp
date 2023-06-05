@@ -560,7 +560,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 						range_tag.Add(',');
 					}
 					function::ConvertDoubleToChars(range_tag, double_values[basic_type_count - 1], 5);
-					range_tag.Add('}');
+					range_tag.AddAssert('}');
 				}
 				else {
 					function::ConvertDoubleToChars(range_tag, shader_field->min_value.x, 5);
@@ -583,7 +583,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				else {
 					range_tag.Add('_');
 				}
-				range_tag.Add(')');
+				range_tag.AddAssert(')');
 			}
 			else if (shader_field->max_value.x != DBL_MAX) {
 				range_tag.Copy(STRING(ECS_UI_RANGE_REFLECT));
@@ -594,12 +594,14 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				unsigned char basic_type_count = Reflection::BasicTypeComponentCount(shader_field->basic_type);
 				write_values(basic_type_count, shader_field->max_value);
 
-				range_tag.Add(')');
+				range_tag.AddAssert(')');
 			}
 
 			if (shader_field->tag.size > 0) {
-				range_tag.Add(' ');
-				range_tag.AddStream(shader_field->tag);
+				if (range_tag.size > 0) {
+					range_tag.Add(' ');
+				}
+				range_tag.AddStreamAssert(shader_field->tag);
 			}
 
 			reflection_fields[0].tag = function::StringCopy(allocator, range_tag);

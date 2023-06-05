@@ -152,12 +152,12 @@ namespace ECSEngine {
 			}
 			size_t index = flag + i - temp.size();
 			if (flag != -1 && index < m_free_block_count) {	
-				m_used_block_count++;
+				unsigned int previous_used_block_count = m_used_block_count++;
 				size_t block_start = GetStart(index);
 				size_t block_end = GetEnd(index);
 				ECS_ASSERT(block_start < block_end);
 				if (block_end - block_start == size) {
-					m_free_block_count--;
+					unsigned int previous_free_block_count = m_free_block_count--;
 					SetStart(index, GetStart(m_free_block_count));
 					SetEnd(index, GetEnd(m_free_block_count));
 					SetStart(m_free_block_count, block_start);

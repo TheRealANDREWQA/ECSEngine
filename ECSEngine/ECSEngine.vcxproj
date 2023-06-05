@@ -328,6 +328,7 @@
     <ClInclude Include="src\Includes\ECSEngineAssets.h" />
     <ClInclude Include="src\Includes\ECSEngineBasics.h" />
     <ClInclude Include="src\Includes\ECSEngineBenchmark.h" />
+    <ClInclude Include="src\Includes\ECSEngineCBufferTags.h" />
     <ClInclude Include="src\Includes\ECSEngineComponents.h" />
     <ClInclude Include="src\Includes\ECSEngineComponentsAll.h" />
     <ClInclude Include="src\Includes\ECSEngineConcurrentPrimitives.h" />

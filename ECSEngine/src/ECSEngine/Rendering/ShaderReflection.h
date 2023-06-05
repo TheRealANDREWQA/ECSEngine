@@ -5,7 +5,6 @@
 #include "../ECS/InternalStructures.h"
 #include "RenderingStructures.h"
 #include "../Utilities/Reflection/ReflectionTypes.h"
-#include "CBufferTags.h"
 
 namespace ECSEngine {
 

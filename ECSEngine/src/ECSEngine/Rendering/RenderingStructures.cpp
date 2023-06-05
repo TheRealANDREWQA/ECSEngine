@@ -1110,6 +1110,7 @@ namespace ECSEngine {
 		byte_offsets[current_index] = byte_offset;
 		buffer_indices[current_index] = buffer_index;
 		(*tag_count)++;
+		tag.CopyTo(tag_storage + tag_storage_size);
 		tag_storage_size += tag.size;
 
 		return current_index;

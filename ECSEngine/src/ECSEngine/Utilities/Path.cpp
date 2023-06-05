@@ -147,6 +147,26 @@ namespace ECSEngine {
 			return GetValidPath(PathExtension(path), PathExtension(path, ECS_OS_PATH_SEPARATOR_ASCII_REL));
 		}
 
+		// -------------------------------------------------------------------------------------------------
+		
+		Path PathNoExtension(Path path, wchar_t separator) {
+			Path extension = PathExtension(path, separator);
+			return { path.buffer, path.size - extension.size };
+		}
+
+		Path PathNoExtensionBoth(Path path) {
+			return GetValidPath(PathNoExtension(path), PathNoExtension(path, ECS_OS_PATH_SEPARATOR_REL));
+		}
+		
+		ASCIIPath PathNoExtension(ASCIIPath path, char separator) {
+			ASCIIPath extension = PathExtension(path, separator);
+			return { path.buffer, path.size - extension.size };
+		}
+		
+		ASCIIPath PathNoExtensionBoth(ASCIIPath path) {
+			return GetValidPath(PathNoExtension(path), PathNoExtension(path, ECS_OS_PATH_SEPARATOR_ASCII_REL));
+		}
+
 		// --------------------------------------------------------------------------------------------------
 
 		size_t PathExtensionSize(Path path, wchar_t separator) {

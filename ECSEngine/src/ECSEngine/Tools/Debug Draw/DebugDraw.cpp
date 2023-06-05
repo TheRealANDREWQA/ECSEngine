@@ -274,22 +274,22 @@ namespace ECSEngine {
 		current_translation = old_translation;
 
 		// The Y axis - rotate around Z axis by 90 degrees
-		float3 y_rotation = { axes->rotation.x, axes->rotation.y, axes->rotation.z + 90.0f };
+		float3 y_rotation = { axes->rotation.y, axes->rotation.x, axes->rotation.z + 90.0f };
 		SetInstancedColor(instanced_data, buffer_index + 1, axes->color_y);
 		float3 direction_y_3 = GetUpVector(axes->rotation);
 
-		current_translation += splatted_cylinder_scale * direction_y_3;
+		//current_translation += splatted_cylinder_scale * direction_y_3;
 		// The translation changes for every cylinder - must be computed each time - cannot be cached
 		Matrix matrix_y = arrow_cylinder_scale_matrix * MatrixRotation(y_rotation) * MatrixTranslation(current_translation);
 		SetInstancedMatrix(instanced_data, buffer_index + 1, MatrixTranspose(matrix_y * camera_matrix));
 		current_translation = old_translation;
 
 		// The Z axis - rotate around Y axis by 90 degrees
-		float3 z_rotation = { axes->rotation.x, axes->rotation.y - 90.0f, axes->rotation.z };
+		float3 z_rotation = { axes->rotation.z, axes->rotation.y - 90.0f, axes->rotation.x };
 		SetInstancedColor(instanced_data, buffer_index + 2, axes->color_z);
 		float3 direction_z_3 = GetForwardVector(axes->rotation);
 
-		current_translation += splatted_cylinder_scale * direction_z_3;
+		//current_translation += splatted_cylinder_scale * direction_z_3;
 		// The translation changes for every cylinder - must be computed each time - cannot be cached
 		Matrix matrix_z = arrow_cylinder_scale_matrix * MatrixRotation(z_rotation) * MatrixTranslation(current_translation);
 		SetInstancedMatrix(instanced_data, buffer_index + 2, MatrixTranspose(matrix_z * camera_matrix));
@@ -447,7 +447,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLineThread(float3 start, float3 end, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -459,7 +459,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddSphereThread(float3 position, float radius, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddSphereThread(unsigned int thread_index, float3 position, float radius, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -471,7 +471,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddPointThread(float3 position, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddPointThread(unsigned int thread_index, float3 position, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Make wireframe false
 		options.wireframe = false;
@@ -486,7 +486,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddRectangleThread(float3 corner0, float3 corner1, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -498,7 +498,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCrossThread(float3 position, float3 rotation, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddCrossThread(unsigned int thread_index, float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -510,7 +510,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCircleThread(float3 position, float3 rotation, float radius, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddCircleThread(unsigned int thread_index, float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -522,7 +522,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowThread(float3 start, float3 end, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -535,7 +535,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowRotationThread(float3 translation, float3 rotation, float length, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowRotationThread(unsigned int thread_index, float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -547,7 +547,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAxesThread(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddAxesThread(unsigned int thread_index, float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -559,7 +559,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddTriangleThread(float3 point0, float3 point1, float3 point2, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddTriangleThread(unsigned int thread_index, float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -571,7 +571,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAABBThread(float3 min_coordinates, float3 max_coordinates, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddAABBThread(unsigned int thread_index, float3 min_coordinates, float3 max_coordinates, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -583,7 +583,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddOOBBThread(float3 translation, float3 rotation, float3 scale, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddOOBBThread(unsigned int thread_index, float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -595,7 +595,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringThread(float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringThread(unsigned int thread_index, float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -608,7 +608,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringRotationThread(float3 position, float3 rotation, float size, Stream<char> text, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringRotationThread(unsigned int thread_index, float3 position, float3 rotation, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue

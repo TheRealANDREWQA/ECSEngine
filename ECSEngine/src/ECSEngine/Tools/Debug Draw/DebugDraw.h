@@ -14,15 +14,15 @@ namespace ECSEngine {
 
 	typedef float3 DebugVertex;
 
-	inline ColorFloat AxisXColor() {
+	ECS_INLINE ColorFloat AxisXColor() {
 		return ColorFloat(1.0f, 0.0f, 0.0f);
 	}
 
-	inline ColorFloat AxisYColor() {
+	ECS_INLINE ColorFloat AxisYColor() {
 		return ColorFloat(0.0f, 1.0f, 0.0f);
 	}
 
-	inline ColorFloat AxisZColor() {
+	ECS_INLINE ColorFloat AxisZColor() {
 		return ColorFloat(0.0f, 0.0f, 1.0f);
 	}
 
@@ -152,7 +152,15 @@ namespace ECSEngine {
 		
 		void AddArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options = {false});
 
-		void AddAxes(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options = {false});
+		void AddAxes(
+			float3 translation, 
+			float3 rotation, 
+			float size, 
+			ColorFloat color_x = AxisXColor(), 
+			ColorFloat color_y = AxisYColor(), 
+			ColorFloat color_z = AxisZColor(), 
+			DebugDrawCallOptions options = {false}
+		);
 
 		void AddTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options = {});
 
@@ -168,50 +176,59 @@ namespace ECSEngine {
 
 #pragma region Add to the draw queue - multi threaded
 
-		void AddLineThread(float3 start, float3 end, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddLineThread(unsigned int thread_index, float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddSphereThread(float3 position, float radius, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddSphereThread(unsigned int thread_index, float3 position, float radius, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddPointThread(float3 position, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {false});
+		void AddPointThread(unsigned int thread_index, float3 position, ColorFloat color, DebugDrawCallOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
-		void AddRectangleThread(float3 corner0, float3 corner1, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddCrossThread(float3 position, float3 rotation, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddCrossThread(unsigned int thread_index, float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddCircleThread(float3 position, float3 rotation, float radius, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddCircleThread(unsigned int thread_index, float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddArrowThread(float3 start, float3 end, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {false});
+		void AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options = {false});
 
-		void AddArrowRotationThread(float3 translation, float3 rotation, float length, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {false});
+		void AddArrowRotationThread(unsigned int thread_index, float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options = {false});
 
-		void AddAxesThread(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, unsigned int thread_index, DebugDrawCallOptions options = {false});
+		void AddAxesThread(
+			unsigned int thread_index, 
+			float3 translation, 
+			float3 rotation, 
+			float size, 
+			ColorFloat color_x = AxisXColor(), 
+			ColorFloat color_y = AxisYColor(), 
+			ColorFloat color_z = AxisZColor(), 
+			DebugDrawCallOptions options = {false}
+		);
 
-		void AddTriangleThread(float3 point0, float3 point1, float3 point2, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddTriangleThread(unsigned int thread_index, float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddAABBThread(float3 translation, float3 scale, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddAABBThread(unsigned int thread_index, float3 translation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddOOBBThread(float3 translation, float3 rotation, float3 scale, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddOOBBThread(unsigned int thread_index, float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
 
 		// It must do an allocation from the memory manager under lock - possible expensive operation
 		void AddStringThread(
+			unsigned int thread_index,
 			float3 position, 
 			float3 direction,
 			float size,
 			Stream<char> text,
 			ColorFloat color, 
-			unsigned int thread_index,
 			DebugDrawCallOptions options = { false }
 		);
 
 		// It must do an allocation from the memory manager under lock - possible expensive operation
 		void AddStringRotationThread(
+			unsigned int thread_index,
 			float3 position,
 			float3 direction,
 			float size,
 			Stream<char> text,
 			ColorFloat color,
-			unsigned int thread_index,
 			DebugDrawCallOptions options = { false }
 		);
 
@@ -237,7 +254,15 @@ namespace ECSEngine {
 		// Rotation expressed as radians
 		void DrawArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options = {false});
 
-		void DrawAxes(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options = {false});
+		void DrawAxes(
+			float3 translation, 
+			float3 rotation, 
+			float size, 
+			ColorFloat color_x = AxisXColor(), 
+			ColorFloat color_y = AxisYColor(), 
+			ColorFloat color_z = AxisZColor(), 
+			DebugDrawCallOptions options = {false}
+		);
 
 		void DrawTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options = {});
 

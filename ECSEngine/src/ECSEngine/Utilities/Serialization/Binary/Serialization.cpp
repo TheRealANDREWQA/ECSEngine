@@ -2104,11 +2104,12 @@ namespace ECSEngine {
 				type.fields[field_index].info.stream_type = types[index].fields[field_index].stream_type;
 				type.fields[field_index].info.stream_byte_size = types[index].fields[field_index].stream_byte_size;
 				type.fields[field_index].info.pointer_offset = types[index].fields[field_index].pointer_offset;
-				type.fields[field_index].tag = { nullptr, 0 };
+				type.fields[field_index].tag = types[index].fields[field_index].tag;
 
 				if (allocate_all) {
 					type.fields[field_index].name = function::StringCopy(allocator, type.fields[field_index].name);
 					type.fields[field_index].definition = function::StringCopy(allocator, type.fields[field_index].definition);
+					type.fields[field_index].tag = function::StringCopy(allocator, type.fields[field_index].tag);
 				}
 			}
 

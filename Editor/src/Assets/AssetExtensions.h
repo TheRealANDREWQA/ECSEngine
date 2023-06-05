@@ -1,12 +1,12 @@
 #pragma once
 #include "ECSEngineContainers.h"
 
-inline const wchar_t* ASSET_MESH_EXTENSIONS[] = {
+inline ECSEngine::Stream<wchar_t> ASSET_MESH_EXTENSIONS[] = {
 	L".glb",
 	L".gltf"
 };
 
-inline const wchar_t* ASSET_TEXTURE_EXTENSIONS[] = {
+inline ECSEngine::Stream<wchar_t> ASSET_TEXTURE_EXTENSIONS[] = {
 	L".jpg",
 	L".png",
 	L".tga",
@@ -15,11 +15,11 @@ inline const wchar_t* ASSET_TEXTURE_EXTENSIONS[] = {
 	L".hdr"
 };
 
-inline const wchar_t* ASSET_GPU_SAMPLER_EXTENSIONS[] = {
+inline ECSEngine::Stream<wchar_t> ASSET_GPU_SAMPLER_EXTENSIONS[] = {
 	L".sampler"
 };
 
-inline const wchar_t* ASSET_SHADER_EXTENSIONS[] = {
+inline ECSEngine::Stream<wchar_t> ASSET_SHADER_EXTENSIONS[] = {
 	L".shader",
 	L".vshader",
 	L".pshader",
@@ -50,15 +50,15 @@ inline ECSEngine::Stream<wchar_t> AssetExtensionFromType(ECSEngine::ECS_SHADER_T
 	return ASSET_SHADER_EXTENSIONS[(unsigned int)type + 1];
 }
 
-inline const wchar_t* ASSET_MATERIAL_EXTENSIONS[] = {
+inline ECSEngine::Stream<wchar_t> ASSET_MATERIAL_EXTENSIONS[] = {
 	L".mat"
 };
 
-inline const wchar_t* ASSET_MISC_EXTENSIONS[] = {
+inline ECSEngine::Stream<wchar_t> ASSET_MISC_EXTENSIONS[] = {
 	L".misc"
 };
 
-inline ECSEngine::Stream<const wchar_t*> ASSET_EXTENSIONS[] = {
+inline ECSEngine::Stream<ECSEngine::Stream<wchar_t>> ASSET_EXTENSIONS[] = {
 	{ ASSET_MESH_EXTENSIONS, std::size(ASSET_MESH_EXTENSIONS) },
 	{ ASSET_TEXTURE_EXTENSIONS, std::size(ASSET_TEXTURE_EXTENSIONS) },
 	{ ASSET_GPU_SAMPLER_EXTENSIONS, std::size(ASSET_GPU_SAMPLER_EXTENSIONS) },

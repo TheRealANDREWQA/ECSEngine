@@ -1212,6 +1212,7 @@ namespace ECSEngine {
 		LoadCoallescedMeshFromGLTFOptions options;
 		options.allocate_submesh_name = true;
 		options.permanent_allocator = AllocatorTs();
+		options.scale_factor = scale_factor;
 		bool success = LoadCoallescedMeshFromGLTFToGPU(m_graphics, *data, mesh, has_invert, &options);
 		if (!success) {
 			Deallocate(allocation);
@@ -1708,6 +1709,7 @@ namespace ECSEngine {
 		Material* converted_material,
 		ResourceManagerLoadDesc load_descriptor
 	) {
+		converted_material->ResetTextures();
 		bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 
 		for (size_t index = 0; index < user_material->textures.size; index++) {
@@ -1766,20 +1768,7 @@ namespace ECSEngine {
 				}
 			}
 
-			switch (user_material->textures[index].shader_type) {
-			case ECS_SHADER_VERTEX:
-				converted_material->v_textures[converted_material->v_texture_count] = resource_view;
-				converted_material->v_texture_slot[converted_material->v_texture_count] = user_material->textures[index].slot;
-				converted_material->v_texture_count++;
-				ECS_ASSERT(converted_material->v_texture_count <= ECS_MATERIAL_VERTEX_TEXTURES_COUNT);
-				break;
-			case ECS_SHADER_PIXEL:
-				converted_material->p_textures[converted_material->p_texture_count] = resource_view;
-				converted_material->p_texture_slot[converted_material->p_texture_count] = user_material->textures[index].slot;
-				converted_material->p_texture_count++;
-				ECS_ASSERT(converted_material->p_texture_count <= ECS_MATERIAL_PIXEL_TEXTURES_COUNT);
-				break;
-			}
+			converted_material->AddResourceView(resource_view, user_material->textures[index].slot, user_material->textures[index].shader_type == ECS_SHADER_VERTEX);
 		}
 
 		return true;
@@ -1793,23 +1782,10 @@ namespace ECSEngine {
 		Material* converted_material,
 		ResourceManagerLoadDesc load_descriptor
 	) {
+		converted_material->ResetSamplers();
 		for (size_t index = 0; index < user_material->samplers.size; index++) {
 			SamplerState sampler = user_material->samplers[index].state;
-
-			if (user_material->samplers[index].shader_type == ECS_SHADER_VERTEX) {
-				unsigned char v_index = converted_material->v_sampler_count;
-				converted_material->v_samplers[v_index] = sampler;
-				converted_material->v_sampler_slot[v_index] = user_material->samplers[index].slot;
-				converted_material->v_sampler_count++;
-				ECS_ASSERT(converted_material->v_sampler_count <= ECS_MATERIAL_VERTEX_TEXTURES_COUNT);
-			}
-			else {
-				unsigned char p_index = converted_material->p_sampler_count;
-				converted_material->p_samplers[p_index] = sampler;
-				converted_material->p_sampler_slot[p_index] = user_material->samplers[index].slot;
-				converted_material->p_sampler_count++;
-				ECS_ASSERT(converted_material->p_sampler_count <= ECS_MATERIAL_PIXEL_TEXTURES_COUNT);
-			}
+			converted_material->AddSampler(sampler, user_material->samplers[index].slot, user_material->samplers[index].shader_type == ECS_SHADER_VERTEX);
 		}
 	}
 
@@ -1821,6 +1797,7 @@ namespace ECSEngine {
 		Material* converted_material,
 		ResourceManagerLoadDesc load_descriptor
 	) {
+		converted_material->ResetConstantBuffers();
 		for (size_t index = 0; index < user_material->buffers.size; index++) {
 			ConstantBuffer buffer = { nullptr };
 			if (user_material->buffers[index].dynamic || user_material->buffers[index].data.buffer != nullptr) {

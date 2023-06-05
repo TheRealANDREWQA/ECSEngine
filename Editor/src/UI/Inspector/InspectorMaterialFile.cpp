@@ -1,4 +1,6 @@
 #include "editorpch.h"
+#include "ECSEngineCBufferTags.h"
+
 #include "InspectorMiscFile.h"
 #include "../Inspector.h"
 #include "InspectorUtilities.h"
@@ -786,12 +788,20 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 					GetAssetFromMetadata(data->editor_state->asset_database->GetAssetConst(handle, dependencies[index].type), dependencies[index].type)
 				);
 			}
+			else {
+				if (IsAssetFromMetadataValid(current_asset, dependencies[index].type)) {
+					data->temporary_database.RandomizePointer(current_asset, dependencies[index].type);
+				}
+				//dependencies[index].handle = -1;
+			}
 		}
+		RemapAssetDependencies(&data->material_asset, ECS_ASSET_MATERIAL, dependencies);
+
 		const MaterialAsset* main_material = editor_state->asset_database->GetMaterialConst(main_database_handle);
 		// Set the pointer for the material
 		SetAssetToMetadata(&data->material_asset, ECS_ASSET_MATERIAL, GetAssetFromMetadata(main_material, ECS_ASSET_MATERIAL));
 
-		is_material_loaded = IsMaterialFromMetadataLoadedEx(&data->material_asset, editor_state->RuntimeResourceManager(), &data->temporary_database, &is_loaded_desc);
+		is_material_loaded = IsMaterialFromMetadataLoadedEx(main_material, editor_state->RuntimeResourceManager(), editor_state->asset_database, &is_loaded_desc);
 	}
 	else {
 		// Set a pointer value to the material such that it will "appear" as loaded. Since it is only in edit mode and

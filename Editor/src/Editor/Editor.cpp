@@ -19,6 +19,7 @@
 #include "../UI/Inspector.h"
 #include <DbgHelp.h>
 #include "ECSEngineBenchmark.h"
+#include "ECSEngineMath.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2

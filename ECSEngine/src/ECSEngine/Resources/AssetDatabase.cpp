@@ -1147,8 +1147,8 @@ namespace ECSEngine {
 			unsigned int count = database->GetAssetCount(current_type);
 			handles[current_type].Initialize(allocator, count);
 			handles[current_type].size = 0;
-			for (unsigned int index = 0; index < count; index++) {
-				unsigned int handle = database->GetAssetHandleFromIndex(index, current_type);
+			for (unsigned int subindex = 0; subindex < count; subindex++) {
+				unsigned int handle = database->GetAssetHandleFromIndex(subindex, current_type);
 				const void* asset = database->GetAssetConst(handle, current_type);
 				if (DoesAssetReferenceOtherAsset(current_handle, type, asset, current_type)) {
 					handles[current_type].Add(handle);
