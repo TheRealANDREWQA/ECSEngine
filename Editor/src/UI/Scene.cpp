@@ -45,19 +45,26 @@ void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_sta
 	descriptor.window_data_size = sizeof(*data);
 }
 
-struct SceneHoverableActionData {
+struct SceneActionData {
+	ECS_INLINE bool IsTheSameData(const SceneActionData* other) const {
+		return other != nullptr && sandbox_index == other->sandbox_index;
+	}
+
 	EditorState* editor_state;
 	unsigned int sandbox_index;
+
+	bool middle_click_initiated = false;
+	bool right_click_initiated = false;
 };
 
-void SceneHoverableAction(ActionData* action_data) {
+void SceneRotationAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	SceneHoverableActionData* data = (SceneHoverableActionData*)_data;
-	if (mouse_tracker->RightButton() == MBPRESSED || mouse_tracker->MiddleButton() == MBPRESSED) {
+	SceneActionData* data = (SceneActionData*)_data;
+	if (mouse_tracker->RightButton() == MBPRESSED) {
 		mouse->EnableRawInput();
 	}
-	else if (mouse_tracker->RightButton() == MBRELEASED || mouse_tracker->MiddleButton() == MBRELEASED) {
+	else if (mouse_tracker->RightButton() == MBRELEASED) {
 		mouse->DisableRawInput();
 	}
 
@@ -86,6 +93,23 @@ void SceneHoverableAction(ActionData* action_data) {
 			RenderSandbox(data->editor_state, data->sandbox_index, current_viewport);
 		}
 	}
+}
+
+void SceneTranslationAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	SceneActionData* data = (SceneActionData*)_data;
+	if (mouse_tracker->MiddleButton() == MBPRESSED) {
+		mouse->EnableRawInput();
+	}
+	else if (mouse_tracker->MiddleButton() == MBRELEASED) {
+		mouse->DisableRawInput();
+	}
+	else if (mouse_tracker->MiddleButton() == MBHELD) {
+		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+	}
+
+	EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxCurrentViewport(data->editor_state, data->sandbox_index);
 
 	if (mouse_tracker->MiddleButton() == MBHELD) {
 		float2 mouse_position = system->GetNormalizeMousePosition();
@@ -110,6 +134,14 @@ void SceneHoverableAction(ActionData* action_data) {
 			RenderSandbox(data->editor_state, data->sandbox_index, current_viewport);
 		}
 	}
+}
+
+void SceneZoomAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	SceneActionData* data = (SceneActionData*)_data;
+
+	EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxCurrentViewport(data->editor_state, data->sandbox_index);
 
 	int scroll_delta = mouse->GetScrollDelta();
 	if (scroll_delta != 0) {
@@ -152,13 +184,17 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			ResizeSandboxTextures(editor_state, drawer, current_viewport, &data->previous_texel_size);
 			DisplaySandboxTexture(editor_state, drawer, current_viewport);
 
-			SceneHoverableActionData hoverable_data;
+			SceneActionData hoverable_data;
 			hoverable_data.editor_state = editor_state;
 			hoverable_data.sandbox_index = sandbox_index;
 
-			UIActionHandler click_handler = { SceneHoverableAction, &hoverable_data, sizeof(hoverable_data) };
-			// This is for translation and rotation
-			drawer.SetWindowHoverable(&click_handler);
+			// Add the handlers for rotation, translation, zoom
+			UIActionHandler rotation_handler = { SceneRotationAction, &hoverable_data, sizeof(hoverable_data) };
+			drawer.SetWindowClickable(&rotation_handler, ECS_MOUSE_RIGHT);
+			UIActionHandler translation_handler = { SceneTranslationAction, &hoverable_data, sizeof(hoverable_data) };
+			drawer.SetWindowClickable(&translation_handler, ECS_MOUSE_MIDDLE);
+			UIActionHandler zoom_handler = { SceneZoomAction, &hoverable_data, sizeof(hoverable_data) };
+			drawer.SetWindowHoverable(&zoom_handler);
 
 			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_index, sandbox_graphics_module_index, drawer);
 		}

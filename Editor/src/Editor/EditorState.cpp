@@ -231,7 +231,7 @@ void TickPendingTasks(EditorState* editor_state) {
 		while (editor_state->pending_background_tasks.Pop(background_task)) {
 			editor_state->task_manager->AddDynamicTaskAndWake(background_task);
 			if (background_task.data_size > 0) {
-				editor_state->multithreaded_editor_allocator->Deallocate(background_task.data);
+				editor_state->multithreaded_editor_allocator->Deallocate_ts(background_task.data);
 			}
 		}
 	}
@@ -353,10 +353,39 @@ void InitializeRuntime(EditorState* editor_state) {
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorStateInitialize(Application* application, EditorState* editor_state, HWND hWnd, HID::Mouse& mouse, HID::Keyboard& keyboard)
+void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, HID::Mouse* mouse, HID::Keyboard* keyboard)
+{
+	GlobalMemoryManager* hub_allocator = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
+	*hub_allocator = GlobalMemoryManager(ECS_KB * 16, 512, ECS_KB * 16);
+
+	HubData* hub_data = (HubData*)malloc(sizeof(HubData));
+	hub_data->projects.Initialize(hub_allocator, 0, EDITOR_HUB_PROJECT_CAPACITY);
+	hub_data->projects.size = 0;
+	hub_data->allocator = GetAllocatorPolymorphic(hub_allocator);
+	editor_state->hub_data = hub_data;
+
+	GlobalMemoryManager* console_global_memory = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
+	*console_global_memory = GlobalMemoryManager(ECS_MB * 3, 64, ECS_MB * 2);
+	MemoryManager* console_memory_manager = (MemoryManager*)malloc(sizeof(MemoryManager));
+	*console_memory_manager = DefaultConsoleAllocator(console_global_memory);
+
+	TaskManager* console_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
+	new (console_task_manager) TaskManager(1, console_global_memory);
+	SetConsole(console_memory_manager, console_task_manager, L"TempDump.txt");
+	console_task_manager->CreateThreads();
+
+	mouse->AttachToProcess({ hwnd });
+	mouse->SetAbsoluteMode();
+	*keyboard = HID::Keyboard(hub_allocator);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void EditorStateInitialize(Application* application, EditorState* editor_state, HWND hWnd, HID::Mouse* mouse, HID::Keyboard* keyboard)
 {
 	// Create every single member using new for easier class construction
 	editor_state->editor_tick = TickPendingTasks;
+	memset(editor_state->flags, 0, sizeof(editor_state->flags));
 
 	GlobalMemoryManager* global_memory_manager = new GlobalMemoryManager(GLOBAL_MEMORY_COUNT, 512, GLOBAL_MEMORY_RESERVE_COUNT);
 	Graphics* graphics = (Graphics*)malloc(sizeof(Graphics));
@@ -403,16 +432,12 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	ResizableMemoryArena* resizable_arena = (ResizableMemoryArena*)malloc(sizeof(ResizableMemoryArena));
 	*resizable_arena = DefaultUISystemAllocator(global_memory_manager);
 
-	mouse.AttachToProcess({ hWnd });
-	mouse.SetAbsoluteMode();
-	keyboard = HID::Keyboard(global_memory_manager);
-
 	UISystem* ui = (UISystem*)malloc(sizeof(UISystem));
 	new (ui) UISystem(
 		application,
 		resizable_arena,
-		&keyboard,
-		&mouse,
+		keyboard,
+		mouse,
 		graphics,
 		ui_resource_manager,
 		editor_task_manager,
@@ -470,20 +495,15 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	for (size_t index = 0; index < ui_asset_overrides.capacity; index++) {
 		editor_state->module_reflection->SetFieldOverride(ui_asset_overrides.buffer + index);
 	}
-
-	HubData* hub_data = (HubData*)malloc(sizeof(HubData));
-	hub_data->projects.Initialize(editor_allocator, 0, EDITOR_HUB_PROJECT_CAPACITY);
-	hub_data->projects.size = 0;
-	editor_state->hub_data = hub_data;
 	
 	ProjectFile* project_file = (ProjectFile*)malloc(sizeof(ProjectFile));
 	project_file->project_name.Initialize(resizable_arena, 0, 64);
 	project_file->path.Initialize(resizable_arena, 0, 256);
 	editor_state->project_file = project_file;
 
-	MemoryManager* console_memory_manager = (MemoryManager*)malloc(sizeof(MemoryManager));
-	*console_memory_manager = DefaultConsoleAllocator(global_memory_manager);
-	SetConsole(console_memory_manager, editor_task_manager, L"TempDump.txt");
+	Console* console = GetConsole();
+	console->allocator->Clear();
+	SetConsole(console->allocator, console->task_manager, L"TempDump.txt");
 
 	GetConsole()->AddSystemFilterString(EDITOR_CONSOLE_SYSTEM_NAME);
 
@@ -537,15 +557,25 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	InitializeRuntime(editor_state);
 
 	// Change the dump type to none during the hub phase
-	Console* console = GetConsole();
 	console->SetDumpType(ECS_CONSOLE_DUMP_NONE);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
 void EditorStateDestroy(EditorState* editor_state) {
-	editor_state->editor_allocator->m_backup->Free();
+	// Destroy the threads for all sandboxes
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		sandbox->sandbox_world.task_manager->DestroyThreads();
+	}
+
+	// Destroy the editor state threads
+	editor_state->task_manager->DestroyThreads();
+	editor_state->render_task_manager->DestroyThreads();
+
 	DestroyGraphics(editor_state->ui_system->m_graphics);
+	editor_state->editor_allocator->m_backup->Free();
 
 	// If necessary, free all the malloc's for the individual allocations - but there are very small and insignificant
 	// Not worth freeing them since EditorStateInitialize won't be called more than a couple of times during the runtime of 

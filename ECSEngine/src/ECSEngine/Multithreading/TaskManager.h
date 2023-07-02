@@ -71,6 +71,14 @@ namespace ECSEngine {
 	// It requires a ThreadWrapperCountTasksData to be allocated
 	ECSENGINE_API ECS_THREAD_WRAPPER_TASK(ThreadWrapperCountTasks);
 
+	struct StaticThreadTask {
+		ECS_INLINE StaticThreadTask() {}
+		ECS_INLINE StaticThreadTask(ThreadTask _task, bool _barrier_task) : task(_task), barrier_task(_barrier_task) {}
+
+		ThreadTask task;
+		bool barrier_task;
+	};
+
 	// The static threads are executed by a single thread
 	// The purpose of the static tasks is to dynamically detect how the data
 	// should be partitioned and then push the dynamic tasks accordingly
@@ -89,9 +97,9 @@ namespace ECSEngine {
 		TaskManager(const TaskManager& other) = default;
 		TaskManager& operator = (const TaskManager& other) = default;
 
-		void AddTask(ThreadTask task);
+		void AddTask(StaticThreadTask task);
 
-		void AddTasks(Stream<ThreadTask> tasks);
+		void AddTasks(Stream<StaticThreadTask> tasks);
 
 		// it will add that task to the next thread after the last one used and returns the index of the 
 		// thread that is executing the task
@@ -208,7 +216,7 @@ namespace ECSEngine {
 		void ResetDynamicQueue(unsigned int thread_id);
 
 		// Sets a specific task, should only be used in initialization
-		void SetTask(ThreadTask task, unsigned int index, size_t task_data_size = 0);
+		void SetTask(StaticThreadTask task, unsigned int index, size_t task_data_size = 0);
 
 		void SetWorld(World* world);
 
@@ -269,12 +277,12 @@ namespace ECSEngine {
 
 		Stream<ThreadQueue*> m_thread_queue;
 
-		struct StaticThreadTask {
+		struct StaticTask {
 			ThreadTask task;
-			SpinLock initialize_lock;
+			Semaphore barrier;
 		};
 
-		ResizableStream<StaticThreadTask> m_tasks;
+		ResizableStream<StaticTask> m_tasks;
 		// Allocated on a separate cache line in order to not affect other
 		// fields when modifying this
 		std::atomic<unsigned int>* m_thread_task_index;

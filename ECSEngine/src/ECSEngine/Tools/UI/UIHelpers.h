@@ -657,7 +657,7 @@ namespace ECSEngine {
 		template<typename Buffer>
 		float2 GetRectangleSectionYBounds(const Buffer* buffer, size_t starting_index, size_t end_index);
 
-		ECSENGINE_API bool IsClickableTrigger(ActionData* action_data);
+		ECSENGINE_API bool IsClickableTrigger(ActionData* action_data, ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT);
 
 	}
 }

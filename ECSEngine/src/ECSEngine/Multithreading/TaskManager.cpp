@@ -187,7 +187,7 @@ namespace ECSEngine {
 		m_static_task_data_allocator = LinearAllocator((void*)buffer_start, STATIC_TASK_ALLOCATOR_SIZE);
 		buffer_start += STATIC_TASK_ALLOCATOR_SIZE;
 
-		m_tasks = ResizableStream<StaticThreadTask>(GetAllocatorPolymorphic(memory), 0);
+		m_tasks = ResizableStream<StaticTask>(GetAllocatorPolymorphic(memory), 0);
 
 		// Now the thread local allocators
 		const size_t linear_allocator_cache_lines = (sizeof(LinearAllocator) - 1) / ECS_CACHE_LINE_SIZE;
@@ -216,28 +216,29 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::AddTask(ThreadTask task) {
-		ECS_ASSERT(task.name.size > 0);
+	void TaskManager::AddTask(StaticThreadTask task) {
+		ECS_ASSERT(task.task.name.size > 0);
 
-		task.data = function::CopyNonZero(StaticTaskAllocator(this), task.data, task.data_size);
+		task.task.data = function::CopyNonZero(StaticTaskAllocator(this), task.task.data, task.task.data_size);
 
 #if 0
 		if (task.name != nullptr) {
 			task.name = function::StringCopy(TaskAllocator(this), task.name).buffer;
 		}
 #else
-		task.name = function::StringCopy(StaticTaskAllocator(this), task.name).buffer;
+		task.task.name = function::StringCopy(StaticTaskAllocator(this), task.task.name).buffer;
 #endif
 		unsigned int index = m_tasks.ReserveNewElement();
-		m_tasks[index].task = task;
-		m_tasks[index].initialize_lock.unlock();
+		m_tasks[index].task = task.task;
+		m_tasks[index].barrier.ClearCount();
+		m_tasks[index].barrier.SetTarget(task.barrier_task ? GetThreadCount() : 1);
 
 		m_tasks.size++;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::AddTasks(Stream<ThreadTask> tasks)
+	void TaskManager::AddTasks(Stream<StaticThreadTask> tasks)
 	{
 		for (size_t index = 0; index < tasks.size; index++) {
 			AddTask(tasks[index]);
@@ -414,7 +415,7 @@ namespace ECSEngine {
 		m_thread_task_index->store(0, ECS_RELEASE);
 		// Make all initialize locks to 0 again
 		for (unsigned int index = 0; index < m_tasks.size; index++) {
-			m_tasks[index].initialize_lock.unlock();
+			m_tasks[index].barrier.ClearCount();
 		}
 	}
 
@@ -510,19 +511,32 @@ namespace ECSEngine {
 			return false;
 		}
 
-		if (m_tasks[task_index].initialize_lock.try_lock()) {
-			// We managed to get the lock - we should do the initialization
+		unsigned int barrier_value = m_tasks[task_index].barrier.TryEnter(0);
+		unsigned int target_value = m_tasks[task_index].barrier.Target();
+		if (barrier_value == 0) {
+			// We are the first thread to reach this task - we should do the initialization
 			// We will anounce to the other threads that we finished the serial
-			// part by setting the high bit
+			// part by setting the count to -2 - we need to preserve the target value for future uses
+			// (cannot use -1 because it will not be detected by the spin wait as a valid value)
+
+			// If this is a barrier, we need to wait for all threads to reach this task
+			if (target_value > 1) {
+				m_tasks[task_index].barrier.SpinWaitEx(target_value, -1);
+			}
+
 			m_static_wrapper.function(thread_id, thread_id, m_world, m_tasks[task_index].task, m_static_wrapper.data);
 			// Increment the static index and then set the high bit
 			IncrementThreadTaskIndex();
 
-			BitLockWithNotify(m_tasks[task_index].initialize_lock.value, 7);
+			m_tasks[task_index].barrier.SetCountEx(-2);
 		}
 		else {
+			if (target_value > 1 && barrier_value == -1) {
+				m_tasks[task_index].barrier.EnterEx();
+			}
+
 			// Wait while the serial part is being finished
-			BitWaitUnlocked(m_tasks[task_index].initialize_lock.value, 7, true);
+			m_tasks[task_index].barrier.SpinWaitEx(-2, -1);
 		}
 
 		return true;
@@ -554,14 +568,13 @@ namespace ECSEngine {
 	ECS_THREAD_TASK(FinishFrameTask) {
 		// Flush the entity manager as well
 		world->entity_manager->EndFrame();
-
 		unsigned int thread_count = world->task_manager->GetThreadCount();
 		world->task_manager->AddDynamicTaskGroup(WITH_NAME(FinishFrameTaskDynamic), nullptr, thread_count, 0, false);
 	}
 
 	void TaskManager::FinishStaticTasks()
 	{
-		AddTask(ECS_THREAD_TASK_NAME(FinishFrameTask, nullptr, 0));
+		AddTask(ECS_STATIC_THREAD_TASK_NAME(FinishFrameTask, nullptr, 0, true));
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -694,15 +707,16 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::SetTask(ThreadTask task, unsigned int index, size_t task_data_size) {
+	void TaskManager::SetTask(StaticThreadTask task, unsigned int index, size_t task_data_size) {
 		ECS_ASSERT(m_tasks.size < m_tasks.capacity);
 		if (task_data_size > 0) {
 			void* allocation = Allocate(m_tasks.allocator, task_data_size);
-			memcpy(allocation, task.data, task_data_size);
-			task.data = allocation;
+			memcpy(allocation, task.task.data, task_data_size);
+			task.task.data = allocation;
 		}
-		m_tasks[index].task = task;
-		m_tasks[index].initialize_lock.unlock();
+		m_tasks[index].task = task.task;
+		m_tasks[index].barrier.ClearCount();
+		m_tasks[index].barrier.SetTarget(task.barrier_task ? GetThreadCount() : 1);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

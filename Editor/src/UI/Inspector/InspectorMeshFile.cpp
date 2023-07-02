@@ -23,7 +23,7 @@ ECS_TOOLS;
 struct InspectorDrawMeshFileData {
 	Stream<wchar_t> path;
 	GLTFThumbnail thumbnail;
-	CoallescedMesh* mesh;
+	CoalescedMesh* mesh;
 	float radius_delta;
 	float2 rotation_delta;
 	float window_thumbnail_percentage;
@@ -42,7 +42,7 @@ void InspectorCleanMeshFile(EditorState* editor_state, unsigned int inspector_in
 	FileExplorerMeshThumbnail file_explorer_thumbnail;
 	if (editor_state->file_explorer_data->mesh_thumbnails.TryGetValue(ResourceIdentifier(data->path.buffer, data->path.size), file_explorer_thumbnail)) {
 		if (file_explorer_thumbnail.could_be_read) {
-			editor_state->ui_resource_manager->UnloadCoallescedMeshImplementation(data->mesh);
+			editor_state->ui_resource_manager->UnloadCoalescedMeshImplementation(data->mesh);
 			// Release the texture aswell
 			Graphics* graphics = editor_state->UIGraphics();
 			Texture2D texture = data->thumbnail.texture.GetResource();
@@ -145,11 +145,16 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 			config, "Scale factor", &data->current_metadata.scale_factor, 1.0f, -100.0f, 100.0f);
 		drawer->NextRow();
 
-		config.flag_count = 2;
-		drawer->CheckBox(base_configuration ^ UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_MAKE_SQUARE, config, "Invert Z axis", &data->current_metadata.invert_z_axis);
-		drawer->NextRow();
+		config.flag_count--;
 
-		config.flag_count = 2;
+		UIConfigCheckBoxCallback check_box_callback;
+		check_box_callback.handler = float_input_callback.handler;
+		config.AddFlag(check_box_callback);
+		drawer->CheckBox(base_configuration ^ UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_MAKE_SQUARE | UI_CONFIG_CHECK_BOX_CALLBACK, 
+			config, "Invert Z axis", &data->current_metadata.invert_z_axis);
+		drawer->NextRow();
+		config.flag_count--;
+
 		const Reflection::ReflectionEnum* optimize_enum = editor_state->ui_reflection->reflection->GetEnum(STRING(ECS_ASSET_MESH_OPTIMIZE_LEVEL));
 		Stream<Stream<char>> optimize_labels = optimize_enum->fields;
 
@@ -190,7 +195,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 			uint2 texture_size = calculate_texture_size_from_region(window_size, drawer->GetRegionScale());
 
 			// Load the mesh
-			CoallescedMesh* mesh = editor_state->ui_resource_manager->LoadCoallescedMeshImplementation(data->path.buffer);
+			CoalescedMesh* mesh = editor_state->ui_resource_manager->LoadCoalescedMeshImplementation(data->path.buffer);
 			data->mesh = mesh;
 			data->thumbnail = GLTFGenerateThumbnail(graphics, texture_size, &mesh->mesh);
 		}

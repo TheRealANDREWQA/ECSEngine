@@ -667,6 +667,90 @@ namespace ECSEngine {
 		return MatrixRotationXRad(rotation.x) * MatrixRotationYRad(rotation.y) * MatrixRotationZRad(rotation.z);
 	}
 
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationCamera(float3 rotation) {
+		return MatrixRotationZ(-rotation.z) * MatrixRotationY(-rotation.y) * MatrixRotationX(-rotation.x);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationCameraRad(float3 rotation) {
+		return MatrixRotationZRad(-rotation.z) * MatrixRotationYRad(-rotation.y) * MatrixRotationXRad(-rotation.x);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationXZY(float3 rotation) {
+		return MatrixRotationX(rotation.x) * MatrixRotationZ(rotation.z) * MatrixRotationY(rotation.y);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationZXY(float3 rotation) {
+		return MatrixRotationZ(rotation.z) * MatrixRotationX(rotation.x) * MatrixRotationY(rotation.y);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationZYX(float3 rotation) {
+		return MatrixRotationZ(rotation.z) * MatrixRotationY(rotation.y) * MatrixRotationX(rotation.x);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationYXZ(float3 rotation) {
+		return MatrixRotationY(rotation.y) * MatrixRotationX(rotation.x) * MatrixRotationZ(rotation.z);
+	}
+	
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationYZX(float3 rotation) {
+		return MatrixRotationY(rotation.y) * MatrixRotationZ(rotation.z) * MatrixRotationX(rotation.x);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationXZYRad(float3 rotation) {
+		return MatrixRotationXRad(rotation.x) * MatrixRotationZRad(rotation.z) * MatrixRotationYRad(rotation.y);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationZXYRad(float3 rotation) {
+		return MatrixRotationZRad(rotation.z) * MatrixRotationXRad(rotation.x) * MatrixRotationYRad(rotation.y);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationZYXRad(float3 rotation) {
+		return MatrixRotationZRad(rotation.z) * MatrixRotationYRad(rotation.y) * MatrixRotationXRad(rotation.x);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationYXZRad(float3 rotation) {
+		return MatrixRotationYRad(rotation.y) * MatrixRotationXRad(rotation.x) * MatrixRotationZRad(rotation.z);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationYZXRad(float3 rotation) {
+		return MatrixRotationYRad(rotation.y) * MatrixRotationZRad(rotation.z) * MatrixRotationXRad(rotation.x);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixTRS(Matrix translation, Matrix rotation, Matrix scale) {
+		return scale * rotation * translation;
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRS(Matrix rotation, Matrix scale) {
+		return scale * rotation;
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixTR(Matrix translation, Matrix rotation) {
+		return rotation * translation;
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixTS(Matrix translation, Matrix scale) {
+		return scale * translation;
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixMVP(Matrix object_matrix, Matrix camera_matrix) {
+		return object_matrix * camera_matrix;
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixGPU(Matrix matrix) {
+		return MatrixTranspose(matrix);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixMVPToGPU(Matrix object_matrix, Matrix camera_matrix) {
+		return MatrixGPU(MatrixMVP(object_matrix, camera_matrix));
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixMVPToGPU(Matrix translation, Matrix rotation, Matrix scale, Matrix camera_matrix) {
+		return MatrixMVPToGPU(MatrixTRS(translation, rotation, scale), camera_matrix);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixLookTo(Vector4 origin, Vector4 direction, Vector4 up) {
@@ -702,15 +786,37 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixPerspective(float width, float height, float near_z, float far_z) {
+	// Left should be smaller than right
+	// Top should be smaller than bottom
+	// Near_z should be smaller than far_z
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixPerspective(float left, float right, float top, float bottom, float near_z, float far_z) {
 		float two_near_z = near_z + near_z;
 		float range = far_z / (far_z - near_z);
+		float width = right - left;
+		float height = bottom - top;
+		float width_inverse = 1.0f / width;
+		float height_inverse = 1.0f / height;
 
-		// 2n / width        0           0          0
-		//     0        2n / height      0          0
-		//     0             0         range        1
-		//     0             0    -range * near_z   0
-		return Matrix(two_near_z / width, 0.0f, 0.0f, 0.0f, 0.0f, two_near_z / height, 0.0f, 0.0f, 0.0f, 0.0f, range, 1.0f, 0.0f, 0.0f, -range * near_z, 0.0f);
+		// 2n / width                  0                      0          0
+		//     0                    2n / height               0          0
+		// - (r + l) / width   - (b + t) / (b - t)          range        1
+		//     0                       0               -range * near_z   0
+		return Matrix(
+			two_near_z * width_inverse, 0.0f, 0.0f, 0.0f, 
+			0.0f, two_near_z * height_inverse, 0.0f, 0.0f, 
+			- (right + left) * width_inverse, -(bottom + top) * height_inverse, range, 1.0f,
+			0.0f, 0.0f, -range * near_z, 0.0f
+		);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// It will align the matrix to the center of a rectangle with the given width and height
+	// Near_z should be smaller than far_z
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixPerspective(float width, float height, float near_z, float far_z) {
+		float half_width = width * 0.5f;
+		float half_height = height * 0.5f;
+		return MatrixPerspective(-half_width, half_width, -half_height, half_height, near_z, far_z);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -737,14 +843,34 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixOrthographic(float width, float height, float near_z, float far_z) {
-		// 2 / width       0           0          0
-		//    0        2 / height      0          0
-		//    0            0         range        0
-		//    0            0     -range * near_z  1
+	// Left should be smaller than right
+	// Top should be smaller than bottom
+	// Near_z should be smaller than far_z
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixOrthographic(float left, float right, float top, float bottom, float near_z, float far_z) {
+		//         2 / width                     0                    0          0
+		//           0                     2 / height                 0          0
+		//           0                          0                   range        0
+		// - (r + l) / (r - l)        - (b + t) / (b - t)   -range * near_z      1
 
 		float range = 1.0f / (far_z - near_z);
-		return Matrix(2.0f / width, 0.0f, 0.0f, 0.0f, 0.0f, 2.0f / height, 0.0f, 0.0f, 0.0f, 0.0f, range, 0.0f, 0.0f, 0.0f, -range * near_z, 1.0f);
+		float width = right - left;
+		float height = bottom - top;
+		float width_inverse = 1.0f / width;
+		float height_inverse = 1.0f / height;
+		return Matrix(
+			2.0f * width_inverse, 0.0f, 0.0f, 0.0f, 
+			0.0f, 2.0f * height_inverse, 0.0f, 0.0f, 
+			0.0f, 0.0f, range, 0.0f, 
+			-(right + left) * width_inverse, - (bottom + top) * height_inverse, -range * near_z, 1.0f
+		);
+	}
+
+	// It will align the matrix to the center of a rectangle with the given width and height
+	// Near_z should be smaller than far_z
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixOrthographic(float width, float height, float near_z, float far_z) {
+		float half_width = width * 0.5f;
+		float half_height = height * 0.5f;
+		return MatrixOrthographic(-half_width, half_width, -half_height, half_height, near_z, far_z);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

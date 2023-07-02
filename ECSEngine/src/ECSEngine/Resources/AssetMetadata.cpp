@@ -27,7 +27,7 @@ namespace ECSEngine {
 	}
 
 	AssetFieldTarget ECS_ASSET_TARGET_FIELD_NAMES[] = {
-		{ STRING(CoallescedMesh), ECS_ASSET_MESH },
+		{ STRING(CoalescedMesh), ECS_ASSET_MESH },
 		{ STRING(ResourceView), ECS_ASSET_TEXTURE },
 		{ STRING(SamplerState), ECS_ASSET_GPU_SAMPLER },
 		{ STRING(VertexShader), ECS_ASSET_SHADER, ECS_SHADER_VERTEX },
@@ -55,7 +55,7 @@ namespace ECSEngine {
 	{
 		switch (type) {
 		case ECS_ASSET_MESH:
-			return ResourceType::CoallescedMesh;
+			return ResourceType::CoalescedMesh;
 		case ECS_ASSET_TEXTURE:
 			return ResourceType::Texture;
 		case ECS_ASSET_GPU_SAMPLER:
@@ -148,7 +148,7 @@ namespace ECSEngine {
 	{
 		switch (type) {
 		case ECS_ASSET_MESH:
-			return sizeof(CoallescedMesh);
+			return sizeof(CoalescedMesh);
 		case ECS_ASSET_MATERIAL:
 			return sizeof(Material);
 		case ECS_ASSET_TEXTURE:
@@ -1543,7 +1543,7 @@ namespace ECSEngine {
 		case ECS_ASSET_MESH:
 		{
 			MeshMetadata* mesh = (MeshMetadata*)metadata;
-			mesh->mesh_pointer = (CoallescedMesh*)asset.buffer;
+			mesh->mesh_pointer = (CoalescedMesh*)asset.buffer;
 		}
 		break;
 		case ECS_ASSET_TEXTURE:
@@ -1594,7 +1594,7 @@ namespace ECSEngine {
 		case ECS_ASSET_MESH:
 		{
 			MeshMetadata* mesh = (MeshMetadata*)metadata;
-			mesh->mesh_pointer = (CoallescedMesh*)index;
+			mesh->mesh_pointer = (CoalescedMesh*)index;
 		}
 		break;
 		case ECS_ASSET_TEXTURE:

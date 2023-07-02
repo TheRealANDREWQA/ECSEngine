@@ -6,6 +6,7 @@
 #include "ECSEngineShaderApplicationStage.h"
 #include "ECSEngineDebugDrawer.h"
 #include "ECSEngineCBufferTags.h"
+#include "ECSEngineMath.h"
 
 using namespace ECSEngine;
 
@@ -19,6 +20,129 @@ ECS_THREAD_TASK(PerformTask) {
 	//camera.SetPerspectiveProjection();
 }
 
+struct BasicDrawForEachData {
+	const Camera* camera;
+	Matrix camera_matrix;
+};
+
+template<bool has_translation, bool has_rotation, bool has_scale>
+void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
+	BasicDrawForEachData* data = (BasicDrawForEachData*)for_each_data->data;
+
+	World* world = for_each_data->world;
+	DebugDrawer* debug_drawer = world->debug_drawer;
+	Graphics* graphics = world->graphics;
+	DebugDrawer* drawer = world->debug_drawer;
+
+	const RenderMesh* mesh = (const RenderMesh*)for_each_data->shared_components[0];
+	if (IsAssetPointerValid(mesh->material) && IsAssetPointerValid(mesh->mesh)) {
+
+		float3 translation_value = { 0.0f, 0.0f, 0.0f };
+		float3 rotation_value = { 0.0f, 0.0f, 0.0f };
+		float3 scale_value = { 1.0f, 1.0f, 1.0f };
+		Matrix matrix_translation;
+		Matrix matrix_rotation;
+		Matrix matrix_scale;
+
+		enum ORDER {
+			TRANSLATION,
+			ROTATION,
+			SCALE,
+			COUNT
+		};
+
+		unsigned char component_indices[COUNT] = { 0 };
+		if constexpr (has_translation) {
+			for (size_t index = TRANSLATION + 1; index < COUNT; index++) {
+				component_indices[index]++;
+			}
+		}
+		if constexpr (has_rotation) {
+			for (size_t index = ROTATION + 1; index < COUNT; index++) {
+				component_indices[index]++;
+			}
+		}
+
+		if constexpr (has_translation) {
+			const Translation* translation = (const Translation*)for_each_data->unique_components[component_indices[TRANSLATION]];
+			translation_value = translation->value;
+			matrix_translation = MatrixTranslation(translation_value);
+		}
+		if constexpr (has_rotation) {
+			const Rotation* rotation = (const Rotation*)for_each_data->unique_components[component_indices[ROTATION]];
+			rotation_value = rotation->value;
+			matrix_rotation = QuaternionRotationMatrix(rotation_value);
+		}
+		if constexpr (has_scale) {
+			const Scale* scale = (const Scale*)for_each_data->unique_components[component_indices[SCALE]];
+			scale_value = scale->value;
+			matrix_scale = MatrixScale(scale_value);
+		}
+
+		Matrix object_matrix;
+
+		if constexpr (has_translation) {
+			if constexpr (has_rotation) {
+				object_matrix = MatrixTR(matrix_translation, matrix_rotation);
+			}
+			else if constexpr (has_scale) {
+				object_matrix = MatrixTS(matrix_translation, matrix_scale);
+			}
+			else {
+				object_matrix = matrix_translation;
+			}
+		}
+		else if constexpr (has_rotation) {
+			if constexpr (has_scale) {
+				object_matrix = MatrixRS(matrix_rotation, matrix_scale);
+			}
+			else {
+				object_matrix = matrix_rotation;
+			}
+		}
+		else if constexpr (has_scale) {
+			object_matrix = matrix_scale;
+		}
+		else {
+			object_matrix = MatrixIdentity();
+		}
+
+		graphics->BindRasterizerState(debug_drawer->rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID]);
+
+		Matrix mvp_matrix = object_matrix * data->camera_matrix;
+
+		object_matrix = MatrixGPU(object_matrix);
+		mvp_matrix = MatrixGPU(mvp_matrix);
+
+		float3 camera_position = data->camera->translation;
+		const void* injected_values[ECS_CB_INJECT_TAG_COUNT];
+		injected_values[ECS_CB_INJECT_CAMERA_POSITION] = &camera_position;
+		injected_values[ECS_CB_INJECT_MVP_MATRIX] = &mvp_matrix;
+		injected_values[ECS_CB_INJECT_OBJECT_MATRIX] = &object_matrix;
+
+		BindConstantBufferInjectedCB(graphics, mesh->material, injected_values);
+
+		graphics->BindMesh(mesh->mesh->mesh);
+		graphics->BindMaterial(*mesh->material);
+
+		graphics->DrawCoalescedMeshCommand(*mesh->mesh);
+
+		float3 camera_distance = translation_value - data->camera->translation;
+		float distance = Length(camera_distance).First();
+
+		drawer->DrawAxes(
+			translation_value,
+			rotation_value,
+			GetConstantObjectSizeInPerspective(data->camera->fov, distance, 0.25f),
+			AxisXColor(),
+			AxisYColor(),
+			AxisZColor(),
+			{ false, true }
+		);
+		graphics->EnableDepth();
+	}
+}
+
 template<bool schedule_element>
 ECS_THREAD_TASK(RenderTask) {
 	if constexpr (!schedule_element) {
@@ -30,79 +154,49 @@ ECS_THREAD_TASK(RenderTask) {
 			Graphics* graphics = world->graphics;
 			DebugDrawer* drawer = world->debug_drawer;
 
-			camera.translation.z -= 5.0f;
 			Matrix camera_matrix = camera.GetViewProjectionMatrix();
-			//camera.SetOrthographicProjection(graphics->GetWindowSize().x, graphics->GetWindowSize().y, 0.0005f, 1000.0f);
-			Matrix perspective_camera = camera.GetViewProjectionMatrix();
+			drawer->UpdateCameraMatrix(camera_matrix);
 
-			drawer->UpdateCameraMatrix(perspective_camera);
-			drawer->DrawAxes({ 0.0f, 5.0f, 0.0f }, { 45.0f, 0.0f, 45.0f }, 20.0f);
+			Component unique_components[3];
+			Component exclude_unique_components[3];
+			Component shared_components[1];
+			shared_components[0] = RenderMesh::ID();
+			ComponentSignature shared_signature(shared_components, std::size(shared_components));
 
-			ForEachEntityCommit<QueryRead<RenderMesh>, QueryRead<Translation>>::Function(world, [camera, camera_matrix](
-				ForEachEntityData* for_each_data,
-				const RenderMesh& mesh,
-				Translation translation
-				) {
-					Timer timer;
+			BasicDrawForEachData for_each_data;
+			for_each_data.camera_matrix = camera_matrix;
+			for_each_data.camera = &camera;
 
-					World* world = for_each_data->world;
-					DebugDrawer* debug_drawer = world->debug_drawer;
+			unique_components[0] = Translation::ID();
+			exclude_unique_components[0] = Rotation::ID();
+			exclude_unique_components[1] = Scale::ID();
+			ForEachEntityCommitFunctor(world, BasicDrawForEach<true, false, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
 
-					debug_drawer->UpdateCameraMatrix(camera_matrix);
+			unique_components[0] = Rotation::ID();
+			exclude_unique_components[0] = Translation::ID();
+			ForEachEntityCommitFunctor(world, BasicDrawForEach<false, true, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
 
-					/*debug_drawer->AddAxes({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-					debug_drawer->AddAxes({ 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-					debug_drawer->AddAxes({ 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-					debug_drawer->AddAxes({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-					debug_drawer->AddAxes({ 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, AxisXColor(), AxisYColor(), AxisZColor());
-					debug_drawer->DrawAxesDeck(1.0f);*/
+			unique_components[0] = Scale::ID();
+			exclude_unique_components[1] = Rotation::ID();
+			ForEachEntityCommitFunctor(world, BasicDrawForEach<false, false, true>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
 
-					/*debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 1.0f, ColorFloat(0.5f, 0.2f, 1.0f));
-					debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 2.0f, ColorFloat(0.5f, 0.5f, 1.0f));
-					debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 3.0f, ColorFloat(0.5f, 0.8f, 1.0f));
-					debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 4.0f, ColorFloat(0.8f, 0.2f, 1.0f));
-					debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 5.0f, ColorFloat(0.5f, 0.2f, 0.5f));
-					debug_drawer->DrawSphere({ 0.0f, 0.0f, 0.0f }, 6.0f, ColorFloat(0.5f, 0.2f, 0.0f));*/
+			unique_components[0] = Translation::ID();
+			unique_components[1] = Rotation::ID();
+			exclude_unique_components[0] = Scale::ID();
+			ForEachEntityCommitFunctor(world, BasicDrawForEach<true, true, false>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
 
-					/*debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 1.0f, ColorFloat(0.5f, 0.2f, 1.0f));
-					debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 2.0f, ColorFloat(0.5f, 0.5f, 1.0f));
-					debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 3.0f, ColorFloat(0.5f, 0.8f, 1.0f));
-					debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 4.0f, ColorFloat(0.8f, 0.2f, 1.0f));
-					debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 5.0f, ColorFloat(0.5f, 0.2f, 0.5f));
-					debug_drawer->AddSphere({ 0.0f, 0.0f, 0.0f }, 6.0f, ColorFloat(0.5f, 0.2f, 0.0f));
-					debug_drawer->DrawSphereDeck(1.0f);*/
+			unique_components[1] = Scale::ID();
+			exclude_unique_components[0] = Rotation::ID();
+			ForEachEntityCommitFunctor(world, BasicDrawForEach<true, false, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
 
-					Graphics* graphics = for_each_data->world->graphics;
-					if (IsAssetPointerValid(mesh.material) && IsAssetPointerValid(mesh.mesh)) {
-						graphics->BindRasterizerState(debug_drawer->rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID]);
-						Matrix object_matrix = MatrixTranslation(translation.value);
-						Matrix mvp_matrix = object_matrix * camera_matrix;
+			unique_components[0] = Rotation::ID();
+			exclude_unique_components[0] = Translation::ID();
+			ForEachEntityCommitFunctor(world, BasicDrawForEach<false, true, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
 
-						object_matrix = MatrixTranspose(object_matrix);
-						mvp_matrix = MatrixTranspose(mvp_matrix);
-
-						float3 camera_position = camera.translation;
-						const void* injected_values[ECS_CB_INJECT_TAG_COUNT];
-						injected_values[ECS_CB_INJECT_CAMERA_POSITION] = &camera_position;
-						injected_values[ECS_CB_INJECT_MVP_MATRIX] = &mvp_matrix;
-						injected_values[ECS_CB_INJECT_OBJECT_MATRIX] = &object_matrix;
-
-						BindConstantBufferInjectedCB(graphics, mesh.material, injected_values);
-
-						graphics->BindMesh(mesh.mesh->mesh);
-						graphics->BindMaterial(*mesh.material);
-
-						graphics->EnableDepth();
-						graphics->DrawCoallescedMeshCommand(*mesh.mesh);
-					}
-
-					//size_t duration = timer.GetDuration(ECS_TIMER_DURATION_US);
-					//ECS_FORMAT_TEMP_STRING(message, "Duration: {#}", duration);
-					//GetConsole()->Info(message);
-					//OutputDebugStringA()
-				});
-			//world->task_manager->AddDynamicTaskGroup(WITH_NAME(PerformTask), nullptr, std::thread::hardware_concurrency(), 0);
-			//world->graphics->GetContext()->Flush();
+			unique_components[0] = Translation::ID();
+			unique_components[1] = Rotation::ID();
+			unique_components[2] = Scale::ID();
+			ForEachEntityCommitFunctor(world, BasicDrawForEach<true, true, true>, &for_each_data, { unique_components, 3 }, shared_signature);
 		}
 
 		world->graphics->GetContext()->Flush();

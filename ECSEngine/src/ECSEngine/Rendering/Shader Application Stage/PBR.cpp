@@ -45,8 +45,8 @@ namespace ECSEngine {
 		void SetPBRVertexConstants(void* data, Matrix object_matrix, Matrix world_view_projection_matrix)
 		{
 			PBRVertexConstants* constants = (PBRVertexConstants*)data;
-			constants->object_matrix = MatrixTranspose(object_matrix);
-			constants->world_view_projection_matrix = MatrixTranspose(world_view_projection_matrix);
+			constants->object_matrix = MatrixGPU(object_matrix);
+			constants->world_view_projection_matrix = MatrixGPU(world_view_projection_matrix);
 		}
 
 		void SetPBRVertexConstants(
@@ -56,7 +56,7 @@ namespace ECSEngine {
 			Matrix world_view_projection_matrix
 		)
 		{
-			SetPBRVertexConstants(buffer, graphics, { MatrixTranspose(object_matrix), MatrixTranspose(world_view_projection_matrix) });
+			SetPBRVertexConstants(buffer, graphics, { MatrixGPU(object_matrix), MatrixGPU(world_view_projection_matrix) });
 		}
 
 		void SetPBRVertexConstants(ConstantBuffer buffer, Graphics* graphics, PBRVertexConstants constants)
@@ -96,8 +96,7 @@ namespace ECSEngine {
 
 		void SetPBRSkyboxVertexConstant(void* data, float3 camera_rotation, Matrix projection_matrix)
 		{
-			Matrix combined_matrix = MatrixTranspose(MatrixRotationZ(-camera_rotation.z) * MatrixRotationY(-camera_rotation.y)
-				* MatrixRotationX(-camera_rotation.x) /** MatrixPerspectiveFOV(90.0f, 1.0f, 0.1f, 1000.0f)*/ * projection_matrix);
+			Matrix combined_matrix = MatrixGPU(MatrixRotationCamera(camera_rotation) /** MatrixPerspectiveFOV(90.0f, 1.0f, 0.1f, 1000.0f)*/ * projection_matrix);
 			combined_matrix.Store(data);
 		}
 

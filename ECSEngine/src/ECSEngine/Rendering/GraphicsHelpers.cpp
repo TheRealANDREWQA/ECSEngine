@@ -25,62 +25,6 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ID3D11Resource* GetResource(Texture1D texture)
-	{
-		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
-		Microsoft::WRL::ComPtr<ID3D11Texture1D> com_tex;
-		com_tex.Attach(texture.tex);
-		HRESULT result = com_tex.As(&_resource);
-
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, "Converting Texture1D to resource failed!");
-
-		return _resource.Detach();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	ID3D11Resource* GetResource(Texture2D texture)
-	{
-		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
-		Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
-		com_tex.Attach(texture.tex);
-		HRESULT result = com_tex.As(&_resource);
-
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, "Converting Texture2D to resource failed!");
-
-		return _resource.Detach();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	ID3D11Resource* GetResource(Texture3D texture)
-	{
-		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
-		Microsoft::WRL::ComPtr<ID3D11Texture3D> com_tex;
-		com_tex.Attach(texture.tex);
-		HRESULT result = com_tex.As(&_resource);
-
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, "Converting Texture3D to resource failed!");
-
-		return _resource.Detach();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	ID3D11Resource* GetResource(TextureCube texture)
-	{
-		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
-		Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
-		com_tex.Attach(texture.tex);
-		HRESULT result = com_tex.As(&_resource);
-
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, "Converting TextureCube to resource failed!");
-
-		return _resource.Detach();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
 	GraphicsViewport GetGraphicsViewportForTexture(Texture2D texture, float min_depth, float max_depth)
 	{
 		GraphicsViewport viewport;
@@ -939,7 +883,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		graphics->DisableCulling();
 
 		for (size_t index = 0; index < 6; index++) {
-			Matrix current_matrix = MatrixTranspose(ViewMatrixTextureCube((TextureCubeFace)index) * projection_matrix);
+			Matrix current_matrix = MatrixGPU(ViewMatrixTextureCube((TextureCubeFace)index) * projection_matrix);
 			UpdateBufferResource(vertex_constants.buffer, &current_matrix, sizeof(Matrix), graphics->GetContext());
 			graphics->BindRenderTargetView(render_views[index], nullptr);
 
@@ -1085,6 +1029,11 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
+
+	float GetConstantObjectSizeInPerspective(float camera_fov, float distance_to_camera, float object_size)
+	{
+		return object_size * tan(DegToRad(camera_fov * 0.5f)) * distance_to_camera;
+	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 

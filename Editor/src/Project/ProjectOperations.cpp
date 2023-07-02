@@ -276,10 +276,18 @@ bool CheckProjectDirectoryIntegrity(const ProjectFile* project) {
 
 void DeallocateCurrentProject(EditorState* editor_state)
 {
-	if (editor_state->project_file->path.size > 0) {
+	// At the moment this can only be called in the hub - don't trouble for the moment
+
+	/*if (editor_state->project_file->path.size > 0) {
+		Application* ecs_application = editor_state->ui_system->m_application;
+		HWND hwnd = (HWND)ecs_application->GetOSWindowHandle();
+		HID::Mouse* mouse = editor_state->Mouse();
+		HID::Keyboard* keyboard = editor_state->Keyboard();
+
 		EditorStateDestroy(editor_state);
 		editor_state->project_file = nullptr;
-	}
+		EditorStateInitialize(ecs_application, editor_state, hwnd, mouse, keyboard);
+	}*/
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -698,11 +706,17 @@ bool OpenProject(ProjectOperationData data)
 void OpenProjectSystemHandlerAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	ProjectOperationData* data = (ProjectOperationData*)_data;
-	bool success = OpenProject(*data);
+	ProjectOperationData data = *(ProjectOperationData*)_data;
+	bool has_project_file = data.editor_state->project_file->path.size > 0;
+	bool success = OpenProject(data);
 	if (!success) {
-		system->PopFrameHandler();
-		EditorSetConsoleError("Could not open project.");
+		// Must use the ui_system from the newly initialized editor state
+		
+		// At the moment there is no project reload
+		//// Eliminate the frame handler only if the project_file was not specified
+		//// since otherwise it will reinitialize the editor state
+		data.editor_state->ui_system->PopFrameHandler();
+		CreateErrorMessageWindow(data.editor_state->ui_system, "Could not open project.");
 	}
 }
 

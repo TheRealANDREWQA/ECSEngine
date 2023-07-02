@@ -97,14 +97,63 @@ namespace ECSEngine {
 			return *this;
 		}
 
+		ECS_INLINE void ClearCount() {
+			count.store(0, ECS_RELEASE);
+		}
+
+		ECS_INLINE void ClearTarget() {
+			target.store(0, ECS_RELEASE);
+		}
+
+		// Relaxed load
+		ECS_INLINE unsigned int Count() const {
+			return count.load(ECS_RELAXED);
+		}
+
+		// Relaxed store
+		ECS_INLINE void SetCount(unsigned int value) {
+			count.store(value, ECS_RELAXED);
+		}
+
+		// Relaxed store and wakes up waiting threads
+		ECS_INLINE void SetCountEx(unsigned int value) {
+			count.store(value, ECS_RELAXED);
+			WakeByAddressAll(&count);
+		}
+
+		// Relaxed load
+		ECS_INLINE unsigned int Target() const {
+			return target.load(ECS_RELAXED);
+		}
+
+		// Relaxed store
+		ECS_INLINE void SetTarget(unsigned int value) {
+			target.store(value, ECS_RELAXED);
+		}
+
+		// Relaxed store and wakes up waiting threads
+		ECS_INLINE void SetTargetEx(unsigned int value) {
+			target.store(value, ECS_RELAXED);
+			WakeByAddressAll(&count);
+		}
+
+		// Returns the previous count value
 		unsigned int Enter(unsigned int count = 1);
 
-		void ClearTarget();
+		// Returns the previous count value
+		// The difference between the two variants is that this uses
+		// a futex call to wake any waiting threads
+		unsigned int EnterEx(unsigned int count = 1);
 
-		void ClearCount();
+		// This version check the count value to that of the check_value and if they match
+		// Only then it will commit the write (this can be used to avoid generating too many cache writes)
+		// Returns the previous count value if it commited else -1
+		unsigned int TryEnter(unsigned int check_value, unsigned int count = 1);
 
+		// Returns the previous count value
 		unsigned int Exit(unsigned int count = 1);
 
+		// Returns the previous count value
 		// The difference between the two variants is that this uses
 		// a futex call to wake any waiting threads
 		unsigned int ExitEx(unsigned int count = 1);

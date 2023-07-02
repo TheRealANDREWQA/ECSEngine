@@ -58,7 +58,7 @@ namespace ECSEngine {
 		ECS_STACK_VOID_STREAM(suffix, 512);
 		MeshMetadataIdentifier(metadata, suffix);
 		load_descriptor.identifier_suffix = suffix;
-		CoallescedMesh* mesh = functor(file_path, load_descriptor);
+		CoalescedMesh* mesh = functor(file_path, load_descriptor);
 		if (mesh != nullptr) {
 			metadata->mesh_pointer = mesh;
 			return true;
@@ -70,7 +70,7 @@ namespace ECSEngine {
 	{
 		return CreateMeshHelper(metadata, mount_point, [&](Stream<wchar_t> file_path, ResourceManagerLoadDesc load_descriptor) {
 			// Use reference counting
-			return resource_manager->LoadCoallescedMesh<true>(file_path, metadata->scale_factor, load_descriptor);
+			return resource_manager->LoadCoalescedMesh<true>(file_path, metadata->scale_factor, load_descriptor);
 		});
 	}
 
@@ -84,7 +84,7 @@ namespace ECSEngine {
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
 			ex_desc.push_lock = ex_data->manager_lock;
-			return resource_manager->LoadCoallescedMeshImplementationEx(meshes, metadata->scale_factor, load_descriptor, &ex_desc);
+			return resource_manager->LoadCoalescedMeshImplementationEx(meshes, metadata->scale_factor, load_descriptor, &ex_desc);
 		});
 	}
 
@@ -93,7 +93,7 @@ namespace ECSEngine {
 	void CreateMeshFromMetadataEx(
 		ResourceManager* resource_manager, 
 		MeshMetadata* metadata, 
-		const GLTFMesh* coallesced_mesh, 
+		const GLTFMesh* coalesced_mesh, 
 		Stream<Submesh> submeshes, 
 		CreateAssetFromMetadataExData* ex_data
 	)
@@ -105,7 +105,7 @@ namespace ECSEngine {
 			ex_desc.time_stamp = time_stamp;
 			ex_desc.push_lock = ex_data->manager_lock;
 			ex_desc.reference_count = ex_data->reference_count;
-			return resource_manager->LoadCoallescedMeshImplementationEx(coallesced_mesh, submeshes, metadata->scale_factor, load_descriptor, &ex_desc);
+			return resource_manager->LoadCoalescedMeshImplementationEx(coalesced_mesh, submeshes, metadata->scale_factor, load_descriptor, &ex_desc);
 		}));
 	}
 
@@ -967,7 +967,7 @@ namespace ECSEngine {
 		ResourceManagerLoadDesc load_desc;
 		load_desc.identifier_suffix = suffix;
 
-		return resource_manager->TryUnloadResource(file_path, ResourceType::CoallescedMesh, load_desc);
+		return resource_manager->TryUnloadResource(file_path, ResourceType::CoalescedMesh, load_desc);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------

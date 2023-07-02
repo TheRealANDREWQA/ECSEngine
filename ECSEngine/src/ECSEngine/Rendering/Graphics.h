@@ -115,10 +115,21 @@ namespace ECSEngine {
 		RasterizerState rasterizer_state;
 	};
 
+	struct GraphicsPipelineShaders {
+		InputLayout layout;
+		VertexShader vertex_shader;
+		PixelShader pixel_shader;
+		DomainShader domain_shader;
+		HullShader hull_shader;
+		GeometryShader geometry_shader;
+		ComputeShader compute_shader;
+	};
+
 	struct GraphicsPipelineRenderState {
 		GraphicsPipelineBlendState blend_state;
 		GraphicsPipelineDepthStencilState depth_stencil_state;
 		GraphicsPipelineRasterizerState rasterizer_state;
+		GraphicsPipelineShaders shaders;
 	};
 
 	struct GraphicsBoundViews {
@@ -139,7 +150,14 @@ namespace ECSEngine {
 		ECS_GRAPHICS_SHADER_HELPER_CREATE_SPECULAR_ENVIRONEMNT,
 		ECS_GRAPHICS_SHADER_HELPER_BRDF_INTEGRATION,
 		ECS_GRAPHICS_SHADER_HELPER_GLTF_THUMBNAIL,
+		ECS_GRAPHICS_SHADER_HELPER_HIGHLIGHT,
 		ECS_GRAPHICS_SHADER_HELPER_COUNT
+	};
+
+	enum GraphicsDepthStencilHelpers : unsigned char {
+		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT_FIRST_PASS,
+		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT_SECOND_PASS,
+		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT
 	};
 
 	struct GraphicsShaderHelper {
@@ -853,6 +871,12 @@ namespace ECSEngine {
 		void ClearRenderTarget(RenderTargetView target, ColorFloat color);
 
 		// Uses the immediate context.
+		void ClearDepth(DepthStencilView depth_stencil, float depth = 1.0f);
+
+		// Uses the immediate context.
+		void ClearStencil(DepthStencilView depth_stencil, unsigned char stencil = 0);
+
+		// Uses the immediate context.
 		void ClearDepthStencil(DepthStencilView depth_stencil, float depth = 1.0f, unsigned char stencil = 0);
 
 		void ClearBackBuffer(float red, float green, float blue);
@@ -889,13 +913,13 @@ namespace ECSEngine {
 		void DrawMesh(const Mesh& mesh, const Material& material);
 
 		// Single mesh drawing - very inefficient, just use for small number of draws
-		void DrawMesh(const CoallescedMesh& mesh, unsigned int submesh_index, const Material& material);
+		void DrawMesh(const CoalescedMesh& mesh, unsigned int submesh_index, const Material& material);
 
 		// This will issue only a DrawIndexed command, does not bind any mesh/material
 		void DrawSubmeshCommand(Submesh submesh);
 
 		// This only issues the draw command for the coallesced mesh, it does not bind the mesh itself or the material
-		void DrawCoallescedMeshCommand(const CoallescedMesh& mesh);
+		void DrawCoalescedMeshCommand(const CoalescedMesh& mesh);
 
 		void EnableAlphaBlending();
 
@@ -1083,9 +1107,25 @@ namespace ECSEngine {
 
 		GraphicsPipelineRenderState GetPipelineRenderState() const;
 
+		GraphicsPipelineShaders GetPipelineShaders() const;
+
 		GraphicsBoundViews GetCurrentViews() const;
 
 		GraphicsPipelineState GetPipelineState() const;
+
+		VertexShader GetCurrentVertexShader() const;
+
+		PixelShader GetCurrentPixelShader() const;
+
+		DomainShader GetCurrentDomainShader() const;
+
+		GeometryShader GetCurrentGeometryShader() const;
+
+		HullShader GetCurrentHullShader() const;
+
+		ComputeShader GetCurrentComputeShader() const;
+
+		void* GetCurrentShader(ECS_SHADER_TYPE shader_type) const;
 
 		GraphicsResourceSnapshot GetResourceSnapshot(AllocatorPolymorphic allocator);
 
@@ -1099,7 +1139,9 @@ namespace ECSEngine {
 
 		void RestoreRasterizerState(GraphicsPipelineRasterizerState state);
 
-		void RestorePipelineRenderState(GraphicsPipelineRenderState state);
+		void RestorePipelineRenderState(const GraphicsPipelineRenderState* state);
+
+		void RestorePipelineShaders(const GraphicsPipelineShaders* shaders);
 
 		void RestoreBoundViews(GraphicsBoundViews views);
 
@@ -1137,7 +1179,7 @@ namespace ECSEngine {
 
 		// Will keep the same submeshes stream, only the mesh portion gets actually transferred
 		// It will register the newly created resources if not temporary
-		CoallescedMesh TransferCoallescedMesh(const CoallescedMesh* mesh, bool temporary = false);
+		CoalescedMesh TransferCoalescedMesh(const CoalescedMesh* mesh, bool temporary = false);
 
 		// Will keep the same material buffer and submesh stream, only the mesh portion gets actually transferred
 		// It will register the newly created resources if not temporary
@@ -1163,6 +1205,7 @@ namespace ECSEngine {
 		ShaderReflection* m_shader_reflection;
 		MemoryManager* m_allocator;
 		CapacityStream<GraphicsShaderHelper> m_shader_helpers;
+		CapacityStream<DepthStencilState> m_depth_stencil_helpers;
 		// Keep a track of the created resources, for leaks and for winking out the device
 		// For some reason DX11 does not provide a winking method for the device!!!
 		AtomicStream<GraphicsInternalResource> m_internal_resources;
@@ -1295,6 +1338,12 @@ namespace ECSEngine {
 	ECSENGINE_API void ClearRenderTarget(RenderTargetView view, GraphicsContext* context, ColorFloat color);
 
 	// Only works on the immediate context
+	ECSENGINE_API void ClearDepth(DepthStencilView view, GraphicsContext* context, float depth = 1.0f);
+
+	// Only works on the immediate context
+	ECSENGINE_API void ClearStencil(DepthStencilView view, GraphicsContext* context, unsigned char stencil = 0);
+
+	// Only works on the immediate context
 	ECSENGINE_API void ClearDepthStencil(DepthStencilView view, GraphicsContext* context, float depth = 1.0f, unsigned char stencil = 0);
 
 	template<typename Resource>
@@ -1400,18 +1449,20 @@ namespace ECSEngine {
 
 	ECSENGINE_API void DrawMesh(const Mesh& mesh, const Material& material, GraphicsContext* context);
 
-	ECSENGINE_API void DrawMesh(const CoallescedMesh& coallesced_mesh, unsigned int submesh_index, const Material& material, GraphicsContext* context);
+	ECSENGINE_API void DrawMesh(const CoalescedMesh& coalesced_mesh, unsigned int submesh_index, const Material& material, GraphicsContext* context);
 
 	// It will only issue the draw command, it will not bind material/mesh
 	ECSENGINE_API void DrawSubmeshCommand(Submesh submesh, GraphicsContext* context);
 
-	ECSENGINE_API void DrawCoallescedMeshCommand(const CoallescedMesh& coallesced_mesh, GraphicsContext* context);
+	ECSENGINE_API void DrawCoalescedMeshCommand(const CoalescedMesh& coalesced_mesh, GraphicsContext* context);
 
 	ECSENGINE_API GraphicsPipelineBlendState GetBlendState(GraphicsContext* context);
 
 	ECSENGINE_API GraphicsPipelineDepthStencilState GetDepthStencilState(GraphicsContext* context);
 
 	ECSENGINE_API GraphicsPipelineRasterizerState GetRasterizerState(GraphicsContext* context);
+
+	ECSENGINE_API GraphicsPipelineShaders GetPipelineShaders(GraphicsContext* context);
 
 	ECSENGINE_API GraphicsPipelineRenderState GetPipelineRenderState(GraphicsContext* context);
 
@@ -1420,6 +1471,22 @@ namespace ECSEngine {
 	ECSENGINE_API GraphicsPipelineState GetPipelineState(GraphicsContext* context);
 
 	ECSENGINE_API GraphicsViewport GetViewport(GraphicsContext* context);
+
+	ECSENGINE_API InputLayout GetCurrentInputLayout(GraphicsContext* context);
+
+	ECSENGINE_API VertexShader GetCurrentVertexShader(GraphicsContext* context);
+
+	ECSENGINE_API PixelShader GetCurrentPixelShader(GraphicsContext* context);
+
+	ECSENGINE_API DomainShader GetCurrentDomainShader(GraphicsContext* context);
+
+	ECSENGINE_API GeometryShader GetCurrentGeometryShader(GraphicsContext* context);
+
+	ECSENGINE_API HullShader GetCurrentHullShader(GraphicsContext* context);
+
+	ECSENGINE_API ComputeShader GetCurrentComputeShader(GraphicsContext* context);
+
+	ECSENGINE_API void* GetCurrentShader(GraphicsContext* context, ECS_SHADER_TYPE shader_type);
 
 	// It must be unmapped manually
 	ECSENGINE_API void* MapBuffer(
@@ -1465,7 +1532,9 @@ namespace ECSEngine {
 
 	ECSENGINE_API void RestoreRasterizerState(GraphicsContext* context, GraphicsPipelineRasterizerState rasterizer_state);
 
-	ECSENGINE_API void RestorePipelineRenderState(GraphicsContext* context, GraphicsPipelineRenderState render_state);
+	ECSENGINE_API void RestorePipelineShaders(GraphicsContext* context, const GraphicsPipelineShaders* shaders);
+
+	ECSENGINE_API void RestorePipelineRenderState(GraphicsContext* context, const GraphicsPipelineRenderState* render_state);
 
 	ECSENGINE_API void RestoreBoundViews(GraphicsContext* context, GraphicsBoundViews views);
 
@@ -1524,7 +1593,7 @@ namespace ECSEngine {
 	ECSENGINE_API void FreeMaterial(Graphics* graphics, const Material* material);
 
 	// Releases the mesh GPU resources and the names of the submeshes if any
-	ECSENGINE_API void FreeCoallescedMesh(Graphics* graphics, CoallescedMesh* mesh, bool coallesced_allocation, AllocatorPolymorphic allocator);
+	ECSENGINE_API void FreeCoalescedMesh(Graphics* graphics, CoalescedMesh* mesh, bool coallesced_allocation, AllocatorPolymorphic allocator);
 
 	// SINGLE THREADED - It uses the CopyResource which requires the immediate context
 	// Merges the vertex buffers and the index buffers into a single resource that can reduce 

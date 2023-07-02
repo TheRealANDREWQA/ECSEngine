@@ -42,7 +42,8 @@ namespace ECSEngine {
 		ECS_VERTEX_SHADER_SOURCE(ConvoluteDiffuseEnvironment),
 		ECS_VERTEX_SHADER_SOURCE(ConvoluteSpecularEnvironment),
 		ECS_VERTEX_SHADER_SOURCE(BRDFIntegration),
-		ECS_VERTEX_SHADER_SOURCE(GLTFThumbnail)
+		ECS_VERTEX_SHADER_SOURCE(GLTFThumbnail),
+		ECS_VERTEX_SHADER_SOURCE(BasicTransform)
 	};
 
 	const wchar_t* SHADER_HELPERS_PIXEL[] = {
@@ -51,8 +52,12 @@ namespace ECSEngine {
 		ECS_PIXEL_SHADER_SOURCE(ConvoluteDiffuseEnvironment),
 		ECS_PIXEL_SHADER_SOURCE(ConvoluteSpecularEnvironment),
 		ECS_PIXEL_SHADER_SOURCE(BRDFIntegration),
-		ECS_PIXEL_SHADER_SOURCE(GLTFThumbnail)
+		ECS_PIXEL_SHADER_SOURCE(GLTFThumbnail),
+		ECS_PIXEL_SHADER_SOURCE(SolidColor)
 	};
+
+	static_assert(std::size(SHADER_HELPERS_VERTEX) == ECS_GRAPHICS_SHADER_HELPER_COUNT);
+	static_assert(std::size(SHADER_HELPERS_PIXEL) == ECS_GRAPHICS_SHADER_HELPER_COUNT);
 
 	const char* ECS_GRAPHICS_RESOURCE_TYPE_STRING[] = {
 		"VertexShader",
@@ -93,8 +98,10 @@ namespace ECSEngine {
 #define GRAPHICS_INTERNAL_RESOURCE_STARTING_COUNT 1024
 
 	void InitializeGraphicsHelpers(Graphics* graphics) {
-		graphics->m_shader_helpers.Initialize(graphics->m_allocator, ECS_GRAPHICS_SHADER_HELPER_COUNT, ECS_GRAPHICS_SHADER_HELPER_COUNT);
+		graphics->m_shader_helpers.Initialize(graphics->Allocator(), ECS_GRAPHICS_SHADER_HELPER_COUNT, ECS_GRAPHICS_SHADER_HELPER_COUNT);
+		graphics->m_depth_stencil_helpers.Initialize(graphics->Allocator(), ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT, ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT);
 
+		// The shader helpers
 		auto load_source_code = [&](const wchar_t* path) {
 			return ReadWholeFileText(path, GetAllocatorPolymorphic(graphics->m_allocator));
 		};
@@ -102,20 +109,30 @@ namespace ECSEngine {
 		Stream<wchar_t> include_directory = ECS_SHADER_DIRECTORY;
 		ShaderIncludeFiles include(graphics->m_allocator, { &include_directory, 1 });
 		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
-			Stream<char> vertex_source = load_source_code(SHADER_HELPERS_VERTEX[index]);
-			ECS_ASSERT(vertex_source.buffer != nullptr);
+			if (SHADER_HELPERS_VERTEX[index] != nullptr) {
+				Stream<char> vertex_source = load_source_code(SHADER_HELPERS_VERTEX[index]);
+				ECS_ASSERT(vertex_source.buffer != nullptr);
 
-			Stream<void> vertex_byte_code;
-			graphics->m_shader_helpers[index].vertex = graphics->CreateVertexShaderFromSource(vertex_source, &include, {}, &vertex_byte_code, true);
+				Stream<void> vertex_byte_code;
+				graphics->m_shader_helpers[index].vertex = graphics->CreateVertexShaderFromSource(vertex_source, &include, {}, &vertex_byte_code, true);
+				graphics->m_shader_helpers[index].input_layout = graphics->ReflectVertexShaderInput(vertex_source, vertex_byte_code, true, true);
+				graphics->m_allocator->Deallocate(vertex_source.buffer);
+			}
+			else {
+				graphics->m_shader_helpers[index].vertex = nullptr;
+				graphics->m_shader_helpers[index].input_layout = nullptr;
+			}
 
-			Stream<char> pixel_source = load_source_code(SHADER_HELPERS_PIXEL[index]);
-			ECS_ASSERT(pixel_source.buffer != nullptr);
+			if (SHADER_HELPERS_PIXEL[index] != nullptr) {
+				Stream<char> pixel_source = load_source_code(SHADER_HELPERS_PIXEL[index]);
+				ECS_ASSERT(pixel_source.buffer != nullptr);
 
-			graphics->m_shader_helpers[index].pixel = graphics->CreatePixelShaderFromSource(pixel_source, &include, {}, true);
-			graphics->m_shader_helpers[index].input_layout = graphics->ReflectVertexShaderInput(vertex_source, vertex_byte_code, true, true);
-
-			graphics->m_allocator->Deallocate(vertex_source.buffer);
-			graphics->m_allocator->Deallocate(pixel_source.buffer);
+				graphics->m_shader_helpers[index].pixel = graphics->CreatePixelShaderFromSource(pixel_source, &include, {}, true);
+				graphics->m_allocator->Deallocate(pixel_source.buffer);
+			}
+			else {
+				graphics->m_shader_helpers[index].pixel = nullptr;
+			}
 		}
 
 		SamplerDescriptor sampler_descriptor;
@@ -125,6 +142,27 @@ namespace ECSEngine {
 		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
 			graphics->m_shader_helpers[index].pixel_sampler = graphics->CreateSamplerState(sampler_descriptor, true);
 		}
+
+		// The depth stencil helpers
+
+		// First pass for highlight - write to stencil always when depth passes
+		D3D11_DEPTH_STENCIL_DESC depth_stencil_state = {};
+		depth_stencil_state.DepthEnable = FALSE;
+		depth_stencil_state.StencilEnable = TRUE;
+		depth_stencil_state.StencilWriteMask = 0xFF;
+		SetDepthStencilDescOP(&depth_stencil_state, true, D3D11_COMPARISON_ALWAYS, D3D11_STENCIL_OP_REPLACE, D3D11_STENCIL_OP_REPLACE, D3D11_STENCIL_OP_REPLACE);
+		SetDepthStencilDescOP(&depth_stencil_state, false, D3D11_COMPARISON_NEVER, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP);
+		
+		graphics->m_depth_stencil_helpers[ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT_FIRST_PASS] = graphics->CreateDepthStencilState(depth_stencil_state, true);
+
+		// Second pass for highlight - read the stencil and proceed only if it is not equal to the write value
+		depth_stencil_state = {};
+		depth_stencil_state.DepthEnable = FALSE;
+		depth_stencil_state.StencilEnable = TRUE;
+		depth_stencil_state.StencilReadMask = 0xFF;
+		SetDepthStencilDescOP(&depth_stencil_state, true, D3D11_COMPARISON_NOT_EQUAL, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP);
+		SetDepthStencilDescOP(&depth_stencil_state, false, D3D11_COMPARISON_NEVER, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP);
+		graphics->m_depth_stencil_helpers[ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT_SECOND_PASS] = graphics->CreateDepthStencilState(depth_stencil_state, true);
 	}
 
 	void EnumGPU(CapacityStream<IDXGIAdapter1*>& adapters, DXGI_GPU_PREFERENCE preference) {
@@ -2424,7 +2462,7 @@ namespace ECSEngine {
 		DepthStencilState state;
 
 		HRESULT result = m_device->CreateDepthStencilState(&descriptor, &state.state);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Creating Rasterizer state failed.");
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Creating Depth Stencil State failed.");
 
 		AddInternalResource(state, temporary, debug_info);
 		return state;
@@ -2450,7 +2488,7 @@ namespace ECSEngine {
 		BlendState state;
 
 		HRESULT result = m_device->CreateBlendState(&descriptor, &state.state);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Creating Rasterizer state failed.");
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Creating Blend State failed.");
 
 		AddInternalResource(state, temporary, debug_info);
 		return state;
@@ -2510,6 +2548,20 @@ namespace ECSEngine {
 	void Graphics::ClearRenderTarget(RenderTargetView target, ColorFloat color)
 	{
 		ECSEngine::ClearRenderTarget(target, GetContext(), color);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::ClearDepth(DepthStencilView depth_stencil, float depth) 
+	{
+		ECSEngine::ClearDepth(depth_stencil, GetContext(), depth);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::ClearStencil(DepthStencilView depth_stencil, unsigned char stencil) 
+	{
+		ECSEngine::ClearStencil(depth_stencil, GetContext(), stencil);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2680,7 +2732,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DrawMesh(const CoallescedMesh& mesh, unsigned int submesh_index, const Material& material)
+	void Graphics::DrawMesh(const CoalescedMesh& mesh, unsigned int submesh_index, const Material& material)
 	{
 		ECSEngine::DrawMesh(mesh, submesh_index, material, GetContext());
 	}
@@ -2694,9 +2746,9 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DrawCoallescedMeshCommand(const CoallescedMesh& mesh)
+	void Graphics::DrawCoalescedMeshCommand(const CoalescedMesh& mesh)
 	{
-		ECSEngine::DrawCoallescedMeshCommand(mesh, GetContext());
+		ECSEngine::DrawCoalescedMeshCommand(mesh, GetContext());
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3044,6 +3096,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	GraphicsPipelineShaders Graphics::GetPipelineShaders() const
+	{
+		return ECSEngine::GetPipelineShaders(m_context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	GraphicsBoundViews Graphics::GetCurrentViews() const
 	{
 		return { m_bound_render_targets[0], m_current_depth_stencil };
@@ -3054,6 +3113,55 @@ namespace ECSEngine {
 	GraphicsPipelineState Graphics::GetPipelineState() const
 	{
 		return { GetPipelineRenderState(), GetCurrentViews(), GetBoundViewport() };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	VertexShader Graphics::GetCurrentVertexShader() const
+	{
+		return ECSEngine::GetCurrentVertexShader(m_context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	PixelShader Graphics::GetCurrentPixelShader() const
+	{
+		return ECSEngine::GetCurrentPixelShader(m_context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	DomainShader Graphics::GetCurrentDomainShader() const
+	{
+		return ECSEngine::GetCurrentDomainShader(m_context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GeometryShader Graphics::GetCurrentGeometryShader() const
+	{
+		return ECSEngine::GetCurrentGeometryShader(m_context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	HullShader Graphics::GetCurrentHullShader() const
+	{
+		return ECSEngine::GetCurrentHullShader(m_context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ComputeShader Graphics::GetCurrentComputeShader() const
+	{
+		return ECSEngine::GetCurrentComputeShader(m_context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void* Graphics::GetCurrentShader(ECS_SHADER_TYPE shader_type) const
+	{
+		return ECSEngine::GetCurrentShader(m_context, shader_type);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3226,9 +3334,9 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	CoallescedMesh Graphics::TransferCoallescedMesh(const CoallescedMesh* mesh, bool temporary)
+	CoalescedMesh Graphics::TransferCoalescedMesh(const CoalescedMesh* mesh, bool temporary)
 	{
-		CoallescedMesh new_mesh;
+		CoalescedMesh new_mesh;
 
 		new_mesh.submeshes = mesh->submeshes;
 		new_mesh.mesh = TransferMesh(&mesh->mesh, temporary);
@@ -3243,7 +3351,7 @@ namespace ECSEngine {
 		PBRMesh new_mesh;
 
 		new_mesh.materials = mesh->materials;
-		new_mesh.mesh = TransferCoallescedMesh(&mesh->mesh, temporary);
+		new_mesh.mesh = TransferCoalescedMesh(&mesh->mesh, temporary);
 
 		return new_mesh;
 	}
@@ -3329,9 +3437,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::RestorePipelineRenderState(GraphicsPipelineRenderState state)
+	void Graphics::RestorePipelineRenderState(const GraphicsPipelineRenderState* state)
 	{
 		ECSEngine::RestorePipelineRenderState(GetContext(), state);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::RestorePipelineShaders(const GraphicsPipelineShaders* shaders)
+	{
+		ECSEngine::RestorePipelineShaders(GetContext(), shaders);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3345,7 +3460,7 @@ namespace ECSEngine {
 
 	void Graphics::RestorePipelineState(const GraphicsPipelineState* state)
 	{
-		RestorePipelineRenderState(state->render_state);
+		RestorePipelineRenderState(&state->render_state);
 		RestoreBoundViews(state->views);
 		BindViewport(state->viewport);
 	}
@@ -3625,8 +3740,13 @@ namespace ECSEngine {
 			graphics->m_shader_helpers[index].pixel_sampler.Release();
 		}
 
-		// Deallocate the shader helper array
+		for (size_t index = 0; index < ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT; index++) {
+			graphics->m_depth_stencil_helpers[index].Release();
+		}
+
+		// Deallocate the helper resources array
 		graphics->m_allocator->Deallocate(graphics->m_shader_helpers.buffer);
+		graphics->m_allocator->Deallocate(graphics->m_depth_stencil_helpers.buffer);
 
 		graphics->m_context->Flush();
 
@@ -4132,6 +4252,20 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void ClearDepth(DepthStencilView view, GraphicsContext* context, float depth)
+	{
+		context->ClearDepthStencilView(view.view, D3D11_CLEAR_DEPTH, depth, 0);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void ClearStencil(DepthStencilView view, GraphicsContext* context, unsigned char stencil)
+	{
+		context->ClearDepthStencilView(view.view, D3D11_CLEAR_STENCIL, 0.0f, stencil);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void ClearDepthStencil(DepthStencilView view, GraphicsContext* context, float depth, unsigned char stencil)
 	{
 		context->ClearDepthStencilView(view.view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, depth, stencil);
@@ -4389,11 +4523,11 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void DrawMesh(const CoallescedMesh& coallesced_mesh, unsigned int submesh_index, const Material& material, GraphicsContext* context)
+	void DrawMesh(const CoalescedMesh& coalesced_mesh, unsigned int submesh_index, const Material& material, GraphicsContext* context)
 	{
-		BindMesh(coallesced_mesh.mesh, context);
+		BindMesh(coalesced_mesh.mesh, context);
 		BindMaterial(material, context);
-		Submesh submesh = coallesced_mesh.submeshes[submesh_index];
+		Submesh submesh = coalesced_mesh.submeshes[submesh_index];
 		DrawSubmeshCommand(submesh, context);
 	}
 
@@ -4406,9 +4540,9 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void DrawCoallescedMeshCommand(const CoallescedMesh& coallesced_mesh, GraphicsContext* context)
+	void DrawCoalescedMeshCommand(const CoalescedMesh& coalesced_mesh, GraphicsContext* context)
 	{
-		DrawIndexed(coallesced_mesh.mesh.index_buffer.count, context);
+		DrawIndexed(coalesced_mesh.mesh.index_buffer.count, context);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4454,6 +4588,93 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	InputLayout GetCurrentInputLayout(GraphicsContext* context)
+	{
+		ID3D11InputLayout* layout;
+		context->IAGetInputLayout(&layout);
+		return layout;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	VertexShader GetCurrentVertexShader(GraphicsContext* context)
+	{
+		ID3D11VertexShader* shader;
+		context->VSGetShader(&shader, nullptr, nullptr);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	PixelShader GetCurrentPixelShader(GraphicsContext* context)
+	{
+		ID3D11PixelShader* shader;
+		context->PSGetShader(&shader, nullptr, nullptr);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	DomainShader GetCurrentDomainShader(GraphicsContext* context)
+	{
+		ID3D11DomainShader* shader;
+		context->DSGetShader(&shader, nullptr, nullptr);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GeometryShader GetCurrentGeometryShader(GraphicsContext* context)
+	{
+		ID3D11GeometryShader* shader;
+		context->GSGetShader(&shader, nullptr, nullptr);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	HullShader GetCurrentHullShader(GraphicsContext* context)
+	{
+		ID3D11HullShader* shader;
+		context->HSGetShader(&shader, nullptr, nullptr);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ComputeShader GetCurrentComputeShader(GraphicsContext* context)
+	{
+		ID3D11ComputeShader* shader;
+		context->CSGetShader(&shader, nullptr, nullptr);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void* GetCurrentShader(GraphicsContext* context, ECS_SHADER_TYPE shader_type)
+	{
+		switch (shader_type) {
+		case ECS_SHADER_VERTEX:
+			return GetCurrentVertexShader(context).Interface();
+		case ECS_SHADER_PIXEL:
+			return GetCurrentPixelShader(context).Interface();
+		case ECS_SHADER_DOMAIN:
+			return GetCurrentDomainShader(context).Interface();
+		case ECS_SHADER_GEOMETRY:
+			return GetCurrentGeometryShader(context).Interface();
+		case ECS_SHADER_HULL:
+			return GetCurrentHullShader(context).Interface();
+		case ECS_SHADER_COMPUTE:
+			return GetCurrentComputeShader(context).Interface();
+		default:
+			ECS_ASSERT(false, "Invalid shader type");
+		}
+
+		return nullptr;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	GraphicsPipelineRasterizerState GetRasterizerState(GraphicsContext* context)
 	{
 		GraphicsPipelineRasterizerState state;
@@ -4465,6 +4686,23 @@ namespace ECSEngine {
 		}
 
 		return state;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GraphicsPipelineShaders GetPipelineShaders(GraphicsContext* context)
+	{
+		GraphicsPipelineShaders shaders;
+		
+		shaders.layout = GetCurrentInputLayout(context);
+		shaders.vertex_shader = GetCurrentVertexShader(context);
+		shaders.pixel_shader = GetCurrentPixelShader(context);
+		shaders.domain_shader = GetCurrentDomainShader(context);
+		shaders.hull_shader = GetCurrentHullShader(context);
+		shaders.geometry_shader = GetCurrentGeometryShader(context);
+		shaders.compute_shader = GetCurrentComputeShader(context);
+
+		return shaders;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4583,11 +4821,12 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void RestorePipelineRenderState(GraphicsContext* context, GraphicsPipelineRenderState render_state)
+	void RestorePipelineRenderState(GraphicsContext* context, const GraphicsPipelineRenderState* render_state)
 	{
-		RestoreBlendState(context, render_state.blend_state);
-		RestoreDepthStencilState(context, render_state.depth_stencil_state);
-		RestoreRasterizerState(context, render_state.rasterizer_state);
+		RestoreBlendState(context, render_state->blend_state);
+		RestoreDepthStencilState(context, render_state->depth_stencil_state);
+		RestoreRasterizerState(context, render_state->rasterizer_state);
+		RestorePipelineShaders(context, &render_state->shaders);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4601,7 +4840,7 @@ namespace ECSEngine {
 
 	void RestorePipelineState(GraphicsContext* context, const GraphicsPipelineState* state)
 	{
-		RestorePipelineRenderState(context, state->render_state);
+		RestorePipelineRenderState(context, &state->render_state);
 		RestoreBoundViews(context, state->views);
 		BindViewport(state->viewport, context);
 	}
@@ -4620,6 +4859,19 @@ namespace ECSEngine {
 	{
 		BindRasterizerState(rasterizer_state.rasterizer_state, context);
 		//rasterizer_state.rasterizer_state.Release();
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void RestorePipelineShaders(GraphicsContext* context, const GraphicsPipelineShaders* shaders)
+	{
+		BindInputLayout(shaders->layout, context);
+		BindVertexShader(shaders->vertex_shader, context);
+		BindPixelShader(shaders->pixel_shader, context);
+		BindDomainShader(shaders->domain_shader, context);
+		BindHullShader(shaders->hull_shader, context);
+		BindGeometryShader(shaders->geometry_shader, context);
+		BindComputeShader(shaders->compute_shader, context);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4886,7 +5138,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void FreeCoallescedMesh(Graphics* graphics, CoallescedMesh* mesh, bool coallesced_allocation, AllocatorPolymorphic allocator)
+	void FreeCoalescedMesh(Graphics* graphics, CoalescedMesh* mesh, bool coallesced_allocation, AllocatorPolymorphic allocator)
 	{
 		graphics->FreeMesh(mesh->mesh);
 		if (coallesced_allocation) {

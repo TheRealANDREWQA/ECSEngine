@@ -507,6 +507,43 @@ namespace ECSEngine {
 	typedef Base4<float> float4;
 	typedef Base4<double> double4;
 
+	template<typename BasicType, typename Functor>
+	ECS_INLINE BasicType BasicType2Action(BasicType type, Functor&& functor) {
+		return { (typename BasicType::Base)functor(type.x), (typename BasicType::Base)functor(type.y) };
+	}
+
+	template<typename BasicType, typename Functor>
+	ECS_INLINE BasicType BasicType3Action(BasicType type, Functor&& functor) {
+		return { (typename BasicType::Base)functor(type.x), (typename BasicType::Base)functor(type.y), (typename BasicType::Base)functor(type.z) };
+	}
+
+	template<typename BasicType, typename Functor>
+	ECS_INLINE BasicType BasicType4Action(BasicType type, Functor&& functor) {
+		return {
+			(typename BasicType::Base)functor(type.x),
+			(typename BasicType::Base)functor(type.y),
+			(typename BasicType::Base)functor(type.z),
+			(typename BasicType::Base)functor(type.w)
+		};
+	}
+
+	template<typename BasicType, typename Functor>
+	ECS_INLINE BasicType BasicTypeAction(BasicType type, Functor&& functor) {
+		constexpr size_t base_count = BasicType::BaseCount();
+		if constexpr (base_count == 2) {
+			return BasicType2Action(type, functor);
+		}
+		else if constexpr (base_count == 3) {
+			return BasicType3Action(type, functor);
+		}
+		else if constexpr (base_count == 4) {
+			return BasicType4Action(type, functor);
+		}
+		else {
+			static_assert(false, "Invalid Basic Type for Action");
+		}
+	}
+
 	// Apply a pair-wise function on basic type with 2 components
 	template<typename BasicType, typename Functor>
 	ECS_INLINE BasicType BasicType2Action(BasicType first, BasicType second, Functor&& functor) {
@@ -516,13 +553,22 @@ namespace ECSEngine {
 	// Apply a pair-wise function on a baisc type with 3 components
 	template<typename BasicType, typename Functor>
 	ECS_INLINE BasicType BasicType3Action(BasicType first, BasicType second, Functor&& functor) {
-		return { functor(first.x, second.x), functor(first.y, second.y), functor(first.z, second.z) };
+		return { 
+			(typename BasicType::Base)functor(first.x, second.x), 
+			(typename BasicType::Base)functor(first.y, second.y), 
+			(typename BasicType::Base)functor(first.z, second.z) 
+		};
 	}
 
 	// Apply a pair-wise function ob a basic type with 4 components
 	template<typename BasicType, typename Functor>
 	ECS_INLINE BasicType BasicType4Action(BasicType first, BasicType second, Functor&& functor) {
-		return { functor(first.x, second.x), functor(first.y, second.y), functor(first.z, second.z), functor(first.w, second.y) };
+		return { 
+			(typename BasicType::Base)functor(first.x, second.x), 
+			(typename BasicType::Base)functor(first.y, second.y), 
+			(typename BasicType::Base)functor(first.z, second.z), 
+			(typename BasicType::Base)functor(first.w, second.y)
+		};
 	}
 
 	template<typename BasicType, typename Functor>
@@ -546,6 +592,20 @@ namespace ECSEngine {
 	ECS_INLINE BasicType AbsoluteDifference(BasicType first, BasicType second) {
 		return BasicTypeAction(first, second, [](auto first, auto second) {
 			return first > second ? first - second : second - first;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE BasicType DegToRad(BasicType angles) {
+		return BasicTypeAction(angles, [](auto value) {
+			return DegToRad((float)value);
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE BasicType RadToDeg(BasicType angles) {
+		return BasicTypeAction(angles, [](auto value) {
+			return RadToDeg((float)value);
 		});
 	}
 

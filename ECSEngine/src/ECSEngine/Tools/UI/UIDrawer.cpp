@@ -57,13 +57,13 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// Add to the late_hoverable, late_clickable or late_generals the last action in order to be added later on
-		ECS_INLINE void AddLateOrSystemAction(UIDrawer* drawer, size_t configuration, bool hoverable, bool clickable, bool general) {
+		ECS_INLINE void AddLateOrSystemAction(UIDrawer* drawer, size_t configuration, bool hoverable, bool general, ECS_MOUSE_BUTTON click_button) {
 			if (IsLateOrSystemConfiguration(configuration)) {
 				if (hoverable) {
 					drawer->late_hoverables.AddAssert(drawer->system->GetLastHoverableIndex(drawer->dockspace, drawer->border_index));
 				}
-				if (clickable) {
-					drawer->late_clickables.AddAssert(drawer->system->GetLastClickableIndex(drawer->dockspace, drawer->border_index));
+				if (click_button != ECS_MOUSE_BUTTON_COUNT) {
+					drawer->late_clickables[click_button].AddAssert(drawer->system->GetLastClickableIndex(drawer->dockspace, drawer->border_index, click_button));
 				}
 				if (general) {
 					drawer->late_generals.AddAssert(drawer->system->GetLastGeneralIndex(drawer->dockspace, drawer->border_index));
@@ -4629,7 +4629,7 @@ namespace ECSEngine {
 				if (active_state) {
 					ECS_UI_DRAW_PHASE phase = drawer->HandlePhase(configuration);
 					reserved_hoverable = drawer->ReserveHoverable(phase);
-					reserved_clickable = drawer->ReserveClickable(phase);
+					reserved_clickable = drawer->ReserveClickable(ECS_MOUSE_LEFT, phase);
 				}
 
 				if (is_selected) {
@@ -8405,9 +8405,11 @@ namespace ECSEngine {
 				system->ReaddHoverableToDockspaceRegion(dockspace, border_index, late_hoverables[index]);
 			}
 
-			for (unsigned int index = 0; index < late_clickables.size; index++) {
-				system->ReaddClickableToDockspaceRegion(dockspace, border_index, late_clickables[index]);
-			}
+			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
+				for (unsigned int index = 0; index < late_clickables[button_type].size; index++) {
+					system->ReaddClickableToDockspaceRegion(dockspace, border_index, late_clickables[button_type][index], button_type);
+				}
+			});
 
 			for (unsigned int index = 0; index < late_generals.size; index++) {
 				system->ReaddGeneralToDockspaceRegion(dockspace, border_index, late_generals[index]);
@@ -8817,7 +8819,9 @@ namespace ECSEngine {
 				current_identifier.size = 0;
 
 				late_hoverables.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
-				late_clickables.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
+				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
+					late_clickables[button_type].Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
+				});
 				late_generals.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
 
 				if (initializer) {
@@ -8879,7 +8883,9 @@ namespace ECSEngine {
 				system->m_memory->Deallocate(identifier_stack.buffer);
 
 				system->m_memory->Deallocate(late_hoverables.buffer);
-				system->m_memory->Deallocate(late_clickables.buffer);
+				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
+					system->m_memory->Deallocate(late_clickables[button_type].buffer);
+				});
 				system->m_memory->Deallocate(late_generals.buffer);
 
 				if (initializer) {
@@ -8914,7 +8920,7 @@ namespace ECSEngine {
 					scale,
 					handler
 				);
-				AddLateOrSystemAction(this, configuration, true, false, false);
+				AddLateOrSystemAction(this, configuration, true, false, ECS_MOUSE_BUTTON_COUNT);
 			}
 		}
 
@@ -8931,7 +8937,7 @@ namespace ECSEngine {
 					data = stack_data;
 				}
 				system->AddHoverableToDockspaceRegion(thread_id, dockspace, border_index, position, scale, { TextTooltipHoverable, data, write_size, phase });
-				AddLateOrSystemAction(this, configuration, true, false, false);
+				AddLateOrSystemAction(this, configuration, true, false, ECS_MOUSE_BUTTON_COUNT);
 			}
 		}
 
@@ -8941,7 +8947,8 @@ namespace ECSEngine {
 			size_t configuration,
 			float2 position,
 			float2 scale,
-			UIActionHandler handler
+			UIActionHandler handler,
+			ECS_MOUSE_BUTTON button_type
 		) {
 			if (!initializer) {
 				system->AddClickableToDockspaceRegion(
@@ -8950,9 +8957,10 @@ namespace ECSEngine {
 					border_index,
 					position,
 					scale,
-					handler
+					handler,
+					button_type
 				);
-				AddLateOrSystemAction(this, configuration, false, true, false);
+				AddLateOrSystemAction(this, configuration, false, false, button_type);
 			}
 		}
 
@@ -8973,7 +8981,7 @@ namespace ECSEngine {
 					scale,
 					handler
 				);
-				AddLateOrSystemAction(this, configuration, false, false, true);
+				AddLateOrSystemAction(this, configuration, false, true, ECS_MOUSE_BUTTON_COUNT);
 			}
 		}
 
@@ -8999,7 +9007,7 @@ namespace ECSEngine {
 				data.phase = phase;
 				system->AddDefaultHoverable(data);
 
-				AddLateOrSystemAction(this, configuration, true, false, false);
+				AddLateOrSystemAction(this, configuration, true, false, ECS_MOUSE_BUTTON_COUNT);
 			}
 		}
 
@@ -9036,7 +9044,7 @@ namespace ECSEngine {
 				data.scale = main_scale;
 				system->AddDefaultHoverable(data);
 
-				AddLateOrSystemAction(this, configuration, true, false, false);
+				AddLateOrSystemAction(this, configuration, true, false, ECS_MOUSE_BUTTON_COUNT);
 			}
 		}
 
@@ -9047,7 +9055,8 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale,
 			UIActionHandler hoverable_handler,
-			UIActionHandler clickable_handler
+			UIActionHandler clickable_handler,
+			ECS_MOUSE_BUTTON button_type
 		) {
 			if (!initializer) {
 				UISystemDefaultClickableData data;
@@ -9058,9 +9067,10 @@ namespace ECSEngine {
 				data.position = position;
 				data.scale = scale;
 				data.thread_id = thread_id;
+				data.button_type = button_type;
 				system->AddDefaultClickable(data);
 
-				AddLateOrSystemAction(this, configuration, true, true, false);
+				AddLateOrSystemAction(this, configuration, true, false, button_type);
 			}
 		}
 
@@ -9072,7 +9082,8 @@ namespace ECSEngine {
 			float2 position, 
 			float2 scale, 
 			UIActionHandler hoverable_handler,
-			UIActionHandler clickable_handler
+			UIActionHandler clickable_handler,
+			ECS_MOUSE_BUTTON button_type
 		)
 		{
 			if (!initializer) {
@@ -9084,6 +9095,7 @@ namespace ECSEngine {
 				data.position = position;
 				data.scale = scale;
 				data.thread_id = thread_id;
+				data.button_type = button_type;
 				system->WriteReservedDefaultClickable(reserved_hoverable, reserved_clickable, data);
 			}
 		}
@@ -9112,7 +9124,7 @@ namespace ECSEngine {
 					second_click_handler
 				);
 
-				AddLateOrSystemAction(this, configuration, false, false, true);
+				AddLateOrSystemAction(this, configuration, false, true, ECS_MOUSE_BUTTON_COUNT);
 			}
 		}
 
@@ -9158,10 +9170,17 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::AddRightClickAction(size_t configuration, float2 position, float2 scale, Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler)
+		void UIDrawer::AddRightClickAction(
+			size_t configuration, 
+			float2 position, 
+			float2 scale, 
+			Stream<char> name, 
+			UIDrawerMenuState* menu_state, 
+			UIActionHandler custom_handler
+		)
 		{
 			UIDrawerMenuRightClickData right_click = PrepareRightClickActionData(name, menu_state, custom_handler);
-			AddHoverable(configuration, position, scale, { RightClickMenu, &right_click, sizeof(right_click), ECS_UI_DRAW_SYSTEM });
+			AddClickable(configuration, position, scale, { RightClickMenu, &right_click, sizeof(right_click), ECS_UI_DRAW_SYSTEM }, ECS_MOUSE_RIGHT);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9176,7 +9195,8 @@ namespace ECSEngine {
 			float2 text_offset,
 			ECS_UI_DRAW_PHASE phase,
 			Color font_color,
-			float percentage
+			float percentage,
+			ECS_MOUSE_BUTTON button_type
 		) {
 			UIDefaultTextHoverableData hoverable_data;
 			hoverable_data.color = color;
@@ -9192,7 +9212,7 @@ namespace ECSEngine {
 			}
 			hoverable_data.text_offset = text_offset;
 
-			AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
+			AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler, button_type);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9203,38 +9223,20 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale,
 			UIActionHandler handler,
-			Color color,
-			Stream<char> text,
-			float2 text_offset,
-			bool horizontal_cull,
-			float horizontal_cull_bound,
-			bool vertical_cull,
-			float vertical_cull_bound,
-			bool vertical_text,
+			UIDefaultTextHoverableData* hoverable_data,
+			Color text_color,
 			ECS_UI_DRAW_PHASE phase,
-			Color font_color,
-			float percentage
+			ECS_MOUSE_BUTTON button_type
 		) {
-			UIDefaultTextHoverableData hoverable_data;
-			hoverable_data.color = color;
-			hoverable_data.percentage = percentage;
-			hoverable_data.character_spacing = font.character_spacing;
-			hoverable_data.font_size = GetFontSize();
-			hoverable_data.text = text;
-			if (font_color == ECS_COLOR_WHITE) {
-				hoverable_data.text_color = color_theme.text;
+			hoverable_data->character_spacing = font.character_spacing;
+			hoverable_data->font_size = GetFontSize();
+			if (text_color == ECS_COLOR_WHITE) {
+				hoverable_data->text_color = color_theme.text;
 			}
 			else {
-				hoverable_data.text_color = font_color;
+				hoverable_data->text_color = text_color;
 			}
-			hoverable_data.text_offset = text_offset;
-			hoverable_data.horizontal_cull = horizontal_cull;
-			hoverable_data.vertical_cull = vertical_cull;
-			hoverable_data.horizontal_cull_bound = horizontal_cull_bound;
-			hoverable_data.vertical_cull_bound = vertical_cull_bound;
-			hoverable_data.vertical_text = vertical_text;
-
-			AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
+			AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, hoverable_data, sizeof(*hoverable_data), phase }, handler, button_type);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9246,7 +9248,8 @@ namespace ECSEngine {
 			UIActionHandler handler,
 			Color color,
 			float percentage,
-			ECS_UI_DRAW_PHASE hoverable_phase
+			ECS_UI_DRAW_PHASE hoverable_phase,
+			ECS_MOUSE_BUTTON button_type
 		) {
 			if (!initializer) {
 				UISystemDefaultHoverableClickableData data;
@@ -9265,9 +9268,10 @@ namespace ECSEngine {
 				data.position = position;
 				data.scale = scale;
 				data.thread_id = thread_id;
+				data.button_type = button_type;
 				system->AddDefaultHoverableClickable(data);
 
-				AddLateOrSystemAction(this, configuration, true, true, false);
+				AddLateOrSystemAction(this, configuration, true, false, button_type);
 			}
 		}
 
@@ -9281,7 +9285,8 @@ namespace ECSEngine {
 			UIActionHandler handler, 
 			Color color, 
 			float percentage,
-			ECS_UI_DRAW_PHASE hoverable_phase
+			ECS_UI_DRAW_PHASE hoverable_phase,
+			ECS_MOUSE_BUTTON button_type
 		)
 		{
 			if (!initializer) {
@@ -9301,7 +9306,8 @@ namespace ECSEngine {
 				data.position = position;
 				data.scale = scale;
 				data.thread_id = thread_id;
-				system->WriteResevedDefaultHoverableClickable(reserved_hoverable, reserved_clickable, data);
+				data.button_type = button_type;
+				system->WriteReservedDefaultHoverableClickable(reserved_hoverable, reserved_clickable, data);
 			}
 		}
 
@@ -9316,7 +9322,8 @@ namespace ECSEngine {
 			const Color* colors,
 			const float* percentages,
 			unsigned int count,
-			UIActionHandler handler
+			UIActionHandler handler,
+			ECS_MOUSE_BUTTON button_type
 		) {
 			if (!initializer) {
 				ECS_ASSERT(count <= ECS_TOOLS_UI_DEFAULT_HOVERABLE_DATA_COUNT);
@@ -9337,9 +9344,10 @@ namespace ECSEngine {
 				data.position = main_position;
 				data.scale = main_scale;
 				data.thread_id = thread_id;
+				data.button_type = button_type;
 				system->AddDefaultHoverableClickable(data);
 
-				AddLateOrSystemAction(this, configuration, true, true, false);
+				AddLateOrSystemAction(this, configuration, true, false, button_type);
 			}
 		}
 
@@ -9355,7 +9363,8 @@ namespace ECSEngine {
 			const Color* colors, 
 			const float* percentages,
 			unsigned int count, 
-			UIActionHandler handler
+			UIActionHandler handler,
+			ECS_MOUSE_BUTTON button_type
 		)
 		{
 			if (!initializer) {
@@ -9377,7 +9386,8 @@ namespace ECSEngine {
 				data.position = main_position;
 				data.scale = main_scale;
 				data.thread_id = thread_id;
-				system->WriteResevedDefaultHoverableClickable(reserved_hoverable, reserved_clickable, data);
+				data.button_type = button_type;
+				system->WriteReservedDefaultHoverableClickable(reserved_hoverable, reserved_clickable, data);
 			}
 		}
 
@@ -11755,13 +11765,13 @@ namespace ECSEngine {
 
 			if (!initializer) {
 				state.hoverable_count = dockspace->borders[border_index].hoverable_handler.position_x.size;
-				state.clickable_count = dockspace->borders[border_index].clickable_handler.position_x.size;
+				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
+					state.clickable_count[button_type] = dockspace->borders[border_index].clickable_handler[button_type].position_x.size;
+				});
 				state.general_count = dockspace->borders[border_index].general_handler.position_x.size;
 			}
 			else {
-				state.hoverable_count = 0;
-				state.clickable_count = 0;
-				state.general_count = 0;
+				memset(&state, 0, sizeof(state));
 			}
 
 			return state;
@@ -12483,7 +12493,7 @@ namespace ECSEngine {
 						}
 
 						AddClickable(configuration, initial_label_position, action_scale, { FilesystemHierarchySelectable, data, 0, selectable_callback_phase });
-						AddDefaultHoverable(configuration, initial_label_position, action_scale, current_color);
+						//AddDefaultHoverable(configuration, initial_label_position, action_scale, current_color);
 
 						UIDrawerFilesystemHierarchyChangeStateData change_state_data;
 						change_state_data.hierarchy = data;
@@ -12520,7 +12530,13 @@ namespace ECSEngine {
 							UIDrawerFilesystemHierarchyRightClickData right_click;
 							right_click.data = data->right_click_callback_data;
 							right_click.label = data->right_click_label_temporary;
-							AddHoverable(configuration, initial_label_position, action_scale, { data->right_click_callback, &right_click, sizeof(right_click), right_click_phase });
+							AddClickable(
+								configuration, 
+								initial_label_position, 
+								action_scale, 
+								{ data->right_click_callback, &right_click, sizeof(right_click), right_click_phase },
+								ECS_MOUSE_RIGHT
+							);
 
 							if (trigger) {
 								data->active_label.Copy(data->selected_label_temporary);
@@ -13022,7 +13038,13 @@ namespace ECSEngine {
 								right_click_data->hover_color = current_color;
 								unsigned int write_size = right_click_data->WriteLabel(untyped_label);
 
-								AddHoverable(configuration, current_position, current_scale, { LabelHierarchyRightClickAction, right_click_data, write_size, right_click_phase });
+								AddClickable(
+									configuration, 
+									current_position, 
+									current_scale, 
+									{ LabelHierarchyRightClickAction, right_click_data, write_size, right_click_phase },
+									ECS_MOUSE_RIGHT
+								);
 							}
 
 							if (is_active) {
@@ -14097,9 +14119,9 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIReservedHandler UIDrawer::ReserveClickable(ECS_UI_DRAW_PHASE phase)
+		UIReservedHandler UIDrawer::ReserveClickable(ECS_MOUSE_BUTTON button_type, ECS_UI_DRAW_PHASE phase)
 		{
-			return system->ReserveClickable(thread_id, dockspace, border_index, phase);
+			return system->ReserveClickable(thread_id, dockspace, border_index, phase, button_type);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -14152,7 +14174,9 @@ namespace ECSEngine {
 		void UIDrawer::RestoreHandlerState(UIDrawerHandlerState state) {
 			if (!initializer) {
 				dockspace->borders[border_index].hoverable_handler.position_x.size = state.hoverable_count;
-				dockspace->borders[border_index].clickable_handler.position_x.size = state.clickable_count;
+				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
+					dockspace->borders[border_index].clickable_handler[button_type].position_x.size = state.clickable_count[button_type];
+				});
 				dockspace->borders[border_index].general_handler.position_x.size = state.general_count;
 			}
 		}
@@ -15108,8 +15132,8 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// places a clickable on the whole window
-		void UIDrawer::SetWindowClickable(const UIActionHandler* handler) {
-			AddClickable(0, region_position, region_scale, *handler);
+		void UIDrawer::SetWindowClickable(const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type) {
+			AddClickable(0, region_position, region_scale, *handler, button_type);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -15553,8 +15577,8 @@ namespace ECSEngine {
 						background_color = background->overwrite_color;
 					}
 
-					background_position = { position.x + (scale.x - background->scale.x) * 0.5f, position.y + (scale.y - background->scale.y) * 0.5f };
-					background_scale = background->scale;
+					background_scale = scale * background->scale_factor;
+					background_position = { position.x + (scale.x - background_scale.x) * 0.5f, position.y + (scale.y - background_scale.y) * 0.5f };
 
 					if (configuration & UI_CONFIG_SPRITE_BUTTON_CENTER_SPRITE_TO_BACKGROUND) {
 						background_position = position;
@@ -15562,13 +15586,13 @@ namespace ECSEngine {
 					}
 				}
 
+				AlignToRowY(drawer, configuration, position, scale);
+
 				if (configuration & UI_CONFIG_GET_TRANSFORM) {
 					UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);
 					*get_transform->position = position;
 					*get_transform->scale = scale;
 				}
-
-				AlignToRowY(drawer, configuration, position, scale);
 
 				if (drawer->ValidatePosition(configuration, position, scale)) {
 					const UIConfigSpriteButtonMultiTexture* multi_texture = nullptr;
@@ -15748,14 +15772,16 @@ namespace ECSEngine {
 						background_color = background->overwrite_color;
 					}
 
-					background_position = { position.x + (scale.x - background->scale.x) * 0.5f, position.y + (scale.y - background->scale.y) * 0.5f };
-					background_scale = background->scale;
+					background_scale = scale * background->scale_factor;
+					background_position = { position.x + (scale.x - background_scale.x) * 0.5f, position.y + (scale.y - background_scale.y) * 0.5f };
 
 					if (configuration & UI_CONFIG_SPRITE_BUTTON_CENTER_SPRITE_TO_BACKGROUND) {
 						background_position = position;
 						position = AlignMiddle(background_position, background_scale, scale);
 					}
 				}
+
+				AlignToRowY(this, configuration, position, scale);
 
 				if (configuration & UI_CONFIG_GET_TRANSFORM) {
 					UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);
@@ -15834,14 +15860,16 @@ namespace ECSEngine {
 							background_color = background->overwrite_color;
 						}
 
-						background_position = { position.x + (scale.x - background->scale.x) * 0.5f, position.y + (scale.y - background->scale.y) * 0.5f };
-						background_scale = background->scale;
+						background_scale = background->scale_factor * scale;
+						background_position = { position.x + (scale.x - background_scale.x) * 0.5f, position.y + (scale.y - background_scale.y) * 0.5f };
 
 						if (configuration & UI_CONFIG_SPRITE_BUTTON_CENTER_SPRITE_TO_BACKGROUND) {
 							background_position = position;
 							position = AlignMiddle(background_position, background_scale, scale);
 						}
 					}
+
+					AlignToRowY(this, configuration, position, scale);
 
 					if (configuration & UI_CONFIG_GET_TRANSFORM) {
 						UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);

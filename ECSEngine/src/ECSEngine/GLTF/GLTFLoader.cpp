@@ -306,7 +306,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		bool CoallescedMeshFromAttribute(
+		bool CoalescedMeshFromAttribute(
 			const GLTFMesh& mesh,
 			GLTFMeshBufferSizes* buffer_sizes,
 			const cgltf_attribute* attribute,
@@ -670,7 +670,7 @@ namespace ECSEngine {
 	}
 
 	// Does not load the name
-	bool LoadCoallescedMeshFromGLTF(
+	bool LoadCoalescedMeshFromGLTF(
 		GLTFMesh& mesh,
 		GLTFMeshBufferSizes* buffer_sizes,
 		const cgltf_node* nodes,
@@ -692,7 +692,7 @@ namespace ECSEngine {
 				const cgltf_attribute* attribute = &primitive->attributes[attribute_index];
 
 				GLTFMeshBufferSizes before_sizes = *buffer_sizes;
-				bool is_valid = CoallescedMeshFromAttribute(
+				bool is_valid = CoalescedMeshFromAttribute(
 					mesh,
 					buffer_sizes,
 					attribute,
@@ -987,13 +987,13 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadCoallescedMeshFromGLTF(
+	bool LoadCoalescedMeshFromGLTF(
 		GLTFData data, 
 		const GLTFMeshBufferSizes* sizes, 
 		GLTFMesh* mesh,
 		Submesh* submeshes,
 		bool invert_z_axis, 
-		LoadCoallescedMeshFromGLTFOptions* options
+		LoadCoalescedMeshFromGLTFOptions* options
 	)
 	{
 		bool allocate_names = false;
@@ -1045,7 +1045,7 @@ namespace ECSEngine {
 		unsigned int submesh_index = 0;
 		bool success = ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
 			GLTFMeshBufferSizes previous_buffer_size = resetted_buffer_sizes;
-			bool success = LoadCoallescedMeshFromGLTF(*mesh, &resetted_buffer_sizes, nodes, index, node_count, invert_z_axis, error_message);
+			bool success = LoadCoalescedMeshFromGLTF(*mesh, &resetted_buffer_sizes, nodes, index, node_count, invert_z_axis, error_message);
 			if (success) {
 				Submesh submesh;
 				submesh.index_buffer_offset = previous_buffer_size.index_count;
@@ -1089,12 +1089,12 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadCoallescedMeshFromGLTF(
+	bool LoadCoalescedMeshFromGLTF(
 		GLTFData data, 
 		GLTFMesh* mesh, 
 		Submesh* submeshes, 
 		bool invert_z_axis, 
-		LoadCoallescedMeshFromGLTFOptions* options
+		LoadCoalescedMeshFromGLTFOptions* options
 	)
 	{
 		CapacityStream<char>* error_message = nullptr;
@@ -1108,7 +1108,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		return LoadCoallescedMeshFromGLTF(data, &buffer_sizes, mesh, submeshes, invert_z_axis, options);
+		return LoadCoalescedMeshFromGLTF(data, &buffer_sizes, mesh, submeshes, invert_z_axis, options);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -1522,15 +1522,15 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	CoallescedMesh LoadCoallescedMeshFromGLTFToGPU(
+	CoalescedMesh LoadCoalescedMeshFromGLTFToGPU(
 		Graphics* graphics, 
 		GLTFData gltf_data, 
-		AllocatorPolymorphic coallesced_mesh_allocator,
+		AllocatorPolymorphic coalesced_mesh_allocator,
 		bool invert_z_axis,
-		LoadCoallescedMeshFromGLTFOptions* options
+		LoadCoalescedMeshFromGLTFOptions* options
 	)
 	{
-		CoallescedMesh result;
+		CoalescedMesh result;
 		memset(&result, 0, sizeof(result));
 
 		GLTFMesh gltf_mesh;
@@ -1547,21 +1547,21 @@ namespace ECSEngine {
 			allocate_submesh_names = options->allocate_submesh_name;
 			coallesced_submesh_names = options->coallesce_submesh_name_allocations;
 			previous_permanent_allocator = options->permanent_allocator;
-			options->permanent_allocator = coallesced_mesh_allocator;
+			options->permanent_allocator = coalesced_mesh_allocator;
 		}
 
-		Submesh* submeshes = (Submesh*)Allocate(coallesced_mesh_allocator, sizeof(Submesh) * gltf_data.mesh_count);
-		bool success = LoadCoallescedMeshFromGLTF(gltf_data, &gltf_mesh, submeshes, invert_z_axis, options);
+		Submesh* submeshes = (Submesh*)Allocate(coalesced_mesh_allocator, sizeof(Submesh) * gltf_data.mesh_count);
+		bool success = LoadCoalescedMeshFromGLTF(gltf_data, &gltf_mesh, submeshes, invert_z_axis, options);
 		if (success) {
 			result.mesh = GLTFMeshToMesh(graphics, gltf_mesh);
 			result.submeshes = { submeshes, gltf_data.mesh_count };
 
 		/*	if (allocate_submesh_names) {
 				if (coallesced_submesh_names) {
-					StreamCoallescedInplaceDeepCopy(result.submeshes, coallesced_mesh_allocator);
+					StreamCoallescedInplaceDeepCopy(result.submeshes, coalesced_mesh_allocator);
 				}
 				else {
-					StreamInPlaceDeepCopy(result.submeshes, coallesced_mesh_allocator);
+					StreamInPlaceDeepCopy(result.submeshes, coalesced_mesh_allocator);
 				}
 			}*/
 
@@ -1577,12 +1577,12 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadCoallescedMeshFromGLTFToGPU(
+	bool LoadCoalescedMeshFromGLTFToGPU(
 		Graphics* graphics, 
 		GLTFData gltf_data, 
-		CoallescedMesh* coallesced_mesh, 
+		CoalescedMesh* coalesced_mesh, 
 		bool invert_z_axis, 
-		LoadCoallescedMeshFromGLTFOptions* options
+		LoadCoalescedMeshFromGLTFOptions* options
 	)
 	{
 		GLTFMesh gltf_mesh;
@@ -1600,9 +1600,9 @@ namespace ECSEngine {
 			return false;
 		}
 
-		success = LoadCoallescedMeshFromGLTF(gltf_data, &buffer_sizes, &gltf_mesh, coallesced_mesh->submeshes.buffer, invert_z_axis, options);
+		success = LoadCoalescedMeshFromGLTF(gltf_data, &buffer_sizes, &gltf_mesh, coalesced_mesh->submeshes.buffer, invert_z_axis, options);
 		if (success) {
-			coallesced_mesh->mesh = GLTFMeshToMesh(graphics, gltf_mesh);
+			coalesced_mesh->mesh = GLTFMeshToMesh(graphics, gltf_mesh);
 		}
 		// In case of failure it will still have the buffers allocated
 		FreeCoallescedGLTFMesh(gltf_mesh, temporary_buffer_allocator);

@@ -243,13 +243,13 @@ namespace ECSEngine {
 			return false;
 		}
 
-		bool UIFocusedWindowData::ExecuteClickableHandler(ActionData* action_data)
+		bool UIFocusedWindowData::ExecuteClickableHandler(ActionData* action_data, ECS_MOUSE_BUTTON button_type)
 		{
-			if (clickable_handler.action != nullptr) {
-				action_data->data = clickable_handler.data;
-				action_data->position = clickable_transform.position;
-				action_data->scale = clickable_transform.scale;
-				clickable_handler.action(action_data);
+			if (clickable_handler[button_type].action != nullptr) {
+				action_data->data = clickable_handler[button_type].data;
+				action_data->position = mouse_click_transform[button_type].position;
+				action_data->scale = mouse_click_transform[button_type].scale;
+				clickable_handler[button_type].action(action_data);
 				return true;
 			}
 			return false;
@@ -278,12 +278,12 @@ namespace ECSEngine {
 			always_hoverable = false;
 		}
 
-		void UIFocusedWindowData::ResetClickableHandler()
+		void UIFocusedWindowData::ResetClickableHandler(ECS_MOUSE_BUTTON button_type)
 		{
-			clickable_handler.action = nullptr;
-			clickable_handler.data = nullptr;
-			clickable_handler.data_size = 0;
-			clickable_handler.phase = ECS_UI_DRAW_NORMAL;
+			clickable_handler[button_type].action = nullptr;
+			clickable_handler[button_type].data = nullptr;
+			clickable_handler[button_type].data_size = 0;
+			clickable_handler[button_type].phase = ECS_UI_DRAW_NORMAL;
 		}
 
 		void UIFocusedWindowData::ResetGeneralHandler()
@@ -295,11 +295,9 @@ namespace ECSEngine {
 			clean_up_call_general = false;
 		}
 
-		void UIFocusedWindowData::ChangeClickableHandler(float2 position, float2 scale, const UIActionHandler* handler)
+		void UIFocusedWindowData::ChangeClickable(float2 position, float2 scale, const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type)
 		{
-			clickable_transform.position = position;
-			clickable_transform.scale = scale;
-			clickable_handler = *handler;
+			ChangeClickable(position, scale, handler->action, handler->data, handler->data_size, handler->phase, button_type);
 		}
 
 		void UIFocusedWindowData::ChangeGeneralHandler(float2 position, float2 scale, const UIActionHandler* handler)
@@ -318,23 +316,17 @@ namespace ECSEngine {
 			clean_up_call_hoverable = false;
 		}
 
-		void UIFocusedWindowData::ChangeClickableHandler(
+		void UIFocusedWindowData::ChangeClickable(
 			float2 position,
 			float2 scale,
 			Action action,
 			void* data,
 			size_t data_size,
-			ECS_UI_DRAW_PHASE phase
+			ECS_UI_DRAW_PHASE phase,
+			ECS_MOUSE_BUTTON button_type
 		)
 		{
-			clickable_handler.action = action;
-			clickable_handler.data = data;
-			clickable_handler.data_size = data_size;
-			clickable_handler.phase = phase;
-			clickable_transform = {
-				position,
-				scale
-			};
+			ChangeClickable({ position, scale }, action, data, data_size, phase, button_type);
 		}
 
 		void UIFocusedWindowData::ChangeHoverableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase)
@@ -372,34 +364,37 @@ namespace ECSEngine {
 			);
 		}
 
-		void UIFocusedWindowData::ChangeClickableHandler(
+		void UIFocusedWindowData::ChangeClickable(
 			UIElementTransform transform,
 			Action action,
 			void* data,
 			size_t data_size,
-			ECS_UI_DRAW_PHASE phase
+			ECS_UI_DRAW_PHASE phase,
+			ECS_MOUSE_BUTTON button_type
 		)
 		{
-			clickable_handler.action = action;
-			clickable_handler.data = data;
-			clickable_handler.phase = phase;
-			clickable_handler.data_size = data_size;
-			clickable_transform = transform;
+			clickable_handler[button_type].action = action;
+			clickable_handler[button_type].data = data;
+			clickable_handler[button_type].phase = phase;
+			clickable_handler[button_type].data_size = data_size;
+			mouse_click_transform[button_type] = transform;
 		}
 
-		void UIFocusedWindowData::ChangeClickableHandler(
+		void UIFocusedWindowData::ChangeClickable(
 			const UIHandler* handler,
 			unsigned int index,
-			void* data
+			void* data,
+			ECS_MOUSE_BUTTON button_type
 		)
 		{
-			ChangeClickableHandler(
+			ChangeClickable(
 				{ handler->position_x[index], handler->position_y[index] },
 				{ handler->scale_x[index], handler->scale_y[index] },
 				handler->action[index].action,
 				data,
 				handler->action[index].data_size,
-				handler->action[index].phase
+				handler->action[index].phase,
+				button_type
 			);
 		}
 
@@ -550,7 +545,9 @@ namespace ECSEngine {
 		void UIDockspaceBorder::Reset()
 		{
 			hoverable_handler.Reset();
-			clickable_handler.Reset();
+			for (size_t index = 0; index < ECS_MOUSE_BUTTON_COUNT; index++) {
+				clickable_handler[index].Reset();
+			}
 			general_handler.Reset();
 			//draw_resources.ReleaseSpriteTextures();
 			for (size_t index = 0; index < draw_resources.sprite_textures.size; index++) {

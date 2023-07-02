@@ -22,7 +22,7 @@ namespace ECSEngine {
 #pragma region Create and Identifiers
 
 	// Returns true if it managed to create the asset according to the metadata, else false
-	// It does not modify the underlying CoallescedMesh* pointer if it fails
+	// It does not modify the underlying CoalescedMesh* pointer if it fails
 	ECSENGINE_API bool CreateMeshFromMetadata(
 		ResourceManager* resource_manager, 
 		MeshMetadata* metadata, 
@@ -31,7 +31,7 @@ namespace ECSEngine {
 
 	// A more detailed version. Useful for multithreaded loading
 	// If the time stamp is 0, then it will get it from the OS
-	// It does not modify the underlying CoallescedMesh* pointer if it fails
+	// It does not modify the underlying CoalescedMesh* pointer if it fails
 	ECSENGINE_API bool CreateMeshFromMetadataEx(
 		ResourceManager* resource_manager,
 		MeshMetadata* metadata,
@@ -41,12 +41,12 @@ namespace ECSEngine {
 
 	// A more detailed version. Useful for multithreaded loading
 	// If the time stamp is 0, then it will get it from the OS
-	// It does not modify the underlying CoallescedMesh* pointer if it fails
+	// It does not modify the underlying CoalescedMesh* pointer if it fails
 	// This version cannot fail (unless the GPU memory runs out)
 	ECSENGINE_API void CreateMeshFromMetadataEx(
 		ResourceManager* resource_manager,
 		MeshMetadata* metadata,
-		const GLTFMesh* coallesced_mesh,
+		const GLTFMesh* coalesced_mesh,
 		Stream<Submesh> submeshes,
 		CreateAssetFromMetadataExData* ex_data = {}
 	);

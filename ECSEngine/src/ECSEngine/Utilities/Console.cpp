@@ -169,7 +169,7 @@ namespace ECSEngine {
 
 	MemoryManager DefaultConsoleAllocator(GlobalMemoryManager* global_manager)
 	{
-		return MemoryManager(1'000'000, ECS_KB * 16, 1'000'000, global_manager);
+		return MemoryManager(ECS_MB, ECS_KB * 16, ECS_MB, global_manager);
 	}
 
 	// -------------------------------------------------------------------------------------------------------

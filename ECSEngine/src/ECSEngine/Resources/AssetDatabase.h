@@ -184,7 +184,7 @@ namespace ECSEngine {
 		unsigned int FindAsset(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type) const;
 
 		// Searches an asset based upon its actual data. Returns -1 if it doesn't find it.
-		unsigned int FindMeshEx(const CoallescedMesh* mesh) const;
+		unsigned int FindMeshEx(const CoalescedMesh* mesh) const;
 
 		// Searches an asset based upon its actual data. Returns -1 if it doesn't find it.
 		unsigned int FindTextureEx(ResourceView resource_view) const;

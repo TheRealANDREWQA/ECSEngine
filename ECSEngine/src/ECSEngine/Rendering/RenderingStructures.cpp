@@ -613,45 +613,63 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	Camera::Camera() : translation(0.0f, 0.0f, 0.0f), rotation(0.0f, 0.0f, 0.0f) {}
+	Camera::Camera() : translation(0.0f, 0.0f, 0.0f), rotation(0.0f, 0.0f, 0.0f), is_orthographic(false), is_perspective_fov(false) {}
 
-	Camera::Camera(float3 _translation, float3 _rotation) : translation(_translation), rotation(_rotation) {}
+	Camera::Camera(float3 _translation, float3 _rotation) : translation(_translation), rotation(_rotation), is_orthographic(false), is_perspective_fov(false) {}
 
-	Camera::Camera(Matrix _projection, float3 _translation, float3 _rotation) : projection(_projection), translation(_translation), rotation(_rotation) {}
+	Camera::Camera(Matrix _projection, float3 _translation, float3 _rotation) : projection(_projection), 
+		translation(_translation), rotation(_rotation), is_orthographic(false), is_perspective_fov(false) {}
 
-	Camera::Camera(const CameraParameters& parameters) {
+	Camera::Camera(const CameraParameters& parameters) : is_perspective_fov(false) {
 		translation = parameters.translation;
 		rotation = parameters.rotation;
 
 		if (parameters.is_orthographic) {
+			is_orthographic = true;
 			SetOrthographicProjection(parameters.width, parameters.height, parameters.near_z, parameters.far_z);
 		}
 		else {
+			is_orthographic = false;
 			SetPerspectiveProjection(parameters.width, parameters.height, parameters.near_z, parameters.far_z);
 		}
 	}
 
-	Camera::Camera(const CameraParametersFOV& parameters) {
+	Camera::Camera(const CameraParametersFOV& parameters) : is_perspective_fov(true) {
 		translation = parameters.translation;
 		rotation = parameters.rotation;
 
 		SetPerspectiveProjectionFOV(parameters.fov, parameters.aspect_ratio, parameters.near_z, parameters.far_z);
 	}
 
-	void Camera::SetOrthographicProjection(float width, float height, float near_z, float far_z) {
+	void Camera::SetOrthographicProjection(float _width, float _height, float near_z, float far_z) {
+		is_orthographic = true;
+		is_perspective_fov = false;
+
+		width = _width;
+		height = _height;
 		projection = MatrixOrthographic(width, height, near_z, far_z);
 	}
 
-	void Camera::SetPerspectiveProjection(float width, float height, float near_z, float far_z) {
+	void Camera::SetPerspectiveProjection(float _width, float _height, float near_z, float far_z) {
+		is_orthographic = false;
+		is_perspective_fov = false;
+
+		width = _width;
+		height = _height;
 		projection = MatrixPerspective(width, height, near_z, far_z);
 	}
 
-	void Camera::SetPerspectiveProjectionFOV(float fov, float aspect_ratio, float near_z, float far_z) {
+	void Camera::SetPerspectiveProjectionFOV(float _fov, float _aspect_ratio, float near_z, float far_z) {
+		is_orthographic = false;
+		is_perspective_fov = true;
+
+		fov = _fov;
+		aspect_ratio = _aspect_ratio;
 		projection = MatrixPerspectiveFOV(fov, aspect_ratio, near_z, far_z);
 	}
 
-	Matrix Camera::GetViewProjectionMatrix() const {
-		return MatrixTranslation(-translation) * MatrixRotationZ(-rotation.z) * MatrixRotationY(-rotation.y) * MatrixRotationX(-rotation.x) * projection;
+	Matrix ECS_VECTORCALL Camera::GetViewProjectionMatrix() const {
+		return GetTranslation() * GetRotation() * GetProjection();
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -888,6 +906,31 @@ namespace ECSEngine {
 				mesh.vertex_buffers[index] = buffer;
 				return;
 			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	void SetDepthStencilDescOP(
+		D3D11_DEPTH_STENCIL_DESC* descriptor, 
+		bool front_face, 
+		D3D11_COMPARISON_FUNC comparison_func, 
+		D3D11_STENCIL_OP fail_op, 
+		D3D11_STENCIL_OP depth_fail_op, 
+		D3D11_STENCIL_OP pass_op
+	)
+	{
+		if (front_face) {
+			descriptor->FrontFace.StencilFunc = comparison_func;
+			descriptor->FrontFace.StencilFailOp = fail_op;
+			descriptor->FrontFace.StencilDepthFailOp = depth_fail_op;
+			descriptor->FrontFace.StencilPassOp = pass_op;
+		}
+		else {
+			descriptor->BackFace.StencilFunc = comparison_func;
+			descriptor->BackFace.StencilFailOp = fail_op;
+			descriptor->BackFace.StencilDepthFailOp = depth_fail_op;
+			descriptor->BackFace.StencilPassOp = pass_op;
 		}
 	}
 
@@ -1325,8 +1368,8 @@ namespace ECSEngine {
 		is_orthographic = false;
 		width = 0.0f;
 		height = 0.0f;
-		near_z = Camera::DefaultNearZ();
-		far_z = Camera::DefaultFarZ();
+		near_z = ECS_CAMERA_DEFAULT_NEAR_Z;
+		far_z = ECS_CAMERA_DEFAULT_FAR_Z;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -1338,8 +1381,8 @@ namespace ECSEngine {
 
 		fov = 60.0f;
 		aspect_ratio = 16.0f / 9.0f;
-		near_z = Camera::DefaultNearZ();
-		far_z = Camera::DefaultFarZ();
+		near_z = ECS_CAMERA_DEFAULT_NEAR_Z;
+		far_z = ECS_CAMERA_DEFAULT_NEAR_Z;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------

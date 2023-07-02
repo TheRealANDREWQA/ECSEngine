@@ -270,8 +270,8 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE CoallescedMesh* ExtractLinkComponentFunctionMesh(void* buffer) {
-		return (CoallescedMesh*)buffer;
+	ECS_INLINE CoalescedMesh* ExtractLinkComponentFunctionMesh(void* buffer) {
+		return (CoalescedMesh*)buffer;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

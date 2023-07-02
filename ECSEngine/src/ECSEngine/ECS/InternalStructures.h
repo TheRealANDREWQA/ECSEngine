@@ -22,9 +22,9 @@ namespace ECSEngine {
 #define ECS_ENTITY_MAX_COUNT (1 << 26)
 
 	struct ECSENGINE_API Entity {
-		Entity() : value(0) {}
-		Entity(unsigned int _index, unsigned int _generation_count) : index(_index), generation_count(_generation_count) {}
-		Entity(unsigned int _value) : value(_value) {}
+		ECS_INLINE Entity() : value(0) {}
+		ECS_INLINE Entity(unsigned int _index, unsigned int _generation_count) : index(_index), generation_count(_generation_count) {}
+		ECS_INLINE Entity(unsigned int _value) : value(_value) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(Entity);
 
@@ -54,8 +54,8 @@ namespace ECSEngine {
 #define ECS_ENTITY_HIERARCHY_MAX_COUNT (4)
 
 	struct ECSENGINE_API EntityInfo {
-		EntityInfo() : main_archetype(0), base_archetype(0), stream_index(0) {}
-		EntityInfo(unsigned int _archetype_index, unsigned int _subarchetype_index, unsigned int _index) :
+		ECS_INLINE EntityInfo() : main_archetype(0), base_archetype(0), stream_index(0) {}
+		ECS_INLINE EntityInfo(unsigned int _archetype_index, unsigned int _subarchetype_index, unsigned int _index) :
 			main_archetype(_archetype_index), base_archetype(_subarchetype_index), stream_index(_index) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(EntityInfo);
@@ -72,6 +72,11 @@ namespace ECSEngine {
 	};
 
 	struct Component {
+		ECS_INLINE Component& operator = (unsigned short _value) {
+			value = _value;
+			return *this;
+		}
+
 		ECS_INLINE unsigned int Hash() const {
 			return value;
 		}
@@ -83,11 +88,11 @@ namespace ECSEngine {
 		short value;
 	};
 
-	inline bool operator == (const Component& lhs, const Component& rhs) {
+	ECS_INLINE bool operator == (const Component& lhs, const Component& rhs) {
 		return lhs.value == rhs.value;
 	}
 
-	inline bool operator != (const Component& lhs, const Component& rhs) {
+	ECS_INLINE bool operator != (const Component& lhs, const Component& rhs) {
 		return !(lhs == rhs);
 	}
 
@@ -95,11 +100,11 @@ namespace ECSEngine {
 		short value;
 	};
 
-	inline bool operator == (const SharedInstance& lhs, const SharedInstance& rhs) {
+	ECS_INLINE bool operator == (const SharedInstance& lhs, const SharedInstance& rhs) {
 		return lhs.value == rhs.value;
 	}
 
-	inline bool operator != (const SharedInstance& lhs, const SharedInstance& rhs) {
+	ECS_INLINE bool operator != (const SharedInstance& lhs, const SharedInstance& rhs) {
 		return !(lhs == rhs);
 	}
 
@@ -147,8 +152,8 @@ namespace ECSEngine {
 #define ECS_COMPONENT_INFO_MAX_BUFFER_COUNT (5)
 
 	struct ECSENGINE_API ComponentInfo {
-		ComponentInfo() : size(0), component_buffers_count(0) {}
-		ComponentInfo(unsigned int _size) : size(_size), component_buffers_count(0) {}
+		ECS_INLINE ComponentInfo() : size(0), component_buffers_count(0) {}
+		ECS_INLINE ComponentInfo(unsigned int _size) : size(_size), component_buffers_count(0) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentInfo);
 
@@ -166,8 +171,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API ComponentSignature {
-		ComponentSignature() : indices(nullptr), count(0) {}
-		ComponentSignature(Component* _indices, unsigned char _count) : indices(_indices), count(_count) {}
+		ECS_INLINE ComponentSignature() : indices(nullptr), count(0) {}
+		ECS_INLINE ComponentSignature(Component* _indices, unsigned char _count) : indices(_indices), count(_count) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentSignature);
 
@@ -200,8 +205,8 @@ namespace ECSEngine {
 	ECSENGINE_API bool ExcludesComponents(ComponentSignature query, ComponentSignature archetype_component);
 
 	struct ECSENGINE_API SharedComponentSignature {
-		SharedComponentSignature() : indices(nullptr), instances(nullptr), count(0) {}
-		SharedComponentSignature(Component* _indices, SharedInstance* _instances, unsigned char _count) : indices(_indices), instances(_instances), count(_count) {}
+		ECS_INLINE SharedComponentSignature() : indices(nullptr), instances(nullptr), count(0) {}
+		ECS_INLINE SharedComponentSignature(Component* _indices, SharedInstance* _instances, unsigned char _count) : indices(_indices), instances(_instances), count(_count) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(SharedComponentSignature);
 

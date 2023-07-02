@@ -5,6 +5,26 @@ namespace ECSEngine {
 
 	namespace HID {
 
+		bool MouseState::Button(ECS_MOUSE_BUTTON button) const
+		{
+			switch (button) {
+			case ECS_MOUSE_LEFT:
+				return LeftButton();
+			case ECS_MOUSE_RIGHT:
+				return RightButton();
+			case ECS_MOUSE_MIDDLE:
+				return MiddleButton();
+			case ECS_MOUSE_X1:
+				return XButton1();
+			case ECS_MOUSE_X2:
+				return XButton2();
+			default:
+				ECS_ASSERT(false);
+			}
+
+			return false;
+		}
+
 		bool MouseState::LeftButton() const
 		{
 			return state.leftButton;
@@ -56,6 +76,12 @@ namespace ECSEngine {
 			previous_position.y = Position().y;
 		}
 
+		void MouseState::SetPosition(int2 position)
+		{
+			state.x = position.x;
+			state.y = position.y;
+		}
+
 		void MouseState::SetPreviousScroll()
 		{
 			previous_scroll = state.scrollWheelValue;
@@ -92,6 +118,26 @@ namespace ECSEngine {
 		MouseButtonState MouseTracker::XButton2() const
 		{
 			return MouseButtonState(tracker.xButton2);
+		}
+
+		MouseButtonState MouseTracker::Button(ECS_MOUSE_BUTTON button) const
+		{
+			switch (button) {
+			case ECS_MOUSE_LEFT:
+				return LeftButton();
+			case ECS_MOUSE_RIGHT:
+				return RightButton();
+			case ECS_MOUSE_MIDDLE:
+				return MiddleButton();
+			case ECS_MOUSE_X1:
+				return XButton1();
+			case ECS_MOUSE_X2:
+				return XButton2();
+			default:
+				ECS_ASSERT(false);
+			}
+
+			return MouseButtonState::UP;
 		}
 
 		void Mouse::AttachToProcess(const MouseProcessAttachment& info) {
@@ -200,6 +246,7 @@ namespace ECSEngine {
 		void Mouse::SetPosition(int x, int y)
 		{
 			m_implementation->SetMousePosition(x, y);
+			m_state.SetPosition({ x, y });
 		}
 
 		void Mouse::SetCursorVisible() {

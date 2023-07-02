@@ -896,7 +896,7 @@ namespace ECSEngine {
 
 		struct UIDrawerHandlerState {
 			size_t hoverable_count;
-			size_t clickable_count;
+			size_t clickable_count[ECS_MOUSE_BUTTON_COUNT];
 			size_t general_count;
 		};
 
@@ -908,7 +908,7 @@ namespace ECSEngine {
 			bool* notifier;
 		};
 
-		using UIConfigFilterMenuNotify = UIConfigStateTableNotify;
+		typedef UIConfigStateTableNotify UIConfigFilterMenuNotify;
 
 		struct UIDrawerStateTableBoolClickable {
 			bool* notifier;
@@ -983,8 +983,7 @@ namespace ECSEngine {
 		typedef UIConfigLabelHierarchySelectableCallback UIConfigFilesystemHierarchySelectableCallback;
 
 		// The callback must cast to UIDrawerLabelHierarchyRightClickData the _data pointer in order to get access to the 
-		// label stream; if copy_on_initialization is set, then the data parameter will be copied only in the initializer
-		// pass
+		// label stream; if copy_on_initialization is set, then the data parameter will be copied only in the initializer pass
 		struct UIConfigLabelHierarchyRightClick {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK;
@@ -1448,14 +1447,15 @@ namespace ECSEngine {
 			bool copy_on_initialization = false;
 		};
 
-		// The background is centered at the center of the sprite
 		// Overwrite color black means ignore it - use the theme color
+		// The scale factor is used to increase or reduce the scale of the
+		// background compared to that of the sprite
 		struct UIConfigSpriteButtonBackground {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_SPRITE_BUTTON_BACKGROUND;
 			}
 
-			float2 scale;
+			float2 scale_factor = { 1.2f, 1.2f };
 			Color overwrite_color = ECS_COLOR_BLACK;
 		};
 
@@ -1835,6 +1835,7 @@ namespace ECSEngine {
 			}
 
 			UIActionHandler hoverable_handler = { nullptr };
+			// Only the left button at the moment
 			UIActionHandler clickable_handler = { nullptr };
 			UIActionHandler general_handler = { nullptr };
 		};

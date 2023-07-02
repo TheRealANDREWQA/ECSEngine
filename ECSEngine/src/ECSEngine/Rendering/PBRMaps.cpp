@@ -58,7 +58,7 @@ namespace ECSEngine {
 
 		Matrix projection_matrix = ProjectionMatrixTextureCube();
 		for (size_t index = 0; index < 6; index++) {
-			Matrix current_matrix = MatrixTranspose(ViewMatrixTextureCube((TextureCubeFace)index) * projection_matrix);
+			Matrix current_matrix = MatrixGPU(ViewMatrixTextureCube((TextureCubeFace)index) * projection_matrix);
 			UpdateBufferResource(vc_buffer.buffer, &current_matrix, sizeof(Matrix), graphics->GetContext());
 			graphics->BindRenderTargetView(target_views[index], nullptr);
 
@@ -171,7 +171,7 @@ namespace ECSEngine {
 				RenderTargetView render_target_view = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index, mip_level, true);
 
 				// Update the vertex buffer
-				Matrix current_matrix = MatrixTranspose(ViewMatrixTextureCube((TextureCubeFace)index) * projection_matrix);
+				Matrix current_matrix = MatrixGPU(ViewMatrixTextureCube((TextureCubeFace)index) * projection_matrix);
 				UpdateBufferResource(vc_buffer.buffer, &current_matrix, sizeof(Matrix), graphics->GetContext());
 
 				graphics->BindRenderTargetView(render_target_view, nullptr);

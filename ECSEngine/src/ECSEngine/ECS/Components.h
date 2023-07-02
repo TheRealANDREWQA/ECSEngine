@@ -18,6 +18,8 @@ namespace ECSEngine {
 	// The name of the unique and shared components from the engine
 	inline Stream<char> ECS_COMPONENTS[] = {
 		STRING(Translation),
+		STRING(Rotation),
+		STRING(Scale),
 		STRING(Name)
 	};
 
@@ -30,12 +32,36 @@ namespace ECSEngine {
 			return false;
 		}
 
-		float3 value = { 1.0f, 0.0f, 0.0f };
+		float3 value = { 0.0f, 0.0f, 0.0f };
+	};
+
+	struct ECS_REFLECT_COMPONENT Rotation {
+		constexpr static inline short ID() {
+			return ECS_COMPONENT_BASE + 1;
+		}
+
+		constexpr static inline bool IsShared() {
+			return false;
+		}
+
+		float3 value = { 0.0f, 0.0f, 0.0f };
+	};
+
+	struct ECS_REFLECT_COMPONENT Scale {
+		constexpr static inline short ID() {
+			return ECS_COMPONENT_BASE + 2;
+		}
+
+		constexpr static inline bool IsShared() {
+			return false;
+		}
+
+		float3 value = { 1.0f, 1.0f, 1.0f };
 	};
 
 	struct ECS_REFLECT_COMPONENT Name {
 		constexpr static short ID() {
-			return ECS_COMPONENT_BASE + 1;
+			return ECS_COMPONENT_BASE + 4;
 		}
 
 		constexpr static size_t AllocatorSize() {

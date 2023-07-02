@@ -64,12 +64,15 @@ void DisplayGraphicsModuleRecompilationWarning(EditorState* editor_state, unsign
 		clickable_data.module_index = module_info->module_index;
 		clickable_data.configuration = module_info->module_configuration;
 
+		// At the moment the background is disabled
 		UIConfigSpriteButtonBackground background;
 		background.overwrite_color = drawer.color_theme.theme;
 		config.AddFlag(background);
+
+
 		drawer.SpriteButton(
-			UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_SPRITE_BUTTON_BACKGROUND
-			| UI_CONFIG_SPRITE_BUTTON_CENTER_SPRITE_TO_BACKGROUND,
+			UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_VALIDATE_POSITION
+			| UI_CONFIG_LATE_DRAW,
 			config,
 			{ warning_clickable, &clickable_data, sizeof(clickable_data) },
 			ECS_TOOLS_UI_TEXTURE_WARN_ICON,

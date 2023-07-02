@@ -76,5 +76,6 @@
 #include <shellapi.h>
 #include <ShlObj_core.h>
 #include <ShellScalingApi.h>
+#include <dwmapi.h>
 
 #endif // ifdef ECSENGINE_PLATFORM_WINDOWS

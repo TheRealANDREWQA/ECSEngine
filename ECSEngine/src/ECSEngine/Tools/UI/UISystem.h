@@ -170,7 +170,8 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				ECS_MOUSE_BUTTON button_type
 			);
 
 			void AddClickableToDockspaceRegion(
@@ -179,7 +180,8 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				ECS_MOUSE_BUTTON button_type
 			);
 
 			void AddClickableToDockspaceRegionForced(
@@ -187,7 +189,8 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				ECS_MOUSE_BUTTON button_type
 			);
 
 			template<typename T>
@@ -199,6 +202,7 @@ namespace ECSEngine {
 				float2 scale,
 				T* data,
 				Action action,
+				ECS_MOUSE_BUTTON button_type,
 				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			) {
 				AddClickableToDockspaceRegion(
@@ -206,13 +210,14 @@ namespace ECSEngine {
 					dockspace,
 					border_index,
 					position,
-					scale, 
+					scale,
 					{
 						action,
 						data,
 						sizeof(T),
 						phase
-					}
+					},
+					button_type
 				);
 			}
 
@@ -666,7 +671,7 @@ namespace ECSEngine {
 
 			void DeallocateDockspaceBorderResource(UIDockspace* dockspace, unsigned int border_index);
 
-			void DeallocateClickableHandler();
+			void DeallocateClickableHandler(ECS_MOUSE_BUTTON button_type);
 
 			void DeallocateHoverableHandler();
 
@@ -718,7 +723,8 @@ namespace ECSEngine {
 				DockspaceType type,
 				float2 mouse_position,
 				unsigned int thread_id,
-				unsigned int offset
+				unsigned int offset,
+				ECS_MOUSE_BUTTON button_type
 			);
 
 			bool DetectGenerals(
@@ -782,9 +788,7 @@ namespace ECSEngine {
 				GraphicsContext* context
 			);
 
-			void DrawDockspaceRegion(const UIDrawDockspaceRegionData* draw_data);
-
-			void DrawDockspaceRegionActive(const UIDrawDockspaceRegionData* draw_data);
+			void DrawDockspaceRegion(const UIDrawDockspaceRegionData* draw_data, bool active_region);
 
 			void DrawDockspaceRegionHeader(
 				unsigned int thread_id,
@@ -1129,13 +1133,13 @@ namespace ECSEngine {
 
 			unsigned int GetFrameHandlerCount() const;
 
-			unsigned int GetLastClickableIndex(const UIDockspace* dockspace, unsigned int border_index) const;
+			unsigned int GetLastClickableIndex(const UIDockspace* dockspace, unsigned int border_index, ECS_MOUSE_BUTTON button_type) const;
 
 			unsigned int GetLastHoverableIndex(const UIDockspace* dockspace, unsigned int border_index) const;
 
 			unsigned int GetLastGeneralIndex(const UIDockspace* dockspace, unsigned int border_index) const;
 
-			void* GetLastClickableData(const UIDockspace* dockspace, unsigned int border_index) const;
+			void* GetLastClickableData(const UIDockspace* dockspace, unsigned int border_index, ECS_MOUSE_BUTTON button_type) const;
 
 			void* GetLastHoverableData(const UIDockspace* dockspace, unsigned int border_index) const;
 
@@ -1199,9 +1203,9 @@ namespace ECSEngine {
 
 			UIWindowDynamicResource* GetWindowDynamicElement(unsigned int window_index, unsigned int index);
 
-			void HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id);
-
 			void HandleHoverable(float2 mouse_position, unsigned int thread_id, void** buffers, size_t* counts);
+
+			void HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id, ECS_MOUSE_BUTTON button_type);
 
 			void HandleFocusedWindowGeneral(float2 mouse_position, unsigned int thread_id);
 
@@ -1315,7 +1319,7 @@ namespace ECSEngine {
 
 			void ReaddHoverableToDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, unsigned int handler_index);
 
-			void ReaddClickableToDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, unsigned int handler_index);
+			void ReaddClickableToDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, unsigned int handler_index, ECS_MOUSE_BUTTON button_type);
 
 			void ReaddGeneralToDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, unsigned int handler_index);
 
@@ -1327,7 +1331,8 @@ namespace ECSEngine {
 				Action action, 
 				const void* data, 
 				size_t data_size,
-				ECS_UI_DRAW_PHASE phase
+				ECS_UI_DRAW_PHASE phase,
+				ECS_MOUSE_BUTTON button_type
 			);
 
 			void RegisterVertexShaderAndLayout(wchar_t* filename);
@@ -1382,7 +1387,7 @@ namespace ECSEngine {
 			void RemoveHoverableHandler(UIDockspace* dockspace, unsigned int border_index);
 
 			// removes the last clickable handler, but it does not free the memory from the temp allocator
-			void RemoveClickableHandler(UIDockspace* dockspace, unsigned int border_index);
+			void RemoveClickableHandler(UIDockspace* dockspace, unsigned int border_index, ECS_MOUSE_BUTTON button_type);
 
 			// removes the last general handler, but it does not free the memory from the temp allocator
 			void RemoveGeneralHandler(UIDockspace* dockspace, unsigned int border_index);
@@ -1398,7 +1403,13 @@ namespace ECSEngine {
 
 			UIReservedHandler ReserveHoverable(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase);
 
-			UIReservedHandler ReserveClickable(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase);
+			UIReservedHandler ReserveClickable(
+				unsigned int thread_id, 
+				UIDockspace* dockspace, 
+				unsigned int border_index, 
+				ECS_UI_DRAW_PHASE phase, 
+				ECS_MOUSE_BUTTON button_type
+			);
 
 			UIReservedHandler ReserveGeneral(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE);
 
@@ -1619,6 +1630,12 @@ namespace ECSEngine {
 
 			void SetWindowOSSize(uint2 new_size);
 
+			// The position is relative to the window position
+			void SetCursorPosition(uint2 position);
+
+			// If the cursor is at the border of the window it will be relocated to the other side
+			void WrapCursorPosition();
+
 			// Used for inter window communication
 			// The interested elements need to use AcquireDragDrop() to be notified if they received something
 			void StartDragDrop(Stream<void> data, Stream<char> name);
@@ -1754,9 +1771,17 @@ namespace ECSEngine {
 
 			bool WriteDescriptorsFile(Stream<wchar_t> filename) const;
 
-			void WriteReservedDefaultClickable(UIReservedHandler hoverable_reservation, UIReservedHandler clickable_reservation, const UISystemDefaultClickableData& data);
+			void WriteReservedDefaultClickable(
+				UIReservedHandler hoverable_reservation, 
+				UIReservedHandler clickable_reservation, 
+				const UISystemDefaultClickableData& data
+			);
 
-			void WriteResevedDefaultHoverableClickable(UIReservedHandler hoverable_reservation, UIReservedHandler clickable_reservation, const UISystemDefaultHoverableClickableData& data);
+			void WriteReservedDefaultHoverableClickable(
+				UIReservedHandler hoverable_reservation, 
+				UIReservedHandler clickable_reservation, 
+				const UISystemDefaultHoverableClickableData& data
+			);
 
 			bool WriteUIFile(Stream<wchar_t> filename, CapacityStream<char>& error_message) const;
 

@@ -21,6 +21,30 @@ struct ECS_REFLECT_COMPONENT GraphicsTranslation {
 	ECSEngine::float3 translation;
 };
 
+struct ECS_REFLECT_COMPONENT GraphicsRotation {
+	constexpr static inline short ID() {
+		return GRAPHICS_COMPONENT_BASE + 26;
+	}
+
+	constexpr static inline bool IsShared() {
+		return false;
+	}
+
+	ECSEngine::float3 rotation;
+};
+
+struct ECS_REFLECT_COMPONENT GraphicsScale {
+	constexpr static inline short ID() {
+		return GRAPHICS_COMPONENT_BASE + 27;
+	}
+
+	constexpr static inline bool IsShared() {
+		return false;
+	}
+
+	ECSEngine::float3 scale = { 1.0f, 1.0f, 1.0f };
+};
+
 struct ECS_REFLECT_SHARED_COMPONENT GraphicsMesh {
 	constexpr static inline short ID() {
 		return GRAPHICS_SHARED_COMPONENT_BASE + 0;
@@ -46,7 +70,7 @@ struct ECS_REFLECT_SHARED_COMPONENT RenderMesh {
 		return true;
 	}
 
-	ECSEngine::CoallescedMesh* mesh;
+	ECSEngine::CoalescedMesh* mesh;
 	ECSEngine::Material* material;
 	unsigned int count;
 	unsigned int new_count;
