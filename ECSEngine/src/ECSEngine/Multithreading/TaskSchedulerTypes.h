@@ -197,6 +197,7 @@ namespace ECSEngine {
 		Stream<TaskDependency> task_dependencies;
 
 		ECS_THREAD_TASK_GROUP task_group;
+		bool barrier_task = false;
 	};
 
 }

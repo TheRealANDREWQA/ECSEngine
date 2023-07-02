@@ -939,6 +939,8 @@ namespace ECSEngine {
 				FloatingPoint ctrl_value = keyboard->IsKeyDown(HID::Key::LeftControl) ? 5.0f : 1.0f;
 				FloatingPoint amount = (FloatingPoint)mouse_delta.x * (FloatingPoint)INPUT_DRAG_FACTOR * shift_value * ctrl_value;
 
+				system->WrapCursorPosition();
+
 				*data->callback_data.number += amount;
 				*data->callback_data.number = function::Clamp(*data->callback_data.number, data->callback_data.min, data->callback_data.max);
 
@@ -991,6 +993,8 @@ namespace ECSEngine {
 				
 				bool is_negative = amount < 0.0f;
 				Integer value_before = *data->data.number;
+
+				system->WrapCursorPosition();
 
 				if (abs(amount) > 1.0f) {
 					*data->data.number += (Integer)amount;
@@ -3083,7 +3087,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerMenuRightClickData* data = (UIDrawerMenuRightClickData*)_data;
-			if (mouse_tracker->RightButton() == MBRELEASED) {
+			if (mouse_tracker->RightButton() == MBRELEASED && IsPointInRectangle(mouse_position, position, scale)) {
 				if (data->action != nullptr) {
 					if (data->is_action_data_ptr) {
 						action_data->data = data->action_data_ptr;
@@ -3146,7 +3150,6 @@ namespace ECSEngine {
 
 				system->AddFrameHandler({ RightClickMenuReleaseResource, &release_data, sizeof(release_data) });
 			}
-
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -3773,7 +3776,7 @@ namespace ECSEngine {
 
 			action_data->data = data;
 
-			if (mouse_tracker->RightButton() == MBRELEASED) {
+			if (IsClickableTrigger(action_data, ECS_MOUSE_RIGHT)) {
 				void* label_storage = ECS_STACK_ALLOC(data->hierarchy->CopySize());
 				data->GetLabel(label_storage);
 				// Change the selected label to this one

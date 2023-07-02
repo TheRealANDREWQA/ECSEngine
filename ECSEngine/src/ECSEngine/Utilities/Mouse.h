@@ -6,11 +6,29 @@
 
 namespace ECSEngine {
 
+	enum ECS_MOUSE_BUTTON : unsigned char {
+		ECS_MOUSE_LEFT,
+		ECS_MOUSE_RIGHT,
+		ECS_MOUSE_MIDDLE,
+		ECS_MOUSE_X1,
+		ECS_MOUSE_X2,
+		ECS_MOUSE_BUTTON_COUNT
+	};
+
+	template<typename Functor>
+	ECS_INLINE void ForEachMouseButton(Functor&& functor) {
+		for (size_t index = 0; index < ECS_MOUSE_BUTTON_COUNT; index++) {
+			functor((ECS_MOUSE_BUTTON)index);
+		}
+	}
+
 	namespace HID {
 
-		using MouseButtonState = DirectX::Mouse::ButtonStateTracker::ButtonState;
+		typedef DirectX::Mouse::ButtonStateTracker::ButtonState MouseButtonState;
 
 		struct ECSENGINE_API MouseState {
+			bool Button(ECS_MOUSE_BUTTON button) const;
+			
 			bool LeftButton() const;
 
 			bool RightButton() const;
@@ -35,6 +53,8 @@ namespace ECSEngine {
 
 			void SetPreviousPosition();
 
+			void SetPosition(int2 position);
+
 			void SetPreviousScroll();
 
 			DirectX::Mouse::State state;
@@ -55,6 +75,8 @@ namespace ECSEngine {
 			MouseButtonState XButton1() const;
 
 			MouseButtonState XButton2() const;
+
+			MouseButtonState Button(ECS_MOUSE_BUTTON button) const;
 
 			DirectX::Mouse::ButtonStateTracker tracker;
 		};

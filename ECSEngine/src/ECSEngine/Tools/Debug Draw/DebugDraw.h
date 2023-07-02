@@ -550,7 +550,7 @@ namespace ECSEngine {
 
 		GraphicsPipelineRenderState GetPreviousRenderState() const;
 
-		void RestorePreviousRenderState(GraphicsPipelineRenderState state);
+		void RestorePreviousRenderState(const GraphicsPipelineRenderState* state);
 
 		static MemoryManager DefaultAllocator(GlobalMemoryManager* global_memory);
 
@@ -592,7 +592,7 @@ namespace ECSEngine {
 		StructuredBuffer instanced_small_structured_buffer;
 		ResourceView instanced_structured_view;
 		Mesh* primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_COUNT];
-		CoallescedMesh* string_mesh;
+		CoalescedMesh* string_mesh;
 		VertexBuffer circle_buffer;
 		VertexShader vertex_shaders[ECS_DEBUG_SHADER_COUNT];
 		PixelShader pixel_shaders[ECS_DEBUG_SHADER_COUNT];

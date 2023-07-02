@@ -4,6 +4,7 @@
 
 #define ECS_TASK_MANAGER_WRAPPER
 #define ECS_THREAD_TASK_NAME(function, data, data_size) ThreadTask(function, data, data_size, STRING(function))
+#define ECS_STATIC_THREAD_TASK_NAME(function, data, data_size, barrier) StaticThreadTask(ECS_THREAD_TASK_NAME(function, data, data_size), barrier)
 
 namespace ECSEngine {
 

@@ -9,4 +9,5 @@ struct HubProject {
 
 struct HubData {
 	ECSEngine::CapacityStream<HubProject> projects;
+	ECSEngine::AllocatorPolymorphic allocator;
 };

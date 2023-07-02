@@ -1,6 +1,7 @@
 #pragma once
 #include "ecspch.h"
 #include "Core.h"
+#include "Utilities/BasicTypes.h"
 
 #define ECS_CURSOR_COUNT 12
 
@@ -30,25 +31,32 @@ namespace ECSEngine {
 	class ECSENGINE_API Application
 	{
 	public:
-		Application();
-		virtual ~Application();
+		Application() {}
+		virtual ~Application() {}
 
 		Application(const Application& other) = default;
 		Application& operator = (const Application& other) = default;
 		
-		virtual int Run();
+		virtual int Run() = 0;
 		
-		virtual void ChangeCursor(ECS_CURSOR_TYPE type);
+		virtual void ChangeCursor(ECS_CURSOR_TYPE type) = 0;
 		
-		virtual ECS_CURSOR_TYPE GetCurrentCursor() const;
+		virtual ECS_CURSOR_TYPE GetCurrentCursor() const = 0;
 		
 		// null terminated
-		virtual void WriteTextToClipboard(const char* text);
+		virtual void WriteTextToClipboard(const char* text) = 0;
 		
 		// returns the count of characters written
-		virtual unsigned int CopyTextFromClipboard(char* text, unsigned int max_size);
+		virtual unsigned int CopyTextFromClipboard(char* text, unsigned int max_size) = 0;
 
-		virtual void* GetOSWindowHandle();
+		virtual void* GetOSWindowHandle() = 0;
+
+		virtual uint2 GetCursorPosition() const = 0;
+
+		virtual void SetCursorPosition(uint2 position) = 0;
+
+		// Sets the position of the cursor relative to the current window position
+		virtual void SetCursorPositionRelative(uint2 position) = 0;
 	};
 
 	// To be defined in Client

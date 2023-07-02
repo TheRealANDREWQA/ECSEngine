@@ -151,7 +151,10 @@ void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTa
 // It will place the task into the GPU tasks queue. It will be consumed later on
 void EditorStateAddGPUTask(EditorState* editor_state, ECSEngine::ThreadTask task);
 
-void EditorStateInitialize(ECSEngine::Application* application, EditorState* editor_state, HWND hWnd, ECSEngine::HID::Mouse& mouse, ECSEngine::HID::Keyboard& keyboard);
+// This needs to be called once per application run
+void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, ECSEngine::HID::Mouse* mouse, ECSEngine::HID::Keyboard* keyboard);
+
+void EditorStateInitialize(ECSEngine::Application* application, EditorState* editor_state, HWND hWnd, ECSEngine::HID::Mouse* mouse, ECSEngine::HID::Keyboard* keyboard);
 
 void EditorStateDestroy(EditorState* editor_state);
 

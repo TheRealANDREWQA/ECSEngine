@@ -162,7 +162,7 @@ namespace ECSEngine {
 
 	ECSENGINE_API size_t AssetMetadataByteSize(ECS_ASSET_TYPE type);
 	
-	// For meshes and materials returns sizeof(CoallescedMesh) and sizeof(Material) respectively
+	// For meshes and materials returns sizeof(CoalescedMesh) and sizeof(Material) respectively
 	// For other asset types it returns 0
 	ECSENGINE_API size_t TargetAssetMetadataByteSize(ECS_ASSET_TYPE type);
 
@@ -216,7 +216,7 @@ namespace ECSEngine {
 		bool invert_z_axis;
 		ECS_ASSET_MESH_OPTIMIZE_LEVEL optimize_level;
 
-		CoallescedMesh* mesh_pointer; ECS_SKIP_REFLECTION()
+		CoalescedMesh* mesh_pointer; ECS_SKIP_REFLECTION()
 	};
 
 	struct ECSENGINE_API ECS_REFLECT TextureMetadata {

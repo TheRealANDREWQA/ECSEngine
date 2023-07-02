@@ -42,6 +42,14 @@ namespace ECSEngine {
 		QuaternionToMatrix(quaternion, matrices[0], matrices[1]);
 	}
 
+	ECS_INLINE Matrix ECS_VECTORCALL QuaternionRotationMatrix(float3 rotation) {
+		return QuaternionToMatrix(QuaternionFromRotation(rotation));
+	}
+
+	ECS_INLINE void ECS_VECTORCALL QuaternionRotationMatrix(float3 rotation1, float3 rotation2, Matrix& first, Matrix& second) {
+		QuaternionToMatrix(QuaternionFromRotation(rotation1, rotation2), first, second);
+	}
+
 	// -------------------------------------------------------------------------------------------------
 
 #pragma endregion

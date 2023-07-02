@@ -14,6 +14,12 @@ namespace ECSEngine {
 		inline Vector8 QUATERNION_EPSILON_8(ECS_QUATERNION_EPSILON);
 	}
 
+	struct Quaternion;
+	struct PackedQuaternion;
+
+	Quaternion ECS_VECTORCALL QuaternionMultiply(Quaternion a, Quaternion b);
+	PackedQuaternion ECS_VECTORCALL QuaternionMultiply(PackedQuaternion a, PackedQuaternion b);
+
 	struct Quaternion {
 		ECS_INLINE Quaternion() {}
 		ECS_INLINE Quaternion(float x, float y, float z, float w) : value(x, y, z, w) {}
@@ -48,6 +54,10 @@ namespace ECSEngine {
 
 		ECS_INLINE Quaternion ECS_VECTORCALL operator * (float scalar) const {
 			return value * Vec4f(scalar);
+		}
+
+		ECS_INLINE Quaternion ECS_VECTORCALL operator * (Quaternion other) const {
+			return QuaternionMultiply(*this, other);
 		}
 
 		ECS_INLINE Quaternion ECS_VECTORCALL operator -() const {
@@ -112,6 +122,10 @@ namespace ECSEngine {
 			return value * Vec8f(scalar);
 		}
 
+		ECS_INLINE PackedQuaternion ECS_VECTORCALL operator * (PackedQuaternion other) const {
+			return QuaternionMultiply(*this, other);
+		}
+
 		ECS_INLINE PackedQuaternion ECS_VECTORCALL operator -() const {
 			return -value;
 		}
@@ -158,88 +172,12 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region From Rotation
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromRotation(float3 rotation) {
-		Quaternion quaternion;
-
-		Vector4 angles(rotation);
-		angles = DegToRad(angles);
-
-		Vector4 half(0.5f);
-		angles *= half;
-
-		Vec4f cos;
-		Vector4 sin = sincos(&cos, angles);
-
-		// Quaternion:
-		// x = cos(x) * cos(y) * cos(z) + sin(x) * sin(y) * sin(z)
-		// y = sin(x) * cos(y) * cos(z) - cos(x) * sin(y) * sin(z)
-		// z = cos(x) * sin(y) * cos(z) + sin(x) * cos(y) * cos(z)
-		// w = cos(x) * cos(y) * sin(z) - sin(x) * sin(y) * cos(z)
-
-		Vector4 first_permutation_left = blend4<0, 4, 0, 0>(cos, sin);
-		Vector4 second_permutation_left = blend4<1, 1, 5, 1>(cos, sin);
-		Vector4 third_permutation_left = blend4<2, 2, 2, 6>(cos, sin);
-
-		Vector4 first_permutation_right = permute4<1, 0, 1, 1>(first_permutation_left);
-		Vector4 second_permutation_right = permute4<2, 2, 0, 2>(second_permutation_left);
-		Vector4 third_permutation_right = permute4<3, 3, 0, 0>(third_permutation_left);
-
-		Vector4 left = first_permutation_left * second_permutation_left * third_permutation_left;
-		Vector4 right = first_permutation_right * second_permutation_right * third_permutation_right;
-		right = change_sign<0, 1, 0, 1>(right);
-
-		quaternion.value = (left + right).value;
-		return quaternion;
-	}
-
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromRotation(float3 rotation1, float3 rotation2) {
-		PackedQuaternion quaternion;
-
-		Vector8 angles(rotation1, rotation2);
-		angles = DegToRad(angles);
-
-		Vector8 half(0.5f);
-		angles *= half;
-
-		Vec8f cos;
-		Vector8 sin = sincos(&cos, angles);
-
-		// Quaternion:
-		// x = cos(x) * cos(y) * cos(z) + sin(x) * sin(y) * sin(z)
-		// y = sin(x) * cos(y) * cos(z) - cos(x) * sin(y) * sin(z)
-		// z = cos(x) * sin(y) * cos(z) + sin(x) * cos(y) * cos(z)
-		// w = cos(x) * cos(y) * sin(z) - sin(x) * sin(y) * cos(z)
-
-		Vector8 first_permutation_left = blend8<0, 8, 0, 0, 4, 12, 4, 4>(cos, sin);
-		Vector8 second_permutation_left = blend8<1, 1, 9, 1, 5, 5, 13, 5>(cos, sin);
-		Vector8 third_permutation_left = blend8<2, 2, 2, 10, 6, 6, 6, 14>(cos, sin);
-
-		Vector8 first_permutation_right = permute8<1, 0, 1, 1, 5, 4, 5, 5>(first_permutation_left);
-		Vector8 second_permutation_right = permute8<2, 2, 0, 2, 6, 6, 4, 6>(second_permutation_left);
-		Vector8 third_permutation_right = permute8<3, 3, 0, 0, 7, 7, 4, 4>(third_permutation_left);
-
-		Vector8 left = first_permutation_left * second_permutation_left * third_permutation_left;
-		Vector8 right = first_permutation_right * second_permutation_right * third_permutation_right;
-		right = change_sign<0, 1, 0, 1, 0, 1, 0, 1>(right);
-
-		quaternion.value = (left + right).value;
-		return quaternion;
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
 #pragma region Angle From Axis
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	// angle must be expressed as radians
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAngleFromAxis(float angle_radians, float3 axis) {
+	// Angle must be expressed in radians
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAngleFromAxisRad(float angle_radians, float3 axis) {
 		Vector4 vector_axis(axis);
 		vector_axis = Normalize3(vector_axis);
 
@@ -251,8 +189,8 @@ namespace ECSEngine {
 		return Quaternion(vector_axis.value);
 	}
 
-	// angle must be expressed as radians
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionAngleFromAxis(float angle_radians1, float3 axis1, float angle_radians2, float3 axis2) {
+	// Angle must be expressed in radians
+	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionAngleFromAxisRad(float angle_radians1, float3 axis1, float angle_radians2, float3 axis2) {
 		Vector8 vector_axis(axis1, axis2);
 		vector_axis = Normalize3(vector_axis);
 
@@ -264,6 +202,108 @@ namespace ECSEngine {
 		vector_axis *= sin;
 		vector_axis = blend8<0, 1, 2, 11, 5, 6, 7, 15>(vector_axis, cos);
 		return PackedQuaternion(vector_axis.value);
+	}
+
+	// Angle must be expressed in degrees
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAngleFromAxis(float angle_degrees, float3 axis) {
+		return QuaternionAngleFromAxisRad(DegToRad(angle_degrees), axis);
+	}
+
+	// Angle must be expressed in degrees
+	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionAngleFromAxis(float angle_degrees1, float3 axis1, float angle_degrees2, float3 axis2) {
+		return QuaternionAngleFromAxisRad(DegToRad(angle_degrees1), axis1, DegToRad(angle_degrees2), axis2);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region From Rotation
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	// The angles must be expressed in radians
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromRotationRad(float3 rotation) {
+		Quaternion quaternion;
+
+		return QuaternionAngleFromAxisRad(rotation.z, { 0.0f, 0.0f, 1.0f }) * 
+			QuaternionAngleFromAxisRad(rotation.y, { 0.0f, 1.0f, 0.0f }) * 
+			QuaternionAngleFromAxisRad(rotation.x, { 1.0f, 0.0f, 0.0f });
+
+		//Vector4 angles(rotation);
+		//Vector4 half(0.5f);
+		//angles *= half;
+
+		//Vec4f cos;
+		//Vector4 sin = sincos(&cos, angles);
+
+		//// Quaternion:
+		//// x = sin(x) * cos(y) * cos(z) - cos(x) * sin(y) * sin(z)
+		//// y = cos(x) * sin(y) * cos(z) + sin(x) * cos(y) * sin(z)
+		//// z = cos(x) * cos(y) * sin(z) - sin(x) * sin(y) * cos(z)
+		//// w = cos(x) * cos(y) * cos(z) + sin(x) * sin(y) * sin(z)
+
+		//Vector4 first_permutation_left = blend4<4, 0, 0, 0>(cos, sin);
+		//Vector4 second_permutation_left = blend4<1, 5, 1, 1>(cos, sin);
+		//Vector4 third_permutation_left = blend4<2, 2, 6, 2>(cos, sin);
+
+		//Vector4 first_permutation_right = permute4<1, 0, 0, 0>(first_permutation_left);
+		//Vector4 second_permutation_right = permute4<1, 0, 1, 1>(second_permutation_left);
+		//Vector4 third_permutation_right = permute4<2, 2, 0, 2>(third_permutation_left);
+
+		//Vector4 left = first_permutation_left * second_permutation_left * third_permutation_left;
+		//Vector4 right = first_permutation_right * second_permutation_right * third_permutation_right;
+		//right = change_sign<1, 0, 1, 0>(right);
+
+		//quaternion.value = (left + right).value;
+		//return quaternion;
+	}
+
+	// The angles must be expressed in radians
+	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromRotationRad(float3 rotation1, float3 rotation2) {
+		PackedQuaternion quaternion;
+
+		return QuaternionAngleFromAxisRad(rotation1.z, { 0.0f, 0.0f, 1.0f }, rotation2.z, {0.0f, 0.0f, 1.0f}) *
+			QuaternionAngleFromAxisRad(rotation1.y, { 0.0f, 1.0f, 0.0f }, rotation2.y, { 0.0f, 1.0f, 0.0f }) *
+			QuaternionAngleFromAxisRad(rotation1.x, { 1.0f, 0.0f, 0.0f }, rotation2.x, { 1.0f, 0.0f, 0.0f });
+
+		//Vector8 angles(rotation1, rotation2);
+		//Vector8 half(0.5f);
+		//angles *= half;
+
+		//Vec8f cos;
+		//Vector8 sin = sincos(&cos, angles);
+
+		//// Quaternion:
+		//// x = cos(x) * cos(y) * cos(z) + sin(x) * sin(y) * sin(z)
+		//// y = sin(x) * cos(y) * cos(z) - cos(x) * sin(y) * sin(z)
+		//// z = cos(x) * sin(y) * cos(z) + sin(x) * cos(y) * cos(z)
+		//// w = cos(x) * cos(y) * sin(z) - sin(x) * sin(y) * cos(z)
+
+		//Vector8 first_permutation_left = blend8<0, 8, 0, 0, 4, 12, 4, 4>(cos, sin);
+		//Vector8 second_permutation_left = blend8<1, 1, 9, 1, 5, 5, 13, 5>(cos, sin);
+		//Vector8 third_permutation_left = blend8<2, 2, 2, 10, 6, 6, 6, 14>(cos, sin);
+
+		//Vector8 first_permutation_right = permute8<1, 0, 1, 1, 5, 4, 5, 5>(first_permutation_left);
+		//Vector8 second_permutation_right = permute8<2, 2, 0, 2, 6, 6, 4, 6>(second_permutation_left);
+		//Vector8 third_permutation_right = permute8<3, 3, 0, 0, 7, 7, 4, 4>(third_permutation_left);
+
+		//Vector8 left = first_permutation_left * second_permutation_left * third_permutation_left;
+		//Vector8 right = first_permutation_right * second_permutation_right * third_permutation_right;
+		//right = change_sign<0, 1, 0, 1, 0, 1, 0, 1>(right);
+
+		//quaternion.value = (left + right).value;
+		//return quaternion;
+	}
+
+	// The angles must be expressed in degrees
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromRotation(float3 rotation) {
+		return QuaternionFromRotationRad(DegToRad(rotation));
+	}
+
+	// The angles must be expressed in degrees
+	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromRotation(float3 rotation1, float3 rotation2) {
+		return QuaternionFromRotationRad(DegToRad(rotation1), DegToRad(rotation2));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
@@ -459,14 +499,26 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE float ECS_VECTORCALL QuaternionAngle(Quaternion quaternion) {
+	// The angle is in radians
+	ECS_INLINE float ECS_VECTORCALL QuaternionAngleRad(Quaternion quaternion) {
 		return 2.0f * quaternion[3];
 	}
 
-	ECS_INLINE float2 ECS_VECTORCALL QuaternionAngle(PackedQuaternion quaternion) {
+	// The angle is in radians
+	ECS_INLINE float2 ECS_VECTORCALL QuaternionAngleRad(PackedQuaternion quaternion) {
 		alignas(32) float values[8];
 		quaternion.value.store_a(values);
 		return { 2.0f * values[0], 2.0f * values[7] };
+	}
+
+	// The angle is in degrees
+	ECS_INLINE float ECS_VECTORCALL QuaternionAngle(Quaternion quaternion) {
+		return RadToDeg(QuaternionAngleRad(quaternion));
+	}
+
+	// The angle is in degrees
+	ECS_INLINE float2 ECS_VECTORCALL QuaternionAngle(PackedQuaternion quaternion) {
+		return RadToDeg(QuaternionAngleRad(quaternion));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
@@ -623,13 +675,15 @@ namespace ECSEngine {
 		Vector4 first_permutation = permute4<3, 2, 1, 0>(a_vector);
 		Vector4 second_permutation = permute4<2, 3, 0, 1>(a_vector);
 		Vector4 third_permutation = permute4<1, 0, 3, 2>(a_vector);
+		Vector4 fourth_permutation = a_vector;
 		
 		// Negate the correct values and the use the dot product to get the values
 		first_permutation = change_sign<0, 0, 1, 0>(first_permutation);
 		second_permutation = change_sign<1, 0, 0, 0>(second_permutation);
 		third_permutation = change_sign<0, 1, 0, 0>(third_permutation);
-		Vector4 fourth_permutation = change_sign<1, 1, 1, 0>(a_vector);
+		fourth_permutation = change_sign<1, 1, 1, 0>(a_vector);
 
+		Vector4 b_value = b.value;
 		Vector4 x = Dot(b.value, first_permutation);
 		Vector4 y = Dot(b.value, second_permutation);
 		Vector4 z = Dot(b.value, third_permutation);
@@ -637,7 +691,7 @@ namespace ECSEngine {
 
 		Vector4 xy = blend4<0, 4, 2, 3>(x, y);
 		Vector4 zw = blend4<0, 0, 0, 4>(z, w);
-		return blend4<0, 1, 4, 5>(xy, zw);
+		return blend4<0, 1, 4, 7>(xy, zw);
 	}
 
 	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionMultiply(PackedQuaternion a, PackedQuaternion b) {
@@ -650,13 +704,15 @@ namespace ECSEngine {
 		Vector8 first_permutation = permute8<3, 2, 1, 0, 7, 6, 5, 4>(a_vector);
 		Vector8 second_permutation = permute8<2, 3, 0, 1, 6, 7, 4, 5>(a_vector);
 		Vector8 third_permutation = permute8<1, 0, 3, 2, 5, 4, 7, 6>(a_vector);
+		Vector8 fourth_permutation = a_vector;
 
 		// Negate the correct values and the use the dot product to get the values
 		first_permutation = change_sign<0, 0, 1, 0, 0, 0, 1, 0>(first_permutation);
 		second_permutation = change_sign<1, 0, 0, 0, 1, 0, 0, 0>(second_permutation);
 		third_permutation = change_sign<0, 1, 0, 0, 0, 1, 0, 0>(third_permutation);
-		Vector8 fourth_permutation = change_sign<1, 1, 1, 0, 1, 1, 1, 0>(a_vector);
+		fourth_permutation = change_sign<1, 1, 1, 0, 1, 1, 1, 0>(a_vector);
 
+		Vector8 b_value = b.value;
 		Vector8 x = Dot(b.value, first_permutation);
 		Vector8 y = Dot(b.value, second_permutation);
 		Vector8 z = Dot(b.value, third_permutation);

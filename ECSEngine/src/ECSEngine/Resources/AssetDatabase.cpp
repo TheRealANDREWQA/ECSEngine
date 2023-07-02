@@ -528,9 +528,9 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	unsigned int AssetDatabase::FindMeshEx(const CoallescedMesh* mesh) const
+	unsigned int AssetDatabase::FindMeshEx(const CoalescedMesh* mesh) const
 	{
-		return FindAssetExImplementation(&mesh_metadata, mesh, sizeof(CoallescedMesh));
+		return FindAssetExImplementation(&mesh_metadata, mesh, sizeof(CoalescedMesh));
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -574,7 +574,7 @@ namespace ECSEngine {
 	{
 		switch (type) {
 		case ECS_ASSET_MESH:
-			return FindMeshEx((const CoallescedMesh*)data.buffer);
+			return FindMeshEx((const CoalescedMesh*)data.buffer);
 		case ECS_ASSET_TEXTURE:
 			return FindTextureEx((ID3D11ShaderResourceView*)data.buffer);
 		case ECS_ASSET_GPU_SAMPLER:
@@ -1994,6 +1994,7 @@ namespace ECSEngine {
 
 				// Load the asset into a temporary and then get its dependencies
 				size_t temporary_asset[AssetMetadataMaxSizetSize()];
+				CreateDefaultAsset(temporary_asset, { nullptr, 0 }, { nullptr, 0 }, asset_type);
 				bool current_success = ReadAssetFile(
 					ECSEngine::GetAssetName(current_metadata, asset_type), 
 					GetAssetFile(current_metadata, asset_type), 

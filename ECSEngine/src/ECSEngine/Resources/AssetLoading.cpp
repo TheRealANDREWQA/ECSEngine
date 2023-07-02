@@ -24,7 +24,7 @@ namespace ECSEngine {
 			return (submeshes.size > 0 && submeshes.buffer != nullptr) || time_stamp > 0;
 		}
 
-		GLTFMesh coallesced_mesh;
+		GLTFMesh coalesced_mesh;
 		Stream<Submesh> submeshes;
 		size_t time_stamp;
 		Stream<unsigned int> different_handles;
@@ -208,7 +208,7 @@ namespace ECSEngine {
 		CreateMeshFromMetadataEx(
 			data->control_block->resource_manager,
 			metadata, 
-			&meshes->coallesced_mesh,
+			&meshes->coalesced_mesh,
 			meshes->submeshes,
 			&ex_data
 		);
@@ -379,10 +379,10 @@ namespace ECSEngine {
 
 		Submesh* submeshes = (Submesh*)Allocate(allocator, sizeof(Submesh) * gltf_data.mesh_count);
 
-		LoadCoallescedMeshFromGLTFOptions load_options;
+		LoadCoalescedMeshFromGLTFOptions load_options;
 		load_options.allocate_submesh_name = true;
 		load_options.temporary_buffer_allocator = allocator;
-		bool success = LoadCoallescedMeshFromGLTF(gltf_data, &mesh_block_pointer->coallesced_mesh, submeshes, metadata->invert_z_axis, &load_options);
+		bool success = LoadCoalescedMeshFromGLTF(gltf_data, &mesh_block_pointer->coalesced_mesh, submeshes, metadata->invert_z_axis, &load_options);
 		FreeGLTFFile(gltf_data);
 		if (success) {
 			mesh_block_pointer->submeshes = { submeshes, gltf_data.mesh_count };
@@ -914,7 +914,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < same_target.meshes.size; index++) {
 			control_block->meshes[index].different_handles.InitializeAndCopy(persistent_allocator, same_target.meshes[index].other_handles);
 			control_block->meshes[index].submeshes = { nullptr, 0 };
-			control_block->meshes[index].coallesced_mesh.name = { nullptr, 0 };
+			control_block->meshes[index].coalesced_mesh.name = { nullptr, 0 };
 		}
 
 		for (size_t index = 0; index < same_target.textures.size; index++) {

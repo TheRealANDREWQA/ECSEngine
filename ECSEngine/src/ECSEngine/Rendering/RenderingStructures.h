@@ -4,6 +4,8 @@
 #include "ecspch.h"
 #include "../Containers/Stream.h"
 #include "../Math/Matrix.h"
+#include "../Math/Quaternion.h"
+#include "../Math/Conversion.h"
 #include "../Allocators/AllocatorTypes.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "ColorUtilities.h"
@@ -262,6 +264,15 @@ namespace ECSEngine {
 		return (ECS_GRAPHICS_MISC_FLAGS)flags;
 	}
 
+	ECSENGINE_API void SetDepthStencilDescOP(
+		D3D11_DEPTH_STENCIL_DESC* descriptor,
+		bool front_face,
+		D3D11_COMPARISON_FUNC comparison_func,
+		D3D11_STENCIL_OP fail_op,
+		D3D11_STENCIL_OP depth_fail_op,
+		D3D11_STENCIL_OP pass_op
+	);
+
 	ECSENGINE_API bool IsGraphicsFormatUINT(ECS_GRAPHICS_FORMAT format);
 
 	ECSENGINE_API bool IsGraphicsFormatSINT(ECS_GRAPHICS_FORMAT format);
@@ -408,6 +419,7 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API InputLayout {
 		ECS_INLINE InputLayout() : layout(nullptr) {}
+		ECS_INLINE InputLayout(ID3D11InputLayout* _layout) : layout(_layout) {}
 
 		InputLayout(const InputLayout& other) = default;
 		InputLayout& operator = (const InputLayout& other) = default;
@@ -1244,6 +1256,9 @@ namespace ECSEngine {
 		float3 rotation;
 	};
 
+#define ECS_CAMERA_DEFAULT_NEAR_Z 0.025f
+#define ECS_CAMERA_DEFAULT_FAR_Z 1000.0f
+
 	struct ECSENGINE_API Camera {
 		Camera();
 		Camera(float3 translation, float3 rotation);
@@ -1254,22 +1269,40 @@ namespace ECSEngine {
 		Camera(const Camera& other) = default;
 		Camera& operator = (const Camera& other) = default;
 
-		void SetPerspectiveProjection(float width, float height, float near_z, float far_z);
+		void SetPerspectiveProjection(float width, float height, float near_z = ECS_CAMERA_DEFAULT_NEAR_Z, float far_z = ECS_CAMERA_DEFAULT_FAR_Z);
 
 		// The FOV angle needs to be expressed in angles
-		void SetPerspectiveProjectionFOV(float fov, float aspect_ratio, float near_z, float far_z);
+		void SetPerspectiveProjectionFOV(float fov, float aspect_ratio, float near_z = ECS_CAMERA_DEFAULT_NEAR_Z, float far_z = ECS_CAMERA_DEFAULT_FAR_Z);
 
-		void SetOrthographicProjection(float width, float height, float near_z, float far_z);
+		void SetOrthographicProjection(float width, float height, float near_z = ECS_CAMERA_DEFAULT_NEAR_Z, float far_z = ECS_CAMERA_DEFAULT_FAR_Z);
 
-		Matrix GetViewProjectionMatrix() const;
+		Matrix ECS_VECTORCALL GetViewProjectionMatrix() const;
 
-		ECS_INLINE static float DefaultNearZ() {
-			return 0.025f;
+		ECS_INLINE Matrix ECS_VECTORCALL GetRotation() const {
+			// The rotation should be in reversed order, Z, Y and then X
+			return QuaternionRotationMatrix(-rotation);
 		}
 
-		ECS_INLINE static float DefaultFarZ() {
-			return 1000.0f;
+		ECS_INLINE Matrix ECS_VECTORCALL GetTranslation() const {
+			return MatrixTranslation(-translation);
 		}
+
+		ECS_INLINE Matrix ECS_VECTORCALL GetProjection() const {
+			return projection;
+		}
+
+		bool is_orthographic;
+		bool is_perspective_fov;
+		union {
+			struct {
+				float width;
+				float height;
+			};
+			struct {
+				float fov;
+				float aspect_ratio;
+			};
+		};
 
 		Matrix projection;
 		float3 translation;
@@ -1682,14 +1715,14 @@ namespace ECSEngine {
 		PBRMaterialTextureIndex index;
 	};
 
-	struct CoallescedMesh {
+	struct CoalescedMesh {
 		Mesh mesh;
 		Stream<Submesh> submeshes;
 	};
 
 	// Each submesh has associated a material
 	struct PBRMesh {
-		CoallescedMesh mesh;
+		CoalescedMesh mesh;
 		PBRMaterial* materials;
 	};
 

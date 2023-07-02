@@ -58,7 +58,7 @@ namespace ECSEngine {
 		vertex_constants.object_matrix = object_matrix;
 
 		Matrix camera_matrix = camera.GetViewProjectionMatrix();
-		vertex_constants.mvp_matrix = MatrixTranspose(object_matrix * camera_matrix);
+		vertex_constants.mvp_matrix = MatrixGPU(MatrixMVP(object_matrix, camera_matrix));
 
 		// Now render the object
 		// We need 1 vertex shader constant buffer and 1 for the pixel shader

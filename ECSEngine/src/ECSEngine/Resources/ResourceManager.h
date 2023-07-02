@@ -376,7 +376,7 @@ namespace ECSEngine {
 
 		// Loads all meshes from a gltf file and creates a coallesced mesh
 		template<bool reference_counted = false>
-		CoallescedMesh* LoadCoallescedMesh(
+		CoalescedMesh* LoadCoalescedMesh(
 			Stream<wchar_t> filename,
 			float scale_factor = 1.0f,
 			ResourceManagerLoadDesc load_descriptor = {}
@@ -384,13 +384,13 @@ namespace ECSEngine {
 
 		// Loads all meshes from a gltf file and creates a coallesced mesh
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
-		CoallescedMesh* LoadCoallescedMeshImplementation(Stream<wchar_t> filename, float scale_factor = 1.0f, ResourceManagerLoadDesc load_descriptor = {});
+		CoalescedMesh* LoadCoalescedMeshImplementation(Stream<wchar_t> filename, float scale_factor = 1.0f, ResourceManagerLoadDesc load_descriptor = {});
 
 		// A more detailed version that directly takes the data and does not deallocate it
 		// If it fails it returns nullptr. It allocates memory from the allocator
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT, ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK.
 		// It will also insert it into the table if the filename is not { nullptr, 0 }
-		CoallescedMesh* LoadCoallescedMeshImplementationEx(
+		CoalescedMesh* LoadCoalescedMeshImplementationEx(
 			const GLTFData* data,
 			float scale_factor = 1.0f,
 			ResourceManagerLoadDesc load_descriptor = {},
@@ -401,7 +401,7 @@ namespace ECSEngine {
 		// If it fails it returns nullptr. It allocates memory from the allocator
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT, ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK.
 		// It will also insert it into the table if the filename is not { nullptr, 0 }
-		CoallescedMesh* LoadCoallescedMeshImplementationEx(
+		CoalescedMesh* LoadCoalescedMeshImplementationEx(
 			Stream<GLTFMesh> gltf_meshes,
 			float scale_factor = 1.0f,
 			ResourceManagerLoadDesc load_descriptor = {},
@@ -413,7 +413,7 @@ namespace ECSEngine {
 		// The submeshes are allocated as well, they are not referenced
 		// Flags: ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK
 		// It will also insert it into the table if the filename is not { nullptr, 0 }
-		CoallescedMesh* LoadCoallescedMeshImplementationEx(
+		CoalescedMesh* LoadCoalescedMeshImplementationEx(
 			const GLTFMesh* gltf_mesh,
 			Stream<Submesh> submeshes,
 			float scale_factor = 1.0f,
@@ -554,12 +554,12 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadCoallescedMesh(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
+		void UnloadCoalescedMesh(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadCoallescedMesh(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadCoalescedMesh(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
-		void UnloadCoallescedMeshImplementation(CoallescedMesh* mesh, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadCoalescedMeshImplementation(CoalescedMesh* mesh, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 			
 		// ---------------------------------------------------------------------------------------------------------------------------
 

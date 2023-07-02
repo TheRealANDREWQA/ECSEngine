@@ -287,6 +287,8 @@ namespace ECSEngine {
 	// Returns {0, 0} if it fails
 	ECSENGINE_API uint2 GetTextureDimensionsHDR(Stream<void> data);
 
-
+	// Returns a size such that the object remains relatively the same
+	// when the camera is moving (it is only a rough approximate)
+	ECSENGINE_API float GetConstantObjectSizeInPerspective(float camera_fov, float distance_to_camera, float object_size);
 
 }

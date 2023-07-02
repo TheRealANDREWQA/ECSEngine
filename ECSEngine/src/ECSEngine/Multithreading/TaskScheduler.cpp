@@ -453,7 +453,7 @@ namespace ECSEngine {
 	void TaskScheduler::SetTaskManagerTasks(TaskManager* task_manager) const
 	{
 		for (unsigned int index = 0; index < elements.size; index++) {
-			task_manager->AddTask({ elements[index].task_function, nullptr, 0, elements[index].task_name });
+			task_manager->AddTask({ { elements[index].task_function, nullptr, 0, elements[index].task_name }, elements[index].barrier_task });
 		}
 	}
 

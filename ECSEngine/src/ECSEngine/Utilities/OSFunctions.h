@@ -167,6 +167,22 @@ namespace ECSEngine {
 
 		ECSENGINE_API void ChangeThreadPriority(ECS_THREAD_PRIORITY priority);
 
+		ECS_INLINE uint2 GetCursorPosition() {
+			POINT point;
+			ECS_ASSERT(GetCursorPos(&point));
+			return { (unsigned int)point.x, (unsigned int)point.y };
+		}
+
+		ECS_INLINE void SetCursorPosition(uint2 position) {
+			ECS_ASSERT(SetCursorPos(position.x, position.y));
+		}
+
+		// The cursor is placed relative to the OS client region
+		// Returns the final position relative to the window location
+		ECSENGINE_API uint2 SetCursorPositionRelative(void* window_handle, uint2 position);
+
+		ECSENGINE_API uint2 GetOSWindowPosition(void* window_handle);
+
 #pragma endregion
 
 #pragma region Error With Window Or Console

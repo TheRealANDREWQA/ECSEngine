@@ -170,6 +170,7 @@ void BindSandboxGraphicsCamera(EditorState* editor_state, unsigned int sandbox_i
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	SetSandboxCameraAspectRatio(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	Camera camera = Camera(sandbox->camera_parameters);
+	camera.translation.z -= 5.0f;
 	SetRuntimeCamera(sandbox->sandbox_world.system_manager, camera);
 }
 
@@ -496,12 +497,15 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 // -----------------------------------------------------------------------------------------------------------------------------
 
 void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool wait_unlocking) {
-	ECS_ASSERT(!IsSandboxLocked(editor_state, sandbox_index));
-
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-	WaitSandboxUnlock(editor_state, sandbox_index);
-	
+	if (wait_unlocking) {
+		WaitSandboxUnlock(editor_state, sandbox_index);
+	}
+	else {
+		ECS_ASSERT(!IsSandboxLocked(editor_state, sandbox_index));
+	}
+
 	// Unload the sandbox assets
 	UnloadSandboxAssets(editor_state, sandbox_index);
 

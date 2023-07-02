@@ -192,12 +192,20 @@ namespace ECSEngine {
 		return count.fetch_add(enter_count, ECS_ACQUIRE);
 	}
 
-	void Semaphore::ClearCount() {
-		count.store(0, ECS_RELEASE);
+	unsigned int Semaphore::EnterEx(unsigned int enter_count) {
+		unsigned int value = count.fetch_add(enter_count, ECS_ACQUIRE);
+		WakeByAddressAll(&count);
+		return value;
 	}
 
-	void Semaphore::ClearTarget() {
-		target.store(0, ECS_RELEASE);
+	unsigned int Semaphore::TryEnter(unsigned int check_value, unsigned int enter_count) {
+		unsigned int value = count.load(ECS_RELAXED);
+		if (value == check_value) {
+			return Enter(enter_count);
+		}
+		else {
+			return -1;
+		}
 	}
 
 	void Semaphore::SpinWait(unsigned int count_value, unsigned int target_value)

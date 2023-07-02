@@ -167,7 +167,7 @@ namespace ECSEngine {
 		ComponentSignature archetype_signature = archetype->GetUniqueSignature();
 		for (unsigned char component_index = 0; component_index < data->component_map_count; component_index++) {
 			functor_uniques[component_index] = base->GetComponentByIndex(data->entity_offset, data->component_map[component_index]);
-			component_sizes[component_index] = world->entity_manager->ComponentSize(archetype_signature.indices[component_index]);
+			component_sizes[component_index] = world->entity_manager->ComponentSize(archetype_signature.indices[data->component_map[component_index]]);
 		}
 
 		const Component* shared_components = archetype->GetSharedSignature().indices;

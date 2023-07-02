@@ -1233,9 +1233,9 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		bool IsClickableTrigger(ActionData* action_data)
+		bool IsClickableTrigger(ActionData* action_data, ECS_MOUSE_BUTTON button_type)
 		{
-			return action_data->mouse_tracker->LeftButton() == MBRELEASED && IsPointInRectangle(action_data->mouse_position, action_data->position, action_data->scale);
+			return action_data->mouse_tracker->Button(button_type) == MBRELEASED && IsPointInRectangle(action_data->mouse_position, action_data->position, action_data->scale);
 		}
 
 		// -------------------------------------------------------------------------------------------------------

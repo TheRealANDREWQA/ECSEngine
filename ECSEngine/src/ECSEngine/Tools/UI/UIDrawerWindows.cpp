@@ -613,7 +613,8 @@ namespace ECSEngine {
 			button_data.system_descriptor = dockspace;
 			drawer.Button("Default values##41", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Border clickable handler count", &dockspace->border_default_clickable_handler_count, (unsigned int)64, (unsigned int)1024);
+			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Border clickable left handler count", &dockspace->border_default_left_clickable_handler_count, (unsigned int)64, (unsigned int)1024);
+			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Border clickable misc handler count", &dockspace->border_default_misc_clickable_handler_count, (unsigned int)16, (unsigned int)1024);
 			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Border general handler count", &dockspace->border_default_general_handler_count, (unsigned int)16, (unsigned int)1024);
 			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Border hoverable handler count", &dockspace->border_default_hoverable_handler_count, (unsigned int)64, (unsigned int)1024);
 			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Border sprite texture count", &dockspace->border_default_sprite_texture_count, (unsigned int)16, (unsigned int)1024);

@@ -1647,7 +1647,8 @@ namespace ECSEngine {
 				size_t configuration,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1691,7 +1692,8 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale,
 				UIActionHandler hoverable_handler,
-				UIActionHandler clickable_handler
+				UIActionHandler clickable_handler,
+				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
 			// Write into a reserved spot
@@ -1701,7 +1703,8 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale,
 				UIActionHandler hoverable_handler,
-				UIActionHandler clickable_handler
+				UIActionHandler clickable_handler,
+				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1742,28 +1745,23 @@ namespace ECSEngine {
 				float2 text_offset,
 				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_LATE,
 				Color font_color = ECS_COLOR_WHITE,
-				float percentage = 1.25f
+				float percentage = 1.25f,
+				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Either horizontal or vertical cull should be set
+			// White color by default means use the color from the color theme
 			void AddDefaultClickableHoverableWithTextEx(
 				size_t configuration,
 				float2 position,
 				float2 scale,
 				UIActionHandler handler,
-				Color color,
-				Stream<char> text,
-				float2 text_offset,
-				bool horizontal_cull = false,
-				float horizontal_cull_bound = 0.0f,
-				bool vertical_cull = false,
-				float vertical_cull_bound = 0.0f,
-				bool vertical_text = false,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_LATE,
-				Color font_color = ECS_COLOR_WHITE,
-				float percentage = 1.25f
+				UIDefaultTextHoverableData* hoverable_data,
+				Color text_color = ECS_COLOR_WHITE,
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL,
+				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1775,7 +1773,8 @@ namespace ECSEngine {
 				UIActionHandler handler,
 				Color color = ECS_COLOR_WHITE,
 				float percentage = 1.25f,
-				ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL,
+				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
 			// Write into a reserved spot
@@ -1787,7 +1786,8 @@ namespace ECSEngine {
 				UIActionHandler handler,
 				Color color = ECS_COLOR_WHITE,
 				float percentage = 1.25f,
-				ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL,
+				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1801,7 +1801,8 @@ namespace ECSEngine {
 				const Color* colors,
 				const float* percentages,
 				unsigned int count,
-				UIActionHandler handler
+				UIActionHandler handler,
+				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
 			// Write into a reserved spot
@@ -1815,7 +1816,8 @@ namespace ECSEngine {
 				const Color* colors,
 				const float* percentages,
 				unsigned int count,
-				UIActionHandler handler
+				UIActionHandler handler,
+				ECS_MOUSE_BUTTON button_type
 			);
 			
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -4085,7 +4087,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIReservedHandler ReserveClickable(ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL);
+			UIReservedHandler ReserveClickable(ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT, ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4539,7 +4541,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// places a clickable on the whole window
-			void SetWindowClickable(const UIActionHandler* handler);
+			void SetWindowClickable(const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4977,7 +4979,7 @@ namespace ECSEngine {
 			CapacityStream<void*> last_initialized_element_allocations;
 			CapacityStream<ResourceIdentifier> last_initialized_element_table_resources;
 			CapacityStream<unsigned int> late_hoverables;
-			CapacityStream<unsigned int> late_clickables;
+			CapacityStream<unsigned int> late_clickables[ECS_MOUSE_BUTTON_COUNT];
 			CapacityStream<unsigned int> late_generals;
 		};
 

@@ -788,6 +788,38 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
+		uint2 SetCursorPositionRelative(void* window_handle, uint2 position)
+		{
+			HWND hwnd = (HWND)window_handle;
+			RECT window_rect;
+			ECS_ASSERT(GetClientRect(hwnd, &window_rect));
+
+			unsigned int width = window_rect.right - window_rect.left;
+			unsigned int height = window_rect.bottom - window_rect.top;
+
+			position.x %= width;
+			position.y %= height;
+
+			position.x += window_rect.left;
+			position.y += window_rect.top;
+
+			SetCursorPosition({ position.x, position.y });
+			return position;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		uint2 GetOSWindowPosition(void* window_handle)
+		{
+			HWND hwnd = (HWND)window_handle;
+			RECT window_rect;
+			ECS_ASSERT(GetClientRect(hwnd, &window_rect));
+
+			return { (unsigned int)window_rect.left, (unsigned int)window_rect.top };
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
 		void LaunchFileExplorerWithError(Stream<wchar_t> path, UISystem* system)
 		{
 			ErrorWindow(path, OS::LaunchFileExplorer, LAUNCH_FILE_EXPLORER_ERROR_STRING, system);

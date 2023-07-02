@@ -272,7 +272,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < data->mesh.submeshes.size; index++) {
 			FreePBRMaterial(data->materials[index], allocator);
 		}
-		FreeCoallescedMesh(resource_manager->m_graphics, &data->mesh, true, allocator);
+		FreeCoalescedMesh(resource_manager->m_graphics, &data->mesh, true, allocator);
 	}
 
 	void DeletePBRMesh(ResourceManager* manager, unsigned int index, size_t flags) {
@@ -281,14 +281,14 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadCoallescedMeshHandler(void* parameter, ResourceManager* resource_manager) {
+	void UnloadCoalescedMeshHandler(void* parameter, ResourceManager* resource_manager) {
 		// Free the coallesced mesh - the submeshes get the deallocated at the same time as this resource
-		CoallescedMesh* mesh = (CoallescedMesh*)parameter;
-		FreeCoallescedMesh(resource_manager->m_graphics, mesh, true, resource_manager->Allocator());
+		CoalescedMesh* mesh = (CoalescedMesh*)parameter;
+		FreeCoalescedMesh(resource_manager->m_graphics, mesh, true, resource_manager->Allocator());
 	}
 
-	void DeleteCoallescedMesh(ResourceManager* manager, unsigned int index, size_t flags) {
-		manager->UnloadCoallescedMesh<false>(index, flags);
+	void DeleteCoalescedMesh(ResourceManager* manager, unsigned int index, size_t flags) {
+		manager->UnloadCoalescedMesh<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -331,7 +331,7 @@ namespace ECSEngine {
 		DeleteTexture, 
 		DeleteTextFile,
 		DeleteMeshes,
-		DeleteCoallescedMesh,
+		DeleteCoalescedMesh,
 		DeleteMaterials,
 		DeletePBRMesh,
 		DeleteShader,
@@ -343,7 +343,7 @@ namespace ECSEngine {
 		UnloadTextureHandler,
 		UnloadTextFileHandler,
 		UnloadMeshesHandler,
-		UnloadCoallescedMeshHandler,
+		UnloadCoalescedMeshHandler,
 		UnloadMaterialsHandler,
 		UnloadPBRMeshHandler,
 		UnloadShaderHandler,
@@ -822,11 +822,11 @@ namespace ECSEngine {
 							// Need to transfer the shader
 						});
 						break;
-					case ResourceType::CoallescedMesh:
+					case ResourceType::CoalescedMesh:
 						// Need to copy the mesh buffers
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
-							CoallescedMesh* mesh = (CoallescedMesh*)entry.data;
-							CoallescedMesh new_mesh = m_graphics->TransferCoallescedMesh(mesh);
+							CoalescedMesh* mesh = (CoalescedMesh*)entry.data;
+							CoalescedMesh new_mesh = m_graphics->TransferCoalescedMesh(mesh);
 							AddResource(identifier, (ResourceType)index, &new_mesh, entry.time_stamp, { nullptr, 0 }, entry.reference_count);
 						});
 						break;
@@ -1158,25 +1158,25 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	CoallescedMesh* ResourceManager::LoadCoallescedMesh(Stream<wchar_t> filename, float scale_factor, ResourceManagerLoadDesc load_descriptor)
+	CoalescedMesh* ResourceManager::LoadCoalescedMesh(Stream<wchar_t> filename, float scale_factor, ResourceManagerLoadDesc load_descriptor)
 	{
 		void* meshes = LoadResource<reference_counted>(
 			this,
 			filename,
-			ResourceType::CoallescedMesh,
+			ResourceType::CoalescedMesh,
 			load_descriptor,
 			[=]() {
-				return LoadCoallescedMeshImplementation(filename, scale_factor, load_descriptor);
+				return LoadCoalescedMeshImplementation(filename, scale_factor, load_descriptor);
 			});
 
-		return (CoallescedMesh*)meshes;
+		return (CoalescedMesh*)meshes;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(CoallescedMesh*, ResourceManager::LoadCoallescedMesh, Stream<wchar_t>, float, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(CoalescedMesh*, ResourceManager::LoadCoalescedMesh, Stream<wchar_t>, float, ResourceManagerLoadDesc);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	CoallescedMesh* ResourceManager::LoadCoallescedMeshImplementation(Stream<wchar_t> filename, float scale_factor, ResourceManagerLoadDesc load_descriptor)
+	CoalescedMesh* ResourceManager::LoadCoalescedMeshImplementation(Stream<wchar_t> filename, float scale_factor, ResourceManagerLoadDesc load_descriptor)
 	{
 		ECS_TEMP_STRING(_path, 512);
 		GLTFData data = LoadGLTFFile(filename);
@@ -1184,14 +1184,14 @@ namespace ECSEngine {
 		if (data.data == nullptr || data.mesh_count == 0) {
 			return nullptr;
 		}
-		CoallescedMesh* coallesced_mesh = LoadCoallescedMeshImplementationEx(&data, scale_factor, load_descriptor);
+		CoalescedMesh* coalesced_mesh = LoadCoalescedMeshImplementationEx(&data, scale_factor, load_descriptor);
 		FreeGLTFFile(data);
-		return coallesced_mesh;
+		return coalesced_mesh;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	CoallescedMesh* ResourceManager::LoadCoallescedMeshImplementationEx(
+	CoalescedMesh* ResourceManager::LoadCoalescedMeshImplementationEx(
 		const GLTFData* data,
 		float scale_factor, 
 		ResourceManagerLoadDesc load_descriptor, 
@@ -1201,19 +1201,19 @@ namespace ECSEngine {
 		bool has_invert = !function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
 
 		// Calculate the allocation size
-		size_t allocation_size = sizeof(CoallescedMesh) + sizeof(Submesh) * data->mesh_count;
+		size_t allocation_size = sizeof(CoalescedMesh) + sizeof(Submesh) * data->mesh_count;
 		// Allocate the needed memory
 		void* allocation = AllocateTs(allocation_size);
-		CoallescedMesh* mesh = (CoallescedMesh*)allocation;
+		CoalescedMesh* mesh = (CoalescedMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
-		buffer += sizeof(CoallescedMesh);
+		buffer += sizeof(CoalescedMesh);
 		mesh->submeshes.InitializeFromBuffer(buffer, data->mesh_count);
 
-		LoadCoallescedMeshFromGLTFOptions options;
+		LoadCoalescedMeshFromGLTFOptions options;
 		options.allocate_submesh_name = true;
 		options.permanent_allocator = AllocatorTs();
 		options.scale_factor = scale_factor;
-		bool success = LoadCoallescedMeshFromGLTFToGPU(m_graphics, *data, mesh, has_invert, &options);
+		bool success = LoadCoalescedMeshFromGLTFToGPU(m_graphics, *data, mesh, has_invert, &options);
 		if (!success) {
 			Deallocate(allocation);
 			mesh = nullptr;
@@ -1224,7 +1224,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	CoallescedMesh* ResourceManager::LoadCoallescedMeshImplementationEx(
+	CoalescedMesh* ResourceManager::LoadCoalescedMeshImplementationEx(
 		Stream<GLTFMesh> gltf_meshes, 
 		float scale_factor, 
 		ResourceManagerLoadDesc load_descriptor, 
@@ -1232,12 +1232,12 @@ namespace ECSEngine {
 	)
 	{
 		// Calculate the allocation size
-		size_t allocation_size = sizeof(CoallescedMesh) + sizeof(Submesh) * gltf_meshes.size;
+		size_t allocation_size = sizeof(CoalescedMesh) + sizeof(Submesh) * gltf_meshes.size;
 		// Allocate the needed memory
 		void* allocation = AllocateTs(allocation_size);
-		CoallescedMesh* mesh = (CoallescedMesh*)allocation;
+		CoalescedMesh* mesh = (CoalescedMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
-		buffer += sizeof(CoallescedMesh);
+		buffer += sizeof(CoalescedMesh);
 		mesh->submeshes.InitializeFromBuffer(buffer, gltf_meshes.size);
 
 		// Scale the gltf meshes, they already have a built in check for scale of 1.0f
@@ -1252,7 +1252,7 @@ namespace ECSEngine {
 		// Convert now to aggregated mesh
 		mesh->mesh = MeshesToSubmeshes(m_graphics, { temporary_meshes, gltf_meshes.size }, mesh->submeshes.buffer, misc_flags);
 
-		AddResourceEx(this, ResourceType::CoallescedMesh, mesh, load_descriptor, ex_desc);
+		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, load_descriptor, ex_desc);
 
 		if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
@@ -1264,7 +1264,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	CoallescedMesh* ResourceManager::LoadCoallescedMeshImplementationEx(
+	CoalescedMesh* ResourceManager::LoadCoalescedMeshImplementationEx(
 		const GLTFMesh* gltf_mesh, 
 		Stream<Submesh> submeshes,
 		float scale_factor,
@@ -1273,12 +1273,12 @@ namespace ECSEngine {
 	)
 	{
 		// Calculate the allocation size
-		size_t allocation_size = sizeof(CoallescedMesh) + sizeof(Submesh) * submeshes.size;
+		size_t allocation_size = sizeof(CoalescedMesh) + sizeof(Submesh) * submeshes.size;
 		// Allocate the needed memory
 		void* allocation = AllocateTs(allocation_size);
-		CoallescedMesh* mesh = (CoallescedMesh*)allocation;
+		CoalescedMesh* mesh = (CoalescedMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
-		buffer += sizeof(CoallescedMesh);
+		buffer += sizeof(CoalescedMesh);
 		mesh->submeshes.InitializeAndCopy(buffer, submeshes);
 
 		// We also need to coallesce the names of the submeshes
@@ -1288,7 +1288,7 @@ namespace ECSEngine {
 
 		mesh->mesh = GLTFMeshToMesh(m_graphics, *gltf_mesh);
 
-		AddResourceEx(this, ResourceType::CoallescedMesh, mesh, load_descriptor, ex_desc);
+		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, load_descriptor, ex_desc);
 
 		if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
@@ -2351,23 +2351,23 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadCoallescedMesh(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
+	void ResourceManager::UnloadCoalescedMesh(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
 	{
-		UnloadResource<reference_counted>(filename, ResourceType::CoallescedMesh, load_desc);
+		UnloadResource<reference_counted>(filename, ResourceType::CoalescedMesh, load_desc);
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadCoallescedMesh(unsigned int index, size_t flags)
+	void ResourceManager::UnloadCoalescedMesh(unsigned int index, size_t flags)
 	{
-		UnloadResource<reference_counted>(index, ResourceType::CoallescedMesh, flags);
+		UnloadResource<reference_counted>(index, ResourceType::CoalescedMesh, flags);
 	}
 
-	void ResourceManager::UnloadCoallescedMeshImplementation(CoallescedMesh* mesh, size_t flags)
+	void ResourceManager::UnloadCoalescedMeshImplementation(CoalescedMesh* mesh, size_t flags)
 	{
-		UnloadCoallescedMeshHandler(mesh, this);
+		UnloadCoalescedMeshHandler(mesh, this);
 	}
 
-	EXPORT_UNLOAD(UnloadCoallescedMesh);
+	EXPORT_UNLOAD(UnloadCoalescedMesh);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 

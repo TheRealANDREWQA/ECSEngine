@@ -20,7 +20,7 @@ void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
 
 	unsigned int index = hub->projects.size;
 	hub->projects[index].error_message = { nullptr, 0 };
-	hub->projects[index].data.path = function::StringCopy(editor_state->EditorAllocator(), path);
+	hub->projects[index].data.path = function::StringCopy(hub->allocator, path);
 
 	// The project name will only reference the filename of the path
 	Stream<wchar_t> project_name = function::PathFilename(hub->projects[hub->projects.size].data.path);
@@ -36,11 +36,11 @@ void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
 
 void DeallocateHubProject(EditorState* editor_state, unsigned int project_hub_index)
 {
-	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+	AllocatorPolymorphic allocator = editor_state->hub_data->allocator;
 	HubData* data = editor_state->hub_data;
 
-	data->projects[project_hub_index].data.path.Deallocate(editor_allocator);
-	data->projects[project_hub_index].error_message.Deallocate(editor_allocator);
+	data->projects[project_hub_index].data.path.Deallocate(allocator);
+	data->projects[project_hub_index].error_message.Deallocate(allocator);
 }
 
 void DeallocateHubProjects(EditorState* editor_state)
@@ -77,7 +77,7 @@ void AddExistingProjectAction(ActionData* action_data) {
 }
 
 bool LoadHubProjectInfo(EditorState* editor_state, unsigned int index) {
-	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+	AllocatorPolymorphic allocator = editor_state->hub_data->allocator;
 
 	ProjectOperationData open_data;
 	char error_message[256];
@@ -88,8 +88,8 @@ bool LoadHubProjectInfo(EditorState* editor_state, unsigned int index) {
 	bool success = OpenProjectFile(open_data, true);
 
 	if (!success) {
-		editor_state->hub_data->projects[index].error_message.Deallocate(editor_allocator);
-		editor_state->hub_data->projects[index].error_message.InitializeAndCopy(editor_allocator, error_message);
+		editor_state->hub_data->projects[index].error_message.Deallocate(allocator);
+		editor_state->hub_data->projects[index].error_message.InitializeAndCopy(allocator, error_message);
 	}
 
 	return success;
@@ -97,7 +97,6 @@ bool LoadHubProjectInfo(EditorState* editor_state, unsigned int index) {
 
 void LoadHubProjectsInfo(EditorState* editor_state)
 {
-	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	HubData* hub_data = editor_state->hub_data;
 
 	for (size_t index = 0; index < hub_data->projects.size; index++) {
@@ -126,7 +125,6 @@ void ResetHubData(EditorState* editor_state) {
 
 void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
 {
-	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	TaskManager* task_manager = editor_state->task_manager;
 	
 	HubData* hub_data = editor_state->hub_data;

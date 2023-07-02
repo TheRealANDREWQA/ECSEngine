@@ -205,7 +205,8 @@ namespace ECSEngine {
 			unsigned int border_default_sprite_texture_count;
 			unsigned int border_default_sprite_cache_count;
 			unsigned int border_default_hoverable_handler_count;
-			unsigned int border_default_clickable_handler_count;
+			unsigned int border_default_left_clickable_handler_count;
+			unsigned int border_default_misc_clickable_handler_count;
 			unsigned int border_default_general_handler_count;
 			float border_margin;
 			float border_size;
@@ -440,7 +441,7 @@ namespace ECSEngine {
 			CapacityStream<unsigned short> window_indices;
 			UIDrawResources draw_resources;
 			UIHandler hoverable_handler;
-			UIHandler clickable_handler;
+			UIHandler clickable_handler[ECS_MOUSE_BUTTON_COUNT];
 			UIHandler general_handler;
 		};
 
@@ -515,6 +516,14 @@ namespace ECSEngine {
 		};
 
 		struct UIDockspaceLayer {
+			ECS_INLINE bool operator == (UIDockspaceLayer other) const {
+				return index == other.index && type == other.type;
+			}
+			
+			ECS_INLINE bool operator != (UIDockspaceLayer other) const {
+				return !(*this == other);
+			}
+
 			unsigned int index;
 			DockspaceType type;
 		};
@@ -606,21 +615,23 @@ namespace ECSEngine {
 			void ChangeHoverableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
 			void ChangeHoverableHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
 			void ChangeHoverableHandler(const UIHandler* handler, unsigned int index, void* data);
-			void ChangeClickableHandler(float2 position, float2 scale, const UIActionHandler* handler);
-			void ChangeClickableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
-			void ChangeClickableHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
-			void ChangeClickableHandler(const UIHandler* handler, unsigned int index, void* data);
+			
+			void ChangeClickable(float2 position, float2 scale, const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type);
+			void ChangeClickable(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase, ECS_MOUSE_BUTTON button_type);
+			void ChangeClickable(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase, ECS_MOUSE_BUTTON button_type);
+			void ChangeClickable(const UIHandler* handler, unsigned int index, void* data, ECS_MOUSE_BUTTON button_type);
+			
 			void ChangeGeneralHandler(float2 position, float2 scale, const UIActionHandler* handler);
 			void ChangeGeneralHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
 			void ChangeGeneralHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
 			void ChangeGeneralHandler(const UIHandler* handler, unsigned int index, void* data);
 
 			bool ExecuteHoverableHandler(ActionData* action_data);
-			bool ExecuteClickableHandler(ActionData* action_data);
+			bool ExecuteClickableHandler(ActionData* action_data, ECS_MOUSE_BUTTON button_type);
 			bool ExecuteGeneralHandler(ActionData* action_data);
 
 			void ResetHoverableHandler();
-			void ResetClickableHandler();
+			void ResetClickableHandler(ECS_MOUSE_BUTTON button_type);
 			void ResetGeneralHandler();
 
 			struct Location {
@@ -632,26 +643,26 @@ namespace ECSEngine {
 			Location active_location;
 			Location hovered_location;
 
-			Location cleanup_general_location;
 			Location cleanup_hoverable_location;
+			Location cleanup_general_location;
 
 			bool always_hoverable;
-			bool clean_up_call_general;
 			bool clean_up_call_hoverable;
+			bool clean_up_call_general;
 			unsigned char locked_window;
 
 			void** buffers;
 			size_t* counts;
 
-			void* additional_general_data;
 			void* additional_hoverable_data;
+			void* additional_general_data;
 
 			UIActionHandler hoverable_handler;
 			UIElementTransform hoverable_transform;
-			UIActionHandler clickable_handler;
-			UIElementTransform clickable_transform;
 			UIActionHandler general_handler;
 			UIElementTransform general_transform;
+			UIActionHandler clickable_handler[ECS_MOUSE_BUTTON_COUNT];
+			UIElementTransform mouse_click_transform[ECS_MOUSE_BUTTON_COUNT];
 		};
 
 		struct UIMoveDockspaceBorderEventData {
@@ -694,17 +705,17 @@ namespace ECSEngine {
 
 		struct UIDefaultTextHoverableData {
 			Color color;
-			float percentage = 1.25f;
-			float2 text_offset;
 			Color text_color = ECS_TOOLS_UI_TEXT_COLOR;
+			float percentage = 1.25f;
+			float2 text_offset = { 0.0f, 0.0f };
 			float2 font_size = { ECS_TOOLS_UI_FONT_SIZE * ECS_TOOLS_UI_FONT_X_FACTOR, ECS_TOOLS_UI_FONT_SIZE };
 			float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING;
 			Stream<char> text = { nullptr, 0 };
 			bool vertical_text = false;
 			bool horizontal_cull = false;
 			bool vertical_cull = false;
-			float horizontal_cull_bound;
-			float vertical_cull_bound;
+			float horizontal_cull_bound = 0.0f;
+			float vertical_cull_bound = 0.0f;
 		};
 
 		struct UIDefaultVertexColorHoverableData {
@@ -719,6 +730,7 @@ namespace ECSEngine {
 			UIActionHandler hoverable_handler;
 			UIActionHandler click_handler;
 			ECS_UI_DRAW_PHASE initial_clickable_phase;
+			ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT;
 		};
 
 		// duration is interpreted as milliseconds
@@ -854,6 +866,7 @@ namespace ECSEngine {
 			UIActionHandler hoverable_handler;
 			UIActionHandler clickable_handler;
 			bool disable_system_phase_retarget = false;
+			ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT;
 		};
 
 		struct UISystemDefaultHoverableClickableData {
@@ -866,6 +879,7 @@ namespace ECSEngine {
 			UIActionHandler clickable_handler;
 			ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL;
 			bool disable_system_phase_retarget = false;
+			ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT;
 		};
 
 #pragma endregion

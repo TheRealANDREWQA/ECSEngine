@@ -3,6 +3,8 @@
 #include "../../Utilities/FunctionInterfaces.h"
 #include "../../Resources/ResourceManager.h"
 #include "../../Rendering/GraphicsHelpers.h"
+#include "../../Math/Quaternion.h"
+#include "../../Math/Conversion.h"
 
 constexpr size_t SMALL_VERTEX_BUFFER_CAPACITY = 8;
 constexpr size_t PER_THREAD_RESOURCES = 32;
@@ -228,13 +230,13 @@ namespace ECSEngine {
 	void ECS_VECTORCALL FillInstancedArrowCylinder(void* instanced_data, size_t buffer_index, const DebugArrow* arrow, Matrix camera_matrix) {
 		SetInstancedColor(instanced_data, buffer_index, arrow->color);
 		float3 direction_3 = GetRightVector(arrow->rotation);
-
 		float3 current_translation = arrow->translation + float3::Splat(arrow->length / 2.0f) * direction_3;
-
 		Matrix rotation_matrix = MatrixRotation(arrow->rotation);
-
-		Matrix matrix = MatrixScale(arrow->length / 2.0f, arrow->size, arrow->size) * rotation_matrix * MatrixTranslation(current_translation);
-		SetInstancedMatrix(instanced_data, buffer_index, MatrixTranspose(matrix * camera_matrix));
+		SetInstancedMatrix(
+			instanced_data, 
+			buffer_index, 
+			MatrixMVPToGPU(MatrixTranslation(current_translation), rotation_matrix, MatrixScale(arrow->length / 2.0f, arrow->size, arrow->size), camera_matrix)
+		);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -242,57 +244,90 @@ namespace ECSEngine {
 	void ECS_VECTORCALL FillInstancedArrowHead(void* instanced_data, size_t buffer_index, const DebugArrow* arrow, Matrix camera_matrix) {
 		float3 direction_3 = GetRightVector(arrow->rotation);
 		SetInstancedColor(instanced_data, buffer_index, arrow->color * ARROW_HEAD_DARKEN_COLOR);
-		Matrix matrix = MatrixScale(float3::Splat(arrow->size)) * MatrixRotation(arrow->rotation) * MatrixTranslation(arrow->translation 
-			+ float3::Splat(arrow->length) * direction_3);
-		SetInstancedMatrix(instanced_data, buffer_index, MatrixTranspose(matrix * camera_matrix));
+		SetInstancedMatrix(
+			instanced_data, 
+			buffer_index,
+			MatrixMVPToGPU(
+				MatrixTranslation(arrow->translation + float3::Splat(arrow->length) * direction_3), 
+				MatrixRotation(arrow->rotation), 
+				MatrixScale(float3::Splat(arrow->size)), 
+				camera_matrix
+			)
+		);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 #define AXES_SIZE_REDUCE_FACTOR 0.28f
 
+	ECS_INLINE float AxesReducedScale(float size) {
+		return size * AXES_SIZE_REDUCE_FACTOR;;
+	}
+
+	ECS_INLINE float CylinderXScale(float reduced_size) {
+		return AXES_X_SCALE * reduced_size;
+	}
+
 	void ECS_VECTORCALL FillInstancedAxesArrowCylinders(void* instanced_data, size_t buffer_index, const DebugAxes* axes, Matrix camera_matrix) {
 		// Magic constant to make it consistent in measurement units - if setting a sphere of radius 1.0f and axes of size 1.0f
 		// then the axes should be radiuses for that sphere
-		float size = axes->size * AXES_SIZE_REDUCE_FACTOR;
+		float size = AxesReducedScale(axes->size);
 		
 		// The X axis
 		SetInstancedColor(instanced_data, buffer_index, axes->color_x);
 
-		float3 direction_x_3 = GetRightVector(axes->rotation);
+		float cylinder_x_scale = CylinderXScale(size) * 0.5f;
+		// Translate the cylinder after it has been scaled such that they all start from the same location
+		Matrix arrow_cylinder_scale_matrix = MatrixScale(cylinder_x_scale, size, size) * MatrixTranslation({ cylinder_x_scale, 0.0f, 0.0f });
 
-		float cylinder_x_scale = AXES_X_SCALE * size / 2.0f;
-		float3 splatted_cylinder_scale = float3::Splat(cylinder_x_scale);
-		Matrix arrow_cylinder_scale_matrix = MatrixScale(cylinder_x_scale, size, size);
+		Matrix general_translation = MatrixTranslation(axes->translation);
 
-		float3 old_translation = axes->translation;
-		float3 current_translation = axes->translation + splatted_cylinder_scale * direction_x_3;
+		float3 x_rotation = { axes->rotation.x, axes->rotation.y, axes->rotation.z };
 
-		// The translation changes for every cylinder - must be computed each time - cannot be cached
-		Matrix matrix_x = arrow_cylinder_scale_matrix * MatrixRotation(axes->rotation) * MatrixTranslation(current_translation);
-		SetInstancedMatrix(instanced_data, buffer_index, MatrixTranspose(matrix_x * camera_matrix));
-		current_translation = old_translation;
+		SetInstancedMatrix(
+			instanced_data, 
+			buffer_index, 
+			MatrixMVPToGPU(
+				general_translation,
+				QuaternionRotationMatrix(x_rotation),
+				arrow_cylinder_scale_matrix,
+				camera_matrix
+			)
+		);
 
 		// The Y axis - rotate around Z axis by 90 degrees
-		float3 y_rotation = { axes->rotation.y, axes->rotation.x, axes->rotation.z + 90.0f };
+		float3 y_rotation = { axes->rotation.x, axes->rotation.y, axes->rotation.z + 90.0f };
 		SetInstancedColor(instanced_data, buffer_index + 1, axes->color_y);
-		float3 direction_y_3 = GetUpVector(axes->rotation);
 
-		//current_translation += splatted_cylinder_scale * direction_y_3;
-		// The translation changes for every cylinder - must be computed each time - cannot be cached
-		Matrix matrix_y = arrow_cylinder_scale_matrix * MatrixRotation(y_rotation) * MatrixTranslation(current_translation);
-		SetInstancedMatrix(instanced_data, buffer_index + 1, MatrixTranspose(matrix_y * camera_matrix));
-		current_translation = old_translation;
+		SetInstancedMatrix(
+			instanced_data, 
+			buffer_index + 1, 
+			MatrixMVPToGPU(
+				general_translation,
+				QuaternionRotationMatrix(y_rotation),
+				arrow_cylinder_scale_matrix ,
+				camera_matrix
+			)
+		);
 
 		// The Z axis - rotate around Y axis by 90 degrees
-		float3 z_rotation = { axes->rotation.z, axes->rotation.y - 90.0f, axes->rotation.x };
-		SetInstancedColor(instanced_data, buffer_index + 2, axes->color_z);
-		float3 direction_z_3 = GetForwardVector(axes->rotation);
+		float3 z_rotation = { axes->rotation.x, axes->rotation.y - 90.0f, 0.0f };
+		SetInstancedColor(
+			instanced_data, 
+			buffer_index + 2,
+			axes->color_z
+		);
 
-		//current_translation += splatted_cylinder_scale * direction_z_3;
-		// The translation changes for every cylinder - must be computed each time - cannot be cached
-		Matrix matrix_z = arrow_cylinder_scale_matrix * MatrixRotation(z_rotation) * MatrixTranslation(current_translation);
-		SetInstancedMatrix(instanced_data, buffer_index + 2, MatrixTranspose(matrix_z * camera_matrix));
+		SetInstancedMatrix(
+			instanced_data, 
+			buffer_index + 2,
+			MatrixMVPToGPU(
+				general_translation,
+				QuaternionRotationMatrix(z_rotation),
+				arrow_cylinder_scale_matrix,
+				camera_matrix
+			)
+		);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -302,29 +337,61 @@ namespace ECSEngine {
 		// then the axes should be radiuses for that sphere
 		float size = axes->size * AXES_SIZE_REDUCE_FACTOR;
 		
+		// For all heads, rotate firstly to get the correct orientation and then translate and rotate with the given rotation
+		// So, for all heads, interchange the translation before the rotation
+
 		// The X axis
 		SetInstancedColor(instanced_data, buffer_index, axes->color_x * ARROW_HEAD_DARKEN_COLOR);
 
-		Matrix arrow_head_scale = MatrixScale(float3::Splat(size));
-		float3 splatted_length = float3::Splat(AXES_X_SCALE * size);
+		float cylinder_x_scale = CylinderXScale(size);
+		Matrix general_translation = MatrixTranslation(axes->translation);
+		Matrix local_translation = MatrixTranslation({ cylinder_x_scale, 0.0f, 0.0f });
 
-		float3 direction_x_3 = GetRightVector(axes->rotation);
-		Matrix matrix_x = arrow_head_scale * MatrixRotation(axes->rotation) * MatrixTranslation(axes->translation + splatted_length * direction_x_3);
-		SetInstancedMatrix(instanced_data, buffer_index, MatrixTranspose(matrix_x * camera_matrix));
+		float3 x_rotation = axes->rotation;
+		Matrix x_rotation_matrix = QuaternionRotationMatrix(x_rotation);
+
+		Matrix arrow_head_scale = MatrixScale(float3::Splat(size));
+		// This head doesn't need to be rotated before scaling
+		SetInstancedMatrix(
+			instanced_data, 
+			buffer_index, 
+			MatrixMVPToGPU(
+				general_translation,
+				x_rotation_matrix,
+				arrow_head_scale * local_translation,
+				camera_matrix
+			)
+		);
 
 		// The Y axis
 		float3 y_rotation = { axes->rotation.x, axes->rotation.y, axes->rotation.z + 90.0f };
-		float3 direction_y_3 = GetUpVector(axes->rotation);
+		Matrix y_rotation_matrix = QuaternionRotationMatrix(y_rotation);
 		SetInstancedColor(instanced_data, buffer_index + 1, axes->color_y * ARROW_HEAD_DARKEN_COLOR);
-		Matrix matrix_y = arrow_head_scale * MatrixRotation(y_rotation) * MatrixTranslation(axes->translation + splatted_length * direction_y_3);
-		SetInstancedMatrix(instanced_data, buffer_index + 1, MatrixTranspose(matrix_y * camera_matrix));
+		SetInstancedMatrix(
+			instanced_data, 
+			buffer_index + 1,
+			MatrixMVPToGPU(
+				general_translation,
+				y_rotation_matrix,
+				arrow_head_scale * local_translation,
+				camera_matrix
+			)
+		);
 
 		// The Z axis
-		float3 z_rotation = { axes->rotation.x, axes->rotation.y - 90.0f, axes->rotation.z };
-		float3 direction_z_3 = GetForwardVector(axes->rotation);
+		float3 z_rotation = { axes->rotation.x, axes->rotation.y - 90.0f, 0.0f };
+		Matrix z_rotation_matrix = QuaternionRotationMatrix(z_rotation);
 		SetInstancedColor(instanced_data, buffer_index + 2, axes->color_z * ARROW_HEAD_DARKEN_COLOR);
-		Matrix matrix_z = arrow_head_scale * MatrixRotation(z_rotation) * MatrixTranslation(axes->translation + splatted_length * direction_z_3);
-		SetInstancedMatrix(instanced_data, buffer_index + 2, MatrixTranspose(matrix_z * camera_matrix));
+		SetInstancedMatrix(
+			instanced_data, 
+			buffer_index + 2, 
+			MatrixMVPToGPU(
+				general_translation,
+				z_rotation_matrix,
+				arrow_head_scale * local_translation,
+				camera_matrix
+			)
+		);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -634,7 +701,7 @@ namespace ECSEngine {
 
 		positions[0] = start;
 		positions[1] = end;
-		SetInstancedMatrix(instanced, 0, MatrixTranspose(camera_matrix));
+		SetInstancedMatrix(instanced, 0, MatrixGPU(camera_matrix));
 		SetInstancedColor(instanced, 0, color);
 
 		UnmapAllStructured(this);
@@ -651,8 +718,8 @@ namespace ECSEngine {
 	{
 		InstancedTransformData* instanced = MapInstancedVertex(this);
 		SetInstancedColor(instanced, 0, color);
-		Matrix matrix = MatrixScale(float3::Splat(radius)) * MatrixTranslation(position);
-		SetInstancedMatrix(instanced, 0, MatrixTranspose(matrix * camera_matrix));
+		Matrix matrix = MatrixTS(MatrixTranslation(position), MatrixScale(float3::Splat(radius)));
+		SetInstancedMatrix(instanced, 0, MatrixGPU(MatrixMVP(matrix, camera_matrix)));
 		UnmapInstancedVertex(this);
 
 		SetSphereState(options);
@@ -669,8 +736,8 @@ namespace ECSEngine {
 
 		InstancedTransformData* instanced = MapInstancedVertex(this);
 		SetInstancedColor(instanced, 0, color);
-		Matrix matrix = MatrixScale(float3::Splat(POINT_SIZE)) * MatrixTranslation(position);
-		SetInstancedMatrix(instanced, 0, MatrixTranspose(matrix * camera_matrix));
+		Matrix matrix = MatrixTS(MatrixTranslation(position), MatrixScale(float3::Splat(POINT_SIZE)));
+		SetInstancedMatrix(instanced, 0, MatrixGPU(MatrixMVP(matrix, camera_matrix)));
 		UnmapInstancedVertex(this);
 
 		SetPointState(options);
@@ -690,7 +757,7 @@ namespace ECSEngine {
 		SetRectanglePositionsFront(positions, corner0, corner1);
 
 		SetInstancedColor(instanced, 0, color);
-		SetInstancedMatrix(instanced, 0, MatrixTranspose(camera_matrix));
+		SetInstancedMatrix(instanced, 0, MatrixGPU(camera_matrix));
 		UnmapAllStructured(this);
 
 		SetRectangleState(options);
@@ -706,9 +773,14 @@ namespace ECSEngine {
 		options.wireframe = false;
 		InstancedTransformData* instanced = MapInstancedVertex(this);
 
-		Matrix matrix = MatrixScale(float3::Splat(size)) * MatrixRotation(rotation) * MatrixTranslation(position);
+		Matrix matrix = MatrixMVPToGPU(
+			MatrixTranslation(position),
+			MatrixRotation(rotation),
+			MatrixScale(float3::Splat(size)),
+			camera_matrix
+		);
 		SetInstancedColor(instanced, 0, color);
-		SetInstancedMatrix(instanced, 0, MatrixTranspose(matrix * camera_matrix));
+		SetInstancedMatrix(instanced, 0, matrix);
 		UnmapInstancedVertex(this);
 
 		SetCrossState(options);
@@ -723,9 +795,15 @@ namespace ECSEngine {
 	{
 		options.wireframe = false;
 		InstancedTransformData* instanced = MapInstancedVertex(this);
-		Matrix matrix = MatrixScale(float3::Splat(radius)) * MatrixRotation(rotation) * MatrixTranslation(position);
+
+		Matrix mvp_matrix = MatrixMVPToGPU(
+			MatrixTranslation(position),
+			MatrixRotation(rotation),
+			MatrixScale(float3::Splat(radius)),
+			camera_matrix
+		);
 		SetInstancedColor(instanced, 0, color);
-		SetInstancedMatrix(instanced, 0, MatrixTranspose(matrix * camera_matrix));
+		SetInstancedMatrix(instanced, 0, mvp_matrix);
 		UnmapInstancedVertex(this);
 
 		SetCircleState(options);
@@ -806,7 +884,7 @@ namespace ECSEngine {
 		positions[2] = point2;
 
 		SetInstancedColor(instanced, 0, color);
-		SetInstancedMatrix(instanced, 0, MatrixTranspose(camera_matrix));
+		SetInstancedMatrix(instanced, 0, MatrixGPU(camera_matrix));
 		UnmapAllStructured(this);
 	
 		SetTriangleState(options);
@@ -829,7 +907,7 @@ namespace ECSEngine {
 	{
 		InstancedTransformData* instanced = MapInstancedVertex(this);
 		SetInstancedColor(instanced, 0, color);
-		SetInstancedMatrix(instanced, 0, MatrixTranspose(MatrixTransform(translation, rotation, scale) * camera_matrix));
+		SetInstancedMatrix(instanced, 0, MatrixGPU(MatrixMVP(MatrixTransform(translation, rotation, scale), camera_matrix)));
 		UnmapInstancedVertex(this);
 
 		SetOOBBState(options);
@@ -860,7 +938,7 @@ namespace ECSEngine {
 
 		Matrix rotation_matrix = MatrixRotation({rotation_from_direction.x, rotation_from_direction.y, rotation_from_direction.z});
 		Matrix scale_matrix = MatrixScale(float3::Splat(size));
-		Matrix scale_rotation = scale_matrix * rotation_matrix;
+		Matrix scale_rotation = MatrixRS(rotation_matrix, scale_matrix);
 
 		// Create the instanced vertex buffer
 		VertexBuffer instanced_data_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), text.size, true);
@@ -925,7 +1003,7 @@ namespace ECSEngine {
 						checked_characters[subindex] = true;
 						
 						SetInstancedColor(instance_data, current_character_count, color);
-						SetInstancedMatrix(instance_data, current_character_count, MatrixTranspose(scale_rotation * MatrixTranslation(translation) * camera_matrix));
+						SetInstancedMatrix(instance_data, current_character_count, MatrixGPU(MatrixMVP(scale_rotation * MatrixTranslation(translation), camera_matrix)));
 						current_character_count++;
 					}
 				}
@@ -985,7 +1063,7 @@ namespace ECSEngine {
 		float3* line_positions = (float3*)graphics->MapBuffer(line_position_buffer.buffer);
 
 		SetInstancedColor(constant_data, 0, color);
-		SetInstancedMatrix(constant_data, 0, MatrixTranspose(world_matrix * drawer->camera_matrix));
+		SetInstancedMatrix(constant_data, 0, MatrixGPU(MatrixMVP(world_matrix, drawer->camera_matrix)));
 
 		// Set the line positions
 		for (size_t index = 0; index < attribute.size; index++) {
@@ -1058,7 +1136,7 @@ namespace ECSEngine {
 
 		for (size_t index = 0; index < world_matrices.size; index++) {
 			SetInstancedColor(instanced_data, index, color);
-			SetInstancedMatrix(instanced_data, index, MatrixTranspose(world_matrices[index] * drawer->camera_matrix));
+			SetInstancedMatrix(instanced_data, index, MatrixGPU(MatrixMVP(world_matrices[index], drawer->camera_matrix)));
 		}
 
 		// Unmap the constant buffer and the staging ones
@@ -1173,7 +1251,7 @@ namespace ECSEngine {
 			ResourceView instanced_view = graphics->CreateBufferView(instanced_buffer, true);
 			graphics->BindVertexResourceView(instanced_view);
 
-			Matrix transposed_camera = MatrixTranspose(camera_matrix);
+			Matrix gpu_camera = MatrixGPU(camera_matrix);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -1188,13 +1266,13 @@ namespace ECSEngine {
 				graphics->UnmapBuffer(instanced_buffer.buffer);
 			};
 
-			auto map_for = [&current_count, &current_indices, this, transposed_camera, deck_pointer](float3* positions, void* instanced_data) {
+			auto map_for = [&current_count, &current_indices, this, gpu_camera, deck_pointer](float3* positions, void* instanced_data) {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugLine* line = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y]; 
 					positions[index * 2] = line->start; 
 					positions[index * 2 + 1] = line->end; 
 					SetInstancedColor(instanced_data, index, line->color); 
-					SetInstancedMatrix(instanced_data, index, transposed_camera); 
+					SetInstancedMatrix(instanced_data, index, gpu_camera); 
 				} 
 			};
 			
@@ -1287,8 +1365,8 @@ namespace ECSEngine {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugSphere* sphere = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
 					SetInstancedColor(instanced_data, index, sphere->color);
-					Matrix matrix = MatrixScale(float3::Splat(sphere->radius)) * MatrixTranslation(sphere->position);
-					SetInstancedMatrix(instanced_data, index, MatrixTranspose(matrix * camera_matrix));
+					Matrix matrix = MatrixTS(MatrixTranslation(sphere->position), MatrixScale(float3::Splat(sphere->radius)));
+					SetInstancedMatrix(instanced_data, index, MatrixGPU(matrix * camera_matrix));
 				}
 			};
 
@@ -1378,8 +1456,8 @@ namespace ECSEngine {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugPoint* point = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
 					SetInstancedColor(instanced_data, index, point->color);
-					Matrix matrix = MatrixScale(float3::Splat(POINT_SIZE)) * MatrixTranslation(point->position);
-					SetInstancedMatrix(instanced_data, index, MatrixTranspose(matrix * camera_matrix));
+					Matrix matrix = MatrixTS(MatrixTranslation(point->position), MatrixScale(float3::Splat(POINT_SIZE)));
+					SetInstancedMatrix(instanced_data, index, MatrixGPU(matrix * camera_matrix));
 				}
 			};
 
@@ -1457,7 +1535,7 @@ namespace ECSEngine {
 			ResourceView instanced_view = graphics->CreateBufferView(instanced_buffer, true);
 			graphics->BindVertexResourceView(instanced_view);
 
-			Matrix transposed_camera = MatrixTranspose(camera_matrix);
+			Matrix gpu_camera = MatrixGPU(camera_matrix);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -1472,12 +1550,12 @@ namespace ECSEngine {
 				graphics->UnmapBuffer(instanced_buffer.buffer);
 			};
 
-			auto map_for = [&current_count, &current_indices, this, transposed_camera, deck_pointer](float3* positions, void* instanced_data) {
+			auto map_for = [&current_count, &current_indices, this, gpu_camera, deck_pointer](float3* positions, void* instanced_data) {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugRectangle* rectangle = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
 					SetRectanglePositionsFront(positions + index * 6, rectangle->corner0, rectangle->corner1);
 					SetInstancedColor(instanced_data, index, rectangle->color);
-					SetInstancedMatrix(instanced_data, index, transposed_camera);
+					SetInstancedMatrix(instanced_data, index, gpu_camera);
 				}
 			};
 
@@ -1570,8 +1648,8 @@ namespace ECSEngine {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugCross* cross = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
 					SetInstancedColor(instanced_data, index, cross->color);
-					Matrix matrix = MatrixScale(float3::Splat(cross->size)) * MatrixTranslation(cross->position);
-					SetInstancedMatrix(instanced_data, index, MatrixTranspose(matrix * camera_matrix));
+					Matrix matrix = MatrixTS(MatrixTranslation(cross->position), MatrixScale(float3::Splat(cross->size)));
+					SetInstancedMatrix(instanced_data, index, MatrixGPU(MatrixMVP(matrix, camera_matrix)));
 				}
 			};
 
@@ -1661,8 +1739,8 @@ namespace ECSEngine {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugCircle* circle = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
 					SetInstancedColor(instanced_data, index, circle->color);
-					Matrix matrix = MatrixScale(float3::Splat(circle->radius)) * MatrixRotation(circle->rotation) * MatrixTranslation(circle->position);
-					SetInstancedMatrix(instanced_data, index, MatrixTranspose(matrix * camera_matrix));
+					Matrix matrix = MatrixTRS(MatrixTranslation(circle->position), MatrixRotation(circle->rotation), MatrixScale(float3::Splat(circle->radius)));
+					SetInstancedMatrix(instanced_data, index, MatrixGPU(MatrixMVP(matrix, camera_matrix)));
 				}
 			};
 
@@ -2000,7 +2078,7 @@ namespace ECSEngine {
 			ResourceView instanced_view = graphics->CreateBufferView(instanced_buffer, true);
 			graphics->BindVertexResourceView(instanced_view);
 
-			Matrix transposed_camera = MatrixTranspose(camera_matrix);
+			Matrix gpu_camera = MatrixGPU(camera_matrix);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -2015,14 +2093,14 @@ namespace ECSEngine {
 				graphics->UnmapBuffer(instanced_buffer.buffer);
 			};
 
-			auto map_for = [&current_count, &current_indices, this, transposed_camera, deck_pointer](float3* positions, void* instanced_data) {
+			auto map_for = [&current_count, &current_indices, this, gpu_camera, deck_pointer](float3* positions, void* instanced_data) {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugTriangle* triangle = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
 					positions[index * 3] = triangle->point0;
 					positions[index * 3 + 1] = triangle->point1;
 					positions[index * 3 + 2] = triangle->point2;
 					SetInstancedColor(instanced_data, index, triangle->color);
-					SetInstancedMatrix(instanced_data, index, transposed_camera);
+					SetInstancedMatrix(instanced_data, index, gpu_camera);
 				}
 			};
 
@@ -2115,8 +2193,8 @@ namespace ECSEngine {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugAABB* aabb = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
 					SetInstancedColor(instanced_data, index, aabb->color);
-					Matrix matrix = MatrixScale(aabb->scale) * MatrixTranslation(aabb->translation);
-					SetInstancedMatrix(instanced_data, index, MatrixTranspose(matrix * camera_matrix));
+					Matrix matrix = MatrixTS(MatrixTranslation(aabb->translation), MatrixScale(aabb->scale));
+					SetInstancedMatrix(instanced_data, index, MatrixGPU(MatrixMVP(matrix, camera_matrix)));
 				}
 			};
 
@@ -2207,7 +2285,7 @@ namespace ECSEngine {
 					DebugOOBB* oobb = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
 					SetInstancedColor(instanced_data, index, oobb->color);
 					Matrix matrix = MatrixTransform(oobb->translation, oobb->rotation, oobb->scale);
-					SetInstancedMatrix(instanced_data, index, MatrixTranspose(matrix * camera_matrix));
+					SetInstancedMatrix(instanced_data, index, MatrixGPU(MatrixMVP(matrix, camera_matrix)));
 				}
 			};
 
@@ -2313,7 +2391,7 @@ namespace ECSEngine {
 
 					Matrix rotation_matrix = MatrixRotation({ rotation_from_direction.x, rotation_from_direction.y, rotation_from_direction.z });
 					Matrix scale_matrix = MatrixScale(float3::Splat(string->size));
-					Matrix scale_rotation = scale_matrix * rotation_matrix;
+					Matrix scale_rotation = MatrixRS(rotation_matrix, scale_matrix);
 
 					// Keep track of already checked elements - the same principle as the Eratosthenes sieve
 					memset(checked_characters, 0, sizeof(bool) * string->text.size);
@@ -2366,7 +2444,9 @@ namespace ECSEngine {
 									checked_characters[subindex] = true;
 
 									SetInstancedColor(instanced_data, current_character_count, string->color);
-									SetInstancedMatrix(instanced_data, current_character_count, MatrixTranspose(scale_rotation * MatrixTranslation(translation) * camera_matrix));
+									SetInstancedMatrix(instanced_data, current_character_count, MatrixGPU(MatrixMVP(
+										scale_rotation * MatrixTranslation(translation), camera_matrix
+									)));
 									current_character_count++;
 								}
 							}
@@ -2975,7 +3055,7 @@ namespace ECSEngine {
 
 		// The string meshes - in the gltf mesh they are stored in reverse order.
 		// Change their order
-		string_mesh = resource_manager->LoadCoallescedMesh<true>(STRING_MESH_FILE);
+		string_mesh = resource_manager->LoadCoalescedMesh<true>(STRING_MESH_FILE);
 
 		size_t submesh_count = string_mesh->submeshes.size;
 		// Change the order of the submeshes such that they mirror alphabet index
@@ -3222,7 +3302,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::RestorePreviousRenderState(GraphicsPipelineRenderState state)
+	void DebugDrawer::RestorePreviousRenderState(const GraphicsPipelineRenderState* state)
 	{
 		graphics->RestorePipelineRenderState(state);
 	}

@@ -1488,7 +1488,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 			FileExplorerMeshThumbnail thumbnail;
 
 			//Try to read the mesh here and create it's buffers GPU buffers
-			CoallescedMesh* mesh = data->resource_manager->LoadCoallescedMeshImplementation(path);
+			CoalescedMesh* mesh = data->resource_manager->LoadCoalescedMeshImplementation(path);
 			// If the mesh is nullptr, the read failed
 			thumbnail.could_be_read = mesh != nullptr;
 			thumbnail.last_write_time = OS::GetFileLastWrite(path);
@@ -1499,7 +1499,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 				thumbnail.texture = gltf_thumbnail.texture;
 
 				// Free the coallesced mesh
-				data->resource_manager->UnloadCoallescedMeshImplementation(mesh);
+				data->resource_manager->UnloadCoalescedMeshImplementation(mesh);
 			}
 
 			// Update the hash table

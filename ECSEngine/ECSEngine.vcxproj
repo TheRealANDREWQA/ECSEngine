@@ -247,6 +247,7 @@
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTaskExport.h" />
     <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Profiling.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\RenderingEffects.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabase.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabaseReference.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetLoading.h" />
@@ -437,6 +438,7 @@
     <ClCompile Include="src\ECSEngine\Multithreading\ThreadTask.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\RenderingEffects.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabase.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabaseReference.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetLoading.cpp" />
@@ -552,6 +554,16 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\SolidColor.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\BasicTransform.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

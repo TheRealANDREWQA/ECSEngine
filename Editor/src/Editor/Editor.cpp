@@ -89,12 +89,25 @@ public:
 		return hWnd;
 	}
 
+	uint2 GetCursorPosition() const {
+		return ECSEngine::OS::GetCursorPosition();
+	}
+
+	void SetCursorPosition(uint2 position) {
+		ECSEngine::OS::SetCursorPosition(position);
+	}
+
+	void SetCursorPositionRelative(uint2 position) {
+		ECSEngine::OS::SetCursorPositionRelative(GetOSWindowHandle(), position);
+	}
+
 	int Run() override {
 		using namespace ECSEngine;
 		using namespace ECSEngine::Tools;
 
 		EditorState editor_state;
-		EditorStateInitialize(this, &editor_state, hWnd, mouse, keyboard);
+		EditorStateBaseInitialize(&editor_state, hWnd, &mouse, &keyboard);
+		EditorStateInitialize(this, &editor_state, hWnd, &mouse, &keyboard);
 
 		ResourceManager* resource_manager = editor_state.ui_resource_manager;
 		Graphics* graphics = editor_state.UIGraphics();
@@ -331,7 +344,7 @@ public:
 		//cerberus_material.pixel_textures[6] = specular_view;
 		//cerberus_material.pixel_textures[7] = brdf_lut_view;
 
-		//CoallescedMesh* cerberus_mesh = resource_manager->LoadCoallescedMesh(
+		//CoalescedMesh* cerberus_mesh = resource_manager->LoadCoalescedMesh(
 		//	L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2material.glb", 
 		//	{ ECS_RESOURCE_MANAGER_SHARED_RESOURCE }
 		//);
@@ -674,88 +687,15 @@ public:
 
 						unsigned int VALUE = 0;
 
-						unsigned int window_index = editor_state.ui_system->GetWindowFromName("Game");
-						if (window_index == -1)
-							window_index = 0;
-						float aspect_ratio = editor_state.ui_system->m_windows[window_index].transform.scale.x / editor_state.ui_system->m_windows[window_index].transform.scale.y
-							* graphics->m_window_size.x / graphics->m_window_size.y;
-
-						//Shaders::SetPBRPixelEnvironmentConstant(environment_constants, graphics, { specular_max_mip, environment_diffuse_factor, environment_specular_factor });
-
 						graphics->ClearBackBuffer(0.0f, 0.0f, 0.0f);
-						const float colors[4] = { 0.3f, 0.6f, 0.95f, 1.0f };
 
 						timer.SetMarker();
-
-						float horizontal_rotation = 0.0f;
-						float vertical_rotation = 0.0f;
-
-						if (mouse_state->MiddleButton()) {
-							float2 mouse_position = editor_state.ui_system->GetNormalizeMousePosition();
-							float2 delta = editor_state.ui_system->GetMouseDelta(mouse_position);
-
-							float3 right_vector = GetRightVector(camera.rotation);
-							float3 up_vector = GetUpVector(camera.rotation);
-
-							float factor = 10.0f;
-
-							if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
-								factor = 2.5f;
-							}
-
-							VALUE = 4;
-
-							camera.translation -= right_vector * float3::Splat(delta.x * factor) - up_vector * float3::Splat(delta.y * factor);
-							CAMERA_CHANGED = true;
-						}
-						if (mouse_state->LeftButton()) {
-							float factor = 75.0f;
-							float2 mouse_position = editor_state.ui_system->GetNormalizeMousePosition();
-							float2 delta = editor_state.ui_system->GetMouseDelta(mouse_position);
-
-							if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
-								factor = 10.0f;
-							}
-
-							VALUE = 4;
-
-							camera.rotation.x += delta.y * factor;
-							camera.rotation.y += delta.x * factor;
-							CAMERA_CHANGED = true;
-
-							horizontal_rotation -= delta.x * factor;
-							vertical_rotation -= delta.y * factor;
-						}
-
-						int scroll_delta = mouse_state->ScrollDelta();
-						if (scroll_delta != 0) {
-							float factor = 0.015f;
-
-							VALUE = 4;
-
-							if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
-								factor = 0.005f;
-							}
-
-							float3 forward_vector = GetForwardVector(camera.rotation);
-
-							camera.translation += forward_vector * float3::Splat(scroll_delta * factor);
-							CAMERA_CHANGED = true;
-						}
-
-						/*HID::MouseTracker* mouse_tracker = mouse.GetTracker();
-						if (mouse_tracker->RightButton() == MBPRESSED || mouse_tracker->MiddleButton() == MBPRESSED || mouse_tracker->LeftButton() == MBPRESSED) {
-							mouse.EnableRawInput();
-						}
-						else if (mouse_tracker->RightButton() == MBRELEASED || mouse_tracker->MiddleButton() == MBRELEASED || mouse_tracker->LeftButton() == MBRELEASED) {
-							mouse.DisableRawInput();
-						}*/
 
 						//if (CAMERA_CHANGED) {
 							//graphics->m_context->ClearDepthStencilView(editor_state.viewport_texture_depth.view, D3D11_CLEAR_DEPTH, 1.0f, 0);
 							//graphics.m_context->ClearRenderTargetView(editor_state.viewport_render_target, colors);
 
-						//	Matrix cube_matrix = MatrixTranspose(camera.GetProjectionViewMatrix());
+						//	Matrix cube_matrix = MatrixGPU(camera.GetProjectionViewMatrix());
 
 						//	graphics->DisableDepth();
 						//	graphics->DisableCulling();
@@ -858,11 +798,11 @@ public:
 						//			* MatrixTranslation(0.0f, 0.0f, 20.0f + subindex * 10.0f);
 						//		Matrix world_matrix = matrix;
 						//		world_matrices[subindex] = world_matrix;
-						//		Matrix transpose = MatrixTranspose(matrix);
+						//		Matrix transpose = MatrixGPU(matrix);
 						//		transpose.Store(reinter);
 
 						//		Matrix MVP_matrix = matrix * camera_matrix;
-						//		matrix = MatrixTranspose(MVP_matrix);
+						//		matrix = MatrixGPU(MVP_matrix);
 						//		matrix.Store(reinter + 16);
 
 						//		graphics->UnmapBuffer(obj_buffer.buffer);
@@ -873,7 +813,7 @@ public:
 						//		mapping[1] = ECS_MESH_NORMAL;
 						//		mapping[2] = ECS_MESH_UV;
 
-						//		Shaders::SetPBRVertexConstants(pbr_vertex_values, graphics, MatrixTranspose(world_matrices[subindex]), MatrixTranspose(MVP_matrix), uv_tiling, uv_offsets);
+						//		Shaders::SetPBRVertexConstants(pbr_vertex_values, graphics, MatrixGPU(world_matrices[subindex]), MatrixGPU(MVP_matrix), uv_tiling, uv_offsets);
 
 						//		graphics->BindMesh(normal_merged_mesh, Stream<ECS_MESH_INDEX>(mapping, std::size(mapping)));
 						//		graphics->DrawIndexed(normal_merged_mesh.index_buffer.count);
@@ -882,12 +822,13 @@ public:
 
 						graphics->BindRenderTargetViewFromInitialViews();
 
-						//CAMERA_CHANGED = false;
-
 						editor_state.Tick();
 
 						frame_pacing = editor_state.ui_system->DoFrame();
 						frame_pacing = std::max(frame_pacing, VALUE);
+
+						// Refresh the graphics object since it might be changed
+						graphics = editor_state.UIGraphics();
 
 						bool removed = graphics->SwapBuffers(0);
 						if (removed) {
@@ -1057,6 +998,9 @@ Editor::Editor(int _width, int _height, LPCWSTR name)
 	// show window since default is hidden
 	ShowWindow(hWnd, SW_SHOWMAXIMIZED);
 	UpdateWindow(hWnd);
+
+	ECS_ASSERT(SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE));
+	GetWindowRect(hWnd, &windowRegion);
 }
 
 Editor::~Editor() {

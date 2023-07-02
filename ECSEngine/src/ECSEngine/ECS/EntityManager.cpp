@@ -1332,9 +1332,10 @@ namespace ECSEngine {
 		bool has_trimmed = manager->m_archetypes.Trim(10);
 		if (has_trimmed) {
 			// Resize the vector components
-			size_t new_size = sizeof(VectorComponentSignature) * 2 * manager->m_archetypes.size;
+			size_t allocate_count = manager->m_archetypes.capacity;
+			size_t new_size = sizeof(VectorComponentSignature) * 2 * allocate_count;
 
-			if (manager->m_archetypes.size < ECS_KB * 2) {
+			if (new_size < ECS_KB * 32) {
 				// Copy to a stack buffer and release the old buffer rightaway - It will clear space inside the allocator
 				// And hopefully reduce the pressure on it
 				void* temp_buffer = ECS_STACK_ALLOC(new_size);
@@ -3515,8 +3516,8 @@ namespace ECSEngine {
 	void ECS_VECTORCALL EntityManager::FindArchetypeSharedComponentVector(unsigned int archetype_index, VectorComponentSignature components, unsigned char* indices) const {
 		ECS_STACK_CAPACITY_STREAM(char, component_string_storage, 1024);
 		
-		ECS_CRASH_RETURN(archetype_index < m_archetypes.size, "EntityManager: The archetype {#} is invalid when trying to find unique components { {#} }.", 
-			archetype_index, GetComponentSignatureString(components, component_string_storage));
+		ECS_CRASH_RETURN(archetype_index < m_archetypes.size, "EntityManager: The archetype {#} is invalid when trying to find shared components { {#} }.", 
+			archetype_index, GetSharedComponentSignatureString(components, component_string_storage));
 		// Use the fast SIMD compare
 		GetArchetypeSharedComponents(archetype_index).Find(components, indices);
 	}
@@ -3960,12 +3961,12 @@ namespace ECSEngine {
 
 	Stream<char> EntityManager::GetComponentName(Component component) const
 	{
-		return m_unique_components[component.value].name;
+		return component.value >= 0 && component.value < m_unique_components.size ? m_unique_components[component.value].name : "Invalid component";
 	}
 
 	Stream<char> EntityManager::GetSharedComponentName(Component component) const
 	{
-		return m_shared_components[component.value].info.name;
+		return component.value >= 0 && component.value < m_shared_components.size ? m_shared_components[component.value].info.name : "Invalid component";
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

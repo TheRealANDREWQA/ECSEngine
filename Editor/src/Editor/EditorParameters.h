@@ -19,5 +19,5 @@ constexpr const wchar_t* CONSOLE_RELATIVE_DUMP_PATH = L"\\Debug\\ConsoleDump.txt
 constexpr const wchar_t* EDITOR_DEFAULT_PROJECT_UI_TEMPLATE = L"Resources/DefaultTemplate";
 constexpr const wchar_t* EDITOR_SYSTEM_PROJECT_UI_TEMPLATE_PREFIX = L"Resources/EditorTemplate";
 
-constexpr size_t EDITOR_HUB_PROJECT_CAPACITY = 32;
+constexpr size_t EDITOR_HUB_PROJECT_CAPACITY = 16;
 constexpr size_t EDITOR_EVENT_QUEUE_CAPACITY = 32;

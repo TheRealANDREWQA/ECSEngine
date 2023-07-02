@@ -66,7 +66,7 @@ namespace ECSEngine {
 		};
 
 		ReflectionRuntimeComponentKnownType ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE[] = {
-			{ STRING(CoallescedMesh), 8 },
+			{ STRING(CoalescedMesh), 8 },
 			{ STRING(ResourceView), 8 },
 			{ STRING(SamplerState), 8 },
 			{ STRING(VertexShader), 8 },
