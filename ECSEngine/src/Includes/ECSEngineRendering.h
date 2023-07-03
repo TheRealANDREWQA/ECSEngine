@@ -8,3 +8,4 @@
 #include "../ECSEngine/Rendering/Shader Application Stage/Lighting.h"
 #include "../ECSEngine/Rendering/Shader Application Stage/PBR.h"
 #include "../ECSEngine/Rendering/PBRMaps.h"
+#include "../ECSEngine/Rendering/RenderingEffects.h"

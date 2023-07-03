@@ -640,6 +640,16 @@ void GetLinkComponentWithAssetFieldsShared(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void IncrementAssetReferenceInSandbox(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index, unsigned int count)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < count; index++) {
+		sandbox->database.AddAsset(handle, type, true);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool IsAssetReferencedInSandbox(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, unsigned int sandbox_index)
 {
 	bool is_referenced = false;

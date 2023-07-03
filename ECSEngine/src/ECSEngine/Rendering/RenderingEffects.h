@@ -5,7 +5,7 @@
 
 namespace ECSEngine {
 
-#define ECS_HIGHLIGHT_OBJECT_THICKNESS_DEFAULT 0.2f
+#define ECS_HIGHLIGHT_OBJECT_THICKNESS_DEFAULT 3
 
 	struct Graphics;
 	struct Mesh;
@@ -13,10 +13,8 @@ namespace ECSEngine {
 
 	struct HighlightObjectElement {
 		bool is_coalesced = false;
-		float thickness = ECS_HIGHLIGHT_OBJECT_THICKNESS_DEFAULT;
-		Color highlight_color;
-		float3 element_scale;
-		Matrix translation_rotation_matrix;
+		// The matrix should be in GPU form
+		Matrix gpu_mvp_matrix;
 		union {
 			struct {
 				const Mesh* mesh;
@@ -32,8 +30,9 @@ namespace ECSEngine {
 
 	ECSENGINE_API void HighlightObject(
 		Graphics* graphics,
-		Matrix camera_matrix,
-		Stream<HighlightObjectElement> elements
+		ColorFloat color,
+		Stream<HighlightObjectElement> elements,
+		unsigned int pixel_thickness = ECS_HIGHLIGHT_OBJECT_THICKNESS_DEFAULT
 	);
 
 	// ------------------------------------------------------------------------------------------------------------

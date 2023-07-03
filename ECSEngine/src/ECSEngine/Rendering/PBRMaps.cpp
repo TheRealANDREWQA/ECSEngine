@@ -23,7 +23,7 @@ namespace ECSEngine {
 		UpdateBufferResource(pc_buffer.buffer, &step, sizeof(float), graphics->GetContext());
 
 		// The format of the cube texture is RGBA16F
-		GraphicsTextureCubeDescriptor cube_descriptor;
+		TextureCubeDescriptor cube_descriptor;
 		cube_descriptor.format = ECS_GRAPHICS_FORMAT_RGBA16_FLOAT;
 		cube_descriptor.size = dimensions;
 		cube_descriptor.mip_levels = 1;
@@ -36,7 +36,7 @@ namespace ECSEngine {
 
 		RenderTargetView target_views[6];
 		for (size_t index = 0; index < 6; index++) {
-			target_views[index] = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index, 0, true);
+			target_views[index] = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index, 0, ECS_GRAPHICS_FORMAT_UNKNOWN, true);
 		}
 
 		SamplerDescriptor sampler_descriptor;
@@ -116,7 +116,7 @@ namespace ECSEngine {
 		SamplerState sampler_state = graphics->CreateSamplerState(sampler_desc, true);
 
 		// The format of the cube texture is RGBA16F
-		GraphicsTextureCubeDescriptor cube_descriptor;
+		TextureCubeDescriptor cube_descriptor;
 		cube_descriptor.format = ECS_GRAPHICS_FORMAT_RGBA16_FLOAT;
 		cube_descriptor.size = dimensions;
 		cube_descriptor.bind_flag = GetGraphicsBindFromNative(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
@@ -168,7 +168,7 @@ namespace ECSEngine {
 
 			for (size_t index = 0; index < 6; index++) {
 				// Create a render target view of the current face
-				RenderTargetView render_target_view = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index, mip_level, true);
+				RenderTargetView render_target_view = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index, mip_level, ECS_GRAPHICS_FORMAT_UNKNOWN, true);
 
 				// Update the vertex buffer
 				Matrix current_matrix = MatrixGPU(ViewMatrixTextureCube((TextureCubeFace)index) * projection_matrix);
@@ -207,7 +207,7 @@ namespace ECSEngine {
 	{
 		Texture2D texture;
 
-		GraphicsTexture2DDescriptor descriptor;
+		Texture2DDescriptor descriptor;
 		descriptor.size = dimensions;
 		descriptor.format = ECS_GRAPHICS_FORMAT_RG16_FLOAT;
 		descriptor.bind_flag = GetGraphicsBindFromNative(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
@@ -255,7 +255,7 @@ namespace ECSEngine {
 		graphics->BindPixelConstantBuffer(sample_buffer);
 		graphics->BindViewport(0.0f, 0.0f, dimensions.x, dimensions.y, 0.0f, 1.0f);
 
-		RenderTargetView render_view = graphics->CreateRenderTargetView(texture, 0, true);
+		RenderTargetView render_view = graphics->CreateRenderTargetView(texture, 0, ECS_GRAPHICS_FORMAT_UNKNOWN, true);
 		graphics->BindRenderTargetView(render_view, nullptr);
 
 #ifdef CUBE

@@ -1038,7 +1038,7 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				GraphicsTexture2DDescriptor graphics_descriptor;
+				Texture2DDescriptor graphics_descriptor;
 				graphics_descriptor.size = { decoded_texture.width, decoded_texture.height };
 				graphics_descriptor.mip_data = { &decoded_texture.data, 1 };
 				graphics_descriptor.mip_levels = 1;

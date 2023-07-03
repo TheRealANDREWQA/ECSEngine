@@ -175,7 +175,7 @@ string_name.AssertCapacity();
 		template<typename Integer, typename CharacterType>
 		Integer ParseInteger(Stream<CharacterType>* characters, CharacterType delimiter) {
 			return ParseType<CharacterType, Integer>(characters, delimiter, [](Stream<CharacterType> stream_characters) {
-				return ConvertCharactersToInt<Integer>(stream_characters);
+				return (Integer)ConvertCharactersToInt(stream_characters);
 			});
 		}
 
@@ -205,7 +205,15 @@ string_name.AssertCapacity();
 		template<typename Integer, typename CharacterType>
 		void ParseIntegers(Stream<CharacterType> characters, CharacterType delimiter, CapacityStream<Integer>& values) {
 			while (characters.size > 0) {
-				values.AddAssert(ParseInteger<Integer>(&characters, delimiter));
+				if (characters[0] == delimiter) {
+					characters.Advance();
+					if (characters.size > 0) {
+						values.AddAssert(ParseInteger<Integer>(&characters, delimiter));
+					}
+				}
+				else {
+					values.AddAssert(ParseInteger<Integer>(&characters, delimiter));
+				}
 			}
 		}
 

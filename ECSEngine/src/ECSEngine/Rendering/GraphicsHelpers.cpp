@@ -843,7 +843,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		TextureCube cube;
 		
 		// Create the 6 faces as render targets
-		GraphicsTexture2DDescriptor texture_descriptor;
+		Texture2DDescriptor texture_descriptor;
 		texture_descriptor.format = cube_format;
 		texture_descriptor.bind_flag = GetGraphicsBindFromNative((D3D11_BIND_FLAG)(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE));
 		texture_descriptor.size = face_size;
@@ -853,7 +853,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		RenderTargetView render_views[6];
 		for (size_t index = 0; index < 6; index++) {
 			cube_textures[index] = graphics->CreateTexture(&texture_descriptor, true);
-			render_views[index] = graphics->CreateRenderTargetView(cube_textures[index], 0, true);
+			render_views[index] = graphics->CreateRenderTargetView(cube_textures[index], 0, ECS_GRAPHICS_FORMAT_UNKNOWN, true);
 		}
 
 		// Generate a unit cube vertex buffer - a cube is needed instead of a rectangle because it will be rotated
@@ -1033,6 +1033,89 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 	float GetConstantObjectSizeInPerspective(float camera_fov, float distance_to_camera, float object_size)
 	{
 		return object_size * tan(DegToRad(camera_fov * 0.5f)) * distance_to_camera;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void GetTextureDescriptor(Texture1D texture, Texture1DDescriptor* descriptor)
+	{
+		D3D11_TEXTURE1D_DESC desc;
+		texture.tex->GetDesc(&desc);
+
+		descriptor->array_size = desc.ArraySize;
+		descriptor->bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
+		descriptor->cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
+		descriptor->format = GetGraphicsFormatFromNative(desc.Format);
+		descriptor->mip_data = { nullptr, 0 };
+		descriptor->mip_levels = desc.MipLevels;
+		descriptor->misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
+		descriptor->usage = GetGraphicsUsageFromNative(desc.Usage);
+		descriptor->width = desc.Width;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void GetTextureDescriptor(Texture2D texture, Texture2DDescriptor* descriptor)
+	{
+		D3D11_TEXTURE2D_DESC desc;
+		texture.tex->GetDesc(&desc);
+
+		descriptor->array_size = desc.ArraySize;
+		descriptor->bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
+		descriptor->cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
+		descriptor->format = GetGraphicsFormatFromNative(desc.Format);
+		descriptor->mip_data = { nullptr, 0 };
+		descriptor->mip_levels = desc.MipLevels;
+		descriptor->misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
+		descriptor->usage = GetGraphicsUsageFromNative(desc.Usage);
+		descriptor->size = { desc.Width, desc.Height };
+		descriptor->sampler_quality = desc.SampleDesc.Quality;
+		descriptor->sample_count = desc.SampleDesc.Count;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void GetTextureDescriptor(Texture3D texture, Texture3DDescriptor* descriptor)
+	{
+		D3D11_TEXTURE3D_DESC desc;
+		texture.tex->GetDesc(&desc);
+
+		descriptor->bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
+		descriptor->cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
+		descriptor->format = GetGraphicsFormatFromNative(desc.Format);
+		descriptor->mip_data = { nullptr, 0 };
+		descriptor->mip_levels = desc.MipLevels;
+		descriptor->misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
+		descriptor->usage = GetGraphicsUsageFromNative(desc.Usage);
+		descriptor->size = { desc.Width, desc.Height, desc.Depth };
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void GetTextureDescriptor(TextureCube texture, TextureCubeDescriptor* descriptor)
+	{
+		D3D11_TEXTURE2D_DESC desc;
+		texture.tex->GetDesc(&desc);
+
+		descriptor->bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
+		descriptor->cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
+		descriptor->format = GetGraphicsFormatFromNative(desc.Format);
+		descriptor->mip_data = { nullptr, 0 };
+		descriptor->mip_levels = desc.MipLevels;
+		descriptor->misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
+		descriptor->usage = GetGraphicsUsageFromNative(desc.Usage);
+		descriptor->size = { desc.Width, desc.Height };
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+	
+	void DrawWholeViewportQuad(Graphics* graphics, GraphicsContext* context)
+	{
+		BindVertexBuffer(graphics->m_cached_resources.vertex_buffer[ECS_GRAPHICS_CACHED_VERTEX_BUFFER_QUAD], context);
+		BindVertexShader(graphics->m_shader_helpers[ECS_GRAPHICS_SHADER_HELPER_VIEWPORT_QUAD].vertex, context);
+		BindInputLayout(graphics->m_shader_helpers[ECS_GRAPHICS_SHADER_HELPER_VIEWPORT_QUAD].input_layout, context);
+		BindTopology(Topology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST), context);
+		Draw(graphics->m_cached_resources.vertex_buffer[ECS_GRAPHICS_CACHED_VERTEX_BUFFER_QUAD].size, context);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

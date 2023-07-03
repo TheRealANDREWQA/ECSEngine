@@ -1,5 +1,4 @@
 // Uses a cbuffer to indicate the color
-
 cbuffer Color
 {
     float4 color;

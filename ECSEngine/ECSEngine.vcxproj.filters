@@ -327,6 +327,10 @@
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\SRGBToLinear.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\BasicTransform.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\SolidColor.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\Highlight.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\HighlightStencil.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\Passthrough.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\HighlightBlend.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="src\TODO.txt" />

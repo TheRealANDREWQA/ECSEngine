@@ -98,8 +98,8 @@ namespace ECSEngine {
 		CompressTextureDescriptor descriptor
 	) {
 		// Get the texture descriptor and fill the DirectX image
-		D3D11_TEXTURE2D_DESC texture_descriptor;
-		texture.tex->GetDesc(&texture_descriptor);
+		Texture2DDescriptor texture_descriptor;
+		GetTextureDescriptor(texture, &texture_descriptor);
 
 		// Check if the compression type conforms to the range
 		if ((unsigned int)compression_type > (unsigned int)ECS_TEXTURE_COMPRESSION_BC7) {
@@ -108,7 +108,7 @@ namespace ECSEngine {
 		}
 
 		// Check to see that the dimensions are multiple of 4
-		if ((texture_descriptor.Width & 3) != 0 || (texture_descriptor.Height & 3) != 0) {
+		if ((texture_descriptor.size.x & 3) != 0 || (texture_descriptor.size.y & 3) != 0) {
 			SetErrorMessage(descriptor.error_message, "Cannot compress textures that do not have dimensions multiple of 4.");
 			return false;
 		}
@@ -116,7 +116,13 @@ namespace ECSEngine {
 		DirectX::ScratchImage initial_image;
 		SetInternalImageAllocator(&initial_image, descriptor.allocator);
 
-		initial_image.Initialize2D(texture_descriptor.Format, texture_descriptor.Width, texture_descriptor.Height, texture_descriptor.ArraySize, texture_descriptor.MipLevels);
+		initial_image.Initialize2D(
+			GetGraphicsNativeFormat(texture_descriptor.format), 
+			texture_descriptor.size.x, 
+			texture_descriptor.size.y, 
+			texture_descriptor.array_size, 
+			texture_descriptor.mip_levels
+		);
 		ECS_GRAPHICS_FORMAT compressed_format;
 		if (function::HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB)) {
 			compressed_format = COMPRESSED_FORMATS_SRGB[(unsigned int)compression_type];
@@ -148,7 +154,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
+		for (size_t index = 0; index < texture_descriptor.mip_levels; index++) {
 			HRESULT result = context->Map(staging_texture.tex, index, D3D11_MAP_READ, 0, &mapping);
 			if (FAILED(result)) {
 				SetErrorMessage(descriptor.error_message, "Failed compressing a texture. Mapping a mip level failed.");
@@ -216,25 +222,25 @@ namespace ECSEngine {
 			return false;
 		}
 
-		D3D11_SUBRESOURCE_DATA new_texture_data[32];
-		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
+		ECS_STACK_CAPACITY_STREAM(Stream<void>, mip_data, 32);
+		for (size_t index = 0; index < texture_descriptor.mip_levels; index++) {
 			const DirectX::Image* image = final_image.GetImage(index, 0, 0);
-			new_texture_data[index].pSysMem = image->pixels;
-			new_texture_data[index].SysMemPitch = image->rowPitch;
-			new_texture_data[index].SysMemSlicePitch = image->slicePitch;
+			mip_data[index].buffer = image->pixels;
+			mip_data[index].size = image->height * image->rowPitch;
 		}
 
 		ID3D11Texture2D* old_texture = texture.tex;
-		texture_descriptor.Format = GetGraphicsNativeFormat(compressed_format);
+		texture_descriptor.format = compressed_format;
+		texture_descriptor.mip_data = { mip_data.buffer, texture_descriptor.mip_levels };
 		if (!function::HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_BIND_RENDER_TARGET)) {
-			texture_descriptor.BindFlags = function::ClearFlag(texture_descriptor.BindFlags, D3D11_BIND_RENDER_TARGET);
+			texture_descriptor.bind_flag = (ECS_GRAPHICS_BIND_TYPE)function::ClearFlag(texture_descriptor.bind_flag, ECS_GRAPHICS_BIND_RENDER_TARGET);
 		}
-		texture_descriptor.MiscFlags = function::ClearFlag(texture_descriptor.MiscFlags, D3D11_RESOURCE_MISC_GENERATE_MIPS);
-		result = device->CreateTexture2D(&texture_descriptor, new_texture_data, &texture.tex);
+		texture_descriptor.misc_flag = (ECS_GRAPHICS_MISC_FLAGS)function::ClearFlag(texture_descriptor.misc_flag, D3D11_RESOURCE_MISC_GENERATE_MIPS);
 		if (FAILED(result)) {
 			SetErrorMessage(descriptor.error_message, "Creating final texture after compression failed.");
 			return false;
 		}
+		texture = graphics->CreateTexture(&texture_descriptor);
 
 		// Release the staging texture
 		staging_texture.Release();
@@ -287,7 +293,7 @@ namespace ECSEngine {
 				return texture_result;
 			}
 
-			GraphicsTexture2DDescriptor texture_descriptor;
+			Texture2DDescriptor texture_descriptor;
 			texture_descriptor.bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
 			texture_descriptor.format = compressed_format;
 			texture_descriptor.usage = ECS_GRAPHICS_USAGE_DEFAULT;

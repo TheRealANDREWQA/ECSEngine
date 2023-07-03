@@ -69,8 +69,6 @@ namespace ECSEngine {
 
 	ECSENGINE_API VertexBuffer CreateRectangleVertexBuffer(Graphics* graphics, float3 top_left, float3 bottom_right, bool temporary = false);
 
-	ECSENGINE_API uint2 GetTextureDimensions(Texture2D texture);
-
 	// It will make a staging texture that has copied the contents of the supplied texture
 	// It relies on the immediate context to copy the contents - SINGLE THREADED
 	// If it fails, the returned interface will be nullptr
@@ -287,8 +285,21 @@ namespace ECSEngine {
 	// Returns {0, 0} if it fails
 	ECSENGINE_API uint2 GetTextureDimensionsHDR(Stream<void> data);
 
+	ECSENGINE_API uint2 GetTextureDimensions(Texture2D texture);
+
 	// Returns a size such that the object remains relatively the same
 	// when the camera is moving (it is only a rough approximate)
 	ECSENGINE_API float GetConstantObjectSizeInPerspective(float camera_fov, float distance_to_camera, float object_size);
+
+	ECSENGINE_API void GetTextureDescriptor(Texture1D texture, Texture1DDescriptor* descriptor);
+
+	ECSENGINE_API void GetTextureDescriptor(Texture2D texture, Texture2DDescriptor* descriptor);
+
+	ECSENGINE_API void GetTextureDescriptor(Texture3D texture, Texture3DDescriptor* descriptor);
+
+	ECSENGINE_API void GetTextureDescriptor(TextureCube texture, TextureCubeDescriptor* descriptor);
+
+	// The pipeline must be set previously
+	ECSENGINE_API void DrawWholeViewportQuad(Graphics* graphics, GraphicsContext* context);
 
 }

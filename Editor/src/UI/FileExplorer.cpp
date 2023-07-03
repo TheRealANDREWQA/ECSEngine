@@ -1206,7 +1206,7 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 
 			auto create_texture = [&](Stream<void> mip_data, ECS_GRAPHICS_FORMAT format, void* deallocate_buffer) {
 				// Create a D3D11 texture from the resized texture
-				GraphicsTexture2DDescriptor texture_descriptor;
+				Texture2DDescriptor texture_descriptor;
 				texture_descriptor.mip_data = { &mip_data, 1 };
 				texture_descriptor.usage = ECS_GRAPHICS_USAGE_IMMUTABLE;
 				texture_descriptor.size = { (unsigned int)TEXTURE_WIDTH, (unsigned int)TEXTURE_WIDTH };

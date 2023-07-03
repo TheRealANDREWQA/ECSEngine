@@ -7,3 +7,4 @@
 #include "ECSEngineReflection.h"
 #include "ECSEngineUtilities.h"
 #include "ECSEngineForEach.h"
+#include "ECSEngineRendering.h"

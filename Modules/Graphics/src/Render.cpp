@@ -127,10 +127,16 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 
 		graphics->DrawCoalescedMeshCommand(*mesh->mesh);
 
+		HighlightObjectElement element;
+		element.is_coalesced = false;
+		element.mesh = &mesh->mesh->mesh;
+		element.gpu_mvp_matrix = mvp_matrix;
+		HighlightObject(graphics, ECS_COLOR_RED, { &element, 1 });
+
 		float3 camera_distance = translation_value - data->camera->translation;
 		float distance = Length(camera_distance).First();
 
-		drawer->DrawAxes(
+		/*drawer->DrawAxes(
 			translation_value,
 			rotation_value,
 			GetConstantObjectSizeInPerspective(data->camera->fov, distance, 0.25f),
@@ -139,7 +145,7 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 			AxisZColor(),
 			{ false, true }
 		);
-		graphics->EnableDepth();
+		graphics->EnableDepth();*/
 	}
 }
 

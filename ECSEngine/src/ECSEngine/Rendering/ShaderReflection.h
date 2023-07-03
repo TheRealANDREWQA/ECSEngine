@@ -239,6 +239,9 @@ namespace ECSEngine {
 		// The macros are used to preprocess the file
 		bool ReflectShader(Stream<char> source_code, const ReflectedShader* reflected_shader) const;
 
+		// Returns whether or not it succeeded
+		bool ReflectComputeShaderDispatchSize(Stream<char> source_code, uint3* dispatch_size) const;
+
 		// It will try to determine the type of the shader from source code
 		ECS_SHADER_TYPE DetermineShaderType(Stream<char> source_code) const;
 

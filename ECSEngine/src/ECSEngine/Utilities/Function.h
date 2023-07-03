@@ -254,6 +254,12 @@ namespace ECSEngine {
 			return OffsetPointer(pointer.buffer, pointer.size);
 		}
 
+		// Returns a / b + ((a % b) != 0)
+		template<typename T>
+		ECS_INLINE T DivideCount(T a, T b) {
+			return a / b + ((a % b) != 0);
+		}
+
 		// a - b
 		ECS_INLINE size_t PointerDifference(const void* a, const void* b) {
 			return (uintptr_t)a - (uintptr_t)b;
