@@ -91,6 +91,7 @@ namespace ECSEngine {
 		ECS_GRAPHICS_FORMAT_R16_UNORM = DXGI_FORMAT_R16_UNORM,
 		ECS_GRAPHICS_FORMAT_RG16_UNORM = DXGI_FORMAT_R16G16_UNORM,
 		ECS_GRAPHICS_FORMAT_RGBA16_UNORM = DXGI_FORMAT_R16G16B16A16_UNORM,
+		ECS_GRAPHICS_FORMAT_R24G8_UNORM = DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
 
 		ECS_GRAPHICS_FORMAT_R8_SNORM = DXGI_FORMAT_R8_SNORM,
 		ECS_GRAPHICS_FORMAT_RG8_SNORM = DXGI_FORMAT_R8G8_SNORM,
@@ -146,6 +147,7 @@ namespace ECSEngine {
 		ECS_GRAPHICS_FORMAT_R16_TYPELESS = DXGI_FORMAT_R16_TYPELESS,
 		ECS_GRAPHICS_FORMAT_RG16_TYPELESS = DXGI_FORMAT_R16G16_TYPELESS,
 		ECS_GRAPHICS_FORMAT_RGBA16_TYPELESS = DXGI_FORMAT_R16G16B16A16_TYPELESS,
+		ECS_GRAPHICS_FORMAT_R24G8_TYPELESS = DXGI_FORMAT_R24G8_TYPELESS,
 		ECS_GRAPHICS_FORMAT_R32_TYPELESS = DXGI_FORMAT_R32_TYPELESS,
 		ECS_GRAPHICS_FORMAT_RG32_TYPELESS = DXGI_FORMAT_R32G32_TYPELESS,
 		ECS_GRAPHICS_FORMAT_RGB32_TYPELESS = DXGI_FORMAT_R32G32B32_TYPELESS,
@@ -301,6 +303,18 @@ namespace ECSEngine {
 	// If the format can have an srgb format, it will make it srgb
 	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatWithSRGB(ECS_GRAPHICS_FORMAT format);
 
+	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatTypelessToUNORM(ECS_GRAPHICS_FORMAT format);
+
+	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatTypelessToSNORM(ECS_GRAPHICS_FORMAT format);
+
+	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatTypelessToUINT(ECS_GRAPHICS_FORMAT format);
+
+	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatTypelessToSINT(ECS_GRAPHICS_FORMAT format);
+
+	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatTypelessToFloat(ECS_GRAPHICS_FORMAT format);
+
+	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatToTypeless(ECS_GRAPHICS_FORMAT format);
+
 	enum ECS_REFLECT ECS_SAMPLER_FILTER_TYPE : unsigned char {
 		ECS_SAMPLER_FILTER_POINT,
 		ECS_SAMPLER_FILTER_LINEAR,
@@ -350,6 +364,15 @@ namespace ECSEngine {
 		ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST
 	};
 
+	enum TextureCubeFace {
+		ECS_TEXTURE_CUBE_X_POS,
+		ECS_TEXTURE_CUBE_X_NEG,
+		ECS_TEXTURE_CUBE_Y_POS,
+		ECS_TEXTURE_CUBE_Y_NEG,
+		ECS_TEXTURE_CUBE_Z_POS,
+		ECS_TEXTURE_CUBE_Z_NEG
+	};
+
 	// Default is no macros, shader target 5 and no compile flags
 	struct ShaderCompileOptions {
 		Stream<ShaderMacro> macros = { nullptr, 0 };
@@ -368,6 +391,100 @@ namespace ECSEngine {
 		device->Release();
 		return device;
 	}
+
+	// Releases the target resource as well
+	// This function does not take into account the graphics object bookkeeping
+	template<typename View>
+	ECS_INLINE void ReleaseGraphicsView(View view) {
+		ID3D11Resource* resource = view.GetResource();
+		view.Release();
+		resource->Release();
+	}
+
+	// Default arguments all but width; initial_data can be set to fill the texture
+	// The initial data is a stream of Stream<void> for each mip map data
+	struct Texture1DDescriptor {
+		unsigned int width;
+		unsigned int array_size = 1u;
+		unsigned int mip_levels = 0u;
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
+		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
+		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
+	};
+
+	// Size must always be initialized;
+	// The initial data is a stream of Stream<void> for each mip map data
+	struct Texture2DDescriptor {
+		uint2 size;
+		unsigned int array_size = 1u;
+		unsigned int mip_levels = 0u;
+		unsigned int sample_count = 1u;
+		unsigned int sampler_quality = 0u;
+
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
+		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
+		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
+	};
+
+	// Size must be set
+	// The initial data is a stream of Stream<void> for each mip map data
+	struct Texture3DDescriptor {
+		uint3 size;
+		unsigned int mip_levels = 0u;
+
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
+		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
+		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
+	};
+
+	// The initial data is a stream of Stream<void> for each mip map data
+	struct TextureCubeDescriptor {
+		uint2 size;
+		unsigned int mip_levels = 0u;
+
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
+		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
+		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
+	};
+
+	struct SamplerDescriptor {
+		ECS_INLINE void SetAddressType(ECS_SAMPLER_ADDRESS_TYPE type) {
+			address_type_u = type;
+			address_type_v = type;
+			address_type_w = type;
+		}
+
+		ECS_SAMPLER_FILTER_TYPE filter_type = ECS_SAMPLER_FILTER_LINEAR;
+		ECS_SAMPLER_ADDRESS_TYPE address_type_u = ECS_SAMPLER_ADDRESS_WRAP;
+		ECS_SAMPLER_ADDRESS_TYPE address_type_v = ECS_SAMPLER_ADDRESS_WRAP;
+		ECS_SAMPLER_ADDRESS_TYPE address_type_w = ECS_SAMPLER_ADDRESS_WRAP;
+
+		unsigned int max_anisotropic_level = 4;
+
+		// Adjust the mip which is being sample (i.e. if the GPU calculates mip 2 and mip_bias is 1
+		// it will sample at level 3)
+		float mip_bias = 0.0f;
+
+		// Which is the biggest mip level accessible (0 is the biggest, mip_count - 1 the smallest)
+		unsigned int min_lod = 0;
+		// Which is the smallest mip level accessible (must be greater than min_lod)
+		unsigned int max_lod = UINT_MAX;
+
+		// Used when address_type_u/v/w is set to ECS_SAMPLER_ADDRESS_BORDER
+		ColorFloat border_color;
+	};
 
 	struct ECSENGINE_API VertexBuffer {
 		ECS_INLINE VertexBuffer() : buffer(nullptr), stride(0), size(0) {}
@@ -769,15 +886,6 @@ namespace ECSEngine {
 		ID3D11Texture2D* tex;
 	};
 
-	enum TextureCubeFace {
-		ECS_TEXTURE_CUBE_X_POS,
-		ECS_TEXTURE_CUBE_X_NEG,
-		ECS_TEXTURE_CUBE_Y_POS,
-		ECS_TEXTURE_CUBE_Y_NEG,
-		ECS_TEXTURE_CUBE_Z_POS,
-		ECS_TEXTURE_CUBE_Z_NEG
-	};
-
 	struct ECSENGINE_API ResourceView {
 		ECS_INLINE ResourceView() : view(nullptr) {}
 		ECS_INLINE ResourceView(ID3D11ShaderResourceView* _view) : view(_view) {}
@@ -889,15 +997,6 @@ namespace ECSEngine {
 
 		ID3D11UnorderedAccessView* view;
 	};
-
-	// Releases the target resource as well
-	// This function does not take into account the graphics object bookkeeping
-	template<typename View>
-	ECS_INLINE void ReleaseGraphicsView(View view) {
-		ID3D11Resource* resource = view.GetResource();
-		view.Release();
-		resource->Release();
-	}
 
 	struct ECSENGINE_API ConstantBuffer {
 		ECS_INLINE ConstantBuffer() : buffer(nullptr) {}
@@ -1057,33 +1156,6 @@ namespace ECSEngine {
 		size_t element_count;
 	};
 
-	struct SamplerDescriptor {
-		inline void SetAddressType(ECS_SAMPLER_ADDRESS_TYPE type) {
-			address_type_u = type;
-			address_type_v = type;
-			address_type_w = type;
-		}
-
-		ECS_SAMPLER_FILTER_TYPE filter_type = ECS_SAMPLER_FILTER_LINEAR;
-		ECS_SAMPLER_ADDRESS_TYPE address_type_u = ECS_SAMPLER_ADDRESS_WRAP;
-		ECS_SAMPLER_ADDRESS_TYPE address_type_v = ECS_SAMPLER_ADDRESS_WRAP;
-		ECS_SAMPLER_ADDRESS_TYPE address_type_w = ECS_SAMPLER_ADDRESS_WRAP;
-
-		unsigned int max_anisotropic_level = 4;
-
-		// Adjust the mip which is being sample (i.e. if the GPU calculates mip 2 and mip_bias is 1
-		// it will sample at level 3)
-		float mip_bias = 0.0f;
-
-		// Which is the biggest mip level accessible (0 is the biggest, mip_count - 1 the smallest)
-		unsigned int min_lod = 0;
-		// Which is the smallest mip level accessible (must be greater than min_lod)
-		unsigned int max_lod = UINT_MAX;
-
-		// Used when address_type_u/v/w is set to ECS_SAMPLER_ADDRESS_BORDER
-		ColorFloat border_color;
-	};
-
 	struct ECSENGINE_API SamplerState {
 		ECS_INLINE SamplerState() : sampler(nullptr) {}
 		ECS_INLINE SamplerState(ID3D11SamplerState* _sampler) : sampler(_sampler) {}
@@ -1205,19 +1277,23 @@ namespace ECSEngine {
 
 	struct RenderDestination {
 		// Does not take into account the graphics object bookkeeping
-		inline void Release() {
+		ECS_INLINE void Release() {
 			ReleaseGraphicsView(render_view);
 			ReleaseGraphicsView(depth_view);
 			// The resource view interface needs to be released solo
 			// because the underlying texture will be released with the previous
 			// render view call
 			output_view.Release();
+			if (render_ua_view.Interface() != nullptr) {
+				render_ua_view.Release();
+			}
 		}
 
 		// This can be used to use the render as input for other phases
 		ResourceView output_view;
 		RenderTargetView render_view;
 		DepthStencilView depth_view;
+		UAView render_ua_view;
 	};
 
 	struct ECS_REFLECT OrientedPoint {

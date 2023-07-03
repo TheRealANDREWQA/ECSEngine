@@ -4,6 +4,7 @@
 #include "EditorState.h"
 #include "../Modules/Module.h"
 #include "../Assets/EditorSandboxAssets.h"
+#include "../Assets/AssetManagement.h"
 
 #include "ECSEngineComponentsAll.h"
 #include "ECSEngineForEach.h"
@@ -229,12 +230,8 @@ Entity CopySandboxEntity(
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
-	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-
-	if (entity_manager->ExistsEntity(entity)) {
-		Entity destination_entity;
-		entity_manager->CopyEntityCommit(entity, 1, true, &destination_entity);
-		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
+	Entity destination_entity;
+	if (CopySandboxEntities(editor_state, sandbox_index, entity, 1, &destination_entity, viewport)) {
 		return destination_entity;
 	}
 	else {
@@ -258,6 +255,15 @@ bool CopySandboxEntities(
 	if (entity_manager->ExistsEntity(entity)) {
 		entity_manager->CopyEntityCommit(entity, count, copied_entities);
 		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
+
+		// Increment the reference count for all assets that this entity references
+		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, entity_assets, 128);
+		GetSandboxEntityAssets(editor_state, sandbox_index, entity, &entity_assets, viewport);
+
+		for (unsigned int index = 0; index < entity_assets.size; index++) {
+			IncrementAssetReferenceInSandbox(editor_state, entity_assets[index].handle, entity_assets[index].type, sandbox_index, count);
+		}
+
 		return true;
 	}
 	else {

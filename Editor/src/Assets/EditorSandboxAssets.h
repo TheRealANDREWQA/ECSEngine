@@ -86,6 +86,11 @@ void GetLinkComponentWithAssetFieldsShared(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Increments the reference count for that asset in the given sandbox
+void IncrementAssetReferenceInSandbox(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index, unsigned int count = 1);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // This check the database associated with the sandbox to see if the asset appears in that database
 bool IsAssetReferencedInSandbox(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
 

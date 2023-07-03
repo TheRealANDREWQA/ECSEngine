@@ -181,7 +181,7 @@ namespace ECSEngine {
 
 	void GLTFRenderThumbnail(RenderTargetView target, Graphics* graphics, const Mesh* mesh, GLTFThumbnailInfo info, uint2 texture_size) {
 		// Create a cleared depth stencil view
-		GraphicsTexture2DDescriptor depth_stencil_descriptor;
+		Texture2DDescriptor depth_stencil_descriptor;
 		depth_stencil_descriptor.size = texture_size;
 		depth_stencil_descriptor.bind_flag = ECS_GRAPHICS_BIND_DEPTH_STENCIL;
 		depth_stencil_descriptor.mip_levels = 1;
@@ -204,7 +204,7 @@ namespace ECSEngine {
 		GLTFThumbnailInfo info = DetermineObjectInitialBounds(data->graphics, data->mesh);
 
 		// Create the texture
-		GraphicsTexture2DDescriptor texture_desc;
+		Texture2DDescriptor texture_desc;
 		texture_desc.bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE | ECS_GRAPHICS_BIND_RENDER_TARGET;
 		texture_desc.usage = ECS_GRAPHICS_USAGE_DEFAULT;
 		texture_desc.mip_levels = 1;
@@ -214,7 +214,7 @@ namespace ECSEngine {
 		Texture2D texture = data->graphics->CreateTexture(&texture_desc);
 		ResourceView resource_view = data->graphics->CreateTextureShaderViewResource(texture);
 		// Create a temporary render target view
-		RenderTargetView render_view = data->graphics->CreateRenderTargetView(texture, 0, true);
+		RenderTargetView render_view = data->graphics->CreateRenderTargetView(texture, 0, ECS_GRAPHICS_FORMAT_UNKNOWN, true);
 		
 		data->thumbnail_to_update->info = info;
 		data->thumbnail_to_update->texture = resource_view;
@@ -239,7 +239,7 @@ namespace ECSEngine {
 		data->thumbnail->info.object_rotation += data->rotation_delta;
 
 		// Create a new render target from the texture
-		RenderTargetView render_view = data->graphics->CreateRenderTargetView(initial_texture, 0, true);
+		RenderTargetView render_view = data->graphics->CreateRenderTargetView(initial_texture, 0, ECS_GRAPHICS_FORMAT_UNKNOWN, true);
 
 		GLTFRenderThumbnail(render_view, data->graphics, data->mesh, data->thumbnail->info, texture_dimensions);
 		render_view.Release();

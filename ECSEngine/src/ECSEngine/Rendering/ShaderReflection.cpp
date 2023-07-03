@@ -1551,6 +1551,46 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
+	bool ShaderReflection::ReflectComputeShaderDispatchSize(Stream<char> source_code, uint3* dispatch_size) const
+	{
+		size_t token_size = strlen("numthreads");
+		Stream<char> search_space = source_code;
+		Stream<char> tag = function::FindFirstToken(search_space, "numthreads");
+		while (tag.size > 0) {
+			Stream<char> previous_space = { search_space.buffer, function::PointerDifference(tag.buffer, search_space.buffer) / sizeof(char) };
+			Stream<char> previous_new_line = function::FindCharacterReverse(previous_space, '\n');
+			Stream<char> next_new_line = function::FindFirstCharacter(tag, '\n');
+
+			// Check to see that it is not a simple variable
+			previous_space = function::SkipWhitespace(previous_space, -1);
+
+			if (previous_space[previous_space.size - 1] == '[') {
+				// Now check forwards
+				Stream<char> remaining_space = { tag.buffer + token_size, function::PointerDifference(next_new_line.buffer, tag.buffer + token_size) / sizeof(char) };
+				Stream<char> closing_bracket = function::FindFirstCharacter(remaining_space, ']');
+				if (closing_bracket.size > 0) {
+					Stream<char> opened_parenthese = function::FindFirstCharacter(remaining_space, '(');
+					Stream<char> closed_paranthese = function::FindFirstCharacter(remaining_space, ')');
+					if (opened_parenthese.size > 0 && closed_paranthese.size > 0) {
+						Stream<char> argument_range = { opened_parenthese.buffer, function::PointerDifference(closed_paranthese.buffer, opened_parenthese.buffer) / sizeof(char) };
+						ECS_STACK_CAPACITY_STREAM(unsigned int, dispatch_sizes, 64);
+						function::ParseIntegers<unsigned int>(argument_range, ',', dispatch_sizes);
+						if (dispatch_sizes.size == 3) {
+							*dispatch_size = { dispatch_sizes[0], dispatch_sizes[1], dispatch_sizes[2] };
+							return true;
+						}
+					}
+				}
+			}
+
+			search_space = tag.AdvanceReturn(token_size);
+			tag = function::FindFirstToken(search_space, "numthreads");
+		}
+		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------------------------
+
 	Stream<char> VERTEX_SHADER_TYPE_KEYWORDS[] = {
 		STRING(SV_Position),
 		STRING(SV_POSITION),

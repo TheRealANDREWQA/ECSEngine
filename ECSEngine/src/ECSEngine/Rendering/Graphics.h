@@ -34,67 +34,9 @@ namespace ECSEngine {
 		bool create_swap_chain = true;
 	};
 
-	// Default arguments all but width; initial_data can be set to fill the texture
-	// The initial data is a stream of Stream<void> for each mip map data
-	struct GraphicsTexture1DDescriptor {
-		unsigned int width;
-		unsigned int array_size = 1u;
-		unsigned int mip_levels = 0u;
-		Stream<Stream<void>> mip_data = { nullptr, 0 };
-		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
-		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
-		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
-		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
-		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
-	};
-
-	// Size must always be initialized;
-	// The initial data is a stream of Stream<void> for each mip map data
-	struct GraphicsTexture2DDescriptor {
-		uint2 size;
-		unsigned int array_size = 1u;
-		unsigned int mip_levels = 0u;
-		unsigned int sample_count = 1u;
-		unsigned int sampler_quality = 0u;
-
-		Stream<Stream<void>> mip_data = { nullptr, 0 };
-		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
-		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
-		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
-		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
-		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
-	};
-
-	// Size must be set
-	// The initial data is a stream of Stream<void> for each mip map data
-	struct GraphicsTexture3DDescriptor {
-		uint3 size;
-		unsigned int array_size = 1u;
-		unsigned int mip_levels = 0u;
-
-		Stream<Stream<void>> mip_data = { nullptr, 0 };
-		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
-		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
-		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
-		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
-		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
-	};
-
-	// The initial data is a stream of Stream<void> for each mip map data
-	struct GraphicsTextureCubeDescriptor {
-		uint2 size;
-		unsigned int mip_levels = 0u;
-
-		Stream<Stream<void>> mip_data = { nullptr, 0 };
-		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
-		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
-		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
-		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
-		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
-	};
-
 	struct GraphicsRenderDestinationOptions {
 		bool gamma_corrected = true;
+		bool unordered_render_view = false;
 		bool no_stencil = false;
 		ECS_GRAPHICS_MISC_FLAGS render_misc = ECS_GRAPHICS_MISC_NONE;
 		ECS_GRAPHICS_MISC_FLAGS depth_misc = ECS_GRAPHICS_MISC_NONE;
@@ -143,6 +85,11 @@ namespace ECSEngine {
 		GraphicsViewport viewport;
 	};
 
+	enum GraphicsCachedVertexBuffer : unsigned char {
+		ECS_GRAPHICS_CACHED_VERTEX_BUFFER_QUAD,
+		ECS_GRAPHICS_CACHED_VERTEX_BUFFER_COUNT
+	};
+
 	enum GraphicsShaderHelpers : unsigned char {
 		ECS_GRAPHICS_SHADER_HELPER_CREATE_TEXTURE_CUBE,
 		ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_TEXTURE_CUBE,
@@ -150,14 +97,10 @@ namespace ECSEngine {
 		ECS_GRAPHICS_SHADER_HELPER_CREATE_SPECULAR_ENVIRONEMNT,
 		ECS_GRAPHICS_SHADER_HELPER_BRDF_INTEGRATION,
 		ECS_GRAPHICS_SHADER_HELPER_GLTF_THUMBNAIL,
-		ECS_GRAPHICS_SHADER_HELPER_HIGHLIGHT,
+		ECS_GRAPHICS_SHADER_HELPER_HIGHLIGHT_STENCIL,
+		ECS_GRAPHICS_SHADER_HELPER_HIGHLIGHT_BLEND,
+		ECS_GRAPHICS_SHADER_HELPER_VIEWPORT_QUAD,
 		ECS_GRAPHICS_SHADER_HELPER_COUNT
-	};
-
-	enum GraphicsDepthStencilHelpers : unsigned char {
-		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT_FIRST_PASS,
-		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT_SECOND_PASS,
-		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT
 	};
 
 	struct GraphicsShaderHelper {
@@ -165,6 +108,13 @@ namespace ECSEngine {
 		PixelShader pixel;
 		InputLayout input_layout;
 		SamplerState pixel_sampler;
+		ComputeShader compute;
+		uint3 compute_shader_dispatch_size;
+	};
+
+	enum GraphicsDepthStencilHelpers : unsigned char {
+		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT,
+		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT
 	};
 
 	enum ECS_GRAPHICS_DEVICE_ERROR : unsigned char {
@@ -756,17 +706,17 @@ namespace ECSEngine {
 
 		SamplerState CreateSamplerState(const SamplerDescriptor& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		Texture1D CreateTexture(const GraphicsTexture1DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		Texture1D CreateTexture(const Texture1DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		Texture2D CreateTexture(const GraphicsTexture2DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		Texture2D CreateTexture(const Texture2DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Must be called in a single threaded context because it uses the immediate context
 		// Cannot create mips for BC formats directly
 		ResourceView CreateTextureWithMips(Stream<void> first_mip, ECS_GRAPHICS_FORMAT format, uint2 size, bool temporary = false, DebugInfo debug_infp = ECS_DEBUG_INFO);
 
-		Texture3D CreateTexture(const GraphicsTexture3DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		Texture3D CreateTexture(const Texture3DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		TextureCube CreateTexture(const GraphicsTextureCubeDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		TextureCube CreateTexture(const TextureCubeDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ECS_GRAPHICS_FORMAT_UNKNOWN means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
@@ -816,11 +766,31 @@ namespace ECSEngine {
 
 		ResourceView CreateTextureShaderViewResource(TextureCube texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		RenderTargetView CreateRenderTargetView(Texture2D texture, unsigned int mip_level = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The specified format is needed only when creating a texture view from typeless formats
+		RenderTargetView CreateRenderTargetView(
+			Texture2D texture, 
+			unsigned int mip_level = 0,
+			ECS_GRAPHICS_FORMAT override_format = ECS_GRAPHICS_FORMAT_UNKNOWN,
+			bool temporary = false, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
-		RenderTargetView CreateRenderTargetView(TextureCube cube, TextureCubeFace face, unsigned int mip_level = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The specified format is needed only when creating a texture view from typeless formats
+		RenderTargetView CreateRenderTargetView(
+			TextureCube cube, 
+			TextureCubeFace face, 
+			unsigned int mip_level = 0,
+			ECS_GRAPHICS_FORMAT override_format = ECS_GRAPHICS_FORMAT_UNKNOWN,
+			bool temporary = false, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
-		DepthStencilView CreateDepthStencilView(Texture2D texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The specified format is needed only when creating a texture view from typeless formats
+		DepthStencilView CreateDepthStencilView(
+			Texture2D texture, 
+			bool temporary = false, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		ResourceView CreateBufferView(StandardBuffer buffer, ECS_GRAPHICS_FORMAT format, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
@@ -834,11 +804,32 @@ namespace ECSEngine {
 
 		UAView CreateUAView(IndirectBuffer buffer, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		UAView CreateUAView(Texture1D texture, unsigned int mip_slice = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The format can be specified (using typeless formats for example)
+		UAView CreateUAView(
+			Texture1D texture, 
+			unsigned int mip_slice = 0, 
+			ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_UNKNOWN, 
+			bool temporary = false, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
-		UAView CreateUAView(Texture2D texture, unsigned int mip_slice = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The format can be specified (using typeless formats for example)
+		UAView CreateUAView(
+			Texture2D texture, 
+			unsigned int mip_slice = 0,
+			ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_UNKNOWN,
+			bool temporary = false, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
-		UAView CreateUAView(Texture3D texture, unsigned int mip_slice = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The format can be specified (using typeless formats for example)
+		UAView CreateUAView(
+			Texture3D texture, 
+			unsigned int mip_slice = 0, 
+			ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_UNKNOWN,
+			bool temporary = false, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		RasterizerState CreateRasterizerState(const D3D11_RASTERIZER_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
@@ -893,7 +884,13 @@ namespace ECSEngine {
 
 		void DisableCulling(GraphicsContext* context, bool wireframe = false);
 
+		void DisableWireframe();
+
+		void DisableWireframe(GraphicsContext* context);
+
 		void Dispatch(uint3 dispatch_size);
+
+		void Dispatch(Texture2D texture, uint3 compute_shader_threads);
 		
 		void DispatchIndirect(IndirectBuffer indirect_buffer);
 
@@ -932,6 +929,10 @@ namespace ECSEngine {
 		void EnableCulling(bool wireframe = false);
 
 		void EnableCulling(GraphicsContext* context, bool wireframe = false);
+
+		void EnableWireframe();
+
+		void EnableWireframe(GraphicsContext* context);
 
 		CommandList FinishCommandList(bool restore_state = false, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
@@ -998,6 +999,8 @@ namespace ECSEngine {
 		bool ReflectShaderSamplers(Stream<char> source_code, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator) const;
 
 		bool ReflectShader(Stream<char> source_code, const ReflectedShader* reflected_shader) const;
+
+		bool ReflectComputeShaderDispatchSize(Stream<char> source_code, uint3* dispatch_size) const;
 
 #pragma endregion
 
@@ -1190,7 +1193,10 @@ namespace ECSEngine {
 
 #pragma endregion
 
-	//private:
+		struct CachedResources {
+			VertexBuffer vertex_buffer[ECS_GRAPHICS_CACHED_VERTEX_BUFFER_COUNT];
+		};
+
 		uint2 m_window_size;
 		GraphicsDevice* m_device;
 		IDXGISwapChain* m_swap_chain;
@@ -1202,6 +1208,7 @@ namespace ECSEngine {
 		DepthStencilView m_depth_stencil_view;
 		DepthStencilView m_current_depth_stencil;
 
+		CachedResources m_cached_resources;
 		ShaderReflection* m_shader_reflection;
 		MemoryManager* m_allocator;
 		CapacityStream<GraphicsShaderHelper> m_shader_helpers;
@@ -1419,6 +1426,8 @@ namespace ECSEngine {
 	);
 
 	ECSENGINE_API void Dispatch(uint3 dispatch_size, GraphicsContext* context);
+
+	ECSENGINE_API void Dispatch(Texture2D texture, uint3 compute_thread_sizes, GraphicsContext* context);
 
 	ECSENGINE_API void DispatchIndirect(IndirectBuffer buffer, GraphicsContext* context);
 

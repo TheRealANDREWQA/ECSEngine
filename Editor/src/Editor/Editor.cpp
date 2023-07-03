@@ -660,6 +660,10 @@ public:
 		//HRESULT resultssss = pixel_shader.shader->QueryInterface(__uuidof(IDXGIResource), (void**)&dxgi_resource);
 		//graphics_copy.BindPixelShader(pixel_shader);
 
+		DebugDrawer debug_drawer;
+		MemoryManager debug_drawer_allocator = DebugDrawer::DefaultAllocator(editor_state.GlobalMemoryManager());
+		debug_drawer.Initialize(&debug_drawer_allocator, editor_state.UIResourceManager(), 1);
+
 		while (true) {
 			auto run_application = [&](char application_quit_value) {
 				while (result == 0 && application_quit == application_quit_value) {
@@ -829,6 +833,23 @@ public:
 
 						// Refresh the graphics object since it might be changed
 						graphics = editor_state.UIGraphics();
+
+						//CoalescedMesh* trireme = editor_state.UIResourceManager()->LoadCoalescedMesh<true>(L"C:\\Users\\Andrei\\DivideEtImpera\\Assets\\trireme2_should_be_fine.glb");
+						//const Matrix CAMERA_MATRIX = MatrixPerspectiveFOV(60.0f, 16.0f / 10.0f, 0.035f, 1000.0f);
+						//debug_drawer.UpdateCameraMatrix(CAMERA_MATRIX);
+						//float3 TRANSLATION = { 0.0f, 0.0f, 5.0f };
+						////debug_drawer.DrawSphere(TRANSLATION, 0.2f, ECS_COLOR_GREEN);
+						////graphics->DisableWireframe();
+
+						//HighlightObjectElement elements[2];
+						//elements[0].is_coalesced = false;
+						//elements[0].mesh = &trireme->mesh;
+						//elements[0].gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION), MatrixIdentity(), MatrixScale({0.2f, 0.2f, 0.2f}), CAMERA_MATRIX);
+
+						//elements[1] = elements[0];
+						//elements[1].gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION + float3(0.0f, 0.5f, 0.0f)), MatrixIdentity(), MatrixScale({ 0.2f, 0.2f, 0.2f }), CAMERA_MATRIX);
+						//HighlightObject(graphics, ECS_COLOR_RED, { elements, 1 });
+						//HighlightObject(graphics, ECS_COLOR_MAGENTA, { elements + 1, 1 });
 
 						bool removed = graphics->SwapBuffers(0);
 						if (removed) {
