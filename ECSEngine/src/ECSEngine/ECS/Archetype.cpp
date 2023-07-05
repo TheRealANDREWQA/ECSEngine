@@ -415,7 +415,7 @@ namespace ECSEngine {
 	SharedComponentSignature Archetype::GetSharedSignature(unsigned int base_index) const
 	{
 		ECS_CRASH_RETURN_VALUE(base_index < m_base_archetypes.size, {}, "Incorrect base index {#} when trying to retrieve shared signature from archetype.", base_index);
-		return { (Component*)m_shared_components.indices, (SharedInstance*)m_base_archetypes[base_index].shared_instances, m_shared_components.count };
+		return { m_shared_components.indices, m_base_archetypes[base_index].shared_instances, m_shared_components.count };
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

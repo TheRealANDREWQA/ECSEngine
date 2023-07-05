@@ -2,6 +2,7 @@
 #include "EditorSandbox.h"
 #include "EditorState.h"
 #include "EditorEvent.h"
+#include "EditorPalette.h"
 #include "../Assets/EditorSandboxAssets.h"
 #include "../Modules/Module.h"
 #include "../Project/ProjectFolders.h"
@@ -32,6 +33,8 @@ using namespace ECSEngine;
 
 #define SANDBOX_FILE_HEADER_VERSION (0)
 #define SANDBOX_FILE_MAX_SANDBOXES (16)
+
+#define LAZY_EVALUATION_RUNTIME_SETTINGS 500
 
 struct SandboxFileHeader {
 	size_t version;
@@ -165,13 +168,21 @@ bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void BindSandboxGraphicsCamera(EditorState* editor_state, unsigned int sandbox_index)
+void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	SetSandboxCameraAspectRatio(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	SetSandboxCameraAspectRatio(editor_state, sandbox_index, viewport);
 	Camera camera = Camera(sandbox->camera_parameters);
 	camera.translation.z -= 5.0f;
-	SetRuntimeCamera(sandbox->sandbox_world.system_manager, camera);
+
+	SystemManager* system_manager = sandbox->sandbox_world.system_manager;
+	SetRuntimeCamera(system_manager, &camera);
+	SetEditorRuntime(system_manager);
+	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+		SetEditorRuntimeSelectColor(system_manager, EDITOR_SELECT_COLOR);
+		SetEditorRuntimeSelectedEntities(system_manager, sandbox->selected_entities);
+		SetEditorRuntimeTransformTool(system_manager, sandbox->transform_tool);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -384,6 +395,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->should_play = true;
 	sandbox->should_step = true;
 	sandbox->is_scene_dirty = false;
+	sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
 
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	sandbox->locked_count = 0;
@@ -422,7 +434,6 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 		sandbox->runtime_descriptor.resource_manager = nullptr;
 	}
 
-	sandbox->copy_world_status.unlock();
 	RegisterInspectorSandboxChange(editor_state);
 }
 
@@ -1224,6 +1235,10 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
 	editor_state->editor_components.SetManagerComponents(sandbox->sandbox_world.entity_manager);
 
+	// Initialize the selected entities
+	sandbox->selected_entities.Initialize(sandbox_allocator, 0);
+	sandbox->selected_entities_changed_counter = 0;
+
 	// Resize the textures for the viewport to a 1x1 texture such that rendering commands will fallthrough even
 	// when the UI has not yet run to resize them
 	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
@@ -1326,13 +1341,13 @@ void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_in
 GraphicsResourceSnapshot RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	SetSandboxGraphicsTextures(editor_state, sandbox_index, viewport);
-	BindSandboxGraphicsCamera(editor_state, sandbox_index);
+	BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, viewport);
 	return editor_state->RuntimeGraphics()->GetResourceSnapshot(editor_state->EditorAllocator());
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, GraphicsResourceSnapshot snapshot)
+void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, GraphicsResourceSnapshot snapshot, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	// Restore the graphics snapshot and deallocate it
 	bool are_resources_valid = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(snapshot);
@@ -1342,8 +1357,15 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 	}
 	snapshot.Deallocate(editor_state->EditorAllocator());
 
-	// Remove from the system manager the camera
-	RemoveRuntimeCamera(GetSandbox(editor_state, sandbox_index)->sandbox_world.system_manager);
+	// Remove from the system manager bound resources
+	SystemManager* system_manager = GetSandbox(editor_state, sandbox_index)->sandbox_world.system_manager;
+	RemoveRuntimeCamera(system_manager);
+	RemoveEditorRuntime(system_manager);
+	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+		RemoveEditorRuntimeSelectColor(system_manager);
+		RemoveEditorRuntimeSelectedEntities(system_manager);
+		RemoveEditorRuntimeTransformTool(system_manager);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1506,7 +1528,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		resource_snapshot.Deallocate(editor_state->EditorAllocator());
 
 		// Now the graphics snapshot will be restored as well
-		RenderSandboxFinishGraphics(editor_state, sandbox_index, graphics_snapshot);
+		RenderSandboxFinishGraphics(editor_state, sandbox_index, graphics_snapshot, viewport);
 
 		return true;
 	}
@@ -1523,6 +1545,33 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	}
 
 	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool RenderSandboxIsPending(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	// If the rendering is disabled also return is pending
+	if (!IsSandboxViewportRendering(editor_state, sandbox_index, viewport)) {
+		return true;
+	}
+
+	// Check to see if we already have a pending event - if we do, skip the call
+	bool pending_event = EditorHasEvent(editor_state, WaitCompilationRenderSandboxEvent);
+	if (pending_event) {
+		return true;
+	}
+
+	// We assume that the Graphics module won't modify any entities
+	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index);
+	if (in_stream_module_index == -1) {
+		return false;
+	}
+
+	// Check to see if the module is being compiled
+	const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_module_index);
+	bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
+	return is_being_compiled;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1804,6 +1853,31 @@ void WaitSandboxUnlock(const EditorState* editor_state, unsigned int sandbox_ind
 		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		TickWait<'!'>(15, sandbox->locked_count, (unsigned char)0);
 	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void TickSandboxesRuntimeSettings(EditorState* editor_state) {
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_RUNTIME_SETTINGS, LAZY_EVALUATION_RUNTIME_SETTINGS)) {
+		ReloadSandboxRuntimeSettings(editor_state);
+	}
+}
+
+void TickSandboxesSelectedEntities(EditorState* editor_state) {
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		if (sandbox->selected_entities_changed_counter > 0) {
+			RenderSandbox(editor_state, index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
+		}
+		sandbox->selected_entities_changed_counter = function::SaturateSub(sandbox->selected_entities_changed_counter, (unsigned char)1);
+	}
+}
+
+void TickSandboxes(EditorState* editor_state)
+{
+	TickSandboxesRuntimeSettings(editor_state);
+	TickSandboxesSelectedEntities(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

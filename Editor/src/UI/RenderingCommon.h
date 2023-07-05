@@ -7,7 +7,7 @@ struct EditorState;
 // Displays the texture on the entire content of the window. If the sandbox_index is -1 it will deduce it
 // from the drawer
 void DisplaySandboxTexture(
-	const EditorState* editor_state,
+	EditorState* editor_state,
 	UIDrawer& drawer,
 	EDITOR_SANDBOX_VIEWPORT viewport,
 	unsigned int sandbox_index = -1

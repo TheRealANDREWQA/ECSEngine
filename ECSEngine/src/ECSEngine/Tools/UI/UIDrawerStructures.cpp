@@ -491,7 +491,12 @@ namespace ECSEngine {
 			}
 
 			selected_labels.size = labels.size;
-			SetFirstSelectedLabel(labels.buffer);
+			if (labels.size > 0) {
+				SetFirstSelectedLabel(labels.buffer);
+			}
+			else {
+				first_selected_label.size = 0;
+			}
 
 			TriggerSelectable(action_data);
 		}
@@ -863,6 +868,52 @@ namespace ECSEngine {
 						AddOpenedLabel(action_data->system, untyped_label);
 					}
 				}
+			}
+		}
+
+		void UIDrawerLabelHierarchyData::UpdateMonitorSelection(UIConfigLabelHierarchyMonitorSelection* monitor_selection) const
+		{
+			// Deallocate the current labels
+			monitor_selection->Deallocate(label_size != 0);
+
+			if (label_size == 0) {
+				// Strings
+				Stream<Stream<char>> char_selected_labels = selected_labels.AsIs<Stream<char>>();
+				if (monitor_selection->is_capacity_selection) {
+					CapacityStream<Stream<char>>* destination_labels = (CapacityStream<Stream<char>>*)monitor_selection->capacity_selection;
+					ECS_ASSERT(char_selected_labels.size <= destination_labels->capacity);
+
+					destination_labels->size = char_selected_labels.size;
+					for (size_t index = 0; index < char_selected_labels.size; index++) {
+						destination_labels->buffer[index].InitializeAndCopy(monitor_selection->Allocator(), char_selected_labels[index]);
+					}
+				}
+				else {
+					monitor_selection->resizable_selection->Resize(char_selected_labels.size);
+					ResizableStream<Stream<char>>* destination_labels = (ResizableStream<Stream<char>>*)monitor_selection->resizable_selection;
+					for (size_t index = 0; index < char_selected_labels.size; index++) {
+						destination_labels->buffer[index].InitializeAndCopy(monitor_selection->Allocator(), char_selected_labels[index]);
+					}
+				}
+			}
+			else {
+				// Blittable data
+				if (monitor_selection->is_capacity_selection) {
+					monitor_selection->capacity_selection->Copy(selected_labels, label_size);
+				}
+				else {
+					monitor_selection->resizable_selection->Copy(selected_labels, label_size);
+				}
+			}
+
+			if (monitor_selection->boolean_changed_flag) {
+				*monitor_selection->is_changed = true;
+			}
+			else {
+				// Increase the counter by 2 in order to have all windows be notified
+				// Of the change - if there are windows A and B and B updates afterwards
+				// the count it will be then decremented and A will not see the change
+				(*monitor_selection->is_changed_counter) += 2;
 			}
 		}
 

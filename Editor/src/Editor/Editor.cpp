@@ -842,7 +842,7 @@ public:
 						////graphics->DisableWireframe();
 
 						//HighlightObjectElement elements[2];
-						//elements[0].is_coalesced = false;
+						//elements[0].is_submesh = false;
 						//elements[0].mesh = &trireme->mesh;
 						//elements[0].gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION), MatrixIdentity(), MatrixScale({0.2f, 0.2f, 0.2f}), CAMERA_MATRIX);
 

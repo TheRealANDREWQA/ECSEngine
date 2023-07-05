@@ -3594,6 +3594,21 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		void LabelHierarchyDeselect(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			if (IsClickableTrigger(action_data)) {
+				UIDrawerLabelHierarchyData* data = (UIDrawerLabelHierarchyData*)_data;
+				data->ChangeSelection({ nullptr, 0 }, action_data);
+				if (data->has_monitor_selection) {
+					data->UpdateMonitorSelection(&data->monitor_selection);
+				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
 		void LabelHierarchyChangeState(ActionData* action_data)
 		{
 			UI_UNPACK_ACTION_DATA;
@@ -3612,6 +3627,9 @@ namespace ECSEngine {
 				}
 				else {
 					data->hierarchy->RemoveOpenedLabel(system, label_storage);
+				}
+				if (data->hierarchy->has_monitor_selection) {
+					data->hierarchy->UpdateMonitorSelection(&data->hierarchy->monitor_selection);
 				}
 			}
 		}
@@ -3739,6 +3757,9 @@ namespace ECSEngine {
 					}
 					else {
 						data->hierarchy->ChangeSelection(untyped_data, action_data);
+					}
+					if (data->hierarchy->has_monitor_selection) {
+						data->hierarchy->UpdateMonitorSelection(&data->hierarchy->monitor_selection);
 					}
 				}
 				else {

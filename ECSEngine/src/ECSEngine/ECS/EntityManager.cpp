@@ -3850,6 +3850,17 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void* EntityManager::GetSharedComponent(Entity entity, Component component) {
+		return (void*)((const EntityManager*)this)->GetSharedComponent(entity, component);
+	}
+
+	const void* EntityManager::GetSharedComponent(Entity entity, Component component) const {
+		SharedInstance instance = GetSharedComponentInstance(component, entity);
+		return GetSharedData(component, instance);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	MemoryArena* EntityManager::GetComponentAllocator(Component component)
 	{
 		ECS_CRASH_RETURN_VALUE(ExistsComponent(component), nullptr, "The component {#} doesn't exist when retrieving its allocator.", GetComponentName(component));
@@ -4869,13 +4880,7 @@ namespace ECSEngine {
 
 	// If the entity doesn't have the component, it will return nullptr
 	void* EntityManager::TryGetComponent(Entity entity, Component component) {
-		EntityInfo info = GetEntityInfo(entity);
-		ArchetypeBase* base = GetBase(info.main_archetype, info.base_archetype);
-		unsigned char component_index = base->FindComponentIndex(component);
-		if (component_index == UCHAR_MAX) {
-			return nullptr;
-		}
-		return base->GetComponentByIndex(info.stream_index, component_index);
+		return (void*)((const EntityManager*)this)->TryGetComponent(entity, component);
 	}
 
 	// If the entity doesn't have the component, it will return nullptr
@@ -4887,6 +4892,22 @@ namespace ECSEngine {
 			return nullptr;
 		}
 		return base->GetComponentByIndex(info.stream_index, component_index);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void* EntityManager::TryGetSharedComponent(Entity entity, Component component) {
+		return (void*)((const EntityManager*)this)->TryGetSharedComponent(entity, component);
+	}
+
+	const void* EntityManager::TryGetSharedComponent(Entity entity, Component component) const {
+		EntityInfo info = GetEntityInfo(entity);
+		const Archetype* archetype = GetArchetype(info.main_archetype);
+		SharedInstance instance = archetype->GetBaseInstance(component, info.base_archetype);
+		if (instance.value == -1) {
+			return nullptr;
+		}
+		return GetSharedData(component, instance);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

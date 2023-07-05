@@ -10,16 +10,6 @@
 
 using namespace ECSEngine;
 
-ECS_THREAD_TASK(PerformTask) {
-	//static size_t value = 0;
-	//for (size_t index = 0; index < 100000; index++) {
-		//value *= index;
-	//}
-
-	//Camera camera;
-	//camera.SetPerspectiveProjection();
-}
-
 struct BasicDrawForEachData {
 	const Camera* camera;
 	Matrix camera_matrix;
@@ -126,17 +116,13 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 		graphics->BindMaterial(*mesh->material);
 
 		graphics->DrawCoalescedMeshCommand(*mesh->mesh);
+		graphics->EnableDepth();
 
-		HighlightObjectElement element;
-		element.is_coalesced = false;
-		element.mesh = &mesh->mesh->mesh;
-		element.gpu_mvp_matrix = mvp_matrix;
-		HighlightObject(graphics, ECS_COLOR_RED, { &element, 1 });
-
+		/*
 		float3 camera_distance = translation_value - data->camera->translation;
 		float distance = Length(camera_distance).First();
 
-		/*drawer->DrawAxes(
+		drawer->DrawAxes(
 			translation_value,
 			rotation_value,
 			GetConstantObjectSizeInPerspective(data->camera->fov, distance, 0.25f),
@@ -145,7 +131,7 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 			AxisZColor(),
 			{ false, true }
 		);
-		graphics->EnableDepth();*/
+		*/
 	}
 }
 
@@ -156,7 +142,7 @@ ECS_THREAD_TASK(RenderTask) {
 
 		Camera camera;
 
-		if (GetRuntimeCamera(world->system_manager, camera)) {
+		if (GetRuntimeCamera(world->system_manager, &camera)) {
 			Graphics* graphics = world->graphics;
 			DebugDrawer* drawer = world->debug_drawer;
 
@@ -204,14 +190,160 @@ ECS_THREAD_TASK(RenderTask) {
 			unique_components[2] = Scale::ID();
 			ForEachEntityCommitFunctor(world, BasicDrawForEach<true, true, true>, &for_each_data, { unique_components, 3 }, shared_signature);
 		}
-
-		world->graphics->GetContext()->Flush();
 	}
 }
 
 ECS_THREAD_TASK_TEMPLATE_BOOL(RenderTask);
 
 ECS_THREAD_TASK(RenderTaskInitialize) {
-	// Create all the necessary shaders, samplers, and other Graphics pipeline objects
-	
+	// Nothing to be performed at the moment
 }
+
+template<bool schedule_element>
+ECS_THREAD_TASK(RenderSelectables) {
+	if constexpr (!schedule_element) {
+		SystemManager* system_manager = world->system_manager;
+		EntityManager* entity_manager = world->entity_manager;
+		if (IsEditorRuntime(system_manager)) {
+			Camera camera;
+			if (GetRuntimeCamera(system_manager, &camera)) {
+				Color select_color = GetEditorRuntimeSelectColor(system_manager);
+				Stream<Entity> selected_entities = GetEditorRuntimeSelectedEntities(system_manager);
+				if (selected_entities.size > 0) {
+					Matrix camera_matrix = camera.GetViewProjectionMatrix();
+					// Highlight the entities - if they have meshes
+					size_t valid_entities = 0;
+					for (size_t index = 0; index < selected_entities.size; index++) {
+						bool has_render_mesh = entity_manager->HasSharedComponent(selected_entities[index], RenderMesh::ID());
+						valid_entities += has_render_mesh;
+					}
+
+					float3 translation_midpoint = { 0.0f, 0.0f, 0.0f };
+					float3 rotation_midpoint = { 0.0f, 0.0f, 0.0f };
+					if (valid_entities > 0) {
+						HighlightObjectElement* highlight_elements = nullptr;
+						size_t allocate_size = sizeof(highlight_elements[0]) * valid_entities;
+						bool stack_allocated = false;
+						if (allocate_size < ECS_KB * 64) {
+							// Use stack allocation
+							highlight_elements = (HighlightObjectElement*)ECS_STACK_ALLOC(allocate_size);
+							stack_allocated = true;
+						}
+						else {
+							highlight_elements = (HighlightObjectElement*)world->task_manager->AllocateTempBuffer(thread_id, allocate_size);
+						}
+
+						for (size_t index = 0; index < selected_entities.size; index++) {
+							const RenderMesh* render_mesh = (const RenderMesh*)entity_manager->TryGetSharedComponent(selected_entities[index], RenderMesh::ID());
+							if (render_mesh != nullptr) {
+								highlight_elements[index].is_submesh = false;
+								highlight_elements[index].mesh = &render_mesh->mesh->mesh;
+
+								Matrix entity_matrix;
+								const Translation* translation = (const Translation*)entity_manager->TryGetComponent(selected_entities[index], Translation::ID());
+								const Rotation* rotation = (const Rotation*)entity_manager->TryGetComponent(selected_entities[index], Rotation::ID());
+								const Scale* scale = (const Scale*)entity_manager->TryGetComponent(selected_entities[index], Scale::ID());
+
+								if (translation != nullptr) {
+									Matrix translation_matrix = MatrixTranslation(translation->value);
+									if (rotation != nullptr) {
+										Matrix rotation_matrix = QuaternionRotationMatrix(rotation->value);
+										if (scale != nullptr) {
+											entity_matrix = MatrixTRS(translation_matrix, rotation_matrix, MatrixScale(scale->value));
+										}
+										else {
+											entity_matrix = MatrixTR(translation_matrix, rotation_matrix);
+										}
+										rotation_midpoint += rotation->value;
+									}
+									else if (scale != nullptr) {
+										entity_matrix = MatrixTS(translation_matrix, MatrixScale(scale->value));
+									}
+									else {
+										entity_matrix = translation_matrix;
+									}
+									translation_midpoint += translation->value;
+								}
+								else if (rotation != nullptr) {
+									Matrix rotation_matrix = QuaternionRotationMatrix(rotation->value);
+									if (scale != nullptr) {
+										entity_matrix = MatrixRS(rotation_matrix, MatrixScale(scale->value));
+									}
+									else {
+										entity_matrix = rotation_matrix;
+									}
+									rotation_midpoint += rotation->value;
+								}
+								else if (scale != nullptr) {
+									entity_matrix = MatrixScale(scale->value);
+								}
+
+								highlight_elements[index].gpu_mvp_matrix = MatrixMVPToGPU(entity_matrix, camera_matrix);
+							}
+						}
+
+						HighlightObject(world->graphics, select_color, { highlight_elements, valid_entities });
+
+						if (!stack_allocated) {
+							world->task_manager->ClearThreadAllocator(thread_id);
+						}
+
+						translation_midpoint /= float3::Splat((float)valid_entities);
+						rotation_midpoint /= float3::Splat((float)valid_entities);
+
+						DebugDrawer* debug_drawer = world->debug_drawer;
+
+						float3 camera_distance = translation_midpoint - camera.translation;
+						float distance = Length(camera_distance).First();			
+
+						// Now display the aggregate tool
+						ECS_TRANSFORM_TOOL transform_tool = GetEditorRuntimeTransformTool(system_manager);
+						if (transform_tool != ECS_TRANSFORM_COUNT) {
+							// Display the gizmo at the midpoint
+							switch (transform_tool) {
+							case ECS_TRANSFORM_TRANSLATION:
+							{
+								debug_drawer->AddAxesThread(
+									thread_id, 
+									translation_midpoint, 
+									rotation_midpoint, 
+									GetConstantObjectSizeInPerspective(camera.fov, distance, 0.25f)
+								);
+							}
+								break;
+							case ECS_TRANSFORM_ROTATION:
+							{
+
+							}
+								break;
+							case ECS_TRANSFORM_SCALE:
+							{
+
+							}
+								break;
+							default:
+								ECS_ASSERT(false, "ECS_TRANSFORM_TOOL invalid value");
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+ECS_THREAD_TASK_TEMPLATE_BOOL(RenderSelectables);
+
+ECS_THREAD_TASK(RenderSelectablesInitialize) {
+	// Nothing to be performed at the moment
+}
+
+template<bool schedule_element>
+ECS_THREAD_TASK(RenderFlush) {
+	if constexpr (!schedule_element) {
+		world->debug_drawer->DrawAll(1.0f);
+		world->graphics->GetContext()->Flush();
+	}
+}
+
+ECS_THREAD_TASK_TEMPLATE_BOOL(RenderFlush);

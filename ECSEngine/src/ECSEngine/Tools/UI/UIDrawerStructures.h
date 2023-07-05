@@ -1055,6 +1055,62 @@ namespace ECSEngine {
 			UIActionHandler delete_handler = { nullptr };
 		};
 
+		struct UIConfigLabelHierarchyMonitorSelection {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_LABEL_HIERARCHY_MONITOR_SELECTION;
+			}
+
+			ECS_INLINE AllocatorPolymorphic Allocator() const {
+				return is_capacity_selection ? capacity_allocator : resizable_selection->allocator;
+			}
+
+			ECS_INLINE Stream<void> Selection() const {
+				return is_capacity_selection ? *capacity_selection : resizable_selection->ToStream();
+			}
+
+			ECS_INLINE Stream<Stream<char>> SelectionStrings() const {
+				return Selection().AsIs<Stream<char>>();
+			}
+
+			ECS_INLINE bool ShouldUpdate() const {
+				return boolean_changed_flag ? *is_changed : (*is_changed_counter) > 0;
+			}
+
+			ECS_INLINE void Deallocate(bool is_blittable) {
+				AllocatorPolymorphic allocator = Allocator();
+
+				if (!is_blittable) {
+					// Strings
+					Stream<void> selection = Selection();
+					Stream<Stream<char>> selection_strings = selection.AsIs<Stream<char>>();
+					for (size_t index = 0; index < selection.size; index++) {
+						selection_strings[index].Deallocate(allocator);
+					}
+				}
+				
+				if (is_capacity_selection) {
+					capacity_selection->size = 0;
+				}
+				else {
+					resizable_selection->FreeBuffer();
+				}
+			}
+
+			bool is_capacity_selection;
+			bool boolean_changed_flag;
+			union {
+				bool* is_changed;
+				unsigned char* is_changed_counter;
+			};
+			union {
+				struct {
+					CapacityStream<void>* capacity_selection;
+					AllocatorPolymorphic capacity_allocator;
+				};
+				ResizableStream<void>* resizable_selection;
+			};
+		};
+
 		// One of the texture or resource view must be specified
 		struct UIConfigMenuButtonSprite {
 			inline static size_t GetAssociatedBit() {
@@ -1668,6 +1724,8 @@ namespace ECSEngine {
 
 			void TriggerDrag(ActionData* action_data);
 
+			void UpdateMonitorSelection(UIConfigLabelHierarchyMonitorSelection* monitor_selection) const;
+
 			Stream<void> opened_labels;
 			CapacityStream<void> hovered_label;
 
@@ -1685,6 +1743,9 @@ namespace ECSEngine {
 
 			// These are coallesced into a single allocation
 			Stream<void> copied_labels;
+
+			UIConfigLabelHierarchyMonitorSelection monitor_selection;
+			bool has_monitor_selection;
 
 			// Value of 0 means no rename, 1 means just selected, 2 the label was copied
 			unsigned char is_rename_label;

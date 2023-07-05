@@ -1249,6 +1249,12 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			memcpy(buffer, memory, memory_size);
 			size = memory_size;
 		}
+		
+		ECS_INLINE void Copy(Stream<void> other, unsigned int element_byte_size) {
+			ECS_ASSERT(other.size <= capacity);
+			memcpy(buffer, other.buffer, other.size * element_byte_size);
+			size = other.size;
+		}
 
 		ECS_INLINE CapacityStream<void> Copy(AllocatorPolymorphic allocator) const {
 			CapacityStream<void> result;
@@ -1329,6 +1335,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			buffer = (void*)_buffer;
 			size = _size;
 			capacity = _capacity;
+
+			_buffer += _capacity;
 		}
 
 		void* buffer;
@@ -1353,9 +1361,19 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		unsigned int Add(Stream<void> data) {
 			if (size + data.size >= capacity) {
-				
+				Resize((unsigned int)((float)capacity * ECS_RESIZABLE_STREAM_FACTOR + 2));
 			}
 			memcpy((void*)((uintptr_t)buffer + size), data.buffer, data.size);
+			unsigned int offset = size;
+			size += data.size;
+			return offset;
+		}
+
+		unsigned int Add(Stream<void> data, unsigned int element_byte_size) {
+			if (size + data.size >= capacity) {
+				Resize((unsigned int)((float)capacity * ECS_RESIZABLE_STREAM_FACTOR + 2), element_byte_size);
+			}
+			memcpy((void*)((uintptr_t)buffer + size * element_byte_size), data.buffer, data.size * element_byte_size);
 			unsigned int offset = size;
 			size += data.size;
 			return offset;
@@ -1370,14 +1388,21 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size = count;
 		}
 
+		ECS_INLINE void Copy(const void* memory, unsigned int count, unsigned int element_byte_size) {
+			if (count != capacity) {
+				ResizeNoCopy(count, element_byte_size);
+			}
+			memcpy(buffer, memory, (size_t)count * (size_t)element_byte_size);
+			size = count;
+		}
+
 		// it will set the size
 		ECS_INLINE void Copy(Stream<void> other) {
 			Copy(other.buffer, other.size);
 		}
 
-		// it will set the size
-		ECS_INLINE void Copy(CapacityStream<void> other) {
-			Copy(other.buffer, other.size);
+		ECS_INLINE void Copy(Stream<void> other, unsigned int element_byte_size) {
+			Copy(other.buffer, other.size, element_byte_size);
 		}
 
 		ECS_INLINE ResizableStream<void> Copy(AllocatorPolymorphic allocator) const {
@@ -1401,8 +1426,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		// If the size is used as an element count instead of byte size
-		ECS_INLINE bool Equals(Stream<void> other, size_t element_size) const {
-			return size == other.size && memcmp(buffer, other.buffer, (size_t)size * element_size) == 0;
+		ECS_INLINE bool Equals(Stream<void> other, unsigned int element_size) const {
+			return size == other.size && memcmp(buffer, other.buffer, size * element_size) == 0;
 		}
 
 		void FreeBuffer() {

@@ -404,6 +404,13 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void TaskManager::ClearThreadAllocator(unsigned int thread_id)
+	{
+		m_thread_linear_allocators[thread_id]->Clear();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::ClearTemporaryAllocators()
 	{
 		ClearThreadAllocators();

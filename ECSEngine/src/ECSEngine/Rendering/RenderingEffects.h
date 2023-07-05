@@ -12,7 +12,7 @@ namespace ECSEngine {
 	struct CoalescedMesh;
 
 	struct HighlightObjectElement {
-		bool is_coalesced = false;
+		bool is_submesh = false;
 		// The matrix should be in GPU form
 		Matrix gpu_mvp_matrix;
 		union {

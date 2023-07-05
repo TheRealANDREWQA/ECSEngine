@@ -191,6 +191,9 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_FILTER = (size_t)1 << 51;
 		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_DEALLOCATE_LABEL = (size_t)1 << 52;
 		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS = (size_t)1 << 53;
+		// The selectable will fill in the selection when something is changed from the UI
+		// and update the UI when the selection is done somewhere else
+		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_MONITOR_SELECTION = (size_t)1 << 54;
 
 		constexpr size_t UI_CONFIG_FILESYSTEM_HIERARCHY_DO_NOT_INFER_X = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_FILESYSTEM_HIERARCHY_HASH_TABLE_CAPACITY = (size_t)1 << 46;
