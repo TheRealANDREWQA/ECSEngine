@@ -426,20 +426,28 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 			config.flag_count = 0;
 			// Now draw the hierarchy, if there is a sandbox at all
 			if (sandbox_count > 0) {
-				const EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+				EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
 
 				UIConfigLabelHierarchyFilter filter;
 				filter.filter = data->filter_string;
 				config.AddFlag(filter);
 
-				size_t LABEL_HIERARCHY_CONFIGURATION = UI_CONFIG_LABEL_HIERARCHY_FILTER | UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK | UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK
-					| UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS | UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL;
+				size_t LABEL_HIERARCHY_CONFIGURATION = UI_CONFIG_LABEL_HIERARCHY_FILTER | UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK 
+					| UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK | UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS 
+					| UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL | UI_CONFIG_LABEL_HIERARCHY_MONITOR_SELECTION;
 
 				UIConfigLabelHierarchySelectableCallback selectable;
 				selectable.callback = SelectableCallback;
 				selectable.data = data;
 				selectable.data_size = 0;
 				config.AddFlag(selectable);
+
+				UIConfigLabelHierarchyMonitorSelection monitor_selection;
+				monitor_selection.is_capacity_selection = false;
+				monitor_selection.boolean_changed_flag = false;
+				monitor_selection.is_changed_counter = &sandbox->selected_entities_changed_counter;
+				monitor_selection.resizable_selection = (ResizableStream<void>*)&sandbox->selected_entities;
+				config.AddFlag(monitor_selection);
 
 				UIConfigLabelHierarchyRightClick right_click_callback;
 				right_click_callback.callback = RightClickCallback;
@@ -508,6 +516,14 @@ void CreateEntitiesUI(EditorState* editor_state)
 
 	UIElementTransform window_transform = { ui_system->GetWindowPosition(window_index), ui_system->GetWindowScale(window_index) };
 	ui_system->CreateDockspace(window_transform, DockspaceType::FloatingHorizontal, window_index, false);
+
+	// Also trigger a re-update of the selected entities such that this newly created entities UI
+	// will update itself
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	if (sandbox_count > 0) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, 0);
+		sandbox->IncrementSelectedEntitiesCounter();
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------

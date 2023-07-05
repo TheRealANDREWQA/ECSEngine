@@ -1104,6 +1104,27 @@ namespace ECSEngine {
 		// Data must have components.count pointers
 		void GetComponentWithIndex(Entity entity, ComponentSignature components, void** data) const;
 
+		void* GetSharedComponent(Entity entity, Component component);
+
+		const void* GetSharedComponent(Entity entity, Component component) const;
+
+		// Works for both unique and shared
+		template<typename T>
+		ECS_INLINE void* GetComponent(Entity entity) {
+			return (void*)((const EntityManager*)this)->GetComponent<T>(entity);
+		}
+
+		// Works for both unique and shared
+		template<typename T>
+		ECS_INLINE const void* GetComponent(Entity entity) const {
+			if constexpr (T::IsShared()) {
+				return GetSharedComponent(entity, T::ID());
+			}
+			else {
+				return GetComponent(entity, T::ID());
+			}
+		}
+
 		MemoryArena* GetComponentAllocator(Component component);
 
 		AllocatorPolymorphic GetComponentAllocatorPolymorphic(Component component);
@@ -1246,6 +1267,17 @@ namespace ECSEngine {
 		bool HasSharedInstance(Entity entity, Component component, SharedInstance shared_instance) const;
 
 		bool HasSharedInstances(Entity entity, VectorComponentSignature components, const SharedInstance* instances, unsigned char component_count) const;
+
+		// Works for both unique and shared components
+		template<typename T>
+		ECS_INLINE bool HasComponent(Entity entity) const {
+			if constexpr (T::IsShared()) {
+				return HasSharedComponent(entity, T::ID());
+			}
+			else {
+				return HasComponent(entity, T::ID());
+			}
+		}
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1457,6 +1489,27 @@ namespace ECSEngine {
 
 		// If the entity doesn't have the component, it will return nullptr
 		const void* TryGetComponent(Entity entity, Component component) const;
+
+		// If the entity doesn't have the shared component, it will return nullptr
+		void* TryGetSharedComponent(Entity entity, Component component);
+
+		// If the entity doesn't have the shared component, it will return nullptr
+		const void* TryGetSharedComponent(Entity entity, Component component) const;
+
+		template<typename T>
+		ECS_INLINE void* TryGetComponent(Entity entity) {
+			return (void*)((const EntityManager*)this)->TryGetComponent<T>(entity);
+		}
+		
+		template<typename T>
+		ECS_INLINE const void* TryGetComponent(Entity entity) const {
+			if constexpr (T::IsShared()) {
+				return TryGetSharedComponent(entity, T::ID());
+			}
+			else {
+				return TryGetComponent(entity, T::ID());
+			}
+		}
 
 		// ---------------------------------------------------------------------------------------------------
 

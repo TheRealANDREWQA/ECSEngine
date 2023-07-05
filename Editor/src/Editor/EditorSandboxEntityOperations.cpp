@@ -124,6 +124,15 @@ void AddSandboxEntityComponentEx(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+void AddSandboxSelectedEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->selected_entities.Add(entity);
+	sandbox->IncrementSelectedEntitiesCounter();
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 void AttachEntityName(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -435,6 +444,11 @@ void DeleteSandboxEntity(
 
 		entity_manager->DeleteEntityCommit(entity);
 		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
+
+		// If this entity belongs to the selected group, remove it from there as well
+		RemoveSandboxSelectedEntity(editor_state, sandbox_index, entity);
+
+		RenderSandboxViewports(editor_state, sandbox_index, { 0, 0 }, true);
 	}
 }
 
@@ -524,6 +538,16 @@ SharedInstance FindOrCreateSharedComponentInstance(
 		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	}
 	return instance;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return sandbox->selected_entities.Find(entity, [](Entity entity) {
+		return entity;
+	});
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -848,6 +872,13 @@ const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, un
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+bool IsSandboxEntitySelected(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+{
+	return FindSandboxSelectedEntityIndex(editor_state, sandbox_index, entity) != -1;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 void ParentSandboxEntity(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -1016,6 +1047,20 @@ void RemoveSandboxComponentAssets(
 
 	// Unregister these assets
 	UnregisterSandboxAsset(editor_state, sandbox_index, unregister_elements);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+bool RemoveSandboxSelectedEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+{
+	unsigned int selected_index = FindSandboxSelectedEntityIndex(editor_state, sandbox_index, entity);
+	if (selected_index != -1) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		sandbox->selected_entities.RemoveSwapBack(selected_index);
+		sandbox->IncrementSelectedEntitiesCounter();
+		return true;
+	}
+	return false;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

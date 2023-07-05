@@ -23,7 +23,6 @@ bool DISPLAY_LOCKED_FILES_SIZE = false;
 #define LAZY_EVALUATION_MODULE_STATUS 500
 #define LAZY_EVALUATION_GRAPHICS_MODULE_STATUS 300
 #define LAZY_EVALUATION_TASK_ALLOCATOR_RESET 500
-#define LAZY_EVALUATION_RUNTIME_SETTINGS 500
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
@@ -159,14 +158,6 @@ void TickModuleStatus(EditorState* editor_state) {
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void TickSandboxRuntimeSettings(EditorState* editor_state) {
-	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_RUNTIME_SETTINGS, LAZY_EVALUATION_RUNTIME_SETTINGS)) {
-		ReloadSandboxRuntimeSettings(editor_state);
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------
-
 void TickEvents(EditorState* editor_state) {
 	editor_state->event_queue_lock.lock();
 
@@ -251,7 +242,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		}
 
 		TickModuleStatus(editor_state);
-		TickSandboxRuntimeSettings(editor_state);
+		TickSandboxes(editor_state);
 
 		DirectoryExplorerTick(editor_state);
 		FileExplorerTick(editor_state);

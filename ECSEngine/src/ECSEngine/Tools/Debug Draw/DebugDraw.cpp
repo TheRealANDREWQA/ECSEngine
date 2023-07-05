@@ -2965,7 +2965,7 @@ namespace ECSEngine {
 		total_memory += thread_capacity_stream_size * ECS_DEBUG_PRIMITIVE_COUNT;
 
 		// The locks will be padded to different cache lines
-		total_memory += (ECS_CACHE_LINE_SIZE + sizeof(SpinLock*)) * ECS_DEBUG_PRIMITIVE_COUNT;
+		total_memory += ECS_CACHE_LINE_SIZE * thread_count + sizeof(SpinLock*) * ECS_DEBUG_PRIMITIVE_COUNT;
 
 		// The string character bounds
 		total_memory += sizeof(float2) * (unsigned int)AlphabetIndex::Unknown;
@@ -3033,6 +3033,7 @@ namespace ECSEngine {
 			thread_locks[index]->value.store(0, ECS_RELAXED);
 			buffer += ECS_CACHE_LINE_SIZE;
 		}
+		string_character_bounds = (float2*)buffer;
 
 		AllocatorPolymorphic polymorphic_allocator = GetAllocatorPolymorphic(allocator);
 
@@ -3048,8 +3049,6 @@ namespace ECSEngine {
 		aabbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
 		oobbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
 		strings.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-
-		string_character_bounds = (float2*)buffer;
 
 #pragma region Primitive buffers
 

@@ -2,6 +2,7 @@
 #pragma once
 #include "ECSEngineRendering.h"
 #include "ECSEngineResources.h"
+#include "ECSEngineRuntime.h"
 #include "editorpch.h"
 #include "../Modules/ModuleDefinition.h"
 #include "ECSEngineReflectionMacros.h"
@@ -37,13 +38,19 @@ struct ECS_REFLECT EditorSandboxModule {
 // -------------------------------------------------------------------------------------------------------------
 
 struct ECS_REFLECT EditorSandbox {
-	inline ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
+	ECS_INLINE ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
 		return (ECSEngine::GlobalMemoryManager*)modules_in_use.allocator.allocator;
 	}
 
-	inline EditorSandbox& operator = (const EditorSandbox& other) {
+	ECS_INLINE EditorSandbox& operator = (const EditorSandbox& other) {
 		memcpy(this, &other, sizeof(*this));
 		return *this;
+	}
+
+	ECS_INLINE void IncrementSelectedEntitiesCounter() {
+		// We need to increase it by since some windows might have already rendered and not catch
+		// the update if we increment it by one
+		selected_entities_changed_counter += 2;
 	}
 
 	ECS_FIELDS_START_REFLECT;
@@ -64,6 +71,8 @@ struct ECS_REFLECT EditorSandbox {
 
 	// When the step button is clicked, if this sandbox should step
 	bool should_step;
+
+	ECSEngine::ECS_TRANSFORM_TOOL transform_tool;
 
 	ECSEngine::CameraParametersFOV camera_parameters;
 	ECSEngine::OrientedPoint camera_saved_orientations[EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT];
@@ -86,7 +95,9 @@ struct ECS_REFLECT EditorSandbox {
 
 	ECSEngine::EntityManager scene_entities;
 	ECSEngine::World sandbox_world;
-	ECSEngine::SpinLock copy_world_status;
+
+	ECSEngine::ResizableStream<ECSEngine::Entity> selected_entities;
+	unsigned char selected_entities_changed_counter;
 };
 
 // -------------------------------------------------------------------------------------------------------------
@@ -109,7 +120,7 @@ bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_i
 
 // -------------------------------------------------------------------------------------------------------------
 
-void BindSandboxGraphicsCamera(EditorState* editor_state, unsigned int sandbox_index);
+void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -479,7 +490,7 @@ ECSEngine::GraphicsResourceSnapshot RenderSandboxInitializeGraphics(EditorState*
 // -------------------------------------------------------------------------------------------------------------
 
 // The snapshot must be given from the Initialize call
-void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::GraphicsResourceSnapshot snapshot);
+void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::GraphicsResourceSnapshot snapshot, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -492,6 +503,14 @@ bool RenderSandbox(
 	EDITOR_SANDBOX_VIEWPORT viewport, 
 	ECSEngine::uint2 new_size = { 0, 0 }, 
 	bool disable_logging = false
+);
+
+// Returns true whether there is already a pending request or the module is being built
+// Else false
+bool RenderSandboxIsPending(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_VIEWPORT viewport
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -611,5 +630,9 @@ void UnlockSandbox(EditorState* editor_state, unsigned int sandbox_index);
 
 // Waits until the given sandbox becomes unlocked. If the sandbox index is -1 then it will wait for all sandboxes
 void WaitSandboxUnlock(const EditorState* editor_state, unsigned int sandbox_index = -1);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void TickSandboxes(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------

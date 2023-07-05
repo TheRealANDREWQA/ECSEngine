@@ -469,6 +469,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 	// Re-render the sandbox - for the scene and the game as well
 	RenderSandbox(data->editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	RenderSandbox(data->editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

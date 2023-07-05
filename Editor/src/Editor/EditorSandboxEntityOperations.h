@@ -47,6 +47,12 @@ void AddSandboxEntityComponentEx(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+void AddSandboxSelectedEntity(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity
+);
+
 void AttachEntityName(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -203,6 +209,13 @@ SharedInstance FindOrCreateSharedComponentInstance(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// Returns -1 if the entity is not selected
+unsigned int FindSandboxSelectedEntityIndex(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity
+);
+
 // Returns -1 if it doesn't exist
 Entity GetSandboxEntity(
 	const EditorState* editor_state, 
@@ -353,6 +366,12 @@ const ECSEngine::EntityManager* GetSandboxEntityManager(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+bool IsSandboxEntitySelected(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity
+);
+
 void ParentSandboxEntity(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -415,6 +434,13 @@ void RemoveSandboxComponentAssets(
 	const void* data,
 	bool shared,
 	Stream<LinkComponentAssetField> asset_fields = { nullptr, 0 }
+);
+
+// Returns true if the entity was selected and removed, else false
+bool RemoveSandboxSelectedEntity(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity
 );
 
 // Reverts the componet to default values

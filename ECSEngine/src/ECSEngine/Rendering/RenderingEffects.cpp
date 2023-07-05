@@ -57,7 +57,7 @@ namespace ECSEngine {
 			elements[index].gpu_mvp_matrix.Store(cbuffer_data);
 			graphics->UnmapBuffer(vertex_cbuffer.buffer);
 
-			if (elements[index].is_coalesced) {
+			if (elements[index].is_submesh) {
 				graphics->BindMesh(elements[index].coalesced_mesh->mesh);
 				Submesh submesh = elements[index].coalesced_mesh->submeshes[elements[index].submesh_index];
 				graphics->DrawIndexed(submesh.index_count, submesh.index_buffer_offset, submesh.vertex_buffer_offset);

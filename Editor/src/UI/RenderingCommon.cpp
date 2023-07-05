@@ -7,7 +7,7 @@
 
 // ------------------------------------------------------------------------------------------------------------
 
-void DisplaySandboxTexture(const EditorState* editor_state, UIDrawer& drawer, EDITOR_SANDBOX_VIEWPORT viewport, unsigned int sandbox_index)
+void DisplaySandboxTexture(EditorState* editor_state, UIDrawer& drawer, EDITOR_SANDBOX_VIEWPORT viewport, unsigned int sandbox_index)
 {
 	sandbox_index = sandbox_index == -1 ? GetWindowNameIndex(drawer) : sandbox_index;
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -22,6 +22,15 @@ void DisplaySandboxTexture(const EditorState* editor_state, UIDrawer& drawer, ED
 		config,
 		sandbox->viewport_transferred_texture[viewport]
 	);
+
+	if (RenderSandboxIsPending(editor_state, sandbox_index, viewport)) {
+		drawer.SpriteRectangle(
+			UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,
+			config,
+			ECS_TOOLS_UI_TEXTURE_MASK,
+			Color((unsigned char)0, 0, 0, 100)
+		);
+	}
 }
 
 // ------------------------------------------------------------------------------------------------------------

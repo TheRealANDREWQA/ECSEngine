@@ -13,7 +13,7 @@ enum EDITOR_SANDBOX_VIEWPORT : unsigned char {
 	EDITOR_SANDBOX_VIEWPORT_COUNT
 };
 
-inline ECSEngine::Stream<char> ViewportString(EDITOR_SANDBOX_VIEWPORT viewport) {
+ECS_INLINE ECSEngine::Stream<char> ViewportString(EDITOR_SANDBOX_VIEWPORT viewport) {
 	switch (viewport) {
 	case EDITOR_SANDBOX_VIEWPORT_SCENE:
 		return "Scene";
@@ -25,7 +25,7 @@ inline ECSEngine::Stream<char> ViewportString(EDITOR_SANDBOX_VIEWPORT viewport) 
 }
 
 // It will map the paused state to the runtime viewport
-inline EDITOR_SANDBOX_VIEWPORT EditorViewportTextureFromState(EDITOR_SANDBOX_STATE sandbox_state) {
+ECS_INLINE EDITOR_SANDBOX_VIEWPORT EditorViewportTextureFromState(EDITOR_SANDBOX_STATE sandbox_state) {
 	switch (sandbox_state) {
 	case EDITOR_SANDBOX_SCENE:
 		return EDITOR_SANDBOX_VIEWPORT_SCENE;

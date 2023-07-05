@@ -245,35 +245,35 @@ namespace ECSEngine {
 	ECS_INLINE AllocatorPolymorphic GetAllocatorPolymorphic(Allocator* allocator, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE) {
 		ECS_ALLOCATOR_TYPE allocator_type = ECS_ALLOCATOR_LINEAR;
 
-		if constexpr (std::is_same_v<Allocator, LinearAllocator>) {
+		if constexpr (std::is_same_v<std::remove_const_t<Allocator>, LinearAllocator>) {
 			allocator_type = ECS_ALLOCATOR_LINEAR;
 		}
-		else if constexpr (std::is_same_v<Allocator, StackAllocator>) {
+		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, StackAllocator>) {
 			allocator_type = ECS_ALLOCATOR_STACK;
 		}
-		else if constexpr (std::is_same_v<Allocator, MultipoolAllocator>) {
+		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, MultipoolAllocator>) {
 			allocator_type = ECS_ALLOCATOR_MULTIPOOL;
 		}
-		else if constexpr (std::is_same_v<Allocator, MemoryManager>) {
+		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, MemoryManager>) {
 			allocator_type = ECS_ALLOCATOR_MANAGER;
 		}
-		else if constexpr (std::is_same_v<Allocator, GlobalMemoryManager>) {
+		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, GlobalMemoryManager>) {
 			allocator_type = ECS_ALLOCATOR_GLOBAL_MANAGER;
 		}
-		else if constexpr (std::is_same_v<Allocator, MemoryArena>) {
+		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, MemoryArena>) {
 			allocator_type = ECS_ALLOCATOR_ARENA;
 		}
-		else if constexpr (std::is_same_v<Allocator, ResizableMemoryArena>) {
+		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, ResizableMemoryArena>) {
 			allocator_type = ECS_ALLOCATOR_RESIZABLE_ARENA;
 		}
-		else if constexpr (std::is_same_v<Allocator, ResizableLinearAllocator>) {
+		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, ResizableLinearAllocator>) {
 			allocator_type = ECS_ALLOCATOR_RESIZABLE_LINEAR;
 		}
 		else {
 			static_assert(false, "Incorrect allocator type for GetAllocatorPolymorphic");
 		}
 
-		return { allocator, allocator_type, allocation_type };
+		return { (void*)allocator, allocator_type, allocation_type };
 	}
 
 	ECSENGINE_API void SetInternalImageAllocator(DirectX::ScratchImage* image, AllocatorPolymorphic allocator);

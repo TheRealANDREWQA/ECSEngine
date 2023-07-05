@@ -42,7 +42,7 @@ namespace ECSEngine {
 		void* final_pointer = (void*)data;
 		if (index == -1) {
 			// Add padding for the alignment of the final pointer
-			size_t total_size_to_allocate = identifier.size + data_size + data_size > 0 ? alignof(void*) : 0;
+			size_t total_size_to_allocate = identifier.size + data_size + (data_size > 0 ? alignof(void*) : 0);
 			void* allocation = Allocate(allocator, total_size_to_allocate);
 			uintptr_t allocation_ptr = (uintptr_t)allocation;
 			identifier.CopyTo(allocation_ptr);
@@ -73,14 +73,14 @@ namespace ECSEngine {
 
 	void* SystemManager::BindData(Stream<char> identifier, const void* data, size_t data_size)
 	{
-		return BindBasic(identifier, data, data_size, &data_table, GetAllocatorPolymorphic(allocator));
+		return BindBasic(identifier, data, data_size, &data_table, Allocator());
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
 
 	void* SystemManager::BindTemporaryData(Stream<char> identifier, const void* data, size_t data_size)
 	{
-		return BindBasic(identifier, data, data_size, &temporary_table, GetAllocatorPolymorphic(&temporary_allocator));
+		return BindBasic(identifier, data, data_size, &temporary_table, TemporaryAllocator());
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------

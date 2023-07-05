@@ -80,6 +80,8 @@ namespace ECSEngine {
 	// Can store in itself at max ECS_TASK_COMPONENT_QUERY_COUNT for normal components
 	// and at max ECS_TASK_COMPONENT_QUERY_EXCLUDE_COUNT for exclude components
 	struct ECSENGINE_API TaskComponentQuery {
+		ECS_INLINE TaskComponentQuery() {}
+
 		void AddComponent(Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory);
 		
 		void AddSharedComponent(Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory);
@@ -88,27 +90,27 @@ namespace ECSEngine {
 
 		void AddSharedComponentExclude(Component component, AllocatorPolymorphic temp_memory);
 
-		inline const Component* Components() const {
+		ECS_INLINE const Component* Components() const {
 			return component_count > ECS_TASK_COMPONENT_QUERY_COUNT ? components_ptr : components;
 		}
 
-		inline const Component* SharedComponents() const {
+		ECS_INLINE const Component* SharedComponents() const {
 			return shared_component_count > ECS_TASK_COMPONENT_QUERY_COUNT ? shared_components_ptr : shared_components;
 		}
 
-		inline const ECS_ACCESS_TYPE* ComponentAccess() const {
+		ECS_INLINE const ECS_ACCESS_TYPE* ComponentAccess() const {
 			return component_count > ECS_TASK_COMPONENT_QUERY_COUNT ? component_access_ptr : component_access;
 		}
 
-		inline const ECS_ACCESS_TYPE* SharedComponentAccess() const {
+		ECS_INLINE const ECS_ACCESS_TYPE* SharedComponentAccess() const {
 			return shared_component_count > ECS_TASK_COMPONENT_QUERY_COUNT ? shared_component_access_ptr : shared_component_access;
 		}
 
-		inline const Component* ExcludeComponents() const {
+		ECS_INLINE const Component* ExcludeComponents() const {
 			return exclude_component_count > ECS_TASK_COMPONENT_QUERY_EXCLUDE_COUNT ? exclude_components_ptr : exclude_components;
 		}
 
-		inline const Component* ExcludeSharedComponents() const {
+		ECS_INLINE const Component* ExcludeSharedComponents() const {
 			return exclude_shared_component_count > ECS_TASK_COMPONENT_QUERY_EXCLUDE_COUNT ? exclude_shared_components_ptr : exclude_shared_components;
 		}
 

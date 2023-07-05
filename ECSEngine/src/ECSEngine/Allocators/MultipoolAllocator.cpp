@@ -33,16 +33,17 @@ namespace ECSEngine {
 	bool MultipoolAllocator::Deallocate(const void* block) {
 		// Calculating the start index of the block by reading the byte metadata 
 		uintptr_t byte_offset_position = (uintptr_t)block - (uintptr_t)m_buffer - 1;
+		unsigned char byte_offset = m_buffer[byte_offset_position];
 		if constexpr (trigger_error_if_not_found) {
-			ECS_ASSERT(m_buffer[byte_offset_position] < ECS_CACHE_LINE_SIZE);
+			ECS_ASSERT(byte_offset < ECS_CACHE_LINE_SIZE);
 		}
 		else {
-			if (m_buffer[byte_offset_position] >= ECS_CACHE_LINE_SIZE) {
+			if (byte_offset >= ECS_CACHE_LINE_SIZE) {
 				// Exit if the alignment is very high
 				return false;
 			}
 		}
-		return m_range.Free<trigger_error_if_not_found>((unsigned int)(byte_offset_position - m_buffer[byte_offset_position]));
+		return m_range.Free<trigger_error_if_not_found>((unsigned int)(byte_offset_position - byte_offset));
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(bool, MultipoolAllocator::Deallocate, const void*);

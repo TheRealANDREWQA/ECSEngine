@@ -72,9 +72,20 @@ namespace ECSEngine {
 	};
 
 	struct Component {
-		ECS_INLINE Component& operator = (unsigned short _value) {
+		ECS_INLINE Component() : value(-1) {}
+		ECS_INLINE Component(short _value) : value(_value) {}
+
+		ECS_INLINE Component& operator = (short _value) {
 			value = _value;
 			return *this;
+		}
+
+		ECS_INLINE bool operator == (Component other) const {
+			return value == other.value;
+		}
+
+		ECS_INLINE bool operator != (Component other) const {
+			return value != other.value;
 		}
 
 		ECS_INLINE unsigned int Hash() const {
@@ -87,14 +98,6 @@ namespace ECSEngine {
 
 		short value;
 	};
-
-	ECS_INLINE bool operator == (const Component& lhs, const Component& rhs) {
-		return lhs.value == rhs.value;
-	}
-
-	ECS_INLINE bool operator != (const Component& lhs, const Component& rhs) {
-		return !(lhs == rhs);
-	}
 
 	struct SharedInstance {
 		short value;

@@ -141,6 +141,8 @@ namespace ECSEngine {
 
 		void ClearThreadAllocators();
 
+		void ClearThreadAllocator(unsigned int thread_id);
+
 		void ClearTemporaryAllocators();
 
 		void ClearTaskStream();

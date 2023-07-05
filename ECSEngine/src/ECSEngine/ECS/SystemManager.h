@@ -18,6 +18,14 @@ namespace ECSEngine {
 		SystemManager() = default;
 		SystemManager(GlobalMemoryManager* global_memory);
 
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
+			return GetAllocatorPolymorphic(allocator);
+		}
+
+		ECS_INLINE AllocatorPolymorphic TemporaryAllocator() const {
+			return GetAllocatorPolymorphic(&temporary_allocator);
+		}
+
 		// Returns the pointer stored in the hash table
 		void* BindData(Stream<char> identifier, const void* data, size_t data_size = 0);
 

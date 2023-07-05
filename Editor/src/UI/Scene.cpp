@@ -67,8 +67,7 @@ void SceneRotationAction(ActionData* action_data) {
 	else if (mouse_tracker->RightButton() == MBRELEASED) {
 		mouse->DisableRawInput();
 	}
-
-	if (mouse_tracker->RightButton() == MBHELD) {
+	else if (mouse_tracker->RightButton() == MBHELD) {
 		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 	}
 

@@ -392,10 +392,10 @@ namespace ECSEngine {
 	};
 
 #define ECS_REGISTER_FOR_EACH_TASK(schedule_element, thread_task_function, module_function_data)	\
-	ECSEngine::Internal::RegisterForEachInfo __register_info##thread_task; \
-	__register_info##thread_task.module_data = module_function_data; \
-	__register_info##thread_task.query = &schedule_element.component_query; \
-	thread_task_function<true>(0, (ECSEngine::World*)&__register_info##thread_task, nullptr); \
+	ECSEngine::Internal::RegisterForEachInfo __register_info##thread_task_function; \
+	__register_info##thread_task_function.module_data = module_function_data; \
+	__register_info##thread_task_function.query = &schedule_element.component_query; \
+	thread_task_function<true>(0, (ECSEngine::World*)&__register_info##thread_task_function, nullptr); \
 	schedule_element.task_function = thread_task_function<false>; \
 	schedule_element.task_name = STRING(thread_task_function); \
 	module_function_data->tasks->AddAssert(schedule_element)

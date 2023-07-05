@@ -12716,6 +12716,9 @@ namespace ECSEngine {
 			IteratorPolymorphic* iterator
 		)
 		{
+			UIActionHandler whole_window_deselect = { LabelHierarchyDeselect, data, 0 };
+			SetWindowClickable(&whole_window_deselect);
+
 			float2 square_scale = GetSquareScale(scale.y);
 
 			// aliases for sprite texture info
@@ -12780,6 +12783,20 @@ namespace ECSEngine {
 				filter = filter_config->filter;
 			}
 
+			// Used by the determine selection
+			ActionData action_data = GetDummyActionData();
+
+			UIConfigLabelHierarchyMonitorSelection* monitor_selection = nullptr;
+			data->has_monitor_selection = false;
+			if (configuration & UI_CONFIG_LABEL_HIERARCHY_MONITOR_SELECTION) {
+				monitor_selection = (UIConfigLabelHierarchyMonitorSelection*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_MONITOR_SELECTION);
+				data->monitor_selection = *monitor_selection;
+				data->has_monitor_selection = true;
+				if (monitor_selection->ShouldUpdate()) {
+					data->ChangeSelection(monitor_selection->Selection(), &action_data);
+				}
+			}
+
 			// The aggregate phase - the "latest" phase of them all. Can't satisfy different phases
 			ECS_UI_DRAW_PHASE click_action_phase = std::max(selectable_callback_phase, drag_phase);
 			click_action_phase = std::max(click_action_phase, double_click_phase);
@@ -12808,9 +12825,6 @@ namespace ECSEngine {
 
 			unsigned int selection_first = -1;
 			unsigned int selection_last = -1;
-
-			// Used by the determine selection
-			ActionData action_data = GetDummyActionData();
 
 			// While the determine count is 1, add the labels to the selection
 			unsigned char determine_count = 0;
@@ -12996,6 +13010,8 @@ namespace ECSEngine {
 
 							AddGeneral(configuration, current_position, current_scale, { LabelHierarchyClickAction, click_data, click_data_size, click_action_phase });
 							AddDefaultHoverable(configuration, current_position, current_scale, current_color);
+							// Add a clickable such that the window will not appear like it can be moved
+							AddClickable(configuration, current_position, current_scale, { SkipAction, nullptr, 0 });
 						}
 
 						// Embedd the string into the data
@@ -13081,6 +13097,9 @@ namespace ECSEngine {
 				}
 
 				data->determine_selection = false;
+				if (monitor_selection != nullptr) {
+					data->UpdateMonitorSelection(monitor_selection);
+				}
 				// Call the selection callback
 				data->TriggerSelectable(&action_data);
 			}

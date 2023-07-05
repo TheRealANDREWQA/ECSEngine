@@ -1217,7 +1217,7 @@ namespace ECSEngine {
 			if (component_exists[index]) {
 				Component current_component = { (short)index };
 				auto info = search_matching_component(current_component);
-				if (info.found_at != index) {
+				if (info.found_at != current_component) {
 					entity_manager->m_unique_components[info.found_at].allocator = component_arena_pointers[index];
 					entity_manager->m_unique_components[info.found_at].size = info.info->component_fixup.component_byte_size;
 					entity_manager->m_unique_components[info.found_at].component_buffers_count = info.info->component_fixup.component_buffer_count;
@@ -1272,7 +1272,7 @@ namespace ECSEngine {
 				Component current_component = { (short)index };
 				auto info = search_matching_shared_component(current_component);
 
-				ECS_ASSERT(info.found_at != -1);
+				ECS_ASSERT(info.found_at.value != -1);
 				short new_id = info.found_at;
 				if (new_id != index) {
 					entity_manager->m_shared_components[new_id].info.allocator = shared_component_arena_pointers[index];
@@ -1930,7 +1930,7 @@ namespace ECSEngine {
 			if (component_exists[index]) {
 				Component current_component = { (short)index };
 				auto info = search_matching_component(current_component);
-				if (info.found_at != index) {
+				if (info.found_at != current_component) {
 					entity_manager->m_unique_components[info.found_at].allocator = component_arena_pointers[index];
 					entity_manager->m_unique_components[info.found_at].size = info.info->component_fixup.component_byte_size;
 					entity_manager->m_unique_components[info.found_at].component_buffers_count = info.info->component_fixup.component_buffer_count;
@@ -1989,7 +1989,7 @@ namespace ECSEngine {
 				Component current_component = { (short)index };
 				auto info = search_matching_shared_component(current_component);
 
-				ECS_ASSERT(info.found_at != -1);
+				ECS_ASSERT(info.found_at.value != -1);
 				short new_id = info.found_at;
 				if (new_id != index) {
 					entity_manager->m_shared_components[new_id].info.allocator = shared_component_arena_pointers[index];
