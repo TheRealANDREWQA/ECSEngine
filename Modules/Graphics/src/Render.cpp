@@ -298,16 +298,22 @@ ECS_THREAD_TASK(RenderSelectables) {
 
 						// Now display the aggregate tool
 						ECS_TRANSFORM_TOOL transform_tool = GetEditorRuntimeTransformTool(system_manager);
+						DebugDrawCallOptions debug_options;
+						debug_options.ignore_depth = true;
+						debug_options.wireframe = false;
 						if (transform_tool != ECS_TRANSFORM_COUNT) {
 							// Display the gizmo at the midpoint
 							switch (transform_tool) {
 							case ECS_TRANSFORM_TRANSLATION:
 							{
-								debug_drawer->AddAxesThread(
-									thread_id, 
+								debug_drawer->AddAxes(
 									translation_midpoint, 
 									rotation_midpoint, 
-									GetConstantObjectSizeInPerspective(camera.fov, distance, 0.25f)
+									GetConstantObjectSizeInPerspective(camera.fov, distance, 0.25f),
+									AxisXColor(),
+									AxisYColor(),
+									AxisZColor(),
+									debug_options
 								);
 							}
 								break;
@@ -341,7 +347,9 @@ ECS_THREAD_TASK(RenderSelectablesInitialize) {
 template<bool schedule_element>
 ECS_THREAD_TASK(RenderFlush) {
 	if constexpr (!schedule_element) {
+		GraphicsPipelineRenderState render_state = world->debug_drawer->GetPreviousRenderState();
 		world->debug_drawer->DrawAll(1.0f);
+		world->debug_drawer->RestorePreviousRenderState(&render_state);
 		world->graphics->GetContext()->Flush();
 	}
 }

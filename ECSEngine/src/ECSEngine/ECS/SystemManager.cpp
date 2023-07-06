@@ -36,8 +36,22 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------------------
 
 	// Returns the pointer stored in the hash table
-	void* BindBasic(Stream<char> identifier, const void* data, size_t data_size, HashTableDefault<void*>* table, AllocatorPolymorphic allocator) {
-		unsigned int index = table->Find(identifier);
+	// unsigned int FindTable(ResourceIdentifier identifier)
+	// void InsertIntoTable(void* final_pointer, ResourceIdentifier identifier)
+	// void* GetPointerFromIndex(unsigned int index)
+	// void ChangePointerFromIndex(unsigned int index, void* data)
+	template<typename FindTable, typename InsertIntoTable, typename GetPointerFromIndex, typename ChangePointerFromIndex>
+	void* BindBasic(
+		Stream<char> identifier, 
+		const void* data, 
+		size_t data_size, 
+		AllocatorPolymorphic allocator,
+		FindTable&& find_table,
+		InsertIntoTable&& insert_table, 
+		GetPointerFromIndex&& get_from_index,
+		ChangePointerFromIndex&& change_pointer_from_index
+	) {
+		unsigned int index = find_table(identifier);
 
 		void* final_pointer = (void*)data;
 		if (index == -1) {
@@ -54,18 +68,17 @@ namespace ECSEngine {
 				final_pointer = (void*)allocation_ptr;
 			}
 
-			InsertIntoDynamicTable(*table, allocator, final_pointer, identifier);
+			insert_table(final_pointer, identifier);		
 		}
 		else {
-			void** ptr = table->GetValuePtrFromIndex(index);
 			if (data_size > 0) {
-				memcpy(*ptr, data, data_size);
+				memcpy(get_from_index(index), data, data_size);
 			}
 			else {
-				*ptr = (void*)data;
+				change_pointer_from_index(index, (void*)data);
 			}
 
-			final_pointer = *ptr;
+			final_pointer = get_from_index(index);
 		}
 
 		return final_pointer;
@@ -73,14 +86,53 @@ namespace ECSEngine {
 
 	void* SystemManager::BindData(Stream<char> identifier, const void* data, size_t data_size)
 	{
-		return BindBasic(identifier, data, data_size, &data_table, Allocator());
+		return BindBasic(
+			identifier, 
+			data, 
+			data_size, 
+			Allocator(),
+			[&](ResourceIdentifier identifier) {
+				return data_table.Find(identifier);
+			},
+			[&](void* final_pointer, ResourceIdentifier identifier) {
+				DataPointer data_pointer;
+				data_pointer.SetData(data_size);
+				data_pointer.SetPointer(final_pointer);
+				InsertIntoDynamicTable(data_table, allocator, data_pointer, identifier);
+			},
+			[&](unsigned int index) {
+				return data_table.GetValueFromIndex(index).GetPointer();
+			},
+			[&](unsigned int index, void* data) {
+				DataPointer* data_pointer = data_table.GetValuePtrFromIndex(index);
+				data_pointer->SetPointer(data);
+			}
+		);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
 
 	void* SystemManager::BindTemporaryData(Stream<char> identifier, const void* data, size_t data_size)
 	{
-		return BindBasic(identifier, data, data_size, &temporary_table, TemporaryAllocator());
+		return BindBasic(
+			identifier, 
+			data, 
+			data_size, 
+			TemporaryAllocator(),
+			[&](ResourceIdentifier identifier) {
+				return temporary_table.Find(identifier);
+			},
+			[&](void* final_pointer, ResourceIdentifier identifier) {
+				InsertIntoDynamicTable(temporary_table, allocator, final_pointer, identifier);
+			},
+			[&](unsigned int index) {
+				return temporary_table.GetValueFromIndex(index);
+			},
+			[&](unsigned int index, void* data) {
+				void** pointer = temporary_table.GetValuePtrFromIndex(index);
+				*pointer = data;
+			}
+		);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
@@ -171,9 +223,9 @@ namespace ECSEngine {
 
 	void* SystemManager::GetData(Stream<char> identifier) const
 	{
-		void* data = nullptr;
-		if (data_table.TryGetValue(identifier, data)) {
-			return data;
+		DataPointer data_pointer = nullptr;
+		if (data_table.TryGetValue(identifier, data_pointer)) {
+			return data_pointer.GetPointer();
 		}
 		
 		ECS_CRASH_RETURN_VALUE(false, nullptr, "System Manager error: there is no data associated to {#}.", identifier);
@@ -216,9 +268,9 @@ namespace ECSEngine {
 
 	void* SystemManager::TryGetData(Stream<char> identifier) const
 	{
-		void* data = nullptr;
-		data_table.TryGetValue(identifier, data);
-		return data;
+		DataPointer data_pointer = nullptr;
+		data_table.TryGetValue(identifier, data_pointer);
+		return data_pointer.GetPointer();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
@@ -258,9 +310,16 @@ namespace ECSEngine {
 			ECS_CRASH_RETURN(false, "System Manager error: there is no data associated to {#} when trying to remove.", identifier);
 		}
 
-		// Deallocate the identifier as well
+		// Normally the identifier is coalesced with the data if it has a byte size to be copied
 		ResourceIdentifier allocated_identifier = data_table.GetIdentifierFromIndex(index);
 		allocator->Deallocate(allocated_identifier.ptr);
+
+		DataPointer ptr = data_table.GetValueFromIndex(index);
+		// It may have been allocated by the user
+		unsigned short data_size = ptr.GetData();
+		if (data_size == 0) {
+			allocator->DeallocateIfBelongs(ptr.GetPointer());
+		}
 		data_table.EraseFromIndex(index);
 	}
 

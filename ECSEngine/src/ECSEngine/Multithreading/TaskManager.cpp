@@ -538,8 +538,13 @@ namespace ECSEngine {
 			m_tasks[task_index].barrier.SetCountEx(-2);
 		}
 		else {
+			// Debug value at the moment
+			unsigned int value = 0;
 			if (target_value > 1 && barrier_value == -1) {
-				m_tasks[task_index].barrier.EnterEx();
+				value = m_tasks[task_index].barrier.EnterEx();
+				if (value == -2) {
+					__debugbreak();
+				}
 			}
 
 			// Wait while the serial part is being finished
