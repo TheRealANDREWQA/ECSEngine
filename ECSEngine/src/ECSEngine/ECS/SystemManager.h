@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "../Containers/HashTable.h"
 #include "../Allocators/LinearAllocator.h"
+#include "../Containers/DataPointer.h"
 
 namespace ECSEngine {
 
@@ -27,6 +28,8 @@ namespace ECSEngine {
 		}
 
 		// Returns the pointer stored in the hash table
+		// If the data_size is 0, when removing, if the data was allocated using
+		// the allocator from here it will deallocate that automatically
 		void* BindData(Stream<char> identifier, const void* data, size_t data_size = 0);
 
 		// Returns the pointer stored in the hash table
@@ -62,13 +65,15 @@ namespace ECSEngine {
 		// It returns nullptr if it doesn't exist
 		void* TryGetTemporaryData(Stream<char> identifier) const;
 
+		// If the data_size was 0 when the data was bound and if the data was allocated using
+		// the allocator from here, then it will deallocate that automatically
 		void RemoveData(Stream<char> identifier);
 
 		void RemoveSystemSetting(Stream<char> system_name);
 
 		MemoryManager* allocator;
 		LinearAllocator temporary_allocator;
-		HashTableDefault<void*> data_table;
+		HashTableDefault<DataPointer> data_table;
 		HashTableDefault<void*> temporary_table;
 		HashTableDefault<Stream<SystemManagerSetting>> system_settings;
 	};

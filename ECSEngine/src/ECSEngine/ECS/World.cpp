@@ -275,6 +275,10 @@ namespace ECSEngine {
 
 		// Finish the static task registration
 		world->task_manager->FinishStaticTasks();
+
+		if (world->debug_drawer != nullptr) {
+			world->debug_drawer->Clear();
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------

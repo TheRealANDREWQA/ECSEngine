@@ -3272,6 +3272,39 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void DebugDrawer::Clear()
+	{
+		lines.FreeChunks();
+		spheres.FreeChunks();
+		points.FreeChunks();
+		rectangles.FreeChunks();
+		crosses.FreeChunks();
+		circles.FreeChunks();
+		arrows.FreeChunks();
+		axes.FreeChunks();
+		triangles.FreeChunks();
+		aabbs.FreeChunks();
+		oobbs.FreeChunks();
+		strings.FreeChunks();
+
+		for (unsigned int index = 0; index < thread_count; index++) {
+			thread_lines[index].Clear();
+			thread_spheres[index].Clear();
+			thread_points[index].Clear();
+			thread_rectangles[index].Clear();
+			thread_crosses[index].Clear();
+			thread_circles[index].Clear();
+			thread_arrows[index].Clear();
+			thread_axes[index].Clear();
+			thread_triangles[index].Clear();
+			thread_aabbs[index].Clear();
+			thread_oobbs[index].Clear();
+			thread_strings[index].Clear();
+		}
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void DebugDrawer::CopyCharacterSubmesh(IndexBuffer index_buffer, unsigned int& buffer_offset, unsigned int alphabet_index) {
 		CopyBufferSubresource(
 			index_buffer,

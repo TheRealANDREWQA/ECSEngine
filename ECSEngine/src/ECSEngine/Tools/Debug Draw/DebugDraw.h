@@ -543,6 +543,8 @@ namespace ECSEngine {
 
 		void BindShaders(unsigned int index);
 
+		void Clear();
+
 		// It also bumps forward the buffer offset
 		void CopyCharacterSubmesh(IndexBuffer index_buffer, unsigned int& buffer_offset, unsigned int alphabet_index);
 
