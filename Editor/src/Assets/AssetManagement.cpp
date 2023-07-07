@@ -48,7 +48,7 @@ ECS_THREAD_TASK(CreateAssetAsyncTask) {
 		ActionData dummy_data;
 		dummy_data.data = data->callback.data;
 		dummy_data.additional_data = &info;
-		dummy_data.system = nullptr;
+		dummy_data.system = data->editor_state->ui_system;
 		data->callback.action(&dummy_data);
 
 		// Deallocate the data if it has the size > 0

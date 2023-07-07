@@ -73,7 +73,7 @@ void DirectoryExplorerHierarchySelectableCallback(ActionData* action_data) {
 void DirectoryExplorerRightClick(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	if (mouse_tracker->RightButton() == MBRELEASED) {
+	if (mouse->IsReleased(ECS_MOUSE_RIGHT)) {
 		UIDrawerFilesystemHierarchyRightClickData* right_click_data = (UIDrawerFilesystemHierarchyRightClickData*)_data;
 		DirectoryExplorerData* data = (DirectoryExplorerData*)right_click_data->data;
 
@@ -378,7 +378,7 @@ unsigned int CreateDirectoryExplorerWindow(EditorState* editor_state) {
 	return editor_state->ui_system->Create_Window(descriptor);
 }
 
-void DirectoryExplorerTick(EditorState* editor_state)
+void TickDirectoryExplorer(EditorState* editor_state)
 {
 	ProjectFile* project_file = editor_state->project_file;
 	unsigned int window_index = editor_state->ui_system->GetWindowFromName(DIRECTORY_EXPLORER_WINDOW_NAME);

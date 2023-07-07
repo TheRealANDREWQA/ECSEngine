@@ -2404,7 +2404,7 @@ namespace ECSEngine {
 					);
 
 					if (configuration & UI_CONFIG_ARRAY_REMOVE_ANYWHERE) {
-						if (system->m_keyboard->IsKeyPressed(HID::Key::Delete) && data->remove_anywhere_index != -1) {
+						if (system->m_keyboard->IsPressed(ECS_KEY_DELETE) && data->remove_anywhere_index != -1) {
 							ActionData action_data = GetDummyActionData();
 							action_data.data = &add_remove_data;
 							UIDrawerArrayRemoveAnywhereAction(&action_data);

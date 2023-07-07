@@ -23,7 +23,7 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE ColorFloat AxisZColor() {
-		return ColorFloat(0.0f, 0.0f, 1.0f);
+		return ColorFloat(0.0f, 0.25f, 1.0f);
 	}
 
 	struct DebugDrawCallOptions {

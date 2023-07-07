@@ -167,7 +167,7 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 			UI_UNPACK_ACTION_DATA;
 
 			NewSettingInputCallbackData* data = (NewSettingInputCallbackData*)_data;
-			if (keyboard->IsKeyDown(HID::Key::Enter)) {
+			if (keyboard->IsDown(ECS_KEY_ENTER)) {
 				// Check to see if it already exists
 				bool exists = function::FindString(data->data->new_name, data->names) != -1;
 				if (!exists && data->data->new_name.size > 0) {

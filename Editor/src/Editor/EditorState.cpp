@@ -14,6 +14,7 @@
 #include "../Assets/AssetManagement.h"
 #include "../Assets/AssetTick.h"
 #include "../UI/AssetOverrides.h"
+#include "EditorInputTick.h"
 
 using namespace ECSEngine;
 
@@ -244,8 +245,8 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickModuleStatus(editor_state);
 		TickSandboxes(editor_state);
 
-		DirectoryExplorerTick(editor_state);
-		FileExplorerTick(editor_state);
+		TickDirectoryExplorer(editor_state);
+		TickFileExplorer(editor_state);
 
 		TickEvents(editor_state);
 		TickPendingTasks(editor_state);
@@ -254,6 +255,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickAsset(editor_state);
 
 		TickUpdateModulesDLLImports(editor_state);
+		TickEditorInput(editor_state);
 	}
 }
 
@@ -344,7 +346,7 @@ void InitializeRuntime(EditorState* editor_state) {
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, HID::Mouse* mouse, HID::Keyboard* keyboard)
+void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mouse, Keyboard* keyboard)
 {
 	GlobalMemoryManager* hub_allocator = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
 	*hub_allocator = GlobalMemoryManager(ECS_KB * 16, 512, ECS_KB * 16);
@@ -366,13 +368,12 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, HID::Mouse*
 	console_task_manager->CreateThreads();
 
 	mouse->AttachToProcess({ hwnd });
-	mouse->SetAbsoluteMode();
-	*keyboard = HID::Keyboard(hub_allocator);
+	*keyboard = Keyboard(hub_allocator);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorStateInitialize(Application* application, EditorState* editor_state, HWND hWnd, HID::Mouse* mouse, HID::Keyboard* keyboard)
+void EditorStateInitialize(Application* application, EditorState* editor_state, HWND hWnd, Mouse* mouse, Keyboard* keyboard)
 {
 	// Create every single member using new for easier class construction
 	editor_state->editor_tick = TickPendingTasks;

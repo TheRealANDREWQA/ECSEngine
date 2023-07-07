@@ -83,13 +83,12 @@ namespace ECSEngine {
 			template<typename Action>
 			void RepeatKeyAction(
 				const UISystem* system,
-				const HID::KeyboardTracker* keyboard_tracker,
-				const HID::Keyboard* keyboard,
-				HID::Key key,
-				HID::Key& repeat_key_pressed,
+				const Keyboard* keyboard,
+				ECS_KEY key,
+				ECS_KEY& repeat_key_pressed,
 				Action&& action
 			) {
-				if (keyboard_tracker->IsKeyPressed(key) && repeat_key == HID::Key::None) {
+				if (keyboard->IsPressed(key) && repeat_key == ECS_KEY_NONE) {
 					repeat_key = key;
 					key_repeat_start = std::chrono::high_resolution_clock::now();
 					repeat_key_count = 0;
@@ -97,7 +96,7 @@ namespace ECSEngine {
 
 					action();
 				}
-				else if (keyboard->IsKeyDown(key) && repeat_key == key) {
+				else if (keyboard->IsDown(key) && repeat_key == key) {
 					repeat_key_pressed = key;
 					size_t duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - key_repeat_start).count();
 
@@ -168,7 +167,7 @@ namespace ECSEngine {
 			bool suppress_arrow_movement;
 			bool is_word_selection;
 			unsigned char word_click_count;
-			HID::Key repeat_key;
+			ECS_KEY repeat_key;
 			bool is_currently_selected;
 
 			bool display_tooltip;

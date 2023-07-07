@@ -3425,7 +3425,7 @@ namespace ECSEngine {
 				UI_UNPACK_ACTION_DATA;
 
 				DefaultActionData* data = (DefaultActionData*)_data;
-				if (mouse_tracker->RightButton() == MBPRESSED) {
+				if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
 					bool new_value = false;
 					if (data->default_value.is_pointer_variable) {
 						new_value = *data->default_value.pointer_variable;
@@ -3689,7 +3689,7 @@ namespace ECSEngine {
 				UI_UNPACK_ACTION_DATA;
 
 				ReturnToDefaultData* data = (ReturnToDefaultData*)_data;
-				if (mouse_tracker->RightButton() == MBPRESSED) {
+				if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
 					if (data->combo_box->mapping_byte_size > 0) {
 						// Find the index of the mapping
 						size_t mapping_index = function::SearchBytesEx(
@@ -5053,7 +5053,7 @@ namespace ECSEngine {
 							function::ConvertFloatToChars(temp_stream, *number, 3);
 							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 
-							if (drag_data.callback_on_release && system->m_mouse_tracker->LeftButton() != MBRELEASED) {
+							if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
 								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 							}
 						}
@@ -5131,7 +5131,7 @@ namespace ECSEngine {
 							function::ConvertDoubleToChars(temp_stream, *number, 3);
 							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 
-							if (drag_data.callback_on_release && system->m_mouse_tracker->LeftButton() != MBRELEASED) {
+							if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
 								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 							}
 						}
@@ -5187,7 +5187,7 @@ namespace ECSEngine {
 						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 						temp_stream.size = 0;
 
-						if (drag_data.callback_on_release && system->m_mouse_tracker->LeftButton() != MBRELEASED) {
+						if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
 							input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 						}
 					}
@@ -5200,7 +5200,7 @@ namespace ECSEngine {
 							function::ConvertIntToChars(temp_stream, (int64_t)*number);
 							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 
-							if (drag_data.callback_on_release && system->m_mouse_tracker->LeftButton() != MBRELEASED) {
+							if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
 								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
 							}
 						}
@@ -12112,14 +12112,14 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		bool UIDrawer::HasClicked(float2 position, float2 scale) {
-			return IsMouseInRectangle(position, scale) && system->m_mouse_tracker->LeftButton() == MBPRESSED;
+			return IsMouseInRectangle(position, scale) && system->m_mouse->IsPressed(ECS_MOUSE_LEFT);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		bool UIDrawer::IsClicked(float2 position, float2 scale)
 		{
-			return IsMouseInRectangle(position, scale) && system->m_mouse->GetState()->LeftButton();
+			return IsMouseInRectangle(position, scale) && system->m_mouse->IsDown(ECS_MOUSE_LEFT);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -12488,7 +12488,7 @@ namespace ECSEngine {
 						);
 
 						float2 action_scale = { horizontal_bound - initial_label_position.x, scale.y };
-						if (IsMouseInRectangle(initial_label_position, action_scale) && system->m_mouse_tracker->LeftButton() == MBRELEASED) {
+						if (IsMouseInRectangle(initial_label_position, action_scale) && system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
 							data->selected_label_temporary.Copy(label_stream);
 						}
 
@@ -12521,7 +12521,7 @@ namespace ECSEngine {
 						}
 
 						if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_RIGHT_CLICK) {
-							bool trigger = IsMouseInRectangle(initial_label_position, action_scale) && system->m_mouse_tracker->RightButton() == MBRELEASED;
+							bool trigger = IsMouseInRectangle(initial_label_position, action_scale) && system->m_mouse->IsReleased(ECS_MOUSE_RIGHT);
 							if (trigger) {
 								data->right_click_label_temporary.Copy(label_stream);
 								data->selected_label_temporary.Copy(label_stream);
@@ -13108,16 +13108,16 @@ namespace ECSEngine {
 				// Check if the window is focused
 				if (system->GetActiveWindow() == window_index) {
 					// Check for Ctrl+C, Ctrl+X, Ctrl+V and delete
-					if (system->m_keyboard->IsKeyDown(HID::Key::LeftControl)) {
-						if (system->m_keyboard->IsKeyPressed(HID::Key::C)) {
+					if (system->m_keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+						if (system->m_keyboard->IsPressed(ECS_KEY_C)) {
 							data->SetSelectionCut(false);
 							data->RecordSelection(&action_data);
 						}
-						else if (system->m_keyboard->IsKeyPressed(HID::Key::X)) {
+						else if (system->m_keyboard->IsPressed(ECS_KEY_X)) {
 							data->SetSelectionCut(true);
 							data->RecordSelection(&action_data);
 						}
-						else if (system->m_keyboard->IsKeyPressed(HID::Key::V)) {
+						else if (system->m_keyboard->IsPressed(ECS_KEY_V)) {
 							// Call the appropriate callback
 							// Only if there is no selection or just a single selection
 							if (data->copied_labels.size > 0 /*&& (data->selected_labels.size == 0 || data->selected_labels.size == 1)*/) {
@@ -13129,14 +13129,14 @@ namespace ECSEngine {
 								}
 							}
 						}
-						else if (system->m_keyboard->IsKeyPressed(HID::Key::D)) {
+						else if (system->m_keyboard->IsPressed(ECS_KEY_D)) {
 							data->SetSelectionCut(false);
 							data->RecordSelection(&action_data);
 
 							data->TriggerCopy(&action_data);
 						}
 					}
-					else if (system->m_keyboard_tracker->IsKeyPressed(HID::Key::Delete)) {
+					else if (system->m_keyboard->IsPressed(ECS_KEY_DELETE)) {
 						if (data->selected_labels.size > 0) {
 							data->TriggerDelete(&action_data);
 						}

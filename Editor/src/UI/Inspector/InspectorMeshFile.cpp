@@ -58,15 +58,15 @@ void InspectorMeshPreviewClickable(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)_data;
-	if (mouse_tracker->LeftButton() == MBPRESSED) {
+	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 		// Active the raw input
 		mouse->EnableRawInput();
 	}
-	else if (mouse_tracker->LeftButton() == MBHELD) {
+	else if (mouse->IsDown(ECS_MOUSE_LEFT)) {
 		data->rotation_delta.x += MESH_PREVIEW_ROTATION_DELTA_FACTOR * mouse_delta.y;
 		data->rotation_delta.y += MESH_PREVIEW_ROTATION_DELTA_FACTOR * mouse_delta.x;
 	}
-	else if (mouse_tracker->LeftButton() == MBRELEASED) {
+	else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 		// Disable the raw input
 		mouse->DisableRawInput();
 	}

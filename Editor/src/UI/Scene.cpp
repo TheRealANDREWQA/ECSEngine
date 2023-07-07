@@ -61,27 +61,27 @@ void SceneRotationAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SceneActionData* data = (SceneActionData*)_data;
-	if (mouse_tracker->RightButton() == MBPRESSED) {
+	if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
 		mouse->EnableRawInput();
 	}
-	else if (mouse_tracker->RightButton() == MBRELEASED) {
+	else if (mouse->IsReleased(ECS_MOUSE_RIGHT)) {
 		mouse->DisableRawInput();
 	}
-	else if (mouse_tracker->RightButton() == MBHELD) {
+	else if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
 		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 	}
 
 	EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxCurrentViewport(data->editor_state, data->sandbox_index);
 
-	if (mouse_tracker->RightButton() == MBHELD) {
+	if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
 		float rotation_factor = 75.0f;
 		float2 mouse_position = system->GetNormalizeMousePosition();
 		float2 delta = system->GetMouseDelta(mouse_position);
 
-		if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
+		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 			rotation_factor = 15.0f;
 		}
-		else if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 			rotation_factor = 200.0f;
 		}
 
@@ -98,19 +98,19 @@ void SceneTranslationAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SceneActionData* data = (SceneActionData*)_data;
-	if (mouse_tracker->MiddleButton() == MBPRESSED) {
+	if (mouse->IsPressed(ECS_MOUSE_MIDDLE)) {
 		mouse->EnableRawInput();
 	}
-	else if (mouse_tracker->MiddleButton() == MBRELEASED) {
+	else if (mouse->IsReleased(ECS_MOUSE_MIDDLE)) {
 		mouse->DisableRawInput();
 	}
-	else if (mouse_tracker->MiddleButton() == MBHELD) {
+	else if (mouse->IsDown(ECS_MOUSE_MIDDLE)) {
 		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 	}
 
 	EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxCurrentViewport(data->editor_state, data->sandbox_index);
 
-	if (mouse_tracker->MiddleButton() == MBHELD) {
+	if (mouse->IsDown(ECS_MOUSE_MIDDLE)) {
 		float2 mouse_position = system->GetNormalizeMousePosition();
 		float2 delta = system->GetMouseDelta(mouse_position);
 
@@ -120,10 +120,10 @@ void SceneTranslationAction(ActionData* action_data) {
 
 		float translation_factor = 10.0f;
 
-		if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
+		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 			translation_factor = 2.5f;
 		}
-		else if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 			translation_factor = 30.0f;
 		}
 
@@ -146,10 +146,10 @@ void SceneZoomAction(ActionData* action_data) {
 	if (scroll_delta != 0) {
 		float factor = 0.015f;
 
-		if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
+		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 			factor = 0.004f;
 		}
-		else if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 			factor = 0.06f;
 		}
 

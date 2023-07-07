@@ -682,13 +682,6 @@ public:
 					static bool CAMERA_CHANGED = true;
 
 					if (!IsIconic(hWnd)) {
-						auto mouse_state = mouse.GetState();
-						auto keyboard_state = keyboard.GetState();
-						mouse.UpdateState();
-						mouse.UpdateTracker();
-						keyboard.UpdateState();
-						keyboard.UpdateTracker();
-
 						unsigned int VALUE = 0;
 
 						graphics->ClearBackBuffer(0.0f, 0.0f, 0.0f);
@@ -855,7 +848,9 @@ public:
 						if (removed) {
 							__debugbreak();
 						}
-						mouse.SetPreviousPositionAndScroll();
+
+						mouse.Update();
+						keyboard.Update();
 					}
 
 					std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_AMOUNT[frame_pacing]));
@@ -880,8 +875,8 @@ public:
 		for (size_t index = 0; index < sandbox_count; index++) {
 			DestroySandbox(&editor_state, 0);
 		}
-		DestroyGraphics(editor_state.UIGraphics());
 		DestroyGraphics(editor_state.RuntimeGraphics());
+		DestroyGraphics(editor_state.UIGraphics());
 
 		if (result == -1)
 			return -1;
@@ -898,8 +893,8 @@ public:
 		//int height;
 		HWND hWnd;
 		ECSEngine::Timer timer;
-		ECSEngine::HID::Mouse mouse;
-		ECSEngine::HID::Keyboard keyboard;
+		ECSEngine::Mouse mouse;
+		ECSEngine::Keyboard keyboard;
 		ECSEngine::Stream<HCURSOR> cursors;
 		ECSEngine::ECS_CURSOR_TYPE current_cursor;
 		char application_quit;

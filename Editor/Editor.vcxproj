@@ -187,6 +187,7 @@
     <ClInclude Include="src\Editor\EditorEvent.h" />
     <ClInclude Include="src\Editor\EditorEventDef.h" />
     <ClInclude Include="src\Editor\EditorFile.h" />
+    <ClInclude Include="src\Editor\EditorInputTick.h" />
     <ClInclude Include="src\Editor\EditorPalette.h" />
     <ClInclude Include="src\Editor\EditorParameters.h" />
     <ClInclude Include="src\editorpch.h" />
@@ -257,6 +258,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="src\Editor\EditorInputTick.cpp" />
     <ClCompile Include="src\Editor\EditorSandbox.cpp" />
     <ClCompile Include="src\Editor\EditorSandboxEntityOperations.cpp" />
     <ClCompile Include="src\Editor\EditorScene.cpp" />

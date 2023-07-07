@@ -281,8 +281,8 @@ void DeallocateCurrentProject(EditorState* editor_state)
 	/*if (editor_state->project_file->path.size > 0) {
 		Application* ecs_application = editor_state->ui_system->m_application;
 		HWND hwnd = (HWND)ecs_application->GetOSWindowHandle();
-		HID::Mouse* mouse = editor_state->Mouse();
-		HID::Keyboard* keyboard = editor_state->Keyboard();
+		Mouse* mouse = editor_state->Mouse();
+		Keyboard* keyboard = editor_state->Keyboard();
 
 		EditorStateDestroy(editor_state);
 		editor_state->project_file = nullptr;

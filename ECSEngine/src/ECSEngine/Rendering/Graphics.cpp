@@ -3400,20 +3400,37 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Resource>
-	Resource Graphics::TransferGPUResource(Resource resource, bool temporary) {
+	Resource Graphics::TransferGPUResource(Resource resource, bool temporary, DebugInfo debug_info) {
+		resource = ECSEngine::TransferGPUResource(resource, GetDevice());
+		AddInternalResource(resource, temporary, debug_info);
 		return resource;
 	}
+
+#define EXPANSION(Resource) ECS_TEMPLATE_FUNCTION(Resource, Graphics::TransferGPUResource, Resource, bool, DebugInfo);
+
+	ECS_GRAPHICS_RESOURCES(EXPANSION);
+
+#undef EXPANSION
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	template<typename View>
-	View Graphics::TransferGPUView(View view, bool temporary) {
+	View Graphics::TransferGPUView(View view, bool temporary, DebugInfo debug_info) {
+		view = ECSEngine::TransferGPUView(view, GetDevice());
+		//AddInternalResource(view, temporary, debug_info);
+		//AddInternalResource(view.GetResource(), temporary, debug_info);
 		return view;
 	}
 
+#define EXPANSION(View) ECS_TEMPLATE_FUNCTION(View, Graphics::TransferGPUView, View, bool, DebugInfo);
+
+	ECS_GRAPHICS_VIEWS(EXPANSION);
+
+#undef EXPANSION
+
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	Mesh Graphics::TransferMesh(const Mesh* mesh, bool temporary)
+	Mesh Graphics::TransferMesh(const Mesh* mesh, bool temporary, DebugInfo debug_info)
 	{
 		Mesh new_mesh;
 
@@ -3428,9 +3445,9 @@ namespace ECSEngine {
 		}
 
 		if (!temporary) {
-			AddInternalResource(new_mesh.index_buffer);
+			AddInternalResource(new_mesh.index_buffer, debug_info);
 			for (size_t index = 0; index < mesh->mapping_count; index++) {
-				AddInternalResource(new_mesh.vertex_buffers[index]);
+				AddInternalResource(new_mesh.vertex_buffers[index], debug_info);
 			}
 		}
 
@@ -3439,48 +3456,33 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	CoalescedMesh Graphics::TransferCoalescedMesh(const CoalescedMesh* mesh, bool temporary)
+	CoalescedMesh Graphics::TransferCoalescedMesh(const CoalescedMesh* mesh, bool temporary, DebugInfo debug_info)
 	{
 		CoalescedMesh new_mesh;
 
 		new_mesh.submeshes = mesh->submeshes;
-		new_mesh.mesh = TransferMesh(&mesh->mesh, temporary);
+		new_mesh.mesh = TransferMesh(&mesh->mesh, temporary, debug_info);
 
 		return new_mesh;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	PBRMesh Graphics::TransferPBRMesh(const PBRMesh* mesh, bool temporary)
+	PBRMesh Graphics::TransferPBRMesh(const PBRMesh* mesh, bool temporary, DebugInfo debug_info)
 	{
 		PBRMesh new_mesh;
 
 		new_mesh.materials = mesh->materials;
-		new_mesh.mesh = TransferCoalescedMesh(&mesh->mesh, temporary);
+		new_mesh.mesh = TransferCoalescedMesh(&mesh->mesh, temporary, debug_info);
 
 		return new_mesh;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	Material Graphics::TransferMaterial(const Material* material, bool temporary)
+	Material Graphics::TransferMaterial(const Material* material, bool temporary, DebugInfo debug_info)
 	{
-		Material new_material;
-
-		new_material.layout = material->layout;
-		new_material.pixel_shader = material->pixel_shader;
-		new_material.vertex_shader = material->vertex_shader;
-
-		new_material.vertex_buffer_mapping_count = material->vertex_buffer_mapping_count;
-		memcpy(new_material.vertex_buffer_mappings, material->vertex_buffer_mappings, sizeof(ECS_MESH_INDEX) * material->vertex_buffer_mapping_count);
-
-		new_material.p_buffer_count = material->p_buffer_count;
-		new_material.p_texture_count = material->p_texture_count;
-
-		new_material.unordered_view_count = material->unordered_view_count;
-
-		new_material.v_buffer_count = material->v_buffer_count;
-		new_material.v_texture_count = material->v_texture_count;
+		Material new_material = *material;
 
 		auto copy_buffers = [&](size_t offset, unsigned char copy_count) {
 			ConstantBuffer* old_buffers = (ConstantBuffer*)function::OffsetPointer(material, offset);
@@ -3488,7 +3490,7 @@ namespace ECSEngine {
 			
 			for (unsigned char index = 0; index < copy_count; index++) {
 				new_buffers[index] = TransferGPUResource(old_buffers[index], GetDevice());
-				AddInternalResource(new_buffers[index], temporary);
+				AddInternalResource(new_buffers[index], temporary, debug_info);
 			}
 		};
 		
@@ -3498,8 +3500,8 @@ namespace ECSEngine {
 
 			for (unsigned char index = 0; index < copy_count; index++) {
 				new_views[index] = TransferGPUView(old_views[index], GetDevice());
-				AddInternalResource(new_views[index], temporary);
-				AddInternalResource(new_views[index].GetResource(), temporary);
+				AddInternalResource(new_views[index], temporary, debug_info);
+				AddInternalResource(new_views[index].GetResource(), temporary, debug_info);
 			}
 		};
 
@@ -3512,8 +3514,8 @@ namespace ECSEngine {
 		// The unordered views need to be handled separately
 		for (unsigned char index = 0; index < material->unordered_view_count; index++) {
 			new_material.unordered_views[index] = TransferGPUView(material->unordered_views[index], GetDevice());
-			AddInternalResource(new_material.unordered_views[index], temporary);
-			AddInternalResource(new_material.unordered_views[index].GetResource(), temporary);
+			AddInternalResource(new_material.unordered_views[index], temporary, debug_info);
+			AddInternalResource(new_material.unordered_views[index].GetResource(), temporary, debug_info);
 		}
 
 		return new_material;
@@ -3824,6 +3826,7 @@ namespace ECSEngine {
 			CASE(ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_STATE, ID3D11DepthStencilState);
 			CASE(ECS_GRAPHICS_RESOURCE_RASTERIZER_STATE, ID3D11RasterizerState);
 			CASE(ECS_GRAPHICS_RESOURCE_COMMAND_LIST, ID3D11CommandList);
+			CASE(ECS_GRAPHICS_RESOURCE_DX_RESOURCE_INTERFACE, ID3D11Resource);
 		default:
 			ECS_ASSERT(false);
 
@@ -3876,6 +3879,15 @@ namespace ECSEngine {
 		graphics->m_allocator->Deallocate(graphics->m_depth_stencil_helpers.buffer);
 
 		graphics->m_context->Flush();
+
+		ID3D11Debug* debug_device = nullptr;
+		HRESULT result = graphics->GetDevice()->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast<void**>(&debug_device));
+		ECS_ASSERT(SUCCEEDED(result));
+
+		result = debug_device->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL);
+		ECS_ASSERT(SUCCEEDED(result));
+
+		debug_device->Release();
 
 		unsigned int count = graphics->m_device->Release();
 		count = graphics->m_deferred_context->Release();
@@ -4733,6 +4745,9 @@ namespace ECSEngine {
 	{
 		ID3D11InputLayout* layout;
 		context->IAGetInputLayout(&layout);
+		if (layout != nullptr) {
+			layout->Release();
+		}
 		return layout;
 	}
 
@@ -4742,6 +4757,9 @@ namespace ECSEngine {
 	{
 		ID3D11VertexShader* shader;
 		context->VSGetShader(&shader, nullptr, nullptr);
+		if (shader != nullptr) {
+			shader->Release();
+		}
 		return shader;
 	}
 
@@ -4751,6 +4769,9 @@ namespace ECSEngine {
 	{
 		ID3D11PixelShader* shader;
 		context->PSGetShader(&shader, nullptr, nullptr);
+		if (shader != nullptr) {
+			shader->Release();
+		}
 		return shader;
 	}
 
@@ -4760,6 +4781,9 @@ namespace ECSEngine {
 	{
 		ID3D11DomainShader* shader;
 		context->DSGetShader(&shader, nullptr, nullptr);
+		if (shader != nullptr) {
+			shader->Release();
+		}
 		return shader;
 	}
 
@@ -4769,6 +4793,9 @@ namespace ECSEngine {
 	{
 		ID3D11GeometryShader* shader;
 		context->GSGetShader(&shader, nullptr, nullptr);
+		if (shader != nullptr) {
+			shader->Release();
+		}
 		return shader;
 	}
 
@@ -4778,6 +4805,9 @@ namespace ECSEngine {
 	{
 		ID3D11HullShader* shader;
 		context->HSGetShader(&shader, nullptr, nullptr);
+		if (shader != nullptr) {
+			shader->Release();
+		}
 		return shader;
 	}
 
@@ -4787,6 +4817,9 @@ namespace ECSEngine {
 	{
 		ID3D11ComputeShader* shader;
 		context->CSGetShader(&shader, nullptr, nullptr);
+		if (shader != nullptr) {
+			shader->Release();
+		}
 		return shader;
 	}
 

@@ -19,4 +19,4 @@ void CreateDirectoryExplorerAction(ECSEngine::Tools::ActionData* action_data);
 // It only creates the window, it will not be assigned to any dockspace and returns the window index
 unsigned int CreateDirectoryExplorerWindow(EditorState* editor_state);
 
-void DirectoryExplorerTick(EditorState* editor_state);
+void TickDirectoryExplorer(EditorState* editor_state);

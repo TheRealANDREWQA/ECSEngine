@@ -8,36 +8,36 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// Uses delta encoding in order to reduce the memory footprint of the serialization
-	ECSENGINE_API void SerializeMouseInput(uintptr_t& buffer, const HID::MouseState* state);
+	ECSENGINE_API void SerializeMouseInput(uintptr_t& buffer, const Mouse* state);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// Uses delta encoding in order to reduce the memory footprint of the serialization
-	ECSENGINE_API void SerializeKeyboardInput(uintptr_t& buffer, const HID::KeyboardState* state);
+	ECSENGINE_API void SerializeKeyboardInput(uintptr_t& buffer, const Keyboard* state);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// Uses delta encoding in order to reduce the memory footprint of the serialization
 	ECSENGINE_API void SerializeInput(
 		uintptr_t& buffer,
-		const HID::MouseState* mouse_state,
-		const HID::KeyboardState* keyboard_state
+		const Mouse* mouse,
+		const Keyboard* keyboard
 	);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void DeserializeMouseInput(uintptr_t& buffer, HID::MouseState* state);
+	ECSENGINE_API void DeserializeMouseInput(uintptr_t& buffer, Mouse* state);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void DeserializeKeyboardInput(uintptr_t& buffer, HID::KeyboardState* state);
+	ECSENGINE_API void DeserializeKeyboardInput(uintptr_t& buffer, Keyboard* state);
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API void DeserializeInput(
 		uintptr_t& buffer,
-		HID::MouseState* mouse_state,
-		HID::KeyboardState* keyboard_state
+		Mouse* mouse_state,
+		Keyboard* keyboard_state
 	);
 
 	// -----------------------------------------------------------------------------------------------------------------------------

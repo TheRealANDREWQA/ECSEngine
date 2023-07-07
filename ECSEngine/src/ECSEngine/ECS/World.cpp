@@ -14,8 +14,8 @@ namespace ECSEngine {
 		ResourceManager* _resource_manager,
 		TaskManager* _task_manager,
 		TaskScheduler* _task_scheduler,
-		HID::Mouse* _mouse,
-		HID::Keyboard* _keyboard,
+		Mouse* _mouse,
+		Keyboard* _keyboard,
 		DebugDrawer* _debug_drawer
 	) : memory(_memory), entity_manager(_entity_manager), resource_manager(_resource_manager), task_manager(_task_manager),
 		graphics(_resource_manager->m_graphics), mouse(_mouse), keyboard(_keyboard), task_scheduler(_task_scheduler), debug_drawer(_debug_drawer) {};
@@ -89,9 +89,6 @@ namespace ECSEngine {
 			resource_manager = (ResourceManager*)allocation;
 			new (resource_manager) ResourceManager(resource_manager_allocator, graphics);
 			allocation = function::OffsetPointer(allocation, sizeof(ResourceManager));
-		}
-		if (resource_manager->m_graphics == nullptr) {
-			__debugbreak();
 		}
 
 		EntityPool* entity_pool = (EntityPool*)allocation;

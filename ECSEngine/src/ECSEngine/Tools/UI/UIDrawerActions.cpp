@@ -99,17 +99,17 @@ namespace ECSEngine {
 			UIDrawerSlider* slider = (UIDrawerSlider*)_data;
 
 			float initial_value = slider->slider_position;
-			if (mouse_tracker->LeftButton() == MBPRESSED) {
+			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = true;
 				SetCapture((HWND)system->m_application->GetOSWindowHandle());
 			}
-			else if (mouse_tracker->LeftButton() == MBRELEASED) {
+			else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = false;
 				ReleaseCapture();
 			}
 
 			float2 previous_mouse = system->m_previous_mouse_position;
-			float dimming_factor = keyboard->IsKeyDown(HID::Key::LeftShift) ? 0.1f : 1.0f;
+			float dimming_factor = keyboard->IsDown(ECS_KEY_LEFT_CTRL) ? 0.1f : 1.0f;
 
 			if (slider->is_vertical) {
 				if (mouse_delta.y > 0.0f) {
@@ -145,7 +145,7 @@ namespace ECSEngine {
 			UIDrawerSliderBringToMouse* data = (UIDrawerSliderBringToMouse*)_data;
 
 			float initial_position = data->slider->slider_position;
-			if (mouse_tracker->LeftButton() == MBPRESSED) {
+			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				data->start_point = std::chrono::high_resolution_clock::now();
 				if (data->slider->is_vertical) {
 					if (mouse_position.y < data->slider->current_position.y + data->slider->current_scale.y * data->slider->slider_position)
@@ -164,7 +164,7 @@ namespace ECSEngine {
 				data->is_finished = false;
 				data->slider->interpolate_value = true;
 			}
-			else if (mouse_tracker->LeftButton() == MBRELEASED) {
+			else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				data->slider->interpolate_value = false;
 			}
 
@@ -203,11 +203,11 @@ namespace ECSEngine {
 				}
 			}
 
-			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-				if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
+			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+				if (keyboard->IsPressed(ECS_KEY_C)) {
 					system->m_application->WriteTextToClipboard(data->slider->characters.buffer);
 				}
-				else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
+				else if (keyboard->IsPressed(ECS_KEY_V)) {
 					data->slider->characters.size = system->m_application->CopyTextFromClipboard(data->slider->characters.buffer, data->slider->characters.capacity);
 					data->slider->character_value = true;
 					data->slider->changed_value = true;
@@ -223,17 +223,17 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerSlider* data = (UIDrawerSlider*)_data;
-			if (mouse_tracker->RightButton()) {
+			if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
 				memcpy(data->value_to_change, data->default_value, data->value_byte_size);
 
 				data->Callback(action_data);
 			}
 
-			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-				if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
+			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+				if (keyboard->IsPressed(ECS_KEY_C)) {
 					system->m_application->WriteTextToClipboard(data->characters.buffer);
 				}
-				else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
+				else if (keyboard->IsPressed(ECS_KEY_V)) {
 					data->characters.size = system->m_application->CopyTextFromClipboard(data->characters.buffer, data->characters.capacity);
 					data->changed_value = true;
 					data->character_value = true;
@@ -250,7 +250,7 @@ namespace ECSEngine {
 			action_data->data = &data->hoverable_data;
 			DefaultHoverableAction(action_data);
 
-			if (mouse_tracker->RightButton()) {
+			if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
 				memcpy(data->slider->value_to_change, data->slider->default_value, data->slider->value_byte_size);
 				data->slider->changed_value = true;
 			}
@@ -269,17 +269,17 @@ namespace ECSEngine {
 
 			float initial_position = slider->slider_position;
 			float dimming_factor = 1.0f;
-			if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
+			if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 				dimming_factor = 0.2f;
 			}
-			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 				dimming_factor = 5.0f;
 			}
 
-			if (mouse_tracker->LeftButton() == MBPRESSED) {
+			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = true;
 			}
-			else if (mouse_tracker->LeftButton() == MBRELEASED) {
+			else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = false;
 			}
 
@@ -415,7 +415,7 @@ namespace ECSEngine {
 			if (!input->is_word_selection) {
 				input->SetSpritePositionFromMouse(system, mouse_position);
 			}
-			if (mouse_tracker->LeftButton() == MBPRESSED) {
+			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				size_t initial_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - input->word_click_start).count();
 
 				auto check_word_boundary = [&](unsigned int& word_start_index, unsigned int& word_end_index) {
@@ -511,14 +511,14 @@ namespace ECSEngine {
 
 			bool is_action = false;
 			if (mouse_position.x > position.x + scale.x) {
-				if (input->repeat_key == HID::Key::None) {
+				if (input->repeat_key == ECS_KEY_NONE) {
 					input->key_repeat_start = std::chrono::high_resolution_clock::now();
-					input->repeat_key = HID::Key::Apps;
+					input->repeat_key = ECS_KEY_APPS;
 					is_action = true;
 					input->repeat_key_count = 0;
 					right_action();
 				}
-				else if (input->repeat_key == HID::Key::Apps) {
+				else if (input->repeat_key == ECS_KEY_APPS) {
 					size_t duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - input->key_repeat_start).count();
 					is_action = true;
 					if (duration > system->m_descriptors.misc.text_input_repeat_start_duration) {
@@ -531,14 +531,14 @@ namespace ECSEngine {
 				}
 			}
 			else if (mouse_position.x < position.x) {
-				if (input->repeat_key == HID::Key::None) {
+				if (input->repeat_key == ECS_KEY_NONE) {
 					input->key_repeat_start = std::chrono::high_resolution_clock::now();
-					input->repeat_key = HID::Key::BrowserFavorites;
+					input->repeat_key = ECS_KEY_COUNT;
 					is_action = true;
 					input->repeat_key_count = 0;
 					left_action();
 				}
-				else if (input->repeat_key == HID::Key::BrowserFavorites) {
+				else if (input->repeat_key == ECS_KEY_COUNT) {
 					size_t duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - input->key_repeat_start).count();
 					is_action = true;
 					if (duration > system->m_descriptors.misc.text_input_repeat_start_duration) {
@@ -552,15 +552,15 @@ namespace ECSEngine {
 			}
 
 			if (!is_action) {
-				input->repeat_key = HID::Key::None;
+				input->repeat_key = ECS_KEY_NONE;
 			}
 
 			input->caret_start = std::chrono::high_resolution_clock::now();
 			input->is_caret_display = true;
 
-			if (mouse_tracker->LeftButton() == MBRELEASED) {
+			if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				input->suppress_arrow_movement = false;
-				input->repeat_key = HID::Key::None;
+				input->repeat_key = ECS_KEY_NONE;
 			}
 		}
 
@@ -638,7 +638,7 @@ namespace ECSEngine {
 		void ColorInputDefaultColor(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			if (mouse_tracker->RightButton() == MBPRESSED) {
+			if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
 				UIDrawerColorInput* data = (UIDrawerColorInput*)_data;
 				*data->rgb = data->default_color;
 				data->hsv = RGBToHSV(data->default_color);
@@ -739,7 +739,7 @@ namespace ECSEngine {
 			UIDrawerHierarchyDragNode* data = (UIDrawerHierarchyDragNode*)_data;
 			float dockspace_mask = GetDockspaceMaskFromType(dockspace_type);
 			if (!data->has_been_cancelled) {
-				if (mouse_tracker->LeftButton() == MBPRESSED) {
+				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					data->selectable_data.hierarchy->selectable.selected_index = data->selectable_data.node_index;
 					data->hierarchies_data->active_hierarchy = data->selectable_data.hierarchy;
 					action_data->data = &data->selectable_data;
@@ -747,7 +747,7 @@ namespace ECSEngine {
 
 					data->timer.SetNewStart();
 				}
-				else if (mouse_tracker->LeftButton() == MBHELD) {
+				else if (mouse->IsDown(ECS_MOUSE_LEFT)) {
 					if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) > system->m_descriptors.misc.hierarchy_drag_node_time) {
 						size_t index = 0;
 
@@ -810,7 +810,7 @@ namespace ECSEngine {
 						data->previous_index = index;
 					}
 				}
-				else if (mouse_tracker->LeftButton() == MBRELEASED) {
+				else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 					if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) > system->m_descriptors.misc.hierarchy_drag_node_time) {
 						size_t index = 0;
 
@@ -854,7 +854,7 @@ namespace ECSEngine {
 					}
 				}
 
-				if (mouse_tracker->RightButton() == MBPRESSED) {
+				if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
 					data->has_been_cancelled = true;
 				}
 			}
@@ -934,9 +934,9 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			DataType* data = (DataType*)_data;
-			if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBRELEASED) {
-				FloatingPoint shift_value = keyboard->IsKeyDown(HID::Key::LeftShift) ? 1.0f / 5.0f : 1.0f;
-				FloatingPoint ctrl_value = keyboard->IsKeyDown(HID::Key::LeftControl) ? 5.0f : 1.0f;
+			if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsReleased(ECS_MOUSE_LEFT)) {
+				FloatingPoint shift_value = keyboard->IsDown(ECS_KEY_LEFT_SHIFT) ? 1.0f / 5.0f : 1.0f;
+				FloatingPoint ctrl_value = keyboard->IsDown(ECS_KEY_LEFT_CTRL) ? 5.0f : 1.0f;
 				FloatingPoint amount = (FloatingPoint)mouse_delta.x * (FloatingPoint)INPUT_DRAG_FACTOR * shift_value * ctrl_value;
 
 				system->WrapCursorPosition();
@@ -945,7 +945,7 @@ namespace ECSEngine {
 				*data->callback_data.number = function::Clamp(*data->callback_data.number, data->callback_data.min, data->callback_data.max);
 
 				if (data->callback_data.number_data.input->HasCallback()) {
-					bool on_release = data->callback_on_release && mouse_tracker->LeftButton() == MBRELEASED;
+					bool on_release = data->callback_on_release && mouse->IsReleased(ECS_MOUSE_LEFT);
 					if (amount != 0.0f || on_release) {
 						// The text input must also be updated before it
 						char number_characters[64];
@@ -957,7 +957,7 @@ namespace ECSEngine {
 						// Set the trigger callback to exit
 						data->callback_data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
 					}
-					if (data->callback_on_release && mouse_tracker->LeftButton() != MBRELEASED) {
+					if (data->callback_on_release && !mouse->IsReleased(ECS_MOUSE_LEFT)) {
 						// Don't trigger the callback for the input
 						data->callback_data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 					}
@@ -982,13 +982,13 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerIntInputDragData<Integer>* data = (UIDrawerIntInputDragData<Integer>*)_data;
-			if (mouse_tracker->LeftButton() == MBPRESSED) {
+			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				data->last_position = mouse_position.x;
 			}
-			else if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBRELEASED) {
+			else if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				float delta_to_position = mouse_position.x - data->last_position;
-				float shift_value = keyboard->IsKeyDown(HID::Key::LeftShift) ? 1.0f / 5.0f : 1.0f;
-				float ctrl_value = keyboard->IsKeyDown(HID::Key::LeftControl) ? 5.0f : 1.0f;
+				float shift_value = keyboard->IsDown(ECS_KEY_LEFT_SHIFT) ? 1.0f / 5.0f : 1.0f;
+				float ctrl_value = keyboard->IsDown(ECS_KEY_LEFT_CTRL) ? 5.0f : 1.0f;
 				float amount = delta_to_position * INPUT_DRAG_FACTOR * shift_value * ctrl_value;
 				
 				bool is_negative = amount < 0.0f;
@@ -1020,14 +1020,14 @@ namespace ECSEngine {
 						data->data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
 
 						if (data->callback_on_release) {
-							if (mouse_tracker->LeftButton() != MBRELEASED) {
+							if (!mouse->IsReleased(ECS_MOUSE_LEFT)) {
 								// Don't trigger the callback for the input
 								data->data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 							}
 						}
 					}
 				}
-				if (data->callback_on_release && mouse_tracker->LeftButton() == MBRELEASED) {
+				if (data->callback_on_release && mouse->IsReleased(ECS_MOUSE_LEFT)) {
 					// Make an exit callback
 					data->data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
 				}
@@ -1047,11 +1047,11 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerSlider* slider = (UIDrawerSlider*)_data;
-			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-				if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
+			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+				if (keyboard->IsPressed(ECS_KEY_C)) {
 					system->m_application->WriteTextToClipboard(slider->characters.buffer);
 				}
-				else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
+				else if (keyboard->IsPressed(ECS_KEY_V)) {
 					slider->characters.size = system->m_application->CopyTextFromClipboard(slider->characters.buffer, slider->characters.capacity);
 					slider->character_value = true;
 					slider->changed_value = true;
@@ -1239,7 +1239,7 @@ namespace ECSEngine {
 				TextTooltipHoverable(action_data);
 			}
 
-			if (mouse_tracker->RightButton() == MBPRESSED && data->data->number_data.return_to_default) {
+			if (mouse->IsPressed(ECS_MOUSE_RIGHT) && data->data->number_data.return_to_default) {
 				*data->data->number = data->data->default_value;
 				data->data->number_data.input->DeleteAllCharacters();
 				char temp_chars[128];
@@ -1277,7 +1277,7 @@ namespace ECSEngine {
 				TextTooltipHoverable(action_data);
 			}
 
-			if (mouse_tracker->RightButton() == MBPRESSED && data->data->number_data.return_to_default) {
+			if (mouse->IsPressed(ECS_MOUSE_RIGHT) && data->data->number_data.return_to_default) {
 				*data->data->number = data->data->default_value;
 				data->data->number_data.input->DeleteAllCharacters();
 				char temp_chars[128];
@@ -1316,7 +1316,7 @@ namespace ECSEngine {
 				TextTooltipHoverable(action_data);
 			}
 
-			if (mouse_tracker->RightButton() == MBPRESSED && data->data->number_data.return_to_default) {
+			if (mouse->IsPressed(ECS_MOUSE_RIGHT) && data->data->number_data.return_to_default) {
 				*data->data->number = data->data->default_value;
 				data->data->number_data.input->DeleteAllCharacters();
 				char temp_chars[128];
@@ -1467,10 +1467,10 @@ namespace ECSEngine {
 			data->Read();
 			unsigned int window_index = system->GetWindowFromName(data->descriptor.window_name);
 
-			if (mouse_tracker->LeftButton() == MBPRESSED) {
+			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				data->is_opened_when_pressed = window_index != -1;
 			}
-			else if (mouse_tracker->LeftButton() == MBRELEASED && IsPointInRectangle(mouse_position, position, scale)) {
+			else if (mouse->IsReleased(ECS_MOUSE_LEFT) && IsPointInRectangle(mouse_position, position, scale)) {
 				if (window_index != -1) {
 					system->DestroyWindowIfFound(data->descriptor.window_name);
 				}
@@ -1523,7 +1523,7 @@ namespace ECSEngine {
 
 			UIDrawerFilesystemHierarchy* data = (UIDrawerFilesystemHierarchy*)_data;
 
-			if (mouse_tracker->LeftButton() == MBRELEASED && IsPointInRectangle(mouse_position, position, scale)) {
+			if (mouse->IsReleased(ECS_MOUSE_LEFT) && IsPointInRectangle(mouse_position, position, scale)) {
 				data->active_label.Copy(data->selected_label_temporary);
 				data->active_label[data->active_label.size] = '\0';
 
@@ -1585,7 +1585,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerArrayDragData* data = (UIDrawerArrayDragData*)_data;
-			if (mouse_tracker->LeftButton() == MBRELEASED) {
+			if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				data->array_data->drag_is_released = true;
 			}
 			else {
@@ -1639,13 +1639,13 @@ namespace ECSEngine {
 			action_data->additional_data = nullptr;
 			system->m_focused_window_data.clean_up_call_general = true;
 
-			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL && !keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
+			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL && !keyboard->IsPressed(ECS_KEY_ENTER)) {
 				keyboard->CaptureCharacters();
 				unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 				input->is_currently_selected = true;
 
 				auto left_arrow_lambda = [&]() {
-					if (keyboard->IsKeyUp(HID::Key::LeftShift) && input->current_sprite_position > input->current_selection) {
+					if (keyboard->IsUp(ECS_KEY_LEFT_SHIFT) && input->current_sprite_position > input->current_selection) {
 						unsigned int difference = input->current_sprite_position - input->current_selection;
 						input->current_sprite_position = input->current_selection;
 						if (input->sprite_render_offset < difference) {
@@ -1656,7 +1656,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+						if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 							// Jump to the next word
 							unsigned int index = input->current_sprite_position;
 							if (input->text->buffer[index] == ' ') {
@@ -1680,7 +1680,7 @@ namespace ECSEngine {
 									input->sprite_render_offset--;
 							}
 						}
-						if (keyboard->IsKeyUp(HID::Key::LeftShift)) {
+						if (keyboard->IsUp(ECS_KEY_LEFT_SHIFT)) {
 							input->current_selection = input->current_sprite_position;
 						}
 					}
@@ -1690,7 +1690,7 @@ namespace ECSEngine {
 				};
 				auto right_arrow_lambda = [&]() {
 					unsigned int visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
-					if (keyboard->IsKeyUp(HID::Key::LeftShift) && input->current_sprite_position < input->current_selection) {
+					if (keyboard->IsUp(ECS_KEY_LEFT_SHIFT) && input->current_sprite_position < input->current_selection) {
 						input->current_sprite_position = input->current_selection;
 						unsigned int visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
 						while (input->sprite_render_offset + visible_sprites < input->current_sprite_position) {
@@ -1699,7 +1699,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+						if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 							// Jump to the next word
 							unsigned int index = input->current_sprite_position;
 							if (input->text->buffer[index] == ' ') {
@@ -1727,7 +1727,7 @@ namespace ECSEngine {
 								}
 							}
 						}
-						if (keyboard->IsKeyUp(HID::Key::LeftShift)) {
+						if (keyboard->IsUp(ECS_KEY_LEFT_SHIFT)) {
 							input->current_selection = input->current_sprite_position;
 						}
 					}
@@ -1792,7 +1792,7 @@ namespace ECSEngine {
 					input->current_sprite_position = input->current_sprite_position > input->text->size ? input->text->size : input->current_sprite_position;
 				}
 
-				if (keyboard->IsKeyUp(HID::Key::LeftControl) && keyboard->IsKeyUp(HID::Key::RightControl)) {
+				if (keyboard->IsUp(ECS_KEY_LEFT_CTRL) && keyboard->IsUp(ECS_KEY_RIGHT_CTRL)) {
 					char characters[64];
 					size_t character_count = 0;
 					while (keyboard->GetCharacter(characters[character_count++])) {
@@ -1846,10 +1846,10 @@ namespace ECSEngine {
 					}
 				}
 
-				HID::Key repeat_key = HID::Key::None;
+				ECS_KEY repeat_key = ECS_KEY_NONE;
 				if (!is_backspace_lambda) {
-					input->RepeatKeyAction(system, keyboard_tracker, keyboard, HID::Key::Back, repeat_key, backspace_lambda);
-					input->RepeatKeyAction(system, keyboard_tracker, keyboard, HID::Key::Delete, repeat_key, backspace_lambda);
+					input->RepeatKeyAction(system, keyboard, ECS_KEY_BACK, repeat_key, backspace_lambda);
+					input->RepeatKeyAction(system, keyboard, ECS_KEY_DELETE, repeat_key, backspace_lambda);
 
 					if (is_backspace_lambda) {
 						size_t total_size = sizeof(UIDrawerTextInputRemoveCommandInfo) + *backspace_text_count + 1;
@@ -1870,28 +1870,28 @@ namespace ECSEngine {
 				}
 
 				if (!input->suppress_arrow_movement) {
-					if (input->repeat_key == HID::Key::Right && keyboard->IsKeyUp(HID::Key::Right)) {
-						input->repeat_key = HID::Key::None;
-						if (keyboard->IsKeyDown(HID::Key::Left)) {
+					if (input->repeat_key == ECS_KEY_RIGHT && keyboard->IsUp(ECS_KEY_RIGHT)) {
+						input->repeat_key = ECS_KEY_NONE;
+						if (keyboard->IsDown(ECS_KEY_LEFT)) {
 							input->repeat_key_count = 0;
-							input->repeat_key = HID::Key::Left;
+							input->repeat_key = ECS_KEY_LEFT;
 							input->key_repeat_start = std::chrono::high_resolution_clock::now();
 						}
 					}
-					else if (input->repeat_key == HID::Key::Left && keyboard->IsKeyUp(HID::Key::Left)) {
-						input->repeat_key = HID::Key::None;
-						if (keyboard->IsKeyDown(HID::Key::Right)) {
+					else if (input->repeat_key == ECS_KEY_LEFT && keyboard->IsUp(ECS_KEY_LEFT)) {
+						input->repeat_key = ECS_KEY_NONE;
+						if (keyboard->IsDown(ECS_KEY_RIGHT)) {
 							input->repeat_key_count = 0;
-							input->repeat_key = HID::Key::Right;
+							input->repeat_key = ECS_KEY_RIGHT;
 							input->key_repeat_start = std::chrono::high_resolution_clock::now();
 						}
 					}
-					input->RepeatKeyAction(system, keyboard_tracker, keyboard, HID::Key::Left, repeat_key, left_arrow_lambda);
-					input->RepeatKeyAction(system, keyboard_tracker, keyboard, HID::Key::Right, repeat_key, right_arrow_lambda);
+					input->RepeatKeyAction(system, keyboard, ECS_KEY_LEFT, repeat_key, left_arrow_lambda);
+					input->RepeatKeyAction(system, keyboard, ECS_KEY_RIGHT, repeat_key, right_arrow_lambda);
 				}
 
-				if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-					if (keyboard_tracker->IsKeyPressed(HID::Key::X)) {
+				if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+					if (keyboard->IsPressed(ECS_KEY_X)) {
 						input->CopyCharacters(system);
 						backspace_lambda();
 
@@ -1910,10 +1910,10 @@ namespace ECSEngine {
 
 						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
 					}
-					else if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
+					else if (keyboard->IsPressed(ECS_KEY_C)) {
 						input->CopyCharacters(system);
 					}
-					else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
+					else if (keyboard->IsPressed(ECS_KEY_V)) {
 						char characters[256];
 						unsigned int character_count = system->m_application->CopyTextFromClipboard(characters, 256);
 
@@ -1940,7 +1940,7 @@ namespace ECSEngine {
 							AddWindowHandleCommand(system, window_index, TextInputRevertReplaceText, replace_info, total_size, ECS_UI_HANDLER_COMMAND_TEXT_REPLACE);
 						}
 					}
-					else if (keyboard_tracker->IsKeyPressed(HID::Key::A)) {
+					else if (keyboard->IsPressed(ECS_KEY_A)) {
 						input->current_selection = 0;
 						input->current_sprite_position = input->text->size;
 					}
@@ -1952,11 +1952,11 @@ namespace ECSEngine {
 					input->caret_start = std::chrono::high_resolution_clock::now();
 				}
 
-				if (input->repeat_key != HID::Key::Apps && input->repeat_key != HID::Key::BrowserFavorites) {
+				if (input->repeat_key != ECS_KEY_APPS && input->repeat_key != ECS_KEY_COUNT) {
 					input->repeat_key = repeat_key;
 				}
 			}
-			else if (keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
+			else if (keyboard->IsPressed(ECS_KEY_ENTER)) {
 				keyboard->DoNotCaptureCharacters();
 				input->is_caret_display = false;
 				input->current_selection = input->current_sprite_position;
@@ -2023,10 +2023,10 @@ namespace ECSEngine {
 						slider->enter_value_click = std::chrono::high_resolution_clock::now();
 					}
 				}
-				else if (slider->text_input_counter == 0 && mouse_tracker->LeftButton() == MBPRESSED) {
+				else if (slider->text_input_counter == 0 && mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					slider->enter_value_click = std::chrono::high_resolution_clock::now();
 				}
-				else if (keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
+				else if (keyboard->IsPressed(ECS_KEY_ENTER)) {
 					bool is_valid_data = terminate_lambda();
 					system->DeallocateGeneralHandler();
 					system->m_focused_window_data.ResetGeneralHandler();
@@ -2036,7 +2036,7 @@ namespace ECSEngine {
 					action_data->data = &input_data;
 					TextInputAction(action_data);
 
-					if (keyboard->IsKeyDown(HID::Key::LeftControl) && keyboard_tracker->IsKeyPressed(HID::Key::C)) {
+					if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) && keyboard->IsPressed(ECS_KEY_C)) {
 						system->m_application->WriteTextToClipboard(slider->characters.buffer);
 					}
 				}
@@ -2499,7 +2499,7 @@ namespace ECSEngine {
 			UIDrawerComboBox* data = clickable_data->box;
 
 			unsigned int combo_index = system->GetWindowFromName(COMBO_BOX_WINDOW_NAME);
-			if (mouse_tracker->LeftButton() == MBPRESSED) {
+			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				clickable_data->is_opened_on_press = combo_index != -1;
 			}
 			else if (IsClickableTrigger(action_data) && !clickable_data->is_opened_on_press) {
@@ -3005,11 +3005,11 @@ namespace ECSEngine {
 
 			UIDrawerMenu* menu = data->menu;
 			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
-				if (mouse_tracker->LeftButton() == MBPRESSED) {
+				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					data->is_opened_when_clicked = system->GetWindowFromName(menu->state.left_characters) != -1;
 				}
 
-				bool is_left_click_released = mouse_tracker->LeftButton() == MBRELEASED;
+				bool is_left_click_released = mouse->IsReleased(ECS_MOUSE_LEFT);
 				if (data->initialize_from_right_click) {
 					is_left_click_released = true;
 					data->initialize_from_right_click = false;
@@ -3087,7 +3087,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerMenuRightClickData* data = (UIDrawerMenuRightClickData*)_data;
-			if (mouse_tracker->RightButton() == MBRELEASED && IsPointInRectangle(mouse_position, position, scale)) {
+			if (mouse->IsReleased(ECS_MOUSE_RIGHT) && IsPointInRectangle(mouse_position, position, scale)) {
 				if (data->action != nullptr) {
 					if (data->is_action_data_ptr) {
 						action_data->data = data->action_data_ptr;
@@ -3642,7 +3642,7 @@ namespace ECSEngine {
 
 			UIDrawerLabelHierarchyRenameFrameHandlerData* data = (UIDrawerLabelHierarchyRenameFrameHandlerData*)_data;
 			if (!IsPointInRectangle(mouse_position, data->label_position, data->label_scale)) {
-				if (mouse_tracker->LeftButton() == MBPRESSED) {
+				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					// Check to see if the general action was changed. If it was, don't deallocate it
 					if (system->m_focused_window_data.general_handler.action == TextInputAction) {
 						system->HandleFocusedWindowCleanupGeneral(mouse_position, 0);
@@ -3661,7 +3661,7 @@ namespace ECSEngine {
 			}
 
 			// Check for enter as well to remove itself. In that case don't call the rename callback
-			if (keyboard->IsKeyDown(HID::Key::Enter)) {
+			if (keyboard->IsDown(ECS_KEY_ENTER)) {
 				system->RemoveFrameHandler(LabelHierarchyRenameLabelFrameHandler, data);
 			}
 		}
@@ -3678,7 +3678,7 @@ namespace ECSEngine {
 
 			action_data->data = &rename_data;
 			data->rename_action(action_data);
-			if (keyboard->IsKeyDown(HID::Key::Enter) || mouse_tracker->LeftButton() == MBPRESSED) {
+			if (keyboard->IsDown(ECS_KEY_ENTER) || mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				data->is_rename_label = 0;
 			}
 		}
@@ -3701,7 +3701,7 @@ namespace ECSEngine {
 				void* untyped_data = ECS_STACK_ALLOC(data->hierarchy->CopySize());
 				data->GetCurrentLabel(untyped_data);
 
-				if (mouse_tracker->LeftButton() == MBPRESSED) {
+				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
 						// If it is the same selected label, proceed with the double click action
 						if (data->hierarchy->selected_labels.size == 1 && data->hierarchy->CompareLabels(untyped_data, data->hierarchy->selected_labels.buffer)) {
@@ -3740,11 +3740,11 @@ namespace ECSEngine {
 
 					// If ctrl is pressed, then add/remove else change the selected label
 					// If shift is pressed, activate the determine_selection
-					if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
+					if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 						data->hierarchy->determine_selection = true;
 						data->hierarchy->SetLastSelectedLabel(untyped_data);
 					}
-					else if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+					else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 						unsigned int index = data->hierarchy->FindSelectedLabel(untyped_data);
 						if (index != -1) {
 							// Remove it
@@ -3765,10 +3765,10 @@ namespace ECSEngine {
 				else {
 					if (data->hierarchy->drag_action != nullptr) {
 						if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) >= drag_milliseconds && !IsPointInRectangle(mouse_position, position, scale)) {
-							if (mouse_tracker->LeftButton() == MBHELD) {
+							if (mouse->IsDown(ECS_MOUSE_LEFT)) {
 								data->hierarchy->is_dragging = true;
 							}
-							else if (mouse_tracker->LeftButton() == MBRELEASED) {
+							else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 								data->hierarchy->is_dragging = false;
 								// Call the drag handler now
 								data->hierarchy->TriggerDrag(action_data);

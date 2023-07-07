@@ -58,11 +58,11 @@ struct EditorState {
 		return editor_components.internal_manager;
 	}
 
-	ECS_INLINE ECSEngine::HID::Mouse* Mouse() {
+	ECS_INLINE ECSEngine::Mouse* Mouse() {
 		return ui_system->m_mouse;
 	}
 
-	ECS_INLINE ECSEngine::HID::Keyboard* Keyboard() {
+	ECS_INLINE ECSEngine::Keyboard* Keyboard() {
 		return ui_system->m_keyboard;
 	}
 
@@ -152,9 +152,9 @@ void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTa
 void EditorStateAddGPUTask(EditorState* editor_state, ECSEngine::ThreadTask task);
 
 // This needs to be called once per application run
-void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, ECSEngine::HID::Mouse* mouse, ECSEngine::HID::Keyboard* keyboard);
+void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, ECSEngine::Mouse* mouse, ECSEngine::Keyboard* keyboard);
 
-void EditorStateInitialize(ECSEngine::Application* application, EditorState* editor_state, HWND hWnd, ECSEngine::HID::Mouse* mouse, ECSEngine::HID::Keyboard* keyboard);
+void EditorStateInitialize(ECSEngine::Application* application, EditorState* editor_state, HWND hWnd, ECSEngine::Mouse* mouse, ECSEngine::Keyboard* keyboard);
 
 void EditorStateDestroy(EditorState* editor_state);
 
