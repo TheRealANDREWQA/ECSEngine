@@ -1170,26 +1170,26 @@ namespace ECSEngine {
 		// It does not affect samplers, input layouts, shaders, other pipeline objects (rasterizer/blend/depth states)
 		// Use this function only for textures and buffers since these are the only ones who actually need transfering
 		template<typename Resource>
-		Resource TransferGPUResource(Resource resource, bool temporary = false);
+		Resource TransferGPUResource(Resource resource, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Transfers the deep target buffer or texture and then creates a new texture view that points to it
 		// Only views should be given
 		template<typename View>
-		View TransferGPUView(View view, bool temporary = false);
+		View TransferGPUView(View view, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// It will register the newly created resources if not temporary
-		Mesh TransferMesh(const Mesh* mesh, bool temporary = false);
+		Mesh TransferMesh(const Mesh* mesh, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Will keep the same submeshes stream, only the mesh portion gets actually transferred
 		// It will register the newly created resources if not temporary
-		CoalescedMesh TransferCoalescedMesh(const CoalescedMesh* mesh, bool temporary = false);
+		CoalescedMesh TransferCoalescedMesh(const CoalescedMesh* mesh, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Will keep the same material buffer and submesh stream, only the mesh portion gets actually transferred
 		// It will register the newly created resources if not temporary
-		PBRMesh TransferPBRMesh(const PBRMesh* mesh, bool temporary = false);
+		PBRMesh TransferPBRMesh(const PBRMesh* mesh, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// It will register the newly created resources if not temporary
-		Material TransferMaterial(const Material* material, bool temporary = false);
+		Material TransferMaterial(const Material* material, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 #pragma endregion
 

@@ -1110,18 +1110,18 @@ namespace ECSEngine {
 
 		// Works for both unique and shared
 		template<typename T>
-		ECS_INLINE void* GetComponent(Entity entity) {
-			return (void*)((const EntityManager*)this)->GetComponent<T>(entity);
+		ECS_INLINE T* GetComponent(Entity entity) {
+			return (T*)((const EntityManager*)this)->GetComponent<T>(entity);
 		}
 
 		// Works for both unique and shared
 		template<typename T>
-		ECS_INLINE const void* GetComponent(Entity entity) const {
+		ECS_INLINE const T* GetComponent(Entity entity) const {
 			if constexpr (T::IsShared()) {
-				return GetSharedComponent(entity, T::ID());
+				return (const T*)GetSharedComponent(entity, T::ID());
 			}
 			else {
-				return GetComponent(entity, T::ID());
+				return (const T*)GetComponent(entity, T::ID());
 			}
 		}
 
@@ -1497,17 +1497,17 @@ namespace ECSEngine {
 		const void* TryGetSharedComponent(Entity entity, Component component) const;
 
 		template<typename T>
-		ECS_INLINE void* TryGetComponent(Entity entity) {
-			return (void*)((const EntityManager*)this)->TryGetComponent<T>(entity);
+		ECS_INLINE T* TryGetComponent(Entity entity) {
+			return (T*)((const EntityManager*)this)->TryGetComponent<T>(entity);
 		}
 		
 		template<typename T>
-		ECS_INLINE const void* TryGetComponent(Entity entity) const {
+		ECS_INLINE const T* TryGetComponent(Entity entity) const {
 			if constexpr (T::IsShared()) {
-				return TryGetSharedComponent(entity, T::ID());
+				return (const T*)TryGetSharedComponent(entity, T::ID());
 			}
 			else {
-				return TryGetComponent(entity, T::ID());
+				return (const T*)TryGetComponent(entity, T::ID());
 			}
 		}
 

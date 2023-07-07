@@ -1603,7 +1603,7 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 	sandbox->viewport_render_destination[viewport] = runtime_graphics->CreateRenderDestination(new_size, destination_options);
 
 	// Now transfer the texture from the RuntimeGraphics to the UIGraphics
-	sandbox->viewport_transferred_texture[viewport] = TransferGPUView(sandbox->viewport_render_destination[viewport].output_view, editor_state->UIGraphics()->GetDevice());
+	sandbox->viewport_transferred_texture[viewport] = editor_state->UIGraphics()->TransferGPUView(sandbox->viewport_render_destination[viewport].output_view);
 
 	runtime_graphics->m_window_size = new_size;
 }
@@ -1767,8 +1767,8 @@ void SetSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_i
 	Graphics* sandbox_graphics = sandbox->runtime_descriptor.graphics;
 	TaskManager* task_manager = sandbox->runtime_descriptor.task_manager;
 	TaskScheduler* task_scheduler = sandbox->runtime_descriptor.task_scheduler;
-	HID::Mouse* mouse = sandbox->runtime_descriptor.mouse;
-	HID::Keyboard* keyboard = sandbox->runtime_descriptor.keyboard;
+	Mouse* mouse = sandbox->runtime_descriptor.mouse;
+	Keyboard* keyboard = sandbox->runtime_descriptor.keyboard;
 
 	memcpy(&sandbox->runtime_descriptor, &descriptor, sizeof(WorldDescriptor));
 

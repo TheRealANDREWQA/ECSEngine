@@ -73,6 +73,7 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <dxgidebug.h>
+#include <DXGIDebug.h>
 #include <shellapi.h>
 #include <ShlObj_core.h>
 #include <ShellScalingApi.h>

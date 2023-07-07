@@ -35,8 +35,8 @@ namespace ECSEngine {
 		// If the graphics descriptor is specified, then it will construct a Graphics object
 		// from the given descriptor
 		Graphics* graphics; ECS_SKIP_REFLECTION()
-		HID::Mouse* mouse; ECS_SKIP_REFLECTION()
-		HID::Keyboard* keyboard; ECS_SKIP_REFLECTION()
+		Mouse* mouse; ECS_SKIP_REFLECTION()
+		Keyboard* keyboard; ECS_SKIP_REFLECTION()
 		TaskScheduler* task_scheduler; ECS_SKIP_REFLECTION()
 		// This is optional. If you want to reuse the task manager among different worlds
 		// without having to reinitialize it, this is the way to do it
@@ -58,8 +58,8 @@ namespace ECSEngine {
 			ResourceManager* _resource_manager, 
 			TaskManager* _task_manager,
 			TaskScheduler* _task_scheduler,
-			HID::Mouse* mouse,
-			HID::Keyboard* keyboard,
+			Mouse* mouse,
+			Keyboard* keyboard,
 			DebugDrawer* debug_drawer
 		);
 		World(const WorldDescriptor& descriptor);
@@ -73,8 +73,8 @@ namespace ECSEngine {
 		EntityManager* entity_manager;
 		Graphics* graphics;
 		SystemManager* system_manager;
-		HID::Mouse* mouse;
-		HID::Keyboard* keyboard;
+		Mouse* mouse;
+		Keyboard* keyboard;
 		DebugDrawer* debug_drawer;
 	};
 

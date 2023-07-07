@@ -70,6 +70,10 @@ struct ECS_REFLECT_SHARED_COMPONENT RenderMesh {
 		return true;
 	}
 
+	inline bool Validate() const {
+		return IsAssetPointerValid(mesh) && IsAssetPointerValid(material);
+	}
+
 	ECSEngine::CoalescedMesh* mesh;
 	ECSEngine::Material* material;
 	unsigned int count;

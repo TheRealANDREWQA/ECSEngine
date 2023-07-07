@@ -11,10 +11,8 @@
 								void* _additional_data = action_data->additional_data; \
 								void** buffers = action_data->buffers; \
 								size_t* counts = action_data->counts; \
-								const ECSEngine::HID::MouseTracker* mouse_tracker = action_data->mouse_tracker; \
-								const ECSEngine::HID::KeyboardTracker* keyboard_tracker = action_data->keyboard_tracker; \
-								ECSEngine::HID::Keyboard* keyboard = action_data->keyboard; \
-								ECSEngine::HID::Mouse* mouse = action_data->mouse; \
+								ECSEngine::Keyboard* keyboard = action_data->keyboard; \
+								ECSEngine::Mouse* mouse = action_data->mouse; \
 								ECSEngine::float2 mouse_delta = system != nullptr ? system->GetMouseDelta(mouse_position) : ECSEngine::float2(0.0f, 0.0f);
 
 #define UI_PREPARE_DRAWER(initializer) ECSEngine::Tools::UIDrawer drawer = ECSEngine::Tools::UIDrawer( \

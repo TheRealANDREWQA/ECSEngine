@@ -25,7 +25,7 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 	DebugDrawer* drawer = world->debug_drawer;
 
 	const RenderMesh* mesh = (const RenderMesh*)for_each_data->shared_components[0];
-	if (IsAssetPointerValid(mesh->material) && IsAssetPointerValid(mesh->mesh)) {
+	if (mesh->Validate()) {
 
 		float3 translation_value = { 0.0f, 0.0f, 0.0f };
 		float3 rotation_value = { 0.0f, 0.0f, 0.0f };
@@ -97,8 +97,6 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 			object_matrix = MatrixIdentity();
 		}
 
-		graphics->BindRasterizerState(debug_drawer->rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID]);
-
 		Matrix mvp_matrix = object_matrix * data->camera_matrix;
 
 		object_matrix = MatrixGPU(object_matrix);
@@ -116,7 +114,6 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 		graphics->BindMaterial(*mesh->material);
 
 		graphics->DrawCoalescedMeshCommand(*mesh->mesh);
-		graphics->EnableDepth();
 
 		/*
 		float3 camera_distance = translation_value - data->camera->translation;
@@ -214,8 +211,8 @@ ECS_THREAD_TASK(RenderSelectables) {
 					// Highlight the entities - if they have meshes
 					size_t valid_entities = 0;
 					for (size_t index = 0; index < selected_entities.size; index++) {
-						bool has_render_mesh = entity_manager->HasSharedComponent(selected_entities[index], RenderMesh::ID());
-						valid_entities += has_render_mesh;
+						const RenderMesh* render_mesh = entity_manager->TryGetComponent<RenderMesh>(selected_entities[index]);
+						valid_entities += render_mesh != nullptr && render_mesh->Validate();
 					}
 
 					float3 translation_midpoint = { 0.0f, 0.0f, 0.0f };
@@ -234,15 +231,15 @@ ECS_THREAD_TASK(RenderSelectables) {
 						}
 
 						for (size_t index = 0; index < selected_entities.size; index++) {
-							const RenderMesh* render_mesh = (const RenderMesh*)entity_manager->TryGetSharedComponent(selected_entities[index], RenderMesh::ID());
-							if (render_mesh != nullptr) {
+							const RenderMesh* render_mesh = entity_manager->TryGetComponent<RenderMesh>(selected_entities[index]);
+							if (render_mesh != nullptr && render_mesh->Validate()) {
 								highlight_elements[index].is_submesh = false;
 								highlight_elements[index].mesh = &render_mesh->mesh->mesh;
 
 								Matrix entity_matrix;
-								const Translation* translation = (const Translation*)entity_manager->TryGetComponent(selected_entities[index], Translation::ID());
-								const Rotation* rotation = (const Rotation*)entity_manager->TryGetComponent(selected_entities[index], Rotation::ID());
-								const Scale* scale = (const Scale*)entity_manager->TryGetComponent(selected_entities[index], Scale::ID());
+								const Translation* translation = entity_manager->TryGetComponent<Translation>(selected_entities[index]);
+								const Rotation* rotation = entity_manager->TryGetComponent<Rotation>(selected_entities[index]);
+								const Scale* scale = entity_manager->TryGetComponent<Scale>(selected_entities[index]);
 
 								if (translation != nullptr) {
 									Matrix translation_matrix = MatrixTranslation(translation->value);
@@ -296,6 +293,8 @@ ECS_THREAD_TASK(RenderSelectables) {
 						float3 camera_distance = translation_midpoint - camera.translation;
 						float distance = Length(camera_distance).First();			
 
+						float constant_viewport_size = GetConstantObjectSizeInPerspective(camera.fov, distance, 0.25f);
+
 						// Now display the aggregate tool
 						ECS_TRANSFORM_TOOL transform_tool = GetEditorRuntimeTransformTool(system_manager);
 						DebugDrawCallOptions debug_options;
@@ -309,7 +308,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 								debug_drawer->AddAxes(
 									translation_midpoint, 
 									rotation_midpoint, 
-									GetConstantObjectSizeInPerspective(camera.fov, distance, 0.25f),
+									constant_viewport_size,
 									AxisXColor(),
 									AxisYColor(),
 									AxisZColor(),
@@ -319,7 +318,35 @@ ECS_THREAD_TASK(RenderSelectables) {
 								break;
 							case ECS_TRANSFORM_ROTATION:
 							{
+								constant_viewport_size *= 1.2f;
+								float3 x_rotation = { rotation_midpoint.x, rotation_midpoint.y, rotation_midpoint.z };
+								x_rotation.z += 90.0f;
+								debug_drawer->AddCircle(
+									translation_midpoint,
+									x_rotation,
+									constant_viewport_size,
+									AxisXColor(),
+									debug_options
+								);
 
+								float3 y_rotation = { rotation_midpoint.x, rotation_midpoint.y, rotation_midpoint.z };
+								debug_drawer->AddCircle(
+									translation_midpoint,
+									y_rotation,
+									constant_viewport_size,
+									AxisYColor(),
+									debug_options
+								);
+
+								float3 z_rotation = { rotation_midpoint.x, rotation_midpoint.z, rotation_midpoint.y };
+								z_rotation.x += 90.0f;
+								debug_drawer->AddCircle(
+									translation_midpoint,
+									z_rotation,
+									constant_viewport_size,
+									AxisZColor(),
+									debug_options
+								);
 							}
 								break;
 							case ECS_TRANSFORM_SCALE:

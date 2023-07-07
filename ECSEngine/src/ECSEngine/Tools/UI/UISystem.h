@@ -41,8 +41,8 @@ namespace ECSEngine {
 			UISystem(
 				Application* application,
 				UIToolsAllocator* memory,
-				HID::Keyboard* keyboard,
-				HID::Mouse* mouse,
+				Keyboard* keyboard,
+				Mouse* mouse,
 				Graphics* graphics,
 				ResourceManager* resource,
 				TaskManager* task_manager,
@@ -1788,10 +1788,8 @@ namespace ECSEngine {
 			//private:
 			Application* m_application;
 			UIToolsAllocator* m_memory;
-			HID::Keyboard* m_keyboard;
-			HID::Mouse* m_mouse;
-			HID::MouseTracker* m_mouse_tracker;
-			HID::KeyboardTracker* m_keyboard_tracker;
+			Keyboard* m_keyboard;
+			Mouse* m_mouse;
 			Graphics* m_graphics;
 			ResourceManager* m_resource_manager;
 			TaskManager* m_task_manager;
@@ -1833,10 +1831,8 @@ namespace ECSEngine {
 				size_t*,
 				float,
 				float,
-				const HID::MouseState*,
-				const HID::MouseTracker*,
-				const HID::KeyboardState*,
-				const HID::KeyboardTracker*
+				const Mouse*,
+				const Keyboard*
 			);
 			UIFocusedWindowData m_focused_window_data;
 			// These handlers will be called every frame - unlike the handler stack on which only the top most handler is called
@@ -1912,10 +1908,8 @@ namespace ECSEngine {
 			size_t* counts,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
-			const HID::MouseState* mouse,
-			const HID::MouseTracker* mouse_tracker,
-			const HID::KeyboardState* keyboard,
-			const HID::KeyboardTracker* keyboard_tracker
+			const Mouse* mouse,
+			const Keyboard* keyboard
 		);
 
 		void ResizeDockspaceEvent(
@@ -1925,10 +1919,8 @@ namespace ECSEngine {
 			size_t* counts,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
-			const HID::MouseState* mouse,
-			const HID::MouseTracker* mouse_tracker,
-			const HID::KeyboardState* keyboard,
-			const HID::KeyboardTracker* keyboard_tracker
+			const Mouse* mouse,
+			const Keyboard* keyboard
 		);
 
 		void HoverOuterDockspaceBorderEvent(
@@ -1938,10 +1930,8 @@ namespace ECSEngine {
 			size_t* counts,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
-			const HID::MouseState* mouse,
-			const HID::MouseTracker* mouse_tracker,
-			const HID::KeyboardState* keyboard,
-			const HID::KeyboardTracker* keyboard_tracker
+			const Mouse* mouse,
+			const Keyboard* keyboard
 		);
 
 		void HoverInnerDockspaceBorderEvent(
@@ -1951,10 +1941,8 @@ namespace ECSEngine {
 			size_t* counts,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
-			const HID::MouseState* mouse,
-			const HID::MouseTracker* mouse_tracker,
-			const HID::KeyboardState* keyboard,
-			const HID::KeyboardTracker* keyboard_tracker
+			const Mouse* mouse,
+			const Keyboard* keyboard
 		);
 
 		ECSENGINE_API void SkipEvent(
@@ -1964,10 +1952,8 @@ namespace ECSEngine {
 			size_t* counts,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
-			const HID::MouseState* mouse,
-			const HID::MouseTracker* mouse_tracker,
-			const HID::KeyboardState* keyboard,
-			const HID::KeyboardTracker* keyboard_tracker
+			const Mouse* mouse,
+			const Keyboard* keyboard
 		);
 
 #pragma endregion

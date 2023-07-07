@@ -58,10 +58,8 @@ namespace ECSEngine {
 			void* additional_data;
 			size_t* counts;
 			void** buffers;
-			const HID::MouseTracker* mouse_tracker;
-			const HID::KeyboardTracker* keyboard_tracker;
-			HID::Keyboard* keyboard;
-			HID::Mouse* mouse;
+			Keyboard* keyboard;
+			Mouse* mouse;
 		};
 
 		struct UIDrawerDescriptor;

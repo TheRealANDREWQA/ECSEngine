@@ -231,7 +231,7 @@ namespace ECSEngine {
 		SetInstancedColor(instanced_data, buffer_index, arrow->color);
 		float3 direction_3 = GetRightVector(arrow->rotation);
 		float3 current_translation = arrow->translation + float3::Splat(arrow->length / 2.0f) * direction_3;
-		Matrix rotation_matrix = MatrixRotation(arrow->rotation);
+		Matrix rotation_matrix = QuaternionRotationMatrix(arrow->rotation);
 		SetInstancedMatrix(
 			instanced_data, 
 			buffer_index, 
@@ -249,7 +249,7 @@ namespace ECSEngine {
 			buffer_index,
 			MatrixMVPToGPU(
 				MatrixTranslation(arrow->translation + float3::Splat(arrow->length) * direction_3), 
-				MatrixRotation(arrow->rotation), 
+				QuaternionRotationMatrix(arrow->rotation), 
 				MatrixScale(float3::Splat(arrow->size)), 
 				camera_matrix
 			)
@@ -775,7 +775,7 @@ namespace ECSEngine {
 
 		Matrix matrix = MatrixMVPToGPU(
 			MatrixTranslation(position),
-			MatrixRotation(rotation),
+			QuaternionRotationMatrix(rotation),
 			MatrixScale(float3::Splat(size)),
 			camera_matrix
 		);
@@ -798,7 +798,7 @@ namespace ECSEngine {
 
 		Matrix mvp_matrix = MatrixMVPToGPU(
 			MatrixTranslation(position),
-			MatrixRotation(rotation),
+			QuaternionRotationMatrix(rotation),
 			MatrixScale(float3::Splat(radius)),
 			camera_matrix
 		);
@@ -936,7 +936,7 @@ namespace ECSEngine {
 		float3 character_spacing = float3::Splat(STRING_CHARACTER_SPACING * size) * direction;
 		float3 new_line_size = float3::Splat(STRING_NEW_LINE_SIZE * -size) * up_direction;
 
-		Matrix rotation_matrix = MatrixRotation({rotation_from_direction.x, rotation_from_direction.y, rotation_from_direction.z});
+		Matrix rotation_matrix = QuaternionRotationMatrix({rotation_from_direction.x, rotation_from_direction.y, rotation_from_direction.z});
 		Matrix scale_matrix = MatrixScale(float3::Splat(size));
 		Matrix scale_rotation = MatrixRS(rotation_matrix, scale_matrix);
 
@@ -1739,8 +1739,13 @@ namespace ECSEngine {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugCircle* circle = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
 					SetInstancedColor(instanced_data, index, circle->color);
-					Matrix matrix = MatrixTRS(MatrixTranslation(circle->position), MatrixRotation(circle->rotation), MatrixScale(float3::Splat(circle->radius)));
-					SetInstancedMatrix(instanced_data, index, MatrixGPU(MatrixMVP(matrix, camera_matrix)));
+					Matrix matrix = MatrixMVPToGPU(
+						MatrixTranslation(circle->position),
+						QuaternionRotationMatrix(circle->rotation), 
+						MatrixScale(float3::Splat(circle->radius)),
+						camera_matrix
+					);
+					SetInstancedMatrix(instanced_data, index, matrix);
 				}
 			};
 
@@ -2389,7 +2394,7 @@ namespace ECSEngine {
 					float3 character_spacing = float3::Splat(STRING_CHARACTER_SPACING * string->size) * direction;
 					float3 new_line_size = float3::Splat(STRING_NEW_LINE_SIZE * -string->size) * up_direction;
 
-					Matrix rotation_matrix = MatrixRotation({ rotation_from_direction.x, rotation_from_direction.y, rotation_from_direction.z });
+					Matrix rotation_matrix = QuaternionRotationMatrix({ rotation_from_direction.x, rotation_from_direction.y, rotation_from_direction.z });
 					Matrix scale_matrix = MatrixScale(float3::Splat(string->size));
 					Matrix scale_rotation = MatrixRS(rotation_matrix, scale_matrix);
 

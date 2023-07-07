@@ -208,6 +208,8 @@
     <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
     <ClInclude Include="src\Includes\ECSEngineCBufferTags.h" />
     <ClInclude Include="src\ECSEngine\Rendering\RenderingEffects.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\InputMapping.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\ButtonInput.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

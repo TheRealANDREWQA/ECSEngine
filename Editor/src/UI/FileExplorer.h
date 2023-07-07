@@ -22,4 +22,4 @@ void ChangeFileExplorerDirectory(EditorState* editor_state, ECSEngine::Stream<wc
 // Index is used to reset the shift indices, can be omitted by external setters
 void ChangeFileExplorerFile(EditorState* editor_state, ECSEngine::Stream<wchar_t> path, unsigned int index = -1);
 
-void FileExplorerTick(EditorState* editor_state);
+void TickFileExplorer(EditorState* editor_state);

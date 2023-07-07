@@ -99,10 +99,6 @@ namespace ECSEngine {
 		stencil_resource_view.Release();
 		stencil_render_view.Release();
 		
-		//graphics->RestoreBlendState(pipeline_state.render_state.blend_state);
-		//graphics->RestoreDepthStencilState(pipeline_state.render_state.depth_stencil_state);
-		//graphics->RestoreRasterizerState(pipeline_state.render_state.rasterizer_state);
-		//graphics->RestorePipelineShaders(&pipeline_state.render_state.shaders);
 		graphics->RestorePipelineState(&pipeline_state);
 	}
 

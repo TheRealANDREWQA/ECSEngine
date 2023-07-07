@@ -107,14 +107,14 @@ namespace ECSEngine {
 		UISystem::UISystem(
 			Application* application,
 			UIToolsAllocator* memory,
-			HID::Keyboard* keyboard,
-			HID::Mouse* mouse,
+			Keyboard* keyboard,
+			Mouse* mouse,
 			Graphics* graphics,
 			ResourceManager* resource,
 			TaskManager* task_manager,
 			uint2 window_os_size,
 			GlobalMemoryManager* initial_allocator
-		) : m_graphics(graphics), m_mouse(mouse), m_mouse_tracker(mouse->GetTracker()), m_keyboard(keyboard), m_keyboard_tracker(keyboard->GetTracker()),
+		) : m_graphics(graphics), m_mouse(mouse), m_keyboard(keyboard),
 			m_memory(memory), m_resource_manager(resource), m_task_manager(task_manager), m_application(application), m_frame_index(0),
 			m_texture_evict_count(0), m_texture_evict_target(60), m_window_os_size(window_os_size)
 		{
@@ -317,7 +317,7 @@ namespace ECSEngine {
 				*highlight_element = false;
 			}
 
-			if (m_mouse_tracker->LeftButton() == MBRELEASED && IsPointInRectangle(GetNormalizeMousePosition(), position, scale)) {
+			if (m_mouse->IsReleased(ECS_MOUSE_LEFT) && IsPointInRectangle(GetNormalizeMousePosition(), position, scale)) {
 				// Check to see if any name exists
 				for (size_t index = 0; index < name.size; index++) {
 					Stream<void> resource = GetGlobalResource(name[index]);
@@ -1428,7 +1428,7 @@ namespace ECSEngine {
 					data->move_x = DockspaceType::FloatingHorizontal == type || DockspaceType::Horizontal == type;
 					data->move_y = DockspaceType::FloatingVertical == type || DockspaceType::Vertical == type;
 					data->type = type;
-					if (m_mouse_tracker->LeftButton() == MBPRESSED) {
+					if (m_mouse->IsPressed(ECS_MOUSE_LEFT)) {
 						m_event = MoveDockspaceBorderEvent;
 						m_event_data = data;
 					}
@@ -1850,7 +1850,7 @@ namespace ECSEngine {
 					reinterpretation->border_hover = border_hover;
 					reinterpretation->dockspace_index = hovered_floating_dockspace;
 					reinterpretation->dockspace_type = DockspaceType::FloatingHorizontal;
-					if (m_mouse_tracker->LeftButton() == MBPRESSED) {
+					if (m_mouse->IsPressed(ECS_MOUSE_LEFT)) {
 						m_event = ResizeDockspaceEvent;
 						m_event_data = allocation;
 					}
@@ -1889,7 +1889,7 @@ namespace ECSEngine {
 					reinterpretation->border_hover = border_hover;
 					reinterpretation->dockspace_index = hovered_floating_dockspace;
 					reinterpretation->dockspace_type = DockspaceType::FloatingVertical;
-					if (m_mouse_tracker->LeftButton() == MBPRESSED) {
+					if (m_mouse->IsPressed(ECS_MOUSE_LEFT)) {
 						m_event = ResizeDockspaceEvent;
 						m_event_data = allocation;
 					}
@@ -1933,7 +1933,7 @@ namespace ECSEngine {
 					reinterpretation->border_hover = border_hover;
 					reinterpretation->dockspace_index = dockspace_index;
 					reinterpretation->dockspace_type = type;
-					if (m_mouse_tracker->LeftButton() == MBPRESSED) {
+					if (m_mouse->IsPressed(ECS_MOUSE_LEFT)) {
 						m_event = ResizeDockspaceEvent;
 						m_event_data = allocation;
 					}
@@ -3070,7 +3070,7 @@ namespace ECSEngine {
 			bool succeded;
 
 			if (hovered_floating_dockspace == -1) {
-				if (m_focused_window_data.clean_up_call_general && m_mouse_tracker->LeftButton() == MBPRESSED) {
+				if (m_focused_window_data.clean_up_call_general && m_mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					HandleFocusedWindowCleanupGeneral(mouse_position, 0);
 					m_focused_window_data.ResetGeneralHandler();
 				}
@@ -3103,8 +3103,8 @@ namespace ECSEngine {
 							};
 							UIDockspace* hovered_dockspace = &dockspaces[(unsigned int)dockspace_type][hovered_floating_dockspace];
 							if (dockspace_type == DockspaceType::FloatingHorizontal || dockspace_type == DockspaceType::FloatingVertical) {
-								if (IsEmptyFixedDockspace(hovered_dockspace) && m_mouse_tracker->LeftButton() == MBPRESSED 
-									&& m_keyboard->IsKeyDown(HID::Key::LeftShift)
+								if (IsEmptyFixedDockspace(hovered_dockspace) && m_mouse->IsPressed(ECS_MOUSE_LEFT) 
+									&& m_keyboard->IsDown(ECS_KEY_LEFT_SHIFT)
 								)
 								DestroyDockspace(hovered_dockspace->borders.buffer, dockspace_type);
 							}
@@ -3227,11 +3227,9 @@ namespace ECSEngine {
 						nullptr,
 						counts,
 						buffers,
-						m_mouse_tracker,
-						m_keyboard_tracker,
+						m_keyboard,
+						m_mouse
 					};
-					action_data.mouse = m_mouse;
-					action_data.keyboard = m_keyboard;
 
 					m_focused_window_data.additional_hoverable_data = additional_data;
 					m_focused_window_data.ExecuteHoverableHandler(&action_data);
@@ -3286,10 +3284,8 @@ namespace ECSEngine {
 					action_data.border_index = border_index;
 					action_data.buffers = buffers;
 					action_data.counts = counts;
-					action_data.mouse_tracker = m_mouse_tracker;
-					action_data.keyboard_tracker = m_keyboard_tracker;
-					action_data.keyboard = m_keyboard;
 					action_data.mouse = m_mouse;
+					action_data.keyboard = m_keyboard;
 					action_data.mouse_position = mouse_position;
 					action_data.type = type;
 
@@ -3383,11 +3379,9 @@ namespace ECSEngine {
 						additional_data,
 						counts,
 						buffers,
-						m_mouse_tracker,
-						m_keyboard_tracker
+						m_keyboard,
+						m_mouse
 					};
-					action_data.mouse = m_mouse;
-					action_data.keyboard = m_keyboard;
 					m_resources.thread_resources[thread_id].phase = general_handler->action[general_index].phase;
 
 					m_focused_window_data.additional_general_data = additional_data;
@@ -3555,9 +3549,6 @@ namespace ECSEngine {
 
 			UpdateDockspaceHierarchy();
 
-			m_mouse_tracker = m_mouse->GetTracker();
-			m_keyboard_tracker = m_keyboard->GetTracker();
-
 #ifdef ECS_TOOLS_UI_SINGLE_THREADED
 			m_graphics->DisableDepth();
 #endif
@@ -3596,12 +3587,12 @@ namespace ECSEngine {
 			}
 			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 				if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_SYSTEM) {
-					if (m_mouse_tracker->Button(button_type) == MBHELD || m_mouse_tracker->LeftButton() == MBPRESSED) {
+					if (m_mouse->IsDown(button_type)) {
 						auto phase_copy = m_resources.thread_resources[0].phase;
 						HandleFocusedWindowClickable(mouse_position, 0, button_type);
 						m_resources.thread_resources[0].phase = phase_copy;
 					}
-					else if (m_mouse_tracker->Button(button_type) == MBRELEASED) {
+					else if (m_mouse->IsReleased(button_type)) {
 						auto phase_copy = m_resources.thread_resources[0].phase;
 						HandleFocusedWindowClickable(mouse_position, 0, button_type);
 						if (m_focused_window_data.clickable_handler[button_type].action != nullptr) {
@@ -3640,10 +3631,8 @@ namespace ECSEngine {
 					counts,
 					mouse_position.x,
 					mouse_position.y,
-					m_mouse->GetState(),
-					m_mouse_tracker,
-					m_keyboard->GetState(),
-					m_keyboard_tracker
+					m_mouse,
+					m_keyboard
 				);
 			}
 
@@ -3953,7 +3942,7 @@ namespace ECSEngine {
 			if (!m_execute_events && data->mouse_region.dockspace == data->dockspace && data->mouse_region.border_index == data->border_index) {
 				bool active_click_handler = false;
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button) {
-					active_click_handler |= m_focused_window_data.clickable_handler[button].action == nullptr || m_mouse_tracker->Button(button) != MBHELD;
+					active_click_handler |= m_focused_window_data.clickable_handler[button].action == nullptr || m_mouse->Get(button) != ECS_BUTTON_DOWN;
 				});
 				if ((active_click_handler || m_focused_window_data.always_hoverable)
 					&& data->dockspace->borders[data->border_index].hoverable_handler.position_x.buffer != nullptr) {
@@ -3970,7 +3959,7 @@ namespace ECSEngine {
 				}
 
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
-					if (m_mouse_tracker->Button(button_type) == MBPRESSED) {
+					if (m_mouse->Get(button_type) == ECS_BUTTON_PRESSED) {
 						DockspaceType floating_type;
 						UIDockspace* floating_dockspace = GetFloatingDockspaceFromDockspace(
 							data->dockspace,
@@ -4014,10 +4003,10 @@ namespace ECSEngine {
 
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 					if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_NORMAL) {
-						if (m_mouse_tracker->Button(button_type) == MBHELD) {
+						if (m_mouse->Get(button_type) == ECS_BUTTON_DOWN) {
 							HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
 						}
-						else if (m_mouse_tracker->Button(button_type) == MBRELEASED) {
+						else if (m_mouse->Get(button_type) == ECS_BUTTON_RELEASED) {
 							HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
 							if (m_focused_window_data.clickable_handler[button_type].action != nullptr) {
 								if (m_focused_window_data.clickable_handler[button_type].data_size != 0) {
@@ -4029,7 +4018,7 @@ namespace ECSEngine {
 						}
 					}
 					});
-				if (m_focused_window_data.general_handler.phase == ECS_UI_DRAW_NORMAL && m_mouse_tracker->LeftButton() != MBPRESSED) {
+				if (m_focused_window_data.general_handler.phase == ECS_UI_DRAW_NORMAL && !m_mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					HandleFocusedWindowGeneral(data->mouse_position, data->thread_id);
 				}
 			}
@@ -4068,10 +4057,10 @@ namespace ECSEngine {
 
 			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 				if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_LATE) {
-					if (m_mouse_tracker->Button(button_type) == MBHELD || m_mouse_tracker->Button(button_type) == MBPRESSED) {
+					if (m_mouse->IsDown(button_type)) {
 						HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
 					}
-					else if (m_mouse_tracker->Button(button_type) == MBRELEASED) {
+					else if (m_mouse->IsReleased(button_type)) {
 						HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
 						if (m_focused_window_data.clickable_handler[button_type].action != nullptr) {
 							if (m_focused_window_data.clickable_handler[button_type].data_size != 0) {
@@ -4115,10 +4104,10 @@ namespace ECSEngine {
 				window_handler.data = m_windows[window_index].default_handler.data;
 				window_handler.dockspace = data->dockspace;
 				window_handler.keyboard = m_keyboard;
-				window_handler.keyboard_tracker = m_keyboard_tracker;
+				window_handler.keyboard = m_keyboard;
 				window_handler.mouse = m_mouse;
 				window_handler.mouse_position = data->mouse_position;
-				window_handler.mouse_tracker = m_mouse_tracker;
+				window_handler.mouse = m_mouse;
 				window_handler.position = region_position;
 				window_handler.scale = region_scale;
 				window_handler.system = this;
@@ -5063,8 +5052,6 @@ namespace ECSEngine {
 		{
 			action_data->keyboard = m_keyboard;
 			action_data->mouse = m_mouse;
-			action_data->keyboard_tracker = m_keyboard_tracker;
-			action_data->mouse_tracker = m_mouse_tracker;
 			action_data->system = this;
 		}
 
@@ -6680,10 +6667,10 @@ namespace ECSEngine {
 			result.data = nullptr;
 			result.dockspace = dockspace;
 			result.keyboard = m_keyboard;
-			result.keyboard_tracker = m_keyboard_tracker;
+			result.keyboard = m_keyboard;
 			result.mouse = m_mouse;
 			result.mouse_position = { -0.0f, -0.0f };
-			result.mouse_tracker = m_mouse_tracker;
+			result.mouse = m_mouse;
 			result.position = { 0.0f, 0.0f };
 			result.scale = { 0.0f, 0.0f };
 			result.system = this;
@@ -6740,10 +6727,8 @@ namespace ECSEngine {
 			action_data.counts = m_focused_window_data.counts;
 			action_data.type = m_focused_window_data.active_location.type;
 			action_data.mouse_position = mouse_position;
-			action_data.keyboard_tracker = m_keyboard_tracker;
-			action_data.mouse_tracker = m_mouse_tracker;
-			action_data.mouse = m_mouse;
 			action_data.keyboard = m_keyboard;
+			action_data.mouse = m_mouse;
 			action_data.additional_data = nullptr;
 
 			if (m_focused_window_data.clickable_handler[button_type].action == DefaultClickableAction) {
@@ -6767,8 +6752,8 @@ namespace ECSEngine {
 			action_data.counts = counts;
 			action_data.type = m_focused_window_data.hovered_location.type;
 			action_data.mouse_position = mouse_position;
-			action_data.keyboard_tracker = m_keyboard_tracker;
-			action_data.mouse_tracker = m_mouse_tracker;
+			action_data.keyboard = m_keyboard;
+			action_data.mouse = m_mouse;
 			action_data.keyboard = m_keyboard;
 			action_data.mouse = m_mouse;
 			action_data.additional_data = m_focused_window_data.additional_hoverable_data;
@@ -6789,8 +6774,6 @@ namespace ECSEngine {
 			action_data.counts = m_focused_window_data.counts;
 			action_data.type = m_focused_window_data.active_location.type;
 			action_data.mouse_position = mouse_position;
-			action_data.keyboard_tracker = m_keyboard_tracker;
-			action_data.mouse_tracker = m_mouse_tracker;
 			action_data.keyboard = m_keyboard;
 			action_data.mouse = m_mouse;
 			action_data.additional_data = nullptr;
@@ -6817,10 +6800,10 @@ namespace ECSEngine {
 				action_data.counts = nullptr;
 				action_data.data = m_focused_window_data.general_handler.data;
 				action_data.keyboard = m_keyboard;
-				action_data.keyboard_tracker = m_keyboard_tracker;
+				action_data.keyboard = m_keyboard;
 				action_data.mouse = m_mouse;
 				action_data.mouse_position = mouse_position;
-				action_data.mouse_tracker = m_mouse_tracker;
+				action_data.mouse = m_mouse;
 				action_data.system = this;
 				action_data.type = m_focused_window_data.cleanup_general_location.type;
 				action_data.position = m_focused_window_data.general_transform.position;
@@ -6843,10 +6826,10 @@ namespace ECSEngine {
 				action_data.counts = nullptr;
 				action_data.data = m_focused_window_data.hoverable_handler.data;
 				action_data.keyboard = m_keyboard;
-				action_data.keyboard_tracker = m_keyboard_tracker;
+				action_data.keyboard = m_keyboard;
 				action_data.mouse = m_mouse;
 				action_data.mouse_position = mouse_position;
-				action_data.mouse_tracker = m_mouse_tracker;
+				action_data.mouse = m_mouse;
 				action_data.system = this;
 				action_data.type = m_focused_window_data.cleanup_hoverable_location.type;
 				action_data.position = m_focused_window_data.hoverable_transform.position;
@@ -7711,10 +7694,9 @@ namespace ECSEngine {
 				data.counts = nullptr;
 				data.dockspace = nullptr;
 				data.keyboard = m_keyboard;
-				data.keyboard_tracker = m_keyboard_tracker;
 				data.mouse = m_mouse;
 				data.mouse_position = GetNormalizeMousePosition();
-				data.mouse_tracker = m_mouse_tracker;
+				data.mouse = m_mouse;
 				data.position = { -10.0f, -10.0f };
 				data.additional_data = nullptr;
 				data.scale = { 0.0f, 0.0f };
@@ -9116,10 +9098,6 @@ namespace ECSEngine {
 			application_window_size.y--;
 
 			uint2 window_position = OS::GetOSWindowPosition(m_application->GetOSWindowHandle());
-
-			if (m_mouse_tracker->XButton1() == MBPRESSED) {
-				__debugbreak();
-			}
 
 			uint2 new_position = cursor_pixel_position;
 			if (window_position.x + application_window_size.x == cursor_pixel_position.x) {
@@ -11489,11 +11467,11 @@ namespace ECSEngine {
 
 			UIPopUpWindowData* data = (UIPopUpWindowData*)_data;
 			
-			HID::MouseButtonState state = MBPRESSED;
+			ECS_BUTTON_STATE state = ECS_BUTTON_PRESSED;
 			if (data->destroy_at_release) {
-				state = MBRELEASED;
+				state = ECS_BUTTON_RELEASED;
 			}
-			if (mouse_tracker->LeftButton() == state) {
+			if (mouse->Get(ECS_MOUSE_LEFT) == state) {
 				if (system->m_pop_up_windows.size > 1) {
 					// Check to see if this is the top most pop up window
 					unsigned int window_index = system->GetWindowFromName(data->name);
@@ -11618,7 +11596,7 @@ namespace ECSEngine {
 		void CollapseTriangleClickableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			if (mouse_tracker->LeftButton() == MBRELEASED && IsPointInRectangle(mouse_position, position, scale))
+			if (mouse->IsReleased(ECS_MOUSE_LEFT) && IsPointInRectangle(mouse_position, position, scale))
 				dockspace->borders[border_index].draw_region_header = 1 - dockspace->borders[border_index].draw_region_header;
 		}
 
@@ -11628,7 +11606,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			const UIDefaultHoverableData* data = (UIDefaultHoverableData*)_data;
-			bool is_pressed_or_held = mouse_tracker->LeftButton() == MBPRESSED || mouse_tracker->LeftButton() == MBHELD;
+			bool is_pressed_or_held = mouse->IsPressed(ECS_MOUSE_LEFT) || mouse->IsDown(ECS_MOUSE_LEFT);
 
 			if (!data->is_single_action_parameter_draw) {
 				for (size_t index = 0; index < data->count; index++) {
@@ -11670,7 +11648,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			const UIDefaultTextHoverableData* data = (UIDefaultTextHoverableData*)_data;
-			bool is_pressed_or_held = mouse_tracker->LeftButton() == MBPRESSED || mouse_tracker->LeftButton() == MBHELD;
+			bool is_pressed_or_held = mouse->IsPressed(ECS_MOUSE_LEFT) || mouse->IsDown(ECS_MOUSE_LEFT);
 
 			float lighten_percentage = data->percentage;
 			if (is_pressed_or_held) {
@@ -11730,7 +11708,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			const UIDefaultVertexColorHoverableData* data = (UIDefaultVertexColorHoverableData*)_data;
-			bool is_pressed_or_held = mouse_tracker->LeftButton() == MBPRESSED || mouse_tracker->LeftButton() == MBHELD;
+			bool is_pressed_or_held = mouse->IsPressed(ECS_MOUSE_LEFT) || mouse->IsDown(ECS_MOUSE_LEFT);
 
 			float lighten_percentage = data->percentage;
 			if (is_pressed_or_held) {
@@ -11761,15 +11739,15 @@ namespace ECSEngine {
 
 			UIDefaultClickableData* data = (UIDefaultClickableData*)_data;
 
-			HID::MouseButtonState button_state = mouse_tracker->Button(data->button_type);
-			if (button_state == MBPRESSED || button_state == MBHELD) {
+			ECS_BUTTON_STATE button_state = mouse->Get(data->button_type);
+			if (button_state == ECS_BUTTON_PRESSED || button_state == ECS_BUTTON_DOWN) {
 				// The data must be inferred
 				void* handler_data = data->hoverable_handler.data_size == 0 ? data->hoverable_handler.data : function::OffsetPointer(data, sizeof(*data));
 
 				action_data->data = handler_data;
 				data->hoverable_handler.action(action_data);
 			}
-			else if (button_state == MBRELEASED) {
+			else if (button_state == ECS_BUTTON_RELEASED) {
 				if (IsPointInRectangle(
 					mouse_position,
 					position,
@@ -11894,7 +11872,7 @@ namespace ECSEngine {
 			system->SetCleanupGeneralHandler();
 
 			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
-				if (mouse_tracker->LeftButton() == MBPRESSED) {
+				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
 						size_t duration = additional_data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS);
 						if (duration < data->max_duration_between_clicks) {
@@ -11990,7 +11968,7 @@ namespace ECSEngine {
 								rectangle_transforms[0],
 								rectangle_transforms[1]
 							)) {
-								if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBPRESSED) {
+								if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsPressed(ECS_MOUSE_LEFT)) {
 									system->HandleDockingGizmoTransparentHover(
 										hovered_dockspace,
 										border_indices[index],
@@ -12000,7 +11978,7 @@ namespace ECSEngine {
 										counts
 									);
 								}
-								else if (mouse_tracker->LeftButton() == MBRELEASED) {
+								else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 									system->HandleDockingGizmoAdditionOfDockspace(
 										dockspaces[index],
 										border_indices[index],
@@ -12018,7 +11996,7 @@ namespace ECSEngine {
 								rectangle_transforms[2],
 								rectangle_transforms[3]
 							)) {
-								if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBPRESSED) {
+								if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsPressed(ECS_MOUSE_LEFT)) {
 									system->HandleDockingGizmoTransparentHover(
 										hovered_dockspace,
 										border_indices[index],
@@ -12028,7 +12006,7 @@ namespace ECSEngine {
 										counts
 									);
 								}
-								else if (mouse_tracker->LeftButton() == MBRELEASED) {
+								else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 									system->HandleDockingGizmoAdditionOfDockspace(
 										dockspaces[index],
 										border_indices[index],
@@ -12046,7 +12024,7 @@ namespace ECSEngine {
 								rectangle_transforms[4],
 								rectangle_transforms[5]
 							)) {
-								if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBPRESSED) {
+								if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsPressed(ECS_MOUSE_LEFT)) {
 									system->HandleDockingGizmoTransparentHover(
 										hovered_dockspace,
 										border_indices[index],
@@ -12056,7 +12034,7 @@ namespace ECSEngine {
 										counts
 									);
 								}
-								else if (mouse_tracker->LeftButton() == MBRELEASED) {
+								else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 									system->HandleDockingGizmoAdditionOfDockspace(
 										dockspaces[index],
 										border_indices[index],
@@ -12074,7 +12052,7 @@ namespace ECSEngine {
 								rectangle_transforms[6],
 								rectangle_transforms[7]
 							)) {
-								if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBPRESSED) {
+								if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsPressed(ECS_MOUSE_LEFT)) {
 									system->HandleDockingGizmoTransparentHover(
 										hovered_dockspace,
 										border_indices[index],
@@ -12084,7 +12062,7 @@ namespace ECSEngine {
 										counts
 									);
 								}
-								else if (mouse_tracker->LeftButton() == MBRELEASED) {
+								else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 									system->HandleDockingGizmoAdditionOfDockspace(
 										dockspaces[index],
 										border_indices[index],
@@ -12102,7 +12080,7 @@ namespace ECSEngine {
 								rectangle_transforms[8],
 								rectangle_transforms[9]
 							)) {
-								if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBPRESSED) {
+								if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsPressed(ECS_MOUSE_LEFT)) {
 									system->HandleDockingGizmoTransparentHover(
 										hovered_dockspace,
 										border_indices[index],
@@ -12112,7 +12090,7 @@ namespace ECSEngine {
 										counts
 									);
 								}
-								else if (mouse_tracker->LeftButton() == MBRELEASED) {
+								else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 									system->HandleDockingGizmoAdditionOfDockspace(
 										dockspaces[index],
 										border_indices[index],
@@ -12157,7 +12135,7 @@ namespace ECSEngine {
 
 			const float EPSILON = 0.03f;
 
-			if (mouse_tracker->LeftButton() == MBPRESSED) {
+			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				float2 sizes[32];
 				system->CalculateDockspaceRegionHeaders(
 					dockspace,
@@ -12513,10 +12491,8 @@ namespace ECSEngine {
 			size_t* counts,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
-			const HID::MouseState* mouse,
-			const HID::MouseTracker* mouse_tracker,
-			const HID::KeyboardState* keyboard,
-			const HID::KeyboardTracker* keyboard_tracker
+			const Mouse* mouse,
+			const Keyboard* keyboard
 		) {
 			UIMoveDockspaceBorderEventData* data = (UIMoveDockspaceBorderEventData*)parameter;
 			float2 mouse_delta = system->GetMouseDelta({ normalized_mouse_x, normalized_mouse_y });
@@ -12527,13 +12503,13 @@ namespace ECSEngine {
 				system->m_focused_window_data.active_location.border_index == data->border_index)) {
 				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 				
-				if (mouse_tracker->LeftButton() == MBPRESSED) {
+				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					system->HandleFocusedWindowCleanupGeneral({ normalized_mouse_x, normalized_mouse_y }, 0);
 					system->DeallocateGeneralHandler();
 					system->m_focused_window_data.ResetGeneralHandler();
 				}
 
-				if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBPRESSED) {
+				if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					DockspaceType floating_type = DockspaceType::Horizontal;
 					UIDockspace* floating_dockspace = system->GetFloatingDockspaceFromDockspace(data->dockspace, data->move_x, floating_type);
 					if (floating_type == DockspaceType::Horizontal) {
@@ -12591,10 +12567,8 @@ namespace ECSEngine {
 			size_t* counts,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
-			const HID::MouseState* mouse,
-			const HID::MouseTracker* mouse_tracker,
-			const HID::KeyboardState* keyboard,
-			const HID::KeyboardTracker* keyboard_tracker
+			const Mouse* mouse,
+			const Keyboard* keyboard
 		) {
 			UIDockspace* dockspaces[4] = {
 				system->m_horizontal_dockspaces.buffer,
@@ -12609,7 +12583,7 @@ namespace ECSEngine {
 			if (system->m_focused_window_data.locked_window == 0 || (system->m_focused_window_data.active_location.dockspace == dockspace)) {
 				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 				
-				if (mouse_tracker->LeftButton() == MBPRESSED) {
+				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					// cleaning up the last action; signaling clean up call by marking the buffers and the counts as nullptr
 					if (system->m_focused_window_data.general_handler.action != nullptr) {
 						system->HandleFocusedWindowCleanupGeneral({ normalized_mouse_x, normalized_mouse_y }, 0, nullptr);
@@ -12675,7 +12649,7 @@ namespace ECSEngine {
 					}
 				};
 
-				if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBPRESSED) {
+				if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					DockspaceType floating_type = DockspaceType::Horizontal;
 					UIDockspace* floating_dockspace = system->GetFloatingDockspaceFromDockspace(dockspace, GetDockspaceMaskFromType(data->dockspace_type), floating_type);
 					if (floating_type == DockspaceType::Horizontal) {
@@ -12729,10 +12703,8 @@ namespace ECSEngine {
 			size_t* counts,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
-			const HID::MouseState* mouse,
-			const HID::MouseTracker* mouse_tracker,
-			const HID::KeyboardState* keyboard,
-			const HID::KeyboardTracker* keyboard_tracker
+			const Mouse* mouse,
+			const Keyboard* keyboard
 		) {
 			const UIDockspace* dockspaces[4] = {
 				system->m_horizontal_dockspaces.buffer,
@@ -12831,10 +12803,8 @@ namespace ECSEngine {
 			size_t* counts,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
-			const HID::MouseState* mouse,
-			const HID::MouseTracker* mouse_tracker,
-			const HID::KeyboardState* keyboard,
-			const HID::KeyboardTracker* keyboard_tracker
+			const Mouse* mouse,
+			const Keyboard* keyboard
 		) {
 			UIMoveDockspaceBorderEventData* data = (UIMoveDockspaceBorderEventData*)parameter;
 			const float masks[4] = { 1.0f, 0.0f, 1.0f, 0.0f };
@@ -12874,10 +12844,8 @@ namespace ECSEngine {
 			size_t* counts,
 			float normalized_mouse_x,
 			float normalized_mouse_y,
-			const HID::MouseState* mouse,
-			const HID::MouseTracker* mouse_tracker,
-			const HID::KeyboardState* keyboard,
-			const HID::KeyboardTracker* keyboard_tracker
+			const Mouse* mouse,
+			const Keyboard* keyboard
 		) {
 			ECS_CURSOR_TYPE current_cursor = system->m_application->GetCurrentCursor();
 			

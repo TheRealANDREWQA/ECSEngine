@@ -1,8 +1,8 @@
 #pragma once
 #include "../Core.h"
 #include "ecspch.h"
-#include "../../../Dependencies/DirectXTK/Inc/Mouse.h"
 #include "../Utilities/BasicTypes.h"
+#include "ButtonInput.h"
 
 namespace ECSEngine {
 
@@ -22,146 +22,68 @@ namespace ECSEngine {
 		}
 	}
 
-	namespace HID {
+	struct ECSENGINE_API MouseProcessAttachment {
+		HWND hWnd;
+	};
 
-		typedef DirectX::Mouse::ButtonStateTracker::ButtonState MouseButtonState;
+	struct ECSENGINE_API MouseProcedureInfo {
+		UINT message;
+		WPARAM wParam;
+		LPARAM lParam;
+	};
 
-		struct ECSENGINE_API MouseState {
-			bool Button(ECS_MOUSE_BUTTON button) const;
-			
-			bool LeftButton() const;
+	struct ECSENGINE_API Mouse : ButtonInput<ECS_MOUSE_BUTTON, ECS_MOUSE_BUTTON_COUNT>
+	{
+	public:
+		Mouse();
 
-			bool RightButton() const;
+		Mouse(const Mouse& other) = default;
+		Mouse& operator =(const Mouse& other) = default;
 
-			bool MiddleButton() const;
+		void AttachToProcess(const MouseProcessAttachment& info);
 
-			bool XButton1() const;
+		void DisableRawInput();
 
-			bool XButton2() const;
+		void EnableRawInput();
 
-			int2 Position() const;
+		int GetScrollValue() const;
 
-			int MouseWheelScroll() const;
+		int2 GetPosition() const;
 
-			int2 PreviousPosition() const;
+		int2 GetPreviousPosition() const;
 
-			int PreviousScroll() const;
+		int2 GetPositionDelta() const;
 
-			int2 PositionDelta()const;
+		int GetPreviousScroll() const;
 
-			int ScrollDelta() const;
+		int GetScrollDelta() const;
 
-			void SetPreviousPosition();
+		bool GetRawInputStatus() const;
 
-			void SetPosition(int2 position);
+		void SetCursorVisibility(bool visible);
 
-			void SetPreviousScroll();
+		void SetPreviousPositionAndScroll();
 
-			DirectX::Mouse::State state;
-			int2 previous_position;
-			int previous_scroll;
-		};
+		void SetPosition(int x, int y);
 
-		struct ECSENGINE_API MouseTracker {
-			void Reset();
-			void Update(const MouseState& state);
+		void AddDelta(int x, int y);
 
-			MouseButtonState LeftButton() const;
+		void ResetCursorWheel();
+		
+		void SetCursorWheel(int value);
 
-			MouseButtonState RightButton() const;
+		void Update();
 
-			MouseButtonState MiddleButton() const;
+		void Procedure(const MouseProcedureInfo& info);
 
-			MouseButtonState XButton1() const;
+		void Reset();
 
-			MouseButtonState XButton2() const;
-
-			MouseButtonState Button(ECS_MOUSE_BUTTON button) const;
-
-			DirectX::Mouse::ButtonStateTracker tracker;
-		};
-
-		struct ECSENGINE_API MouseProcessAttachment {
-			HWND hWnd;
-		};
-
-		struct ECSENGINE_API MouseProcedureInfo {
-			UINT message;
-			WPARAM wParam;
-			LPARAM lParam;
-		};
-
-		#define MBPRESSED HID::MouseButtonState(DirectX::Mouse::ButtonStateTracker::ButtonState::PRESSED)
-		#define MBRELEASED HID::MouseButtonState(DirectX::Mouse::ButtonStateTracker::ButtonState::RELEASED)
-		#define MBUP HID::MouseButtonState(DirectX::Mouse::ButtonStateTracker::ButtonState::UP)
-		#define MBHELD HID::MouseButtonState(DirectX::Mouse::ButtonStateTracker::ButtonState::HELD)
-
-		class ECSENGINE_API Mouse
-		{
-		public:
-			Mouse();
-
-			Mouse(const Mouse& other) = default;
-			Mouse& operator =(const Mouse& other) = default;
-
-			void AttachToProcess(const MouseProcessAttachment& info);
-
-			void DisableRawInput();
-
-			void EnableRawInput();
-
-			MouseState* GetState();
-
-			MouseTracker* GetTracker();
-
-			int GetScrollValue() const;
-
-			int2 GetPosition() const;
-
-			int2 GetPreviousPosition() const;
-
-			int2 GetPositionDelta() const;
-
-			int GetPreviousScroll() const;
-
-			int GetScrollDelta() const;
-
-			bool GetRawInputStatus() const;
-
-			bool IsCursorVisible() const;
-
-			void UpdateTracker();
-
-			void UpdateState();
-
-			void SetAbsoluteMode();
-
-			void SetRelativeMode();
-
-			void SetCursorVisible();
-
-			void SetCursorInvisible();
-
-			void SetPreviousPositionAndScroll();
-
-			void SetPosition(int x, int y);
-
-			void AddDelta(int x, int y);
-
-			void ResetCursorWheel();
-
-			void ResetTracker();
-
-			void Procedure(const MouseProcedureInfo& info);
-
-		//private:
-			DirectX::Mouse* m_implementation;
-			MouseState m_state;
-			MouseTracker m_tracker;
-			bool m_get_raw_input;
-		};
-
-	}
+		int2 m_previous_position;
+		int m_previous_scroll;
+		int2 m_current_position;
+		int m_current_scroll;
+		bool m_get_raw_input;
+	};
 
 }
 

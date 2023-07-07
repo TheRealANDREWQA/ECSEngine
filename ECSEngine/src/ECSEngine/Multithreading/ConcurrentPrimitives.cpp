@@ -178,7 +178,8 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------
 
 	unsigned int Semaphore::Exit(unsigned int exit_count) {
-		return count.fetch_sub(exit_count, ECS_RELEASE);
+		unsigned int value = count.fetch_sub(exit_count, ECS_RELEASE);
+		return value;
 	}
 
 	unsigned int Semaphore::ExitEx(unsigned int exit_count)
@@ -201,7 +202,8 @@ namespace ECSEngine {
 	unsigned int Semaphore::TryEnter(unsigned int check_value, unsigned int enter_count) {
 		unsigned int value = count.load(ECS_RELAXED);
 		if (value == check_value) {
-			return Enter(enter_count);
+			// Use a compare exchange
+			return count.compare_exchange_weak(value, value + enter_count, ECS_RELAXED) ? value : -1;
 		}
 		else {
 			return -1;

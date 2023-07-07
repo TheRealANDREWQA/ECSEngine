@@ -238,11 +238,11 @@ void FileExplorerSelectableBase(ActionData* action_data) {
 	FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
 
 	if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
-		if (mouse_tracker->LeftButton() == MBPRESSED) {
-			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+		if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
+			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 				FileExplorerHandleControlPath(data->editor_state, data->selection);
 			}
-			else if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
+			else if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 				FileExplorerHandleShiftSelection(data->editor_state, data->index);
 			}
 			else {
@@ -265,17 +265,17 @@ void FileExplorerDirectorySelectable(ActionData* action_data) {
 
 	system->m_focused_window_data.clean_up_call_general = true;
 	if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
-		if (mouse_tracker->LeftButton() == MBPRESSED) {
+		if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 			if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
-				if (additional_data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) < DOUBLE_CLICK_DURATION && keyboard->IsKeyUp(HID::Key::LeftControl)) {
+				if (additional_data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) < DOUBLE_CLICK_DURATION && keyboard->IsUp(ECS_KEY_LEFT_CTRL)) {
 					FileExplorerSetNewDirectory(data->editor_state, data->selection, data->index);
 				}
 			}
 			data->timer.SetMarker();
-			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 				FileExplorerHandleControlPath(data->editor_state, data->selection);
 			}
-			else if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
+			else if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 				FileExplorerHandleShiftSelection(data->editor_state, data->index);
 			}
 			else {
@@ -309,7 +309,7 @@ void FileExplorerLabelRenameCallback(ActionData* action_data) {
 	system->SetCleanupGeneralHandler();
 
 	if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
-		if (mouse_tracker->LeftButton() == MBPRESSED) {
+		if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 			if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
 				if (additional_data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) < DOUBLE_CLICK_DURATION) {
 					bool is_file = IsFile(data->selection);
@@ -804,7 +804,7 @@ void FileExplorerDrag(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	FileExplorerData* explorer_data = (FileExplorerData*)_data;
-	if (mouse_tracker->LeftButton() == MBHELD) {
+	if (mouse->IsDown(ECS_MOUSE_LEFT)) {
 		// Display the hover only if the mouse exited the action box
 		if (!IsPointInRectangle(mouse_position, position, scale)) {
 			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
@@ -927,7 +927,7 @@ void FileExplorerDrag(ActionData* action_data) {
 			explorer_data->flags = function::SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
 		}
 	}
-	else if (mouse_tracker->LeftButton() == MBRELEASED) {
+	else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 		if (function::HasFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES)) {
 			explorer_data->flags = function::SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_MOVE_SELECTED_FILES);
 			explorer_data->flags = function::ClearFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
@@ -1765,7 +1765,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	auto DeselectClick = [](ActionData* action_data) {
 		UI_UNPACK_ACTION_DATA;
 
-		if (mouse_tracker->LeftButton() == MBPRESSED) {
+		if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 			FileExplorerData* data = (FileExplorerData*)_data;
 			FileExplorerResetSelectedFiles(data);
 			data->starting_shift_index = data->ending_shift_index = -1;
@@ -1873,7 +1873,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		delimiter = delimiter == nullptr ? ascii_path.buffer : delimiter;
 		ASCIIPath current_path(ascii_path.buffer, delimiter - ascii_path.buffer);
 
-		const auto mouse_state = drawer.system->m_mouse_tracker->LeftButton();
+		const auto mouse_state = drawer.system->m_mouse->Get(ECS_MOUSE_LEFT);
 		while (current_path.size > 0) {
 			*delimiter = '\0';
 
@@ -1896,7 +1896,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 			Color rectangle_color = drawer.color_theme.background;
 			float2 rectangle_position = absolute_transform.position - drawer.region_render_offset;
-			if (drawer.IsMouseInRectangle(rectangle_position, absolute_transform.scale) && (mouse_state == MBPRESSED || mouse_state == MBHELD)) {
+			if (drawer.IsMouseInRectangle(rectangle_position, absolute_transform.scale) && (mouse_state == ECS_BUTTON_PRESSED || mouse_state == ECS_BUTTON_DOWN)) {
 				rectangle_color = drawer.color_theme.theme;
 			}
 			drawer.SolidColorRectangle(UI_CONFIG_LATE_DRAW, rectangle_position, absolute_transform.scale, rectangle_color);
@@ -1940,7 +1940,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		Color rectangle_color = drawer.color_theme.background;
 		float2 rectangle_position = absolute_transform.position - drawer.region_render_offset;
 		float2 rectangle_scale = { label_scale, drawer.layout.default_element_y };
-		if (drawer.IsMouseInRectangle(rectangle_position, rectangle_scale) && (mouse_state == MBPRESSED || mouse_state == MBHELD)) {
+		if (drawer.IsMouseInRectangle(rectangle_position, rectangle_scale) && (mouse_state == ECS_BUTTON_PRESSED || mouse_state == ECS_BUTTON_DOWN)) {
 			rectangle_color = drawer.color_theme.theme;
 		}
 		drawer.SolidColorRectangle(UI_CONFIG_LATE_DRAW, rectangle_position, rectangle_scale, rectangle_color);
@@ -2362,22 +2362,22 @@ void FileExplorerPrivateAction(ActionData* action_data) {
 
 	EditorState* editor_state = (EditorState*)_additional_data;
 	FileExplorerData* data = editor_state->file_explorer_data;
-	if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-		if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
+	if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+		if (keyboard->IsPressed(ECS_KEY_C)) {
 			action_data->data = data;
 			FileExplorerCopySelection(action_data);
 		}
-		else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
+		else if (keyboard->IsPressed(ECS_KEY_V)) {
 			action_data->data = editor_state;
 			FileExplorerPasteElements(action_data);
 		}
-		else if (keyboard_tracker->IsKeyPressed(HID::Key::X)) {
+		else if (keyboard->IsPressed(ECS_KEY_X)) {
 			action_data->data = data;
 			FileExplorerCutSelection(action_data);
 		}
 	}
 
-	if (keyboard->IsKeyPressed(HID::Key::Delete)) {
+	if (keyboard->IsPressed(ECS_KEY_DELETE)) {
 		action_data->data = data;
 		FileExplorerDeleteSelection(action_data);
 	}
@@ -2418,7 +2418,7 @@ void CreateFileExplorerAction(ActionData* action_data) {
 	CreateFileExplorer((EditorState*)action_data->data);
 }
 
-void FileExplorerTick(EditorState* editor_state)
+void TickFileExplorer(EditorState* editor_state)
 {
 	FileExplorerData* data = editor_state->file_explorer_data;
 

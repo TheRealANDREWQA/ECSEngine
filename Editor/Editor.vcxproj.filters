@@ -64,6 +64,7 @@
     <ClInclude Include="src\Editor\EditorSandboxTypes.h" />
     <ClInclude Include="src\UI\RenderingCommon.h" />
     <ClInclude Include="src\Editor\EditorStateTypes.h" />
+    <ClInclude Include="src\Editor\EditorInputTick.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -118,6 +119,7 @@
     <ClCompile Include="src\Assets\AssetTick.cpp" />
     <ClCompile Include="src\UI\Common.cpp" />
     <ClCompile Include="src\UI\RenderingCommon.cpp" />
+    <ClCompile Include="src\Editor\EditorInputTick.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

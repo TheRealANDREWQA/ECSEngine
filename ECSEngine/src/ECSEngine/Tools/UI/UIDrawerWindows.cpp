@@ -910,8 +910,8 @@ namespace ECSEngine {
 
 			int scroll_amount = mouse->GetScrollValue() - data->scroll;
 			float total_scroll = 0.0f;
-			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-				if (keyboard_tracker->IsKeyPressed(HID::Key::Z)) {
+			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+				if (keyboard->IsPressed(ECS_KEY_Z)) {
 					HandlerCommand command;
 					if (data->revert_commands.Pop(command)) {
 						action_data->data = command.handler.data;
@@ -921,7 +921,7 @@ namespace ECSEngine {
 					}
 				}
 				else if (IsPointInRectangle(mouse_position, position, scale) && data->last_frame == system->GetFrameIndex() - 1) {
-					if (mouse_tracker->RightButton() != MBPRESSED && data->allow_zoom) {
+					if (!mouse->IsPressed(ECS_MOUSE_RIGHT) && data->allow_zoom) {
 						if (scroll_amount != 0.0f) {
 							float2 before_zoom = system->m_windows[window_index].zoom;
 							system->m_windows[window_index].zoom.x += scroll_amount * ECS_TOOLS_UI_DEFAULT_HANDLER_ZOOM_FACTOR;
@@ -953,8 +953,8 @@ namespace ECSEngine {
 			else {
 				if (data->last_frame == system->GetFrameIndex() - 1 && IsPointInRectangle(mouse_position, position, scale)) {
 					float dimming_value = 1.0f;
-					dimming_value = keyboard->IsKeyDown(HID::Key::LeftShift) ? 0.2f : 1.0f;
-					dimming_value = keyboard->IsKeyDown(HID::Key::RightShift) ? 0.02f : dimming_value;
+					dimming_value = keyboard->IsDown(ECS_KEY_LEFT_SHIFT) ? 0.2f : 1.0f;
+					dimming_value = keyboard->IsDown(ECS_KEY_RIGHT_SHIFT) ? 0.02f : dimming_value;
 
 					if (scroll_amount != 0.0f) {
 						if (system->m_windows[window_index].drawer_draw_difference.y < ECS_TOOLS_UI_DEFAULT_HANDLER_SCROLL_THRESHOLD) {
@@ -976,14 +976,14 @@ namespace ECSEngine {
 			data->scroll = mouse->GetScrollValue();
 			data->last_frame = system->GetFrameIndex();
 
-			if (keyboard->IsKeyDown(HID::Key::LeftAlt) && mouse_tracker->LeftButton() == MBPRESSED &&
+			if (keyboard->IsDown(ECS_KEY_LEFT_ALT) && mouse->IsPressed(ECS_MOUSE_LEFT) &&
 				IsPointInRectangle(mouse_position, system->m_windows[window_index].transform) &&
 				!data->is_parameter_window_opened && !data->is_this_parameter_window) {
 				data->is_parameter_window_opened = true;
 				OpenWindowParameters(action_data);
 			}
 
-			if (keyboard->IsKeyDown(HID::Key::RightAlt) && mouse_tracker->LeftButton() == MBPRESSED
+			if (keyboard->IsDown(ECS_KEY_RIGHT_ALT) && mouse->IsPressed(ECS_MOUSE_LEFT)
 				&& IsPointInRectangle(mouse_position, system->m_windows[window_index].transform)) {
 				OpenSystemParameters(action_data);
 			}
@@ -997,7 +997,7 @@ namespace ECSEngine {
 			if (IsPointInRectangle(mouse_position, position, scale) && !system->m_execute_events) {
 				system->m_application->ChangeCursor(data->commit_cursor);
 			}
-			data->commit_cursor = ECS_CURSOR_TYPE::ECS_CURSOR_DEFAULT;
+			data->commit_cursor = ECS_CURSOR_DEFAULT;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1116,7 +1116,7 @@ namespace ECSEngine {
 			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 
 			// If enter is pressed, confirm the action
-			if (drawer.system->m_keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
+			if (drawer.system->m_keyboard->IsPressed(ECS_KEY_ENTER)) {
 				auto system_handler_wrapper = [](ActionData* action_data) {
 					UI_UNPACK_ACTION_DATA;
 
@@ -1354,7 +1354,7 @@ namespace ECSEngine {
 		void TextInputWizardPrivateHandler(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			if (keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
+			if (keyboard->IsPressed(ECS_KEY_ENTER)) {
 				action_data->data = action_data->additional_data;
 				TextInputWizardConfirmAction(action_data);
 			}

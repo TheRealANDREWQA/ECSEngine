@@ -24,6 +24,11 @@ function(Texture3D);
 #define ECS_GRAPHICS_RESOURCES(function) /* Useful for macro expansion */ ECS_GRAPHICS_TEXTURES(function); \
 ECS_GRAPHICS_BUFFERS(function); 
 
+#define ECS_GRAPHICS_VIEWS(function) function(ResourceView); \
+function(RenderTargetView); \
+function(DepthStencilView); \
+function(UAView);
+
 #define ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT 4
 #define ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT 6
 #define ECS_MATERIAL_VERTEX_TEXTURES_COUNT 2

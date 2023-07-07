@@ -182,6 +182,22 @@ namespace ECSEngine {
 			m_queue.FreeBuffer();
 		}
 
+		void CopyTo(uintptr_t& buffer) const {
+			unsigned int last_index = m_first_item + GetSize();
+			if (last_index < GetCapacity()) {
+				memcpy((void*)buffer, m_queue.buffer + m_first_item, GetSize() * sizeof(T));
+				buffer += GetSize() * sizeof(T);
+			}
+			else {
+				unsigned int copy_size = 2 * GetCapacity() - last_index;
+				memcpy((void*)buffer, m_queue.buffer + m_first_item, copy_size * sizeof(T));
+				buffer += copy_size * sizeof(T);
+				copy_size = GetCapacity() - copy_size;
+				memcpy((void*)buffer, m_queue.buffer, copy_size * sizeof(T));
+				buffer += copy_size * sizeof(T);
+			}
+		}
+
 		ECS_INLINE unsigned int GetSize() const {
 			return m_queue.size;
 		}
@@ -279,6 +295,11 @@ namespace ECSEngine {
 		ECS_INLINE void Reset() {
 			m_first_item = 0;
 			m_queue.Reset();
+		}
+
+		ECS_INLINE void ResizeNoCopy(unsigned int capacity) {
+			m_first_item = 0;
+			m_queue.ResizeNoCopy(capacity);
 		}
 
 		ECS_INLINE const void* GetAllocatedBuffer() const {
