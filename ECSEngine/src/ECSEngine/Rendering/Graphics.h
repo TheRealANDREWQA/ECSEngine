@@ -42,49 +42,6 @@ namespace ECSEngine {
 		ECS_GRAPHICS_MISC_FLAGS depth_misc = ECS_GRAPHICS_MISC_NONE;
 	};
 
-	struct GraphicsPipelineBlendState {
-		BlendState blend_state;
-		float blend_factors[4];
-		unsigned int sample_mask;
-	};
-
-	struct GraphicsPipelineDepthStencilState {
-		DepthStencilState depth_stencil_state;
-		unsigned int stencil_ref;
-	};
-
-	struct GraphicsPipelineRasterizerState {
-		RasterizerState rasterizer_state;
-	};
-
-	struct GraphicsPipelineShaders {
-		InputLayout layout;
-		VertexShader vertex_shader;
-		PixelShader pixel_shader;
-		DomainShader domain_shader;
-		HullShader hull_shader;
-		GeometryShader geometry_shader;
-		ComputeShader compute_shader;
-	};
-
-	struct GraphicsPipelineRenderState {
-		GraphicsPipelineBlendState blend_state;
-		GraphicsPipelineDepthStencilState depth_stencil_state;
-		GraphicsPipelineRasterizerState rasterizer_state;
-		GraphicsPipelineShaders shaders;
-	};
-
-	struct GraphicsBoundViews {
-		RenderTargetView target;
-		DepthStencilView depth_stencil;
-	};
-
-	struct GraphicsPipelineState {
-		GraphicsPipelineRenderState render_state;
-		GraphicsBoundViews views;
-		GraphicsViewport viewport;
-	};
-
 	enum GraphicsCachedVertexBuffer : unsigned char {
 		ECS_GRAPHICS_CACHED_VERTEX_BUFFER_QUAD,
 		ECS_GRAPHICS_CACHED_VERTEX_BUFFER_COUNT
@@ -100,6 +57,7 @@ namespace ECSEngine {
 		ECS_GRAPHICS_SHADER_HELPER_HIGHLIGHT_STENCIL,
 		ECS_GRAPHICS_SHADER_HELPER_HIGHLIGHT_BLEND,
 		ECS_GRAPHICS_SHADER_HELPER_VIEWPORT_QUAD,
+		ECS_GRAPHICS_SHADER_HELPER_MOUSE_PICK,
 		ECS_GRAPHICS_SHADER_HELPER_COUNT
 	};
 
@@ -112,6 +70,7 @@ namespace ECSEngine {
 		uint3 compute_shader_dispatch_size;
 	};
 
+	// TODO: This is not used anymore, decide if we want to keep this or not
 	enum GraphicsDepthStencilHelpers : unsigned char {
 		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT,
 		ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT

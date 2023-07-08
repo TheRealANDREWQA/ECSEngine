@@ -194,7 +194,7 @@ namespace ECSEngine {
 
 		ThreadFunction task_function;
 		Stream<char> task_name;
-		ThreadFunction initialize_task_function;
+		ThreadFunction initialize_task_function = nullptr;
 		TaskComponentQuery component_query;
 		Stream<TaskDependency> task_dependencies;
 

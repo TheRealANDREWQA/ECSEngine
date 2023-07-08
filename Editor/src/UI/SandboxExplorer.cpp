@@ -1,7 +1,7 @@
 #include "editorpch.h"
 #include "SandboxExplorer.h"
 #include "../Editor/EditorState.h"
-#include "../HelperWindows.h"
+#include "../UI/HelperWindows.h"
 
 #include "../Editor/EditorSandbox.h"
 #include "Inspector.h"

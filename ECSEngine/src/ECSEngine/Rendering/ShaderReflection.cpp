@@ -966,7 +966,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					// Get the basic type - the "row" of the matrix
 					char* x_character = (char*)strchr(type_start, 'x');
 					const char* basic_type_end = type_end;
-					if (x_character != nullptr) {
+					if (x_character != nullptr && x_character < type_end) {
 						basic_type_end = x_character;
 					}
 

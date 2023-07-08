@@ -2,16 +2,15 @@
 #include "../Core.h"
 #include "ColorUtilities.h"
 #include "../Math/Matrix.h"
+#include "RenderingStructures.h"
 
 namespace ECSEngine {
 
 #define ECS_HIGHLIGHT_OBJECT_THICKNESS_DEFAULT 3
 
 	struct Graphics;
-	struct Mesh;
-	struct CoalescedMesh;
 
-	struct HighlightObjectElement {
+	struct RenderingEffectMesh {
 		bool is_submesh = false;
 		// The matrix should be in GPU form
 		Matrix gpu_mvp_matrix;
@@ -25,14 +24,44 @@ namespace ECSEngine {
 			};
 		};
 	};
-	
+
 	// ------------------------------------------------------------------------------------------------------------
 
+	struct HighlightObjectElement {
+		RenderingEffectMesh base;
+	};
+	
 	ECSENGINE_API void HighlightObject(
 		Graphics* graphics,
 		ColorFloat color,
 		Stream<HighlightObjectElement> elements,
 		unsigned int pixel_thickness = ECS_HIGHLIGHT_OBJECT_THICKNESS_DEFAULT
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+#define ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS 4
+#define ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS ((1 << ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS) - 1)
+
+	// If the instance_index is left at -1, then it will use the index
+	// inside the elements stream
+	struct GenerateInstanceFramebufferElement {
+		RenderingEffectMesh base;
+		unsigned char pixel_thickness = 0;
+		unsigned int instance_index = -1;
+	};
+
+	ECSENGINE_API void GenerateInstanceFramebuffer(
+		Graphics* graphics,
+		Stream<GenerateInstanceFramebufferElement> elements,
+		RenderTargetView render_target,
+		DepthStencilView depth_stencil_view
+	);
+
+	ECSENGINE_API unsigned int GetInstanceFromFramebuffer(
+		Graphics* graphics,
+		RenderTargetView render_target,
+		uint2 pixel_position
 	);
 
 	// ------------------------------------------------------------------------------------------------------------

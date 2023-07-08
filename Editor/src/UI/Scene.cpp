@@ -1,7 +1,7 @@
 #include "editorpch.h"
 #include "Scene.h"
 #include "../Editor/EditorState.h"
-#include "../HelperWindows.h"
+#include "HelperWindows.h"
 #include "Common.h"
 #include "../Editor/EditorPalette.h"
 #include "ECSEngineMath.h"
@@ -230,4 +230,16 @@ void GetSceneUIWindowName(unsigned int index, CapacityStream<char>& name) {
 
 void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index) {
 	UpdateUIWindowIndex(editor_state, SCENE_WINDOW_NAME, old_index, new_index);
+}
+
+unsigned int SceneUITargetSandbox(const EditorState* editor_state, unsigned int window_index)
+{
+	Stream<char> window_name = editor_state->ui_system->GetWindowName(window_index);
+	Stream<char> prefix = SCENE_WINDOW_NAME;
+	if (window_name.StartsWith(prefix)) {
+		return GetWindowNameIndex(window_name);
+	}
+	else {
+		return -1;
+	}
 }

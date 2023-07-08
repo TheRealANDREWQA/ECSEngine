@@ -70,6 +70,31 @@ namespace ECSEngine {
 				*character += 'a' - 'A';
 			}
 		}
+		
+		template<typename Integer>
+		ECS_INLINE Integer IsolateLowBits(Integer integer, int bit_count) {
+			return integer & ((1 << (bit_count + 1)) - 1);
+		}
+		
+		// Combines first and second as follows
+		// The low bits of first are keept the same and the low bits of second are placed after those first bits
+		template<typename Integer>
+		ECS_INLINE Integer BlendBits(Integer first, Integer second, int first_bit_count, int second_bit_count) {
+			return IsolateLowBits(first, first_bit_count) | (IsolateLowBits(second, second_bit_count) << first_bit_count);
+		}
+
+		// Retrieves the bits from the a blended integer
+		template<typename Integer>
+		ECS_INLINE void RetrieveBlendedBits(Integer integer, int first_bit_count, int second_bit_count, Integer& first, Integer& second) {
+			first = IsolateLowBits(integer, first_bit_count);
+			second = integer >> first_bit_count;
+			second = IsolateLowBits(second, second_bit_count);
+		}
+
+		template<typename T>
+		ECS_INLINE T IndexTexture(const T* texture_data, size_t row, size_t column, size_t width) {
+			return texture_data[row * width + column];
+		}
 
 		// The functor receives as parameter a T or T&/const T&
 		// Return true inside the functor if you want to exit from the loop.

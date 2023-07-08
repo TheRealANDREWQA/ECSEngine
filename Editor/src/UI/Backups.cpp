@@ -1,6 +1,6 @@
 #include "editorpch.h"
 #include "Backups.h"
-#include "../HelperWindows.h"
+#include "HelperWindows.h"
 #include "../Editor/EditorState.h"
 #include "../Project/ProjectBackup.h"
 #include "../Project/ProjectFolders.h"

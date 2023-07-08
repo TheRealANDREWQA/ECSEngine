@@ -1,6 +1,7 @@
 #include "editorpch.h"
 #include "Editor\EditorState.h"
 #include "HelperWindows.h"
+#include "TargetSandboxWindows.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -295,4 +296,27 @@ void CreateRenameFolderWizardAction(ActionData* action_data) {
 
 	Stream<wchar_t>* data = (Stream<wchar_t>*)_data;
 	CreateRenameFolderWizard(*data, system);
+}
+
+unsigned int GetActiveWindowSandbox(const EditorState* editor_state)
+{
+	unsigned int active_window = editor_state->ui_system->GetActiveWindow();
+	
+	unsigned int target_sandbox = SceneUITargetSandbox(editor_state, active_window);
+	if (target_sandbox != -1) {
+		return target_sandbox;
+	}
+
+	target_sandbox = GameUITargetSandbox(editor_state, active_window);
+	if (target_sandbox != -1) {
+		return target_sandbox;
+	}
+
+	target_sandbox = GetInspectorTargetSandboxFromUIWindow(editor_state, active_window);
+	if (target_sandbox != -1) {
+		return target_sandbox;
+	}
+
+	target_sandbox = EntitiesUITargetSandbox(editor_state, active_window);
+	return target_sandbox;
 }

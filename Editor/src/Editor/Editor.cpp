@@ -664,6 +664,24 @@ public:
 		MemoryManager debug_drawer_allocator = DebugDrawer::DefaultAllocator(editor_state.GlobalMemoryManager());
 		debug_drawer.Initialize(&debug_drawer_allocator, editor_state.UIResourceManager(), 1);
 
+		// TESTING STUFF
+		//// Also create the instanced framebuffers
+		//Texture2DDescriptor instanced_framebuffer_descriptor;
+		//instanced_framebuffer_descriptor.format = ECS_GRAPHICS_FORMAT_R32_UINT;
+		//instanced_framebuffer_descriptor.bind_flag = ECS_GRAPHICS_BIND_RENDER_TARGET;
+		//instanced_framebuffer_descriptor.mip_levels = 1;
+		//instanced_framebuffer_descriptor.size = graphics->GetWindowSize();
+		//Texture2D instanced_framebuffer_texture = graphics->CreateTexture(&instanced_framebuffer_descriptor);
+		//RenderTargetView RENDER_TARGET = graphics->CreateRenderTargetView(instanced_framebuffer_texture);
+
+		//Texture2DDescriptor instanced_depth_stencil_descriptor;
+		//instanced_depth_stencil_descriptor.format = ECS_GRAPHICS_FORMAT_D32_FLOAT;
+		//instanced_depth_stencil_descriptor.bind_flag = ECS_GRAPHICS_BIND_DEPTH_STENCIL;
+		//instanced_depth_stencil_descriptor.mip_levels = 1;
+		//instanced_depth_stencil_descriptor.size = graphics->GetWindowSize();
+		//Texture2D instanced_depth_texture = graphics->CreateTexture(&instanced_depth_stencil_descriptor);
+		//DepthStencilView DEPTH_STENCIL = graphics->CreateDepthStencilView(instanced_depth_texture);
+
 		while (true) {
 			auto run_application = [&](char application_quit_value) {
 				while (result == 0 && application_quit == application_quit_value) {
@@ -834,6 +852,21 @@ public:
 						////debug_drawer.DrawSphere(TRANSLATION, 0.2f, ECS_COLOR_GREEN);
 						////graphics->DisableWireframe();
 
+						//debug_drawer.DrawRectangle(
+						//	{ 1.0f, 0.0f, 1.0f },
+						//	{ 0.0f, 1.0f, 1.0f },
+						//	AxisXColor(),
+						//	{ false, true }
+						//);
+
+						//debug_drawer.DrawRectangle(
+						//	{ 0.0f, 1.0f, 1.0f },
+						//	{ 1.0f, 0.0f, 1.0f },
+						//	AxisYColor(),
+						//	{ false, true }
+						//);
+						//debug_drawer.DrawAll(1.0f);
+
 						//HighlightObjectElement elements[2];
 						//elements[0].is_submesh = false;
 						//elements[0].mesh = &trireme->mesh;
@@ -843,6 +876,18 @@ public:
 						//elements[1].gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION + float3(0.0f, 0.5f, 0.0f)), MatrixIdentity(), MatrixScale({ 0.2f, 0.2f, 0.2f }), CAMERA_MATRIX);
 						//HighlightObject(graphics, ECS_COLOR_RED, { elements, 1 });
 						//HighlightObject(graphics, ECS_COLOR_MAGENTA, { elements + 1, 1 });
+
+						/*GenerateInstanceFramebufferElement generate_element;
+						generate_element.base.is_submesh = false;
+						generate_element.base.mesh = &trireme->mesh;
+						generate_element.base.gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION), MatrixIdentity(), MatrixScale({ 0.2f, 0.2f, 0.2f }), CAMERA_MATRIX);
+						generate_element.instance_index = 100000;
+						generate_element.pixel_thickness = 10;
+
+						GenerateInstanceFramebuffer(graphics, { &generate_element, 1 }, RENDER_TARGET, DEPTH_STENCIL);
+
+						unsigned int instance_index = GetInstanceFromFramebuffer(graphics, RENDER_TARGET, { 1156, 787 });
+						ECS_FORMAT_TEMP_STRING(CONSOLE_MESSAGE, "Instance index: {#}", instance_index);*/
 
 						bool removed = graphics->SwapBuffers(0);
 						if (removed) {

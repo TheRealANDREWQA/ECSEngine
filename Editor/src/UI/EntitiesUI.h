@@ -34,6 +34,12 @@ unsigned int GetEntitiesUIIndexFromName(ECSEngine::Stream<char> name);
 // Returns -1 if no Entities UI window is created
 unsigned int GetEntitiesUILastWindowIndex(const EditorState* editor_state);
 
+// The index is the actual ordinal value, not the index from the UISystem
+unsigned int GetEntitiesUITargetSandbox(const EditorState* editor_state, unsigned int entities_index);
+
 // Does nothing if the old_index doesn't exist. Changes all Entities windows which targeted the old index
 // into the new index
 void UpdateEntitiesUITargetSandbox(EditorState* editor_state, unsigned int old_index, unsigned int new_index);
+
+// Returns the target sandbox index if the given UI window is an EntitiesUI window, else -1
+unsigned int EntitiesUITargetSandbox(const EditorState* editor_state, unsigned int window_index);

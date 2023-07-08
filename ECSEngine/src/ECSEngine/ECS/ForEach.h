@@ -400,6 +400,8 @@ namespace ECSEngine {
 	schedule_element.task_name = STRING(thread_task_function); \
 	module_function_data->tasks->AddAssert(schedule_element)
 
+#define ECS_REGISTER_FOR_EACH_COMPONENTS(...) Internal::AddQueryComponents<__VA_ARGS__>((Internal::RegisterForEachInfo*)world);
+
 	// -------------------------------------------------------------------------------------------------------------------------------
 
 //	typedef void (*ForEachBaseArchetypeFunctor)(ArchetypeBase* base, void** unique_components, void** shared_components, void* data);

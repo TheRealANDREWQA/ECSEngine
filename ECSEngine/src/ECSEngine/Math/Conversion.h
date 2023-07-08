@@ -52,6 +52,57 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------
 
+	ECS_INLINE float3 ECS_VECTORCALL RotateVectorQuaternion(float3 rotation, Vector4 direction) {
+		return RotateVectorMatrix(QuaternionRotationMatrix(rotation), direction);
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL RotateVectorQuaternionSIMD(float3 rotation, Vector4 direction) {
+		return RotateVectorMatrixSIMD(QuaternionRotationMatrix(rotation), direction);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorQuaternionSIMD(float3 rotation, Vector8 direction) {
+		Matrix rotation_matrix = QuaternionRotationMatrix(rotation);
+		return RotateVectorMatrixSIMD(rotation_matrix, direction);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorQuaternionSIMD(float3 rotation0, float3 rotation1, Vector8 direction) {
+		Matrix matrix_rotation0, matrix_rotation1;
+		QuaternionRotationMatrix(rotation0, rotation1, matrix_rotation0, matrix_rotation1);
+		return RotateVectorMatrixSIMD(matrix_rotation0, matrix_rotation1, direction);
+	}
+
+	// -------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float3 ECS_VECTORCALL GetRightVectorQuaternion(float3 rotation) {
+		return RotateVectorQuaternion(rotation, VectorGlobals::RIGHT_4);
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL GetRightVectorQuaternionSIMD(float3 rotation) {
+		return RotateVectorQuaternionSIMD(rotation, VectorGlobals::RIGHT_4);
+	}
+
+	// -------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float3 ECS_VECTORCALL GetUpVectorQuaternion(float3 rotation) {
+		return RotateVectorQuaternion(rotation, VectorGlobals::UP_4);
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL GetUpVectorQuaternionSIMD(float3 rotation) {
+		return RotateVectorQuaternionSIMD(rotation, VectorGlobals::UP_4);
+	}
+
+	// -------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float3 ECS_VECTORCALL GetForwardVectorQuaternion(float3 rotation) {
+		return RotateVectorQuaternion(rotation, VectorGlobals::FORWARD_4);
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL GetForwardVectorQuaternionSIMD(float3 rotation) {
+		return RotateVectorSIMD(rotation, VectorGlobals::FORWARD_4);
+	}
+
+	// -------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Matrix to quaternion

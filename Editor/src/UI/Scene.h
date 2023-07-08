@@ -34,3 +34,7 @@ void GetSceneUIWindowName(unsigned int index, ECSEngine::CapacityStream<char>& n
 
 // Does nothing if the old_index doesn't exist
 void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);
+
+// Returns the target sandbox index from that window_index. If the window is not a scene UI window,
+// it will return -1
+unsigned int SceneUITargetSandbox(const EditorState* editor_state, unsigned int window_index);

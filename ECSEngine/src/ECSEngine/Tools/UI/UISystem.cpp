@@ -7033,6 +7033,36 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		uint2 UISystem::GetWindowTexelPosition(unsigned int window_index, float2 position) const
+		{
+			float2 window_position = GetWindowPosition(window_index);
+			float2 window_scale = GetWindowScale(window_index);
+			if (IsPointInRectangle(position, window_position, window_scale)) {
+				float2 difference = position - window_position;
+				difference.x = difference.x * m_window_os_size.x * 0.5f;
+				difference.y = difference.y * m_window_os_size.y * 0.5f;
+			}
+			else {
+				return { -1, -1 };
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		uint2 UISystem::GetMousePositionHoveredWindowTexelPosition() const
+		{
+			float2 mouse_position = GetNormalizeMousePosition();
+			unsigned int hovered_window = GetWindowFromMouse(mouse_position);
+			if (hovered_window != -1) {
+				return GetWindowTexelPosition(hovered_window, mouse_position);
+			}
+			else {
+				return uint2(-1, -1);
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		UISpriteTexture* UISystem::GetNextSpriteTextureToDraw(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type)
 		{
 			if (phase == ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM) {

@@ -9,7 +9,6 @@
 #include "../Editor/EditorParameters.h"
 #include "../UI/SandboxExplorer.h"
 #include "../UI/Hub.h"
-#include "../HelperWindows.h"
 #include "../UI/ModuleExplorer.h"
 #include "../UI/Inspector.h"
 #include "../UI/NotificationBar.h"

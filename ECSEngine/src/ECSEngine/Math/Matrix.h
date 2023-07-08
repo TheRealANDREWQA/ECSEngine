@@ -955,30 +955,44 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE float3 ECS_VECTORCALL RotateVector(float3 rotation, Vector4 direction) {
+	ECS_INLINE float3 ECS_VECTORCALL RotateVectorMatrix(Matrix rotation_matrix, Vector4 direction) {
 		alignas(16) float4 result;
 
-		Matrix rotation_matrix = MatrixRotation(rotation);
 		Vector4 rotated_direction = MatrixVectorMultiply(direction, rotation_matrix);
 		rotated_direction.StoreAligned(&result);
 
 		return { result.x, result.y, result.z };
 	}
 
-	ECS_INLINE Vector4 ECS_VECTORCALL RotateVectorSIMD(float3 rotation, Vector4 direction) {
-		Matrix rotation_matrix = MatrixRotation(rotation);
+	ECS_INLINE Vector4 ECS_VECTORCALL RotateVectorMatrixSIMD(Matrix rotation_matrix, Vector4 direction) {
 		return MatrixVectorMultiply(direction, rotation_matrix);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorMatrixSIMD(Matrix rotation_matrix, Vector8 direction) {
+		return MatrixVectorMultiply(direction, rotation_matrix);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorMatrixSIMD(Matrix rotation_matrix0, Matrix rotation_matrix1, Vector8 direction) {
+		return MatrixVectorMultiply(direction, rotation_matrix0, rotation_matrix1);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float3 ECS_VECTORCALL RotateVector(float3 rotation, Vector4 direction) {
+		return RotateVectorMatrix(MatrixRotation(rotation), direction);
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL RotateVectorSIMD(float3 rotation, Vector4 direction) {
+		return RotateVectorMatrixSIMD(MatrixRotation(rotation), direction);
 	}
 
 	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorSIMD(float3 rotation, Vector8 direction) {
 		Matrix rotation_matrix = MatrixRotation(rotation);
-		return MatrixVectorMultiply(direction, rotation_matrix);
+		return RotateVectorMatrixSIMD(rotation_matrix, direction);
 	}
 
 	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorSIMD(float3 rotation0, float3 rotation1, Vector8 direction) {
-		Matrix rotation_matrix0 = MatrixRotation(rotation0);
-		Matrix rotation_matrix1 = MatrixRotation(rotation1);
-		return MatrixVectorMultiply(direction, rotation_matrix0, rotation_matrix1);
+		return RotateVectorMatrixSIMD(MatrixRotation(rotation0), MatrixRotation(rotation1), direction);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -1062,12 +1076,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	// Rotation in angles
+	// Rotation in angles - the rotation matrix version
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixTransform(float3 translation, float3 rotation, float3 scale) {
 		return MatrixScale(scale) * MatrixRotation(rotation) * MatrixTranslation(translation);
 	}
 
-	// Rotation in radians
+	// Rotation in radians - the rotation matrix version
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixTransformRad(float3 translation, float3 rotation, float3 scale) {
 		return MatrixScale(scale) * MatrixRotationRad(rotation) * MatrixTranslation(translation);
 	}

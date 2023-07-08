@@ -9,6 +9,7 @@
 #define SELECTED_ENTITIES_IDENTIFIER "__SelectedEntities"
 #define SELECT_COLOR_IDENTIFIER "__SelectColor"
 #define TRANSFORM_TOOL_IDENTIFIER "__TransformTool"
+#define INSTANCED_FRAMEBUFFER_IDENTIFIER "__InstancedFramebuffer"
 
 namespace ECSEngine {
 	
@@ -115,6 +116,23 @@ namespace ECSEngine {
 	void RemoveEditorRuntimeTransformTool(SystemManager* system_manager)
 	{
 		system_manager->RemoveData(TRANSFORM_TOOL_IDENTIFIER);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool GetEditorRuntimeInstancedFramebuffer(const SystemManager* system_manager, GraphicsBoundViews* views)
+	{
+		return GetRuntimeResource(system_manager, views, INSTANCED_FRAMEBUFFER_IDENTIFIER);
+	}
+
+	void SetEditorRuntimeInstancedFramebuffer(SystemManager* system_manager, const GraphicsBoundViews* views)
+	{
+		system_manager->BindData(INSTANCED_FRAMEBUFFER_IDENTIFIER, views, sizeof(*views));
+	}
+
+	void RemoveEditorRuntimeInstancedFramebuffer(SystemManager* system_manager)
+	{
+		system_manager->RemoveData(INSTANCED_FRAMEBUFFER_IDENTIFIER);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

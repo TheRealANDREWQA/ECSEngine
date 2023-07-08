@@ -3,7 +3,6 @@
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
-;
 
 struct EditorState;
 
@@ -65,3 +64,7 @@ unsigned int CreateRenameFolderWizard(Stream<wchar_t> path, UISystem* system);
 
 // Data must be a Stream<wchar_t>*
 void CreateRenameFolderWizardAction(ActionData* action_data);
+
+// Returns -1 if no window which targets a sandbox is selected
+// Else the sandbox index that is being targeted
+unsigned int GetActiveWindowSandbox(const EditorState* editor_state);

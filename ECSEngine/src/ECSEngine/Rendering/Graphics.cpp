@@ -45,7 +45,8 @@ namespace ECSEngine {
 		ECS_VERTEX_SHADER_SOURCE(GLTFThumbnail),
 		ECS_VERTEX_SHADER_SOURCE(BasicTransform),
 		nullptr,
-		ECS_VERTEX_SHADER_SOURCE(Passthrough)
+		ECS_VERTEX_SHADER_SOURCE(Passthrough),
+		ECS_VERTEX_SHADER_SOURCE(MousePick)
 	};
 
 	const wchar_t* SHADER_HELPERS_PIXEL[] = {
@@ -57,10 +58,12 @@ namespace ECSEngine {
 		ECS_PIXEL_SHADER_SOURCE(GLTFThumbnail),
 		ECS_PIXEL_SHADER_SOURCE(HighlightStencil),
 		ECS_PIXEL_SHADER_SOURCE(HighlightBlend),
-		nullptr
+		nullptr,
+		ECS_PIXEL_SHADER_SOURCE(MousePick)
 	};
 
 	const wchar_t* SHADER_HELPERS_COMPUTE[] = {
+		nullptr,
 		nullptr,
 		nullptr,
 		nullptr,

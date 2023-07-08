@@ -10,6 +10,9 @@
 
 namespace ECSEngine {
 
+#define ECS_DEBUG_DRAWER_OUTPUT_INSTANCE_IMMEDIATE -1
+#define ECS_DEBUG_DRAWER_OUTPUT_INSTANCE_ADD -2
+
 	struct ResourceManager;
 
 	typedef float3 DebugVertex;
@@ -126,6 +129,13 @@ namespace ECSEngine {
 		DebugDrawCallOptions options;
 	};
 
+	struct DebugDrawerOutputInstance {
+		unsigned int instance_index;
+		unsigned int thread_index = ECS_DEBUG_DRAWER_OUTPUT_INSTANCE_IMMEDIATE;
+		unsigned char pixel_index;
+		DebugDrawCallOptions options = {};
+	};
+
 	struct ECSENGINE_API DebugDrawer {
 		DebugDrawer() : allocator(nullptr), graphics(nullptr) {}
 		DebugDrawer(MemoryManager* allocator, ResourceManager* manager, size_t thread_count);
@@ -136,6 +146,8 @@ namespace ECSEngine {
 #pragma region Add to the draw queue - single threaded
 
 		void AddLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options = {});
+
+		void AddLine(float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {});
 
 		void AddSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options = {});
 
@@ -177,6 +189,8 @@ namespace ECSEngine {
 #pragma region Add to the draw queue - multi threaded
 
 		void AddLineThread(unsigned int thread_index, float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options = {});
+
+		void AddLineThread(unsigned int thread_index, float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {});
 
 		void AddSphereThread(unsigned int thread_index, float3 position, float radius, ColorFloat color, DebugDrawCallOptions options = {});
 
@@ -237,6 +251,8 @@ namespace ECSEngine {
 #pragma region Draw immediately
 
 		void DrawLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options = {});
+
+		void DrawLine(float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {});
 
 		void DrawSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options = {});
 
@@ -396,6 +412,117 @@ namespace ECSEngine {
 		void DrawStringDeck(float time_delta);
 
 		void DrawAll(float time_delta);
+
+#pragma endregion
+
+#pragma region Output Instance Index
+
+		// These functions output into a framebuffer which is of type R32_UINT
+		// the instance index of 28 bits packed with 4 bits of pixel thickness
+		// For all of these functions, you can specify the thread_index for per thread
+		// addition, addition to the main pool or immediate draw
+
+		void OutputInstanceIndexLine(
+			float3 start, 
+			float3 end, 
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexLine(
+			float3 translation,
+			float3 rotation,
+			float size,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexSphere(
+			float3 translation,
+			float radius,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexPoint(
+			float3 translation,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexRectangle(
+			float3 corner0, 
+			float3 corner1,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexCross(
+			float3 position, 
+			float3 rotation, 
+			float size,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexCircle(
+			float3 position, 
+			float3 rotation, 
+			float radius,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexArrow(
+			float3 start, 
+			float3 end, 
+			float size,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexArrowRotation(
+			float3 translation,
+			float3 rotation,
+			float length,
+			float size,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexAxes(
+			float3 translation,
+			float3 rotation,
+			float size,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexTriangle(
+			float3 point0, 
+			float3 point1, 
+			float3 point2,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexAABB(
+			float3 translation, 
+			float3 scale,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexOOBB(
+			float3 translation, 
+			float3 rotation, 
+			float3 scale,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexString(
+			float3 translation,
+			float3 direction,
+			float size,
+			Stream<char> text,
+			const DebugDrawerOutputInstance* instance
+		);
+
+		void OutputInstanceIndexStringRotation(
+			float3 translation,
+			float3 rotation,
+			float size,
+			Stream<char> text,
+			const DebugDrawerOutputInstance* instance
+		);
 
 #pragma endregion
 
@@ -590,7 +717,7 @@ namespace ECSEngine {
 		unsigned int thread_count;
 		RasterizerState rasterizer_states[ECS_DEBUG_RASTERIZER_COUNT];
 		VertexBuffer positions_small_vertex_buffer;
-		VertexBuffer instanced_small_vertex_buffer;
+		VertexBuffer instanced_small_transform_vertex_buffer;
 		StructuredBuffer instanced_small_structured_buffer;
 		ResourceView instanced_structured_view;
 		Mesh* primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_COUNT];

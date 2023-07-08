@@ -210,6 +210,7 @@
     <ClInclude Include="src\ECSEngine\Rendering\RenderingEffects.h" />
     <ClInclude Include="src\ECSEngine\Utilities\InputMapping.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ButtonInput.h" />
+    <ClInclude Include="src\Includes\ECSEngineHID.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -323,6 +324,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\RenderingEffects.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\InputMapping.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />
@@ -333,6 +335,8 @@
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\HighlightStencil.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\Passthrough.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\HighlightBlend.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\MousePick.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\MousePick.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="src\TODO.txt" />

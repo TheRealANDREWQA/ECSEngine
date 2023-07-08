@@ -163,6 +163,7 @@ namespace ECSEngine {
 
 	// At the moment map the values directly for "fast" retrieval
 	enum ECS_GRAPHICS_BIND_TYPE {
+		ECS_GRAPHICS_BIND_NONE = 0,
 		ECS_GRAPHICS_BIND_VERTEX_BUFFER = D3D11_BIND_VERTEX_BUFFER,
 		ECS_GRAPHICS_BIND_INDEX_BUFFER  = D3D11_BIND_INDEX_BUFFER,
 		ECS_GRAPHICS_BIND_CONSTANT_BUFFER = D3D11_BIND_CONSTANT_BUFFER,
@@ -1299,6 +1300,49 @@ namespace ECSEngine {
 		RenderTargetView render_view;
 		DepthStencilView depth_view;
 		UAView render_ua_view;
+	};
+
+	struct GraphicsPipelineBlendState {
+		BlendState blend_state;
+		float blend_factors[4];
+		unsigned int sample_mask;
+	};
+
+	struct GraphicsPipelineDepthStencilState {
+		DepthStencilState depth_stencil_state;
+		unsigned int stencil_ref;
+	};
+
+	struct GraphicsPipelineRasterizerState {
+		RasterizerState rasterizer_state;
+	};
+
+	struct GraphicsPipelineShaders {
+		InputLayout layout;
+		VertexShader vertex_shader;
+		PixelShader pixel_shader;
+		DomainShader domain_shader;
+		HullShader hull_shader;
+		GeometryShader geometry_shader;
+		ComputeShader compute_shader;
+	};
+
+	struct GraphicsPipelineRenderState {
+		GraphicsPipelineBlendState blend_state;
+		GraphicsPipelineDepthStencilState depth_stencil_state;
+		GraphicsPipelineRasterizerState rasterizer_state;
+		GraphicsPipelineShaders shaders;
+	};
+
+	struct GraphicsBoundViews {
+		RenderTargetView target;
+		DepthStencilView depth_stencil;
+	};
+
+	struct GraphicsPipelineState {
+		GraphicsPipelineRenderState render_state;
+		GraphicsBoundViews views;
+		GraphicsViewport viewport;
 	};
 
 	struct ECS_REFLECT OrientedPoint {

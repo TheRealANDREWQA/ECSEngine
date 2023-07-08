@@ -20,9 +20,7 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 	BasicDrawForEachData* data = (BasicDrawForEachData*)for_each_data->data;
 
 	World* world = for_each_data->world;
-	DebugDrawer* debug_drawer = world->debug_drawer;
 	Graphics* graphics = world->graphics;
-	DebugDrawer* drawer = world->debug_drawer;
 
 	const RenderMesh* mesh = (const RenderMesh*)for_each_data->shared_components[0];
 	if (mesh->Validate()) {
@@ -114,21 +112,6 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 		graphics->BindMaterial(*mesh->material);
 
 		graphics->DrawCoalescedMeshCommand(*mesh->mesh);
-
-		/*
-		float3 camera_distance = translation_value - data->camera->translation;
-		float distance = Length(camera_distance).First();
-
-		drawer->DrawAxes(
-			translation_value,
-			rotation_value,
-			GetConstantObjectSizeInPerspective(data->camera->fov, distance, 0.25f),
-			AxisXColor(),
-			AxisYColor(),
-			AxisZColor(),
-			{ false, true }
-		);
-		*/
 	}
 }
 
@@ -136,6 +119,7 @@ template<bool schedule_element>
 ECS_THREAD_TASK(RenderTask) {
 	if constexpr (!schedule_element) {
 		world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.5f, 0.6f, 1.0f, 1.0f));
+		world->graphics->ClearDepth(world->graphics->GetBoundDepthStencil());
 
 		Camera camera;
 
@@ -188,6 +172,9 @@ ECS_THREAD_TASK(RenderTask) {
 			ForEachEntityCommitFunctor(world, BasicDrawForEach<true, true, true>, &for_each_data, { unique_components, 3 }, shared_signature);
 		}
 	}
+	else {
+		ECS_REGISTER_FOR_EACH_COMPONENTS(QueryRead<Translation>, QueryRead<Rotation>, QueryRead<Scale>);
+	}
 }
 
 ECS_THREAD_TASK_TEMPLATE_BOOL(RenderTask);
@@ -233,8 +220,8 @@ ECS_THREAD_TASK(RenderSelectables) {
 						for (size_t index = 0; index < selected_entities.size; index++) {
 							const RenderMesh* render_mesh = entity_manager->TryGetComponent<RenderMesh>(selected_entities[index]);
 							if (render_mesh != nullptr && render_mesh->Validate()) {
-								highlight_elements[index].is_submesh = false;
-								highlight_elements[index].mesh = &render_mesh->mesh->mesh;
+								highlight_elements[index].base.is_submesh = false;
+								highlight_elements[index].base.mesh = &render_mesh->mesh->mesh;
 
 								Matrix entity_matrix;
 								const Translation* translation = entity_manager->TryGetComponent<Translation>(selected_entities[index]);
@@ -275,7 +262,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 									entity_matrix = MatrixScale(scale->value);
 								}
 
-								highlight_elements[index].gpu_mvp_matrix = MatrixMVPToGPU(entity_matrix, camera_matrix);
+								highlight_elements[index].base.gpu_mvp_matrix = MatrixMVPToGPU(entity_matrix, camera_matrix);
 							}
 						}
 
@@ -318,7 +305,6 @@ ECS_THREAD_TASK(RenderSelectables) {
 								break;
 							case ECS_TRANSFORM_ROTATION:
 							{
-								constant_viewport_size *= 1.2f;
 								float3 x_rotation = { rotation_midpoint.x, rotation_midpoint.y, rotation_midpoint.z };
 								x_rotation.z += 90.0f;
 								debug_drawer->AddCircle(
@@ -351,7 +337,35 @@ ECS_THREAD_TASK(RenderSelectables) {
 								break;
 							case ECS_TRANSFORM_SCALE:
 							{
+								float3 x_rotation = rotation_midpoint;
+								debug_drawer->AddLine(
+									translation_midpoint,
+									x_rotation,
+									constant_viewport_size,
+									AxisXColor(),
+									debug_options
+								);
 
+								float3 y_rotation = rotation_midpoint;
+								y_rotation.z += 90.0f;
+								debug_drawer->AddLine(
+									translation_midpoint,
+									y_rotation,
+									constant_viewport_size,
+									AxisYColor(),
+									debug_options
+								);
+
+								float3 z_rotation = rotation_midpoint;
+								z_rotation.y -= 90.0f;
+								z_rotation.z = 0.0f;
+								debug_drawer->AddLine(
+									translation_midpoint,
+									z_rotation,
+									constant_viewport_size,
+									AxisZColor(),
+									debug_options
+								);
 							}
 								break;
 							default:
@@ -382,3 +396,166 @@ ECS_THREAD_TASK(RenderFlush) {
 }
 
 ECS_THREAD_TASK_TEMPLATE_BOOL(RenderFlush);
+
+struct InstancedFramebufferForEachData {
+	const Camera* camera;
+	Matrix camera_matrix;
+	ResizableStream<GenerateInstanceFramebufferElement>* elements;
+};
+
+template<bool has_translation, bool has_rotation, bool has_scale>
+void InstancedFramebufferForEach(ForEachEntityFunctorData* for_each_data) {
+	InstancedFramebufferForEachData* data = (InstancedFramebufferForEachData*)for_each_data->data;
+
+	World* world = for_each_data->world;
+	Graphics* graphics = world->graphics;
+
+	const RenderMesh* mesh = (const RenderMesh*)for_each_data->shared_components[0];
+	if (mesh->Validate()) {
+		float3 translation_value = { 0.0f, 0.0f, 0.0f };
+		float3 rotation_value = { 0.0f, 0.0f, 0.0f };
+		float3 scale_value = { 1.0f, 1.0f, 1.0f };
+		Matrix matrix_translation;
+		Matrix matrix_rotation;
+		Matrix matrix_scale;
+
+		enum ORDER {
+			TRANSLATION,
+			ROTATION,
+			SCALE,
+			COUNT
+		};
+
+		unsigned char component_indices[COUNT] = { 0 };
+		if constexpr (has_translation) {
+			for (size_t index = TRANSLATION + 1; index < COUNT; index++) {
+				component_indices[index]++;
+			}
+		}
+		if constexpr (has_rotation) {
+			for (size_t index = ROTATION + 1; index < COUNT; index++) {
+				component_indices[index]++;
+			}
+		}
+
+		if constexpr (has_translation) {
+			const Translation* translation = (const Translation*)for_each_data->unique_components[component_indices[TRANSLATION]];
+			translation_value = translation->value;
+			matrix_translation = MatrixTranslation(translation_value);
+		}
+		if constexpr (has_rotation) {
+			const Rotation* rotation = (const Rotation*)for_each_data->unique_components[component_indices[ROTATION]];
+			rotation_value = rotation->value;
+			matrix_rotation = QuaternionRotationMatrix(rotation_value);
+		}
+		if constexpr (has_scale) {
+			const Scale* scale = (const Scale*)for_each_data->unique_components[component_indices[SCALE]];
+			scale_value = scale->value;
+			matrix_scale = MatrixScale(scale_value);
+		}
+
+		Matrix object_matrix;
+
+		if constexpr (has_translation) {
+			if constexpr (has_rotation) {
+				object_matrix = MatrixTR(matrix_translation, matrix_rotation);
+			}
+			else if constexpr (has_scale) {
+				object_matrix = MatrixTS(matrix_translation, matrix_scale);
+			}
+			else {
+				object_matrix = matrix_translation;
+			}
+		}
+		else if constexpr (has_rotation) {
+			if constexpr (has_scale) {
+				object_matrix = MatrixRS(matrix_rotation, matrix_scale);
+			}
+			else {
+				object_matrix = matrix_rotation;
+			}
+		}
+		else if constexpr (has_scale) {
+			object_matrix = matrix_scale;
+		}
+		else {
+			object_matrix = MatrixIdentity();
+		}
+
+		Matrix mvp_matrix = object_matrix * data->camera_matrix;
+		mvp_matrix = MatrixGPU(mvp_matrix);
+
+		GenerateInstanceFramebufferElement element;
+		element.base.is_submesh = false;
+		element.base.mesh = &mesh->mesh->mesh;
+		element.base.gpu_mvp_matrix = mvp_matrix;
+		element.instance_index = for_each_data->entity.index;
+		data->elements.Add(element);
+	}
+}
+
+template<bool schedule_element>
+ECS_THREAD_TASK(RenderInstancedFramebuffer) {
+	if constexpr (!schedule_element) {
+		SystemManager* system_manager = world->system_manager;
+		if (IsEditorRuntime(system_manager)) {
+			Camera camera;
+			if (GetRuntimeCamera(system_manager, &camera)) {
+				GraphicsBoundViews instanced_views;
+				if (GetEditorRuntimeInstancedFramebuffer(system_manager, &instanced_views)) {
+					// Render the elements
+					ResizableStream<GenerateInstanceFramebufferElement> elements;
+					elements.Initialize(GetAllocatorPolymorphic(world->memory), 0);
+
+					Component unique_components[3];
+					Component exclude_unique_components[3];
+					Component shared_components[1];
+					shared_components[0] = RenderMesh::ID();
+					ComponentSignature shared_signature(shared_components, std::size(shared_components));
+
+					InstancedFramebufferForEachData for_each_data;
+					for_each_data.camera_matrix = camera.GetViewProjectionMatrix();
+					for_each_data.camera = &camera;
+					for_each_data.elements = &elements;
+
+					unique_components[0] = Translation::ID();
+					exclude_unique_components[0] = Rotation::ID();
+					exclude_unique_components[1] = Scale::ID();
+					ForEachEntityCommitFunctor(world, BasicDrawForEach<true, false, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+
+					unique_components[0] = Rotation::ID();
+					exclude_unique_components[0] = Translation::ID();
+					ForEachEntityCommitFunctor(world, BasicDrawForEach<false, true, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+
+					unique_components[0] = Scale::ID();
+					exclude_unique_components[1] = Rotation::ID();
+					ForEachEntityCommitFunctor(world, BasicDrawForEach<false, false, true>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+
+					unique_components[0] = Translation::ID();
+					unique_components[1] = Rotation::ID();
+					exclude_unique_components[0] = Scale::ID();
+					ForEachEntityCommitFunctor(world, BasicDrawForEach<true, true, false>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
+
+					unique_components[1] = Scale::ID();
+					exclude_unique_components[0] = Rotation::ID();
+					ForEachEntityCommitFunctor(world, BasicDrawForEach<true, false, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
+
+					unique_components[0] = Rotation::ID();
+					exclude_unique_components[0] = Translation::ID();
+					ForEachEntityCommitFunctor(world, BasicDrawForEach<false, true, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
+
+					unique_components[0] = Translation::ID();
+					unique_components[1] = Rotation::ID();
+					unique_components[2] = Scale::ID();
+					ForEachEntityCommitFunctor(world, BasicDrawForEach<true, true, true>, &for_each_data, { unique_components, 3 }, shared_signature);
+
+					GenerateInstanceFramebuffer(world->graphics, elements.ToStream(), instanced_views.target, instanced_views.depth_stencil);
+
+					elements.FreeBuffer();
+				}
+			}
+		}
+	}
+}
+
+ECS_THREAD_TASK_TEMPLATE_BOOL(RenderInstancedFramebuffer);

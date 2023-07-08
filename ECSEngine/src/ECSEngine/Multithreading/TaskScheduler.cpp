@@ -56,7 +56,7 @@ namespace ECSEngine {
 		size_t current_query_index = 0;
 
 		for (size_t index = 0; index < elements.size; index++) {
-			if (elements[index].component_query.component_count > 0 || elements[index].component_query.shared_component_count > 0) {
+			if (elements[index].component_query.IsValid()) {
 				const TaskComponentQuery& current_query = elements[index].component_query;
 				size_t exclude_count = current_query.exclude_component_count;
 				size_t exclude_shared_count = current_query.exclude_shared_component_count;
@@ -78,7 +78,8 @@ namespace ECSEngine {
 			}
 		}
 
-		ECS_ASSERT(current_query_index == query_infos.size);
+		// Some tasks can lack queries
+		//ECS_ASSERT(current_query_index == query_infos.size);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -365,9 +366,9 @@ namespace ECSEngine {
 		Stream<TaskSchedulerInfo>* infos = &scheduler->query_infos;
 
 		// Resize the scheduling data
-		infos->Initialize(elements->allocator, conflicting_queries.size);
+		infos->Initialize(elements->allocator, elements->size);
 		// Memset the infos to 0 - no barrier and fine locking wrapper
-		memset(infos->buffer, 0, sizeof(TaskSchedulerInfo) * conflicting_queries.size);
+		memset(infos->buffer, 0,  elements->MemoryOf(elements->size));
 
 		scheduler->task_barriers.Initialize(elements->allocator, elements->size);
 		// Copy the barriers

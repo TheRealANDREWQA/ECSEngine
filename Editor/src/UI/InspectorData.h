@@ -60,3 +60,6 @@ void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sa
 void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int module_index);
 
 void SetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index);
+
+// Returns the target sandbox index if the UI window is an inspector window, else -1
+unsigned int GetInspectorTargetSandboxFromUIWindow(const EditorState* editor_state, unsigned int window_index);

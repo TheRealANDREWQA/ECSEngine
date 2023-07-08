@@ -18,6 +18,7 @@ namespace ECSEngine {
 	struct SystemManager;
 	struct Camera;
 	struct Entity;
+	struct GraphicsBoundViews;
 
 	enum ECS_REFLECT ECS_TRANSFORM_TOOL : unsigned char {
 		ECS_TRANSFORM_TRANSLATION,
@@ -74,4 +75,11 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	ECSENGINE_API bool GetEditorRuntimeInstancedFramebuffer(const SystemManager* system_manager, GraphicsBoundViews* views);
+
+	ECSENGINE_API void SetEditorRuntimeInstancedFramebuffer(SystemManager* system_manager, const GraphicsBoundViews* views);
+
+	ECSENGINE_API void RemoveEditorRuntimeInstancedFramebuffer(SystemManager* system_manager);
+
+	// ------------------------------------------------------------------------------------------------------------
 }

@@ -1,8 +1,8 @@
 #include "editorpch.h"
 #include "DirectoryExplorer.h"
-#include "..\Editor\EditorState.h"
+#include "../Editor/EditorState.h"
 #include "FileExplorerData.h"
-#include "..\HelperWindows.h"
+#include "HelperWindows.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;

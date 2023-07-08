@@ -5,16 +5,22 @@
 using namespace ECSEngine;
 
 void ModuleTaskFunction(ModuleTaskFunctionData* data) {
-	TaskSchedulerElement element;
-	element.initialize_task_function = RenderTaskInitialize;
-	element.task_group = ECS_THREAD_TASK_FINALIZE_LATE;
-	ECS_REGISTER_FOR_EACH_TASK(element, RenderTask, data);
+	TaskSchedulerElement elements[4];
+	
+	for (size_t index = 0; index < std::size(elements); index++) {
+		elements[index].task_group = ECS_THREAD_TASK_FINALIZE_LATE;
+		elements[index].initialize_task_function = nullptr;
+	}
+	
+	elements[0].initialize_task_function = RenderTaskInitialize;
+	ECS_REGISTER_FOR_EACH_TASK(elements[0], RenderTask, data);
 
-	element.initialize_task_function = RenderSelectablesInitialize;
-	ECS_REGISTER_FOR_EACH_TASK(element, RenderSelectables, data);
+	elements[1].initialize_task_function = RenderSelectablesInitialize;
+	ECS_REGISTER_FOR_EACH_TASK(elements[1], RenderSelectables, data);
+	
+	ECS_REGISTER_FOR_EACH_TASK(elements[2], RenderInstancedFramebuffer, data);
 
-	element.initialize_task_function = nullptr;
-	ECS_REGISTER_FOR_EACH_TASK(element, RenderFlush, data);
+	ECS_REGISTER_FOR_EACH_TASK(elements[3], RenderFlush, data);
 }
 
 #if 0
