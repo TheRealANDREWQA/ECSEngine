@@ -3,7 +3,7 @@
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorPalette.h"
 #include "../Assets/EditorSandboxAssets.h"
-#include "../HelperWindows.h"
+#include "../UI/HelperWindows.h"
 #include "ECSEngineAssets.h"
 #include "../Project/ProjectFolders.h"
 #include "Inspector.h"

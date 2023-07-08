@@ -2,8 +2,40 @@
 #include "RenderingEffects.h"
 #include "GraphicsHelpers.h"
 #include "Graphics.h"
+#include "../Utilities/FunctionInterfaces.h"
 
 namespace ECSEngine {
+
+	// The functor is called each iteration before the draw call is issued with the index
+	// of the current iteration
+	template<typename Functor>
+	void RenderingEffectElementBaseDraw(
+		Graphics* graphics,
+		const void* elements,
+		size_t count,
+		size_t byte_size,
+		ConstantBuffer vertex_cbuffer,
+		Functor&& functor
+	) {
+		for (size_t index = 0; index < count; index++) {
+			const RenderingEffectMesh* element = (const RenderingEffectMesh*)function::OffsetPointer(elements, byte_size * index);
+			void* cbuffer_data = graphics->MapBuffer(vertex_cbuffer.buffer);
+			element->gpu_mvp_matrix.Store(cbuffer_data);
+			graphics->UnmapBuffer(vertex_cbuffer.buffer);
+
+			functor(index);
+
+			if (element->is_submesh) {
+				graphics->BindMesh(element->coalesced_mesh->mesh);
+				Submesh submesh = element->coalesced_mesh->submeshes[element->submesh_index];
+				graphics->DrawIndexed(submesh.index_count, submesh.index_buffer_offset, submesh.vertex_buffer_offset);
+			}
+			else {
+				graphics->BindMesh(*element->mesh);
+				graphics->DrawIndexed(element->mesh->index_buffer.count);
+			}
+		}
+	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
@@ -35,10 +67,8 @@ namespace ECSEngine {
 
 		graphics->BindRenderTargetView(stencil_render_view, graphics->GetBoundDepthStencil());
 
-		// Bind the default transform vertex shader and solid color pixel shader
-		graphics->BindVertexShader(graphics->m_shader_helpers[ECS_GRAPHICS_SHADER_HELPER_HIGHLIGHT_STENCIL].vertex);
-		graphics->BindInputLayout(graphics->m_shader_helpers[ECS_GRAPHICS_SHADER_HELPER_HIGHLIGHT_STENCIL].input_layout);
-		graphics->BindPixelShader(graphics->m_shader_helpers[ECS_GRAPHICS_SHADER_HELPER_HIGHLIGHT_STENCIL].pixel);
+		// Bind the helper stencil output
+		graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_HIGHLIGHT_STENCIL);
 
 		ConstantBuffer vertex_cbuffer = graphics->CreateConstantBuffer(sizeof(Matrix), true);
 		graphics->BindVertexConstantBuffer(vertex_cbuffer);
@@ -50,23 +80,14 @@ namespace ECSEngine {
 		graphics->DisableDepth();
 
 		// First pass - output the stencil values
-		// Bind the first draw pass depth stencil state
-		// Leave the scale as is
-		for (size_t index = 0; index < elements.size; index++) {
-			void* cbuffer_data = graphics->MapBuffer(vertex_cbuffer.buffer);
-			elements[index].gpu_mvp_matrix.Store(cbuffer_data);
-			graphics->UnmapBuffer(vertex_cbuffer.buffer);
-
-			if (elements[index].is_submesh) {
-				graphics->BindMesh(elements[index].coalesced_mesh->mesh);
-				Submesh submesh = elements[index].coalesced_mesh->submeshes[elements[index].submesh_index];
-				graphics->DrawIndexed(submesh.index_count, submesh.index_buffer_offset, submesh.vertex_buffer_offset);
-			}
-			else {
-				graphics->BindMesh(*elements[index].mesh);
-				graphics->DrawIndexed(elements[index].mesh->index_buffer.count);
-			}
-		}
+		RenderingEffectElementBaseDraw(
+			graphics,
+			elements.buffer,
+			elements.size,
+			elements.MemoryOf(1),
+			vertex_cbuffer,
+			[](size_t index) {}
+		);
 
 		// Second pass
 		// Unbind the stencil texture and rebing the initial texture
@@ -100,6 +121,134 @@ namespace ECSEngine {
 		stencil_render_view.Release();
 		
 		graphics->RestorePipelineState(&pipeline_state);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GenerateInstanceFramebuffer(
+		Graphics* graphics,
+		Stream<GenerateInstanceFramebufferElement> elements,
+		RenderTargetView render_target,
+		DepthStencilView depth_stencil
+	) {
+		GraphicsPipelineState pipeline_state = graphics->GetPipelineState();
+
+		struct VertexCBuffer {
+			Matrix mvp_matrix;
+		};
+
+		struct PixelCBuffer {
+			unsigned int instance_index_pixel_thickness;
+		};
+
+		ConstantBuffer vertex_cbuffer = graphics->CreateConstantBuffer(sizeof(VertexCBuffer), true);
+		ConstantBuffer pixel_cbuffer = graphics->CreateConstantBuffer(sizeof(PixelCBuffer), true);
+
+		graphics->BindVertexConstantBuffer(vertex_cbuffer);
+		graphics->BindPixelConstantBuffer(pixel_cbuffer);
+
+		graphics->ClearDepthStencil(depth_stencil);
+		// An instance index of 0 means that the slot is empty
+		graphics->ClearRenderTarget(render_target, ColorFloat(0.0f, 0.0f, 0.0f, 0.0f));
+
+		graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_MOUSE_PICK);
+		graphics->BindRenderTargetView(render_target, depth_stencil);
+
+		RenderingEffectElementBaseDraw(
+			graphics,
+			elements.buffer,
+			elements.size,
+			elements.MemoryOf(1),
+			vertex_cbuffer,
+			[&](size_t index) {
+				PixelCBuffer* pixel_data = (PixelCBuffer*)graphics->MapBuffer(pixel_cbuffer.buffer);
+				ECS_ASSERT(elements[index].pixel_thickness <= ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+				unsigned int instance_index = elements[index].instance_index;
+				instance_index = instance_index == -1 ? (unsigned int)index : instance_index;
+				// Increase this value such that values of 0 are invalid
+				instance_index++;
+				pixel_data->instance_index_pixel_thickness = function::BlendBits<unsigned int>(
+					instance_index, 
+					elements[index].pixel_thickness, 
+					32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS, 
+					ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS
+				);
+				graphics->UnmapBuffer(pixel_cbuffer.buffer);
+			}
+		);
+
+		vertex_cbuffer.Release();
+		pixel_cbuffer.Release();
+
+		graphics->RestorePipelineState(&pipeline_state);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	unsigned int GetInstanceFromFramebuffer(Graphics* graphics, RenderTargetView render_target, uint2 pixel_position)
+	{
+		// Create a temporary staging readback texture
+		Texture2DDescriptor temporary_texture_descriptor;
+		temporary_texture_descriptor.usage = ECS_GRAPHICS_USAGE_STAGING;
+		temporary_texture_descriptor.size = { ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS + 1, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS + 1 };
+		temporary_texture_descriptor.bind_flag = ECS_GRAPHICS_BIND_NONE;
+		temporary_texture_descriptor.cpu_flag = ECS_GRAPHICS_CPU_ACCESS_READ;
+		temporary_texture_descriptor.mip_levels = 1;
+		temporary_texture_descriptor.format = ECS_GRAPHICS_FORMAT_R32_UINT;
+
+		Texture2D temporary_texture = graphics->CreateTexture(&temporary_texture_descriptor, true);
+
+		Texture2DDescriptor render_texture_descriptor;
+		Texture2D render_texture = render_target.GetResource();
+		GetTextureDescriptor(render_texture, &render_texture_descriptor);
+
+		uint2 top_left_copy_corner = {
+			function::SaturateSub<unsigned int>(pixel_position.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS),
+			function::SaturateSub<unsigned int>(pixel_position.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS)
+		};
+
+		uint2 bottom_right_copy_corner = {
+			function::ClampMax(pixel_position.x + ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS, render_texture_descriptor.size.x),
+			function::ClampMax(pixel_position.y + ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS, render_texture_descriptor.size.y)
+		};
+
+		uint2 copy_size = bottom_right_copy_corner - top_left_copy_corner;
+		copy_size.x++;
+		copy_size.y++;
+
+		CopyTextureSubresource(temporary_texture, { 0, 0 }, 0, render_texture, top_left_copy_corner, copy_size, 0, graphics->GetContext());
+
+		// Now open the texture and read the pixels
+		unsigned int* texture_data = (unsigned int*)graphics->MapTexture(temporary_texture, ECS_GRAPHICS_MAP_READ);
+
+		unsigned int final_instance_index = 0;
+
+		// Read the values now
+		for (unsigned int row = 0; row < copy_size.x; row++) {
+			for (unsigned int column = 0; column < copy_size.y; column++) {
+				uint2 current_position = { row, column };
+				unsigned int instance_index, pixel_thickness;
+				function::RetrieveBlendedBits(
+					function::IndexTexture(texture_data, current_position.x, current_position.y, temporary_texture_descriptor.size.x),
+					32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+					ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+					instance_index,
+					pixel_thickness
+				);
+
+				int2 int_current_position = int2(current_position.x + top_left_copy_corner.x, current_position.y + top_left_copy_corner.y);
+				int2 int_pixel_position = int2(pixel_position.x, pixel_position.y);
+				int2 difference = AbsoluteDifference(int_pixel_position, int_current_position);
+				if (difference.x <= pixel_thickness && difference.y <= pixel_thickness) {
+					final_instance_index = instance_index;
+				}
+			}
+		}
+
+		graphics->UnmapTexture(temporary_texture);
+		temporary_texture.Release();
+
+		return final_instance_index - 1;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

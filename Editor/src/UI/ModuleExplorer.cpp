@@ -1,13 +1,13 @@
 #include "editorpch.h"
 #include "ModuleExplorer.h"
-#include "..\Editor\EditorState.h"
-#include "..\HelperWindows.h"
-#include "..\Modules\Module.h"
-#include "..\Editor\EditorPalette.h"
-#include "..\Modules\ModuleFile.h"
+#include "../Editor/EditorState.h"
+#include "HelperWindows.h"
+#include "../Modules/Module.h"
+#include "../Editor/EditorPalette.h"
+#include "../Modules/ModuleFile.h"
 #include "Inspector.h"
-#include "..\Editor\EditorEvent.h"
-#include "..\Project\ProjectOperations.h"
+#include "../Editor/EditorEvent.h"
+#include "../Project/ProjectOperations.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;

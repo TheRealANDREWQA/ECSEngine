@@ -52,6 +52,11 @@ namespace ECSEngine {
 		ColorFloat color;
 	};
 
+	struct InstancedVertex {
+		float3 position;
+		unsigned int instance_index;
+	};
+
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	unsigned char GetMaskFromOptions(DebugDrawCallOptions options) {
@@ -100,15 +105,15 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	float3* MapPositions(DebugDrawer* drawer) {
-		return (float3*)drawer->graphics->MapBuffer(drawer->positions_small_vertex_buffer.buffer);
+	InstancedVertex* MapPositions(DebugDrawer* drawer) {
+		return (InstancedVertex*)drawer->graphics->MapBuffer(drawer->positions_small_vertex_buffer.buffer);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// Can be used as InstancedTransformData or plain Color information for world position shader
-	InstancedTransformData* MapInstancedVertex(DebugDrawer* drawer) {
-		return (InstancedTransformData*)drawer->graphics->MapBuffer(drawer->instanced_small_vertex_buffer.buffer);
+	InstancedTransformData* MapInstancedTransformVertex(DebugDrawer* drawer) {
+		return (InstancedTransformData*)drawer->graphics->MapBuffer(drawer->instanced_small_transform_vertex_buffer.buffer);
 	}
 
 	InstancedTransformData* MapInstancedStructured(DebugDrawer* drawer) {
@@ -122,7 +127,7 @@ namespace ECSEngine {
 	}
 
 	void UnmapInstancedVertex(DebugDrawer* drawer) {
-		drawer->graphics->UnmapBuffer(drawer->instanced_small_vertex_buffer.buffer);
+		drawer->graphics->UnmapBuffer(drawer->instanced_small_transform_vertex_buffer.buffer);
 	}
 
 	void UnmapInstancedStructured(DebugDrawer* drawer) {
@@ -167,16 +172,26 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void SetRectanglePositionsFront(float3* positions, float3 corner0, float3 corner1) {
+	void SetRectanglePositionsFront(InstancedVertex* positions, unsigned int instance_index, float3 corner0, float3 corner1) {
+		unsigned int offset = instance_index * 6;
+
 		// First rectangle triangle
-		positions[0] = corner0;
-		positions[1] = { corner1.x, corner0.y, corner1.z };
-		positions[2] = { corner0.x, corner1.y, corner0.z };
+		positions[offset + 0].position = corner0;
+		positions[offset + 1].position = { corner1.x, corner0.y, corner1.z };
+		positions[offset + 2].position = { corner0.x, corner1.y, corner0.z };
 
 		// Second rectangle triangle
-		positions[3] = positions[1];
-		positions[4] = corner1;
-		positions[5] = positions[2];
+		positions[offset + 3].position = positions[offset + 1].position;
+		positions[offset + 4].position = corner1;
+		positions[offset + 5].position = positions[offset + 2].position;
+
+		// The instance index
+		positions[offset + 0].instance_index = instance_index;
+		positions[offset + 1].instance_index = instance_index;
+		positions[offset + 2].instance_index = instance_index;
+		positions[offset + 3].instance_index = instance_index;
+		positions[offset + 4].instance_index = instance_index;
+		positions[offset + 5].instance_index = instance_index;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -254,6 +269,22 @@ namespace ECSEngine {
 				camera_matrix
 			)
 		);
+	}
+
+	void ConvertTranslationLineIntoStartEnd(float3 translation, float3 rotation, float size, float3& start, float3& end) {
+		start = translation;
+		float3 direction = GetRightVectorQuaternion(rotation);
+		end = translation + float3::Splat(size) * direction;
+	}
+
+	DebugLine ConvertTranslationLineIntoStartEnd(float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options) {
+		DebugLine debug_line;
+
+		ConvertTranslationLineIntoStartEnd(translation, rotation, size, debug_line.start, debug_line.end);
+		debug_line.color = color;
+		debug_line.options = options;
+			
+		return debug_line;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -411,6 +442,15 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void DebugDrawer::AddLine(float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
+	{
+		float3 start, end;
+		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
+		AddLine(start, end, color, options);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void DebugDrawer::AddSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options)
 	{
 		spheres.Add({ position, radius, color, options });
@@ -522,6 +562,15 @@ namespace ECSEngine {
 			FlushLine(thread_index);
 		}
 		thread_lines[thread_index].Add({ start, end, color, options });
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
+	{
+		float3 start, end;
+		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
+		AddLineThread(thread_index, start, end, color, options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -696,11 +745,15 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options)
 	{
-		float3* positions = MapPositions(this);
+		InstancedVertex* positions = MapPositions(this);
 		InstancedTransformData* instanced = MapInstancedStructured(this);
 
-		positions[0] = start;
-		positions[1] = end;
+		positions[0].position = start;
+		positions[1].position = end;
+
+		positions[0].instance_index = 0;
+		positions[1].instance_index = 0;
+
 		SetInstancedMatrix(instanced, 0, MatrixGPU(camera_matrix));
 		SetInstancedColor(instanced, 0, color);
 
@@ -714,16 +767,25 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void DebugDrawer::DrawLine(float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
+	{
+		float3 start, end;
+		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
+		DrawLine(start, end, color, options);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void DebugDrawer::DrawSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options)
 	{
-		InstancedTransformData* instanced = MapInstancedVertex(this);
+		InstancedTransformData* instanced = MapInstancedTransformVertex(this);
 		SetInstancedColor(instanced, 0, color);
 		Matrix matrix = MatrixTS(MatrixTranslation(position), MatrixScale(float3::Splat(radius)));
 		SetInstancedMatrix(instanced, 0, MatrixGPU(MatrixMVP(matrix, camera_matrix)));
 		UnmapInstancedVertex(this);
 
 		SetSphereState(options);
-		BindSphereBuffers(instanced_small_vertex_buffer);
+		BindSphereBuffers(instanced_small_transform_vertex_buffer);
 
 		DrawCallSphere(1);
 	}
@@ -734,14 +796,14 @@ namespace ECSEngine {
 	{
 		options.wireframe = false;
 
-		InstancedTransformData* instanced = MapInstancedVertex(this);
+		InstancedTransformData* instanced = MapInstancedTransformVertex(this);
 		SetInstancedColor(instanced, 0, color);
 		Matrix matrix = MatrixTS(MatrixTranslation(position), MatrixScale(float3::Splat(POINT_SIZE)));
 		SetInstancedMatrix(instanced, 0, MatrixGPU(MatrixMVP(matrix, camera_matrix)));
 		UnmapInstancedVertex(this);
 
 		SetPointState(options);
-		BindPointBuffers(instanced_small_vertex_buffer);
+		BindPointBuffers(instanced_small_transform_vertex_buffer);
 
 		DrawCallPoint(1);
 	}
@@ -751,10 +813,10 @@ namespace ECSEngine {
 	// Draw it double sided, so it appears on both sides
 	void DebugDrawer::DrawRectangle(float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options)
 	{
-		float3* positions = MapPositions(this);
+		InstancedVertex* positions = MapPositions(this);
 		InstancedTransformData* instanced = MapInstancedStructured(this);
 
-		SetRectanglePositionsFront(positions, corner0, corner1);
+		SetRectanglePositionsFront(positions, 0, corner0, corner1);
 
 		SetInstancedColor(instanced, 0, color);
 		SetInstancedMatrix(instanced, 0, MatrixGPU(camera_matrix));
@@ -771,7 +833,7 @@ namespace ECSEngine {
 	void DebugDrawer::DrawCross(float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
 		options.wireframe = false;
-		InstancedTransformData* instanced = MapInstancedVertex(this);
+		InstancedTransformData* instanced = MapInstancedTransformVertex(this);
 
 		Matrix matrix = MatrixMVPToGPU(
 			MatrixTranslation(position),
@@ -784,7 +846,7 @@ namespace ECSEngine {
 		UnmapInstancedVertex(this);
 
 		SetCrossState(options);
-		BindCrossBuffers(instanced_small_vertex_buffer);
+		BindCrossBuffers(instanced_small_transform_vertex_buffer);
 
 		DrawCallCross(1);
 	}
@@ -794,7 +856,7 @@ namespace ECSEngine {
 	void DebugDrawer::DrawCircle(float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options)
 	{
 		options.wireframe = false;
-		InstancedTransformData* instanced = MapInstancedVertex(this);
+		InstancedTransformData* instanced = MapInstancedTransformVertex(this);
 
 		Matrix mvp_matrix = MatrixMVPToGPU(
 			MatrixTranslation(position),
@@ -807,7 +869,7 @@ namespace ECSEngine {
 		UnmapInstancedVertex(this);
 
 		SetCircleState(options);
-		BindCircleBuffers(instanced_small_vertex_buffer);
+		BindCircleBuffers(instanced_small_transform_vertex_buffer);
 
 		DrawCallCircle(1);
 	}
@@ -822,7 +884,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
-		InstancedTransformData* instanced = MapInstancedVertex(this);
+		InstancedTransformData* instanced = MapInstancedTransformVertex(this);
 		
 		DebugArrow arrow = { translation, rotation, length, size, color, options };
 		FillInstancedArrowCylinder(instanced, 0, &arrow, camera_matrix);
@@ -830,16 +892,16 @@ namespace ECSEngine {
 		UnmapInstancedVertex(this);
 		SetArrowCylinderState(options);
 
-		BindArrowCylinderBuffers(instanced_small_vertex_buffer);
+		BindArrowCylinderBuffers(instanced_small_transform_vertex_buffer);
 
 		DrawCallArrowCylinder(1);
 
 		// The instanced buffer must be mapped again
-		instanced = MapInstancedVertex(this);
+		instanced = MapInstancedTransformVertex(this);
 		FillInstancedArrowHead(instanced, 0, &arrow, camera_matrix);
 		UnmapInstancedVertex(this);
 
-		BindArrowHeadBuffers(instanced_small_vertex_buffer);
+		BindArrowHeadBuffers(instanced_small_transform_vertex_buffer);
 
 		SetArrowHeadState(options);
 
@@ -851,24 +913,24 @@ namespace ECSEngine {
 	void DebugDrawer::DrawAxes(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options)
 	{
 		// Draw 3 separate arrows - but batch the cylinder and head draws - in order to avoid 3 times the draw calls
-		InstancedTransformData* instanced = MapInstancedVertex(this);
+		InstancedTransformData* instanced = MapInstancedTransformVertex(this);
 
 		DebugAxes axes = { translation, rotation, size, color_x, color_y, color_z, options };
 		FillInstancedAxesArrowCylinders(instanced, 0, &axes, camera_matrix);
 
 		UnmapInstancedVertex(this);
 		SetArrowCylinderState(options);
-		BindArrowCylinderBuffers(instanced_small_vertex_buffer);
+		BindArrowCylinderBuffers(instanced_small_transform_vertex_buffer);
 		DrawCallArrowCylinder(3);
 
 		// The arrow heads - The instanced buffer must be mapped again
-		instanced = MapInstancedVertex(this);
+		instanced = MapInstancedTransformVertex(this);
 
 		FillInstancedAxesArrowHead(instanced, 0, &axes, camera_matrix);
 		
 		UnmapInstancedVertex(this);
 		SetArrowHeadState(options);
-		BindArrowHeadBuffers(instanced_small_vertex_buffer);
+		BindArrowHeadBuffers(instanced_small_transform_vertex_buffer);
 		DrawCallArrowHead(3);
 	}
 
@@ -876,12 +938,16 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options)
 	{
-		float3* positions = MapPositions(this);
+		InstancedVertex* positions = MapPositions(this);
 		InstancedTransformData* instanced = MapInstancedStructured(this);
 
-		positions[0] = point0;
-		positions[1] = point1;
-		positions[2] = point2;
+		positions[0].position = point0;
+		positions[1].position = point1;
+		positions[2].position = point2;
+		
+		positions[0].instance_index = 0;
+		positions[1].instance_index = 0;
+		positions[2].instance_index = 0;
 
 		SetInstancedColor(instanced, 0, color);
 		SetInstancedMatrix(instanced, 0, MatrixGPU(camera_matrix));
@@ -905,13 +971,13 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawOOBB(float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options)
 	{
-		InstancedTransformData* instanced = MapInstancedVertex(this);
+		InstancedTransformData* instanced = MapInstancedTransformVertex(this);
 		SetInstancedColor(instanced, 0, color);
 		SetInstancedMatrix(instanced, 0, MatrixGPU(MatrixMVP(MatrixTransform(translation, rotation, scale), camera_matrix)));
 		UnmapInstancedVertex(this);
 
 		SetOOBBState(options);
-		BindCubeBuffers(instanced_small_vertex_buffer);
+		BindCubeBuffers(instanced_small_transform_vertex_buffer);
 
 		DrawCallOOBB(1);
 	}
@@ -1243,7 +1309,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data - each line has 2 endpoints
-			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 2, true);
+			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(InstancedVertex), instance_count * 2, true);
 			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffer and the structured buffer now
@@ -1256,8 +1322,8 @@ namespace ECSEngine {
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
 
-			auto map_buffers = [this](VertexBuffer position_buffer, StructuredBuffer instanced_buffer, float3** positions, void** instanced_data) {
-				*positions = (float3*)graphics->MapBuffer(position_buffer.buffer);
+			auto map_buffers = [this](VertexBuffer position_buffer, StructuredBuffer instanced_buffer, InstancedVertex** positions, void** instanced_data) {
+				*positions = (InstancedVertex*)graphics->MapBuffer(position_buffer.buffer);
 				*instanced_data = graphics->MapBuffer(instanced_buffer.buffer);
 			};
 
@@ -1266,17 +1332,19 @@ namespace ECSEngine {
 				graphics->UnmapBuffer(instanced_buffer.buffer);
 			};
 
-			auto map_for = [&current_count, &current_indices, this, gpu_camera, deck_pointer](float3* positions, void* instanced_data) {
+			auto map_for = [&current_count, &current_indices, this, gpu_camera, deck_pointer](InstancedVertex* positions, void* instanced_data) {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugLine* line = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y]; 
-					positions[index * 2] = line->start; 
-					positions[index * 2 + 1] = line->end; 
+					positions[index * 2].position = line->start; 
+					positions[index * 2 + 1].position = line->end; 
+					positions[index * 2].instance_index = index;
+					positions[index * 2 + 1].instance_index = index;
 					SetInstancedColor(instanced_data, index, line->color); 
 					SetInstancedMatrix(instanced_data, index, gpu_camera); 
 				} 
 			};
 			
-			float3* positions = nullptr;
+			InstancedVertex* positions = nullptr;
 			void* instanced_data = nullptr;
 
 			auto draw_call = [&](DebugDrawCallOptions options) {
@@ -1527,7 +1595,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data - each rectangles has 6 vertices
-			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 6, true);
+			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(InstancedVertex), instance_count * 6, true);
 			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffer and the structured buffer now
@@ -1540,8 +1608,8 @@ namespace ECSEngine {
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
 
-			auto map_buffers = [this](VertexBuffer position_buffer, StructuredBuffer instanced_buffer, float3** positions, void** instanced_data) {
-				*positions = (float3*)graphics->MapBuffer(position_buffer.buffer);
+			auto map_buffers = [this](VertexBuffer position_buffer, StructuredBuffer instanced_buffer, InstancedVertex** positions, void** instanced_data) {
+				*positions = (InstancedVertex*)graphics->MapBuffer(position_buffer.buffer);
 				*instanced_data = graphics->MapBuffer(instanced_buffer.buffer);
 			};
 
@@ -1550,16 +1618,16 @@ namespace ECSEngine {
 				graphics->UnmapBuffer(instanced_buffer.buffer);
 			};
 
-			auto map_for = [&current_count, &current_indices, this, gpu_camera, deck_pointer](float3* positions, void* instanced_data) {
+			auto map_for = [&current_count, &current_indices, this, gpu_camera, deck_pointer](InstancedVertex* positions, void* instanced_data) {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugRectangle* rectangle = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
-					SetRectanglePositionsFront(positions + index * 6, rectangle->corner0, rectangle->corner1);
+					SetRectanglePositionsFront(positions, index, rectangle->corner0, rectangle->corner1);
 					SetInstancedColor(instanced_data, index, rectangle->color);
 					SetInstancedMatrix(instanced_data, index, gpu_camera);
 				}
 			};
 
-			float3* positions = nullptr;
+			InstancedVertex* positions = nullptr;
 			void* instanced_data = nullptr;
 
 			auto draw_call = [&](DebugDrawCallOptions options) {
@@ -2075,7 +2143,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data - each triangle has 3 vertices
-			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 3, true);
+			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(InstancedVertex), instance_count * 3, true);
 			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffer and the structured buffer now
@@ -2088,8 +2156,8 @@ namespace ECSEngine {
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
 
-			auto map_buffers = [this](VertexBuffer position_buffer, StructuredBuffer instanced_buffer, float3** positions, void** instanced_data) {
-				*positions = (float3*)graphics->MapBuffer(position_buffer.buffer);
+			auto map_buffers = [this](VertexBuffer position_buffer, StructuredBuffer instanced_buffer, InstancedVertex** positions, void** instanced_data) {
+				*positions = (InstancedVertex*)graphics->MapBuffer(position_buffer.buffer);
 				*instanced_data = graphics->MapBuffer(instanced_buffer.buffer);
 			};
 
@@ -2098,18 +2166,23 @@ namespace ECSEngine {
 				graphics->UnmapBuffer(instanced_buffer.buffer);
 			};
 
-			auto map_for = [&current_count, &current_indices, this, gpu_camera, deck_pointer](float3* positions, void* instanced_data) {
+			auto map_for = [&current_count, &current_indices, this, gpu_camera, deck_pointer](InstancedVertex* positions, void* instanced_data) {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugTriangle* triangle = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
-					positions[index * 3] = triangle->point0;
-					positions[index * 3 + 1] = triangle->point1;
-					positions[index * 3 + 2] = triangle->point2;
+					positions[index * 3 + 0].position = triangle->point0;
+					positions[index * 3 + 1].position = triangle->point1;
+					positions[index * 3 + 2].position = triangle->point2;
+
+					positions[index * 3 + 0].instance_index = index;
+					positions[index * 3 + 1].instance_index = index;
+					positions[index * 3 + 2].instance_index = index;
+
 					SetInstancedColor(instanced_data, index, triangle->color);
 					SetInstancedMatrix(instanced_data, index, gpu_camera);
 				}
 			};
 
-			float3* positions = nullptr;
+			InstancedVertex* positions = nullptr;
 			void* instanced_data = nullptr;
 
 			auto draw_call = [&](DebugDrawCallOptions options) {
@@ -2911,8 +2984,8 @@ namespace ECSEngine {
 		thread_count = _thread_count;
 
 		// Initialize the small vertex buffers
-		positions_small_vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), SMALL_VERTEX_BUFFER_CAPACITY);
-		instanced_small_vertex_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), SMALL_VERTEX_BUFFER_CAPACITY);
+		positions_small_vertex_buffer = graphics->CreateVertexBuffer(sizeof(InstancedVertex), SMALL_VERTEX_BUFFER_CAPACITY);
+		instanced_small_transform_vertex_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), SMALL_VERTEX_BUFFER_CAPACITY);
 		instanced_small_structured_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), SMALL_VERTEX_BUFFER_CAPACITY);
 		instanced_structured_view = graphics->CreateBufferView(instanced_small_structured_buffer);
 
@@ -3360,7 +3433,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawCallLine(unsigned int instance_count)
 	{
-		graphics->DrawInstanced(2, instance_count);
+		graphics->Draw(2 * instance_count);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -3381,7 +3454,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawCallRectangle(unsigned int instance_count)
 	{
-		graphics->DrawInstanced(6, instance_count);
+		graphics->Draw(6 * instance_count);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -3416,7 +3489,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawCallTriangle(unsigned int instance_count)
 	{
-		graphics->DrawInstanced(3, instance_count);
+		graphics->Draw(3 * instance_count);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

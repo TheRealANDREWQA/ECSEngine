@@ -603,6 +603,20 @@ unsigned int GetEntitiesUILastWindowIndex(const EditorState* editor_state)
 
 // -------------------------------------------------------------------------------------------------------------
 
+unsigned int GetEntitiesUITargetSandbox(const EditorState* editor_state, unsigned int entities_index)
+{
+	unsigned int window_index = GetEntitiesUIWindowIndex(editor_state, entities_index);
+	if (window_index != -1) {
+		EntitiesUIData* data = (EntitiesUIData*)editor_state->ui_system->GetWindowData(window_index);
+		return data->sandbox_index;
+	}
+	else {
+		return -1;
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
 void UpdateEntitiesUITargetSandbox(EditorState* editor_state, unsigned int old_index, unsigned int new_index)
 {
 	for (unsigned int entities_index = 0; entities_index < MAX_ENTITIES_UI_WINDOWS; entities_index++) {
@@ -618,6 +632,21 @@ void UpdateEntitiesUITargetSandbox(EditorState* editor_state, unsigned int old_i
 				data->sandbox_index = (unsigned char)new_index;
 			}
 		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+unsigned int EntitiesUITargetSandbox(const EditorState* editor_state, unsigned int window_index)
+{
+	Stream<char> window_name = editor_state->ui_system->GetWindowName(window_index);
+	Stream<char> prefix = ENTITIES_UI_WINDOW_NAME;
+	if (window_name.StartsWith(prefix)) {
+		unsigned int entities_index = GetEntitiesUIIndexFromName(window_name);
+		return GetEntitiesUITargetSandbox(editor_state, entities_index);
+	}
+	else {
+		return -1;
 	}
 }
 

@@ -14,7 +14,7 @@
 #include "../Assets/AssetManagement.h"
 #include "../Assets/AssetTick.h"
 #include "../UI/AssetOverrides.h"
-#include "EditorInputTick.h"
+#include "EditorInputMapping.h"
 
 using namespace ECSEngine;
 
@@ -520,6 +520,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	memset(editor_state->lazy_evaluation_counters, 0xFF, sizeof(unsigned short) * EDITOR_LAZY_EVALUATION_COUNTERS_COUNT);
 
 	editor_state->lazy_evalution_timer.SetNewStart();
+
+	// Allocate the input mapping
 
 	// This needs to be called last
 	InitializeSandboxes(editor_state);

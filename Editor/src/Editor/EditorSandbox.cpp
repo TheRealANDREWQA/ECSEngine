@@ -182,6 +182,10 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 		SetEditorRuntimeSelectColor(system_manager, EDITOR_SELECT_COLOR);
 		SetEditorRuntimeSelectedEntities(system_manager, sandbox->selected_entities);
 		SetEditorRuntimeTransformTool(system_manager, sandbox->transform_tool);
+		GraphicsBoundViews instanced_views;
+		instanced_views.depth_stencil = sandbox->scene_viewport_depth_stencil_framebuffer;
+		instanced_views.target = sandbox->scene_viewport_instance_framebuffer;
+		SetEditorRuntimeInstancedFramebuffer(system_manager, &instanced_views);
 	}
 }
 
@@ -591,6 +595,8 @@ void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_i
 	if (sandbox->viewport_render_destination[viewport].render_view.Interface() != nullptr) {
 		runtime_graphics->FreeRenderDestination(sandbox->viewport_render_destination[viewport]);
 		ReleaseGraphicsView(sandbox->viewport_transferred_texture[viewport]);
+		runtime_graphics->FreeView(sandbox->scene_viewport_instance_framebuffer);
+		runtime_graphics->FreeView(sandbox->scene_viewport_depth_stencil_framebuffer);
 	}
 
 	runtime_graphics->GetContext()->ClearState();
@@ -1365,6 +1371,7 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 		RemoveEditorRuntimeSelectColor(system_manager);
 		RemoveEditorRuntimeSelectedEntities(system_manager);
 		RemoveEditorRuntimeTransformTool(system_manager);
+		RemoveEditorRuntimeInstancedFramebuffer(system_manager);
 	}
 }
 
@@ -1604,6 +1611,23 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 
 	// Now transfer the texture from the RuntimeGraphics to the UIGraphics
 	sandbox->viewport_transferred_texture[viewport] = editor_state->UIGraphics()->TransferGPUView(sandbox->viewport_render_destination[viewport].output_view);
+
+	// Also create the instanced framebuffers
+	Texture2DDescriptor instanced_framebuffer_descriptor;
+	instanced_framebuffer_descriptor.format = ECS_GRAPHICS_FORMAT_R32_UINT;
+	instanced_framebuffer_descriptor.bind_flag = ECS_GRAPHICS_BIND_RENDER_TARGET;
+	instanced_framebuffer_descriptor.mip_levels = 1;
+	instanced_framebuffer_descriptor.size = new_size;
+	Texture2D instanced_framebuffer_texture = runtime_graphics->CreateTexture(&instanced_framebuffer_descriptor);
+	sandbox->scene_viewport_instance_framebuffer = runtime_graphics->CreateRenderTargetView(instanced_framebuffer_texture);
+	
+	Texture2DDescriptor instanced_depth_stencil_descriptor;
+	instanced_depth_stencil_descriptor.format = ECS_GRAPHICS_FORMAT_D32_FLOAT;
+	instanced_depth_stencil_descriptor.bind_flag = ECS_GRAPHICS_BIND_DEPTH_STENCIL;
+	instanced_depth_stencil_descriptor.mip_levels = 1;
+	instanced_depth_stencil_descriptor.size = new_size;
+	Texture2D instanced_depth_texture = runtime_graphics->CreateTexture(&instanced_depth_stencil_descriptor);
+	sandbox->scene_viewport_depth_stencil_framebuffer = runtime_graphics->CreateDepthStencilView(instanced_depth_texture);
 
 	runtime_graphics->m_window_size = new_size;
 }

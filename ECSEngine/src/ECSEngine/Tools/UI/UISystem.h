@@ -1195,6 +1195,13 @@ namespace ECSEngine {
 
 			uint2 GetWindowTexelSize(unsigned int window_index) const;
 
+			// Returns the texel offset from the beginning of the given window
+			// If the position falls outside the bounds it will return { -1, -1 }
+			uint2 GetWindowTexelPosition(unsigned int window_index, float2 position) const;
+
+			// Returns the pixel offset from the beginning of the currently hovered window
+			uint2 GetMousePositionHoveredWindowTexelPosition() const;
+
 			// Advances the next sprite texture
 			UISpriteTexture* GetNextSpriteTextureToDraw(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type);
 

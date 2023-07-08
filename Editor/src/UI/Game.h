@@ -34,3 +34,7 @@ void GetGameUIWindowName(unsigned int index, ECSEngine::CapacityStream<char>& na
 
 // Does nothing if the old_index doesn't exist
 void UpdateGameUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);
+
+// Returns the target sandbox index from that window_index. If the window is not a game UI window,
+// it will return -1
+unsigned int GameUITargetSandbox(const EditorState* editor_state, unsigned int window_index);

@@ -5,26 +5,34 @@
 
 namespace ECSEngine {
 
-	enum ECS_BUTTON_STATE : unsigned char {
+	struct ECSENGINE_API InputMappingButton {
+		ECS_INLINE InputMappingButton() : is_key(false), key(ECS_KEY_NONE) {}
 
+		bool IsTriggered(const Mouse* mouse, const Keyboard* keyboard) const;
+
+		bool is_key;
+		union {
+			ECS_MOUSE_BUTTON mouse_button;
+			ECS_KEY key;
+		};
+		ECS_BUTTON_STATE state;
 	};
 
 	struct InputMappingElement {
-		bool first_is_key;
-		bool second_is_key;
-		union {
-			ECS_MOUSE_BUTTON first_mouse_button;
-			Key first_key;
-		};
-		union {
-			ECS_MOUSE_BUTTON second_mouse_button;
-			Key second_key;
-		};
+		InputMappingButton first;
+		InputMappingButton second;
+		InputMappingButton third;
 	};
 
 	struct ECSENGINE_API InputMapping {
+		void Initialize(AllocatorPolymorphic allocator, size_t count);
+
+		bool IsTriggered(unsigned int index, const Mouse* mouse, const Keyboard* keyboard) const;
+
+		void ChangeMapping(unsigned int index, InputMappingElement mapping_element);
 
 
+		Stream<InputMappingElement> mappings;
 	};
 
 }

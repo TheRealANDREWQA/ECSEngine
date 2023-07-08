@@ -203,8 +203,17 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
+		ECS_INLINE bool EndsWith(Stream<T> other) const {
+			if (other.size <= size) {
+				return memcmp(buffer + size - other.size, other.buffer, other.MemoryOf(other.size)) == 0;
+			}
+			else {
+				return false;
+			}
+		}
+
 		// Returns the previous buffer (the size is also updated)
-		void* Expand(AllocatorPolymorphic allocator, size_t new_elements, bool deallocate_old = false) {
+		ECS_INLINE void* Expand(AllocatorPolymorphic allocator, size_t new_elements, bool deallocate_old = false) {
 			return Resize(allocator, size + new_elements, true, deallocate_old);
 		}
 
@@ -320,6 +329,15 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 
 			return -1;
+		}
+
+		ECS_INLINE bool StartsWith(Stream<T> other) const {
+			if (other.size <= size) {
+				return memcmp(buffer, other.buffer, other.MemoryOf(other.size)) == 0;
+			}
+			else {
+				return false;
+			}
 		}
 
 		ECS_INLINE T& operator [](size_t index) {
@@ -591,6 +609,15 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
+		ECS_INLINE bool EndsWith(Stream<T> other) const {
+			if (other.size <= size) {
+				return memcmp(buffer + size - other.size, other.buffer, other.MemoryOf(other.size)) == 0;
+			}
+			else {
+				return false;
+			}
+		}
+
 		// Returns the old buffer if a resize was performed, else nullptr. Can select the amount by which it grows with the growth_count
 		// (the capacity will be necessary_elements + growth_count). 
 		void* Expand(AllocatorPolymorphic allocator, unsigned int expand_count, unsigned int growth_count = 0, bool deallocate_previous = true) {
@@ -702,6 +729,15 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 
 			return -1;
+		}
+
+		ECS_INLINE bool StartsWith(Stream<T> other) const {
+			if (other.size <= size) {
+				return memcmp(buffer, other.buffer, other.MemoryOf(other.size)) == 0;
+			}
+			else {
+				return false;
+			}
 		}
 
 		ECS_INLINE T& operator [](unsigned int index) {

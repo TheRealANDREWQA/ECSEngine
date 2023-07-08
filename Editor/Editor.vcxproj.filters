@@ -7,7 +7,7 @@
     <ClInclude Include="src\editorpch.h" />
     <ClInclude Include="src\Editor\EditorState.h" />
     <ClInclude Include="src\Project\ProjectOperations.h" />
-    <ClInclude Include="src\HelperWindows.h" />
+    <ClInclude Include="src\UI\HelperWindows.h" />
     <ClInclude Include="src\Project\ProjectUITemplatePreview.h" />
     <ClInclude Include="src\Editor\EditorFile.h" />
     <ClInclude Include="src\Editor\EditorEvent.h" />
@@ -64,13 +64,14 @@
     <ClInclude Include="src\Editor\EditorSandboxTypes.h" />
     <ClInclude Include="src\UI\RenderingCommon.h" />
     <ClInclude Include="src\Editor\EditorStateTypes.h" />
-    <ClInclude Include="src\Editor\EditorInputTick.h" />
+    <ClInclude Include="src\Editor\EditorInputMapping.h" />
+    <ClInclude Include="src\UI\TargetSandboxWindows.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
     <ClCompile Include="src\editorpch.cpp" />
     <ClCompile Include="src\Project\ProjectOperations.cpp" />
-    <ClCompile Include="src\HelperWindows.cpp" />
+    <ClCompile Include="src\UI\HelperWindows.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplatePreview.cpp" />
     <ClCompile Include="src\Editor\EditorFile.cpp" />
     <ClCompile Include="src\Editor\EditorEvent.cpp" />
@@ -119,7 +120,7 @@
     <ClCompile Include="src\Assets\AssetTick.cpp" />
     <ClCompile Include="src\UI\Common.cpp" />
     <ClCompile Include="src\UI\RenderingCommon.cpp" />
-    <ClCompile Include="src\Editor\EditorInputTick.cpp" />
+    <ClCompile Include="src\Editor\EditorInputMapping.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

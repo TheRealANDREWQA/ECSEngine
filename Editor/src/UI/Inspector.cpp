@@ -3,7 +3,6 @@
 #include "InspectorData.h"
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorPalette.h"
-#include "../HelperWindows.h"
 #include "../Editor/EditorEvent.h"
 #include "FileExplorer.h"
 #include "../Modules/Module.h"
@@ -354,6 +353,20 @@ void SetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector
 	// them can result in inconsistent results
 
 	ChangeInspectorToNothing(editor_state, inspector_index);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+unsigned int GetInspectorTargetSandboxFromUIWindow(const EditorState* editor_state, unsigned int window_index) {
+	Stream<char> window_name = editor_state->ui_system->GetWindowName(window_index);
+	Stream<char> prefix = INSPECTOR_WINDOW_NAME;
+	if (window_name.StartsWith(prefix)) {
+		unsigned int inspector_index = GetInspectorIndex(window_name);
+		return GetInspectorTargetSandbox(editor_state, inspector_index);
+	}
+	else {
+		return -1;
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

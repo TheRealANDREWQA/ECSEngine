@@ -343,6 +343,7 @@
     <ClInclude Include="src\Includes\ECSEngineEntities.h" />
     <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
     <ClInclude Include="src\Includes\ECSEngineForEach.h" />
+    <ClInclude Include="src\Includes\ECSEngineHID.h" />
     <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />
     <ClInclude Include="src\Includes\ECSEngineThreadTaskExport.h" />
     <ClInclude Include="src\Includes\ECSEngineRuntime.h" />
@@ -519,6 +520,7 @@
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Utilities\FunctionInterfaces.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\InputMapping.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Keyboard.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Mouse.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\OSFunctions.cpp" />
@@ -575,12 +577,22 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
     </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\MousePick.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
+    </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\SolidColor.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\BasicTransform.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\MousePick.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
