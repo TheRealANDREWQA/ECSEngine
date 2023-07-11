@@ -7043,7 +7043,7 @@ namespace ECSEngine {
 				difference.y = difference.y * m_window_os_size.y * 0.5f;
 			}
 			else {
-				return { -1, -1 };
+				return { (unsigned int)-1, (unsigned int)-1 };
 			}
 		}
 
@@ -8650,8 +8650,8 @@ namespace ECSEngine {
 							if (m_pop_up_windows[subindex] == index) {
 								m_pop_up_windows[subindex] = 0;
 							}
-							else if (m_pop_up_windows[subindex] > index) {
-								m_pop_up_windows[subindex]--;
+							else if (m_pop_up_windows[subindex] < index) {
+								m_pop_up_windows[subindex]++;
 							}
 						}
 						break;

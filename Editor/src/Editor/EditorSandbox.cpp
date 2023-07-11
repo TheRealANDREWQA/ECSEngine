@@ -595,8 +595,10 @@ void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_i
 	if (sandbox->viewport_render_destination[viewport].render_view.Interface() != nullptr) {
 		runtime_graphics->FreeRenderDestination(sandbox->viewport_render_destination[viewport]);
 		ReleaseGraphicsView(sandbox->viewport_transferred_texture[viewport]);
-		runtime_graphics->FreeView(sandbox->scene_viewport_instance_framebuffer);
-		runtime_graphics->FreeView(sandbox->scene_viewport_depth_stencil_framebuffer);
+		if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+			runtime_graphics->FreeView(sandbox->scene_viewport_instance_framebuffer);
+			runtime_graphics->FreeView(sandbox->scene_viewport_depth_stencil_framebuffer);
+		}
 	}
 
 	runtime_graphics->GetContext()->ClearState();

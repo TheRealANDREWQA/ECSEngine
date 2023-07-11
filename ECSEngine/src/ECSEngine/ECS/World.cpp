@@ -255,6 +255,9 @@ namespace ECSEngine {
 
 	void PrepareWorld(World* world, Stream<TaskSchedulerElement> scheduler_elements)
 	{
+		world->entity_manager->ClearCache();
+		world->entity_manager->ClearFrame();
+
 		if (scheduler_elements.size > 0) {
 			world->task_scheduler->Add(scheduler_elements);
 		}

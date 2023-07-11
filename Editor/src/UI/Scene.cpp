@@ -12,6 +12,7 @@
 struct SceneDrawData {
 	EditorState* editor_state;
 	uint2 previous_texel_size;
+	uint2 previous_mouse_texel_position;
 };
 
 void SceneUIDestroy(ActionData* action_data) {
@@ -52,9 +53,6 @@ struct SceneActionData {
 
 	EditorState* editor_state;
 	unsigned int sandbox_index;
-
-	bool middle_click_initiated = false;
-	bool right_click_initiated = false;
 };
 
 void SceneRotationAction(ActionData* action_data) {
@@ -161,6 +159,12 @@ void SceneZoomAction(ActionData* action_data) {
 	}
 }
 
+void SceneLeftClickableAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	SceneActionData* data = (SceneActionData*)_data;
+}
+
 void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
@@ -172,6 +176,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	if (initialize) {
 		data->previous_texel_size = { 0, 0 };
+		data->previous_mouse_texel_position = { 0, 0 };
 		// Enable the rendering of the viewport
 		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	}
@@ -194,6 +199,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			drawer.SetWindowClickable(&translation_handler, ECS_MOUSE_MIDDLE);
 			UIActionHandler zoom_handler = { SceneZoomAction, &hoverable_data, sizeof(hoverable_data) };
 			drawer.SetWindowHoverable(&zoom_handler);
+
 
 			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_index, sandbox_graphics_module_index, drawer);
 		}
