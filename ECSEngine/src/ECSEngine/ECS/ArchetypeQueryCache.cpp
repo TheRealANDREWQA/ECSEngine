@@ -36,8 +36,18 @@ namespace ECSEngine {
 		// Just lock, add or resize and unlock
 		query_results.lock.lock();
 
+		// Check to see if this query already exists
+		for (unsigned int index = 0; index < query_results.count; index++) {
+			if (query_results.components[index] == query) {
+				// It matches this query - don't need to create a new one
+				// Unlock the lock
+				query_results.lock.unlock();
+				return index;
+			}
+		}
+
 		if (query_results.count == query_results.capacity) {
-			Resize(RESIZE_FACTOR * query_results.capacity);
+			Resize(RESIZE_FACTOR * query_results.capacity + 2);
 		}
 		unsigned int index = query_results.count;
 		query_results.components[index] = query;
@@ -61,8 +71,17 @@ namespace ECSEngine {
 		// Just lock, add or resize and unlock
 		exclude_query_results.lock.lock();
 
+		// Check to see if this query already exists
+		for (unsigned int index = 0; index < query_results.count; index++) {
+			if (exclude_query_results.components[index] == query) {
+				// It matches this query - don't need to create a new one
+				exclude_query_results.lock.unlock();
+				return index;
+			}
+		}
+
 		if (exclude_query_results.count == exclude_query_results.capacity) {
-			ResizeExclude(RESIZE_FACTOR * exclude_query_results.capacity);
+			ResizeExclude(RESIZE_FACTOR * exclude_query_results.capacity + 2);
 		}
 		unsigned int index = exclude_query_results.count;
 		exclude_query_results.components[index] = query;
@@ -306,7 +325,7 @@ namespace ECSEngine {
 			ECS_ASSERT(results.size < STACK_CAPACITY);
 
 			temporary_values.Copy(results);
-			Deallocate(allocator, results.buffer);
+			results.Deallocate(allocator);
 
 			results.Initialize(allocator, results.size + 1);
 			results.Copy(temporary_values);

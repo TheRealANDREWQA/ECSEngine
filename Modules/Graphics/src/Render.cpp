@@ -71,7 +71,12 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 
 		if constexpr (has_translation) {
 			if constexpr (has_rotation) {
-				object_matrix = MatrixTR(matrix_translation, matrix_rotation);
+				if constexpr (has_scale) {
+					object_matrix = MatrixTRS(matrix_translation, matrix_rotation, matrix_scale);
+				}
+				else {
+					object_matrix = MatrixTR(matrix_translation, matrix_rotation);
+				}
 			}
 			else if constexpr (has_scale) {
 				object_matrix = MatrixTS(matrix_translation, matrix_scale);
@@ -458,7 +463,12 @@ void InstancedFramebufferForEach(ForEachEntityFunctorData* for_each_data) {
 
 		if constexpr (has_translation) {
 			if constexpr (has_rotation) {
-				object_matrix = MatrixTR(matrix_translation, matrix_rotation);
+				if constexpr (has_scale) {
+					object_matrix = MatrixTRS(matrix_translation, matrix_rotation, matrix_scale);
+				}
+				else {
+					object_matrix = MatrixTR(matrix_translation, matrix_rotation);
+				}
 			}
 			else if constexpr (has_scale) {
 				object_matrix = MatrixTS(matrix_translation, matrix_scale);

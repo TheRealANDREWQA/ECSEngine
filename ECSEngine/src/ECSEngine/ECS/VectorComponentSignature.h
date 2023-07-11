@@ -69,6 +69,10 @@ namespace ECSEngine {
 	struct ECSENGINE_API ArchetypeQuery {
 		ECS_INLINE ArchetypeQuery() {}
 		ECS_INLINE ArchetypeQuery(VectorComponentSignature _unique, VectorComponentSignature _shared) : unique(_unique), shared(_shared) {}
+		
+		ECS_INLINE bool ECS_VECTORCALL operator == (ArchetypeQuery other) const {
+			return unique == other.unique && shared == other.shared;
+		}
 
 		bool ECS_VECTORCALL Verifies(VectorComponentSignature unique, VectorComponentSignature shared) const;
 
@@ -88,6 +92,11 @@ namespace ECSEngine {
 			VectorComponentSignature _exclude_unique,
 			VectorComponentSignature _exclude_shared
 		) : unique(_unique), shared(_shared), unique_excluded(_exclude_unique), shared_excluded(_exclude_shared) {}
+
+		ECS_INLINE bool ECS_VECTORCALL operator == (ArchetypeQueryExclude other) const {
+			return unique == other.unique && shared == other.shared && unique_excluded == other.unique_excluded
+				&& shared_excluded == other.shared_excluded;
+		}
 
 		bool ECS_VECTORCALL Verifies(VectorComponentSignature unique, VectorComponentSignature shared) const;
 
