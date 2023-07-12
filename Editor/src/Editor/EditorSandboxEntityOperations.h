@@ -69,6 +69,12 @@ void ChangeEntityName(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+void ChangeSandboxSelectedEntity(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Stream<Entity> entities
+);
+
 // An empty entity
 Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
 

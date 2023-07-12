@@ -333,6 +333,14 @@ unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned 
 
 // -------------------------------------------------------------------------------------------------------------
 
+ECSEngine::RenderTargetView GetSandboxInstancedFramebuffer(const EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+ECSEngine::DepthStencilView GetSandboxInstancedDepthFramebuffer(const EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 bool IsSandboxModuleDeactivated(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------

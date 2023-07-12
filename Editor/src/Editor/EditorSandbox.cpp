@@ -743,6 +743,20 @@ unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned 
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+ECSEngine::RenderTargetView GetSandboxInstancedFramebuffer(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	return GetSandbox(editor_state, sandbox_index)->scene_viewport_instance_framebuffer;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+ECSEngine::DepthStencilView GetSandboxInstancedDepthFramebuffer(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	return GetSandbox(editor_state, sandbox_index)->scene_viewport_depth_stencil_framebuffer;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool IsSandboxModuleDeactivated(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
 {
 	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);

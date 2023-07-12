@@ -178,7 +178,7 @@ ECS_THREAD_TASK(RenderTask) {
 		}
 	}
 	else {
-		ECS_REGISTER_FOR_EACH_COMPONENTS(QueryRead<Translation>, QueryRead<Rotation>, QueryRead<Scale>);
+		ECS_REGISTER_FOR_EACH_COMPONENTS(QueryRead<RenderMesh>, QueryRead<Translation>, QueryRead<Rotation>, QueryRead<Scale>);
 	}
 }
 
@@ -382,6 +382,9 @@ ECS_THREAD_TASK(RenderSelectables) {
 			}
 		}
 	}
+	else {
+		ECS_REGISTER_FOR_EACH_COMPONENTS(QueryRead<RenderMesh>, QueryRead<Translation>, QueryRead<Rotation>, QueryRead<Scale>);
+	}
 }
 
 ECS_THREAD_TASK_TEMPLATE_BOOL(RenderSelectables);
@@ -565,6 +568,9 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 				}
 			}
 		}
+	}
+	else {
+		ECS_REGISTER_FOR_EACH_COMPONENTS(QueryRead<RenderMesh>, QueryRead<Translation>, QueryRead<Rotation>, QueryRead<Scale>);
 	}
 }
 

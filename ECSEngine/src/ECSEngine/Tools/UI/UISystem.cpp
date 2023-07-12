@@ -7041,6 +7041,8 @@ namespace ECSEngine {
 				float2 difference = position - window_position;
 				difference.x = difference.x * m_window_os_size.x * 0.5f;
 				difference.y = difference.y * m_window_os_size.y * 0.5f;
+
+				return uint2(difference.x, difference.y);
 			}
 			else {
 				return { (unsigned int)-1, (unsigned int)-1 };
