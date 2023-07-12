@@ -288,6 +288,7 @@ namespace ECSEngine {
 		if (component_query.IsValid() && other->component_query.IsValid()) {
 			return component_query.Conflicts(&other->component_query);
 		}
+		return false;
 	}
 
 	// --------------------------------------------------------------------------------------

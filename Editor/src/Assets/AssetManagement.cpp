@@ -152,7 +152,7 @@ EDITOR_EVENT(RegisterEvent) {
 				ActionData dummy_data;
 				dummy_data.data = data->callback.data;
 				dummy_data.additional_data = &info;
-				dummy_data.system = nullptr;
+				dummy_data.system = editor_state->ui_system;
 				data->callback.action(&dummy_data);
 
 				// Deallocate the data, if it has the size > 0
@@ -226,7 +226,7 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 
 		auto loop = [=](unsigned int sandbox_index) {
 			ActionData dummy_data;
-			dummy_data.system = nullptr;
+			dummy_data.system = editor_state->ui_system;
 
 			size_t count = Extractor::Count(data);
 
@@ -264,7 +264,7 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 		}
 		else {
 			//ActionData dummy_data;
-			//dummy_data.system = nullptr;
+			//dummy_data.system = editor_state->ui_system;
 
 			//size_t count = Extractor::Count(data);
 			//for (size_t index = 0; index < count; index++) {
@@ -563,7 +563,7 @@ bool AddRegisterAssetEvent(
 			ActionData dummy_data;
 			dummy_data.data = callback.data;
 			dummy_data.additional_data = &info;
-			dummy_data.system = nullptr;
+			dummy_data.system = editor_state->ui_system;
 			callback.action(&dummy_data);
 		}
 		return true;

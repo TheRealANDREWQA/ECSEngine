@@ -179,6 +179,15 @@ void ChangeEntityName(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+void ChangeSandboxSelectedEntity(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> entities)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->selected_entities.Copy(entities);
+	sandbox->IncrementSelectedEntitiesCounter();
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	return CreateSandboxEntity(editor_state, sandbox_index, {}, {}, viewport);
