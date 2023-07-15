@@ -17,6 +17,7 @@
 #include "../UI/Scene.h"
 #include "../UI/EntitiesUI.h"
 #include "../UI/AssetExplorer.h"
+#include "../UI/VisualizeTexture.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -259,6 +260,17 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 				// If this fails as well, then check for entitites UI
 				matched_index = get_indexed_window(ENTITIES_UI_WINDOW_NAME, sandbox_count, EntitiesUISetDescriptor);
 				if (matched_index != -1) {
+					continue;
+				}
+
+				// The test for visualize texture needs to be done separately
+				if (file_window_names[index].StartsWith(VISUALIZE_TEXTURE_WINDOW_NAME)) {
+					unsigned int visualize_index = function::ConvertCharactersToInt(file_window_names[index]);
+					CreateIndexedWindow(visualize_index, file_window_names[index], descriptor, editor_state, stack_memory, VisualizeTextureUISetDecriptor);
+					// Get the window and set the border to NOTHING
+					unsigned int visualize_ui_index = ui_system->GetWindowFromName(file_window_names[index]);
+					ui_system->ChangeBorderFlags(visualize_ui_index, UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER | UI_DOCKSPACE_BORDER_FLAG_NO_TITLE);
+
 					continue;
 				}
 			}

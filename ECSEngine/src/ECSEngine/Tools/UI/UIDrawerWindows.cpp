@@ -2276,7 +2276,7 @@ namespace ECSEngine {
 			descriptor.window_data_size = sizeof(data);
 			descriptor.window_name = window_name;
 
-			return system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_POP_UP_WINDOW);
+			return system->CreateWindowAndDockspace(descriptor, is_pop_up_window ? UI_DOCKSPACE_POP_UP_WINDOW : 0);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -2313,6 +2313,197 @@ namespace ECSEngine {
 			}
 			extra_draw_element_count++;
 		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		struct VisualizeTextureWindowData {
+			Texture2D original_texture;
+			ResourceView texture_view;
+			Texture2D transferred_texture;
+			VisualizeTextureOptions visualize_options;
+
+			bool automatic_update;
+		};
+
+		void VisualizeTextureWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer) {
+			UI_PREPARE_DRAWER(initializer);
+
+			VisualizeTextureWindowData* data = (VisualizeTextureWindowData*)window_data;
+			// Allow for a very large zoom
+			// Do this every frame since when recovering from file this zoom will not be set
+			drawer.system->SetWindowMaxZoom(drawer.window_index, 100.0f);
+
+			UIDrawConfig config;
+			if (data->original_texture.Interface() != nullptr && data->texture_view.Interface() != nullptr) {
+				if (data->automatic_update) {
+					ConvertTextureToVisualize(drawer.system->m_graphics, data->original_texture, data->texture_view.AsTexture2D(), &data->visualize_options);
+				}
+
+				UIConfigAbsoluteTransform whole_transform = drawer.GetWholeRegionTransform();
+				config.AddFlag(whole_transform);
+
+				drawer.SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, config, data->texture_view);
+			}
+			else {
+				drawer.Text("No texture selected");
+			}
+		}
+
+		void VisualizeTextureDeallocateTexture(UISystem* system, VisualizeTextureWindowData* data) {
+			if (data->original_texture.Interface() != nullptr) {
+				if (data->transferred_texture.Interface() != nullptr) {
+					system->m_graphics->FreeResource(data->transferred_texture);
+				}
+				system->m_graphics->RemovePossibleResourceFromTracking(data->texture_view.Interface());
+				system->m_graphics->RemovePossibleResourceFromTracking(data->texture_view.AsTexture2D().Interface());
+				ReleaseGraphicsView(data->texture_view);
+			}
+		}
+
+		void VisualizeTextureCreateTexture(UISystem* system, VisualizeTextureWindowData* data, Texture2D target_texture, bool transfer_texture) {
+			if (target_texture.Interface() != nullptr) {
+				Texture2D texture_to_copy = target_texture;
+				if (transfer_texture) {
+					data->transferred_texture = system->m_graphics->TransferGPUResource(target_texture);
+					texture_to_copy = data->transferred_texture;
+				}
+				else {
+					data->transferred_texture.tex = nullptr;
+				}
+
+				Texture2D copied_texture = ConvertTextureToVisualize(system->m_graphics, texture_to_copy, &data->visualize_options);
+				data->texture_view = system->m_graphics->CreateTextureShaderViewResource(copied_texture);
+			}
+			else {
+				data->texture_view = nullptr;
+				data->transferred_texture.tex = nullptr;
+			}
+		}
+
+		void VisualizeTextureDestroyAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIActionHandler* data = (UIActionHandler*)_data;
+			VisualizeTextureWindowData* window_data = (VisualizeTextureWindowData*)_additional_data;
+			VisualizeTextureDeallocateTexture(system, window_data);
+
+			if (data->action != nullptr) {
+				action_data->data = data->data_size > 0 ? function::OffsetPointer(data, sizeof(*data)) : data->data;
+				data->action(action_data);
+			}
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		UIWindowDescriptor VisualizeTextureWindowDescriptor(UISystem* system, const VisualizeTextureActionData* create_data, void* stack_memory)
+		{
+			constexpr float2 SIZE = { 1.0f, 1.0f };
+
+			UIWindowDescriptor descriptor;
+
+			descriptor.draw = VisualizeTextureWindowDraw;
+			descriptor.destroy_action = VisualizeTextureDestroyAction;
+
+			descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, SIZE.x);
+			descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, SIZE.y);
+			descriptor.initial_size_x = SIZE.x;
+			descriptor.initial_size_y = SIZE.y;
+
+			// Allow the texture to be nullptr in order to have it be reconstructed from an UI file
+			VisualizeTextureWindowData* data = (VisualizeTextureWindowData*)stack_memory;
+			data->texture_view = nullptr;
+			data->transferred_texture = (ID3D11Texture2D*)nullptr;
+			if (create_data->texture.Interface() != nullptr) {
+				data->visualize_options = *create_data->options;
+				data->visualize_options.copy_texture_if_same_format = true;
+				data->automatic_update = create_data->automatic_update;
+
+				VisualizeTextureCreateTexture(system, data, create_data->texture, create_data->transfer_texture_to_ui_graphics);
+			}
+
+			descriptor.window_data = data;
+			descriptor.window_data_size = sizeof(*data);
+			descriptor.window_name = create_data->window_name;
+
+			// Embed the data directly here if needed
+			size_t destroy_data_size = sizeof(UIActionHandler) + create_data->destroy_window_handler.data_size;
+
+			void* destroy_data = function::OffsetPointer(stack_memory, sizeof(*data));
+			memcpy(destroy_data, &create_data->destroy_window_handler, sizeof(create_data->destroy_window_handler));
+			if (create_data->destroy_window_handler.data_size > 0) {
+				memcpy(function::OffsetPointer(destroy_data, sizeof(create_data->destroy_window_handler)), create_data->destroy_window_handler.data, create_data->destroy_window_handler.data_size);
+			}
+
+			descriptor.destroy_action_data = destroy_data;
+			descriptor.destroy_action_data_size = destroy_data_size;
+
+			return descriptor;
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		unsigned int CreateVisualizeTextureWindow(UISystem* system, const VisualizeTextureActionData* create_data)
+		{
+			size_t stack_memory[256];
+			UIWindowDescriptor descriptor = VisualizeTextureWindowDescriptor(system, create_data, stack_memory);
+
+			unsigned int window_index = system->CreateWindowAndDockspace(
+				descriptor, 
+				(create_data->is_pop_up_window ? UI_DOCKSPACE_POP_UP_WINDOW : 0) | UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER 
+				| UI_DOCKSPACE_BORDER_FLAG_NO_TITLE
+			);
+			return window_index;
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void CreateVisualizeTextureAction(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			const VisualizeTextureActionData* data = (const VisualizeTextureActionData*)_data;
+			unsigned int window_index = system->GetWindowFromName(data->window_name);
+			if (window_index == -1) {
+				CreateVisualizeTextureWindow(system, data);
+			}
+			else {
+				system->SetActiveWindow(window_index);
+			}
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void ChangeVisualizeTextureWindowOptions(
+			UISystem* system, 
+			Stream<char> window_name, 
+			const VisualizeTextureOptions* options,
+			Texture2D target_texture,
+			bool transfer_texture
+		)
+		{
+			unsigned int window_index = system->GetWindowFromName(window_name);
+			if (window_index != -1) {
+				VisualizeTextureWindowData* window_data = (VisualizeTextureWindowData*)system->GetWindowData(window_index);
+				window_data->visualize_options = *options;
+				window_data->visualize_options.copy_texture_if_same_format = true;
+
+				if (target_texture.Interface() != nullptr && (target_texture.Interface() != window_data->original_texture.Interface())) {
+					// We must free the old resources and create a new texture and view
+					VisualizeTextureDeallocateTexture(system, window_data);
+					VisualizeTextureCreateTexture(system, window_data, target_texture, transfer_texture);
+					window_data->original_texture = target_texture;
+				}
+
+				if (window_data->original_texture.Interface() != nullptr) {
+					ConvertTextureToVisualize(system->m_graphics, window_data->original_texture, window_data->texture_view.AsTexture2D(), &window_data->visualize_options);
+				}
+			}
+			else {
+				ECS_ASSERT(false, "Invalid window name for VisualizeTexture UI window");
+			}
+		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 	}
 

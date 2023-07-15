@@ -20,6 +20,7 @@
 #include <DbgHelp.h>
 #include "ECSEngineBenchmark.h"
 #include "ECSEngineMath.h"
+#include "ECSEngineVisualizeTexture.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -674,13 +675,41 @@ public:
 		//Texture2D instanced_framebuffer_texture = graphics->CreateTexture(&instanced_framebuffer_descriptor);
 		//RenderTargetView RENDER_TARGET = graphics->CreateRenderTargetView(instanced_framebuffer_texture);
 
-		//Texture2DDescriptor instanced_depth_stencil_descriptor;
-		//instanced_depth_stencil_descriptor.format = ECS_GRAPHICS_FORMAT_D32_FLOAT;
-		//instanced_depth_stencil_descriptor.bind_flag = ECS_GRAPHICS_BIND_DEPTH_STENCIL;
-		//instanced_depth_stencil_descriptor.mip_levels = 1;
-		//instanced_depth_stencil_descriptor.size = graphics->GetWindowSize();
-		//Texture2D instanced_depth_texture = graphics->CreateTexture(&instanced_depth_stencil_descriptor);
+		/*Texture2DDescriptor instanced_depth_stencil_descriptor;
+		instanced_depth_stencil_descriptor.format = ECS_GRAPHICS_FORMAT_R32_FLOAT;
+		instanced_depth_stencil_descriptor.bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		instanced_depth_stencil_descriptor.mip_levels = 1;
+		instanced_depth_stencil_descriptor.size = graphics->GetWindowSize();
+		Texture2D instanced_depth_texture = graphics->CreateTexture(&instanced_depth_stencil_descriptor);
+		D3D11_SHADER_RESOURCE_VIEW_DESC view_desc;
+		view_desc.Format = GetGraphicsNativeFormat(ECS_GRAPHICS_FORMAT_R32_FLOAT);
+		view_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+		view_desc.Buffer.ElementOffset = 0;
+		view_desc.Buffer.ElementWidth = 4;
+		view_desc.Buffer.FirstElement = 0;
+		view_desc.Buffer.NumElements = instanced_depth_stencil_descriptor.size.x * instanced_depth_stencil_descriptor.size.y;
+		ID3D11ShaderResourceView* view;
+		ECS_ASSERT(SUCCEEDED(graphics->GetDevice()->CreateShaderResourceView(instanced_depth_texture.GetResource(), &view_desc, &view)));*/
 		//DepthStencilView DEPTH_STENCIL = graphics->CreateDepthStencilView(instanced_depth_texture);
+
+		float* valuess = (float*)malloc(256 * 256 * 4);
+		for (int i = 0; i < 256 * 256; i++) {
+			valuess[i] = 1.0f / (256 * 256) * (float)i;
+		}
+
+		Stream<void> mip_data = { valuess, 256 * 256 * 4 };
+		Texture2DDescriptor temp;
+		temp.format = ECS_GRAPHICS_FORMAT_R32_TYPELESS;
+		temp.size = { 256, 256 };
+		temp.mip_levels = 1;
+		temp.mip_data = { &mip_data, 1 };
+		temp.usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		temp.bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		Texture2D temp_texture = graphics->CreateTexture(&temp, true);
+		VisualizeTextureOptions texture_option;
+		texture_option.override_format = ECS_GRAPHICS_FORMAT_D32_FLOAT;
+		Texture2D visualize_texture = ConvertTextureToVisualize(graphics, temp_texture, &texture_option);
+		ResourceView visualize_texture_view = graphics->CreateTextureShaderView(visualize_texture);
 
 		while (true) {
 			auto run_application = [&](char application_quit_value) {

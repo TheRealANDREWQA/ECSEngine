@@ -1364,6 +1364,32 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::ChangeBorderFlags(UIDockspace* dockspace, unsigned int border_index, size_t flags)
+		{
+			if ((flags & UI_DOCKSPACE_BORDER_NOTHING) != 0) {
+				dockspace->borders[border_index].draw_close_x = false;
+				dockspace->borders[border_index].draw_region_header = false;
+				dockspace->borders[border_index].draw_elements = false;
+			}
+			else {
+				dockspace->borders[border_index].draw_region_header = (flags & UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER) == 0;
+				dockspace->borders[border_index].draw_close_x = (flags & UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X) == 0;
+				dockspace->borders[border_index].draw_elements = (flags & UI_DOCKSPACE_BORDER_FLAG_NO_TITLE) == 0;
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ChangeBorderFlags(unsigned int window_index, size_t flags)
+		{
+			unsigned int border_index;
+			DockspaceType dockspace_type;
+			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, dockspace_type);
+			ChangeBorderFlags(dockspace, border_index, flags);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::ChangeWindowNameFromIndex(Stream<char> base_name, unsigned int current_index, unsigned int new_index)
 		{
 			ECS_STACK_CAPACITY_STREAM(char, full_name, 256);
@@ -2745,16 +2771,7 @@ namespace ECSEngine {
 			dockspace->borders[border_index].active_window = 0;
 			
 			// flags
-			if ((border_flags & UI_DOCKSPACE_BORDER_NOTHING) != 0) {
-				dockspace->borders[border_index].draw_close_x = false;
-				dockspace->borders[border_index].draw_region_header = false;
-				dockspace->borders[border_index].draw_elements = false;
-			}
-			else {
-				dockspace->borders[border_index].draw_region_header = (border_flags & UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER) == 0;
-				dockspace->borders[border_index].draw_close_x = (border_flags & UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X) == 0;
-				dockspace->borders[border_index].draw_elements = (border_flags & UI_DOCKSPACE_BORDER_FLAG_NO_TITLE) == 0;
-			}
+			ChangeBorderFlags(dockspace, border_index, border_flags);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

@@ -421,13 +421,17 @@ namespace ECSEngine {
 				float2* sizes
 			) const;
 
-			// Changes the name with the current index appended to the base name into the new index
-			// E.g. Inspector 0 -> Inspector 1
-			void ChangeWindowNameFromIndex(Stream<char> base_name, unsigned int current_index, unsigned int new_index);
+			void ChangeBorderFlags(UIDockspace* dockspace, unsigned int border_index, size_t flags);
+			
+			void ChangeBorderFlags(unsigned int window_index, size_t flags);
 
 			void ChangeFocusedWindowHoverable(UIActionHandler handler, float2 mouse_position = { -2.0f, -2.0f });
 
 			void ChangeFocusedWindowGeneral(UIActionHandler handler, float2 mouse_position = { -2.0f, -2.0f });
+
+			// Changes the name with the current index appended to the base name into the new index
+			// E.g. Inspector 0 -> Inspector 1
+			void ChangeWindowNameFromIndex(Stream<char> base_name, unsigned int current_index, unsigned int new_index);
 
 			// it will automatically set the event if a border is hovered
 			bool CheckDockspaceInnerBorders(

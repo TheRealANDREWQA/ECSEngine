@@ -1261,6 +1261,277 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	bool IsGraphicsFormatFloatCompatible(ECS_GRAPHICS_FORMAT format, bool include_unormalized_float)
+	{
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_R8_UNORM:
+		case ECS_GRAPHICS_FORMAT_R8_SNORM:
+		case ECS_GRAPHICS_FORMAT_R16_UNORM:
+		case ECS_GRAPHICS_FORMAT_R16_SNORM:
+		case ECS_GRAPHICS_FORMAT_R24G8_UNORM:
+		case ECS_GRAPHICS_FORMAT_RG8_UNORM:
+		case ECS_GRAPHICS_FORMAT_RG8_SNORM:
+		case ECS_GRAPHICS_FORMAT_RG16_UNORM:
+		case ECS_GRAPHICS_FORMAT_RG16_SNORM:
+		case ECS_GRAPHICS_FORMAT_RGBA8_UNORM:
+		case ECS_GRAPHICS_FORMAT_RGBA8_SNORM:
+		case ECS_GRAPHICS_FORMAT_RGBA16_UNORM:
+		case ECS_GRAPHICS_FORMAT_RGBA16_SNORM:
+			return true;
+		}
+
+		if (IsGraphicsFormatBC(format)) {
+			return true;
+		}
+
+		if (include_unormalized_float) {
+			return IsGraphicsFormatFloat(format);
+		}
+
+		return false;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatSingleChannel(ECS_GRAPHICS_FORMAT format) {
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_R8_SINT:
+		case ECS_GRAPHICS_FORMAT_R8_SNORM:
+		case ECS_GRAPHICS_FORMAT_R8_UNORM:
+		case ECS_GRAPHICS_FORMAT_R8_UINT:
+		case ECS_GRAPHICS_FORMAT_R8_TYPELESS:
+		case ECS_GRAPHICS_FORMAT_R16_SINT:
+		case ECS_GRAPHICS_FORMAT_R16_SNORM:
+		case ECS_GRAPHICS_FORMAT_R16_UINT:
+		case ECS_GRAPHICS_FORMAT_R16_UNORM:
+		case ECS_GRAPHICS_FORMAT_R16_TYPELESS:
+		case ECS_GRAPHICS_FORMAT_R16_FLOAT:
+		case ECS_GRAPHICS_FORMAT_R32_FLOAT:
+		case ECS_GRAPHICS_FORMAT_R32_SINT:
+		case ECS_GRAPHICS_FORMAT_R32_UINT:
+		case ECS_GRAPHICS_FORMAT_R32_TYPELESS:
+			return true;
+		}
+
+		return false;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatDoubleChannel(ECS_GRAPHICS_FORMAT format) {
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_RG8_SINT:
+		case ECS_GRAPHICS_FORMAT_RG8_SNORM:
+		case ECS_GRAPHICS_FORMAT_RG8_UNORM:
+		case ECS_GRAPHICS_FORMAT_RG8_UINT:
+		case ECS_GRAPHICS_FORMAT_RG8_TYPELESS:
+		case ECS_GRAPHICS_FORMAT_RG16_SINT:
+		case ECS_GRAPHICS_FORMAT_RG16_SNORM:
+		case ECS_GRAPHICS_FORMAT_RG16_UINT:
+		case ECS_GRAPHICS_FORMAT_RG16_UNORM:
+		case ECS_GRAPHICS_FORMAT_RG16_TYPELESS:
+		case ECS_GRAPHICS_FORMAT_RG16_FLOAT:
+		case ECS_GRAPHICS_FORMAT_RG32_FLOAT:
+		case ECS_GRAPHICS_FORMAT_RG32_SINT:
+		case ECS_GRAPHICS_FORMAT_RG32_UINT:
+		case ECS_GRAPHICS_FORMAT_RG32_TYPELESS:
+		case ECS_GRAPHICS_FORMAT_R24G8_UNORM:
+			return true;
+		}
+
+		return false;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatTripleChannel(ECS_GRAPHICS_FORMAT format) {
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_RGB32_FLOAT:
+		case ECS_GRAPHICS_FORMAT_RGB32_SINT:
+		case ECS_GRAPHICS_FORMAT_RGB32_UINT:
+		case ECS_GRAPHICS_FORMAT_RGB32_TYPELESS:
+		case ECS_GRAPHICS_FORMAT_R11G11B10_FLOAT:
+			return true;
+		}
+
+		return false;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatQuadrupleChannel(ECS_GRAPHICS_FORMAT format) {
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_RGBA8_SINT:
+		case ECS_GRAPHICS_FORMAT_RGBA8_SNORM:
+		case ECS_GRAPHICS_FORMAT_RGBA8_UNORM:
+		case ECS_GRAPHICS_FORMAT_RGBA8_UINT:
+		case ECS_GRAPHICS_FORMAT_RGBA8_TYPELESS:
+		case ECS_GRAPHICS_FORMAT_RGBA16_SINT:
+		case ECS_GRAPHICS_FORMAT_RGBA16_SNORM:
+		case ECS_GRAPHICS_FORMAT_RGBA16_UINT:
+		case ECS_GRAPHICS_FORMAT_RGBA16_UNORM:
+		case ECS_GRAPHICS_FORMAT_RGBA16_TYPELESS:
+		case ECS_GRAPHICS_FORMAT_RGBA16_FLOAT:
+		case ECS_GRAPHICS_FORMAT_RGBA32_FLOAT:
+		case ECS_GRAPHICS_FORMAT_RGBA32_SINT:
+		case ECS_GRAPHICS_FORMAT_RGBA32_UINT:
+		case ECS_GRAPHICS_FORMAT_RGBA32_TYPELESS:
+		case ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB:
+			return true;
+		}
+
+		return false;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	unsigned int GetGraphicsFormatChannelCount(ECS_GRAPHICS_FORMAT format)
+	{
+		if (IsGraphicsFormatSingleChannel(format)) {
+			return 1;
+		}
+		else if (IsGraphicsFormatDoubleChannel(format)) {
+			return 2;
+		}
+		else if (IsGraphicsFormatTripleChannel(format)) {
+			return 3;
+		}
+		else if (IsGraphicsFormatQuadrupleChannel(format)) {
+			return 4;
+		}
+
+		if (IsGraphicsFormatDepth(format)) {
+			return 1;
+		}
+		
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_BC1:
+		case ECS_GRAPHICS_FORMAT_BC1_SRGB:
+		case ECS_GRAPHICS_FORMAT_BC7:
+		case ECS_GRAPHICS_FORMAT_BC7_SRGB:
+			// Assume BC7 is triple channel
+			return 3;
+		case ECS_GRAPHICS_FORMAT_BC3:
+		case ECS_GRAPHICS_FORMAT_BC3_SRGB:
+			return 4;
+		case ECS_GRAPHICS_FORMAT_BC4:
+			return 1;
+		case ECS_GRAPHICS_FORMAT_BC5:
+			return 2;
+		case ECS_GRAPHICS_FORMAT_BC6:
+			return 3;
+		}
+
+		// Invalid format
+		ECS_ASSERT(false);
+		return -1;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ECS_GRAPHICS_FORMAT GetGraphicsFormatChannelCount(ECS_GRAPHICS_FORMAT format, unsigned int new_count)
+	{
+		ECS_ASSERT(new_count <= 4, "Trying to convert a graphics format to a format with more than 4 channels");
+
+		struct StaticFormatArray {
+			StaticFormatArray() {
+				auto splat_format = [&](ECS_GRAPHICS_FORMAT format) {
+					for (size_t index = 0; index < 4; index++) {
+						formats[format][index] = format;
+					}
+				};
+
+				auto set_format = [&](
+					ECS_GRAPHICS_FORMAT format,
+					ECS_GRAPHICS_FORMAT first,
+					ECS_GRAPHICS_FORMAT second,
+					ECS_GRAPHICS_FORMAT third,
+					ECS_GRAPHICS_FORMAT fourth
+				) {
+					formats[format][0] = first;
+					formats[format][1] = second;
+					formats[format][2] = third;
+					formats[format][3] = fourth;
+				};
+
+				splat_format(ECS_GRAPHICS_FORMAT_UNKNOWN);
+				splat_format(ECS_GRAPHICS_FORMAT_BC1);
+				splat_format(ECS_GRAPHICS_FORMAT_BC3);
+				splat_format(ECS_GRAPHICS_FORMAT_BC4);
+				splat_format(ECS_GRAPHICS_FORMAT_BC5);
+				splat_format(ECS_GRAPHICS_FORMAT_BC6);
+				splat_format(ECS_GRAPHICS_FORMAT_BC7);
+				splat_format(ECS_GRAPHICS_FORMAT_BC1_SRGB);
+				splat_format(ECS_GRAPHICS_FORMAT_BC3_SRGB);
+				splat_format(ECS_GRAPHICS_FORMAT_BC7_SRGB);
+				splat_format(ECS_GRAPHICS_FORMAT_D16_UNORM);
+				splat_format(ECS_GRAPHICS_FORMAT_D24_UNORM_S8_UINT);
+				splat_format(ECS_GRAPHICS_FORMAT_D32_FLOAT);
+				splat_format(ECS_GRAPHICS_FORMAT_R11G11B10_FLOAT);
+				splat_format(ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB);
+
+#define SET_FORMAT_8(suffix) set_format(ECS_GRAPHICS_FORMAT_R8_##suffix, ECS_GRAPHICS_FORMAT_R8_##suffix, ECS_GRAPHICS_FORMAT_RG8_##suffix, ECS_GRAPHICS_FORMAT_UNKNOWN, ECS_GRAPHICS_FORMAT_RGBA8_##suffix); \
+	set_format(ECS_GRAPHICS_FORMAT_RG8_##suffix, ECS_GRAPHICS_FORMAT_R8_##suffix, ECS_GRAPHICS_FORMAT_RG8_##suffix, ECS_GRAPHICS_FORMAT_UNKNOWN, ECS_GRAPHICS_FORMAT_RGBA8_##suffix); \
+	set_format(ECS_GRAPHICS_FORMAT_RGBA8_##suffix, ECS_GRAPHICS_FORMAT_R8_##suffix, ECS_GRAPHICS_FORMAT_RG8_##suffix, ECS_GRAPHICS_FORMAT_UNKNOWN, ECS_GRAPHICS_FORMAT_RGBA8_##suffix);
+
+#define SET_FORMAT_16(suffix) set_format(ECS_GRAPHICS_FORMAT_R16_##suffix, ECS_GRAPHICS_FORMAT_R16_##suffix, ECS_GRAPHICS_FORMAT_RG16_##suffix, ECS_GRAPHICS_FORMAT_UNKNOWN, ECS_GRAPHICS_FORMAT_RGBA16_##suffix); \
+	set_format(ECS_GRAPHICS_FORMAT_RG16_##suffix, ECS_GRAPHICS_FORMAT_R16_##suffix, ECS_GRAPHICS_FORMAT_RG16_##suffix, ECS_GRAPHICS_FORMAT_UNKNOWN, ECS_GRAPHICS_FORMAT_RGBA16_##suffix); \
+	set_format(ECS_GRAPHICS_FORMAT_RGBA16_##suffix, ECS_GRAPHICS_FORMAT_R16_##suffix, ECS_GRAPHICS_FORMAT_RG16_##suffix, ECS_GRAPHICS_FORMAT_UNKNOWN, ECS_GRAPHICS_FORMAT_RGBA16_##suffix);
+
+#define SET_FORMAT_32(suffix) set_format(ECS_GRAPHICS_FORMAT_R32_##suffix, ECS_GRAPHICS_FORMAT_R32_##suffix, ECS_GRAPHICS_FORMAT_RG32_##suffix, ECS_GRAPHICS_FORMAT_RGB32_##suffix, ECS_GRAPHICS_FORMAT_RGBA32_##suffix); \
+	set_format(ECS_GRAPHICS_FORMAT_RG32_##suffix, ECS_GRAPHICS_FORMAT_R32_##suffix, ECS_GRAPHICS_FORMAT_RG32_##suffix, ECS_GRAPHICS_FORMAT_RGB32_##suffix, ECS_GRAPHICS_FORMAT_RGBA32_##suffix); \
+	set_format(ECS_GRAPHICS_FORMAT_RGB32_##suffix, ECS_GRAPHICS_FORMAT_R32_##suffix, ECS_GRAPHICS_FORMAT_RG32_##suffix, ECS_GRAPHICS_FORMAT_RGB32_##suffix, ECS_GRAPHICS_FORMAT_RGBA32_##suffix); \
+	set_format(ECS_GRAPHICS_FORMAT_RGBA32_##suffix, ECS_GRAPHICS_FORMAT_R32_##suffix, ECS_GRAPHICS_FORMAT_RG32_##suffix, ECS_GRAPHICS_FORMAT_RGB32_##suffix, ECS_GRAPHICS_FORMAT_RGBA32_##suffix);
+
+				SET_FORMAT_8(SINT);
+				SET_FORMAT_8(UINT);
+				SET_FORMAT_8(SNORM);
+				SET_FORMAT_8(UNORM);
+				SET_FORMAT_8(TYPELESS);
+
+				SET_FORMAT_16(SINT);
+				SET_FORMAT_16(UINT);
+				SET_FORMAT_16(SNORM);
+				SET_FORMAT_16(UNORM);
+				SET_FORMAT_16(TYPELESS);
+				SET_FORMAT_16(FLOAT);
+
+				SET_FORMAT_32(FLOAT);
+				SET_FORMAT_32(UINT);
+				SET_FORMAT_32(SINT);
+				SET_FORMAT_32(TYPELESS);
+
+#undef SET_FORMAT_8
+#undef SET_FORMAT_16
+#undef SET_FORMAT_32
+			}
+
+			// We currently don't have a COUNT for graphics format
+			ECS_GRAPHICS_FORMAT formats[UCHAR_MAX][4];
+		};
+
+		static StaticFormatArray format_array = StaticFormatArray();
+		return format_array.formats[format][new_count];
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ECS_GRAPHICS_FORMAT ConvertDepthToRenderFormat(ECS_GRAPHICS_FORMAT format)
+	{
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_D16_UNORM:
+			return ECS_GRAPHICS_FORMAT_R16_UNORM;
+		case ECS_GRAPHICS_FORMAT_D24_UNORM_S8_UINT:
+			return ECS_GRAPHICS_FORMAT_R24G8_UNORM;
+		case ECS_GRAPHICS_FORMAT_D32_FLOAT:
+			return ECS_GRAPHICS_FORMAT_R32_FLOAT;
+		}
+
+		return format;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	D3D11_FILTER GetGraphicsNativeFilter(ECS_SAMPLER_FILTER_TYPE filter) {
 		switch (filter) {
 		case ECS_SAMPLER_FILTER_POINT:

@@ -1037,74 +1037,90 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void GetTextureDescriptor(Texture1D texture, Texture1DDescriptor* descriptor)
+	Texture1DDescriptor GetTextureDescriptor(Texture1D texture)
 	{
+		Texture1DDescriptor descriptor;
+
 		D3D11_TEXTURE1D_DESC desc;
 		texture.tex->GetDesc(&desc);
 
-		descriptor->array_size = desc.ArraySize;
-		descriptor->bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
-		descriptor->cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
-		descriptor->format = GetGraphicsFormatFromNative(desc.Format);
-		descriptor->mip_data = { nullptr, 0 };
-		descriptor->mip_levels = desc.MipLevels;
-		descriptor->misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
-		descriptor->usage = GetGraphicsUsageFromNative(desc.Usage);
-		descriptor->width = desc.Width;
+		descriptor.array_size = desc.ArraySize;
+		descriptor.bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
+		descriptor.cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
+		descriptor.format = GetGraphicsFormatFromNative(desc.Format);
+		descriptor.mip_data = { nullptr, 0 };
+		descriptor.mip_levels = desc.MipLevels;
+		descriptor.misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
+		descriptor.usage = GetGraphicsUsageFromNative(desc.Usage);
+		descriptor.width = desc.Width;
+
+		return descriptor;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void GetTextureDescriptor(Texture2D texture, Texture2DDescriptor* descriptor)
+	Texture2DDescriptor GetTextureDescriptor(Texture2D texture)
 	{
+		Texture2DDescriptor descriptor;
+
 		D3D11_TEXTURE2D_DESC desc;
 		texture.tex->GetDesc(&desc);
 
-		descriptor->array_size = desc.ArraySize;
-		descriptor->bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
-		descriptor->cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
-		descriptor->format = GetGraphicsFormatFromNative(desc.Format);
-		descriptor->mip_data = { nullptr, 0 };
-		descriptor->mip_levels = desc.MipLevels;
-		descriptor->misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
-		descriptor->usage = GetGraphicsUsageFromNative(desc.Usage);
-		descriptor->size = { desc.Width, desc.Height };
-		descriptor->sampler_quality = desc.SampleDesc.Quality;
-		descriptor->sample_count = desc.SampleDesc.Count;
+		descriptor.array_size = desc.ArraySize;
+		descriptor.bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
+		descriptor.cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
+		descriptor.format = GetGraphicsFormatFromNative(desc.Format);
+		descriptor.mip_data = { nullptr, 0 };
+		descriptor.mip_levels = desc.MipLevels;
+		descriptor.misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
+		descriptor.usage = GetGraphicsUsageFromNative(desc.Usage);
+		descriptor.size = { desc.Width, desc.Height };
+		descriptor.sampler_quality = desc.SampleDesc.Quality;
+		descriptor.sample_count = desc.SampleDesc.Count;
+
+		return descriptor;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void GetTextureDescriptor(Texture3D texture, Texture3DDescriptor* descriptor)
+	Texture3DDescriptor GetTextureDescriptor(Texture3D texture)
 	{
+		Texture3DDescriptor descriptor;
+
 		D3D11_TEXTURE3D_DESC desc;
 		texture.tex->GetDesc(&desc);
 
-		descriptor->bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
-		descriptor->cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
-		descriptor->format = GetGraphicsFormatFromNative(desc.Format);
-		descriptor->mip_data = { nullptr, 0 };
-		descriptor->mip_levels = desc.MipLevels;
-		descriptor->misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
-		descriptor->usage = GetGraphicsUsageFromNative(desc.Usage);
-		descriptor->size = { desc.Width, desc.Height, desc.Depth };
+		descriptor.bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
+		descriptor.cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
+		descriptor.format = GetGraphicsFormatFromNative(desc.Format);
+		descriptor.mip_data = { nullptr, 0 };
+		descriptor.mip_levels = desc.MipLevels;
+		descriptor.misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
+		descriptor.usage = GetGraphicsUsageFromNative(desc.Usage);
+		descriptor.size = { desc.Width, desc.Height, desc.Depth };
+
+		return descriptor;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void GetTextureDescriptor(TextureCube texture, TextureCubeDescriptor* descriptor)
+	TextureCubeDescriptor GetTextureDescriptor(TextureCube texture)
 	{
+		TextureCubeDescriptor descriptor;
+
 		D3D11_TEXTURE2D_DESC desc;
 		texture.tex->GetDesc(&desc);
 
-		descriptor->bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
-		descriptor->cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
-		descriptor->format = GetGraphicsFormatFromNative(desc.Format);
-		descriptor->mip_data = { nullptr, 0 };
-		descriptor->mip_levels = desc.MipLevels;
-		descriptor->misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
-		descriptor->usage = GetGraphicsUsageFromNative(desc.Usage);
-		descriptor->size = { desc.Width, desc.Height };
+		descriptor.bind_flag = GetGraphicsBindFromNative(desc.BindFlags);
+		descriptor.cpu_flag = GetGraphicsCPUAccessFromNative(desc.CPUAccessFlags);
+		descriptor.format = GetGraphicsFormatFromNative(desc.Format);
+		descriptor.mip_data = { nullptr, 0 };
+		descriptor.mip_levels = desc.MipLevels;
+		descriptor.misc_flag = GetGraphicsMiscFlagsFromNative(desc.MiscFlags);
+		descriptor.usage = GetGraphicsUsageFromNative(desc.Usage);
+		descriptor.size = { desc.Width, desc.Height };
+
+		return descriptor;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

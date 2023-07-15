@@ -18,6 +18,7 @@
 #include "EntitiesUI.h"
 #include "Game.h"
 #include "Scene.h"
+#include "VisualizeTexture.h"
 
 #endif
 
@@ -121,6 +122,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		data->window_actions[TOOLBAR_WINDOW_MENU_INSPECTOR] = { CreateInspectorAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_BACKUPS] = { CreateBackupsWindowAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_ENTITIES_UI] = { CreateEntitiesUIAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_VISUALIZE_TEXTURE] = { CreateVisualizeTextureUIWindowAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 
 		data->game_ui_handlers.size = 0;
 		
