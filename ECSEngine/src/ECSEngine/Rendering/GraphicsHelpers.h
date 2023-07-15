@@ -291,13 +291,13 @@ namespace ECSEngine {
 	// when the camera is moving (it is only a rough approximate)
 	ECSENGINE_API float GetConstantObjectSizeInPerspective(float camera_fov, float distance_to_camera, float object_size);
 
-	ECSENGINE_API void GetTextureDescriptor(Texture1D texture, Texture1DDescriptor* descriptor);
+	ECSENGINE_API Texture1DDescriptor GetTextureDescriptor(Texture1D texture);
 
-	ECSENGINE_API void GetTextureDescriptor(Texture2D texture, Texture2DDescriptor* descriptor);
+	ECSENGINE_API Texture2DDescriptor GetTextureDescriptor(Texture2D texture);
 
-	ECSENGINE_API void GetTextureDescriptor(Texture3D texture, Texture3DDescriptor* descriptor);
+	ECSENGINE_API Texture3DDescriptor GetTextureDescriptor(Texture3D texture);
 
-	ECSENGINE_API void GetTextureDescriptor(TextureCube texture, TextureCubeDescriptor* descriptor);
+	ECSENGINE_API TextureCubeDescriptor GetTextureDescriptor(TextureCube texture);
 
 	// The pipeline must be set previously
 	ECSENGINE_API void DrawWholeViewportQuad(Graphics* graphics, GraphicsContext* context);

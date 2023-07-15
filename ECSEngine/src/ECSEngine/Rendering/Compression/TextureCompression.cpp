@@ -98,8 +98,7 @@ namespace ECSEngine {
 		CompressTextureDescriptor descriptor
 	) {
 		// Get the texture descriptor and fill the DirectX image
-		Texture2DDescriptor texture_descriptor;
-		GetTextureDescriptor(texture, &texture_descriptor);
+		Texture2DDescriptor texture_descriptor = GetTextureDescriptor(texture);
 
 		// Check if the compression type conforms to the range
 		if ((unsigned int)compression_type > (unsigned int)ECS_TEXTURE_COMPRESSION_BC7) {

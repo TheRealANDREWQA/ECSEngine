@@ -46,7 +46,11 @@ namespace ECSEngine {
 		ECS_VERTEX_SHADER_SOURCE(BasicTransform),
 		nullptr,
 		ECS_VERTEX_SHADER_SOURCE(Passthrough),
-		ECS_VERTEX_SHADER_SOURCE(MousePick)
+		ECS_VERTEX_SHADER_SOURCE(MousePick),
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr
 	};
 
 	const wchar_t* SHADER_HELPERS_PIXEL[] = {
@@ -59,7 +63,11 @@ namespace ECSEngine {
 		ECS_PIXEL_SHADER_SOURCE(HighlightStencil),
 		ECS_PIXEL_SHADER_SOURCE(HighlightBlend),
 		nullptr,
-		ECS_PIXEL_SHADER_SOURCE(MousePick)
+		ECS_PIXEL_SHADER_SOURCE(MousePick),
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr
 	};
 
 	const wchar_t* SHADER_HELPERS_COMPUTE[] = {
@@ -72,7 +80,11 @@ namespace ECSEngine {
 		nullptr,
 		nullptr,
 		nullptr,
-		nullptr
+		nullptr,
+		ECS_COMPUTE_SHADER_SOURCE(VisualizeTexture), // Each shader will have a different macro annotation
+		ECS_COMPUTE_SHADER_SOURCE(VisualizeTexture), // Each shader will have a different macro annotation
+		ECS_COMPUTE_SHADER_SOURCE(VisualizeTexture), // Each shader will have a different macro annotation
+		ECS_COMPUTE_SHADER_SOURCE(VisualizeTexture), // Each shader will have a different macro annotation
 	};
 
 	static_assert(std::size(SHADER_HELPERS_VERTEX) == ECS_GRAPHICS_SHADER_HELPER_COUNT);
@@ -179,10 +191,30 @@ namespace ECSEngine {
 			}
 
 			if (SHADER_HELPERS_COMPUTE[index] != nullptr) {
+				ShaderMacro compute_macro;
+
+				ShaderCompileOptions compile_options = {};
+				if (index == ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_DEPTH) {
+					compile_options.macros = { &compute_macro, 1 };
+					compute_macro.name = "DEPTH";
+				}
+				else if (index == ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_FLOAT) {
+					compile_options.macros = { &compute_macro, 1 };
+					compute_macro.name = "FLOAT";
+				}
+				else if (index == ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_SINT) {
+					compile_options.macros = { &compute_macro, 1 };
+					compute_macro.name = "SINT";
+				}
+				else if (index == ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_UINT) {
+					compile_options.macros = { &compute_macro, 1 };
+					compute_macro.name = "UINT";
+				}
+
 				Stream<char> compute_source = load_source_code(SHADER_HELPERS_COMPUTE[index]);
 				ECS_ASSERT(compute_source.buffer != nullptr);
 
-				graphics->m_shader_helpers[index].compute = graphics->CreateComputeShaderFromSource(compute_source, &include, {}, true);
+				graphics->m_shader_helpers[index].compute = graphics->CreateComputeShaderFromSource(compute_source, &include, compile_options, true);
 				ECS_ASSERT(graphics->ReflectComputeShaderDispatchSize(compute_source, &graphics->m_shader_helpers[index].compute_shader_dispatch_size));
 				graphics->m_allocator->Deallocate(compute_source.buffer);
 			}

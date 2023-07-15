@@ -96,8 +96,7 @@ namespace ECSEngine {
 		// Enable alpha blending - we'll use this as a way of masking the pixels which should not be highlighted
 		graphics->EnableAlphaBlending();
 
-		Texture2DDescriptor render_descriptor;
-		GetTextureDescriptor(render_texture, &render_descriptor);
+		Texture2DDescriptor render_descriptor = GetTextureDescriptor(render_texture);
 
 		struct HighlightBlendData {
 			ColorFloat color;
@@ -190,7 +189,7 @@ namespace ECSEngine {
 		// Create a temporary staging readback texture
 		Texture2DDescriptor temporary_texture_descriptor;
 		temporary_texture_descriptor.usage = ECS_GRAPHICS_USAGE_STAGING;
-		temporary_texture_descriptor.size = { ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS + 1, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS + 1 };
+		temporary_texture_descriptor.size = { ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS * 2 + 1, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS * 2 + 1 };
 		temporary_texture_descriptor.bind_flag = ECS_GRAPHICS_BIND_NONE;
 		temporary_texture_descriptor.cpu_flag = ECS_GRAPHICS_CPU_ACCESS_READ;
 		temporary_texture_descriptor.mip_levels = 1;
@@ -198,9 +197,8 @@ namespace ECSEngine {
 
 		Texture2D temporary_texture = graphics->CreateTexture(&temporary_texture_descriptor, true);
 
-		Texture2DDescriptor render_texture_descriptor;
 		Texture2D render_texture = render_target.GetResource();
-		GetTextureDescriptor(render_texture, &render_texture_descriptor);
+		Texture2DDescriptor render_texture_descriptor = GetTextureDescriptor(render_texture);
 
 		uint2 top_left_copy_corner = {
 			function::SaturateSub<unsigned int>(pixel_position.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS),
@@ -213,8 +211,6 @@ namespace ECSEngine {
 		};
 
 		uint2 copy_size = bottom_right_copy_corner - top_left_copy_corner;
-		copy_size.x++;
-		copy_size.y++;
 
 		CopyTextureSubresource(temporary_texture, { 0, 0 }, 0, render_texture, top_left_copy_corner, copy_size, 0, graphics->GetContext());
 

@@ -19,10 +19,12 @@ enum TOOLBAR_WINDOW_MENU_INDEX {
 	TOOLBAR_WINDOW_MENU_ENTITIES_UI,
 	TOOLBAR_WINDOW_MENU_GAME_UI,
 	TOOLBAR_WINDOW_MENU_SCENE_UI,
+	TOOLBAR_WINDOW_MENU_VISUALIZE_TEXTURE,
 	TOOLBAR_WINDOW_MENU_COUNT
 };
 
-#define TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION "Console\nDirectory Explorer\nFile Explorer\nModule Explorer\nSandbox Explorer\nAsset Explorer\nInspector\nBackups\nEntities\nGame\nScene"
+#define TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION "Console\nDirectory Explorer\nFile Explorer\nModule Explorer\nSandbox Explorer\n" \
+"Asset Explorer\nInspector\nBackups\nEntities\nGame\nScene\nVisualize Texture"
 
 struct EditorState;
 

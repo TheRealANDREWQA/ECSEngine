@@ -66,6 +66,7 @@
     <ClInclude Include="src\Editor\EditorStateTypes.h" />
     <ClInclude Include="src\Editor\EditorInputMapping.h" />
     <ClInclude Include="src\UI\TargetSandboxWindows.h" />
+    <ClInclude Include="src\UI\VisualizeTexture.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -121,6 +122,7 @@
     <ClCompile Include="src\UI\Common.cpp" />
     <ClCompile Include="src\UI\RenderingCommon.cpp" />
     <ClCompile Include="src\Editor\EditorInputMapping.cpp" />
+    <ClCompile Include="src\UI\VisualizeTexture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

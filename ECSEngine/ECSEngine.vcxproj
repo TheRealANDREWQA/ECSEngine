@@ -248,6 +248,7 @@
     <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Profiling.h" />
     <ClInclude Include="src\ECSEngine\Rendering\RenderingEffects.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\VisualizeTexture.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabase.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabaseReference.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetLoading.h" />
@@ -391,6 +392,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\Serialization.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeMultisection.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeSection.h" />
+    <ClInclude Include="src\Includes\ECSEngineVisualizeTexture.h" />
     <ClInclude Include="src\Includes\ECSEngineWorld.h" />
     <ClInclude Include="src\Includes\EntryPoint.h" />
     <ClInclude Include="src\Includes\ecspch.h" />
@@ -442,6 +444,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\RenderingEffects.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\VisualizeTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabase.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabaseReference.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetLoading.cpp" />
@@ -601,6 +604,14 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\VisualizeTexture.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">5.0</ShaderModel>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

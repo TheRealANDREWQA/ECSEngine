@@ -321,6 +321,33 @@ namespace ECSEngine {
 
 	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatToTypeless(ECS_GRAPHICS_FORMAT format);
 
+	// Returns true for all formats that can be rendered from a shader as normalized float
+	// Can optionally choose to include normal 16 and 32 bit float values into consideration as well
+	ECSENGINE_API bool IsGraphicsFormatFloatCompatible(ECS_GRAPHICS_FORMAT format, bool include_unormalized_float = true);
+
+	// Ignores depth and BC textures
+	ECSENGINE_API bool IsGraphicsFormatSingleChannel(ECS_GRAPHICS_FORMAT format);
+
+	// Ignores depth and BC textures
+	ECSENGINE_API bool IsGraphicsFormatDoubleChannel(ECS_GRAPHICS_FORMAT format);
+
+	// Ignores depth and BC textures
+	ECSENGINE_API bool IsGraphicsFormatTripleChannel(ECS_GRAPHICS_FORMAT format);
+
+	// Ignores depth and BC textures
+	ECSENGINE_API bool IsGraphicsFormatQuadrupleChannel(ECS_GRAPHICS_FORMAT format);
+
+	// Returns the number of channels the format has
+	ECSENGINE_API unsigned int GetGraphicsFormatChannelCount(ECS_GRAPHICS_FORMAT format);
+
+	// For each format (it ignores BC and depth textures) it will return the equivalent format (if there is one with the
+	// given count) but with a different channel count
+	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatChannelCount(ECS_GRAPHICS_FORMAT format, unsigned int new_count);
+
+	// It must be a depth format and returns a suitable rendering format to be used in a ResourceView
+	// For formats other than depth it will return it again
+	ECSENGINE_API ECS_GRAPHICS_FORMAT ConvertDepthToRenderFormat(ECS_GRAPHICS_FORMAT format);
+
 	enum ECS_REFLECT ECS_SAMPLER_FILTER_TYPE : unsigned char {
 		ECS_SAMPLER_FILTER_POINT,
 		ECS_SAMPLER_FILTER_LINEAR,

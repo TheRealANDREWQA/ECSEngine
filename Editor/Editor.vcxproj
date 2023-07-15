@@ -242,6 +242,7 @@
     <ClInclude Include="src\UI\Scene.h" />
     <ClInclude Include="src\UI\TargetSandboxWindows.h" />
     <ClInclude Include="src\UI\ToolbarUI.h" />
+    <ClInclude Include="src\UI\VisualizeTexture.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Assets\AssetManagement.cpp" />
@@ -305,6 +306,7 @@
     <ClCompile Include="src\UI\CreateScene.cpp" />
     <ClCompile Include="src\UI\Scene.cpp" />
     <ClCompile Include="src\UI\ToolbarUI.cpp" />
+    <ClCompile Include="src\UI\VisualizeTexture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

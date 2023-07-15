@@ -3,6 +3,7 @@
 #include "UIReflection.h"
 #include "UIResourcePaths.h"
 #include "../../Utilities/Console.h"
+#include "../../Rendering/VisualizeTexture.h"
 
 #define ECS_TOOLS using namespace ECSEngine::Tools
 constexpr const char* ECS_TOOLS_UI_ERROR_MESSAGE_WINDOW_NAME = "Error Message";
@@ -276,6 +277,47 @@ namespace ECSEngine {
 		ECSENGINE_API void CreateInjectValuesAction(ActionData* action_data);
 
 		ECSENGINE_API void InjectWindowDestroyAction(ActionData* action_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		// It will create a copy of the texture - on the same graphics object or on different ones
+		struct VisualizeTextureActionData {
+			Texture2D texture;
+			Stream<char> window_name;
+			UIActionHandler destroy_window_handler = {};
+
+			// If this is set, it will automatically destroy the reference to the shared texture on destroy
+			bool transfer_texture_to_ui_graphics = false;
+			bool is_pop_up_window = false;
+			bool automatic_update = true;
+
+			// These are used as initial values
+			// Except for the conversion and override format which are permanent
+			const VisualizeTextureOptions* options = {};
+		};
+
+		// Stack memory should be at least 512 bytes long
+		ECSENGINE_API UIWindowDescriptor VisualizeTextureWindowDescriptor(UISystem* system, const VisualizeTextureActionData* create_data, void* stack_memory);
+
+		// It also creates a dockspace for it, returns the window index
+		ECSENGINE_API unsigned int CreateVisualizeTextureWindow(
+			UISystem* system, 
+			const VisualizeTextureActionData* create_data
+		);
+
+		// It also creates the dockspace for it
+		ECSENGINE_API void CreateVisualizeTextureAction(ActionData* action_data);
+		
+		// Can optionally retarget the texture that is being displayed
+		ECSENGINE_API void ChangeVisualizeTextureWindowOptions(
+			UISystem* system, 
+			Stream<char> window_name, 
+			const VisualizeTextureOptions* options,
+			Texture2D target_texture = { (ID3D11Resource*)nullptr },
+			bool transfer_texture = false
+		);
+
+		// --------------------------------------------------------------------------------------------------------------
 
 	}
 
