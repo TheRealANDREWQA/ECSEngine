@@ -11,6 +11,7 @@
 #include "EditorEventDef.h"
 #include "EditorStateTypes.h"
 #include "ECSEngineHID.h"
+#include "EditorVisualizeTexture.h"
 
 #define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
 
@@ -111,6 +112,8 @@ struct EditorState {
 	InspectorManager inspector_manager;
 	EditorComponents editor_components;
 	ECSEngine::InputMapping input_mapping;
+
+	EditorVisualizeTexture visualize_texture;
 
 	// These will be played back on the main thread. If multithreaded tasks are desired,
 	// use the AddBackgroundTask function. It is used in a multithreaded context

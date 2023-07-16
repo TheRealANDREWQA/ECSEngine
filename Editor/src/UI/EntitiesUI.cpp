@@ -334,7 +334,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		row_layout.SetOffsetRenderRegion({ true, false });
 		row_layout.AddSquareLabel();
 		row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
-		row_layout.CombineLastElements();
+		row_layout.RemoveLastElementsIndentation();
 
 		size_t scene_icon_configuration = 0;
 		row_layout.GetTransform(config, scene_icon_configuration);
@@ -401,7 +401,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		row_layout.SetOffsetRenderRegion({ true, false });
 		row_layout.AddComboBox(combo_labels, { nullptr, 0 }, prefix.prefix);
 		row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
-		row_layout.CombineLastElements();
+		row_layout.RemoveLastElementsIndentation();
 
 		config.AddFlag(border);
 		config.AddFlag(prefix);

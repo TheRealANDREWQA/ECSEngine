@@ -82,21 +82,35 @@ namespace ECSEngine {
 			// that it stretches to accomodate the window. The y component is still used like in relative transform
 			// The y component is used just to change the row size if it isn't enough
 			// Make the y component 0.0f if you want to be the size of the row
-			void AddElement(size_t transform_type, float2 parameters);
+			void AddElement(size_t transform_type, float2 parameters, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
 
-			void AddLabel(Stream<char> characters);
+			void AddLabel(Stream<char> characters, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
 
 			// If the label size is defaulted with 0.0f, then it will use the row scale
-			void AddSquareLabel(float label_size = 0.0f);
+			void AddSquareLabel(float label_size = 0.0f, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
 
-			void AddComboBox(Stream<Stream<char>> labels, Stream<char> name = { nullptr, 0 }, Stream<char> prefix = { nullptr, 0 });
+			// It will use the row scale
+			void AddCheckBox(Stream<char> name = { nullptr, 0 }, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
+
+			void AddComboBox(
+				Stream<Stream<char>> labels, 
+				Stream<char> name = { nullptr, 0 }, 
+				Stream<char> prefix = { nullptr, 0 }, 
+				ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT
+			);
+
+			// Combines the last elements and the resulting transform will be an absolute transform
+			// This only works if the elements have the same alignment
+			void CombineLastElements(unsigned int count = 2);
 
 			// It will place the elements one right after the other like there is no indentation applied
 			// But also takes into account window dependent elements
-			void CombineLastElements(unsigned int count = 2);
+			void RemoveLastElementsIndentation(unsigned int count = 2);
 
 			// Add the corresponding transform such that it gets rendered as it should be
 			void GetTransform(UIDrawConfig& config, size_t& configuration);
+
+			float2 GetScaleForElement(unsigned int index) const;
 
 			// Reduces the x scale
 			void IndentRow(float scale);
@@ -136,6 +150,7 @@ namespace ECSEngine {
 			float2 element_sizes[MAX_ELEMENTS];
 			float indentations[MAX_ELEMENTS]; // The indentation between elements
 			size_t element_transform_types[MAX_ELEMENTS];
+			ECS_UI_ALIGN element_alignment[MAX_ELEMENTS];
 			bool2 offset_render_region;
 
 #undef MAX_ELEMENTS
@@ -3506,6 +3521,10 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			float2 GetRelativeElementSize(float2 factors) const;
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// Accounts for zoom
 			float2 GetStaticElementDefaultScale() const;
 
@@ -3552,7 +3571,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIConfigAbsoluteTransform GetWholeRegionTransform() const;
+			UIConfigAbsoluteTransform GetWholeRegionTransform(bool consider_region_header = false) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3808,6 +3827,10 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			bool IsMouseInRectangle(float2 position, float2 scale);
+			
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			bool IsActiveWindow() const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3815,7 +3838,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			// Indent's a percentage of the window's size
+			// Indents a percentage of the window's size
 			void IndentWindowSize(float percentage);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -4524,8 +4547,9 @@ namespace ECSEngine {
 			void SetNextRowYOffset(float value);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
-
+			
 			// Currently, draw_mode_float is needed for column draw which denotes the spacing in between columns
+			// And the target is how many elements to be drawn for each column, if such a behaviour is desired
 			void SetDrawMode(ECS_UI_DRAWER_MODE mode, unsigned int target = 0, float draw_mode_float = 0.0f);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------

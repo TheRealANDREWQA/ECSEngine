@@ -18,6 +18,7 @@ namespace ECSEngine {
 	namespace Tools {
 
 		struct UIDrawer;
+		struct UIDrawerRowLayout;
 
 		constexpr const wchar_t* CONSOLE_TEXTURE_ICONS[] = {
 			ECS_TOOLS_UI_TEXTURE_INFO_ICON,
@@ -37,6 +38,146 @@ namespace ECSEngine {
 			CONSOLE_ERROR_COLOR,
 			CONSOLE_TRACE_COLOR
 		};
+
+#pragma region General Additional Draw
+
+		// Decide if it is worth the time implementing such a feature
+
+		//// For all GET reaons, the additional data will contain a row layout that can be used to fill in the transforms that this
+		//// additional draw wants to do alongside
+		//// For ROW_DRAW, the data will contain an index of the current row that is being drawn
+		//// For ACTION_BEFORE happens before the the window draws anything, ACTION_AFTER after all drawing has finished
+		//// THe STATE_ELEMENTS reason is called at the beginning to determine which elements are covered
+		//enum UIAdditionalDrawReason : unsigned char {
+		//	ECS_UI_ADDITIONAL_DRAW_STATE_ELEMENTS,
+		//	ECS_UI_ADDITIONAL_DRAW_HEADER_GET,
+		//	ECS_UI_ADDITIONAL_DRAW_HEADER_DRAW,
+		//	ECS_UI_ADDITIONAL_DRAW_TOP_GET,
+		//	ECS_UI_ADDITIONAL_DRAW_TOP_DRAW,
+		//	ECS_UI_ADDITIONAL_DRAW_BOTTOM_GET,
+		//	ECS_UI_ADDITIONAL_DRAW_BOTTOM_DRAW,
+		//	ECS_UI_ADDITIONAL_DRAW_NORMAL_GET,
+		//	ECS_UI_ADDITIONAL_DRAW_NORMAL_DRAW,
+		//	ECS_UI_ADDITIONAL_DRAW_ROW_GET,
+		//	ECS_UI_ADDITIONAL_DRAW_ROW_DRAW,
+		//	ECS_UI_ADDITIONAL_DRAW_WHOLE_SCREEN_BEFORE,
+		//	ECS_UI_ADDITIONAL_DRAW_WHOLE_SCREEN_AFTER,
+		//	ECS_UI_ADDITIONAL_DRAW_ACTION_BEFORE,
+		//	ECS_UI_ADDITIONAL_DRAW_ACTION_AFTER
+		//};
+
+		//enum UIAdditionalParentDrawReason : unsigned char {
+		//	ECS_UI_ADDITIONAL_PARENT_DRAW_HEADER,
+		//	ECS_UI_ADDITIONAL_PARENT_DRAW_TOP,
+		//	ECS_UI_ADDITIONAL_PARENT_DRAW_BOTTOM,
+		//	ECS_UI_ADDITIONAL_PARENT_DRAW_NORMAL,
+		//	ECS_UI_ADDITIONAL_PARENT_DRAW_ROW,
+		//	ECS_UI_ADDITIONAL_PARENT_DRAW_WHOLE_SCREEN
+		//};
+
+		//// This is used to control where the element is going to be rendered
+		//// With respect to the parent
+		//enum UIAdditionalDrawOrder : unsigned char {
+		//	ECS_UI_ADDITIONAL_DRAW_LEFT_BEFORE,
+		//	ECS_UI_ADDITIONAL_DRAW_LEFT_AFTER,
+		//	ECS_UI_ADDITIONAL_DRAW_RIGHT_BEFORE,
+		//	ECS_UI_ADDITIONAL_DRAW_RIGHT_AFTER,
+		//	ECS_UI_ADDITIONAL_DRAW_NORMAL_BEFORE,
+		//	ECS_UI_ADDITIONAL_DRAW_NORMAL_AFTER,
+		//	ECS_UI_ADDITIONAL_DRAW_MIDDLE_BEFORE,
+		//	ECS_UI_ADDITIONAL_DRAW_MIDDLE_AFTER
+		//};
+
+		//struct UIAdditionalDrawElement {
+		//	UIAdditionalDrawReason reason;
+		//	UIAdditionalDrawOrder order;
+		//};
+
+		//struct UIAdditionalDrawData {
+		//	UIDrawer* drawer;
+		//	// This is the data that the main parent window receives
+		//	void* window_data;
+		//	// This is personal data that you set
+		//	void* data;
+		//	// These are extra options that the parent window can give you
+		//	void* extra_data;
+
+		//	ECS_INLINE void AddDrawElement(UIAdditionalDrawElement element) {
+		//		if (draw_elements_count < std::size(draw_elements)) {
+		//			draw_elements[draw_elements_count++] = element;
+		//		}
+		//		else {
+		//			ECS_ASSERT(false, "Too many draw elements for UIAdditionalDraw");
+		//		}
+		//	}
+
+		//	ECS_INLINE void AddDrawOrder(UIAdditionalDrawOrder order) {
+		//		if (draw_order_count < std::size(draw_order)) {
+		//			draw_order[draw_order_count++] = order;
+		//		}
+		//		else {
+		//			ECS_ASSERT(false, "Too many draw order elements for UIAdditionalDraw");
+		//		}
+		//	}
+
+		//	// This is valid for all reasons except ACTION
+		//	UIDrawerRowLayout* row_layout;
+
+		//	union {
+		//		// This is valid only for STATE_ELEMENTS
+		//		struct {
+		//			UIAdditionalDrawElement draw_elements[16];
+		//			unsigned short draw_elements_count;
+		//		};
+		//		// This is valid for all GET reasons to fill what parts are needed
+		//		struct {
+		//			UIAdditionalDrawOrder draw_order[16];
+		//			unsigned short draw_order_count;
+		//		};
+		//	};
+
+		//	UIAdditionalDrawReason reason;
+
+		//	// This is valid only for ROW_DRAW reason to inform
+		//	// what row it currently is
+		//	unsigned int current_element_index;
+		//};
+
+		//struct UIAdditionalParentDrawData {
+		//	UIDrawer* drawer;
+		//	void* window_data;
+
+		//	UIAdditionalParentDrawReason reason;
+		//};
+
+		//struct AdditionalWindowDrawWrapperData {
+		//	WindowDraw parent_draw;
+		//	WindowDraw child_draw;
+
+		//	ECS_INLINE void* ParentData() const {
+		//		return is_parent_data_ptr ? parent_data_ptr : (void*)parent_data;
+		//	}
+
+		//	ECS_INLINE void* ChildData() const {
+		//		return is_child_data_ptr ? child_data_ptr : (void*)child_data;
+		//	}
+
+		//	bool is_parent_data_ptr;
+		//	bool is_child_data_ptr;
+		//	union {
+		//		void* parent_data_ptr;
+		//		size_t parent_data[16];
+		//	};
+
+		//	union {
+		//		void* child_data_ptr;
+		//		size_t child_data[16];
+		//	};
+		//};
+
+		//ECSENGINE_API void AdditionalWindowDrawWrapper(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer);
+
+#pragma endregion
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -280,9 +421,55 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		struct VisualizeTextureSelectElement {
+			Texture2D texture;
+			Stream<char> name;
+			bool transfer_texture_to_ui_graphics = false;
+			ECS_GRAPHICS_FORMAT override_format = ECS_GRAPHICS_FORMAT_UNKNOWN;
+			VisualizeFormatConversion format_conversion = { 0.0f, 1.0f, (unsigned int)-1 };
+		};
+
+		// The select_elements are needed only when the selection_mode is triggered
+		struct VisualizeTextureAdditionalDrawData {
+			UIDrawer* drawer;
+			void* window_data;
+			void* private_data;
+
+			// The additional draw can set this boolean to false
+			// In order to prevent the draw from happening - in case this is needed
+			bool can_display_texture;
+			// Adds a label to the combo box that makes the transition to the selection mode
+			bool include_select_label = true;
+			// Hides the button in the middle that allows selection
+			bool hide_select_button = true;
+
+			CapacityStream<void>* combo_callback_memory;
+			// Can optionally fill in a combo box to be displayed
+			unsigned char* combo_index;
+			CapacityStream<char>* combo_memory;
+			CapacityStream<Stream<char>>* combo_labels;
+			UIActionHandler combo_callback = {};
+
+			CapacityStream<void>* check_box_callback_memory;
+			Stream<char> check_box_name = { nullptr, 0 };
+			UIActionHandler check_box_callback = {};
+			bool* check_box_flag;
+
+			// Can optionally give a list of textures that the user can select to display
+			// If dynamic names are needed, use memory from the given capacity stream
+			CapacityStream<char>* select_element_name_memory;
+			CapacityStream<VisualizeTextureSelectElement>* select_elements;
+		};
+
 		// It will create a copy of the texture - on the same graphics object or on different ones
 		struct VisualizeTextureActionData {
-			Texture2D texture;
+			// This draw will be called before the main draw is happening
+			// It allows to perform certain operations
+			WindowDraw additional_draw = nullptr;
+			void* additional_draw_data = nullptr;
+			size_t additional_draw_data_size = 0;
+
+			Texture2D texture = { (ID3D11Resource*)nullptr };
 			Stream<char> window_name;
 			UIActionHandler destroy_window_handler = {};
 
@@ -312,9 +499,56 @@ namespace ECSEngine {
 		ECSENGINE_API void ChangeVisualizeTextureWindowOptions(
 			UISystem* system, 
 			Stream<char> window_name, 
-			const VisualizeTextureOptions* options,
-			Texture2D target_texture = { (ID3D11Resource*)nullptr },
-			bool transfer_texture = false
+			const VisualizeTextureActionData* create_data
+		);
+
+		ECSENGINE_API void ChangeVisualizeTextureWindowOptions(
+			UISystem* system,
+			unsigned int window_index,
+			const VisualizeTextureActionData* create_data
+		);
+
+		// Returns the additional draw data for the given visualize texture window
+		ECSENGINE_API void* GetVisualizeTextureWindowAdditionalData(
+			UISystem* system,
+			Stream<char> window_name
+		);
+
+		// Returns the additional draw data for the given visualize texture window
+		ECSENGINE_API void* GetVisualizeTextureWindowAdditionalData(
+			UISystem* system,
+			unsigned int window_index
+		);
+
+		// Can change or update the visualize texture window data
+		// Or can change the additional draw. If left at nullptr, then
+		// it will not change the function
+		ECSENGINE_API void UpdateVisualizeTextureWindowAdditionalDraw(
+			UISystem* system,
+			Stream<char> window_name,
+			WindowDraw additional_draw = nullptr,
+			void* additional_draw_data = nullptr,
+			size_t additional_draw_data_size = 0
+		);
+
+		// Can change or update the visualize texture window data
+		// Or can change the additional draw. If left at nullptr, then
+		// it will not change the function
+		ECSENGINE_API void UpdateVisualizeTextureWindowAdditionalDraw(
+			UISystem* system,
+			unsigned int window_index,
+			WindowDraw additional_draw = nullptr,
+			void* additional_draw_data = nullptr,
+			size_t additional_draw_data_size = 0
+		);
+
+		ECSENGINE_API void TransitionVisualizeTextureWindowSelection(
+			void* window_data
+		);
+
+		ECSENGINE_API void TransitionVisualizeTextureWindowSelection(
+			UISystem* system,
+			unsigned int window_index
 		);
 
 		// --------------------------------------------------------------------------------------------------------------

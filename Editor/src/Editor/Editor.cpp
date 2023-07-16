@@ -697,7 +697,7 @@ public:
 			valuess[i] = 1.0f / (256 * 256) * (float)i;
 		}
 
-		Stream<void> mip_data = { valuess, 256 * 256 * 4 };
+		/*Stream<void> mip_data = { valuess, 256 * 256 * 4 };
 		Texture2DDescriptor temp;
 		temp.format = ECS_GRAPHICS_FORMAT_R32_TYPELESS;
 		temp.size = { 256, 256 };
@@ -709,7 +709,7 @@ public:
 		VisualizeTextureOptions texture_option;
 		texture_option.override_format = ECS_GRAPHICS_FORMAT_D32_FLOAT;
 		Texture2D visualize_texture = ConvertTextureToVisualize(graphics, temp_texture, &texture_option);
-		ResourceView visualize_texture_view = graphics->CreateTextureShaderView(visualize_texture);
+		ResourceView visualize_texture_view = graphics->CreateTextureShaderView(visualize_texture);*/
 
 		while (true) {
 			auto run_application = [&](char application_quit_value) {

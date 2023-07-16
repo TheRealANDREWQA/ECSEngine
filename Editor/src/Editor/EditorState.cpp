@@ -16,6 +16,8 @@
 #include "../UI/AssetOverrides.h"
 #include "EditorInputMapping.h"
 
+#include "../UI/VisualizeTexture.h"
+
 using namespace ECSEngine;
 
 bool DISPLAY_LOCKED_FILES_SIZE = false;
@@ -256,6 +258,24 @@ void EditorStateProjectTick(EditorState* editor_state) {
 
 		TickUpdateModulesDLLImports(editor_state);
 		TickEditorInput(editor_state);
+
+		if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+			unsigned int visualize_index = GetMaxVisualizeTextureUIIndex(editor_state);
+			if (visualize_index == 0) {
+				unsigned int sandbox_count = GetSandboxCount(editor_state);
+				if (sandbox_count > 0) {
+					Texture2D depth_texture = GetSandbox(editor_state, 0)->scene_viewport_depth_stencil_framebuffer.GetResource();
+					VisualizeTextureActionData create_data;
+					create_data.texture = depth_texture;
+					create_data.transfer_texture_to_ui_graphics = true;
+					ChangeVisualizeTextureUIWindowTarget(
+						editor_state,
+						visualize_index,
+						&create_data
+					);
+				}
+			}
+		}
 	}
 }
 

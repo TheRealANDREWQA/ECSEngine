@@ -1,5 +1,6 @@
 #pragma once
 #include "ECSEngineUI.h"
+#include "ECSEngineVisualizeTexture.h"
 
 struct EditorState;
 
@@ -22,3 +23,15 @@ void GetVisualizeTextureUIWindowName(unsigned int index, ECSEngine::CapacityStre
 // Returns the max index of the visualize texture
 // Returns -1 if no windows was created
 unsigned int GetMaxVisualizeTextureUIIndex(const EditorState* editor_state);
+
+void ChangeVisualizeTextureUIWindowTarget(
+	EditorState* editor_state,
+	ECSEngine::Stream<char> window_name,
+	const VisualizeTextureActionData* create_data
+);
+
+void ChangeVisualizeTextureUIWindowTarget(
+	EditorState* editor_state,
+	unsigned int visualize_index,
+	const VisualizeTextureActionData* create_data
+);

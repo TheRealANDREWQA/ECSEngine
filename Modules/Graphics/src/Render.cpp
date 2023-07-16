@@ -503,7 +503,7 @@ void InstancedFramebufferForEach(ForEachEntityFunctorData* for_each_data) {
 		element.base.mesh = &mesh->mesh->mesh;
 		element.base.gpu_mvp_matrix = mvp_matrix;
 		element.instance_index = for_each_data->entity.index;
-		data->elements.Add(element);
+		data->elements->Add(element);
 	}
 }
 
@@ -534,33 +534,33 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 					unique_components[0] = Translation::ID();
 					exclude_unique_components[0] = Rotation::ID();
 					exclude_unique_components[1] = Scale::ID();
-					ForEachEntityCommitFunctor(world, BasicDrawForEach<true, false, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<true, false, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
 
 					unique_components[0] = Rotation::ID();
 					exclude_unique_components[0] = Translation::ID();
-					ForEachEntityCommitFunctor(world, BasicDrawForEach<false, true, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<false, true, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
 
 					unique_components[0] = Scale::ID();
 					exclude_unique_components[1] = Rotation::ID();
-					ForEachEntityCommitFunctor(world, BasicDrawForEach<false, false, true>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<false, false, true>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
 
 					unique_components[0] = Translation::ID();
 					unique_components[1] = Rotation::ID();
 					exclude_unique_components[0] = Scale::ID();
-					ForEachEntityCommitFunctor(world, BasicDrawForEach<true, true, false>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
+					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<true, true, false>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
 
 					unique_components[1] = Scale::ID();
 					exclude_unique_components[0] = Rotation::ID();
-					ForEachEntityCommitFunctor(world, BasicDrawForEach<true, false, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
+					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<true, false, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
 
 					unique_components[0] = Rotation::ID();
 					exclude_unique_components[0] = Translation::ID();
-					ForEachEntityCommitFunctor(world, BasicDrawForEach<false, true, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
+					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<false, true, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
 
 					unique_components[0] = Translation::ID();
 					unique_components[1] = Rotation::ID();
 					unique_components[2] = Scale::ID();
-					ForEachEntityCommitFunctor(world, BasicDrawForEach<true, true, true>, &for_each_data, { unique_components, 3 }, shared_signature);
+					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<true, true, true>, &for_each_data, { unique_components, 3 }, shared_signature);
 
 					GenerateInstanceFramebuffer(world->graphics, elements.ToStream(), instanced_views.target, instanced_views.depth_stencil);
 
