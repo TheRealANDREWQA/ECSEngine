@@ -2317,50 +2317,83 @@ namespace ECSEngine {
 		// -------------------------------------------------------------------------------------------------------
 
 		struct VisualizeTextureWindowData {
+			ECS_INLINE Texture2D TextureToCopy() const {
+				return transferred_texture.Interface() != nullptr ? transferred_texture : original_texture;
+			}
+
+			ECS_INLINE void* AdditionalData() const {
+				return is_additional_draw_data_ptr ? additional_draw_data_ptr : (void*)additional_draw_data;
+			}
+
+			void TransitionSelectionMode() {
+				select_mode = !select_mode;
+				if (select_mode) {
+					select_texture_filter.size = 0;
+					selected_element.size = 0;
+				}
+			}
+
 			Texture2D original_texture;
 			ResourceView texture_view;
 			Texture2D transferred_texture;
 			VisualizeTextureOptions visualize_options;
 
 			bool automatic_update;
+			bool is_additional_draw_data_ptr;
+			bool display_options;
+			bool select_mode;
+			unsigned char additional_draw_combo_index;
+			bool additional_draw_check_box_flag;
+			CapacityStream<char> select_texture_filter;
+			CapacityStream<char> selected_element;
+
+			WindowDraw additional_draw;
+			union {
+				// Make the additional_draw_data embedded here such that to avoid
+				// A new allocation being made
+				size_t additional_draw_data[16];
+				void* additional_draw_data_ptr;
+			};
 		};
 
-		void VisualizeTextureWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer) {
-			UI_PREPARE_DRAWER(initializer);
+		// -------------------------------------------------------------------------------------------------------
 
-			VisualizeTextureWindowData* data = (VisualizeTextureWindowData*)window_data;
-			// Allow for a very large zoom
-			// Do this every frame since when recovering from file this zoom will not be set
-			drawer.system->SetWindowMaxZoom(drawer.window_index, 100.0f);
+		static void UpdateVisualizeTextureWindowAdditionalDraw(
+			VisualizeTextureWindowData* window_data,
+			WindowDraw additional_draw,
+			void* additional_draw_data,
+			size_t additional_draw_data_size
+		) {
+			ECS_ASSERT(additional_draw_data_size < sizeof(window_data->additional_draw_data), "Additional draw for Visualize Texture too much byte data");
 
-			UIDrawConfig config;
-			if (data->original_texture.Interface() != nullptr && data->texture_view.Interface() != nullptr) {
-				if (data->automatic_update) {
-					ConvertTextureToVisualize(drawer.system->m_graphics, data->original_texture, data->texture_view.AsTexture2D(), &data->visualize_options);
-				}
-
-				UIConfigAbsoluteTransform whole_transform = drawer.GetWholeRegionTransform();
-				config.AddFlag(whole_transform);
-
-				drawer.SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, config, data->texture_view);
+			if (additional_draw_data_size > 0) {
+				memcpy(window_data->additional_draw_data, additional_draw_data, additional_draw_data_size);
 			}
 			else {
-				drawer.Text("No texture selected");
+				window_data->additional_draw_data_ptr = additional_draw_data;
 			}
+			window_data->is_additional_draw_data_ptr = additional_draw_data_size == 0;
+			window_data->additional_draw = additional_draw != nullptr ? additional_draw : window_data->additional_draw;
 		}
 
-		void VisualizeTextureDeallocateTexture(UISystem* system, VisualizeTextureWindowData* data) {
+		// -------------------------------------------------------------------------------------------------------
+
+		static void VisualizeTextureDeallocateTexture(UISystem* system, VisualizeTextureWindowData* data) {
 			if (data->original_texture.Interface() != nullptr) {
 				if (data->transferred_texture.Interface() != nullptr) {
 					system->m_graphics->FreeResource(data->transferred_texture);
 				}
-				system->m_graphics->RemovePossibleResourceFromTracking(data->texture_view.Interface());
-				system->m_graphics->RemovePossibleResourceFromTracking(data->texture_view.AsTexture2D().Interface());
-				ReleaseGraphicsView(data->texture_view);
+				if (data->texture_view.Interface() != nullptr) {
+					system->m_graphics->RemovePossibleResourceFromTracking(data->texture_view.Interface());
+					system->m_graphics->RemovePossibleResourceFromTracking(data->texture_view.AsTexture2D().Interface());
+					ReleaseGraphicsView(data->texture_view);
+				}
 			}
 		}
 
-		void VisualizeTextureCreateTexture(UISystem* system, VisualizeTextureWindowData* data, Texture2D target_texture, bool transfer_texture) {
+		// -------------------------------------------------------------------------------------------------------
+
+		static void VisualizeTextureCreateTexture(UISystem* system, VisualizeTextureWindowData* data, Texture2D target_texture, bool transfer_texture) {
 			if (target_texture.Interface() != nullptr) {
 				Texture2D texture_to_copy = target_texture;
 				if (transfer_texture) {
@@ -2373,10 +2406,358 @@ namespace ECSEngine {
 
 				Texture2D copied_texture = ConvertTextureToVisualize(system->m_graphics, texture_to_copy, &data->visualize_options);
 				data->texture_view = system->m_graphics->CreateTextureShaderViewResource(copied_texture);
+				data->original_texture = target_texture;
 			}
 			else {
 				data->texture_view = nullptr;
 				data->transferred_texture.tex = nullptr;
+				data->original_texture.tex = nullptr;
+			}
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		static void ChangeVisualizeTextureWindowOptions(
+			UISystem* system,
+			VisualizeTextureWindowData* window_data,
+			const VisualizeTextureActionData* create_data
+		) {
+			if (create_data->options != nullptr) {
+				window_data->visualize_options = *create_data->options;
+			}
+
+			if (create_data->texture.Interface() != nullptr && (create_data->texture.Interface() != window_data->original_texture.Interface())) {
+				// We must free the old resources and create a new texture and view
+				VisualizeTextureDeallocateTexture(system, window_data);
+				VisualizeTextureCreateTexture(system, window_data, create_data->texture, create_data->transfer_texture_to_ui_graphics);
+			}
+			else if (window_data->original_texture.Interface() != nullptr) {
+				ConvertTextureToVisualize(system->m_graphics, window_data->TextureToCopy(), window_data->texture_view.AsTexture2D(), &window_data->visualize_options);
+			}
+
+			UpdateVisualizeTextureWindowAdditionalDraw(window_data, create_data->additional_draw, create_data->additional_draw_data, create_data->additional_draw_data_size);
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		static void ChangeVisualizeTextureWindowFromSelection(
+			UISystem* system,
+			VisualizeTextureWindowData* window_data,
+			const VisualizeTextureSelectElement* select_element
+		) {
+			VisualizeTextureActionData create_data;
+			create_data.options = &window_data->visualize_options;
+			create_data.transfer_texture_to_ui_graphics = select_element->transfer_texture_to_ui_graphics;
+			create_data.texture = select_element->texture;
+			window_data->visualize_options.override_format = select_element->override_format;
+			window_data->visualize_options.format_conversion = select_element->format_conversion;
+			ChangeVisualizeTextureWindowOptions(system, window_data, &create_data);
+		
+			window_data->TransitionSelectionMode();
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void VisualizeTextureWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer) {
+			UI_PREPARE_DRAWER(initializer);
+
+			VisualizeTextureWindowData* data = (VisualizeTextureWindowData*)window_data;
+			// Allow for a very large zoom
+			// Do this every frame since when recovering from file this zoom will not be set
+			drawer.system->SetWindowMaxZoom(drawer.window_index, 100.0f);
+
+			/*const char* COMBO_INDEX_NAME = "COMBO_INDEX";
+
+			unsigned char* combo_index = nullptr;
+			if (initializer) {
+				combo_index = (unsigned char*)drawer.GetMainAllocatorBufferAndStoreAsResource(COMBO_INDEX_NAME, sizeof(*combo_index));
+				*combo_index = 0;
+			}
+			else {
+				combo_index = (unsigned char*)drawer.GetResource(COMBO_INDEX_NAME);
+			}*/
+
+			if (initializer) {
+				const size_t SELECTION_FILTER_CAPACITY = 256;
+				void* selection_filter_memory = drawer.GetMainAllocatorBuffer(sizeof(char) * SELECTION_FILTER_CAPACITY);
+				data->select_texture_filter.InitializeFromBuffer(selection_filter_memory, 0, SELECTION_FILTER_CAPACITY);
+
+				const size_t SELECTED_ELEMENT_CAPACITY = 256;
+				void* selected_element_memory = drawer.GetMainAllocatorBuffer(sizeof(char) * SELECTED_ELEMENT_CAPACITY);
+				data->selected_element.InitializeFromBuffer(selected_element_memory, 0, SELECTED_ELEMENT_CAPACITY);
+			}
+
+			Stream<char> SELECT_BUTTON_CHARACTERS = "Select...";
+
+			VisualizeTextureAdditionalDrawData additional_data;
+			additional_data.can_display_texture = true;
+
+			ECS_STACK_CAPACITY_STREAM(char, combo_label_memory, 512);
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, combo_labels, 32);
+			ECS_STACK_VOID_STREAM(combo_callback_memory, 512);
+			ECS_STACK_VOID_STREAM(check_box_callback_memory, 512);
+
+			// Allocate these from the temp buffer - these will survive until the next window draw
+			// So the data is stable for the clickable detection
+			const size_t SELECT_ELEMENT_CAPACITY = ECS_KB;
+			void* select_elements_buffer = drawer.GetTempBuffer(sizeof(VisualizeTextureSelectElement) * SELECT_ELEMENT_CAPACITY);
+			const size_t SELECT_ELEMENT_NAME_CAPACITY = ECS_KB * 16;
+			void* select_elements_name_buffer = drawer.GetTempBuffer(sizeof(char) * SELECT_ELEMENT_NAME_CAPACITY);
+
+			CapacityStream<VisualizeTextureSelectElement> select_elements;
+			select_elements.InitializeFromBuffer(select_elements_buffer, 0, SELECT_ELEMENT_CAPACITY);
+			CapacityStream<char> select_elements_name;
+			select_elements_name.InitializeFromBuffer(select_elements_name_buffer, 0, SELECT_ELEMENT_NAME_CAPACITY);
+
+			if (data->additional_draw != nullptr) {
+				// Reduce the capacity by one in case we need to include the select label
+				combo_labels.capacity--;
+
+				additional_data.window_data = data;
+				additional_data.drawer = &drawer;
+				additional_data.private_data = data->AdditionalData();
+				additional_data.combo_index = &data->additional_draw_combo_index;
+				additional_data.combo_labels = &combo_labels;
+				additional_data.combo_memory = &combo_label_memory;
+				additional_data.combo_callback_memory = &combo_callback_memory;
+				additional_data.check_box_callback_memory = &check_box_callback_memory;
+				
+				if (data->select_mode) {
+					additional_data.select_elements = &select_elements;
+					additional_data.select_element_name_memory = &select_elements_name;
+				}
+				else {
+					additional_data.select_elements = nullptr;
+					additional_data.select_element_name_memory = nullptr;
+				}
+
+				data->additional_draw(&additional_data, nullptr, initializer);
+
+				if (additional_data.include_select_label) {
+					combo_labels.AddSafe(SELECT_BUTTON_CHARACTERS);
+				}
+			}
+
+			if (!initializer) {
+				UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+
+				UIDrawConfig config;
+				if (data->select_mode) {
+					UIConfigBorder border;
+					border.color = drawer.color_theme.borders;
+
+					UIConfigWindowDependentSize dependent_size;
+					drawer.SetCurrentPositionToHeader();
+					dependent_size.scale_factor = drawer.GetWindowSizeScaleUntilBorder(true);
+
+					UIConfigTextInputHint filter_hint;
+					filter_hint.characters = "Search";
+
+					config.AddFlag(border);
+					config.AddFlag(dependent_size);
+					config.AddFlag(filter_hint);
+					drawer.TextInput(
+						UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_INPUT_HINT | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_TEXT_INPUT_NO_NAME
+						| UI_CONFIG_BORDER,
+						config,
+						"TextInput",
+						&data->select_texture_filter
+					);
+
+					drawer.SetCurrentPositionToStart();
+					drawer.NextRow(2.0f);
+
+					// Draw each entry
+					drawer.SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
+
+					UIConfigWindowDependentSize label_size;
+					config.flag_count = 0;
+					config.AddFlag(label_size);
+
+					struct SelectActionData {
+						VisualizeTextureWindowData* window_data;
+						Stream<VisualizeTextureSelectElement> elements;
+						unsigned int select_index;
+					};
+
+					auto select_action = [](ActionData* action_data) {
+						UI_UNPACK_ACTION_DATA;
+
+						SelectActionData* data = (SelectActionData*)_data;
+
+						VisualizeTextureSelectElement select_element = data->elements[data->select_index];
+						ChangeVisualizeTextureWindowFromSelection(system, data->window_data, &select_element);
+					};
+
+					SelectActionData select_data;
+					select_data.elements = select_elements;
+					select_data.window_data = data;
+					select_data.select_index = 0;
+
+					UIActionHandler select_handler = { select_action, &select_data, sizeof(select_data) };
+
+					bool is_active_window = drawer.IsActiveWindow();
+					bool up_key = is_active_window && drawer.system->m_keyboard->IsDown(ECS_KEY_UP);
+					bool down_key = is_active_window && drawer.system->m_keyboard->IsDown(ECS_KEY_DOWN);
+
+					unsigned int found_selected = -1;
+					unsigned int previous_filtered = -1;
+					bool get_down_label = false;
+
+					for (unsigned int index = 0; index < select_elements.size; index++) {
+						bool matches_filter = data->select_texture_filter.size == 0 ?
+							true :
+							function::FindFirstToken(select_elements[index].name, data->select_texture_filter).size > 0;
+						if (matches_filter) {
+							if (found_selected == -1) {
+								if (select_elements[index].name == data->selected_element) {
+									found_selected = index;
+									if (up_key && previous_filtered != -1) {
+										data->selected_element.Copy(select_elements[previous_filtered].name);
+									}
+									else if (down_key) {
+										get_down_label = true;
+									}
+								}
+							}
+							previous_filtered = index;
+							if (get_down_label) {
+								data->selected_element.Copy(select_elements[index].name);
+								get_down_label = false;
+							}
+
+							size_t label_transparent = found_selected == index ? 0 : UI_CONFIG_LABEL_TRANSPARENT;
+							drawer.Button(label_transparent | UI_CONFIG_WINDOW_DEPENDENT_SIZE
+								| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, select_elements[index].name, select_handler);
+						}
+						select_data.select_index++;
+					}
+
+					// Check if the ENTER key is pressed when we are active window
+					if (is_active_window && drawer.system->m_keyboard->IsPressed(ECS_KEY_ENTER)) {
+						// Verify if we have an active label
+						if (found_selected != -1) {
+							ChangeVisualizeTextureWindowFromSelection(drawer.system, data, &select_elements[found_selected]);
+						}
+					}
+
+					if (select_elements.size == 0) {
+						drawer.Text("No select entries");
+					}
+				}
+				else {
+					if (data->original_texture.Interface() != nullptr && data->texture_view.Interface() != nullptr) {
+						if (data->automatic_update) {
+							ConvertTextureToVisualize(drawer.system->m_graphics, data->TextureToCopy(), data->texture_view.AsTexture2D(), &data->visualize_options);
+						}
+
+						if (data->display_options) {
+							UIConfigSpriteButtonBackground sprite_background;
+							sprite_background.overwrite_color = drawer.color_theme.theme;
+							const float sprite_background_size = drawer.GetRelativeElementSize(sprite_background.scale_factor).y;
+
+							// Red
+							row_layout.AddSquareLabel(sprite_background_size);
+							// Green
+							row_layout.AddSquareLabel(sprite_background_size);
+							// Blue
+							row_layout.AddSquareLabel(sprite_background_size);
+							// Alpha
+							row_layout.AddSquareLabel(sprite_background_size);
+
+							// Optional control
+							if (additional_data.check_box_name.size > 0) {
+								row_layout.AddCheckBox(additional_data.check_box_name);
+							}
+
+							// Optional control
+							if (!additional_data.hide_select_button) {
+								row_layout.AddLabel(SELECT_BUTTON_CHARACTERS, ECS_UI_ALIGN_MIDDLE);
+							}
+
+							// Optional control
+							if (combo_labels.size > 0) {
+								row_layout.AddComboBox(combo_labels, {}, {}, ECS_UI_ALIGN_RIGHT);
+							}
+
+							struct ChangeChannelFlagActionData {
+								VisualizeTextureWindowData* data;
+								unsigned char flag_offset;
+							};
+
+							auto change_channel_flag_action = [](ActionData* action_data) {
+								UI_UNPACK_ACTION_DATA;
+
+								ChangeChannelFlagActionData* data = (ChangeChannelFlagActionData*)_data;
+								bool* flags = &data->data->visualize_options.enable_red;
+								flags[data->flag_offset] = !flags[data->flag_offset];
+								ConvertTextureToVisualize(system->m_graphics, data->data->TextureToCopy(), data->data->texture_view.AsTexture2D(), &data->data->visualize_options);
+							};
+
+							ChangeChannelFlagActionData change_channel_data;
+							change_channel_data.data = data;
+							change_channel_data.flag_offset = 0;
+							UIActionHandler change_flag_handler = { change_channel_flag_action, &change_channel_data, sizeof(change_channel_data) };
+
+							size_t configuration = 0;
+
+							auto draw_flag = [&](Color color) {
+								bool* flags = &data->visualize_options.enable_red;
+								if (flags[change_channel_data.flag_offset]) {
+									config.AddFlag(sprite_background);
+									configuration |= UI_CONFIG_SPRITE_BUTTON_BACKGROUND | UI_CONFIG_SPRITE_BUTTON_CENTER_SPRITE_TO_BACKGROUND;
+								}
+
+								row_layout.GetTransform(config, configuration);
+								drawer.SpriteButton(configuration, config, change_flag_handler, ECS_TOOLS_UI_TEXTURE_MASK, color);
+
+								configuration = 0;
+								config.flag_count = 0;
+								change_channel_data.flag_offset++;
+							};
+
+							draw_flag(Color(255, 0, 0));
+							draw_flag(Color(0, 255, 0));
+							draw_flag(Color(0, 0, 255));
+							draw_flag(Color(255, 255, 255));
+
+							if (additional_data.check_box_name.size > 0) {
+								configuration = 0;
+								config.flag_count = 0;
+
+								ECS_ASSERT(additional_data.check_box_callback.action != nullptr);
+								UIConfigCheckBoxCallback callback;
+								callback.handler = additional_data.check_box_callback;
+								config.AddFlag(callback);
+								configuration |= UI_CONFIG_CHECK_BOX_CALLBACK;
+
+								drawer.CheckBox(configuration, config, additional_data.check_box_name, &data->additional_draw_check_box_flag);
+							}
+
+							if (!additional_data.hide_select_button) {
+								configuration = 0;
+								config.flag_count = 0;
+
+								auto select_button = [](ActionData* action_data) {
+									UI_UNPACK_ACTION_DATA;
+
+									VisualizeTextureWindowData* data = (VisualizeTextureWindowData*)_data;
+									data->TransitionSelectionMode();
+								};
+							}
+						}
+
+						if (additional_data.can_display_texture) {
+							UIConfigAbsoluteTransform whole_transform = drawer.GetWholeRegionTransform(true);
+							config.AddFlag(whole_transform);
+
+							drawer.SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, config, data->texture_view);
+						}
+					}
+					else {
+						drawer.Text("No texture selected");
+					}
+				}
 			}
 		}
 
@@ -2395,6 +2776,21 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
+		void VisualizeTexturePrivateWindow(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+			
+			VisualizeTextureWindowData* window_data = (VisualizeTextureWindowData*)_additional_data;
+			unsigned int active_window_index = system->GetActiveWindow();
+			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+			if (window_index == active_window_index) {
+				if (keyboard->IsPressed(ECS_KEY_O)) {
+					window_data->display_options = !window_data->display_options;
+				}
+			}
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
 		UIWindowDescriptor VisualizeTextureWindowDescriptor(UISystem* system, const VisualizeTextureActionData* create_data, void* stack_memory)
 		{
 			constexpr float2 SIZE = { 1.0f, 1.0f };
@@ -2403,6 +2799,7 @@ namespace ECSEngine {
 
 			descriptor.draw = VisualizeTextureWindowDraw;
 			descriptor.destroy_action = VisualizeTextureDestroyAction;
+			descriptor.private_action = VisualizeTexturePrivateWindow;
 
 			descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, SIZE.x);
 			descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, SIZE.y);
@@ -2413,13 +2810,28 @@ namespace ECSEngine {
 			VisualizeTextureWindowData* data = (VisualizeTextureWindowData*)stack_memory;
 			data->texture_view = nullptr;
 			data->transferred_texture = (ID3D11Texture2D*)nullptr;
+			data->additional_draw = nullptr;
+			data->automatic_update = false;
+			data->additional_draw_combo_index = 0;
+			data->display_options = true;
+			data->select_mode = false;
+			data->additional_draw_check_box_flag = false;
 			if (create_data->texture.Interface() != nullptr) {
-				data->visualize_options = *create_data->options;
-				data->visualize_options.copy_texture_if_same_format = true;
+				if (create_data->options != nullptr) {
+					data->visualize_options = *create_data->options;
+				}
+				else {
+					data->visualize_options = VisualizeTextureOptions();
+				}
 				data->automatic_update = create_data->automatic_update;
 
 				VisualizeTextureCreateTexture(system, data, create_data->texture, create_data->transfer_texture_to_ui_graphics);
 			}
+			else {
+				data->visualize_options = VisualizeTextureOptions();
+			}
+
+			UpdateVisualizeTextureWindowAdditionalDraw(data, create_data->additional_draw, create_data->additional_draw_data, create_data->additional_draw_data_size);
 
 			descriptor.window_data = data;
 			descriptor.window_data_size = sizeof(*data);
@@ -2449,8 +2861,7 @@ namespace ECSEngine {
 
 			unsigned int window_index = system->CreateWindowAndDockspace(
 				descriptor, 
-				(create_data->is_pop_up_window ? UI_DOCKSPACE_POP_UP_WINDOW : 0) | UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER 
-				| UI_DOCKSPACE_BORDER_FLAG_NO_TITLE
+				(create_data->is_pop_up_window ? UI_DOCKSPACE_POP_UP_WINDOW : 0)
 			);
 			return window_index;
 		}
@@ -2476,31 +2887,113 @@ namespace ECSEngine {
 		void ChangeVisualizeTextureWindowOptions(
 			UISystem* system, 
 			Stream<char> window_name, 
-			const VisualizeTextureOptions* options,
-			Texture2D target_texture,
-			bool transfer_texture
+			const VisualizeTextureActionData* create_data
 		)
 		{
 			unsigned int window_index = system->GetWindowFromName(window_name);
 			if (window_index != -1) {
-				VisualizeTextureWindowData* window_data = (VisualizeTextureWindowData*)system->GetWindowData(window_index);
-				window_data->visualize_options = *options;
-				window_data->visualize_options.copy_texture_if_same_format = true;
-
-				if (target_texture.Interface() != nullptr && (target_texture.Interface() != window_data->original_texture.Interface())) {
-					// We must free the old resources and create a new texture and view
-					VisualizeTextureDeallocateTexture(system, window_data);
-					VisualizeTextureCreateTexture(system, window_data, target_texture, transfer_texture);
-					window_data->original_texture = target_texture;
-				}
-
-				if (window_data->original_texture.Interface() != nullptr) {
-					ConvertTextureToVisualize(system->m_graphics, window_data->original_texture, window_data->texture_view.AsTexture2D(), &window_data->visualize_options);
-				}
+				ChangeVisualizeTextureWindowOptions(system, window_index, create_data);
 			}
 			else {
 				ECS_ASSERT(false, "Invalid window name for VisualizeTexture UI window");
 			}
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void ChangeVisualizeTextureWindowOptions(
+			UISystem* system,
+			unsigned int window_index,
+			const VisualizeTextureActionData* create_data
+		) {
+			VisualizeTextureWindowData* window_data = (VisualizeTextureWindowData*)system->GetWindowData(window_index);
+			if (create_data->options != nullptr) {
+				window_data->visualize_options = *create_data->options;
+			}
+
+			if (create_data->texture.Interface() != nullptr && (create_data->texture.Interface() != window_data->original_texture.Interface())) {
+				// We must free the old resources and create a new texture and view
+				VisualizeTextureDeallocateTexture(system, window_data);
+				VisualizeTextureCreateTexture(system, window_data, create_data->texture, create_data->transfer_texture_to_ui_graphics);
+			}
+			else if (window_data->original_texture.Interface() != nullptr) {
+				ConvertTextureToVisualize(system->m_graphics, window_data->TextureToCopy(), window_data->texture_view.AsTexture2D(), &window_data->visualize_options);
+			}
+
+			UpdateVisualizeTextureWindowAdditionalDraw(system, window_index, create_data->additional_draw, create_data->additional_draw_data, create_data->additional_draw_data_size);
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void* GetVisualizeTextureWindowAdditionalData(UISystem* system, Stream<char> window_name)
+		{
+			unsigned int window_index = system->GetWindowFromName(window_name);
+			if (window_index != -1) {
+				return GetVisualizeTextureWindowAdditionalData(system, window_index);
+			}
+			else {
+				ECS_ASSERT(false, "Invalid window name for VisualizeTexture UI window");
+				return nullptr;
+			}
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void* GetVisualizeTextureWindowAdditionalData(UISystem* system, unsigned int window_index)
+		{
+			VisualizeTextureWindowData* window_data = (VisualizeTextureWindowData*)system->GetWindowData(window_index);
+			return window_data->AdditionalData();
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void UpdateVisualizeTextureWindowAdditionalDraw(
+			UISystem* system, 
+			Stream<char> window_name, 
+			WindowDraw additional_draw, 
+			void* additional_draw_data, 
+			size_t additional_draw_data_size
+		)
+		{
+			unsigned int window_index = system->GetWindowFromName(window_name);
+			if (window_index != -1) {
+				UpdateVisualizeTextureWindowAdditionalDraw(system, window_index, additional_draw, additional_draw_data, additional_draw_data_size);
+			}
+			else {
+				ECS_ASSERT(false, "Invalid window name for VisualizeTexture UI window");
+			}
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void UpdateVisualizeTextureWindowAdditionalDraw(
+			UISystem* system, 
+			unsigned int window_index, 
+			WindowDraw additional_draw,
+			void* additional_draw_data,
+			size_t additional_draw_data_size
+		)
+		{
+			VisualizeTextureWindowData* window_data = (VisualizeTextureWindowData*)system->GetWindowData(window_index);
+			UpdateVisualizeTextureWindowAdditionalDraw(window_data, additional_draw, additional_draw_data, additional_draw_data_size);
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void TransitionVisualizeTextureWindowSelection(
+			void* window_data
+		) {
+			VisualizeTextureWindowData* data = (VisualizeTextureWindowData*)window_data;
+			data->TransitionSelectionMode();
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void TransitionVisualizeTextureWindowSelection(
+			UISystem* system,
+			unsigned int window_index
+		) {
+			TransitionVisualizeTextureWindowSelection(system->GetWindowData(window_index));
 		}
 
 		// -------------------------------------------------------------------------------------------------------

@@ -1353,7 +1353,7 @@ namespace ECSEngine {
 
 		bool UIDrawer::HandleFitSpaceRectangle(size_t configuration, float2& position, float2 scale) {
 			if (~configuration & UI_CONFIG_DO_NOT_FIT_SPACE) {
-				if (draw_mode == ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_FIT_SPACE) {
+				if (draw_mode == ECS_UI_DRAWER_FIT_SPACE) {
 					bool is_outside = VerifyFitSpaceRectangle(position, scale);
 					if (is_outside) {
 						NextRow();
@@ -1364,7 +1364,7 @@ namespace ECSEngine {
 					}
 					return false;
 				}
-				else if (draw_mode == ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_COLUMN_DRAW_FIT_SPACE || draw_mode == ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_COLUMN_DRAW) {
+				else if (draw_mode == ECS_UI_DRAWER_COLUMN_DRAW_FIT_SPACE || draw_mode == ECS_UI_DRAWER_COLUMN_DRAW) {
 					bool is_outside = VerifyFitSpaceRectangle(position, scale);
 					if (is_outside) {
 						NextRow();
@@ -11505,6 +11505,13 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		float2 UIDrawer::GetRelativeElementSize(float2 factors) const
+		{
+			return GetElementDefaultScale() * factors;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		// Accounts for zoom
 		float2 UIDrawer::GetStaticElementDefaultScale() const {
 			return { layout.default_element_x / zoom_ptr->x, layout.default_element_y / zoom_ptr->y };
@@ -11613,9 +11620,21 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIConfigAbsoluteTransform UIDrawer::GetWholeRegionTransform() const
+		UIConfigAbsoluteTransform UIDrawer::GetWholeRegionTransform(bool consider_region_header) const
 		{
-			return { GetRegionPosition() + GetRegionRenderOffset(), GetRegionScale() };
+			float2 position = GetRegionPosition();
+			float2 scale = GetRegionScale();
+			float2 region_offset = GetRegionRenderOffset();
+
+			if (consider_region_header) {
+				UIDockspaceBorder* border = &dockspace->borders[border_index];
+				if (border->draw_region_header) {
+					position.y += system->m_descriptors.misc.title_y_scale;
+					scale.y -= system->m_descriptors.misc.title_y_scale;
+				}
+			}
+
+			return { position + region_offset, scale };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -12135,6 +12154,13 @@ namespace ECSEngine {
 				}
 			}
 			return false;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		bool UIDrawer::IsActiveWindow() const
+		{
+			return window_index == system->GetActiveWindow();
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -15603,6 +15629,8 @@ namespace ECSEngine {
 						background_position = position;
 						position = AlignMiddle(background_position, background_scale, scale);
 					}
+
+					drawer->SpriteRectangle(configuration, background_position, background_scale, ECS_TOOLS_UI_TEXTURE_MASK, background_color);
 				}
 
 				AlignToRowY(drawer, configuration, position, scale);
@@ -15679,10 +15707,6 @@ namespace ECSEngine {
 
 					if (multi_texture != nullptr && !multi_texture->draw_before_main_texture) {
 						draw_multi_texture();
-					}
-
-					if (configuration & UI_CONFIG_SPRITE_BUTTON_BACKGROUND) {
-						drawer->SolidColorRectangle(configuration, background_position, background_scale, background_color);
 					}
 				}
 
@@ -17337,7 +17361,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void UIDrawerRowLayout::AddElement(size_t transform_type, float2 parameters)
+		void UIDrawerRowLayout::AddElement(size_t transform_type, float2 parameters, ECS_UI_ALIGN alignment)
 		{
 			if (current_index > 0) {
 				indentations[current_index] = indentation;
@@ -17376,36 +17400,76 @@ namespace ECSEngine {
 			else {
 				ECS_ASSERT(false);
 			}
-
+			element_alignment[current_index] = alignment;
 			current_index++;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void UIDrawerRowLayout::AddLabel(Stream<char> characters)
+		void UIDrawerRowLayout::AddLabel(Stream<char> characters, ECS_UI_ALIGN alignment)
 		{
 			float2 scale = drawer->GetLabelScale(characters);
-			AddElement(UI_CONFIG_ABSOLUTE_TRANSFORM, scale);
+			AddElement(UI_CONFIG_ABSOLUTE_TRANSFORM, scale, alignment);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void UIDrawerRowLayout::AddSquareLabel(float label_size)
+		void UIDrawerRowLayout::AddSquareLabel(float label_size, ECS_UI_ALIGN alignment)
 		{
-			AddElement(UI_CONFIG_MAKE_SQUARE, { 0.0f, label_size });
+			AddElement(UI_CONFIG_MAKE_SQUARE, { 0.0f, label_size }, alignment);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void UIDrawerRowLayout::AddComboBox(Stream<Stream<char>> labels, Stream<char> name, Stream<char> prefix)
+		void UIDrawerRowLayout::AddCheckBox(Stream<char> name, ECS_UI_ALIGN alignment)
+		{
+			AddSquareLabel(alignment);
+			if (name.size > 0) {
+				AddLabel(name, alignment);
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::AddComboBox(Stream<Stream<char>> labels, Stream<char> name, Stream<char> prefix, ECS_UI_ALIGN alignment)
 		{
 			float combo_scale = drawer->ComboBoxDefaultSize(labels, name, prefix);
-			AddElement(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_COMBO_BOX_NAME_WITH_SCALE, { combo_scale, row_scale.y });
+			AddElement(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_COMBO_BOX_NAME_WITH_SCALE, { combo_scale, row_scale.y }, alignment);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		void UIDrawerRowLayout::CombineLastElements(unsigned int count)
+		{
+			ECS_ASSERT(count <= current_index);
+
+			float total_scale = 0.0f;
+			float max_y_scale = 0.0f;
+			for (unsigned int index = 0; index < count; index++) {
+				float2 current_scale = GetScaleForElement(current_index - index);
+				total_scale += current_scale.x;
+				max_y_scale = std::max(max_y_scale, current_scale.y);
+				if (index != 0) {
+					total_scale += indentations[current_index - index];
+				}
+			}
+
+			unsigned int first_element = current_index - count + 1;
+			element_sizes[first_element].x = total_scale;
+			element_sizes[first_element].y = max_y_scale;
+			element_transform_types[first_element] = function::ClearFlag(
+				element_transform_types[first_element],
+				UI_CONFIG_RELATIVE_TRANSFORM, 
+				UI_CONFIG_WINDOW_DEPENDENT_SIZE, 
+				UI_CONFIG_MAKE_SQUARE
+			);
+			element_transform_types[first_element] |= UI_CONFIG_ABSOLUTE_TRANSFORM;
+			current_index -= count - 1;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::RemoveLastElementsIndentation(unsigned int count)
 		{
 			ECS_ASSERT(count <= current_index);
 
@@ -17491,6 +17555,26 @@ namespace ECSEngine {
 				ECS_ASSERT(false);
 			}
 			current_index++;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		float2 UIDrawerRowLayout::GetScaleForElement(unsigned int index) const
+		{
+			if (function::HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
+				return element_sizes[index];
+			}
+			else if (element_transform_types[index] & UI_CONFIG_RELATIVE_TRANSFORM) {
+				return drawer->GetRelativeElementSize(element_sizes[index]);
+			}
+			else if (element_transform_types[index] & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+				return drawer->GetWindowSizeScaleElement(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, element_sizes[index]);
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+
+			return { 0.0f, 0.0f };
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -17605,6 +17689,8 @@ namespace ECSEngine {
 
 		void UIDrawerRowLayout::UpdateElementsFromAlignment()
 		{
+#pragma region Whole Row Alignment
+			// This is the general pass that aligns all the elements according to the overall
 			if (horizontal_alignment == ECS_UI_ALIGN_LEFT) {
 				indentations[0] = 0.0f;
 				return;
@@ -17617,7 +17703,7 @@ namespace ECSEngine {
 					total_size += element_sizes[index].x;
 				}
 				else if (function::HasFlag(element_transform_types[index], UI_CONFIG_RELATIVE_TRANSFORM)) {
-					total_size += element_sizes[index].x * drawer->layout.default_element_x;
+					total_size += drawer->GetRelativeElementSize(element_sizes[index]).x;
 				}
 				else {
 					total_size += drawer->GetWindowSizeScaleElement(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, element_sizes[index]).x;
@@ -17633,6 +17719,65 @@ namespace ECSEngine {
 			else if (horizontal_alignment == ECS_UI_ALIGN_RIGHT) {
 				indentations[0] = row_scale.x - total_size;
 			}
+#pragma endregion
+
+#pragma region Element Transform Alignments
+			
+			// At the moment we ignore indentations after elements
+
+			// Determine the size of the middle, left and right elements
+			float left_elements_size = 0.0f;
+			float middle_elements_size = 0.0f;
+			float right_elements_size = 0.0f;
+
+			unsigned int first_middle_element = -1;
+			unsigned int first_right_element = -1;
+			for (unsigned int index = 0; index < element_count; index++) {
+				float element_scale = GetScaleForElement(index).x;
+				if (element_alignment[index] == ECS_UI_ALIGN_MIDDLE) {
+					middle_elements_size += element_scale;
+					if (first_middle_element == -1) {
+						first_middle_element = index;
+					}
+				}
+				else if (element_alignment[index] == ECS_UI_ALIGN_LEFT) {
+					left_elements_size += element_scale;
+				}
+				else if (element_alignment[index] == ECS_UI_ALIGN_RIGHT) {
+					right_elements_size += element_scale;
+					if (first_right_element == -1) {
+						first_right_element = index;
+					}
+				}
+			}
+
+			// Determine if they fit in the available space
+			total_size = left_elements_size + middle_elements_size + right_elements_size;
+			if (total_size < row_scale.x) {
+				// They fit
+				// Determine how much space is left for the middle alignment
+				float middle_alignment_space = row_scale.x - total_size;
+				// We need to offset the middle elements by the half of that distance
+				middle_alignment_space *= 0.5f;
+
+				// The right elements need to be offsetted by row_scale.x - right_elements_size
+				float right_alignment = row_scale.x - right_elements_size;
+
+				// We just need to add the offsets to the indentations
+				if (first_middle_element != -1) {
+					indentations[first_middle_element] += middle_alignment_space;
+				}
+				
+				if (first_right_element != -1) {
+					indentations[first_right_element] = right_alignment;
+				}
+			}
+			else {
+				// Nothing needs to be done since they don't fit anyway
+			}
+
+#pragma endregion
+
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

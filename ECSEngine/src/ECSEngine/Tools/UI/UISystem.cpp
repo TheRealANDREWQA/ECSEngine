@@ -9076,15 +9076,22 @@ namespace ECSEngine {
 				m_windows[window_index].name.size = 0;
 			}
 			else {
-				void* new_allocation = m_memory->Allocate((sizeof(UISpriteVertex) * 6 + sizeof(char)) * name.size, alignof(UISpriteVertex));
+				// Check for the separation character
+				Stream<char> separation_character = function::FindFirstToken(name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				Stream<char> visible_name = name;
+				if (separation_character.size > 0) {
+					visible_name = { name.buffer, name.size - separation_character.size };
+				}
+
+				void* new_allocation = m_memory->Allocate(sizeof(UISpriteVertex) * 6 * visible_name.size + sizeof(char) * name.size, alignof(UISpriteVertex));
 				uintptr_t buffer = (uintptr_t)new_allocation;
 				m_windows[window_index].name_vertex_buffer.buffer = (UISpriteVertex*)new_allocation;
-				m_windows[window_index].name_vertex_buffer.size = name.size * 6;
-				buffer += sizeof(UISpriteVertex) * 6 * name.size;
+				m_windows[window_index].name_vertex_buffer.size = visible_name.size * 6;
+				buffer += sizeof(UISpriteVertex) * 6 * visible_name.size;
 				m_windows[window_index].name.InitializeAndCopy(buffer, name);
 				float sprite_y_scale = GetTextSpriteYScale(m_descriptors.font.size);
 				ConvertCharactersToTextSprites(
-					name,
+					visible_name,
 					float2(0.0f, AlignMiddle(
 						0.0f,
 						m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size,

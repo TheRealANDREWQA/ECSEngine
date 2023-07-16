@@ -43,6 +43,22 @@ struct SandboxFileHeader {
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+ECS_INLINE Stream<char> ColorDepthTextureString(bool color_texture) {
+	return color_texture ? "render" : "depth";
+}
+
+ECS_INLINE void GetVisualizeTextureName(Stream<char> viewport_description, unsigned int sandbox_index, bool color_texture, CapacityStream<char>& name) {
+	ECS_FORMAT_STRING(name, "{#} {#} {#}", viewport_description, sandbox_index, ColorDepthTextureString(color_texture));
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+ECS_INLINE void GetVisualizeInstancedTextureName(unsigned int sandbox_index, bool color_texture, CapacityStream<char>& name) {
+	ECS_FORMAT_STRING(name, "Scene {#} instanced {#}", sandbox_index, ColorDepthTextureString(color_texture));
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void GetSandboxScenePathImpl(const EditorState* editor_state, Stream<wchar_t> scene_path, CapacityStream<wchar_t>& absolute_path) {
 	GetProjectAssetsFolder(editor_state, absolute_path);
 	absolute_path.Add(ECS_OS_PATH_SEPARATOR);
@@ -595,10 +611,28 @@ void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_i
 	if (sandbox->viewport_render_destination[viewport].render_view.Interface() != nullptr) {
 		runtime_graphics->FreeRenderDestination(sandbox->viewport_render_destination[viewport]);
 		ReleaseGraphicsView(sandbox->viewport_transferred_texture[viewport]);
+
+		ECS_STACK_CAPACITY_STREAM(char, visualize_texture_name, 512);	
 		if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			runtime_graphics->FreeView(sandbox->scene_viewport_instance_framebuffer);
 			runtime_graphics->FreeView(sandbox->scene_viewport_depth_stencil_framebuffer);
+
+			GetVisualizeInstancedTextureName(sandbox_index, true, visualize_texture_name);
+			RemoveVisualizeTexture(editor_state, visualize_texture_name);
+			visualize_texture_name.size = 0;
+
+			GetVisualizeInstancedTextureName(sandbox_index, false, visualize_texture_name);
+			RemoveVisualizeTexture(editor_state, visualize_texture_name);
+			visualize_texture_name.size = 0;
 		}
+
+		Stream<char> viewport_string = ViewportString(viewport);
+		GetVisualizeTextureName(viewport_string, sandbox_index, true, visualize_texture_name);
+		RemoveVisualizeTexture(editor_state, visualize_texture_name);
+
+		visualize_texture_name.size = 0;
+		GetVisualizeTextureName(viewport_string, sandbox_index, false, visualize_texture_name);
+		RemoveVisualizeTexture(editor_state, visualize_texture_name);
 	}
 
 	runtime_graphics->GetContext()->ClearState();
@@ -1628,22 +1662,54 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 	// Now transfer the texture from the RuntimeGraphics to the UIGraphics
 	sandbox->viewport_transferred_texture[viewport] = editor_state->UIGraphics()->TransferGPUView(sandbox->viewport_render_destination[viewport].output_view);
 
+	ECS_STACK_CAPACITY_STREAM(char, visualize_name, 512);
+
+	Stream<char> viewport_description = ViewportString(viewport);
+	GetVisualizeTextureName(viewport_description, sandbox_index, true, visualize_name);
+
+	// Add the sandbox render and depth textures into the visualize textures
+	VisualizeTextureSelectElement visualize_element;
+	visualize_element.transfer_texture_to_ui_graphics = true;
+	visualize_element.name = visualize_name;
+	visualize_element.texture = sandbox->viewport_render_destination[viewport].output_view.AsTexture2D();
+	SetVisualizeTexture(editor_state, visualize_element);
+
+	visualize_name.size = 0;
+	GetVisualizeTextureName(viewport_description, sandbox_index, false, visualize_name);
+	visualize_element.name = visualize_name;
+	visualize_element.texture = sandbox->viewport_render_destination[viewport].depth_view.GetResource();
+	SetVisualizeTexture(editor_state, visualize_element);
+
 	// Also create the instanced framebuffers
 	Texture2DDescriptor instanced_framebuffer_descriptor;
 	instanced_framebuffer_descriptor.format = ECS_GRAPHICS_FORMAT_R32_UINT;
 	instanced_framebuffer_descriptor.bind_flag = ECS_GRAPHICS_BIND_RENDER_TARGET;
 	instanced_framebuffer_descriptor.mip_levels = 1;
 	instanced_framebuffer_descriptor.size = new_size;
+	instanced_framebuffer_descriptor.misc_flag = ECS_GRAPHICS_MISC_SHARED;
 	Texture2D instanced_framebuffer_texture = runtime_graphics->CreateTexture(&instanced_framebuffer_descriptor);
 	sandbox->scene_viewport_instance_framebuffer = runtime_graphics->CreateRenderTargetView(instanced_framebuffer_texture);
+
+	visualize_name.size = 0;
+	GetVisualizeInstancedTextureName(sandbox_index, true, visualize_name);
+	visualize_element.name = visualize_name;
+	visualize_element.texture = sandbox->scene_viewport_instance_framebuffer.GetResource();
+	SetVisualizeTexture(editor_state, visualize_element);
 	
 	Texture2DDescriptor instanced_depth_stencil_descriptor;
 	instanced_depth_stencil_descriptor.format = ECS_GRAPHICS_FORMAT_D32_FLOAT;
 	instanced_depth_stencil_descriptor.bind_flag = ECS_GRAPHICS_BIND_DEPTH_STENCIL;
 	instanced_depth_stencil_descriptor.mip_levels = 1;
 	instanced_depth_stencil_descriptor.size = new_size;
+	instanced_depth_stencil_descriptor.misc_flag = ECS_GRAPHICS_MISC_SHARED;
 	Texture2D instanced_depth_texture = runtime_graphics->CreateTexture(&instanced_depth_stencil_descriptor);
 	sandbox->scene_viewport_depth_stencil_framebuffer = runtime_graphics->CreateDepthStencilView(instanced_depth_texture);
+
+	visualize_name.size = 0;
+	GetVisualizeInstancedTextureName(sandbox_index, false, visualize_name);
+	visualize_element.name = visualize_name;
+	visualize_element.texture = sandbox->scene_viewport_depth_stencil_framebuffer.GetResource();
+	SetVisualizeTexture(editor_state, visualize_element);
 
 	runtime_graphics->m_window_size = new_size;
 }

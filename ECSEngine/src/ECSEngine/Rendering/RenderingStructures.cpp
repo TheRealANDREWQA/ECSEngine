@@ -492,13 +492,18 @@ namespace ECSEngine {
 
 	Texture1D::Texture1D(ID3D11Resource* _resource)
 	{
-		Microsoft::WRL::ComPtr<ID3D11Resource> ptr;
-		ptr.Attach(_resource);
-		Microsoft::WRL::ComPtr<ID3D11Texture1D> com_tex;
-		HRESULT result = ptr.As(&com_tex);
+		if (_resource) {
+			Microsoft::WRL::ComPtr<ID3D11Resource> ptr;
+			ptr.Attach(_resource);
+			Microsoft::WRL::ComPtr<ID3D11Texture1D> com_tex;
+			HRESULT result = ptr.As(&com_tex);
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture1D failed!");
-		tex = com_tex.Detach();
+			ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture1D failed!");
+			tex = com_tex.Detach();
+		}
+		else {
+			tex = nullptr;
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -523,13 +528,18 @@ namespace ECSEngine {
 
 	Texture2D::Texture2D(ID3D11Resource* _resource)
 	{
-		Microsoft::WRL::ComPtr<ID3D11Resource> ptr;
-		ptr.Attach(_resource);
-		Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
-		HRESULT result = ptr.As(&com_tex);
+		if (_resource) {
+			Microsoft::WRL::ComPtr<ID3D11Resource> ptr;
+			ptr.Attach(_resource);
+			Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
+			HRESULT result = ptr.As(&com_tex);
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture2D failed!");
-		tex = com_tex.Detach();
+			ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture2D failed!");
+			tex = com_tex.Detach();
+		}
+		else {
+			tex = nullptr;
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -554,13 +564,18 @@ namespace ECSEngine {
 
 	Texture3D::Texture3D(ID3D11Resource* _resource)
 	{
-		Microsoft::WRL::ComPtr<ID3D11Resource> ptr;
-		ptr.Attach(_resource);
-		Microsoft::WRL::ComPtr<ID3D11Texture3D> com_tex;
-		HRESULT result = ptr.As(&com_tex);
+		if (_resource) {
+			Microsoft::WRL::ComPtr<ID3D11Resource> ptr;
+			ptr.Attach(_resource);
+			Microsoft::WRL::ComPtr<ID3D11Texture3D> com_tex;
+			HRESULT result = ptr.As(&com_tex);
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture3D failed!");
-		tex = com_tex.Detach();
+			ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture3D failed!");
+			tex = com_tex.Detach();
+		}
+		else {
+			tex = nullptr;
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -584,13 +599,18 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------------------
 
 	TextureCube::TextureCube(ID3D11Resource* _resource) {
-		Microsoft::WRL::ComPtr<ID3D11Resource> ptr;
-		ptr.Attach(_resource);
-		Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
-		HRESULT result = ptr.As(&com_tex);
+		if (_resource) {
+			Microsoft::WRL::ComPtr<ID3D11Resource> ptr;
+			ptr.Attach(_resource);
+			Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
+			HRESULT result = ptr.As(&com_tex);
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to TextureCube failed!");
-		tex = com_tex.Detach();
+			ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to TextureCube failed!");
+			tex = com_tex.Detach();
+		}
+		else {
+			tex = nullptr;
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -1525,6 +1545,22 @@ namespace ECSEngine {
 			return ECS_GRAPHICS_FORMAT_R24G8_UNORM;
 		case ECS_GRAPHICS_FORMAT_D32_FLOAT:
 			return ECS_GRAPHICS_FORMAT_R32_FLOAT;
+		}
+
+		return format;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ECS_GRAPHICS_FORMAT ConvertDepthToTypelessFormat(ECS_GRAPHICS_FORMAT format)
+	{
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_D16_UNORM:
+			return ECS_GRAPHICS_FORMAT_R16_TYPELESS;
+		case ECS_GRAPHICS_FORMAT_D24_UNORM_S8_UINT:
+			return ECS_GRAPHICS_FORMAT_R24G8_TYPELESS;
+		case ECS_GRAPHICS_FORMAT_D32_FLOAT:
+			return ECS_GRAPHICS_FORMAT_R32_TYPELESS;
 		}
 
 		return format;

@@ -198,6 +198,7 @@
     <ClInclude Include="src\Editor\EditorState.h" />
     <ClInclude Include="src\Editor\EditorComponents.h" />
     <ClInclude Include="src\Editor\EditorStateTypes.h" />
+    <ClInclude Include="src\Editor\EditorVisualizeTexture.h" />
     <ClInclude Include="src\Modules\Module.h" />
     <ClInclude Include="src\Modules\ModuleDefinition.h" />
     <ClInclude Include="src\Modules\ModuleFile.h" />
@@ -266,6 +267,7 @@
     <ClCompile Include="src\Editor\EditorScene.cpp" />
     <ClCompile Include="src\Editor\EditorState.cpp" />
     <ClCompile Include="src\Editor\EditorComponents.cpp" />
+    <ClCompile Include="src\Editor\EditorVisualizeTexture.cpp" />
     <ClCompile Include="src\Modules\Module.cpp" />
     <ClCompile Include="src\Modules\ModuleDefinition.cpp" />
     <ClCompile Include="src\Modules\ModuleFile.cpp" />

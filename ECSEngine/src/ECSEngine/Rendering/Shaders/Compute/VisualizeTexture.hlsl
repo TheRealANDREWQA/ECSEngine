@@ -69,7 +69,7 @@ float4 VisualizeValue(
     
     if (!keep_alpha)
     {
-        value.a = 0.0f;
+        value.a = 1.0f;
     }
     
     return value * normalize_factor + offset;

@@ -267,10 +267,8 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 				if (file_window_names[index].StartsWith(VISUALIZE_TEXTURE_WINDOW_NAME)) {
 					unsigned int visualize_index = function::ConvertCharactersToInt(file_window_names[index]);
 					CreateIndexedWindow(visualize_index, file_window_names[index], descriptor, editor_state, stack_memory, VisualizeTextureUISetDecriptor);
-					// Get the window and set the border to NOTHING
-					unsigned int visualize_ui_index = ui_system->GetWindowFromName(file_window_names[index]);
-					ui_system->ChangeBorderFlags(visualize_ui_index, UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER | UI_DOCKSPACE_BORDER_FLAG_NO_TITLE);
-
+					unsigned int ui_index = editor_state->ui_system->GetWindowFromName(file_window_names[index]);
+					TransitionVisualizeTextureWindowSelection(editor_state->ui_system, ui_index);
 					continue;
 				}
 			}

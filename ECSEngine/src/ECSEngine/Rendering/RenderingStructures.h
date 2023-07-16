@@ -348,6 +348,10 @@ namespace ECSEngine {
 	// For formats other than depth it will return it again
 	ECSENGINE_API ECS_GRAPHICS_FORMAT ConvertDepthToRenderFormat(ECS_GRAPHICS_FORMAT format);
 
+	// It must be a depth format and return the equivalent typeless format
+	// For formats other than depth it will return it again
+	ECSENGINE_API ECS_GRAPHICS_FORMAT ConvertDepthToTypelessFormat(ECS_GRAPHICS_FORMAT format);
+
 	enum ECS_REFLECT ECS_SAMPLER_FILTER_TYPE : unsigned char {
 		ECS_SAMPLER_FILTER_POINT,
 		ECS_SAMPLER_FILTER_LINEAR,
@@ -528,11 +532,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Buffer* Interface() const {
+		ECS_INLINE ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return buffer->Release();
 		}
 
@@ -551,11 +555,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Buffer* Interface() const {
+		ECS_INLINE ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return buffer->Release();
 		}
 
@@ -574,11 +578,11 @@ namespace ECSEngine {
 		InputLayout(const InputLayout& other) = default;
 		InputLayout& operator = (const InputLayout& other) = default;
 
-		inline ID3D11InputLayout* Interface() const {
+		ECS_INLINE ID3D11InputLayout* Interface() const {
 			return layout;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return layout->Release();
 		}
 
@@ -597,21 +601,21 @@ namespace ECSEngine {
 		VertexShader(const VertexShader& other) = default;
 		VertexShader& operator = (const VertexShader& other) = default;
 
-		inline ID3D11VertexShader* Interface() const {
+		ECS_INLINE ID3D11VertexShader* Interface() const {
 			return shader;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return shader->Release();
 		}
 
 		static VertexShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
-		inline static VertexShader FromInterface(void* interface_) {
+		ECS_INLINE static VertexShader FromInterface(void* interface_) {
 			return VertexShader((ID3D11VertexShader*)interface_);
 		}
 
-		inline void From(void* interface_) {
+		ECS_INLINE void From(void* interface_) {
 			shader = (ID3D11VertexShader*)interface_;
 		}
 
@@ -626,21 +630,21 @@ namespace ECSEngine {
 		PixelShader(const PixelShader& other) = default;
 		PixelShader& operator = (const PixelShader& other) = default;
 
-		inline ID3D11PixelShader* Interface() const {
+		ECS_INLINE ID3D11PixelShader* Interface() const {
 			return shader;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return shader->Release();
 		}
 
 		static PixelShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
-		inline static PixelShader FromInterface(void* interface_) {
+		ECS_INLINE static PixelShader FromInterface(void* interface_) {
 			return PixelShader((ID3D11PixelShader*)interface_);
 		}
 
-		inline void From(void* interface_) {
+		ECS_INLINE void From(void* interface_) {
 			shader = (ID3D11PixelShader*)interface_;
 		}
 
@@ -654,21 +658,21 @@ namespace ECSEngine {
 		GeometryShader(const GeometryShader& other) = default;
 		GeometryShader& operator = (const GeometryShader& other) = default;
 
-		inline ID3D11GeometryShader* Interface() const {
+		ECS_INLINE ID3D11GeometryShader* Interface() const {
 			return shader;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return shader->Release();
 		}
 
 		static GeometryShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
-		inline static GeometryShader FromInterface(void* interface_) {
+		ECS_INLINE static GeometryShader FromInterface(void* interface_) {
 			return GeometryShader((ID3D11GeometryShader*)interface_);
 		}
 
-		inline void From(void* interface_) {
+		ECS_INLINE void From(void* interface_) {
 			shader = (ID3D11GeometryShader*)interface_;
 		}
 
@@ -682,21 +686,21 @@ namespace ECSEngine {
 		DomainShader(const DomainShader& other) = default;
 		DomainShader& operator = (const DomainShader& other) = default;
 
-		inline ID3D11DomainShader* Interface() const {
+		ECS_INLINE ID3D11DomainShader* Interface() const {
 			return shader;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return shader->Release();
 		}
 
 		static DomainShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
-		inline static DomainShader FromInterface(void* interface_) {
+		ECS_INLINE static DomainShader FromInterface(void* interface_) {
 			return DomainShader((ID3D11DomainShader*)interface_);
 		}
 
-		inline void From(void* interface_) {
+		ECS_INLINE void From(void* interface_) {
 			shader = (ID3D11DomainShader*)interface_;
 		}
 
@@ -710,21 +714,21 @@ namespace ECSEngine {
 		HullShader(const HullShader& other) = default;
 		HullShader& operator = (const HullShader& other) = default;
 		
-		inline ID3D11HullShader* Interface() const {
+		ECS_INLINE ID3D11HullShader* Interface() const {
 			return shader;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return shader->Release();
 		}
 
 		static HullShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
-		inline static HullShader FromInterface(void* interface_) {
+		ECS_INLINE static HullShader FromInterface(void* interface_) {
 			return HullShader((ID3D11HullShader*)interface_);
 		}
 
-		inline void From(void* interface_) {
+		ECS_INLINE void From(void* interface_) {
 			shader = (ID3D11HullShader*)interface_;
 		}
 
@@ -739,21 +743,21 @@ namespace ECSEngine {
 		ComputeShader(const ComputeShader& other) = default;
 		ComputeShader& operator = (const ComputeShader& other) = default;
 
-		inline ID3D11ComputeShader* Interface() const {
+		ECS_INLINE ID3D11ComputeShader* Interface() const {
 			return shader;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return shader->Release();
 		}
 
 		static ComputeShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 		
-		inline static ComputeShader FromInterface(void* interface_) {
+		ECS_INLINE static ComputeShader FromInterface(void* interface_) {
 			return ComputeShader((ID3D11ComputeShader*)interface_);
 		}
 
-		inline void From(void* interface_) {
+		ECS_INLINE void From(void* interface_) {
 			shader = (ID3D11ComputeShader*)interface_;
 		}
 
@@ -828,11 +832,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Texture1D* Interface() const {
+		ECS_INLINE ID3D11Texture1D* Interface() const {
 			return tex;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return tex->Release();
 		}
 
@@ -854,11 +858,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Texture2D* Interface() const {
+		ECS_INLINE ID3D11Texture2D* Interface() const {
 			return tex;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return tex->Release();
 		}
 
@@ -880,11 +884,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Texture3D* Interface() const {
+		ECS_INLINE ID3D11Texture3D* Interface() const {
 			return tex;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return tex->Release();
 		}
 
@@ -906,11 +910,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Texture2D* Interface() const {
+		ECS_INLINE ID3D11Texture2D* Interface() const {
 			return tex;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return tex->Release();
 		}
 
@@ -965,11 +969,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11RenderTargetView* Interface() const {
+		ECS_INLINE ID3D11RenderTargetView* Interface() const {
 			return view;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return view->Release();
 		}
 
@@ -990,11 +994,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11DepthStencilView* Interface() const {
+		ECS_INLINE ID3D11DepthStencilView* Interface() const {
 			return view;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return view->Release();
 		}
 
@@ -1015,11 +1019,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11UnorderedAccessView* Interface() const {
+		ECS_INLINE ID3D11UnorderedAccessView* Interface() const {
 			return view;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return view->Release();
 		}
 
@@ -1040,11 +1044,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Buffer* Interface() const {
+		ECS_INLINE ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return buffer->Release();
 		}
 
@@ -1062,11 +1066,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Buffer* Interface() const {
+		ECS_INLINE ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return buffer->Release();
 		}
 
@@ -1085,11 +1089,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Buffer* Interface() const {
+		ECS_INLINE ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return buffer->Release();
 		}
 
@@ -1107,11 +1111,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Buffer* Interface() const {
+		ECS_INLINE ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return buffer->Release();
 		}
 
@@ -1129,11 +1133,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Buffer* Interface() const {
+		ECS_INLINE ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return buffer->Release();
 		}
 
@@ -1152,11 +1156,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Buffer* Interface() const {
+		ECS_INLINE ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return buffer->Release();
 		}
 
@@ -1175,11 +1179,11 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
-		inline ID3D11Buffer* Interface() const {
+		ECS_INLINE ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return buffer->Release();
 		}
 
@@ -1196,11 +1200,11 @@ namespace ECSEngine {
 		SamplerState(const SamplerState& other) = default;
 		SamplerState& operator = (const SamplerState& other) = default;
 
-		inline ID3D11SamplerState* Interface() const {
+		ECS_INLINE ID3D11SamplerState* Interface() const {
 			return sampler;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return sampler->Release();
 		}
 
@@ -1216,11 +1220,11 @@ namespace ECSEngine {
 		BlendState(const BlendState& other) = default;
 		BlendState& operator = (const BlendState& other) = default;
 
-		inline ID3D11BlendState* Interface() const {
+		ECS_INLINE ID3D11BlendState* Interface() const {
 			return state;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return state->Release();
 		}
 
@@ -1234,11 +1238,11 @@ namespace ECSEngine {
 		RasterizerState(const RasterizerState& other) = default;
 		RasterizerState& operator = (const RasterizerState& other) = default;
 
-		inline ID3D11RasterizerState* Interface() const {
+		ECS_INLINE ID3D11RasterizerState* Interface() const {
 			return state;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return state->Release();
 		}
 
@@ -1252,11 +1256,11 @@ namespace ECSEngine {
 		DepthStencilState(const DepthStencilState& other) = default;
 		DepthStencilState& operator = (const DepthStencilState& other) = default;
 
-		inline ID3D11DepthStencilState* Interface() const {
+		ECS_INLINE ID3D11DepthStencilState* Interface() const {
 			return state;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return state->Release();
 		}
 
@@ -1270,11 +1274,11 @@ namespace ECSEngine {
 		CommandList(const CommandList& other) = default;
 		CommandList& operator = (const CommandList& other) = default;
 
-		inline ID3D11CommandList* Interface() const {
+		ECS_INLINE ID3D11CommandList* Interface() const {
 			return list;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return list->Release();
 		}
 
@@ -1288,11 +1292,11 @@ namespace ECSEngine {
 		GPUQuery(const GPUQuery& other) = default;
 		GPUQuery& operator = (const GPUQuery& other) = default;
 
-		inline ID3D11Query* Interface() const {
+		ECS_INLINE ID3D11Query* Interface() const {
 			return query;
 		}
 
-		inline unsigned int Release() {
+		ECS_INLINE unsigned int Release() {
 			return query->Release();
 		}
 

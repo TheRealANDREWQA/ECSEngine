@@ -5108,6 +5108,8 @@ namespace ECSEngine {
 		result = dxgi_resource->GetSharedHandle(&handle);
 		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_dx_resource, "Acquiring a handle for a shared resource failed.");
 
+		ECS_CRASH_RETURN_VALUE(handle, new_dx_resource, "Trying to transfer a GPU resource that was not created with MISC flag");
+
 		result = device->OpenSharedResource(handle, __uuidof(ID3D11Resource), (void**)&new_dx_resource);
 		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_dx_resource, "Obtaining shared resource from handle failed.");
 

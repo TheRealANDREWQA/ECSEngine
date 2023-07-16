@@ -337,8 +337,8 @@ namespace ECSEngine {
 			keep_alpha = options->enable_alpha;
 		}
 
+		Texture2DDescriptor target_descriptor = GetTextureDescriptor(target_texture);
 		if (texture_format == ECS_GRAPHICS_FORMAT_UNKNOWN) {
-			Texture2DDescriptor target_descriptor = GetTextureDescriptor(target_texture);
 			texture_format = target_descriptor.format;
 		}
 
@@ -351,6 +351,20 @@ namespace ECSEngine {
 
 		// If the override format is a depth format, we need to convert that into a normal format
 		override_format = ConvertDepthToRenderFormat(override_format);
+
+		Texture2D temp_default_texture;
+		temp_default_texture.tex = nullptr;
+		// If the texture format is a depth format, we cannot create a render view on it
+		// Unfortunately, we need to create a default texture, copy into it and then create a render texture
+		if (IsGraphicsFormatDepth(texture_format)) {
+			target_descriptor.usage = ECS_GRAPHICS_USAGE_DEFAULT;
+			target_descriptor.bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+			target_descriptor.format = ConvertDepthToTypelessFormat(texture_format);
+			temp_default_texture = graphics->CreateTexture(&target_descriptor, true);
+			CopyGraphicsResource(temp_default_texture, target_texture, graphics->GetContext());
+			target_texture = temp_default_texture;
+			override_format = ConvertDepthToRenderFormat(texture_format);
+		}
 		ResourceView input_view = graphics->CreateTextureShaderView(target_texture, override_format, 0, -1, true);
 
 		ECS_ASSERT(conversion.shader_helper_index == ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_DEPTH
@@ -386,9 +400,17 @@ namespace ECSEngine {
 		graphics->BindComputeResourceView(input_view);
 		graphics->Dispatch(visualize_texture, graphics->m_shader_helpers[conversion.shader_helper_index].compute_shader_dispatch_size);
 
+		if (temp_default_texture.Interface() != nullptr) {
+			temp_default_texture.Release();
+		}
 		ua_view.Release();
 		input_view.Release();
 		compute_buffer.Release();
+
+		// Unbind the UA view such that the texture can be later viewed
+		// If it is still bound to the compute shader as UA view it will not allow the rendering to continue
+		graphics->BindComputeUAView(nullptr);
+		graphics->BindComputeResourceView(nullptr);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
