@@ -1,3 +1,5 @@
+#include "../Utilities.hlsli"
+
 cbuffer Conversion : register(b0)
 {
     float4 offset;
@@ -8,10 +10,11 @@ cbuffer Conversion : register(b0)
     uint keep_alpha;
     uint keep_channel;
     uint channel_count;
+    uint perform_srgb;
 }
 
 #ifdef FLOAT
-Texture2D<float4> input_values : register(t0);
+Texture2D<unorm float4> input_values : register(t0);
 #else
 #ifdef UINT
 Texture2D<uint4> input_values : register(t0);
@@ -35,6 +38,7 @@ float4 VisualizeValue(
     uint keep_alpha,
     uint keep_channel,
     uint channel_count,
+    uint perform_srgb,
     float4 offset,
     float4 normalize_factor
 )
@@ -51,6 +55,8 @@ float4 VisualizeValue(
     {
         value.a = 1.0f;
     }
+    
+    value = value * normalize_factor + offset;
     
     if (!keep_red)
     {
@@ -72,7 +78,11 @@ float4 VisualizeValue(
         value.a = 1.0f;
     }
     
-    return value * normalize_factor + offset;
+    if (perform_srgb)
+    {
+        value.xyz = LinearToSRGB(value.xyz);
+    }
+    return value;
 }
 
 
@@ -95,5 +105,16 @@ void main(uint3 dispatch_id : SV_DispatchThreadID)
     input = float4(0.001f, 0.001f, 0.001f, 0.001f) / (float4(1.001f, 1.001f, 1.001f, 1.001f) - input);
 #endif
     
-    output_values[dispatch_id.xy] = VisualizeValue(input, keep_red, keep_green, keep_blue, keep_alpha, local_keep_channel, local_channel_count, offset, normalize_factor);
+    output_values[dispatch_id.xy] = VisualizeValue(
+        input, 
+        keep_red, 
+        keep_green, 
+        keep_blue, 
+        keep_alpha, 
+        local_keep_channel, 
+        local_channel_count, 
+        perform_srgb, 
+        offset, 
+        normalize_factor
+        );
 }

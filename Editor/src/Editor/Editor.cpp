@@ -661,41 +661,32 @@ public:
 		//HRESULT resultssss = pixel_shader.shader->QueryInterface(__uuidof(IDXGIResource), (void**)&dxgi_resource);
 		//graphics_copy.BindPixelShader(pixel_shader);
 
-		DebugDrawer debug_drawer;
-		MemoryManager debug_drawer_allocator = DebugDrawer::DefaultAllocator(editor_state.GlobalMemoryManager());
-		debug_drawer.Initialize(&debug_drawer_allocator, editor_state.UIResourceManager(), 1);
+		//DebugDrawer debug_drawer;
+		//MemoryManager debug_drawer_allocator = DebugDrawer::DefaultAllocator(editor_state.GlobalMemoryManager());
+		//debug_drawer.Initialize(&debug_drawer_allocator, editor_state.UIResourceManager(), 1);
 
 		// TESTING STUFF
-		//// Also create the instanced framebuffers
-		//Texture2DDescriptor instanced_framebuffer_descriptor;
-		//instanced_framebuffer_descriptor.format = ECS_GRAPHICS_FORMAT_R32_UINT;
-		//instanced_framebuffer_descriptor.bind_flag = ECS_GRAPHICS_BIND_RENDER_TARGET;
-		//instanced_framebuffer_descriptor.mip_levels = 1;
-		//instanced_framebuffer_descriptor.size = graphics->GetWindowSize();
-		//Texture2D instanced_framebuffer_texture = graphics->CreateTexture(&instanced_framebuffer_descriptor);
-		//RenderTargetView RENDER_TARGET = graphics->CreateRenderTargetView(instanced_framebuffer_texture);
+		// Also create the instanced framebuffers
+		/*Texture2DDescriptor instanced_framebuffer_descriptor;
+		instanced_framebuffer_descriptor.format = ECS_GRAPHICS_FORMAT_R32_UINT;
+		instanced_framebuffer_descriptor.bind_flag = ECS_GRAPHICS_BIND_RENDER_TARGET | ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		instanced_framebuffer_descriptor.mip_levels = 1;
+		instanced_framebuffer_descriptor.size = graphics->GetWindowSize();
+		Texture2D instanced_framebuffer_texture = graphics->CreateTexture(&instanced_framebuffer_descriptor);
+		RenderTargetView RENDER_TARGET = graphics->CreateRenderTargetView(instanced_framebuffer_texture);
 
-		/*Texture2DDescriptor instanced_depth_stencil_descriptor;
-		instanced_depth_stencil_descriptor.format = ECS_GRAPHICS_FORMAT_R32_FLOAT;
-		instanced_depth_stencil_descriptor.bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		Texture2DDescriptor instanced_depth_stencil_descriptor;
+		instanced_depth_stencil_descriptor.format = ECS_GRAPHICS_FORMAT_R32_TYPELESS;
+		instanced_depth_stencil_descriptor.bind_flag = ECS_GRAPHICS_BIND_DEPTH_STENCIL | ECS_GRAPHICS_BIND_SHADER_RESOURCE;
 		instanced_depth_stencil_descriptor.mip_levels = 1;
 		instanced_depth_stencil_descriptor.size = graphics->GetWindowSize();
 		Texture2D instanced_depth_texture = graphics->CreateTexture(&instanced_depth_stencil_descriptor);
-		D3D11_SHADER_RESOURCE_VIEW_DESC view_desc;
-		view_desc.Format = GetGraphicsNativeFormat(ECS_GRAPHICS_FORMAT_R32_FLOAT);
-		view_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
-		view_desc.Buffer.ElementOffset = 0;
-		view_desc.Buffer.ElementWidth = 4;
-		view_desc.Buffer.FirstElement = 0;
-		view_desc.Buffer.NumElements = instanced_depth_stencil_descriptor.size.x * instanced_depth_stencil_descriptor.size.y;
-		ID3D11ShaderResourceView* view;
-		ECS_ASSERT(SUCCEEDED(graphics->GetDevice()->CreateShaderResourceView(instanced_depth_texture.GetResource(), &view_desc, &view)));*/
-		//DepthStencilView DEPTH_STENCIL = graphics->CreateDepthStencilView(instanced_depth_texture);
+		DepthStencilView DEPTH_STENCIL = graphics->CreateDepthStencilView(instanced_depth_texture);*/
 
-		float* valuess = (float*)malloc(256 * 256 * 4);
+		/*float* valuess = (float*)malloc(256 * 256 * 4);
 		for (int i = 0; i < 256 * 256; i++) {
 			valuess[i] = 1.0f / (256 * 256) * (float)i;
-		}
+		}*/
 
 		/*Stream<void> mip_data = { valuess, 256 * 256 * 4 };
 		Texture2DDescriptor temp;
@@ -710,6 +701,27 @@ public:
 		texture_option.override_format = ECS_GRAPHICS_FORMAT_D32_FLOAT;
 		Texture2D visualize_texture = ConvertTextureToVisualize(graphics, temp_texture, &texture_option);
 		ResourceView visualize_texture_view = graphics->CreateTextureShaderView(visualize_texture);*/
+
+		/*CoalescedMesh* trireme = editor_state.UIResourceManager()->LoadCoalescedMesh<true>(L"C:\\Users\\Andrei\\DivideEtImpera\\Assets\\trireme2_should_be_fine.glb");
+		const Matrix CAMERA_MATRIX = MatrixPerspectiveFOV(60.0f, 16.0f / 10.0f, 0.035f, 1000.0f);
+		debug_drawer.UpdateCameraMatrix(CAMERA_MATRIX);
+		float3 TRANSLATION = { 0.0f, 0.0f, 5.0f };
+
+		GenerateInstanceFramebufferElement generate_element;
+		generate_element.base.is_submesh = false;
+		generate_element.base.mesh = &trireme->mesh;
+		generate_element.base.gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION), MatrixIdentity(), MatrixScale({ 0.2f, 0.2f, 0.2f }), CAMERA_MATRIX);
+		generate_element.instance_index = 100000;
+		generate_element.pixel_thickness = 10;
+
+		GenerateInstanceFramebuffer(graphics, { &generate_element, 1 }, RENDER_TARGET, DEPTH_STENCIL);
+
+		unsigned int instance_index = GetInstanceFromFramebuffer(graphics, RENDER_TARGET, { 1156, 787 });
+		ECS_FORMAT_TEMP_STRING(CONSOLE_MESSAGE, "Instance index: {#}", instance_index);
+
+		Texture2D my_texture = ConvertTextureToVisualize(graphics, RENDER_TARGET.GetResource());*/
+		//graphics->FreeResource(my_texture);
+
 
 		while (true) {
 			auto run_application = [&](char application_quit_value) {
@@ -874,10 +886,10 @@ public:
 						// Refresh the graphics object since it might be changed
 						graphics = editor_state.UIGraphics();
 
-						//CoalescedMesh* trireme = editor_state.UIResourceManager()->LoadCoalescedMesh<true>(L"C:\\Users\\Andrei\\DivideEtImpera\\Assets\\trireme2_should_be_fine.glb");
-						//const Matrix CAMERA_MATRIX = MatrixPerspectiveFOV(60.0f, 16.0f / 10.0f, 0.035f, 1000.0f);
-						//debug_drawer.UpdateCameraMatrix(CAMERA_MATRIX);
-						//float3 TRANSLATION = { 0.0f, 0.0f, 5.0f };
+						/*CoalescedMesh* trireme = editor_state.UIResourceManager()->LoadCoalescedMesh<true>(L"C:\\Users\\Andrei\\DivideEtImpera\\Assets\\trireme2_should_be_fine.glb");
+						const Matrix CAMERA_MATRIX = MatrixPerspectiveFOV(60.0f, 16.0f / 10.0f, 0.035f, 1000.0f);
+						debug_drawer.UpdateCameraMatrix(CAMERA_MATRIX);
+						float3 TRANSLATION = { 0.0f, 0.0f, 5.0f };*/
 						////debug_drawer.DrawSphere(TRANSLATION, 0.2f, ECS_COLOR_GREEN);
 						////graphics->DisableWireframe();
 
@@ -916,7 +928,10 @@ public:
 						GenerateInstanceFramebuffer(graphics, { &generate_element, 1 }, RENDER_TARGET, DEPTH_STENCIL);
 
 						unsigned int instance_index = GetInstanceFromFramebuffer(graphics, RENDER_TARGET, { 1156, 787 });
-						ECS_FORMAT_TEMP_STRING(CONSOLE_MESSAGE, "Instance index: {#}", instance_index);*/
+						ECS_FORMAT_TEMP_STRING(CONSOLE_MESSAGE, "Instance index: {#}", instance_index);
+
+						Texture2D my_texture = ConvertTextureToVisualize(graphics, RENDER_TARGET.GetResource());
+						graphics->FreeResource(my_texture);*/
 
 						bool removed = graphics->SwapBuffers(0);
 						if (removed) {

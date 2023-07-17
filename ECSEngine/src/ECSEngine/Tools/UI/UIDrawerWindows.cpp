@@ -2405,7 +2405,7 @@ namespace ECSEngine {
 				}
 
 				Texture2D copied_texture = ConvertTextureToVisualize(system->m_graphics, texture_to_copy, &data->visualize_options);
-				data->texture_view = system->m_graphics->CreateTextureShaderViewResource(copied_texture);
+				data->texture_view = CreateVisualizeTextureView(system->m_graphics, copied_texture);
 				data->original_texture = target_texture;
 			}
 			else {
@@ -2424,6 +2424,7 @@ namespace ECSEngine {
 		) {
 			if (create_data->options != nullptr) {
 				window_data->visualize_options = *create_data->options;
+				window_data->visualize_options.copy_texture_if_same_format = true;
 			}
 
 			if (create_data->texture.Interface() != nullptr && (create_data->texture.Interface() != window_data->original_texture.Interface())) {
@@ -2651,6 +2652,14 @@ namespace ECSEngine {
 							ConvertTextureToVisualize(drawer.system->m_graphics, data->TextureToCopy(), data->texture_view.AsTexture2D(), &data->visualize_options);
 						}
 
+						if (additional_data.can_display_texture) {
+							UIConfigAbsoluteTransform whole_transform = drawer.GetWholeRegionTransform(true);
+							config.AddFlag(whole_transform);
+
+							drawer.SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, config, data->texture_view);
+							config.flag_count = 0;
+						}
+
 						if (data->display_options) {
 							UIConfigSpriteButtonBackground sprite_background;
 							sprite_background.overwrite_color = drawer.color_theme.theme;
@@ -2705,7 +2714,7 @@ namespace ECSEngine {
 								bool* flags = &data->visualize_options.enable_red;
 								if (flags[change_channel_data.flag_offset]) {
 									config.AddFlag(sprite_background);
-									configuration |= UI_CONFIG_SPRITE_BUTTON_BACKGROUND | UI_CONFIG_SPRITE_BUTTON_CENTER_SPRITE_TO_BACKGROUND;
+									configuration |= UI_CONFIG_SPRITE_BUTTON_BACKGROUND;
 								}
 
 								row_layout.GetTransform(config, configuration);
@@ -2745,13 +2754,6 @@ namespace ECSEngine {
 									data->TransitionSelectionMode();
 								};
 							}
-						}
-
-						if (additional_data.can_display_texture) {
-							UIConfigAbsoluteTransform whole_transform = drawer.GetWholeRegionTransform(true);
-							config.AddFlag(whole_transform);
-
-							drawer.SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, config, data->texture_view);
 						}
 					}
 					else {
@@ -2823,12 +2825,14 @@ namespace ECSEngine {
 				else {
 					data->visualize_options = VisualizeTextureOptions();
 				}
+				data->visualize_options.copy_texture_if_same_format = true;
 				data->automatic_update = create_data->automatic_update;
 
 				VisualizeTextureCreateTexture(system, data, create_data->texture, create_data->transfer_texture_to_ui_graphics);
 			}
 			else {
 				data->visualize_options = VisualizeTextureOptions();
+				data->visualize_options.copy_texture_if_same_format = true;
 			}
 
 			UpdateVisualizeTextureWindowAdditionalDraw(data, create_data->additional_draw, create_data->additional_draw_data, create_data->additional_draw_data_size);
@@ -2907,20 +2911,7 @@ namespace ECSEngine {
 			const VisualizeTextureActionData* create_data
 		) {
 			VisualizeTextureWindowData* window_data = (VisualizeTextureWindowData*)system->GetWindowData(window_index);
-			if (create_data->options != nullptr) {
-				window_data->visualize_options = *create_data->options;
-			}
-
-			if (create_data->texture.Interface() != nullptr && (create_data->texture.Interface() != window_data->original_texture.Interface())) {
-				// We must free the old resources and create a new texture and view
-				VisualizeTextureDeallocateTexture(system, window_data);
-				VisualizeTextureCreateTexture(system, window_data, create_data->texture, create_data->transfer_texture_to_ui_graphics);
-			}
-			else if (window_data->original_texture.Interface() != nullptr) {
-				ConvertTextureToVisualize(system->m_graphics, window_data->TextureToCopy(), window_data->texture_view.AsTexture2D(), &window_data->visualize_options);
-			}
-
-			UpdateVisualizeTextureWindowAdditionalDraw(system, window_index, create_data->additional_draw, create_data->additional_draw_data, create_data->additional_draw_data_size);
+			ChangeVisualizeTextureWindowOptions(system, window_data, create_data);
 		}
 
 		// -------------------------------------------------------------------------------------------------------

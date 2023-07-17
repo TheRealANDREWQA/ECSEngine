@@ -1657,6 +1657,7 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 
 	GraphicsRenderDestinationOptions destination_options;
 	destination_options.render_misc = ECS_GRAPHICS_MISC_SHARED;
+	destination_options.depth_misc = ECS_GRAPHICS_MISC_SHARED;
 	sandbox->viewport_render_destination[viewport] = runtime_graphics->CreateRenderDestination(new_size, destination_options);
 
 	// Now transfer the texture from the RuntimeGraphics to the UIGraphics
@@ -1672,18 +1673,20 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 	visualize_element.transfer_texture_to_ui_graphics = true;
 	visualize_element.name = visualize_name;
 	visualize_element.texture = sandbox->viewport_render_destination[viewport].output_view.AsTexture2D();
+	visualize_element.override_format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB;
 	SetVisualizeTexture(editor_state, visualize_element);
 
 	visualize_name.size = 0;
 	GetVisualizeTextureName(viewport_description, sandbox_index, false, visualize_name);
 	visualize_element.name = visualize_name;
 	visualize_element.texture = sandbox->viewport_render_destination[viewport].depth_view.GetResource();
+	visualize_element.override_format = ECS_GRAPHICS_FORMAT_UNKNOWN;
 	SetVisualizeTexture(editor_state, visualize_element);
 
 	// Also create the instanced framebuffers
 	Texture2DDescriptor instanced_framebuffer_descriptor;
 	instanced_framebuffer_descriptor.format = ECS_GRAPHICS_FORMAT_R32_UINT;
-	instanced_framebuffer_descriptor.bind_flag = ECS_GRAPHICS_BIND_RENDER_TARGET;
+	instanced_framebuffer_descriptor.bind_flag = ECS_GRAPHICS_BIND_RENDER_TARGET | ECS_GRAPHICS_BIND_SHADER_RESOURCE;
 	instanced_framebuffer_descriptor.mip_levels = 1;
 	instanced_framebuffer_descriptor.size = new_size;
 	instanced_framebuffer_descriptor.misc_flag = ECS_GRAPHICS_MISC_SHARED;
