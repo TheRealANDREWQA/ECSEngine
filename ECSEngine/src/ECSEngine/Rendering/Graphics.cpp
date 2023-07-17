@@ -2372,8 +2372,19 @@ namespace ECSEngine {
 	{
 		HRESULT result;
 
+		Texture2DDescriptor descriptor = GetTextureDescriptor(texture);
+		D3D11_DEPTH_STENCIL_VIEW_DESC view_desc;
+		D3D11_DEPTH_STENCIL_VIEW_DESC* view_desc_ptr = nullptr;
+		if (IsGraphicsFormatTypeless(descriptor.format)) {
+			view_desc_ptr = &view_desc;
+			view_desc.Texture2D.MipSlice = 0;
+			view_desc.Format = GetGraphicsNativeFormat(GetGraphicsFormatTypelessToDepth(descriptor.format));
+			view_desc.Flags = 0;
+			view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+		}
+
 		DepthStencilView view;
-		result = m_device->CreateDepthStencilView(texture.tex, nullptr, &view.view);
+		result = m_device->CreateDepthStencilView(texture.tex, view_desc_ptr, &view.view);
 		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating render target view failed!");
 
 		AddInternalResource(view, temporary, debug_info);

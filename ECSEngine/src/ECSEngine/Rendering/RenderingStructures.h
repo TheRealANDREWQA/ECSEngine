@@ -319,6 +319,8 @@ namespace ECSEngine {
 
 	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatTypelessToFloat(ECS_GRAPHICS_FORMAT format);
 
+	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatTypelessToDepth(ECS_GRAPHICS_FORMAT format);
+
 	ECSENGINE_API ECS_GRAPHICS_FORMAT GetGraphicsFormatToTypeless(ECS_GRAPHICS_FORMAT format);
 
 	// Returns true for all formats that can be rendered from a shader as normalized float

@@ -1220,6 +1220,22 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	ECS_GRAPHICS_FORMAT GetGraphicsFormatTypelessToDepth(ECS_GRAPHICS_FORMAT format)
+	{
+		switch (format) {
+		case ECS_GRAPHICS_FORMAT_R16_TYPELESS:
+			return ECS_GRAPHICS_FORMAT_D16_UNORM;
+		case ECS_GRAPHICS_FORMAT_R24G8_TYPELESS:
+			return ECS_GRAPHICS_FORMAT_D24_UNORM_S8_UINT;
+		case ECS_GRAPHICS_FORMAT_R32_TYPELESS:
+			return ECS_GRAPHICS_FORMAT_D32_FLOAT;
+		}
+
+		return format;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	ECS_GRAPHICS_FORMAT GetGraphicsFormatToTypeless(ECS_GRAPHICS_FORMAT format)
 	{
 		switch (format) {
@@ -1237,6 +1253,7 @@ namespace ECSEngine {
 		case ECS_GRAPHICS_FORMAT_RGBA8_UINT:
 		case ECS_GRAPHICS_FORMAT_RGBA8_SNORM:
 		case ECS_GRAPHICS_FORMAT_RGBA8_UNORM:
+		case ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB:
 			return ECS_GRAPHICS_FORMAT_RGBA8_TYPELESS;
 		case ECS_GRAPHICS_FORMAT_R16_SINT:
 		case ECS_GRAPHICS_FORMAT_R16_UINT:
@@ -1531,7 +1548,7 @@ namespace ECSEngine {
 		};
 
 		static StaticFormatArray format_array = StaticFormatArray();
-		return format_array.formats[format][new_count];
+		return format_array.formats[format][new_count - 1];
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------

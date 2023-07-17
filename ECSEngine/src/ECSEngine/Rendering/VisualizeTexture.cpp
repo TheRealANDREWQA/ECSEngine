@@ -245,6 +245,10 @@ namespace ECSEngine {
 		break;
 		}
 
+		if (format == ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB) {
+			set_conversion(0.0f, 1.0f, ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_FLOAT);
+		}
+
 		// Typeless and BC textures are left as is
 		return format;
 	}
@@ -274,18 +278,26 @@ namespace ECSEngine {
 
 		// Get the format of the texture
 		Texture2DDescriptor texture_descriptor = GetTextureDescriptor(texture);
-		if (texture_format == ECS_GRAPHICS_FORMAT_UNKNOWN) {
-			texture_format = texture_descriptor.format;
-		}
+		texture_format = texture_descriptor.format;
 
 		VisualizeFormatConversion* format_conversion = conversion.normalize_factor != 1.0f || conversion.offset != 0.0f ? nullptr : &conversion;
-		ECS_GRAPHICS_FORMAT view_format = GetTextureVisualizeFormat(texture_format, keep_channel_width, format_conversion);
+		ECS_GRAPHICS_FORMAT view_format = GetTextureVisualizeFormat(
+			override_format != ECS_GRAPHICS_FORMAT_UNKNOWN ? override_format : texture_format, 
+			keep_channel_width, 
+			format_conversion
+		);
+
+		ECS_ASSERT(!IsGraphicsFormatTypeless(view_format), "For a typeless texture when trying to visualize it you need to specify the override format");
+		if (IsGraphicsFormatSRGB(view_format)) {
+			// Convert the format into a typeless format such that it can be used as a UAV and SRV
+			view_format = GetGraphicsFormatToTypeless(view_format);
+		}
 
 		// If the view format is the same as the current one then skip
 		if (view_format == texture_format) {
 			// Return the existing texture - if we don't need to copy
 			if (copy_texture_if_same_format) {
-				texture_descriptor.bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+				texture_descriptor.bind_flag = ECS_GRAPHICS_BIND_UNORDERED_ACCESS | ECS_GRAPHICS_BIND_SHADER_RESOURCE;
 				texture_descriptor.usage = ECS_GRAPHICS_USAGE_DEFAULT;
 				texture_descriptor.cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
 				new_texture = graphics->CreateTexture(&texture_descriptor);
@@ -329,7 +341,6 @@ namespace ECSEngine {
 			texture_format = options->override_format;
 			override_format = options->override_format;
 			keep_channel_width = options->keep_channel_width;
-			conversion = options->format_conversion;
 
 			keep_red = options->enable_red;
 			keep_green = options->enable_green;
@@ -342,12 +353,19 @@ namespace ECSEngine {
 			texture_format = target_descriptor.format;
 		}
 
-		VisualizeFormatConversion* format_conversion = conversion.normalize_factor != 1.0f || conversion.offset != 0.0f ? nullptr : &conversion;
 		// We are interested only in the conversion
-		GetTextureVisualizeFormat(texture_format, keep_channel_width, format_conversion);
+		GetTextureVisualizeFormat(texture_format, keep_channel_width, &conversion);
+
+		if (options != nullptr) {
+			if (options->format_conversion.normalize_factor != 1.0f || options->format_conversion.offset != 0.0f || options->format_conversion.shader_helper_index != -1) {
+				conversion = options->format_conversion;
+			}
+		}
+
+		Texture2DDescriptor visualize_descriptor = GetTextureDescriptor(visualize_texture);
 
 		// Create a UA view for the output texture and a ResourceView for the input texture
-		UAView ua_view = graphics->CreateUAView(visualize_texture, 0, ECS_GRAPHICS_FORMAT_UNKNOWN, true);
+		UAView ua_view = graphics->CreateUAView(visualize_texture, 0, GetGraphicsFormatNoSRGB(override_format), true);
 
 		// If the override format is a depth format, we need to convert that into a normal format
 		override_format = ConvertDepthToRenderFormat(override_format);
@@ -381,16 +399,23 @@ namespace ECSEngine {
 			unsigned int keep_alpha;
 			unsigned int keep_channel;
 			unsigned int channel_count;
+			unsigned int perform_srgb;
 		};
 
 		ComputeCBuffer compute_cbuffer;
 		compute_cbuffer.offset = float4::Splat(conversion.offset);
 		compute_cbuffer.normalize_factor = float4::Splat(conversion.normalize_factor);
+		
+		// Don't affect the alpha
+		compute_cbuffer.offset.w = 0.0f;
+		compute_cbuffer.normalize_factor.w = 1.0f;
+		
 		compute_cbuffer.keep_red = keep_red;
 		compute_cbuffer.keep_blue = keep_blue;
 		compute_cbuffer.keep_green = keep_green;
 		compute_cbuffer.keep_alpha = keep_alpha;
 		compute_cbuffer.keep_channel = keep_channel_width;
+		compute_cbuffer.perform_srgb = IsGraphicsFormatSRGB(override_format);
 		compute_cbuffer.channel_count = GetGraphicsFormatChannelCount(texture_format);
 
 		ConstantBuffer compute_buffer = graphics->CreateConstantBuffer(sizeof(compute_cbuffer), &compute_cbuffer, true);
@@ -411,6 +436,31 @@ namespace ECSEngine {
 		// If it is still bound to the compute shader as UA view it will not allow the rendering to continue
 		graphics->BindComputeUAView(nullptr);
 		graphics->BindComputeResourceView(nullptr);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ResourceView CreateVisualizeTextureView(Graphics* graphics, Texture2D converted_texture, bool temporary)
+	{
+		Texture2DDescriptor descriptor = GetTextureDescriptor(converted_texture);
+		ECS_GRAPHICS_FORMAT format = descriptor.format;
+		if (IsGraphicsFormatTypeless(format)) {
+			if (format == ECS_GRAPHICS_FORMAT_RGBA8_TYPELESS) {
+				// This means that the texture before hand was UNORM_SRGB 
+				// So we must keep this format consistent
+				format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB;
+			}
+			else {
+				// Convert to the UNORM or float format
+				format = GetGraphicsFormatTypelessToUNORM(format);
+				if (format == descriptor.format) {
+					// This means it was a 32 bit component - then convert to float
+					format = GetGraphicsFormatTypelessToFloat(format);
+				}
+			}
+		}
+
+		return graphics->CreateTextureShaderView(converted_texture, format, 0, -1, temporary);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
