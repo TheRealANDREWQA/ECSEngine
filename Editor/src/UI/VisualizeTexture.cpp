@@ -8,12 +8,83 @@ using namespace ECSEngine;
 
 // ------------------------------------------------------------------------------------------------------------
 
+struct AutomaticRefreshCallbackData {
+	bool* flag;
+};
+
+void AutomaticRefreshCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	AutomaticRefreshCallbackData* data = (AutomaticRefreshCallbackData*)_data;
+	UpdateVisualizeTextureWindowAutomaticRefresh(system, system->GetWindowData(system->GetWindowIndexFromBorder(dockspace, border_index)), *data->flag);
+}
+
+struct ComboCallbackData {
+	VisualizeTextureSelectElement* elements;
+	unsigned char* flag_index;
+};
+
+void ComboCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+	
+	ComboCallbackData* data = (ComboCallbackData*)_data;
+	unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+
+	VisualizeTextureSelectElement element = data->elements[*data->flag_index];
+	ChangeVisualizeTextureWindowOptions(system, window_index, &element);
+}
+
 void VisualizeTextureUIAdditionalDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer) {
 	VisualizeTextureAdditionalDrawData* additional_data = (VisualizeTextureAdditionalDrawData*)window_data;
 	EditorState* editor_state = (EditorState*)additional_data->private_data;
 
-	if (additional_data->select_elements != nullptr && additional_data->select_elements->capacity > 0) {
+	if (additional_data->is_select_mode) {
 		GetVisualizeTextureElements(editor_state, additional_data->select_elements);
+	}
+	else {
+		// Automatic Refresh Checkbox
+		additional_data->check_box_name = "Automatic Refresh";
+		AutomaticRefreshCallbackData* callback_data = (AutomaticRefreshCallbackData*)additional_data->check_box_callback_memory->buffer;
+		callback_data->flag = additional_data->check_box_flag;
+		additional_data->check_box_callback = { AutomaticRefreshCallback, callback_data, sizeof(*callback_data) };
+		
+		// Combo context
+		ECS_STACK_CAPACITY_STREAM(VisualizeTextureSelectElement, select_elements, ECS_KB);
+		GetVisualizeTextureElements(editor_state, &select_elements);
+
+		Stream<char> scene_starts_with = "Scene ";
+		Stream<char> runtime_starts_with = "Runtime ";
+		Stream<char> depth_ends_with = " depth";
+		Stream<char> render_ends_with = " render";
+
+		// Now filter the entries which belong to sandbox textures
+		for (unsigned int index = 0; index < select_elements.size; index++) {
+			Stream<char> name = select_elements[index].name;
+			if (!name.StartsWith(scene_starts_with) && !name.StartsWith(runtime_starts_with) && !name.EndsWith(render_ends_with) &&
+				!name.EndsWith(depth_ends_with)) {
+				select_elements.RemoveSwapBack(index);
+			}
+		}
+		ECS_ASSERT(additional_data->combo_labels->capacity >= select_elements.size);
+
+		// Sort again the entries
+		function::insertion_sort(select_elements.buffer, select_elements.size, 1, [](const VisualizeTextureSelectElement& left, const VisualizeTextureSelectElement& right) {
+			return function::StringLexicographicCompare(left.name, right.name);
+		});
+
+		// Now put the entries into a temp buffer from the drawer and fill in the temp memory
+		VisualizeTextureSelectElement* allocated_select_elements = (VisualizeTextureSelectElement*)additional_data->drawer->GetTempBuffer(
+			sizeof(VisualizeTextureSelectElement) * select_elements.size
+		);
+		select_elements.CopyTo(allocated_select_elements);
+		
+		ComboCallbackData* combo_callback_data = (ComboCallbackData*)additional_data->combo_callback_memory->buffer;
+		combo_callback_data->elements = allocated_select_elements;
+		combo_callback_data->flag_index = additional_data->combo_index;
+		additional_data->combo_callback = { ComboCallback, combo_callback_data, sizeof(*combo_callback_data) };
+		for (unsigned int index = 0; index < select_elements.size; index++) {
+			additional_data->combo_labels->Add(select_elements[index].name);
+		}
 	}
 }
 
@@ -25,7 +96,7 @@ void VisualizeTextureUISetDecriptor(UIWindowDescriptor& descriptor, EditorState*
 	window_name->InitializeFromBuffer(function::OffsetPointer(window_name, sizeof(*window_name)), 0, 128);
 	GetVisualizeTextureUIWindowName(index, *window_name);
 
-	VisualizeTextureActionData create_data;
+	VisualizeTextureCreateData create_data;
 	create_data.texture.tex = nullptr;
 	create_data.window_name = *window_name;
 	create_data.additional_draw = VisualizeTextureUIAdditionalDraw;
@@ -42,7 +113,7 @@ unsigned int CreateVisualizeTextureUIWindow(EditorState* editor_state)
 		ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
 		GetVisualizeTextureUIWindowName(max_window_index + 1, window_name);
 
-		VisualizeTextureActionData create_data;
+		VisualizeTextureCreateData create_data;
 		create_data.texture.tex = nullptr;
 		create_data.window_name = window_name;
 		CreateVisualizeTextureWindow(editor_state->ui_system, &create_data);
@@ -96,7 +167,7 @@ unsigned int GetMaxVisualizeTextureUIIndex(const EditorState* editor_state)
 void ChangeVisualizeTextureUIWindowTarget(
 	EditorState* editor_state, 
 	Stream<char> window_name, 
-	const VisualizeTextureActionData* create_data
+	const VisualizeTextureCreateData* create_data
 )
 {
 
@@ -114,7 +185,7 @@ void ChangeVisualizeTextureUIWindowTarget(
 void ChangeVisualizeTextureUIWindowTarget(
 	EditorState* editor_state, 
 	unsigned int visualize_index, 
-	const VisualizeTextureActionData* create_data
+	const VisualizeTextureCreateData* create_data
 )
 {
 	ECS_STACK_CAPACITY_STREAM(char, window_name, 512);

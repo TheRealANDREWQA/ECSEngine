@@ -17426,6 +17426,7 @@ namespace ECSEngine {
 			AddSquareLabel(alignment);
 			if (name.size > 0) {
 				AddLabel(name, alignment);
+				CombineLastElements();
 			}
 		}
 
@@ -17439,17 +17440,17 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void UIDrawerRowLayout::CombineLastElements(unsigned int count)
+		void UIDrawerRowLayout::CombineLastElements(unsigned int count, bool keep_indents)
 		{
 			ECS_ASSERT(count <= current_index);
 
 			float total_scale = 0.0f;
 			float max_y_scale = 0.0f;
 			for (unsigned int index = 0; index < count; index++) {
-				float2 current_scale = GetScaleForElement(current_index - index);
+				float2 current_scale = GetScaleForElement(current_index - index - 1);
 				total_scale += current_scale.x;
 				max_y_scale = std::max(max_y_scale, current_scale.y);
-				if (index != 0) {
+				if (index != 0 && keep_indents) {
 					total_scale += indentations[current_index - index];
 				}
 			}
@@ -17693,31 +17694,31 @@ namespace ECSEngine {
 			// This is the general pass that aligns all the elements according to the overall
 			if (horizontal_alignment == ECS_UI_ALIGN_LEFT) {
 				indentations[0] = 0.0f;
-				return;
 			}
+			else {
+				// Calculate the total element size
+				float total_size = 0.0f;
+				for (unsigned int index = 0; index < element_count; index++) {
+					if (function::HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
+						total_size += element_sizes[index].x;
+					}
+					else if (function::HasFlag(element_transform_types[index], UI_CONFIG_RELATIVE_TRANSFORM)) {
+						total_size += drawer->GetRelativeElementSize(element_sizes[index]).x;
+					}
+					else {
+						total_size += drawer->GetWindowSizeScaleElement(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, element_sizes[index]).x;
+					}
+					if (index < element_count - 1) {
+						total_size += indentations[index + 1];
+					}
+				}
 
-			// Calculate the total element size
-			float total_size = 0.0f;
-			for (unsigned int index = 0; index < element_count; index++) {
-				if (function::HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
-					total_size += element_sizes[index].x;
+				if (horizontal_alignment == ECS_UI_ALIGN_MIDDLE) {
+					indentations[0] = AlignMiddle(0.0f, row_scale.x, total_size);
 				}
-				else if (function::HasFlag(element_transform_types[index], UI_CONFIG_RELATIVE_TRANSFORM)) {
-					total_size += drawer->GetRelativeElementSize(element_sizes[index]).x;
+				else if (horizontal_alignment == ECS_UI_ALIGN_RIGHT) {
+					indentations[0] = row_scale.x - total_size;
 				}
-				else {
-					total_size += drawer->GetWindowSizeScaleElement(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, element_sizes[index]).x;
-				}
-				if (index < element_count - 1) {
-					total_size += indentations[index + 1];
-				}
-			}
-
-			if (horizontal_alignment == ECS_UI_ALIGN_MIDDLE) {
-				indentations[0] = AlignMiddle(0.0f, row_scale.x, total_size);
-			}
-			else if (horizontal_alignment == ECS_UI_ALIGN_RIGHT) {
-				indentations[0] = row_scale.x - total_size;
 			}
 #pragma endregion
 
@@ -17734,6 +17735,10 @@ namespace ECSEngine {
 			unsigned int first_right_element = -1;
 			for (unsigned int index = 0; index < element_count; index++) {
 				float element_scale = GetScaleForElement(index).x;
+				if (index < element_count - 1) {
+					// Add the indentation as well if it is not the last element
+					element_scale += indentations[index + 1];
+				}
 				if (element_alignment[index] == ECS_UI_ALIGN_MIDDLE) {
 					middle_elements_size += element_scale;
 					if (first_middle_element == -1) {
@@ -17752,7 +17757,7 @@ namespace ECSEngine {
 			}
 
 			// Determine if they fit in the available space
-			total_size = left_elements_size + middle_elements_size + right_elements_size;
+			float total_size = left_elements_size + middle_elements_size + right_elements_size;
 			if (total_size < row_scale.x) {
 				// They fit
 				// Determine how much space is left for the middle alignment
@@ -17765,11 +17770,16 @@ namespace ECSEngine {
 
 				// We just need to add the offsets to the indentations
 				if (first_middle_element != -1) {
-					indentations[first_middle_element] += middle_alignment_space;
+					indentations[first_middle_element] = middle_alignment_space;
 				}
 				
 				if (first_right_element != -1) {
-					indentations[first_right_element] = right_alignment;
+					if (middle_elements_size > 0.0f) {
+						indentations[first_right_element] = right_alignment - middle_alignment_space;
+					}
+					else {
+						indentations[first_right_element] = right_alignment - left_elements_size;
+					}
 				}
 			}
 			else {

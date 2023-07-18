@@ -434,6 +434,7 @@ namespace ECSEngine {
 			UIDrawer* drawer;
 			void* window_data;
 			void* private_data;
+			Stream<char> window_name;
 
 			// The additional draw can set this boolean to false
 			// In order to prevent the draw from happening - in case this is needed
@@ -442,6 +443,9 @@ namespace ECSEngine {
 			bool include_select_label = true;
 			// Hides the button in the middle that allows selection
 			bool hide_select_button = true;
+			// When this is true, only the select streams are valid
+			// When it's false, the checkbox and the combo labels are active
+			bool is_select_mode;
 
 			CapacityStream<void>* combo_callback_memory;
 			// Can optionally fill in a combo box to be displayed
@@ -462,7 +466,7 @@ namespace ECSEngine {
 		};
 
 		// It will create a copy of the texture - on the same graphics object or on different ones
-		struct VisualizeTextureActionData {
+		struct VisualizeTextureCreateData {
 			// This draw will be called before the main draw is happening
 			// It allows to perform certain operations
 			WindowDraw additional_draw = nullptr;
@@ -484,12 +488,12 @@ namespace ECSEngine {
 		};
 
 		// Stack memory should be at least 512 bytes long
-		ECSENGINE_API UIWindowDescriptor VisualizeTextureWindowDescriptor(UISystem* system, const VisualizeTextureActionData* create_data, void* stack_memory);
+		ECSENGINE_API UIWindowDescriptor VisualizeTextureWindowDescriptor(UISystem* system, const VisualizeTextureCreateData* create_data, void* stack_memory);
 
 		// It also creates a dockspace for it, returns the window index
 		ECSENGINE_API unsigned int CreateVisualizeTextureWindow(
 			UISystem* system, 
-			const VisualizeTextureActionData* create_data
+			const VisualizeTextureCreateData* create_data
 		);
 
 		// It also creates the dockspace for it
@@ -499,13 +503,31 @@ namespace ECSEngine {
 		ECSENGINE_API void ChangeVisualizeTextureWindowOptions(
 			UISystem* system, 
 			Stream<char> window_name, 
-			const VisualizeTextureActionData* create_data
+			const VisualizeTextureCreateData* create_data
 		);
 
 		ECSENGINE_API void ChangeVisualizeTextureWindowOptions(
 			UISystem* system,
 			unsigned int window_index,
-			const VisualizeTextureActionData* create_data
+			const VisualizeTextureCreateData* create_data
+		);
+
+		ECSENGINE_API void ChangeVisualizeTextureWindowOptions(
+			UISystem* system,
+			Stream<char> window_name,
+			const VisualizeTextureSelectElement* select_element
+		);
+
+		ECSENGINE_API void ChangeVisualizeTextureWindowOptions(
+			UISystem* system,
+			unsigned int window_index,
+			const VisualizeTextureSelectElement* select_element
+		);
+
+		ECSENGINE_API void ChangeVisualizeTextureWindowOptions(
+			UISystem* system,
+			void* window_data,
+			const VisualizeTextureSelectElement* select_element
 		);
 
 		// Returns the additional draw data for the given visualize texture window
@@ -540,6 +562,12 @@ namespace ECSEngine {
 			WindowDraw additional_draw = nullptr,
 			void* additional_draw_data = nullptr,
 			size_t additional_draw_data_size = 0
+		);
+
+		ECSENGINE_API void UpdateVisualizeTextureWindowAutomaticRefresh(
+			UISystem* system,
+			void* window_data,
+			bool automatic_refresh
 		);
 
 		ECSENGINE_API void TransitionVisualizeTextureWindowSelection(

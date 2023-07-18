@@ -37,6 +37,10 @@ void GetVisualizeTextureNames(const EditorState* editor_state, ECSEngine::Capaci
 
 	editor_state->visualize_texture.mapping.ForEachConst([&](const VisualizeTextureSelectElement& element, ResourceIdentifier identifier) {
 		names->Add(element.name);
+		});
+
+	function::insertion_sort(names->buffer, names->size, 1, [](Stream<char> left, Stream<char> right) {
+		return function::StringLexicographicCompare(left, right);
 	});
 }
 
@@ -45,5 +49,9 @@ void GetVisualizeTextureElements(const EditorState* editor_state, ECSEngine::Cap
 
 	editor_state->visualize_texture.mapping.ForEachConst([&](const VisualizeTextureSelectElement& element, ResourceIdentifier identifier) {
 		select_elements->Add(element);
+	});
+
+	function::insertion_sort(select_elements->buffer, select_elements->size, 1, [](const VisualizeTextureSelectElement& left, const VisualizeTextureSelectElement& right) {
+		return function::StringLexicographicCompare(left.name, right.name);
 	});
 }

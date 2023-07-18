@@ -265,7 +265,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 				unsigned int sandbox_count = GetSandboxCount(editor_state);
 				if (sandbox_count > 0) {
 					Texture2D depth_texture = GetSandbox(editor_state, 0)->scene_viewport_depth_stencil_framebuffer.GetResource();
-					VisualizeTextureActionData create_data;
+					VisualizeTextureCreateData create_data;
 					create_data.texture = depth_texture;
 					create_data.transfer_texture_to_ui_graphics = true;
 					ChangeVisualizeTextureUIWindowTarget(

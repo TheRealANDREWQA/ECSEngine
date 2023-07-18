@@ -27,11 +27,11 @@ unsigned int GetMaxVisualizeTextureUIIndex(const EditorState* editor_state);
 void ChangeVisualizeTextureUIWindowTarget(
 	EditorState* editor_state,
 	ECSEngine::Stream<char> window_name,
-	const VisualizeTextureActionData* create_data
+	const VisualizeTextureCreateData* create_data
 );
 
 void ChangeVisualizeTextureUIWindowTarget(
 	EditorState* editor_state,
 	unsigned int visualize_index,
-	const VisualizeTextureActionData* create_data
+	const VisualizeTextureCreateData* create_data
 );
