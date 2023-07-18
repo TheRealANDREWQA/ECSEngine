@@ -82,12 +82,12 @@ namespace ECSEngine {
 			// that it stretches to accomodate the window. The y component is still used like in relative transform
 			// The y component is used just to change the row size if it isn't enough
 			// Make the y component 0.0f if you want to be the size of the row
-			void AddElement(size_t transform_type, float2 parameters, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
+			void AddElement(size_t transform_type, float2 parameters, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT, float border_thickness = 0.0f);
 
-			void AddLabel(Stream<char> characters, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
+			void AddLabel(Stream<char> characters, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT, float border_thickness = 0.0f);
 
 			// If the label size is defaulted with 0.0f, then it will use the row scale
-			void AddSquareLabel(float label_size = 0.0f, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
+			void AddSquareLabel(float label_size = 0.0f, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT, float border_thickness = 0.0f);
 
 			// It will use the row scale
 			void AddCheckBox(Stream<char> name = { nullptr, 0 }, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
@@ -96,12 +96,13 @@ namespace ECSEngine {
 				Stream<Stream<char>> labels, 
 				Stream<char> name = { nullptr, 0 }, 
 				Stream<char> prefix = { nullptr, 0 }, 
-				ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT
+				ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT,
+				float border_thickness = 0.0f
 			);
 
 			// Combines the last elements and the resulting transform will be an absolute transform
 			// This only works if the elements have the same alignment
-			void CombineLastElements(unsigned int count = 2);
+			void CombineLastElements(unsigned int count = 2, bool keep_indents = false);
 
 			// It will place the elements one right after the other like there is no indentation applied
 			// But also takes into account window dependent elements

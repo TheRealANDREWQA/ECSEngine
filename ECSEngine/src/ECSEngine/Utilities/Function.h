@@ -242,6 +242,23 @@ namespace ECSEngine {
 			return string.size == other.size && (memcmp(string.buffer, other.buffer, sizeof(char) * other.size) == 0);
 		}
 
+		ECS_INLINE int StringLexicographicCompare(Stream<char> left, Stream<char> right) {
+			size_t smaller_size = std::min(left.size, right.size);
+			int result = memcmp(left.buffer, right.buffer, smaller_size * sizeof(char));
+			if (result == 0) {
+				if (left.size < right.size) {
+					return -1;
+				}
+				else if (left.size == right.size) {
+					return 0;
+				}
+				else {
+					return 1;
+				}
+			}
+			return result;
+		}
+
 		// This is an implementation version because if use this version then we can't have
 		// conversions between capacity streams and normal streams.
 		template<typename CharacterType>

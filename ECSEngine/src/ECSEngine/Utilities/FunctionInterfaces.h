@@ -334,6 +334,38 @@ string_name.AssertCapacity();
 			}
 		}
 
+		// The comparator takes a left and a right T element
+		// It should return -1 if left is smaller than right, 0 if they are equal and 1 if left is greater than right
+		template<typename T, typename Comparator>
+		void insertion_sort(T* buffer, size_t size, int increment, Comparator&& comparator) {
+			size_t i = 0;
+			while (i + increment < size) {
+				while (i + increment < size) {
+					int compare = comparator(buffer[i], buffer[i + increment]);
+					if (compare == 1) {
+						// Break if left is greater
+						break;
+					}
+					i += increment;
+				}
+				int64_t j = i + increment;
+				if (j >= size) {
+					return;
+				}
+				while (j - increment >= 0 && comparator(buffer[j], buffer[j - increment])) {
+					int compare = comparator(buffer[j], buffer[j - increment]);
+					if (compare != -1) {
+						// Break if left is not smaller than right
+						break;
+					}
+					T temp = buffer[j];
+					buffer[j] = buffer[j - increment];
+					buffer[j - increment] = temp;
+					j -= increment;
+				}
+			}
+		}
+
 		template<typename BufferType, typename ExtractKey>
 		void byte_counting_sort(BufferType buffer, size_t size, BufferType result, ExtractKey&& extract_key)
 		{
