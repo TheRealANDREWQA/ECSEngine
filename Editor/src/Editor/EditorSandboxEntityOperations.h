@@ -69,10 +69,15 @@ void ChangeEntityName(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-void ChangeSandboxSelectedEntity(
+void ChangeSandboxSelectedEntities(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	Stream<Entity> entities
+);
+
+void ClearSandboxSelectedEntities(
+	EditorState* editor_state,
+	unsigned int sandbox_index
 );
 
 // An empty entity
@@ -372,10 +377,19 @@ const ECSEngine::EntityManager* GetSandboxEntityManager(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// Returns true if the given entity is selected in the scene for that sandbox
 bool IsSandboxEntitySelected(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	Entity entity
+);
+
+// Returns true if the given entity is valid, else false
+bool IsSandboxEntityValid(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
 void ParentSandboxEntity(

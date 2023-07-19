@@ -2661,12 +2661,16 @@ namespace ECSEngine {
 
 							// Red
 							row_layout.AddSquareLabel();
+							//row_layout.AddBorderToLastElement();
 							// Green
 							row_layout.AddSquareLabel();
+							//row_layout.AddBorderToLastElement();
 							// Blue
 							row_layout.AddSquareLabel();
+							//row_layout.AddBorderToLastElement();
 							// Alpha
 							row_layout.AddSquareLabel();
+							//row_layout.AddBorderToLastElement();
 
 							// Optional control
 							if (additional_data.check_box_name.size > 0) {

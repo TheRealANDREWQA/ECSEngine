@@ -302,4 +302,10 @@ namespace ECSEngine {
 	// The pipeline must be set previously
 	ECSENGINE_API void DrawWholeViewportQuad(Graphics* graphics, GraphicsContext* context);
 
+	// Creates a constant buffer that can be used as a colorization array
+	// Where values can be indexed into it in order to have better visualization
+	// The theoretical maximum count can be ECS_KB * 4 (because the values are stored as ColorFloat)
+	// But for now 256 is the limit - for aesthetics reasons mostly otherwise colors would start to appear again
+	ECSENGINE_API ConstantBuffer CreateColorizeConstantBuffer(Graphics* graphics, unsigned int count, bool temporary = true);
+
 }

@@ -20,6 +20,7 @@ void AutomaticRefreshCallback(ActionData* action_data) {
 }
 
 struct ComboCallbackData {
+	void* visualize_texture_data;
 	VisualizeTextureSelectElement* elements;
 	unsigned char* flag_index;
 };
@@ -28,10 +29,8 @@ void ComboCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 	
 	ComboCallbackData* data = (ComboCallbackData*)_data;
-	unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
-
 	VisualizeTextureSelectElement element = data->elements[*data->flag_index];
-	ChangeVisualizeTextureWindowOptions(system, window_index, &element);
+	ChangeVisualizeTextureWindowOptions(system, data->visualize_texture_data, &element);
 }
 
 void VisualizeTextureUIAdditionalDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer) {
@@ -81,6 +80,7 @@ void VisualizeTextureUIAdditionalDraw(void* window_data, UIDrawerDescriptor* dra
 		ComboCallbackData* combo_callback_data = (ComboCallbackData*)additional_data->combo_callback_memory->buffer;
 		combo_callback_data->elements = allocated_select_elements;
 		combo_callback_data->flag_index = additional_data->combo_index;
+		combo_callback_data->visualize_texture_data = additional_data->window_data;
 		additional_data->combo_callback = { ComboCallback, combo_callback_data, sizeof(*combo_callback_data) };
 		for (unsigned int index = 0; index < select_elements.size; index++) {
 			additional_data->combo_labels->Add(select_elements[index].name);

@@ -179,11 +179,18 @@ void ChangeEntityName(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void ChangeSandboxSelectedEntity(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> entities)
+void ChangeSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> entities)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->selected_entities.Copy(entities);
 	sandbox->IncrementSelectedEntitiesCounter();
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void ClearSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index)
+{
+	ChangeSandboxSelectedEntities(editor_state, sandbox_index, { nullptr,0 });
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -884,6 +891,14 @@ const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, un
 bool IsSandboxEntitySelected(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
 	return FindSandboxSelectedEntityIndex(editor_state, sandbox_index, entity) != -1;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxEntityValid(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	const EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	return active_entity_manager->ExistsEntity(entity);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
