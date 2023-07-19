@@ -141,7 +141,7 @@ void SceneTranslationAction(ActionData* action_data) {
 // Returns true if the position has changed and it is preventing from using the RuntimeGraphics()
 // Else false
 bool DetermineHoveredElement(SceneDrawData* data, unsigned int sandbox_index, uint2 hovered_texel_offset) {
-	if (hovered_texel_offset != data->previous_mouse_texel_position) {
+	//if (hovered_texel_offset != data->previous_mouse_texel_position) {
 		// We need the immediate context - if there is no one loading something, then perform the detection
 		if (!EditorStateHasFlag(data->editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 			// Redermine the hovered entity
@@ -155,8 +155,8 @@ bool DetermineHoveredElement(SceneDrawData* data, unsigned int sandbox_index, ui
 		else {
 			return true;
 		}
-	}
-	return false;
+	//}
+	//return false;
 }
 
 void SceneZoomHoveredEntity(ActionData* action_data) {
@@ -190,7 +190,7 @@ void SceneZoomHoveredEntity(ActionData* action_data) {
 	// Hovered Entity start
 
 	uint2 hovered_texel_offset = system->GetMousePositionHoveredWindowTexelPosition();
-	DetermineHoveredElement(data->draw_data, data->sandbox_index, hovered_texel_offset);
+	//DetermineHoveredElement(data->draw_data, data->sandbox_index, hovered_texel_offset);
 
 	// Hovered Entity end
 }
@@ -201,15 +201,25 @@ void SceneLeftClickableAction(ActionData* action_data) {
 	SceneActionData* data = (SceneActionData*)_data;
 
 	EditorState* editor_state = data->draw_data->editor_state;
+	unsigned int sandbox_index = data->sandbox_index;
 
-	uint2 hovered_texel_offset = system->GetMousePositionHoveredWindowTexelPosition();
-	bool should_wait = DetermineHoveredElement(data->draw_data, data->sandbox_index, hovered_texel_offset);
-	if (should_wait) {
-
+	if (IsClickableTrigger(action_data)) {
+		uint2 hovered_texel_offset = system->GetMousePositionHoveredWindowTexelPosition();
+		bool should_wait = DetermineHoveredElement(data->draw_data, sandbox_index, hovered_texel_offset);
+		if (should_wait) {
+			// At the moment don't do anything
+		}
+		else {
+			// Now commit the selection
+			if (IsSandboxEntityValid(editor_state, sandbox_index, data->draw_data->hovered_entity)) {
+				ChangeSandboxSelectedEntities(editor_state, sandbox_index, { &data->draw_data->hovered_entity, 1 });
+			}
+			else {
+				// No entity was hovered, clear the selection
+				ClearSandboxSelectedEntities(editor_state, sandbox_index);
+			}
+		}
 	}
-
-	// Now commit the selected entity
-	ChangeSandboxSelectedEntity(data->draw_data->editor_state, data->sandbox_index, { &data->draw_data->hovered_entity, 1 });
 }
 
 void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
@@ -248,7 +258,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			UIActionHandler zoom_handler = { SceneZoomHoveredEntity, &hoverable_data, sizeof(hoverable_data) };
 			drawer.SetWindowHoverable(&zoom_handler);
 			UIActionHandler selection_handler = { SceneLeftClickableAction, &hoverable_data, sizeof(hoverable_data) };
-			//drawer.SetWindowClickable(&selection_handler);
+			drawer.SetWindowClickable(&selection_handler);
 
 			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_index, sandbox_graphics_module_index, drawer);
 		}

@@ -1,5 +1,8 @@
 #include "../Utilities.hlsli"
 
+#define COLORIZE_SIZE 256
+#define COLORIZE_MODULO_AND 255
+
 cbuffer Conversion : register(b0)
 {
     float4 offset;
@@ -11,7 +14,16 @@ cbuffer Conversion : register(b0)
     uint keep_channel;
     uint channel_count;
     uint perform_srgb;
+    // If this is true, then it will use the colorize constant buffer
+    // There needs to be 1024 colors into the colorize buffer
+    uint colorize;
 }
+
+cbuffer Colorize : register(b1)
+{
+    float4 colorize_values[COLORIZE_SIZE];
+}
+
 
 #ifdef FLOAT
 Texture2D<unorm float4> input_values : register(t0);
@@ -82,21 +94,42 @@ float4 VisualizeValue(
     {
         value.xyz = LinearToSRGB(value.xyz);
     }
+    
     return value;
 }
-
 
 [numthreads(16, 16, 1)]
 void main(uint3 dispatch_id : SV_DispatchThreadID)
 {
-#if defined(DEPTH) || defined(SINT) || defined(UINT) || defined(FLOAT)
-    float4 input = input_values[dispatch_id.xy];
-#else
     float4 input = float4(0.0f, 0.0f, 0.0f, 0.0f);
-#endif
-    
     uint local_keep_channel = keep_channel;
     uint local_channel_count = channel_count;
+    float local_offset = offset;
+    float local_normalize_factor = normalize_factor;
+    
+#if defined(DEPTH) || defined(FLOAT)
+    input = input_values[dispatch_id.xy];
+#elif defined(SINT) || defined(UINT)
+    // Check to see if colorization is enabled
+    if (colorize) {
+        // Treat both SINT and UINT the same, just hash the value into the colorize array
+        uint4 input_uint = (uint4)input_values[dispatch_id.xy];
+        // For the colorization, use this simple rule to get the hash value to use in the
+        // colorize_values - add all channels together. This also is nice since channels that
+        // got extended won't affect the other channels
+        uint colorize_hash = input_uint.x + input_uint.y + input_uint.z + input_uint.w;
+        input = colorize_values[colorize_hash & COLORIZE_MODULO_AND];
+    
+        // We can also disable the offset and the normalization just to be safe
+        local_offset = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        local_normalize_factor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+        local_keep_channel = 1;
+    }
+    else {
+        input = input_values[dispatch_id.xy];
+    }
+#endif
+    
 #ifdef DEPTH
     local_keep_channel = 0;
     local_channel_count = 1;
@@ -114,7 +147,7 @@ void main(uint3 dispatch_id : SV_DispatchThreadID)
         local_keep_channel, 
         local_channel_count, 
         perform_srgb, 
-        offset, 
-        normalize_factor
-        );
+        local_offset, 
+        local_normalize_factor
+    );
 }

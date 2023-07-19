@@ -400,9 +400,41 @@ namespace ECSEngine {
 			unsigned int keep_channel;
 			unsigned int channel_count;
 			unsigned int perform_srgb;
+			unsigned int colorize;
 		};
 
 		ComputeCBuffer compute_cbuffer;
+		compute_cbuffer.colorize = false;
+
+		ConstantBuffer colorize_constant_buffer = { nullptr };
+		if (conversion.shader_helper_index == ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_SINT ||
+			conversion.shader_helper_index == ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_UINT) {
+			// We might want to perform colorization for 16 bit and 32 bit values
+			switch (texture_format) {
+			case ECS_GRAPHICS_FORMAT_R16_SINT:
+			case ECS_GRAPHICS_FORMAT_R16_UINT:
+			case ECS_GRAPHICS_FORMAT_R32_SINT:
+			case ECS_GRAPHICS_FORMAT_R32_UINT:
+			case ECS_GRAPHICS_FORMAT_RG16_SINT:
+			case ECS_GRAPHICS_FORMAT_RG16_UINT:
+			case ECS_GRAPHICS_FORMAT_RG32_SINT:
+			case ECS_GRAPHICS_FORMAT_RG32_UINT:
+			case ECS_GRAPHICS_FORMAT_RGBA16_SINT:
+			case ECS_GRAPHICS_FORMAT_RGBA16_UINT:
+			case ECS_GRAPHICS_FORMAT_RGB32_SINT:
+			case ECS_GRAPHICS_FORMAT_RGB32_UINT:
+			case ECS_GRAPHICS_FORMAT_RGBA32_SINT:
+			case ECS_GRAPHICS_FORMAT_RGBA32_UINT:
+			{
+				// Perform colorization
+				colorize_constant_buffer = CreateColorizeConstantBuffer(graphics, 256);
+				graphics->BindComputeConstantBuffer(colorize_constant_buffer, 1);
+				compute_cbuffer.colorize = true;
+			}
+				break;
+			}
+		}
+
 		compute_cbuffer.offset = float4::Splat(conversion.offset);
 		compute_cbuffer.normalize_factor = float4::Splat(conversion.normalize_factor);
 		
@@ -427,6 +459,9 @@ namespace ECSEngine {
 
 		if (temp_default_texture.Interface() != nullptr) {
 			temp_default_texture.Release();
+		}
+		if (colorize_constant_buffer.Interface() != nullptr) {
+			colorize_constant_buffer.Release();
 		}
 		ua_view.Release();
 		input_view.Release();

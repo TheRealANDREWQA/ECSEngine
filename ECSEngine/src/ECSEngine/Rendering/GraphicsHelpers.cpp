@@ -1136,4 +1136,41 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	ConstantBuffer CreateColorizeConstantBuffer(Graphics* graphics, unsigned int count, bool temporary)
+	{
+		ConstantBuffer result;
+	
+		ECS_ASSERT(count <= 256);
+		ECS_STACK_CAPACITY_STREAM(ColorFloat, colorize_values, 256);
+
+		// Use an HSV description since it allows us to have different hues
+		// which will make things easier to stop difference
+		// Start with a given saturation of 128 and value of 255 and go in increments of 64
+		// When that is exhausted, start offseting by 16, 32 and then 48 and keep the increment at 64
+		// When that is exhausted, increment the saturation by 32 and then reset with offset of 16
+		// When that is exhausted, decrease the value by 64 and offset with 16, 32 and 48
+
+		const unsigned int SATURATION_BASE_OFFSET = 128;
+		const unsigned int VALUE_BASE_OFFSET = 255;
+		for (unsigned int index = 0; index < count; index++) {
+			Color hsv_color;
+			unsigned int hue_divisor = (index % 4) * 64;
+			unsigned int hue_offset = ((index / 4) % 4) * 16;
+			unsigned int saturation_divisor = ((index / 16) % 4) * 32;
+			unsigned int saturation_offset = ((index / 64) % 2) * 16 + SATURATION_BASE_OFFSET;
+			unsigned int value_divisor = ((index / 128) % 4) * 64;
+			unsigned int value_offset = VALUE_BASE_OFFSET - ((index / 512) % 4) * 16;
+			hsv_color.hue = (unsigned char)(hue_divisor + hue_offset);
+			hsv_color.saturation = (unsigned char)(saturation_divisor + saturation_offset);
+			hsv_color.value = (unsigned char)(value_offset - value_divisor);
+
+			colorize_values[index] = HSVToRGB(hsv_color);
+		}
+
+		result = graphics->CreateConstantBuffer(count * sizeof(ColorFloat), colorize_values.buffer, temporary);
+		return result;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 }

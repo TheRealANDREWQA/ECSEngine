@@ -11486,6 +11486,7 @@ namespace ECSEngine {
 			row_layout.horizontal_alignment = ECS_UI_ALIGN_LEFT;
 			row_layout.vertical_alignment = ECS_UI_ALIGN_TOP;
 			row_layout.offset_render_region = { false, false };
+			row_layout.SetBorderThickness(GetDefaultBorderThickness());
 			memset(row_layout.indentations, 0, sizeof(row_layout.indentations));
 			
 			return row_layout;
@@ -11495,6 +11496,13 @@ namespace ECSEngine {
 
 		float UIDrawer::GetDefaultBorderThickness() const {
 			return system->m_descriptors.dockspaces.border_size;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		float2 UIDrawer::GetDefaultBorderThickness2() const
+		{
+			return GetSquareScale(GetDefaultBorderThickness());
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -17401,6 +17409,7 @@ namespace ECSEngine {
 				ECS_ASSERT(false);
 			}
 			element_alignment[current_index] = alignment;
+			has_border[current_index] = false;
 			current_index++;
 		}
 
@@ -17440,6 +17449,13 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		void UIDrawerRowLayout::AddBorderToLastElement()
+		{
+			has_border[current_index - 1] = true;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
 		void UIDrawerRowLayout::CombineLastElements(unsigned int count, bool keep_indents)
 		{
 			ECS_ASSERT(count <= current_index);
@@ -17455,7 +17471,7 @@ namespace ECSEngine {
 				}
 			}
 
-			unsigned int first_element = current_index - count + 1;
+			unsigned int first_element = current_index - count;
 			element_sizes[first_element].x = total_scale;
 			element_sizes[first_element].y = max_y_scale;
 			element_transform_types[first_element] = function::ClearFlag(
@@ -17562,14 +17578,15 @@ namespace ECSEngine {
 
 		float2 UIDrawerRowLayout::GetScaleForElement(unsigned int index) const
 		{
+			float2 border_size = has_border[index] ? border_thickness : float2(0.0f, 0.0f);
 			if (function::HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
-				return element_sizes[index];
+				return element_sizes[index] + border_size;
 			}
 			else if (element_transform_types[index] & UI_CONFIG_RELATIVE_TRANSFORM) {
-				return drawer->GetRelativeElementSize(element_sizes[index]);
+				return drawer->GetRelativeElementSize(element_sizes[index]) + border_size;
 			}
 			else if (element_transform_types[index] & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
-				return drawer->GetWindowSizeScaleElement(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, element_sizes[index]);
+				return drawer->GetWindowSizeScaleElement(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, element_sizes[index]) + border_size;
 			}
 			else {
 				ECS_ASSERT(false);
@@ -17623,6 +17640,13 @@ namespace ECSEngine {
 		void UIDrawerRowLayout::SetOffsetRenderRegion(bool2 should_offset)
 		{
 			offset_render_region = should_offset;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::SetBorderThickness(float thickness)
+		{
+			border_thickness = drawer->GetSquareScale(thickness) * float2(2.0f, 2.0f);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -17731,6 +17755,7 @@ namespace ECSEngine {
 			float middle_elements_size = 0.0f;
 			float right_elements_size = 0.0f;
 
+			unsigned int last_left_element = -1;
 			unsigned int first_middle_element = -1;
 			unsigned int first_right_element = -1;
 			for (unsigned int index = 0; index < element_count; index++) {
@@ -17747,6 +17772,7 @@ namespace ECSEngine {
 				}
 				else if (element_alignment[index] == ECS_UI_ALIGN_LEFT) {
 					left_elements_size += element_scale;
+					last_left_element = index;
 				}
 				else if (element_alignment[index] == ECS_UI_ALIGN_RIGHT) {
 					right_elements_size += element_scale;
@@ -17754,6 +17780,9 @@ namespace ECSEngine {
 						first_right_element = index;
 					}
 				}
+			}
+			if (last_left_element != -1) {
+				left_elements_size -= indentations[last_left_element + 1];
 			}
 
 			// Determine if they fit in the available space

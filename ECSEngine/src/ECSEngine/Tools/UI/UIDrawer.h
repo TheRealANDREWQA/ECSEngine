@@ -82,12 +82,12 @@ namespace ECSEngine {
 			// that it stretches to accomodate the window. The y component is still used like in relative transform
 			// The y component is used just to change the row size if it isn't enough
 			// Make the y component 0.0f if you want to be the size of the row
-			void AddElement(size_t transform_type, float2 parameters, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT, float border_thickness = 0.0f);
+			void AddElement(size_t transform_type, float2 parameters, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
 
-			void AddLabel(Stream<char> characters, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT, float border_thickness = 0.0f);
+			void AddLabel(Stream<char> characters, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
 
 			// If the label size is defaulted with 0.0f, then it will use the row scale
-			void AddSquareLabel(float label_size = 0.0f, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT, float border_thickness = 0.0f);
+			void AddSquareLabel(float label_size = 0.0f, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
 
 			// It will use the row scale
 			void AddCheckBox(Stream<char> name = { nullptr, 0 }, ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT);
@@ -96,9 +96,11 @@ namespace ECSEngine {
 				Stream<Stream<char>> labels, 
 				Stream<char> name = { nullptr, 0 }, 
 				Stream<char> prefix = { nullptr, 0 }, 
-				ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT,
-				float border_thickness = 0.0f
+				ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT
 			);
+
+			// If the thickness is left at 0.0f, then it will use the default border thickness
+			void AddBorderToLastElement();
 
 			// Combines the last elements and the resulting transform will be an absolute transform
 			// This only works if the elements have the same alignment
@@ -127,6 +129,9 @@ namespace ECSEngine {
 			// If set to true, then the row won't change on the specified axis when scrolling
 			void SetOffsetRenderRegion(bool2 should_offset);
 
+			// Overrides the current thickness
+			void SetBorderThickness(float thickness);
+
 			void UpdateRowYScale(float scale);
 
 			void UpdateSquareElements();
@@ -143,15 +148,20 @@ namespace ECSEngine {
 			UIDrawer* drawer;
 			float2 row_scale; // This is the total scale
 			float indentation;
+			// This field is the actual double of the value given since the border is symmetrical
+			float2 border_thickness;
 			unsigned int current_index;
 			unsigned int element_count;
 
 #define MAX_ELEMENTS 8
 
 			float2 element_sizes[MAX_ELEMENTS];
-			float indentations[MAX_ELEMENTS]; // The indentation between elements
+			// The indentation between elements. The indentation at index 0 is the indentation
+			// before the first element, so the indentation between element 0 and 1 is at index 1
+			float indentations[MAX_ELEMENTS]; 
 			size_t element_transform_types[MAX_ELEMENTS];
 			ECS_UI_ALIGN element_alignment[MAX_ELEMENTS];
+			bool has_border[MAX_ELEMENTS];
 			bool2 offset_render_region;
 
 #undef MAX_ELEMENTS
@@ -3515,6 +3525,10 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float GetDefaultBorderThickness() const;
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			float2 GetDefaultBorderThickness2() const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
