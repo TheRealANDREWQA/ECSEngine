@@ -211,11 +211,14 @@ namespace ECSEngine {
 		};
 
 		uint2 copy_size = bottom_right_copy_corner - top_left_copy_corner;
+		copy_size.x++;
+		copy_size.y++;
 
 		CopyTextureSubresource(temporary_texture, { 0, 0 }, 0, render_texture, top_left_copy_corner, copy_size, 0, graphics->GetContext());
 
 		// Now open the texture and read the pixels
-		unsigned int* texture_data = (unsigned int*)graphics->MapTexture(temporary_texture, ECS_GRAPHICS_MAP_READ);
+		MappedTexture mapped_texture = graphics->MapTexture(temporary_texture, ECS_GRAPHICS_MAP_READ);
+		unsigned int* texture_data = (unsigned int*)mapped_texture.data;
 
 		unsigned int final_instance_index = 0;
 
@@ -225,7 +228,7 @@ namespace ECSEngine {
 				uint2 current_position = { row, column };
 				unsigned int instance_index, pixel_thickness;
 				function::RetrieveBlendedBits(
-					function::IndexTexture(texture_data, current_position.x, current_position.y, temporary_texture_descriptor.size.x),
+					function::IndexTextureEx(texture_data, current_position.x, current_position.y, mapped_texture.row_byte_size),
 					32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
 					ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
 					instance_index,

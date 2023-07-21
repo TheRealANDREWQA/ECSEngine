@@ -909,11 +909,11 @@ namespace ECSEngine {
 
 		void* MapBuffer(ID3D11Buffer* buffer, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		void* MapTexture(Texture1D texture, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
+		MappedTexture MapTexture(Texture1D texture, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		void* MapTexture(Texture2D texture, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
+		MappedTexture MapTexture(Texture2D texture, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		void* MapTexture(Texture3D texture, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
+		MappedTexture MapTexture(Texture3D texture, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
 		void UpdateBuffer(ID3D11Buffer* buffer, const void* data, size_t data_size, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int map_flags = 0u, unsigned int subresource_index = 0);
 
@@ -1480,17 +1480,7 @@ namespace ECSEngine {
 
 	// It must be unmapped manually
 	template<typename Texture>
-	ECSENGINE_API void* MapTexture(
-		Texture texture,
-		GraphicsContext* context,
-		ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD,
-		unsigned int subresource_index = 0,
-		unsigned int map_flags = 0
-	);
-
-	// It must be unmapped manually
-	template<typename Texture>
-	ECSENGINE_API D3D11_MAPPED_SUBRESOURCE MapTextureEx(
+	ECSENGINE_API MappedTexture MapTexture(
 		Texture texture,
 		GraphicsContext* context,
 		ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD,

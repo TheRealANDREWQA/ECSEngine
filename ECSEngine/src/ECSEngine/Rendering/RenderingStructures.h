@@ -281,6 +281,9 @@ namespace ECSEngine {
 		D3D11_STENCIL_OP pass_op
 	);
 
+	// It doesn't work for BC, depth or typeless formats - it will simply fill in DBL_MAX
+	ECSENGINE_API void ExtractPixelFromGraphicsFormat(ECS_GRAPHICS_FORMAT format, size_t count, const void* pixels, double4* values);
+
 	ECSENGINE_API bool IsGraphicsFormatUINT(ECS_GRAPHICS_FORMAT format);
 
 	ECSENGINE_API bool IsGraphicsFormatSINT(ECS_GRAPHICS_FORMAT format);
@@ -439,6 +442,14 @@ namespace ECSEngine {
 		view.Release();
 		resource->Release();
 	}
+
+	// Row byte size is valid only for Texture2D and 3D
+	// Slice and byte size is valid only for 3D
+	struct MappedTexture {
+		void* data;
+		unsigned int row_byte_size;
+		unsigned int slice_byte_size;
+	};
 
 	// Default arguments all but width; initial_data can be set to fill the texture
 	// The initial data is a stream of Stream<void> for each mip map data

@@ -248,6 +248,7 @@
     <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Profiling.h" />
     <ClInclude Include="src\ECSEngine\Rendering\RenderingEffects.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\SampleTexture.h" />
     <ClInclude Include="src\ECSEngine\Rendering\VisualizeTexture.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabase.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabaseReference.h" />
@@ -345,6 +346,7 @@
     <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
     <ClInclude Include="src\Includes\ECSEngineForEach.h" />
     <ClInclude Include="src\Includes\ECSEngineHID.h" />
+    <ClInclude Include="src\Includes\ECSEngineSampleTexture.h" />
     <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />
     <ClInclude Include="src\Includes\ECSEngineThreadTaskExport.h" />
     <ClInclude Include="src\Includes\ECSEngineRuntime.h" />
@@ -444,6 +446,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\RenderingEffects.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\SampleTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\VisualizeTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabase.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabaseReference.cpp" />
