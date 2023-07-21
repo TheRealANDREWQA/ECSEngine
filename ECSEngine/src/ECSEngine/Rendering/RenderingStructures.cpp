@@ -956,6 +956,176 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	template<size_t count, typename BasicType>
+	double4 ExtractBasicType(const void*& pixel) {
+		BasicType* value = (BasicType*)pixel;
+		pixel = function::OffsetPointer(pixel, sizeof(BasicType) * count);
+		if constexpr (count == 1) {
+			return double4(value[0], 0.0, 0.0, 0.0);
+		}
+		else if constexpr (count == 2) {
+			return double4(value[0], value[1], 0.0, 0.0);
+		}
+		else if constexpr (count == 3) {
+			return double4(value[0], value[1], value[2], 0.0);
+		}
+		else if constexpr (count == 4) {
+			return double4(value[0], value[1], value[2], value[3]);
+		}
+	}
+
+	template<size_t count>
+	double4 ExtractUNORM8(const void*& pixel) {
+		double4 result = ExtractBasicType<count, unsigned char>(pixel);
+		return result * double4::Splat(1.0 / (double)UCHAR_MAX);
+	}
+
+	template<size_t count>
+	double4 ExtractSNORM8(const void*& pixel) {
+		double4 result = ExtractBasicType<count, char>(pixel);
+		return result * double4::Splat(2.0 / (double)UCHAR_MAX);
+	}
+
+	template<size_t count>
+	double4 ExtractUNORM16(const void*& pixel) {
+		double4 result = ExtractBasicType<count, unsigned short>(pixel);
+		return result * double4::Splat(1.0 / (double)USHORT_MAX);
+	}
+
+	template<size_t count>
+	double4 ExtractSNORM16(const void*& pixel) {
+		double4 result = ExtractBasicType<count, short>(pixel);
+		return result * double4::Splat(2.0 / (double)USHORT_MAX);
+	}
+
+	double4 ExtractRGBA8_UNORM_SRGB(const void*& pixel) {
+		double4 result = ExtractUNORM8<4>(pixel);
+		return SRGBToLinear(result);
+	}
+
+	double4 ExtractDBL_MAX(const void*& pixel) {
+		// We don't need to move the pointer since we are setting the values
+		// to the same DBL_MAX
+		return double4::Splat(DBL_MAX);
+	}
+
+	void ExtractPixelFromGraphicsFormat(ECS_GRAPHICS_FORMAT format, size_t count, const void* pixels, double4* values)
+	{
+		// Get value is a functor that takes const void*& and returns a double4
+		auto loop = [&](auto get_value) {
+			for (size_t index = 0; index < count; index++) {
+				values[index] = get_value(pixels);
+			}
+		};
+
+#define BASIC_CASE_124(bits, ending, type) \
+	case ECS_GRAPHICS_FORMAT_R##bits##_##ending: \
+		{ \
+			loop(ExtractBasicType<1, type>); \
+		} \
+		break; \
+		case ECS_GRAPHICS_FORMAT_RG##bits##_##ending: \
+		{ \
+			loop(ExtractBasicType<2, type>); \
+		} \
+		break; \
+		case ECS_GRAPHICS_FORMAT_RGBA##bits##_##ending: \
+		{ \
+			loop(ExtractBasicType<4, type>); \
+		} \
+		break;
+
+#define NORM_CASE_124(bits, ending) \
+	case ECS_GRAPHICS_FORMAT_R##bits##_##ending: \
+	{ \
+		loop(Extract##ending##bits<1>); \
+	} \
+	break; \
+	case ECS_GRAPHICS_FORMAT_RG##bits##_##ending: \
+	{ \
+		loop(Extract##ending##bits<2>); \
+	} \
+	break; \
+	case ECS_GRAPHICS_FORMAT_RGBA##bits##_##ending: \
+	{ \
+		loop(Extract##ending##bits<4>);\
+	} \
+	break;
+
+#define BASIC_CASE_1234(bits, ending, type) \
+	case ECS_GRAPHICS_FORMAT_R##bits##_##ending: \
+	{ \
+		loop(ExtractBasicType<1, type>); \
+	} \
+		break; \
+	case ECS_GRAPHICS_FORMAT_RG##bits##_##ending: \
+	{ \
+		loop(ExtractBasicType<2, type>); \
+	} \
+		break; \
+	case ECS_GRAPHICS_FORMAT_RGB##bits##_##ending: \
+	{ \
+		loop(ExtractBasicType<3, type>); \
+	} \
+		break; \
+	case ECS_GRAPHICS_FORMAT_RGBA##bits##_##ending: \
+	{ \
+		loop(ExtractBasicType<4, type>); \
+	} \
+		break;
+												   
+
+		switch (format) {
+			BASIC_CASE_124(8, SINT, char);
+			BASIC_CASE_124(8, UINT, unsigned char);
+			BASIC_CASE_124(16, SINT, short);
+			BASIC_CASE_124(16, UINT, short);
+			BASIC_CASE_1234(32, SINT, int);
+			BASIC_CASE_1234(32, UINT, unsigned int);
+			NORM_CASE_124(8, UNORM);
+			NORM_CASE_124(8, SNORM);
+			NORM_CASE_124(16, UNORM);
+			NORM_CASE_124(16, SNORM);
+
+		case ECS_GRAPHICS_FORMAT_R32_FLOAT:
+		{
+			loop(ExtractBasicType<1, float>);
+		}
+		break;
+		case ECS_GRAPHICS_FORMAT_RG32_FLOAT:
+		{
+			loop(ExtractBasicType<2, float>);
+		}
+		break;
+		case ECS_GRAPHICS_FORMAT_RGB32_FLOAT:
+		{
+			loop(ExtractBasicType<3, float>);
+		}
+		break;
+		case ECS_GRAPHICS_FORMAT_RGBA32_FLOAT:
+		{
+			loop(ExtractBasicType<4, float>);
+		}
+		break;
+		case ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB:
+		{
+			loop(ExtractRGBA8_UNORM_SRGB);
+		}
+		break;
+		default:
+		{
+			loop(ExtractDBL_MAX);
+		}
+		break;
+		}
+
+#undef BASIC_CASE_124
+#undef NORM_CASE_124
+#undef BASIC_CASE_1234
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	bool IsGraphicsFormatUINT(ECS_GRAPHICS_FORMAT format)
 	{
 		return format == ECS_GRAPHICS_FORMAT_R8_UINT || format == ECS_GRAPHICS_FORMAT_R8_UINT || format == ECS_GRAPHICS_FORMAT_RG8_UINT

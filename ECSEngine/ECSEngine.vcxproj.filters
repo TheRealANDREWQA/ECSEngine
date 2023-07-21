@@ -213,6 +213,8 @@
     <ClInclude Include="src\Includes\ECSEngineHID.h" />
     <ClInclude Include="src\ECSEngine\Rendering\VisualizeTexture.h" />
     <ClInclude Include="src\Includes\ECSEngineVisualizeTexture.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\SampleTexture.h" />
+    <ClInclude Include="src\Includes\ECSEngineSampleTexture.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -328,6 +330,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\RenderingEffects.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\InputMapping.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\VisualizeTexture.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\SampleTexture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

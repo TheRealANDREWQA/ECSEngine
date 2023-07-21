@@ -461,4 +461,68 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	template<typename Color>
+	Color LinearToSRGB(Color color) {
+		// The color needs to be converted into a float color in order to perform the computation accurately
+		ColorFloat float_color = color;
+		float factor = 1.0f / 2.2f;
+		float_color.red = pow(float_color.red, factor);
+		float_color.green = pow(float_color.green, factor);
+		float_color.blue = pow(float_color.blue, factor);
+		return float_color;
+	}
+
+	ECS_TEMPLATE_FUNCTION(Color, LinearToSRGB, Color);
+	ECS_TEMPLATE_FUNCTION(ColorFloat, LinearToSRGB, ColorFloat);
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	template<typename Color>
+	Color SRGBToLinear(Color color) {
+		// The color needs to be converted into a float color in order to perform the computation accurately
+		ColorFloat float_color = color;
+		float factor = 2.2f;
+		float_color.red = pow(float_color.red, factor);
+		float_color.green = pow(float_color.green, factor);
+		float_color.blue = pow(float_color.blue, factor);
+		return float_color;
+	}
+
+	ECS_TEMPLATE_FUNCTION(Color, SRGBToLinear, Color);
+	ECS_TEMPLATE_FUNCTION(ColorFloat, SRGBToLinear, ColorFloat);
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	double4 LinearToSRGB(double4 value)
+	{
+		double4 return_value;
+
+		double factor = 1.0 / 2.2;
+		Vec4d vector_factor = factor;
+		Vec4d vector_value;
+		vector_value.load((double*)&value);
+		vector_value = pow(vector_value, factor);
+		vector_value.store((double*)&return_value);
+
+		return return_value;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	double4 SRGBToLinear(double4 value)
+	{
+		double4 return_value;
+
+		double factor = 2.2;
+		Vec4d vector_factor = factor;
+		Vec4d vector_value;
+		vector_value.load((double*)&value);
+		vector_value = pow(vector_value, factor);
+		vector_value.store((double*)&return_value);
+
+		return return_value;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 }

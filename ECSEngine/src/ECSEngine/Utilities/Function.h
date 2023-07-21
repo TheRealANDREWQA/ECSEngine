@@ -96,6 +96,12 @@ namespace ECSEngine {
 			return texture_data[row * width + column];
 		}
 
+		// This version takes the row byte size instead of the width
+		template<typename T>
+		ECS_INLINE T IndexTextureEx(const T* texture_data, size_t row, size_t column, size_t row_byte_size) {
+			return *(T*)function::OffsetPointer(texture_data, row * row_byte_size + column * sizeof(T));
+		}
+
 		// The functor receives as parameter a T or T&/const T&
 		// Return true inside the functor if you want to exit from the loop.
 		// Returns the true when an early exit was done, else false
@@ -300,6 +306,16 @@ namespace ECSEngine {
 		template<typename T>
 		ECS_INLINE T DivideCount(T a, T b) {
 			return a / b + ((a % b) != 0);
+		}
+
+		template<typename T>
+		ECS_INLINE bool IsInRange(T value, T low_bound, T high_bound) {
+			return low_bound <= value && value <= high_bound;
+		}
+
+		template<typename T>
+		ECS_INLINE bool IsInRangeStrict(T value, T low_bound, T high_bound) {
+			return low_bound < value && value < high_bound;
 		}
 
 		// a - b

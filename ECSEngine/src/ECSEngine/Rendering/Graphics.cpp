@@ -3015,21 +3015,21 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void* Graphics::MapTexture(Texture1D texture, ECS_GRAPHICS_MAP_TYPE map_type, unsigned int subresource_index, unsigned int map_flags)
+	MappedTexture Graphics::MapTexture(Texture1D texture, ECS_GRAPHICS_MAP_TYPE map_type, unsigned int subresource_index, unsigned int map_flags)
 	{
 		return ECSEngine::MapTexture(texture, GetContext(), map_type, subresource_index, map_flags);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void* Graphics::MapTexture(Texture2D texture, ECS_GRAPHICS_MAP_TYPE map_type, unsigned int subresource_index, unsigned int map_flags)
+	MappedTexture Graphics::MapTexture(Texture2D texture, ECS_GRAPHICS_MAP_TYPE map_type, unsigned int subresource_index, unsigned int map_flags)
 	{
 		return ECSEngine::MapTexture(texture, GetContext(), map_type, subresource_index, map_flags);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void* Graphics::MapTexture(Texture3D texture, ECS_GRAPHICS_MAP_TYPE map_type, unsigned int subresource_index, unsigned int map_flags)
+	MappedTexture Graphics::MapTexture(Texture3D texture, ECS_GRAPHICS_MAP_TYPE map_type, unsigned int subresource_index, unsigned int map_flags)
 	{
 		return ECSEngine::MapTexture(texture, GetContext(), map_type, subresource_index, map_flags);
 	}
@@ -5002,7 +5002,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Texture>
-	void* MapTexture(
+	MappedTexture MapTexture(
 		Texture texture,
 		GraphicsContext* context,
 		ECS_GRAPHICS_MAP_TYPE map_type,
@@ -5010,34 +5010,15 @@ namespace ECSEngine {
 		unsigned int map_flags
 	)
 	{
-		return MapResourceInternal(texture, context, map_type, subresource_index, map_flags, "Mapping a texture failed.").pData;
+		D3D11_MAPPED_SUBRESOURCE mapped_subresource = MapResourceInternal(texture, context, map_type, subresource_index, map_flags, "Mapping a texture failed.");
+		return { mapped_subresource.pData, mapped_subresource.RowPitch, mapped_subresource.DepthPitch };
 	}
 
 	// Cringe bug from intellisense that makes all the file full of errors when in reality everything is fine; instantiations must
 	// be unrolled manually
-	ECS_TEMPLATE_FUNCTION(void*, MapTexture, Texture1D, GraphicsContext*, ECS_GRAPHICS_MAP_TYPE, unsigned int, unsigned int);
-	ECS_TEMPLATE_FUNCTION(void*, MapTexture, Texture2D, GraphicsContext*, ECS_GRAPHICS_MAP_TYPE, unsigned int, unsigned int);
-	ECS_TEMPLATE_FUNCTION(void*, MapTexture, Texture3D, GraphicsContext*, ECS_GRAPHICS_MAP_TYPE, unsigned int, unsigned int);
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	// It must be unmapped manually
-	template<typename Texture>
-	D3D11_MAPPED_SUBRESOURCE MapTextureEx(
-		Texture texture,
-		GraphicsContext* context,
-		ECS_GRAPHICS_MAP_TYPE map_type,
-		unsigned int subresource_index,
-		unsigned int map_flags
-	) {
-		return MapResourceInternal(texture, context, map_type, subresource_index, map_flags, "Mapping a texture failed.");
-	}
-
-	// Cringe bug from intellisense that makes all the file full of errors when in reality everything is fine; instantiations must
-	// be unrolled manually
-	ECS_TEMPLATE_FUNCTION(D3D11_MAPPED_SUBRESOURCE, MapTextureEx, Texture1D, GraphicsContext*, ECS_GRAPHICS_MAP_TYPE, unsigned int, unsigned int);
-	ECS_TEMPLATE_FUNCTION(D3D11_MAPPED_SUBRESOURCE, MapTextureEx, Texture2D, GraphicsContext*, ECS_GRAPHICS_MAP_TYPE, unsigned int, unsigned int);
-	ECS_TEMPLATE_FUNCTION(D3D11_MAPPED_SUBRESOURCE, MapTextureEx, Texture3D, GraphicsContext*, ECS_GRAPHICS_MAP_TYPE, unsigned int, unsigned int);
+	ECS_TEMPLATE_FUNCTION(MappedTexture, MapTexture, Texture1D, GraphicsContext*, ECS_GRAPHICS_MAP_TYPE, unsigned int, unsigned int);
+	ECS_TEMPLATE_FUNCTION(MappedTexture, MapTexture, Texture2D, GraphicsContext*, ECS_GRAPHICS_MAP_TYPE, unsigned int, unsigned int);
+	ECS_TEMPLATE_FUNCTION(MappedTexture, MapTexture, Texture3D, GraphicsContext*, ECS_GRAPHICS_MAP_TYPE, unsigned int, unsigned int);
 
 	// ------------------------------------------------------------------------------------------------------------------------
 

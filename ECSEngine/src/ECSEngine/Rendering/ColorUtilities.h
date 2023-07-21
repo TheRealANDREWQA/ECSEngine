@@ -201,4 +201,18 @@ namespace ECSEngine {
 	template<typename Color>
 	ECSENGINE_API Color ChangeValue(Color rgb, float percentage);
 
+	// Converts a color from linear space to gamma space
+	template<typename Color>
+	ECSENGINE_API Color LinearToSRGB(Color color);
+
+	// Converts a color from gamma space to linear space
+	template<typename Color>
+	ECSENGINE_API Color SRGBToLinear(Color color);
+
+	// The conversion is applied only to the xyz channels
+	ECSENGINE_API double4 LinearToSRGB(double4 value);
+
+	// The conversion is applied only to the xyz channels
+	ECSENGINE_API double4 SRGBToLinear(double4 value);
+
 }

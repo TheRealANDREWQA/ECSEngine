@@ -182,10 +182,10 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(staging_texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ, index, 0);
-			subresource_data[index].pSysMem = resource.pData;
-			subresource_data[index].SysMemPitch = resource.RowPitch;
-			subresource_data[index].SysMemSlicePitch = resource.DepthPitch;
+			MappedTexture resource = MapTexture(staging_texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ, index, 0);
+			subresource_data[index].pSysMem = resource.data;
+			subresource_data[index].SysMemPitch = resource.row_byte_size;
+			subresource_data[index].SysMemSlicePitch = resource.slice_byte_size;
 		}
 
 		new_texture = Texture::RawCreate(device, &texture_descriptor, subresource_data);
@@ -263,10 +263,10 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ, index, 0);
-			subresource_data[index].pSysMem = resource.pData;
-			subresource_data[index].SysMemPitch = resource.RowPitch;
-			subresource_data[index].SysMemSlicePitch = resource.DepthPitch;
+			MappedTexture resource = MapTexture(texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ, index, 0);
+			subresource_data[index].pSysMem = resource.data;
+			subresource_data[index].SysMemPitch = resource.row_byte_size;
+			subresource_data[index].SysMemSlicePitch = resource.slice_byte_size;
 		}
 
 		new_texture = Texture::RawCreate(device, &texture_descriptor, subresource_data);
@@ -325,8 +325,8 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 	Texture2D ResizeTextureWithStaging(Graphics* graphics, Texture2D texture, size_t new_width, size_t new_height, size_t resize_flag, bool temporary)
 	{
 		Texture2D staging_texture = TextureToStaging(graphics, texture);
-		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(staging_texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ);
-		Texture2D new_texture = ResizeTexture(graphics, first_mip.pData, texture, new_width, new_height, { nullptr }, resize_flag, temporary);
+		MappedTexture first_mip = MapTexture(staging_texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ);
+		Texture2D new_texture = ResizeTexture(graphics, first_mip.data, texture, new_width, new_height, { nullptr }, resize_flag, temporary);
 		UnmapTexture(staging_texture, graphics->GetContext());
 		staging_texture.Release();
 		return new_texture;
@@ -338,8 +338,8 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 	{
 		Texture2D result;
 
-		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ);
-		result = ResizeTexture(graphics, first_mip.pData, texture, new_width, new_height, {nullptr}, resize_flag, temporary);
+		MappedTexture first_mip = MapTexture(texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ);
+		result = ResizeTexture(graphics, first_mip.data, texture, new_width, new_height, {nullptr}, resize_flag, temporary);
 		UnmapTexture(texture, graphics->GetContext());
 		return result;
 	}

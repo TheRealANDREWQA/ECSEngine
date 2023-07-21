@@ -9,12 +9,11 @@
 #include "../Modules/Module.h"
 #include "RenderingCommon.h"
 #include "../Editor/EditorSandboxEntityOperations.h"
+#include "ECSEngineSampleTexture.h"
 
 struct SceneDrawData {
 	EditorState* editor_state;
 	uint2 previous_texel_size;
-	uint2 previous_mouse_texel_position;
-	Entity hovered_entity;
 };
 
 void SceneUIDestroy(ActionData* action_data) {
@@ -140,26 +139,23 @@ void SceneTranslationAction(ActionData* action_data) {
 
 // Returns true if the position has changed and it is preventing from using the RuntimeGraphics()
 // Else false
-bool DetermineHoveredElement(SceneDrawData* data, unsigned int sandbox_index, uint2 hovered_texel_offset) {
-	//if (hovered_texel_offset != data->previous_mouse_texel_position) {
-		// We need the immediate context - if there is no one loading something, then perform the detection
-		if (!EditorStateHasFlag(data->editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-			// Redermine the hovered entity
-			RenderTargetView instanced_framebuffer = GetSandboxInstancedFramebuffer(data->editor_state, sandbox_index);
-			// The instance identifier is the entity index at the moment
-			unsigned int instance_identifier = GetInstanceFromFramebuffer(data->editor_state->RuntimeGraphics(), instanced_framebuffer, hovered_texel_offset);
-			data->hovered_entity = { instance_identifier };
+bool DetermineHoveredElement(SceneDrawData* data, unsigned int sandbox_index, uint2 hovered_texel_offset, Entity* hovered_entity) {
+	// We need the immediate context - if there is no one loading something, then perform the detection
+	if (!EditorStateHasFlag(data->editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		// Redermine the hovered entity
+		RenderTargetView instanced_framebuffer = GetSandboxInstancedFramebuffer(data->editor_state, sandbox_index);
+		// The instance identifier is the entity index at the moment
+		unsigned int instance_identifier = GetInstanceFromFramebuffer(data->editor_state->RuntimeGraphics(), instanced_framebuffer, hovered_texel_offset);
+		*hovered_entity = { instance_identifier };
 
-			data->previous_mouse_texel_position = hovered_texel_offset;
-		}
-		else {
-			return true;
-		}
-	//}
-	//return false;
+		return false;
+	}
+	else {
+		return true;
+	}
 }
 
-void SceneZoomHoveredEntity(ActionData* action_data) {
+void SceneZoomAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SceneActionData* data = (SceneActionData*)_data;
@@ -186,13 +182,6 @@ void SceneZoomHoveredEntity(ActionData* action_data) {
 		RenderSandbox(editor_state, data->sandbox_index, current_viewport);
 	}
 	// Zoom end
-
-	// Hovered Entity start
-
-	uint2 hovered_texel_offset = system->GetMousePositionHoveredWindowTexelPosition();
-	//DetermineHoveredElement(data->draw_data, data->sandbox_index, hovered_texel_offset);
-
-	// Hovered Entity end
 }
 
 void SceneLeftClickableAction(ActionData* action_data) {
@@ -205,14 +194,15 @@ void SceneLeftClickableAction(ActionData* action_data) {
 
 	if (IsClickableTrigger(action_data)) {
 		uint2 hovered_texel_offset = system->GetMousePositionHoveredWindowTexelPosition();
-		bool should_wait = DetermineHoveredElement(data->draw_data, sandbox_index, hovered_texel_offset);
+		Entity hovered_entity;
+		bool should_wait = DetermineHoveredElement(data->draw_data, sandbox_index, hovered_texel_offset, &hovered_entity);
 		if (should_wait) {
 			// At the moment don't do anything
 		}
 		else {
 			// Now commit the selection
-			if (IsSandboxEntityValid(editor_state, sandbox_index, data->draw_data->hovered_entity)) {
-				ChangeSandboxSelectedEntities(editor_state, sandbox_index, { &data->draw_data->hovered_entity, 1 });
+			if (IsSandboxEntityValid(editor_state, sandbox_index, hovered_entity)) {
+				ChangeSandboxSelectedEntities(editor_state, sandbox_index, { &hovered_entity, 1 });
 			}
 			else {
 				// No entity was hovered, clear the selection
@@ -233,8 +223,6 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	if (initialize) {
 		data->previous_texel_size = { 0, 0 };
-		data->previous_mouse_texel_position = { 0, 0 };
-		data->hovered_entity = Entity(-1);
 		// Enable the rendering of the viewport
 		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	}
@@ -255,7 +243,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			drawer.SetWindowClickable(&rotation_handler, ECS_MOUSE_RIGHT);
 			UIActionHandler translation_handler = { SceneTranslationAction, &hoverable_data, sizeof(hoverable_data) };
 			drawer.SetWindowClickable(&translation_handler, ECS_MOUSE_MIDDLE);
-			UIActionHandler zoom_handler = { SceneZoomHoveredEntity, &hoverable_data, sizeof(hoverable_data) };
+			UIActionHandler zoom_handler = { SceneZoomAction, &hoverable_data, sizeof(hoverable_data) };
 			drawer.SetWindowHoverable(&zoom_handler);
 			UIActionHandler selection_handler = { SceneLeftClickableAction, &hoverable_data, sizeof(hoverable_data) };
 			drawer.SetWindowClickable(&selection_handler);
