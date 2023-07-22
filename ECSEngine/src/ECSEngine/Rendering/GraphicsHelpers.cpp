@@ -11,14 +11,41 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	uint2 GetTextureDimensions(Texture2D texture) {
+	unsigned int GetTextureDimensions(Texture1D texture, unsigned int mip_level)
+	{
+		unsigned int result;
+
+		Texture1DDescriptor descriptor = GetTextureDescriptor(texture);
+		ECS_ASSERT(mip_level < descriptor.mip_levels);
+		result = function::ClampMin<unsigned int>(descriptor.width << mip_level, 1);
+
+		return result;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	uint2 GetTextureDimensions(Texture2D texture, unsigned int mip_level) {
 		uint2 result;
 
-		D3D11_TEXTURE2D_DESC descriptor;
-		texture.tex->GetDesc(&descriptor);
-		
-		result.x = descriptor.Width;
-		result.y = descriptor.Height;
+		Texture2DDescriptor descriptor = GetTextureDescriptor(texture);
+		ECS_ASSERT(mip_level < descriptor.mip_levels);
+		result.x = function::ClampMin<unsigned int>(descriptor.size.x << mip_level, 1);
+		result.y = function::ClampMin<unsigned int>(descriptor.size.y << mip_level, 1);
+
+		return result;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	uint3 GetTextureDimensions(Texture3D texture, unsigned int mip_level)
+	{
+		uint3 result;
+
+		Texture3DDescriptor descriptor = GetTextureDescriptor(texture);
+		ECS_ASSERT(mip_level < descriptor.mip_levels);
+		result.x = function::ClampMin<unsigned int>(descriptor.size.x << mip_level, 1);
+		result.y = function::ClampMin<unsigned int>(descriptor.size.y << mip_level, 1);
+		result.z = function::ClampMin<unsigned int>(descriptor.size.z << mip_level, 1);
 
 		return result;
 	}
@@ -1121,6 +1148,30 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		descriptor.size = { desc.Width, desc.Height };
 
 		return descriptor;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	unsigned int ClampToTextureBounds(Texture1D texture, unsigned int position, unsigned int mip_level)
+	{
+		unsigned int texture_bound = GetTextureDimensions(texture, mip_level);
+		return function::ClampMax(position, texture_bound);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	uint2 ClampToTextureBounds(Texture2D texture, uint2 position, unsigned int mip_level)
+	{
+		uint2 texture_bounds = GetTextureDimensions(texture, mip_level);
+		return BasicTypeClampMax(position, texture_bounds);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	uint3 ClampToTextureBounds(Texture3D texture, uint3 position, unsigned int mip_level)
+	{
+		uint3 texture_bounds = GetTextureDimensions(texture, mip_level);
+		return BasicTypeClampMax(position, texture_bounds);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

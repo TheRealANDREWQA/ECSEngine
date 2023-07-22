@@ -464,39 +464,41 @@ namespace ECSEngine {
 						system->RemoveWindowBufferFromAll(window_index, char_selected_labels[index].buffer, dynamic_index);
 					}
 
-					system->RemoveWindowBufferFromAll(window_index, char_selected_labels.buffer, dynamic_index);
 				}
+				//system->m_memory->Deallocate(selected_labels.buffer);
+				system->RemoveWindowBufferFromAll(window_index, selected_labels.buffer, dynamic_index);
 			}
 
-			// Need to allocate the buffer first
-			selected_labels.buffer = system->m_memory->Allocate(copy_size * labels.size);
-			system->AddWindowMemoryResource(selected_labels.buffer, window_index);
-			if (dynamic_index != -1) {
-				system->AddWindowDynamicElementAllocation(window_index, dynamic_index, selected_labels.buffer);
-			}
+			if (labels.size > 0) {
+				// Need to allocate the buffer first
+				selected_labels.buffer = system->m_memory->Allocate(copy_size * labels.size);
+				system->AddWindowMemoryResource(selected_labels.buffer, window_index);
+				if (dynamic_index != -1) {
+					system->AddWindowDynamicElementAllocation(window_index, dynamic_index, selected_labels.buffer);
+				}
 
-			if (label_size == 0) {
-				Stream<Stream<char>> char_labels = labels.AsIs<Stream<char>>();
-				Stream<Stream<char>> char_selected_labels = selected_labels.AsIs<Stream<char>>();
-				for (size_t index = 0; index < char_labels.size; index++) {
-					char_selected_labels[index] = function::StringCopy(GetAllocatorPolymorphic(system->m_memory), char_labels[index]);
-					system->AddWindowMemoryResource(char_selected_labels[index].buffer, window_index);
-					if (dynamic_index != -1) {
-						system->AddWindowDynamicElementAllocation(window_index, dynamic_index, char_selected_labels[index].buffer);
+				if (label_size == 0) {
+					Stream<Stream<char>> char_labels = labels.AsIs<Stream<char>>();
+					Stream<Stream<char>> char_selected_labels = selected_labels.AsIs<Stream<char>>();
+					for (size_t index = 0; index < char_labels.size; index++) {
+						char_selected_labels[index] = function::StringCopy(GetAllocatorPolymorphic(system->m_memory), char_labels[index]);
+						system->AddWindowMemoryResource(char_selected_labels[index].buffer, window_index);
+						if (dynamic_index != -1) {
+							system->AddWindowDynamicElementAllocation(window_index, dynamic_index, char_selected_labels[index].buffer);
+						}
 					}
 				}
-			}
-			else {
-				selected_labels.CopySlice(0, labels.buffer, copy_size * labels.size);
-			}
-
-			selected_labels.size = labels.size;
-			if (labels.size > 0) {
+				else {
+					selected_labels.CopySlice(0, labels.buffer, copy_size * labels.size);
+				}
 				SetFirstSelectedLabel(labels.buffer);
 			}
 			else {
 				first_selected_label.size = 0;
+				selected_labels = { nullptr, 0 };
 			}
+
+			selected_labels.size = labels.size;
 
 			TriggerSelectable(action_data);
 		}

@@ -318,6 +318,29 @@ namespace ECSEngine {
 			return low_bound < value && value < high_bound;
 		}
 
+		// Returns the overlapping line as a pair of start, end (end is not included)
+		// If the lines don't overlap, it will return { -1, -1 }
+		ECSENGINE_API uint2 LineOverlap(
+			unsigned int first_start,
+			unsigned int first_end,
+			unsigned int second_start,
+			unsigned int second_end
+		);
+
+		// Returns the rectangle stored as xy - top left, zw - bottom right (the end is not included)
+		// that is overlapping between these 2 rectangles. If zero_if_not_valid
+		// is set to true then if one of the dimensions is 0, it will make the other
+		// one 0 as well (useful for iteration for example, since it will result in
+		// less iterations). If the rectangles don't overlap, it will return
+		// { -1, -1, -1, -1 }
+		ECSENGINE_API uint4 RectangleOverlap(
+			uint2 first_top_left,
+			uint2 first_bottom_right,
+			uint2 second_top_left,
+			uint2 second_bottom_right,
+			bool zero_if_not_valid = true
+		);
+
 		// a - b
 		ECS_INLINE size_t PointerDifference(const void* a, const void* b) {
 			return (uintptr_t)a - (uintptr_t)b;
@@ -784,11 +807,11 @@ namespace ECSEngine {
 
 		ECSENGINE_API Stream<char> FindDelimitedString(Stream<char> range, char opened_delimiter, char closed_delimiter, bool skip_whitespace = false);
 
-		ECSENGINE_API unsigned int FindString(const char* ECS_RESTRICT string, Stream<const char*> other);
+		ECSENGINE_API unsigned int FindString(const char* string, Stream<const char*> other);
 
 		ECSENGINE_API unsigned int FindString(Stream<char> string, Stream<Stream<char>> other);
 
-		ECSENGINE_API unsigned int FindString(const wchar_t* ECS_RESTRICT string, Stream<const wchar_t*> other);
+		ECSENGINE_API unsigned int FindString(const wchar_t* string, Stream<const wchar_t*> other);
 
 		ECSENGINE_API unsigned int FindString(Stream<wchar_t> string, Stream<Stream<wchar_t>> other);
 

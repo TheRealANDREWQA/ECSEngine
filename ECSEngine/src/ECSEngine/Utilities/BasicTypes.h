@@ -609,4 +609,37 @@ namespace ECSEngine {
 		});
 	}
 
+	template<typename BasicType>
+	ECS_INLINE BasicType BasicTypeClampMin(BasicType value, BasicType min) {
+		return BasicTypeAction(value, min, [](auto value, auto min) {
+			return value < min ? min : value;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE BasicType BasicTypeClampMax(BasicType value, BasicType max) {
+		return BasicTypeAction(value, max, [](auto value, auto max) {
+			return value > max ? max : value;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE BasicType BasicTypeClamp(BasicType value, BasicType min, BasicType max) {
+		return BasicTypeClampMax(BasicTypeClampMin(value, min), max);
+	}
+
+	template<typename BasicType>
+	ECS_INLINE BasicType BasicTypeMin(BasicType a, BasicType b) {
+		return BasicTypeAction(a, b, [](auto a, auto b) {
+			return a < b ? a : b;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE BasicType BasicTypeMax(BasicType a, BasicType b) {
+		return BasicTypeAction(a, b, [](auto a, auto b) {
+			return a > b ? a : b;
+		});
+	}
+
 }

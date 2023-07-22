@@ -285,7 +285,14 @@ namespace ECSEngine {
 	// Returns {0, 0} if it fails
 	ECSENGINE_API uint2 GetTextureDimensionsHDR(Stream<void> data);
 
-	ECSENGINE_API uint2 GetTextureDimensions(Texture2D texture);
+	// It will assert that the mip level is in bounds
+	ECSENGINE_API unsigned int GetTextureDimensions(Texture1D texture, unsigned int mip_level = 0);
+
+	// It will assert that the mip level is in bounds
+	ECSENGINE_API uint2 GetTextureDimensions(Texture2D texture, unsigned int mip_level = 0);
+
+	// It will assert that the mip level is in bounds
+	ECSENGINE_API uint3 GetTextureDimensions(Texture3D texture, unsigned int mip_level = 0);
 
 	// Returns a size such that the object remains relatively the same
 	// when the camera is moving (it is only a rough approximate)
@@ -298,6 +305,15 @@ namespace ECSEngine {
 	ECSENGINE_API Texture3DDescriptor GetTextureDescriptor(Texture3D texture);
 
 	ECSENGINE_API TextureCubeDescriptor GetTextureDescriptor(TextureCube texture);
+
+	// If position > bound, then the position is set to bound
+	ECSENGINE_API unsigned int ClampToTextureBounds(Texture1D texture, unsigned int position, unsigned int mip_level = 0);
+
+	// If position > bound, then the position is set to bound
+	ECSENGINE_API uint2 ClampToTextureBounds(Texture2D texture, uint2 position, unsigned int mip_level = 0);
+
+	// If position > bound, then the position is set to bound
+	ECSENGINE_API uint3 ClampToTextureBounds(Texture3D texture, uint3 position, unsigned int mip_level = 0);
 
 	// The pipeline must be set previously
 	ECSENGINE_API void DrawWholeViewportQuad(Graphics* graphics, GraphicsContext* context);

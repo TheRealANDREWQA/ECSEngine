@@ -126,6 +126,11 @@ void SelectableCallback(ActionData* action_data) {
 		Entity* first_entity = (Entity*)select_data->labels.buffer;
 		ChangeInspectorToEntity(data->editor_state, data->sandbox_index, *first_entity);
 	}
+	else if (select_data->labels.size == 0) {
+		unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+		unsigned int inspector_index = GetInspectorIndex(system->GetWindowName(window_index));
+		ChangeInspectorToNothing(data->editor_state, inspector_index);
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------
