@@ -186,10 +186,44 @@ namespace ECSEngine {
 
 	unsigned int GetInstanceFromFramebuffer(Graphics* graphics, RenderTargetView render_target, uint2 pixel_position)
 	{
+		unsigned int value;
+		GetInstancesFromFramebuffer(graphics, render_target, pixel_position, pixel_position + uint2(1, 1), &value);
+		return value;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	// The functor will be called with the pixel data, the clamped top left copy corner
+	// and the clamped  bottom right copy corner, the copy size and the mapped texture row byte size
+	// The signature is (unsigned int* texture_data, uint2 top_left_copy_corner, 
+	// uint2 bottom_right_copy_corner, uint2 copy_size, unsigned int mapped_texture_row_byte_size)
+	template<typename Functor>
+	void GetInstancesFromFramebufferMain(
+		Graphics* graphics,
+		RenderTargetView render_target,
+		uint2 top_left,
+		uint2 bottom_right,
+		Functor&& functor
+	) {
+		Texture2D render_texture = render_target.GetResource();
+		Texture2DDescriptor render_texture_descriptor = GetTextureDescriptor(render_texture);
+
+		uint2 top_left_copy_corner = {
+			function::SaturateSub<unsigned int>(top_left.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS),
+			function::SaturateSub<unsigned int>(top_left.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS)
+		};
+
+		uint2 bottom_right_copy_corner = {
+			function::ClampMax(bottom_right.x + ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS, render_texture_descriptor.size.x),
+			function::ClampMax(bottom_right.y + ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS, render_texture_descriptor.size.y)
+		};
+
+		uint2 copy_size = bottom_right_copy_corner - top_left_copy_corner;
+
 		// Create a temporary staging readback texture
 		Texture2DDescriptor temporary_texture_descriptor;
 		temporary_texture_descriptor.usage = ECS_GRAPHICS_USAGE_STAGING;
-		temporary_texture_descriptor.size = { ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS * 2 + 1, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS * 2 + 1 };
+		temporary_texture_descriptor.size = copy_size;
 		temporary_texture_descriptor.bind_flag = ECS_GRAPHICS_BIND_NONE;
 		temporary_texture_descriptor.cpu_flag = ECS_GRAPHICS_CPU_ACCESS_READ;
 		temporary_texture_descriptor.mip_levels = 1;
@@ -197,57 +231,119 @@ namespace ECSEngine {
 
 		Texture2D temporary_texture = graphics->CreateTexture(&temporary_texture_descriptor, true);
 
-		Texture2D render_texture = render_target.GetResource();
-		Texture2DDescriptor render_texture_descriptor = GetTextureDescriptor(render_texture);
-
-		uint2 top_left_copy_corner = {
-			function::SaturateSub<unsigned int>(pixel_position.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS),
-			function::SaturateSub<unsigned int>(pixel_position.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS)
-		};
-
-		uint2 bottom_right_copy_corner = {
-			function::ClampMax(pixel_position.x + ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS, render_texture_descriptor.size.x),
-			function::ClampMax(pixel_position.y + ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS, render_texture_descriptor.size.y)
-		};
-
-		uint2 copy_size = bottom_right_copy_corner - top_left_copy_corner;
-		copy_size.x++;
-		copy_size.y++;
-
 		CopyTextureSubresource(temporary_texture, { 0, 0 }, 0, render_texture, top_left_copy_corner, copy_size, 0, graphics->GetContext());
 
 		// Now open the texture and read the pixels
 		MappedTexture mapped_texture = graphics->MapTexture(temporary_texture, ECS_GRAPHICS_MAP_READ);
 		unsigned int* texture_data = (unsigned int*)mapped_texture.data;
 
-		unsigned int final_instance_index = 0;
-
-		// Read the values now
-		for (unsigned int row = 0; row < copy_size.x; row++) {
-			for (unsigned int column = 0; column < copy_size.y; column++) {
-				uint2 current_position = { row, column };
-				unsigned int instance_index, pixel_thickness;
-				function::RetrieveBlendedBits(
-					function::IndexTextureEx(texture_data, current_position.x, current_position.y, mapped_texture.row_byte_size),
-					32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
-					ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
-					instance_index,
-					pixel_thickness
-				);
-
-				int2 int_current_position = int2(current_position.x + top_left_copy_corner.x, current_position.y + top_left_copy_corner.y);
-				int2 int_pixel_position = int2(pixel_position.x, pixel_position.y);
-				int2 difference = AbsoluteDifference(int_pixel_position, int_current_position);
-				if (difference.x <= pixel_thickness && difference.y <= pixel_thickness) {
-					final_instance_index = instance_index;
-				}
-			}
-		}
+		functor(texture_data, top_left_copy_corner, bottom_right_copy_corner, copy_size, mapped_texture.row_byte_size);
 
 		graphics->UnmapTexture(temporary_texture);
 		temporary_texture.Release();
+	}
 
-		return final_instance_index - 1;
+	void GetInstancesFromFramebuffer(
+		Graphics* graphics, 
+		RenderTargetView render_target, 
+		uint2 top_left, 
+		uint2 bottom_right, 
+		unsigned int* values
+	)
+	{
+		GetInstancesFromFramebufferMain(graphics, render_target, top_left, bottom_right, [&](
+			unsigned int* texture_data, 
+			uint2 top_left_copy_corner,
+			uint2 bottom_right_copy_corner,
+			uint2 copy_size,
+			unsigned int mapped_texture_row_byte_size
+		) {
+			uint2 dimensions = bottom_right - top_left;
+			memset(values, 0, sizeof(unsigned int) * dimensions.x * dimensions.y);
+
+			// Read the values now
+			for (unsigned int row = 0; row < copy_size.y; row++) {
+				for (unsigned int column = 0; column < copy_size.x; column++) {
+					unsigned int instance_index, pixel_thickness;
+					function::RetrieveBlendedBits(
+						function::IndexTextureEx(texture_data, row, column, mapped_texture_row_byte_size),
+						32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+						ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+						instance_index,
+						pixel_thickness
+					);
+
+					uint2 pixel_thickness2 = { pixel_thickness, pixel_thickness };
+					uint2 current_position = uint2(row + top_left_copy_corner.x, column + top_left_copy_corner.y);
+					uint2 test_top_left = current_position - pixel_thickness2;
+					uint2 test_bottom_right = current_position + pixel_thickness2;
+					uint4 overlap = function::RectangleOverlap(test_top_left, test_bottom_right, top_left, bottom_right);
+
+					// Now iterate over the positions where instances need to be retrieved
+					unsigned int overlap_width = overlap.z - overlap.x + 1;
+					unsigned int overlap_height = overlap.w - overlap.y + 1;
+					for (unsigned int overlap_row = 0; overlap_row < overlap_height; overlap_row++) {
+						for (unsigned int overlap_column = 0; overlap_column < overlap_width; overlap_column++) {
+							uint2 current_instance_position = top_left + uint2(overlap_row, overlap_column);
+							uint2 difference = AbsoluteDifference(current_instance_position, current_position);
+							if (difference.x <= pixel_thickness && difference.y <= pixel_thickness) {
+								values[overlap_row * dimensions.x + overlap_column] = instance_index;
+							}
+						}
+					}
+				}
+			}
+
+			// Now we need to decrement the the values by one
+			// In order to preserve the right order and for pixels that don't have a match
+			// to return -1
+			for (unsigned int index = 0; index < dimensions.x * dimensions.y; index++) {
+				values[index]--;
+			}
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetInstancesFromFramebufferFiltered(
+		Graphics* graphics, 
+		RenderTargetView render_target, 
+		uint2 top_left, 
+		uint2 bottom_right, 
+		CapacityStream<unsigned int>* values
+	)
+	{
+		GetInstancesFromFramebufferMain(graphics, render_target, top_left, bottom_right, [&](
+			unsigned int* texture_data,
+			uint2 top_left_copy_corner,
+			uint2 bottom_right_copy_corner,
+			uint2 copy_size,
+			unsigned int mapped_texture_row_byte_size
+		) {
+			// Here ignore pixel thickness
+			uint2 dimensions = bottom_right - top_left;
+			uint2 offsets = top_left - top_left_copy_corner;
+
+			for (unsigned int row = 0; row < dimensions.y; row++) {
+				for (unsigned int column = 0; column < dimensions.x; column++) {
+					unsigned int instance_index, pixel_thickness;
+					function::RetrieveBlendedBits(
+						function::IndexTextureEx(texture_data, offsets.x + row, offsets.y + column, mapped_texture_row_byte_size),
+						32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+						ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+						instance_index,
+						pixel_thickness
+					);
+
+					if (instance_index != 0) {
+						instance_index--;
+						CapacityStream<unsigned int> addition = { &instance_index, 1, 1 };
+						// Check to see if it exists and add it if not
+						function::StreamAddUniqueSearchBytes(*values, addition);
+					}
+				}
+			}
+		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

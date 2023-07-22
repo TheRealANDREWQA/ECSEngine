@@ -1200,8 +1200,16 @@ namespace ECSEngine {
 			uint2 GetWindowTexelSize(unsigned int window_index) const;
 
 			// Returns the texel offset from the beginning of the given window
-			// If the position falls outside the bounds it will return { -1, -1 }
+			// If the position falls outside the bounds, it will return { -1, -1 }
 			uint2 GetWindowTexelPosition(unsigned int window_index, float2 position) const;
+
+			// Returns the texel offset from the beginning of the given window
+			// If the position falls outside the bounds, it will return the offset as it is 
+			int2 GetWindowTexelPositionEx(unsigned int window_index, float2 position) const;
+
+			// Returns the texel offset from the beginning of the given window
+			// If the position falls outside the bounds, it will be clamped to a border/corner
+			uint2 GetWindowTexelPositionClamped(unsigned int window_index, float2 position) const;
 
 			// Returns the pixel offset from the beginning of the currently hovered window
 			uint2 GetMousePositionHoveredWindowTexelPosition() const;

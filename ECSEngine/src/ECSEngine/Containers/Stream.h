@@ -998,16 +998,22 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		void Resize(unsigned int new_capacity) {
 			void* new_buffer = nullptr;
-			if (buffer != nullptr && size > 0) {
-				unsigned int copy_size = size < new_capacity ? size : new_capacity;
-				new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T));
-				ECS_ASSERT(new_buffer != nullptr);
-				if (new_buffer != buffer) {
-					memcpy(new_buffer, buffer, MemoryOf(copy_size));
+
+			if (new_capacity != 0) {
+				if (buffer != nullptr && size > 0) {
+					unsigned int copy_size = size < new_capacity ? size : new_capacity;
+					new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T));
+					ECS_ASSERT(new_buffer != nullptr);
+					if (new_buffer != buffer) {
+						memcpy(new_buffer, buffer, MemoryOf(copy_size));
+					}
+				}
+				else {
+					new_buffer = ECSEngine::Allocate(allocator, MemoryOf(new_capacity), alignof(T));
 				}
 			}
 			else {
-				new_buffer = ECSEngine::Allocate(allocator, MemoryOf(new_capacity), alignof(T));
+				FreeBuffer();
 			}
 
 			buffer = (T*)new_buffer;
@@ -1016,13 +1022,19 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		void ResizeNoCopy(unsigned int new_capacity) {
 			void* new_buffer = nullptr;
-			if (buffer != nullptr && size > 0) {
-				unsigned int copy_size = size < new_capacity ? size : new_capacity;
-				new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T));
-				ECS_ASSERT(new_buffer != nullptr);
+
+			if (new_capacity > 0) {
+				if (buffer != nullptr && size > 0) {
+					unsigned int copy_size = size < new_capacity ? size : new_capacity;
+					new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T));
+					ECS_ASSERT(new_buffer != nullptr);
+				}
+				else {
+					new_buffer = ECSEngine::Allocate(allocator, MemoryOf(new_capacity), alignof(T));
+				}
 			}
 			else {
-				new_buffer = ECSEngine::Allocate(allocator, MemoryOf(new_capacity), alignof(T));
+				FreeBuffer();
 			}
 
 			buffer = (T*)new_buffer;

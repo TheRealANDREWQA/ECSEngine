@@ -705,7 +705,49 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		unsigned int FindString(const char* ECS_RESTRICT string, Stream<const char*> other)
+		uint2 LineOverlap(unsigned int first_start, unsigned int first_end, unsigned int second_start, unsigned int second_end)
+		{
+			unsigned int start = -1;
+			// We set length to -1 such that if there is no overlap, it will return
+			// { -1, -2 } which will return a length of 0 when calculated
+			unsigned int length = -1;
+			if (IsInRange(first_start, second_start, second_end)) {
+				start = first_start;
+				length = function::ClampMax(first_end, second_end) - start;
+			}
+			else if (first_start < second_start && first_end >= second_start) {
+				start = second_start;
+				length = function::ClampMax(first_end - second_start, second_end - second_start);
+			}
+
+			return { start, start + length };
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		uint4 RectangleOverlap(uint2 first_top_left, uint2 first_bottom_right, uint2 second_top_left, uint2 second_bottom_right, bool zero_if_not_valid)
+		{
+			uint2 overlap_x = LineOverlap(first_top_left.x, first_bottom_right.x, second_top_left.x, second_bottom_right.x);
+			uint2 overlap_y = LineOverlap(first_top_left.y, first_bottom_right.y, second_top_left.y, second_bottom_right.y);
+
+			unsigned int width = overlap_x.y - overlap_x.x;
+			unsigned int height = overlap_y.y - overlap_y.x;
+
+			if (zero_if_not_valid) {
+				if (width == 0) {
+					overlap_y.y = overlap_y.x;
+				}
+				else if (height == 0) {
+					overlap_x.y = overlap_x.x;
+				}
+			}
+
+			return { overlap_x.x, overlap_y.x, overlap_x.y, overlap_y.y };
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		unsigned int FindString(const char* string, Stream<const char*> other)
 		{
 			Stream<char> stream_string = string;
 			for (size_t index = 0; index < other.size; index++) {
@@ -730,10 +772,10 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		unsigned int FindString(const wchar_t* ECS_RESTRICT string, Stream<const wchar_t*> other) {
+		unsigned int FindString(const wchar_t* string, Stream<const wchar_t*> other) {
 			Stream<wchar_t> stream_string = string;
 			for (size_t index = 0; index < other.size; index++) {
-				if (CompareStrings(string, other[index])) {
+				if (CompareStrings(string, Stream<wchar_t>(other[index]))) {
 					return index;
 				}
 			}

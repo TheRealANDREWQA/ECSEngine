@@ -202,13 +202,13 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 		else {
 			// Only update the thumbnail if there is something to update or if the region scale changed
 			bool dimensions_changed = false;
-			uint2 texture_size = GetTextureDimensions(data->thumbnail.texture.GetResource());
+			uint2 texture_size = GetTextureDimensions(data->thumbnail.texture.AsTexture2D());
 			uint2 texture_size_from_region = calculate_texture_size_from_region(window_size, drawer->GetRegionScale());
 			dimensions_changed = texture_size != texture_size_from_region;
 
 			if (dimensions_changed) {
 				// Release the texture and the view
-				Texture2D texture = data->thumbnail.texture.GetResource();
+				Texture2D texture = data->thumbnail.texture.AsTexture2D();
 				graphics->FreeResource(texture);
 				graphics->FreeResource(data->thumbnail.texture);
 

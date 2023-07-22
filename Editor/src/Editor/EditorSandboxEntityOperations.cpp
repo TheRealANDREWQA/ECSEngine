@@ -888,6 +888,13 @@ const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, un
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+Stream<Entity> GetSandboxSelectedEntities(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	return GetSandbox(editor_state, sandbox_index)->selected_entities.ToStream();
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 bool IsSandboxEntitySelected(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
 	return FindSandboxSelectedEntityIndex(editor_state, sandbox_index, entity) != -1;

@@ -11,6 +11,9 @@
 #include "../Editor/EditorSandboxEntityOperations.h"
 #include "ECSEngineSampleTexture.h"
 
+// Use this to smoothen the selection
+#define LEFT_CLICK_SELECTION_LAZY_RETRIEVAL 50
+
 struct SceneDrawData {
 	EditorState* editor_state;
 	uint2 previous_texel_size;
@@ -137,24 +140,6 @@ void SceneTranslationAction(ActionData* action_data) {
 	}
 }
 
-// Returns true if the position has changed and it is preventing from using the RuntimeGraphics()
-// Else false
-bool DetermineHoveredElement(SceneDrawData* data, unsigned int sandbox_index, uint2 hovered_texel_offset, Entity* hovered_entity) {
-	// We need the immediate context - if there is no one loading something, then perform the detection
-	if (!EditorStateHasFlag(data->editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		// Redermine the hovered entity
-		RenderTargetView instanced_framebuffer = GetSandboxInstancedFramebuffer(data->editor_state, sandbox_index);
-		// The instance identifier is the entity index at the moment
-		unsigned int instance_identifier = GetInstanceFromFramebuffer(data->editor_state->RuntimeGraphics(), instanced_framebuffer, hovered_texel_offset);
-		*hovered_entity = { instance_identifier };
-
-		return false;
-	}
-	else {
-		return true;
-	}
-}
-
 void SceneZoomAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
@@ -184,30 +169,151 @@ void SceneZoomAction(ActionData* action_data) {
 	// Zoom end
 }
 
+struct SceneLeftClickableActionData {
+	EditorState* editor_state;
+	unsigned int sandbox_index;
+	uint2 click_texel_position;
+	float2 click_ui_position;
+	bool enter_selection_mode;
+
+	// Use lazy retrieval of selection - that is trigger it
+	// every LEFT_CLICK_SELECTION_LAZY_RETRIEVAL ms in order
+	// to make the frame rate better
+	Timer timer;
+
+	// This is used for the selection mode to add/disable
+	// entities
+	Stream<Entity> original_selection;
+};
+
 void SceneLeftClickableAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	SceneActionData* data = (SceneActionData*)_data;
+	SceneLeftClickableActionData* data = (SceneLeftClickableActionData*)_data;
 
-	EditorState* editor_state = data->draw_data->editor_state;
+	EditorState* editor_state = data->editor_state;
 	unsigned int sandbox_index = data->sandbox_index;
 
-	if (IsClickableTrigger(action_data)) {
-		uint2 hovered_texel_offset = system->GetMousePositionHoveredWindowTexelPosition();
-		Entity hovered_entity;
-		bool should_wait = DetermineHoveredElement(data->draw_data, sandbox_index, hovered_texel_offset, &hovered_entity);
-		if (should_wait) {
-			// At the moment don't do anything
+	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
+		data->click_ui_position = mouse_position;
+		data->click_texel_position = system->GetMousePositionHoveredWindowTexelPosition();
+		data->enter_selection_mode = false;
+		data->original_selection.InitializeAndCopy(editor_state->EditorAllocator(), GetSandboxSelectedEntities(editor_state, sandbox_index));
+	}
+	else {
+		// Check to see if the mouse moved
+		unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+		uint2 hovered_texel_offset = system->GetWindowTexelPositionClamped(window_index, mouse_position);
+		if (hovered_texel_offset != data->click_texel_position && !data->enter_selection_mode) {
+			// Enter the selection mode
+			data->enter_selection_mode = true;
+			data->timer.SetNewStart();
 		}
-		else {
-			// Now commit the selection
-			if (IsSandboxEntityValid(editor_state, sandbox_index, hovered_entity)) {
-				ChangeSandboxSelectedEntities(editor_state, sandbox_index, { &hovered_entity, 1 });
+
+		// Check to see if the RuntimeGraphics is available for selection
+		if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+			if (data->enter_selection_mode) {
+				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+				if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) >= LEFT_CLICK_SELECTION_LAZY_RETRIEVAL) {
+					ECS_STACK_CAPACITY_STREAM(unsigned int, selected_entities, ECS_KB * 16);
+					RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
+					uint2 top_left = BasicTypeMin(hovered_texel_offset, data->click_texel_position);
+					uint2 bottom_right = BasicTypeMax(hovered_texel_offset, data->click_texel_position);
+
+					GetInstancesFromFramebufferFiltered(editor_state->RuntimeGraphics(), instanced_view, top_left, bottom_right, &selected_entities);
+
+					if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+						ChangeSandboxSelectedEntities(editor_state, sandbox_index, data->original_selection);
+
+						// Reduce the selection by these entities
+						for (unsigned int index = 0; index < selected_entities.size; index++) {
+							// This checks to see that the entity exists and 
+							RemoveSandboxSelectedEntity(editor_state, sandbox_index, selected_entities[index]);
+						}
+					}
+					else if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
+						// Add to the sxisting selection
+						ChangeSandboxSelectedEntities(editor_state, sandbox_index, data->original_selection);
+
+						// Add to the selection these entities that do not exist
+						for (unsigned int index = 0; index < selected_entities.size; index++) {
+							if (!IsSandboxEntitySelected(editor_state, sandbox_index, selected_entities[index])) {
+								AddSandboxSelectedEntity(editor_state, sandbox_index, selected_entities[index]);
+							}
+						}
+					}
+					else {
+						if (selected_entities.size > 0) {
+							// We can reinterpret the unsigned ints as entities 
+							ChangeSandboxSelectedEntities(editor_state, sandbox_index, { (Entity*)selected_entities.buffer, selected_entities.size });
+						}
+						else {
+							ClearSandboxSelectedEntities(editor_state, sandbox_index);
+						}
+					}
+
+					
+					data->timer.SetNewStart();
+				}
+
+				float2 selection_top_left = BasicTypeMin(mouse_position, data->click_ui_position);
+				float2 selection_bottom_right = BasicTypeMax(mouse_position, data->click_ui_position);
+				float2 selection_scale = selection_bottom_right - selection_top_left;
+
+				Color selection_color = EDITOR_SELECT_COLOR;
+				selection_color.alpha = 150;
+				system->SetSprite(
+					dockspace,
+					border_index,
+					ECS_TOOLS_UI_TEXTURE_MASK,
+					selection_top_left,
+					selection_scale,
+					buffers,
+					counts,
+					selection_color,
+					{0.0f, 0.0f},
+					{1.0f, 1.0f},
+					ECS_UI_DRAW_LATE
+				);
+
+				float2 border_scale = { ECS_TOOLS_UI_ONE_PIXEL_X * 2, ECS_TOOLS_UI_ONE_PIXEL_Y * 2 };
+				CreateSolidColorRectangleBorder<false>(
+					selection_top_left,
+					selection_scale,
+					border_scale,
+					selection_color,
+					counts,
+					buffers
+				);
 			}
-			else {
-				// No entity was hovered, clear the selection
-				ClearSandboxSelectedEntities(editor_state, sandbox_index);
+			else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
+				// Only a single selection
+				RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
+				Entity selected_entity = GetInstanceFromFramebuffer(editor_state->RuntimeGraphics(), instanced_view, hovered_texel_offset);
+				if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) || keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
+					if (IsSandboxEntityValid(editor_state, sandbox_index, selected_entity)) {
+						// See if the entity exists or not
+						if (IsSandboxEntitySelected(editor_state, sandbox_index, selected_entity)) {
+							RemoveSandboxSelectedEntity(editor_state, sandbox_index, selected_entity);
+						}
+						else {
+							AddSandboxSelectedEntity(editor_state, sandbox_index, selected_entity);
+						}
+					}
+				}
+				else {
+					if (IsSandboxEntityValid(editor_state, sandbox_index, selected_entity)) {
+						ChangeSandboxSelectedEntities(editor_state, sandbox_index, { &selected_entity, 1 });
+					}
+					else {
+						ClearSandboxSelectedEntities(editor_state, sandbox_index);
+					}
+				}
 			}
+		}
+
+		if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
+			data->original_selection.Deallocate(editor_state->EditorAllocator());
 		}
 	}
 }
@@ -245,7 +351,12 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			drawer.SetWindowClickable(&translation_handler, ECS_MOUSE_MIDDLE);
 			UIActionHandler zoom_handler = { SceneZoomAction, &hoverable_data, sizeof(hoverable_data) };
 			drawer.SetWindowHoverable(&zoom_handler);
-			UIActionHandler selection_handler = { SceneLeftClickableAction, &hoverable_data, sizeof(hoverable_data) };
+
+			SceneLeftClickableActionData left_clickable_data;
+			left_clickable_data.editor_state = editor_state;
+			left_clickable_data.sandbox_index = sandbox_index;
+			// Set the phase to late to have the selection border be drawn over the main sprite
+			UIActionHandler selection_handler = { SceneLeftClickableAction, &left_clickable_data, sizeof(left_clickable_data), ECS_UI_DRAW_LATE };
 			drawer.SetWindowClickable(&selection_handler);
 
 			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_index, sandbox_graphics_module_index, drawer);

@@ -134,7 +134,7 @@ namespace ECSEngine {
 			float2 scale;
 		};
 
-		using UISpriteTexture = ResourceView;
+		typedef ResourceView UISpriteTexture;
 
 #pragma endregion
 

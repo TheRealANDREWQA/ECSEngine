@@ -4064,33 +4064,33 @@ namespace ECSEngine {
 				m_graphics->GetContext()
 			);
 
-			if (active_region) {
-				m_focused_window_data.buffers = buffers + ECS_TOOLS_UI_MATERIALS;
-				m_focused_window_data.counts = vertex_count + ECS_TOOLS_UI_MATERIALS;
-			}
 			if (is_hoverable && m_focused_window_data.hoverable_handler.phase == ECS_UI_DRAW_LATE) {
 				HandleHoverable(data->mouse_position, data->thread_id, buffers + ECS_TOOLS_UI_MATERIALS, vertex_count + ECS_TOOLS_UI_MATERIALS);
 			}
+			if (active_region) {
+				m_focused_window_data.buffers = buffers + ECS_TOOLS_UI_MATERIALS;
+				m_focused_window_data.counts = vertex_count + ECS_TOOLS_UI_MATERIALS;
 
-			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
-				if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_LATE) {
-					if (m_mouse->IsDown(button_type)) {
-						HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
-					}
-					else if (m_mouse->IsReleased(button_type)) {
-						HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
-						if (m_focused_window_data.clickable_handler[button_type].action != nullptr) {
-							if (m_focused_window_data.clickable_handler[button_type].data_size != 0) {
-								m_memory->Deallocate(m_focused_window_data.clickable_handler[button_type].data);
+				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
+					if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_LATE) {
+						if (m_mouse->IsDown(button_type)) {
+							HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
+						}
+						else if (m_mouse->IsReleased(button_type)) {
+							HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
+							if (m_focused_window_data.clickable_handler[button_type].action != nullptr) {
+								if (m_focused_window_data.clickable_handler[button_type].data_size != 0) {
+									m_memory->Deallocate(m_focused_window_data.clickable_handler[button_type].data);
+								}
+								m_focused_window_data.clickable_handler[button_type].action = nullptr;
+								m_focused_window_data.clickable_handler[button_type].phase = ECS_UI_DRAW_NORMAL;
 							}
-							m_focused_window_data.clickable_handler[button_type].action = nullptr;
-							m_focused_window_data.clickable_handler[button_type].phase = ECS_UI_DRAW_NORMAL;
 						}
 					}
+					});
+				if (m_focused_window_data.general_handler.phase == ECS_UI_DRAW_LATE && !m_mouse->IsPressed(ECS_MOUSE_LEFT)) {
+					HandleFocusedWindowGeneral(data->mouse_position, data->thread_id);
 				}
-			});
-			if (m_focused_window_data.general_handler.phase == ECS_UI_DRAW_LATE) {
-				HandleFocusedWindowGeneral(data->mouse_position, data->thread_id);
 			}
 
 			data->dockspace->borders[data->border_index].draw_resources.UnmapLate(m_graphics->GetContext());
@@ -7068,6 +7068,30 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		int2 UISystem::GetWindowTexelPositionEx(unsigned int window_index, float2 position) const
+		{
+			float2 window_position = GetWindowPosition(window_index);
+			float2 window_scale = GetWindowScale(window_index);
+			float2 difference = position - window_position;
+			difference.x = difference.x * m_window_os_size.x * 0.5f;
+			difference.y = difference.y * m_window_os_size.y * 0.5f;
+			return int2(difference.x, difference.y);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		uint2 UISystem::GetWindowTexelPositionClamped(unsigned int window_index, float2 position) const
+		{
+			int2 texel_offset = GetWindowTexelPositionEx(window_index, position);
+			float2 window_scale = GetWindowScale(window_index);
+			window_scale = window_scale * float2(m_window_os_size.x, m_window_os_size.y) * float2::Splat(0.5f);
+			int2 window_int_scale = int2(window_scale.x, window_scale.y);
+			texel_offset = BasicTypeClamp(texel_offset, int2(0, 0), window_int_scale);
+			return uint2(texel_offset.x, texel_offset.y);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		uint2 UISystem::GetMousePositionHoveredWindowTexelPosition() const
 		{
 			float2 mouse_position = GetNormalizeMousePosition();
@@ -9406,12 +9430,23 @@ namespace ECSEngine {
 				if (buffer_index != -1) {
 					resource->added_allocations.RemoveSwapBack(buffer_index);
 					// Relocate the buffer
-					void* new_allocation = m_memory->Allocate(resource->added_allocations.MemoryOf(resource->added_allocations.size));
-					resource->added_allocations.CopyTo(new_allocation);
+					if (resource->added_allocations.size > 0) {
+						void* new_allocation = m_memory->Allocate(resource->added_allocations.MemoryOf(resource->added_allocations.size));
+						resource->added_allocations.CopyTo(new_allocation);
 
-					void* old_buffer = resource->added_allocations.buffer;
-					resource->added_allocations.buffer = (void**)new_allocation;
-					ReplaceWindowMemoryResource(window_index, old_buffer, new_allocation);
+						void* old_buffer = resource->added_allocations.buffer;
+						resource->added_allocations.buffer = (void**)new_allocation;
+						ReplaceWindowMemoryResource(window_index, old_buffer, new_allocation);
+
+						// Deallocate the previous buffer
+						m_memory->Deallocate(old_buffer);
+					}
+					else {
+						RemoveWindowMemoryResource(window_index, resource->added_allocations.buffer);
+						m_memory->Deallocate(resource->added_allocations.buffer);
+						resource->added_allocations.buffer = nullptr;
+					}
+
 					return true;
 				}
 				else {

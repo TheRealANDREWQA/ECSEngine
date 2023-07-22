@@ -377,6 +377,11 @@ const ECSEngine::EntityManager* GetSandboxEntityManager(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+ECSEngine::Stream<ECSEngine::Entity> GetSandboxSelectedEntities(
+	const EditorState* editor_state,
+	unsigned int sandbox_index
+);
+
 // Returns true if the given entity is selected in the scene for that sandbox
 bool IsSandboxEntitySelected(
 	const EditorState* editor_state,
