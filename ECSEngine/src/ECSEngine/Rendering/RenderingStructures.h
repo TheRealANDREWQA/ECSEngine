@@ -982,6 +982,10 @@ namespace ECSEngine {
 
 		ID3D11Resource* GetResource() const;
 
+		ECS_INLINE Texture2D AsTexture2D() const {
+			return GetResource();
+		}
+
 		ECS_INLINE ID3D11RenderTargetView* Interface() const {
 			return view;
 		}

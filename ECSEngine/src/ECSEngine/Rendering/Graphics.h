@@ -415,6 +415,16 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Helper Shader
+
+		void BindMousePickShaderPixelCBuffer(ConstantBuffer buffer);
+
+		ConstantBuffer CreateMousePickShaderPixelCBuffer(bool temporary = true);
+
+		void UpdateMousePickShaderPixelCBuffer(ConstantBuffer buffer, unsigned int blended_value);
+
+#pragma endregion
+
 #pragma region Component Creation
 
 		// ----------------------------------------------- Component Creation ----------------------------------------------------

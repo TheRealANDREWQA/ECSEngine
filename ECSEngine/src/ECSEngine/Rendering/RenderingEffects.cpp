@@ -136,15 +136,11 @@ namespace ECSEngine {
 			Matrix mvp_matrix;
 		};
 
-		struct PixelCBuffer {
-			unsigned int instance_index_pixel_thickness;
-		};
-
 		ConstantBuffer vertex_cbuffer = graphics->CreateConstantBuffer(sizeof(VertexCBuffer), true);
-		ConstantBuffer pixel_cbuffer = graphics->CreateConstantBuffer(sizeof(PixelCBuffer), true);
+		ConstantBuffer pixel_cbuffer = graphics->CreateMousePickShaderPixelCBuffer();
 
 		graphics->BindVertexConstantBuffer(vertex_cbuffer);
-		graphics->BindPixelConstantBuffer(pixel_cbuffer);
+		graphics->BindMousePickShaderPixelCBuffer(pixel_cbuffer);
 
 		graphics->ClearDepthStencil(depth_stencil);
 		// An instance index of 0 means that the slot is empty
@@ -160,19 +156,12 @@ namespace ECSEngine {
 			elements.MemoryOf(1),
 			vertex_cbuffer,
 			[&](size_t index) {
-				PixelCBuffer* pixel_data = (PixelCBuffer*)graphics->MapBuffer(pixel_cbuffer.buffer);
-				ECS_ASSERT(elements[index].pixel_thickness <= ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
 				unsigned int instance_index = elements[index].instance_index;
 				instance_index = instance_index == -1 ? (unsigned int)index : instance_index;
 				// Increase this value such that values of 0 are invalid
 				instance_index++;
-				pixel_data->instance_index_pixel_thickness = function::BlendBits<unsigned int>(
-					instance_index, 
-					elements[index].pixel_thickness, 
-					32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS, 
-					ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS
-				);
-				graphics->UnmapBuffer(pixel_cbuffer.buffer);
+				
+				graphics->UpdateMousePickShaderPixelCBuffer(pixel_cbuffer, GenerateRenderInstanceValue(instance_index, elements[index].pixel_thickness));
 			}
 		);
 
@@ -344,6 +333,83 @@ namespace ECSEngine {
 				}
 			}
 		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	size_t GetInstancesFramebufferAllocateSize(RenderTargetView render_target)
+	{
+		uint2 texture_dimensions = GetTextureDimensions(render_target.AsTexture2D());
+		return texture_dimensions.x * texture_dimensions.y * sizeof(unsigned int);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	CPUInstanceFramebuffer TransferInstancesFramebufferToCPU(Graphics* graphics, RenderTargetView render_target, unsigned int* values)
+	{
+		CPUInstanceFramebuffer cpu_framebuffer;
+		cpu_framebuffer.values = values;
+
+		// Create a staging texture and then copy from it
+		Texture2D current_texture = render_target.AsTexture2D();
+		Texture2D staging_texture = TextureToStaging(graphics, current_texture);
+
+		uint2 texture_dimensions = GetTextureDimensions(current_texture);
+		cpu_framebuffer.dimensions = texture_dimensions;
+		
+		MappedTexture mapped_values = graphics->MapTexture(staging_texture, ECS_GRAPHICS_MAP_READ);
+		// We need to copy row by row since the texture might have padding in between rows
+		for (unsigned int index = 0; index < texture_dimensions.y; index++) {
+			memcpy(values, mapped_values.data, sizeof(unsigned int) * texture_dimensions.x);
+			values += texture_dimensions.x;
+			mapped_values.data = function::OffsetPointer(mapped_values.data, mapped_values.row_byte_size);
+		}
+
+		graphics->UnmapTexture(staging_texture);
+		staging_texture.Release();
+
+		return cpu_framebuffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	CPUInstanceFramebuffer TransferInstancesFramebufferToCPUAndAllocate(Graphics* graphics, RenderTargetView render_target, AllocatorPolymorphic allocator)
+	{
+		size_t byte_size = GetInstancesFramebufferAllocateSize(render_target);
+		void* allocation = AllocateEx(allocator, byte_size);
+		return TransferInstancesFramebufferToCPU(graphics, render_target, (unsigned int*)allocation);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetInstancesFromFramebufferFilteredCPU(
+		CPUInstanceFramebuffer cpu_values,
+		uint2 top_left, 
+		uint2 bottom_right, 
+		CapacityStream<unsigned int>* filtered_values
+	)
+	{
+		size_t row_byte_size = sizeof(unsigned int) * cpu_values.dimensions.x;
+		uint2 dimensions = bottom_right - top_left;
+		for (unsigned int row = 0; row < dimensions.y; row++) {
+			for (unsigned int column = 0; column < dimensions.x; column++) {
+				unsigned int instance_index, pixel_thickness;
+				function::RetrieveBlendedBits(
+					function::IndexTextureEx(cpu_values.values, top_left.y + row, top_left.x + column, row_byte_size),
+					32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+					ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+					instance_index,
+					pixel_thickness
+				);
+
+				if (instance_index != 0) {
+					instance_index--;
+					CapacityStream<unsigned int> addition = { &instance_index, 1, 1 };
+					// Check to see if it exists and add it if not
+					function::StreamAddUniqueSearchBytes(*filtered_values, addition);
+				}
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

@@ -35,30 +35,39 @@ namespace ECSEngine {
 		float duration = 0.0f;
 	};
 
+	union DebugDrawerOutput {
+		ECS_INLINE DebugDrawerOutput() {}
+		ECS_INLINE DebugDrawerOutput(ColorFloat _color) : color(_color) {}
+		ECS_INLINE DebugDrawerOutput(unsigned int _instance_index) : instance_index(_instance_index) {}
+
+		ColorFloat color;
+		unsigned int instance_index;;
+	};
+
 	struct DebugLine {
 		float3 start;
 		float3 end;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugSphere {
 		float3 position;
 		float radius;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugPoint {
 		float3 position;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugRectangle {
 		float3 corner0;
 		float3 corner1;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
@@ -66,7 +75,7 @@ namespace ECSEngine {
 		float3 position;
 		float3 rotation;
 		float size;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
@@ -74,7 +83,7 @@ namespace ECSEngine {
 		float3 position;
 		float3 rotation;
 		float radius;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
@@ -83,7 +92,7 @@ namespace ECSEngine {
 		float3 rotation;
 		float length;
 		float size;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
@@ -91,9 +100,9 @@ namespace ECSEngine {
 		float3 translation;
 		float3 rotation;
 		float size;
-		ColorFloat color_x;
-		ColorFloat color_y;
-		ColorFloat color_z;
+		DebugDrawerOutput output_x;
+		DebugDrawerOutput output_y;
+		DebugDrawerOutput output_z;
 		DebugDrawCallOptions options;
 	};
 
@@ -101,14 +110,14 @@ namespace ECSEngine {
 		float3 point0;
 		float3 point1;
 		float3 point2;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugAABB {
 		float3 translation;
 		float3 scale;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
@@ -116,7 +125,7 @@ namespace ECSEngine {
 		float3 translation;
 		float3 rotation;
 		float3 scale;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
@@ -125,14 +134,12 @@ namespace ECSEngine {
 		float3 direction;
 		float size;
 		Stream<char> text;
-		ColorFloat color;
+		DebugDrawerOutput output;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugDrawerOutputInstance {
 		unsigned int instance_index;
-		unsigned int thread_index = ECS_DEBUG_DRAWER_OUTPUT_INSTANCE_IMMEDIATE;
-		unsigned char pixel_index;
 		DebugDrawCallOptions options = {};
 	};
 
@@ -389,11 +396,6 @@ namespace ECSEngine {
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration 0 or negative after substraction with time delta
 		// will be removed
-		void DrawAxesDeck(float time_delta);
-
-		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
-		// will be removed
 		void DrawTriangleDeck(float time_delta);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
@@ -418,59 +420,67 @@ namespace ECSEngine {
 #pragma region Output Instance Index
 
 		// These functions output into a framebuffer which is of type R32_UINT
-		// the instance index of 28 bits packed with 4 bits of pixel thickness
-		// For all of these functions, you can specify the thread_index for per thread
-		// addition, addition to the main pool or immediate draw
+		// the instance index of 29 bits packed with 3 bits of pixel thickness
+		// For all of these functions if the addition_stream is nullptr then it
+		// will draw immediately, otherwise it will add the entry to the stream
 
 		void OutputInstanceIndexLine(
 			float3 start, 
 			float3 end, 
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugLine>* addition_stream
 		);
 
 		void OutputInstanceIndexLine(
 			float3 translation,
 			float3 rotation,
 			float size,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugLine>* addition_stream
 		);
 
 		void OutputInstanceIndexSphere(
 			float3 translation,
 			float radius,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugSphere>* addition_stream
 		);
 
 		void OutputInstanceIndexPoint(
 			float3 translation,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugPoint>* addition_stream
 		);
 
 		void OutputInstanceIndexRectangle(
 			float3 corner0, 
 			float3 corner1,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugRectangle>* addition_stream
 		);
 
 		void OutputInstanceIndexCross(
 			float3 position, 
 			float3 rotation, 
 			float size,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugCross>* addition_stream
 		);
 
 		void OutputInstanceIndexCircle(
 			float3 position, 
 			float3 rotation, 
 			float radius,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugCircle>* addition_stream
 		);
 
 		void OutputInstanceIndexArrow(
 			float3 start, 
 			float3 end, 
 			float size,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugArrow>* addition_stream
 		);
 
 		void OutputInstanceIndexArrowRotation(
@@ -478,50 +488,135 @@ namespace ECSEngine {
 			float3 rotation,
 			float length,
 			float size,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugArrow>* addition_stream
 		);
 
 		void OutputInstanceIndexAxes(
 			float3 translation,
 			float3 rotation,
 			float size,
-			const DebugDrawerOutputInstance* instance
+			unsigned int instance_x,
+			unsigned int instance_y,
+			unsigned int instance_z,
+			DebugDrawCallOptions options,
+			AdditionStreamAtomic<DebugArrow>* addition_stream
 		);
 
 		void OutputInstanceIndexTriangle(
 			float3 point0, 
 			float3 point1, 
 			float3 point2,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugTriangle>* addition_stream
 		);
 
 		void OutputInstanceIndexAABB(
 			float3 translation, 
 			float3 scale,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugAABB>* addition_stream
 		);
 
 		void OutputInstanceIndexOOBB(
 			float3 translation, 
 			float3 rotation, 
 			float3 scale,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugOOBB>* addition_stream
 		);
 
+		// The allocator will be used to allocate the string
 		void OutputInstanceIndexString(
 			float3 translation,
 			float3 direction,
 			float size,
 			Stream<char> text,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugString>* addition_stream,
+			AllocatorPolymorphic allocator
 		);
 
+		// The allocator will be used to allocate the string
 		void OutputInstanceIndexStringRotation(
 			float3 translation,
 			float3 rotation,
 			float size,
 			Stream<char> text,
-			const DebugDrawerOutputInstance* instance
+			const DebugDrawerOutputInstance* instance,
+			AdditionStreamAtomic<DebugString>* addition_stream,
+			AllocatorPolymorphic allocator
+		);
+
+#pragma endregion
+
+#pragma region Output Instance Bulk
+
+		// The time delta is optional
+		void OutputInstanceIndexLineBulk(
+			const AdditionStreamAtomic<DebugLine>* addition_stream,
+			float time_delta = 0.0f
+		);
+
+		// The time delta is optional
+		void OutputInstanceIndexSphereBulk(
+			const AdditionStreamAtomic<DebugSphere>* addition_stream,
+			float time_delta = 0.0f
+		);
+
+		// The time delta is optional
+		void OutputInstanceIndexPointBulk(
+			const AdditionStreamAtomic<DebugPoint>* addition_stream,
+			float time_delta = 0.0f
+		);
+
+		// The time delta is optional
+		void OutputInstanceIndexRectangleBulk(
+			const AdditionStreamAtomic<DebugRectangle>* addition_stream,
+			float time_delta = 0.0f
+		);
+
+		// The time delta is optional
+		void OutputInstanceIndexCrossBulk(
+			const AdditionStreamAtomic<DebugCross>* addition_stream,
+			float time_delta = 0.0f
+		);
+
+		// The time delta is optional
+		void OutputInstanceIndexCircleBulk(
+			const AdditionStreamAtomic<DebugCircle>* addition_stream,
+			float time_delta = 0.0f
+		);
+
+		// The time delta is optional
+		void OutputInstanceIndexArrowBulk(
+			const AdditionStreamAtomic<DebugArrow>* addition_stream,
+			float time_delta = 0.0f
+		);
+
+		// The time delta is optional
+		void OutputInstanceIndexTriangleBulk(
+			const AdditionStreamAtomic<DebugTriangle>* addition_stream,
+			float time_delta = 0.0f
+		);
+
+		// The time delta is optional
+		void OutputInstanceIndexAABBBulk(
+			const AdditionStreamAtomic<DebugAABB>* addition_stream,
+			float time_delta = 0.0f
+		);
+
+		// The time delta is optional
+		void OutputInstanceIndexOOBBBulk(
+			const AdditionStreamAtomic<DebugOOBB>* addition_stream,
+			float time_delta = 0.0f
+		);
+
+		// The time delta is optional
+		// The allocator will be used to allocate the string
+		void OutputInstanceIndexStringBulk(
+			const AdditionStreamAtomic<DebugString>* addition_stream,
+			float time_delta = 0.0f
 		);
 
 #pragma endregion
@@ -545,8 +640,6 @@ namespace ECSEngine {
 
 		void FlushArrow(unsigned int thread_index);
 
-		void FlushAxes(unsigned int thread_index);
-
 		void FlushTriangle(unsigned int thread_index);
 
 		void FlushAABB(unsigned int thread_index);
@@ -559,55 +652,11 @@ namespace ECSEngine {
 
 #pragma region Set state
 
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetLineState(DebugDrawCallOptions options);
+		// It does not set the vertex buffers. The topology is TRIANGLELIST
+		void SetTransformShaderState(DebugDrawCallOptions options, DebugShaderOutput output);
 
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetSphereState(DebugDrawCallOptions options);
-
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetPointState(DebugDrawCallOptions options);
-
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetRectangleState(DebugDrawCallOptions options);
-
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetCrossState(DebugDrawCallOptions options);
-
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetCircleState(DebugDrawCallOptions options);
-
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetArrowCylinderState(DebugDrawCallOptions options);
-
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetArrowHeadState(DebugDrawCallOptions options);
-
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetAxesState(DebugDrawCallOptions options);
-
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetTriangleState(DebugDrawCallOptions options);
-
-		// The AABB is treated as an OOBB with no rotation - so no state required
-
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetOOBBState(DebugDrawCallOptions options);
-
-		// It does not set the vertex buffers - it sets the shaders, input layout, topology,
-		// rasterizer state and depth state
-		void SetStringState(DebugDrawCallOptions options);
+		// It does not set the vertex buffers. The topology is TRIANGLELIST
+		void SetStructuredShaderState(DebugDrawCallOptions options, DebugShaderOutput output);
 
 #pragma endregion
 
@@ -618,49 +667,11 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region Bindings
-
-		void BindSphereBuffers(VertexBuffer instanced_data);
-
-		void BindPointBuffers(VertexBuffer instanced_data);
-
-		void BindCrossBuffers(VertexBuffer instanced_data);
-
-		void BindCircleBuffers(VertexBuffer instanced_data);
-
-		void BindArrowCylinderBuffers(VertexBuffer instanced_data);
-
-		void BindArrowHeadBuffers(VertexBuffer instanced_data);
-
-		void BindCubeBuffers(VertexBuffer instanced_data);
-
-		void BindStringBuffers(VertexBuffer instanced_data);
-
-#pragma endregion
-
 #pragma region Draw Calls
 
-		void DrawCallLine(unsigned int instance_count);
+		void DrawCallStructured(unsigned int vertex_count, unsigned int instance_count);
 
-		void DrawCallSphere(unsigned int instance_count);
-
-		void DrawCallPoint(unsigned int instance_count);
-
-		void DrawCallRectangle(unsigned int instance_count);
-
-		void DrawCallCross(unsigned int instance_count);
-
-		void DrawCallCircle(unsigned int instance_count);
-
-		void DrawCallArrowCylinder(unsigned int instance_count);
-
-		void DrawCallArrowHead(unsigned int instance_count);
-
-		void DrawCallTriangle(unsigned int instance_count);
-		
-		void DrawCallAABB(unsigned int instance_count);
-
-		void DrawCallOOBB(unsigned int instance_count);
+		void DrawCallTransform(unsigned int index_count, unsigned int instance_count);
 
 #pragma endregion
 
@@ -668,7 +679,7 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic AllocatorTs() const;
 
-		void BindShaders(unsigned int index);
+		void BindShaders(unsigned int index, DebugShaderOutput output);
 
 		void Clear();
 
@@ -681,7 +692,9 @@ namespace ECSEngine {
 
 		void RestorePreviousRenderState(const GraphicsPipelineRenderState* state);
 
-		static MemoryManager DefaultAllocator(GlobalMemoryManager* global_memory);
+		ECS_INLINE static MemoryManager DefaultAllocator(GlobalMemoryManager* global_memory) {
+			return MemoryManager(DefaultAllocatorSize(), ECS_KB * 16, DefaultAllocatorSize(), global_memory);
+		}
 
 		ECS_INLINE static size_t DefaultAllocatorSize() {
 			return ECS_MB;
@@ -696,7 +709,6 @@ namespace ECSEngine {
 		DeckPowerOfTwo<DebugCross> crosses;
 		DeckPowerOfTwo<DebugCircle> circles;
 		DeckPowerOfTwo<DebugArrow> arrows;
-		DeckPowerOfTwo<DebugAxes> axes;
 		DeckPowerOfTwo<DebugTriangle> triangles;
 		DeckPowerOfTwo<DebugAABB> aabbs;
 		DeckPowerOfTwo<DebugOOBB> oobbs;
@@ -708,7 +720,6 @@ namespace ECSEngine {
 		CapacityStream<DebugCross>* thread_crosses;
 		CapacityStream<DebugCircle>* thread_circles;
 		CapacityStream<DebugArrow>* thread_arrows;
-		CapacityStream<DebugAxes>* thread_axes;
 		CapacityStream<DebugTriangle>* thread_triangles;
 		CapacityStream<DebugAABB>* thread_aabbs;
 		CapacityStream<DebugOOBB>* thread_oobbs;
@@ -718,14 +729,20 @@ namespace ECSEngine {
 		RasterizerState rasterizer_states[ECS_DEBUG_RASTERIZER_COUNT];
 		VertexBuffer positions_small_vertex_buffer;
 		VertexBuffer instanced_small_transform_vertex_buffer;
+		VertexBuffer output_instance_small_matrix_buffer;
+		VertexBuffer output_instance_small_id_buffer;
 		StructuredBuffer instanced_small_structured_buffer;
 		ResourceView instanced_structured_view;
+		StructuredBuffer output_instance_matrix_small_structured_buffer;
+		ResourceView output_instance_matrix_structured_view;
+		StructuredBuffer output_instance_id_small_structured_buffer;
+		ResourceView output_instance_id_structured_view;
 		Mesh* primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_COUNT];
 		CoalescedMesh* string_mesh;
 		VertexBuffer circle_buffer;
-		VertexShader vertex_shaders[ECS_DEBUG_SHADER_COUNT];
-		PixelShader pixel_shaders[ECS_DEBUG_SHADER_COUNT];
-		InputLayout layout_shaders[ECS_DEBUG_SHADER_COUNT];
+		VertexShader vertex_shaders[ECS_DEBUG_SHADER_COUNT][ECS_DEBUG_SHADER_OUTPUT_COUNT];
+		PixelShader pixel_shaders[ECS_DEBUG_SHADER_COUNT][ECS_DEBUG_SHADER_OUTPUT_COUNT];
+		InputLayout layout_shaders[ECS_DEBUG_SHADER_COUNT][ECS_DEBUG_SHADER_OUTPUT_COUNT];
 		Matrix camera_matrix;
 		float2* string_character_bounds;
 	};

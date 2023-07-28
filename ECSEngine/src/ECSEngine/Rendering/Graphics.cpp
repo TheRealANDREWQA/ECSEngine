@@ -783,6 +783,35 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+#pragma region Helper Shader
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindMousePickShaderPixelCBuffer(ConstantBuffer buffer)
+	{
+		BindPixelConstantBuffer(buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ConstantBuffer Graphics::CreateMousePickShaderPixelCBuffer(bool temporary)
+	{
+		return CreateConstantBuffer(sizeof(unsigned int), temporary);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::UpdateMousePickShaderPixelCBuffer(ConstantBuffer buffer, unsigned int blended_value)
+	{
+		UpdateBuffer(buffer.buffer, &blended_value, sizeof(blended_value));
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	IndexBuffer Graphics::CreateIndexBuffer(Stream<unsigned char> indices, bool temporary, DebugInfo debug_info)
 	{ 
 		return CreateIndexBuffer(

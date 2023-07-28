@@ -1,6 +1,7 @@
 #pragma once
-#include "..\Core.h"
+#include "../Core.h"
 #include "Stream.h"
+#include "../Utilities/Function.h"
 
 namespace ECSEngine {
 
@@ -421,11 +422,36 @@ namespace ECSEngine {
 			}
 		}
 
+		// Temp buffer needs to have at least 64 bytes long
+		// You should only read from this deck, not peform any mutable operations
+		static Deck<T, RangeSelector> InitializeTempReference(Stream<T> data, void* temp_buffer) {
+			Deck<T, RangeSelector> deck;
+
+			ulong2 next_capacity = RangeSelector::GetNextCapacity(data.size);
+			deck.buffers.buffer = (CapacityStream<T>*)temp_buffer;
+			deck.buffers.capacity = 1;
+			deck.buffers.size = 1;
+			deck.buffers.allocator = { nullptr };
+			temp_buffer = function::OffsetPointer(temp_buffer, sizeof(deck.buffers.buffer[0]));
+
+			deck.buffers[0] = { data.buffer, (unsigned int)data.size, (unsigned int)data.size };
+			deck.chunk_size = next_capacity.x;
+			deck.miscellaneous = next_capacity.y;
+
+			deck.chunks_with_elements.InitializeFromBuffer(temp_buffer, 1);
+			deck.chunks_with_elements[0] = 0;
+
+			return deck;
+		}
+
 		ResizableStream<CapacityStream<T>> buffers;
 		Stream<unsigned int> chunks_with_elements;
 		size_t chunk_size;
 		size_t miscellaneous;
 	};
+
+	// The GetNextCapacity() is used to initialize a temp reference to an existing Stream<T>
+	// It needs to return a ulong2 that represents { chunk_size, miscellaneous }
 
 	struct DeckRangeModulo {
 		ECS_INLINE static size_t Chunk(size_t index, size_t chunk_size, size_t miscellaneous) {
@@ -434,6 +460,10 @@ namespace ECSEngine {
 
 		ECS_INLINE static size_t Buffer(size_t index, size_t chunk_size, size_t miscellaneous) {
 			return index % chunk_size;
+		}
+
+		ECS_INLINE static ulong2 GetNextCapacity(size_t capacity) {
+			return { capacity, 0 };
 		}
 	};
 
@@ -444,6 +474,10 @@ namespace ECSEngine {
 
 		ECS_INLINE static size_t Buffer(size_t index, size_t chunk_size, size_t miscellaneous) {
 			return index & (chunk_size - 1);
+		}
+
+		ECS_INLINE static ulong2 GetNextCapacity(size_t capacity) {
+			return function::PowerOfTwoGreaterEx(capacity);
 		}
 	};
 

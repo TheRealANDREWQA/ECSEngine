@@ -161,7 +161,8 @@ namespace ECSEngine {
 		}
 		
 		Stream<T> ToStream() const {
-			return { buffer, size.load(ECS_RELAXED) };
+			unsigned int current_size = SpinWaitWrites();
+			return { buffer, current_size };
 		}
 
 		// It will atomically increment the size and if the size is still
@@ -180,12 +181,6 @@ namespace ECSEngine {
 				}
 			}
 			return false;
-		}
-
-		// Performs an action for all elements - including those which are pending to be written
-		template<typename Functor>
-		void PerformAction(unsigned int starting_index, Functor&& functor) {
-			unsigned int previous_write_index = Spinw
 		}
 
 		ECS_INLINE T& operator [](size_t index) {
@@ -245,6 +240,82 @@ namespace ECSEngine {
 		std::atomic<unsigned int> write_index;
 		std::atomic<unsigned int> size;
 		unsigned int capacity;
+	};
+
+	template<typename T>
+	struct AdditionStreamAtomic {
+		enum TYPE : unsigned char {
+			CAPACITY,
+			RESIZABLE,
+			ATOMIC
+		};
+
+		ECS_INLINE unsigned int Add(T element) {
+			if (IsCapacity()) {
+				return capacity_stream.AddAssert(element);
+			}
+			else if (IsResizable()) {
+				return resizable_stream.Add(element);
+			}
+			else {
+				return atomic_stream.Add(element);
+			}
+		}
+
+		ECS_INLINE unsigned int AddStream(Stream<T> elements) {
+			if (IsCapacity()) {
+				return capacity_stream.AddStreamAssert(elements);
+			}
+			else if (IsResizable()) {
+				return resizable_stream.AddStream(elements);
+			}
+			else {
+				return atomic_stream.AddStream(elements);
+			}
+		}
+
+		ECS_INLINE bool IsCapacity() const {
+			return tag == CAPACITY;
+		}
+
+		ECS_INLINE bool IsResizable() const {
+			return tag == RESIZABLE;
+		}
+
+		ECS_INLINE bool IsAtomic() const {
+			return tag == ATOMIC;
+		}
+
+		ECS_INLINE Stream<T> ToStream() const {
+			if (IsCapacity()) {
+				return capacity_stream.ToStream();
+			}
+			else if (IsResizable()) {
+				return resizable_stream.ToStream();
+			}
+			else {
+				return atomic_stream.ToStream();
+			}
+		}
+
+		ECS_INLINE bool IsInitialized() const {
+			if (IsCapacity()) {
+				return capacity_stream.capacity > 0;
+			}
+			else if (IsResizable()) {
+				return resizable_stream.allocator.allocator != nullptr;
+			}
+			else {
+				return atomic_stream.capacity > 0;
+			}
+		}
+
+		TYPE tag;
+		union {
+			CapacityStream<T> capacity_stream;
+			ResizableStream<T> resizable_stream;
+			AtomicStream<T> atomic_stream;
+		};
 	};
 
 }

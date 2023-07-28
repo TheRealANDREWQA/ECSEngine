@@ -344,6 +344,9 @@
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\MousePick.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\MousePick.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\VisualizeTexture.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugMousePick.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugStructuredInstance.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugTransformInstance.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="src\TODO.txt" />
