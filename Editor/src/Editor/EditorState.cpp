@@ -410,7 +410,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->editor_allocator = editor_allocator;
 	AllocatorPolymorphic polymorphic_editor_allocator = GetAllocatorPolymorphic(editor_allocator);
 
-	MemoryManager* multithreaded_editor_allocator = new MemoryManager(50'000'000, 4096, 50'000'000, global_memory_manager);
+	MemoryManager* multithreaded_editor_allocator = new MemoryManager(10'000'000, 4096, 10'000'000, global_memory_manager);
 	editor_state->multithreaded_editor_allocator = multithreaded_editor_allocator;
 
 	TaskManager* editor_task_manager = (TaskManager*)malloc(sizeof(TaskManager));

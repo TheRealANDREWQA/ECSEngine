@@ -1152,7 +1152,7 @@ namespace ECSEngine {
 	}
 
 	// Returns the euler angles in radians that correspond to that direction
-	ECS_INLINE float3 DirectionToRotation(float3 direction) {
+	ECS_INLINE float3 DirectionToRotationRad(float3 direction) {
 		float3 result;
 
 		Vector4 vector_dir(direction);
@@ -1160,6 +1160,11 @@ namespace ECSEngine {
 		vector_dir.StorePartialConstant<3>(&result);
 
 		return result;
+	}
+
+	// Returns the euler angles in angles that correspond to that direction
+	ECS_INLINE float3 DirectionToRotation(float3 direction) {
+		return RadToDeg(DirectionToRotationRad(direction));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

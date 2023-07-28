@@ -3956,6 +3956,8 @@ namespace ECSEngine {
 			);
 
 			bool is_hoverable = false;
+			bool is_clickable = false;
+			bool is_general = false;
 			if (!m_execute_events && data->mouse_region.dockspace == data->dockspace && data->mouse_region.border_index == data->border_index) {
 				bool active_click_handler = false;
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button) {
@@ -3985,7 +3987,7 @@ namespace ECSEngine {
 						);
 						SetNewFocusedDockspace(floating_dockspace, floating_type);
 						SetNewFocusedDockspaceRegion(data->dockspace, data->border_index, data->type);
-						bool is_clickable = DetectClickables(
+						is_clickable = DetectClickables(
 							vertex_count,
 							buffers,
 							data->dockspace,
@@ -3996,7 +3998,7 @@ namespace ECSEngine {
 							0,
 							button_type
 						);
-						bool is_general = false;
+						is_general = false;
 						if (button_type == ECS_MOUSE_LEFT) {
 							is_general = DetectGenerals(
 								vertex_count,
@@ -4009,6 +4011,7 @@ namespace ECSEngine {
 								0
 							);
 						}
+						active_region |= is_clickable | is_general;
 						m_frame_pacing = ((is_clickable || is_general) && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 					}
 				});

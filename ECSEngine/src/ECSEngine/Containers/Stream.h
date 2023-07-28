@@ -464,14 +464,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return true;
 		}
 
-		ECS_INLINE void AddAssert(T element) {
+		ECS_INLINE unsigned int AddAssert(T element) {
 			ECS_ASSERT(size < capacity);
-			Add(element);
+			return Add(element);
 		}
 
-		ECS_INLINE void AddAssert(const T* element) {
+		ECS_INLINE unsigned int AddAssert(const T* element) {
 			ECS_ASSERT(size < capacity);
-			Add(element);
+			return Add(element);
 		}
 
 		ECS_INLINE bool AddStreamSafe(Stream<T> other) {
@@ -482,9 +482,9 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return true;
 		}
 
-		ECS_INLINE void AddStreamAssert(Stream<T> other) {
+		ECS_INLINE unsigned int AddStreamAssert(Stream<T> other) {
 			ECS_ASSERT(size + other.size <= capacity);
-			AddStream(other);
+			return AddStream(other);
 		}
 
 		// Returns the index at which it was added. Can select the amount by which it grows with the growth_count
@@ -1789,5 +1789,40 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 	}
+
+	template<typename T>
+	struct AdditionStream {
+		ECS_INLINE unsigned int Add(T element) {
+			if (is_capacity) {
+				return capacity_stream.AddAssert(element);
+			}
+			else {
+				return resizable_stream.Add(element);
+			}
+		}
+
+		ECS_INLINE bool IsCapacity() const {
+			return is_capacity;
+		}
+
+		ECS_INLINE Stream<T> ToStream() const {
+			if (is_capacity) {
+				return capacity_stream;
+			}
+			else {
+				return resizable_stream.ToStream();
+			}
+		}
+
+		ECS_INLINE bool IsInitialized() const {
+			return is_capacity ? capacity_stream.capacity > 0 : resizable_stream.allocator.allocator != nullptr;
+		}
+
+		bool is_capacity;
+		union {
+			CapacityStream<T> capacity_stream;
+			ResizableStream<T> resizable_stream;
+		};
+	};
 
 }

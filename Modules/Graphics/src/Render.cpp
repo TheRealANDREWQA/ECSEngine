@@ -292,6 +292,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 						DebugDrawCallOptions debug_options;
 						debug_options.ignore_depth = true;
 						debug_options.wireframe = false;
+
 						if (transform_tool != ECS_TRANSFORM_COUNT) {
 							// Display the gizmo at the midpoint
 							switch (transform_tool) {
@@ -376,6 +377,12 @@ ECS_THREAD_TASK(RenderSelectables) {
 							default:
 								ECS_ASSERT(false, "ECS_TRANSFORM_TOOL invalid value");
 							}
+
+							debug_options.wireframe = true;
+							debug_drawer->AddAABB({ 0.0f, 0.0f, 0.0f }, float3::Splat(1.0f), AxisXColor(), debug_options);
+							debug_drawer->AddOOBB({ 0.0f, 0.0f, 0.0f }, float3::Splat(45.0f), float3::Splat(1.0f), AxisZColor(), debug_options);
+							debug_drawer->AddLine({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -5.0f }, AxisYColor());
+							debug_drawer->AddRectangle({ 5.0f, 0.0f, -5.0f }, { 0.0f, 5.0f, -5.0f }, Color(100, 120, 160), debug_options);
 						}
 					}
 				}

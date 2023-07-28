@@ -8,6 +8,9 @@ namespace ECSEngine {
 
 #define ECS_HIGHLIGHT_OBJECT_THICKNESS_DEFAULT 3
 
+#define ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS 3
+#define ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS ((1 << ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS) - 1)
+
 	struct Graphics;
 
 	struct RenderingEffectMesh {
@@ -40,9 +43,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-#define ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS 3
-#define ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS ((1 << ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS) - 1)
-
 	// If the instance_index is left at -1, then it will use the index
 	// inside the elements stream. Pxel thickness can be at max ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS
 	struct GenerateInstanceFramebufferElement {
@@ -50,6 +50,16 @@ namespace ECSEngine {
 		unsigned char pixel_thickness = 0;
 		unsigned int instance_index = -1;
 	};
+
+	ECS_INLINE unsigned int GenerateRenderInstanceValue(unsigned int index, unsigned char pixel_thickness) {
+		ECS_ASSERT(pixel_thickness < ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+		return function::BlendBits<unsigned int>(
+			index,
+			pixel_thickness,
+			32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+			ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS
+		);
+	}
 
 	ECSENGINE_API void GenerateInstanceFramebuffer(
 		Graphics* graphics,
@@ -85,6 +95,47 @@ namespace ECSEngine {
 		uint2 top_left,
 		uint2 bottom_right,
 		CapacityStream<unsigned int>* values
+	);
+
+	struct CPUInstanceFramebuffer {
+		// Can't inline this function since it will cause a crash on malloc
+		// if the allocation is made with TransferInstancesFramebufferToCPU
+		// that will cause an allocation to be made from the DLL and the deallocation
+		// in the exe
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+			ECSEngine::DeallocateEx(allocator, values);
+		}
+
+		unsigned int* values;
+		uint2 dimensions;
+	};
+
+	// Returns the byte size necessary to get all the values stored in the render target view
+	// Such that the entire texture uints can be stored
+	ECSENGINE_API size_t GetInstancesFramebufferAllocateSize(
+		RenderTargetView render_target
+	);
+
+	// Get allocation size of the uints can be determined using the
+	// GetInstancesFramebufferAllocateSize function
+	ECSENGINE_API CPUInstanceFramebuffer TransferInstancesFramebufferToCPU(
+		Graphics* graphics,
+		RenderTargetView render_target,
+		unsigned int* values
+	);
+
+	// It will determine the byte size and make the proper allocation
+	ECSENGINE_API CPUInstanceFramebuffer TransferInstancesFramebufferToCPUAndAllocate(
+		Graphics* graphics,
+		RenderTargetView render_target,
+		AllocatorPolymorphic allocator
+	);
+
+	ECSENGINE_API void GetInstancesFromFramebufferFilteredCPU(
+		CPUInstanceFramebuffer cpu_values,
+		uint2 top_left,
+		uint2 bottom_right,
+		CapacityStream<unsigned int>* filtered_values
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
