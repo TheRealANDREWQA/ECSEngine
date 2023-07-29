@@ -244,6 +244,8 @@ namespace ECSEngine {
 
 	template<typename T>
 	struct AdditionStreamAtomic {
+		ECS_INLINE AdditionStreamAtomic() {}
+
 		enum TYPE : unsigned char {
 			CAPACITY,
 			RESIZABLE,

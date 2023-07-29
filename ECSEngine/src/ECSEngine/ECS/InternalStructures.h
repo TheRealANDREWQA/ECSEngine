@@ -322,6 +322,24 @@ namespace ECSEngine {
 		// Returns how many entities are alive
 		unsigned int GetCount() const;
 
+		// Returns an Entity identifier that is not in use at this moment
+		// Returns -1 if there is no empty entity
+		Entity GetUnusedEntity() const;
+
+		// Fills in entity identifiers that are not in use at this moment
+		// Returns true if there were enough entities, else false
+		bool GetUnusedEntities(Stream<Entity> entities) const;
+
+		// Returns an Entity identifier that is not in use at this moment.
+		// Additionally, this version takes in a stream of already used slots from previous calls
+		// to omit them. Returns -1 if there is no empty entity
+		Entity GetUnusedEntity(Stream<Entity> excluded_entities) const;
+
+		// Fills in entity identifiers that are not in use at this moment.
+		// Additionally, this version takes in a stream of already used slots from previous calls
+		// to omit them. Returns true if there were enough entities, else false
+		bool GetUnusedEntities(Stream<Entity> entities, Stream<Entity> excluded_entities) const;
+
 		// The tag should be the bit position, not the actual value
 		bool HasTag(Entity entity, unsigned char tag) const;
 

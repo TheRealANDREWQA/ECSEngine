@@ -417,8 +417,11 @@ namespace ECSEngine {
 		if (entity_indices.x >= m_entity_infos.size || !m_entity_infos[entity_indices.x].is_in_use) {
 			return false;
 		}
-		EntityInfo info = m_entity_infos[entity_indices.x].stream[entity_indices.y];
-		return info.generation_count == entity.generation_count;
+		if (m_entity_infos[entity_indices.x].stream.ExistsItem(entity_indices.y)) {
+			EntityInfo info = m_entity_infos[entity_indices.x].stream[entity_indices.y];
+			return info.generation_count == entity.generation_count;
+		}
+		return false;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -490,6 +493,84 @@ namespace ECSEngine {
 		}
 
 		return total;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	Entity EntityPool::GetUnusedEntity() const
+	{
+		const size_t ITERATION_STOP_COUNT = 1'000;
+
+		// Iterate from the high values until a value is found to be empty. Stop after an iteration count
+		for (size_t index = 0; index < ITERATION_STOP_COUNT; index++) {
+			unsigned int entity_index = -2 - (unsigned int)index;
+			if (!IsValid(entity_index)) {
+				return entity_index;
+			}
+		}
+
+		return { (unsigned int)-1 };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool EntityPool::GetUnusedEntities(Stream<Entity> entities) const
+	{
+		const size_t total_iterations = function::ClampMin<size_t>(entities.size * 2, 1000);
+		size_t current_count = 0;
+		// Iterate from the high values until a value is found to be empty. Stop after an iteration count
+		for (size_t index = 0; index < total_iterations; index++) {
+			unsigned int entity_index = -2 - (unsigned int)index;
+			if (!IsValid(entity_index)) {
+				entities[current_count++] = entity_index;
+				if (current_count == entities.size) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	Entity EntityPool::GetUnusedEntity(Stream<Entity> excluded_entities) const
+	{
+		const size_t ITERATION_STOP_COUNT = 1'000 + excluded_entities.size;
+		unsigned int uint_exclude_size = (unsigned int)excluded_entities.size;
+		for (size_t index = 0; index < ITERATION_STOP_COUNT; index++) {
+			unsigned int entity_index = -2 - uint_exclude_size - index;
+			// Check to see if this entity exists in the excluded_entities
+			if (function::SearchBytes(excluded_entities.buffer, excluded_entities.size, entity_index, sizeof(entity_index)) == -1) {
+				if (!IsValid(entity_index)) {
+					return entity_index;
+				}
+			}
+		}
+
+		return { (unsigned int)-1 };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool EntityPool::GetUnusedEntities(Stream<Entity> entities, Stream<Entity> excluded_entities) const
+	{
+		const size_t ITERATION_STOP_COUNT = function::ClampMin<size_t>(entities.size * 2 + excluded_entities.size, 1'000);
+		unsigned int uint_exclude_size = (unsigned int)excluded_entities.size;
+		size_t current_count = 0;
+		for (size_t index = 0; index < ITERATION_STOP_COUNT; index++) {
+			unsigned int entity_index = -2 - uint_exclude_size - index;
+			// Check to see if this entity exists in the excluded entities
+			if (function::SearchBytes(excluded_entities.buffer, excluded_entities.size, entity_index, sizeof(entity_index)) == -1) {
+				if (!IsValid(entity_index)) {
+					entities[current_count++] = entity_index;
+					if (entities.size == current_count) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

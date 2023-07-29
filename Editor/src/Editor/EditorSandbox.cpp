@@ -127,6 +127,13 @@ EDITOR_SANDBOX_VIEWPORT GetSandboxCurrentViewport(const EditorState* editor_stat
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+EDITOR_SANDBOX_VIEWPORT GetSandboxViewportOverride(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	return viewport == EDITOR_SANDBOX_VIEWPORT_COUNT ? GetSandboxCurrentViewport(editor_state, sandbox_index) : viewport;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool IsSandboxRuntimePreinitialized(const EditorState* editor_state, unsigned int sandbox_index) {
 	return GetSandbox(editor_state, sandbox_index)->runtime_descriptor.graphics != nullptr;
 }
@@ -1298,8 +1305,11 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	// Resize the textures for the viewport to a 1x1 texture such that rendering commands will fallthrough even
 	// when the UI has not yet run to resize them
 	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
+		sandbox->unused_entities_slots[index].Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
+		sandbox->unused_entities_slots_recompute[index] = true;
 		ResizeSandboxRenderTextures(editor_state, sandbox_index, (EDITOR_SANDBOX_VIEWPORT)index, { 1, 1 });
 	}
+
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1912,6 +1922,46 @@ void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+struct SignalSelectedEntitiesCounterEventData {
+	unsigned int sandbox_index;
+};
+
+EDITOR_EVENT(SignalSelectedEntitiesCounterEvent) {
+	SignalSelectedEntitiesCounterEventData* data = (SignalSelectedEntitiesCounterEventData*)_data;
+	GetSandbox(editor_state, data->sandbox_index)->selected_entities_changed_counter++;
+}
+
+void SignalSandboxSelectedEntitiesCounter(EditorState* editor_state, unsigned int sandbox_index)
+{
+	SignalSelectedEntitiesCounterEventData event_data;
+	event_data.sandbox_index = sandbox_index;
+	EditorAddEvent(editor_state, SignalSelectedEntitiesCounterEvent, &event_data, sizeof(event_data));
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+struct SignalUnusedEntitiesSlotsCounterEventData {
+	unsigned int sandbox_index;
+	EDITOR_SANDBOX_VIEWPORT viewport;
+};
+
+EDITOR_EVENT(SignalUnusedEntitiesSlotsCounterEvent) {
+	SignalUnusedEntitiesSlotsCounterEventData* data = (SignalUnusedEntitiesSlotsCounterEventData*)_data;
+	EDITOR_SANDBOX_VIEWPORT viewport = GetSandboxViewportOverride(editor_state, data->sandbox_index, data->viewport);
+	GetSandbox(editor_state, data->sandbox_index)->unused_entities_slots_recompute[viewport]++;
+}
+
+
+void SignalSandboxUnusedEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	SignalUnusedEntitiesSlotsCounterEventData event_data;
+	event_data.sandbox_index = sandbox_index;
+	event_data.viewport = viewport;
+	EditorAddEvent(editor_state, SignalUnusedEntitiesSlotsCounterEvent, &event_data, sizeof(event_data));
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void TranslateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 translation)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -1980,6 +2030,16 @@ void TickSandboxesSelectedEntities(EditorState* editor_state) {
 			RenderSandbox(editor_state, index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
 		}
 		sandbox->selected_entities_changed_counter = function::SaturateSub(sandbox->selected_entities_changed_counter, (unsigned char)1);
+	}
+}
+
+void TickSandboxesClearUnusedSlots(EditorState* editor_state) {
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		for (size_t viewport = 0; viewport < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport++) {
+			sandbox->unused_entities_slots_recompute[viewport] = function::SaturateSub<unsigned char>(sandbox->unused_entities_slots_recompute[viewport], 1);
+		}
 	}
 }
 

@@ -10,7 +10,7 @@ struct VS_INPUT
 
 struct VS_OUTPUT
 {
-    float4 instance_index_thickness : INSTANCE_INDEX_THICKNESS;
+    uint instance_index_thickness : INSTANCE_INDEX_THICKNESS;
 };
 
 VS_OUTPUT main(in VS_INPUT input, out float4 position : SV_Position)
