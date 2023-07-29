@@ -128,9 +128,13 @@ namespace ECSEngine {
 		Graphics* graphics,
 		Stream<GenerateInstanceFramebufferElement> elements,
 		RenderTargetView render_target,
-		DepthStencilView depth_stencil
+		DepthStencilView depth_stencil,
+		bool do_not_restore_pipeline_state
 	) {
-		GraphicsPipelineState pipeline_state = graphics->GetPipelineState();
+		GraphicsPipelineState pipeline_state;
+		if (!do_not_restore_pipeline_state) {
+			pipeline_state = graphics->GetPipelineState();
+		}
 
 		struct VertexCBuffer {
 			Matrix mvp_matrix;
@@ -168,7 +172,9 @@ namespace ECSEngine {
 		vertex_cbuffer.Release();
 		pixel_cbuffer.Release();
 
-		graphics->RestorePipelineState(&pipeline_state);
+		if (!do_not_restore_pipeline_state) {
+			graphics->RestorePipelineState(&pipeline_state);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

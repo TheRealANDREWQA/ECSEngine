@@ -17,57 +17,49 @@ namespace ECSEngine {
 
 	typedef float3 DebugVertex;
 
-	ECS_INLINE ColorFloat AxisXColor() {
-		return ColorFloat(1.0f, 0.0f, 0.0f);
+	ECS_INLINE Color AxisXColor() {
+		return Color(255, 0, 0);
 	}
 
-	ECS_INLINE ColorFloat AxisYColor() {
-		return ColorFloat(0.0f, 1.0f, 0.0f);
+	ECS_INLINE Color AxisYColor() {
+		return Color(0, 255, 0);
 	}
 
-	ECS_INLINE ColorFloat AxisZColor() {
-		return ColorFloat(0.0f, 0.25f, 1.0f);
+	ECS_INLINE Color AxisZColor() {
+		return Color(0, 64, 255);
 	}
 
 	struct DebugDrawCallOptions {
 		bool wireframe = true;
 		bool ignore_depth = false;
 		float duration = 0.0f;
-	};
-
-	union DebugDrawerOutput {
-		ECS_INLINE DebugDrawerOutput() {}
-		ECS_INLINE DebugDrawerOutput(ColorFloat _color) : color(_color) {}
-		ECS_INLINE DebugDrawerOutput(unsigned int _instance_index) : instance_index(_instance_index) {}
-
-		ColorFloat color;
-		unsigned int instance_index;;
+		unsigned int instance_index = (unsigned int)-1;
 	};
 
 	struct DebugLine {
 		float3 start;
 		float3 end;
-		DebugDrawerOutput output;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugSphere {
 		float3 position;
 		float radius;
-		DebugDrawerOutput output;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugPoint {
 		float3 position;
-		DebugDrawerOutput output;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugRectangle {
 		float3 corner0;
 		float3 corner1;
-		DebugDrawerOutput output;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
@@ -75,7 +67,7 @@ namespace ECSEngine {
 		float3 position;
 		float3 rotation;
 		float size;
-		DebugDrawerOutput output;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
@@ -83,7 +75,7 @@ namespace ECSEngine {
 		float3 position;
 		float3 rotation;
 		float radius;
-		DebugDrawerOutput output;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
@@ -92,17 +84,7 @@ namespace ECSEngine {
 		float3 rotation;
 		float length;
 		float size;
-		DebugDrawerOutput output;
-		DebugDrawCallOptions options;
-	};
-
-	struct DebugAxes {
-		float3 translation;
-		float3 rotation;
-		float size;
-		DebugDrawerOutput output_x;
-		DebugDrawerOutput output_y;
-		DebugDrawerOutput output_z;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
@@ -110,14 +92,14 @@ namespace ECSEngine {
 		float3 point0;
 		float3 point1;
 		float3 point2;
-		DebugDrawerOutput output;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugAABB {
 		float3 translation;
 		float3 scale;
-		DebugDrawerOutput output;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
@@ -125,7 +107,7 @@ namespace ECSEngine {
 		float3 translation;
 		float3 rotation;
 		float3 scale;
-		DebugDrawerOutput output;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
@@ -134,13 +116,17 @@ namespace ECSEngine {
 		float3 direction;
 		float size;
 		Stream<char> text;
-		DebugDrawerOutput output;
+		Color color;
 		DebugDrawCallOptions options;
 	};
 
-	struct DebugDrawerOutputInstance {
-		unsigned int instance_index;
-		DebugDrawCallOptions options = {};
+	struct DebugAxesInfo {
+		Color color_x = AxisXColor();
+		Color color_y = AxisYColor();
+		Color color_z = AxisZColor();
+		unsigned int instance_x = (unsigned int)-1;
+		unsigned int instance_y = (unsigned int)-1;
+		unsigned int instance_z = (unsigned int)-1;
 	};
 
 	struct ECSENGINE_API DebugDrawer {
@@ -152,84 +138,80 @@ namespace ECSEngine {
 
 #pragma region Add to the draw queue - single threaded
 
-		void AddLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddLine(float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
 
-		void AddLine(float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddLine(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
 
-		void AddSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {});
 
-		void AddPoint(float3 position, ColorFloat color, DebugDrawCallOptions options = {false});
+		void AddPoint(float3 position, Color color, DebugDrawCallOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
-		void AddRectangle(float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
 
-		void AddCross(float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {false});
+		void AddCross(float3 position, float3 rotation, float size, Color color, DebugDrawCallOptions options = {false});
 
-		void AddCircle(float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddCircle(float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options = {});
 
-		void AddArrow(float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options = {false});
+		void AddArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {false});
 		
-		void AddArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options = {false});
+		void AddArrowRotation(float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
 
 		void AddAxes(
 			float3 translation, 
 			float3 rotation, 
 			float size, 
-			ColorFloat color_x = AxisXColor(), 
-			ColorFloat color_y = AxisYColor(), 
-			ColorFloat color_z = AxisZColor(), 
+			const DebugAxesInfo* info = {},
 			DebugDrawCallOptions options = {false}
 		);
 
-		void AddTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options = {});
 
-		void AddAABB(float3 translation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
-		void AddOOBB(float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddOOBB(float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
-		void AddString(float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options = { false });
+		void AddString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options = { false });
 
-		void AddStringRotation(float3 position, float3 rotation, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options = { false });
+		void AddStringRotation(float3 position, float3 rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options = { false });
 
 #pragma endregion
 
 #pragma region Add to the draw queue - multi threaded
 
-		void AddLineThread(unsigned int thread_index, float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddLineThread(unsigned int thread_index, float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
 
-		void AddLineThread(unsigned int thread_index, float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddLineThread(unsigned int thread_index, float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
 
-		void AddSphereThread(unsigned int thread_index, float3 position, float radius, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddSphereThread(unsigned int thread_index, float3 position, float radius, Color color, DebugDrawCallOptions options = {});
 
-		void AddPointThread(unsigned int thread_index, float3 position, ColorFloat color, DebugDrawCallOptions options = {false});
+		void AddPointThread(unsigned int thread_index, float3 position, Color color, DebugDrawCallOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
-		void AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
 
-		void AddCrossThread(unsigned int thread_index, float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddCrossThread(unsigned int thread_index, float3 position, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
 
-		void AddCircleThread(unsigned int thread_index, float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddCircleThread(unsigned int thread_index, float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options = {});
 
-		void AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options = {false});
+		void AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {false});
 
-		void AddArrowRotationThread(unsigned int thread_index, float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options = {false});
+		void AddArrowRotationThread(unsigned int thread_index, float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
 
 		void AddAxesThread(
 			unsigned int thread_index, 
 			float3 translation, 
 			float3 rotation, 
 			float size, 
-			ColorFloat color_x = AxisXColor(), 
-			ColorFloat color_y = AxisYColor(), 
-			ColorFloat color_z = AxisZColor(), 
+			const DebugAxesInfo* info = {},
 			DebugDrawCallOptions options = {false}
 		);
 
-		void AddTriangleThread(unsigned int thread_index, float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddTriangleThread(unsigned int thread_index, float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options = {});
 
-		void AddAABBThread(unsigned int thread_index, float3 translation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddAABBThread(unsigned int thread_index, float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
-		void AddOOBBThread(unsigned int thread_index, float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
+		void AddOOBBThread(unsigned int thread_index, float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
 		// It must do an allocation from the memory manager under lock - possible expensive operation
 		void AddStringThread(
@@ -238,7 +220,7 @@ namespace ECSEngine {
 			float3 direction,
 			float size,
 			Stream<char> text,
-			ColorFloat color, 
+			Color color, 
 			DebugDrawCallOptions options = { false }
 		);
 
@@ -249,7 +231,7 @@ namespace ECSEngine {
 			float3 direction,
 			float size,
 			Stream<char> text,
-			ColorFloat color,
+			Color color,
 			DebugDrawCallOptions options = { false }
 		);
 
@@ -257,41 +239,41 @@ namespace ECSEngine {
 
 #pragma region Draw immediately
 
-		void DrawLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options = {});
+		void DrawLine(float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
 
-		void DrawLine(float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {});
+		void DrawLine(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
 
-		void DrawSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options = {});
+		void DrawSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {});
 
-		void DrawPoint(float3 position, ColorFloat color, DebugDrawCallOptions options = {});
+		void DrawPoint(float3 position, Color color, DebugDrawCallOptions options = {});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
-		void DrawRectangle(float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options = {});
+		void DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
 
-		void DrawCross(float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {});
+		void DrawCross(float3 position, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
 
-		void DrawCircle(float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options = {});
+		void DrawCircle(float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options = {});
 
-		void DrawArrow(float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options = {false});
+		void DrawArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {false});
 
 		// Rotation expressed as radians
-		void DrawArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options = {false});
+		void DrawArrowRotation(float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
 
 		void DrawAxes(
 			float3 translation, 
 			float3 rotation, 
 			float size, 
-			ColorFloat color_x = AxisXColor(), 
-			ColorFloat color_y = AxisYColor(), 
-			ColorFloat color_z = AxisZColor(), 
+			Color color_x = AxisXColor(), 
+			Color color_y = AxisYColor(), 
+			Color color_z = AxisZColor(), 
 			DebugDrawCallOptions options = {false}
 		);
 
-		void DrawTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options = {});
+		void DrawTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options = {});
 
-		void DrawAABB(float3 translation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
+		void DrawAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
-		void DrawOOBB(float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
+		void DrawOOBB(float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
 		// Text rotation is the rotation alongside the X axis - rotates the text in order to be seen from below, above, or at a specified angle
 		void DrawString(
@@ -299,7 +281,7 @@ namespace ECSEngine {
 			float3 direction, 
 			float size, 
 			Stream<char> text,
-			ColorFloat color, 
+			Color color, 
 			DebugDrawCallOptions options = {false}
 		);
 
@@ -310,7 +292,7 @@ namespace ECSEngine {
 			float3 rotation, 
 			float size, 
 			Stream<char> text, 
-			ColorFloat color, 
+			Color color, 
 			DebugDrawCallOptions options = {false}
 		);
 
@@ -319,7 +301,7 @@ namespace ECSEngine {
 			VertexBuffer model_position, 
 			VertexBuffer model_normals,
 			float size, 
-			ColorFloat color, 
+			Color color, 
 			Matrix world_matrix,
 			DebugDrawCallOptions options = {}
 		);
@@ -329,7 +311,7 @@ namespace ECSEngine {
 			VertexBuffer model_position,
 			VertexBuffer model_normals,
 			float size,
-			ColorFloat color,
+			Color color,
 			Stream<Matrix> world_matrices,
 			DebugDrawCallOptions options = {}
 		);
@@ -339,7 +321,7 @@ namespace ECSEngine {
 			VertexBuffer model_position,
 			VertexBuffer model_tangents,
 			float size,
-			ColorFloat color,
+			Color color,
 			Matrix world_matrix,
 			DebugDrawCallOptions options = {}
 		);
@@ -349,7 +331,7 @@ namespace ECSEngine {
 			VertexBuffer model_position,
 			VertexBuffer model_tangents,
 			float size,
-			ColorFloat color,
+			Color color,
 			Stream<Matrix> world_matrices,
 			DebugDrawCallOptions options = {}
 		);
@@ -359,61 +341,64 @@ namespace ECSEngine {
 #pragma region Draw Deck elements
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawLineDeck(float time_delta);
+		void DrawLineDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawSphereDeck(float time_delta);
+		void DrawSphereDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawPointDeck(float time_delta);
+		void DrawPointDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawRectangleDeck(float time_delta);
+		void DrawRectangleDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawCrossDeck(float time_delta);
+		void DrawCrossDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawCircleDeck(float time_delta);
+		void DrawCircleDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawArrowDeck(float time_delta);
+		void DrawArrowDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawTriangleDeck(float time_delta);
+		void DrawTriangleDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawAABBDeck(float time_delta);
+		void DrawAABBDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawOOBBDeck(float time_delta);
+		void DrawOOBBDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
-		// Elements that have their duration 0 or negative after substraction with time delta
+		// Elements that have their duration negative after substraction with time delta
 		// will be removed
-		void DrawStringDeck(float time_delta);
+		void DrawStringDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
-		void DrawAll(float time_delta);
+		// Draws all combinations for all types - Wireframe depth, wireframe no depth, solid depth, solid no depth
+		// Elements that have their duration negative after substraction with time delta
+		// will be removed
+		void DrawAll(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 #pragma endregion
 
@@ -427,7 +412,7 @@ namespace ECSEngine {
 		void OutputInstanceIndexLine(
 			float3 start, 
 			float3 end, 
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugLine>* addition_stream
 		);
 
@@ -435,27 +420,27 @@ namespace ECSEngine {
 			float3 translation,
 			float3 rotation,
 			float size,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugLine>* addition_stream
 		);
 
 		void OutputInstanceIndexSphere(
 			float3 translation,
 			float radius,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugSphere>* addition_stream
 		);
 
 		void OutputInstanceIndexPoint(
 			float3 translation,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugPoint>* addition_stream
 		);
 
 		void OutputInstanceIndexRectangle(
 			float3 corner0, 
 			float3 corner1,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugRectangle>* addition_stream
 		);
 
@@ -463,7 +448,7 @@ namespace ECSEngine {
 			float3 position, 
 			float3 rotation, 
 			float size,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugCross>* addition_stream
 		);
 
@@ -471,7 +456,7 @@ namespace ECSEngine {
 			float3 position, 
 			float3 rotation, 
 			float radius,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugCircle>* addition_stream
 		);
 
@@ -479,7 +464,7 @@ namespace ECSEngine {
 			float3 start, 
 			float3 end, 
 			float size,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugArrow>* addition_stream
 		);
 
@@ -488,7 +473,7 @@ namespace ECSEngine {
 			float3 rotation,
 			float length,
 			float size,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugArrow>* addition_stream
 		);
 
@@ -507,14 +492,14 @@ namespace ECSEngine {
 			float3 point0, 
 			float3 point1, 
 			float3 point2,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugTriangle>* addition_stream
 		);
 
 		void OutputInstanceIndexAABB(
 			float3 translation, 
 			float3 scale,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugAABB>* addition_stream
 		);
 
@@ -522,7 +507,7 @@ namespace ECSEngine {
 			float3 translation, 
 			float3 rotation, 
 			float3 scale,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugOOBB>* addition_stream
 		);
 
@@ -532,7 +517,7 @@ namespace ECSEngine {
 			float3 direction,
 			float size,
 			Stream<char> text,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugString>* addition_stream,
 			AllocatorPolymorphic allocator
 		);
@@ -543,7 +528,7 @@ namespace ECSEngine {
 			float3 rotation,
 			float size,
 			Stream<char> text,
-			const DebugDrawerOutputInstance* instance,
+			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugString>* addition_stream,
 			AllocatorPolymorphic allocator
 		);
@@ -660,13 +645,6 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region Initialize
-
-		// If creates with a default constructor or allocated
-		void Initialize(MemoryManager* allocator, ResourceManager* resource_manager, size_t thread_count);
-
-#pragma endregion
-
 #pragma region Draw Calls
 
 		void DrawCallStructured(unsigned int vertex_count, unsigned int instance_count);
@@ -685,6 +663,9 @@ namespace ECSEngine {
 
 		// It also bumps forward the buffer offset
 		void CopyCharacterSubmesh(IndexBuffer index_buffer, unsigned int& buffer_offset, unsigned int alphabet_index);
+
+		// If creates with a default constructor or allocated
+		void Initialize(MemoryManager* allocator, ResourceManager* resource_manager, size_t thread_count);
 
 		void UpdateCameraMatrix(Matrix new_matrix);
 
@@ -746,5 +727,8 @@ namespace ECSEngine {
 		Matrix camera_matrix;
 		float2* string_character_bounds;
 	};
+
+	// Testing method that adds some primitives of each kind to see if they are displayed correctly
+	ECSENGINE_API void DebugDrawerAddToDrawShapes(DebugDrawer* drawer);
 
 }

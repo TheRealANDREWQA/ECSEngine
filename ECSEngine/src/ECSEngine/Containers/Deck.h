@@ -8,8 +8,8 @@ namespace ECSEngine {
 	// Miscellaneous is used as the exponent for the power of two range selector
 	template<typename T, typename RangeSelector>
 	struct Deck {
-		Deck() : buffers({ nullptr }, 0), chunk_size(0), miscellaneous(0) {}
-		Deck(
+		ECS_INLINE Deck() : buffers({ nullptr }, 0), chunk_size(0), miscellaneous(0) {}
+		ECS_INLINE Deck(
 			const void* _buffers, 
 			size_t _buffers_capacity,
 			size_t _chunk_size, 
@@ -52,15 +52,15 @@ namespace ECSEngine {
 
 	public:
 
-		size_t Add(T element) {
+		ECS_INLINE size_t Add(T element) {
 			return AddImpl(element);
 		}
 
-		size_t Add(const T* element) {
+		ECS_INLINE size_t Add(const T* element) {
 			return AddImpl(element);
 		}
 
-		void AddStream(Stream<T> other) {
+		ECS_INLINE void AddStream(Stream<T> other) {
 			ReserveNewElements(other.size);
 			for (size_t index = 0; index < other.size; index++) {
 				Add(other[index]);
@@ -97,20 +97,107 @@ namespace ECSEngine {
 			chunks_with_elements[0] = buffers.size - 1;
 		}
 
-		void Copy(Stream<T> other) {
+		ECS_INLINE void Copy(Stream<T> other) {
 			Copy(other.buffer, other.size);
 		}
 
-		void CopyTo(void* memory) const {
+		ECS_INLINE void CopyTo(void* memory) const {
 			uintptr_t ptr = (uintptr_t)memory;
 			CopyTo(ptr);
 		}
 
-		void CopyTo(uintptr_t& memory) const {
+		ECS_INLINE void CopyTo(uintptr_t& memory) const {
 			for (size_t index = 0; index < buffers.size; index++) {
 				memcpy((void*)memory, buffers[index].buffer, sizeof(T) * buffers[index].size);
 				memory += sizeof(T) * buffers[index].size;
 			}
+		}
+
+		bool Exists(size_t index) const {
+			size_t chunk_index = RangeSelector::Chunk(index, chunk_size, miscellaneous);
+			size_t in_chunk_index = RangeSelector::Buffer(index, chunk_size, miscellaneous);
+			// Search for the chunk index inside the chunks_with_elements
+			if (function::SearchBytes(chunks_with_elements.buffer, chunks_with_elements.size, chunk_index, sizeof(unsigned int)) == -1) {
+				return false;
+			}
+
+			return in_chunk_index < buffers[chunk_index].size;
+		}
+
+		// The functor receives a uint2 which has in the x component
+		// the chunk index and in the y the stream index for that chunk
+		// Return true to early exit, else false
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEachIndex(Functor&& functor) const {
+			for (size_t index = 0; index < chunks_with_elements.size; index++) {
+				for (unsigned int subindex = 0; subindex < buffers[chunks_with_elements[index]].size; subindex++) {
+					uint2 indices = { chunks_with_elements[index], subindex };
+					if constexpr (early_exit) {
+						if (functor(indices)) {
+							return true;
+						}
+					}
+					else {
+						functor(indices);
+					}
+				}
+			}
+			return false;
+		}
+
+		// Return true to early exit, else false
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) {
+			for (size_t index = 0; index < chunks_with_elements.size; index++) {
+				for (unsigned int subindex = 0; subindex < buffers[chunks_with_elements[index]].size; subindex++) {
+					T* element = &buffers[chunks_with_elements[index]][subindex];
+					if constexpr (early_exit) {
+						if (functor(*element)) {
+							return true;
+						}
+					}
+					else {
+						functor(*element);
+					}
+				}
+			}
+			return false;
+		}
+
+		// CONST VARIANT
+		// Return true to early exit, else false
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) const {
+			for (size_t index = 0; index < chunks_with_elements.size; index++) {
+				for (unsigned int subindex = 0; subindex < buffers[chunks_with_elements[index]].size; subindex++) {
+					const T* element = &buffers[chunks_with_elements[index]][subindex];
+					if constexpr (early_exit) {
+						if (functor(*element)) {
+							return true;
+						}
+					}
+					else {
+						functor(*element);
+					}
+				}
+			}
+			return false;
+		}
+
+		// Use this method in case you have the indices valid or from iterating and storing the values
+		ECS_INLINE T GetValue(size_t chunk_index, size_t in_chunk_index) const {
+			return buffers[chunk_index][in_chunk_index];
+		}
+
+		ECS_INLINE T* GetValuePtr(size_t chunk_index, size_t in_chunk_index) {
+			return &buffers[chunk_index][in_chunk_index];
+		}
+
+		ECS_INLINE const T* GetValuePtr(size_t chunk_index, size_t in_chunk_index) const {
+			return &buffers[chunk_index][in_chunk_index];
 		}
 
 		size_t GetElementCount() const {

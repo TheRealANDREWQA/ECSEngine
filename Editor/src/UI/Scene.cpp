@@ -226,14 +226,16 @@ void SceneLeftClickableAction(ActionData* action_data) {
 				uint2 bottom_right = BasicTypeMax(hovered_texel_offset, data->click_texel_position);
 
 				GetInstancesFromFramebufferFilteredCPU(data->cpu_framebuffer, top_left, bottom_right, &selected_entities);
+				Stream<Entity> selected_entities_stream = { selected_entities.buffer, selected_entities.size };
+				FilterSandboxEntitiesValid(editor_state, sandbox_index, &selected_entities_stream);
 
 				if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 					ChangeSandboxSelectedEntities(editor_state, sandbox_index, data->original_selection);
 
 					// Reduce the selection by these entities
-					for (unsigned int index = 0; index < selected_entities.size; index++) {
+					for (size_t index = 0; index < selected_entities_stream.size; index++) {
 						// This checks to see that the entity exists and 
-						RemoveSandboxSelectedEntity(editor_state, sandbox_index, selected_entities[index]);
+						RemoveSandboxSelectedEntity(editor_state, sandbox_index, selected_entities_stream[index]);
 					}
 				}
 				else if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
@@ -241,16 +243,16 @@ void SceneLeftClickableAction(ActionData* action_data) {
 					ChangeSandboxSelectedEntities(editor_state, sandbox_index, data->original_selection);
 
 					// Add to the selection these entities that do not exist
-					for (unsigned int index = 0; index < selected_entities.size; index++) {
-						if (!IsSandboxEntitySelected(editor_state, sandbox_index, selected_entities[index])) {
-							AddSandboxSelectedEntity(editor_state, sandbox_index, selected_entities[index]);
+					for (size_t index = 0; index < selected_entities_stream.size; index++) {
+						if (!IsSandboxEntitySelected(editor_state, sandbox_index, selected_entities_stream[index])) {
+							AddSandboxSelectedEntity(editor_state, sandbox_index, selected_entities_stream[index]);
 						}
 					}
 				}
 				else {
-					if (selected_entities.size > 0) {
+					if (selected_entities_stream.size > 0) {
 						// We can reinterpret the unsigned ints as entities 
-						ChangeSandboxSelectedEntities(editor_state, sandbox_index, { (Entity*)selected_entities.buffer, selected_entities.size });
+						ChangeSandboxSelectedEntities(editor_state, sandbox_index, selected_entities_stream);
 					}
 					else {
 						ClearSandboxSelectedEntities(editor_state, sandbox_index);

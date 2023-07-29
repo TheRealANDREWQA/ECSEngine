@@ -61,6 +61,15 @@ namespace ECSEngine {
 		unsigned int instance_index;
 	};
 
+	union DebugDrawerOutput {
+		ECS_INLINE DebugDrawerOutput() {}
+		ECS_INLINE DebugDrawerOutput(Color _color) : color(_color) {}
+		ECS_INLINE DebugDrawerOutput(unsigned int _instance_index) : instance_index(_instance_index) {}
+
+		Color color;
+		unsigned int instance_index;
+	};
+
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	unsigned char GetMaskFromOptions(DebugDrawCallOptions options) {
@@ -75,19 +84,46 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	template<typename Deck>
+	bool HasOutputIDElements(Deck* deck) {
+
+	}
+
 	template<typename Element>
-	ushort2* CalculateElementTypeCounts(MemoryManager* allocator, unsigned int* counts, ushort2** indices, DeckPowerOfTwo<Element>* deck) {
+	ushort2* CalculateElementTypeCounts(
+		MemoryManager* allocator, 
+		unsigned int* counts, 
+		ushort2** indices, 
+		DeckPowerOfTwo<Element>* deck, 
+		DebugShaderOutput shader_output
+	) {
 		unsigned int total_count = deck->GetElementCount();
 		ushort2* type_indices = (ushort2*)allocator->Allocate(sizeof(ushort2) * total_count * 4);
 		SetIndicesTypeMask(indices, type_indices, total_count);
 
-		for (size_t index = 0; index < deck->buffers.size; index++) {
-			for (size_t subindex = 0; subindex < deck->buffers[index].size; subindex++) {
-				unsigned char mask = GetMaskFromOptions(deck->buffers[index][subindex].options);
-				// Assigned the indices and update the count
-				indices[mask][counts[mask]++] = { (unsigned short)index, (unsigned short)subindex };
+		auto for_each_lambda = [&](uint2 deck_indices, auto is_output_id) {
+			const auto* value = deck->GetValuePtr(deck_indices.x, deck_indices.y);
+			if constexpr (is_output_id) {
+				if (GetTypeInstanceThickness(value) == -1) {
+					return;
+				}
 			}
+			unsigned char mask = GetMaskFromOptions(value->options);
+			// Assigned the indices and update the count
+			indices[mask][counts[mask]++] = { (unsigned short)deck_indices.x, (unsigned short)deck_indices.y };
+		};
+
+		if (shader_output == ECS_DEBUG_SHADER_OUTPUT_ID) {
+			deck->ForEachIndex([&](uint2 deck_indices) {
+				for_each_lambda(deck_indices, std::true_type{});
+			});
 		}
+		else {
+			deck->ForEachIndex([&](uint2 deck_indices) {
+				for_each_lambda(deck_indices, std::false_type{});
+			});
+		}
+
 		return type_indices;
 	}
 
@@ -189,7 +225,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// Sets the color of the instaced data if the stream has a color and matrix as instanced data
-	void SetInstancedColor(void* pointer, unsigned int index, ColorFloat color) {
+	void SetInstancedColor(void* pointer, unsigned int index, Color color) {
 		InstancedTransformData* data = (InstancedTransformData*)pointer;
 		data[index].color = color;
 	}
@@ -369,158 +405,33 @@ namespace ECSEngine {
 		);
 	}
 
+	ECS_INLINE float3 AxesArrowXRotation(float3 rotation) {
+		return rotation;
+	}
+
+	ECS_INLINE float3 AxesArrowYRotation(float3 rotation) {
+		return rotation + float3(0.0f, 0.0f, 90.0f);
+	}
+
+	// The Z axis arrow doesn't need Z rotation
+	ECS_INLINE float3 AxesArrowZRotation(float3 rotation) {
+		return rotation + float3(0.0f, -90.0f, -rotation.z);
+	}
+
 	void ConvertTranslationLineIntoStartEnd(float3 translation, float3 rotation, float size, float3& start, float3& end) {
 		start = translation;
 		float3 direction = GetRightVectorQuaternion(rotation);
 		end = translation + float3::Splat(size) * direction;
 	}
 
-	DebugLine ConvertTranslationLineIntoStartEnd(float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options) {
+	DebugLine ConvertTranslationLineIntoStartEnd(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options) {
 		DebugLine debug_line;
 
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, debug_line.start, debug_line.end);
-		debug_line.output.color = color;
+		debug_line.color = color;
 		debug_line.options = options;
 			
 		return debug_line;
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-#define AXES_SIZE_REDUCE_FACTOR 0.28f
-
-	ECS_INLINE float AxesReducedScale(float size) {
-		return size * AXES_SIZE_REDUCE_FACTOR;;
-	}
-
-	ECS_INLINE float CylinderXScale(float reduced_size) {
-		return AXES_X_SCALE * reduced_size;
-	}
-
-	void ECS_VECTORCALL FillInstancedAxesArrowCylinders(void* instanced_data, size_t buffer_index, const DebugAxes* axes, Matrix camera_matrix) {
-		// Magic constant to make it consistent in measurement units - if setting a sphere of radius 1.0f and axes of size 1.0f
-		// then the axes should be radiuses for that sphere
-		float size = AxesReducedScale(axes->size);
-		
-		// The X axis
-		SetInstancedColor(instanced_data, buffer_index, axes->output_x.color);
-
-		float cylinder_x_scale = CylinderXScale(size) * 0.5f;
-		// Translate the cylinder after it has been scaled such that they all start from the same location
-		Matrix arrow_cylinder_scale_matrix = MatrixScale(cylinder_x_scale, size, size) * MatrixTranslation({ cylinder_x_scale, 0.0f, 0.0f });
-
-		Matrix general_translation = MatrixTranslation(axes->translation);
-
-		float3 x_rotation = { axes->rotation.x, axes->rotation.y, axes->rotation.z };
-
-		SetInstancedMatrix(
-			instanced_data, 
-			buffer_index, 
-			MatrixMVPToGPU(
-				general_translation,
-				QuaternionRotationMatrix(x_rotation),
-				arrow_cylinder_scale_matrix,
-				camera_matrix
-			)
-		);
-
-		// The Y axis - rotate around Z axis by 90 degrees
-		float3 y_rotation = { axes->rotation.x, axes->rotation.y, axes->rotation.z + 90.0f };
-		SetInstancedColor(instanced_data, buffer_index + 1, axes->output_y.color);
-
-		SetInstancedMatrix(
-			instanced_data, 
-			buffer_index + 1, 
-			MatrixMVPToGPU(
-				general_translation,
-				QuaternionRotationMatrix(y_rotation),
-				arrow_cylinder_scale_matrix ,
-				camera_matrix
-			)
-		);
-
-		// The Z axis - rotate around Y axis by 90 degrees
-		float3 z_rotation = { axes->rotation.x, axes->rotation.y - 90.0f, 0.0f };
-		SetInstancedColor(
-			instanced_data, 
-			buffer_index + 2,
-			axes->output_z.color
-		);
-
-		SetInstancedMatrix(
-			instanced_data, 
-			buffer_index + 2,
-			MatrixMVPToGPU(
-				general_translation,
-				QuaternionRotationMatrix(z_rotation),
-				arrow_cylinder_scale_matrix,
-				camera_matrix
-			)
-		);
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	void ECS_VECTORCALL FillInstancedAxesArrowHead(void* instanced_data, size_t buffer_index, const DebugAxes* axes, Matrix camera_matrix) {
-		// Magic constant to make it consistent in measurement units - if setting a sphere of radius 1.0f and axes of size 1.0f
-		// then the axes should be radiuses for that sphere
-		float size = axes->size * AXES_SIZE_REDUCE_FACTOR;
-		
-		// For all heads, rotate firstly to get the correct orientation and then translate and rotate with the given rotation
-		// So, for all heads, interchange the translation before the rotation
-
-		// The X axis
-		SetInstancedColor(instanced_data, buffer_index, axes->output_x.color * ARROW_HEAD_DARKEN_COLOR);
-
-		float cylinder_x_scale = CylinderXScale(size);
-		Matrix general_translation = MatrixTranslation(axes->translation);
-		Matrix local_translation = MatrixTranslation({ cylinder_x_scale, 0.0f, 0.0f });
-
-		float3 x_rotation = axes->rotation;
-		Matrix x_rotation_matrix = QuaternionRotationMatrix(x_rotation);
-
-		Matrix arrow_head_scale = MatrixScale(float3::Splat(size));
-		// This head doesn't need to be rotated before scaling
-		SetInstancedMatrix(
-			instanced_data, 
-			buffer_index, 
-			MatrixMVPToGPU(
-				general_translation,
-				x_rotation_matrix,
-				arrow_head_scale * local_translation,
-				camera_matrix
-			)
-		);
-
-		// The Y axis
-		float3 y_rotation = { axes->rotation.x, axes->rotation.y, axes->rotation.z + 90.0f };
-		Matrix y_rotation_matrix = QuaternionRotationMatrix(y_rotation);
-		SetInstancedColor(instanced_data, buffer_index + 1, axes->output_y.color * ARROW_HEAD_DARKEN_COLOR);
-		SetInstancedMatrix(
-			instanced_data, 
-			buffer_index + 1,
-			MatrixMVPToGPU(
-				general_translation,
-				y_rotation_matrix,
-				arrow_head_scale * local_translation,
-				camera_matrix
-			)
-		);
-
-		// The Z axis
-		float3 z_rotation = { axes->rotation.x, axes->rotation.y - 90.0f, 0.0f };
-		Matrix z_rotation_matrix = QuaternionRotationMatrix(z_rotation);
-		SetInstancedColor(instanced_data, buffer_index + 2, axes->output_z.color * ARROW_HEAD_DARKEN_COLOR);
-		SetInstancedMatrix(
-			instanced_data, 
-			buffer_index + 2, 
-			MatrixMVPToGPU(
-				general_translation,
-				z_rotation_matrix,
-				arrow_head_scale * local_translation,
-				camera_matrix
-			)
-		);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -533,14 +444,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLine(float3 start, float3 end, Color color, DebugDrawCallOptions options)
 	{
 		lines.Add({ start, end, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLine(float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLine(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		float3 start, end;
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
@@ -549,14 +460,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddSphere(float3 position, float radius, Color color, DebugDrawCallOptions options)
 	{
 		spheres.Add({ position, radius, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddPoint(float3 position, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddPoint(float3 position, Color color, DebugDrawCallOptions options)
 	{
 		// Make wireframe false
 		points.Add({ position, color, { false, options.ignore_depth, options.duration } });
@@ -564,28 +475,28 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddRectangle(float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options)
 	{
 		rectangles.Add({ corner0, corner1, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCross(float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCross(float3 position, float3 rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		crosses.Add({ position, rotation, size, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCircle(float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCircle(float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options)
 	{
 		circles.Add({ position, rotation, radius, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrow(float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
 	{
 		float4 rotation_length = ArrowStartEndToRotation(start, end);
 		arrows.Add({ start, {rotation_length.x, rotation_length.y, rotation_length.z}, rotation_length.w, size, color, options });
@@ -593,45 +504,53 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowRotation(float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options)
 	{
 		arrows.Add({ translation, rotation, length, size, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAxes(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options)
+	void DebugDrawer::AddAxes(float3 translation, float3 rotation, float size, const DebugAxesInfo* info, DebugDrawCallOptions options)
 	{
+		DebugDrawCallOptions options_x = options;
+		DebugDrawCallOptions options_y = options;
+		DebugDrawCallOptions options_z = options;
+
+		options_x.instance_index = info->instance_x;
+		options_y.instance_index = info->instance_y;
+		options_z.instance_index = info->instance_z;
+
 		// The same as adding 3 arrows
-		AddArrowRotation(translation, rotation, size, size, color_x, options);
-		AddArrowRotation(translation, rotation + float3(0.0f, 0.0f, 90.0f), size, size, color_y, options);
-		AddArrowRotation(translation, rotation + float3(0.0f, 90.0f, 0.0f), size, size, color_z, options);
+		AddArrowRotation(translation, AxesArrowXRotation(rotation), size, size, info->color_x, options_x);
+		AddArrowRotation(translation, AxesArrowYRotation(rotation), size, size, info->color_y, options_y);
+		AddArrowRotation(translation, AxesArrowZRotation(rotation), size, size, info->color_z, options_z);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options)
 	{
 		triangles.Add({ point0, point1, point2, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAABB(float3 min_coordinates, float3 max_coordinates, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddAABB(float3 min_coordinates, float3 max_coordinates, Color color, DebugDrawCallOptions options)
 	{
 		aabbs.Add({ min_coordinates, max_coordinates, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddOOBB(float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddOOBB(float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options)
 	{
 		oobbs.Add({ translation, rotation, scale, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddString(float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
 	{
 		Stream<char> text_copy = function::StringCopy(Allocator(), text);
 		strings.Add({ position, direction, size, text_copy, color, options });
@@ -639,11 +558,11 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringRotation(float3 position, float3 rotation, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringRotation(float3 position, float3 rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
 	{
 		Stream<char> text_copy = function::StringCopy(Allocator(), text);
 		float3 direction = GetRightVector(rotation);
-		strings.Add({ position, direction, size, text_copy, color, options });
+		AddString(position, direction, size, text, color, options);
 	}
 
 
@@ -655,7 +574,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 start, float3 end, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -667,7 +586,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLineThread(unsigned int thread_index, float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		float3 start, end;
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
@@ -676,7 +595,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddSphereThread(unsigned int thread_index, float3 position, float radius, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddSphereThread(unsigned int thread_index, float3 position, float radius, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -688,7 +607,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddPointThread(unsigned int thread_index, float3 position, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddPointThread(unsigned int thread_index, float3 position, Color color, DebugDrawCallOptions options)
 	{
 		// Make wireframe false
 		options.wireframe = false;
@@ -703,7 +622,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -715,7 +634,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCrossThread(unsigned int thread_index, float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCrossThread(unsigned int thread_index, float3 position, float3 rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -727,7 +646,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCircleThread(unsigned int thread_index, float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCircleThread(unsigned int thread_index, float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -739,7 +658,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -752,7 +671,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowRotationThread(unsigned int thread_index, float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowRotationThread(unsigned int thread_index, float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -764,21 +683,30 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAxesThread(unsigned int thread_index, float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options)
+	void DebugDrawer::AddAxesThread(unsigned int thread_index, float3 translation, float3 rotation, float size, const DebugAxesInfo* info, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
 		if (thread_arrows[thread_index].size + 3 > thread_arrows[thread_index].capacity) {
 			FlushArrow(thread_index);
 		}
-		thread_arrows[thread_index].Add({ translation, rotation, size, size, color_x, options });
-		thread_arrows[thread_index].Add({ translation, rotation + float3(0.0f, 0.0f, 90.0f), size, size, color_y, options });
-		thread_arrows[thread_index].Add({ translation, rotation + float3(0.0f, 90.0f, 0.0f), size, size, color_y, options });
+
+		DebugDrawCallOptions options_x = options;
+		DebugDrawCallOptions options_y = options;
+		DebugDrawCallOptions options_z = options;
+
+		options_x.instance_index = info->instance_x;
+		options_y.instance_index = info->instance_y;
+		options_z.instance_index = info->instance_z;
+
+		thread_arrows[thread_index].Add({ translation, AxesArrowXRotation(rotation), size, size, info->color_x, options_x });
+		thread_arrows[thread_index].Add({ translation, AxesArrowYRotation(rotation), size, size, info->color_y, options_y });
+		thread_arrows[thread_index].Add({ translation, AxesArrowZRotation(rotation), size, size, info->color_z, options_z });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddTriangleThread(unsigned int thread_index, float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddTriangleThread(unsigned int thread_index, float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -790,7 +718,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAABBThread(unsigned int thread_index, float3 min_coordinates, float3 max_coordinates, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddAABBThread(unsigned int thread_index, float3 min_coordinates, float3 max_coordinates, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -802,7 +730,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddOOBBThread(unsigned int thread_index, float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddOOBBThread(unsigned int thread_index, float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -814,7 +742,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringThread(unsigned int thread_index, float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringThread(unsigned int thread_index, float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -827,7 +755,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringRotationThread(unsigned int thread_index, float3 position, float3 rotation, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringRotationThread(unsigned int thread_index, float3 position, float3 rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -870,6 +798,17 @@ namespace ECSEngine {
 			draw_count = drawer->primitive_meshes[debug_vertex_buffer]->index_buffer.count;
 		}
 		return draw_count;
+	}
+
+	template<size_t flags>
+	void DrawCallTransformFlags(DebugDrawer* drawer, unsigned int mesh_index_count, unsigned int instance_count) {
+		if constexpr (flags & DRAW_TRANSFORM_CIRCLE_BUFFER) {
+			drawer->graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+			drawer->graphics->DrawInstanced(mesh_index_count, instance_count);
+		}
+		else {
+			drawer->DrawCallTransform(mesh_index_count, instance_count);
+		}
 	}
 	
 	// This is for a single element draw
@@ -978,12 +917,12 @@ namespace ECSEngine {
 			drawer->graphics->BindVertexBuffer(drawer->output_instance_small_id_buffer, 2);
 		}
 
-		drawer->DrawCallTransform(draw_count, instance_count);
+		DrawCallTransformFlags<flags>(drawer, draw_count, instance_count);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawLine(float3 start, float3 end, Color color, DebugDrawCallOptions options)
 	{
 		DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR, DRAW_STRUCTURED_LINE_TOPOLOGY>(
 			this, 
@@ -998,7 +937,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawLine(float3 translation, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawLine(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		float3 start, end;
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
@@ -1007,7 +946,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawSphere(float3 position, float radius, Color color, DebugDrawCallOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1022,7 +961,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawPoint(float3 position, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawPoint(float3 position, Color color, DebugDrawCallOptions options)
 	{
 		options.wireframe = false;
 
@@ -1040,7 +979,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// Draw it double sided, so it appears on both sides
-	void DebugDrawer::DrawRectangle(float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options)
 	{
 		DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1055,7 +994,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCross(float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawCross(float3 position, float3 rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1070,7 +1009,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCircle(float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawCircle(float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options)
 	{
 		options.wireframe = false;
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR, DRAW_TRANSFORM_CIRCLE_BUFFER>(
@@ -1086,13 +1025,13 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawArrow(float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
 	{
 		float4 rotation_length = ArrowStartEndToRotation(start, end);
 		DrawArrowRotation(start, { rotation_length.x, rotation_length.y, rotation_length.z }, rotation_length.w, size, color, options);
 	}
 
-	void DebugDrawer::DrawArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawArrowRotation(float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1107,7 +1046,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawAxes(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options)
+	void DebugDrawer::DrawAxes(float3 translation, float3 rotation, float size, Color color_x, Color color_y, Color color_z, DebugDrawCallOptions options)
 	{
 		// The same as drawing 3 arrows for each axis
 		DebugDrawerOutput colors[] = {
@@ -1138,7 +1077,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options)
 	{
 		DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1154,14 +1093,14 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// It uses a scaled cube to draw it
-	void DebugDrawer::DrawAABB(float3 translation, float3 scale, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options)
 	{
 		DrawOOBB(translation, float3::Splat(0.0f), scale, color, options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawOOBB(float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawOOBB(float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options)
 	{
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
 			this, 
@@ -1176,7 +1115,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawString(float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
 	{
 		ECS_ASSERT(text.size < 10'000);
 
@@ -1288,7 +1227,7 @@ namespace ECSEngine {
 		float3 rotation,
 		float size,
 		Stream<char> text,
-		ColorFloat color,
+		Color color,
 		DebugDrawCallOptions options
 	) {
 		DrawString(translation, GetRightVector(rotation), size, text, color, options);
@@ -1302,7 +1241,7 @@ namespace ECSEngine {
 		VertexBuffer attribute, 
 		unsigned int float_step, 
 		float size, 
-		ColorFloat color,
+		Color color,
 		Matrix world_matrix, 
 		DebugDrawCallOptions options
 	) {
@@ -1365,7 +1304,7 @@ namespace ECSEngine {
 		VertexBuffer attribute,
 		unsigned int float_step,
 		float size,
-		ColorFloat color,
+		Color color,
 		Stream<Matrix> world_matrices,
 		DebugDrawCallOptions options
 	) {
@@ -1430,7 +1369,7 @@ namespace ECSEngine {
 		VertexBuffer model_position,
 		VertexBuffer model_normals, 
 		float size,
-		ColorFloat color, 
+		Color color, 
 		Matrix world_matrix,
 		DebugDrawCallOptions options
 	)
@@ -1444,7 +1383,7 @@ namespace ECSEngine {
 		VertexBuffer model_position,
 		VertexBuffer model_normals,
 		float size,
-		ColorFloat color,
+		Color color,
 		Stream<Matrix> world_matrices,
 		DebugDrawCallOptions options
 	) {
@@ -1457,7 +1396,7 @@ namespace ECSEngine {
 		VertexBuffer model_position,
 		VertexBuffer model_tangents,
 		float size, 
-		ColorFloat color, 
+		Color color, 
 		Matrix world_matrix, 
 		DebugDrawCallOptions options
 	)
@@ -1471,7 +1410,7 @@ namespace ECSEngine {
 		VertexBuffer model_position,
 		VertexBuffer model_tangents, 
 		float size,
-		ColorFloat color,
+		Color color,
 		Stream<Matrix> world_matrices,
 		DebugDrawCallOptions options
 	)
@@ -1487,22 +1426,27 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	// It doesn't work for DebugAxes
 	template<typename DebugType>
-	ECS_INLINE ColorFloat GetTypeColor(const DebugType* type) {
-		return type->output.color;
+	ECS_INLINE Color GetTypeColor(const DebugType* type) {
+		return type->color;
 	}
 
-	// It doesn't work for DebugAxes
 	template<typename DebugType>
 	ECS_INLINE unsigned int GetTypeInstanceThickness(const DebugType* type) {
-		return type->output.instance_index;
+		return type->options.instance_index;
+	}
+
+	template<typename Deck>
+	ECS_INLINE bool DeckHasOutputID(const Deck* deck) {
+		return deck->ForEach<true>([](const auto* element) {
+			return GetTypeInstanceThickness(element) != -1;
+		});
 	}
 
 	// The functor receives as parameters (InstancedVertex* positions, unsigned int index, const auto* element)
 	// and must fill in the positions accordingly
-	template<DebugShaderOutput shader_output, size_t flags = 0, typename DeckType, typename SetPositionsFunctor>
-	void DrawStructuredDeck(DebugDrawer* drawer, DeckType* deck, unsigned int vertex_count, float time_delta, SetPositionsFunctor&& set_positions_functor) {
+	template<size_t flags = 0, typename DeckType, typename SetPositionsFunctor>
+	void DrawStructuredDeck(DebugDrawer* drawer, DeckType* deck, unsigned int vertex_count, float time_delta, DebugShaderOutput shader_output, SetPositionsFunctor&& set_positions_functor) {
 		// Calculate the maximum amount of vertices needed for every type
 		// and also get an integer mask to indicate the elements for each type
 		unsigned int counts[ELEMENT_COUNT] = { 0 };
@@ -1511,138 +1455,143 @@ namespace ECSEngine {
 
 		if (total_count > 0) {
 			// Allocate 4 times the memory needed to be sure that each type has enough indices
-			ushort2* type_indices = CalculateElementTypeCounts(drawer->allocator, counts, indices, deck);
+			ushort2* type_indices = CalculateElementTypeCounts(drawer->allocator, counts, indices, deck, shader_output);
 
 			// Get the max
 			unsigned int instance_count = GetMaximumCount(counts);
 
-			// Create temporary buffers to hold the data - each line has 2 endpoints
-			VertexBuffer position_buffer = drawer->graphics->CreateVertexBuffer(sizeof(InstancedVertex), instance_count * vertex_count, true);
-			// Bind the vertex buffer and the structured buffer now
-			drawer->graphics->BindVertexBuffer(position_buffer);
+			if (instance_count > 0) {
+				// Create temporary buffers to hold the data - each line has 2 endpoints
+				VertexBuffer position_buffer = drawer->graphics->CreateVertexBuffer(sizeof(InstancedVertex), instance_count * vertex_count, true);
+				// Bind the vertex buffer and the structured buffer now
+				drawer->graphics->BindVertexBuffer(position_buffer);
 
-			StructuredBuffer instanced_buffer;
-			StructuredBuffer matrix_buffer;
-			StructuredBuffer instance_pixel_thickness_buffer;
-			ResourceView instanced_view;
-			ResourceView matrix_view;
-			ResourceView instance_pixel_thickness_view;
+				StructuredBuffer instanced_buffer;
+				StructuredBuffer matrix_buffer;
+				StructuredBuffer instance_pixel_thickness_buffer;
+				ResourceView instanced_view;
+				ResourceView matrix_view;
+				ResourceView instance_pixel_thickness_view;
 
-			if constexpr (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-				instanced_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count, true);
-				instanced_view = drawer->graphics->CreateBufferView(instanced_buffer, true);
-				drawer->graphics->BindVertexResourceView(instanced_view);
-			}
-			else {
-				matrix_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(Matrix), instance_count, true);
-				instance_pixel_thickness_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(unsigned int), instance_count, true);
-				matrix_view = drawer->graphics->CreateBufferView(matrix_buffer, true);
-				instance_pixel_thickness_view = drawer->graphics->CreateBufferView(instance_pixel_thickness_buffer, true);
-				ResourceView vertex_views[] = {
-					matrix_view,
-					instance_pixel_thickness_view
-				};
-				drawer->graphics->BindVertexResourceViews({ vertex_views, std::size(vertex_views) });
-			}
+				if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+					instanced_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count, true);
+					instanced_view = drawer->graphics->CreateBufferView(instanced_buffer, true);
+					drawer->graphics->BindVertexResourceView(instanced_view);
+				}
+				else {
+					matrix_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(Matrix), instance_count, true);
+					instance_pixel_thickness_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(unsigned int), instance_count, true);
+					matrix_view = drawer->graphics->CreateBufferView(matrix_buffer, true);
+					instance_pixel_thickness_view = drawer->graphics->CreateBufferView(instance_pixel_thickness_buffer, true);
+					ResourceView vertex_views[] = {
+						matrix_view,
+						instance_pixel_thickness_view
+					};
+					drawer->graphics->BindVertexResourceViews({ vertex_views, std::size(vertex_views) });
+				}
 
-			Matrix gpu_camera = MatrixGPU(drawer->camera_matrix);
+				Matrix gpu_camera = MatrixGPU(drawer->camera_matrix);
 
-			unsigned int current_count = counts[WIREFRAME_DEPTH];
-			ushort2* current_indices = indices[WIREFRAME_DEPTH];
+				unsigned int current_count = counts[WIREFRAME_DEPTH];
+				ushort2* current_indices = indices[WIREFRAME_DEPTH];
 
-			InstancedVertex* positions = nullptr;
-			void* instanced_data = nullptr;
-			Matrix* matrix_data = nullptr;
-			unsigned int* instance_pixel_thickness_data = nullptr;
+				InstancedVertex* positions = nullptr;
+				void* instanced_data = nullptr;
+				Matrix* matrix_data = nullptr;
+				unsigned int* instance_pixel_thickness_data = nullptr;
 
-			auto draw_call = [&](DebugDrawCallOptions options) {
-				if (current_count > 0) {
-					// Map the buffers
-					positions = (InstancedVertex*)drawer->graphics->MapBuffer(position_buffer.buffer);
-					if constexpr (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-						instanced_data = drawer->graphics->MapBuffer(instanced_buffer.buffer);
-					}
-					else {
-						matrix_data = (Matrix*)drawer->graphics->MapBuffer(matrix_buffer.buffer);
-						instance_pixel_thickness_data = (unsigned int*)drawer->graphics->MapBuffer(instance_pixel_thickness_buffer.buffer);
-					}
-
-					// Fill the buffers
-					for (size_t index = 0; index < current_count; index++) {
-						const auto* element = &deck->buffers[current_indices[index].x][current_indices[index].y];
-						set_positions_functor(positions, index, element);
-						if constexpr (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-							SetInstancedColor(instanced_data, index, GetTypeColor(element));
-							SetInstancedMatrix(instanced_data, index, gpu_camera);
+				auto draw_call = [&](DebugDrawCallOptions options) {
+					if (current_count > 0) {
+						// Map the buffers
+						positions = (InstancedVertex*)drawer->graphics->MapBuffer(position_buffer.buffer);
+						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+							instanced_data = drawer->graphics->MapBuffer(instanced_buffer.buffer);
 						}
 						else {
-							gpu_camera.Store(matrix_data + index);
-							instance_pixel_thickness_data[index] = GetTypeInstanceThickness(element);
+							matrix_data = (Matrix*)drawer->graphics->MapBuffer(matrix_buffer.buffer);
+							instance_pixel_thickness_data = (unsigned int*)drawer->graphics->MapBuffer(instance_pixel_thickness_buffer.buffer);
 						}
-					}
 
-					// Unmap the buffers
-					drawer->graphics->UnmapBuffer(position_buffer.buffer);
-					if constexpr (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-						drawer->graphics->UnmapBuffer(instanced_buffer.buffer);
-					}
-					else {
-						drawer->graphics->UnmapBuffer(matrix_buffer.buffer);
-						drawer->graphics->UnmapBuffer(instance_pixel_thickness_buffer.buffer);
-					}
+						// Fill the buffers
+						for (size_t index = 0; index < current_count; index++) {
+							const auto* element = &deck->buffers[current_indices[index].x][current_indices[index].y];
+							set_positions_functor(positions, index, element);
+							if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+								SetInstancedColor(instanced_data, index, GetTypeColor(element));
+								SetInstancedMatrix(instanced_data, index, gpu_camera);
+							}
+							else {
+								gpu_camera.Store(matrix_data + index);
+								instance_pixel_thickness_data[index] = GetTypeInstanceThickness(element);
+							}
+						}
 
-					// Set the state
-					BindStructuredShaderState<flags>(drawer, options, ECS_DEBUG_SHADER_OUTPUT_COLOR);
+						// Unmap the buffers
+						drawer->graphics->UnmapBuffer(position_buffer.buffer);
+						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+							drawer->graphics->UnmapBuffer(instanced_buffer.buffer);
+						}
+						else {
+							drawer->graphics->UnmapBuffer(matrix_buffer.buffer);
+							drawer->graphics->UnmapBuffer(instance_pixel_thickness_buffer.buffer);
+						}
 
-					// Issue the draw call
-					drawer->DrawCallStructured(vertex_count, current_count);
+						// Set the state
+						BindStructuredShaderState<flags>(drawer, options, ECS_DEBUG_SHADER_OUTPUT_COLOR);
+
+						// Issue the draw call
+						drawer->DrawCallStructured(vertex_count, current_count);
+					}
+				};
+
+				// Draw all the Wireframe depth elements
+				draw_call({ true, false });
+
+				// Draw all the Wireframe no depth elements
+				current_count = counts[WIREFRAME_NO_DEPTH];
+				current_indices = indices[WIREFRAME_NO_DEPTH];
+				draw_call({ true, true });
+
+				// Draw all the Solid depth elements
+				current_count = counts[SOLID_DEPTH];
+				current_indices = indices[SOLID_DEPTH];
+				draw_call({ false, false });
+
+				// Draw all the Solid no depth elements
+				current_count = counts[SOLID_NO_DEPTH];
+				current_indices = indices[SOLID_NO_DEPTH];
+				draw_call({ false, true });
+
+				// Update the duration and remove those elements that expired
+				if (time_delta != 0.0f) {
+					UpdateElementDurations(deck, time_delta);
 				}
-			};
 
-			// Draw all the Wireframe depth elements - only solid draw
-			draw_call({ false, false });
-
-			// Draw all the Wireframe no depth elements - only solid draw
-			current_count = counts[WIREFRAME_NO_DEPTH];
-			current_indices = indices[WIREFRAME_NO_DEPTH];
-			draw_call({ false, true });
-
-			// Draw all the Solid depth elements
-			current_count = counts[SOLID_DEPTH];
-			current_indices = indices[SOLID_DEPTH];
-			draw_call({ false, false });
-
-			// Draw all the Solid no depth elements
-			current_count = counts[SOLID_NO_DEPTH];
-			current_indices = indices[SOLID_NO_DEPTH];
-			draw_call({ false, true });
-
-			// Update the duration and remove those elements that expired
-			UpdateElementDurations(deck, time_delta);
-
-			// Release the temporary vertex buffer, structured buffer and the temporary allocation
-			position_buffer.Release();
-			if constexpr (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-				instanced_view.Release();
-				instanced_buffer.Release();
-			}
-			else {
-				matrix_view.Release();
-				matrix_buffer.Release();
-				instance_pixel_thickness_view.Release();
-				instance_pixel_thickness_buffer.Release();
+				// Release the temporary vertex buffer, structured buffer and the temporary allocation
+				position_buffer.Release();
+				if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+					instanced_view.Release();
+					instanced_buffer.Release();
+				}
+				else {
+					matrix_view.Release();
+					matrix_buffer.Release();
+					instance_pixel_thickness_view.Release();
+					instance_pixel_thickness_buffer.Release();
+				}
 			}
 			drawer->allocator->Deallocate(type_indices);
 		}
 	}
 
 	// The functor receives as parameters (const auto* element) and must return a matrix
-	template<DebugShaderOutput shader_output, size_t flags = 0, typename DeckElement, typename SetMatrixFunctor>
+	template<size_t flags = 0, typename DeckElement, typename SetMatrixFunctor>
 	void DrawTransformDeck(
 		DebugDrawer* drawer,
 		DeckPowerOfTwo<DeckElement>* deck,
 		DebugVertexBuffers debug_vertex_buffer,
 		float time_delta,
+		DebugShaderOutput shader_output,
 		SetMatrixFunctor&& set_matrix_functor
 	) {
 		// Calculate the maximum amount of vertices needed for every type
@@ -1653,111 +1602,115 @@ namespace ECSEngine {
 
 		if (total_count > 0) {
 			// Allocate 4 times the memory needed to be sure that each type has enough indices
-			ushort2* type_indices = CalculateElementTypeCounts(drawer->allocator, counts, indices, deck);
+			ushort2* type_indices = CalculateElementTypeCounts(drawer->allocator, counts, indices, deck, shader_output);
 
 			// Get the max
 			unsigned int instance_count = GetMaximumCount(counts);
 
-			VertexBuffer instanced_buffer;
-			VertexBuffer matrix_buffer;
-			VertexBuffer instance_id_buffer;
+			if (instance_count > 0) {
+				VertexBuffer instanced_buffer;
+				VertexBuffer matrix_buffer;
+				VertexBuffer instance_id_buffer;
 
-			// Create temporary buffers to hold the data
-			if constexpr (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-				instanced_buffer = drawer->graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
-				drawer->graphics->BindVertexBuffer(instanced_buffer, 1);
-			}
-			else {
-				matrix_buffer = drawer->graphics->CreateVertexBuffer(sizeof(Matrix), instance_count, true);
-				drawer->graphics->BindVertexBuffer(matrix_buffer, 1);
-				instance_id_buffer = drawer->graphics->CreateVertexBuffer(sizeof(unsigned int), instance_count, true);
-				drawer->graphics->BindVertexBuffer(instance_id_buffer, 2);
-			}
+				// Create temporary buffers to hold the data
+				if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+					instanced_buffer = drawer->graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
+					drawer->graphics->BindVertexBuffer(instanced_buffer, 1);
+				}
+				else {
+					matrix_buffer = drawer->graphics->CreateVertexBuffer(sizeof(Matrix), instance_count, true);
+					drawer->graphics->BindVertexBuffer(matrix_buffer, 1);
+					instance_id_buffer = drawer->graphics->CreateVertexBuffer(sizeof(unsigned int), instance_count, true);
+					drawer->graphics->BindVertexBuffer(instance_id_buffer, 2);
+				}
 
-			// Bind the vertex buffers now
-			unsigned int mesh_index_count = BindTransformVertexBuffers<flags>(drawer, debug_vertex_buffer);	
+				// Bind the vertex buffers now
+				unsigned int mesh_index_count = BindTransformVertexBuffers<flags>(drawer, debug_vertex_buffer);
 
-			unsigned int current_count = counts[WIREFRAME_DEPTH];
-			ushort2* current_indices = indices[WIREFRAME_DEPTH];
+				unsigned int current_count = counts[WIREFRAME_DEPTH];
+				ushort2* current_indices = indices[WIREFRAME_DEPTH];
 
-			void* instanced_data = nullptr;
-			Matrix* matrix_data = nullptr;
-			unsigned int* instance_id_data = nullptr;
+				void* instanced_data = nullptr;
+				Matrix* matrix_data = nullptr;
+				unsigned int* instance_id_data = nullptr;
 
-			auto draw_call = [&](DebugDrawCallOptions options) {
-				if (current_count > 0) {
-					// Map the buffers
-					if constexpr (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-						instanced_data = drawer->graphics->MapBuffer(instanced_buffer.buffer);
-					}
-					else {
-						matrix_data = (Matrix*)drawer->graphics->MapBuffer(matrix_buffer.buffer);
-						instance_id_data = (unsigned int*)drawer->graphics->MapBuffer(instance_id_buffer.buffer);
-					}
-
-					// Fill the buffers
-					for (size_t index = 0; index < current_count; index++) {
-						const auto* element = &deck->buffers[current_indices[index].x][current_indices[index].y];
-						Matrix current_matrix = set_matrix_functor(element);
-						if constexpr (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-							SetInstancedColor(instanced_data, index, GetTypeColor(element));
-							SetInstancedMatrix(instanced_data, index, current_matrix);
+				auto draw_call = [&](DebugDrawCallOptions options) {
+					if (current_count > 0) {
+						// Map the buffers
+						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+							instanced_data = drawer->graphics->MapBuffer(instanced_buffer.buffer);
 						}
 						else {
-							current_matrix.Store(matrix_data + index);
-							instance_id_data[index] = GetTypeInstanceThickness(element);
+							matrix_data = (Matrix*)drawer->graphics->MapBuffer(matrix_buffer.buffer);
+							instance_id_data = (unsigned int*)drawer->graphics->MapBuffer(instance_id_buffer.buffer);
 						}
-					}
 
-					// Unmap the buffers
-					if constexpr (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-						drawer->graphics->UnmapBuffer(instanced_buffer.buffer);
-					}
-					else {
-						drawer->graphics->UnmapBuffer(matrix_buffer.buffer);
-						drawer->graphics->UnmapBuffer(instance_id_buffer.buffer);
-					}
+						// Fill the buffers
+						for (size_t index = 0; index < current_count; index++) {
+							const auto* element = &deck->buffers[current_indices[index].x][current_indices[index].y];
+							Matrix current_matrix = set_matrix_functor(element);
+							if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+								SetInstancedColor(instanced_data, index, GetTypeColor(element));
+								SetInstancedMatrix(instanced_data, index, current_matrix);
+							}
+							else {
+								current_matrix.Store(matrix_data + index);
+								instance_id_data[index] = GetTypeInstanceThickness(element);
+							}
+						}
 
-					drawer->SetTransformShaderState(options, shader_output);
-					drawer->DrawCallTransform(mesh_index_count, current_count);
+						// Unmap the buffers
+						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+							drawer->graphics->UnmapBuffer(instanced_buffer.buffer);
+						}
+						else {
+							drawer->graphics->UnmapBuffer(matrix_buffer.buffer);
+							drawer->graphics->UnmapBuffer(instance_id_buffer.buffer);
+						}
+
+						drawer->SetTransformShaderState(options, shader_output);
+						DrawCallTransformFlags<flags>(drawer, mesh_index_count, current_count);
+					}
+				};
+
+				// Draw all the Wireframe depth elements
+				draw_call({ true, false });
+
+				// Draw all the Wireframe no depth elements
+				current_count = counts[WIREFRAME_NO_DEPTH];
+				current_indices = indices[WIREFRAME_NO_DEPTH];
+				draw_call({ true, true });
+
+				// Draw all the Solid depth elements
+				current_count = counts[SOLID_DEPTH];
+				current_indices = indices[SOLID_DEPTH];
+				draw_call({ false, false });
+
+				// Draw all the Solid no depth elements
+				current_count = counts[SOLID_NO_DEPTH];
+				current_indices = indices[SOLID_NO_DEPTH];
+				draw_call({ false, true });
+
+				// Update the duration and remove those elements that expired
+				if (time_delta != 0.0f) {
+					UpdateElementDurations(deck, time_delta);
 				}
-			};
 
-			// Draw all the Wireframe depth elements
-			draw_call({ true, false });
-
-			// Draw all the Wireframe no depth elements
-			current_count = counts[WIREFRAME_NO_DEPTH];
-			current_indices = indices[WIREFRAME_NO_DEPTH];
-			draw_call({ true, true });
-
-			// Draw all the Solid depth elements
-			current_count = counts[SOLID_DEPTH];
-			current_indices = indices[SOLID_DEPTH];
-			draw_call({ false, false });
-
-			// Draw all the Solid no depth elements
-			current_count = counts[SOLID_NO_DEPTH];
-			current_indices = indices[SOLID_NO_DEPTH];
-			draw_call({ false, true });
-
-			// Update the duration and remove those elements that expired
-			UpdateElementDurations(deck, time_delta);
-
-			// Release the temporary vertex buffers and the temporary allocation
-			if constexpr (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-				instanced_buffer.Release();
-			}
-			else {
-				matrix_buffer.Release();
-				instance_id_buffer.Release();
+				// Release the temporary vertex buffers and the temporary allocation
+				if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+					instanced_buffer.Release();
+				}
+				else {
+					matrix_buffer.Release();
+					instance_id_buffer.Release();
+				}
 			}
 			drawer->allocator->Deallocate(type_indices);
 		}
 	}
 
-	void DebugDrawer::DrawLineDeck(float time_delta) {
-		DrawStructuredDeck<ECS_DEBUG_SHADER_OUTPUT_COLOR, DRAW_STRUCTURED_LINE_TOPOLOGY>(this, &lines, 2, time_delta,
+	void DebugDrawer::DrawLineDeck(float time_delta, DebugShaderOutput shader_output) {
+		DrawStructuredDeck<DRAW_STRUCTURED_LINE_TOPOLOGY>(this, &lines, 2, time_delta, shader_output,
 			[](InstancedVertex* positions, unsigned int index, const DebugLine* line) {
 				SetLinePositions(positions, index, line->start, line->end);
 		});
@@ -1765,24 +1718,24 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawSphereDeck(float time_delta) {
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_COLOR>(this, &spheres, ECS_DEBUG_VERTEX_BUFFER_SPHERE, time_delta, [&](const DebugSphere* sphere) {
+	void DebugDrawer::DrawSphereDeck(float time_delta, DebugShaderOutput shader_output) {
+		DrawTransformDeck(this, &spheres, ECS_DEBUG_VERTEX_BUFFER_SPHERE, time_delta, shader_output, [&](const DebugSphere* sphere) {
 			return SphereMatrix(sphere->position, sphere->radius, camera_matrix);
 		});
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawPointDeck(float time_delta) {
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_COLOR>(this, &points, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, [&](const DebugPoint* point) {
+	void DebugDrawer::DrawPointDeck(float time_delta, DebugShaderOutput shader_output) {
+		DrawTransformDeck(this, &points, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, shader_output, [&](const DebugPoint* point) {
 			return PointMatrix(point->position, camera_matrix);
 		});
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawRectangleDeck(float time_delta) {
-		DrawStructuredDeck<ECS_DEBUG_SHADER_OUTPUT_COLOR>(this, &rectangles, 6, time_delta, 
+	void DebugDrawer::DrawRectangleDeck(float time_delta, DebugShaderOutput shader_output) {
+		DrawStructuredDeck(this, &rectangles, 6, time_delta, shader_output,
 			[](InstancedVertex* positions, unsigned int index, const DebugRectangle* rectangle) {
 				SetRectanglePositionsFront(positions, index, rectangle->corner0, rectangle->corner1);
 		});
@@ -1790,16 +1743,16 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCrossDeck(float time_delta) {
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_COLOR>(this, &crosses, ECS_DEBUG_VERTEX_BUFFER_CROSS, time_delta, [&](const DebugCross* cross) {
+	void DebugDrawer::DrawCrossDeck(float time_delta, DebugShaderOutput shader_output) {
+		DrawTransformDeck(this, &crosses, ECS_DEBUG_VERTEX_BUFFER_CROSS, time_delta, shader_output, [&](const DebugCross* cross) {
 			return CrossMatrix(cross->position, cross->rotation, cross->size, camera_matrix);
 		});
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCircleDeck(float time_delta) {
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_COLOR, DRAW_TRANSFORM_CIRCLE_BUFFER>(this, &circles, ECS_DEBUG_VERTEX_BUFFER_COUNT, time_delta,
+	void DebugDrawer::DrawCircleDeck(float time_delta, DebugShaderOutput shader_output) {
+		DrawTransformDeck<DRAW_TRANSFORM_CIRCLE_BUFFER>(this, &circles, ECS_DEBUG_VERTEX_BUFFER_COUNT, time_delta, shader_output,
 			[&](const DebugCircle* circle) {
 				return CircleMatrix(circle->position, circle->rotation, circle->radius, camera_matrix);
 		});
@@ -1807,16 +1760,16 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawArrowDeck(float time_delta) {
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_COLOR>(this, &arrows, ECS_DEBUG_VERTEX_BUFFER_ARROW, time_delta, [&](const DebugArrow* arrow) {
+	void DebugDrawer::DrawArrowDeck(float time_delta, DebugShaderOutput shader_output) {
+		DrawTransformDeck(this, &arrows, ECS_DEBUG_VERTEX_BUFFER_ARROW, time_delta, shader_output, [&](const DebugArrow* arrow) {
 			return ArrowMatrix(arrow->translation, arrow->rotation, arrow->length, arrow->size, camera_matrix);
 		});
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawTriangleDeck(float time_delta) {
-		DrawStructuredDeck<ECS_DEBUG_SHADER_OUTPUT_COLOR>(this, &triangles, 3, time_delta, 
+	void DebugDrawer::DrawTriangleDeck(float time_delta, DebugShaderOutput shader_output) {
+		DrawStructuredDeck(this, &triangles, 3, time_delta, shader_output,
 			[](InstancedVertex* positions, unsigned int index, const DebugTriangle* triangle) {
 				SetTrianglePositions(positions, index, triangle->point0, triangle->point1, triangle->point2);
 		});
@@ -1824,23 +1777,23 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawAABBDeck(float time_delta) {
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_COLOR>(this, &aabbs, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, [&](const DebugAABB* aabb) {
+	void DebugDrawer::DrawAABBDeck(float time_delta, DebugShaderOutput shader_output) {
+		DrawTransformDeck(this, &aabbs, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, shader_output, [&](const DebugAABB* aabb) {
 			return AABBMatrix(aabb->translation, aabb->scale, camera_matrix);
 		});
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawOOBBDeck(float time_delta) {
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_COLOR>(this, &oobbs, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, [&](const DebugOOBB* oobb) {
+	void DebugDrawer::DrawOOBBDeck(float time_delta, DebugShaderOutput shader_output) {
+		DrawTransformDeck(this, &oobbs, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, shader_output, [&](const DebugOOBB* oobb) {
 			return OOBBMatrix(oobb->translation, oobb->rotation, oobb->scale, camera_matrix);
 		});
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawStringDeck(float time_delta) {
+	void DebugDrawer::DrawStringDeck(float time_delta, DebugShaderOutput shader_output) {
 		// Calculate the maximum amount of vertices needed for every type
 		// and also get an integer mask to indicate the elements for each type
 		unsigned int counts[ELEMENT_COUNT] = { 0 };
@@ -1849,8 +1802,12 @@ namespace ECSEngine {
 		unsigned int total_count = deck_pointer->GetElementCount();
 
 		if (total_count > 0) {
+			if (shader_output == ECS_DEBUG_SHADER_OUTPUT_ID) {
+				ECS_ASSERT(false);
+			}
+
 			// Allocate 4 times the memory needed to be sure that each type has enough indices
-			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
+			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer, ECS_DEBUG_SHADER_OUTPUT_COLOR);
 
 			// Get the maximum count of characters for each string
 			size_t instance_count = 0;
@@ -1945,7 +1902,7 @@ namespace ECSEngine {
 									float3 translation = string->position + horizontal_offsets[subindex] + vertical_offsets[subindex];
 									checked_characters[subindex] = true;
 
-									SetInstancedColor(instanced_data, current_character_count, string->output.color);
+									SetInstancedColor(instanced_data, current_character_count, string->color);
 									SetInstancedMatrix(instanced_data, current_character_count, MatrixGPU(MatrixMVP(
 										scale_rotation * MatrixTranslation(translation), camera_matrix
 									)));
@@ -1957,7 +1914,10 @@ namespace ECSEngine {
 
 							unsigned int alphabet_index = function::GetAlphabetIndex(string->text[text_index]);
 							// Draw the current character
-							graphics->DrawIndexedInstanced(string_mesh->submeshes[alphabet_index].index_count, current_character_count, string_mesh->submeshes[alphabet_index].index_buffer_offset);
+							Submesh submesh = string_mesh->submeshes[alphabet_index];
+							// Here the buffer offset needs to be 0
+							submesh.vertex_buffer_offset = 0;
+							graphics->DrawSubmeshCommand(submesh, current_character_count);
 						}
 					}
 				}
@@ -2019,20 +1979,20 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawAll(float time_delta)
+	void DebugDrawer::DrawAll(float time_delta, DebugShaderOutput shader_output)
 	{
 		FlushAll();
-		DrawLineDeck(time_delta);
-		DrawSphereDeck(time_delta);
-		DrawPointDeck(time_delta);
-		DrawRectangleDeck(time_delta);
-		DrawCrossDeck(time_delta);
-		DrawCircleDeck(time_delta);
-		DrawArrowDeck(time_delta);
-		DrawTriangleDeck(time_delta);
-		DrawAABBDeck(time_delta);
-		DrawOOBBDeck(time_delta);
-		DrawStringDeck(time_delta);
+		DrawLineDeck(time_delta, shader_output);
+		DrawSphereDeck(time_delta, shader_output);
+		DrawPointDeck(time_delta, shader_output);
+		DrawRectangleDeck(time_delta, shader_output);
+		DrawCrossDeck(time_delta, shader_output);
+		DrawCircleDeck(time_delta, shader_output);
+		DrawArrowDeck(time_delta, shader_output);
+		DrawTriangleDeck(time_delta, shader_output);
+		DrawAABBDeck(time_delta, shader_output);
+		DrawOOBBDeck(time_delta, shader_output);
+		DrawStringDeck(time_delta, shader_output);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2043,26 +2003,27 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE const DebugDrawerOutput* ToDrawerOutput(const DebugDrawerOutputInstance* instance) {
-		return (const DebugDrawerOutput*)&instance->instance_index;
+	ECS_INLINE const DebugDrawerOutput* ToDrawerOutput(const DebugDrawCallOptions* options) {
+		return (const DebugDrawerOutput*)&options->instance_index;
 	}
 
 	void DebugDrawer::OutputInstanceIndexLine(
 		float3 start, 
 		float3 end, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugLine>* addition_stream
 	)
 	{
+		options.instance_index = GenerateRenderInstanceValue(options.instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
 		if (addition_stream != nullptr) {
-			addition_stream->Add({ start, end, GenerateRenderInstanceValue(instance->instance_index, STRUCTURED_OUTPUT_ID_THICKNESS), instance->options });
+			addition_stream->Add({ start, end, Color(), options });
 		}
 		else {
 			DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_ID, DRAW_STRUCTURED_LINE_TOPOLOGY>(
 				this,
 				1,
-				ToDrawerOutput(instance),
-				instance->options,
+				ToDrawerOutput(&options),
+				options,
 				2,
 				[&](InstancedVertex* positions, unsigned int index) {
 					SetLinePositions(positions, index, start, end);
@@ -2076,13 +2037,13 @@ namespace ECSEngine {
 		float3 translation, 
 		float3 rotation, 
 		float size, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugLine>* addition_stream
 	)
 	{
 		float3 start, end;
 		ConvertTranslationLineIntoStartEnd(translation, rotation, size, start, end);
-		OutputInstanceIndexLine(start, end, instance, addition_stream);
+		OutputInstanceIndexLine(start, end, options, addition_stream);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2090,15 +2051,16 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexSphere(
 		float3 translation, 
 		float radius, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugSphere>* addition_stream
 	)
 	{
+		options.instance_index = GenerateRenderInstanceValue(options.instance_index, 0);
 		if (addition_stream != nullptr) {
-			addition_stream->Add({ translation, radius, GenerateRenderInstanceValue(instance->instance_index, 0), instance->options });
+			addition_stream->Add({ translation, radius, Color(), options });
 		}
 		else {
-			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(instance), instance->options, ECS_DEBUG_VERTEX_BUFFER_SPHERE, [&](unsigned int index) {
+			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(&options), options, ECS_DEBUG_VERTEX_BUFFER_SPHERE, [&](unsigned int index) {
 				return SphereMatrix(translation, radius, camera_matrix);
 			});
 		}
@@ -2108,18 +2070,19 @@ namespace ECSEngine {
 
 	void DebugDrawer::OutputInstanceIndexPoint(
 		float3 translation, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options, 
 		AdditionStreamAtomic<DebugPoint>* addition_stream
 	)
 	{
-		DebugDrawCallOptions temp_options = instance->options;
+		DebugDrawCallOptions temp_options = options;
 		temp_options.wireframe = false;
+		temp_options.instance_index = GenerateRenderInstanceValue(options.instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
 
 		if (addition_stream != nullptr) {
-			addition_stream->Add({ translation, GenerateRenderInstanceValue(instance->instance_index, STRUCTURED_OUTPUT_ID_THICKNESS), temp_options });
+			addition_stream->Add({ translation, Color(), temp_options });
 		}
 		else {
-			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(this, 1, ToDrawerOutput(instance), temp_options, ECS_DEBUG_VERTEX_BUFFER_POINT, [&](unsigned int index) {
+			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(this, 1, ToDrawerOutput(&options), temp_options, ECS_DEBUG_VERTEX_BUFFER_POINT, [&](unsigned int index) {
 				return PointMatrix(translation, camera_matrix);
 			});
 		}
@@ -2130,15 +2093,16 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexRectangle(
 		float3 corner0, 
 		float3 corner1, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugRectangle>* addition_stream
 	)
 	{
+		options.instance_index = GenerateRenderInstanceValue(options.instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
 		if (addition_stream != nullptr) {
-			addition_stream->Add({ corner0, corner1, GenerateRenderInstanceValue(instance->instance_index, STRUCTURED_OUTPUT_ID_THICKNESS), instance->options });
+			addition_stream->Add({ corner0, corner1, Color(), options });
 		}
 		else {
-			DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(instance), instance->options, 6, [&](InstancedVertex* positions, unsigned int index) {
+			DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(&options), options, 6, [&](InstancedVertex* positions, unsigned int index) {
 				SetRectanglePositionsFront(positions, index, corner0, corner1);
 			});
 		}
@@ -2150,15 +2114,16 @@ namespace ECSEngine {
 		float3 position, 
 		float3 rotation, 
 		float size, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugCross>* addition_stream
 	)
 	{
+		options.instance_index = GenerateRenderInstanceValue(options.instance_index, 0);
 		if (addition_stream != nullptr) {
-			addition_stream->Add({ position, rotation, size, GenerateRenderInstanceValue(instance->instance_index, 0), instance->options });
+			addition_stream->Add({ position, rotation, size, Color(), options });
 		}
 		else {
-			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(instance), instance->options, ECS_DEBUG_VERTEX_BUFFER_CROSS, [&](unsigned int index) {
+			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(&options), options, ECS_DEBUG_VERTEX_BUFFER_CROSS, [&](unsigned int index) {
 				return CrossMatrix(position, rotation, size, camera_matrix);
 			});
 		}
@@ -2170,15 +2135,16 @@ namespace ECSEngine {
 		float3 position, 
 		float3 rotation, 
 		float radius, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugCircle>* addition_stream
 	)
 	{
+		options.instance_index = GenerateRenderInstanceValue(options.instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
 		if (addition_stream != nullptr) {
-			addition_stream->Add({ position, rotation, radius, GenerateRenderInstanceValue(instance->instance_index, STRUCTURED_OUTPUT_ID_THICKNESS), instance->options });
+			addition_stream->Add({ position, rotation, radius, Color(), options });
 		}
 		else {
-			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID, DRAW_TRANSFORM_CIRCLE_BUFFER>(this, 1, ToDrawerOutput(instance), instance->options, ECS_DEBUG_VERTEX_BUFFER_COUNT, 
+			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID, DRAW_TRANSFORM_CIRCLE_BUFFER>(this, 1, ToDrawerOutput(&options), options, ECS_DEBUG_VERTEX_BUFFER_COUNT, 
 				[&](unsigned int index) {
 				return CircleMatrix(position, rotation, radius, camera_matrix);
 			});
@@ -2191,12 +2157,12 @@ namespace ECSEngine {
 		float3 start, 
 		float3 end, 
 		float size, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugArrow>* addition_stream
 	)
 	{
 		float4 rotation_length = ArrowStartEndToRotation(start, end);
-		OutputInstanceIndexArrowRotation(start, { rotation_length.x, rotation_length.y, rotation_length.z }, rotation_length.w, size, instance, addition_stream);
+		OutputInstanceIndexArrowRotation(start, { rotation_length.x, rotation_length.y, rotation_length.z }, rotation_length.w, size, options, addition_stream);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2206,15 +2172,16 @@ namespace ECSEngine {
 		float3 rotation, 
 		float length, 
 		float size, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugArrow>* addition_stream
 	)
 	{
+		options.instance_index = GenerateRenderInstanceValue(options.instance_index, 0);
 		if (addition_stream != nullptr) {
-			addition_stream->Add({ translation, rotation, length, size, GenerateRenderInstanceValue(instance->instance_index, 0), instance->options });
+			addition_stream->Add({ translation, rotation, length, size, Color(), options });
 		}
 		else {
-			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(instance), instance->options, ECS_DEBUG_VERTEX_BUFFER_ARROW, [&](unsigned int index) {
+			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(&options), options, ECS_DEBUG_VERTEX_BUFFER_ARROW, [&](unsigned int index) {
 				return ArrowMatrix(translation, rotation, length, size, camera_matrix);
 			});
 		}
@@ -2234,10 +2201,19 @@ namespace ECSEngine {
 	)
 	{
 		if (addition_stream != nullptr) {
+			DebugDrawCallOptions options_x = options;
+			options_x.instance_index = GenerateRenderInstanceValue(instance_x, 0);
+
+			DebugDrawCallOptions options_y = options;
+			options_y.instance_index = GenerateRenderInstanceValue(instance_y, 0);
+
+			DebugDrawCallOptions options_z = options;
+			options_z.instance_index = GenerateRenderInstanceValue(instance_z, 0);
+
 			DebugArrow arrows[] = {
-				{ translation, rotation, size, size, GenerateRenderInstanceValue(instance_x, 0), options },
-				{ translation, rotation + float3(0.0f, 0.0f, 90.0f), size, size, GenerateRenderInstanceValue(instance_y, 0), options },
-				{ translation, rotation + float3(0.0f, 90.0f, 0.0f), size, size, GenerateRenderInstanceValue(instance_z, 0), options}
+				{ translation, AxesArrowXRotation(rotation), size, size, Color(), options_x },
+				{ translation, AxesArrowYRotation(rotation), size, size, Color(), options_y },
+				{ translation, AxesArrowZRotation(rotation), size, size, Color(), options_z }
 			};
 
 			addition_stream->AddStream({ arrows, std::size(arrows)});
@@ -2253,9 +2229,9 @@ namespace ECSEngine {
 			// called multiple times and fold the calls into a single one (with optimizations for sure, in release
 			// I hope so)
 			Matrix matrices[] = {
-				ArrowMatrix(translation, rotation, size, size, camera_matrix),
-				ArrowMatrix(translation, rotation + float3(0.0f, 0.0f, 90.0f), size, size, camera_matrix),
-				ArrowMatrix(translation, rotation + float3(0.0f, -90.0f, 0.0f), size, size, camera_matrix)
+				ArrowMatrix(translation, AxesArrowXRotation(rotation), size, size, camera_matrix),
+				ArrowMatrix(translation, AxesArrowYRotation(rotation), size, size, camera_matrix),
+				ArrowMatrix(translation, AxesArrowZRotation(rotation), size, size, camera_matrix)
 			};
 
 			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 3, outputs, options, ECS_DEBUG_VERTEX_BUFFER_ARROW, [&](unsigned int index) {
@@ -2270,15 +2246,16 @@ namespace ECSEngine {
 		float3 point0, 
 		float3 point1, 
 		float3 point2, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugTriangle>* addition_stream
 	)
 	{
+		options.instance_index = GenerateRenderInstanceValue(options.instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
 		if (addition_stream != nullptr) {
-			addition_stream->Add({ point0, point1, point2, GenerateRenderInstanceValue(instance->instance_index, STRUCTURED_OUTPUT_ID_THICKNESS), instance->options });
+			addition_stream->Add({ point0, point1, point2, Color(), options });
 		}
 		else {
-			DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(instance), instance->options, 3, [&](InstancedVertex* positions, unsigned int index) {
+			DrawStructuredImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(&options), options, 3, [&](InstancedVertex* positions, unsigned int index) {
 				SetTrianglePositions(positions, index, point0, point1, point2);
 			});
 		}
@@ -2289,15 +2266,16 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexAABB(
 		float3 translation, 
 		float3 scale, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugAABB>* addition_stream
 	)
 	{
+		options.instance_index = GenerateRenderInstanceValue(options.instance_index, 0);
 		if (addition_stream != nullptr) {
-			addition_stream->Add({ translation, scale, GenerateRenderInstanceValue(instance->instance_index, 0), instance->options });
+			addition_stream->Add({ translation, scale, Color(), options });
 		}
 		else {
-			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(instance), instance->options, ECS_DEBUG_VERTEX_BUFFER_CUBE, [&](unsigned int index) {
+			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(&options), options, ECS_DEBUG_VERTEX_BUFFER_CUBE, [&](unsigned int index) {
 				return AABBMatrix(translation, scale, camera_matrix);
 			});
 		}
@@ -2309,15 +2287,16 @@ namespace ECSEngine {
 		float3 translation, 
 		float3 rotation, 
 		float3 scale, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugOOBB>* addition_stream
 	)
 	{
+		options.instance_index = GenerateRenderInstanceValue(options.instance_index, 0);
 		if (addition_stream != nullptr) {
-			addition_stream->Add({ translation, rotation, scale, GenerateRenderInstanceValue(instance->instance_index, 0), instance->options });
+			addition_stream->Add({ translation, rotation, scale, Color(), options });
 		}
 		else {
-			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(instance), instance->options, ECS_DEBUG_VERTEX_BUFFER_CUBE, [&](unsigned int index) {
+			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 1, ToDrawerOutput(&options), options, ECS_DEBUG_VERTEX_BUFFER_CUBE, [&](unsigned int index) {
 				return OOBBMatrix(translation, rotation, scale, camera_matrix);
 			});
 		}
@@ -2330,7 +2309,7 @@ namespace ECSEngine {
 		float3 direction, 
 		float size, 
 		Stream<char> text, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugString>* addition_stream, 
 		AllocatorPolymorphic allocator
 	)
@@ -2345,12 +2324,12 @@ namespace ECSEngine {
 		float3 rotation, 
 		float size, 
 		Stream<char> text, 
-		const DebugDrawerOutputInstance* instance, 
+		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugString>* addition_stream, 
 		AllocatorPolymorphic allocator
 	)
 	{
-		OutputInstanceIndexString(translation, GetRightVector(rotation), size, text, instance, addition_stream, allocator);
+		OutputInstanceIndexString(translation, GetRightVector(rotation), size, text, options, addition_stream, allocator);
 	}
 
 
@@ -2366,7 +2345,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugLine> temp_deck = DeckPowerOfTwo<DebugLine>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawStructuredDeck<ECS_DEBUG_SHADER_OUTPUT_ID, DRAW_STRUCTURED_LINE_TOPOLOGY>(this, &temp_deck, 2, time_delta, 
+		DrawStructuredDeck<DRAW_STRUCTURED_LINE_TOPOLOGY>(this, &temp_deck, 2, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID,
 			[&](InstancedVertex* positions, unsigned int index, const DebugLine* line) {
 				SetLinePositions(positions, index, line->start, line->end);
 		});
@@ -2378,7 +2357,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugSphere> temp_deck = DeckPowerOfTwo<DebugSphere>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_ID>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_SPHERE, time_delta, [&](const DebugSphere* sphere) {
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_SPHERE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugSphere* sphere) {
 			return SphereMatrix(sphere->position, sphere->radius, camera_matrix);
 		});
 	}
@@ -2389,7 +2368,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugPoint> temp_deck = DeckPowerOfTwo<DebugPoint>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_ID>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, [&](const DebugPoint* point) {
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugPoint* point) {
 			return PointMatrix(point->position, camera_matrix);
 		});
 	}
@@ -2400,7 +2379,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugRectangle> temp_deck = DeckPowerOfTwo<DebugRectangle>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawStructuredDeck<ECS_DEBUG_SHADER_OUTPUT_ID>(this, &temp_deck, 6, time_delta, [](InstancedVertex* positions, unsigned int index, const DebugRectangle* rectangle) {
+		DrawStructuredDeck(this, &temp_deck, 6, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [](InstancedVertex* positions, unsigned int index, const DebugRectangle* rectangle) {
 			SetRectanglePositionsFront(positions, index, rectangle->corner0, rectangle->corner1);
 		});
 	}
@@ -2411,7 +2390,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugCross> temp_deck = DeckPowerOfTwo<DebugCross>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_ID>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CROSS, time_delta, [&](const DebugCross* cross) {
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CROSS, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugCross* cross) {
 			return CrossMatrix(cross->position, cross->rotation, cross->size, camera_matrix);
 		});
 	}
@@ -2422,7 +2401,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugCircle> temp_deck = DeckPowerOfTwo<DebugCircle>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_ID, DRAW_TRANSFORM_CIRCLE_BUFFER>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_COUNT, time_delta, [&](const DebugCircle* circle) {
+		DrawTransformDeck<DRAW_TRANSFORM_CIRCLE_BUFFER>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_COUNT, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugCircle* circle) {
 			return CircleMatrix(circle->position, circle->rotation, circle->radius, camera_matrix);
 		});
 	}
@@ -2433,7 +2412,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugArrow> temp_deck = DeckPowerOfTwo<DebugArrow>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_ID>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_ARROW, time_delta, [&](const DebugArrow* arrow) {
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_ARROW, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugArrow* arrow) {
 			return ArrowMatrix(arrow->translation, arrow->rotation, arrow->length, arrow->size, camera_matrix);
 		});
 	}
@@ -2444,7 +2423,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugTriangle> temp_deck = DeckPowerOfTwo<DebugTriangle>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawStructuredDeck<ECS_DEBUG_SHADER_OUTPUT_ID>(this, &temp_deck, 3, time_delta, [](InstancedVertex* positions, unsigned int index, const DebugTriangle* triangle) {
+		DrawStructuredDeck(this, &temp_deck, 3, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [](InstancedVertex* positions, unsigned int index, const DebugTriangle* triangle) {
 			SetTrianglePositions(positions, index, triangle->point0, triangle->point1, triangle->point2);
 		});
 	}
@@ -2455,7 +2434,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugAABB> temp_deck = DeckPowerOfTwo<DebugAABB>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_ID>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, [&](const DebugAABB* aabb) {
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugAABB* aabb) {
 			return AABBMatrix(aabb->translation, aabb->scale, camera_matrix);
 		});
 	}
@@ -2466,7 +2445,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugOOBB> temp_deck = DeckPowerOfTwo<DebugOOBB>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck<ECS_DEBUG_SHADER_OUTPUT_ID>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, [&](const DebugOOBB* oobb) {
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugOOBB* oobb) {
 			return OOBBMatrix(oobb->translation, oobb->rotation, oobb->scale, camera_matrix);
 		});
 	}
@@ -2783,7 +2762,7 @@ namespace ECSEngine {
 
 		thread_locks = (SpinLock**)buffer;
 		buffer += sizeof(SpinLock*) * ECS_DEBUG_PRIMITIVE_COUNT;
-
+		
 		// Padd the locks to different cache lines
 		for (size_t index = 0; index < thread_count; index++) {
 			thread_locks[index] = (SpinLock*)buffer;
@@ -2806,6 +2785,7 @@ namespace ECSEngine {
 		oobbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
 		strings.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
 
+
 #pragma region Primitive buffers
 
 		// The string meshes - in the gltf mesh they are stored in reverse order.
@@ -2821,7 +2801,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < (unsigned int)AlphabetIndex::Space; index++) {
 			for (size_t subindex = 0; subindex < submesh_count && string_submesh_mask[index] == 0; subindex++) {
 				// If it is not the invalid character, " or backslash
-				if (string_mesh->submeshes[subindex].name[1] == '\0') {
+				if (string_mesh->submeshes[subindex].name.size == 1) {
 					unsigned int alphabet_index = function::GetAlphabetIndex(string_mesh->submeshes[subindex].name[0]);
 					string_submesh_mask[index] = (alphabet_index == index) * subindex;
 				}
@@ -3032,5 +3012,27 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 	
+	void DebugDrawerAddToDrawShapes(DebugDrawer* drawer) {
+		DebugDrawCallOptions debug_options;
+		debug_options.ignore_depth = true;
+		debug_options.wireframe = true;
+		drawer->AddAABB({ 0.0f, 0.0f, 0.0f }, float3::Splat(1.0f), AxisXColor(), debug_options);
+		drawer->AddOOBB({ 0.0f, 0.0f, 0.0f }, float3::Splat(45.0f), float3::Splat(1.0f), AxisZColor(), debug_options);
+		drawer->AddLine({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -5.0f }, AxisYColor());
+		drawer->AddRectangle({ 5.0f, 0.0f, -5.0f }, { 0.0f, 5.0f, -5.0f }, Color(100, 120, 160), debug_options);
+
+		debug_options.wireframe = false;
+		drawer->AddArrow({ 5.0f, 0.0f, -5.0f }, { 10.0f, 0.0f, -5.0f }, 10.0f, Color(200, 100, 150), debug_options);
+		drawer->AddCircle({ -5.0f, 0.0f, -5.0f }, float3(0.0f, 0.0f, 0.0f), 1.0f, Color(100, 150, 200), debug_options);
+		drawer->AddCircle({ -5.0f, 0.0f, -5.0f }, float3(90.0f, 0.0f, 0.0f), 1.0f, Color(100, 150, 200), debug_options);
+		drawer->AddCircle({ -5.0f, 0.0f, -5.0f }, float3(0.0f, 0.0f, 90.0f), 1.0f, Color(100, 150, 200), debug_options);
+
+		drawer->AddCross({ 10.0f, 10.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 1.0f, Color(200, 200, 200), debug_options);
+		drawer->AddPoint({ 0.0f, 0.0f, -10.0f }, Color(255, 255, 255), debug_options);
+		drawer->AddTriangle({ 2.0f, 0.0f, 0.0f }, { 5.0f, 0.0f, 0.0f }, { 0.0f, 5.0f, 0.0f }, Color(10, 50, 200), debug_options);
+
+		drawer->AddString({ 0.0f, 10.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 1.0f, "Hey there fellas!\nNice to see this working!\n\PogU", Color(255, 255, 255), debug_options);
+	}
+
 	// ----------------------------------------------------------------------------------------------------------------------
 }

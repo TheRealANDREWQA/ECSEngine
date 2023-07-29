@@ -2428,6 +2428,10 @@ namespace ECSEngine {
 				window_data->visualize_options = *create_data->options;
 				window_data->visualize_options.copy_texture_if_same_format = true;
 			}
+			else {
+				// Disable the previous override format
+				window_data->visualize_options.override_format = ECS_GRAPHICS_FORMAT_UNKNOWN;
+			}
 
 			if (create_data->texture.Interface() != nullptr && (create_data->texture.Interface() != window_data->original_texture.Interface())) {
 				// We must free the old resources and create a new texture and view
@@ -2655,6 +2659,8 @@ namespace ECSEngine {
 						}
 
 						if (data->display_options) {
+							bool has_additional_draw = data->additional_draw != nullptr;
+
 							UIConfigSpriteButtonBackground sprite_background;
 							sprite_background.overwrite_color = drawer.color_theme.theme;
 							const float sprite_background_size = drawer.GetRelativeElementSize(sprite_background.scale_factor).y;
@@ -2672,19 +2678,21 @@ namespace ECSEngine {
 							row_layout.AddSquareLabel();
 							//row_layout.AddBorderToLastElement();
 
-							// Optional control
-							if (additional_data.check_box_name.size > 0) {
-								row_layout.AddCheckBox(additional_data.check_box_name);
-							}
+							if (has_additional_draw) {
+								// Optional control
+								if (additional_data.check_box_name.size > 0) {
+									row_layout.AddCheckBox(additional_data.check_box_name);
+								}
 
-							// Optional control
-							if (!additional_data.hide_select_button) {
-								row_layout.AddLabel(SELECT_BUTTON_CHARACTERS, ECS_UI_ALIGN_MIDDLE);
-							}
+								// Optional control
+								if (!additional_data.hide_select_button) {
+									row_layout.AddLabel(SELECT_BUTTON_CHARACTERS, ECS_UI_ALIGN_MIDDLE);
+								}
 
-							// Optional control
-							if (combo_labels.size > 0) {
-								row_layout.AddComboBox(combo_labels, {}, {}, ECS_UI_ALIGN_RIGHT);
+								// Optional control
+								if (combo_labels.size > 0) {
+									row_layout.AddComboBox(combo_labels, {}, {}, ECS_UI_ALIGN_RIGHT);
+								}
 							}
 
 							struct ChangeChannelFlagActionData {
@@ -2729,102 +2737,104 @@ namespace ECSEngine {
 							draw_flag(Color(255, 255, 255));
 							// For the alpha control always draw with a background since on white images it will not be distinguishable
 
-							if (additional_data.check_box_name.size > 0) {
-								configuration = 0;
-								config.flag_count = 0;
+							if (has_additional_draw) {
+								if (additional_data.check_box_name.size > 0) {
+									configuration = 0;
+									config.flag_count = 0;
 
-								ECS_ASSERT(additional_data.check_box_callback.action != nullptr);
-								UIConfigCheckBoxCallback callback;
-								callback.handler = additional_data.check_box_callback;
-								config.AddFlag(callback);
-								configuration |= UI_CONFIG_CHECK_BOX_CALLBACK;
+									ECS_ASSERT(additional_data.check_box_callback.action != nullptr);
+									UIConfigCheckBoxCallback callback;
+									callback.handler = additional_data.check_box_callback;
+									config.AddFlag(callback);
+									configuration |= UI_CONFIG_CHECK_BOX_CALLBACK;
 
-								row_layout.GetTransform(config, configuration);
-								drawer.CheckBox(configuration | UI_CONFIG_LATE_DRAW, config, additional_data.check_box_name, &data->additional_draw_check_box_flag);
-							}
-
-							if (!additional_data.hide_select_button) {
-								configuration = 0;
-								config.flag_count = 0;
-
-								auto select_button = [](ActionData* action_data) {
-									UI_UNPACK_ACTION_DATA;
-
-									VisualizeTextureWindowData* data = (VisualizeTextureWindowData*)_data;
-									data->TransitionSelectionMode();
-								};
-
-								row_layout.GetTransform(config, configuration);
-								drawer.Button(
-									configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LATE_DRAW, 
-									config, 
-									SELECT_BUTTON_CHARACTERS, 
-									{ select_button, data, 0 }
-								);
-							}
-
-							if (additional_data.combo_labels->size > 0) {
-								configuration = 0;
-								config.flag_count = 0;
-
-								struct ComboWrapperData {
-									VisualizeTextureWindowData* window_data;
-									UIActionHandler user_handler;
-									unsigned char* flag_index;
-									unsigned char last_label_index;
-									bool has_include_select;
-								};
-
-								auto combo_wrapper = [](ActionData* action_data) {
-									UI_UNPACK_ACTION_DATA;
-
-									ComboWrapperData* data = (ComboWrapperData*)_data;
-									if (*data->flag_index == data->last_label_index && data->has_include_select) {
-										// We just need to transition to the SelectMode
-										data->window_data->TransitionSelectionMode();
-									}
-									else {
-										// Call the user_handler
-										void* user_data = data->user_handler.data_size == 0 ?
-											data->user_handler.data : function::OffsetPointer(data, sizeof(*data));
-										action_data->data = user_data;
-										data->user_handler.action(action_data);
-									}
-								};
-
-								size_t _combo_wrapper_data[128];
-								ComboWrapperData* combo_wrapper_data = (ComboWrapperData*)_combo_wrapper_data;
-								combo_wrapper_data->flag_index = &data->additional_draw_combo_index;
-								combo_wrapper_data->has_include_select = additional_data.include_select_label;
-								combo_wrapper_data->last_label_index = additional_data.combo_labels->size - 1;
-								combo_wrapper_data->window_data = data;
-								combo_wrapper_data->user_handler = additional_data.combo_callback;
-								unsigned int copy_size = sizeof(*combo_wrapper_data);
-								if (additional_data.combo_callback.data_size > 0) {
-									ECS_ASSERT(additional_data.combo_callback.data_size + sizeof(*combo_wrapper_data) <= sizeof(_combo_wrapper_data));
-									memcpy(
-										function::OffsetPointer(combo_wrapper_data, sizeof(*combo_wrapper_data)), 
-										additional_data.combo_callback.data, 
-										additional_data.combo_callback.data_size
-									);
-									copy_size += additional_data.combo_callback.data_size;
+									row_layout.GetTransform(config, configuration);
+									drawer.CheckBox(configuration | UI_CONFIG_LATE_DRAW, config, additional_data.check_box_name, &data->additional_draw_check_box_flag);
 								}
-								configuration |= UI_CONFIG_COMBO_BOX_CALLBACK;
 
-								UIConfigComboBoxCallback combo_callback;
-								combo_callback.handler = { combo_wrapper, combo_wrapper_data, copy_size };
-								combo_callback.copy_on_initialization = false;
-								config.AddFlag(combo_callback);
-								row_layout.GetTransform(config, configuration);
+								if (!additional_data.hide_select_button) {
+									configuration = 0;
+									config.flag_count = 0;
 
-								drawer.ComboBox(
-									configuration | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_LATE_DRAW, 
-									config, 
-									"Combo", 
-									additional_data.combo_labels->ToStream(), 
-									16, 
-									&data->additional_draw_combo_index
-								);
+									auto select_button = [](ActionData* action_data) {
+										UI_UNPACK_ACTION_DATA;
+
+										VisualizeTextureWindowData* data = (VisualizeTextureWindowData*)_data;
+										data->TransitionSelectionMode();
+									};
+
+									row_layout.GetTransform(config, configuration);
+									drawer.Button(
+										configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LATE_DRAW,
+										config,
+										SELECT_BUTTON_CHARACTERS,
+										{ select_button, data, 0 }
+									);
+								}
+
+								if (combo_labels.size > 0) {
+									configuration = 0;
+									config.flag_count = 0;
+
+									struct ComboWrapperData {
+										VisualizeTextureWindowData* window_data;
+										UIActionHandler user_handler;
+										unsigned char* flag_index;
+										unsigned char last_label_index;
+										bool has_include_select;
+									};
+
+									auto combo_wrapper = [](ActionData* action_data) {
+										UI_UNPACK_ACTION_DATA;
+
+										ComboWrapperData* data = (ComboWrapperData*)_data;
+										if (*data->flag_index == data->last_label_index && data->has_include_select) {
+											// We just need to transition to the SelectMode
+											data->window_data->TransitionSelectionMode();
+										}
+										else {
+											// Call the user_handler
+											void* user_data = data->user_handler.data_size == 0 ?
+												data->user_handler.data : function::OffsetPointer(data, sizeof(*data));
+											action_data->data = user_data;
+											data->user_handler.action(action_data);
+										}
+									};
+
+									size_t _combo_wrapper_data[128];
+									ComboWrapperData* combo_wrapper_data = (ComboWrapperData*)_combo_wrapper_data;
+									combo_wrapper_data->flag_index = &data->additional_draw_combo_index;
+									combo_wrapper_data->has_include_select = additional_data.include_select_label;
+									combo_wrapper_data->last_label_index = additional_data.combo_labels->size - 1;
+									combo_wrapper_data->window_data = data;
+									combo_wrapper_data->user_handler = additional_data.combo_callback;
+									unsigned int copy_size = sizeof(*combo_wrapper_data);
+									if (additional_data.combo_callback.data_size > 0) {
+										ECS_ASSERT(additional_data.combo_callback.data_size + sizeof(*combo_wrapper_data) <= sizeof(_combo_wrapper_data));
+										memcpy(
+											function::OffsetPointer(combo_wrapper_data, sizeof(*combo_wrapper_data)),
+											additional_data.combo_callback.data,
+											additional_data.combo_callback.data_size
+										);
+										copy_size += additional_data.combo_callback.data_size;
+									}
+									configuration |= UI_CONFIG_COMBO_BOX_CALLBACK;
+
+									UIConfigComboBoxCallback combo_callback;
+									combo_callback.handler = { combo_wrapper, combo_wrapper_data, copy_size };
+									combo_callback.copy_on_initialization = false;
+									config.AddFlag(combo_callback);
+									row_layout.GetTransform(config, configuration);
+
+									drawer.ComboBox(
+										configuration | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_LATE_DRAW,
+										config,
+										"Combo",
+										additional_data.combo_labels->ToStream(),
+										16,
+										&data->additional_draw_combo_index
+									);
+								}
 							}
 						}
 					}

@@ -65,7 +65,8 @@ namespace ECSEngine {
 		Graphics* graphics,
 		Stream<GenerateInstanceFramebufferElement> elements,
 		RenderTargetView render_target,
-		DepthStencilView depth_stencil_view
+		DepthStencilView depth_stencil_view,
+		bool do_not_restore_pipeline_state = false
 	);
 
 	// Returns -1 if nothing is drawn at that point

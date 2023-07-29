@@ -47,12 +47,6 @@ struct ECS_REFLECT EditorSandbox {
 		return *this;
 	}
 
-	ECS_INLINE void IncrementSelectedEntitiesCounter() {
-		// We need to increase it by since some windows might have already rendered and not catch
-		// the update if we increment it by one
-		selected_entities_changed_counter += 2;
-	}
-
 	ECS_FIELDS_START_REFLECT;
 
 	ECSEngine::ResizableStream<EditorSandboxModule> modules_in_use;
@@ -100,6 +94,10 @@ struct ECS_REFLECT EditorSandbox {
 
 	ECSEngine::ResizableStream<ECSEngine::Entity> selected_entities;
 	unsigned char selected_entities_changed_counter;
+
+	ECSEngine::ResizableStream<ECSEngine::Entity> unused_entities_slots[EDITOR_SANDBOX_VIEWPORT_COUNT];
+	// These flags indicate when the unused slots need to be recomputed (after a clear/reset for example)
+	unsigned char unused_entities_slots_recompute[EDITOR_SANDBOX_VIEWPORT_COUNT];
 };
 
 // -------------------------------------------------------------------------------------------------------------
@@ -259,6 +257,11 @@ EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned i
 
 // Returns which viewport is currently displayed by the scene window
 EDITOR_SANDBOX_VIEWPORT GetSandboxCurrentViewport(const EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns the viewport of the sandbox if the given viewport is COUNT or the viewport again else
+EDITOR_SANDBOX_VIEWPORT GetSandboxViewportOverride(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -616,6 +619,18 @@ void SetSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_i
 // -------------------------------------------------------------------------------------------------------------
 
 void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// This will add an event to increment the counter in order to be picked up by all systems
+// next frame
+void SignalSandboxSelectedEntitiesCounter(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// This will add an event to increment the counter in order to be picked up by all systems
+// next frame
+void SignalSandboxUnusedEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
 
 // -------------------------------------------------------------------------------------------------------------
 

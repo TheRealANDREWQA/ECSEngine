@@ -1792,6 +1792,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 	template<typename T>
 	struct AdditionStream {
+		ECS_INLINE AdditionStream() {}
+
 		ECS_INLINE unsigned int Add(T element) {
 			if (is_capacity) {
 				return capacity_stream.AddAssert(element);

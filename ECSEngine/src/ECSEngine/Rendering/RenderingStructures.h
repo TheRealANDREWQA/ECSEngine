@@ -1488,6 +1488,16 @@ namespace ECSEngine {
 		Mesh(const Mesh& other) = default;
 		Mesh& operator = (const Mesh& other) = default;
 
+		// Returns a nullptr vertex buffer if there is no vertex buffer for that mapping
+		ECS_INLINE VertexBuffer GetBuffer(ECS_MESH_INDEX vertex_mapping) const {
+			for (unsigned char index = 0; index < mapping_count; index++) {
+				if (mapping[index] == vertex_mapping) {
+					return vertex_buffers[index];
+				}
+			}
+			return {};
+		}
+
 		IndexBuffer index_buffer;
 		VertexBuffer vertex_buffers[ECS_MESH_BUFFER_COUNT];
 		ECS_MESH_INDEX mapping[ECS_MESH_BUFFER_COUNT];

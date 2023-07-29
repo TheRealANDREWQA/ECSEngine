@@ -227,6 +227,14 @@ unsigned int FindSandboxSelectedEntityIndex(
 	Entity entity
 );
 
+// It will modify the stream in place such that only valid entities are left
+void FilterSandboxEntitiesValid(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Stream<Entity>* entities,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 // Returns -1 if it doesn't exist
 Entity GetSandboxEntity(
 	const EditorState* editor_state, 
@@ -382,6 +390,16 @@ ECSEngine::Stream<ECSEngine::Entity> GetSandboxSelectedEntities(
 	unsigned int sandbox_index
 );
 
+// Fills in entity slots that are not yet used in the runtime
+// or somewhere else in the editor
+void GetSandboxUnusedEntitySlots(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ECSEngine::Stream<Entity> entities, 
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+
 // Returns true if the given entity is selected in the scene for that sandbox
 bool IsSandboxEntitySelected(
 	const EditorState* editor_state,
@@ -474,6 +492,12 @@ void ResetSandboxEntityComponent(
 	unsigned int sandbox_index, 
 	Entity entity, 
 	Stream<char> component_name,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+void ResetSandboxUnusedEntities(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 

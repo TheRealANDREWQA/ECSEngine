@@ -568,6 +568,23 @@ unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, uns
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+void FilterSandboxEntitiesValid(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Stream<Entity>* entities, 
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	for (size_t index = 0; index < entities->size; index++) {
+		if (!IsSandboxEntityValid(editor_state, sandbox_index, entities->buffer[index], viewport)) {
+			entities->RemoveSwapBack(index);
+			index--;
+		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 Entity GetSandboxEntity(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -893,6 +910,17 @@ Stream<Entity> GetSandboxSelectedEntities(const EditorState* editor_state, unsig
 	return GetSandbox(editor_state, sandbox_index)->selected_entities.ToStream();
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxUnusedEntitySlots(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> entities, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	ECS_ASSERT(entity_manager->m_entity_pool->GetUnusedEntities(entities, sandbox->unused_entities_slots[viewport].ToStream()));
+	sandbox->unused_entities_slots->AddStream(entities);
+}
+
 // ------------------------------------------------------------------------------------------------------------------------------
 
 bool IsSandboxEntitySelected(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
@@ -1122,6 +1150,16 @@ void ResetSandboxEntityComponent(
 		RemoveSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name, viewport);
 		AddSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name, { -1 }, viewport);
 	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void ResetSandboxUnusedEntities(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->unused_entities_slots[viewport].FreeBuffer();
+	SignalSandboxUnusedEntitiesSlotsCounter(editor_state, sandbox_index, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

@@ -2896,16 +2896,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DrawSubmeshCommand(Submesh submesh)
+	void Graphics::DrawSubmeshCommand(Submesh submesh, unsigned int count)
 	{
-		ECSEngine::DrawSubmeshCommand(submesh, GetContext());
+		ECSEngine::DrawSubmeshCommand(submesh, GetContext(), count);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DrawCoalescedMeshCommand(const CoalescedMesh& mesh)
+	void Graphics::DrawCoalescedMeshCommand(const CoalescedMesh& mesh, unsigned int count)
 	{
-		ECSEngine::DrawCoalescedMeshCommand(mesh, GetContext());
+		ECSEngine::DrawCoalescedMeshCommand(mesh, GetContext(), count);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4378,17 +4378,11 @@ namespace ECSEngine {
 		// Vertex Buffers
 		VertexBuffer vertex_buffers[ECS_MESH_BUFFER_COUNT];
 
-		size_t valid_mappings = 0;
 		for (size_t index = 0; index < mapping.size; index++) {
-			for (size_t map_index = 0; map_index < mesh.mapping_count; map_index++) {
-				if (mesh.mapping[map_index] == mapping[index]) {
-					vertex_buffers[valid_mappings++] = mesh.vertex_buffers[mapping[index]];
-					break;
-				}
-			}
+			vertex_buffers[index] = mesh.GetBuffer(mapping[index]);
+			ECS_ASSERT(vertex_buffers[index].Interface() != nullptr, "The given mesh does not have the necessary vertex buffers.");
 		}
 
-		ECS_ASSERT(valid_mappings == mapping.size, "The given mesh does not have the necessary vertex buffers.");
 		BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, mapping.size), context);
 
 		// Topology
@@ -4760,16 +4754,26 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void DrawSubmeshCommand(Submesh submesh, GraphicsContext* context)
+	void DrawSubmeshCommand(Submesh submesh, GraphicsContext* context, unsigned int count)
 	{
-		DrawIndexed(submesh.index_count, context, submesh.index_buffer_offset, submesh.vertex_buffer_offset);
+		if (count == 1) {
+			DrawIndexed(submesh.index_count, context, submesh.index_buffer_offset, submesh.vertex_buffer_offset);
+		}
+		else {
+			DrawIndexedInstanced(submesh.index_count, count, context, submesh.index_buffer_offset, submesh.vertex_buffer_offset);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void DrawCoalescedMeshCommand(const CoalescedMesh& coalesced_mesh, GraphicsContext* context)
+	void DrawCoalescedMeshCommand(const CoalescedMesh& coalesced_mesh, GraphicsContext* context, unsigned int count)
 	{
-		DrawIndexed(coalesced_mesh.mesh.index_buffer.count, context);
+		if (count == 1) {
+			DrawIndexed(coalesced_mesh.mesh.index_buffer.count, context);
+		}
+		else {
+			DrawIndexedInstanced(coalesced_mesh.mesh.index_buffer.count, count, context);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

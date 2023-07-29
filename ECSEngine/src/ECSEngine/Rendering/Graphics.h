@@ -886,10 +886,12 @@ namespace ECSEngine {
 		void DrawMesh(const CoalescedMesh& mesh, unsigned int submesh_index, const Material& material);
 
 		// This will issue only a DrawIndexed command, does not bind any mesh/material
-		void DrawSubmeshCommand(Submesh submesh);
+		// If count > 1, it will use instanced rendering
+		void DrawSubmeshCommand(Submesh submesh, unsigned int count = 1);
 
 		// This only issues the draw command for the coallesced mesh, it does not bind the mesh itself or the material
-		void DrawCoalescedMeshCommand(const CoalescedMesh& mesh);
+		// If count > 1, it will use instanced rendering
+		void DrawCoalescedMeshCommand(const CoalescedMesh& mesh, unsigned int count = 1);
 
 		void EnableAlphaBlending();
 
@@ -1434,9 +1436,9 @@ namespace ECSEngine {
 	ECSENGINE_API void DrawMesh(const CoalescedMesh& coalesced_mesh, unsigned int submesh_index, const Material& material, GraphicsContext* context);
 
 	// It will only issue the draw command, it will not bind material/mesh
-	ECSENGINE_API void DrawSubmeshCommand(Submesh submesh, GraphicsContext* context);
+	ECSENGINE_API void DrawSubmeshCommand(Submesh submesh, GraphicsContext* context, unsigned int count = 1);
 
-	ECSENGINE_API void DrawCoalescedMeshCommand(const CoalescedMesh& coalesced_mesh, GraphicsContext* context);
+	ECSENGINE_API void DrawCoalescedMeshCommand(const CoalescedMesh& coalesced_mesh, GraphicsContext* context, unsigned int count = 1);
 
 	ECSENGINE_API GraphicsPipelineBlendState GetBlendState(GraphicsContext* context);
 

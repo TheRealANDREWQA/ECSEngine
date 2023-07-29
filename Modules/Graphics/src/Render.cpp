@@ -298,13 +298,15 @@ ECS_THREAD_TASK(RenderSelectables) {
 							switch (transform_tool) {
 							case ECS_TRANSFORM_TRANSLATION:
 							{
+								DebugAxesInfo axes_info;
+								axes_info.instance_x = 10;
+								axes_info.instance_y = 20;
+								axes_info.instance_z = 30;
 								debug_drawer->AddAxes(
 									translation_midpoint, 
 									rotation_midpoint, 
 									constant_viewport_size,
-									AxisXColor(),
-									AxisYColor(),
-									AxisZColor(),
+									&axes_info,
 									debug_options
 								);
 							}
@@ -377,12 +379,6 @@ ECS_THREAD_TASK(RenderSelectables) {
 							default:
 								ECS_ASSERT(false, "ECS_TRANSFORM_TOOL invalid value");
 							}
-
-							debug_options.wireframe = true;
-							debug_drawer->AddAABB({ 0.0f, 0.0f, 0.0f }, float3::Splat(1.0f), AxisXColor(), debug_options);
-							debug_drawer->AddOOBB({ 0.0f, 0.0f, 0.0f }, float3::Splat(45.0f), float3::Splat(1.0f), AxisZColor(), debug_options);
-							debug_drawer->AddLine({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -5.0f }, AxisYColor());
-							debug_drawer->AddRectangle({ 5.0f, 0.0f, -5.0f }, { 0.0f, 5.0f, -5.0f }, Color(100, 120, 160), debug_options);
 						}
 					}
 				}
@@ -569,7 +565,14 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 					unique_components[2] = Scale::ID();
 					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<true, true, true>, &for_each_data, { unique_components, 3 }, shared_signature);
 
-					GenerateInstanceFramebuffer(world->graphics, elements.ToStream(), instanced_views.target, instanced_views.depth_stencil);
+					// Get the pipeline state before rendering the instances
+					GraphicsPipelineState pipeline_state = world->graphics->GetPipelineState();
+
+					GenerateInstanceFramebuffer(world->graphics, elements.ToStream(), instanced_views.target, instanced_views.depth_stencil, true);
+					world->graphics->BindRenderTargetView(instanced_views.target, instanced_views.depth_stencil);
+					world->debug_drawer->DrawAll(0.0f, ECS_DEBUG_SHADER_OUTPUT_ID);
+					
+					world->graphics->RestorePipelineState(&pipeline_state);
 
 					elements.FreeBuffer();
 				}
