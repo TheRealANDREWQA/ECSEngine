@@ -1,9 +1,9 @@
-// ECS_REFLECT
 #pragma once
 #include "../Core.h"
 #include "../Containers/Stream.h"
 #include "../Rendering/ColorUtilities.h"
-#include "../Utilities/Reflection/ReflectionMacros.h"
+#include "../ECS/InternalStructures.h"
+#include "../Utilities/TransformTool.h"
 
 namespace ECSEngine {
 
@@ -17,22 +17,25 @@ namespace ECSEngine {
 
 	struct SystemManager;
 	struct Camera;
-	struct Entity;
+	struct CameraCached;
 	struct GraphicsBoundViews;
 
-	enum ECS_REFLECT ECS_TRANSFORM_TOOL : unsigned char {
-		ECS_TRANSFORM_TRANSLATION,
-		ECS_TRANSFORM_ROTATION,
-		ECS_TRANSFORM_SCALE,
-		ECS_TRANSFORM_COUNT
+	// The entity ids are used to output the values to the instanced framebuffer
+	// And the booleans is_selected informs the module if the tool is selected or not
+	struct ECSTransformToolEx {
+		ECS_TRANSFORM_TOOL tool;
+		bool is_selected[ECS_TRANSFORM_AXIS_COUNT];
+		Entity entity_ids[ECS_TRANSFORM_AXIS_COUNT];
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
 
 	// Returns true if there is a runtime camera, else false
-	ECSENGINE_API bool GetRuntimeCamera(const SystemManager* system_manager, Camera* camera);
+	// Can optionally retrieve the cached camera
+	ECSENGINE_API bool GetRuntimeCamera(const SystemManager* system_manager, Camera* camera, CameraCached** camera_cached = nullptr);
 
-	ECSENGINE_API void SetRuntimeCamera(SystemManager* system_manager, const Camera* camera);
+	// Can optionally have the system also record a cached variant of the camera that it can hand back
+	ECSENGINE_API void SetRuntimeCamera(SystemManager* system_manager, const Camera* camera, bool set_cached_camera = false);
 
 	ECSENGINE_API void RemoveRuntimeCamera(SystemManager* system_manager);
 
@@ -73,6 +76,15 @@ namespace ECSEngine {
 
 	ECSENGINE_API void RemoveEditorRuntimeTransformTool(SystemManager* system_manager);
 
+	// ------------------------------------------------------------------------------------------------------------
+
+	// Returns ECS_TRANSFORM_COUNT if there is no tool specified
+	ECSENGINE_API ECSTransformToolEx GetEditorRuntimeTransformToolEx(const SystemManager* system_manager);
+
+	ECSENGINE_API void SetEditorRuntimeTransformToolEx(SystemManager* system_manager, ECSTransformToolEx tool_ex);
+
+	ECSENGINE_API void RemoveEditorRuntimeTransformToolEx(SystemManager* system_manager);
+	
 	// ------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API bool GetEditorRuntimeInstancedFramebuffer(const SystemManager* system_manager, GraphicsBoundViews* views);

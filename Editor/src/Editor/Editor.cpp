@@ -711,7 +711,7 @@ public:
 		generate_element.base.is_submesh = false;
 		generate_element.base.mesh = &trireme->mesh;
 		generate_element.base.gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION), MatrixIdentity(), MatrixScale({ 0.2f, 0.2f, 0.2f }), CAMERA_MATRIX);
-		generate_element.instance_index = 100000;
+		generate_element.instance_thickness = 100000;
 		generate_element.pixel_thickness = 10;
 
 		GenerateInstanceFramebuffer(graphics, { &generate_element, 1 }, RENDER_TARGET, DEPTH_STENCIL);
@@ -722,6 +722,93 @@ public:
 		Texture2D my_texture = ConvertTextureToVisualize(graphics, RENDER_TARGET.GetResource());*/
 		//graphics->FreeResource(my_texture);
 
+float4 my_val = float4(0.187506557f, 0.164706543f, 0.325979382f, 0.911839068);
+
+		Vector8 vector_axis = NormalizeIfNot(float3(0.0f, 0.0f, 1.0f));
+		Vector8 square_length = SquareLength(Vector8(float3(0.0f, 0.0f, 1.0f)));
+		if (!IsNormalizedSquareLengthWhole(square_length)) {
+			vector_axis /= sqrt(square_length);
+		}
+		else {
+			vector_axis = vector_axis;
+		}
+
+		Vec8f cos;
+		Vector8 sin = sincos(&cos, Vector8(DegToRad(36.0f * 0.5f)));
+		vector_axis *= sin;
+		vector_axis = PerLaneBlend<0, 1, 2, 7>(vector_axis, Vector8(cos));
+		Vector8 quat = vector_axis.value;
+
+		Quaternion quaternion = QuaternionFromEulerRadEx(DegToRad(float3(100.0f, 25.0f, 36.0f)));
+		Quaternion add_rotation = QuaternionFromEulerRadEx(DegToRad(float3(1.0f, 0.0f, 0.0f)));
+		Quaternion my_w = QuaternionFromEulerRadEx(DegToRad(float3(101.0f, 25.0f, 36.0f)));
+
+		Quaternion multiplied_quat = AddWorldRotation(quaternion, add_rotation);
+		bool same_orientation = QuaternionSameOrientationLow(my_w, multiplied_quat);
+		Quaternion inverse_quat = QuaternionInverse(quaternion);
+		Quaternion remaining_quat = AddWorldRotation(multiplied_quat, inverse_quat);
+
+		float3 delta_euler = QuaternionToEulerLow(remaining_quat);
+		float3 previous_euler = QuaternionToEulerLow(multiplied_quat);
+
+		float3 euler_again = QuaternionToEulerLow(quaternion);
+		Vector8 one = VectorGlobals::ONE;
+		Vector8 two = Vector8(2.0f);
+
+		Vector8 y_factor_first = PerLanePermute<2, 3, V_DC, V_DC>(quaternion.value);
+		Vector8 y_factor_multiplied = quaternion.value * y_factor_first;
+		// Now we have in the x and y of the y_factor_multiplied the values
+		Vector8 y_factor_multiplied_shuffle = PerLanePermute<V_DC, 0, V_DC, V_DC>(y_factor_multiplied);
+		// Just the y component has the value
+		Vector8 y_factor = y_factor_multiplied - y_factor_multiplied_shuffle;
+		// Just the y component has the value
+		Vector8 sqrt_first = one + two * y_factor;
+		Vector8 sqrt_second = one - two * y_factor;
+		Vector8 sqrt_values = PerLaneBlend<1, 5, V_DC, V_DC>(sqrt_first, sqrt_second);
+		// We now have the values for the atan2 in the x and y
+		sqrt_values = sqrt(sqrt_values);
+
+		// Now calculate the y_factors and z_factors
+		Vector8 first_multiply_element = PerLanePermute<3, 0, 3, 1>(quaternion.value);
+		Vector8 second_multiply_element = PerLanePermute<0, 0, 2, 1>(quaternion.value);
+		Vector8 third_multiply_element = PerLanePermute<1, 1, 0, 2>(quaternion.value);
+		Vector8 fourth_multiply_element = PerLanePermute<2, 1, 1, 2>(quaternion.value);
+
+		Vector8 first_multiplication = first_multiply_element * second_multiply_element;
+		Vector8 second_multiplication = third_multiply_element * fourth_multiply_element;
+		// The x factors are in the x and y components, while the z ones are in the z and w
+		Vector8 xz_factors = first_multiplication + second_multiplication;
+
+		Vector8 double_xz_factors = two * xz_factors;
+		Vector8 xz_factor_second = one - double_xz_factors;
+
+		Vector8 xz_atan_numerators = PerLanePermute<0, V_DC, 2, V_DC>(double_xz_factors);
+		Vector8 xz_atan_denominators = PerLanePermute<1, V_DC, 3, V_DC>(xz_factor_second);
+
+		// Now we can finally bridge all values into atan numerators and denominators
+		Vector8 atan_numerators = PerLaneBlend<0, 4, 2, V_DC>(xz_atan_numerators, sqrt_values);
+		Vector8 atan_denominators = PerLaneBlend<0, 5, 2, V_DC>(xz_atan_denominators, sqrt_values);
+
+		quaternion = QuaternionNormalize(quaternion);
+		float4 q = quaternion.StorageLow();
+
+		Vector8 rez = atan2(atan_numerators, atan_denominators);
+		float3 e = RadToDeg(SIMDHelpers::FinishEulerRotation(rez.AsFloat3Low()));
+
+		// The formula is this one
+			// x_factor_first = qw * qx + qy * qz
+			// x_factor_second = qx * qx + qy * qy
+			// z_factor_first = qw * qz + qx * qy
+			// z_factor_second = qy * qy + qz * qz
+			// y_factor = qw * qy - qx * qz
+			// 
+			// x_rotation = atan2(2 * x_factor_first, 1 - 2 * x_factor_second)
+			// y rotation = -PI/2 + 2 * atan2(sqrt(1 + 2 * y_factor), sqrt(1 - 2 * y_factor))
+			// z_rotation = atan2(2 * z_factor_first, 1 - 2 * z_factor_second)
+
+		float z_first = 2.0f * (q.w * q.z + q.x * q.y);
+		float z_second = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+		float rot = RadToDeg(atan2(z_first, z_second));
 
 		while (true) {
 			auto run_application = [&](char application_quit_value) {
@@ -922,7 +1009,7 @@ public:
 						generate_element.base.is_submesh = false;
 						generate_element.base.mesh = &trireme->mesh;
 						generate_element.base.gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION), MatrixIdentity(), MatrixScale({ 0.2f, 0.2f, 0.2f }), CAMERA_MATRIX);
-						generate_element.instance_index = 100000;
+						generate_element.instance_thickness = 100000;
 						generate_element.pixel_thickness = 10;
 
 						GenerateInstanceFramebuffer(graphics, { &generate_element, 1 }, RENDER_TARGET, DEPTH_STENCIL);

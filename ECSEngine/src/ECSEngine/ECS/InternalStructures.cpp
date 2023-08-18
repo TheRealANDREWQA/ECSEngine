@@ -497,13 +497,19 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Entity EntityPool::GetUnusedEntity() const
+	ECS_INLINE unsigned int GetMaxUnusedEntityValue(unsigned int bit_count) {
+		ECS_ASSERT(bit_count >= 16);
+		return (1 << bit_count) - 2;
+	}
+
+	Entity EntityPool::GetUnusedEntity(unsigned int bit_count) const
 	{
 		const size_t ITERATION_STOP_COUNT = 1'000;
 
+		const unsigned int max_value = GetMaxUnusedEntityValue(bit_count);
 		// Iterate from the high values until a value is found to be empty. Stop after an iteration count
 		for (size_t index = 0; index < ITERATION_STOP_COUNT; index++) {
-			unsigned int entity_index = -2 - (unsigned int)index;
+			unsigned int entity_index = max_value - (unsigned int)index;
 			if (!IsValid(entity_index)) {
 				return entity_index;
 			}
@@ -514,13 +520,14 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	bool EntityPool::GetUnusedEntities(Stream<Entity> entities) const
+	bool EntityPool::GetUnusedEntities(Stream<Entity> entities, unsigned int bit_count) const
 	{
 		const size_t total_iterations = function::ClampMin<size_t>(entities.size * 2, 1000);
 		size_t current_count = 0;
+		const unsigned int max_value = GetMaxUnusedEntityValue(bit_count);
 		// Iterate from the high values until a value is found to be empty. Stop after an iteration count
 		for (size_t index = 0; index < total_iterations; index++) {
-			unsigned int entity_index = -2 - (unsigned int)index;
+			unsigned int entity_index = max_value - (unsigned int)index;
 			if (!IsValid(entity_index)) {
 				entities[current_count++] = entity_index;
 				if (current_count == entities.size) {
@@ -534,12 +541,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Entity EntityPool::GetUnusedEntity(Stream<Entity> excluded_entities) const
+	Entity EntityPool::GetUnusedEntity(Stream<Entity> excluded_entities, unsigned int bit_count) const
 	{
 		const size_t ITERATION_STOP_COUNT = 1'000 + excluded_entities.size;
 		unsigned int uint_exclude_size = (unsigned int)excluded_entities.size;
+		const unsigned int max_value = GetMaxUnusedEntityValue(bit_count);
 		for (size_t index = 0; index < ITERATION_STOP_COUNT; index++) {
-			unsigned int entity_index = -2 - uint_exclude_size - index;
+			unsigned int entity_index = max_value - uint_exclude_size - index;
 			// Check to see if this entity exists in the excluded_entities
 			if (function::SearchBytes(excluded_entities.buffer, excluded_entities.size, entity_index, sizeof(entity_index)) == -1) {
 				if (!IsValid(entity_index)) {
@@ -553,13 +561,14 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	bool EntityPool::GetUnusedEntities(Stream<Entity> entities, Stream<Entity> excluded_entities) const
+	bool EntityPool::GetUnusedEntities(Stream<Entity> entities, Stream<Entity> excluded_entities, unsigned int bit_count) const
 	{
 		const size_t ITERATION_STOP_COUNT = function::ClampMin<size_t>(entities.size * 2 + excluded_entities.size, 1'000);
 		unsigned int uint_exclude_size = (unsigned int)excluded_entities.size;
 		size_t current_count = 0;
+		const unsigned int max_value = GetMaxUnusedEntityValue(bit_count);
 		for (size_t index = 0; index < ITERATION_STOP_COUNT; index++) {
-			unsigned int entity_index = -2 - uint_exclude_size - index;
+			unsigned int entity_index = max_value - uint_exclude_size - index;
 			// Check to see if this entity exists in the excluded entities
 			if (function::SearchBytes(excluded_entities.buffer, excluded_entities.size, entity_index, sizeof(entity_index)) == -1) {
 				if (!IsValid(entity_index)) {

@@ -285,6 +285,15 @@ namespace ECSEngine {
 					}
 				);
 			}
+
+			void AddHandlerToDockspaceRegionAtIndex(
+				unsigned int thread_id,
+				UIHandler* handler,
+				float2 position,
+				float2 scale,
+				UIActionHandler action_handler,
+				unsigned int add_index
+			);
 			
 			// this is triggered when the element is placed over the center of the Docking gizmo
 			void AddWindowToDockspaceRegion(
@@ -921,6 +930,14 @@ namespace ECSEngine {
 			float2 GetDockspaceBorderPosition(const UIDockspace* dockspace, unsigned int border_index, float mask) const;
 
 			float2 GetDockspaceBorderScale(const UIDockspace* dockspace, unsigned int border_index, float mask) const;
+			
+			UIHandler* GetDockspaceBorderHandler(
+				UIDockspace* dockspace, 
+				unsigned int border_index, 
+				bool hoverable, 
+				ECS_MOUSE_BUTTON clickable_button, 
+				bool general
+			) const;
 
 			// searches only inner borders, not the first one and the last one which are outer
 			unsigned int GetDockspaceBorderFromMouseCoordinates(
@@ -998,6 +1015,8 @@ namespace ECSEngine {
 			bool GetLastRevertCommand(HandlerCommand& command, unsigned int window_index);
 
 			float2 GetMouseDelta(float2 mouse_position) const;
+
+			int2 GetTexelMouseDelta() const;
 
 			float GetTextSpriteNDC_YScale() const;
 

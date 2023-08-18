@@ -136,7 +136,7 @@ namespace ECSEngine {
 		unsigned int UIHandler::AddResizable(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler) {
 			unsigned int current_size = position_x.size;
 			if (!Add(position, scale, handler)) {
-				Resize(allocator, position_x.capacity * 1.5f);
+				Resize(allocator, position_x.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2);
 				Add(position, scale, handler);
 			}
 			return current_size;
@@ -173,6 +173,29 @@ namespace ECSEngine {
 		unsigned int UIHandler::GetLastHandlerIndex() const
 		{
 			return position_x.size - 1;
+		}
+
+		void UIHandler::Insert(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, unsigned int insert_index)
+		{
+			unsigned int current_size = position_x.size;
+			if (current_size == position_x.capacity) {
+				Resize(allocator, position_x.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2);
+			}
+
+			for (unsigned int index = current_size; index > insert_index; index--) {
+				unsigned int bellow_index = index - 1;
+				position_x[index] = position_x[bellow_index];
+				position_y[index] = position_y[bellow_index];
+				scale_x[index] = scale_x[bellow_index];
+				scale_y[index] = scale_y[bellow_index];
+				action[index] = action[bellow_index];
+			}
+			position_x[insert_index] = position.x;
+			position_y[insert_index] = position.y;
+			scale_x[insert_index] = scale.x;
+			scale_y[insert_index] = scale.y;
+			action[insert_index] = handler;
+			position_x.size++;
 		}
 
 		void UIHandler::Resize(AllocatorPolymorphic allocator, size_t new_count)

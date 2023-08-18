@@ -43,11 +43,13 @@ namespace ECSEngine {
 
 }
 
+// This macro is used to give other macros that want a single argument
+// but the argument is actually a list of values
+#define FORWARD(...) __VA_ARGS__
 #define STRING(s) #s
 // Places the type followed by a comma with the stringified name
 #define WITH_NAME(type) type, STRING(type)
 #define ECS_CACHE_LINE_SIZE 64
-#define ECS_MICROSOFT_WRL using namespace Microsoft::WRL
 #define ECS_VECTORCALL __vectorcall
 #define ECS_INLINE __forceinline
 #define ECS_NOINLINE __declspec(noinline)
@@ -125,26 +127,6 @@ template ECSENGINE_API return_type function_name<false, true>(__VA_ARGS__) const
 
 #define ECS_TEMPLATE_FUNCTION_DOUBLE_BOOL_CONST_NO_API(return_type, function_name, ...) template return_type function_name<false, false>(__VA_ARGS__) const; template return_type function_name<true, false>(__VA_ARGS__) const; \
 template return_type function_name<false, true>(__VA_ARGS__) const; template return_type function_name<true, true>(__VA_ARGS__) const;
-
-#define ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(return_type, function_name, ...) template ECSENGINE_API return_type function_name(LinearAllocator*, __VA_ARGS__); \
-template ECSENGINE_API return_type function_name(StackAllocator*, __VA_ARGS__); \
-/*template ECSENGINE_API return_type function_name(PoolAllocator*, __VA_ARGS__);*/ \
-template ECSENGINE_API return_type function_name(MultipoolAllocator*, __VA_ARGS__); \
-template ECSENGINE_API return_type function_name(MemoryManager*, __VA_ARGS__); \
-template ECSENGINE_API return_type function_name(GlobalMemoryManager*, __VA_ARGS__); \
-template ECSENGINE_API return_type function_name(MemoryArena*, __VA_ARGS__); \
-template ECSENGINE_API return_type function_name(ResizableMemoryArena*, __VA_ARGS__); \
-template ECSENGINE_API return_type function_name(ResizableLinearAllocator*, __VA_ARGS__);
-
-#define ECS_TEMPLATE_FUNCTION_ALLOCATOR(return_type, function_name, ...) template return_type function_name(LinearAllocator*, __VA_ARGS__); \
-template return_type function_name(StackAllocator*, __VA_ARGS__); \
-/*template return_type function_name(PoolAllocator*, __VA_ARGS__);*/ \
-template return_type function_name(MultipoolAllocator*, __VA_ARGS__); \
-template return_type function_name(MemoryManager*, __VA_ARGS__); \
-template return_type function_name(GlobalMemoryManager*, __VA_ARGS__); \
-template return_type function_name(MemoryArena*, __VA_ARGS__); \
-template return_type function_name(ResizableMemoryArena*, __VA_ARGS__); \
-template return_type function_name(ResizableLinearAllocator*, __VA_ARGS__);
 
 #define ECS_TEMPLATE_FUNCTION_INTEGER(function) function(char); function(int8_t); function(uint8_t); function(int16_t); function(uint16_t); \
 function(int32_t); function(uint32_t); function(int64_t); function(uint64_t);

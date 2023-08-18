@@ -162,9 +162,6 @@ namespace ECSEngine {
 			[&](size_t index) {
 				unsigned int instance_index = elements[index].instance_index;
 				instance_index = instance_index == -1 ? (unsigned int)index : instance_index;
-				// Increase this value such that values of 0 are invalid
-				instance_index++;
-				
 				graphics->UpdateMousePickShaderPixelCBuffer(pixel_cbuffer, GenerateRenderInstanceValue(instance_index, elements[index].pixel_thickness));
 			}
 		);
@@ -300,6 +297,79 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void GetInstancesFromFramebufferFilteredInSelection(
+		unsigned int* texture_data,
+		uint2 start,
+		uint2 dimensions,
+		uint2 texture_dimensions,
+		unsigned int texture_data_row_byte_size,
+		CapacityStream<unsigned int>* filtered_values
+	) {
+		uint2 bottom_right = start + dimensions;
+		if (dimensions.x > 1 || dimensions.y > 1) {
+			for (unsigned int row = 0; row < dimensions.y; row++) {
+				for (unsigned int column = 0; column < dimensions.x; column++) {
+					unsigned int instance_index, pixel_thickness;
+					unsigned int current_value = function::IndexTextureEx(texture_data, start.y + row, start.x + column, texture_data_row_byte_size);
+					function::RetrieveBlendedBits(
+						current_value,
+						32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+						ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+						instance_index,
+						pixel_thickness
+					);
+
+					if (instance_index != 0) {
+						instance_index--;
+						CapacityStream<unsigned int> addition = { &instance_index, 1, 1 };
+						// Check to see if it exists and add it if not
+						function::StreamAddUniqueSearchBytes(*filtered_values, addition);
+					}
+				}
+			}
+		}
+		else if (dimensions.x == 1 && dimensions.y == 1) {
+			unsigned int left_start_count = function::ClampMax<unsigned int>(start.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+			unsigned int top_start_count = function::ClampMax<unsigned int>(start.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+			unsigned int right_end_count = function::ClampMax<unsigned int>(texture_dimensions.x - bottom_right.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+			unsigned int bottom_end_count = function::ClampMax<unsigned int>(texture_dimensions.y - bottom_right.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+
+			uint2 initial_position = start;
+			start.x -= left_start_count;
+			start.y -= top_start_count;
+			bottom_right.x -= right_end_count;
+			bottom_right.y -= bottom_end_count;
+
+			// For single point take into consideration the thickness as well
+			unsigned int max_pixel_thickness = 0;
+			for (unsigned int row = 0; row < top_start_count + bottom_end_count + 1; row++) {
+				for (unsigned int column = 0; column < left_start_count + right_end_count + 1; column++) {
+					unsigned int instance_index, pixel_thickness;
+					unsigned int current_value = function::IndexTextureEx(texture_data, start.y + row, start.x + column, texture_data_row_byte_size);
+					function::RetrieveBlendedBits(
+						current_value,
+						32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+						ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+						instance_index,
+						pixel_thickness
+					);
+
+					if (instance_index != 0) {
+						uint2 position_difference = AbsoluteDifference(initial_position, uint2(start.x + column, start.y + row));
+						if (position_difference.x <= pixel_thickness && position_difference.y <= pixel_thickness) {
+							if (pixel_thickness >= max_pixel_thickness) {
+								instance_index--;
+								filtered_values->buffer[0] = instance_index;
+								filtered_values->size = 1;
+								max_pixel_thickness = pixel_thickness;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	void GetInstancesFromFramebufferFiltered(
 		Graphics* graphics, 
 		RenderTargetView render_target, 
@@ -319,25 +389,8 @@ namespace ECSEngine {
 			uint2 dimensions = bottom_right - top_left;
 			uint2 offsets = top_left - top_left_copy_corner;
 
-			for (unsigned int row = 0; row < dimensions.y; row++) {
-				for (unsigned int column = 0; column < dimensions.x; column++) {
-					unsigned int instance_index, pixel_thickness;
-					function::RetrieveBlendedBits(
-						function::IndexTextureEx(texture_data, offsets.x + row, offsets.y + column, mapped_texture_row_byte_size),
-						32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
-						ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
-						instance_index,
-						pixel_thickness
-					);
-
-					if (instance_index != 0) {
-						instance_index--;
-						CapacityStream<unsigned int> addition = { &instance_index, 1, 1 };
-						// Check to see if it exists and add it if not
-						function::StreamAddUniqueSearchBytes(*values, addition);
-					}
-				}
-			}
+			uint2 texture_dimensions = GetTextureDimensions(render_target.AsTexture2D());
+			GetInstancesFromFramebufferFilteredInSelection(texture_data, offsets, dimensions, texture_dimensions, mapped_texture_row_byte_size, values);
 		});
 	}
 
@@ -395,27 +448,14 @@ namespace ECSEngine {
 		CapacityStream<unsigned int>* filtered_values
 	)
 	{
-		size_t row_byte_size = sizeof(unsigned int) * cpu_values.dimensions.x;
-		uint2 dimensions = bottom_right - top_left;
-		for (unsigned int row = 0; row < dimensions.y; row++) {
-			for (unsigned int column = 0; column < dimensions.x; column++) {
-				unsigned int instance_index, pixel_thickness;
-				function::RetrieveBlendedBits(
-					function::IndexTextureEx(cpu_values.values, top_left.y + row, top_left.x + column, row_byte_size),
-					32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
-					ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
-					instance_index,
-					pixel_thickness
-				);
-
-				if (instance_index != 0) {
-					instance_index--;
-					CapacityStream<unsigned int> addition = { &instance_index, 1, 1 };
-					// Check to see if it exists and add it if not
-					function::StreamAddUniqueSearchBytes(*filtered_values, addition);
-				}
-			}
-		}
+		GetInstancesFromFramebufferFilteredInSelection(
+			cpu_values.values, 
+			top_left, 
+			bottom_right - top_left, 
+			cpu_values.dimensions, 
+			sizeof(unsigned int) * cpu_values.dimensions.x, 
+			filtered_values
+		);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

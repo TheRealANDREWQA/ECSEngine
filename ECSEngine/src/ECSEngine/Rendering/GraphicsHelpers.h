@@ -21,11 +21,11 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE Matrix ViewMatrixTextureCubeXPositive() {
-		return MatrixLookAt(ZeroVector4(), VectorGlobals::RIGHT_4, VectorGlobals::UP_4);
+		return MatrixLookAtLow(ZeroVector(), RightVector(), UpVector());
 	}
 
 	ECS_INLINE Matrix ViewMatrixTextureCubeXNegative() {
-		return MatrixLookAt(ZeroVector4(), -VectorGlobals::RIGHT_4, VectorGlobals::UP_4);
+		return MatrixLookAtLow(ZeroVector(), -RightVector(), UpVector());
 	}
 
 	// For some reason, the matrices for up must be inverted - positive direction takes negative up
@@ -33,19 +33,19 @@ namespace ECSEngine {
 	// These matrices are used in constructing the matrix for texture cube conversion and 
 	// diffuse environment convolution
 	ECS_INLINE Matrix ViewMatrixTextureCubeYPositive() {
-		return MatrixLookAt(ZeroVector4(), -VectorGlobals::UP_4, VectorGlobals::FORWARD_4);
+		return MatrixLookAtLow(ZeroVector(), -UpVector(), ForwardVector());
 	}
 
 	ECS_INLINE Matrix ViewMatrixTextureCubeYNegative() {
-		return MatrixLookAt(ZeroVector4(), VectorGlobals::UP_4, -VectorGlobals::FORWARD_4);
+		return MatrixLookAtLow(ZeroVector(), UpVector(), -ForwardVector());
 	}
 
 	ECS_INLINE Matrix ViewMatrixTextureCubeZPositive() {
-		return MatrixLookAt(ZeroVector4(), VectorGlobals::FORWARD_4, VectorGlobals::UP_4);
+		return MatrixLookAtLow(ZeroVector(), ForwardVector(), UpVector());
 	}
 
 	ECS_INLINE Matrix ViewMatrixTextureCubeZNegative() {
-		return MatrixLookAt(ZeroVector4(), -VectorGlobals::FORWARD_4, VectorGlobals::UP_4);
+		return MatrixLookAtLow(ZeroVector(), -ForwardVector(), UpVector());
 	}
 
 	inline Matrix ViewMatrixTextureCube(TextureCubeFace face) {

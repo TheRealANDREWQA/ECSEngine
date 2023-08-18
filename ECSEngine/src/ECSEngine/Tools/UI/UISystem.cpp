@@ -289,9 +289,7 @@ namespace ECSEngine {
 			UIActionHandler action_handler
 		) {
 			if (action_handler.data_size > 0) {
-				void* allocation = AllocateHandlerMemory(allocator, action_handler.data_size, 8, action_handler.data);
-				memcpy(allocation, action_handler.data, action_handler.data_size);
-				action_handler.data = allocation;
+				action_handler.data = AllocateHandlerMemory(allocator, action_handler.data_size, 8, action_handler.data);
 			}
 			AddActionHandlerForced(handler, position, scale, action_handler);
 		}
@@ -648,6 +646,24 @@ namespace ECSEngine {
 				scale,
 				handler
 			);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::AddHandlerToDockspaceRegionAtIndex(
+			unsigned int thread_id, 
+			UIHandler* handler, 
+			float2 position, 
+			float2 scale, 
+			UIActionHandler action_handler, 
+			unsigned int add_index
+		)
+		{
+			LinearAllocator* temp_allocator = TemporaryAllocator(thread_id, action_handler.phase);
+			if (action_handler.data_size > 0) {
+				action_handler.data = AllocateHandlerMemory(temp_allocator, action_handler.data_size, 8, action_handler.data);
+			}
+			handler->Insert(GetAllocatorPolymorphic(temp_allocator), position, scale, action_handler, add_index);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3958,6 +3974,9 @@ namespace ECSEngine {
 			bool is_hoverable = false;
 			bool is_clickable = false;
 			bool is_general = false;
+			if (m_mouse->Get(ECS_MOUSE_X2)) {
+				__debugbreak();
+			}
 			if (!m_execute_events && data->mouse_region.dockspace == data->dockspace && data->mouse_region.border_index == data->border_index) {
 				bool active_click_handler = false;
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button) {
@@ -3979,14 +3998,6 @@ namespace ECSEngine {
 
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 					if (m_mouse->Get(button_type) == ECS_BUTTON_PRESSED) {
-						DockspaceType floating_type;
-						UIDockspace* floating_dockspace = GetFloatingDockspaceFromDockspace(
-							data->dockspace,
-							dockspace_mask,
-							floating_type
-						);
-						SetNewFocusedDockspace(floating_dockspace, floating_type);
-						SetNewFocusedDockspaceRegion(data->dockspace, data->border_index, data->type);
 						is_clickable = DetectClickables(
 							vertex_count,
 							buffers,
@@ -4010,6 +4021,16 @@ namespace ECSEngine {
 								data->thread_id,
 								0
 							);
+						}
+						if (is_clickable || is_general || button_type == ECS_MOUSE_LEFT || button_type == ECS_MOUSE_MIDDLE || button_type == ECS_MOUSE_RIGHT) {
+							DockspaceType floating_type;
+							UIDockspace* floating_dockspace = GetFloatingDockspaceFromDockspace(
+								data->dockspace,
+								dockspace_mask,
+								floating_type
+							);
+							SetNewFocusedDockspace(floating_dockspace, floating_type);
+							SetNewFocusedDockspaceRegion(data->dockspace, data->border_index, data->type);
 						}
 						active_region |= is_clickable | is_general;
 						m_frame_pacing = ((is_clickable || is_general) && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
@@ -4411,14 +4432,16 @@ namespace ECSEngine {
 				thread_id,
 				dockspace,
 				border_index,
-				{
+				/*{
 					dockspace_region_position.x + normalized_margin * 0.5f,
 					dockspace_region_position.y + m_descriptors.dockspaces.border_margin * 0.5f
 				},
 			{
 				dockspace_region_scale.x - normalized_margin,
 				dockspace_region_scale.y - m_descriptors.dockspaces.border_margin
-			},
+			},*/
+				dockspace_region_position,
+				dockspace_region_scale,
 				&drag_dockspace_data,
 				DragDockspaceAction,
 				ECS_MOUSE_LEFT,
@@ -5402,6 +5425,31 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		UIHandler* UISystem::GetDockspaceBorderHandler(
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			bool hoverable, 
+			ECS_MOUSE_BUTTON clickable_button, 
+			bool general
+		) const
+		{
+			if (hoverable) {
+				return &dockspace->borders[border_index].hoverable_handler;
+			}
+			else if (clickable_button != ECS_MOUSE_BUTTON_COUNT) {
+				return &dockspace->borders[border_index].clickable_handler[clickable_button];
+			}
+			else if (general) {
+				return &dockspace->borders[border_index].general_handler;
+			}
+
+			ECS_ASSERT(false);
+			// Shuldn't reach here
+			return nullptr;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::GetDockspaceBorderFromMouseCoordinates(float2 mouse_position, UIDockspace** dockspace, float& mask) const {
 			DockspaceType type;
 			unsigned int floating_dockspace = GetFloatingDockspaceIndexFromMouseCoordinates(mouse_position, type);
@@ -5780,6 +5828,13 @@ namespace ECSEngine {
 
 		float2 UISystem::GetMouseDelta(float2 mouse_position) const {
 			return float2(mouse_position.x - m_previous_mouse_position.x, mouse_position.y - m_previous_mouse_position.y);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		int2 UISystem::GetTexelMouseDelta() const
+		{
+			return m_mouse->GetPositionDelta();
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

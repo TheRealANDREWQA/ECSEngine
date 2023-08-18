@@ -387,6 +387,8 @@ namespace ECSEngine {
 
 			unsigned int GetLastHandlerIndex() const;
 
+			void Insert(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, unsigned int insert_index);
+
 			void Resize(AllocatorPolymorphic allocator, size_t new_count);
 
 			unsigned int ReserveOne(AllocatorPolymorphic allocator);

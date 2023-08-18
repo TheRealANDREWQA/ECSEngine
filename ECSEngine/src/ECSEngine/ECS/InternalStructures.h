@@ -32,6 +32,16 @@ namespace ECSEngine {
 			return value == other.value;
 		}
 
+		// This just returns true if the value is different from -1,
+		// And not if the entity is valid in the context of an entity manager
+		ECS_INLINE bool Valid() const {
+			return value != -1;
+		}
+
+		ECS_INLINE operator unsigned int() const {
+			return value;
+		}
+
 		union {
 			struct {
 				unsigned int index : 26;
@@ -96,10 +106,22 @@ namespace ECSEngine {
 			return value;
 		}
 
+		// This just returns true if the value is different from -1,
+		// And not if the entity is valid in the context of an entity manager
+		ECS_INLINE bool Valid() const {
+			return value != -1;
+		}
+
 		short value;
 	};
 
 	struct SharedInstance {
+		// This just returns true if the value is different from -1,
+		// And not if the entity is valid in the context of an entity manager
+		ECS_INLINE bool Valid() const {
+			return value != -1;
+		}
+
 		short value;
 	};
 
@@ -323,22 +345,26 @@ namespace ECSEngine {
 		unsigned int GetCount() const;
 
 		// Returns an Entity identifier that is not in use at this moment
+		// The bit count limits the amount of bits that the entity can have
 		// Returns -1 if there is no empty entity
-		Entity GetUnusedEntity() const;
+		Entity GetUnusedEntity(unsigned int bit_count = 32) const;
 
 		// Fills in entity identifiers that are not in use at this moment
+		// The bit count limits the amount of bits that the entity can have
 		// Returns true if there were enough entities, else false
-		bool GetUnusedEntities(Stream<Entity> entities) const;
+		bool GetUnusedEntities(Stream<Entity> entities, unsigned int bit_count = 32) const;
 
 		// Returns an Entity identifier that is not in use at this moment.
+		// The bit count limits the amount of bits that the entity can have
 		// Additionally, this version takes in a stream of already used slots from previous calls
 		// to omit them. Returns -1 if there is no empty entity
-		Entity GetUnusedEntity(Stream<Entity> excluded_entities) const;
+		Entity GetUnusedEntity(Stream<Entity> excluded_entities, unsigned int bit_count = 32) const;
 
 		// Fills in entity identifiers that are not in use at this moment.
+		// The bit count limits the amount of bits that the entity can have
 		// Additionally, this version takes in a stream of already used slots from previous calls
 		// to omit them. Returns true if there were enough entities, else false
-		bool GetUnusedEntities(Stream<Entity> entities, Stream<Entity> excluded_entities) const;
+		bool GetUnusedEntities(Stream<Entity> entities, Stream<Entity> excluded_entities, unsigned int bit_count = 32) const;
 
 		// The tag should be the bit position, not the actual value
 		bool HasTag(Entity entity, unsigned char tag) const;

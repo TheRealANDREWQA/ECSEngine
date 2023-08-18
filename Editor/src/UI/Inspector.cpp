@@ -346,6 +346,17 @@ unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices)
+{
+	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
+		if (GetInspectorTargetSandbox(editor_state, index) == sandbox_index) {
+			inspector_indices->AddAssert(index);
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void SetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
 {
 	editor_state->inspector_manager.data[inspector_index].target_sandbox = sandbox_index;
@@ -592,6 +603,13 @@ void ChangeInspectorToAsset(EditorState* editor_state, const void* metadata, ECS
 void ChangeInspectorToAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE asset_type, unsigned int inspector_index)
 {
 	ChangeInspectorToAsset(editor_state, editor_state->asset_database->GetAssetConst(handle, asset_type), asset_type, inspector_index);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+bool ExistsInspector(const EditorState* editor_state, unsigned int inspector_index)
+{
+	return editor_state->inspector_manager.data.size > inspector_index;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

@@ -27,12 +27,13 @@ namespace ECSEngine {
 	struct ECSENGINE_API InputMapping {
 		void Initialize(AllocatorPolymorphic allocator, size_t count);
 
-		bool IsTriggered(unsigned int index, const Mouse* mouse, const Keyboard* keyboard) const;
+		bool IsTriggered(unsigned int index) const;
 
 		void ChangeMapping(unsigned int index, InputMappingElement mapping_element);
 
-
 		Stream<InputMappingElement> mappings;
+		const Mouse* mouse;
+		const Keyboard* keyboard;
 	};
 
 }

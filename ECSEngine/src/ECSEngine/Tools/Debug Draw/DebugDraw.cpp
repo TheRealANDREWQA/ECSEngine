@@ -38,8 +38,6 @@ namespace ECSEngine {
 
 	const wchar_t* STRING_MESH_FILE = L"Resources/DebugPrimitives/Alphabet.glb";
 
-#define STRUCTURED_OUTPUT_ID_THICKNESS 3
-
 	enum ElementType {
 		WIREFRAME_DEPTH,
 		WIREFRAME_NO_DEPTH,
@@ -58,16 +56,16 @@ namespace ECSEngine {
 
 	struct InstancedVertex {
 		float3 position;
-		unsigned int instance_index;
+		unsigned int instance_thickness;
 	};
 
 	union DebugDrawerOutput {
 		ECS_INLINE DebugDrawerOutput() {}
 		ECS_INLINE DebugDrawerOutput(Color _color) : color(_color) {}
-		ECS_INLINE DebugDrawerOutput(unsigned int _instance_index) : instance_index(_instance_index) {}
+		ECS_INLINE DebugDrawerOutput(unsigned int _instance_index) : instance_thickness(_instance_index) {}
 
 		Color color;
-		unsigned int instance_index;
+		unsigned int instance_thickness;
 	};
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -250,30 +248,30 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void SetLinePositions(InstancedVertex* positions, unsigned int instance_index, float3 start, float3 end) {
-		unsigned int offset = instance_index * 2;
+	void SetLinePositions(InstancedVertex* positions, unsigned int instance_thickness, float3 start, float3 end) {
+		unsigned int offset = instance_thickness * 2;
 
 		positions[offset].position = start;
 		positions[offset + 1].position = end;
 
-		positions[offset].instance_index = instance_index;
-		positions[offset + 1].instance_index = instance_index;
+		positions[offset].instance_thickness = instance_thickness;
+		positions[offset + 1].instance_thickness = instance_thickness;
 	}
 
-	void SetTrianglePositions(InstancedVertex* positions, unsigned int instance_index, float3 corner0, float3 corner1, float3 corner2) {
-		unsigned int offset = instance_index * 3;
+	void SetTrianglePositions(InstancedVertex* positions, unsigned int instance_thickness, float3 corner0, float3 corner1, float3 corner2) {
+		unsigned int offset = instance_thickness * 3;
 
 		positions[offset].position = corner0;
 		positions[offset + 1].position = corner1;
 		positions[offset + 2].position = corner2;
 
-		positions[offset].instance_index = instance_index;
-		positions[offset + 1].instance_index = instance_index;
-		positions[offset + 2].instance_index = instance_index;
+		positions[offset].instance_thickness = instance_thickness;
+		positions[offset + 1].instance_thickness = instance_thickness;
+		positions[offset + 2].instance_thickness = instance_thickness;
 	}
 
-	void SetRectanglePositionsFront(InstancedVertex* positions, unsigned int instance_index, float3 corner0, float3 corner1) {
-		unsigned int offset = instance_index * 6;
+	void SetRectanglePositionsFront(InstancedVertex* positions, unsigned int instance_thickness, float3 corner0, float3 corner1) {
+		unsigned int offset = instance_thickness * 6;
 
 		// First rectangle triangle
 		positions[offset + 0].position = corner0;
@@ -286,12 +284,12 @@ namespace ECSEngine {
 		positions[offset + 5].position = positions[offset + 2].position;
 
 		// The instance index
-		positions[offset + 0].instance_index = instance_index;
-		positions[offset + 1].instance_index = instance_index;
-		positions[offset + 2].instance_index = instance_index;
-		positions[offset + 3].instance_index = instance_index;
-		positions[offset + 4].instance_index = instance_index;
-		positions[offset + 5].instance_index = instance_index;
+		positions[offset + 0].instance_thickness = instance_thickness;
+		positions[offset + 1].instance_thickness = instance_thickness;
+		positions[offset + 2].instance_thickness = instance_thickness;
+		positions[offset + 3].instance_thickness = instance_thickness;
+		positions[offset + 4].instance_thickness = instance_thickness;
+		positions[offset + 5].instance_thickness = instance_thickness;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -372,11 +370,11 @@ namespace ECSEngine {
 		float4 result;
 
 		float3 direction = start - end;
-		Vector4 direction_simd(direction);
-		Vector4 angles = DirectionToRotation(direction_simd);
-		angles.Store(&result);
+		Vector8 direction_simd(direction);
+		Vector8 angles = DirectionToRotationEuler(direction_simd);
+		angles.StorePartialConstant<4, true>(&result);
 
-		float length = Length3(direction_simd).First();
+		float length = Length(direction_simd).First();
 		result.w = length;
 
 		return result;
@@ -420,7 +418,7 @@ namespace ECSEngine {
 
 	void ConvertTranslationLineIntoStartEnd(float3 translation, float3 rotation, float size, float3& start, float3& end) {
 		start = translation;
-		float3 direction = GetRightVectorQuaternion(rotation);
+		float3 direction = RotateVectorQuaternion(rotation, RightVector());
 		end = translation + float3::Splat(size) * direction;
 	}
 
@@ -470,7 +468,8 @@ namespace ECSEngine {
 	void DebugDrawer::AddPoint(float3 position, Color color, DebugDrawCallOptions options)
 	{
 		// Make wireframe false
-		points.Add({ position, color, { false, options.ignore_depth, options.duration } });
+		options.wireframe = false;
+		points.Add({ position, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -499,7 +498,7 @@ namespace ECSEngine {
 	void DebugDrawer::AddArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
 	{
 		float4 rotation_length = ArrowStartEndToRotation(start, end);
-		arrows.Add({ start, {rotation_length.x, rotation_length.y, rotation_length.z}, rotation_length.w, size, color, options });
+		AddArrowRotation(start, { rotation_length.x, rotation_length.y, rotation_length.z }, rotation_length.w, size, color, options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -517,9 +516,9 @@ namespace ECSEngine {
 		DebugDrawCallOptions options_y = options;
 		DebugDrawCallOptions options_z = options;
 
-		options_x.instance_index = info->instance_x;
-		options_y.instance_index = info->instance_y;
-		options_z.instance_index = info->instance_z;
+		options_x.instance_thickness = info->instance_thickness_x;
+		options_y.instance_thickness = info->instance_thickness_y;
+		options_z.instance_thickness = info->instance_thickness_z;
 
 		// The same as adding 3 arrows
 		AddArrowRotation(translation, AxesArrowXRotation(rotation), size, size, info->color_x, options_x);
@@ -561,7 +560,7 @@ namespace ECSEngine {
 	void DebugDrawer::AddStringRotation(float3 position, float3 rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
 	{
 		Stream<char> text_copy = function::StringCopy(Allocator(), text);
-		float3 direction = GetRightVector(rotation);
+		float3 direction = RotateVectorQuaternion(rotation, RightVector());
 		AddString(position, direction, size, text, color, options);
 	}
 
@@ -695,9 +694,9 @@ namespace ECSEngine {
 		DebugDrawCallOptions options_y = options;
 		DebugDrawCallOptions options_z = options;
 
-		options_x.instance_index = info->instance_x;
-		options_y.instance_index = info->instance_y;
-		options_z.instance_index = info->instance_z;
+		options_x.instance_thickness = info->instance_thickness_x;
+		options_y.instance_thickness = info->instance_thickness_y;
+		options_z.instance_thickness = info->instance_thickness_z;
 
 		thread_arrows[thread_index].Add({ translation, AxesArrowXRotation(rotation), size, size, info->color_x, options_x });
 		thread_arrows[thread_index].Add({ translation, AxesArrowYRotation(rotation), size, size, info->color_y, options_y });
@@ -763,7 +762,7 @@ namespace ECSEngine {
 			FlushString(thread_index);
 		}
 		Stream<char> string_copy = function::StringCopy(AllocatorTs(), text);
-		thread_strings[thread_index].Add({ position, GetRightVector(rotation), size, string_copy, color, options });
+		thread_strings[thread_index].Add({ position, RotateVectorQuaternion(rotation, RightVector()), size, string_copy, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -843,7 +842,7 @@ namespace ECSEngine {
 			}
 			else {
 				gpu_matrix.Store(matrix + index);
-				ids[index] = GenerateRenderInstanceValue(outputs[index].instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
+				ids[index] = outputs[index].instance_thickness;
 			}
 		}
 
@@ -896,7 +895,7 @@ namespace ECSEngine {
 			}
 			else {
 				matrix.Store(matrix_data + index);
-				id[index] = GenerateRenderInstanceValue(outputs[index].instance_index, 0) ;
+				id[index] = outputs[index].instance_thickness;
 			}
 		}
 
@@ -1122,10 +1121,10 @@ namespace ECSEngine {
 		// Normalize the direction
 		direction = Normalize(direction);
 
-		float3 rotation_from_direction = DirectionToRotation(direction);
+		float3 rotation_from_direction = DirectionToRotationEuler(direction);
 		// Invert the y axis 
 		rotation_from_direction.y = -rotation_from_direction.y;
-		float3 up_direction = GetUpVector(rotation_from_direction);
+		float3 up_direction = RotateVectorQuaternion(rotation_from_direction, UpVector());
 
 		// Splat these early
 		float3 space_size = float3::Splat(STRING_SPACE_SIZE * size) * direction;
@@ -1230,7 +1229,7 @@ namespace ECSEngine {
 		Color color,
 		DebugDrawCallOptions options
 	) {
-		DrawString(translation, GetRightVector(rotation), size, text, color, options);
+		DrawString(translation, RotateVectorQuaternion(rotation, GetRightVector()), size, text, color, options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1433,7 +1432,7 @@ namespace ECSEngine {
 
 	template<typename DebugType>
 	ECS_INLINE unsigned int GetTypeInstanceThickness(const DebugType* type) {
-		return type->options.instance_index;
+		return type->options.instance_thickness;
 	}
 
 	template<typename Deck>
@@ -1537,7 +1536,7 @@ namespace ECSEngine {
 						}
 
 						// Set the state
-						BindStructuredShaderState<flags>(drawer, options, ECS_DEBUG_SHADER_OUTPUT_COLOR);
+						BindStructuredShaderState<flags>(drawer, options, shader_output);
 
 						// Issue the draw call
 						drawer->DrawCallStructured(vertex_count, current_count);
@@ -1837,10 +1836,10 @@ namespace ECSEngine {
 					// Normalize the direction
 					float3 direction = Normalize(string->direction);
 
-					float3 rotation_from_direction = DirectionToRotation(direction);
+					float3 rotation_from_direction = DirectionToRotationEuler(direction);
 					// Invert the y axis 
 					rotation_from_direction.y = -rotation_from_direction.y;
-					float3 up_direction = GetUpVector(rotation_from_direction);
+					float3 up_direction = RotateVectorQuaternion(rotation_from_direction, GetUpVector());
 
 					// Splat these early
 					float3 space_size = float3::Splat(STRING_SPACE_SIZE * string->size) * direction;
@@ -2004,7 +2003,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE const DebugDrawerOutput* ToDrawerOutput(const DebugDrawCallOptions* options) {
-		return (const DebugDrawerOutput*)&options->instance_index;
+		return (const DebugDrawerOutput*)&options->instance_thickness;
 	}
 
 	void DebugDrawer::OutputInstanceIndexLine(
@@ -2014,7 +2013,6 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugLine>* addition_stream
 	)
 	{
-		options.instance_index = GenerateRenderInstanceValue(options.instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
 		if (addition_stream != nullptr) {
 			addition_stream->Add({ start, end, Color(), options });
 		}
@@ -2055,7 +2053,6 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugSphere>* addition_stream
 	)
 	{
-		options.instance_index = GenerateRenderInstanceValue(options.instance_index, 0);
 		if (addition_stream != nullptr) {
 			addition_stream->Add({ translation, radius, Color(), options });
 		}
@@ -2076,7 +2073,6 @@ namespace ECSEngine {
 	{
 		DebugDrawCallOptions temp_options = options;
 		temp_options.wireframe = false;
-		temp_options.instance_index = GenerateRenderInstanceValue(options.instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
 
 		if (addition_stream != nullptr) {
 			addition_stream->Add({ translation, Color(), temp_options });
@@ -2097,7 +2093,6 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugRectangle>* addition_stream
 	)
 	{
-		options.instance_index = GenerateRenderInstanceValue(options.instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
 		if (addition_stream != nullptr) {
 			addition_stream->Add({ corner0, corner1, Color(), options });
 		}
@@ -2118,7 +2113,6 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugCross>* addition_stream
 	)
 	{
-		options.instance_index = GenerateRenderInstanceValue(options.instance_index, 0);
 		if (addition_stream != nullptr) {
 			addition_stream->Add({ position, rotation, size, Color(), options });
 		}
@@ -2139,7 +2133,6 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugCircle>* addition_stream
 	)
 	{
-		options.instance_index = GenerateRenderInstanceValue(options.instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
 		if (addition_stream != nullptr) {
 			addition_stream->Add({ position, rotation, radius, Color(), options });
 		}
@@ -2176,7 +2169,7 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugArrow>* addition_stream
 	)
 	{
-		options.instance_index = GenerateRenderInstanceValue(options.instance_index, 0);
+		options.instance_thickness = GenerateRenderInstanceValue(options.instance_thickness, 0);
 		if (addition_stream != nullptr) {
 			addition_stream->Add({ translation, rotation, length, size, Color(), options });
 		}
@@ -2193,22 +2186,22 @@ namespace ECSEngine {
 		float3 translation,
 		float3 rotation,
 		float size,
-		unsigned int instance_x,
-		unsigned int instance_y,
-		unsigned int instance_z,
+		unsigned int instance_thickness_x,
+		unsigned int instance_thickness_y,
+		unsigned int instance_thickness_z,
 		DebugDrawCallOptions options,
 		AdditionStreamAtomic<DebugArrow>* addition_stream
 	)
 	{
 		if (addition_stream != nullptr) {
 			DebugDrawCallOptions options_x = options;
-			options_x.instance_index = GenerateRenderInstanceValue(instance_x, 0);
+			options_x.instance_thickness = GenerateRenderInstanceValue(instance_thickness_x, 0);
 
 			DebugDrawCallOptions options_y = options;
-			options_y.instance_index = GenerateRenderInstanceValue(instance_y, 0);
+			options_y.instance_thickness = GenerateRenderInstanceValue(instance_thickness_y, 0);
 
 			DebugDrawCallOptions options_z = options;
-			options_z.instance_index = GenerateRenderInstanceValue(instance_z, 0);
+			options_z.instance_thickness = GenerateRenderInstanceValue(instance_thickness_z, 0);
 
 			DebugArrow arrows[] = {
 				{ translation, AxesArrowXRotation(rotation), size, size, Color(), options_x },
@@ -2220,9 +2213,9 @@ namespace ECSEngine {
 		}
 		else {
 			DebugDrawerOutput outputs[] = {
-				instance_x,
-				instance_y,
-				instance_z
+				instance_thickness_x,
+				instance_thickness_y,
+				instance_thickness_z
 			};
 
 			// Hopefully since the function is marked as inline the compiler will notice the same function being
@@ -2250,7 +2243,6 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugTriangle>* addition_stream
 	)
 	{
-		options.instance_index = GenerateRenderInstanceValue(options.instance_index, STRUCTURED_OUTPUT_ID_THICKNESS);
 		if (addition_stream != nullptr) {
 			addition_stream->Add({ point0, point1, point2, Color(), options });
 		}
@@ -2270,7 +2262,6 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugAABB>* addition_stream
 	)
 	{
-		options.instance_index = GenerateRenderInstanceValue(options.instance_index, 0);
 		if (addition_stream != nullptr) {
 			addition_stream->Add({ translation, scale, Color(), options });
 		}
@@ -2291,7 +2282,6 @@ namespace ECSEngine {
 		AdditionStreamAtomic<DebugOOBB>* addition_stream
 	)
 	{
-		options.instance_index = GenerateRenderInstanceValue(options.instance_index, 0);
 		if (addition_stream != nullptr) {
 			addition_stream->Add({ translation, rotation, scale, Color(), options });
 		}
@@ -2329,7 +2319,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	)
 	{
-		OutputInstanceIndexString(translation, GetRightVector(rotation), size, text, options, addition_stream, allocator);
+		OutputInstanceIndexString(translation, RotateVectorQuaternion(rotation, GetRightVector()), size, text, options, addition_stream, allocator);
 	}
 
 
@@ -2638,6 +2628,7 @@ namespace ECSEngine {
 			&shader_source, \
 			&byte_code \
 		); \
+		shader_source = function::PreprocessCFile(shader_source); \
 		layout_shaders[type][output_type] = resource_manager->m_graphics->ReflectVertexShaderInput(shader_source, byte_code); \
 		resource_manager->Deallocate(shader_source.buffer);
 

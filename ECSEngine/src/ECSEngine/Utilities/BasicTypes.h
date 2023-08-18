@@ -157,14 +157,18 @@ namespace ECSEngine {
 	template<typename Base>
 	struct Base2 {
 		typedef Base Base;
+		typedef Base2<bool> BooleanEquivalent;
 		constexpr static inline size_t BaseCount() {
 			return 2;
 		}
 		
 
-		constexpr Base2() {}
+		ECS_INLINE constexpr Base2() {}
 		/*constexpr Base2(Base _x) : x(_x) {}*/
-		constexpr Base2(Base _x, Base _y) : x(_x), y(_y) {}
+		ECS_INLINE constexpr Base2(Base _x, Base _y) : x(_x), y(_y) {}
+
+		template<typename OtherBase>
+		ECS_INLINE constexpr Base2(Base2<OtherBase> xy) : x(xy.x), y(xy.y) {}
 
 		// assumes all components
 		ECS_INLINE Base2(const Base* ptr) : x(*ptr), y(*(ptr + 1)) {}
@@ -178,6 +182,10 @@ namespace ECSEngine {
 
 		ECS_INLINE bool operator != (const Base2& other) const {
 			return x != other.x || y != other.y;
+		}
+
+		ECS_INLINE Base2 operator !() const {
+			return Base2<Base>(!x, !y);
 		}
 
 		ECS_INLINE Base2 operator + (const Base2& other) const {
@@ -258,14 +266,19 @@ namespace ECSEngine {
 	template<typename Base>
 	struct Base3 {
 		typedef Base Base;
+		typedef Base3<bool> BooleanEquivalent;
 		constexpr inline static size_t BaseCount() {
 			return 3;
 		}
 
-		constexpr Base3() {}
+		ECS_INLINE constexpr Base3() {}
 		//constexpr Base3(Base _x) : x(_x) {}
 		//constexpr Base3(Base _x, Base _y) : x(_x), y(_y) {}
-		constexpr Base3(Base _x, Base _y, Base _z) : x(_x), y(_y), z(_z) {}
+		ECS_INLINE constexpr Base3(Base2<Base> xy, Base _z) : x(xy.x), y(xy.y), z(_z) {}
+		ECS_INLINE constexpr Base3(Base _x, Base _y, Base _z) : x(_x), y(_y), z(_z) {}
+
+		template<typename OtherBase>
+		ECS_INLINE constexpr Base3(Base3<OtherBase> xyz) : x(xyz.x), y(xyz.y), z(xyz.z) {}
 
 		// assumes all components
 		ECS_INLINE Base3(const Base* ptr) : x(*ptr), y(*(ptr + 1)), z(*(ptr + 2)) {}
@@ -279,6 +292,10 @@ namespace ECSEngine {
 
 		ECS_INLINE bool operator != (const Base3& other) const {
 			return x != other.x || y != other.y || z != other.z;
+		}
+
+		ECS_INLINE Base3 operator !() const {
+			return Base3<Base>(!x, !y, !z);
 		}
 
 		ECS_INLINE Base3 operator + (const Base3& other) const {
@@ -348,6 +365,10 @@ namespace ECSEngine {
 			return *((const Base*)this + index);
 		}
 
+		ECS_INLINE Base2<Base> xy() const {
+			return Base2<Base>(x, y);
+		}
+
 		ECS_INLINE static Base3 Splat(Base value) {
 			return Base3(value, value, value);
 		}
@@ -365,15 +386,21 @@ namespace ECSEngine {
 	template<class Base>
 	struct Base4 {
 		typedef Base Base;
+		typedef Base4<bool> BooleanEquivalent;
 		constexpr static inline size_t BaseCount() {
 			return 4;
 		}
 
-		constexpr  Base4() {}
+		ECS_INLINE constexpr Base4() {}
 		//constexpr Base4(Base _x) : x(_x) {}
 		//constexpr Base4(Base _x, Base _y) : x(_x), y(_y) {}
 		//constexpr Base4(Base _x, Base _y, Base _z) : x(_x), y(_y), z(_z) {}
-		constexpr Base4(Base _x, Base _y, Base _z, Base _w) : x(_x), y(_y), z(_z), w(_w) {}
+		ECS_INLINE constexpr Base4(Base2<Base> xy, Base2<Base> zw) : x(xy.x), y(xy.y), z(zw.x), w(zw.y) {}
+		ECS_INLINE constexpr Base4(Base3<Base> xyz, Base _w) : x(xyz.x), y(xyz.y), z(xyz.z), w(_w) {}
+		ECS_INLINE constexpr Base4(Base _x, Base _y, Base _z, Base _w) : x(_x), y(_y), z(_z), w(_w) {}
+		
+		template<typename OtherBase>
+		ECS_INLINE constexpr Base4(Base4<OtherBase> xyzw) : x(xyzw.x), y(xyzw.y), z(xyzw.z), w(xyzw.w) {}
 
 		// assumes all components
 		ECS_INLINE Base4(const Base* ptr) : x(*ptr), y(*(ptr + 1)), z(*(ptr + 2)), w(*(ptr + 3)) {}
@@ -387,6 +414,10 @@ namespace ECSEngine {
 
 		ECS_INLINE bool operator != (const Base4& other) const {
 			return x != other.x || y != other.y || z != other.z || w != other.w;
+		}
+
+		ECS_INLINE Base4 operator !() const {
+			return Base4<Base>(!x, !y, !z, !w);
 		}
 
 		ECS_INLINE Base4 operator + (const Base4& other) const {
@@ -461,6 +492,18 @@ namespace ECSEngine {
 			return *((const Base*)this + index);
 		}
 
+		ECS_INLINE Base2<Base> xy() const {
+			return Base2<Base>(x, y);
+		}
+
+		ECS_INLINE Base2<Base> zw() const {
+			return Base2<Base>(z, w);
+		}
+
+		ECS_INLINE Base3<Base> xyz() const {
+			return Base3<Base>(x, y, z);
+		}
+
 		ECS_INLINE static Base4 Splat(Base value) {
 			return Base4(value, value, value, value);
 		}
@@ -507,118 +550,146 @@ namespace ECSEngine {
 	typedef Base4<float> float4;
 	typedef Base4<double> double4;
 
-	template<typename BasicType, typename Functor>
-	ECS_INLINE BasicType BasicType2Action(BasicType type, Functor&& functor) {
-		return { (typename BasicType::Base)functor(type.x), (typename BasicType::Base)functor(type.y) };
+	// Allow these functions to receive a specified return type
+	// such that we can do something like applying functors on floats
+	// and generate booleans
+
+	template<typename ReturnType, typename BasicType, typename Functor>
+	ECS_INLINE ReturnType BasicType2Action(BasicType type, Functor&& functor) {
+		return { (typename ReturnType::Base)functor(type.x), (typename ReturnType::Base)functor(type.y) };
 	}
 
-	template<typename BasicType, typename Functor>
-	ECS_INLINE BasicType BasicType3Action(BasicType type, Functor&& functor) {
-		return { (typename BasicType::Base)functor(type.x), (typename BasicType::Base)functor(type.y), (typename BasicType::Base)functor(type.z) };
+	template<typename ReturnType, typename BasicType, typename Functor>
+	ECS_INLINE ReturnType BasicType3Action(BasicType type, Functor&& functor) {
+		return { (typename ReturnType::Base)functor(type.x), (typename ReturnType::Base)functor(type.y), (typename ReturnType::Base)functor(type.z) };
 	}
 
-	template<typename BasicType, typename Functor>
-	ECS_INLINE BasicType BasicType4Action(BasicType type, Functor&& functor) {
+	template<typename ReturnType, typename BasicType, typename Functor>
+	ECS_INLINE ReturnType BasicType4Action(BasicType type, Functor&& functor) {
 		return {
-			(typename BasicType::Base)functor(type.x),
-			(typename BasicType::Base)functor(type.y),
-			(typename BasicType::Base)functor(type.z),
-			(typename BasicType::Base)functor(type.w)
+			(typename ReturnType::Base)functor(type.x),
+			(typename ReturnType::Base)functor(type.y),
+			(typename ReturnType::Base)functor(type.z),
+			(typename ReturnType::Base)functor(type.w)
 		};
 	}
 
-	template<typename BasicType, typename Functor>
-	ECS_INLINE BasicType BasicTypeAction(BasicType type, Functor&& functor) {
-		constexpr size_t base_count = BasicType::BaseCount();
-		if constexpr (base_count == 2) {
-			return BasicType2Action(type, functor);
-		}
-		else if constexpr (base_count == 3) {
-			return BasicType3Action(type, functor);
-		}
-		else if constexpr (base_count == 4) {
-			return BasicType4Action(type, functor);
+	template<typename ReturnType, typename BasicType, typename Functor>
+	ECS_INLINE ReturnType BasicTypeAction(BasicType type, Functor&& functor) {
+		// Check for fundamental types first since they don't have the BaseCount() static function
+		
+		if constexpr (std::is_arithmetic_v<BasicType>) {
+			// Allow this case for when we have types like bool and bool2 and we want
+			// to apply a functor on both cases without having to write conditional checks
+			return functor(type);
 		}
 		else {
-			static_assert(false, "Invalid Basic Type for Action");
+			constexpr size_t base_count = BasicType::BaseCount();
+			if constexpr (base_count == 2) {
+				return BasicType2Action<ReturnType>(type, functor);
+			}
+			else if constexpr (base_count == 3) {
+				return BasicType3Action<ReturnType>(type, functor);
+			}
+			else if constexpr (base_count == 4) {
+				return BasicType4Action<ReturnType>(type, functor);
+			}
+			else {
+				static_assert(false, "Invalid Basic Type for Action");
+			}
 		}
 	}
 
 	// Apply a pair-wise function on basic type with 2 components
-	template<typename BasicType, typename Functor>
-	ECS_INLINE BasicType BasicType2Action(BasicType first, BasicType second, Functor&& functor) {
-		return { (typename BasicType::Base)functor(first.x, second.x), (typename BasicType::Base)functor(first.y, second.y) };
+	template<typename ReturnType, typename BasicType, typename Functor>
+	ECS_INLINE ReturnType BasicType2Action(BasicType first, BasicType second, Functor&& functor) {
+		return { (typename ReturnType::Base)functor(first.x, second.x), (typename ReturnType::Base)functor(first.y, second.y) };
 	}
 
 	// Apply a pair-wise function on a baisc type with 3 components
-	template<typename BasicType, typename Functor>
-	ECS_INLINE BasicType BasicType3Action(BasicType first, BasicType second, Functor&& functor) {
+	template<typename ReturnType, typename BasicType, typename Functor>
+	ECS_INLINE ReturnType BasicType3Action(BasicType first, BasicType second, Functor&& functor) {
 		return { 
-			(typename BasicType::Base)functor(first.x, second.x), 
-			(typename BasicType::Base)functor(first.y, second.y), 
-			(typename BasicType::Base)functor(first.z, second.z) 
+			(typename ReturnType::Base)functor(first.x, second.x), 
+			(typename ReturnType::Base)functor(first.y, second.y), 
+			(typename ReturnType::Base)functor(first.z, second.z) 
 		};
 	}
 
 	// Apply a pair-wise function ob a basic type with 4 components
-	template<typename BasicType, typename Functor>
-	ECS_INLINE BasicType BasicType4Action(BasicType first, BasicType second, Functor&& functor) {
+	template<typename ReturnType, typename BasicType, typename Functor>
+	ECS_INLINE ReturnType BasicType4Action(BasicType first, BasicType second, Functor&& functor) {
 		return { 
-			(typename BasicType::Base)functor(first.x, second.x), 
-			(typename BasicType::Base)functor(first.y, second.y), 
-			(typename BasicType::Base)functor(first.z, second.z), 
-			(typename BasicType::Base)functor(first.w, second.y)
+			(typename ReturnType::Base)functor(first.x, second.x), 
+			(typename ReturnType::Base)functor(first.y, second.y), 
+			(typename ReturnType::Base)functor(first.z, second.z), 
+			(typename ReturnType::Base)functor(first.w, second.y)
 		};
 	}
 
-	template<typename BasicType, typename Functor>
-	ECS_INLINE BasicType BasicTypeAction(BasicType first, BasicType second, Functor&& functor) {
-		constexpr size_t base_count = BasicType::BaseCount();
-		if constexpr (base_count == 2) {
-			return BasicType2Action(first, second, functor);
-		}
-		else if constexpr (base_count == 3) {
-			return BasicType3Action(first, second, functor);
-		}
-		else if constexpr (base_count == 4) {
-			return BasicType4Action(first, second, functor);
+	template<typename ReturnType, typename BasicType, typename Functor>
+	ECS_INLINE ReturnType BasicTypeAction(BasicType first, BasicType second, Functor&& functor) {
+		// Check for fundamental types first since they don't have the BaseCount() static function
+		if constexpr (std::is_arithmetic_v<BasicType>) {
+			// Allow this case for when we have types like bool and bool2 and we want
+			// to apply a functor on both cases without having to write conditional checks
+			return functor(first, second);
 		}
 		else {
-			static_assert(false, "Invalid Basic Type for Action");
+			constexpr size_t base_count = BasicType::BaseCount();
+			if constexpr (base_count == 2) {
+				return BasicType2Action<ReturnType>(first, second, functor);
+			}
+			else if constexpr (base_count == 3) {
+				return BasicType3Action<ReturnType>(first, second, functor);
+			}
+			else if constexpr (base_count == 4) {
+				return BasicType4Action<ReturnType>(first, second, functor);
+			}
+			else {
+				static_assert(false, "Invalid Basic Type for Action");
+			}
 		}
 	}
 
 	template<typename BasicType>
 	ECS_INLINE BasicType AbsoluteDifference(BasicType first, BasicType second) {
-		return BasicTypeAction(first, second, [](auto first, auto second) {
+		return BasicTypeAction<BasicType>(first, second, [](auto first, auto second) {
 			return first > second ? first - second : second - first;
 		});
 	}
 
 	template<typename BasicType>
+	ECS_INLINE BasicType Abs(BasicType value) {
+		return BasicTypeAction<BasicType>(value, [](auto value) {
+			return abs(value);
+		});
+	}
+
+	template<typename BasicType>
 	ECS_INLINE BasicType DegToRad(BasicType angles) {
-		return BasicTypeAction(angles, [](auto value) {
+		return BasicTypeAction<BasicType>(angles, [](auto value) {
 			return DegToRad((float)value);
 		});
 	}
 
 	template<typename BasicType>
 	ECS_INLINE BasicType RadToDeg(BasicType angles) {
-		return BasicTypeAction(angles, [](auto value) {
+		return BasicTypeAction<BasicType>(angles, [](auto value) {
 			return RadToDeg((float)value);
 		});
 	}
 
 	template<typename BasicType>
 	ECS_INLINE BasicType BasicTypeClampMin(BasicType value, BasicType min) {
-		return BasicTypeAction(value, min, [](auto value, auto min) {
+		return BasicTypeAction<BasicType>(value, min, [](auto value, auto min) {
 			return value < min ? min : value;
 		});
 	}
 
 	template<typename BasicType>
 	ECS_INLINE BasicType BasicTypeClampMax(BasicType value, BasicType max) {
-		return BasicTypeAction(value, max, [](auto value, auto max) {
+		return BasicTypeAction<BasicType>(value, max, [](auto value, auto max) {
 			return value > max ? max : value;
 		});
 	}
@@ -630,15 +701,105 @@ namespace ECSEngine {
 
 	template<typename BasicType>
 	ECS_INLINE BasicType BasicTypeMin(BasicType a, BasicType b) {
-		return BasicTypeAction(a, b, [](auto a, auto b) {
+		return BasicTypeAction<BasicType>(a, b, [](auto a, auto b) {
 			return a < b ? a : b;
 		});
 	}
 
 	template<typename BasicType>
 	ECS_INLINE BasicType BasicTypeMax(BasicType a, BasicType b) {
-		return BasicTypeAction(a, b, [](auto a, auto b) {
+		return BasicTypeAction<BasicType>(a, b, [](auto a, auto b) {
 			return a > b ? a : b;
+		});
+	}
+
+	enum BasicTypeLogicOp {
+		ECS_BASIC_TYPE_LOGIC_AND,
+		ECS_BASIC_TYPE_LOGIC_OR,
+	};
+
+	// This function accepts normal arithmetic values like float, double
+	// The functor must convert the given value into a boolean
+	template<BasicTypeLogicOp logic_op, typename Functor, typename BasicType>
+	ECS_INLINE bool BasicTypeLogicalOp(BasicType value, Functor&& functor) {
+		bool logic_values[4];
+		size_t iterate_count = 0;
+
+		if constexpr (std::is_arithmetic_v<BasicType>) {
+			logic_values[0] = functor(value);
+		}
+		else {
+			if constexpr (BasicType::BaseCount() > 4) {
+				static_assert(false, "Invalid basic type for logical op");
+			}
+
+			logic_values[0] = functor(value.x);
+			logic_values[1] = functor(value.y);
+			if constexpr (BasicType::BaseCount() == 3) {
+				logic_values[2] = functor(value.z);
+			}
+			if constexpr (BasicType::BaseCount() == 4) {
+				logic_values[3] = functor(value.w);
+			}
+			iterate_count = BasicType::BaseCount() - 1;
+		}
+		
+		for (size_t index = 0; index < iterate_count; index++) {
+			if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_AND) {
+				logic_values[0] &= logic_values[index + 1];
+			}
+			else if constexpr (logic_op == ECS_BASIC_TYPE_LOGIC_OR) {
+				logic_values[0] |= logic_values[index + 1];
+			}
+			else {
+				static_assert(false);
+			}
+		}
+		return logic_values[0];
+	}
+
+	// This can only be applied to boolean types
+	template<BasicTypeLogicOp logic_op, typename BasicType>
+	ECS_INLINE bool BasicTypeLogicOpBoolean(BasicType value) {
+		if constexpr (std::is_same_v<BasicType, bool>) {
+			return value;
+		}
+
+		return BasicTypeLogicalOp<logic_op>(value, [](auto value) {
+			return value;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE bool BasicTypeLogicAndBoolean(BasicType value) {
+		return BasicTypeLogicOpBoolean<ECS_BASIC_TYPE_LOGIC_AND>(value);
+	}
+
+	template<typename BasicType>
+	ECS_INLINE bool BasicTypeLogicOrBoolean(BasicType value) {
+		return BasicTypeLogicOpBoolean<ECS_BASIC_TYPE_LOGIC_OR>(value);
+	}
+
+	// Only booleans should be used here
+	template<typename BasicType>
+	ECS_INLINE BasicType BasicTypeLogicAnd(BasicType a, BasicType b) {
+		return BasicTypeAction<BasicType>(a, b, [](auto a_value, auto b_value) {
+			return a_value && b_value;
+		});
+	}
+
+	// Only booleans should be used here
+	template<typename BasicType>
+	ECS_INLINE BasicType BasicTypeLogicOr(BasicType a, BasicType b) {
+		return BasicTypeAction<BasicType>(a, b, [](auto a_value, auto b_value) {
+			return a_value || b_value;
+		});
+	}
+
+	template<typename BasicType>
+	ECS_INLINE BasicType BasicTypeSign(BasicType element) {
+		return BasicTypeAction<BasicType>(element, [](auto value) {
+			return value < 0 ? -1 : 1;
 		});
 	}
 

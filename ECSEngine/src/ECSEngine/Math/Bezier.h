@@ -17,17 +17,6 @@ namespace ECSEngine {
 		BasicType control2;
 	};
 
-	template<typename BasicType>
-	BasicType InterpolateBezier(const BezierBase<BasicType>& curve, float percentage) {
-		ECS_ASSERT(percentage >= 0.0f && percentage <= 1.0f);
-
-		// Point1 ((1-percentage)^3) + control1 (3(1-percentage^2)percentage) +
-		// control2 (3(1-percentage)percentage ^ 2) + point2 * (percentage ^ 3)
-		float one_minus = 1.0f - percentage;
-		return curve.point1 * one_minus * one_minus * one_minus + curve.control1 * (3.0f * one_minus * one_minus * percentage) +
-			curve.control2 * (3.0f * one_minus * percentage * percentage) + curve.point2 * percentage * percentage * percentage;
-	}
-
 	struct BezierFloat {
 		BezierFloat() {}
 		BezierFloat(float _point1, float _point2, float _control1, float _control2) : point1(_point1), point2(_point2),
@@ -72,61 +61,87 @@ namespace ECSEngine {
 		float4 point2;
 	};
 
-	ECS_INLINE float ECS_VECTORCALL InterpolateBezier(BezierFloat curve, float percentage) {
-		ECS_ASSERT(0.0f <= percentage && percentage <= 1.0f);
+	// This is generic functions - for more performance use the native float variants
+	template<typename BasicType>
+	BasicType InterpolateBezier(const BezierBase<BasicType>& curve, float percentage) {
+		ECS_ASSERT(percentage >= 0.0f && percentage <= 1.0f);
+
 		// Point1 ((1-percentage)^3) + control1 (3(1-percentage^2)percentage) +
 		// control2 (3(1-percentage)percentage ^ 2) + point2 * (percentage ^ 3)
-		Vector4 curve_vector(&curve);
-		Vector4 one = VectorGlobals::ONE_4;
-		Vector4 percentages(percentage);
-
-		Vector4 one_minus = one - percentages;
-		Vector4 shuffle_1 = blend4<4, 5, 6, 3>(percentages, one_minus);
-		Vector4 shuffle_2 = blend4<4, 5, 2, 3>(percentages, one_minus);
-		Vector4 shuffle_3 = blend4<4, 1, 2, 3>(percentages, one_minus);
-
-		Vector4 scalar_factors(1.0f, 3.0f, 3.0f, 1.0f);
-		Vector4 factors = shuffle_1 * shuffle_2 * shuffle_3 * scalar_factors;
-		factors *= curve_vector;
-		return horizontal_add(factors);
+		float one_minus = 1.0f - percentage;
+		return curve.point1 * one_minus * one_minus * one_minus + curve.control1 * (3.0f * one_minus * one_minus * percentage) +
+			curve.control2 * (3.0f * one_minus * percentage * percentage) + curve.point2 * percentage * percentage * percentage;
 	}
 
-	ECS_INLINE float2 ECS_VECTORCALL InterpolateBezier(BezierFloat2 curve, float percentage) {
-		ECS_ASSERT(0.0f <= percentage && percentage <= 1.0f);
-		// Point1 ((1-percentage)^3) + control1 (3(1-percentage^2)percentage) +
-		// control2 (3(1-percentage)percentage ^ 2) + point2 * (percentage ^ 3)
+	namespace SIMDHelpers {
 
+		ECS_INLINE float2 ECS_VECTORCALL InterpolateBezier(Vector8 curve_vector, Vector8 percentages) {
+			bool is_in_range = IsInRangeMask<true, true>(percentages, ZeroVector(), VectorGlobals::ONE).MaskResultWhole<4>();
+			ECS_ASSERT(is_in_range);
+
+			// Point1 ((1-percentage)^3) + control1 (3(1-percentage^2)percentage) +
+			// control2 (3(1-percentage)percentage ^ 2) + point2 * (percentage ^ 3)
+
+			Vector8 one = VectorGlobals::ONE;
+
+			Vector8 one_minus = one - percentages;
+			Vector8 shuffle_1 = PerLaneBlend<4, 5, 6, 3>(percentages, one_minus);
+			Vector8 shuffle_2 = PerLaneBlend<4, 5, 2, 3>(percentages, one_minus);
+			Vector8 shuffle_3 = PerLaneBlend<4, 1, 2, 3>(percentages, one_minus);
+
+			Vector8 three = 3.0f;
+			Vector8 scalar_factors = PerLaneBlend<0, 5, 6, 3>(one, three);
+			Vector8 factors = shuffle_1 * shuffle_2 * shuffle_3 * scalar_factors;
+			return PerLaneHorizontalAdd(factors * curve_vector).GetFirsts();
+		}
+
+	}
+
+	ECS_INLINE float ECS_VECTORCALL InterpolateBezier(BezierFloat curve, Vector8 percentage) {
+		return SIMDHelpers::InterpolateBezier(Vector8(&curve), percentage).x;
+	}
+
+	ECS_INLINE float2 ECS_VECTORCALL InterpolateBezier(BezierFloat curve0, BezierFloat curve1, Vector8 percentage) {
+		Vector8 curve_vector = Vector8(float4((const float*)&curve0), float4((const float*)&curve1));
+		return SIMDHelpers::InterpolateBezier(curve_vector, percentage);
+	}
+
+	ECS_INLINE float2 ECS_VECTORCALL InterpolateBezier(BezierFloat2 curve, Vector8 percentage) {
 		Vector8 curve_vector(&curve);
-		Vector8 one = VectorGlobals::ONE_8;
-		Vector8 percentages(percentage);
 
-		Vector8 one_minus = one - percentages;
-		Vector8 shuffle_1 = blend8<8, 9, 10, 11, 12, 13, 6, 7>(percentages, one_minus);
-		Vector8 shuffle_2 = blend8<8, 9, 10, 11, 4, 5, 6, 7>(percentages, one_minus);
-		Vector8 shuffle_3 = blend8<8, 9, 2, 3, 4, 5, 6, 7>(percentages, one_minus);
-		
-		Vector8 scalar_factors(1.0f, 1.0f, 3.0f, 3.0f, 3.0f, 3.0f, 1.0f, 1.0f);
-		Vector8 factors = shuffle_1 * shuffle_2 * shuffle_3 * scalar_factors;
-		factors *= curve_vector;
-		
-		alignas(curve_vector.value.size() * 4) float values[curve_vector.value.size()];
-		factors.StoreAligned(values);
-		return { values[0] + values[2] + values[4] + values[6], values[1] + values[3] + values[5] + values[7] };
-	}
+		bool is_in_range = IsInRangeMask<true, true>(percentage, ZeroVector(), VectorGlobals::ONE).MaskResultWhole<4>();
+		ECS_ASSERT(is_in_range);
 
-
-	ECS_INLINE float3 ECS_VECTORCALL InterpolateBezier(const BezierFloat2& curve, float percentage) {
-		ECS_ASSERT(0.0f <= percentage && percentage <= 1.0f);
 		// Point1 ((1-percentage)^3) + control1 (3(1-percentage^2)percentage) +
 		// control2 (3(1-percentage)percentage ^ 2) + point2 * (percentage ^ 3)
 
+		Vector8 one = VectorGlobals::ONE;
+
+		Vector8 one_minus = one - percentage;
+		Vector8 shuffle_1 = blend8<8, 9, 10, 11, 12, 13, 6, 7>(percentage, one_minus);
+		Vector8 shuffle_2 = blend8<8, 9, 10, 11, 4, 5, 6, 7>(percentage, one_minus);
+		Vector8 shuffle_3 = blend8<8, 9, 2, 3, 4, 5, 6, 7>(percentage, one_minus);
+		
+		Vector8 three = 3.0f;
+		Vector8 scalar_factors = blend8<0, 1, 10, 11, 12, 13, 6, 7>(one, three);
+		Vector8 factors = shuffle_1 * shuffle_2 * shuffle_3 * scalar_factors;	
+		return PerLaneHorizontalAdd(factors * curve_vector).GetFirsts();
+	}
+
+
+	ECS_INLINE float3 ECS_VECTORCALL InterpolateBezier(const BezierFloat3& curve, Vector8 percentages) {
 		// Only the first 6 values will be used, the other two will be hoisted into
 		// the other SIMD register
 		Vector8 curve_vector1(&curve);
 		Vector8 curve_vector2(function::OffsetPointer(&curve, sizeof(float) * 6));
 
-		Vector8 one = VectorGlobals::ONE_8;
-		Vector8 percentages(percentage);
+		bool is_in_range = IsInRangeMask<true, true>(percentages, ZeroVector(), VectorGlobals::ONE).MaskResultWhole<4>();
+		ECS_ASSERT(is_in_range);
+		// Point1 ((1-percentage)^3) + control1 (3(1-percentage^2)percentage) +
+		// control2 (3(1-percentage)percentage ^ 2) + point2 * (percentage ^ 3)
+
+
+		Vector8 one = VectorGlobals::ONE;
 		Vector8 one_minus = one - percentages;
 
 		Vector8 shuffle_low_1 = one_minus;
@@ -137,9 +152,11 @@ namespace ECSEngine {
 		Vector8 shuffle_high_2 = percentages;
 		Vector8 shuffle_high_3 = percentages;
 		
-		Vector8 scalar_factors(1.0f, 1.0f, 1.0f, 3.0f, 3.0f, 3.0f, 1.0f, 1.0f);
+		Vector8 three = 3.0f;
+		Vector8 scalar_factors = blend8<0, 1, 2, 11, 12, 13, 6, 7>(one, three);
 		Vector8 scalar_factors_low = scalar_factors;
-		Vector8 scalar_factors_high = permute8<3, 3, 3, 0, 0, 0, V_DC, V_DC>(scalar_factors);
+		// 3.0f, 3.0f, 3.0f, 1.0f, 1.0f, 1.0f
+		Vector8 scalar_factors_high = permute8<3, 3, 3, 0, 7, 7, V_DC, V_DC>(scalar_factors);
 
 		Vector8 factors_low = shuffle_low_1 * shuffle_low_2 * shuffle_low_3 * scalar_factors_low * curve_vector1;
 		Vector8 factors_high = shuffle_high_1 * shuffle_high_2 * shuffle_high_3 * scalar_factors_high * curve_vector2;
@@ -148,24 +165,19 @@ namespace ECSEngine {
 		Vector8 permutation = permute8<3, 4, 5, V_DC, V_DC, V_DC, V_DC, V_DC>(factors_semi_added);
 		Vector8 values = factors_semi_added + permutation;
 
-		alignas(one.value.size() * sizeof(float)) float scalar_values[one.value.size()];
-		values.StoreAligned(scalar_values);
-
-		return { scalar_values };
+		return values.AsFloat3Low();
 	}
 
-	ECS_INLINE float4 ECS_VECTORCALL InterpolateBezier(const BezierFloat4& curve, float percentage) {
-		ECS_ASSERT(0.0f <= percentage && percentage <= 1.0f);
-		// Point1 ((1-percentage)^3) + control1 (3(1-percentage^2)percentage) +
-		// control2 (3(1-percentage)percentage ^ 2) + point2 * (percentage ^ 3)
-
-		float4 result;
-
+	ECS_INLINE float4 ECS_VECTORCALL InterpolateBezier(const BezierFloat4& curve, Vector8 percentages) {
 		Vector8 curve_low(&curve);
 		Vector8 curve_high(function::OffsetPointer(&curve, sizeof(float) * 8));
 
-		Vector8 one = VectorGlobals::ONE_8;
-		Vector8 percentages(percentage);
+		bool is_in_range = IsInRangeMask<true, true>(percentages, ZeroVector(), VectorGlobals::ONE).MaskResultWhole<4>();
+		ECS_ASSERT(is_in_range);
+		// Point1 ((1-percentage)^3) + control1 (3(1-percentage^2)percentage) +
+		// control2 (3(1-percentage)percentage ^ 2) + point2 * (percentage ^ 3)
+
+		Vector8 one = VectorGlobals::ONE;
 		Vector8 one_minus = one - percentages;
 
 		Vector8 shuffle_low_1 = one_minus;
@@ -176,7 +188,8 @@ namespace ECSEngine {
 		Vector8 shuffle_high_2 = percentages;
 		Vector8 shuffle_high_3 = percentages;
 
-		Vector8 scalar_factors(1.0f, 1.0f, 1.0f, 1.0f, 3.0f, 3.0f, 3.0f, 3.0f);
+		Vector8 three = 3.0f;
+		Vector8 scalar_factors = blend8<0, 1, 2, 3, 12, 13, 14, 15>(one, three);
 		Vector8 scalar_factors_low = scalar_factors;
 		Vector8 scalar_factors_high = permute8<4, 5, 6, 7, 0, 1, 2, 3>(scalar_factors);
 
@@ -187,7 +200,6 @@ namespace ECSEngine {
 		Vector8 factors_permuted = permute8<4, 5, 6, 7, V_DC, V_DC, V_DC, V_DC>(factors_semi_added);
 		factors_semi_added += factors_permuted;
 
-		factors_semi_added.Low().Store(&result);
-		return result;
+		return factors_semi_added.AsFloat4Low();
 	}
 }

@@ -5052,6 +5052,7 @@ namespace ECSEngine {
 							input->DeleteAllCharacters();
 							function::ConvertFloatToChars(temp_stream, *number, 3);
 							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
+							data->number_data.external_value_change = true;
 
 							if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
 								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
@@ -9170,6 +9171,15 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		UIActionHandler UIDrawer::PrepareRightClickHandler(Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler)
+		{
+			UIDrawerMenuRightClickData* right_click = (UIDrawerMenuRightClickData*)GetTempBuffer(sizeof(UIDrawerMenuRightClickData));
+			*right_click = PrepareRightClickActionData(name, menu_state, custom_handler);
+			return { RightClickMenu, &right_click, sizeof(right_click), ECS_UI_DRAW_SYSTEM };
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		void UIDrawer::AddRightClickAction(
 			size_t configuration, 
 			float2 position, 
@@ -9179,8 +9189,7 @@ namespace ECSEngine {
 			UIActionHandler custom_handler
 		)
 		{
-			UIDrawerMenuRightClickData right_click = PrepareRightClickActionData(name, menu_state, custom_handler);
-			AddClickable(configuration, position, scale, { RightClickMenu, &right_click, sizeof(right_click), ECS_UI_DRAW_SYSTEM }, ECS_MOUSE_RIGHT);
+			AddClickable(configuration, position, scale, PrepareRightClickHandler(name, menu_state, custom_handler), ECS_MOUSE_RIGHT);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -11712,32 +11721,6 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		float2 UIDrawer::GetRegionPosition() const {
-			return region_position;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		float2 UIDrawer::GetRegionScale() const {
-			return region_scale;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		float2 UIDrawer::GetRegionRenderOffset() const
-		{
-			return region_render_offset;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		// returns the render bound difference
-		float2 UIDrawer::GetRenderSpan() const {
-			return { max_render_bounds.x - min_render_bounds.x, max_render_bounds.y - min_render_bounds.y };
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
 		// returns the viewport visible zone
 		float2 UIDrawer::GetRenderZone() const {
 			float horizontal_region_difference;
@@ -11755,12 +11738,6 @@ namespace ECSEngine {
 			}
 
 			return { horizontal_region_difference, vertical_region_difference };
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		void** UIDrawer::GetBuffers() {
-			return buffers;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -11802,54 +11779,6 @@ namespace ECSEngine {
 			}
 
 			return state;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		size_t* UIDrawer::GetCounts() {
-			return counts;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		void** UIDrawer::GetSystemBuffers() {
-			return system_buffers;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		size_t* UIDrawer::GetSystemCounts() {
-			return system_counts;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		float2 UIDrawer::GetFontSize() const {
-			return { ECS_TOOLS_UI_FONT_X_FACTOR * font.size, font.size };
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		UIFontDescriptor* UIDrawer::GetFontDescriptor() {
-			return &font;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		UILayoutDescriptor* UIDrawer::GetLayoutDescriptor() {
-			return &layout;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		UIColorThemeDescriptor* UIDrawer::GetColorThemeDescriptor() {
-			return &color_theme;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		UIElementDescriptor* UIDrawer::GetElementDescriptor() {
-			return &element_descriptor;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -15177,28 +15106,50 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		// places a hoverable on the whole window
+		static void SetWholeWindowHandler(const UIDrawer* drawer, UIHandler* handler, const UIActionHandler* action_handler) {
+			// Check for other whole window actions and override them
+			// While leaving all other actions after this one
+			unsigned int handler_count = handler->GetLastHandlerIndex() + 1;
+			int index = (int)handler_count - 1;
+			for (; index >= 0; index--) {
+				float2 position = handler->GetPositionFromIndex(index);
+				float2 scale = handler->GetScaleFromIndex(index);
+
+				if (position == drawer->GetRegionPosition() && scale == drawer->GetRegionScale()) {
+					break;
+				}
+			}
+			index++;
+			drawer->system->AddHandlerToDockspaceRegionAtIndex(drawer->thread_id, handler, drawer->GetRegionPosition(), drawer->GetRegionScale(), *action_handler, index);
+		}
+
 		void UIDrawer::SetWindowHoverable(const UIActionHandler* handler) {
-			AddHoverable(0, region_position, region_scale, *handler);
+			if (!initializer) {
+				UIHandler* border_handler = system->GetDockspaceBorderHandler(dockspace, border_index, true, ECS_MOUSE_BUTTON_COUNT, false);
+				SetWholeWindowHandler(this, border_handler, handler);
+			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		// places a clickable on the whole window
 		void UIDrawer::SetWindowClickable(const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type) {
-			AddClickable(0, region_position, region_scale, *handler, button_type);
+			if (!initializer) {
+				UIHandler* border_handler = system->GetDockspaceBorderHandler(dockspace, border_index, false, button_type, false);
+				SetWholeWindowHandler(this, border_handler, handler);
+			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		// places a general on the whole window
 		void UIDrawer::SetWindowGeneral(const UIActionHandler* handler) {
-			AddGeneral(0, region_position, region_scale, *handler);
+			if (!initializer) {
+				UIHandler* border_handler = system->GetDockspaceBorderHandler(dockspace, border_index, false, ECS_MOUSE_BUTTON_COUNT, true);
+				SetWholeWindowHandler(this, border_handler, handler);
+			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		// configuration is needed for phase deduction
 		void UIDrawer::SetSpriteClusterTexture(size_t configuration, Stream<wchar_t> texture, unsigned int count) {
 			if (configuration & UI_CONFIG_LATE_DRAW) {
 				system->SetSpriteCluster(dockspace, border_index, texture, count, ECS_UI_DRAW_LATE);

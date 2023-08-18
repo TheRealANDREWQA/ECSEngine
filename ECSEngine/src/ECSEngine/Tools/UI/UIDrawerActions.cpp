@@ -1132,22 +1132,27 @@ namespace ECSEngine {
 			UIDrawerFloatInputCallbackData* data = (UIDrawerFloatInputCallbackData*)_data;
 			
 			if (!data->number_data.input->is_currently_selected) {
-				float number = 0;
-				if (data->number_data.input->text->size > 0) {
-					number = function::ConvertCharactersToFloat(*data->number_data.input->text);
-				}
+				if (!data->number_data.external_value_change) {
+					float number = 0;
+					if (data->number_data.input->text->size > 0) {
+						number = function::ConvertCharactersToFloat(*data->number_data.input->text);
+					}
 
-				double previous_number = number;
-				number = function::Clamp<float>(number, data->min, data->max);
-				if (previous_number != number || data->number_data.input->text->size == 0) {
-					// Need to update the text input
-					data->number_data.input->DeleteAllCharacters();
-					ECS_STACK_CAPACITY_STREAM(char, new_characters, 128);
-					function::ConvertFloatToChars(new_characters, number, 3);
-					data->number_data.input->InsertCharacters(new_characters.buffer, new_characters.size, 0, system);
-				}
+					double previous_number = number;
+					number = function::Clamp<float>(number, data->min, data->max);
+					if (previous_number != number || data->number_data.input->text->size == 0) {
+						// Need to update the text input
+						data->number_data.input->DeleteAllCharacters();
+						ECS_STACK_CAPACITY_STREAM(char, new_characters, 128);
+						function::ConvertFloatToChars(new_characters, number, 3);
+						data->number_data.input->InsertCharacters(new_characters.buffer, new_characters.size, 0, system);
+					}
 
-				*data->number = number;
+					*data->number = number;
+				}
+				else {
+					data->number_data.external_value_change = false;
+				}
 
 				if (data->number_data.user_action != nullptr) {
 					action_data->data = data->number_data.GetUserData();
@@ -1164,22 +1169,27 @@ namespace ECSEngine {
 			UIDrawerDoubleInputCallbackData* data = (UIDrawerDoubleInputCallbackData*)_data;
 
 			if (!data->number_data.input->is_currently_selected) {
-				double number = 0;
-				if (data->number_data.input->text->size > 0) {
-					number = function::ConvertCharactersToDouble(*data->number_data.input->text);
-				}
+				if (!data->number_data.external_value_change) {
+					double number = 0;
+					if (data->number_data.input->text->size > 0) {
+						number = function::ConvertCharactersToDouble(*data->number_data.input->text);
+					}
 
-				double previous_number = number;
-				number = function::Clamp<double>(number, data->min, data->max);
-				if (previous_number != number || data->number_data.input->text->size == 0) {
-					// Need to update the text input
-					data->number_data.input->DeleteAllCharacters();
-					ECS_STACK_CAPACITY_STREAM(char, new_characters, 128);
-					function::ConvertDoubleToChars(new_characters, number, 3);
-					data->number_data.input->InsertCharacters(new_characters.buffer, new_characters.size, 0, system);
-				}
+					double previous_number = number;
+					number = function::Clamp<double>(number, data->min, data->max);
+					if (previous_number != number || data->number_data.input->text->size == 0) {
+						// Need to update the text input
+						data->number_data.input->DeleteAllCharacters();
+						ECS_STACK_CAPACITY_STREAM(char, new_characters, 128);
+						function::ConvertDoubleToChars(new_characters, number, 3);
+						data->number_data.input->InsertCharacters(new_characters.buffer, new_characters.size, 0, system);
+					}
 
-				*data->number = number;
+					*data->number = number;
+				}
+				else {
+					data->number_data.external_value_change = false;
+				}
 
 				if (data->number_data.user_action != nullptr) {
 					action_data->data = data->number_data.GetUserData();
@@ -1197,22 +1207,27 @@ namespace ECSEngine {
 			UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)_data;
 
 			if (!data->number_data.input->is_currently_selected) {
-				Integer number = 0;
-				if (data->number_data.input->text->size > 0) {
-					number = function::ConvertCharactersToIntImpl<Integer, char>(*data->number_data.input->text);
-				}
+				if (!data->number_data.external_value_change) {
+					Integer number = 0;
+					if (data->number_data.input->text->size > 0) {
+						number = function::ConvertCharactersToIntImpl<Integer, char>(*data->number_data.input->text);
+					}
 
-				Integer previous_number = number;
-				number = function::Clamp<Integer>(number, data->min, data->max);
-				if (previous_number != number || data->number_data.input->text->size == 0) {
-					// Need to update the text input
-					data->number_data.input->DeleteAllCharacters();
-					ECS_STACK_CAPACITY_STREAM(char, new_characters, 128);
-					function::ConvertIntToChars(new_characters, (int64_t)number);
-					data->number_data.input->InsertCharacters(new_characters.buffer, new_characters.size, 0, system);
-				}
+					Integer previous_number = number;
+					number = function::Clamp<Integer>(number, data->min, data->max);
+					if (previous_number != number || data->number_data.input->text->size == 0) {
+						// Need to update the text input
+						data->number_data.input->DeleteAllCharacters();
+						ECS_STACK_CAPACITY_STREAM(char, new_characters, 128);
+						function::ConvertIntToChars(new_characters, (int64_t)number);
+						data->number_data.input->InsertCharacters(new_characters.buffer, new_characters.size, 0, system);
+					}
 
-				*data->number = number;
+					*data->number = number;
+				}
+				else {
+					data->number_data.external_value_change = false;
+				}
 
 				if (data->number_data.user_action != nullptr) {
 					action_data->data = data->number_data.GetUserData();

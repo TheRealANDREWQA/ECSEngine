@@ -227,6 +227,11 @@ namespace ECSEngine {
 			ReflectionEnum CopyTo(uintptr_t& ptr) const;
 
 			Stream<char> name;
+			// These are the fields as they are parsed originally
+			Stream<Stream<char>> original_fields;
+
+			// These are the stylized fields - those that have no underscores
+			// or all caps and without the COUNT label if it exists
 			Stream<Stream<char>> fields;
 			unsigned int folder_hierarchy_index;
 		};

@@ -768,6 +768,7 @@ namespace ECSEngine {
 					memcpy(allocation, callback_data, callback_data_size);
 					UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)allocation;
 					base_data->user_action = user_callback->handler.action;
+					base_data->external_value_change = false;
 					
 					if (user_callback->handler.data_size > 0) {
 						void* user_data = function::OffsetPointer(base_data, callback_data_size);
@@ -1748,6 +1749,8 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			UIDrawerMenuRightClickData PrepareRightClickActionData(Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler = { nullptr });
+
+			UIActionHandler PrepareRightClickHandler(Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler = { nullptr });
 
 			// This will always have the system phase
 			void AddRightClickAction(
@@ -3632,20 +3635,28 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 GetRegionPosition() const;
+			ECS_INLINE float2 GetRegionPosition() const {
+				return region_position;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 GetRegionScale() const;
+			ECS_INLINE float2 GetRegionScale() const {
+				return region_scale;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 GetRegionRenderOffset() const;
+			ECS_INLINE float2 GetRegionRenderOffset() const {
+				return region_render_offset;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// returns the render bound difference
-			float2 GetRenderSpan() const;
+			ECS_INLINE float2 GetRenderSpan() const {
+				return { max_render_bounds.x - min_render_bounds.x, max_render_bounds.y - min_render_bounds.y };
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3654,7 +3665,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void** GetBuffers();
+			ECS_INLINE void** GetBuffers() {
+				return buffers;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3666,35 +3679,51 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t* GetCounts();
+			ECS_INLINE size_t* GetCounts() const {
+				return counts;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void** GetSystemBuffers();
+			ECS_INLINE void** GetSystemBuffers() const {
+				return system_buffers;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t* GetSystemCounts();
+			ECS_INLINE size_t* GetSystemCounts() const {
+				return system_counts;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 GetFontSize() const;
+			ECS_INLINE float2 GetFontSize() const {
+				return { ECS_TOOLS_UI_FONT_X_FACTOR * font.size, font.size };
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIFontDescriptor* GetFontDescriptor();
+			ECS_INLINE UIFontDescriptor* GetFontDescriptor() const {
+				return &font;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UILayoutDescriptor* GetLayoutDescriptor();
+			ECS_INLINE UILayoutDescriptor* GetLayoutDescriptor() const {
+				return &layout;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIColorThemeDescriptor* GetColorThemeDescriptor();
+			ECS_INLINE UIColorThemeDescriptor* GetColorThemeDescriptor() const {
+				return &color_theme;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIElementDescriptor* GetElementDescriptor();
+			ECS_INLINE UIElementDescriptor* GetElementDescriptor() const {
+				return &element_descriptor;
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

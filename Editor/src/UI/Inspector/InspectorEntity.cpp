@@ -625,7 +625,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 	UIConfigNamePadding name_padding;
 	name_padding.alignment = ECS_UI_ALIGN_LEFT;
-	name_padding.total_length = 0.15f;
+	name_padding.total_length = 0.125f;
 	config.AddFlag(name_padding);
 
 	UIConfigWindowDependentSize window_dependent_size;

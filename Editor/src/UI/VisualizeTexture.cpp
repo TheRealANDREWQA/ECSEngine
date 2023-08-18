@@ -118,6 +118,7 @@ unsigned int CreateVisualizeTextureUIWindow(EditorState* editor_state)
 		create_data.window_name = window_name;
 		create_data.additional_draw = VisualizeTextureUIAdditionalDraw;
 		create_data.additional_draw_data = editor_state;
+		create_data.select_mode = true;
 		CreateVisualizeTextureWindow(editor_state->ui_system, &create_data);
 
 		return max_window_index + 1;

@@ -44,7 +44,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		float3 value = { 0.0f, 0.0f, 0.0f };
+		float4 value = { 0.0f, 0.0f, 0.0f, 1.0f };
 	};
 
 	struct ECS_REFLECT_COMPONENT Scale {

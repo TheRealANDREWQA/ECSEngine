@@ -47,6 +47,10 @@ unsigned int GetInspectorIndex(ECSEngine::Stream<char> window_name);
 // Returns the inspector name according to an index
 void GetInspectorName(unsigned int inspector_index, ECSEngine::CapacityStream<char>& inspector_name);
 
+InspectorDrawFunction GetInspectorDrawFunction(const EditorState* editor_state, unsigned int inspector_index);
+
+void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices);
+
 // It will resize the round robin index - can be used both when removing or adding
 // And reroute any inspector pointing to an invalid sandbox (when removing)
 // to the 0 sandbox

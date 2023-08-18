@@ -17,6 +17,8 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 
 void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
+void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer);
+
 // Only creates the UI window, not the dockspace. Returns the window index
 unsigned int CreateInspectorWindow(EditorState* editor_state, unsigned int inspector_index);
 
@@ -43,6 +45,9 @@ void ChangeInspectorTargetSandbox(EditorState* editor_state, unsigned int inspec
 void ChangeInspectorToAsset(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE asset_type, unsigned int inspector_index = -1);
 
 void ChangeInspectorToAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE asset_type, unsigned int inspector_index = -1);
+
+// Returns true if the inspector at that index exists, else false
+bool ExistsInspector(const EditorState* editor_state, unsigned int inspector_index);
 
 // Returns the index of the sandbox that is being referenced by the inspector
 unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned int inspector_index);

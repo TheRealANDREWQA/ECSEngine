@@ -8,7 +8,7 @@ namespace ECSEngine {
 		mappings.Initialize(allocator, count);
 	}
 
-	bool InputMapping::IsTriggered(unsigned int index, const Mouse* mouse, const Keyboard* keyboard) const
+	bool InputMapping::IsTriggered(unsigned int index) const
 	{
 		InputMappingElement element = mappings[index];
 		return element.first.IsTriggered(mouse, keyboard) && element.second.IsTriggered(mouse, keyboard) && element.third.IsTriggered(mouse, keyboard);

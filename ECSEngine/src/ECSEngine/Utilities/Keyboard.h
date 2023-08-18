@@ -185,6 +185,10 @@ namespace ECSEngine {
 			m_process_characters = false;
 		}
 
+        ECS_INLINE bool IsCaptureCharacters() {
+            return m_process_characters;
+        }
+
 		ECS_INLINE bool GetCharacter(char& character) {
 			return m_character_queue.Pop(character);
 		}

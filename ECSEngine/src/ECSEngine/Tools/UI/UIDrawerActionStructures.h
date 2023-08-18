@@ -446,6 +446,7 @@ namespace ECSEngine {
 			bool return_to_default;
 			bool display_range;
 			bool relative_user_data;
+			bool external_value_change;
 		};
 
 		// input, return_to_default and display_range must be the first data members

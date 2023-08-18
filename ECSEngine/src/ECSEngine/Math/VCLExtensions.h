@@ -1,6 +1,7 @@
 #pragma once
 #include "../../Dependencies/VCL-version2/vectorclass.h"
 #include "../Core.h"
+#include "../Utilities/BasicTypes.h"
 
 namespace ECSEngine {
 
@@ -15,6 +16,14 @@ namespace ECSEngine {
 	ECS_INLINE __m256 ECS_VECTORCALL CastToFloat(__m256d vector) {
 		return _mm256_castpd_ps(vector);
 	}
+	
+	ECS_INLINE __m128 ECS_VECTORCALL CastToFloat(__m128i vector) {
+		return _mm_castsi128_ps(vector);
+	}
+
+	ECS_INLINE __m128 ECS_VECTORCALL CastToFloat(__m128d vector) {
+		return _mm_castpd_ps(vector);
+	}
 
 	// Only compiler hint - no instruction generated
 	ECS_INLINE __m256i ECS_VECTORCALL CastToInteger(__m256 vector) {
@@ -26,6 +35,14 @@ namespace ECSEngine {
 		return _mm256_castpd_si256(vector);
 	}
 
+	ECS_INLINE __m128i ECS_VECTORCALL CastToInteger(__m128 vector) {
+		return _mm_castps_si128(vector);
+	}
+
+	ECS_INLINE __m128i ECS_VECTORCALL CastToInteger(__m128d vector) {
+		return _mm_castpd_si128(vector);
+	}
+
 	// Only compiler hint - no instruction generated
 	ECS_INLINE __m256d ECS_VECTORCALL CastToDouble(__m256 vector) {
 		return _mm256_castps_pd(vector);
@@ -34,6 +51,29 @@ namespace ECSEngine {
 	// Only compiler hint - no instruction generated
 	ECS_INLINE __m256d ECS_VECTORCALL CastToDouble(__m256i vector) {
 		return _mm256_castsi256_pd(vector);
+	}
+
+	ECS_INLINE __m128d ECS_VECTORCALL CastToDouble(__m128 vector) {
+		return _mm_castps_pd(vector);
+	}
+
+	ECS_INLINE __m128d ECS_VECTORCALL CastToDouble(__m128i vector) {
+		return _mm_castsi128_pd(vector);
+	}
+
+#pragma endregion
+
+#pragma region Not
+
+	// This is a logical not on a boolean vector field - which has all bits set to
+	// 1 for fields that matched. We need to negate the vector
+
+	ECS_INLINE __m128 ECS_VECTORCALL Not(__m128 vector) {
+		return ~Vec4fb(vector);
+	}
+
+	ECS_INLINE __m256 ECS_VECTORCALL Not(__m256 vector) {
+		return ~Vec8fb(vector);
 	}
 
 #pragma endregion
@@ -59,7 +99,7 @@ namespace ECSEngine {
 	// Conditionally multiply the packed single-precision(32-bit) floating-point elements in a and b 
 	// using the high 4 bits in imm8, sum the four products, and conditionally store the sum in dst using the low 4 bits of imm8.
 	template<int mask>
-	Vec4f ECS_VECTORCALL Dot(Vec4f a, Vec4f b) {
+	ECS_INLINE Vec4f ECS_VECTORCALL DotIntrinsic(Vec4f a, Vec4f b) {
 		return _mm_dp_ps(a, b, mask);
 	}
 
@@ -67,14 +107,14 @@ namespace ECSEngine {
 	// using the high 4 bits in imm8, sum the four products, and conditionally store the sum in dst using the low 4 bits of imm8.
 	// Works as if doing two dots for the high and the low part of the vector
 	template<int mask>
-	Vec8f ECS_VECTORCALL Dot(Vec8f a, Vec8f b) {
+	ECS_INLINE Vec8f ECS_VECTORCALL DotIntrinsic(Vec8f a, Vec8f b) {
 		return _mm256_dp_ps(a, b, mask);
 	}
 
 	// Conditionally multiply the packed double-precision (64-bit) floating-point elements in a and b using the high 4 bits in imm8, 
 	// sum the two products, and conditionally store the sum in dst using the low 4 bits of imm8.
 	template<int mask>
-	Vec2d ECS_VECTORCALL Dot(Vec2d a, Vec2d b) {
+	ECS_INLINE Vec2d ECS_VECTORCALL DotIntrinsic(Vec2d a, Vec2d b) {
 		return _mm_dp_pd(a, b, mask);
 	}
 
@@ -214,8 +254,17 @@ namespace ECSEngine {
 	dst[MAX:256] := 0
 	*/
 	template<int mask>
-	Vec8f ECS_VECTORCALL Permute2f128(Vec8f a, Vec8f b) {
+	ECS_INLINE Vec8f ECS_VECTORCALL Permute2f128(Vec8f a, Vec8f b) {
 		return _mm256_permute2f128_ps(a, b, mask);
+	}
+
+	// If 0, it will select the low from a
+	// If 1, it will select the high from a
+	// If 2, it will select the low from b
+	// If 3, it will select the high from b
+	template<int low, int high>
+	ECS_INLINE Vec8f ECS_VECTORCALL Permute2f128Helper(Vec8f a, Vec8f b) {
+		return Permute2f128<low | (high << 4)>(a, b);
 	}
 
 	/* Shuffle 128-bits (composed of 2 packed double-precision (64-bit) floating-point elements) selected by 
@@ -237,7 +286,7 @@ namespace ECSEngine {
 	dst[MAX:256] := 0
 	*/
 	template<int mask>
-	Vec4d ECS_VECTORCALL Permute2d128(Vec4d a, Vec4d b) {
+	ECS_INLINE Vec4d ECS_VECTORCALL Permute2d128(Vec4d a, Vec4d b) {
 		return _mm256_permute2f128_pd(a, b, mask);
 	}
 
@@ -263,7 +312,7 @@ namespace ECSEngine {
 	dst[MAX:256] := 0
 	*/
 	template<int mask>
-	Vec4d ECS_VECTORCALL Permute4x64(Vec4d a) {
+	ECS_INLINE Vec4d ECS_VECTORCALL Permute4x64(Vec4d a) {
 		return _mm256_permute4x64_pd(a, mask);
 	}
 
@@ -277,6 +326,126 @@ namespace ECSEngine {
 			return horizontal_find_first(vector);
 		}
 		return -1;
+	}
+
+#pragma endregion
+
+#pragma region Per Lane Operations
+
+	// At the moment implementations are only for the 4 component and 8 component vectors
+
+	template<int position, typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL PerLaneBroadcast(VectorType vector) {
+		static_assert(position < 4, "Invalid index for PerLaneBroadcast4");
+		if constexpr (VectorType::size() == 4) {
+			return permute4<position, position, position, position>(vector);
+		}
+		else {
+			return permute8<position, position, position, position, position + 4, position + 4, position + 4, position + 4>(vector);
+		}
+	}
+
+	template<int x0, int x1, int x2, int x3, typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL PerLanePermute(VectorType value) {
+		static_assert(x0 < 4 && x1 < 4 && x2 < 4 && x3 < 4, "Invalid indices for PerLanePermute4");
+
+		if constexpr (VectorType::size() == 4) {
+			return permute4<x0, x1, x2, x3>(value);
+		}
+		else {
+			// Take into consideration the V_DC case - such that we don't perform the
+			// addition unnecessarily
+			return permute8<x0, x1, x2, x3, 
+				x0 == V_DC ? V_DC : x0 + 4, x1 == V_DC ? V_DC : x1 + 4, x2 == V_DC ? V_DC : x2 + 4, x3 == V_DC ? V_DC : x3 + 4>(value);
+		}
+	}
+
+	template<int x0, int x1, int x2, int x3, typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL PerLaneBlend(VectorType first, VectorType second) {
+		static_assert(x0 < 8 && x1 < 8 && x2 < 8 && x3 < 8, "Invalid indices for PerLaneBlend4");
+
+		if constexpr (VectorType::size() == 4) {
+			return blend4<x0, x1, x2, x3>(first, second);
+		}
+		else {
+			constexpr int x0_offset = x0 >= 4 ? 4 : 0;
+			constexpr int x1_offset = x1 >= 4 ? 4 : 0;
+			constexpr int x2_offset = x2 >= 4 ? 4 : 0;
+			constexpr int x3_offset = x3 >= 4 ? 4 : 0;
+			// For the first lane we don't need to consider V_DC, for the second lane we must
+			return blend8<x0 + x0_offset, x1 + x1_offset, x2 + x2_offset, x3 + x3_offset,
+				x0 == V_DC ? V_DC : x0 + x0_offset + 4, x1 == V_DC ? V_DC : x1 + x1_offset + 4, 
+				x2 == V_DC ? V_DC : x2 + x2_offset + 4, x3 == V_DC ? V_DC : x3 + x3_offset + 4>(first, second);
+		}
+	}
+
+	// Non zero indices means change the index (use 1 for better clarity)
+	template<int x0, int x1, int x2, int x3, typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL PerLaneChangeSign(VectorType vector) {
+		if constexpr (VectorType::size() == 4) {
+			return change_sign<x0, x1, x2, x3>(vector);
+		}
+		else {
+			return change_sign<x0, x1, x2, x3, x0, x1, x2, x3>(vector);
+		}
+	}
+
+	template<typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL PerLaneCreateFromValues(float x, float y, float z, float w) {
+		if constexpr (VectorType::size() == 4) {
+			return VectorType({ x, y, z, w });
+		}
+		else {
+			return VectorType({ x, y, z, w }, { x, y, z, w });
+		}
+	}
+
+	// Element count determines how many elements are taken into consideration
+	// Aka 4 means all, 3 just the first 3, 2 only the first 2 and 1 just the first one
+	template<int element_count>
+	ECS_INLINE bool ECS_VECTORCALL PerLaneHorizontalAnd(__m128 mask) {
+		int bit_mask = _mm_movemask_ps(mask);
+		int compare_mask = 0x0F;
+		if constexpr (element_count == 1) {
+			compare_mask = 0x01;
+		}
+		else if constexpr (element_count == 2) {
+			compare_mask = 0x03;
+		}
+		else if constexpr (element_count == 3) {
+			compare_mask = 0x07;
+		}
+		return bit_mask == compare_mask;
+	}
+
+	template<int element_count>
+	ECS_INLINE bool2 ECS_VECTORCALL PerLaneHorizontalAnd(__m256 mask) {
+		int bit_mask = _mm256_movemask_ps(mask);
+		int compare_mask = 0x0F;
+		if constexpr (element_count == 1) {
+			compare_mask = 0x01;
+		}
+		else if constexpr (element_count == 2) {
+			compare_mask = 0x03;
+		}
+		else if constexpr (element_count == 3) {
+			compare_mask = 0x07;
+		}
+		bool first = (bit_mask & 0x0F) == compare_mask;
+		bool second = ((bit_mask >> 4) & 0x0F) == compare_mask;
+		return { first, second };
+	}
+
+	// The value will be broadcasted per lane
+	template<typename VectorType>
+	ECS_INLINE VectorType PerLaneHorizontalAdd(VectorType vector) {
+		VectorType xy = vector;
+		VectorType zw = PerLanePermute<2, 3, V_DC, V_DC>(vector);
+		VectorType half_sums = xy + zw;
+		VectorType half_sum_shuffle = PerLanePermute<1, V_DC, V_DC, V_DC>(half_sums);
+		// We have the sum in the X component
+		VectorType final_sum = half_sums + half_sum_shuffle;
+		return PerLaneBroadcast<0>(final_sum);
 	}
 
 #pragma endregion
@@ -359,7 +528,7 @@ namespace ECSEngine {
 #pragma region Broadcast element
 
 	template<int position>
-	__m256 ECS_VECTORCALL Broadcast8(__m256 vector) {
+	ECS_INLINE __m256 ECS_VECTORCALL Broadcast8(__m256 vector) {
 		static_assert(position >= 0);
 		// Avoid using permutevar8x32 because that require a global constant vector of indices
 		// Permute inside lanes and the choose the appropriate vector to broadcast since it needs
@@ -384,12 +553,12 @@ namespace ECSEngine {
 	}
 
 	template<int position>
-	__m256i ECS_VECTORCALL Broadcast8(__m256i vector) {
+	ECS_INLINE __m256i ECS_VECTORCALL Broadcast8(__m256i vector) {
 		return _mm256_castps_si256(Broadcast8<position>(_mm256_castsi256_ps(vector)));
 	}
 
 	template<int position>
-	__m256i ECS_VECTORCALL Broadcast16(__m256i vector) {
+	ECS_INLINE __m256i ECS_VECTORCALL Broadcast16(__m256i vector) {
 		// Avoid using permutevar8x32 because that require a global constant vector of indices
 		// Permute inside lanes and the choose the appropriate vector to broadcast since it needs
 		// only an __m128
@@ -424,7 +593,7 @@ namespace ECSEngine {
 	}
 
 	template<int position>
-	__m256i ECS_VECTORCALL Broadcast32(__m256i vector) {
+	ECS_INLINE __m256i ECS_VECTORCALL Broadcast32(__m256i vector) {
 		static_assert(position >= 0);
 
 		__m256i permutation;
@@ -449,7 +618,7 @@ namespace ECSEngine {
 	}
 
 	template<int position>
-	__m256i ECS_VECTORCALL Broadcast4(__m256i vector) {
+	ECS_INLINE __m256i ECS_VECTORCALL Broadcast4(__m256i vector) {
 		static_assert(position >= 0);
 
 		__m256i permutation;
@@ -464,7 +633,7 @@ namespace ECSEngine {
 	}
 
 	template<int position>
-	__m256d ECS_VECTORCALL Broadcast4(__m256d vector) {
+	ECS_INLINE __m256d ECS_VECTORCALL Broadcast4(__m256d vector) {
 		return _mm256_castsi256_pd(Broadcast4<position>(_mm256_castpd_si256(vector)));
 	}
 
@@ -474,7 +643,7 @@ namespace ECSEngine {
 #pragma region Dynamic Mask Creation
 
 	// Dynamic mask creation - if possible consider using the compile time variant
-	ECS_INLINE __m256i ECS_VECTORCALL SelectMask32(
+	static __m256i ECS_VECTORCALL SelectMask32(
 		bool element_0,
 		bool element_1,
 		bool element_2,
@@ -528,7 +697,7 @@ namespace ECSEngine {
 	}
 
 	// Dynamic mask creation - if possible consider using the compile time variant
-	ECS_INLINE __m256i ECS_VECTORCALL SelectMask32(const bool* elements) {
+	static __m256i ECS_VECTORCALL SelectMask32(const bool* elements) {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(32) uint8_t mask[sizeof(__m256i) / sizeof(uint8_t)];
@@ -549,7 +718,7 @@ namespace ECSEngine {
 	}
 
 	// Dynamic mask creation - if possible consider using the compile time variant
-	ECS_INLINE __m256i ECS_VECTORCALL SelectMask16(
+	static __m256i ECS_VECTORCALL SelectMask16(
 		bool element_0,
 		bool element_1,
 		bool element_2,
@@ -583,7 +752,7 @@ namespace ECSEngine {
 	}
 
 	// Dynamic mask creation - if possible consider using the compile time variant
-	ECS_INLINE __m256i ECS_VECTORCALL SelectMask16(const bool* elements) {
+	static __m256i ECS_VECTORCALL SelectMask16(const bool* elements) {
 		__m256i zeros = ZeroVectorInteger();
 
 		alignas(32) uint16_t mask[sizeof(__m256i) / sizeof(uint16_t)];
@@ -600,7 +769,7 @@ namespace ECSEngine {
 	}
 
 	// Dynamic mask creation - if possible consider using the compile time variant
-	ECS_INLINE __m256 ECS_VECTORCALL SelectMask8(
+	static __m256 ECS_VECTORCALL SelectMask8(
 		bool element_0,
 		bool element_1,
 		bool element_2,
@@ -624,7 +793,7 @@ namespace ECSEngine {
 	}
 
 	// Dynamic mask creation - if possible consider using the compile time variant
-	ECS_INLINE __m256 ECS_VECTORCALL SelectMask8(const bool* elements) {
+	static __m256 ECS_VECTORCALL SelectMask8(const bool* elements) {
 		__m256 zeros = ZeroVectorFloat();
 
 		alignas(32) uint32_t mask[sizeof(__m256) / sizeof(float)];
@@ -833,24 +1002,24 @@ namespace ECSEngine {
 	}
 
 	template<bool right>
-	__m256i ECS_VECTORCALL Rotate4(__m256i vector, unsigned int count) {
+	ECS_INLINE __m256i ECS_VECTORCALL Rotate4(__m256i vector, unsigned int count) {
 		return CastToInteger(Rotate<right>(CastToDouble(vector), count));
 	}
 
 	template<bool right>
-	__m256i ECS_VECTORCALL Rotate8(__m256i vector, unsigned int count) {
+	ECS_INLINE __m256i ECS_VECTORCALL Rotate8(__m256i vector, unsigned int count) {
 		return CastToInteger(Rotate<right>(CastToFloat(vector), count));
 	}
 
 	// If the count is even, it can be permuted like 32 bit values using _mm256_permutevar8x32_epi32
 	template<bool right>
-	__m256i ECS_VECTORCALL Rotate16Even(__m256i vector, unsigned int count) {
+	ECS_INLINE __m256i ECS_VECTORCALL Rotate16Even(__m256i vector, unsigned int count) {
 		return Rotate8<right>(vector, count >> 1);
 	}
 
 	// If the count is odd, the values can be bit shifted inside the 32 bit values and then blended together
 	template<bool right>
-	__m256i ECS_VECTORCALL Rotate16Once(__m256i vector) {
+	ECS_INLINE __m256i ECS_VECTORCALL Rotate16Once(__m256i vector) {
 		if constexpr (right) {
 			// Shift once to the right inside the 64 bit values
 			__m256i right_shift = _mm256_srai_epi64(vector, 16);
@@ -874,7 +1043,7 @@ namespace ECSEngine {
 	}
 
 	template<bool right>
-	__m256i ECS_VECTORCALL Rotate16(__m256i vector, unsigned int count) {
+	ECS_INLINE __m256i ECS_VECTORCALL Rotate16(__m256i vector, unsigned int count) {
 		// Eliminate the last bit
 		unsigned int even_count = count & (UINT_MAX - 1);
 		if (even_count > 0) {
@@ -889,7 +1058,7 @@ namespace ECSEngine {
 	}
 
 	template<bool right>
-	__m256i ECS_VECTORCALL Rotate32MultipleOf4(__m256i vector, unsigned int count) {
+	ECS_INLINE __m256i ECS_VECTORCALL Rotate32MultipleOf4(__m256i vector, unsigned int count) {
 		return Rotate8<right>(vector, count >> 2);
 	}
 
