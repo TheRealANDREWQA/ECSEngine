@@ -2898,7 +2898,7 @@ namespace ECSEngine {
 			data->automatic_update = false;
 			data->additional_draw_combo_index = 0;
 			data->display_options = true;
-			data->select_mode = false;
+			data->select_mode = create_data->select_mode;
 			data->additional_draw_check_box_flag = false;
 			if (create_data->texture.Interface() != nullptr) {
 				if (create_data->options != nullptr) {
@@ -3026,6 +3026,7 @@ namespace ECSEngine {
 			VisualizeTextureCreateData create_data;
 			create_data.texture = select_element->texture;
 			create_data.transfer_texture_to_ui_graphics = select_element->transfer_texture_to_ui_graphics;
+			create_data.additional_draw = data->additional_draw;
 
 			VisualizeTextureOptions visualize_options = data->visualize_options;
 			create_data.options = &visualize_options;

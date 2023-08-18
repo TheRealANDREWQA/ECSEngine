@@ -923,6 +923,11 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				size_t current_index = elements.size;
 
 				const char* type_start = function::SkipWhitespace(last_character);
+				if (*type_start == '\n') {
+					// Empty line skip it
+					last_character = (char*)type_start + 1;
+					continue;
+				}
 				const char* type_end = function::SkipCodeIdentifier(type_start);
 
 				// make the end line character \0 for C functions

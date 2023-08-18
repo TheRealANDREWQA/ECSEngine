@@ -240,6 +240,8 @@
     <ClInclude Include="src\ECSEngine\ECS\EntityManagerSerializeTypes.h" />
     <ClInclude Include="src\ECSEngine\ECS\ForEach.h" />
     <ClInclude Include="src\ECSEngine\ECS\LinkComponents.h" />
+    <ClInclude Include="src\ECSEngine\Math\Intersection.h" />
+    <ClInclude Include="src\ECSEngine\Math\Plane.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\RingBuffer.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\TaskSchedulerTypes.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\TaskStealing.h" />
@@ -303,6 +305,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializationMacro.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\TransformTool.h" />
     <ClInclude Include="src\ECSEngine\Utilities\TreeIterator.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Crash.h" />
     <ClInclude Include="src\ECSEngine\Utilities\CrashHandler.h" />
@@ -543,6 +546,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Text\TextSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Text\TextSerializeFields.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Timer.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\TransformTool.cpp" />
     <ClCompile Include="src\Includes\ecspch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>

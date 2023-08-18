@@ -112,6 +112,23 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
 
+	void* SystemManager::BindDataNoCopy(Stream<char> identifier, size_t data_size)
+	{
+		unsigned int table_index = data_table.Find(identifier);
+		void* data = nullptr;
+		if (table_index == -1) {
+			// Allocate the space and insert into the table
+			data = allocator->Allocate(data_size);
+			InsertIntoDynamicTable(data_table, allocator, DataPointer(data, data_size), identifier);
+		}
+		else {
+			data = data_table.GetValueFromIndex(table_index).GetPointer();
+		}
+		return data;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------------
+
 	void* SystemManager::BindTemporaryData(Stream<char> identifier, const void* data, size_t data_size)
 	{
 		return BindBasic(

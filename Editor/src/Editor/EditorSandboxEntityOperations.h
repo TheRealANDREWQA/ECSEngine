@@ -13,12 +13,6 @@ struct EditorState;
 	that it should use the active entity manager. If given it will use the entity manager from that viewport
 */
 
-// When it is not playing it returns the scene entities manager, when playing the runtime one
-const EntityManager* ActiveEntityManager(const EditorState* editor_state, unsigned int sandbox_index);
-
-// When it is not playing it returns the scene entities manager, when playing the runtime one
-EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandbox_index);
-
 // Does nothing if the entity doesn't exist
 void AddSandboxEntityComponent(
 	EditorState* editor_state, 
@@ -220,13 +214,6 @@ SharedInstance FindOrCreateSharedComponentInstance(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-// Returns -1 if the entity is not selected
-unsigned int FindSandboxSelectedEntityIndex(
-	const EditorState* editor_state,
-	unsigned int sandbox_index,
-	Entity entity
-);
-
 // It will modify the stream in place such that only valid entities are left
 void FilterSandboxEntitiesValid(
 	const EditorState* editor_state,
@@ -307,6 +294,28 @@ const void* GetSandboxEntityComponentEx(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// Returns a component from an entity unique or shared. If it doesn't exist it returns nullptr
+template<typename T>
+const T* GetSandboxEntityComponent(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+) {
+	return (const T*)GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, T::ID(), T::IsShared(), viewport);
+}
+
+// Returns a component from an entity unique or shared. If it doesn't exist it returns nullptr
+template<typename T>
+T* GetSandboxEntityComponent(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+) {
+	return (T*)GetSandboxEntityComponent<T>((const EditorState*)editor_state, sandbox_index, entity, viewport);
+}
+
 MemoryArena* GetComponentAllocator(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -372,33 +381,6 @@ void GetSandboxEntityAssets(
 	CapacityStream<AssetTypedHandle>* handles,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
-
-ECSEngine::EntityManager* GetSandboxEntityManager(
-	EditorState* editor_state,
-	unsigned int sandbox_index,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
-);
-
-const ECSEngine::EntityManager* GetSandboxEntityManager(
-	const EditorState* editor_state,
-	unsigned int sandbox_index,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
-);
-
-ECSEngine::Stream<ECSEngine::Entity> GetSandboxSelectedEntities(
-	const EditorState* editor_state,
-	unsigned int sandbox_index
-);
-
-// Fills in entity slots that are not yet used in the runtime
-// or somewhere else in the editor
-void GetSandboxUnusedEntitySlots(
-	EditorState* editor_state, 
-	unsigned int sandbox_index, 
-	ECSEngine::Stream<Entity> entities, 
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
-);
-
 
 // Returns true if the given entity is selected in the scene for that sandbox
 bool IsSandboxEntitySelected(
@@ -492,12 +474,6 @@ void ResetSandboxEntityComponent(
 	unsigned int sandbox_index, 
 	Entity entity, 
 	Stream<char> component_name,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
-);
-
-void ResetSandboxUnusedEntities(
-	EditorState* editor_state,
-	unsigned int sandbox_index,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 

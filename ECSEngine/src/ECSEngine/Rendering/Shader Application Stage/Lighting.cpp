@@ -27,16 +27,13 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------
 
 		void NormalizeFloat3(void* location, float3 value) {
-			Vector4 vector_value(value);
-			vector_value = Normalize3(vector_value);
-			vector_value.StorePartialConstant<3>(location);
+			float3* float3_val = (float3*)location;
+			*float3_val = Normalize(value);
 		}
 
 		void NormalizeFloat3Negate(void* location, float3 value) {
-			Vector4 vector_value(value);
-			vector_value = Normalize3(vector_value);
-			vector_value = Negate(vector_value);
-			vector_value.StorePartialConstant<3>(location);
+			float3* float3_val = (float3*)location;
+			*float3_val = -Normalize(value);
 		}
 
 		// ----------------------------------------------------------------------------------------------------
@@ -207,11 +204,7 @@ namespace ECSEngine {
 		) {
 			// Direction must be negated, so substract from first second
 			float3 direction = first_position - second_position;
-			Vector4 vector_direction(direction);
-			Vector4 vector_length = Length3(vector_direction);
-			float length = vector_length.First();
-
-			SetCapsuleLight(data, first_position, direction, length, range, range_attenuation, color);
+			SetCapsuleLight(data, first_position, direction, Length(direction), range, range_attenuation, color);
 		}
 
 		void SetCapsuleLight(

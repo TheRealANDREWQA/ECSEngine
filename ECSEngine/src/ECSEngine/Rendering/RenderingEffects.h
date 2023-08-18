@@ -52,13 +52,27 @@ namespace ECSEngine {
 	};
 
 	ECS_INLINE unsigned int GenerateRenderInstanceValue(unsigned int index, unsigned char pixel_thickness) {
-		ECS_ASSERT(pixel_thickness < ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+		// Increase this value such that values of 0 are invalid
+		ECS_ASSERT(pixel_thickness <= ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
 		return function::BlendBits<unsigned int>(
 			index,
 			pixel_thickness,
 			32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
 			ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS
+		) + 1;
+	}
+
+	ECS_INLINE unsigned int FromRenderInstanceValueToID(unsigned int blended_value) {
+		// Remember to decrement
+		unsigned int instance_index, pixel_thickness;
+		function::RetrieveBlendedBits(
+			blended_value,
+			32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+			ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
+			instance_index,
+			pixel_thickness
 		);
+		return instance_index - 1;
 	}
 
 	ECSENGINE_API void GenerateInstanceFramebuffer(

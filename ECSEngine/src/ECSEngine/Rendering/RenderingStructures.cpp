@@ -633,8 +633,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	Camera::Camera() : translation(0.0f, 0.0f, 0.0f), rotation(0.0f, 0.0f, 0.0f), is_orthographic(false), is_perspective_fov(false) {}
-
 	Camera::Camera(float3 _translation, float3 _rotation) : translation(_translation), rotation(_rotation), is_orthographic(false), is_perspective_fov(false) {}
 
 	Camera::Camera(Matrix _projection, float3 _translation, float3 _rotation) : projection(_projection), 
@@ -2071,7 +2069,33 @@ namespace ECSEngine {
 		fov = 60.0f;
 		aspect_ratio = 16.0f / 9.0f;
 		near_z = ECS_CAMERA_DEFAULT_NEAR_Z;
-		far_z = ECS_CAMERA_DEFAULT_NEAR_Z;
+		far_z = ECS_CAMERA_DEFAULT_FAR_Z;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	CameraCached::CameraCached(const Camera* camera)
+	{
+		is_orthographic = camera->is_orthographic;
+		is_perspective_fov = camera->is_perspective_fov;
+		translation = camera->translation;
+		rotation = camera->rotation;
+
+		if (is_orthographic || !is_perspective_fov) {
+			width = camera->width;
+			height = camera->height;
+		}
+		else {
+			fov = camera->fov;
+			aspect_ratio = camera->aspect_ratio;
+			horizontal_fov = HorizontalFOVFromVertical(fov, aspect_ratio);
+		}
+
+		rotation_matrix = camera->GetRotation();
+		rotation_as_is_matrix = camera->GetRotationAsIs();
+		projection_matrix = camera->projection;
+		view_projection_matrix = camera->GetViewProjectionMatrix();
+		inverse_view_projection_matrix = camera->GetInverseViewProjectionMatrix();
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------

@@ -10,8 +10,7 @@
 
 namespace ECSEngine {
 
-#define ECS_DEBUG_DRAWER_OUTPUT_INSTANCE_IMMEDIATE -1
-#define ECS_DEBUG_DRAWER_OUTPUT_INSTANCE_ADD -2
+#define ECS_DEBUG_DRAWER_STRUCTURED_OUTPUT_ID_THICKNESS 3
 
 	struct ResourceManager;
 
@@ -29,11 +28,12 @@ namespace ECSEngine {
 		return Color(0, 64, 255);
 	}
 
+	// If you don't want thickness, just assign the instance index directly
 	struct DebugDrawCallOptions {
 		bool wireframe = true;
 		bool ignore_depth = false;
 		float duration = 0.0f;
-		unsigned int instance_index = (unsigned int)-1;
+		unsigned int instance_thickness = (unsigned int)-1;
 	};
 
 	struct DebugLine {
@@ -120,13 +120,14 @@ namespace ECSEngine {
 		DebugDrawCallOptions options;
 	};
 
+	// If you don't want thickness, just assign the index directly
 	struct DebugAxesInfo {
 		Color color_x = AxisXColor();
 		Color color_y = AxisYColor();
 		Color color_z = AxisZColor();
-		unsigned int instance_x = (unsigned int)-1;
-		unsigned int instance_y = (unsigned int)-1;
-		unsigned int instance_z = (unsigned int)-1;
+		unsigned int instance_thickness_x = (unsigned int)-1;
+		unsigned int instance_thickness_y = (unsigned int)-1;
+		unsigned int instance_thickness_z = (unsigned int)-1;
 	};
 
 	struct ECSENGINE_API DebugDrawer {
@@ -481,9 +482,9 @@ namespace ECSEngine {
 			float3 translation,
 			float3 rotation,
 			float size,
-			unsigned int instance_x,
-			unsigned int instance_y,
-			unsigned int instance_z,
+			unsigned int instance_thickness_x,
+			unsigned int instance_thickness_y,
+			unsigned int instance_thickness_z,
 			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugArrow>* addition_stream
 		);

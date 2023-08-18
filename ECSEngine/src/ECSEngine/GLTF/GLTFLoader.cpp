@@ -129,13 +129,13 @@ namespace ECSEngine {
 				size_t count = mesh_positions.size;
 				size_t index = 0;
 
-				constexpr size_t MASK_LAST_BIT = ~0x0000000000000001;
-				size_t masked_count = count & MASK_LAST_BIT;
-				for (; index < masked_count; index += 2) {
-					TransformPoint(mesh_positions[index], mesh_positions[index + 1], ecs_matrix);
+				size_t simd_count = function::GetSimdCount(count, 2);
+				for (; index < simd_count; index += 2) {
+					Vector8 transformed_positions = TransformPoint(Vector8(mesh_positions[index], mesh_positions[index + 1]), ecs_matrix);
+					transformed_positions.StoreFloat3(mesh_positions.buffer + index);
 				}
 				if (index < count) {
-					mesh_positions[count - 1] = TransformPoint(mesh_positions[count - 1], ecs_matrix);
+					mesh_positions[count - 1] = TransformPoint(mesh_positions[count - 1], ecs_matrix).AsFloat3Low();
 				}
 			}
 		}
@@ -145,20 +145,22 @@ namespace ECSEngine {
 		void ProcessMeshNormals(Stream<float3> mesh_normals, const cgltf_node* nodes, size_t current_node_index) {
 			float matrix[16];
 			cgltf_node_transform_world(nodes + current_node_index, matrix);
-			Vector4 last_row = VectorGlobals::QUATERNION_IDENTITY_4;
-			Vector8 extended_last_row(last_row, ZeroVector4());
-
 			Matrix ecs_matrix(matrix);
-			ecs_matrix.v[1].value = blend8<0, 1, 2, 3, 8, 9, 10, 11>(ecs_matrix.v[1].value, extended_last_row);
+			ecs_matrix.v[1].value = blend8<0, 1, 2, 3, 12, 13, 14, 15>(ecs_matrix.v[1].value, LastElementOneVector());
 
-			Vector4 tolerance(0.000001f);
+			const float TOLERANCE_VAL = 0.000001f;
+			Vector8 tolerance(TOLERANCE_VAL);
 
 			auto loop = [&](auto perform_world_transformation) {
-				for (size_t index = 0; index < mesh_normals.size; index++) {
-					Vector4 normal(mesh_normals[index]);
-					//normal = permute4<0, 2, 1, V_DC>(normal);
-					if (horizontal_and((SquareLength3(normal) < tolerance))) {
-						normal = VectorGlobals::UP_4;
+				size_t simd_count = function::GetSimdCount(mesh_normals.size, tolerance.Lanes());
+				size_t index = 0;
+
+				for (; index < simd_count + tolerance.Lanes(); index += tolerance.Lanes()) {
+					Vector8 normal(mesh_normals[index], mesh_normals[index + 1]);
+					//normal = PerLanePermute<0, 2, 1, V_DC>(normal);
+					Vector8 less_than_tolerance_mask = SquareLength(normal) < tolerance;
+					if (BasicTypeLogicAndBoolean(PerLaneHorizontalAnd<3>(less_than_tolerance_mask.AsMask()))) {
+						normal = UpVector();
 						/*if (error_message != nullptr) {
 							ECS_FORMAT_STRING(*error_message, "Mesh normal data is invalid. A normal has a squared length smaller than the tolerance. Index is {#}", index);
 						}
@@ -170,8 +172,14 @@ namespace ECSEngine {
 						normal = MatrixVectorMultiply(normal, ecs_matrix);
 					}
 
-					normal = Normalize3(normal);
-					normal.StorePartialConstant<3>(mesh_normals.buffer + index);
+					normal = NormalizeIfNot(normal);
+					if (index == mesh_normals.size - 1) {
+						// We only need to store the dummy
+						mesh_normals[index] = normal.AsFloat3Low();
+					}
+					else {
+						normal.StoreFloat3(mesh_normals.buffer + index);
+					}
 				}
 			};
 
@@ -1682,8 +1690,8 @@ namespace ECSEngine {
 					positions *= splatted_factor;
 					positions.Store(float_positions + float_index);
 				}
-				// There is a remainder vertex
-				if (simd_count < vertex_count) {
+				// There are remainder values
+				if (simd_count < float_count) {
 					for (size_t float_index = simd_count; float_index < float_count; float_index++) {
 						float_positions[float_index] *= scale_factor;
 					}

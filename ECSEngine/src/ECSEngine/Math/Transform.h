@@ -6,9 +6,10 @@ constexpr float ECS_TRANSFORM_SCALE_EPSILON = 0.00005f;
 
 namespace ECSEngine {
 
+	// The rotation is a quaternion lane
 	struct Transform {
 		ECS_INLINE Transform() {}
-		ECS_INLINE ECS_VECTORCALL Transform(float3 _position, Quaternion _rotation, float3 _scale) : position(_position),
+		ECS_INLINE Transform(float3 _position, float4 _rotation, float3 _scale) : position(_position),
 			scale(_scale), rotation(_rotation) {}
 
 		// Translation - 0.0f, 0.0f, 0.0f
@@ -17,150 +18,72 @@ namespace ECSEngine {
 		ECS_INLINE void Default() {
 			position = { 0.0f, 0.0f, 0.0f };
 			scale = { 1.0f, 1.0f, 1.0f };
-			rotation = QuaternionIdentity();
+			rotation = QuaternionIdentity().StorageLow();
 		}
 
 		float3 position;
 		float3 scale;
-		Quaternion rotation;
+		float4 rotation;
 	};
 
 	struct VectorTransform {
 		ECS_INLINE VectorTransform() {}
-		ECS_INLINE ECS_VECTORCALL VectorTransform(Vector4 _position, Vector4 _scale, Quaternion _rotation) : position(_position),
+		ECS_INLINE VectorTransform(Vector8 _position, Vector8 _scale, Quaternion _rotation) : position(_position),
 			scale(_scale), rotation(_rotation) {}
+		ECS_INLINE VectorTransform(Transform low) : position(low.position),
+			scale(low.scale), rotation(low.rotation) {}
+		ECS_INLINE VectorTransform(Transform low, Transform high) : position(low.position, high.position),
+			scale(low.scale, high.scale), rotation(low.rotation, high.rotation) {}
+
+		ECS_INLINE Transform Low() const {
+			return { position.AsFloat3Low(), rotation.StorageLow(), scale.AsFloat3Low() };
+		}
+
+		ECS_INLINE Transform High() const {
+			return { position.AsFloat3High(), rotation.StorageHigh(), scale.AsFloat3High() };
+		}
 
 		// Translation - 0.0f, 0.0f, 0.0f
 		// Scale - 1.0f, 1.0f, 1.0f
 		// Rotation - Quaternion Identity
 		ECS_INLINE void Default() {
-
-		}
-
-		ECS_INLINE Transform ToTransform() const {
-			Transform transform;
-			position.StorePartialConstant<3>(&transform.position);
-			scale.StorePartialConstant<3>(&transform.scale);
-			transform.rotation = rotation;
-
-			return transform;
-		}
-
-		Vector4 position;
-		Vector4 scale;
-		Quaternion rotation;
-	};
-
-	struct PackedVectorTransform {
-		ECS_INLINE PackedVectorTransform() {}
-		ECS_INLINE ECS_VECTORCALL PackedVectorTransform(Vector8 _position, Vector8 _scale, PackedQuaternion _rotation) : position(_position),
-			scale(_scale), rotation(_rotation) {}
-		ECS_INLINE ECS_VECTORCALL PackedVectorTransform(VectorTransform first, VectorTransform second) : position(first.position, second.position),
-			scale(first.scale, second.scale), rotation(first.rotation, second.rotation) {}
-
-		ECS_INLINE VectorTransform Low() const {
-			return { position.Low(), scale.Low(), rotation.Low() };
-		}
-
-		ECS_INLINE VectorTransform High() const {
-			return { position.High(), scale.High(), rotation.High() };
+			position = ZeroVector();
+			scale = VectorGlobals::ONE;
+			rotation = QuaternionIdentity();
 		}
 
 		Vector8 position;
 		Vector8 scale;
-		PackedQuaternion rotation;
+		Quaternion rotation;
 	};
-
-	ECS_INLINE VectorTransform ECS_VECTORCALL ToVectorTransform(Transform transform) {
-		return { Vector4(transform.position), Vector4(transform.scale), transform.rotation };
-	}
-
-#pragma region Combine
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-	namespace SIMDHelpers {
-		template<typename VectorTransform>
-		VectorTransform ECS_VECTORCALL TransformCombine(VectorTransform parent, VectorTransform child) {
-			VectorTransform result;
-
-			// Rotation and scale can be composed by multiplication
-			result.rotation = QuaternionMultiply(child.rotation, parent.rotation);
-			result.scale = parent.scale * child.scale;
-
-			// The position must be transformed by the parent's transform and then translated
-			result.position = QuaternionVectorMultiply(parent.rotation, parent.scale * child.position);
-			result.position += parent.position;
-
-			return result;
-		}
-	}
-
-	ECS_INLINE Transform ECS_VECTORCALL TransformCombine(Transform parent, Transform child) {
-		Transform result;
+	ECS_INLINE VectorTransform ECS_VECTORCALL TransformCombine(VectorTransform parent, VectorTransform child) {
+		VectorTransform result;
 
 		// Rotation and scale can be composed by multiplication
 		result.rotation = QuaternionMultiply(child.rotation, parent.rotation);
 		result.scale = parent.scale * child.scale;
 
-		// The position must be transformed by the parent's transform and then translated
-		Vector4 position = QuaternionVectorMultiply(parent.rotation, Vector4(parent.scale * child.position));
-		position.StorePartialConstant<3>(&result.position);
+		// The position must be transformed by the parent's rotation and then translated
+		result.position = QuaternionVectorMultiply(parent.rotation, parent.scale * child.position);
 		result.position += parent.position;
 
 		return result;
 	}
 
-	ECS_INLINE VectorTransform ECS_VECTORCALL TransformCombine(VectorTransform parent, VectorTransform child) {
-		return SIMDHelpers::TransformCombine(parent, child);
-	}
-
-	ECS_INLINE PackedVectorTransform ECS_VECTORCALL TransformCombine(PackedVectorTransform parent, PackedVectorTransform child) {
-		return SIMDHelpers::TransformCombine(parent, child);
-	}
-
 	// ---------------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Inverse
-
-	// ---------------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Transform ECS_VECTORCALL TransformInverse(Transform transform) {
-		Transform result;
-
-		result.rotation = QuaternionInverse(transform.rotation);
-		result.scale.x = fabsf(transform.scale.x) < ECS_TRANSFORM_SCALE_EPSILON ? 0.0f : 1.0f / transform.scale.x;
-		result.scale.y = fabsf(transform.scale.y) < ECS_TRANSFORM_SCALE_EPSILON ? 0.0f : 1.0f / transform.scale.y;
-		result.scale.z = fabsf(transform.scale.z) < ECS_TRANSFORM_SCALE_EPSILON ? 0.0f : 1.0f / transform.scale.z;
-
-		float3 negative_position = transform.position * float3(-1.0f, -1.0f, -1.0f);
-		Vector4 position = QuaternionVectorMultiply(transform.rotation, result.scale * negative_position);
-		position.StorePartialConstant<3>(&result.position);
-
-		return result;
-	}
 
 	ECS_INLINE VectorTransform ECS_VECTORCALL TransformInverse(VectorTransform transform) {
 		VectorTransform result;
 
 		result.rotation = QuaternionInverse(transform.rotation);
-		result.scale = select(abs(transform.scale) < Vector4(ECS_TRANSFORM_SCALE_EPSILON), ZeroVector4(), VectorGlobals::ONE_4 / transform.scale);
-		result.position = change_sign<1, 1, 1, 0>(transform.position);
+		result.scale = Select(abs(transform.scale) < Vector8(ECS_TRANSFORM_SCALE_EPSILON), ZeroVector(), VectorGlobals::ONE / transform.scale);
+		// The position needs to be negated
+		result.position = PerLaneChangeSign<1, 1, 1, 0>(transform.position);
 
-		result.position = QuaternionVectorMultiply(transform.rotation, result.scale * result.position);
-
-		return result;
-	}
-
-	ECS_INLINE PackedVectorTransform ECS_VECTORCALL TransformInverse(PackedVectorTransform transform) {
-		PackedVectorTransform result;
-
-		result.rotation = QuaternionInverse(transform.rotation);
-		result.scale = select(abs(transform.scale) < Vector8(ECS_TRANSFORM_SCALE_EPSILON), ZeroVector8(), VectorGlobals::ONE_8 / transform.scale);
-		result.position = change_sign<1, 1, 1, 0, 1, 1, 1, 0>(transform.position);
-
+		// And afterwards we need to rotate this current position according to the scale and the quaternion
 		result.position = QuaternionVectorMultiply(transform.rotation, result.scale * result.position);
 
 		return result;
@@ -168,202 +91,94 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region Mix
-
-	// ---------------------------------------------------------------------------------------------------------------------
-
-	namespace SIMDHelpers {
-		template<typename VectorTransform>
-		VectorTransform ECS_VECTORCALL TransformMix(VectorTransform from, VectorTransform to, float percentage) {
-			VectorTransform result;
-
-			result.position = Lerp(from.position, to.position, percentage);
-			result.scale = Lerp(from.scale, to.scale, percentage);
-			result.rotation = QuaternionNLerpNeighbour(from.rotation, to.rotation, percentage);
-
-			return result;
-		}
-	}
-
 	// Linear blend
-	ECS_INLINE Transform ECS_VECTORCALL TransformMix(Transform from, Transform to, float percentage) {
-		Transform result;
+	ECS_INLINE VectorTransform ECS_VECTORCALL TransformMix(VectorTransform from, VectorTransform to, Vector8 percentage) {
+		VectorTransform result;
 
-		Vector4 position_lerp = Lerp(Vector4(from.position), Vector4(to.position), percentage);
-		Vector4 scale_lerp = Lerp(Vector4(from.scale), Vector4(to.scale), percentage);
-
-		position_lerp.StorePartialConstant<3>(&result.position);
-		scale_lerp.StorePartialConstant<3>(&result.scale);
-
-		Quaternion rotation_lerp = QuaternionNLerpNeighbour(from.rotation, to.rotation, percentage);
-		result.rotation = rotation_lerp;
+		result.position = Lerp(from.position, to.position, percentage);
+		result.scale = Lerp(from.scale, to.scale, percentage);
+		result.rotation = QuaternionNLerpNeighbour(from.rotation, to.rotation, percentage);
 
 		return result;
 	}
 
-	// Linear blend
-	ECS_INLINE VectorTransform ECS_VECTORCALL TransformMix(VectorTransform from, VectorTransform to, float percentage) {
-		return SIMDHelpers::TransformMix(from, to, percentage);
-	}
-
-	// Linear blend
-	ECS_INLINE PackedVectorTransform ECS_VECTORCALL TransformMix(PackedVectorTransform from, PackedVectorTransform to, float percentage) {
-		return SIMDHelpers::TransformMix(from, to, percentage);
-	}
-
-	// Linear blend
-	ECS_INLINE PackedVectorTransform ECS_VECTORCALL TransformMix(PackedVectorTransform from, PackedVectorTransform to, float percentage1, float percentage2) {
-		PackedVectorTransform result;
-
-		Vector8 percentages(percentage1, percentage1, percentage1, percentage1, percentage2, percentage2, percentage2, percentage2);
-		result.position = Lerp(from.position, to.position, percentages);
-		result.scale = Lerp(from.scale, to.scale, percentages);
-		result.rotation = QuaternionNLerpNeighbour(from.rotation, to.rotation, percentage1, percentage2);
-
-		return result;
-	}
-
-
 	// ---------------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region To Matrix
-
-	// ---------------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Matrix ECS_VECTORCALL TransformToMatrix(Transform transform) {
+	ECS_INLINE void ECS_VECTORCALL TransformToMatrix(VectorTransform transform, Matrix* low, Matrix* high) {
 		// Extract the rotation basis of transform
-		Vector4 x = QuaternionVectorMultiply(transform.rotation, VectorGlobals::RIGHT_4);
-		Vector4 y = QuaternionVectorMultiply(transform.rotation, VectorGlobals::UP_4);
-		Vector4 z = QuaternionVectorMultiply(transform.rotation, VectorGlobals::FORWARD_4);
+		Vector8 x = RotateVectorQuaternionSIMD(transform.rotation, RightVector());
+		Vector8 y = RotateVectorQuaternionSIMD(transform.rotation, UpVector());
+		Vector8 z = RotateVectorQuaternionSIMD(transform.rotation, ForwardVector());
 
 		// Scale the basis vectors
-		Vector4 splatted_scale_x(transform.scale.x);
-		Vector4 splatted_scale_y(transform.scale.y);
-		Vector4 splatted_scale_z(transform.scale.z);
+		Vector8 splatted_scale_x = PerLaneBroadcast<0>(transform.scale);
+		Vector8 splatted_scale_y = PerLaneBroadcast<1>(transform.scale);
+		Vector8 splatted_scale_z = PerLaneBroadcast<2>(transform.scale);
 
 		x *= splatted_scale_x;
 		y *= splatted_scale_y;
 		z *= splatted_scale_z;
 
-		Vector4 zero = ZeroVector4();
-		Vector4 one = VectorGlobals::ONE_4;
-		x = blend4<0, 1, 2, 7>(x, zero);
-		y = blend4<0, 1, 2, 7>(y, zero);
-		z = blend4<0, 1, 2, 7>(z, zero);
-		Vector4 position_vec;
-		position_vec.Load(&transform.position);
-		Vector4 position = blend4<0, 1, 2, 7>(position_vec, one);
+		Vector8 zero = ZeroVector();
+		Vector8 one = VectorGlobals::ONE;
+		x = PerLaneBlend<0, 1, 2, 7>(x, zero);
+		y = PerLaneBlend<0, 1, 2, 7>(y, zero);
+		z = PerLaneBlend<0, 1, 2, 7>(z, zero);
+		Vector8 position = PerLaneBlend<0, 1, 2, 7>(transform.position, one);
 
-		return Matrix(x, y, z, position);
+		*low = Matrix(
+			Permute2f128Helper<0, 2>(x, y),
+			Permute2f128Helper<0, 2>(z, position)
+		);
+
+		*high = Matrix(
+			Permute2f128Helper<1, 3>(x, y),
+			Permute2f128Helper<1, 3>(z, position)
+		);
 	}
 
-	ECS_INLINE Matrix ECS_VECTORCALL TransformToMatrix(VectorTransform transform) {
+	ECS_INLINE Matrix ECS_VECTORCALL TransformToMatrixLow(VectorTransform transform) {
+		Quaternion splatted_rotation = Permute2f128Helper<0, 0>(transform.rotation, transform.rotation);
+
+		Vector8 right_up = blend8<0, 1, 2, 3, 12, 13, 14, 15>(RightVector(), UpVector());
+
 		// Extract the rotation basis of transform
-		Vector4 x = QuaternionVectorMultiply(transform.rotation, VectorGlobals::RIGHT_4);
-		Vector4 y = QuaternionVectorMultiply(transform.rotation, VectorGlobals::UP_4);
-		Vector4 z = QuaternionVectorMultiply(transform.rotation, VectorGlobals::FORWARD_4);
+		Vector8 xy = RotateVectorQuaternionSIMD(splatted_rotation, right_up);
+		Vector8 z = RotateVectorQuaternionSIMD(transform.rotation, ForwardVector());
 
 		// Scale the basis vectors
-		Vector4 splatted_scale_x = permute4<0, 0, 0, 0>(transform.scale);
-		Vector4 splatted_scale_y = permute4<1, 1, 1, 1>(transform.scale);
-		Vector4 splatted_scale_z = permute4<2, 2, 2, 2>(transform.scale);
+		Vector8 splatted_scale_x = PerLaneBroadcast<0>(transform.scale);
+		Vector8 splatted_scale_y = PerLaneBroadcast<1>(transform.scale);
+		Vector8 splatted_scale_z = PerLaneBroadcast<2>(transform.scale);
 
-		x *= splatted_scale_x;
-		y *= splatted_scale_y;
+		Vector8 splatted_scale_xy = Permute2f128Helper<0, 2>(splatted_scale_x, splatted_scale_y);
+		xy *= splatted_scale_xy;
 		z *= splatted_scale_z;
 
-		Vector4 zero = ZeroVector4();
-		Vector4 one = VectorGlobals::ONE_4;
-		x = blend4<0, 1, 2, 7>(x, zero);
-		y = blend4<0, 1, 2, 7>(y, zero);
-		z = blend4<0, 1, 2, 7>(z, zero);
-		Vector4 position = blend4<0, 1, 2, 7>(transform.position, one);
+		Vector8 zero = ZeroVector();
+		Vector8 one = VectorGlobals::ONE;
+		xy = PerLaneBlend<0, 1, 2, 7>(xy, zero);
+		z = PerLaneBlend<0, 1, 2, 7>(z, zero);
+		Vector8 position = PerLaneBlend<0, 1, 2, 7>(transform.position, one);
 
-		return Matrix(x, y, z, position);
-	}
-
-	ECS_INLINE void ECS_VECTORCALL TransformToMatrix(PackedVectorTransform transform, Matrix& first, Matrix& second) {
-		// Extract the rotation basis of transform
-		Vector8 x = QuaternionVectorMultiply(transform.rotation, VectorGlobals::RIGHT_8);
-		Vector8 y = QuaternionVectorMultiply(transform.rotation, VectorGlobals::UP_8);
-		Vector8 z = QuaternionVectorMultiply(transform.rotation, VectorGlobals::FORWARD_8);
-
-		// Scale the basis vectors
-		Vector8 splatted_scale_x = permute8<0, 0, 0, 0, 4, 4, 4, 4>(transform.scale);
-		Vector8 splatted_scale_y = permute8<1, 1, 1, 1, 5, 5, 5, 5>(transform.scale);
-		Vector8 splatted_scale_z = permute8<2, 2, 2, 2, 6, 6, 6, 6>(transform.scale);
-
-		x *= splatted_scale_x;
-		y *= splatted_scale_y;
-		z *= splatted_scale_z;
-
-		Vector8 zero = ZeroVector8();
-		Vector8 one = VectorGlobals::ONE_8;
-		x = blend8<0, 1, 2, 11, 4, 5, 6, 15>(x, zero);
-		y = blend8<0, 1, 2, 11, 4, 5, 6, 15>(y, zero);
-		z = blend8<0, 1, 2, 11, 4, 5, 6, 15>(z, zero);
-		Vector8 position = blend8<0, 1, 2, 11, 4, 5, 6, 15>(transform.position, one);
-
-		first = Matrix(x.Low(), y.Low(), z.Low(), position.Low());
-		second = Matrix(x.High(), y.High(), z.High(), position.High());
-	}
-
-	ECS_INLINE void ECS_VECTORCALL TransformToMatrix(PackedVectorTransform transform, Matrix* matrices) {
-		TransformToMatrix(transform, matrices[0], matrices[1]);
+		return Matrix(
+			xy,
+			Permute2f128Helper<0, 2>(z, position)
+		);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Matrix To Transform
-
-	// ---------------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Transform ECS_VECTORCALL MatrixToTransform(Matrix matrix) {
-		Transform transform;
-
-		Vector4 position = matrix.v[1].High();
-		position.StorePartialConstant<3>(&transform.position);
-		transform.rotation = MatrixToQuaternion(matrix);
-
-		Matrix rotation_scale_matrix = matrix;
-
-		// Zero out the last elements of the first 3 rows - might be unnecessary since the matrix should
-		// already have them 0
-		/*Vector8 zero = ZeroVector8();
-
-		rotation_scale_matrix.v[0] = blend8<0, 1, 2, 11, 4, 5, 6, 15>(rotation_scale_matrix.v[0], zero);
-		rotation_scale_matrix.v[1] = blend8<0, 1, 2, 11, 4, 5, 6, 7>(rotation_scale_matrix.v[1], zero);*/
-		rotation_scale_matrix.v[1] = Vector8(rotation_scale_matrix.v[1].Low(), VectorGlobals::QUATERNION_IDENTITY_4);
-		Matrix inverse_rotation = QuaternionToMatrix(QuaternionInverse(transform.rotation));
-		Matrix scale_skew_matrix = MatrixMultiply(rotation_scale_matrix, rotation_scale_matrix);
-
-		Vector4 x = scale_skew_matrix.v[0].Low();
-		Vector4 y = scale_skew_matrix.v[0].High();
-		Vector4 xy = blend4<0, 5, V_DC, V_DC>(x, y);
-
-		Vector4 z = scale_skew_matrix.v[1].Low();
-		Vector4 xyz = blend4<0, 1, 6, V_DC>(xy, z);
-		xyz.StorePartialConstant<3>(&transform.scale);
-
-		return transform;
-	}
 
 	ECS_INLINE VectorTransform ECS_VECTORCALL MatrixToVectorTransform(Matrix matrix)
 	{
 		VectorTransform transform;
 
-		transform.position = matrix.v[1].High();
+		transform.position = Permute2f128Helper<1, 1>(matrix.v[1], matrix.v[1]);
 		transform.rotation = MatrixToQuaternion(matrix);
 
-		Vector4 zero = ZeroVector4();
-		// zero out the last element of the position
-		transform.position = blend4<0, 1, 2, 7>(transform.position, zero);
+		Vector8 zero = ZeroVector();
+		// Zero out the last element of the position
+		transform.position = PerLaneBlend<0, 1, 2, 7>(transform.position, zero);
 
 		Matrix rotation_scale_matrix = matrix;
 		// Zero out the last elements of the first 3 rows - might be unnecessary since the matrix should
@@ -372,95 +187,86 @@ namespace ECSEngine {
 
 		rotation_scale_matrix.v[0] = blend8<0, 1, 2, 11, 4, 5, 6, 15>(rotation_scale_matrix.v[0], zero);
 		rotation_scale_matrix.v[1] = blend8<0, 1, 2, 11, 4, 5, 6, 7>(rotation_scale_matrix.v[1], zero);*/
-		rotation_scale_matrix.v[1] = Vector8(rotation_scale_matrix.v[1].Low(), VectorGlobals::QUATERNION_IDENTITY_4);
-		Matrix inverse_rotation = QuaternionToMatrix(QuaternionInverse(transform.rotation));
-		Matrix scale_skew_matrix = MatrixMultiply(rotation_scale_matrix, rotation_scale_matrix);
 
-		Vector4 x = scale_skew_matrix.v[0].Low();
-		Vector4 y = scale_skew_matrix.v[0].High();
-		Vector4 xy = blend4<0, 5, V_DC, V_DC>(x, y);
+		Vector8 quat_identity = LastElementOneVector();
+		rotation_scale_matrix.v[1] = blend8<0, 1, 2, 3, 12, 13, 14, 15>(rotation_scale_matrix.v[1], quat_identity);
+		Matrix inverse_rotation = QuaternionToMatrixLow(QuaternionInverse(transform.rotation));
+		Matrix scale_skew_matrix = MatrixMultiply(rotation_scale_matrix, inverse_rotation);
 
-		Vector4 z = scale_skew_matrix.v[1].Low();
-		Vector4 xyz = blend4<0, 1, 6, V_DC>(xy, z);
-		xyz = blend4<0, 1, 2, 7>(xyz, zero);
+		// Extract the scale from the principal diagonal
+		Vector8 yz_shuffle = Permute2f128Helper<1, 2>(scale_skew_matrix.v[0], scale_skew_matrix.v[1]);
+		Vector8 xyz = blend8<0, 9, 10, V_DC, V_DC, V_DC, V_DC, V_DC>(scale_skew_matrix.v[0], yz_shuffle);
+		xyz = PerLaneBlend<0, 1, 2, 7>(xyz, zero);
 		transform.scale = xyz;
 
 		return transform;
 	}
 
-	ECS_INLINE PackedVectorTransform ECS_VECTORCALL MatrixToTransform(Matrix matrix1, Matrix matrix2)
+	ECS_INLINE VectorTransform ECS_VECTORCALL MatrixToTransform(Matrix matrix1, Matrix matrix2)
 	{
-		VectorTransform first = MatrixToVectorTransform(matrix1);
-		VectorTransform second = MatrixToVectorTransform(matrix2);
+		VectorTransform transform;
 
-		return { first, second };
+		transform.position = Permute2f128Helper<1, 3>(matrix1.v[1], matrix2.v[1]);
+		transform.rotation = MatrixToQuaternion(matrix1, matrix2);
+
+		Vector8 zero = ZeroVector();
+		// Zero out the last element of the position
+		transform.position = PerLaneBlend<0, 1, 2, 7>(transform.position, zero);
+
+		Matrix rotation_scale_matrix1 = matrix1;
+		Matrix rotation_scale_matrix2 = matrix2;
+		// Zero out the last elements of the first 3 rows - might be unnecessary since the matrix should
+		// already have them 0
+		/*Vector8 zero = ZeroVector8();
+
+		rotation_scale_matrix.v[0] = blend8<0, 1, 2, 11, 4, 5, 6, 15>(rotation_scale_matrix.v[0], zero);
+		rotation_scale_matrix.v[1] = blend8<0, 1, 2, 11, 4, 5, 6, 7>(rotation_scale_matrix.v[1], zero);*/
+
+		Vector8 quat_identity = LastElementOneVector();
+		rotation_scale_matrix1.v[1] = blend8<0, 1, 2, 3, 12, 13, 14, 15>(rotation_scale_matrix1.v[1], quat_identity);
+		rotation_scale_matrix2.v[1] = blend8<0, 1, 2, 3, 12, 13, 14, 15>(rotation_scale_matrix2.v[1], quat_identity);
+
+		Matrix inverse_rotation1, inverse_rotation2;
+		QuaternionToMatrix(QuaternionInverse(transform.rotation), &inverse_rotation1, &inverse_rotation2);
+		Matrix scale_skew_matrix1 = MatrixMultiply(rotation_scale_matrix1, inverse_rotation1);
+		Matrix scale_skew_matrix2 = MatrixMultiply(rotation_scale_matrix2, inverse_rotation2);
+
+		// Extract the scale from the principal diagonal
+		Vector8 yz_shuffle1 = Permute2f128Helper<1, 2>(scale_skew_matrix1.v[0], scale_skew_matrix1.v[1]);
+		Vector8 yz_shuffle2 = Permute2f128Helper<1, 2>(scale_skew_matrix2.v[0], scale_skew_matrix2.v[1]);
+		Vector8 xyz1 = blend8<0, 9, 10, V_DC, V_DC, V_DC, V_DC, V_DC>(scale_skew_matrix1.v[0], yz_shuffle1);
+		Vector8 xyz2 = blend8<0, 9, 10, V_DC, V_DC, V_DC, V_DC, V_DC>(scale_skew_matrix2.v[0], yz_shuffle2);
+		xyz1 = PerLaneBlend<0, 1, 2, 7>(xyz2, zero);
+		xyz2 = PerLaneBlend<0, 1, 2, 7>(xyz2, zero);
+		transform.scale = Permute2f128Helper<0, 2>(xyz1, xyz2);
+
+		return transform;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region Transform Point
-
-	// ---------------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Vector4 ECS_VECTORCALL TransformPoint(Transform transform, Vector4 point) {
-		// Scale, rotate, translate
-		Vector4 scale(transform.scale);
-		point = QuaternionVectorMultiply(transform.rotation, scale * point);
-		return point + Vector4(transform.position);
-	}
-
-	ECS_INLINE Vector4 ECS_VECTORCALL TransformPoint(VectorTransform transform, Vector4 point) {
+	ECS_INLINE Vector8 ECS_VECTORCALL TransformPoint(VectorTransform transform, Vector8 point) {
 		// Scale, rotate, translate
 		return transform.position + QuaternionVectorMultiply(transform.rotation, transform.scale * point);
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL TransformPoint(PackedVectorTransform transform, Vector8 points) {
-		// Scale, rotate, translate
-		return transform.position + QuaternionVectorMultiply(transform.rotation, transform.scale * points);
+	// ---------------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE Vector8 ECS_VECTORCALL TransformVector(Transform transform, Vector8 vector) {
+		// Scale and rotate
+		return QuaternionVectorMultiply(transform.rotation, Vector8(transform.scale) * vector);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Transform Vector
-
-	// ---------------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Vector4 ECS_VECTORCALL TransformVector(Transform transform, Vector4 vector) {
-		// Scale and rotate
-		return QuaternionVectorMultiply(transform.rotation, Vector4(transform.scale) * vector);
-	}
-
-	ECS_INLINE Vector4 ECS_VECTORCALL TransformVector(VectorTransform transform, Vector4 vector) {
-		// Scale and rotate
-		return QuaternionVectorMultiply(transform.rotation, transform.scale * vector);
-	}
-
-	ECS_INLINE Vector8 ECS_VECTORCALL TransformVector(PackedVectorTransform transform, Vector8 vectors) {
-		// Scale and rotate
-		return QuaternionVectorMultiply(transform.rotation, transform.scale * vectors);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
 
 	// It will first select a slice inside the XZ plane using the rotation given by the x component
 	// Then it will rotate in the plane determined by the diameter of that rotation and the Y axis
 	// The point is centered around the origin, if a translation is desired, it should be added afterwards
 	// Rotation is in degrees
 	ECS_INLINE float3 OrbitPoint(float radius, float2 rotation) {
-		float4 position;
 		Matrix matrix = MatrixRotation({ rotation.x, rotation.y, 0.0f });
-
-		Vector4 new_position = TransformPointSIMD({ 0.0f, 0.0f, -radius }, matrix);
-		new_position.Store(&position);
-
-		return { position.x, position.y, position.z };
+		Vector8 new_position = TransformPoint(float3(0.0f, 0.0f, -radius), matrix);
+		return new_position.AsFloat3Low();
 	}
 
 }

@@ -1577,7 +1577,7 @@ namespace ECSEngine {
 		memcpy(allocation, data->data, component_size);
 
 		unsigned int instance_index = manager->m_shared_components[data->component.value].instances.Add(allocation);
-		ECS_CRASH_RETURN(instance_index < ECS_SHARED_INSTANCE_MAX_VALUE, "EntityManager: Too many shared instances created for component {#}.", 
+		ECS_CRASH_RETURN(instance_index < ECS_SHARED_INSTANCE_MAX_VALUE, "EntityManager: Too many shared instances created for component {#}.",
 			manager->GetSharedComponentName(data->component));
 		
 		if (data->copy_buffers) {
@@ -4142,7 +4142,7 @@ namespace ECSEngine {
 			return false;
 		});
 
-		return { (short)instance_index };
+		return { instance_index };
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

@@ -215,6 +215,9 @@
     <ClInclude Include="src\Includes\ECSEngineVisualizeTexture.h" />
     <ClInclude Include="src\ECSEngine\Rendering\SampleTexture.h" />
     <ClInclude Include="src\Includes\ECSEngineSampleTexture.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\TransformTool.h" />
+    <ClInclude Include="src\ECSEngine\Math\Plane.h" />
+    <ClInclude Include="src\ECSEngine\Math\Intersection.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -331,6 +334,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\InputMapping.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\VisualizeTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\SampleTexture.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\TransformTool.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

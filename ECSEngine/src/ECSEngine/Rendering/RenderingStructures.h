@@ -1433,14 +1433,13 @@ namespace ECSEngine {
 #define ECS_CAMERA_DEFAULT_FAR_Z 1000.0f
 
 	struct ECSENGINE_API Camera {
-		Camera();
+		ECS_INLINE Camera() : translation(0.0f, 0.0f, 0.0f), rotation(0.0f, 0.0f, 0.0f), is_orthographic(false), is_perspective_fov(false) {}
 		Camera(float3 translation, float3 rotation);
 		Camera(Matrix projection, float3 translation, float3 rotation);
 		Camera(const CameraParameters& camera_parameters);
 		Camera(const CameraParametersFOV& camera_parameters);
 
-		Camera(const Camera& other) = default;
-		Camera& operator = (const Camera& other) = default;
+		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(Camera);
 
 		void SetPerspectiveProjection(float width, float height, float near_z = ECS_CAMERA_DEFAULT_NEAR_Z, float far_z = ECS_CAMERA_DEFAULT_FAR_Z);
 
@@ -1451,9 +1450,31 @@ namespace ECSEngine {
 
 		Matrix ECS_VECTORCALL GetViewProjectionMatrix() const;
 
+		ECS_INLINE Matrix ECS_VECTORCALL GetInverseViewProjectionMatrix() const {
+			return MatrixInverse(GetViewProjectionMatrix());
+		}
+
+		ECS_INLINE Matrix ECS_VECTORCALL GetViewMatrix() const {
+			return GetTranslation() * GetRotation();
+		}
+
 		ECS_INLINE Matrix ECS_VECTORCALL GetRotation() const {
 			// The rotation should be in reversed order, Z, Y and then X
-			return QuaternionRotationMatrix(-rotation);
+			//return QuaternionRotationMatrix(-rotation);
+			return MatrixRotationCamera(rotation);
+		}
+
+		ECS_INLINE Matrix ECS_VECTORCALL GetRotationAsIs() const {
+			//return QuaternionRotationMatrix(rotation);
+			return MatrixRotation(rotation);
+		}
+
+		ECS_INLINE Quaternion ECS_VECTORCALL GetRotationQuaternion() const {
+			return QuaternionFromEuler(-rotation);
+		}
+
+		ECS_INLINE Quaternion ECS_VECTORCALL GetRotationQuaternionAsIs() const {
+			return QuaternionFromEuler(rotation);
 		}
 
 		ECS_INLINE Matrix ECS_VECTORCALL GetTranslation() const {
@@ -1462,6 +1483,21 @@ namespace ECSEngine {
 
 		ECS_INLINE Matrix ECS_VECTORCALL GetProjection() const {
 			return projection;
+		}
+
+		// The vector is already normalized
+		ECS_INLINE Vector8 ECS_VECTORCALL GetRightVector() const {
+			return RotateVectorQuaternionSIMD(GetRotationQuaternionAsIs(), RightVector());
+		}
+
+		// The vector is already normalized
+		ECS_INLINE Vector8 ECS_VECTORCALL GetUpVector() const {
+			return RotateVectorQuaternionSIMD(GetRotationQuaternionAsIs(), UpVector());
+		}
+
+		// The vector is already normalized
+		ECS_INLINE Vector8 ECS_VECTORCALL GetForwardVector() const {
+			return RotateVectorQuaternionSIMD(GetRotationQuaternionAsIs(), ForwardVector());
 		}
 
 		bool is_orthographic;
@@ -1481,6 +1517,159 @@ namespace ECSEngine {
 		float3 translation;
 		float3 rotation;
 	};
+
+	struct ECSENGINE_API CameraCached {
+		ECS_INLINE CameraCached() {}
+		CameraCached(const Camera* camera);
+
+		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(CameraCached);
+
+		ECS_INLINE Matrix ECS_VECTORCALL GetViewProjectionMatrix() const {
+			return view_projection_matrix;
+		}
+
+		ECS_INLINE Matrix ECS_VECTORCALL GetInverseViewProjectionMatrix() const {
+			return inverse_view_projection_matrix;
+		}
+
+		ECS_INLINE Matrix ECS_VECTORCALL GetViewMatrix() const {
+			return GetTranslation() * GetRotation();
+		}
+
+		ECS_INLINE Matrix ECS_VECTORCALL GetRotation() const {
+			// The rotation should be in reversed order, Z, Y and then X
+			//return QuaternionRotationMatrix(-rotation);
+			return rotation_matrix;
+		}
+
+		ECS_INLINE Matrix ECS_VECTORCALL GetRotationAsIs() const {
+			//return QuaternionRotationMatrix(rotation);
+			return rotation_as_is_matrix;
+		}
+
+		ECS_INLINE Quaternion ECS_VECTORCALL GetRotationQuaternion() const {
+			return QuaternionFromEuler(-rotation);
+		}
+
+		ECS_INLINE Quaternion ECS_VECTORCALL GetRotationQuaternionAsIs() const {
+			return QuaternionFromEuler(rotation);
+		}
+
+		ECS_INLINE Matrix ECS_VECTORCALL GetTranslation() const {
+			return MatrixTranslation(-translation);
+		}
+
+		ECS_INLINE Matrix ECS_VECTORCALL GetProjection() const {
+			return projection_matrix;
+		}
+
+		// The vector is already normalized
+		ECS_INLINE Vector8 ECS_VECTORCALL GetRightVector() const {
+			return RotateVectorMatrixSIMD(rotation_as_is_matrix, RightVector());
+		}
+
+		// The vector is already normalized
+		ECS_INLINE Vector8 ECS_VECTORCALL GetUpVector() const {
+			return RotateVectorMatrixSIMD(rotation_as_is_matrix, UpVector());
+		}
+
+		// The vector is already normalized
+		ECS_INLINE Vector8 ECS_VECTORCALL GetForwardVector() const {
+			return RotateVectorMatrixSIMD(rotation_as_is_matrix, ForwardVector());
+		}
+
+		bool is_orthographic;
+		bool is_perspective_fov;
+		union {
+			struct {
+				float width;
+				float height;
+			};
+			struct {
+				float fov;
+				float horizontal_fov;
+				float aspect_ratio;
+			};
+		};
+
+		float3 translation;
+		float3 rotation;
+
+		// This is the rotation that should be applied on objects
+		Matrix rotation_matrix;
+		// This is the rotation that is used to get the Right, Up and Forward directions
+		Matrix rotation_as_is_matrix;
+		Matrix projection_matrix;
+		Matrix view_projection_matrix;
+		Matrix inverse_view_projection_matrix;
+	};
+
+	// This make it easier to write templated code to make sure that the
+	// correct method is called and not have to go through recompilation
+	// processes because of misspelled names
+
+	template<typename CameraType>
+	ECS_INLINE Matrix ECS_VECTORCALL GetCameraViewProjectionMatrix(const CameraType* camera) {
+		return camera->GetViewProjectionMatrix();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE Matrix ECS_VECTORCALL GetCameraInverseViewProjectionMatrix(const CameraType* camera) {
+		return camera->GetInverseViewProjectionMatrix();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE Matrix ECS_VECTORCALL GetCameraViewMatrix(const CameraType* camera) {
+		return camera->GetViewMatrix();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE Matrix ECS_VECTORCALL GetCameraRotation(const CameraType* camera) {
+		return camera->GetRotation();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE Matrix ECS_VECTORCALL GetCameraRotationAsIs(const CameraType* camera) {
+		return camera->GetRotationAsIs();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE Quaternion ECS_VECTORCALL GetCameraRotationQuaternion(const CameraType* camera) {
+		return camera->GetRotationQuaternion();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE Quaternion ECS_VECTORCALL GetCameraRotationQuaternionAsIs(const CameraType* camera) {
+		return camera->GetRotationQuaternionAsIs();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE Matrix ECS_VECTORCALL GetCameraTranslation(const CameraType* camera) {
+		return camera->GetTranslation();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE Matrix ECS_VECTORCALL GetCameraProjection(const CameraType* camera) {
+		return camera->GetProjection();
+	}
+
+	// The vector is already normalized
+	template<typename CameraType>
+	ECS_INLINE Vector8 ECS_VECTORCALL GetCameraRightVector(const CameraType* camera) {
+		return camera->GetRightVector();
+	}
+
+	// The vector is already normalized
+	template<typename CameraType>
+	ECS_INLINE Vector8 ECS_VECTORCALL GetCameraUpVector(const CameraType* camera) {
+		return camera->GetUpVector();
+	}
+
+	// The vector is already normalized
+	template<typename CameraType>
+	ECS_INLINE Vector8 ECS_VECTORCALL GetCameraForwardVector(const CameraType* camera) {
+		return camera->GetForwardVector();
+	}
 
 	struct ECSENGINE_API Mesh {
 		ECS_INLINE Mesh() : name(nullptr, 0), mapping_count(0) {}

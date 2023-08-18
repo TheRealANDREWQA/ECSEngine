@@ -68,7 +68,7 @@ struct ECS_REFLECT EditorSandbox {
 
 	ECSEngine::ECS_TRANSFORM_TOOL transform_tool;
 
-	ECSEngine::CameraParametersFOV camera_parameters;
+	ECSEngine::CameraParametersFOV camera_parameters[EDITOR_SANDBOX_VIEWPORT_COUNT];
 	ECSEngine::OrientedPoint camera_saved_orientations[EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT];
 
 	ECS_FIELDS_END_REFLECT;
@@ -88,6 +88,9 @@ struct ECS_REFLECT EditorSandbox {
 	// These are set used to make calls to RenderSandbox ignore the request if the output is
 	// not going to be visualized
 	bool viewport_enable_rendering[EDITOR_SANDBOX_VIEWPORT_COUNT];
+	
+	// Indicate which axis of the transform tool is currently selected
+	bool transform_tool_selected[3];
 
 	ECSEngine::EntityManager scene_entities;
 	ECSEngine::World sandbox_world;
@@ -96,9 +99,18 @@ struct ECS_REFLECT EditorSandbox {
 	unsigned char selected_entities_changed_counter;
 
 	ECSEngine::ResizableStream<ECSEngine::Entity> unused_entities_slots[EDITOR_SANDBOX_VIEWPORT_COUNT];
+	ECSEngine::ResizableStream<EDITOR_SANDBOX_ENTITY_SLOT> unused_entity_slot_type[EDITOR_SANDBOX_VIEWPORT_COUNT];
 	// These flags indicate when the unused slots need to be recomputed (after a clear/reset for example)
-	unsigned char unused_entities_slots_recompute[EDITOR_SANDBOX_VIEWPORT_COUNT];
+	bool unused_entities_slots_recompute[EDITOR_SANDBOX_VIEWPORT_COUNT];
 };
+
+// -------------------------------------------------------------------------------------------------------------
+
+// When it is not playing it returns the scene entities manager, when playing the runtime one
+const ECSEngine::EntityManager* ActiveEntityManager(const EditorState* editor_state, unsigned int sandbox_index);
+
+// When it is not playing it returns the scene entities manager, when playing the runtime one
+ECSEngine::EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -216,11 +228,41 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool 
 
 // -------------------------------------------------------------------------------------------------------------
 
-void DisableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+void DisableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns -1 if the entity is not selected
+unsigned int FindSandboxSelectedEntityIndex(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::Entity entity
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns -1 if it doesn't find slot with the given value
+ECSEngine::Entity FindSandboxUnusedEntitySlot(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns EDITOR_SANDBOX_ENTITY_SLOT_COUNT if the entity could not be found
+// It will assert that the slot was assigned beforehand
+EDITOR_SANDBOX_ENTITY_SLOT FindSandboxUnusedEntitySlotType(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -256,12 +298,27 @@ EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned i
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns which viewport is currently displayed by the scene window
-EDITOR_SANDBOX_VIEWPORT GetSandboxCurrentViewport(const EditorState* editor_state, unsigned int sandbox_index);
+EDITOR_SANDBOX_VIEWPORT GetSandboxActiveViewport(const EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns the viewport of the sandbox if the given viewport is COUNT or the viewport again else
 EDITOR_SANDBOX_VIEWPORT GetSandboxViewportOverride(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
+ECSEngine::EntityManager* GetSandboxEntityManager(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+const ECSEngine::EntityManager* GetSandboxEntityManager(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -321,7 +378,11 @@ ECSEngine::WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state,
 
 // -------------------------------------------------------------------------------------------------------------
 
-ECSEngine::OrientedPoint GetSandboxCameraPoint(const EditorState* editor_state, unsigned int sandbox_index);
+ECSEngine::OrientedPoint GetSandboxCameraPoint(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
+ECSEngine::Camera GetSandboxSceneCamera(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -341,6 +402,25 @@ ECSEngine::RenderTargetView GetSandboxInstancedFramebuffer(const EditorState* ed
 // -------------------------------------------------------------------------------------------------------------
 
 ECSEngine::DepthStencilView GetSandboxInstancedDepthFramebuffer(const EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+ECSEngine::Stream<ECSEngine::Entity> GetSandboxSelectedEntities(
+	const EditorState* editor_state,
+	unsigned int sandbox_index
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Fills in entity slots that are not yet used in the runtime
+// or somewhere else in the editor. Returns an index that needs to be used
+// to set the transform type afterwards with the function SetSandboxUnusedEntitySlotType
+unsigned int GetSandboxUnusedEntitySlots(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::Stream<ECSEngine::Entity> entities,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -394,6 +474,15 @@ void InitializeSandboxRuntime(
 // -------------------------------------------------------------------------------------------------------------
 
 bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxGizmoEntity(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ECSEngine::Entity entity, 
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -469,7 +558,8 @@ void ReinitializeSandboxRuntime(
 void RegisterSandboxCameraTransform(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	unsigned int camera_index
+	unsigned int camera_index,
+	EDITOR_SANDBOX_VIEWPORT viewport
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -507,8 +597,9 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 
 // -------------------------------------------------------------------------------------------------------------
 
-// Returns true if the render was successful. It can fail if there is no graphics module, there are multiple of them or the
-// task scheduling failed for the graphics module. If the new size is specified, it will also resize the textures before rendering
+// If the new size is specified, it will also resize the textures before rendering
+// This call will push an event that will render the sandbox at the end of the frame
+// such that multiple call to this function in the same frame will resolve to a single draw
 // (it will take into account if it cannot right now because of the resource loading)
 bool RenderSandbox(
 	EditorState* editor_state, 
@@ -528,7 +619,7 @@ bool RenderSandboxIsPending(
 
 // -------------------------------------------------------------------------------------------------------------
 
-// Returns true if all renders were successful, else false. It will render all viewports of that sandbox
+// It will render all viewports of that sandbox. Returns true if all renders succeeded
 bool RenderSandboxViewports(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
@@ -543,16 +634,25 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 
 // -------------------------------------------------------------------------------------------------------------
 
-void RotateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::float3 rotation);
+void RotateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::float3 rotation, EDITOR_SANDBOX_VIEWPORT viewport);
 
-// -------------------------------------------------------------------------------------------------------------
-
-void RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Defaults the values for the camera and saved positions
-void ResetSandboxCamera(EditorState* editor_state, unsigned int sandbox_index);
+void ResetSandboxCameras(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void ResetSandboxUnusedEntities(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -622,6 +722,25 @@ void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_
 
 // -------------------------------------------------------------------------------------------------------------
 
+// The slot index needs to be obtained through the GetSandboxUnusedEntitySlots
+void SetSandboxUnusedEntitySlotType(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	unsigned int slot_index,
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+bool ShouldSandboxRecomputeEntitySlots(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // This will add an event to increment the counter in order to be picked up by all systems
 // next frame
 void SignalSandboxSelectedEntitiesCounter(EditorState* editor_state, unsigned int sandbox_index);
@@ -634,7 +753,7 @@ void SignalSandboxUnusedEntitiesSlotsCounter(EditorState* editor_state, unsigned
 
 // -------------------------------------------------------------------------------------------------------------
 
-void TranslateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::float3 translation);
+void TranslateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::float3 translation, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
 

@@ -9,12 +9,13 @@
 #define SELECTED_ENTITIES_IDENTIFIER "__SelectedEntities"
 #define SELECT_COLOR_IDENTIFIER "__SelectColor"
 #define TRANSFORM_TOOL_IDENTIFIER "__TransformTool"
+#define TRANSFORM_TOOL_EX_IDENTIFIER "__TransformToolEx"
 #define INSTANCED_FRAMEBUFFER_IDENTIFIER "__InstancedFramebuffer"
 
 namespace ECSEngine {
 	
 	template<typename T>
-	bool GetRuntimeResource(const SystemManager* system_manager, T* resource, Stream<char> identifier) {
+	static bool GetRuntimeResource(const SystemManager* system_manager, T* resource, Stream<char> identifier) {
 		void* runtime_resource = system_manager->TryGetData(identifier);
 		if (runtime_resource != nullptr) {
 			*resource = *(T*)runtime_resource;
@@ -25,14 +26,31 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	bool GetRuntimeCamera(const SystemManager* system_manager, Camera* camera)
+	// Camera needs to be the first field in this structure
+	struct TableCamera {
+		Camera camera;
+		CameraCached camera_cached;
+	};
+
+	bool GetRuntimeCamera(const SystemManager* system_manager, Camera* camera, CameraCached** camera_cached)
 	{
-		return GetRuntimeResource(system_manager, camera, CAMERA_IDENTIFIER);
+		bool success = GetRuntimeResource(system_manager, camera, CAMERA_IDENTIFIER);
+		if (success && camera_cached != nullptr) {
+			*camera_cached = (CameraCached*)function::OffsetPointer(camera, sizeof(*camera));
+		}
+		return success;
 	}
 
-	void SetRuntimeCamera(SystemManager* system_manager, const Camera* camera)
+	void SetRuntimeCamera(SystemManager* system_manager, const Camera* camera, bool set_cached_camera)
 	{
-		Camera* bound_camera = (Camera*)system_manager->BindData(CAMERA_IDENTIFIER, camera, sizeof(*camera));
+		if (set_cached_camera) {
+			TableCamera* table_camera = (TableCamera*)system_manager->BindDataNoCopy(CAMERA_IDENTIFIER, sizeof(TableCamera));
+			table_camera->camera = *camera;
+			table_camera->camera_cached = camera;
+		}
+		else {
+			system_manager->BindData(CAMERA_IDENTIFIER, camera, sizeof(*camera));
+		}
 	}
 
 	void RemoveRuntimeCamera(SystemManager* system_manager)
@@ -116,6 +134,26 @@ namespace ECSEngine {
 	void RemoveEditorRuntimeTransformTool(SystemManager* system_manager)
 	{
 		system_manager->RemoveData(TRANSFORM_TOOL_IDENTIFIER);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ECSTransformToolEx GetEditorRuntimeTransformToolEx(const SystemManager* system_manager)
+	{
+		ECSTransformToolEx tool_ex;
+		tool_ex.tool = ECS_TRANSFORM_COUNT;
+		GetRuntimeResource(system_manager, &tool_ex, TRANSFORM_TOOL_EX_IDENTIFIER);
+		return tool_ex;
+	}
+
+	void SetEditorRuntimeTransformToolEx(SystemManager* system_manager, ECSTransformToolEx tool_ex)
+	{
+		system_manager->BindData(TRANSFORM_TOOL_EX_IDENTIFIER, &tool_ex, sizeof(tool_ex));
+	}
+
+	void RemoveEditorRuntimeTransformToolEx(SystemManager* system_manager)
+	{
+		system_manager->RemoveData(TRANSFORM_TOOL_EX_IDENTIFIER);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

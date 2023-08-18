@@ -917,7 +917,8 @@ namespace ECSEngine {
 
 			uintptr_t ptr = (uintptr_t)allocation;
 
-			// Bind all the new constants
+			// Bind all the new constants and add all enums before evaluating basic array sizes for reflection types
+			// since they might refer them
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				// The constants now
 				for (size_t constant_index = 0; constant_index < data[data_index].constants.size; constant_index++) {
@@ -925,6 +926,27 @@ namespace ECSEngine {
 					ReflectionConstant constant = data[data_index].constants[constant_index];
 					constant.folder_hierarchy = folder_index;
 					constants.Add(constant.CopyTo(ptr));
+				}
+
+				// TODO: Do we need a disable for the stylized labels?
+				for (size_t index = 0; index < data[data_index].enums.size; index++) {
+					const ReflectionEnum* data_enum = &data[data_index].enums[index];
+					ReflectionEnum temp_copy = *data_enum;
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, temp_stylized_enum_fields, 512);
+					temp_copy.fields.InitializeFromBuffer(temp_stylized_enum_fields.buffer, 0);
+					temp_copy.fields.Copy(temp_copy.original_fields);
+					// Stylized the labels such that they don't appear excessively long
+					ReflectionManagerStylizeEnum(temp_copy);
+
+					ReflectionEnum enum_ = temp_copy.CopyTo(ptr);
+					enum_.folder_hierarchy_index = folder_index;
+					ResourceIdentifier identifier(enum_.name);
+					if (enum_definitions.Find(identifier) != -1) {
+						// If the enum already exists, fail
+						FreeFolderHierarchy(folder_index);
+						return false;
+					}
+					ECS_ASSERT(!enum_definitions.Insert(enum_, identifier));
 				}
 			}
 
@@ -934,17 +956,30 @@ namespace ECSEngine {
 					ReflectionEmbeddedArraySize embedded_size = data[data_index].embedded_array_size[index];
 					double constant = GetConstant(embedded_size.body);
 					if (constant == DBL_MAX) {
-						// Fail
-						FreeFolderHierarchy(folder_index);
-						ECS_FORMAT_TEMP_STRING(
-							error_message,
-							"Failed to determine constant {#} for type {#}, field {#} when trying to determine embedded size.",
-							embedded_size.body,
-							embedded_size.reflection_type,
-							embedded_size.field_name
-						);
-						WriteErrorMessage(data, error_message.buffer, -1);
-						return false;
+						// Check enum original fields - if we have a match then we can proceed
+						enum_definitions.ForEachConst<true>([&](const ReflectionEnum& enum_, ResourceIdentifier identifier) {
+							for (size_t field_index = 0; field_index < enum_.original_fields.size; field_index++) {
+								if (enum_.original_fields[field_index] == embedded_size.body) {
+									constant = (double)field_index;
+									return true;
+								}
+							}
+							return false;
+						});
+
+						if (constant == DBL_MAX) {
+							// Fail
+							FreeFolderHierarchy(folder_index);
+							ECS_FORMAT_TEMP_STRING(
+								error_message,
+								"Failed to determine constant {#} for type {#}, field {#} when trying to determine embedded size.",
+								embedded_size.body,
+								embedded_size.reflection_type,
+								embedded_size.field_name
+							);
+							WriteErrorMessage(data, error_message.buffer, -1);
+							return false;
+						}
 					}
 
 					unsigned short int_constant = (unsigned short)constant;
@@ -1065,24 +1100,6 @@ namespace ECSEngine {
 						allocated_skipped_fields.InitializeAndCopy(GetAllocatorPolymorphic(&stack_allocator), current_skipped_fields);
 					}
 					skipped_fields_table.Insert(allocated_skipped_fields, data_type->name);
-				}
-
-				// TODO: Do we need a disable for the stylized labels?
-				for (size_t index = 0; index < data[data_index].enums.size; index++) {
-					const ReflectionEnum* data_enum = &data[data_index].enums[index];
-					ReflectionEnum temp_copy = *data_enum;
-					// Stylized the labels such that they don't appear excessively long
-					ReflectionManagerStylizeEnum(temp_copy);
-
-					ReflectionEnum enum_ = temp_copy.CopyTo(ptr);
-					enum_.folder_hierarchy_index = folder_index;
-					ResourceIdentifier identifier(enum_.name);
-					if (enum_definitions.Find(identifier) != -1) {
-						// If the enum already exists, fail
-						FreeFolderHierarchy(folder_index);
-						return false;
-					}
-					ECS_ASSERT(!enum_definitions.Insert(enum_, identifier));
 				}
 			}
 
@@ -2993,9 +3010,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			uintptr_t ptr = (uintptr_t)data->thread_memory.buffer + data->thread_memory.size;
 			uintptr_t before_ptr = ptr;
 			ptr = function::AlignPointer(ptr, alignof(ReflectionEnum));
-			enum_definition.fields = Stream<Stream<char>>((void*)ptr, 0);
+			enum_definition.original_fields = Stream<Stream<char>>((void*)ptr, 0);
 
 			size_t memory_size = sizeof(Stream<char>) * next_line_positions.size + alignof(ReflectionEnum);
+			// We need to double this since we are doing stylized fields and original fields
+			memory_size *= 2;
 			data->thread_memory.size += memory_size;
 			data->total_memory += memory_size;
 			if (data->thread_memory.size > data->thread_memory.capacity) {
@@ -3016,8 +3035,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					current_character--;
 				}
 
-				enum_definition.fields.Add(current_character + 1);
-				data->total_memory += PtrDifference(current_character + 1, final_character);
+				enum_definition.original_fields.Add(current_character + 1);
+				// We multiply by 2 since we have original fields and stylized fields
+				data->total_memory += PtrDifference(current_character + 1, final_character) * 2;
 			}
 
 			data->enums.Add(enum_definition);

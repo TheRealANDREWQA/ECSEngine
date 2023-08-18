@@ -5,39 +5,69 @@
 #include "VCLExtensions.h"
 #include "Vector.h"
 
-constexpr float ECS_QUATERNION_EPSILON = 0.00005f;
+#define ECS_QUATERNION_EPSILON (0.00005f)
 
 namespace ECSEngine {
 
 	namespace VectorGlobals {
-		inline Vector4 QUATERNION_EPSILON_4(ECS_QUATERNION_EPSILON);
-		inline Vector8 QUATERNION_EPSILON_8(ECS_QUATERNION_EPSILON);
+		inline Vector8 QUATERNION_EPSILON(ECS_QUATERNION_EPSILON);
 	}
 
 	struct Quaternion;
-	struct PackedQuaternion;
 
 	Quaternion ECS_VECTORCALL QuaternionMultiply(Quaternion a, Quaternion b);
-	PackedQuaternion ECS_VECTORCALL QuaternionMultiply(PackedQuaternion a, PackedQuaternion b);
+	Quaternion ECS_VECTORCALL QuaternionFromEuler(float3 rotation);
+	Quaternion ECS_VECTORCALL QuaternionFromEuler(float3 rotation0, float3 rotation1);
+	float3 ECS_VECTORCALL QuaternionToEulerLow(Quaternion quaternion);
+	float3 ECS_VECTORCALL QuaternionToEulerHigh(Quaternion quaternion);
+
+	// When wanting to store a quaternion value into structures but you don't want
+	// to store the SIMD quaternion is this value
+	typedef float4 QuaternionStorage;
 
 	struct Quaternion {
+		typedef Vector8 VectorType;
+
 		ECS_INLINE Quaternion() {}
-		ECS_INLINE Quaternion(float x, float y, float z, float w) : value(x, y, z, w) {}
+		ECS_INLINE Quaternion(float x1, float y1, float z1, float w1, float x2, float y2, float z2, float w2)
+		: value(x1, y1, z1, w1, x2, y2, z2, w2) {}
 		ECS_INLINE Quaternion(const float* values) {
 			value.load(values);
 		}
-		ECS_INLINE ECS_VECTORCALL Quaternion(Vec4f _value) : value(_value) {}
-		ECS_INLINE ECS_VECTORCALL Quaternion(Vector4 _value) : value(_value.value) {}
+		ECS_INLINE Quaternion(float3 rotation) {
+			*this = QuaternionFromEuler(rotation);
+		}
+		ECS_INLINE Quaternion(QuaternionStorage storage_value) {
+			value = Vector8(storage_value).value;
+		}
+		ECS_INLINE Quaternion(float3 rotation0, float3 rotation1) {
+			*this = QuaternionFromEuler(rotation0, rotation1);
+		}
+		ECS_INLINE Quaternion(QuaternionStorage value0, QuaternionStorage value1) {
+			value = Vector8(value0, value1).value;
+		}
+		ECS_INLINE Quaternion(Vec8f _value) : value(_value) {}
+		ECS_INLINE Quaternion(Vector8 _value) : value(_value.value) {}
 
 		ECS_INLINE Quaternion(const Quaternion& other) = default;
 		ECS_INLINE Quaternion& ECS_VECTORCALL operator = (const Quaternion& other) = default;
 
-		ECS_INLINE bool ECS_VECTORCALL operator == (Quaternion other) const {
-			return horizontal_and(abs(value - other.value) < VectorGlobals::QUATERNION_EPSILON_4);
+		ECS_INLINE ECS_VECTORCALL operator Vec8f() const {
+			return value;
 		}
-		
-		ECS_INLINE bool ECS_VECTORCALL operator != (Quaternion other) const {
-			return !(*this == other);
+
+		ECS_INLINE ECS_VECTORCALL operator __m256() const {
+			return value.operator __m256();
+		}
+
+		ECS_INLINE bool2 ECS_VECTORCALL operator == (Quaternion other) const {
+			auto bool_vector = abs(value - other.value) < VectorGlobals::QUATERNION_EPSILON;
+			return { horizontal_and(bool_vector.get_low()), horizontal_and(bool_vector.get_high()) };
+		}
+
+		ECS_INLINE bool2 ECS_VECTORCALL operator != (Quaternion other) const {
+			bool2 is_equal = *this == other;
+			return { !is_equal.x, !is_equal.y };
 		}
 
 		ECS_INLINE float ECS_VECTORCALL operator [](unsigned int index) const {
@@ -53,7 +83,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE Quaternion ECS_VECTORCALL operator * (float scalar) const {
-			return value * Vec4f(scalar);
+			return value * Vec8f(scalar);
 		}
 
 		ECS_INLINE Quaternion ECS_VECTORCALL operator * (Quaternion other) const {
@@ -73,237 +103,169 @@ namespace ECSEngine {
 			value -= other.value;
 			return *this;
 		}
-		
+
 		ECS_INLINE Quaternion& ECS_VECTORCALL operator *= (float scalar) {
-			value *= Vec4f(scalar);
-			return *this;
-		}
-
-		Vec4f value;
-	};
-
-	struct PackedQuaternion {
-		ECS_INLINE PackedQuaternion() {}
-		ECS_INLINE PackedQuaternion(float x1, float y1, float z1, float w1, float x2, float y2, float z2, float w2) 
-		: value(x1, y1, z1, w1, x2, y2, z2, w2) {}
-		ECS_INLINE PackedQuaternion(const float* values) {
-			value.load(values);
-		}
-		ECS_INLINE ECS_VECTORCALL PackedQuaternion(Vec8f _value) : value(_value) {}
-		ECS_INLINE ECS_VECTORCALL PackedQuaternion(Vector8 _value) : value(_value.value) {}
-		ECS_INLINE ECS_VECTORCALL PackedQuaternion(Quaternion first, Quaternion second) : value(first.value, second.value) {}
-
-		ECS_INLINE PackedQuaternion(const PackedQuaternion& other) = default;
-		ECS_INLINE PackedQuaternion& ECS_VECTORCALL operator = (const PackedQuaternion& other) = default;
-
-		ECS_INLINE bool2 ECS_VECTORCALL operator == (PackedQuaternion other) const {
-			auto bool_vector = abs(value - other.value) < VectorGlobals::QUATERNION_EPSILON_8;
-			return { horizontal_and(bool_vector.get_low()), horizontal_and(bool_vector.get_high()) };
-		}
-
-		ECS_INLINE bool2 ECS_VECTORCALL operator != (PackedQuaternion other) const {
-			bool2 is_equal = *this == other;
-			return { !is_equal.x, !is_equal.y };
-		}
-
-		ECS_INLINE float ECS_VECTORCALL operator [](unsigned int index) const {
-			return value.extract(index);
-		}
-
-		ECS_INLINE PackedQuaternion ECS_VECTORCALL operator + (PackedQuaternion other) const {
-			return value + other.value;
-		}
-
-		ECS_INLINE PackedQuaternion ECS_VECTORCALL operator - (PackedQuaternion other) const {
-			return value - other.value;
-		}
-
-		ECS_INLINE PackedQuaternion ECS_VECTORCALL operator * (float scalar) const {
-			return value * Vec8f(scalar);
-		}
-
-		ECS_INLINE PackedQuaternion ECS_VECTORCALL operator * (PackedQuaternion other) const {
-			return QuaternionMultiply(*this, other);
-		}
-
-		ECS_INLINE PackedQuaternion ECS_VECTORCALL operator -() const {
-			return -value;
-		}
-
-		ECS_INLINE PackedQuaternion& ECS_VECTORCALL operator += (PackedQuaternion other) {
-			value += other.value;
-			return *this;
-		}
-
-		ECS_INLINE PackedQuaternion& ECS_VECTORCALL operator -= (PackedQuaternion other) {
-			value -= other.value;
-			return *this;
-		}
-
-		ECS_INLINE PackedQuaternion& ECS_VECTORCALL operator *= (float scalar) {
 			value *= Vec8f(scalar);
 			return *this;
 		}
 
-		ECS_INLINE Quaternion ECS_VECTORCALL Low() const {
-			return Quaternion(value.get_low());
+		ECS_INLINE Quaternion& ECS_VECTORCALL operator *= (Quaternion other) {
+			*this = QuaternionMultiply(*this, other);
+			return *this;
 		}
 
-		ECS_INLINE Quaternion ECS_VECTORCALL High() const {
-			return Quaternion(value.get_high());
+		ECS_INLINE Vec4f ECS_VECTORCALL LowSIMD() const {
+			return value.get_low();
+		}
+
+		ECS_INLINE Vec4f ECS_VECTORCALL HighSIMD() const {
+			return value.get_high();
+		}
+
+		ECS_INLINE float4 ECS_VECTORCALL StorageLow() const {
+			return Vector8(value).AsFloat4Low();
+		}
+
+		ECS_INLINE float4 ECS_VECTORCALL StorageHigh() const {
+			return Vector8(value).AsFloat4High();
+		}
+
+		ECS_INLINE float3 EulerLow() const {
+			return QuaternionToEulerLow(*this);
+		}
+
+		ECS_INLINE float3 EulerHigh() const {
+			return QuaternionToEulerHigh(*this);
 		}
 
 		Vec8f value;
 	};
 
-#pragma region Identity
-
 	// ---------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionIdentity() {
-		return VectorGlobals::QUATERNION_IDENTITY_4;
-	}
-
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL PackedQuaternionIdentity() {
-		return VectorGlobals::QUATERNION_IDENTITY_8;
+		return LastElementOneVector();
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
+	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionCompareMask(Quaternion a, Quaternion b, Vector8 epsilon = VectorGlobals::EPSILON) {
+		return CompareMask<true>(a.value, b.value, epsilon);
+	}
 
-#pragma region Angle From Axis
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+		QuaternionCompare,
+		FORWARD(Quaternion a, Quaternion b, Vector8 epsilon = VectorGlobals::EPSILON),
+		FORWARD(a, b, epsilon)
+	);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	// The value is replicated across all register values
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionDot(Quaternion a, Quaternion b) {
+		return Dot<true>(a.value, b.value);
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionSquaredLength(Quaternion a) {
+		return QuaternionDot(a, a);
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionLength(Quaternion quaternion) {
+		return sqrt(QuaternionSquaredLength(quaternion).value);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNormalize(Quaternion quaternion) {
+		return Normalize<precision, true>(Vector8(quaternion.value));
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionIsNormalizedMask(Quaternion quaternion) {
+		return IsNormalizedMask<true>(Vector8(quaternion));
+	}
+
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+		QuaternionIsNormalized,
+		Quaternion quaternion,
+		quaternion
+	);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// Angle must be expressed in radians
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAngleFromAxisRad(float angle_radians, float3 axis) {
-		Vector4 vector_axis(axis);
-		vector_axis = Normalize3(vector_axis);
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAngleFromAxisRad(Vector8 vector_axis, Vector8 angle_radians) {
+		vector_axis = NormalizeIfNot(vector_axis);
 
-		angle_radians *= 0.5f;
-		Vec4f cos;
-		Vector4 sin = sincos(&cos, angle_radians);
-		vector_axis *= sin;
-		vector_axis = blend4<0, 1, 2, 7>(vector_axis, cos);
-		return Quaternion(vector_axis.value);
-	}
-
-	// Angle must be expressed in radians
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionAngleFromAxisRad(float angle_radians1, float3 axis1, float angle_radians2, float3 axis2) {
-		Vector8 vector_axis(axis1, axis2);
-		vector_axis = Normalize3(vector_axis);
-
-		angle_radians1 *= 0.5f;
-		angle_radians2 *= 0.5f;
+		Vector8 half = 0.5f;
+		angle_radians *= half;
 
 		Vec8f cos;
-		Vector8 sin = sincos(&cos, Vec8f(angle_radians1, angle_radians1, angle_radians1, angle_radians1, angle_radians2, angle_radians2, angle_radians2, angle_radians2));
+		Vector8 sin = sincos(&cos, angle_radians.value);
 		vector_axis *= sin;
-		vector_axis = blend8<0, 1, 2, 11, 5, 6, 7, 15>(vector_axis, cos);
-		return PackedQuaternion(vector_axis.value);
+		vector_axis = PerLaneBlend<0, 1, 2, 7>(vector_axis, Vector8(cos));
+		return vector_axis.value;
 	}
 
-	// Angle must be expressed in degrees
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAngleFromAxis(float angle_degrees, float3 axis) {
-		return QuaternionAngleFromAxisRad(DegToRad(angle_degrees), axis);
-	}
-
-	// Angle must be expressed in degrees
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionAngleFromAxis(float angle_degrees1, float3 axis1, float angle_degrees2, float3 axis2) {
-		return QuaternionAngleFromAxisRad(DegToRad(angle_degrees1), axis1, DegToRad(angle_degrees2), axis2);
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAngleFromAxis(Vector8 vector_axis, Vector8 angle_degrees) {
+		return QuaternionAngleFromAxisRad(vector_axis, DegToRad(angle_degrees));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region From Rotation
-
-	// ---------------------------------------------------------------------------------------------------------------
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEulerRadEx(float3 rotation) {
+		return QuaternionAngleFromAxisRad(float3(0.0f, 0.0f, 1.0f), rotation.z) *
+			QuaternionAngleFromAxisRad(float3(0.0f, 1.0f, 0.0f), rotation.y) *
+			QuaternionAngleFromAxisRad(float3(1.0f, 0.0f, 0.0f), rotation.x);
+	}
 
 	// The angles must be expressed in radians
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromRotationRad(float3 rotation) {
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEulerRad(float3 rotation_radians0, float3 rotation_radians1) {
 		Quaternion quaternion;
 
-		return QuaternionAngleFromAxisRad(rotation.z, { 0.0f, 0.0f, 1.0f }) * 
-			QuaternionAngleFromAxisRad(rotation.y, { 0.0f, 1.0f, 0.0f }) * 
-			QuaternionAngleFromAxisRad(rotation.x, { 1.0f, 0.0f, 0.0f });
+		Vector8 angles(rotation_radians0, rotation_radians1);
+		Vector8 half(0.5f);
+		angles *= half;
 
-		//Vector4 angles(rotation);
-		//Vector4 half(0.5f);
-		//angles *= half;
+		Vec8f cos;
+		Vector8 sin = sincos(&cos, angles);
 
-		//Vec4f cos;
-		//Vector4 sin = sincos(&cos, angles);
+		// Quaternion:
+		// x = sin(x) * cos(y) * cos(z) - cos(x) * sin(y) * sin(z)
+		// y = cos(x) * sin(y) * cos(z) + sin(x) * cos(y) * sin(z)
+		// z = cos(x) * cos(y) * sin(z) - sin(x) * sin(y) * cos(z)
+		// w = cos(x) * cos(y) * cos(z) + sin(x) * sin(y) * sin(z)
 
-		//// Quaternion:
-		//// x = sin(x) * cos(y) * cos(z) - cos(x) * sin(y) * sin(z)
-		//// y = cos(x) * sin(y) * cos(z) + sin(x) * cos(y) * sin(z)
-		//// z = cos(x) * cos(y) * sin(z) - sin(x) * sin(y) * cos(z)
-		//// w = cos(x) * cos(y) * cos(z) + sin(x) * sin(y) * sin(z)
+		Vector8 first_permutation_left = PerLaneBlend<4, 0, 0, 0>(Vector8(cos), sin);
+		Vector8 second_permutation_left = PerLaneBlend<1, 5, 1, 1>(Vector8(cos), sin);
+		Vector8 third_permutation_left = PerLaneBlend<2, 2, 6, 2>(Vector8(cos), sin);
 
-		//Vector4 first_permutation_left = blend4<4, 0, 0, 0>(cos, sin);
-		//Vector4 second_permutation_left = blend4<1, 5, 1, 1>(cos, sin);
-		//Vector4 third_permutation_left = blend4<2, 2, 6, 2>(cos, sin);
+		Vector8 first_permutation_right = PerLanePermute<1, 0, 0, 0>(first_permutation_left);
+		Vector8 second_permutation_right = PerLanePermute<1, 0, 1, 1>(second_permutation_left);
+		Vector8 third_permutation_right = PerLanePermute<2, 2, 0, 2>(third_permutation_left);
 
-		//Vector4 first_permutation_right = permute4<1, 0, 0, 0>(first_permutation_left);
-		//Vector4 second_permutation_right = permute4<1, 0, 1, 1>(second_permutation_left);
-		//Vector4 third_permutation_right = permute4<2, 2, 0, 2>(third_permutation_left);
+		Vector8 left = first_permutation_left * second_permutation_left * third_permutation_left;
+		Vector8 right = first_permutation_right * second_permutation_right * third_permutation_right;
+		right = PerLaneChangeSign<1, 0, 1, 0>(right);
 
-		//Vector4 left = first_permutation_left * second_permutation_left * third_permutation_left;
-		//Vector4 right = first_permutation_right * second_permutation_right * third_permutation_right;
-		//right = change_sign<1, 0, 1, 0>(right);
+		quaternion.value = (left + right).value;
+		return quaternion;
+	}
 
-		//quaternion.value = (left + right).value;
-		//return quaternion;
+	// The angles must be expressed in degrees
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEuler(float3 rotation_degrees0, float3 rotation_degrees1) {
+		return QuaternionFromEulerRad(DegToRad(rotation_degrees0), DegToRad(rotation_degrees1));
 	}
 
 	// The angles must be expressed in radians
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromRotationRad(float3 rotation1, float3 rotation2) {
-		PackedQuaternion quaternion;
-
-		return QuaternionAngleFromAxisRad(rotation1.z, { 0.0f, 0.0f, 1.0f }, rotation2.z, {0.0f, 0.0f, 1.0f}) *
-			QuaternionAngleFromAxisRad(rotation1.y, { 0.0f, 1.0f, 0.0f }, rotation2.y, { 0.0f, 1.0f, 0.0f }) *
-			QuaternionAngleFromAxisRad(rotation1.x, { 1.0f, 0.0f, 0.0f }, rotation2.x, { 1.0f, 0.0f, 0.0f });
-
-		//Vector8 angles(rotation1, rotation2);
-		//Vector8 half(0.5f);
-		//angles *= half;
-
-		//Vec8f cos;
-		//Vector8 sin = sincos(&cos, angles);
-
-		//// Quaternion:
-		//// x = cos(x) * cos(y) * cos(z) + sin(x) * sin(y) * sin(z)
-		//// y = sin(x) * cos(y) * cos(z) - cos(x) * sin(y) * sin(z)
-		//// z = cos(x) * sin(y) * cos(z) + sin(x) * cos(y) * cos(z)
-		//// w = cos(x) * cos(y) * sin(z) - sin(x) * sin(y) * cos(z)
-
-		//Vector8 first_permutation_left = blend8<0, 8, 0, 0, 4, 12, 4, 4>(cos, sin);
-		//Vector8 second_permutation_left = blend8<1, 1, 9, 1, 5, 5, 13, 5>(cos, sin);
-		//Vector8 third_permutation_left = blend8<2, 2, 2, 10, 6, 6, 6, 14>(cos, sin);
-
-		//Vector8 first_permutation_right = permute8<1, 0, 1, 1, 5, 4, 5, 5>(first_permutation_left);
-		//Vector8 second_permutation_right = permute8<2, 2, 0, 2, 6, 6, 4, 6>(second_permutation_left);
-		//Vector8 third_permutation_right = permute8<3, 3, 0, 0, 7, 7, 4, 4>(third_permutation_left);
-
-		//Vector8 left = first_permutation_left * second_permutation_left * third_permutation_left;
-		//Vector8 right = first_permutation_right * second_permutation_right * third_permutation_right;
-		//right = change_sign<0, 1, 0, 1, 0, 1, 0, 1>(right);
-
-		//quaternion.value = (left + right).value;
-		//return quaternion;
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEulerRad(float3 rotation) {
+		// We don't care about the second float3
+		return QuaternionFromEulerRad(rotation, float3(0.0f, 0.0f, 0.0f));
 	}
 
 	// The angles must be expressed in degrees
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromRotation(float3 rotation) {
-		return QuaternionFromRotationRad(DegToRad(rotation));
-	}
-
-	// The angles must be expressed in degrees
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromRotation(float3 rotation1, float3 rotation2) {
-		return QuaternionFromRotationRad(DegToRad(rotation1), DegToRad(rotation2));
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEuler(float3 rotation) {
+		return QuaternionFromEulerRad(DegToRad(rotation));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
@@ -314,354 +276,204 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	namespace SIMDHelpers {
-		// Expects the from vector and the to vector to be normalized
-		ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromVectorsHelper(Vector4 from_vector, Vector4 to_vector) {
-			// If they are equal return an identity quaternion
-			if (from_vector == to_vector) {
-				return QuaternionIdentity();
-			}
-			// else check if they are opposite 
-			// If they are, return the most orthogonal axis of the from vector
-			// that can be used to create a pure quaternion
-			else if (from_vector == Vector4(-to_vector)) {
-				Vector4 no_abs_from_vector = from_vector;
-				from_vector = abs(from_vector);
-				alignas(16) float4 values;
-				from_vector.StoreAligned(&values);
-
-				Vector4 one = VectorGlobals::ONE_4;
-				Vector4 zero = ZeroVector4();
-				Vector4 orthogonal = blend4<4, 0, 0, 0>(zero, one);
-				if (values.y < values.x) {
-					orthogonal = blend4<0, 4, 0, 0>(zero, one);
-				}
-				else if (values.z < values.y && values.z < values.x) {
-					orthogonal = blend4<0, 0, 4, 0>(zero, one);
-				}
-				Vector4 axis = Normalize3(Cross(no_abs_from_vector, orthogonal));
-				return Quaternion(blend4<0, 1, 2, 4>(axis, zero));
-			}
-
-			// else create the quaternion from the half vector
-			Vector4 half = Normalize3(from_vector + to_vector);
-			Vector4 axis = Cross(from_vector, half);
-			Vector4 dot = Dot3(from_vector, half);
-			return Quaternion(blend4<0, 1, 2, 4>(axis, dot));
+	// Expects the from vector and the to vector to be normalized
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromVectorsNormalized(Vector8 from_vector_normalized, Vector8 to_vector_normalized) {
+		// If they are equal return an identity quaternion
+		bool2 both_are_equal = Compare(from_vector_normalized, to_vector_normalized, VectorGlobals::QUATERNION_EPSILON);
+		if (both_are_equal.x && both_are_equal.y) {
+			return QuaternionIdentity();
 		}
-
-		// Expects the from vector and the to vector to be normalized
-		ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromVectorsHelper(Vector8 from_vector, Vector8 to_vector) {
-			// If they are equal return an identity quaternion
-			if (from_vector == to_vector) {
-				return PackedQuaternionIdentity();
-			}
-			// else check if they are opposite 
-			// If they are, return the most orthogonal axis of the from_vector vector
+		else {
+			// Now there are 2 branches left
+			// If they are opposite and when they are not
+			// If they are opposite return the most orthogonal axis of the from_vector vector
 			// that can be used to create a pure quaternion
-			else if (from_vector == Vector8(-to_vector)) {
-				Vector8 no_abs_from_vector_vector = from_vector;
-				from_vector = abs(from_vector);
-				alignas(32) float4 values[2];
-				from_vector.StoreAligned(&values);
 
-				Vector8 one = VectorGlobals::ONE_8;
-				Vector8 zero = ZeroVector8();
-				Vector8 orthogonal = blend8<8, 0, 0, 0, 8, 0, 0, 0>(zero, one);
+			// Can't be sure which branch each half must take so execute both of them
+			// and then mask the result at the end
 
-				// first assignment - no need to do a second blend to keep the original values
-				if (values[0].y < values[0].x) {
-					orthogonal = blend8<0, 8, 0, 0, 8, 0, 0, 0>(zero, one);
-				}
-				else if (values[0].z < values[0].y && values[0].z < values[0].x) {
-					orthogonal = blend8<0, 0, 8, 0, 8, 0, 0, 0>(zero, one);
-				}
+			Vector8 compare_mask = CompareMask(from_vector_normalized, -to_vector_normalized, VectorGlobals::QUATERNION_EPSILON);
 
-				// second assignment - original values must be kept so a second blend must be done
-				if (values[1].y < values[1].x) {
-					// only the first 4 values of the zero one blend must be correct
-					orthogonal = blend8<0, 1, 2, 3, 8, 9, 10, 11>(blend8<0, 8, 0, 0, 0, 0, 0, 0>(zero, one), orthogonal);
+#pragma region Opposite branch - it needs to be executed no matter what
+			// This is the scalar code that must be executed
+			// In the branches down bellow
+			/*
+				float3 ortho = float3(1, 0, 0);
+				if (fabsf(f.y) < fabsf(f.x)) {
+					orthogonal = float3(0, 1, 0);
 				}
-				else if (values[1].z < values[1].y && values[1].z < values[1].x) {
-					orthogonal = blend8<0, 1, 2, 3, 8, 9, 10, 11>(blend8<0, 0, 8, 0, 0, 0, 0, 0>(zero, one), orthogonal);
+				if (fabsf(f.z) < fabs(f.y) && fabs(f.z) < fabsf(f.x)){
+					orthogonal = float3(0, 0, 1);
 				}
+			*/
 
-				Vector8 axis = Normalize(Cross(no_abs_from_vector_vector, orthogonal));
-				return PackedQuaternion(blend8<0, 1, 2, 8, 4, 5, 6, 8>(axis, zero));
+			Vector8 absolute_from_vector = abs(from_vector_normalized);
+
+			// TODO: Make this more efficient?
+			alignas(32) float4 opposite_values[2];
+			absolute_from_vector.StoreAligned(&opposite_values);
+
+			Vector8 one = VectorGlobals::ONE;
+			Vector8 zero = ZeroVector();
+			Vector8 opposite_orthogonal = PerLaneBlend<4, 0, 0, 0>(zero, one);
+
+			// first assignment - no need to do a second blend to keep the original values
+			if (opposite_values[0].y < opposite_values[0].x) {
+				opposite_orthogonal = blend8<0, 9, 0, 0, 12, 0, 0, 0>(zero, one);
+			}
+			else if (opposite_values[0].z < opposite_values[0].y && opposite_values[0].z < opposite_values[0].x) {
+				opposite_orthogonal = blend8<0, 0, 10, 0, 12, 0, 0, 0>(zero, one);
 			}
 
-			// can't be sure which branch each half must take
-			// so split them in 2 Vector4's and do each assignment
-			// and then merge
-			Vector4 from_vector_vector_low = from_vector.value.get_low();
-			Vector4 from_vector_vector_high = from_vector.value.get_high();
+			// second assignment - original values must be kept so a second blend must be done
+			if (opposite_values[1].y < opposite_values[1].x) {
+				// only the first 4 values of the zero one blend must be correct
+				opposite_orthogonal = permute8<0, 1, 2, 3, 7, 4, 7, 7>(opposite_orthogonal);
+			}
+			else if (opposite_values[1].z < opposite_values[1].y && opposite_values[1].z < opposite_values[1].x) {
+				opposite_orthogonal = permute8<0, 1, 2, 3, 7, 7, 4, 7>(opposite_orthogonal);
+			}
 
-			Vector4 to_vector_low = to_vector.value.get_low();
-			Vector4 to_vector_high = to_vector.value.get_high();
-
-			Quaternion quaternion_low = SIMDHelpers::QuaternionFromVectorsHelper(from_vector_vector_low, to_vector_low);
-			Quaternion quaternion_high = SIMDHelpers::QuaternionFromVectorsHelper(from_vector_vector_high, to_vector_high);
-
-			return PackedQuaternion(quaternion_low, quaternion_high);
-		}
-	}
-
-	// If the vectors are already normalized you can call directly
-	// SIMDHelpers::QuaternionFromVectorsHelper
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromVectors(Vector4 from, Vector4 to) {
-		// Normalize the vectors
-		from = Normalize3(from);
-		to = Normalize3(to);
-
-		return SIMDHelpers::QuaternionFromVectorsHelper(from, to);
-	}
-
-	// If the vectors are already normalized you can call directly
-	// SIMDHelpers::QuaternionFromVectorsHelper
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromVectors(float3 from, float3 to) {
-		Vector4 from_vector(from);
-		Vector4 to_vector(to);
-		
-		return QuaternionFromVectors(from_vector, to_vector);
-	}
-
-	// If the vectors are already normalized you can call directly
-	// SIMDHelpers::QuaternionFromVectorsHelper
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromVectors(Vector8 from, Vector8 to) {
-		// Normalize the vectors
-		from = Normalize3(from);
-		to = Normalize3(to);
-
-		return SIMDHelpers::QuaternionFromVectorsHelper(from, to);
-	}
-
-	// If the vectors are already normalized you can call directly
-	// SIMDHelpers::QuaternionFromVectorsHelper
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromVectors(Vector4 from1, Vector4 to1, Vector4 from2, Vector4 to2) {
-		Vector8 from(from1, from2);
-		Vector8 to(to1, to2);
-
-		return QuaternionFromVectors(from, to);
-	}
-
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionFromVectors(float3 from1, float3 to1, float3 from2, float3 to2) {
-		Vector8 from_vector(from1, from2);
-		Vector8 to_vector(to1, to2);
-
-		return QuaternionFromVectors(from_vector, to_vector);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------
+			Vector8 opposite_quaternion_axis = Normalize(Cross(from_vector_normalized, opposite_orthogonal));
+			Quaternion opposite_quaternion_result = Quaternion(PerLaneBlend<0, 1, 2, 7>(opposite_quaternion_axis, zero));
 
 #pragma endregion
 
-#pragma region Get Axis
+			// Test the case when they are both opposite
+			// If they are, we can stop and return the result calculated here
+			if (horizontal_and(compare_mask.AsMask())) {
+				return opposite_quaternion_result;
+			}
 
-	// ---------------------------------------------------------------------------------------------------------------
+			// Else create the quaternion from the half vector
+			Vector8 half = Normalize(from_vector_normalized + to_vector_normalized);
+			Vector8 axis = Cross(from_vector_normalized, half);
+			Vector8 dot = Dot(to_vector_normalized, half);
+			Quaternion general_case_result = Quaternion(PerLaneBlend<0, 1, 2, 4>(axis, dot));
 
-	// Will do a partial store on the axis, this is useful if packed buffers must be filled in
-	ECS_INLINE void ECS_VECTORCALL QuaternionAxis(Quaternion quaternion, float3& axis) {
-		Vector4 vector_axis(axis);
-		vector_axis = Normalize3(vector_axis);
-		vector_axis.StorePartialConstant<3>(&axis);
+			// Select the branch each half needs to take
+			return Select(compare_mask, opposite_quaternion_result.value, general_case_result.value);
+		}
 	}
 
-	// Can do a normal store on float4 and the use only the 3 components; useful for stack variable
-	ECS_INLINE void ECS_VECTORCALL QuaternionAxis(Quaternion quaternion, float4& axis) {
-		Vector4 vector_axis(axis);
-		vector_axis = Normalize3(vector_axis);
-		vector_axis.Store(&axis);
-	}
+	// If the vectors are already normalized you can call directly the other function
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromVectors(Vector8 from, Vector8 to) {
+		// Normalize the vectors
+		from = Normalize(from);
+		to = Normalize(to);
 
-	// Will do a partial store on each axis by using the high and the low part
-	ECS_INLINE void ECS_VECTORCALL QuaternionAxis(PackedQuaternion quaternion, float3& first_axis, float3& second_axis) {
-		Quaternion low = quaternion.Low();
-		Quaternion high = quaternion.High();
-
-		QuaternionAxis(low, first_axis);
-		QuaternionAxis(high, second_axis);
-	}
-
-	// Will do a normal store on each axis by using the high and the low part; useful for stack variables
-	ECS_INLINE void ECS_VECTORCALL QuaternionAxis(PackedQuaternion quaternion, float4& first_axis, float4& second_axis) {
-		Quaternion low = quaternion.Low();
-		Quaternion high = quaternion.High();
-
-		QuaternionAxis(low, first_axis);
-		QuaternionAxis(high, second_axis);
+		return QuaternionFromVectorsNormalized(from, to);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
+	// The quaternion needs to be normalized
+	ECS_INLINE void ECS_VECTORCALL QuaternionAxisNormalized(Quaternion quaternion_normalized, float3* axis_low, float3* axis_high) {
+		Vector8 vector_axis(quaternion_normalized.value);
+		vector_axis.StoreFloat3(axis_low, axis_high);
+	}
 
-#pragma region Get Angle
+	// The quaternion needs to be normalized
+	ECS_INLINE float3 ECS_VECTORCALL QuaternionAxisNormalized(Quaternion quaternion_normalized) {
+		Vector8 vector_axis(quaternion_normalized.value);
+		return vector_axis.AsFloat3Low();
+	}
+
+	// If the quaternion is normalized use the other variant
+	ECS_INLINE void ECS_VECTORCALL QuaternionAxis(Quaternion quaternion, float3* axis_low, float3* axis_high) {
+		QuaternionAxisNormalized(QuaternionNormalize(quaternion), axis_low, axis_high);
+	}
+
+	// If the quaternion is normalized use the other variant
+	ECS_INLINE float3 ECS_VECTORCALL QuaternionAxis(Quaternion quaternion) {
+		return QuaternionAxisNormalized(QuaternionNormalize(quaternion));
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// The angle is in radians
-	ECS_INLINE float ECS_VECTORCALL QuaternionAngleRad(Quaternion quaternion) {
-		return 2.0f * quaternion[3];
+	ECS_INLINE float ECS_VECTORCALL QuaternionAngleRadLow(Quaternion quaternion) {
+		return 2.0f * acosf(Vector8(quaternion).Last());
 	}
 
 	// The angle is in radians
-	ECS_INLINE float2 ECS_VECTORCALL QuaternionAngleRad(PackedQuaternion quaternion) {
-		alignas(32) float values[8];
-		quaternion.value.store_a(values);
-		return { 2.0f * values[0], 2.0f * values[7] };
+	ECS_INLINE float2 ECS_VECTORCALL QuaternionAngleRad(Quaternion quaternion) {
+		// Calculate the acos for both at the same time
+		Vector8 half_angle = acos(quaternion.value);
+		return float2::Splat(2.0f) * half_angle.GetLasts();
+	}
+
+	// The angle is in radians
+	// The angle value is splatted across the lane
+	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionHalfAngleRadSIMD(Quaternion quaternion) {
+		Vector8 half_angle = acos(Vector8(quaternion.value));
+		return PerLaneBroadcast<3>(half_angle);
+	}
+
+	// The angle is in radians
+	// The angle value is splatted across the lane
+	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionAngleRadSIMD(Quaternion quaternion) {	
+		Vector8 two = Vector8(2.0f);
+		return QuaternionHalfAngleRadSIMD(quaternion) * two;
 	}
 
 	// The angle is in degrees
-	ECS_INLINE float ECS_VECTORCALL QuaternionAngle(Quaternion quaternion) {
-		return RadToDeg(QuaternionAngleRad(quaternion));
+	ECS_INLINE float ECS_VECTORCALL QuaternionAngleLow(Quaternion quaternion) {
+		return RadToDeg(QuaternionAngleRadLow(quaternion));
 	}
 
 	// The angle is in degrees
-	ECS_INLINE float2 ECS_VECTORCALL QuaternionAngle(PackedQuaternion quaternion) {
+	ECS_INLINE float2 ECS_VECTORCALL QuaternionAngle(Quaternion quaternion) {
 		return RadToDeg(QuaternionAngleRad(quaternion));
 	}
 
-	// ---------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Same Orientation
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE bool ECS_VECTORCALL QuaternionSameOrientation(Quaternion a, Quaternion b) {
-		return horizontal_and(abs(a.value - b.value) < VectorGlobals::QUATERNION_EPSILON_4 || horizontal_and(abs(a.value + b.value) < VectorGlobals::QUATERNION_EPSILON_4));
+	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionHalfAngleSIMD(Quaternion quaternion) {
+		return RadToDeg(QuaternionHalfAngleRadSIMD(quaternion));
 	}
 
-	ECS_INLINE bool2 ECS_VECTORCALL QuaternionSameOrientation(PackedQuaternion a, PackedQuaternion b) {
-		auto negative_bool = abs(a.value - b.value) < VectorGlobals::QUATERNION_EPSILON_8;
-		auto positive_bool = abs(a.value + b.value) < VectorGlobals::QUATERNION_EPSILON_8;
-		return { horizontal_and(negative_bool.get_low()) || horizontal_and(positive_bool.get_low()), horizontal_and(negative_bool.get_high()) || horizontal_and(positive_bool.get_high()) };
+	// The angle is in degrees
+	// The angle value is splatted across the lane
+	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionAngleSIMD(Quaternion quaternion) {
+		return RadToDeg(QuaternionAngleRadSIMD(quaternion));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region Dot
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// The value is replicated accross all register values
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionDot(Quaternion a, Quaternion b) {
-		return Dot(a.value, b.value);
+	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionSameOrientationMask(Quaternion a, Quaternion b) {
+		return abs(a.value - b.value) < VectorGlobals::QUATERNION_EPSILON || abs(a.value + b.value) < VectorGlobals::QUATERNION_EPSILON;
 	}
 
-	// The value is replicated accross all 4 register values inside the low and high parts
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionDot(PackedQuaternion a, PackedQuaternion b) {
-		return Dot(a.value, b.value);
-	}
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+		QuaternionSameOrientation,
+		FORWARD(Quaternion a, Quaternion b),
+		FORWARD(a, b)
+	);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma region
-
-#pragma region Squared Length
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionSquaredLength(Quaternion a) {
-		return QuaternionDot(a, a);
-	}
-
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionSquaredLength(PackedQuaternion a) {
-		return QuaternionDot(a, a);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Length
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionLength(Quaternion quaternion) {
-		return sqrt(QuaternionSquaredLength(quaternion).value);
-	}
-
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionLength(PackedQuaternion quaternion) {
-		return sqrt(QuaternionSquaredLength(quaternion).value);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Normalize
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNormalize(Quaternion quaternion) {
-		Vector4 vector(quaternion.value);
-		return Normalize(vector);
-	}
-
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionNormalize(PackedQuaternion quaternion) {
-		Vector8 vector(quaternion.value);
-		return Normalize(vector);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Conjugate
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// Invert the axis
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionConjugate(Quaternion quaternion) {
-		return Quaternion(blend4<0, 1, 2, 7>(-quaternion.value, quaternion.value));
-	}
-
-	// Invert the axis 
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionConjugate(PackedQuaternion quaternion) {
-		return PackedQuaternion(blend8<0, 1, 2, 11, 4, 5, 6, 15>(-quaternion.value, quaternion.value));
+		// Invert the axis
+		return Quaternion(PerLaneBlend<0, 1, 2, 7>(-quaternion.value, quaternion.value));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region Inverse
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// Proper inverse is the conjugate divided by the squared length
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionInverse(Quaternion quaternion) {
-		Vector4 reciprocal = VectorGlobals::ONE_4 / Vector4(QuaternionSquaredLength(quaternion).value);
-		return Quaternion(Vector4(QuaternionConjugate(quaternion).value) * reciprocal);
-	}
-
-	// Proper inverse is the conjugate divided by the squared length
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionInverse(PackedQuaternion quaternion) {
-		Vector8 reciprocal = VectorGlobals::ONE_8 / Vector8(QuaternionSquaredLength(quaternion).value);
-		return PackedQuaternion(Vector8(QuaternionConjugate(quaternion).value) * reciprocal);
-	}
-
-	// The conjugate and the inverse are the same if the quaternion is normalized;
-	// Avoids a division, a dot product and a multiplication
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNormalizedInverse(Quaternion quaternion) {
+		// The conjugate and the inverse are the same if the quaternion is normalized;
+		// Avoids a division, a square root and a dot product
 		return QuaternionConjugate(quaternion);
 	}
 
-	// The conjugate and the inverse are the same if the quaternion is normalized;
-	// Avoids a division, a dot product and a multiplication
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionNormalizedInverse(PackedQuaternion quaternion) {
-		return QuaternionConjugate(quaternion);
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionInverse(Quaternion quaternion) {
+		// Proper inverse is the conjugate divided by the squared length
+		// If the squared length is 1.0f, then don't perform the division
+		if (!QuaternionIsNormalizedWhole(quaternion)) {
+			return Quaternion(QuaternionConjugate(quaternion).value / QuaternionSquaredLength(quaternion.value).value);
+		}
+		else {
+			return QuaternionNormalizedInverse(quaternion);
+		}
 	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Multiplication
 
 	// ---------------------------------------------------------------------------------------------------------------
 
@@ -671,100 +483,45 @@ namespace ECSEngine {
 		// z = b.x * a.y - b.y * a.x + b.z * a.w + b.w * a.z
 		// w = -b.x * a.x - b.y * a.y - b.z * a.z + b.w * a.w
 
-		Vector4 a_vector = a.value;
-		Vector4 first_permutation = permute4<3, 2, 1, 0>(a_vector);
-		Vector4 second_permutation = permute4<2, 3, 0, 1>(a_vector);
-		Vector4 third_permutation = permute4<1, 0, 3, 2>(a_vector);
-		Vector4 fourth_permutation = a_vector;
-		
-		// Negate the correct values and the use the dot product to get the values
-		first_permutation = change_sign<0, 0, 1, 0>(first_permutation);
-		second_permutation = change_sign<1, 0, 0, 0>(second_permutation);
-		third_permutation = change_sign<0, 1, 0, 0>(third_permutation);
-		fourth_permutation = change_sign<1, 1, 1, 0>(a_vector);
-
-		Vector4 b_value = b.value;
-		Vector4 x = Dot(b.value, first_permutation);
-		Vector4 y = Dot(b.value, second_permutation);
-		Vector4 z = Dot(b.value, third_permutation);
-		Vector4 w = Dot(b.value, fourth_permutation);
-
-		Vector4 xy = blend4<0, 4, 2, 3>(x, y);
-		Vector4 zw = blend4<0, 0, 0, 4>(z, w);
-		return blend4<0, 1, 4, 7>(xy, zw);
-	}
-
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionMultiply(PackedQuaternion a, PackedQuaternion b) {
-		// x = b.x * a.w + b.y * a.z - b.z * a.y + b.w * a.x
-		// y = -b.x * a.z + b.y * a.w + b.z * a.x + b.w * a.y
-		// z = b.x * a.y - b.y * a.x + b.z * a.w + b.w * a.z
-		// w = -b.x * a.x - b.y * a.y - b.z * a.z + b.w * a.w
-
 		Vector8 a_vector = a.value;
-		Vector8 first_permutation = permute8<3, 2, 1, 0, 7, 6, 5, 4>(a_vector);
-		Vector8 second_permutation = permute8<2, 3, 0, 1, 6, 7, 4, 5>(a_vector);
-		Vector8 third_permutation = permute8<1, 0, 3, 2, 5, 4, 7, 6>(a_vector);
-		Vector8 fourth_permutation = a_vector;
+		Vector8 b_vector = b.value;
+
+		Vector8 b_first = PerLaneBroadcast<0>(b_vector);
+		Vector8 b_second = PerLaneBroadcast<1>(b_vector);
+		Vector8 b_third = PerLaneBroadcast<2>(b_vector);
+		Vector8 b_fourth = PerLaneBroadcast<3>(b_vector);
+
+		Vector8 a_first = PerLanePermute<3, 2, 1, 0>(a_vector);
+		Vector8 a_second = PerLanePermute<2, 3, 0, 1>(a_vector);
+		Vector8 a_third = PerLanePermute<1, 0, 3, 2>(a_vector);
+		Vector8 a_fourth = a_vector;
 
 		// Negate the correct values and the use the dot product to get the values
-		first_permutation = change_sign<0, 0, 1, 0, 0, 0, 1, 0>(first_permutation);
-		second_permutation = change_sign<1, 0, 0, 0, 1, 0, 0, 0>(second_permutation);
-		third_permutation = change_sign<0, 1, 0, 0, 0, 1, 0, 0>(third_permutation);
-		fourth_permutation = change_sign<1, 1, 1, 0, 1, 1, 1, 0>(a_vector);
+		a_first = PerLaneChangeSign<0, 1, 0, 1>(a_first);
+		a_second = PerLaneChangeSign<0, 0, 1, 1>(a_second);
+		a_third = PerLaneChangeSign<1, 0, 0, 1>(a_third);
 
-		Vector8 b_value = b.value;
-		Vector8 x = Dot(b.value, first_permutation);
-		Vector8 y = Dot(b.value, second_permutation);
-		Vector8 z = Dot(b.value, third_permutation);
-		Vector8 w = Dot(b.value, fourth_permutation);
-
-		Vector8 xy = blend8<0, 8, 2, 3, 4, 12, 6, 7>(x, y);
-		Vector8 zw = blend8<0, 1, 2, 8, 4, 5, 6, 15>(z, w);
-		return blend8<0, 1, 10, 11, 4, 5, 14, 15>(xy, zw);
+		Vector8 final_value = b_first * a_first;
+		final_value = Fmadd(b_second, a_second, final_value);
+		final_value = Fmadd(b_third, a_third, final_value);
+		return Fmadd(b_fourth, a_fourth, final_value);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region Vector multiply
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Vector4 ECS_VECTORCALL QuaternionVectorMultiply(Quaternion quaternion, Vector4 vector) {
-		// 2.0f * Dot3(quaternion.xyz, vector.xyz) * quaternion.xyz + vector * 
-		// (quaternion.w * quaternion.w - Dot(quaternion.xyz, quaternion.xyz)) + Cross(quaternion.xyz, vector.xyz) * 2.0f * quaternion.w
-
-		Vector4 quat_vec(quaternion.value);
-		// Splat the w component
-		Vector4 quat_w = permute4<3, 3, 3, 3>(quat_vec);
-		Vector4 w_squared = quat_w * quat_w;
-		Vector4 dot = Dot3(quat_vec, vector);
-		Vector4 cross = Cross(quat_vec, vector);
-		Vector4 two = Vector4(2.0f);
-
-		Vector4 quaternion_dot = Dot3(quat_vec, quat_vec);
-
-		Vector4 first_term = two * dot * quat_vec;
-		Vector4 second_term = vector * (w_squared - quaternion_dot);
-		Vector4 third_term = cross * two * quat_w;
-
-		return first_term + second_term + third_term;
-	}
-
-	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionVectorMultiply(PackedQuaternion quaternion, Vector8 vector) {
+	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionVectorMultiply(Quaternion quaternion, Vector8 vector) {
 		// 2.0f * Dot3(quaternion.xyz, vector.xyz) * quaternion.xyz + vector * 
 		// (quaternion.w * quaternion.w - Dot(quaternion.xyz, quaternion.xyz)) + Cross(quaternion.xyz, vector.xyz) * 2.0f * quaternion.w
 
 		Vector8 quat_vec(quaternion.value);
 		// Splat the w component
-		Vector8 quat_w = permute8<3, 3, 3, 3, 7, 7, 7, 7>(quat_vec);
+		Vector8 quat_w = PerLaneBroadcast<3>(quat_vec);
 		Vector8 w_squared = quat_w * quat_w;
-		Vector8 dot = Dot3(quat_vec, vector);
+		Vector8 dot = Dot(quat_vec, vector);
 		Vector8 cross = Cross(quat_vec, vector);
 		Vector8 two = Vector8(2.0f);
 
-		Vector8 quaternion_dot = Dot3(quat_vec, quat_vec);
+		Vector8 quaternion_dot = Dot(quat_vec, quat_vec);
 
 		Vector8 first_term = two * dot * quat_vec;
 		Vector8 second_term = vector * (w_squared - quaternion_dot);
@@ -775,250 +532,118 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region Neighbourhood
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// If the dot product between the 2 quaternions is negative, negate b and return it
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNeighbour(Quaternion quat_a, Quaternion quat_b) {
+		// If the dot product between the 2 quaternions is negative, negate b and return it
 		Quaternion dot = QuaternionDot(quat_a, quat_b);
-		float value = Vector4(dot.value).First();
-		if (value < 0.0f) {
-			return -quat_b;
-		}
-		return quat_b;
-	}
-
-	// If the dot product between the 2 quaternions is negative, negate b and return it
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionNeighbour(PackedQuaternion quat_a, PackedQuaternion quat_b) {
-		PackedQuaternion dot = QuaternionDot(quat_a, quat_b);
-		float value1 = Vector8(dot.value).First();
-		float value2 = Vector8(dot.value).FirstHigh();
-
-		PackedQuaternion negated = -quat_b;
-		PackedQuaternion result = quat_b;
-		if (value1 < 0.0f) {
-			result = Vector8(blend8<8, 9, 10, 11, 4, 5, 6, 7>(quat_b.value, negated.value));
-		}
-		if (value2 < 0.0f) {
-			result = Vector8(blend8<0, 1, 2, 3, 12, 13, 14, 15>(result.value, negated.value));
-		}
-		return result;
+		Vector8 mask = dot < ZeroVector();
+		return Select(mask, -quat_b.value, quat_b.value);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region Mix
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// If inputs are unit length, output will be the same; assumes neighbour quaternions
-	// Similar to a lerp
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionMix(Quaternion from, Quaternion to, float percentage) {
-		Vector4 vector_percentage(percentage);
-		Vector4 one_minus_vector = VectorGlobals::ONE_4 - vector_percentage;
-		return Quaternion(Vector4(Vector4(from.value) * one_minus_vector + Vector4(to.value) * vector_percentage).value);
-	}
-
-	// If inputs are unit length, output will be the same; assumes neighbour quaternions
-	// Similar to a lerp; applies the percentage to both parts - high and low
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionMix(PackedQuaternion from, PackedQuaternion to, float percentage) {
-		Vector8 vector_percentage(percentage);
-		Vector8 one_minus_vector = VectorGlobals::ONE_8 - vector_percentage;
-		return PackedQuaternion(Vector8(Vector8(from.value) * one_minus_vector + Vector8(to.value) * vector_percentage).value);
-	}
-
-	// If inputs are unit length, output will be the same; assumes neighbour quaternions
-	// Similar to a lerp; applies different percentages to high and low
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionMix(PackedQuaternion from, PackedQuaternion to, float percentage1, float percentage2) {
-		Vector8 vector_percentage{ Vector4(percentage1), Vector4(percentage2) };
-		Vector8 one_minus_vector = VectorGlobals::ONE_8 - vector_percentage;
-		return PackedQuaternion(Vector8(Vector8(from.value) * one_minus_vector + Vector8(to.value) * vector_percentage).value);
+	// If inputs are unit length, output will be unit length as well; assumes neighbour quaternions
+	// Similar to a lerp but slightly different
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionMix(Quaternion from, Quaternion to, Vector8 percentages) {
+		Vector8 one_minus_vector = VectorGlobals::ONE - percentages;
+		return (Vector8(from.value) * one_minus_vector + Vector8(to.value) * percentages).value;
 	}
 
 	// If inputs are unit length, output will be the same; makes neighbour correction as needed
-	// Similar to a lerp
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionMixNeighbour(Quaternion from, Quaternion to, float percentage) {
+	// Similar to a lerp but slightly different
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionMixNeighbour(Quaternion from, Quaternion to, Vector8 percentages) {
 		to = QuaternionNeighbour(from, to);
-		return QuaternionMix(from, to, percentage);
+		return QuaternionMix(from, to, percentages);
 	}
-
-	// If inputs are unit length, output will be the same; makes neighbour correction as needed
-	// Similar to a lerp; applies the percentage to both parts - high and low
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionMixNeighbour(PackedQuaternion from, PackedQuaternion to, float percentage) {
-		to = QuaternionNeighbour(from, to);
-		return QuaternionMix(from, to, percentage);
-	}
-
-	// If inputs are unit length, output will be the same; makes neighbour correction as needed
-	// Similar to a lerp; applies different percentages to high and low
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionMixNeighbour(PackedQuaternion from, PackedQuaternion to, float percentage1, float percentage2) {
-		to = QuaternionNeighbour(from, to);
-		return QuaternionMix(from, to, percentage1, percentage2);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region NLerp
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// Assumes neighbour quaternions
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNLerp(Quaternion from, Quaternion to, float percentage) {
-		return QuaternionNormalize(from + (to - from) * percentage);
-	}
-
-	// Assumes neighbour quaternions; percentage1 for low, percentage2 for high
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionNLerp(PackedQuaternion from, PackedQuaternion to, float percentage1, float percentage2) {
-		Vector8 to_from = (to - from).value;
-		return QuaternionNormalize(from + PackedQuaternion(to_from * Vector8{ Vector4(percentage1), Vector4(percentage2) }));
-	}
-
-	// Assumes neighbour quaternions; percentage for low and high
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionNLerp(PackedQuaternion from, PackedQuaternion to, float percentage) {
-		return QuaternionNormalize(from + (to - from) * percentage);
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNLerp(Quaternion from, Quaternion to, Vector8 percentages) {
+		return QuaternionNormalize(Lerp(from.value, to.value, percentages));
 	}
 
 	// Makes neighbour correction
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNLerpNeighbour(Quaternion from, Quaternion to, float percentage) {
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNLerpNeighbour(Quaternion from, Quaternion to, Vector8 percentages) {
 		to = QuaternionNeighbour(from, to);
-		return QuaternionNLerp(from, to, percentage);
-	}
-
-	// Makes neighbour correction; percentage1 for low, percentage2 for high
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionNLerpNeighbour(PackedQuaternion from, PackedQuaternion to, float percentage1, float percentage2) {
-		to = QuaternionNeighbour(from, to);
-		return QuaternionNLerp(from, to, percentage1, percentage2);
-	}
-
-	// Makes neighbour correction; percentage for low and high
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionNLerpNeighbour(PackedQuaternion from, PackedQuaternion to, float percentage) {
-		to = QuaternionNeighbour(from, to);
-		return QuaternionNLerp(from, to, percentage);
+		return QuaternionNLerp(from, to, percentages);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionToPower(Quaternion quaternion, Vector8 power) {
+		/*
+			Scalar formula
+			angle = acos(quaternion.w) // This is the half angle of the quaternion
+			halfSin = sin(angle * power)
+			halfCos = cos(angle * power)
+			axis = Normalize(quaternion.xyz)
 
-#pragma region To Power
+			return Quaternion (
+				axis.x * halfSin,
+				axis.y * halfSin,
+				axis.z * halfSin,
+				halfCos
+			)
+		*/
 
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionToPower(Quaternion quaternion, float power) {
-		float quat_angle = QuaternionAngle(quaternion);
-		float angle = acosf(quat_angle);
-		Vector4 axis = Normalize3(quaternion.value);
-		
-		Vec4f cos;
-		Vector4 sin = sincos(&cos, power * angle);
-		axis *= sin;
-
-		return Quaternion(blend4<0, 1, 2, 4>(axis, cos));
-	}
-
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionToPower(PackedQuaternion quaternion, float power) {
-		Vector8 power_vector(power);
-		Vector8 axis = Normalize3(quaternion.value);
-
-		Vector8 angle = acos(quaternion.value);
+		Vector8 angle = QuaternionHalfAngleSIMD(quaternion);
+		// The axis needs to be normalized no matter what
+		Vector8 axis = Normalize(quaternion.value);
 
 		Vec8f cos;
-		Vector8 sin = sincos(&cos, angle * power_vector);
+		Vector8 sin = sincos(&cos, power * angle);
 		axis *= sin;
 
-		return PackedQuaternion(blend8<0, 1, 2, 11, 4, 5, 6, 15>(axis, cos));
+		return Quaternion(PerLaneBlend<0, 1, 2, 7>(axis, Vector8(cos)));
 	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region SLerp
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// Assumes neighbour quaternions
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionSLerp(Quaternion from, Quaternion to, float percentage) {
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionSLerp(Quaternion from, Quaternion to, Vector8 percentages) {
 		Quaternion dot = QuaternionDot(from, to);
-		Vector4 abs_dot = abs(Vector4(dot.value));
-		Vector4 one_epsilon = VectorGlobals::ONE_4 - VectorGlobals::QUATERNION_EPSILON_4;
-		if (horizontal_and(abs_dot.value > one_epsilon.value)) {
-			return QuaternionNLerp(from, to, percentage);
+		Vector8 abs_dot = abs(Vector8(dot.value));
+		Vector8 one_epsilon = VectorGlobals::ONE - VectorGlobals::QUATERNION_EPSILON;
+		Vector8 mask = abs_dot.value > one_epsilon.value;
+
+		// We have 2 branches - one when the quaternions are close together where
+		// slerp can produce unstable result, we fall back to nlerp
+		// And the other branch is the classical slerp algorithm
+
+		Quaternion nlerp_quaternion = QuaternionNLerp(from, to, percentages);
+		if (horizontal_and(mask.AsMask())) {
+			// We can already return
+			return nlerp_quaternion;
 		}
+
 		Quaternion delta = QuaternionMultiply(QuaternionInverse(from), to);
-		return QuaternionNormalize(QuaternionMultiply(QuaternionToPower(delta, percentage), from));
-	}
-
-	// Assumes neighbour quaternions; applies the same percentage to low and high
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionSLerp(PackedQuaternion from, PackedQuaternion to, float percentage) {
-		Quaternion from_low = from.Low();
-		Quaternion from_high = from.High();
-		Quaternion to_low = to.Low();
-		Quaternion to_high = to.High();
-
-		return PackedQuaternion(QuaternionSLerp(from_low, to_low, percentage), QuaternionSLerp(from_high, to_high, percentage));
-	}
-
-	// Assumes neighbour quaternions; applies different percentages to low and high
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionSLerp(PackedQuaternion from, PackedQuaternion to, float percentage1, float percentage2) {
-		Quaternion from_low = from.Low();
-		Quaternion from_high = from.High();
-		Quaternion to_low = to.Low();
-		Quaternion to_high = to.High();
-
-		return PackedQuaternion(QuaternionSLerp(from_low, to_low, percentage1), QuaternionSLerp(from_high, to_high, percentage2));
+		Quaternion slerp_quaternion = QuaternionNormalize(QuaternionMultiply(QuaternionToPower(delta, percentages), from));
+		return Select(mask, nlerp_quaternion.value, slerp_quaternion.value);
 	}
 
 	// Makes the neighbour adjustment
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionSLerpNeighbour(Quaternion from, Quaternion to, float percentage) {
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionSLerpNeighbour(Quaternion from, Quaternion to, Vector8 percentage) {
 		to = QuaternionNeighbour(from, to);
 		return QuaternionSLerp(from, to, percentage);
 	}
 
-	// Makes the neighbour adjustment; applies the same percentage to low and high
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionSLerpNeighbour(PackedQuaternion from, PackedQuaternion to, float percentage) {
-		to = QuaternionNeighbour(from, to);
-		return QuaternionSLerp(from, to, percentage);
-	}
-
-	// Makes the neighbour adjustment; applies different percentages to low and high
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionSLerpNeighbour(PackedQuaternion from, PackedQuaternion to, float percentage1, float percentage2) {
-		to = QuaternionNeighbour(from, to);
-		return QuaternionSLerp(from, to, percentage1, percentage2);
-	}
-
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionLookRotationNormalized(Vector8 direction_normalized, Vector8 up_normalized) {
+		Vector8 normalized_right = Cross(up_normalized, direction_normalized); // Object Right
 
-#pragma region Look Rotation
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionLookRotation(Vector4 direction, Vector4 up) {
-		Vector4 normalized_direction = Normalize3(direction); // Object Forward
-		Vector4 normalized_up = Normalize3(up); // Desired Up
-		Vector4 normalized_right = Cross(normalized_up, normalized_direction); // Object Right
-
-		Vector4 object_up = Cross(normalized_direction, normalized_right); // Object Up
+		Vector8 current_up = Cross(direction_normalized, normalized_right); // Object Up
 		// From world forward to object forward
 
-		Vector4 default_up = VectorGlobals::UP_4;
-		Vector4 default_forward = VectorGlobals::FORWARD_4;
-		Quaternion world_to_object = QuaternionFromVectors(default_forward, normalized_direction);
+		Vector8 default_up = UpVector();
+		Vector8 default_forward = ForwardVector();
+		Vector8 world_to_object = QuaternionFromVectors(default_forward, direction_normalized);
 
-		// What direction is the new object up?
-		Vector4 objectUp = QuaternionVectorMultiply(world_to_object, default_up);
+		// This is the new up that the object wants to have
+		Vector8 desired_up = QuaternionVectorMultiply(world_to_object, default_up);
 
 		// From object up to desired up
-		Quaternion object_up_to_desired_up = QuaternionFromVectors(objectUp, object_up);
+		Quaternion object_up_to_desired_up = QuaternionFromVectors(desired_up, current_up);
 
 		// Rotate to forward direction first then twist to correct up
 		Quaternion result = QuaternionMultiply(world_to_object, object_up_to_desired_up);
@@ -1027,66 +652,273 @@ namespace ECSEngine {
 		return QuaternionNormalize(result);
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionLookRotation(float3 direction, float3 up) {
-		// Find orthonormal basis vectors
-		Vector4 direction_vector(direction);
-		Vector4 up_vector(up);
-
-		return QuaternionLookRotation(direction_vector, up_vector);
-	}
-
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionLookRotation(Vector8 direction, Vector8 up) {
-		Vector8 normalized_direction = Normalize3(direction); // Object Forward
-		Vector8 normalized_up = Normalize3(up); // Desired Up
-		Vector8 normalized_right = Cross(normalized_up, normalized_direction); // Object Right
-
-		Vector8 object_up = Cross(normalized_direction, normalized_right); // Object Up
-		// From world forward to object forward
-
-		Vector8 default_up = VectorGlobals::UP_8;
-		Vector8 default_forward = VectorGlobals::FORWARD_8;
-		PackedQuaternion world_to_object = QuaternionFromVectors(default_forward, normalized_direction);
-
-		// What direction is the new object up?
-		Vector8 objectUp = QuaternionVectorMultiply(world_to_object, default_up);
-
-		// From object up to desired up
-		PackedQuaternion object_up_to_desired_up = QuaternionFromVectors(objectUp, object_up);
-
-		// Rotate to forward direction first then twist to correct up
-		PackedQuaternion result = QuaternionMultiply(world_to_object, object_up_to_desired_up);
-
-		// Normalize the result
-		return QuaternionNormalize(result);
-	}
-
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL QuaternionLookRotation(float3 direction1, float3 up1, float3 direction2, float3 up2) {
-		// Find orthonormal basis vectors
-		Vector8 direction_vector(direction1, direction2);
-		Vector8 up_vector(up1, up2);
-
-		return QuaternionLookRotation(direction_vector, up_vector);
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionLookRotation(Vector8 direction, Vector8 up) {
+		Vector8 normalized_direction = Normalize(direction); // Object Forward
+		Vector8 normalized_up = Normalize(up); // Desired Up
+		return QuaternionLookRotationNormalized(normalized_direction, normalized_up);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region Rotate Vector
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Vector4 ECS_VECTORCALL RotateVector(Vector4 vector, Quaternion quaternion) {
+	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorQuaternionSIMD(Quaternion quaternion, Vector8 vector) {
 		return QuaternionVectorMultiply(quaternion, vector);
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL RotateVector(Vector8 vector, PackedQuaternion quaternion) {
-		return QuaternionVectorMultiply(quaternion, vector);
+	// This only rotates the low part
+	ECS_INLINE float3 ECS_VECTORCALL RotateVectorQuaternion(Quaternion quaternion, Vector8 vector) {
+		return RotateVectorQuaternionSIMD(quaternion, vector).AsFloat3Low();
 	}
 
-	// ---------------------------------------------------------------------------------------------------------------
+	// --------------------------------------------------------------------------------------------------------------
 
-#pragma region
+	// Given 2 directions in 3D, A and B, in the same plane, it determines if the
+	// A is clockwise or anticlockwise with respect to B. Clockwise it means that
+	// A needs to be rotated clockwise with the lesser amount, counterclockwise
+	// means that A needs to be rotated counterclockwise with the lesser amount
 
+	// We do this by getting the cross product of the 2 vectors. Using that cross
+	// Product, we can create a quaternion that will rotate the A and B vectors
+	// into the XY plane. Then we can apply the 2D version of the IsClockwise
+	// that is based on the quadrants and doesn't use any trigonometric functions
+
+	// Have specialization for the 2D case
+
+	// The values range from 1 to 4
+	ECS_INLINE int GetQuadrant(float2 vector) {
+		if (vector.x > 0.0f) {
+			if (vector.y > 0.0f) {
+				return 1;
+			}
+			else {
+				return 4;
+			}
+		}
+		else {
+			if (vector.y > 0.0f) {
+				return 2;
+			}
+			else {
+				return 3;
+			}
+		}
+	}
+
+	// If a and b are alredy normalized, you can set the boolean to false such
+	// that it doesn't perform a reduntant normalization
+	static bool IsClockwise(float2 a, float2 b, bool normalize_late = true) {
+		// Here it is much simpler.
+		// Get the quadrants of A and B
+		int a_quadrant = GetQuadrant(a);
+		int b_quadrant = GetQuadrant(b);
+
+		// If in the same quadrant or opposing quadrant, we need a special case
+		auto same_quadrant_case = [normalize_late](float2 a, float2 b, int quadrant) {
+			if (normalize_late) {
+				float4 normalized_values;
+				Normalize2x2(float4(a.x, a.y, b.x, b.y)).Store(&normalized_values);
+				a = { normalized_values.x, normalized_values.y };
+				b = { normalized_values.z, normalized_values.w };
+			}
+
+			// TODO: Do we need both checks? If they are already normalized
+			// Then we need to perform a single check
+			switch (quadrant) {
+			case 1:
+				// It needs to have the Y component bigger and the X smaller
+				return a.y > b.y;
+				break;
+			case 2:
+				// It needs to have the Y component smaller and the X smaller
+				return a.y < b.y;
+				break;
+			case 3:
+				// It needs to have the Y component smaller and the X bigger
+				return a.y < b.y;
+				break;
+			case 4:
+				// It needs to have the Y component bigger and the X bigger
+				return a.y > b.y;
+				break;
+			}
+		};
+
+		if (a_quadrant == b_quadrant) {
+			return same_quadrant_case(a, b, a_quadrant);
+		}
+		else {
+			int difference = abs(a_quadrant - b_quadrant);
+			if (difference == 1) {
+				// Neighbour quadrants
+				// Return true if the a_quadrant is bigger than b
+				return a_quadrant > b_quadrant;
+			}
+			else if (difference == 2) {
+				// This is the negation of the same quadrant case
+				// With the b being negated
+				return !same_quadrant_case(a, -b, a_quadrant);
+			}
+			else if (difference == 3) {
+				// Neighbour quadrants
+				// One is 1 and the other one is 4
+				// If a is in the first quadrant, then it needs to rotate clockwise
+				return a_quadrant == 1;
+			}
+		}
+
+		// Shouldn't reach here
+		return false;
+	}
+
+	// The values need to be normalized before that
+	ECS_INLINE bool IsCounterClockwise(float2 a_normalized, float2 b_normalized) {
+		return !IsClockwise(a_normalized, b_normalized);
+	}
+	
+	// The vectors don't need to be normalized
+	ECS_INLINE bool2 ECS_VECTORCALL IsClockwise(Vector8 a, Vector8 b) {
+		Vector8 cross = Cross(a, b);
+		// The cross product needs to be normalized here
+		cross = Normalize(cross);
+		// We need to transform the cross product to the forward vector in order
+		// to bring A and B into the XY plane
+		Quaternion from_cross_to_YZ = QuaternionFromVectorsNormalized(cross, ForwardVector());
+		Vector8 a_xy = RotateVectorQuaternionSIMD(from_cross_to_YZ, a);
+		Vector8 b_xy = RotateVectorQuaternionSIMD(from_cross_to_YZ, b);
+
+		float4 values[4];
+		a_xy.Store(values);
+		b_xy.Store(values + 2);
+
+		float2 a0_2d = values[0].xy();
+		float2 a1_2d = values[1].xy();
+		float2 b0_2d = values[2].xy();
+		float2 b1_2d = values[3].xy();
+		return bool2(IsClockwise(a0_2d, b0_2d), IsClockwise(a1_2d, b1_2d));
+	}
+
+	// The vectors don't need to be normalized
+	ECS_INLINE bool IsClockwiseLow(Vector8 a, Vector8 b) {
+		return IsClockwise(a, b).x;
+	}
+
+	// The vectors don't need to be normalized
+	ECS_INLINE bool IsClockwiseBoth(Vector8 a, Vector8 b) {
+		return BasicTypeLogicAndBoolean(IsClockwise(a, b));
+	}
+
+	// The vectors don't need to be normalized
+	ECS_INLINE bool2 IsCounterClockwise(Vector8 a, Vector8 b) {
+		return !IsClockwise(a, b);
+	}
+
+	// The vectors don't need to be normalized
+	ECS_INLINE bool IsCounterClockwiseLow(Vector8 a, Vector8 b) {
+		return !IsClockwiseLow(a, b);
+	}
+
+	// The vectors don't need to be normalized
+	ECS_INLINE bool IsCounterClockwiseBoth(Vector8 a, Vector8 b) {
+		return !IsClockwiseBoth(a, b);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+	
+	namespace SIMDHelpers {
+
+		// There needs to be a fixup for the Y value
+		// Use the function FinishEulerRotation to finalize it
+		ECS_INLINE Vector8 ECS_VECTORCALL QuaternionToEulerRadHelper(Quaternion quaternion) {
+			// The formula is this one
+			// x_factor_first = qw * qx + qy * qz
+			// x_factor_second = qx * qx + qy * qy
+			// z_factor_first = qw * qz + qx * qy
+			// z_factor_second = qy * qy + qz * qz
+			// y_factor = qw * qy - qx * qz
+			// 
+			// x_rotation = atan2(2 * x_factor_first, 1 - 2 * x_factor_second)
+			// y rotation = -PI/2 + 2 * atan2(sqrt(1 + 2 * y_factor), sqrt(1 - 2 * y_factor))
+			// z_rotation = atan2(2 * z_factor_first, 1 - 2 * z_factor_second)
+
+			Vector8 one = VectorGlobals::ONE;
+			Vector8 two = Vector8(2.0f);
+
+			Vector8 y_factor_first = PerLanePermute<2, 3, V_DC, V_DC>(quaternion.value);
+			Vector8 y_factor_multiplied = quaternion.value * y_factor_first;
+			// Now we have in the x and y of the y_factor_multiplied the values
+			Vector8 y_factor_multiplied_shuffle = PerLanePermute<V_DC, 0, V_DC, V_DC>(y_factor_multiplied);
+			// Just the y component has the value
+			Vector8 y_factor = y_factor_multiplied - y_factor_multiplied_shuffle;
+			// Just the y component has the value
+			Vector8 sqrt_first = one + two * y_factor;
+			Vector8 sqrt_second = one - two * y_factor;
+			Vector8 sqrt_values = PerLaneBlend<1, 5, V_DC, V_DC>(sqrt_first, sqrt_second);
+			// We now have the values for the atan2 in the x and y
+			sqrt_values = sqrt(sqrt_values);
+
+			// Now calculate the y_factors and z_factors
+			Vector8 first_multiply_element = PerLanePermute<3, 0, 3, 1>(quaternion.value);
+			Vector8 second_multiply_element = PerLanePermute<0, 0, 2, 1>(quaternion.value);
+			Vector8 third_multiply_element = PerLanePermute<1, 1, 0, 2>(quaternion.value);
+			Vector8 fourth_multiply_element = PerLanePermute<2, 1, 1, 2>(quaternion.value);
+
+			Vector8 first_multiplication = first_multiply_element * second_multiply_element;
+			Vector8 second_multiplication = third_multiply_element * fourth_multiply_element;
+			// The x factors are in the x and y components, while the z ones are in the z and w
+			Vector8 xz_factors = first_multiplication + second_multiplication;
+
+			Vector8 double_xz_factors = two * xz_factors;
+			Vector8 xz_factor_second = one - double_xz_factors;
+
+			Vector8 xz_atan_numerators = PerLanePermute<0, V_DC, 2, V_DC>(double_xz_factors);
+			Vector8 xz_atan_denominators = PerLanePermute<1, V_DC, 3, V_DC>(xz_factor_second);
+
+			// Now we can finally bridge all values into atan numerators and denominators
+			Vector8 atan_numerators = PerLaneBlend<0, 4, 2, V_DC>(xz_atan_numerators, sqrt_values);
+			Vector8 atan_denominators = PerLaneBlend<0, 5, 2, V_DC>(xz_atan_denominators, sqrt_values);
+
+			return atan2(atan_numerators, atan_denominators);
+		}
+
+		// This can be used to finish the transformation into euler rotation from quaternion
+		static float3 FinishEulerRotation(float3 euler_rotation) {
+			euler_rotation.y = euler_rotation.y * 2.0f - PI * 0.5f;
+			return euler_rotation;
+		}
+
+	}
+
+	ECS_INLINE float3 ECS_VECTORCALL QuaternionToEulerRadLow(Quaternion quaternion) {
+		Vector8 unfinished_rotation = SIMDHelpers::QuaternionToEulerRadHelper(quaternion);
+		return SIMDHelpers::FinishEulerRotation(unfinished_rotation.AsFloat3Low());
+	}
+
+	ECS_INLINE void ECS_VECTORCALL QuaternionToEulerRad(Quaternion quaternion, float3* low, float3* high) {
+		Vector8 unfinished_rotation = SIMDHelpers::QuaternionToEulerRadHelper(quaternion);
+		unfinished_rotation.StoreFloat3(low, high);
+	}
+
+	ECS_INLINE float3 ECS_VECTORCALL QuaternionToEulerLow(Quaternion quaternion) {
+		return RadToDeg(QuaternionToEulerRadLow(quaternion));
+	}
+
+	ECS_INLINE void ECS_VECTORCALL QuaternionToEuler(Quaternion quaternion, float3* low, float3* high) {
+		QuaternionToEulerRad(quaternion, low, high);
+		*low = RadToDeg(*low);
+		*high = RadToDeg(*high);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// Add a rotation with respect to the local axes of the object
+	ECS_INLINE Quaternion ECS_VECTORCALL AddLocalRotation(Quaternion current_rotation, Quaternion add_rotation) {
+		return current_rotation * add_rotation;
+	}
+
+	// Add a rotation with respect to the global axes of the object
+	ECS_INLINE Quaternion ECS_VECTORCALL AddWorldRotation(Quaternion current_rotation, Quaternion add_rotation) {
+		return add_rotation * current_rotation;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
 
 }

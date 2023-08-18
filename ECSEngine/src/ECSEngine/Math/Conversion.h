@@ -4,141 +4,91 @@
 
 namespace ECSEngine {
 
-#pragma region Quaternion to Matrix
-
 	// -------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Matrix ECS_VECTORCALL QuaternionToMatrix(Quaternion quaternion) {
-		Vector4 right = QuaternionVectorMultiply(quaternion, VectorGlobals::RIGHT_4);
-		Vector4 up = QuaternionVectorMultiply(quaternion, VectorGlobals::UP_4);
-		Vector4 forward = QuaternionVectorMultiply(quaternion, VectorGlobals::FORWARD_4);
+	ECS_INLINE Matrix ECS_VECTORCALL QuaternionToMatrixLow(Quaternion quaternion) {
+		// Make sure that the quaternion has the low and high
+		quaternion.value = Permute2f128Helper<0, 0>(quaternion.value, quaternion.value);
 
-		Vector4 zero = ZeroVector4();
+		Vector8 right = RightVector();
+		Vector8 up = UpVector();
+		Vector8 forward = ForwardVector();
+
+		Vector8 right_up_shuffle = Permute2f128Helper<0, 2>(right, up);
+		Vector8 rotated_right_up = QuaternionVectorMultiply(quaternion, right_up_shuffle);
+		Vector8 rotated_forward = QuaternionVectorMultiply(quaternion, forward);
+
+		Vector8 zero = ZeroVector();
+		rotated_right_up = PerLaneBlend<0, 1, 2, 7>(rotated_right_up, zero);
+		rotated_forward = PerLaneBlend<0, 1, 2, 7>(rotated_forward, zero);
+
+		Vector8 quat_identity = QuaternionIdentity().value;
+		return Matrix(
+			rotated_right_up,
+			blend8<0, 1, 2, 3, 12, 13, 14, 15>(rotated_forward, quat_identity)
+		);
+	}
+
+	ECS_INLINE void ECS_VECTORCALL QuaternionToMatrix(Quaternion quaternion, Matrix* low, Matrix* high) {
+		Vector8 right = QuaternionVectorMultiply(quaternion, RightVector());
+		Vector8 up = QuaternionVectorMultiply(quaternion, UpVector());
+		Vector8 forward = QuaternionVectorMultiply(quaternion, ForwardVector());
+
+		Vector8 zero = ZeroVector();
 		// zero the last element of each vector
-		right = blend4<0, 1, 2, 7>(right, zero);
-		up = blend4<0, 1, 2, 7>(up, zero);
-		forward = blend4<0, 1, 2, 7>(forward, zero);
+		right = PerLaneBlend<0, 1, 2, 7>(right, zero);
+		up = PerLaneBlend<0, 1, 2, 7>(up, zero);
+		forward = PerLaneBlend<0, 1, 2, 7>(forward, zero);
 
-		return Matrix(right, up, forward, VectorGlobals::QUATERNION_IDENTITY_4);
-	}
+		Vector8 quat_identity = QuaternionIdentity().value;
+		*low = Matrix(
+			Permute2f128Helper<0, 2>(right, up),
+			PerLaneBlend<0, 1, 2, 3>(forward, quat_identity)
+		);
 
-	ECS_INLINE void ECS_VECTORCALL QuaternionToMatrix(PackedQuaternion quaternion, Matrix& first, Matrix& second) {
-		Vector8 right = QuaternionVectorMultiply(quaternion, VectorGlobals::RIGHT_8);
-		Vector8 up = QuaternionVectorMultiply(quaternion, VectorGlobals::UP_8);
-		Vector8 forward = QuaternionVectorMultiply(quaternion, VectorGlobals::FORWARD_8);
-
-		Vector8 zero = ZeroVector8();
-
-		// zero the last element of low and high
-		right = blend8<0, 1, 2, 11, 4, 5, 6, 15>(right, zero);
-		up = blend8<0, 1, 2, 11, 4, 5, 6, 15>(up, zero);
-		forward = blend8<0, 1, 2, 11, 4, 5, 6, 15>(forward, zero);
-
-		first = Matrix(right.Low(), up.Low(), forward.Low(), VectorGlobals::QUATERNION_IDENTITY_4);
-		second = Matrix(right.High(), up.High(), forward.High(), VectorGlobals::QUATERNION_IDENTITY_4);
-	}
-
-	ECS_INLINE void ECS_VECTORCALL QuaternionToMatrix(PackedQuaternion quaternion, Matrix* matrices) {
-		QuaternionToMatrix(quaternion, matrices[0], matrices[1]);
+		*low = Matrix(
+			Permute2f128Helper<1, 3>(right, up),
+			Permute2f128Helper<1, 3>(forward, quat_identity)
+		);
 	}
 
 	ECS_INLINE Matrix ECS_VECTORCALL QuaternionRotationMatrix(float3 rotation) {
-		return QuaternionToMatrix(QuaternionFromRotation(rotation));
+		return QuaternionToMatrixLow(QuaternionFromEuler(rotation));
 	}
 
-	ECS_INLINE void ECS_VECTORCALL QuaternionRotationMatrix(float3 rotation1, float3 rotation2, Matrix& first, Matrix& second) {
-		QuaternionToMatrix(QuaternionFromRotation(rotation1, rotation2), first, second);
-	}
-
-	// -------------------------------------------------------------------------------------------------
-
-	ECS_INLINE float3 ECS_VECTORCALL RotateVectorQuaternion(float3 rotation, Vector4 direction) {
-		return RotateVectorMatrix(QuaternionRotationMatrix(rotation), direction);
-	}
-
-	ECS_INLINE Vector4 ECS_VECTORCALL RotateVectorQuaternionSIMD(float3 rotation, Vector4 direction) {
-		return RotateVectorMatrixSIMD(QuaternionRotationMatrix(rotation), direction);
-	}
-
-	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorQuaternionSIMD(float3 rotation, Vector8 direction) {
-		Matrix rotation_matrix = QuaternionRotationMatrix(rotation);
-		return RotateVectorMatrixSIMD(rotation_matrix, direction);
-	}
-
-	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorQuaternionSIMD(float3 rotation0, float3 rotation1, Vector8 direction) {
-		Matrix matrix_rotation0, matrix_rotation1;
-		QuaternionRotationMatrix(rotation0, rotation1, matrix_rotation0, matrix_rotation1);
-		return RotateVectorMatrixSIMD(matrix_rotation0, matrix_rotation1, direction);
+	ECS_INLINE void ECS_VECTORCALL QuaternionRotationMatrix(float3 rotation1, float3 rotation2, Matrix* low, Matrix* high) {
+		QuaternionToMatrix(QuaternionFromEuler(rotation1, rotation2), low, high);
 	}
 
 	// -------------------------------------------------------------------------------------------------
 
-	ECS_INLINE float3 ECS_VECTORCALL GetRightVectorQuaternion(float3 rotation) {
-		return RotateVectorQuaternion(rotation, VectorGlobals::RIGHT_4);
-	}
-
-	ECS_INLINE Vector4 ECS_VECTORCALL GetRightVectorQuaternionSIMD(float3 rotation) {
-		return RotateVectorQuaternionSIMD(rotation, VectorGlobals::RIGHT_4);
-	}
-
-	// -------------------------------------------------------------------------------------------------
-
-	ECS_INLINE float3 ECS_VECTORCALL GetUpVectorQuaternion(float3 rotation) {
-		return RotateVectorQuaternion(rotation, VectorGlobals::UP_4);
-	}
-
-	ECS_INLINE Vector4 ECS_VECTORCALL GetUpVectorQuaternionSIMD(float3 rotation) {
-		return RotateVectorQuaternionSIMD(rotation, VectorGlobals::UP_4);
-	}
-
-	// -------------------------------------------------------------------------------------------------
-
-	ECS_INLINE float3 ECS_VECTORCALL GetForwardVectorQuaternion(float3 rotation) {
-		return RotateVectorQuaternion(rotation, VectorGlobals::FORWARD_4);
-	}
-
-	ECS_INLINE Vector4 ECS_VECTORCALL GetForwardVectorQuaternionSIMD(float3 rotation) {
-		return RotateVectorSIMD(rotation, VectorGlobals::FORWARD_4);
-	}
-
-	// -------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region Matrix to quaternion
-
-	// -------------------------------------------------------------------------------------------------
-
+	// Only the low is a valid quaternion
 	ECS_INLINE Quaternion ECS_VECTORCALL MatrixToQuaternion(Matrix matrix) {
 		// Since a matrix can contain scale, the vectors cannot be taken as they are
 		// So they must be deducted in order to be orthogonal
-		Vector8 right_up_normalized = Normalize3(matrix.v[0]);
-		Vector8 forward_normalized = Normalize3(matrix.v[1]);
+		Vector8 right_up_normalized = NormalizeIfNot(matrix.v[0]);
+		Vector8 forward_normalized = NormalizeIfNot(matrix.v[1]);
 
-		Vector8 up_right_normalized = permute8<4, 5, 6, 7, 0, 1, 2, 3>(right_up_normalized);
+		Vector8 up_right_normalized = Permute2f128Helper<1, 0>(right_up_normalized, right_up_normalized);
 		Vector8 right = Cross(up_right_normalized, forward_normalized);
 		Vector8 orthogonal_up = Cross(forward_normalized, right);
-		return QuaternionLookRotation(forward_normalized.Low(), orthogonal_up.Low());
+		return QuaternionLookRotation(forward_normalized, orthogonal_up);
 	}
 
-	ECS_INLINE PackedQuaternion ECS_VECTORCALL MatrixToQuaternion(Matrix matrix1, Matrix matrix2) {
+	ECS_INLINE Quaternion ECS_VECTORCALL MatrixToQuaternion(Matrix matrix1, Matrix matrix2) {
 		// Since a matrix can contain scale, the vectors cannot be taken as they are
 		// So they must be deducted in order to be orthogonal
 
-		Vector8 ups = blend8<4, 5, 6, 7, 12, 13, 14, 15>(matrix1.v[0], matrix2.v[0]);
-		Vector8 forwards = blend8<0, 1, 2, 3, 8, 9, 10, 11>(matrix1.v[1], matrix2.v[1]);
+		Vector8 ups = Permute2f128Helper<1, 3>(matrix1.v[0], matrix2.v[0]);
+		Vector8 forwards = Permute2f128Helper<0, 2>(matrix1.v[1], matrix2.v[1]);
 
-		ups = Normalize3(ups);
-		forwards = Normalize3(forwards);
+		ups = NormalizeIfNot(ups);
+		forwards = NormalizeIfNot(forwards);
 
 		Vector8 rights = Cross(ups, forwards);
 		Vector8 orthogonal_up = Cross(forwards, rights);
 		return QuaternionLookRotation(forwards, orthogonal_up);
 	}
-
-	// -------------------------------------------------------------------------------------------------
-
-#pragma endregion
 
 	// -------------------------------------------------------------------------------------------------
 

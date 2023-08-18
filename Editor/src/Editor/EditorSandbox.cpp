@@ -110,7 +110,7 @@ EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-EDITOR_SANDBOX_VIEWPORT GetSandboxCurrentViewport(const EditorState* editor_state, unsigned int sandbox_index)
+EDITOR_SANDBOX_VIEWPORT GetSandboxActiveViewport(const EditorState* editor_state, unsigned int sandbox_index)
 {
 	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
 	if (state == EDITOR_SANDBOX_SCENE) {
@@ -129,13 +129,68 @@ EDITOR_SANDBOX_VIEWPORT GetSandboxCurrentViewport(const EditorState* editor_stat
 
 EDITOR_SANDBOX_VIEWPORT GetSandboxViewportOverride(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	return viewport == EDITOR_SANDBOX_VIEWPORT_COUNT ? GetSandboxCurrentViewport(editor_state, sandbox_index) : viewport;
+	return viewport == EDITOR_SANDBOX_VIEWPORT_COUNT ? GetSandboxActiveViewport(editor_state, sandbox_index) : viewport;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+EntityManager* GetSandboxEntityManager(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	switch (viewport) {
+	case EDITOR_SANDBOX_VIEWPORT_SCENE:
+		return &sandbox->scene_entities;
+	case EDITOR_SANDBOX_VIEWPORT_RUNTIME:
+		return sandbox->sandbox_world.entity_manager;
+	case EDITOR_SANDBOX_VIEWPORT_COUNT:
+		return ActiveEntityManager(editor_state, sandbox_index);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	switch (viewport) {
+	case EDITOR_SANDBOX_VIEWPORT_SCENE:
+		return &sandbox->scene_entities;
+	case EDITOR_SANDBOX_VIEWPORT_RUNTIME:
+		return sandbox->sandbox_world.entity_manager;
+	case EDITOR_SANDBOX_VIEWPORT_COUNT:
+		return ActiveEntityManager(editor_state, sandbox_index);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 bool IsSandboxRuntimePreinitialized(const EditorState* editor_state, unsigned int sandbox_index) {
 	return GetSandbox(editor_state, sandbox_index)->runtime_descriptor.graphics != nullptr;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+const EntityManager* ActiveEntityManager(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	if (state == EDITOR_SANDBOX_SCENE) {
+		return &sandbox->scene_entities;
+	}
+	return sandbox->sandbox_world.entity_manager;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandbox_index) {
+	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	if (state == EDITOR_SANDBOX_SCENE) {
+		return &sandbox->scene_entities;
+	}
+	return sandbox->sandbox_world.entity_manager;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -195,8 +250,7 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	SetSandboxCameraAspectRatio(editor_state, sandbox_index, viewport);
-	Camera camera = Camera(sandbox->camera_parameters);
-	camera.translation.z -= 5.0f;
+	Camera camera = Camera(sandbox->camera_parameters[viewport]);
 
 	SystemManager* system_manager = sandbox->sandbox_world.system_manager;
 	SetRuntimeCamera(system_manager, &camera);
@@ -204,7 +258,44 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 		SetEditorRuntimeSelectColor(system_manager, EDITOR_SELECT_COLOR);
 		SetEditorRuntimeSelectedEntities(system_manager, sandbox->selected_entities);
-		SetEditorRuntimeTransformTool(system_manager, sandbox->transform_tool);
+		
+		ECSTransformToolEx transform_tool;
+		transform_tool.tool = sandbox->transform_tool;
+		memcpy(transform_tool.is_selected, sandbox->transform_tool_selected, sizeof(sandbox->transform_tool_selected));
+		bool entity_ids_are_valid = true;
+		// If one entity id is invalid, all should be invalid since these are created and released all at once
+		for (size_t index = 0; index < 3; index++) {
+			transform_tool.entity_ids[index] = FindSandboxUnusedEntitySlot(
+				editor_state, 
+				sandbox_index, 
+				(EDITOR_SANDBOX_ENTITY_SLOT)(EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X + index), 
+				viewport
+			);
+			if (!transform_tool.entity_ids[index].Valid()) {
+				entity_ids_are_valid = false;
+			}
+		}
+
+		// Check to see if we need to recompute the unused slots
+		if (ShouldSandboxRecomputeEntitySlots(editor_state, sandbox_index, viewport) || !entity_ids_are_valid) {
+			unsigned int slot_write_index = GetSandboxUnusedEntitySlots(
+				editor_state, 
+				sandbox_index, 
+				{ transform_tool.entity_ids, std::size(transform_tool.entity_ids) }, 
+				viewport
+			);
+			for (unsigned int index = 0; index < std::size(transform_tool.entity_ids); index++) {
+				SetSandboxUnusedEntitySlotType(
+					editor_state, 
+					sandbox_index, 
+					slot_write_index + index, 
+					(EDITOR_SANDBOX_ENTITY_SLOT)(EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X + index), 
+					viewport
+				);
+			}
+		}
+
+		SetEditorRuntimeTransformToolEx(system_manager, transform_tool);
 		GraphicsBoundViews instanced_views;
 		instanced_views.depth_stencil = sandbox->scene_viewport_depth_stencil_framebuffer;
 		instanced_views.target = sandbox->scene_viewport_instance_framebuffer;
@@ -423,6 +514,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->should_step = true;
 	sandbox->is_scene_dirty = false;
 	sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
+	memset(sandbox->transform_tool_selected, 0, sizeof(sandbox->transform_tool_selected));
 
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	sandbox->locked_count = 0;
@@ -437,7 +529,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 
 	sandbox->scene_path.Initialize(editor_state->EditorAllocator(), 0, SCENE_PATH_STRING_CAPACITY);
 
-	ResetSandboxCamera(editor_state, sandbox_index);
+	ResetSandboxCameras(editor_state, sandbox_index);
 
 	if (initialize_runtime) {
 		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
@@ -591,6 +683,7 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool 
 
 void DisableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
 	GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport] = false;
 }
 
@@ -598,7 +691,55 @@ void DisableSandboxViewportRendering(EditorState* editor_state, unsigned int san
 
 void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
 	GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport] = true;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return sandbox->selected_entities.Find(entity, [](Entity entity) {
+		return entity;
+		});
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+Entity FindSandboxUnusedEntitySlot(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
+	unsigned int slot_index = sandbox->unused_entity_slot_type[viewport].Find(slot_type, [](EDITOR_SANDBOX_ENTITY_SLOT current_slot) {
+		return current_slot;
+		});
+
+	return slot_index != -1 ? sandbox->unused_entities_slots[viewport][slot_index] : Entity(-1);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+EDITOR_SANDBOX_ENTITY_SLOT FindSandboxUnusedEntitySlotType(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ECSEngine::Entity entity, 
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
+	size_t slot_index = function::SearchBytes(sandbox->unused_entities_slots[viewport].buffer, sandbox->unused_entities_slots[viewport].size, entity.value, sizeof(entity));
+	if (slot_index != -1) {
+		ECS_ASSERT(sandbox->unused_entity_slot_type[viewport][slot_index] != EDITOR_SANDBOX_ENTITY_SLOT_COUNT);
+		return sandbox->unused_entity_slot_type[viewport][slot_index];
+	}
+	return EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -744,10 +885,17 @@ WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state, unsigned i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-OrientedPoint GetSandboxCameraPoint(const EditorState* editor_state, unsigned int sandbox_index)
+OrientedPoint GetSandboxCameraPoint(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return { sandbox->camera_parameters.translation, sandbox->camera_parameters.rotation };
+	return { sandbox->camera_parameters[viewport].translation, sandbox->camera_parameters[viewport].rotation };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+Camera GetSandboxSceneCamera(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	return GetSandbox(editor_state, sandbox_index)->camera_parameters[viewport];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -794,6 +942,39 @@ ECSEngine::RenderTargetView GetSandboxInstancedFramebuffer(const EditorState* ed
 ECSEngine::DepthStencilView GetSandboxInstancedDepthFramebuffer(const EditorState* editor_state, unsigned int sandbox_index)
 {
 	return GetSandbox(editor_state, sandbox_index)->scene_viewport_depth_stencil_framebuffer;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+Stream<Entity> GetSandboxSelectedEntities(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	return GetSandbox(editor_state, sandbox_index)->selected_entities.ToStream();
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+unsigned int GetSandboxUnusedEntitySlots(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> entities, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	// Limit the bit count to the available space for the instance bitness for the instanced buffer
+	ECS_ASSERT(entity_manager->m_entity_pool->GetUnusedEntities(
+		entities, 
+		sandbox->unused_entities_slots[viewport].ToStream(), 
+		32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS - 1
+	));
+	unsigned int write_index = sandbox->unused_entities_slots[viewport].AddStream(entities);
+	if (sandbox->unused_entities_slots[viewport].capacity != sandbox->unused_entity_slot_type[viewport].capacity) {
+		sandbox->unused_entity_slot_type[viewport].Resize(sandbox->unused_entities_slots[viewport].capacity);
+		for (size_t index = 0; index < entities.size; index++) {
+			// Default initialize to invalid value
+			sandbox->unused_entity_slot_type[viewport][write_index + index] = EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
+		}
+		sandbox->unused_entity_slot_type[viewport].size = sandbox->unused_entities_slots[viewport].size;
+	}
+
+	return write_index;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -942,6 +1123,13 @@ void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_in
 bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	return GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport];
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxGizmoEntity(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	return FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, entity, viewport) != EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1145,7 +1333,9 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 			}
 
 			// Copy the camera positions and parameters
-			sandbox->camera_parameters = sandboxes[index].camera_parameters;
+			for (size_t viewport = 0; viewport < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport++) {
+				sandbox->camera_parameters[viewport] = sandboxes[index].camera_parameters[viewport];
+			}
 			memcpy(sandbox->camera_saved_orientations, sandboxes[index].camera_saved_orientations, sizeof(sandbox->camera_saved_orientations));
 
 			// Now the modules
@@ -1306,7 +1496,8 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	// when the UI has not yet run to resize them
 	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
 		sandbox->unused_entities_slots[index].Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
-		sandbox->unused_entities_slots_recompute[index] = true;
+		sandbox->unused_entity_slot_type[index].Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
+		sandbox->unused_entities_slots_recompute[index] = false;
 		ResizeSandboxRenderTextures(editor_state, sandbox_index, (EDITOR_SANDBOX_VIEWPORT)index, { 1, 1 });
 	}
 
@@ -1322,14 +1513,14 @@ void ReinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RegisterSandboxCameraTransform(EditorState* editor_state, unsigned int sandbox_index, unsigned int camera_index)
+void RegisterSandboxCameraTransform(EditorState* editor_state, unsigned int sandbox_index, unsigned int camera_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_ASSERT(camera_index < std::size(sandbox->camera_saved_orientations));
 
 	EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
 	if (sandbox_state == EDITOR_SANDBOX_SCENE) {
-		sandbox->camera_saved_orientations[camera_index] = { sandbox->camera_parameters.translation, sandbox->camera_parameters.rotation };
+		sandbox->camera_saved_orientations[camera_index] = { sandbox->camera_parameters[viewport].translation, sandbox->camera_parameters[viewport].rotation };
 	}
 	else {
 		// TODO: Implement the runtime version
@@ -1430,7 +1621,7 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 		RemoveEditorRuntimeSelectColor(system_manager);
 		RemoveEditorRuntimeSelectedEntities(system_manager);
-		RemoveEditorRuntimeTransformTool(system_manager);
+		RemoveEditorRuntimeTransformToolEx(system_manager);
 		RemoveEditorRuntimeInstancedFramebuffer(system_manager);
 	}
 }
@@ -1498,9 +1689,13 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	}
 
 	// Check to see if we already have a pending event - if we do, skip the call
-	bool pending_event = EditorHasEvent(editor_state, WaitCompilationRenderSandboxEvent);
-	if (pending_event) {
-		return true;
+	ECS_STACK_CAPACITY_STREAM(void*, events_data, 256);
+	EditorGetEventTypeData(editor_state, WaitCompilationRenderSandboxEvent, &events_data);
+	for (unsigned int index = 0; index < events_data.size; index++) {
+		const WaitCompilationRenderSandboxEventData* data = (const WaitCompilationRenderSandboxEventData*)events_data[index];
+		if (data->sandbox_index == sandbox_index) {
+			return true;
+		}
 	}
 
 	// Check for the prevent loading resource flag
@@ -1618,10 +1813,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 bool RenderSandboxIsPending(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	// If the rendering is disabled also return is pending
-	if (!IsSandboxViewportRendering(editor_state, sandbox_index, viewport)) {
-		return true;
-	}
+	// If the module has rendering disabled don't report as pending
 
 	// Check to see if we already have a pending event - if we do, skip the call
 	bool pending_event = EditorHasEvent(editor_state, WaitCompilationRenderSandboxEvent);
@@ -1729,21 +1921,33 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RotateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 rotation)
+void RotateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 rotation, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->camera_parameters.rotation += rotation;
+	sandbox->camera_parameters[viewport].rotation += rotation;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ResetSandboxCamera(EditorState* editor_state, unsigned int sandbox_index)
+void ResetSandboxCameras(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->camera_parameters.Default();
+	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
+		sandbox->camera_parameters[index].Default();
+	}
 	for (size_t index = 0; index < EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT; index++) {
 		sandbox->camera_saved_orientations[index].ToOrigin();
 	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void ResetSandboxUnusedEntities(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->unused_entities_slots[viewport].FreeBuffer();
+	SignalSandboxUnusedEntitiesSlotsCounter(editor_state, sandbox_index, viewport);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1859,7 +2063,7 @@ void SetSandboxCameraAspectRatio(EditorState* editor_state, unsigned int sandbox
 	ResourceView view = sandbox->viewport_render_destination[viewport].output_view;
 
 	uint2 dimensions = GetTextureDimensions(view.AsTexture2D());
-	sandbox->camera_parameters.aspect_ratio = (float)dimensions.x / (float)dimensions.y;
+	sandbox->camera_parameters[viewport].aspect_ratio = (float)dimensions.x / (float)dimensions.y;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1920,6 +2124,30 @@ void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_
 	sandbox->sandbox_world.graphics->BindViewport(graphics_viewport);
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void SetSandboxUnusedEntitySlotType(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	unsigned int slot_index,
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
+	sandbox->unused_entity_slot_type[viewport][slot_index] = slot_type;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool ShouldSandboxRecomputeEntitySlots(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
+	return sandbox->unused_entities_slots_recompute[viewport];
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------
 
 struct SignalSelectedEntitiesCounterEventData {
@@ -1929,6 +2157,7 @@ struct SignalSelectedEntitiesCounterEventData {
 EDITOR_EVENT(SignalSelectedEntitiesCounterEvent) {
 	SignalSelectedEntitiesCounterEventData* data = (SignalSelectedEntitiesCounterEventData*)_data;
 	GetSandbox(editor_state, data->sandbox_index)->selected_entities_changed_counter++;
+	return false;
 }
 
 void SignalSandboxSelectedEntitiesCounter(EditorState* editor_state, unsigned int sandbox_index)
@@ -1948,7 +2177,8 @@ struct SignalUnusedEntitiesSlotsCounterEventData {
 EDITOR_EVENT(SignalUnusedEntitiesSlotsCounterEvent) {
 	SignalUnusedEntitiesSlotsCounterEventData* data = (SignalUnusedEntitiesSlotsCounterEventData*)_data;
 	EDITOR_SANDBOX_VIEWPORT viewport = GetSandboxViewportOverride(editor_state, data->sandbox_index, data->viewport);
-	GetSandbox(editor_state, data->sandbox_index)->unused_entities_slots_recompute[viewport]++;
+	GetSandbox(editor_state, data->sandbox_index)->unused_entities_slots_recompute[viewport] = true;
+	return false;
 }
 
 
@@ -1962,10 +2192,10 @@ void SignalSandboxUnusedEntitiesSlotsCounter(EditorState* editor_state, unsigned
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void TranslateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 translation)
+void TranslateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 translation, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->camera_parameters.translation += translation;
+	sandbox->camera_parameters[viewport].translation += translation;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

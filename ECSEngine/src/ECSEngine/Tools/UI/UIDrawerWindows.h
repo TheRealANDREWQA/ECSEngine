@@ -481,6 +481,7 @@ namespace ECSEngine {
 			bool transfer_texture_to_ui_graphics = false;
 			bool is_pop_up_window = false;
 			bool automatic_update = true;
+			bool select_mode = false;
 
 			// These are used as initial values
 			// Except for the conversion and override format which are permanent

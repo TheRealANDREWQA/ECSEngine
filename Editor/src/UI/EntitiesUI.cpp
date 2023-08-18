@@ -101,7 +101,7 @@ void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_data) {
 	state.click_handlers = handlers;
 	state.row_count = std::size(handlers);
 
-	drawer.AddRightClickAction(0, drawer.GetRegionPosition(), drawer.GetRegionScale(), "Entities Right Click", &state);
+	drawer.SetWindowClickable(&drawer.PrepareRightClickHandler("Entities Right Click", &state), ECS_MOUSE_RIGHT);
 }
 
 void RenameCallback(ActionData* action_data) {
@@ -128,8 +128,17 @@ void SelectableCallback(ActionData* action_data) {
 	}
 	else if (select_data->labels.size == 0) {
 		unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
-		unsigned int inspector_index = GetInspectorIndex(system->GetWindowName(window_index));
-		ChangeInspectorToNothing(data->editor_state, inspector_index);
+		unsigned int entities_ui_index = GetInspectorIndex(system->GetWindowName(window_index));
+		unsigned int target_sandbox = GetEntitiesUITargetSandbox(data->editor_state, entities_ui_index);
+
+		ECS_STACK_CAPACITY_STREAM(unsigned int, inspector_indices, 512);
+		GetInspectorsForSandbox(data->editor_state, target_sandbox, &inspector_indices);
+		for (unsigned int index = 0; index < inspector_indices.size; index++) {
+			if (!IsInspectorLocked(data->editor_state, inspector_indices[index]) && 
+				GetInspectorDrawFunction(data->editor_state, inspector_indices[index]) == InspectorDrawEntity) {
+				ChangeInspectorToNothing(data->editor_state, inspector_indices[index]);
+			}
+		}
 	}
 }
 
@@ -526,8 +535,7 @@ void CreateEntitiesUI(EditorState* editor_state)
 	// will update itself
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
 	if (sandbox_count > 0) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, 0);
-		sandbox->IncrementSelectedEntitiesCounter();
+		SignalSandboxSelectedEntitiesCounter(editor_state, 0);
 	}
 }
 

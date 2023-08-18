@@ -674,6 +674,9 @@ namespace ECSEngine {
 
 		void ReflectionEnum::Deallocate(AllocatorPolymorphic allocator) const
 		{
+			for (size_t index = 0; index < original_fields.size; index++) {
+				DeallocateIfBelongs(allocator, original_fields[index].buffer);
+			}
 			for (size_t index = 0; index < fields.size; index++) {
 				DeallocateIfBelongs(allocator, fields[index].buffer);
 			}
@@ -690,6 +693,7 @@ namespace ECSEngine {
 			copy.folder_hierarchy_index = folder_hierarchy_index;
 			copy.name.InitializeAndCopy(ptr, name);
 			copy.fields = StreamCoallescedDeepCopy(fields, ptr);
+			copy.original_fields = StreamCoallescedDeepCopy(original_fields, ptr);
 
 			return copy;
 		}

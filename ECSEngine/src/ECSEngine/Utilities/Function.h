@@ -73,7 +73,7 @@ namespace ECSEngine {
 		
 		template<typename Integer>
 		ECS_INLINE Integer IsolateLowBits(Integer integer, int bit_count) {
-			return integer & ((1 << (bit_count + 1)) - 1);
+			return integer & ((1 << bit_count) - 1);
 		}
 		
 		// Combines first and second as follows
@@ -644,6 +644,16 @@ namespace ECSEngine {
 
 		template<bool is_delta = false, typename Value>
 		ECS_INLINE Value Lerp(Value a, Value b, float percentage) {
+			if constexpr (!is_delta) {
+				return (b - a) * percentage + a;
+			}
+			else {
+				return b * percentage + a;
+			}
+		}
+
+		template<bool is_delta = false, typename Value>
+		ECS_INLINE Value LerpDouble(Value a, Value b, double percentage) {
 			if constexpr (!is_delta) {
 				return (b - a) * percentage + a;
 			}

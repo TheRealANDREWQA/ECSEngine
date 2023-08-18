@@ -250,32 +250,13 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickDirectoryExplorer(editor_state);
 		TickFileExplorer(editor_state);
 
-		TickEvents(editor_state);
-		TickPendingTasks(editor_state);
+		TickUpdateModulesDLLImports(editor_state);
 
+		TickPendingTasks(editor_state);
 		TickEditorComponents(editor_state);
 		TickAsset(editor_state);
 
-		TickUpdateModulesDLLImports(editor_state);
-		TickEditorInput(editor_state);
-
-		if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-			unsigned int visualize_index = GetMaxVisualizeTextureUIIndex(editor_state);
-			if (visualize_index == 0) {
-				unsigned int sandbox_count = GetSandboxCount(editor_state);
-				if (sandbox_count > 0) {
-					Texture2D depth_texture = GetSandbox(editor_state, 0)->scene_viewport_depth_stencil_framebuffer.GetResource();
-					VisualizeTextureCreateData create_data;
-					create_data.texture = depth_texture;
-					create_data.transfer_texture_to_ui_graphics = true;
-					ChangeVisualizeTextureUIWindowTarget(
-						editor_state,
-						visualize_index,
-						&create_data
-					);
-				}
-			}
-		}
+		TickEvents(editor_state);
 	}
 }
 
@@ -542,6 +523,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->lazy_evalution_timer.SetNewStart();
 
 	// Allocate the input mapping
+	InitializeInputMapping(editor_state);
 
 	// This needs to be called last
 	InitializeSandboxes(editor_state);

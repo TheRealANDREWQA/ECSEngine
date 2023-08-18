@@ -38,3 +38,5 @@ void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index,
 // Returns the target sandbox index from that window_index. If the window is not a scene UI window,
 // it will return -1
 unsigned int SceneUITargetSandbox(const EditorState* editor_state, unsigned int window_index);
+
+void HandleTransformTool(EditorState* editor_state, unsigned int sandbox_index);

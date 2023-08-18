@@ -549,15 +549,8 @@ namespace ECSEngine {
 
 		template<typename Stream>
 		size_t ConvertFloatToChars(Stream& chars, float value, size_t precision) {
-			ECS_ASSERT(precision < 16);
-			float power_multiply = CalculateFloatPrecisionPower(precision + 1);
-			int64_t rounded_int;
-
-			float new_value = roundf(value * power_multiply);
-			new_value *= 0.1f;
-			rounded_int = static_cast<int64_t>(new_value);
-
-			return ConvertFloatingPointIntegerToChars<Stream>(chars, rounded_int, precision);
+			// Redirect to the double version since it will allow for better precision
+			return ConvertDoubleToChars(chars, (double)value, precision);
 		}
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(size_t, ConvertFloatToChars, Stream<char>&, CapacityStream<char>&, Stream<wchar_t>&, CapacityStream<wchar_t>&, float, size_t);
@@ -567,11 +560,10 @@ namespace ECSEngine {
 		template<typename Stream>
 		size_t ConvertDoubleToChars(Stream& chars, double value, size_t precision) {
 			ECS_ASSERT(precision < 16);
-			double power_multiply = CalculateDoublePrecisionPower(precision + 1);
+			double power_multiply = CalculateDoublePrecisionPower(precision);
 			int64_t rounded_int;
 
 			double new_value = round(value * power_multiply);
-			new_value *= 0.1;
 			rounded_int = static_cast<int64_t>(new_value);
 
 			return ConvertFloatingPointIntegerToChars<Stream>(chars, rounded_int, precision);

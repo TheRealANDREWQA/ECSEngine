@@ -42,11 +42,6 @@ namespace ECSEngine {
 			v[1] = Vec8f(third_row, fourth_row);
 		}
 
-		ECS_INLINE Matrix(Vector4 row0, Vector4 row1, Vector4 row2, Vector4 row3) {
-			v[0] = Vector8(row0, row1);
-			v[1] = Vector8(row2, row3);
-		}
-
 		ECS_INLINE Matrix(Vector8 _v1, Vector8 _v2) {
 			v[0] = _v1;
 			v[1] = _v2;
@@ -206,7 +201,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixTranspose(Matrix matrix) {
-		Vec8f first, second;
+		Vector8 first, second;
 		// 4 registers needed to keep the indices for blending
 		first = blend8<0, 4, 8, 12, 1, 5, 9, 13>(matrix.v[0], matrix.v[1]);
 		second = blend8<2, 6, 10, 14, 3, 7, 11, 15>(matrix.v[0], matrix.v[1]);
@@ -216,14 +211,48 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixIdentity() {
-		return Matrix(VectorGlobals::RIGHT_4, VectorGlobals::UP_4, VectorGlobals::FORWARD_4, VectorGlobals::QUATERNION_IDENTITY_4);
+		Vector8 right = RightVector();
+		Vector8 up = UpVector();
+		Vector8 forward = ForwardVector();
+		Vector8 quat_identity = LastElementOneVector();
+
+		return Matrix(blend8<0, 1, 2, 3, 12, 13, 14, 15>(right, up), blend8<0, 1, 2, 3, 12, 13, 14, 15>(forward, quat_identity));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixNull() {
-		Vector8 zero = ZeroVector8();
+		Vector8 zero = ZeroVector();
 		return Matrix(zero, zero);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// Returns the matrix with the last column and row set to 0.0f
+	ECS_INLINE Matrix ECS_VECTORCALL Matrix3x3(Matrix matrix) {
+		Vector8 zero_vector = ZeroVector();
+		matrix.v[0] = PerLaneBlend<0, 1, 2, 7>(matrix.v[0], zero_vector);
+		matrix.v[1] = blend8<0, 1, 2, 11, 12, 13, 14, 15>(matrix.v[1], zero_vector);
+		return matrix;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// Returns the matrix with the last column set to 0.0f
+	ECS_INLINE Matrix ECS_VECTORCALL Matrix4x3(Matrix matrix) {
+		Vector8 zero_vector = ZeroVector();
+		matrix.v[0] = PerLaneBlend<0, 1, 2, 7>(matrix.v[0], zero_vector);
+		matrix.v[1] = PerLaneBlend<0, 1, 2, 7>(matrix.v[1], zero_vector);
+		return matrix;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// Returns the matrix with the last row set to 0.0f
+	ECS_INLINE Matrix ECS_VECTORCALL Matrix3x4(Matrix matrix) {
+		Vector8 zero_vector = ZeroVector();
+		matrix.v[1] = blend8<0, 1, 2, 3, 12, 13, 14, 15>(matrix.v[1], zero_vector);
+		return matrix;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -554,8 +583,13 @@ namespace ECSEngine {
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixTranslation(float x, float y, float z) {
 		Matrix result;
-		result.v[0] = Vec8f(VectorGlobals::RIGHT_4, VectorGlobals::UP_4);
-		result.v[1] = Vec8f(VectorGlobals::FORWARD_4, Vector4(x, y, z, 1.0f));
+		Vector8 right = RightVector();
+		Vector8 up = UpVector();
+		Vector8 forward = ForwardVector();
+		Vec4f translation_row = { x, y, z, 1.0f };
+
+		result.v[0] = Vec8f(blend8<0, 1, 2, 3, 12, 13, 14, 15>(right, up));
+		result.v[1] = Vec8f(forward.Low(), translation_row);
 		return result;
 	}
 
@@ -570,7 +604,7 @@ namespace ECSEngine {
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixScale(float x, float y, float z) {
 		Matrix result;
 
-		Vector8 zero = ZeroVector8();
+		Vector8 zero = ZeroVector();
 		Vector8 values(x, 0.0f, z, 0.0f, 0.0f, y, 0.0f, 1.0f);
 
 		result.v[0] = blend8<0, 1, 10, 3, 4, 5, 6, 15>(values, zero);
@@ -587,18 +621,20 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationXRad(float angle_radians) {
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationXRad(Vector8 angle_radians) {
 		Matrix result;
 
-		Vector8 zero = ZeroVector8();
+		Vector8 zero = ZeroVector();
 		Vec8f cosine;
-		Vector8 sine = sincos(&cosine, Vector8(angle_radians));
+		Vector8 sine = sincos(&cosine, angle_radians);
 		Vector8 sine_cosine = blend8<V_DC, 9, 2, V_DC, V_DC, 5, 14, V_DC>(cosine, sine);
 		sine_cosine = change_sign<0, 1, 0, 0, 0, 0, 0, 0>(sine_cosine);
 
 		sine_cosine = blend8<8, 1, 2, 11, 12, 5, 6, 15>(sine_cosine, zero);
-		result.v[0] = Vec8f(VectorGlobals::RIGHT_4, sine_cosine.value.get_high());
-		result.v[1] = Vec8f(sine_cosine.value.get_low(), VectorGlobals::QUATERNION_IDENTITY_4);
+		Vector8 right = RightVector();
+		Vector8 quat_identity = LastElementOneVector();
+		result.v[0] = Vec8f(blend8<0, 1, 2, 3, 12, 13, 14, 15>(right, sine_cosine.value));
+		result.v[1] = Vec8f(blend8<0, 1, 2, 3, 12, 13, 14, 15>(sine_cosine.value, quat_identity));
 
 		return result;
 	}
@@ -613,7 +649,7 @@ namespace ECSEngine {
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationYRad(float angle_radians) {
 		Matrix result;
 
-		Vector8 zero = ZeroVector8();
+		Vector8 zero = ZeroVector();
 		Vec8f cosine;
 		Vector8 sine = sincos(&cosine, Vector8(angle_radians));
 
@@ -621,8 +657,11 @@ namespace ECSEngine {
 		sine_cosine = change_sign<0, 0, 1, 0, 0, 0, 0, 0>(sine_cosine);
 		sine_cosine = blend8<0, 9, 2, 11, 4, 13, 6, 15>(sine_cosine, zero);
 
-		result.v[0] = Vec8f(sine_cosine.value.get_low(), VectorGlobals::UP_4);
-		result.v[1] = Vec8f(sine_cosine.value.get_high(), VectorGlobals::QUATERNION_IDENTITY_4);
+		Vector8 up = UpVector();
+		Vector8 quat_identity = LastElementOneVector();
+
+		result.v[0] = Vec8f(blend8<0, 1, 2, 3, 12, 13, 14, 15>(sine_cosine.value, up));
+		result.v[1] = Vec8f(Permute2f128Helper<1, 3>(sine_cosine, quat_identity));
 
 		return result;
 	}
@@ -643,10 +682,14 @@ namespace ECSEngine {
 		Vector8 sine_cosine = blend8<0, 9, V_DC, V_DC, 4, 13, V_DC, V_DC>(cosine, sine);
 		sine_cosine = change_sign<0, 0, 0, 0, 0, 1, 0, 0>(sine_cosine);
 
-		Vector8 zero = ZeroVector8();
+		Vector8 zero = ZeroVector();
 		sine_cosine = blend8<0, 1, 10, 11, 5, 6, 14, 15>(sine_cosine, zero);
 		result.v[0] = sine_cosine;
-		result.v[1] = Vec8f(VectorGlobals::FORWARD_4, VectorGlobals::QUATERNION_IDENTITY_4);
+
+		Vector8 forward = ForwardVector();
+		Vector8 quat_identity = LastElementOneVector();
+
+		result.v[1] = Vec8f(blend8<0, 1, 2, 3, 12, 13, 14, 15>(forward, quat_identity));
 
 		return result;
 	}
@@ -660,19 +703,10 @@ namespace ECSEngine {
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotation(float3 rotation) {
 		return MatrixRotationX(rotation.x) * MatrixRotationY(rotation.y) * MatrixRotationZ(rotation.z);
-		//return MatrixRotationZ(rotation.z) * MatrixRotationY(rotation.y) * MatrixRotationX(rotation.x);
 	}
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationRad(float3 rotation) {
 		return MatrixRotationXRad(rotation.x) * MatrixRotationYRad(rotation.y) * MatrixRotationZRad(rotation.z);
-	}
-
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationCamera(float3 rotation) {
-		return MatrixRotationZ(-rotation.z) * MatrixRotationY(-rotation.y) * MatrixRotationX(-rotation.x);
-	}
-
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationCameraRad(float3 rotation) {
-		return MatrixRotationZRad(-rotation.z) * MatrixRotationYRad(-rotation.y) * MatrixRotationXRad(-rotation.x);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -717,6 +751,14 @@ namespace ECSEngine {
 		return MatrixRotationYRad(rotation.y) * MatrixRotationZRad(rotation.z) * MatrixRotationXRad(rotation.x);
 	}
 
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationCamera(float3 rotation) {
+		return MatrixRotationZYX(-rotation);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationCameraRad(float3 rotation) {
+		return MatrixRotationZYXRad(-rotation);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixTRS(Matrix translation, Matrix rotation, Matrix scale) {
@@ -753,35 +795,72 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixLookTo(Vector4 origin, Vector4 direction, Vector4 up) {
-		ECS_ASSERT(!IsInfinite(direction));
-		ECS_ASSERT(!IsInfinite(up));
+	namespace SIMDHelpers {
 
-		Vector4 normalized_direction = Normalize(direction);
-		Vector4 normalized_right = Normalize(Cross(up, normalized_direction));
-		Vector4 inverted_normalized_up = Normalize(-up);
+		template<bool only_low>
+		ECS_INLINE void ECS_VECTORCALL MatrixLookTo(Vector8 origin, Vector8 direction, Vector8 up, Matrix* low, Matrix* high) {
+			if constexpr (only_low) {
+				ECS_ASSERT(!IsInfiniteLow(direction));
+				ECS_ASSERT(!IsInfiniteLow(up));
+			}
+			else {
+				ECS_ASSERT(!IsInfiniteWhole(direction));
+				ECS_ASSERT(!IsInfiniteWhole(up));
+			}
 
-		Vector4 inverted_origin = -origin;
-		Vector4 mask_last_element = Vector4(INT_MAX, INT_MAX, INT_MAX, 0);
+			Vector8 normalized_direction = NormalizeIfNot(direction);
+			Vector8 normalized_right = Normalize(Cross(up, normalized_direction));
+			Vector8 inverted_normalized_up = NormalizeIfNot(-up);
 
-		Vector4 dot0 = Dot(normalized_direction, inverted_origin);
-		Vector4 dot1 = Dot(inverted_normalized_up, inverted_origin);
-		Vector4 dot2 = Dot(normalized_right, inverted_origin);
+			Vector8 inverted_origin = -origin;
+			Vector8 all_mask = Vector8(INT_MAX);
+			Vector8 zero_vector = ZeroVector();
+			Vector8 mask_last_element = PerLaneBlend<0, 1, 2, 7>(all_mask, zero_vector);
 
-		Matrix matrix(
-			Select(mask_last_element, dot0, normalized_right),
-			Select(mask_last_element, dot1, inverted_normalized_up),
-			Select(mask_last_element, dot2, normalized_direction),
-			VectorGlobals::QUATERNION_IDENTITY_4
-		);
+			Vector8 dot0 = Dot(normalized_direction, inverted_origin);
+			Vector8 dot1 = Dot(inverted_normalized_up, inverted_origin);
+			Vector8 dot2 = Dot(normalized_right, inverted_origin);
 
-		return MatrixTranspose(matrix);
+			Vector8 first_row_select = Select(mask_last_element, dot0, normalized_right);
+			Vector8 second_row_select = Select(mask_last_element, dot1, inverted_normalized_up);
+			Vector8 third_row_select = Select(mask_last_element, dot2, normalized_direction);
+			Vector8 quat_identity = LastElementOneVector();
+
+			*low = Matrix(
+				Vector8(Vec8f(first_row_select.Low(), second_row_select.Low())),
+				blend8<0, 1, 2, 3, 12, 13, 14, 15>(third_row_select, quat_identity)
+			);
+			*low = MatrixTranspose(*low);
+
+			if constexpr (!only_low) {
+				*high = Matrix(
+					Vector8(Vec8f(first_row_select.High(), second_row_select.High())),
+					Permute2f128Helper<1, 3>(third_row_select, quat_identity)
+				);
+				*high = MatrixTranspose(*high);
+			}
+		}
+
+	}
+
+	ECS_INLINE void ECS_VECTORCALL MatrixLookTo(Vector8 origin, Vector8 direction, Vector8 up, Matrix* low, Matrix* high) {
+		SIMDHelpers::MatrixLookTo<false>(origin, direction, up, low, high);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixLookToLow(Vector8 origin, Vector8 direction, Vector8 up) {
+		Matrix result, dummy;
+		SIMDHelpers::MatrixLookTo<true>(origin, direction, up, &result, &dummy);
+		return result;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixLookAt(Vector4 origin, Vector4 focus_point, Vector4 up) {
-		return MatrixLookTo(origin, focus_point - origin, up);
+	ECS_INLINE void ECS_VECTORCALL MatrixLookAt(Vector8 origin, Vector8 focus_point, Vector8 up, Matrix* low, Matrix* high) {
+		MatrixLookTo(origin, focus_point - origin, up, low, high);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixLookAtLow(Vector8 origin, Vector8 focus_point, Vector8 up) {
+		return MatrixLookToLow(origin, focus_point - origin, up);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -823,8 +902,8 @@ namespace ECSEngine {
 
 	// The FOV angle needs to be expressed in degrees
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixPerspectiveFOV(float fov, float aspect_ratio, float near_z, float far_z) {
-		// x_scale = y_scale / aspect_ratio;
 		// y_scale = cotangent(fov / 2.0f);
+		// x_scale = y_scale / aspect_ratio;
 		// range = far_z / (far_z - near_z);
 		
 
@@ -839,6 +918,30 @@ namespace ECSEngine {
 		float x_scale = y_scale / aspect_ratio;
 		float range = far_z / (far_z - near_z);
 		return Matrix(x_scale, 0.0f, 0.0f, 0.0f, 0.0f, y_scale, 0.0f, 0.0f, 0.0f, 0.0f, range, 1.0f, 0.0f, 0.0f, -range * near_z, 0.0f);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// The fov is expressed in radians
+	ECS_INLINE float HorizontalFOVFromVerticalRad(float fov_rad, float aspect_ratio) {
+		// hfov = 2 * arctan(tan(V/2) * aspect_ratio)
+		return 2 * atanf(tan(fov_rad * 0.5f) * aspect_ratio);
+	}
+
+	// The fov is expressed in angles
+	ECS_INLINE float HorizontalFOVFromVertical(float fov_angles, float aspect_ratio) {
+		return RadToDeg(HorizontalFOVFromVerticalRad(DegToRad(fov_angles), aspect_ratio));
+	}
+
+	// The fov is expressed in radians
+	ECS_INLINE float VerticalFOVFromHorizontalRad(float fov_radians, float aspect_ratio) {
+		// vfov = 2 * arctan(tan(H/2) / aspect_ratio)
+		return 2 * atanf(tan(fov_radians * 0.5f) / aspect_ratio);
+	}
+
+	// The fov is expressed in angles
+	ECS_INLINE float VerticalFOVFromHorizontal(float fov_angles, float aspect_ratio) {
+		return RadToDeg(VerticalFOVFromHorizontalRad(DegToRad(fov_angles), aspect_ratio));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -883,67 +986,81 @@ namespace ECSEngine {
 		float right_left = right - left;
 		float top_bottom = top - bottom;
 		float far_near = far - near;
+
+		float right_left_inverse = 1.0f / right_left;
+		float top_bottom_inverse = 1.0f / top_bottom;
+		float far_near_inverse = 1.0f / far_near;
+
 		return Matrix(
-			     near2 / right_left,                      0.0f,                         0.0f,                0.0f,
-			           0.0f,                        near2 / top_bottom,                 0.0f,                0.0f,
-			(right + left) / right_left,      (top + bottom) / top_bottom,    -(far + near) / far_near,     -1.0f,
-			           0.0f,                              0.0f,               (-far * near2) / far_near,     0.0f
+			     near2 * right_left_inverse,                      0.0f,								0.0f,                0.0f,
+			           0.0f,							near2 * top_bottom_inverse,                 0.0f,                0.0f,
+			(right + left) * right_left_inverse,  (top + bottom) * top_bottom_inverse,    -(far + near) * far_near_inverse,     -1.0f,
+			           0.0f,									 0.0f,               (-far * near2) * far_near_inverse,     0.0f
 		);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Vector4 ECS_VECTORCALL MatrixVectorMultiply(Vector4 vector, Matrix matrix) {
-		Vector4 x_splatted = permute4<0, 0, 0, 0>(vector);
-		Vector4 y_splatted = permute4<1, 1, 1, 1>(vector);
-		Vector4 z_splatted = permute4<2, 2, 2, 2>(vector);
-		Vector4 w_splatted = permute4<3, 3, 3, 3>(vector);
+	namespace SIMDHelpers {
 
-		Vector8 xy_splatted(x_splatted, y_splatted);
-		Vector8 zw_splatted(z_splatted, w_splatted);
+		template<bool only_low>
+		ECS_INLINE Vector8 ECS_VECTORCALL MatrixVectorMultiply(Vector8 vector, Matrix matrix) {
+			Vector8 x_splatted = PerLaneBroadcast<0>(vector);
+			Vector8 y_splatted = PerLaneBroadcast<1>(vector);
+			Vector8 z_splatted = PerLaneBroadcast<2>(vector);
+			Vector8 w_splatted = PerLaneBroadcast<3>(vector);
 
-		Vector8 rows01 = xy_splatted * matrix.v[0];
-		Vector8 rows23 = zw_splatted * matrix.v[1];
+			if constexpr (only_low) {
+				Vector8 xy_splatted = Permute2f128Helper<0, 2>(x_splatted, y_splatted);
+				Vector8 zw_splatted = Permute2f128Helper<0, 2>(z_splatted, w_splatted);
 
-		Vector8 half_sum = rows01 + rows23;
-		Vector8 other_half = permute8<4, 5, 6, 7, V_DC, V_DC, V_DC, V_DC>(half_sum);
+				Vector8 rows01 = xy_splatted * matrix.v[0];
+				Vector8 rows23 = zw_splatted * matrix.v[1];
 
-		Vector8 result = half_sum + other_half;
-		return result.Low();
+				Vector8 half_sum = rows01 + rows23;
+				// We don't care about the upper lane
+				Vector8 other_half_low = Permute2f128Helper<1, 0>(half_sum, half_sum);
+				return half_sum + other_half_low;
+			}
+			else {
+				Vector8 matrix_row0 = Permute2f128Helper<0, 0>(matrix.v[0], matrix.v[0]);
+				Vector8 matrix_row1 = Permute2f128Helper<1, 1>(matrix.v[0], matrix.v[0]);
+				Vector8 matrix_row2 = Permute2f128Helper<0, 0>(matrix.v[1], matrix.v[1]);
+				Vector8 matrix_row3 = Permute2f128Helper<1, 1>(matrix.v[1], matrix.v[1]);
+
+				Vector8 row0 = x_splatted * matrix_row0;
+				Vector8 row1 = y_splatted * matrix_row1;
+				Vector8 row2 = z_splatted * matrix_row2;
+				Vector8 row3 = w_splatted * matrix_row3;
+
+				return row0 + row1 + row2 + row3;
+			}
+		}
+
+	}
+
+	// Multiplies only the low part of the vector
+	ECS_INLINE Vector8 ECS_VECTORCALL MatrixVectorMultiplyLow(Vector8 vector, Matrix matrix) {
+		return SIMDHelpers::MatrixVectorMultiply<true>(vector, matrix);
 	}
 
 	// Applies the same matrix to low and upper
 	ECS_INLINE Vector8 ECS_VECTORCALL MatrixVectorMultiply(Vector8 vector, Matrix matrix) {
-		Vector8 x_splatted = permute8<0, 0, 0, 0, 4, 4, 4, 4>(vector);
-		Vector8 y_splatted = permute8<1, 1, 1, 1, 5, 5, 5, 5>(vector);
-		Vector8 z_splatted = permute8<2, 2, 2, 2, 6, 6, 6, 6>(vector);
-		Vector8 w_splatted = permute8<3, 3, 3, 3, 7, 7, 7, 7>(vector);
-
-		Vector8 matrix_row0 = Permute2f128<0x00>(matrix.v[0], matrix.v[0]);
-		Vector8 matrix_row1 = Permute2f128<0x11>(matrix.v[0], matrix.v[0]);
-		Vector8 matrix_row2 = Permute2f128<0x00>(matrix.v[1], matrix.v[1]);
-		Vector8 matrix_row3 = Permute2f128<0x11>(matrix.v[1], matrix.v[1]);
-
-		Vector8 row0 = x_splatted * matrix_row0;
-		Vector8 row1 = y_splatted * matrix_row1;
-		Vector8 row2 = z_splatted * matrix_row2;
-		Vector8 row3 = w_splatted * matrix_row3;
-
-		return row0 + row1 + row2 + row3;
+		return SIMDHelpers::MatrixVectorMultiply<false>(vector, matrix);
 	}
 
-	// If matrices are different, this method can be used but it will perform worse than the single matrix
+	// If matrices are different, this method can be used but it might perform worse than the single matrix
 	// because of the register usage that might push onto the stack some registers
 	ECS_INLINE Vector8 ECS_VECTORCALL MatrixVectorMultiply(Vector8 vector, Matrix matrix0, Matrix matrix1) {
-		Vector8 x_splatted = permute8<0, 0, 0, 0, 4, 4, 4, 4>(vector);
-		Vector8 y_splatted = permute8<1, 1, 1, 1, 5, 5, 5, 5>(vector);
-		Vector8 z_splatted = permute8<2, 2, 2, 2, 6, 6, 6, 6>(vector);
-		Vector8 w_splatted = permute8<3, 3, 3, 3, 7, 7, 7, 7>(vector);
+		Vector8 x_splatted = PerLaneBroadcast<0>(vector);
+		Vector8 y_splatted = PerLaneBroadcast<1>(vector);
+		Vector8 z_splatted = PerLaneBroadcast<2>(vector);
+		Vector8 w_splatted = PerLaneBroadcast<3>(vector);
 
-		Vector8 matrix_row0 = Permute2f128<0x20>(matrix0.v[0], matrix1.v[0]);
-		Vector8 matrix_row1 = Permute2f128<0x31>(matrix0.v[0], matrix1.v[0]);
-		Vector8 matrix_row2 = Permute2f128<0x20>(matrix0.v[1], matrix1.v[1]);
-		Vector8 matrix_row3 = Permute2f128<0x31>(matrix0.v[1], matrix1.v[1]);
+		Vector8 matrix_row0 = Permute2f128Helper<0, 2>(matrix0.v[0], matrix1.v[0]);
+		Vector8 matrix_row1 = Permute2f128Helper<1, 3>(matrix0.v[0], matrix1.v[0]);
+		Vector8 matrix_row2 = Permute2f128Helper<0, 2>(matrix0.v[1], matrix1.v[1]);
+		Vector8 matrix_row3 = Permute2f128Helper<1, 3>(matrix0.v[1], matrix1.v[1]);
 
 		Vector8 row0 = x_splatted * matrix_row0;
 		Vector8 row1 = y_splatted * matrix_row1;
@@ -955,17 +1072,9 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE float3 ECS_VECTORCALL RotateVectorMatrix(Matrix rotation_matrix, Vector4 direction) {
-		alignas(16) float4 result;
-
-		Vector4 rotated_direction = MatrixVectorMultiply(direction, rotation_matrix);
-		rotated_direction.StoreAligned(&result);
-
-		return { result.x, result.y, result.z };
-	}
-
-	ECS_INLINE Vector4 ECS_VECTORCALL RotateVectorMatrixSIMD(Matrix rotation_matrix, Vector4 direction) {
-		return MatrixVectorMultiply(direction, rotation_matrix);
+	ECS_INLINE float3 ECS_VECTORCALL RotateVectorMatrixLow(Matrix rotation_matrix, Vector8 direction) {
+		Vector8 rotated_direction = MatrixVectorMultiply(direction, rotation_matrix);
+		return rotated_direction.AsFloat3Low();
 	}
 
 	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorMatrixSIMD(Matrix rotation_matrix, Vector8 direction) {
@@ -978,17 +1087,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE float3 ECS_VECTORCALL RotateVector(float3 rotation, Vector4 direction) {
-		return RotateVectorMatrix(MatrixRotation(rotation), direction);
-	}
-
-	ECS_INLINE Vector4 ECS_VECTORCALL RotateVectorSIMD(float3 rotation, Vector4 direction) {
-		return RotateVectorMatrixSIMD(MatrixRotation(rotation), direction);
+	ECS_INLINE float3 ECS_VECTORCALL RotateVectorLow(float3 rotation, Vector8 direction) {
+		return RotateVectorMatrixLow(MatrixRotation(rotation), direction);
 	}
 
 	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorSIMD(float3 rotation, Vector8 direction) {
-		Matrix rotation_matrix = MatrixRotation(rotation);
-		return RotateVectorMatrixSIMD(rotation_matrix, direction);
+		return RotateVectorMatrixSIMD(MatrixRotation(rotation), direction);
 	}
 
 	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorSIMD(float3 rotation0, float3 rotation1, Vector8 direction) {
@@ -996,94 +1100,43 @@ namespace ECSEngine {
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE float3 ECS_VECTORCALL GetRightVector(float3 rotation) {
-		return RotateVector(rotation, VectorGlobals::RIGHT_4);
+	
+	// It will set the 4th component to 1.0f as points need that
+	ECS_INLINE Vector8 ECS_VECTORCALL TransformPoint(Vector8 point, Matrix matrix) {
+		Vector8 one = VectorGlobals::ONE;
+		point = PerLaneBlend<0, 1, 2, 7>(point, one);
+		return MatrixVectorMultiply(point, matrix);
 	}
 
-	ECS_INLINE Vector4 ECS_VECTORCALL GetRightVectorSIMD(float3 rotation) {
-		return RotateVectorSIMD(rotation, VectorGlobals::RIGHT_4);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE float3 ECS_VECTORCALL GetUpVector(float3 rotation) {
-		return RotateVector(rotation, VectorGlobals::UP_4);
-	}
-
-	ECS_INLINE Vector4 ECS_VECTORCALL GetUpVectorSIMD(float3 rotation) {
-		return RotateVectorSIMD(rotation, VectorGlobals::UP_4);
+	ECS_INLINE Vector8 ECS_VECTORCALL TransformPoint(Vector8 point, Matrix matrix0, Matrix matrix1) {
+		Vector8 one = VectorGlobals::ONE;
+		point = PerLaneBlend<0, 1, 2, 7>(point, one);
+		return MatrixVectorMultiply(point, matrix0, matrix1);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE float3 ECS_VECTORCALL GetForwardVector(float3 rotation) {
-		return RotateVector(rotation, VectorGlobals::FORWARD_4);
-	}
-
-	ECS_INLINE Vector4 ECS_VECTORCALL GetForwardVectorSIMD(float3 rotation) {
-		return RotateVectorSIMD(rotation, VectorGlobals::FORWARD_4);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Vector4 ECS_VECTORCALL TransformPointSIMD(float3 point, Matrix matrix) {
-		Vector4 vector_point(&point);
-		Vector4 one = VectorGlobals::ONE_4;
-		vector_point = blend4<0, 1, 2, 7>(vector_point, one);
-
-		return MatrixVectorMultiply(vector_point, matrix);
-	}
-
-	// Applies the same matrix to low and high
-	ECS_INLINE Vector8 ECS_VECTORCALL TransformPointSIMD(float3 point0, float3 point1, Matrix matrix) {
-		Vector8 vector_point(point0.x, point0.y, point0.z, 1.0f, point1.x, point1.y, point1.z, 1.0f);
-
-		return MatrixVectorMultiply(vector_point, matrix);
-	}
-
-	ECS_INLINE Vector8 ECS_VECTORCALL TransformPointSIMD(float3 point0, float3 point1, Matrix matrix0, Matrix matrix1) {
-		Vector8 vector_point(point0.x, point0.y, point0.z, 1.0f, point1.x, point1.y, point1.z, 1.0f);
-
-		return MatrixVectorMultiply(vector_point, matrix0, matrix1);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE float3 ECS_VECTORCALL TransformPoint(float3 point, Matrix matrix) {
-		float3 result;
-
-		Vector4 vector_result = TransformPointSIMD(point, matrix);
-		vector_result.StorePartialConstant<3>(&result);
-
-		return result;
-	}
-
-	// Uses the same matrix for both points
-	ECS_INLINE void ECS_VECTORCALL TransformPoint(float3& point0, float3& point1, Matrix matrix) {
-		Vector8 result = TransformPointSIMD(point0, point1, matrix);	
-		result.StorePartialConstant<3>(&point0);
-		result.High().StorePartialConstant<3>(&point1);
-	}
-
-	// Might perform slower than the single matrix because of the high register usage that
-	// can cause stack spillage
-	ECS_INLINE void ECS_VECTORCALL TransformPoint(float3& point0, float3& point1, Matrix matrix0, Matrix matrix1) {
-		Vector8 result = TransformPointSIMD(point0, point1, matrix0, matrix1);
-		result.StorePartialConstant<3>(&point0);
-		result.High().StorePartialConstant<3>(&point1);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	// Rotation in angles - the rotation matrix version
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixTransform(float3 translation, float3 rotation, float3 scale) {
-		return MatrixScale(scale) * MatrixRotation(rotation) * MatrixTranslation(translation);
-	}
 
 	// Rotation in radians - the rotation matrix version
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixTransformRad(float3 translation, float3 rotation, float3 scale) {
-		return MatrixScale(scale) * MatrixRotationRad(rotation) * MatrixTranslation(translation);
+		return MatrixTRS(MatrixTranslation(translation), MatrixRotationRad(rotation), MatrixScale(scale));
+	}
+
+	// Rotation in degrees - the rotation matrix version
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixTransform(float3 translation, float3 rotation, float3 scale) {
+		return MatrixTransformRad(translation, DegToRad(rotation), scale);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// Changes a line defined by a point and a direction from a space to another space
+
+	// The direction needs to be normalized before hand, the output it's going to be normalized as well
+	ECS_INLINE void ECS_VECTORCALL ChangeLineSpace(float3* line_point, float3* line_direction_normalized, Matrix matrix) {
+		// We need to multiply without any translation - so have the last value of the direction be 0
+		// Calculate the projected point - we need to have the 1.0f as the fourth component
+		Vector8 direction_simd = { float4(*line_point, 1.0f), float4(*line_direction_normalized, 0.0f) };
+		Vector8 changed_space = MatrixVectorMultiply(direction_simd, Matrix(matrix));
+		changed_space.StoreFloat3(line_point, line_direction_normalized);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
