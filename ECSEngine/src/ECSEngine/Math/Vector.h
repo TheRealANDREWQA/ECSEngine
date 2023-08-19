@@ -9,13 +9,29 @@ namespace ECSEngine {
 	// Have the functions that return a vector mask that can be used then to generate all the permutations
 	// of the boolean functions that correspond to that function
 
-#define ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(function_name, signature, arguments) \
+#define ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(function_name, default_lanes, signature, arguments) \
+	template<int lanes = default_lanes> \
 	ECS_INLINE bool ECS_VECTORCALL function_name##Low(signature) { \
-		return PerLaneHorizontalAnd<4>(function_name##Mask(arguments).AsMaskLow()); \
+		return PerLaneHorizontalAnd<lanes>(function_name##Mask(arguments).AsMaskLow()); \
+	} \
+	\
+	template<int lanes = default_lanes> \
+	ECS_INLINE bool2 ECS_VECTORCALL function_name(signature) { \
+		return PerLaneHorizontalAnd<lanes>(function_name##Mask(arguments).AsMask()); \
+	} \
+	\
+	template<int lanes = default_lanes> \
+	ECS_INLINE bool ECS_VECTORCALL function_name##Whole(signature) { \
+		return BasicTypeLogicAndBoolean(function_name(arguments)); \
+	}
+
+#define ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(function_name, lanes, signature, arguments) \
+	ECS_INLINE bool ECS_VECTORCALL function_name##Low(signature) { \
+		return PerLaneHorizontalAnd<lanes>(function_name##Mask(arguments).AsMaskLow()); \
 	} \
 	\
 	ECS_INLINE bool2 ECS_VECTORCALL function_name(signature) { \
-		return PerLaneHorizontalAnd<4>(function_name##Mask(arguments).AsMask()); \
+		return PerLaneHorizontalAnd<lanes>(function_name##Mask(arguments).AsMask()); \
 	} \
 	\
 	ECS_INLINE bool ECS_VECTORCALL function_name##Whole(signature) { \
@@ -337,6 +353,12 @@ namespace ECSEngine {
 			return BasicTypeLogicAndBoolean(MaskResult<element_count>());
 		}
 
+		template<int element_count>
+		ECS_INLINE bool MaskResultNone() const {
+			bool2 result = MaskResult<element_count>();
+			return result.x == false && result.y == false;
+		}
+
 		// Make this call compliant with the underlying call
 		ECS_INLINE constexpr static int size() {
 			return Vec8f::size();
@@ -344,6 +366,14 @@ namespace ECSEngine {
 
 		ECS_INLINE constexpr static int Lanes() {
 			return 2;
+		}
+
+		ECS_INLINE Vector8 ECS_VECTORCALL SplatLow() const {
+			return Permute2f128Helper<0, 0>(value, value);
+		}
+
+		ECS_INLINE Vector8 ECS_VECTORCALL SplatHigh() const {
+			return Permute2f128Helper<1, 1>(value, value);
 		}
 
 		Vec8f value;
@@ -414,6 +444,10 @@ namespace ECSEngine {
 		return ZeroVector() - VectorGlobals::ONE;
 	}
 
+	ECS_INLINE Vector8 TrueMaskVector() {
+		return Vector8(INT_MAX);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Vector8 ECS_VECTORCALL IsInfiniteMask(Vector8 vector) {
@@ -421,7 +455,7 @@ namespace ECSEngine {
 		return vector.value == VectorGlobals::INFINITY_MASK.value;
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(IsInfinite, Vector8 vector, vector);
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(IsInfinite, 4, Vector8 vector, vector);
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -435,7 +469,7 @@ namespace ECSEngine {
 		return vector.value != vector.value;
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(IsNan, Vector8 vector, vector);
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(IsNan, 4, Vector8 vector, vector);
 
 	// --------------------------------------------------------------------------------------------------------------
 
@@ -734,8 +768,9 @@ namespace ECSEngine {
 		return CompareMask(first_normalized, second_normalized, epsilon);
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		IsParallel,
+		3,
 		FORWARD(Vector8 first_normalized, Vector8 second_normalized, Vector8 epsilon = VectorGlobals::EPSILON),
 		FORWARD(first_normalized, second_normalized, epsilon)
 	);
@@ -749,8 +784,9 @@ namespace ECSEngine {
 		return CompareAngleNormalizedRadMask(first_normalized, second_normalized, radians);
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		IsParallelAngle,
+		3,
 		FORWARD(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians),
 		FORWARD(first_normalized, second_normalized, radians)
 	);
@@ -764,8 +800,9 @@ namespace ECSEngine {
 		return CompareMask(Dot(first_normalized, second_normalized), ZeroVector(), epsilon);
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		IsPerpendicular,
+		3,
 		FORWARD(Vector8 first_normalized, Vector8 second_normalized, Vector8 epsilon = VectorGlobals::EPSILON),
 		FORWARD(first_normalized, second_normalized, epsilon)
 	);
@@ -779,8 +816,9 @@ namespace ECSEngine {
 		return Vector8(Vec8fb(Not(CompareAngleNormalizedRadMask(first_normalized, second_normalized, half_pi - radians))));
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		IsPerpendicularAngle,
+		3,
 		FORWARD(Vector8 first_normalized, Vector8 second_normalized, Vector8 radians),
 		FORWARD(first_normalized, second_normalized, radians)
 	);
@@ -966,6 +1004,61 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	// Constructs an orthonormal basis out of a given direction
+	ECS_INLINE void ECS_VECTORCALL OrthonormalBasis(Vector8 direction_normalized, Vector8* direction_first, Vector8* direction_second) {
+		/*
+		*   Scalar algorithm - Credit to Building an Orthonormal Basis, Revisited - 2017
+			if(n.z<0.){
+				const float a = 1.0f / (1.0f - n.z);
+				const float b = n.x * n.y * a;
+				b1 = Vec3f(1.0f - n.x * n.x * a, -b, n.x);
+				b2 = Vec3f(b, n.y * n.y*a - 1.0f, -n.y);
+			}
+			else{
+				const float a = 1.0f / (1.0f + n.z);
+				const float b = -n.x * n.y * a;
+				b1 = Vec3f(1.0f - n.x * n.x * a, b, -n.x);
+				b2 = Vec3f(b, 1.0f - n.y * n.y * a, -n.y);
+			}
+		*/
+
+		Vector8 negative_z = direction_normalized < ZeroVector();
+		Vector8 splatted_x = PerLaneBroadcast<0>(direction_normalized);
+		Vector8 splatted_y = PerLaneBroadcast<1>(direction_normalized);
+		Vector8 splatted_z = PerLaneBroadcast<2>(direction_normalized);
+		Vector8 xx = splatted_x * splatted_x;
+		Vector8 yy = splatted_y * splatted_y;
+		Vector8 xy = splatted_x * splatted_y;
+		negative_z = PerLaneBroadcast<2>(negative_z);
+
+		Vector8 one = VectorGlobals::ONE;
+		Vector8 first_a = one / (one + splatted_z);
+		Vector8 second_a = one / (one - splatted_z);
+
+		Vector8 a = Select(negative_z, first_a, second_a);
+		Vector8 b = xy * a;
+		Vector8 x_factor = one - xx * a;
+		Vector8 y_factor = one - yy * a;
+
+		Vector8 a_result_xy = PerLaneBlend<0, 5, V_DC, V_DC>(x_factor, b);
+		Vector8 a_result = PerLaneBlend<0, 1, 6, V_DC>(a_result_xy, splatted_x);
+		Vector8 b_result_xy = PerLaneBlend<4, 1, V_DC, V_DC>(y_factor, b);
+		Vector8 b_result = PerLaneBlend<0, 1, 6, V_DC>(b_result_xy, splatted_y);
+
+		Vector8 negative_a_sign_mask = PerLaneChangeSignMask<0, 1, 0, 0, Vector8>();
+		Vector8 positive_a_sign_mask = PerLaneChangeSignMask<0, 0, 1, 0, Vector8>();
+		Vector8 negative_b_sign_mask = PerLaneChangeSignMask<0, 0, 1, 0, Vector8>();
+		Vector8 positive_b_sign_mask = PerLaneChangeSignMask<0, 1, 1, 0, Vector8>();
+
+		Vector8 a_mask = Select(negative_z, negative_a_sign_mask, positive_a_sign_mask);
+		Vector8 b_mask = Select(negative_z, negative_b_sign_mask, positive_b_sign_mask);
+
+		*direction_first = PerLaneChangeSign(a_result, a_mask);
+		*direction_second = PerLaneChangeSign(b_result, b_mask);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
 	// Converts from clip space to NDC
 	ECS_INLINE Vector8 ECS_VECTORCALL ClipSpaceToNDC(Vector8 vector) {
 		// We just need to divide xyz / w, but here we also divide w by w
@@ -974,6 +1067,65 @@ namespace ECSEngine {
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
+	
+	// The direction needs to be normalized before hand
+	// The output is normalized as well
+	ECS_INLINE Vector8 ECS_VECTORCALL GetRightVectorForDirection(Vector8 direction_normalized) {
+		// Compute the cross product between the world up and the given direction
+		// If they are parallel, then the right vector is the global right vector if the direction
+		// is positive, else the negative right vector if the direction is negative
+
+		Vector8 world_up = UpVector();
+		Vector8 is_parallel_to_up = IsParallelMask(direction_normalized, world_up);
+
+		// This is the branch were we calculate the result for the case where
+		// the direction is parallel to the world up
+		Vector8 world_right = RightVector();
+		// The direction is either (0.0f, 1.0f, 0.0f) or (0.0f, -1.0f, 0.0f)
+		// We can permute the value and the multiply with right
+		Vector8 sign = PerLanePermute<1, V_DC, V_DC, V_DC>(direction_normalized);
+		Vector8 parallel_result = sign * world_right;
+
+		if (is_parallel_to_up.MaskResultWhole<3>()) {
+			return parallel_result;
+		}
+		else {
+			// Compute the cross product
+			Vector8 cross_product = Cross(direction_normalized, world_up);
+			cross_product = Normalize(cross_product);
+
+			return Select(is_parallel_to_up, parallel_result, cross_product);
+		}
+	}
+
+	// The direction needs to be normalized before hand
+	// The output is normalized as well
+	ECS_INLINE Vector8 ECS_VECTORCALL GetUpVectorForDirection(Vector8 direction_normalized) {
+		// This is the same as the the Right case, we just need to replace the
+		// vectors and the permutation for the sign
+
+		Vector8 world_right = RightVector();
+		Vector8 is_parallel_to_right = IsParallelMask(direction_normalized, world_right);
+
+		// This is the branch were we calculate the result for the case where
+		// the direction is parallel to the world up
+		Vector8 world_up = UpVector();
+		// The direction is either (0.0f, 1.0f, 0.0f) or (0.0f, -1.0f, 0.0f)
+		// We can permute the value and the multiply with right
+		Vector8 sign = PerLanePermute<1, V_DC, V_DC, V_DC>(direction_normalized);
+		Vector8 parallel_result = sign * world_up;
+
+		if (is_parallel_to_right.MaskResultWhole<3>()) {
+			return parallel_result;
+		}
+		else {
+			// Compute the cross product
+			Vector8 cross_product = Cross(direction_normalized, world_right);
+			cross_product = Normalize(cross_product);
+
+			return Select(is_parallel_to_right, parallel_result, cross_product);
+		}
+	}
 
 	// --------------------------------------------------------------------------------------------------------------
 

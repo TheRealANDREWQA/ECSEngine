@@ -1326,6 +1326,11 @@ namespace ECSEngine {
 
 		bool IsFloatingPointNumber(Stream<char> characters, bool skip_whitespace)
 		{
+			// Check for NaN and inf
+			if (characters == "NaN" || characters == "INF" || characters == "-INF") {
+				return true;
+			}
+
 			unsigned int dot_count = 0;
 			size_t starting_index = characters[0] == '+' || characters[0] == '-';
 			for (size_t index = starting_index; index < characters.size; index++) {

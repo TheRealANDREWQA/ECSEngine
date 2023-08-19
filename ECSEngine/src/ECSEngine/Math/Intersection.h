@@ -19,10 +19,10 @@ namespace ECSEngine {
 			// t = (plane.dot - Dot3(plane.normal, segment_a)) / Dot3(plane.normal, segment_direction)
 			// The t_factor is stored in the 4th component
 			Vector8 t_simd = (plane.normal_dot - Dot(plane.normal_dot, line_origin)) / Dot(plane.normal_dot, line_direction);
-
+			t_simd = PerLaneBroadcast<3>(t_simd);
 			Vector8 mask = result_functor(t_simd);
 			// Calculating the final result is not expensive - 5 cycles
-			output = Fmadd(PerLaneBroadcast<3>(t_simd), line_direction, line_origin.value);
+			output = Fmadd(t_simd, line_direction, line_origin.value);
 			output = PerLaneBlend<0, 1, 2, 7>(output, t_simd);
 			return mask;
 		}
@@ -63,8 +63,9 @@ namespace ECSEngine {
 		);
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		IntersectSegmentPlane,
+		3,
 		FORWARD(Vector8 segment_a, Vector8 segment_b, Plane plane, Vector8& output),
 		FORWARD(segment_a, segment_b, plane, output)
 	);
@@ -81,8 +82,9 @@ namespace ECSEngine {
 		);
 	}
 	
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		IntersectRayPlane,
+		3,
 		FORWARD(Vector8 ray_origin, Vector8 ray_direction, Plane plane, Vector8& output),
 		FORWARD(ray_origin, ray_direction, plane, output)
 	);
@@ -102,8 +104,9 @@ namespace ECSEngine {
 		});
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		IntersectLinePlane,
+		3,
 		FORWARD(Vector8 line_direction, Plane plane, Vector8& output),
 		FORWARD(line_direction, plane, output)
 	);

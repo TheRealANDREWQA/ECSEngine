@@ -34,6 +34,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	template <typename T>
 	struct Stream
 	{
+		typedef T T;
+
 		ECS_INLINE Stream() : buffer(nullptr), size(0) {}
 		ECS_INLINE Stream(const void* buffer, size_t size) : buffer((T*)buffer), size(size) {}
 		ECS_INLINE Stream(CapacityStream<T> other) : buffer(other.buffer), size(other.size) {}
@@ -408,6 +410,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 	template<typename T>
 	struct CapacityStream {
+		typedef T T;
+
 		ECS_INLINE CapacityStream() : buffer(nullptr), size(0), capacity(0) {}
 		ECS_INLINE CapacityStream(const void* buffer, unsigned int size) : buffer((T*)buffer), size(size), capacity(size) {}
 		ECS_INLINE CapacityStream(const void* buffer, unsigned int size, unsigned int capacity) : buffer((T*)buffer), size(size), capacity(capacity) {}
@@ -819,6 +823,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 	template<typename T>
 	struct ResizableStream {
+		typedef T T;
+
 		ECS_INLINE ResizableStream() : buffer(nullptr), allocator({nullptr}), capacity(0), size(0) {}
 		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : allocator(_allocator), capacity(_capacity), size(0) {
 			if (_capacity != 0) {
@@ -1138,6 +1144,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	template <>
 	struct ECSENGINE_API Stream<void>
 	{
+		typedef void T;
+
 		ECS_INLINE Stream() : buffer(nullptr), size(0) {}
 		ECS_INLINE Stream(const void* _buffer, size_t _size) : buffer((void*)_buffer), size(_size) {}
 
@@ -1255,6 +1263,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	template<>
 	struct ECSENGINE_API CapacityStream<void>
 	{
+		typedef void T;
+
 		ECS_INLINE CapacityStream() : buffer(nullptr), size(0), capacity(0) {}
 		ECS_INLINE CapacityStream(const void* _buffer, unsigned int _size, unsigned int _capacity) : buffer((void*)_buffer), size(_size), capacity(_capacity) {}
 
@@ -1394,6 +1404,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 	template<>
 	struct ResizableStream<void> {
+		typedef void T;
+
 		ECS_INLINE ResizableStream() : buffer(nullptr), allocator({ nullptr }), capacity(0), size(0) {}
 		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : allocator(_allocator), capacity(_capacity), size(0) {
 			if (_capacity != 0) {

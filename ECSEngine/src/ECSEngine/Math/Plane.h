@@ -1,5 +1,6 @@
 #pragma once
 #include "Vector.h"
+#include "Quaternion.h"
 
 namespace ECSEngine {
 
@@ -15,19 +16,10 @@ namespace ECSEngine {
 		typedef Vector8 VectorType;
 
 		ECS_INLINE Plane() {}
-		ECS_INLINE Plane(float3 axis_direction, float3 point) {
-			Vector8 axis_direction_vector = axis_direction;
-			Vector8 point_vector = point;
-			axis_direction_vector = NormalizeIfNot(axis_direction_vector);
-			Vector8 dot = ECSEngine::Dot(axis_direction_vector, point_vector);
-			normal_dot = PerLaneBlend<0, 1, 2, 7>(axis_direction_vector, dot);
-		}
-		ECS_INLINE Plane(float3 axis_direction0, float3 point0, float3 axis_direction1, float3 point1) {
-			Vector8 axis_direction_vector = { axis_direction0, axis_direction1 };
-			Vector8 point_vector = { point0, point1 };
-			axis_direction_vector = NormalizeIfNot(axis_direction_vector);
-			Vector8 dot = ECSEngine::Dot(axis_direction_vector, point_vector);
-			normal_dot = PerLaneBlend<0, 1, 2, 7>(axis_direction_vector, dot);
+		ECS_INLINE Plane(Vector8 axis_direction, Vector8 point) {
+			axis_direction = NormalizeIfNot(axis_direction);
+			Vector8 dot = ECSEngine::Dot(axis_direction, point);
+			normal_dot = PerLaneBlend<0, 1, 2, 7>(axis_direction, dot);
 		}
 		ECS_INLINE Plane(Vector8 _value) : normal_dot(_value) {}
 
@@ -67,25 +59,56 @@ namespace ECSEngine {
 		return PerLaneBlend<0, 1, 2, 7>(normal, dot);
 	}
 
+	ECS_INLINE Plane ECS_VECTORCALL PlaneFromNormalizedAxis(Vector8 axis_direction_normalized, Vector8 offset, bool invert_normal = false) {
+		Vector8 dot = Dot(axis_direction_normalized, offset);
+		Vector8 axis = Select(invert_normal ? TrueMaskVector() : ZeroVector(), -axis_direction_normalized, axis_direction_normalized);
+		return PerLaneBlend<0, 1, 2, 7>(axis, dot);
+	}
+
+	namespace SIMDHelpers {
+		
+		ECS_INLINE Plane ECS_VECTORCALL PlaneFromAxis(Vector8 normal, float offset, bool invert_normal = false) {
+			normal = Select(invert_normal ? TrueMaskVector() : ZeroVector(), -normal, normal);
+			Vector8 vector_offset = offset;
+			return PerLaneBlend<0, 1, 2, 7>(normal, vector_offset);
+		}
+
+		// The normal is already normalized
+		ECS_INLINE Plane ECS_VECTORCALL PlaneFromAxisRotated(Vector8 normal_normalized, Quaternion rotation, Vector8 offset, bool invert_normal = false) {
+			normal_normalized = RotateVectorQuaternionSIMD(rotation, normal_normalized);
+			return PlaneFromNormalizedAxis(normal_normalized, offset, invert_normal);
+		}
+
+	}
+
 	ECS_INLINE Plane ECS_VECTORCALL PlaneXY(float z_offset = 0.0f, bool invert_normal = false) {
 		Vector8 normal = ForwardVector();
-		normal = Select(Vector8(invert_normal ? INT_MAX : 0), normal, -normal);
-		Vector8 offset = z_offset;
-		return PerLaneBlend<0, 1, 2, 7>(normal, offset);
+		return SIMDHelpers::PlaneFromAxis(normal, z_offset, invert_normal);
 	}
 
 	ECS_INLINE Plane ECS_VECTORCALL PlaneXZ(float y_offset = 0.0f, bool invert_normal = false) {
 		Vector8 normal = UpVector();
-		normal = Select(Vector8(invert_normal ? INT_MAX : 0), normal, -normal);
-		Vector8 offset = y_offset;
-		return PerLaneBlend<0, 1, 2, 7>(normal, offset);
+		return SIMDHelpers::PlaneFromAxis(normal, y_offset, invert_normal);
 	}
 
 	ECS_INLINE Plane ECS_VECTORCALL PlaneYZ(float x_offset = 0.0f, bool invert_normal = false) {
 		Vector8 normal = RightVector();
-		normal = Select(Vector8(invert_normal ? INT_MAX : 0), normal, -normal);
-		Vector8 offset = x_offset;
-		return PerLaneBlend<0, 1, 2, 7>(normal, offset);
+		return SIMDHelpers::PlaneFromAxis(normal, x_offset, invert_normal);
+	}
+
+	ECS_INLINE Plane ECS_VECTORCALL PlaneXYRotated(Quaternion rotation, Vector8 plane_offset, bool invert_normal = false) {
+		Vector8 normal = ForwardVector();
+		return SIMDHelpers::PlaneFromAxisRotated(normal, rotation, plane_offset, invert_normal);
+	}
+
+	ECS_INLINE Plane ECS_VECTORCALL PlaneXZRotated(Quaternion rotation, Vector8 plane_offset, bool invert_normal = false) {
+		Vector8 normal = UpVector();
+		return SIMDHelpers::PlaneFromAxisRotated(normal, rotation, plane_offset, invert_normal);
+	}
+
+	ECS_INLINE Plane ECS_VECTORCALL PlaneYZRotated(Quaternion rotation, Vector8 plane_offset, bool invert_normal = false) {
+		Vector8 normal = RightVector();
+		return SIMDHelpers::PlaneFromAxisRotated(normal, rotation, plane_offset, invert_normal);
 	}
 
 	// Returns true if the given direction is parallel to the plane
@@ -94,8 +117,9 @@ namespace ECSEngine {
 		return IsPerpendicularMask(plane.normal_dot, direction_normalized, epsilon);
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		PlaneIsParallel,
+		3,
 		FORWARD(Plane plane, Vector8 direction_normalized, Vector8 epsilon = VectorGlobals::EPSILON),
 		FORWARD(plane, direction_normalized, epsilon)
 	);
@@ -104,8 +128,9 @@ namespace ECSEngine {
 		return IsPerpendicularAngleMask(plane.normal_dot, direction_normalized, radians);
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		PlaneIsParallelAngle,
+		3,
 		FORWARD(Plane plane, Vector8 direction_normalized, Vector8 radians),
 		FORWARD(plane, direction_normalized, radians)
 	);
@@ -118,15 +143,15 @@ namespace ECSEngine {
 		// is above. If the value is 0, then it's on the plane and negative means bellow the plane
 		Vector8 plane_point = plane.normal_dot * PerLaneBroadcast<3>(plane.normal_dot);
 		Vector8 direction = point - plane_point;
-		Vector8 normalized_direction = Normalize(direction);
-		Vector8 cosine = Dot(plane.normal_dot, normalized_direction);
+		Vector8 cosine = Dot(plane.normal_dot, direction);
 		Vector8 mask = cosine > ZeroVector();
 		mask = PerLaneBroadcast<0>(mask);
 		return mask;
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		IsAbovePlane,
+		4,
 		FORWARD(Plane plane, Vector8 point),
 		FORWARD(plane, point)
 	);

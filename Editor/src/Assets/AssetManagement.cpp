@@ -169,6 +169,8 @@ EDITOR_EVENT(RegisterEvent) {
 		}
 
 		if (loaded_now) {
+			// We still have the lock on the sandbox here - the Async task will release it
+
 			// Launch a background task - block the resource manager first
 			EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
 			EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);

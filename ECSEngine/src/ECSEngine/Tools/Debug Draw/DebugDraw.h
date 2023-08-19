@@ -65,7 +65,7 @@ namespace ECSEngine {
 
 	struct DebugCross {
 		float3 position;
-		float3 rotation;
+		QuaternionStorage rotation;
 		float size;
 		Color color;
 		DebugDrawCallOptions options;
@@ -73,7 +73,7 @@ namespace ECSEngine {
 
 	struct DebugCircle {
 		float3 position;
-		float3 rotation;
+		QuaternionStorage rotation;
 		float radius;
 		Color color;
 		DebugDrawCallOptions options;
@@ -81,7 +81,7 @@ namespace ECSEngine {
 
 	struct DebugArrow {
 		float3 translation;
-		float3 rotation;
+		QuaternionStorage rotation;
 		float length;
 		float size;
 		Color color;
@@ -105,7 +105,7 @@ namespace ECSEngine {
 
 	struct DebugOOBB {
 		float3 translation;
-		float3 rotation;
+		QuaternionStorage rotation;
 		float3 scale;
 		Color color;
 		DebugDrawCallOptions options;
@@ -141,7 +141,7 @@ namespace ECSEngine {
 
 		void AddLine(float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
 
-		void AddLine(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void AddLine(float3 translation, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {});
 
 		void AddSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {});
 
@@ -150,17 +150,17 @@ namespace ECSEngine {
 		// Corner0 is the top left corner, corner1 is the bottom right corner
 		void AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
 
-		void AddCross(float3 position, float3 rotation, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddCross(float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {false});
 
-		void AddCircle(float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options = {});
+		void AddCircle(float3 position, QuaternionStorage rotation, float radius, Color color, DebugDrawCallOptions options = {});
 
 		void AddArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {false});
 		
-		void AddArrowRotation(float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddArrowRotation(float3 translation, QuaternionStorage rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
 
 		void AddAxes(
 			float3 translation, 
-			float3 rotation, 
+			QuaternionStorage rotation, 
 			float size, 
 			const DebugAxesInfo* info = {},
 			DebugDrawCallOptions options = {false}
@@ -170,11 +170,11 @@ namespace ECSEngine {
 
 		void AddAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
-		void AddOOBB(float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void AddOOBB(float3 translation, QuaternionStorage rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
 		void AddString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options = { false });
 
-		void AddStringRotation(float3 position, float3 rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options = { false });
+		void AddStringRotation(float3 position, QuaternionStorage rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options = { false });
 
 #pragma endregion
 
@@ -182,7 +182,7 @@ namespace ECSEngine {
 
 		void AddLineThread(unsigned int thread_index, float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
 
-		void AddLineThread(unsigned int thread_index, float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void AddLineThread(unsigned int thread_index, float3 translation, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {});
 
 		void AddSphereThread(unsigned int thread_index, float3 position, float radius, Color color, DebugDrawCallOptions options = {});
 
@@ -191,18 +191,18 @@ namespace ECSEngine {
 		// Corner0 is the top left corner, corner1 is the bottom right corner
 		void AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
 
-		void AddCrossThread(unsigned int thread_index, float3 position, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void AddCrossThread(unsigned int thread_index, float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {});
 
-		void AddCircleThread(unsigned int thread_index, float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options = {});
+		void AddCircleThread(unsigned int thread_index, float3 position, QuaternionStorage rotation, float radius, Color color, DebugDrawCallOptions options = {});
 
 		void AddArrowThread(unsigned int thread_index, float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {false});
 
-		void AddArrowRotationThread(unsigned int thread_index, float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
+		void AddArrowRotationThread(unsigned int thread_index, float3 translation, QuaternionStorage rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
 
 		void AddAxesThread(
 			unsigned int thread_index, 
 			float3 translation, 
-			float3 rotation, 
+			QuaternionStorage rotation, 
 			float size, 
 			const DebugAxesInfo* info = {},
 			DebugDrawCallOptions options = {false}
@@ -212,7 +212,7 @@ namespace ECSEngine {
 
 		void AddAABBThread(unsigned int thread_index, float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
-		void AddOOBBThread(unsigned int thread_index, float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void AddOOBBThread(unsigned int thread_index, float3 translation, QuaternionStorage rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
 		// It must do an allocation from the memory manager under lock - possible expensive operation
 		void AddStringThread(
@@ -229,7 +229,7 @@ namespace ECSEngine {
 		void AddStringRotationThread(
 			unsigned int thread_index,
 			float3 position,
-			float3 direction,
+			QuaternionStorage rotation,
 			float size,
 			Stream<char> text,
 			Color color,
@@ -242,7 +242,7 @@ namespace ECSEngine {
 
 		void DrawLine(float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
 
-		void DrawLine(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void DrawLine(float3 translation, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {});
 
 		void DrawSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {});
 
@@ -251,18 +251,18 @@ namespace ECSEngine {
 		// Corner0 is the top left corner, corner1 is the bottom right corner
 		void DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
 
-		void DrawCross(float3 position, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void DrawCross(float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {});
 
-		void DrawCircle(float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options = {});
+		void DrawCircle(float3 position, QuaternionStorage rotation, float radius, Color color, DebugDrawCallOptions options = {});
 
 		void DrawArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {false});
 
 		// Rotation expressed as radians
-		void DrawArrowRotation(float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
+		void DrawArrowRotation(float3 translation, QuaternionStorage rotation, float length, float size, Color color, DebugDrawCallOptions options = {false});
 
 		void DrawAxes(
 			float3 translation, 
-			float3 rotation, 
+			QuaternionStorage rotation, 
 			float size, 
 			Color color_x = AxisXColor(), 
 			Color color_y = AxisYColor(), 
@@ -274,7 +274,7 @@ namespace ECSEngine {
 
 		void DrawAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
-		void DrawOOBB(float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void DrawOOBB(float3 translation, QuaternionStorage rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
 
 		// Text rotation is the rotation alongside the X axis - rotates the text in order to be seen from below, above, or at a specified angle
 		void DrawString(
@@ -290,7 +290,7 @@ namespace ECSEngine {
 		// The direction is specified as rotation in angles as degrees
 		void DrawStringRotation(
 			float3 translation, 
-			float3 rotation, 
+			QuaternionStorage rotation, 
 			float size, 
 			Stream<char> text, 
 			Color color, 
@@ -419,7 +419,7 @@ namespace ECSEngine {
 
 		void OutputInstanceIndexLine(
 			float3 translation,
-			float3 rotation,
+			QuaternionStorage rotation,
 			float size,
 			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugLine>* addition_stream
@@ -447,7 +447,7 @@ namespace ECSEngine {
 
 		void OutputInstanceIndexCross(
 			float3 position, 
-			float3 rotation, 
+			QuaternionStorage rotation, 
 			float size,
 			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugCross>* addition_stream
@@ -455,7 +455,7 @@ namespace ECSEngine {
 
 		void OutputInstanceIndexCircle(
 			float3 position, 
-			float3 rotation, 
+			QuaternionStorage rotation, 
 			float radius,
 			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugCircle>* addition_stream
@@ -471,7 +471,7 @@ namespace ECSEngine {
 
 		void OutputInstanceIndexArrowRotation(
 			float3 translation,
-			float3 rotation,
+			QuaternionStorage rotation,
 			float length,
 			float size,
 			DebugDrawCallOptions options,
@@ -480,7 +480,7 @@ namespace ECSEngine {
 
 		void OutputInstanceIndexAxes(
 			float3 translation,
-			float3 rotation,
+			QuaternionStorage rotation,
 			float size,
 			unsigned int instance_thickness_x,
 			unsigned int instance_thickness_y,
@@ -506,7 +506,7 @@ namespace ECSEngine {
 
 		void OutputInstanceIndexOOBB(
 			float3 translation, 
-			float3 rotation, 
+			QuaternionStorage rotation, 
 			float3 scale,
 			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugOOBB>* addition_stream
@@ -526,7 +526,7 @@ namespace ECSEngine {
 		// The allocator will be used to allocate the string
 		void OutputInstanceIndexStringRotation(
 			float3 translation,
-			float3 rotation,
+			QuaternionStorage rotation,
 			float size,
 			Stream<char> text,
 			DebugDrawCallOptions options,

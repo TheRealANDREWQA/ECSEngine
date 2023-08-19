@@ -43,10 +43,10 @@ EDITOR_EVENT(EditorEventExecuteFunctorWaitFlag) {
 	bool is_set = EditorStateHasFlag(editor_state, data->flag);
 	is_set = data->set ? is_set : !is_set;
 	if (is_set) {
+		Functor* functor = (Functor*)data->functor_storage;
+		(*functor)();
 		return true;
 	}
-	Functor* functor = (Functor*)data->functor_storage;
-	(*functor)();
 	return false;
 }
 

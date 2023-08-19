@@ -3,6 +3,7 @@
 #include "Function.h"
 #include "Assert.h"
 #include "../Math/VCLExtensions.h"
+#include <limits.h>
 
 namespace ECSEngine {
 
@@ -12,12 +13,39 @@ namespace ECSEngine {
 
 		template<typename FloatingPoint, typename CharacterType>
 		FloatingPoint ConvertCharactersToFloatingPoint(Stream<CharacterType> stream) {
+			// Check for the special case of nan and inf
+			if (stream.size == 3 || stream.size == 4) {
+				// Check for nan and inf
+				if constexpr (std::is_same_v<CharacterType, char>) {
+					if (stream == "NaN") {
+						return std::numeric_limits<FloatingPoint>::quiet_NaN();
+					}
+					else if (stream == "INF") {
+						return std::numeric_limits<FloatingPoint>::infinity();
+					}
+					else if (stream == "-INF") {
+						return -std::numeric_limits<FloatingPoint>::infinity();
+					}
+				}
+				else {
+					if (stream == L"NaN") {
+						return std::numeric_limits<FloatingPoint>::quiet_NaN();
+					}
+					else if (stream == L"INF") {
+						return std::numeric_limits<FloatingPoint>::infinity();
+					}
+					else if (stream == L"-INF") {
+						return -std::numeric_limits<FloatingPoint>::infinity();
+					}
+				}
+			}
+
 			FloatingPoint value = 0;
-			size_t starting_index = stream[0] == '-' || stream[0] == '+' ? 1 : 0;
+			size_t starting_index = stream[0] == Character<CharacterType>('-') || stream[0] == Character<CharacterType>('+') ? 1 : 0;
 
 			size_t dot_index = stream.size;
 			for (size_t index = 0; index < stream.size; index++) {
-				if (stream[index] == '.') {
+				if (stream[index] == Character<CharacterType>('.')) {
 					dot_index = index;
 					break;
 				}
@@ -38,7 +66,7 @@ namespace ECSEngine {
 				}
 				fractional_float *= fractional_power;
 				FloatingPoint value = integral_float + fractional_float;
-				if (stream[0] == '-') {
+				if (stream[0] == Character<CharacterType>('-')) {
 					value = -value;
 				}
 				return value;
@@ -47,7 +75,7 @@ namespace ECSEngine {
 				if (stream.size > 0) {
 					int64_t integer = ConvertCharactersToInt(Stream<CharacterType>(stream.buffer + starting_index, stream.size - starting_index));
 					value = static_cast<FloatingPoint>(integer);
-					if (stream[0] == '-') {
+					if (stream[0] == Character<CharacterType>('-')) {
 						value = -value;
 					}
 				}
@@ -557,8 +585,48 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<typename Stream>
-		size_t ConvertDoubleToChars(Stream& chars, double value, size_t precision) {
+		template<typename StringStream>
+		size_t ConvertDoubleToChars(StringStream& chars, double value, size_t precision) {
+			auto add = [&](auto add_string) {
+				if constexpr (std::is_same_v<Stream<char>, StringStream> || std::is_same_v<Stream<wchar_t>, StringStream>) {
+					chars.AddStream(add_string);
+				}
+				else {
+					chars.AddStreamAssert(add_string);
+				}
+			};
+
+			if constexpr (std::is_same_v<typename StringStream::T, char>) {
+				// If the value is NaN or infinity, handle it separately
+				if (isnan(value)) {
+					add("NaN");
+					return 3;
+				}
+				else if (value == std::numeric_limits<double>::infinity()) {
+					add("INF");
+					return 3;
+				}
+				else if (value == -std::numeric_limits<double>::infinity()) {
+					add("-INF");
+					return 4;
+				}
+			}
+			else {
+				// If the value is NaN or infinity, handle it separately
+				if (isnan(value)) {
+					add(L"NaN");
+					return 3;
+				}
+				else if (value == std::numeric_limits<double>::infinity()) {
+					add(L"INF");
+					return 3;
+				}
+				else if (value == -std::numeric_limits<double>::infinity()) {
+					add(L"-INF");
+					return 4;
+				}
+			}
+
 			ECS_ASSERT(precision < 16);
 			double power_multiply = CalculateDoublePrecisionPower(precision);
 			int64_t rounded_int;
@@ -566,7 +634,7 @@ namespace ECSEngine {
 			double new_value = round(value * power_multiply);
 			rounded_int = static_cast<int64_t>(new_value);
 
-			return ConvertFloatingPointIntegerToChars<Stream>(chars, rounded_int, precision);
+			return ConvertFloatingPointIntegerToChars<StringStream>(chars, rounded_int, precision);
 		}
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(size_t, ConvertDoubleToChars, Stream<char>&, CapacityStream<char>&, Stream<wchar_t>&, CapacityStream<wchar_t>&, double, size_t);
