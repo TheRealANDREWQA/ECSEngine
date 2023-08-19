@@ -1851,7 +1851,7 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	
 	// If the resource loading is active we need to wait
-	EditorStateWaitFlag(25, editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, false);
+	EditorStateWaitFlag(20, editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, false);
 
 	Graphics* runtime_graphics = editor_state->RuntimeGraphics();
 	// Free the current render destination and create a new one

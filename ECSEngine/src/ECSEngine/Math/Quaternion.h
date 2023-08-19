@@ -138,6 +138,16 @@ namespace ECSEngine {
 			return QuaternionToEulerHigh(*this);
 		}
 
+		// Returns a quaternion with the low duplicated
+		ECS_INLINE Quaternion ECS_VECTORCALL SplatLow() const {
+			return Permute2f128Helper<0, 0>(value, value);
+		}
+
+		// Returns a quaternion with the high duplicated
+		ECS_INLINE Quaternion ECS_VECTORCALL SplatHigh() const {
+			return Permute2f128Helper<1, 1>(value, value);
+		}
+
 		Vec8f value;
 	};
 
@@ -153,8 +163,9 @@ namespace ECSEngine {
 		return CompareMask<true>(a.value, b.value, epsilon);
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		QuaternionCompare,
+		4,
 		FORWARD(Quaternion a, Quaternion b, Vector8 epsilon = VectorGlobals::EPSILON),
 		FORWARD(a, b, epsilon)
 	);
@@ -185,8 +196,9 @@ namespace ECSEngine {
 		return IsNormalizedMask<true>(Vector8(quaternion));
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		QuaternionIsNormalized,
+		4,
 		Quaternion quaternion,
 		quaternion
 	);
@@ -213,11 +225,31 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEulerRadEx(float3 rotation) {
-		return QuaternionAngleFromAxisRad(float3(0.0f, 0.0f, 1.0f), rotation.z) *
-			QuaternionAngleFromAxisRad(float3(0.0f, 1.0f, 0.0f), rotation.y) *
-			QuaternionAngleFromAxisRad(float3(1.0f, 0.0f, 0.0f), rotation.x);
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisXRad(Vector8 angle_radians) {
+		return QuaternionAngleFromAxisRad(RightVector(), angle_radians);
 	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisYRad(Vector8 angle_radians) {
+		return QuaternionAngleFromAxisRad(UpVector(), angle_radians);
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisZRad(Vector8 angle_radians) {
+		return QuaternionAngleFromAxisRad(ForwardVector(), angle_radians);
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisX(Vector8 angle_degrees) {
+		return QuaternionForAxisXRad(DegToRad(angle_degrees));
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisY(Vector8 angle_degrees) {
+		return QuaternionForAxisYRad(DegToRad(angle_degrees));
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionForAxisZ(Vector8 angle_degrees) {
+		return QuaternionForAxisZRad(DegToRad(angle_degrees));
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
 
 	// The angles must be expressed in radians
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEulerRad(float3 rotation_radians0, float3 rotation_radians1) {
@@ -259,8 +291,7 @@ namespace ECSEngine {
 
 	// The angles must be expressed in radians
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionFromEulerRad(float3 rotation) {
-		// We don't care about the second float3
-		return QuaternionFromEulerRad(rotation, float3(0.0f, 0.0f, 0.0f));
+		return QuaternionFromEulerRad(rotation, rotation);
 	}
 
 	// The angles must be expressed in degrees
@@ -443,8 +474,9 @@ namespace ECSEngine {
 		return abs(a.value - b.value) < VectorGlobals::QUATERNION_EPSILON || abs(a.value + b.value) < VectorGlobals::QUATERNION_EPSILON;
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		QuaternionSameOrientation,
+		4,
 		FORWARD(Quaternion a, Quaternion b),
 		FORWARD(a, b)
 	);
@@ -509,6 +541,8 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
+	// Can choose to preserve the 4th component from the original or not
+	template<bool preserve = false>
 	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionVectorMultiply(Quaternion quaternion, Vector8 vector) {
 		// 2.0f * Dot3(quaternion.xyz, vector.xyz) * quaternion.xyz + vector * 
 		// (quaternion.w * quaternion.w - Dot(quaternion.xyz, quaternion.xyz)) + Cross(quaternion.xyz, vector.xyz) * 2.0f * quaternion.w
@@ -527,7 +561,11 @@ namespace ECSEngine {
 		Vector8 second_term = vector * (w_squared - quaternion_dot);
 		Vector8 third_term = cross * two * quat_w;
 
-		return first_term + second_term + third_term;
+		Vector8 multiplied_vector = first_term + second_term + third_term;
+		if constexpr (preserve) {
+			multiplied_vector = PerLaneBlend<0, 1, 2, 7>(multiplied_vector, vector);
+		}
+		return multiplied_vector;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
@@ -660,8 +698,9 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
+	template<bool preserve = false>
 	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorQuaternionSIMD(Quaternion quaternion, Vector8 vector) {
-		return QuaternionVectorMultiply(quaternion, vector);
+		return QuaternionVectorMultiply<preserve>(quaternion, vector);
 	}
 
 	// This only rotates the low part
@@ -880,7 +919,7 @@ namespace ECSEngine {
 		}
 
 		// This can be used to finish the transformation into euler rotation from quaternion
-		static float3 FinishEulerRotation(float3 euler_rotation) {
+		ECS_INLINE float3 FinishEulerRotation(float3 euler_rotation) {
 			euler_rotation.y = euler_rotation.y * 2.0f - PI * 0.5f;
 			return euler_rotation;
 		}
@@ -917,6 +956,14 @@ namespace ECSEngine {
 	// Add a rotation with respect to the global axes of the object
 	ECS_INLINE Quaternion ECS_VECTORCALL AddWorldRotation(Quaternion current_rotation, Quaternion add_rotation) {
 		return add_rotation * current_rotation;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// Converts the given direction into a quaternion
+	ECS_INLINE Quaternion DirectionToQuaternion(Vector8 direction_normalized) {
+		Vector8 up_vector = GetUpVectorForDirection(direction_normalized);
+		return QuaternionLookRotationNormalized(direction_normalized, up_vector);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

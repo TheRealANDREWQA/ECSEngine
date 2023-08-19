@@ -207,18 +207,14 @@ struct SceneLeftClickableActionData {
 	uint2 click_texel_position;
 	float2 click_ui_position;
 	bool is_selection_mode;
+
 	ECS_TRANSFORM_TOOL_AXIS tool_axis;
 	// This is cached such that it doesn't need to be calculated each time
 	float3 gizmo_translation_midpoint;
-	float3 gizmo_rotation_midpoint_euler;
-
 	Quaternion gizmo_rotation_midpoint;
+	TransformToolDrag transform_drag;
 	
 	CPUInstanceFramebuffer cpu_framebuffer;
-
-	TranslationToolDrag translation_drag;
-	RotationToolDrag rotation_drag;
-	ScaleToolDrag scale_drag;
 
 	// This is used for the selection mode to add/disable entities
 	Stream<Entity> original_selection;
@@ -247,9 +243,6 @@ void SceneLeftClickableAction(ActionData* action_data) {
 		data->is_selection_mode = false;
 		data->original_selection.InitializeAndCopy(editor_state->EditorAllocator(), GetSandboxSelectedEntities(editor_state, sandbox_index));
 		data->cpu_framebuffer = { nullptr, {0, 0} };
-		data->translation_drag.Initialize();
-		data->rotation_drag.InitializeCircle();
-		data->scale_drag.Initialize();
 		mouse->EnableRawInput();
 
 		DisableSandboxViewportRendering(editor_state, sandbox_index);
@@ -294,18 +287,24 @@ void SceneLeftClickableAction(ActionData* action_data) {
 					{
 						component_name = STRING(Translation);
 						component_id = Translation::ID();
+						data->transform_drag.translation.Initialize();
+						data->transform_drag.translation.axis = data->tool_axis;
 					}
 					break;
 					case ECS_TRANSFORM_ROTATION:
 					{
 						component_name = STRING(Rotation);
 						component_id = Rotation::ID();
+						data->transform_drag.rotation.InitializeCircle();
+						data->transform_drag.rotation.axis = data->tool_axis;
 					}
 					break;
 					case ECS_TRANSFORM_SCALE:
 					{
 						component_name = STRING(Scale);
 						component_id = Scale::ID();
+						data->transform_drag.scale.Initialize();
+						data->transform_drag.scale.axis = data->tool_axis;
 					}
 					break;
 					}
@@ -320,7 +319,6 @@ void SceneLeftClickableAction(ActionData* action_data) {
 					}
 
 					data->gizmo_translation_midpoint = float3::Splat(0.0f);
-					data->gizmo_rotation_midpoint_euler = float3::Splat(0.0f);
 					data->gizmo_rotation_midpoint = QuaternionIdentity();
 					for (size_t index = 0; index < selected_entities.size; index++) {
 						const Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
@@ -334,14 +332,9 @@ void SceneLeftClickableAction(ActionData* action_data) {
 					}
 					float3 count_inverse = float3::Splat(1.0f / (float)selected_entities.size);
 					data->gizmo_translation_midpoint *= count_inverse;
-					data->gizmo_rotation_midpoint_euler *= count_inverse;
 				}
 			}
 		}
-
-		data->translation_drag.axis = data->tool_axis;
-		data->rotation_drag.axis = data->tool_axis;
-		data->scale_drag.axis = data->tool_axis;
 	}
 	else {
 		if (data->tool_axis == ECS_TRANSFORM_AXIS_COUNT) {
@@ -490,7 +483,8 @@ void SceneLeftClickableAction(ActionData* action_data) {
 				float3 translation_delta = HandleTranslationToolDelta(
 					&camera,
 					data->gizmo_translation_midpoint,
-					&data->translation_drag,
+					data->gizmo_rotation_midpoint,
+					&data->transform_drag.translation,
 					mouse_ray_direction
 				);
 
@@ -511,11 +505,12 @@ void SceneLeftClickableAction(ActionData* action_data) {
 				else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 					factor *= 5.0f;
 				}
+				Rotation* first_rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[0]);
 				float4 rotation_delta = HandleRotationToolDeltaCircleMapping(
 					&camera,
 					data->gizmo_translation_midpoint,
-					QuaternionIdentity(),
-					&data->rotation_drag,
+					first_rotation->value,
+					&data->transform_drag.rotation,
 					viewport_dimensions,
 					unclampped_texel_position,
 					factor
@@ -545,7 +540,7 @@ void SceneLeftClickableAction(ActionData* action_data) {
 					&camera,
 					data->gizmo_translation_midpoint,
 					QuaternionIdentity(),
-					&data->scale_drag,
+					&data->transform_drag.scale,
 					system->GetTexelMouseDelta(),
 					factor
 				);

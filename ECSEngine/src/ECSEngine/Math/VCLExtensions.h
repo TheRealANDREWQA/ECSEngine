@@ -390,6 +390,27 @@ namespace ECSEngine {
 		}
 	}
 
+	template<int x0, int x1, int x2, int x3, typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL PerLaneChangeSignMask() {
+		const int mask = 0x80000000;
+		if constexpr (VectorType::size() == 4) {
+			return VectorType(x0 ? mask : 0, x1 ? mask : 0, x2 ? mask : 0, x3 ? mask : 0);
+		}
+		else {
+			return VectorType(x0 ? mask : 0, x1 ? mask : 0, x2 ? mask : 0, x3 ? mask : 0, x0 ? mask : 0, x1 ? mask : 0, x2 ? mask : 0, x3 ? mask : 0);
+		}
+	}
+
+	template<typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL PerLaneChangeSign(VectorType vector, VectorType mask) {
+		if constexpr (VectorType::size() == 4) {
+			return VectorType(Vec4f(_mm_xor_ps(vector, mask)));
+		}
+		else {
+			return VectorType(Vec8f(_mm256_xor_ps(vector, mask)));
+		}
+	}
+
 	template<typename VectorType>
 	ECS_INLINE VectorType ECS_VECTORCALL PerLaneCreateFromValues(float x, float y, float z, float w) {
 		if constexpr (VectorType::size() == 4) {
@@ -415,7 +436,7 @@ namespace ECSEngine {
 		else if constexpr (element_count == 3) {
 			compare_mask = 0x07;
 		}
-		return bit_mask == compare_mask;
+		return (bit_mask & compare_mask) == compare_mask;
 	}
 
 	template<int element_count>
@@ -431,8 +452,8 @@ namespace ECSEngine {
 		else if constexpr (element_count == 3) {
 			compare_mask = 0x07;
 		}
-		bool first = (bit_mask & 0x0F) == compare_mask;
-		bool second = ((bit_mask >> 4) & 0x0F) == compare_mask;
+		bool first = (bit_mask & compare_mask) == compare_mask;
+		bool second = ((bit_mask >> 4) & compare_mask) == compare_mask;
 		return { first, second };
 	}
 

@@ -214,7 +214,6 @@ ECS_THREAD_TASK(RenderSelectables) {
 					}
 
 					float3 translation_midpoint = { 0.0f, 0.0f, 0.0f };
-					//float3 rotation_midpoint = { 0.0f, 0.0f, 0.0f };
 					Quaternion rotation_midpoint = QuaternionIdentity();
 					if (valid_entities > 0) {
 						HighlightObjectElement* highlight_elements = nullptr;
@@ -286,12 +285,9 @@ ECS_THREAD_TASK(RenderSelectables) {
 
 						translation_midpoint /= float3::Splat((float)valid_entities);
 						//rotation_midpoint /= float3::Splat((float)valid_entities);
-						float3 rotation_midpoint_euler = QuaternionToEulerLow(rotation_midpoint);
-						rotation_midpoint_euler = { 0.0f, 0.0f, 0.0f };
 
 						// At the moment disable the rotation of the elements
 						// Until we implement the World/Local transformation tool
-						//rotation_midpoint = float3::Splat(0.0f);
 
 						DebugDrawer* debug_drawer = world->debug_drawer;
 
@@ -340,7 +336,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 								axes_info.color_z = transform_colors[ECS_TRANSFORM_AXIS_Z];
 								debug_drawer->AddAxes(
 									translation_midpoint, 
-									rotation_midpoint_euler,
+									rotation_midpoint.StorageLow(),
 									constant_viewport_size,
 									&axes_info,
 									debug_options
@@ -349,34 +345,31 @@ ECS_THREAD_TASK(RenderSelectables) {
 								break;
 							case ECS_TRANSFORM_ROTATION:
 							{
-								float3 x_rotation = { rotation_midpoint_euler.x, rotation_midpoint_euler.y, rotation_midpoint_euler.z };
-								x_rotation.z -= 90.0f;
+								Quaternion x_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisZ(90.0f));
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_X], true);
 								debug_drawer->AddCircle(
 									translation_midpoint,
-									x_rotation,
+									x_rotation.StorageLow(),
 									constant_viewport_size,
 									transform_colors[ECS_TRANSFORM_AXIS_X],
 									debug_options
 								);
 
-								float3 y_rotation = { rotation_midpoint_euler.x, rotation_midpoint_euler.y, rotation_midpoint_euler.z };
+								Quaternion y_rotation = rotation_midpoint;
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Y], true);
 								debug_drawer->AddCircle(
 									translation_midpoint,
-									y_rotation,
+									y_rotation.StorageLow(),
 									constant_viewport_size,
 									transform_colors[ECS_TRANSFORM_AXIS_Y],
 									debug_options
 								);
 
-								float3 z_rotation = { rotation_midpoint_euler.x, rotation_midpoint_euler.z, rotation_midpoint_euler.y };
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Z], true);
-								z_rotation.x -= 90.0f;
-								z_rotation.y = 0.0f;
+								Quaternion z_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisX(90.0f));
 								debug_drawer->AddCircle(
 									translation_midpoint,
-									z_rotation,
+									z_rotation.StorageLow(),
 									constant_viewport_size,
 									transform_colors[ECS_TRANSFORM_AXIS_Z],
 									debug_options
@@ -387,34 +380,31 @@ ECS_THREAD_TASK(RenderSelectables) {
 							{
 								float3 oobb_scale = float3(1.0f, 0.02f, 0.02f) * float3::Splat(constant_viewport_size);
 
-								float3 x_rotation = rotation_midpoint_euler;
+								Quaternion x_rotation = rotation_midpoint;
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_X], true);
 								debug_drawer->AddOOBB(
 									translation_midpoint,
-									x_rotation,
+									x_rotation.StorageLow(),
 									oobb_scale,
 									transform_colors[ECS_TRANSFORM_AXIS_X],
 									debug_options
 								);
 
-								float3 y_rotation = rotation_midpoint_euler;
-								y_rotation.z += 90.0f;
+								Quaternion y_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisZ(90.0f));
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Y], true);
 								debug_drawer->AddOOBB(
 									translation_midpoint,
-									y_rotation,
+									y_rotation.StorageLow(),
 									oobb_scale,
 									transform_colors[ECS_TRANSFORM_AXIS_Y],
 									debug_options
 								);
 
-								float3 z_rotation = rotation_midpoint_euler;
-								z_rotation.y -= 90.0f;
-								z_rotation.z = 0.0f;
+								Quaternion z_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisY(90.0f));
 								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Z], true);
 								debug_drawer->AddOOBB(
 									translation_midpoint,
-									z_rotation,
+									z_rotation.StorageLow(),
 									oobb_scale,
 									transform_colors[ECS_TRANSFORM_AXIS_Z],
 									debug_options

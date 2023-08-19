@@ -5048,7 +5048,9 @@ namespace ECSEngine {
 					}
 
 					if (!input->is_currently_selected) {
-						if ((abs(current_value - *number) > EPSILON) || digit_count != 3) {
+						float difference = abs(current_value - *number);
+
+						auto has_changed_action = [&]() {
 							input->DeleteAllCharacters();
 							function::ConvertFloatToChars(temp_stream, *number, 3);
 							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
@@ -5057,6 +5059,17 @@ namespace ECSEngine {
 							if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
 								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 							}
+						};
+
+						if (isnan(difference)) {
+							bool current_nan = isnan(current_value);
+							bool number_nan = isnan(*number);
+							if ((!current_nan && number_nan) || (current_nan && !number_nan)) {
+								has_changed_action();
+							}
+						}
+						else if (difference > EPSILON || digit_count != 3) {
+							has_changed_action();
 						}
 					}
 					
@@ -5127,14 +5140,28 @@ namespace ECSEngine {
 					// If the value changed, update the input stream
 					double current_value = function::ConvertCharactersToDouble(*input->text);
 					if (!input->is_currently_selected) {
-						if ((abs(current_value - *number) > EPSILON) || digit_count != 3) {
+						double difference = abs(current_value - *number);
+
+						auto has_changed_action = [&]() {
 							input->DeleteAllCharacters();
 							function::ConvertDoubleToChars(temp_stream, *number, 3);
 							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
+							data->number_data.external_value_change = true;
 
 							if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
 								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 							}
+						};
+
+						if (isnan(difference)) {
+							bool current_nan = isnan(current_value);
+							bool number_nan = isnan(*number);
+							if ((!current_nan && number_nan) || (current_nan && !number_nan)) {
+								has_changed_action();
+							}
+						}
+						else if (difference > EPSILON || digit_count != 3) {
+							has_changed_action();
 						}
 					}
 
