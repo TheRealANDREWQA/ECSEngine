@@ -756,6 +756,18 @@ namespace ECSEngine {
 		}
 	}
 
+	// Returns 1.0f / value when using precise mode
+	// And an approximate version when using ACCURATE/FAST
+	template<VectorOperationPrecision precision = ECS_VECTOR_PRECISE>
+	ECS_INLINE Vector8 ECS_VECTORCALL OneDividedVector(Vector8 value) {
+		if constexpr (precision == ECS_VECTOR_PRECISE) {
+			return VectorGlobals::ONE / value;
+		}
+		else {
+			return approx_recipr(value);
+		}
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	// For both Is Parallel and Is Perpendicular we need to normalize both directions

@@ -213,8 +213,10 @@ ECS_THREAD_TASK(RenderSelectables) {
 						valid_entities += render_mesh != nullptr && render_mesh->Validate();
 					}
 
+					ECSTransformToolEx transform_tool = GetEditorRuntimeTransformToolEx(system_manager);
+
 					float3 translation_midpoint = { 0.0f, 0.0f, 0.0f };
-					Quaternion rotation_midpoint = QuaternionIdentity();
+					Quaternion rotation_midpoint = QuaternionAverageCumulatorInitialize();
 					if (valid_entities > 0) {
 						HighlightObjectElement* highlight_elements = nullptr;
 						size_t allocate_size = sizeof(highlight_elements[0]) * valid_entities;
@@ -242,14 +244,17 @@ ECS_THREAD_TASK(RenderSelectables) {
 								if (translation != nullptr) {
 									Matrix translation_matrix = MatrixTranslation(translation->value);
 									if (rotation != nullptr) {
-										Matrix rotation_matrix = QuaternionToMatrixLow(Quaternion(rotation->value));
+										Quaternion rotation_quaternion = Quaternion(rotation->value);
+										Matrix rotation_matrix = QuaternionToMatrixLow(rotation_quaternion);
 										if (scale != nullptr) {
 											entity_matrix = MatrixTRS(translation_matrix, rotation_matrix, MatrixScale(scale->value));
 										}
 										else {
 											entity_matrix = MatrixTR(translation_matrix, rotation_matrix);
 										}
-										rotation_midpoint *= Quaternion(rotation->value);
+										if (transform_tool.space == ECS_TRANSFORM_LOCAL_SPACE) {
+											QuaternionAddToAverageStep(&rotation_midpoint, rotation_quaternion);
+										}
 									}
 									else if (scale != nullptr) {
 										entity_matrix = MatrixTS(translation_matrix, MatrixScale(scale->value));
@@ -260,14 +265,17 @@ ECS_THREAD_TASK(RenderSelectables) {
 									translation_midpoint += translation->value;
 								}
 								else if (rotation != nullptr) {
-									Matrix rotation_matrix = QuaternionToMatrixLow(Quaternion(rotation->value));
+									Quaternion rotation_quaternion = Quaternion(rotation->value);
+									Matrix rotation_matrix = QuaternionToMatrixLow(rotation_quaternion);
 									if (scale != nullptr) {
 										entity_matrix = MatrixRS(rotation_matrix, MatrixScale(scale->value));
 									}
 									else {
 										entity_matrix = rotation_matrix;
 									}
-									rotation_midpoint *= Quaternion(rotation->value);
+									if (transform_tool.space == ECS_TRANSFORM_LOCAL_SPACE) {
+										QuaternionAddToAverageStep(&rotation_midpoint, rotation_quaternion);
+									}
 								}
 								else if (scale != nullptr) {
 									entity_matrix = MatrixScale(scale->value);
@@ -284,10 +292,13 @@ ECS_THREAD_TASK(RenderSelectables) {
 						}
 
 						translation_midpoint /= float3::Splat((float)valid_entities);
-						//rotation_midpoint /= float3::Splat((float)valid_entities);
-
-						// At the moment disable the rotation of the elements
-						// Until we implement the World/Local transformation tool
+						if (transform_tool.space == ECS_TRANSFORM_LOCAL_SPACE) {
+							rotation_midpoint = QuaternionAverageFromCumulation(rotation_midpoint, valid_entities);
+						}
+						else {
+							rotation_midpoint = QuaternionIdentity();
+						}
+						QuaternionStorage rotation_midpoint_storage = rotation_midpoint.StorageLow();
 
 						DebugDrawer* debug_drawer = world->debug_drawer;
 
@@ -297,32 +308,47 @@ ECS_THREAD_TASK(RenderSelectables) {
 						float constant_viewport_size = GetConstantObjectSizeInPerspective(camera.fov, distance, 0.25f);
 
 						// Now display the aggregate tool
-						ECSTransformToolEx transform_tool = GetEditorRuntimeTransformToolEx(system_manager);
 						DebugDrawCallOptions debug_options;
 						debug_options.ignore_depth = true;
 						debug_options.wireframe = false;
 
-						if (transform_tool.tool != ECS_TRANSFORM_COUNT) {
-							Color gray_color = Color(100, 100, 100);
-							Color transform_colors[ECS_TRANSFORM_AXIS_COUNT] = {
+						Color gray_color = Color(100, 100, 100);
+						Color transform_colors[ECS_TRANSFORM_AXIS_COUNT] = {
 								AxisXColor(),
 								AxisYColor(),
 								AxisZColor()
-							};
+						};
 
-							if (transform_tool.is_selected[ECS_TRANSFORM_AXIS_X]) {
-								transform_colors[ECS_TRANSFORM_AXIS_Y] = gray_color;
-								transform_colors[ECS_TRANSFORM_AXIS_Z] = gray_color;
-							}
-							else if (transform_tool.is_selected[ECS_TRANSFORM_AXIS_Y]) {
-								transform_colors[ECS_TRANSFORM_AXIS_X] = gray_color;
-								transform_colors[ECS_TRANSFORM_AXIS_Z] = gray_color;
-							}
-							else if (transform_tool.is_selected[ECS_TRANSFORM_AXIS_Z]) {
-								transform_colors[ECS_TRANSFORM_AXIS_X] = gray_color;
-								transform_colors[ECS_TRANSFORM_AXIS_Y] = gray_color;
-							}
+						if (transform_tool.is_selected[ECS_TRANSFORM_AXIS_X]) {
+							transform_colors[ECS_TRANSFORM_AXIS_Y] = gray_color;
+							transform_colors[ECS_TRANSFORM_AXIS_Z] = gray_color;
+						}
+						else if (transform_tool.is_selected[ECS_TRANSFORM_AXIS_Y]) {
+							transform_colors[ECS_TRANSFORM_AXIS_X] = gray_color;
+							transform_colors[ECS_TRANSFORM_AXIS_Z] = gray_color;
+						}
+						else if (transform_tool.is_selected[ECS_TRANSFORM_AXIS_Z]) {
+							transform_colors[ECS_TRANSFORM_AXIS_X] = gray_color;
+							transform_colors[ECS_TRANSFORM_AXIS_Y] = gray_color;
+						}
 
+						if (transform_tool.display_axes) {
+							// Just draw a cross at the midpoint with a very large length
+							// Such that it will cover the entire screen - this info
+							// doesn't need instance thickness x, y, z
+							DebugOOBBCrossInfo info;
+							memcpy(&info.color_x, &transform_colors[ECS_TRANSFORM_AXIS_X], sizeof(Color) * ECS_TRANSFORM_AXIS_COUNT);
+							debug_drawer->AddOOBBCross(
+								translation_midpoint,
+								rotation_midpoint_storage,
+								10000.0f,
+								constant_viewport_size,
+								false,
+								&info,
+								debug_options
+							);
+						}
+						else if (transform_tool.tool != ECS_TRANSFORM_COUNT) {
 							// Display the gizmo at the midpoint
 							switch (transform_tool.tool) {
 							case ECS_TRANSFORM_TRANSLATION:
@@ -336,7 +362,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 								axes_info.color_z = transform_colors[ECS_TRANSFORM_AXIS_Z];
 								debug_drawer->AddAxes(
 									translation_midpoint, 
-									rotation_midpoint.StorageLow(),
+									rotation_midpoint_storage,
 									constant_viewport_size,
 									&axes_info,
 									debug_options
@@ -346,7 +372,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 							case ECS_TRANSFORM_ROTATION:
 							{
 								Quaternion x_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisZ(90.0f));
-								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_X], true);
+								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_X]);
 								debug_drawer->AddCircle(
 									translation_midpoint,
 									x_rotation.StorageLow(),
@@ -356,7 +382,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 								);
 
 								Quaternion y_rotation = rotation_midpoint;
-								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Y], true);
+								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Y]);
 								debug_drawer->AddCircle(
 									translation_midpoint,
 									y_rotation.StorageLow(),
@@ -365,7 +391,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 									debug_options
 								);
 
-								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Z], true);
+								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Z]);
 								Quaternion z_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisX(90.0f));
 								debug_drawer->AddCircle(
 									translation_midpoint,
@@ -378,35 +404,20 @@ ECS_THREAD_TASK(RenderSelectables) {
 								break;
 							case ECS_TRANSFORM_SCALE:
 							{
-								float3 oobb_scale = float3(1.0f, 0.02f, 0.02f) * float3::Splat(constant_viewport_size);
-
-								Quaternion x_rotation = rotation_midpoint;
-								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_X], true);
-								debug_drawer->AddOOBB(
+								DebugOOBBCrossInfo info;
+								info.color_x = transform_colors[ECS_TRANSFORM_AXIS_X];
+								info.color_y = transform_colors[ECS_TRANSFORM_AXIS_Y];
+								info.color_z = transform_colors[ECS_TRANSFORM_AXIS_Z];
+								info.instance_thickness_x = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_X]);
+								info.instance_thickness_y = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Y]);
+								info.instance_thickness_z = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Z]);
+								debug_drawer->AddOOBBCross(
 									translation_midpoint,
-									x_rotation.StorageLow(),
-									oobb_scale,
-									transform_colors[ECS_TRANSFORM_AXIS_X],
-									debug_options
-								);
-
-								Quaternion y_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisZ(90.0f));
-								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Y], true);
-								debug_drawer->AddOOBB(
-									translation_midpoint,
-									y_rotation.StorageLow(),
-									oobb_scale,
-									transform_colors[ECS_TRANSFORM_AXIS_Y],
-									debug_options
-								);
-
-								Quaternion z_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisY(90.0f));
-								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Z], true);
-								debug_drawer->AddOOBB(
-									translation_midpoint,
-									z_rotation.StorageLow(),
-									oobb_scale,
-									transform_colors[ECS_TRANSFORM_AXIS_Z],
+									rotation_midpoint_storage,
+									constant_viewport_size * 0.45f,
+									constant_viewport_size,
+									true,
+									&info,
 									debug_options
 								);
 							}

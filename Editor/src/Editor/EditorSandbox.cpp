@@ -261,6 +261,15 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 		
 		ECSTransformToolEx transform_tool;
 		transform_tool.tool = sandbox->transform_tool;
+		transform_tool.display_axes = sandbox->transform_display_axes;
+		if (transform_tool.display_axes) {
+			// Odd number of key presses means keep the same transform space as the global one
+			// Even means invert it
+			transform_tool.space = (sandbox->transform_keyboard_press_count % 2) == 0 ? InvertTransformSpace(sandbox->transform_space) : sandbox->transform_space;
+		}
+		else {
+			transform_tool.space = sandbox->transform_space;
+		}
 		memcpy(transform_tool.is_selected, sandbox->transform_tool_selected, sizeof(sandbox->transform_tool_selected));
 		bool entity_ids_are_valid = true;
 		// If one entity id is invalid, all should be invalid since these are created and released all at once
@@ -514,6 +523,8 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->should_step = true;
 	sandbox->is_scene_dirty = false;
 	sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
+	sandbox->transform_space = ECS_TRANSFORM_LOCAL_SPACE;
+	sandbox->transform_keyboard_press_count = 0;
 	memset(sandbox->transform_tool_selected, 0, sizeof(sandbox->transform_tool_selected));
 
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;

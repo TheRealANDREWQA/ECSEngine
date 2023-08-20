@@ -482,7 +482,7 @@ namespace ECSEngine {
     ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, HandleRotationToolDelta, const Camera*, const CameraCached*, float3, Quaternion, RotationToolDrag*, uint2, int2, float);
 
     template<typename CameraType>
-    float4 HandleRotationToolDeltaCircleMapping(
+    QuaternionStorage HandleRotationToolDeltaCircleMapping(
         const CameraType* camera,
         float3 rotation_center,
         Quaternion rotation_value,
@@ -538,10 +538,10 @@ namespace ECSEngine {
             Quaternion rotation_quaternion = QuaternionAngleFromAxis(axis_direction, angle_degrees * rotation_factor);
             return rotation_quaternion.StorageLow();
         }
-        return float4(0.0f, 0.0f, 0.0f, 1.0f);
+        return QuaternionIdentity().StorageLow();
     }
 
-    ECS_TEMPLATE_FUNCTION_2_BEFORE(float4, HandleRotationToolDeltaCircleMapping, const Camera*, const CameraCached*, float3, Quaternion, RotationToolDrag*, uint2, int2, float);
+    ECS_TEMPLATE_FUNCTION_2_BEFORE(QuaternionStorage, HandleRotationToolDeltaCircleMapping, const Camera*, const CameraCached*, float3, Quaternion, RotationToolDrag*, uint2, int2, float);
 
     template<typename CameraType>
     float3 HandleScaleToolDelta(

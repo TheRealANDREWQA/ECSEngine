@@ -722,6 +722,12 @@ public:
 		Texture2D my_texture = ConvertTextureToVisualize(graphics, RENDER_TARGET.GetResource());*/
 		//graphics->FreeResource(my_texture);
 
+Quaternion some_rotation = QuaternionFromEuler(float3(20.0f, 100.0f, 50.0f));
+Quaternion delta_rotation = QuaternionFromEuler(float3(10.0f, 0.0f, 0.0f));
+Quaternion world = AddWorldRotation(some_rotation, delta_rotation);
+Quaternion local = AddLocalRotation(some_rotation, delta_rotation);
+bool same_orientation = QuaternionSameOrientationLow(world, local);
+
 		while (true) {
 			auto run_application = [&](char application_quit_value) {
 				while (result == 0 && application_quit == application_quit_value) {

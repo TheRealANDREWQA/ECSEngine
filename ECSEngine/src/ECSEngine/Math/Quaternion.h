@@ -196,7 +196,8 @@ namespace ECSEngine {
 		return IsNormalizedMask<true>(Vector8(quaternion));
 	}
 
-	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE
+	(
 		QuaternionIsNormalized,
 		4,
 		Quaternion quaternion,
@@ -481,6 +482,19 @@ namespace ECSEngine {
 		FORWARD(a, b)
 	);
 
+	// Returns true if the quaternions are located in the same hyperspace
+	// (The dot product between them is positive)
+	ECS_INLINE Vector8 ECS_VECTORCALL QuaternionSameHyperspaceMask(Quaternion a, Quaternion b) {
+		return QuaternionDot(a, b) > ZeroVector();
+	}
+
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
+		QuaternionSameHyperspace,
+		4,
+		FORWARD(Quaternion a, Quaternion b),
+		FORWARD(a, b)
+	);
+
 	// ---------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionConjugate(Quaternion quaternion) {
@@ -570,11 +584,11 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
+	// Returns the negated quaternion if they are in different hyperspaces
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNeighbour(Quaternion quat_a, Quaternion quat_b) {
 		// If the dot product between the 2 quaternions is negative, negate b and return it
-		Quaternion dot = QuaternionDot(quat_a, quat_b);
-		Vector8 mask = dot < ZeroVector();
-		return Select(mask, -quat_b.value, quat_b.value);
+		Vector8 mask = QuaternionSameHyperspaceMask(quat_a, quat_b);
+		return Select(mask, quat_b.value, -quat_b.value);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
@@ -964,6 +978,50 @@ namespace ECSEngine {
 	ECS_INLINE Quaternion DirectionToQuaternion(Vector8 direction_normalized) {
 		Vector8 up_vector = GetUpVectorForDirection(direction_normalized);
 		return QuaternionLookRotationNormalized(direction_normalized, up_vector);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAverageCumulatorInitialize() {
+		return ZeroVector();
+	}
+
+	// The reference quaternion is used to changed the sign of the current quaternion if they are in different hyperplanes
+	// It needs to be the same value across multiple cumulations. Usually, it is the first quaternion that is being cumulated
+	// This only does the cumulative step
+	ECS_INLINE void ECS_VECTORCALL QuaternionAddToAverageStep(Quaternion* cumulator, Quaternion current_quaternion) {
+		// Use some default value for the reference quaternion
+		Quaternion reference_quaternion = QuaternionForAxisX(0.0f);
+		Quaternion neighbour_quaternion = QuaternionNeighbour(reference_quaternion, current_quaternion);
+		*cumulator += neighbour_quaternion;
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAverageFromCumulation(Quaternion cumulator, unsigned int count) {
+		Vector8 float_count = (float)count;
+		Vector8 count_inverse = OneDividedVector<ECS_VECTOR_ACCURATE>(float_count);
+
+		Vector8 average_values = cumulator.value * count_inverse;
+		return QuaternionNormalize(average_values);
+	}
+
+	// The reference quaternion is used to changed the sign of the current quaternion if they are in different hyperplanes
+	// It needs to be the same value across multiple cumulations. Usually, it is the first quaternion that is being cumulated
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAddToAverage(Quaternion* cumulator, Quaternion current_quaternion, unsigned int count) {
+		QuaternionAddToAverageStep(cumulator, current_quaternion);
+		return QuaternionAverageFromCumulation(*cumulator, count);
+	}
+
+	// Call this function only for 2 quaternions - otherwise use the cumulative version
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAverage2(Quaternion a, Quaternion b) {
+		return QuaternionSLerpNeighbour(a, b, 0.5f);
+	}
+
+	// Returns the average between the low and high lane
+	// It will be splatted in the low and high as well
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAverageLowAndHigh(Quaternion average) {
+		Quaternion low = average.SplatLow();
+		Quaternion high = average.SplatHigh();
+		return QuaternionAverage2(low, high);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

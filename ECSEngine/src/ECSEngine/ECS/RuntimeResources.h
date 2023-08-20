@@ -22,8 +22,12 @@ namespace ECSEngine {
 
 	// The entity ids are used to output the values to the instanced framebuffer
 	// And the booleans is_selected informs the module if the tool is selected or not
+	// The display axes boolean indicates if the module should not display the gizmos,
+	// but the axes at that location
 	struct ECSTransformToolEx {
 		ECS_TRANSFORM_TOOL tool;
+		ECS_TRANSFORM_SPACE space;
+		bool display_axes;
 		bool is_selected[ECS_TRANSFORM_AXIS_COUNT];
 		Entity entity_ids[ECS_TRANSFORM_AXIS_COUNT];
 	};

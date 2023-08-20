@@ -141,7 +141,9 @@ namespace ECSEngine {
 	ECSTransformToolEx GetEditorRuntimeTransformToolEx(const SystemManager* system_manager)
 	{
 		ECSTransformToolEx tool_ex;
+		tool_ex.display_axes = false;
 		tool_ex.tool = ECS_TRANSFORM_COUNT;
+		tool_ex.space = ECS_TRANSFORM_SPACE_COUNT;
 		GetRuntimeResource(system_manager, &tool_ex, TRANSFORM_TOOL_EX_IDENTIFIER);
 		return tool_ex;
 	}
