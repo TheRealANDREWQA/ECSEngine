@@ -67,11 +67,18 @@ struct ECS_REFLECT EditorSandbox {
 	bool should_step;
 
 	ECSEngine::ECS_TRANSFORM_TOOL transform_tool;
+	ECSEngine::ECS_TRANSFORM_SPACE transform_space;
 
 	ECSEngine::CameraParametersFOV camera_parameters[EDITOR_SANDBOX_VIEWPORT_COUNT];
 	ECSEngine::OrientedPoint camera_saved_orientations[EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT];
 
 	ECS_FIELDS_END_REFLECT;
+
+	unsigned char transform_keyboard_press_count;
+	// This flag is set when initiating keyboard transform actions
+	bool transform_display_axes;
+	// Indicate which axis of the transform tool is currently selected
+	bool transform_tool_selected[3];
 
 	EDITOR_SANDBOX_STATE run_state;
 	bool is_scene_dirty;
@@ -88,9 +95,7 @@ struct ECS_REFLECT EditorSandbox {
 	// These are set used to make calls to RenderSandbox ignore the request if the output is
 	// not going to be visualized
 	bool viewport_enable_rendering[EDITOR_SANDBOX_VIEWPORT_COUNT];
-	
-	// Indicate which axis of the transform tool is currently selected
-	bool transform_tool_selected[3];
+
 
 	ECSEngine::EntityManager scene_entities;
 	ECSEngine::World sandbox_world;
@@ -277,7 +282,6 @@ EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index)
 // -------------------------------------------------------------------------------------------------------------
 
 const EditorSandbox* GetSandbox(const EditorState* editor_state, unsigned int sandbox_index);
-
 // -------------------------------------------------------------------------------------------------------------
 
 EditorSandboxModule* GetSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
@@ -649,6 +653,14 @@ void ResetSandboxUnusedEntities(
 	unsigned int sandbox_index,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
+
+ECS_INLINE void ResetSandboxTransformToolSelectedAxes(
+	EditorState* editor_state,
+	unsigned int sandbox_index
+) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	memset(sandbox->transform_tool_selected, 0, sizeof(sandbox->transform_tool_selected));
+}
 
 // -------------------------------------------------------------------------------------------------------------
 

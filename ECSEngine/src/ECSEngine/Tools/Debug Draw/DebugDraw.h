@@ -130,6 +130,8 @@ namespace ECSEngine {
 		unsigned int instance_thickness_z = (unsigned int)-1;
 	};
 
+	typedef DebugAxesInfo DebugOOBBCrossInfo;
+
 	struct ECSENGINE_API DebugDrawer {
 		DebugDrawer() : allocator(nullptr), graphics(nullptr) {}
 		DebugDrawer(MemoryManager* allocator, ResourceManager* manager, size_t thread_count);
@@ -151,6 +153,18 @@ namespace ECSEngine {
 		void AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
 
 		void AddCross(float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {false});
+
+		// If the start_from_same_point is set to true, it will mimick the Axes call, where the
+		// arrows start from the same point. Else, it will draw like the normal cross
+		void AddOOBBCross(
+			float3 position, 
+			QuaternionStorage rotation, 
+			float length,
+			float size, 
+			bool start_from_same_point, 
+			const DebugOOBBCrossInfo* info = {},
+			DebugDrawCallOptions options = { false }
+		);
 
 		void AddCircle(float3 position, QuaternionStorage rotation, float radius, Color color, DebugDrawCallOptions options = {});
 
@@ -191,7 +205,18 @@ namespace ECSEngine {
 		// Corner0 is the top left corner, corner1 is the bottom right corner
 		void AddRectangleThread(unsigned int thread_index, float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
 
-		void AddCrossThread(unsigned int thread_index, float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void AddCrossThread(unsigned int thread_index, float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {false});
+
+		void AddOOBBCrossThread(
+			unsigned int thread_index,
+			float3 position,
+			QuaternionStorage rotation,
+			float length,
+			float size,
+			bool start_from_same_point,
+			const DebugOOBBCrossInfo* info = {},
+			DebugDrawCallOptions options = { false }
+		);
 
 		void AddCircleThread(unsigned int thread_index, float3 position, QuaternionStorage rotation, float radius, Color color, DebugDrawCallOptions options = {});
 
@@ -244,14 +269,26 @@ namespace ECSEngine {
 
 		void DrawLine(float3 translation, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {});
 
-		void DrawSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {});
+		void DrawSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {false});
 
-		void DrawPoint(float3 position, Color color, DebugDrawCallOptions options = {});
+		void DrawPoint(float3 position, Color color, DebugDrawCallOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
 		void DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
 
-		void DrawCross(float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void DrawCross(float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options = {false});
+
+		void DrawOOBBCross(
+			float3 position, 
+			QuaternionStorage rotation,
+			float length,
+			float size, 
+			bool start_from_same_point, 
+			Color color_x = AxisXColor(), 
+			Color color_y = AxisYColor(), 
+			Color color_z = AxisZColor(), 
+			DebugDrawCallOptions options = {false}
+		);
 
 		void DrawCircle(float3 position, QuaternionStorage rotation, float radius, Color color, DebugDrawCallOptions options = {});
 
@@ -451,6 +488,19 @@ namespace ECSEngine {
 			float size,
 			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugCross>* addition_stream
+		);
+
+		void OutputInstanceIndexOOBBCross(
+			float3 position,
+			QuaternionStorage rotation,
+			float length,
+			float size,
+			bool start_from_same_point,
+			unsigned int instance_thickness_x,
+			unsigned int instance_thickness_y,
+			unsigned int instance_thickness_z,
+			DebugDrawCallOptions options,
+			AdditionStreamAtomic<DebugOOBB>* addition_stream
 		);
 
 		void OutputInstanceIndexCircle(

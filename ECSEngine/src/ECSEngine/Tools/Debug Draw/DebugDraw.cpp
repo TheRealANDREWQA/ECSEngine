@@ -23,6 +23,9 @@ constexpr size_t PER_THREAD_RESOURCES = 32;
 #define DECK_CHUNK_SIZE 128
 #define DECK_POWER_OF_TWO 7
 
+#define OOBB_CROSS_Y_SCALE 0.02f
+#define OOBB_CROSS_Z_SCALE 0.02f
+
 namespace ECSEngine {
 
 	// In consort with DebugVertexBuffers
@@ -70,22 +73,23 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	unsigned char GetMaskFromOptions(DebugDrawCallOptions options) {
+	ECS_INLINE unsigned char GetMaskFromOptions(DebugDrawCallOptions options) {
 		return (unsigned char)options.ignore_depth | (((unsigned char)(!options.wireframe) << 1) & 2);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	unsigned int GetMaximumCount(unsigned int* counts) {
+	ECS_INLINE unsigned int GetMaximumCount(unsigned int* counts) {
 		return std::max(std::max(counts[WIREFRAME_DEPTH], counts[WIREFRAME_NO_DEPTH]), std::max(counts[SOLID_DEPTH], counts[SOLID_NO_DEPTH]));
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	template<typename Deck>
-	bool HasOutputIDElements(Deck* deck) {
-
+	ECS_INLINE float3 OOBBCrossSize(float length, float size) {
+		return float3(length, size * OOBB_CROSS_Y_SCALE, size * OOBB_CROSS_Z_SCALE);
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Element>
 	ushort2* CalculateElementTypeCounts(
@@ -399,16 +403,62 @@ namespace ECSEngine {
 		);
 	}
 
+	ECS_INLINE Matrix ECS_VECTORCALL OOBBCrossMatrix(float3 translation, QuaternionStorage rotation, float length, float size, Matrix camera_matrix) {
+		Matrix rotation_matrix = QuaternionToMatrixLow(rotation);
+		float3 current_translation = translation;
+		return MatrixMVPToGPU(
+			MatrixTranslation(current_translation),
+			rotation_matrix,
+			MatrixScale(OOBBCrossSize(length, size)),
+			camera_matrix
+		);
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL AxesArrowXRotationSIMD(Quaternion rotation) {
+		return rotation;
+	}
+
 	ECS_INLINE QuaternionStorage AxesArrowXRotation(QuaternionStorage rotation) {
 		return rotation;
 	}
 
+	ECS_INLINE Quaternion ECS_VECTORCALL AxesArrowYRotationSIMD(Quaternion rotation) {
+		return AddWorldRotation(rotation, QuaternionAngleFromAxis(ForwardVector(), 90.0f));
+	}
+
 	ECS_INLINE QuaternionStorage AxesArrowYRotation(QuaternionStorage rotation) {
-		return AddWorldRotation(rotation, QuaternionAngleFromAxis(ForwardVector(), 90.0f)).StorageLow();
+		return AxesArrowYRotationSIMD(rotation).StorageLow();
+	}
+
+	ECS_INLINE Quaternion ECS_VECTORCALL AxesArrowZRotationSIMD(Quaternion rotation) {
+		return AddWorldRotation(rotation, QuaternionAngleFromAxis(UpVector(), -90.0f));
 	}
 
 	ECS_INLINE QuaternionStorage AxesArrowZRotation(QuaternionStorage rotation) {
-		return AddWorldRotation(rotation, QuaternionAngleFromAxis(UpVector(), -90.0f)).StorageLow();
+		return AxesArrowZRotationSIMD(rotation).StorageLow();
+	}
+
+	float3 OOBBCrossTranslation(float3 translation, Quaternion rotation, float length, bool start_from_same_point) {
+		// Offset in the direction of the by half of the length - if start from same point
+		if (start_from_same_point) {
+			float3 direction = RotateVectorQuaternion(rotation, RightVector());
+			return translation + direction * float3::Splat(length);
+		}
+		else {
+			return translation;
+		}
+	}
+
+	ECS_INLINE float3 OOBBCrossXTranslation(float3 translation, Quaternion rotation, float length, bool start_from_same_point) {
+		return OOBBCrossTranslation(translation, AxesArrowXRotationSIMD(rotation), length, start_from_same_point);
+	}
+
+	ECS_INLINE float3 OOBBCrossYTranslation(float3 translation, Quaternion rotation, float length, bool start_from_same_point) {
+		return OOBBCrossTranslation(translation, AxesArrowYRotationSIMD(rotation), length, start_from_same_point);
+	}
+
+	ECS_INLINE float3 OOBBCrossZTranslation(float3 translation, Quaternion rotation, float length, bool start_from_same_point) {
+		return OOBBCrossTranslation(translation, AxesArrowZRotationSIMD(rotation), length, start_from_same_point);
 	}
 
 	void ConvertTranslationLineIntoStartEnd(float3 translation, QuaternionStorage rotation, float size, float3& start, float3& end) {
@@ -479,6 +529,52 @@ namespace ECSEngine {
 	void DebugDrawer::AddCross(float3 position, QuaternionStorage rotation, float size, Color color, DebugDrawCallOptions options)
 	{
 		crosses.Add({ position, rotation, size, color, options });
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::AddOOBBCross(
+		float3 position, 
+		QuaternionStorage rotation, 
+		float length,
+		float size, 
+		bool start_from_same_point, 
+		const DebugOOBBCrossInfo* info,
+		DebugDrawCallOptions options
+	)
+	{
+		Quaternion rotation_quaternion = rotation;
+		float3 complete_size = OOBBCrossSize(length, size);
+
+		DebugDrawCallOptions options_x = options;
+		DebugDrawCallOptions options_y = options;
+		DebugDrawCallOptions options_z = options;
+
+		options_x.instance_thickness = info->instance_thickness_x;
+		options_y.instance_thickness = info->instance_thickness_y;
+		options_z.instance_thickness = info->instance_thickness_z;
+
+		AddOOBB(
+			OOBBCrossXTranslation(position, rotation_quaternion, length, start_from_same_point),
+			AxesArrowXRotation(rotation), 
+			complete_size, 
+			info->color_x, 
+			options_x
+		);
+		AddOOBB(
+			OOBBCrossYTranslation(position, rotation_quaternion, length, start_from_same_point), 
+			AxesArrowYRotation(rotation), 
+			complete_size, 
+			info->color_y, 
+			options_y
+		);
+		AddOOBB(
+			OOBBCrossZTranslation(position, rotation_quaternion, length, start_from_same_point), 
+			AxesArrowZRotation(rotation), 
+			complete_size, 
+			info->color_z, 
+			options_z
+		);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -638,6 +734,56 @@ namespace ECSEngine {
 			FlushCross(thread_index);
 		}
 		thread_crosses[thread_index].Add({ position, rotation, size, color, options });
+	}
+	
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::AddOOBBCrossThread(
+		unsigned int thread_index, 
+		float3 position, 
+		QuaternionStorage rotation,
+		float length,
+		float size, 
+		bool start_from_same_point, 
+		const DebugOOBBCrossInfo* info,
+		DebugDrawCallOptions options
+	)
+	{
+		Quaternion rotation_quaternion = rotation;
+		float3 complete_size = OOBBCrossSize(length, size);
+
+		DebugDrawCallOptions options_x = options;
+		DebugDrawCallOptions options_y = options;
+		DebugDrawCallOptions options_z = options;
+
+		options_x.instance_thickness = info->instance_thickness_x;
+		options_y.instance_thickness = info->instance_thickness_y;
+		options_z.instance_thickness = info->instance_thickness_z;
+
+		AddOOBBThread(
+			thread_index,
+			OOBBCrossXTranslation(position, rotation_quaternion, length, start_from_same_point),
+			AxesArrowXRotation(rotation),
+			complete_size,
+			info->color_x,
+			options_x
+		);
+		AddOOBBThread(
+			thread_index,
+			OOBBCrossYTranslation(position, rotation_quaternion, length, start_from_same_point),
+			AxesArrowYRotation(rotation),
+			complete_size,
+			info->color_y,
+			options_y
+		);
+		AddOOBBThread(
+			thread_index,
+			OOBBCrossZTranslation(position, rotation_quaternion, length, start_from_same_point),
+			AxesArrowZRotation(rotation),
+			complete_size,
+			info->color_z,
+			options_z
+		);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1002,6 +1148,49 @@ namespace ECSEngine {
 			ECS_DEBUG_VERTEX_BUFFER_CROSS, 
 			[&](unsigned int index) {
 			return CrossMatrix(position, rotation, size, camera_matrix);
+		});
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawOOBBCross(
+		float3 position, 
+		QuaternionStorage rotation,
+		float length,
+		float size, 
+		bool start_from_same_point, 
+		Color color_x, 
+		Color color_y, 
+		Color color_z, 
+		DebugDrawCallOptions options
+	)
+	{
+		// The same as drawing 3 arrows for each axis
+		DebugDrawerOutput colors[] = {
+			color_x,
+			color_y,
+			color_z
+		};
+
+		Quaternion rotation_quaternion = rotation;
+
+		// Hopefully since the function is marked as inline the compiler will notice the same function being
+		// called multiple times and fold the calls into a single one (with optimizations for sure, in release
+		// I hope so)
+		Matrix matrices[] = {
+			OOBBCrossMatrix(OOBBCrossXTranslation(position, rotation_quaternion, length, start_from_same_point), AxesArrowXRotation(rotation), length, size, camera_matrix),
+			OOBBCrossMatrix(OOBBCrossYTranslation(position, rotation_quaternion, length, start_from_same_point), AxesArrowYRotation(rotation), length, size, camera_matrix),
+			OOBBCrossMatrix(OOBBCrossZTranslation(position, rotation_quaternion, length, start_from_same_point), AxesArrowZRotation(rotation), length, size, camera_matrix)
+		};
+
+		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
+			this,
+			3,
+			colors,
+			options,
+			ECS_DEBUG_VERTEX_BUFFER_CUBE,
+			[&](unsigned int index) {
+				return matrices[index];
 		});
 	}
 
@@ -2124,6 +2313,81 @@ namespace ECSEngine {
 		}
 	}
 
+	void DebugDrawer::OutputInstanceIndexOOBBCross(
+		float3 position, 
+		QuaternionStorage rotation,
+		float length,
+		float size, 
+		bool start_from_same_point, 
+		unsigned int instance_thickness_x, 
+		unsigned int instance_thickness_y, 
+		unsigned int instance_thickness_z, 
+		DebugDrawCallOptions options, 
+		AdditionStreamAtomic<DebugOOBB>* addition_stream
+	)
+	{
+		Quaternion rotation_quaternion = rotation;
+		float3 translations[] = {
+			OOBBCrossXTranslation(position, rotation_quaternion, length, start_from_same_point),
+			OOBBCrossYTranslation(position, rotation_quaternion, length, start_from_same_point),
+			OOBBCrossZTranslation(position, rotation_quaternion, length, start_from_same_point),
+		};
+		QuaternionStorage rotations[] = {
+			AxesArrowXRotation(rotation),
+			AxesArrowYRotation(rotation),
+			AxesArrowZRotation(rotation)
+		};
+		float3 complete_size = OOBBCrossSize(length, size);
+
+		if (addition_stream != nullptr) {
+			unsigned int instance_thickness_values[] = {
+				instance_thickness_x,
+				instance_thickness_y,
+				instance_thickness_z,
+			};
+
+			DebugOOBB oobbs[3] = {};
+			for (size_t index = 0; index < std::size(oobbs); index++) {
+				DebugDrawCallOptions current_option = options;
+				current_option.instance_thickness = instance_thickness_values[index];
+				oobbs[index] = {
+					translations[index],
+					rotations[index],
+					complete_size,
+					Color(),
+					current_option
+				};
+			}
+
+			addition_stream->AddStream({ oobbs, std::size(oobbs) });
+		}
+		else {
+			DebugDrawerOutput outputs[] = {
+				instance_thickness_x,
+				instance_thickness_y,
+				instance_thickness_z
+			};
+
+			// Hopefully since the function is marked as inline the compiler will notice the same function being
+			// called multiple times and fold the calls into a single one (with optimizations for sure, in release
+			// I hope so)
+			Matrix matrices[3] = {};
+			for (size_t index = 0; index < std::size(matrices); index++) {
+				matrices[index] = OOBBCrossMatrix(
+					translations[index],
+					rotations[index],
+					length,
+					size,
+					camera_matrix
+				);
+			}
+
+			DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_ID>(this, 3, outputs, options, ECS_DEBUG_VERTEX_BUFFER_CUBE, [&](unsigned int index) {
+				return matrices[index];
+			});
+		}
+	}
+
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::OutputInstanceIndexCircle(
@@ -2198,13 +2462,13 @@ namespace ECSEngine {
 	{
 		if (addition_stream != nullptr) {
 			DebugDrawCallOptions options_x = options;
-			options_x.instance_thickness = GenerateRenderInstanceValue(instance_thickness_x, 0);
+			options_x.instance_thickness = instance_thickness_x;
 
 			DebugDrawCallOptions options_y = options;
-			options_y.instance_thickness = GenerateRenderInstanceValue(instance_thickness_y, 0);
+			options_y.instance_thickness = instance_thickness_y;
 
 			DebugDrawCallOptions options_z = options;
-			options_z.instance_thickness = GenerateRenderInstanceValue(instance_thickness_z, 0);
+			options_z.instance_thickness = instance_thickness_z;
 
 			DebugArrow arrows[] = {
 				{ translation, AxesArrowXRotation(rotation), size, size, Color(), options_x },

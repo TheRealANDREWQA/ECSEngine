@@ -22,7 +22,7 @@ namespace ECSEngine {
 		ECS_TRANSFORM_AXIS_COUNT
 	};
 
-	enum ECS_TRANSFORM_SPACE : unsigned char {
+	enum ECS_REFLECT ECS_TRANSFORM_SPACE : unsigned char {
 		ECS_TRANSFORM_LOCAL_SPACE,
 		ECS_TRANSFORM_WORLD_SPACE,
 		ECS_TRANSFORM_SPACE_COUNT
@@ -106,6 +106,10 @@ namespace ECSEngine {
 		RotationToolDrag rotation;
 		ScaleToolDrag scale;
 	};
+
+	ECS_INLINE ECS_TRANSFORM_SPACE InvertTransformSpace(ECS_TRANSFORM_SPACE space) {
+		return space == ECS_TRANSFORM_LOCAL_SPACE ? ECS_TRANSFORM_WORLD_SPACE : ECS_TRANSFORM_LOCAL_SPACE;
+	}
 
 	// Returns { 1.0f, 0.0f, 0.0f } for X
 	// Returns { 0.0f, 1.0f, 0.0f } for Y
@@ -260,7 +264,7 @@ namespace ECSEngine {
 	);
 
 	template<typename CameraType>
-	ECSENGINE_API float4 HandleRotationToolDeltaCircleMapping(
+	ECSENGINE_API QuaternionStorage HandleRotationToolDeltaCircleMapping(
 		const CameraType* camera,
 		float3 rotation_center,
 		Quaternion rotation_value,

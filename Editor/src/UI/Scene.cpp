@@ -44,17 +44,67 @@ void ScenePrivateAction(ActionData* action_data) {
 	if (target_sandbox == sandbox_index && !editor_state->Keyboard()->IsCaptureCharacters()) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, target_sandbox);
 		ECS_TRANSFORM_TOOL current_tool = sandbox->transform_tool;
-		if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_TRANSLATION_TOOL)) {
+		if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_TRANSLATION_TOOL)) {
 			sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
 		}
-		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_ROTATION_TOOL)) {
+		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_ROTATION_TOOL)) {
 			sandbox->transform_tool = ECS_TRANSFORM_ROTATION;
 		}
-		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_SCALE_TOOL)) {
+		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_SCALE_TOOL)) {
 			sandbox->transform_tool = ECS_TRANSFORM_SCALE;
 		}
 
-		if (current_tool != sandbox->transform_tool) {
+		bool trigger_rerender = false;
+		if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TRANSFORM_SPACE)) {
+			sandbox->transform_space = InvertTransformSpace(sandbox->transform_space);
+			trigger_rerender = true;
+		}
+
+		auto initiate_transform = [&](ECS_TRANSFORM_TOOL tool) {
+			// Check to see if the same transform was pressed to change the space
+			if (sandbox->transform_tool == tool && sandbox->transform_display_axes) {
+				sandbox->transform_keyboard_press_count++;
+			}
+			else {
+				sandbox->transform_keyboard_press_count = 1;
+			}
+			trigger_rerender = true;
+			sandbox->transform_display_axes = true;
+			ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+			sandbox->transform_tool = tool;
+		};
+
+		// For each initiate transform check to see if we need to change from 
+		if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INITIATE_TRANSLATION)) {
+			initiate_transform(ECS_TRANSFORM_TRANSLATION);
+		}
+		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INITIATE_ROTATION)) {
+			initiate_transform(ECS_TRANSFORM_ROTATION);
+		}
+		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INITIATE_SCALE)) {
+			initiate_transform(ECS_TRANSFORM_SCALE);
+		}
+
+		// Check to see if the initiated transform mode is selected
+		if (sandbox->transform_display_axes) {
+			auto change_selected_axis = [&](ECS_TRANSFORM_TOOL_AXIS axis) {
+				ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+				sandbox->transform_tool_selected[axis] = true;
+				trigger_rerender = true;
+			};
+
+			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_X)) {
+				change_selected_axis(ECS_TRANSFORM_AXIS_X);
+			}
+			else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_Y)) {
+				change_selected_axis(ECS_TRANSFORM_AXIS_Y);
+			}
+			else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_Z)) {
+				change_selected_axis(ECS_TRANSFORM_AXIS_Z);
+			}
+		}
+
+		if (current_tool != sandbox->transform_tool || trigger_rerender) {
 			RenderSandbox(editor_state, target_sandbox, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
 	}
@@ -238,6 +288,12 @@ void SceneLeftClickableAction(ActionData* action_data) {
 	uint2 hovered_texel_offset = system->GetWindowTexelPositionClamped(window_index, mouse_position);
 
 	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
+		// Disable for this sandbox the selectable axes from keyboard hotkeys
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		sandbox->transform_display_axes = false;
+		sandbox->transform_keyboard_press_count = 0;
+		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+
 		data->click_ui_position = mouse_position;
 		data->click_texel_position = system->GetMousePositionHoveredWindowTexelPosition();
 		data->is_selection_mode = false;
@@ -273,7 +329,7 @@ void SceneLeftClickableAction(ActionData* action_data) {
 				}
 				
 				if (data->tool_axis != ECS_TRANSFORM_AXIS_COUNT) {
-					EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+					ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 					sandbox->transform_tool_selected[data->tool_axis] = true;
 
 					ECS_TRANSFORM_TOOL transform_tool = sandbox->transform_tool;
@@ -288,7 +344,6 @@ void SceneLeftClickableAction(ActionData* action_data) {
 						component_name = STRING(Translation);
 						component_id = Translation::ID();
 						data->transform_drag.translation.Initialize();
-						data->transform_drag.translation.axis = data->tool_axis;
 					}
 					break;
 					case ECS_TRANSFORM_ROTATION:
@@ -296,7 +351,6 @@ void SceneLeftClickableAction(ActionData* action_data) {
 						component_name = STRING(Rotation);
 						component_id = Rotation::ID();
 						data->transform_drag.rotation.InitializeCircle();
-						data->transform_drag.rotation.axis = data->tool_axis;
 					}
 					break;
 					case ECS_TRANSFORM_SCALE:
@@ -304,10 +358,11 @@ void SceneLeftClickableAction(ActionData* action_data) {
 						component_name = STRING(Scale);
 						component_id = Scale::ID();
 						data->transform_drag.scale.Initialize();
-						data->transform_drag.scale.axis = data->tool_axis;
 					}
 					break;
 					}
+					data->transform_drag.SetAxis(data->tool_axis);
+					data->transform_drag.SetSpace(sandbox->transform_space);
 
 					// Calculate the midpoint here such that it won't need to be calculated each frame
 					for (size_t index = 0; index < selected_entities.size; index++) {
@@ -319,7 +374,7 @@ void SceneLeftClickableAction(ActionData* action_data) {
 					}
 
 					data->gizmo_translation_midpoint = float3::Splat(0.0f);
-					data->gizmo_rotation_midpoint = QuaternionIdentity();
+					data->gizmo_rotation_midpoint = QuaternionAverageCumulatorInitialize();
 					for (size_t index = 0; index < selected_entities.size; index++) {
 						const Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
 						if (translation != nullptr) {
@@ -327,11 +382,12 @@ void SceneLeftClickableAction(ActionData* action_data) {
 						}
 						const Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[index]);
 						if (rotation != nullptr) {
-							data->gizmo_rotation_midpoint *= Quaternion(rotation->value);
+							QuaternionAddToAverageStep(&data->gizmo_rotation_midpoint, rotation->value);
 						}
 					}
 					float3 count_inverse = float3::Splat(1.0f / (float)selected_entities.size);
 					data->gizmo_translation_midpoint *= count_inverse;
+					data->gizmo_rotation_midpoint = QuaternionAverageFromCumulation(data->gizmo_rotation_midpoint, selected_entities.size);
 				}
 			}
 		}
@@ -471,10 +527,6 @@ void SceneLeftClickableAction(ActionData* action_data) {
 			int2 unclampped_texel_position = system->GetWindowTexelPositionEx(window_index, mouse_position);
 			uint2 viewport_dimensions = system->GetWindowTexelSize(window_index);
 
-			if (mouse->IsPressed(ECS_MOUSE_X1)) {
-				__debugbreak();
-			}
-
 			Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
 			switch (sandbox->transform_tool) {
 			case ECS_TRANSFORM_TRANSLATION:
@@ -509,17 +561,19 @@ void SceneLeftClickableAction(ActionData* action_data) {
 				float4 rotation_delta = HandleRotationToolDeltaCircleMapping(
 					&camera,
 					data->gizmo_translation_midpoint,
-					first_rotation->value,
+					data->gizmo_rotation_midpoint,
 					&data->transform_drag.rotation,
 					viewport_dimensions,
 					unclampped_texel_position,
 					factor
 				);
 
-				if (rotation_delta != float4(0.0f, 0.0f, 0.0f, 1.0f)) {
+				if (rotation_delta != QuaternionIdentity().StorageLow()) {
 					for (size_t index = 0; index < selected_entities.size; index++) {
 						Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[index]);
 						Quaternion original_quat = Quaternion(rotation->value);
+						// We need to use local rotation regardless of the transform space
+						// The transform tool takes care of the correct rotation delta
 						Quaternion combined_quaternion = AddLocalRotation(original_quat, rotation_delta);
 						rotation->value = combined_quaternion.StorageLow();
 					}
@@ -539,7 +593,7 @@ void SceneLeftClickableAction(ActionData* action_data) {
 				float3 scale_delta = HandleScaleToolDelta(
 					&camera,
 					data->gizmo_translation_midpoint,
-					QuaternionIdentity(),
+					data->gizmo_rotation_midpoint,
 					&data->transform_drag.scale,
 					system->GetTexelMouseDelta(),
 					factor
@@ -563,7 +617,7 @@ void SceneLeftClickableAction(ActionData* action_data) {
 			}
 			// We need to reset any selected tool info
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-			memset(sandbox->transform_tool_selected, 0, sizeof(sandbox->transform_tool_selected));
+			ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 		}
 
 		EnableSandboxViewportRendering(editor_state, sandbox_index);
