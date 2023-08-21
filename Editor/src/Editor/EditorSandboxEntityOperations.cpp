@@ -840,6 +840,83 @@ void GetSandboxEntityAssets(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+template<bool has_translation, bool has_rotation>
+void GetSandboxEntitiesMidpointImpl(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Stream<Entity> entities,
+	float3* translation_midpoint,
+	Quaternion* rotation_midpoint,
+	EDITOR_SANDBOX_VIEWPORT viewport
+) {
+	float3 translation_average = float3::Splat(0.0f);
+	Quaternion rotation_average = QuaternionAverageCumulatorInitialize();
+
+	for (size_t index = 0; index < entities.size; index++) {
+		if constexpr (has_translation) {
+			const Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, entities[index], viewport);
+			if (translation != nullptr) {
+				translation_average += translation->value;
+			}
+		}
+		if constexpr (has_rotation) {
+			const Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, entities[index], viewport);
+			if (rotation != nullptr) {
+				QuaternionAddToAverageStep(&rotation_average, rotation->value);
+			}
+		}
+	}
+
+	if constexpr (has_translation) {
+		*translation_midpoint = translation_average * float3::Splat(1.0f / entities.size);
+	}
+	if constexpr (has_rotation) {
+		*rotation_midpoint = QuaternionAverageFromCumulator(rotation_average, entities.size);
+	}
+}
+
+float3 GetSandboxEntitiesTranslationMidpoint(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Stream<Entity> entities, 
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	float3 midpoint;
+	GetSandboxEntitiesMidpointImpl<true, false>(editor_state, sandbox_index, entities, &midpoint, nullptr, viewport);
+	return midpoint;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+Quaternion ECS_VECTORCALL GetSandboxEntitiesRotationMidpoint(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Stream<Entity> entities, 
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	Quaternion midpoint;
+	GetSandboxEntitiesMidpointImpl<false, true>(editor_state, sandbox_index, entities, nullptr, &midpoint, viewport);
+	return midpoint;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxEntitiesMidpoint(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Stream<Entity> entities, 
+	float3* translation_midpoint, 
+	Quaternion* rotation_midpoint, 
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	GetSandboxEntitiesMidpointImpl<true, true>(editor_state, sandbox_index, entities, translation_midpoint, rotation_midpoint, viewport);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 bool IsSandboxEntitySelected(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
 	return FindSandboxSelectedEntityIndex(editor_state, sandbox_index, entity) != -1;

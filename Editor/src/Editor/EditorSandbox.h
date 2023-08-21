@@ -74,11 +74,14 @@ struct ECS_REFLECT EditorSandbox {
 
 	ECS_FIELDS_END_REFLECT;
 
-	unsigned char transform_keyboard_press_count;
 	// This flag is set when initiating keyboard transform actions
 	bool transform_display_axes;
 	// Indicate which axis of the transform tool is currently selected
 	bool transform_tool_selected[3];
+	// We need to record separately the tool that is being used for the keyboard presses
+	ECSEngine::ECS_TRANSFORM_TOOL transform_keyboard_tool;
+	// We need to record the transform space for the keyboard press
+	ECSEngine::ECS_TRANSFORM_SPACE transform_keyboard_space;
 
 	EDITOR_SANDBOX_STATE run_state;
 	bool is_scene_dirty;

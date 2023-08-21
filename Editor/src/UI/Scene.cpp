@@ -18,6 +18,125 @@
 #define CLICK_SELECTION_MARGIN_X 0.01f
 #define CLICK_SELECTION_MARGIN_Y 0.01f
 
+struct HandleSelectedEntitiesTransformUpdateDescriptor {
+	EditorState* editor_state;
+	unsigned int sandbox_index;
+	UISystem* system;
+	unsigned int window_index;
+	float2 mouse_position;
+	float3* translation_midpoint;
+	Quaternion rotation_midpoint;
+	TransformToolDrag* tool_drag;
+	ECS_TRANSFORM_TOOL tool_to_use;
+};
+
+static void AddSelectedEntitiesComponentIfMissing(EditorState* editor_state, unsigned int sandbox_index, ECS_TRANSFORM_TOOL tool) {
+	Component component_id = TransformToolComponentID(tool);
+	Stream<char> component_name = TransformToolComponentName(tool);
+
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+	for (size_t index = 0; index < selected_entities.size; index++) {
+		const void* component = GetSandboxEntityComponentEx(editor_state, sandbox_index, selected_entities[index], component_id, false);
+		if (component == nullptr) {
+			// Add the component to the entity
+			AddSandboxEntityComponent(editor_state, sandbox_index, selected_entities[index], component_name);
+		}
+	}
+}
+
+static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTransformUpdateDescriptor* descriptor) {
+	EditorState* editor_state = descriptor->editor_state;
+	unsigned int sandbox_index = descriptor->sandbox_index;
+	Keyboard* keyboard = descriptor->system->m_keyboard;
+
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	Camera camera = sandbox->camera_parameters[EDITOR_SANDBOX_VIEWPORT_SCENE];
+	int2 unclampped_texel_position = descriptor->system->GetWindowTexelPositionEx(descriptor->window_index, descriptor->mouse_position);
+	uint2 viewport_dimensions = descriptor->system->GetWindowTexelSize(descriptor->window_index);
+
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+	switch (descriptor->tool_to_use) {
+	case ECS_TRANSFORM_TRANSLATION:
+	{
+		float3 mouse_ray_direction = MouseRayDirection(&camera, viewport_dimensions, unclampped_texel_position);
+		float3 translation_delta = HandleTranslationToolDelta(
+			&camera,
+			*descriptor->translation_midpoint,
+			descriptor->rotation_midpoint,
+			&descriptor->tool_drag->translation,
+			mouse_ray_direction
+		);
+
+		for (size_t index = 0; index < selected_entities.size; index++) {
+			Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
+			translation->value += translation_delta;
+		}
+		// Also translate the midpoint along
+		*descriptor->translation_midpoint += translation_delta;
+	}
+	break;
+	case ECS_TRANSFORM_ROTATION:
+	{
+		float factor = 0.5f;
+		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
+			factor *= 0.2f;
+		}
+		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+			factor *= 5.0f;
+		}
+		Rotation* first_rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[0]);
+		float4 rotation_delta = HandleRotationToolDeltaCircleMapping(
+			&camera,
+			*descriptor->translation_midpoint,
+			descriptor->rotation_midpoint,
+			&descriptor->tool_drag->rotation,
+			viewport_dimensions,
+			unclampped_texel_position,
+			factor
+		);
+
+		if (rotation_delta != QuaternionIdentity().StorageLow()) {
+			for (size_t index = 0; index < selected_entities.size; index++) {
+				Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[index]);
+				Quaternion original_quat = Quaternion(rotation->value);
+				// We need to use local rotation regardless of the transform space
+				// The transform tool takes care of the correct rotation delta
+				Quaternion combined_quaternion = AddLocalRotation(original_quat, rotation_delta);
+				rotation->value = combined_quaternion.StorageLow();
+			}
+		}
+	}
+	break;
+	case ECS_TRANSFORM_SCALE:
+	{
+		float factor = 0.004f;
+		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
+			factor *= 0.2f;
+		}
+		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+			factor *= 5.0f;
+		}
+
+		float3 scale_delta = HandleScaleToolDelta(
+			&camera,
+			*descriptor->translation_midpoint,
+			descriptor->rotation_midpoint,
+			&descriptor->tool_drag->scale,
+			descriptor->system->GetTexelMouseDelta(),
+			factor
+		);
+
+		if (scale_delta != float3::Splat(0.0f)) {
+			for (size_t index = 0; index < selected_entities.size; index++) {
+				Scale* scale = GetSandboxEntityComponent<Scale>(editor_state, sandbox_index, selected_entities[index]);
+				scale->value += scale_delta;
+			}
+		}
+	}
+	break;
+	}
+}
+
 struct SceneDrawData {
 	EditorState* editor_state;
 	uint2 previous_texel_size;
@@ -33,10 +152,24 @@ void SceneUIDestroy(ActionData* action_data) {
 	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 }
 
+struct ScenePrivateActionData {
+	// This is the only field that needs to be initialized from the outside
+	EditorState* editor_state;
+
+	// Internal fields
+	TransformToolDrag drag_tool;
+	// This needs to be calculated once when rotating and scaling and updated when translating
+	float3 translation_midpoint;
+	// This needs to be calculated once and then kept the same across calls
+	Quaternion rotation_midpoint;
+};
+
 void ScenePrivateAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	EditorState* editor_state = (EditorState*)_data;
+	ScenePrivateActionData* data = (ScenePrivateActionData*)_data;
+	EditorState* editor_state = data->editor_state;
+
 	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
 	// Determine if the transform tool needs to be changed
 	unsigned int target_sandbox = GetActiveWindowSandbox(editor_state);
@@ -63,15 +196,19 @@ void ScenePrivateAction(ActionData* action_data) {
 		auto initiate_transform = [&](ECS_TRANSFORM_TOOL tool) {
 			// Check to see if the same transform was pressed to change the space
 			if (sandbox->transform_tool == tool && sandbox->transform_display_axes) {
-				sandbox->transform_keyboard_press_count++;
+				data->drag_tool.SetSpace(InvertTransformSpace(data->drag_tool.GetSpace()));
 			}
 			else {
-				sandbox->transform_keyboard_press_count = 1;
+				data->drag_tool.SetSpace(sandbox->transform_space);
 			}
+			sandbox->transform_keyboard_space = data->drag_tool.GetSpace();
 			trigger_rerender = true;
 			sandbox->transform_display_axes = true;
 			ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
-			sandbox->transform_tool = tool;
+			sandbox->transform_keyboard_tool = tool;	
+
+			// Add the component type if it is missing
+			AddSelectedEntitiesComponentIfMissing(editor_state, sandbox_index, tool);
 		};
 
 		// For each initiate transform check to see if we need to change from 
@@ -91,6 +228,26 @@ void ScenePrivateAction(ActionData* action_data) {
 				ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 				sandbox->transform_tool_selected[axis] = true;
 				trigger_rerender = true;
+
+				// Reinitialize the drag tool
+				switch (sandbox->transform_keyboard_tool) {
+				case ECS_TRANSFORM_TRANSLATION:
+					data->drag_tool.translation.Initialize();
+					break;
+				case ECS_TRANSFORM_ROTATION:
+					data->drag_tool.rotation.InitializeCircle();
+					break;
+				case ECS_TRANSFORM_SCALE:
+					data->drag_tool.scale.Initialize();
+					break;
+				default:
+					ECS_ASSERT(false, "Invalid keyboard transform tool");
+				}
+
+				// Get the rotation and translation midpoints for the selected entities
+				Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+				GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
+				data->drag_tool.SetAxis(axis);
 			};
 
 			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_X)) {
@@ -102,11 +259,45 @@ void ScenePrivateAction(ActionData* action_data) {
 			else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_Z)) {
 				change_selected_axis(ECS_TRANSFORM_AXIS_Z);
 			}
+		
+			// Check to see if we have active keyboard action
+			unsigned char axes_select_count = 0;
+			ECS_TRANSFORM_TOOL_AXIS axis = ECS_TRANSFORM_AXIS_COUNT;
+			for (size_t index = 0; index < ECS_TRANSFORM_AXIS_COUNT; index++) {
+				if (sandbox->transform_tool_selected[index]) {
+					axis = (ECS_TRANSFORM_TOOL_AXIS)index;
+					axes_select_count++;
+				}
+			}
+
+			// We have just one axis selected
+			if (axes_select_count == 1) {
+				HandleSelectedEntitiesTransformUpdateDescriptor update_descriptor;
+				update_descriptor.editor_state = editor_state;
+				update_descriptor.mouse_position = mouse_position;
+				update_descriptor.rotation_midpoint = data->rotation_midpoint;
+				update_descriptor.sandbox_index = sandbox_index;
+				update_descriptor.system = system;
+				update_descriptor.tool_drag = &data->drag_tool;
+				update_descriptor.translation_midpoint = &data->translation_midpoint;
+				update_descriptor.window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+				update_descriptor.tool_to_use = sandbox->transform_keyboard_tool;
+
+				HandleSelectedEntitiesTransformUpdate(&update_descriptor);
+				trigger_rerender = true;
+			}
 		}
 
 		if (current_tool != sandbox->transform_tool || trigger_rerender) {
 			RenderSandbox(editor_state, target_sandbox, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
+	}
+
+	// If the user has clicked somewhere and we have active axes, disable them
+	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
+		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		sandbox->transform_display_axes = false;
 	}
 }
 
@@ -120,13 +311,16 @@ void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_sta
 
 	descriptor.draw = SceneUIWindowDraw;
 
+	ScenePrivateActionData* private_data = (ScenePrivateActionData*)function::OffsetPointer(data, sizeof(*data));
+	private_data->editor_state = editor_state;
 	descriptor.private_action = ScenePrivateAction;
-	descriptor.private_action_data = editor_state;
+	descriptor.private_action_data = private_data;
+	descriptor.private_action_data_size = sizeof(*private_data);
 
 	descriptor.destroy_action = SceneUIDestroy;
 	descriptor.destroy_action_data = editor_state;
 
-	CapacityStream<char> window_name(function::OffsetPointer(data, sizeof(*data)), 0, 128);
+	CapacityStream<char> window_name(function::OffsetPointer(private_data, sizeof(*private_data)), 0, 128);
 	GetSceneUIWindowName(index, window_name);
 
 	descriptor.window_name = window_name;
@@ -291,7 +485,6 @@ void SceneLeftClickableAction(ActionData* action_data) {
 		// Disable for this sandbox the selectable axes from keyboard hotkeys
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		sandbox->transform_display_axes = false;
-		sandbox->transform_keyboard_press_count = 0;
 		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 
 		data->click_ui_position = mouse_position;
@@ -333,61 +526,19 @@ void SceneLeftClickableAction(ActionData* action_data) {
 					sandbox->transform_tool_selected[data->tool_axis] = true;
 
 					ECS_TRANSFORM_TOOL transform_tool = sandbox->transform_tool;
-
-					// If the entity is missing the corresponding component, add it
-					Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-					Stream<char> component_name;
-					Component component_id;
-					switch (transform_tool) {
-					case ECS_TRANSFORM_TRANSLATION:
-					{
-						component_name = STRING(Translation);
-						component_id = Translation::ID();
-						data->transform_drag.translation.Initialize();
-					}
-					break;
-					case ECS_TRANSFORM_ROTATION:
-					{
-						component_name = STRING(Rotation);
-						component_id = Rotation::ID();
-						data->transform_drag.rotation.InitializeCircle();
-					}
-					break;
-					case ECS_TRANSFORM_SCALE:
-					{
-						component_name = STRING(Scale);
-						component_id = Scale::ID();
-						data->transform_drag.scale.Initialize();
-					}
-					break;
-					}
+				
+					data->transform_drag.Initialize(transform_tool);
 					data->transform_drag.SetAxis(data->tool_axis);
 					data->transform_drag.SetSpace(sandbox->transform_space);
 
-					// Calculate the midpoint here such that it won't need to be calculated each frame
-					for (size_t index = 0; index < selected_entities.size; index++) {
-						const void* component = GetSandboxEntityComponentEx(editor_state, sandbox_index, selected_entities[index], component_id, false);
-						if (component == nullptr) {
-							// Add the component to the entity
-							AddSandboxEntityComponent(editor_state, sandbox_index, selected_entities[index], component_name);
-						}
-					}
+					// Add the component type if it is missing
+					AddSelectedEntitiesComponentIfMissing(editor_state, sandbox_index, transform_tool);
 
-					data->gizmo_translation_midpoint = float3::Splat(0.0f);
-					data->gizmo_rotation_midpoint = QuaternionAverageCumulatorInitialize();
-					for (size_t index = 0; index < selected_entities.size; index++) {
-						const Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
-						if (translation != nullptr) {
-							data->gizmo_translation_midpoint += translation->value;
-						}
-						const Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[index]);
-						if (rotation != nullptr) {
-							QuaternionAddToAverageStep(&data->gizmo_rotation_midpoint, rotation->value);
-						}
-					}
-					float3 count_inverse = float3::Splat(1.0f / (float)selected_entities.size);
-					data->gizmo_translation_midpoint *= count_inverse;
-					data->gizmo_rotation_midpoint = QuaternionAverageFromCumulation(data->gizmo_rotation_midpoint, selected_entities.size);
+					// If the entity is missing the corresponding component, add it
+					Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+
+					// Calculate the midpoint here such that it won't need to be calculated each frame
+					GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->gizmo_translation_midpoint, &data->gizmo_rotation_midpoint);
 				}
 			}
 		}
@@ -522,92 +673,18 @@ void SceneLeftClickableAction(ActionData* action_data) {
 		}
 		else {
 			// Transform tool selection here
-			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-			Camera camera = sandbox->camera_parameters[EDITOR_SANDBOX_VIEWPORT_SCENE];
-			int2 unclampped_texel_position = system->GetWindowTexelPositionEx(window_index, mouse_position);
-			uint2 viewport_dimensions = system->GetWindowTexelSize(window_index);
+			HandleSelectedEntitiesTransformUpdateDescriptor update_descriptor;
+			update_descriptor.editor_state = editor_state;
+			update_descriptor.mouse_position = mouse_position;
+			update_descriptor.rotation_midpoint = data->gizmo_rotation_midpoint;
+			update_descriptor.sandbox_index = sandbox_index;
+			update_descriptor.system = system;
+			update_descriptor.tool_drag = &data->transform_drag;
+			update_descriptor.translation_midpoint = &data->gizmo_translation_midpoint;
+			update_descriptor.window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+			update_descriptor.tool_to_use = GetSandbox(editor_state, sandbox_index)->transform_tool;
 
-			Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-			switch (sandbox->transform_tool) {
-			case ECS_TRANSFORM_TRANSLATION:
-			{
-				float3 mouse_ray_direction = MouseRayDirection(&camera, viewport_dimensions, unclampped_texel_position);
-				float3 translation_delta = HandleTranslationToolDelta(
-					&camera,
-					data->gizmo_translation_midpoint,
-					data->gizmo_rotation_midpoint,
-					&data->transform_drag.translation,
-					mouse_ray_direction
-				);
-
-				for (size_t index = 0; index < selected_entities.size; index++) {
-					Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
-					translation->value += translation_delta;
-				}
-				// Also translate the midpoint along
-				data->gizmo_translation_midpoint += translation_delta;
-			}
-			break;
-			case ECS_TRANSFORM_ROTATION:
-			{
-				float factor = 0.5f;
-				if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-					factor *= 0.2f;
-				}
-				else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-					factor *= 5.0f;
-				}
-				Rotation* first_rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[0]);
-				float4 rotation_delta = HandleRotationToolDeltaCircleMapping(
-					&camera,
-					data->gizmo_translation_midpoint,
-					data->gizmo_rotation_midpoint,
-					&data->transform_drag.rotation,
-					viewport_dimensions,
-					unclampped_texel_position,
-					factor
-				);
-
-				if (rotation_delta != QuaternionIdentity().StorageLow()) {
-					for (size_t index = 0; index < selected_entities.size; index++) {
-						Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[index]);
-						Quaternion original_quat = Quaternion(rotation->value);
-						// We need to use local rotation regardless of the transform space
-						// The transform tool takes care of the correct rotation delta
-						Quaternion combined_quaternion = AddLocalRotation(original_quat, rotation_delta);
-						rotation->value = combined_quaternion.StorageLow();
-					}
-				}
-			}
-			break;
-			case ECS_TRANSFORM_SCALE:
-			{
-				float factor = 0.004f;
-				if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-					factor *= 0.2f;
-				}
-				else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-					factor *= 5.0f;
-				}
-
-				float3 scale_delta = HandleScaleToolDelta(
-					&camera,
-					data->gizmo_translation_midpoint,
-					data->gizmo_rotation_midpoint,
-					&data->transform_drag.scale,
-					system->GetTexelMouseDelta(),
-					factor
-				);
-
-				if (scale_delta != float3::Splat(0.0f)) {
-					for (size_t index = 0; index < selected_entities.size; index++) {
-						Scale* scale = GetSandboxEntityComponent<Scale>(editor_state, sandbox_index, selected_entities[index]);
-						scale->value += scale_delta;
-					}
-				}
-			}
-			break;
-			}
+			HandleSelectedEntitiesTransformUpdate(&update_descriptor);
 		}
 
 		if (mouse->IsReleased(ECS_MOUSE_LEFT)) {

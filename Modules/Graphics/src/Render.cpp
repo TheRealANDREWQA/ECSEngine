@@ -293,7 +293,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 
 						translation_midpoint /= float3::Splat((float)valid_entities);
 						if (transform_tool.space == ECS_TRANSFORM_LOCAL_SPACE) {
-							rotation_midpoint = QuaternionAverageFromCumulation(rotation_midpoint, valid_entities);
+							rotation_midpoint = QuaternionAverageFromCumulator(rotation_midpoint, valid_entities);
 						}
 						else {
 							rotation_midpoint = QuaternionIdentity();
@@ -342,7 +342,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 								translation_midpoint,
 								rotation_midpoint_storage,
 								10000.0f,
-								constant_viewport_size,
+								1.0f,
 								false,
 								&info,
 								debug_options
