@@ -5,6 +5,7 @@
 #include "BasicTypes.h"
 #include "../Math/Plane.h"
 #include "../Math/Quaternion.h"
+#include "../ECS/InternalStructures.h"
 
 namespace ECSEngine {
 
@@ -92,6 +93,14 @@ namespace ECSEngine {
 	union TransformToolDrag  {
 		TransformToolDrag() {}
 
+		ECS_INLINE ECS_TRANSFORM_TOOL_AXIS GetAxis() const {
+			return translation.axis;
+		}
+
+		ECS_INLINE ECS_TRANSFORM_SPACE GetSpace() const {
+			return translation.space;
+		}
+
 		ECS_INLINE void SetAxis(ECS_TRANSFORM_TOOL_AXIS axis) {
 			// All types have the first field the axis - it's fine to reference any
 			translation.axis = axis;
@@ -102,6 +111,22 @@ namespace ECSEngine {
 			translation.space = space;
 		}
 
+		ECS_INLINE void Initialize(ECS_TRANSFORM_TOOL tool) {
+			switch (tool) {
+			case ECS_TRANSFORM_TRANSLATION:
+				translation.Initialize();
+				break;
+			case ECS_TRANSFORM_ROTATION:
+				rotation.InitializeCircle();
+				break;
+			case ECS_TRANSFORM_SCALE:
+				scale.Initialize();
+				break;
+			default:
+				ECS_ASSERT(false, "Invalid transform tool when initializing transform drag");
+			}
+		}
+
 		TranslationToolDrag translation;
 		RotationToolDrag rotation;
 		ScaleToolDrag scale;
@@ -110,6 +135,10 @@ namespace ECSEngine {
 	ECS_INLINE ECS_TRANSFORM_SPACE InvertTransformSpace(ECS_TRANSFORM_SPACE space) {
 		return space == ECS_TRANSFORM_LOCAL_SPACE ? ECS_TRANSFORM_WORLD_SPACE : ECS_TRANSFORM_LOCAL_SPACE;
 	}
+
+	ECSENGINE_API Component TransformToolComponentID(ECS_TRANSFORM_TOOL tool);
+
+	ECSENGINE_API Stream<char> TransformToolComponentName(ECS_TRANSFORM_TOOL tool);
 
 	// Returns { 1.0f, 0.0f, 0.0f } for X
 	// Returns { 0.0f, 1.0f, 0.0f } for Y

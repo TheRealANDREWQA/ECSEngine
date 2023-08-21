@@ -3,8 +3,37 @@
 #include "../Rendering/RenderingStructures.h"
 #include "../Math/Intersection.h"
 #include "Function.h"
+#include "../ECS/Components.h"
 
 namespace ECSEngine {
+
+    Component TransformToolComponentID(ECS_TRANSFORM_TOOL tool) {
+        switch (tool) {
+        case ECS_TRANSFORM_TRANSLATION:
+            return Translation::ID();
+        case ECS_TRANSFORM_ROTATION:
+            return Rotation::ID();
+        case ECS_TRANSFORM_SCALE:
+            return Scale::ID();
+        }
+
+        ECS_ASSERT(false, "Invalid transform tool when getting component id");
+        return -1;
+    }
+
+    Stream<char> TransformToolComponentName(ECS_TRANSFORM_TOOL tool) {
+        switch (tool) {
+        case ECS_TRANSFORM_TRANSLATION:
+            return STRING(Translation);
+        case ECS_TRANSFORM_ROTATION:
+            return STRING(Rotation);
+        case ECS_TRANSFORM_SCALE:
+            return STRING(Scale);
+        }
+
+        ECS_ASSERT(false, "Invalid transform tool when getting component name");
+        return {};
+    }
 
     float3 AxisDirection(ECS_TRANSFORM_TOOL_AXIS axis)
     {

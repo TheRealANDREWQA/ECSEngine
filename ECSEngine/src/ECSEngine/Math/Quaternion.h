@@ -996,7 +996,7 @@ namespace ECSEngine {
 		*cumulator += neighbour_quaternion;
 	}
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAverageFromCumulation(Quaternion cumulator, unsigned int count) {
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAverageFromCumulator(Quaternion cumulator, unsigned int count) {
 		Vector8 float_count = (float)count;
 		Vector8 count_inverse = OneDividedVector<ECS_VECTOR_ACCURATE>(float_count);
 
@@ -1008,7 +1008,7 @@ namespace ECSEngine {
 	// It needs to be the same value across multiple cumulations. Usually, it is the first quaternion that is being cumulated
 	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionAddToAverage(Quaternion* cumulator, Quaternion current_quaternion, unsigned int count) {
 		QuaternionAddToAverageStep(cumulator, current_quaternion);
-		return QuaternionAverageFromCumulation(*cumulator, count);
+		return QuaternionAverageFromCumulator(*cumulator, count);
 	}
 
 	// Call this function only for 2 quaternions - otherwise use the cumulative version

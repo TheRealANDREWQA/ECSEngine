@@ -265,7 +265,7 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 		if (transform_tool.display_axes) {
 			// Odd number of key presses means keep the same transform space as the global one
 			// Even means invert it
-			transform_tool.space = (sandbox->transform_keyboard_press_count % 2) == 0 ? InvertTransformSpace(sandbox->transform_space) : sandbox->transform_space;
+			transform_tool.space = sandbox->transform_keyboard_space;
 		}
 		else {
 			transform_tool.space = sandbox->transform_space;
@@ -524,7 +524,8 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->is_scene_dirty = false;
 	sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
 	sandbox->transform_space = ECS_TRANSFORM_LOCAL_SPACE;
-	sandbox->transform_keyboard_press_count = 0;
+	sandbox->transform_keyboard_space = ECS_TRANSFORM_LOCAL_SPACE;
+	sandbox->transform_keyboard_tool = ECS_TRANSFORM_COUNT;
 	memset(sandbox->transform_tool_selected, 0, sizeof(sandbox->transform_tool_selected));
 
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;

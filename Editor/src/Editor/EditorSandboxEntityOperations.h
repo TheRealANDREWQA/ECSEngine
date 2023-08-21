@@ -382,6 +382,30 @@ void GetSandboxEntityAssets(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// Returns the translation midpoint of the given entities from the sandbox
+float3 GetSandboxEntitiesTranslationMidpoint(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Stream<Entity> entities,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+Quaternion ECS_VECTORCALL GetSandboxEntitiesRotationMidpoint(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Stream<Entity> entities,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+void GetSandboxEntitiesMidpoint(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Stream<Entity> entities,
+	float3* translation_midpoint,
+	Quaternion* rotation_midpoint,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 // Returns true if the given entity is selected in the scene for that sandbox
 bool IsSandboxEntitySelected(
 	const EditorState* editor_state,
