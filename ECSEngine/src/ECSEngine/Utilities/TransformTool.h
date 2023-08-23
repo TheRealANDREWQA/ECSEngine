@@ -35,6 +35,11 @@ namespace ECSEngine {
 			space = ECS_TRANSFORM_LOCAL_SPACE;
 		}
 
+		// Returns true if the Init values were set to an initial value, else false
+		ECS_INLINE bool WasFirstCalled() const {
+			return last_successful_direction.x != FLT_MAX;
+		}
+
 		ECS_TRANSFORM_TOOL_AXIS axis;
 		ECS_TRANSFORM_SPACE space;
 		float3 last_successful_direction;
@@ -53,6 +58,16 @@ namespace ECSEngine {
 			rotation_center_ndc.x = FLT_MAX;
 			last_circle_direction.x = FLT_MAX;
 			space = ECS_TRANSFORM_LOCAL_SPACE;
+		}
+
+		// Returns true if the Init values were set to an initial value, else false
+		ECS_INLINE bool WasFirstCalledRoller() const {
+			return projected_direction.x != FLT_MAX;
+		}
+
+		// Returns true if the Init values were set to an initial value, else false
+		ECS_INLINE bool WasFirstCalledCircle() const {
+			return last_circle_direction.x != FLT_MAX;
 		}
 
 		ECS_TRANSFORM_TOOL_AXIS axis;
@@ -78,6 +93,11 @@ namespace ECSEngine {
 	struct ScaleToolDrag {
 		ECS_INLINE void Initialize() {
 			projected_direction_sign.x = FLT_MAX;
+		}
+
+		// Returns true if the Init values were set to an initial value, else false
+		ECS_INLINE bool WasFirstCalled() const {
+			return projected_direction_sign.x != FLT_MAX;
 		}
 
 		ECS_TRANSFORM_TOOL_AXIS axis;
@@ -233,11 +253,18 @@ namespace ECSEngine {
 	// Converts the mouse position into [-1, 1] range if inside, else accordingly
 	ECSENGINE_API float2 MouseToNDC(float2 window_size, float2 mouse_texel_position);
 
+	// Position needs to be in range [-1, 1]
+	ECSENGINE_API int2 NDCToViewportTexels(uint2 window_size, float2 position);
+
 	// Returns the direction of the ray that passes through the current cursor position
 	// Mouse texel positions must be relative to the top left corner
 	// At the moment this works only for perspective FOV cameras
 	template<typename CameraType>
-	ECSENGINE_API float3 MouseRayDirection(const CameraType* camera, uint2 window_size, int2 mouse_texel_position);
+	ECSENGINE_API float3 ViewportToWorldRayDirection(const CameraType* camera, uint2 window_size, int2 mouse_texel_position);
+
+	// Projects the point into texel coordinates relative to the top left corner of the viewport
+	template<typename CameraType>
+	ECSENGINE_API int2 PositionToViewportTexels(const CameraType* camera, uint2 viewport_size, float3 position);
 
 	// Returns the translation delta corresponding to the mouse delta
 	// We need a point from the plane in order to form the plane

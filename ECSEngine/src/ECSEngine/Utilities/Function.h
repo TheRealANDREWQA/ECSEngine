@@ -318,6 +318,10 @@ namespace ECSEngine {
 			return low_bound < value && value < high_bound;
 		}
 
+		ECS_INLINE bool FloatCompare(float a, float b, float epsilon = 0.00001f) {
+			return fabsf(a - b) < epsilon;
+		}
+
 		// Returns the overlapping line as a pair of start, end (end is not included)
 		// If the lines don't overlap, it will return { -1, -1 }
 		ECSENGINE_API uint2 LineOverlap(

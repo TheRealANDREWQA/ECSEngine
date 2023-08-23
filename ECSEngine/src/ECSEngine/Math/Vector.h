@@ -1078,6 +1078,11 @@ namespace ECSEngine {
 		return vector / PerLaneBroadcast<3>(vector);
 	}
 
+	ECS_INLINE Vector8 ECS_VECTORCALL PerspectiveDivide(Vector8 vector) {
+		// Same as ClipSpaceToNDC
+		return ClipSpaceToNDC(vector);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 	
 	// The direction needs to be normalized before hand

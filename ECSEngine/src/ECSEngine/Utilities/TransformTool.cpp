@@ -319,11 +319,17 @@ namespace ECSEngine {
         return float2(2.0f * mouse_texel_position.x / window_size.x - 1.0f, 1.0f - 2.0f * mouse_texel_position.y / window_size.y);
     }
 
+    int2 NDCToViewportTexels(uint2 window_size, float2 position)
+    {
+        float2 percentage = { position.x * 0.5f + 0.5f, 0.5f - position.y * 0.5f };
+        return int2(float2(window_size) * percentage);
+    }
+
     // We cannot use the horizontal and vertical fov to determine the position
     // Since that will result in interpolation of angles - and we would have to
     // use spherical interpolation which would be expensive
     template<typename CameraType>
-    float3 MouseRayDirection(const CameraType* camera, uint2 window_size, int2 mouse_texel_position)
+    float3 ViewportToWorldRayDirection(const CameraType* camera, uint2 window_size, int2 mouse_texel_position)
     {
         float2 normalized_values = MouseToNDC(window_size, mouse_texel_position);
         float4 near_clip_space_position(normalized_values.x, normalized_values.y, -1.0f, 1.0f);
@@ -334,7 +340,22 @@ namespace ECSEngine {
         return Normalize(ray_direction_world).AsFloat3Low();
     }
 
-    ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, MouseRayDirection, const Camera*, const CameraCached*, uint2, int2);
+    ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, ViewportToWorldRayDirection, const Camera*, const CameraCached*, uint2, int2);
+
+    template<typename CameraType>
+    int2 PositionToViewportTexels(const CameraType* camera, uint2 viewport_size, float3 position) {
+        Matrix view_projection_matrix = GetCameraViewProjectionMatrix(camera);
+        // Transform the point using the view projection matrix
+        Vector8 transformed_point = TransformPoint(position, view_projection_matrix);
+        // Perform the perspective divide
+        transformed_point = PerspectiveDivide(transformed_point);
+
+        // Now we have the NDC position of the point
+        float4 ndc_point = transformed_point.AsFloat4Low();
+        return NDCToViewportTexels(viewport_size, ndc_point.xy());
+    }
+
+    ECS_TEMPLATE_FUNCTION_2_BEFORE(int2, PositionToViewportTexels, const Camera*, const CameraCached*, uint2, float3);
 
     template<typename CameraType>
     float3 HandleTranslationToolDelta(
@@ -350,8 +371,8 @@ namespace ECSEngine {
     {
         // Get the difference in the ray position
         if (mouse_delta.x != 0 || mouse_delta.y != 0) {
-            float3 previous_ray_direction = MouseRayDirection(camera, window_size, mouse_texel_position - mouse_delta);
-            float3 current_ray_direction = MouseRayDirection(camera, window_size, mouse_texel_position);
+            float3 previous_ray_direction = ViewportToWorldRayDirection(camera, window_size, mouse_texel_position - mouse_delta);
+            float3 current_ray_direction = ViewportToWorldRayDirection(camera, window_size, mouse_texel_position);
             return HandleTranslationToolDelta(camera, plane_point, object_rotation, axis, space, previous_ray_direction, current_ray_direction);
         }
         return float3::Splat(0.0f);
@@ -409,8 +430,6 @@ namespace ECSEngine {
                 float3 previous_hit_point = projected_hit_point.AsFloat3Low();
                 // The current hit point is in the high
                 float3 current_hit_point = projected_hit_point.AsFloat3High();
-                float3 difference_low = Normalize(previous_hit_point - plane_point_vector.AsFloat3Low());
-                float3 difference_high = Normalize(current_hit_point - plane_point_vector.AsFloat3Low());
 
                 float3 translation_delta = current_hit_point - previous_hit_point;
                 return translation_delta;

@@ -342,7 +342,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 								translation_midpoint,
 								rotation_midpoint_storage,
 								10000.0f,
-								1.0f,
+								pow(constant_viewport_size, 0.33f),
 								false,
 								&info,
 								debug_options

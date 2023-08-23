@@ -28,6 +28,13 @@ struct HandleSelectedEntitiesTransformUpdateDescriptor {
 	Quaternion rotation_midpoint;
 	TransformToolDrag* tool_drag;
 	ECS_TRANSFORM_TOOL tool_to_use;
+
+	// If this is set to true, the ray will be cast at the objects location instead of the mouse'
+	bool launch_at_object_position = false;
+	// If this is specified, this will add the rotation delta to this quaternion
+	Quaternion* rotation_delta = nullptr;
+	// If this is specified, this will add the scale delta to the value
+	float3* scale_delta = nullptr;
 };
 
 static void AddSelectedEntitiesComponentIfMissing(EditorState* editor_state, unsigned int sandbox_index, ECS_TRANSFORM_TOOL tool) {
@@ -49,6 +56,10 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 	unsigned int sandbox_index = descriptor->sandbox_index;
 	Keyboard* keyboard = descriptor->system->m_keyboard;
 
+	if (descriptor->system->m_mouse->IsPressed(ECS_MOUSE_X1)) {
+		__debugbreak();
+	}
+
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	Camera camera = sandbox->camera_parameters[EDITOR_SANDBOX_VIEWPORT_SCENE];
 	int2 unclampped_texel_position = descriptor->system->GetWindowTexelPositionEx(descriptor->window_index, descriptor->mouse_position);
@@ -58,13 +69,33 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 	switch (descriptor->tool_to_use) {
 	case ECS_TRANSFORM_TRANSLATION:
 	{
-		float3 mouse_ray_direction = MouseRayDirection(&camera, viewport_dimensions, unclampped_texel_position);
+		float3 ray_direction = ViewportToWorldRayDirection(&camera, viewport_dimensions, unclampped_texel_position);
+		if (descriptor->launch_at_object_position) {
+			static int2 last_position = int2(0, 0);
+			int2 mouse_delta = descriptor->system->GetTexelMouseDelta();
+			if (!descriptor->tool_drag->translation.WasFirstCalled()) {
+				ray_direction = Normalize(*descriptor->translation_midpoint - camera.translation);
+				last_position = PositionToViewportTexels(&camera, viewport_dimensions, *descriptor->translation_midpoint);
+			}
+			else {
+				if (mouse_delta != int2(0, 0)) {
+					int2 new_position = last_position + mouse_delta;
+					last_position = new_position;
+
+					ray_direction = ViewportToWorldRayDirection(&camera, viewport_dimensions, new_position);
+				}
+				else {
+					ray_direction = descriptor->tool_drag->translation.last_successful_direction;
+				}
+			}
+		}
+
 		float3 translation_delta = HandleTranslationToolDelta(
 			&camera,
 			*descriptor->translation_midpoint,
 			descriptor->rotation_midpoint,
 			&descriptor->tool_drag->translation,
-			mouse_ray_direction
+			ray_direction
 		);
 
 		for (size_t index = 0; index < selected_entities.size; index++) {
@@ -104,6 +135,10 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 				Quaternion combined_quaternion = AddLocalRotation(original_quat, rotation_delta);
 				rotation->value = combined_quaternion.StorageLow();
 			}
+
+			if (descriptor->rotation_delta != nullptr) {
+				*descriptor->rotation_delta = AddLocalRotation(*descriptor->rotation_delta, rotation_delta);
+			}
 		}
 	}
 	break;
@@ -130,6 +165,10 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 			for (size_t index = 0; index < selected_entities.size; index++) {
 				Scale* scale = GetSandboxEntityComponent<Scale>(editor_state, sandbox_index, selected_entities[index]);
 				scale->value += scale_delta;
+			}
+
+			if (descriptor->scale_delta != nullptr) {
+				*descriptor->scale_delta += scale_delta;
 			}
 		}
 	}
@@ -162,6 +201,12 @@ struct ScenePrivateActionData {
 	float3 translation_midpoint;
 	// This needs to be calculated once and then kept the same across calls
 	Quaternion rotation_midpoint;
+
+	// This is the value calculated when the keyboard tool was activated
+	float3 original_translation_midpoint;
+	Quaternion rotation_delta;
+	// This is the total scale change
+	float3 scale_delta;
 };
 
 void ScenePrivateAction(ActionData* action_data) {
@@ -248,6 +293,9 @@ void ScenePrivateAction(ActionData* action_data) {
 				Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
 				GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
 				data->drag_tool.SetAxis(axis);
+				data->scale_delta = float3::Splat(0.0f);
+				data->original_translation_midpoint = data->translation_midpoint;
+				data->rotation_delta = QuaternionIdentity();
 			};
 
 			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_X)) {
@@ -282,6 +330,9 @@ void ScenePrivateAction(ActionData* action_data) {
 				update_descriptor.translation_midpoint = &data->translation_midpoint;
 				update_descriptor.window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 				update_descriptor.tool_to_use = sandbox->transform_keyboard_tool;
+				update_descriptor.launch_at_object_position = true;
+				update_descriptor.rotation_delta = &data->rotation_delta;
+				update_descriptor.scale_delta = &data->scale_delta;
 
 				HandleSelectedEntitiesTransformUpdate(&update_descriptor);
 				trigger_rerender = true;
@@ -293,11 +344,61 @@ void ScenePrivateAction(ActionData* action_data) {
 		}
 	}
 
+	auto reset_axes_and_rerender = [&]() {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+		sandbox->transform_display_axes = false;
+		// We also need to trigger a re-render
+		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	};
+
 	// If the user has clicked somewhere and we have active axes, disable them
 	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
-		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		sandbox->transform_display_axes = false;
+		if (sandbox->transform_display_axes) {
+			reset_axes_and_rerender();
+		}
+	}
+	else if (mouse->IsPressed(ECS_MOUSE_MIDDLE) || mouse->IsPressed(ECS_MOUSE_RIGHT)) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		if (sandbox->transform_display_axes) {
+			// Restore the value to the selected entities
+			Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+			switch (sandbox->transform_keyboard_tool) {
+			case ECS_TRANSFORM_TRANSLATION:
+			{
+				// Restore the translation
+				// Calculate the delta between the current translation and the original one
+				float3 delta = data->translation_midpoint - data->original_translation_midpoint;
+
+				for (size_t index = 0; index < selected_entities.size; index++) {
+					Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
+					translation->value -= delta;
+				}
+			}
+			break;
+			case ECS_TRANSFORM_ROTATION:
+			{
+				// Restore the rotation by adding the inverse delta
+				for (size_t index = 0; index < selected_entities.size; index++) {
+					Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[index]);
+					rotation->value = AddLocalRotation(rotation->value, QuaternionInverse(data->rotation_delta)).StorageLow();
+				}
+			}
+			break;
+			case ECS_TRANSFORM_SCALE:
+			{
+				// Restore the scale by adding the negated delta
+				for (size_t index = 0; index < selected_entities.size; index++) {
+					Scale* scale = GetSandboxEntityComponent<Scale>(editor_state, sandbox_index, selected_entities[index]);
+					scale->value -= data->scale_delta;
+				}
+			}
+			break;
+			}
+
+			reset_axes_and_rerender();
+		}
 	}
 }
 
@@ -335,41 +436,52 @@ struct SceneActionData {
 
 	SceneDrawData* draw_data;
 	unsigned int sandbox_index;
+	bool initial_axes_draw;
 };
 
 void SceneRotationAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SceneActionData* data = (SceneActionData*)_data;
-	if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
-		mouse->EnableRawInput();
-	}
-	else if (mouse->IsReleased(ECS_MOUSE_RIGHT)) {
-		mouse->DisableRawInput();
-	}
-	else if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
-		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
-	}
-
 	EditorState* editor_state = data->draw_data->editor_state;
+	
+	// If the axes were enabled, don't perform the action
 
-	if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
-		float rotation_factor = 75.0f;
-		float2 mouse_position = system->GetNormalizeMousePosition();
-		float2 delta = system->GetMouseDelta(mouse_position);
-
-		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-			rotation_factor = 15.0f;
+	if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+		data->initial_axes_draw = sandbox->transform_display_axes;
+		if (!data->initial_axes_draw) {
+			mouse->EnableRawInput();
 		}
-		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-			rotation_factor = 200.0f;
+	}
+	
+	if (!data->initial_axes_draw) {
+		if (mouse->IsReleased(ECS_MOUSE_RIGHT)) {
+			mouse->DisableRawInput();
+		}
+		else if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
+			system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 		}
 
-		float3 rotation = { delta.y * rotation_factor, delta.x * rotation_factor, 0.0f };
-		// If the rotation has changed, rerender the sandbox
-		if (rotation.x != 0.0f || rotation.y != 0.0f) {
-			RotateSandboxCamera(editor_state, data->sandbox_index, rotation, EDITOR_SANDBOX_VIEWPORT_SCENE);
-			RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+
+		if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
+			float rotation_factor = 75.0f;
+			float2 mouse_position = system->GetNormalizeMousePosition();
+			float2 delta = system->GetMouseDelta(mouse_position);
+
+			if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
+				rotation_factor = 15.0f;
+			}
+			else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+				rotation_factor = 200.0f;
+			}
+
+			float3 rotation = { delta.y * rotation_factor, delta.x * rotation_factor, 0.0f };
+			// If the rotation has changed, rerender the sandbox
+			if (rotation.x != 0.0f || rotation.y != 0.0f) {
+				RotateSandboxCamera(editor_state, data->sandbox_index, rotation, EDITOR_SANDBOX_VIEWPORT_SCENE);
+				RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			}
 		}
 	}
 }
@@ -378,40 +490,47 @@ void SceneTranslationAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SceneActionData* data = (SceneActionData*)_data;
-	if (mouse->IsPressed(ECS_MOUSE_MIDDLE)) {
-		mouse->EnableRawInput();
-	}
-	else if (mouse->IsReleased(ECS_MOUSE_MIDDLE)) {
-		mouse->DisableRawInput();
-	}
-	else if (mouse->IsDown(ECS_MOUSE_MIDDLE)) {
-		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
-	}
-
 	EditorState* editor_state = data->draw_data->editor_state;
-	EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxActiveViewport(editor_state, data->sandbox_index);
-
-	if (mouse->IsDown(ECS_MOUSE_MIDDLE)) {
-		float2 mouse_position = system->GetNormalizeMousePosition();
-		float2 delta = system->GetMouseDelta(mouse_position);
-
-		Camera scene_camera = GetSandboxSceneCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-		float3 right_vector = scene_camera.GetRightVector().AsFloat3Low();
-		float3 up_vector = scene_camera.GetUpVector().AsFloat3Low();
-
-		float translation_factor = 10.0f;
-
-		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-			translation_factor = 2.5f;
+	if (mouse->IsPressed(ECS_MOUSE_MIDDLE)) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+		data->initial_axes_draw = sandbox->transform_display_axes;
+		if (!data->initial_axes_draw) {
+			mouse->EnableRawInput();
 		}
-		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-			translation_factor = 30.0f;
+	}
+	
+	if (!data->initial_axes_draw) {
+		if (mouse->IsReleased(ECS_MOUSE_MIDDLE)) {
+			mouse->DisableRawInput();
+		}
+		else if (mouse->IsDown(ECS_MOUSE_MIDDLE)) {
+			system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 		}
 
-		float3 translation = right_vector * float3::Splat(-delta.x * translation_factor) + up_vector * float3::Splat(delta.y * translation_factor);
-		if (translation.x != 0.0f || translation.y != 0.0f || translation.z != 0.0f) {
-			TranslateSandboxCamera(editor_state, data->sandbox_index, translation, EDITOR_SANDBOX_VIEWPORT_SCENE);
-			RenderSandbox(editor_state, data->sandbox_index, current_viewport);
+		EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxActiveViewport(editor_state, data->sandbox_index);
+
+		if (mouse->IsDown(ECS_MOUSE_MIDDLE)) {
+			float2 mouse_position = system->GetNormalizeMousePosition();
+			float2 delta = system->GetMouseDelta(mouse_position);
+
+			Camera scene_camera = GetSandboxSceneCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			float3 right_vector = scene_camera.GetRightVector().AsFloat3Low();
+			float3 up_vector = scene_camera.GetUpVector().AsFloat3Low();
+
+			float translation_factor = 10.0f;
+
+			if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
+				translation_factor = 2.5f;
+			}
+			else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+				translation_factor = 30.0f;
+			}
+
+			float3 translation = right_vector * float3::Splat(-delta.x * translation_factor) + up_vector * float3::Splat(delta.y * translation_factor);
+			if (translation.x != 0.0f || translation.y != 0.0f || translation.z != 0.0f) {
+				TranslateSandboxCamera(editor_state, data->sandbox_index, translation, EDITOR_SANDBOX_VIEWPORT_SCENE);
+				RenderSandbox(editor_state, data->sandbox_index, current_viewport);
+			}
 		}
 	}
 }
@@ -451,6 +570,7 @@ struct SceneLeftClickableActionData {
 	uint2 click_texel_position;
 	float2 click_ui_position;
 	bool is_selection_mode;
+	bool was_keyboard_transform_on_click;
 
 	ECS_TRANSFORM_TOOL_AXIS tool_axis;
 	// This is cached such that it doesn't need to be calculated each time
@@ -484,66 +604,73 @@ void SceneLeftClickableAction(ActionData* action_data) {
 	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 		// Disable for this sandbox the selectable axes from keyboard hotkeys
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		data->was_keyboard_transform_on_click = sandbox->transform_display_axes;
 		sandbox->transform_display_axes = false;
 		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 
-		data->click_ui_position = mouse_position;
-		data->click_texel_position = system->GetMousePositionHoveredWindowTexelPosition();
-		data->is_selection_mode = false;
-		data->original_selection.InitializeAndCopy(editor_state->EditorAllocator(), GetSandboxSelectedEntities(editor_state, sandbox_index));
-		data->cpu_framebuffer = { nullptr, {0, 0} };
-		mouse->EnableRawInput();
+		if (!data->was_keyboard_transform_on_click) {
+			data->click_ui_position = mouse_position;
+			data->click_texel_position = system->GetMousePositionHoveredWindowTexelPosition();
+			data->is_selection_mode = false;
+			data->original_selection.InitializeAndCopy(editor_state->EditorAllocator(), GetSandboxSelectedEntities(editor_state, sandbox_index));
+			data->cpu_framebuffer = { nullptr, {0, 0} };
+			mouse->EnableRawInput();
 
-		DisableSandboxViewportRendering(editor_state, sandbox_index);
+			DisableSandboxViewportRendering(editor_state, sandbox_index);
 
-		if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-			RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
-			data->cpu_framebuffer = TransferInstancesFramebufferToCPUAndAllocate(editor_state->RuntimeGraphics(), instanced_view, { nullptr });
+			if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+				RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
+				data->cpu_framebuffer = TransferInstancesFramebufferToCPUAndAllocate(editor_state->RuntimeGraphics(), instanced_view, { nullptr });
 
-			// Get an initial entity selected and see if a gizmo was selected
-			// Only a single selection
-			ECS_STACK_CAPACITY_STREAM(unsigned int, selected_entity_instance, 1);
-			GetInstancesFromFramebufferFilteredCPU(data->cpu_framebuffer, hovered_texel_offset, hovered_texel_offset + uint2(1, 1), &selected_entity_instance);
-			// Check for the case nothing is selected
-			Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
-			// Check to see if this a gizmo Entity
-			EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, selected_entity);
-			if (entity_slot != EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
-				switch (entity_slot) {
-				case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X:
-					data->tool_axis = ECS_TRANSFORM_AXIS_X;
-					break;
-				case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_Y:
-					data->tool_axis = ECS_TRANSFORM_AXIS_Y;
-					break;
-				case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_Z:
-					data->tool_axis = ECS_TRANSFORM_AXIS_Z;
-					break;
-				}
-				
-				if (data->tool_axis != ECS_TRANSFORM_AXIS_COUNT) {
-					ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
-					sandbox->transform_tool_selected[data->tool_axis] = true;
+				// Get an initial entity selected and see if a gizmo was selected
+				// Only a single selection
+				ECS_STACK_CAPACITY_STREAM(unsigned int, selected_entity_instance, 1);
+				GetInstancesFromFramebufferFilteredCPU(data->cpu_framebuffer, hovered_texel_offset, hovered_texel_offset + uint2(1, 1), &selected_entity_instance);
+				// Check for the case nothing is selected
+				Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
+				// Check to see if this a gizmo Entity
+				EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, selected_entity);
+				if (entity_slot != EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
+					switch (entity_slot) {
+					case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X:
+						data->tool_axis = ECS_TRANSFORM_AXIS_X;
+						break;
+					case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_Y:
+						data->tool_axis = ECS_TRANSFORM_AXIS_Y;
+						break;
+					case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_Z:
+						data->tool_axis = ECS_TRANSFORM_AXIS_Z;
+						break;
+					}
 
-					ECS_TRANSFORM_TOOL transform_tool = sandbox->transform_tool;
-				
-					data->transform_drag.Initialize(transform_tool);
-					data->transform_drag.SetAxis(data->tool_axis);
-					data->transform_drag.SetSpace(sandbox->transform_space);
+					if (data->tool_axis != ECS_TRANSFORM_AXIS_COUNT) {
+						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+						sandbox->transform_tool_selected[data->tool_axis] = true;
 
-					// Add the component type if it is missing
-					AddSelectedEntitiesComponentIfMissing(editor_state, sandbox_index, transform_tool);
+						ECS_TRANSFORM_TOOL transform_tool = sandbox->transform_tool;
 
-					// If the entity is missing the corresponding component, add it
-					Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+						data->transform_drag.Initialize(transform_tool);
+						data->transform_drag.SetAxis(data->tool_axis);
+						data->transform_drag.SetSpace(sandbox->transform_space);
 
-					// Calculate the midpoint here such that it won't need to be calculated each frame
-					GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->gizmo_translation_midpoint, &data->gizmo_rotation_midpoint);
+						// Add the component type if it is missing
+						AddSelectedEntitiesComponentIfMissing(editor_state, sandbox_index, transform_tool);
+
+						// If the entity is missing the corresponding component, add it
+						Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+
+						// Calculate the midpoint here such that it won't need to be calculated each frame
+						GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->gizmo_translation_midpoint, &data->gizmo_rotation_midpoint);
+					}
 				}
 			}
 		}
+		else {
+			// Render the viewport once since we need to update the visuals that the keyboard axes are disabled
+			RenderSandbox(editor_state, sandbox_index, GetSandboxActiveViewport(editor_state, sandbox_index));
+		}
 	}
-	else {
+	else if (!data->was_keyboard_transform_on_click) {
 		if (data->tool_axis == ECS_TRANSFORM_AXIS_COUNT) {
 			// Check to see if the RuntimeGraphics is available for copying to the CPU the values
 			if (data->cpu_framebuffer.values == nullptr) {

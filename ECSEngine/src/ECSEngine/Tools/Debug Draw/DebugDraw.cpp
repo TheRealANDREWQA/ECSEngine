@@ -85,8 +85,9 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE float3 OOBBCrossSize(float length, float size) {
-		return float3(length, size * OOBB_CROSS_Y_SCALE, size * OOBB_CROSS_Z_SCALE);
+	ECS_INLINE float3 OOBBCrossSize(float length, float size, float override_value) {
+		float size_value = override_value == 0.0f ? size : override_value;
+		return float3(length, size_value * OOBB_CROSS_Y_SCALE, size_value * OOBB_CROSS_Z_SCALE);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -403,13 +404,20 @@ namespace ECSEngine {
 		);
 	}
 
-	ECS_INLINE Matrix ECS_VECTORCALL OOBBCrossMatrix(float3 translation, QuaternionStorage rotation, float length, float size, Matrix camera_matrix) {
+	ECS_INLINE Matrix ECS_VECTORCALL OOBBCrossMatrix(
+		float3 translation, 
+		QuaternionStorage rotation, 
+		float length, 
+		float size, 
+		float size_override, 
+		Matrix camera_matrix
+	) {
 		Matrix rotation_matrix = QuaternionToMatrixLow(rotation);
 		float3 current_translation = translation;
 		return MatrixMVPToGPU(
 			MatrixTranslation(current_translation),
 			rotation_matrix,
-			MatrixScale(OOBBCrossSize(length, size)),
+			MatrixScale(OOBBCrossSize(length, size, size_override)),
 			camera_matrix
 		);
 	}
@@ -544,7 +552,9 @@ namespace ECSEngine {
 	)
 	{
 		Quaternion rotation_quaternion = rotation;
-		float3 complete_size = OOBBCrossSize(length, size);
+		float3 complete_size_x = OOBBCrossSize(length, size, info->size_override_x);
+		float3 complete_size_y = OOBBCrossSize(length, size, info->size_override_y);
+		float3 complete_size_z = OOBBCrossSize(length, size, info->size_override_z);
 
 		DebugDrawCallOptions options_x = options;
 		DebugDrawCallOptions options_y = options;
@@ -557,21 +567,21 @@ namespace ECSEngine {
 		AddOOBB(
 			OOBBCrossXTranslation(position, rotation_quaternion, length, start_from_same_point),
 			AxesArrowXRotation(rotation), 
-			complete_size, 
+			complete_size_x, 
 			info->color_x, 
 			options_x
 		);
 		AddOOBB(
 			OOBBCrossYTranslation(position, rotation_quaternion, length, start_from_same_point), 
 			AxesArrowYRotation(rotation), 
-			complete_size, 
+			complete_size_y, 
 			info->color_y, 
 			options_y
 		);
 		AddOOBB(
 			OOBBCrossZTranslation(position, rotation_quaternion, length, start_from_same_point), 
 			AxesArrowZRotation(rotation), 
-			complete_size, 
+			complete_size_z, 
 			info->color_z, 
 			options_z
 		);
@@ -750,7 +760,9 @@ namespace ECSEngine {
 	)
 	{
 		Quaternion rotation_quaternion = rotation;
-		float3 complete_size = OOBBCrossSize(length, size);
+		float3 complete_size_x = OOBBCrossSize(length, size, info->size_override_x);
+		float3 complete_size_y = OOBBCrossSize(length, size, info->size_override_y);
+		float3 complete_size_z = OOBBCrossSize(length, size, info->size_override_z);
 
 		DebugDrawCallOptions options_x = options;
 		DebugDrawCallOptions options_y = options;
@@ -764,7 +776,7 @@ namespace ECSEngine {
 			thread_index,
 			OOBBCrossXTranslation(position, rotation_quaternion, length, start_from_same_point),
 			AxesArrowXRotation(rotation),
-			complete_size,
+			complete_size_x,
 			info->color_x,
 			options_x
 		);
@@ -772,7 +784,7 @@ namespace ECSEngine {
 			thread_index,
 			OOBBCrossYTranslation(position, rotation_quaternion, length, start_from_same_point),
 			AxesArrowYRotation(rotation),
-			complete_size,
+			complete_size_y,
 			info->color_y,
 			options_y
 		);
@@ -780,7 +792,7 @@ namespace ECSEngine {
 			thread_index,
 			OOBBCrossZTranslation(position, rotation_quaternion, length, start_from_same_point),
 			AxesArrowZRotation(rotation),
-			complete_size,
+			complete_size_z,
 			info->color_z,
 			options_z
 		);
@@ -1159,17 +1171,15 @@ namespace ECSEngine {
 		float length,
 		float size, 
 		bool start_from_same_point, 
-		Color color_x, 
-		Color color_y, 
-		Color color_z, 
+		const DebugOOBBCrossInfo* info,
 		DebugDrawCallOptions options
 	)
 	{
 		// The same as drawing 3 arrows for each axis
 		DebugDrawerOutput colors[] = {
-			color_x,
-			color_y,
-			color_z
+			info->color_x,
+			info->color_y,
+			info->color_z
 		};
 
 		Quaternion rotation_quaternion = rotation;
@@ -1178,9 +1188,30 @@ namespace ECSEngine {
 		// called multiple times and fold the calls into a single one (with optimizations for sure, in release
 		// I hope so)
 		Matrix matrices[] = {
-			OOBBCrossMatrix(OOBBCrossXTranslation(position, rotation_quaternion, length, start_from_same_point), AxesArrowXRotation(rotation), length, size, camera_matrix),
-			OOBBCrossMatrix(OOBBCrossYTranslation(position, rotation_quaternion, length, start_from_same_point), AxesArrowYRotation(rotation), length, size, camera_matrix),
-			OOBBCrossMatrix(OOBBCrossZTranslation(position, rotation_quaternion, length, start_from_same_point), AxesArrowZRotation(rotation), length, size, camera_matrix)
+			OOBBCrossMatrix(
+				OOBBCrossXTranslation(position, rotation_quaternion, length, start_from_same_point), 
+				AxesArrowXRotation(rotation), 
+				length, 
+				size, 
+				info->size_override_x, 
+				camera_matrix
+			),
+			OOBBCrossMatrix(
+				OOBBCrossYTranslation(position, rotation_quaternion, length, start_from_same_point), 
+				AxesArrowYRotation(rotation), 
+				length, 
+				size,
+				info->size_override_y,
+				camera_matrix
+			),
+			OOBBCrossMatrix(
+				OOBBCrossZTranslation(position, rotation_quaternion, length, start_from_same_point), 
+				AxesArrowZRotation(rotation), 
+				length, 
+				size, 
+				info->size_override_z,
+				camera_matrix
+			)
 		};
 
 		DrawTransformImmediate<ECS_DEBUG_SHADER_OUTPUT_COLOR>(
@@ -2319,9 +2350,7 @@ namespace ECSEngine {
 		float length,
 		float size, 
 		bool start_from_same_point, 
-		unsigned int instance_thickness_x, 
-		unsigned int instance_thickness_y, 
-		unsigned int instance_thickness_z, 
+		const DebugOOBBCrossInfo* info,
 		DebugDrawCallOptions options, 
 		AdditionStreamAtomic<DebugOOBB>* addition_stream
 	)
@@ -2337,13 +2366,17 @@ namespace ECSEngine {
 			AxesArrowYRotation(rotation),
 			AxesArrowZRotation(rotation)
 		};
-		float3 complete_size = OOBBCrossSize(length, size);
+		float3 complete_sizes[] = {
+			OOBBCrossSize(length, size, info->size_override_x),
+			OOBBCrossSize(length, size, info->size_override_y),
+			OOBBCrossSize(length, size, info->size_override_z),
+		};
 
 		if (addition_stream != nullptr) {
 			unsigned int instance_thickness_values[] = {
-				instance_thickness_x,
-				instance_thickness_y,
-				instance_thickness_z,
+				info->instance_thickness_x,
+				info->instance_thickness_y,
+				info->instance_thickness_z,
 			};
 
 			DebugOOBB oobbs[3] = {};
@@ -2353,7 +2386,7 @@ namespace ECSEngine {
 				oobbs[index] = {
 					translations[index],
 					rotations[index],
-					complete_size,
+					complete_sizes[index],
 					Color(),
 					current_option
 				};
@@ -2363,9 +2396,9 @@ namespace ECSEngine {
 		}
 		else {
 			DebugDrawerOutput outputs[] = {
-				instance_thickness_x,
-				instance_thickness_y,
-				instance_thickness_z
+				info->instance_thickness_x,
+				info->instance_thickness_y,
+				info->instance_thickness_z
 			};
 
 			// Hopefully since the function is marked as inline the compiler will notice the same function being
@@ -2378,6 +2411,7 @@ namespace ECSEngine {
 					rotations[index],
 					length,
 					size,
+					info->GetSizeOverrides()[index],
 					camera_matrix
 				);
 			}

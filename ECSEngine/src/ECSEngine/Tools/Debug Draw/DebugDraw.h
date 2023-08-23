@@ -130,7 +130,44 @@ namespace ECSEngine {
 		unsigned int instance_thickness_z = (unsigned int)-1;
 	};
 
-	typedef DebugAxesInfo DebugOOBBCrossInfo;
+	struct DebugOOBBCrossInfo {
+		ECS_INLINE Color* GetColors() {
+			return &color_x;
+		}
+
+		ECS_INLINE const Color* GetColors() const {
+			return &color_x;
+		}
+
+		ECS_INLINE unsigned int* GetInstances() {
+			return &instance_thickness_x;
+		}
+
+		ECS_INLINE const unsigned int* GetInstances() const {
+			return &instance_thickness_x;
+		}
+
+		ECS_INLINE float* GetSizeOverrides() {
+			return &size_override_x;
+		}
+
+		ECS_INLINE const float* GetSizeOverrides() const {
+			return &size_override_x;
+		}
+
+		Color color_x = AxisXColor();
+		Color color_y = AxisYColor();
+		Color color_z = AxisZColor();
+
+		unsigned int instance_thickness_x = (unsigned int)-1;
+		unsigned int instance_thickness_y = (unsigned int)-1;
+		unsigned int instance_thickness_z = (unsigned int)-1;
+
+		// You can override the size for a specific axis
+		float size_override_x = 0.0f;
+		float size_override_y = 0.0f;
+		float size_override_z = 0.0f;
+	};
 
 	struct ECSENGINE_API DebugDrawer {
 		DebugDrawer() : allocator(nullptr), graphics(nullptr) {}
@@ -284,9 +321,7 @@ namespace ECSEngine {
 			float length,
 			float size, 
 			bool start_from_same_point, 
-			Color color_x = AxisXColor(), 
-			Color color_y = AxisYColor(), 
-			Color color_z = AxisZColor(), 
+			const DebugOOBBCrossInfo* info = {},
 			DebugDrawCallOptions options = {false}
 		);
 
@@ -496,9 +531,7 @@ namespace ECSEngine {
 			float length,
 			float size,
 			bool start_from_same_point,
-			unsigned int instance_thickness_x,
-			unsigned int instance_thickness_y,
-			unsigned int instance_thickness_z,
+			const DebugOOBBCrossInfo* info,
 			DebugDrawCallOptions options,
 			AdditionStreamAtomic<DebugOOBB>* addition_stream
 		);
