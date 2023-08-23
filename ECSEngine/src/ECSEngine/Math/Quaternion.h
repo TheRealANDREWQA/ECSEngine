@@ -504,7 +504,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionNormalizedInverse(Quaternion quaternion) {
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionInverseNormalized(Quaternion quaternion) {
 		// The conjugate and the inverse are the same if the quaternion is normalized;
 		// Avoids a division, a square root and a dot product
 		return QuaternionConjugate(quaternion);
@@ -517,7 +517,7 @@ namespace ECSEngine {
 			return Quaternion(QuaternionConjugate(quaternion).value / QuaternionSquaredLength(quaternion.value).value);
 		}
 		else {
-			return QuaternionNormalizedInverse(quaternion);
+			return QuaternionInverseNormalized(quaternion);
 		}
 	}
 
