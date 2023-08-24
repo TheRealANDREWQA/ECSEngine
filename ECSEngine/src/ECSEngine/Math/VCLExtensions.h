@@ -469,6 +469,12 @@ namespace ECSEngine {
 		return PerLaneBroadcast<0>(final_sum);
 	}
 
+	ECS_INLINE Vec8f PerLaneLoad3(const float* elements) {
+		Vec8f vector;
+		vector.load(elements);
+		return permute8<0, 1, 2, V_DC, 3, 4, 5, V_DC>(vector);
+	}
+
 #pragma endregion
 
 #pragma region For Each Bit

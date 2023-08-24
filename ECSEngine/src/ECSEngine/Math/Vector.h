@@ -104,6 +104,10 @@ namespace ECSEngine {
 			value = Vec8f(values0.x, values0.y, values0.z, 0.0f, values1.x, values1.y, values1.z, 0.0f);
 		}
 
+		ECS_INLINE Vector8(const float3* values) {
+			value = PerLaneLoad3((const float*)values);
+		}
+
 		ECS_INLINE Vector8(const Vector8& other) = default;
 		ECS_INLINE Vector8& ECS_VECTORCALL operator = (const Vector8& other) = default;
 

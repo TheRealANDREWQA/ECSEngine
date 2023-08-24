@@ -154,7 +154,24 @@ namespace ECSEngine {
         ECS_KEY_OEM_COMMA,
         ECS_KEY_OEM_MINUS,
         ECS_KEY_OEM_PERIOD,
-        ECS_KEY_COUNT
+        ECS_KEY_COUNT,
+
+        // These are helpers to reference keys which have a
+        // not so explicit mapping
+        ECS_KEY_SEMICOLON = ECS_KEY_OEM1,
+        ECS_KEY_COLON = ECS_KEY_OEM1,
+        ECS_KEY_FORWARD_SLASH = ECS_KEY_OEM2,
+        ECS_KEY_QUESTION_MARK = ECS_KEY_OEM2,
+        ECS_KEY_SHARP_QUOTE = ECS_KEY_OEM3,
+        ECS_KEY_TILDE = ECS_KEY_OEM3,
+        ECS_KEY_OPEN_SQUARE_BRACKET = ECS_KEY_OEM4,
+        ECS_KEY_OPEN_CURLY_BRACKET = ECS_KEY_OEM4,
+        ECS_KEY_BACKSLASH = ECS_KEY_OEM5,
+        ECS_KEY_PIPE = ECS_KEY_OEM5,
+        ECS_KEY_CLOSED_SQUARE_BRACKET = ECS_KEY_OEM6,
+        ECS_KEY_CLOSED_CURLY_BRACKET = ECS_KEY_OEM6,
+        ECS_KEY_APOSTROPHE = ECS_KEY_OEM7,
+        ECS_KEY_QUOTES = ECS_KEY_OEM7
 	};
 
 	typedef ResizableQueue<char> KeyboardCharacterQueue;

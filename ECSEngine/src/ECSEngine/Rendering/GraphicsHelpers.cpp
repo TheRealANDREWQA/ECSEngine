@@ -117,6 +117,48 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void GetMeshBoundingBox(Stream<float3> positions, float3* min_bound, float3* max_bound)
+	{
+		Vector8 vector_min(FLT_MAX), vector_max(-FLT_MAX);
+		size_t simd_count = function::GetSimdCount(positions.size, vector_min.Lanes());
+		for (size_t index = 0; index < simd_count; index += vector_min.Lanes()) {
+			Vector8 current_positions(positions.buffer + index);
+			vector_min = min(vector_min, current_positions);
+			vector_max = max(vector_max, current_positions);
+		}
+
+		float4 mins[2];
+		float4 maxs[2];
+
+		vector_min.Store(mins);
+		vector_max.Store(maxs);
+
+		float3 current_min = BasicTypeMin(mins[0].xyz(), mins[1].xyz());
+		float3 current_max = BasicTypeMax(maxs[0].xyz(), maxs[1].xyz());
+
+		if (simd_count < positions.size) {
+			current_min = BasicTypeMin(current_min, positions[simd_count]);
+			current_max = BasicTypeMax(current_max, positions[simd_count]);
+		}
+
+		*min_bound = current_min;
+		*max_bound = current_max;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void GetMeshBoundingBox(Graphics* graphics, VertexBuffer positions_buffer, float3* min_bound, float3* max_bound)
+	{
+		VertexBuffer staging_buffer = BufferToStaging(graphics, positions_buffer);
+
+		float3* positions = (float3*)graphics->MapBuffer(staging_buffer.buffer, ECS_GRAPHICS_MAP_READ);
+		GetMeshBoundingBox(Stream<float3>(positions, positions_buffer.size), min_bound, max_bound);
+
+		staging_buffer.Release();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 #define EXPORT_TEXTURE_TEMPLATE(function_name) ECS_TEMPLATE_FUNCTION(Texture1D, function_name, Graphics*, Texture1D, bool);  \
 ECS_TEMPLATE_FUNCTION(Texture2D, function_name, Graphics*, Texture2D, bool); \
 ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \

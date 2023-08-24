@@ -235,22 +235,26 @@ void FileExplorerSelectableBase(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SelectableData* data = (SelectableData*)_data;
-	FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
+	EditorState* editor_state = data->editor_state;
+	FileExplorerData* explorer_data = editor_state->file_explorer_data;
 
 	if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
 		if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-				FileExplorerHandleControlPath(data->editor_state, data->selection);
+				FileExplorerHandleControlPath(editor_state, data->selection);
 			}
 			else if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-				FileExplorerHandleShiftSelection(data->editor_state, data->index);
+				FileExplorerHandleShiftSelection(editor_state, data->index);
 			}
 			else {
 				// Check to see if the file is already selected - if it is, then do nothing in order for 
-				// the drag to work correctly
+				// the drag to work correctly - we still have to notify the inspectors
 				Stream<Stream<wchar_t>> selected_files(explorer_data->selected_files.buffer, explorer_data->selected_files.size);
 				if (function::FindString(data->selection, selected_files) == -1) {
-					FileExplorerSetNewFile(data->editor_state, data->selection, data->index);
+					FileExplorerSetNewFile(editor_state, data->selection, data->index);
+				}
+				else {
+					ChangeInspectorToFile(editor_state, data->selection);
 				}
 			}
 		}
