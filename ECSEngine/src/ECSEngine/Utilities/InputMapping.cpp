@@ -19,6 +19,13 @@ namespace ECSEngine {
 		mappings[index] = mapping_element;
 	}
 
+	void InputMapping::ChangeMapping(const InputMappingElement* elements)
+	{
+		for (size_t index = 0; index < mappings.size; index++) {
+			ChangeMapping(index, elements[index]);
+		}
+	}
+
 	bool InputMappingButton::IsTriggered(const Mouse* mouse, const Keyboard* keyboard) const
 	{
 		if (is_key) {

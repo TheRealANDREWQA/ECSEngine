@@ -5072,6 +5072,10 @@ namespace ECSEngine {
 							has_changed_action();
 						}
 					}
+					else {
+						// If the input is selected, disable the external value change flag
+						data->number_data.external_value_change = false;
+					}
 					
 					if (configuration & UI_CONFIG_NUMBER_INPUT_RANGE) {
 						bool is_different = data->max != max || data->min != min;
@@ -5163,6 +5167,10 @@ namespace ECSEngine {
 						else if (difference > EPSILON || digit_count != 3) {
 							has_changed_action();
 						}
+					}
+					else {
+						// If the input is selected, disable the external value change flag
+						data->number_data.external_value_change = false;
 					}
 
 					if (configuration & UI_CONFIG_NUMBER_INPUT_RANGE) {

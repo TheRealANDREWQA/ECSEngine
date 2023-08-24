@@ -87,6 +87,11 @@ namespace ECSEngine {
 		bool allocate_submesh_name = false;
 		bool coallesce_submesh_name_allocations = true;
 		float scale_factor = 1.0f;
+
+		// If these are set, then it will deduce the bounding box
+		// if the given coalesced mesh
+		float3* min_bound = nullptr;
+		float3* max_bound = nullptr;
 	};
 
 	// Coallesces on the CPU side the values to be directly copied to the GPU
@@ -209,12 +214,18 @@ namespace ECSEngine {
 
 	ECSENGINE_API void FreeGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator);
 
-	ECSENGINE_API void FreeGLTFMeshes(const GLTFMesh* meshes, size_t count, AllocatorPolymorphic allocator);
+	ECSENGINE_API void FreeGLTFMeshes(Stream<GLTFMesh> meshes, AllocatorPolymorphic allocator);
 
 	ECSENGINE_API void FreeCoallescedGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator);
 
 	ECSENGINE_API void FreeGLTFFile(GLTFData data);
 
-	ECSENGINE_API void ScaleGLTFMeshes(const GLTFMesh* gltf_meshes, size_t count, float scale_factor);
+	ECSENGINE_API void ScaleGLTFMeshes(Stream<GLTFMesh> meshes, float scale_factor);
+	
+	ECSENGINE_API void GetGLTFMeshBoundingBox(const GLTFMesh* mesh, float3* min_bound, float3* max_bound);
+
+	ECSENGINE_API void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, float3* min_bounds, float3* max_bounds);
+
+	ECSENGINE_API void GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes, float3* min_bound, float3* max_bound);
 
 }

@@ -69,6 +69,12 @@ namespace ECSEngine {
 
 	ECSENGINE_API VertexBuffer CreateRectangleVertexBuffer(Graphics* graphics, float3 top_left, float3 bottom_right, bool temporary = false);
 
+	ECSENGINE_API void GetMeshBoundingBox(Stream<float3> positions, float3* min_bound, float3* max_bound);
+
+	// If the vertex buffer is on the GPU, it will copy it to the CPU and then perform the bounding box deduction
+	// It needs the immediate context to perform the copy and the mapping
+	ECSENGINE_API void GetMeshBoundingBox(Graphics* graphics, VertexBuffer positions_buffer, float3* min_bound, float3* max_bound);
+
 	// It will make a staging texture that has copied the contents of the supplied texture
 	// It relies on the immediate context to copy the contents - SINGLE THREADED
 	// If it fails, the returned interface will be nullptr

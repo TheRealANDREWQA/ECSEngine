@@ -36,11 +36,11 @@ namespace ECSEngine {
 	};
 
 	// This can be used as an asyncronous call to generate the thumbnail. It will use the GPU immediate context 
-	// As such, cannot be used from multiple threads. But can be placed onto a queue for a thread to consume GPU requests
+	// As such, cannot be used from multiple threads. But can be placed into a queue for a thread to consume GPU requests
 	ECS_THREAD_TASK(GLTFGenerateThumbnailTask);
 
 	// This can be used as an asyncronous call to generate the thumbnail. It will use the GPU immediate context 
-	// As such, cannot be used from multiple threads. But can be placed onto a queue for a thread to consume GPU requests
+	// As such, cannot be used from multiple threads. But can be placed into a queue for a thread to consume GPU requests
 	ECS_THREAD_TASK(GLTFUpdateThumbnailTask);
 
 	// It will read the mesh' position buffer onto the CPU in order to determine the bounds of the mesh and then will create a

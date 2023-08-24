@@ -896,7 +896,7 @@ string_name.AssertCapacity();
 		// -----------------------------------------------------------------------------------------------------------------------
 
 		template<typename Type>
-		inline Stream<void> GetCoallescedStreamFromType(Type* type) {
+		ECS_INLINE Stream<void> GetCoallescedStreamFromType(Type* type) {
 			void* location = function::OffsetPointer(type, sizeof(*type));
 			return { location, *type->Size() };
 		}
@@ -904,7 +904,7 @@ string_name.AssertCapacity();
 		// -----------------------------------------------------------------------------------------------------------------------
 
 		template<typename Type>
-		inline Type* CreateCoallescedStreamIntoType(void* buffer, Stream<void> stream, unsigned int* write_size) {
+		ECS_INLINE Type* CreateCoallescedStreamIntoType(void* buffer, Stream<void> stream, unsigned int* write_size) {
 			Type* type = (Type*)buffer;
 			*write_size = CoallesceStreamIntoType(type, stream);
 			return type;
@@ -1072,6 +1072,29 @@ string_name.AssertCapacity();
 			string->AddStreamAssert(debug_info.function);
 			string->AddStreamAssert(", line: ");
 			function::ConvertIntToChars(*string, debug_info.line);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
+		// The functor receives as parameters (const Input* input_values, Output* output_values, size_t element_count)
+		// And must return how many elements to write (this value is ignored when a full iteration is in place, it is
+		// needed only when there is a remainder - this value must be expressed in elements of output type)
+		template<typename InputStreamType, typename OutputStreamType, typename Functor>
+		void ApplySIMD(InputStreamType input, OutputStreamType output, size_t simd_elements, size_t output_count_per_iteration, Functor&& functor) {
+			size_t simd_count = GetSimdCount(input.size, simd_elements);
+			size_t output_element_index = 0;
+			for (size_t index = 0; index < simd_count; index += simd_elements) {
+				// No need to marshal here
+				functor(input.buffer + index, output.buffer + output_element_index, simd_elements);
+				output_element_index += output_count_per_iteration;
+			}
+
+			if (simd_count < input.size) {
+				// We need to perform another iteration here but with redirection
+				size_t temporary_memory[ECS_SIMD_SIZE_T_SIZE];
+				size_t write_count = functor(input.buffer + simd_count, (decltype(output.buffer))temporary_memory, input.size - simd_count);
+				memcpy(output.buffer + output_element_index, temporary_memory, output.MemoryOf(1) * write_count);
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------

@@ -240,16 +240,22 @@ void ScenePrivateAction(ActionData* action_data) {
 
 		auto initiate_transform = [&](ECS_TRANSFORM_TOOL tool) {
 			// Check to see if the same transform was pressed to change the space
-			if (sandbox->transform_tool == tool && sandbox->transform_display_axes) {
+			// Don't reset the active axis if the tool is already this one and the keyboard axes are activated
+			if (sandbox->transform_keyboard_tool == tool && sandbox->transform_display_axes) {
 				data->drag_tool.SetSpace(InvertTransformSpace(data->drag_tool.GetSpace()));
+				// If this the rotation tool, we also need to recalculate the rotation midpoint
+				if (tool == ECS_TRANSFORM_ROTATION) {
+					Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+					GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
+				}
 			}
 			else {
 				data->drag_tool.SetSpace(sandbox->transform_space);
+				ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 			}
 			sandbox->transform_keyboard_space = data->drag_tool.GetSpace();
 			trigger_rerender = true;
 			sandbox->transform_display_axes = true;
-			ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 			sandbox->transform_keyboard_tool = tool;	
 
 			// Add the component type if it is missing
@@ -323,7 +329,7 @@ void ScenePrivateAction(ActionData* action_data) {
 				HandleSelectedEntitiesTransformUpdateDescriptor update_descriptor;
 				update_descriptor.editor_state = editor_state;
 				update_descriptor.mouse_position = mouse_position;
-				update_descriptor.rotation_midpoint = data->rotation_midpoint;
+				update_descriptor.rotation_midpoint = sandbox->transform_keyboard_space == ECS_TRANSFORM_LOCAL_SPACE ? data->rotation_midpoint : QuaternionIdentity();
 				update_descriptor.sandbox_index = sandbox_index;
 				update_descriptor.system = system;
 				update_descriptor.tool_drag = &data->drag_tool;

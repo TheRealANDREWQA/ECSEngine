@@ -1117,7 +1117,7 @@ namespace ECSEngine {
 
 		load_descriptor.load_flags |= ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK;
 		Stream<Mesh>* meshes = LoadMeshImplementationEx({ gltf_meshes, data->mesh_count }, scale_factor, load_descriptor, ex_desc);
-		FreeGLTFMeshes(gltf_meshes, data->mesh_count, allocator);
+		FreeGLTFMeshes({ gltf_meshes, data->mesh_count }, allocator);
 
 		return meshes;
 	}
@@ -1127,7 +1127,7 @@ namespace ECSEngine {
 	Stream<Mesh>* ResourceManager::LoadMeshImplementationEx(Stream<GLTFMesh> gltf_meshes, float scale_factor, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc)
 	{
 		// Scale the meshes, the function already checks for scale of 1.0f
-		ScaleGLTFMeshes(gltf_meshes.buffer, gltf_meshes.size, scale_factor);
+		ScaleGLTFMeshes(gltf_meshes, scale_factor);
 
 		void* allocation = nullptr;
 		// Calculate the allocation size
@@ -1147,7 +1147,7 @@ namespace ECSEngine {
 
 		if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
-			ScaleGLTFMeshes(gltf_meshes.buffer, gltf_meshes.size, 1.0f / scale_factor);
+			ScaleGLTFMeshes(gltf_meshes, 1.0f / scale_factor);
 		}
 
 		AddResourceEx(this, ResourceType::Mesh, meshes, load_descriptor, ex_desc);
@@ -1241,7 +1241,7 @@ namespace ECSEngine {
 		mesh->submeshes.InitializeFromBuffer(buffer, gltf_meshes.size);
 
 		// Scale the gltf meshes, they already have a built in check for scale of 1.0f
-		ScaleGLTFMeshes(gltf_meshes.buffer, gltf_meshes.size, scale_factor);
+		ScaleGLTFMeshes(gltf_meshes, scale_factor);
 
 		Mesh* temporary_meshes = (Mesh*)ECS_STACK_ALLOC(sizeof(Mesh) * gltf_meshes.size);
 
@@ -1256,7 +1256,7 @@ namespace ECSEngine {
 
 		if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
-			ScaleGLTFMeshes(gltf_meshes.buffer, gltf_meshes.size, 1.0f / scale_factor);
+			ScaleGLTFMeshes(gltf_meshes, 1.0f / scale_factor);
 		}
 		
 		return mesh;
@@ -1284,7 +1284,7 @@ namespace ECSEngine {
 		// We also need to coallesce the names of the submeshes
 		StreamCoallescedInplaceDeepCopy(mesh->submeshes, AllocatorTs());
 
-		ScaleGLTFMeshes(gltf_mesh, 1, scale_factor);
+		ScaleGLTFMeshes({ gltf_mesh, 1 }, scale_factor);
 
 		mesh->mesh = GLTFMeshToMesh(m_graphics, *gltf_mesh);
 
@@ -1292,7 +1292,7 @@ namespace ECSEngine {
 
 		if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
-			ScaleGLTFMeshes(gltf_mesh, 1, 1.0f / scale_factor);
+			ScaleGLTFMeshes({ gltf_mesh, 1 }, 1.0f / scale_factor);
 		}
 
 		return mesh;
@@ -1916,7 +1916,7 @@ namespace ECSEngine {
 
 		// Free the gltf data, the gltf meshes and the initial allocation
 		FreeGLTFFile(data);
-		FreeGLTFMeshes(gltf_meshes, data.mesh_count, allocator);
+		FreeGLTFMeshes({ gltf_meshes, data.mesh_count }, allocator);
 		Deallocate(initial_allocation);
 
 		return mesh;

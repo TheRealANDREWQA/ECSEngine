@@ -5,6 +5,7 @@
 #include "../Rendering/RenderingStructures.h"
 #include "../Utilities/FunctionInterfaces.h"
 #include "../Rendering/Graphics.h"
+#include "../Rendering/GraphicsHelpers.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 
 namespace ECSEngine {
@@ -126,17 +127,11 @@ namespace ECSEngine {
 
 			Matrix ecs_matrix(world_matrix);
 			if (ecs_matrix != MatrixIdentity()) {
-				size_t count = mesh_positions.size;
-				size_t index = 0;
-
-				size_t simd_count = function::GetSimdCount(count, 2);
-				for (; index < simd_count; index += 2) {
-					Vector8 transformed_positions = TransformPoint(Vector8(mesh_positions[index], mesh_positions[index + 1]), ecs_matrix);
-					transformed_positions.StoreFloat3(mesh_positions.buffer + index);
-				}
-				if (index < count) {
-					mesh_positions[count - 1] = TransformPoint(mesh_positions[count - 1], ecs_matrix).AsFloat3Low();
-				}
+				function::ApplySIMD(mesh_positions, mesh_positions, Vector8::Lanes(), Vector8::Lanes(), [ecs_matrix](const float3* input, float3* output, size_t count) {
+					Vector8 transformed_positions = TransformPoint(Vector8(input), ecs_matrix);
+					transformed_positions.StoreFloat3(output);
+					return count;
+				});
 			}
 		}
 
@@ -151,12 +146,10 @@ namespace ECSEngine {
 			const float TOLERANCE_VAL = 0.000001f;
 			Vector8 tolerance(TOLERANCE_VAL);
 
-			auto loop = [&](auto perform_world_transformation) {
-				size_t simd_count = function::GetSimdCount(mesh_normals.size, tolerance.Lanes());
-				size_t index = 0;
-
-				for (; index < simd_count + tolerance.Lanes(); index += tolerance.Lanes()) {
-					Vector8 normal(mesh_normals[index], mesh_normals[index + 1]);
+			// Takes a lambda that transforms the normal if needed
+			auto loop = [&](Vector8 (ECS_VECTORCALL *perform_world_transformation)(Vector8 normal, Matrix transform_matrix)) {
+				function::ApplySIMD(mesh_normals, mesh_normals, tolerance.Lanes(), tolerance.Lanes(), [&](const float3* input, float3* output, size_t count) {
+					Vector8 normal(input);
 					//normal = PerLanePermute<0, 2, 1, V_DC>(normal);
 					Vector8 less_than_tolerance_mask = SquareLength(normal) < tolerance;
 					if (BasicTypeLogicAndBoolean(PerLaneHorizontalAnd<3>(less_than_tolerance_mask.AsMask()))) {
@@ -167,29 +160,26 @@ namespace ECSEngine {
 						return false;*/
 					}
 
-					if constexpr (perform_world_transformation) {
-						// Transform the normal
-						normal = MatrixVectorMultiply(normal, ecs_matrix);
-					}
+					// Transform the normal
+					normal = perform_world_transformation(normal, ecs_matrix);
 
 					normal = NormalizeIfNot(normal);
-					if (index == mesh_normals.size - 1) {
-						// We only need to store the dummy
-						mesh_normals[index] = normal.AsFloat3Low();
-					}
-					else {
-						normal.StoreFloat3(mesh_normals.buffer + index);
-					}
-				}
+					normal.StoreFloat3(output);
+					return count;
+				});
 			};
 
 			if (ecs_matrix != MatrixIdentity()) {
 				// Perform normalization + world transformation
-				loop(std::true_type{});
+				loop([](Vector8 normal, Matrix transform_matrix) {
+					return MatrixVectorMultiply(normal, transform_matrix);
+				});
 			}
 			else {
 				// Perform only normalization
-				loop(std::false_type{});
+				loop([](Vector8 normal, Matrix transform_matrix) {
+					return normal;
+				});
 			}
 		}
 
@@ -1089,7 +1079,7 @@ namespace ECSEngine {
 
 			// We also need to scale the gltf mesh, if required
 			if (scale_factor != 1.0f) {
-				ScaleGLTFMeshes(mesh, 1, scale_factor);
+				ScaleGLTFMeshes({ mesh, 1 }, scale_factor);
 			}
 		}
 		return success;
@@ -1530,6 +1520,21 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
+	static void FillBoundingBox(const GLTFMesh* mesh, LoadCoalescedMeshFromGLTFOptions* options) {
+		if (options->min_bound || options->max_bound) {
+			// Need to retrieve the bounds
+			float3 min_bound, max_bound;
+			GetGLTFMeshBoundingBox(mesh, &min_bound, &max_bound);
+
+			if (options->min_bound) {
+				*options->min_bound = min_bound;
+			}
+			if (options->max_bound) {
+				*options->max_bound = max_bound;
+			}
+		}
+	}
+
 	CoalescedMesh LoadCoalescedMeshFromGLTFToGPU(
 		Graphics* graphics, 
 		GLTFData gltf_data, 
@@ -1563,6 +1568,9 @@ namespace ECSEngine {
 		if (success) {
 			result.mesh = GLTFMeshToMesh(graphics, gltf_mesh);
 			result.submeshes = { submeshes, gltf_data.mesh_count };
+
+			// Check the bounds call
+			FillBoundingBox(&gltf_mesh, options);
 
 		/*	if (allocate_submesh_names) {
 				if (coallesced_submesh_names) {
@@ -1611,6 +1619,9 @@ namespace ECSEngine {
 		success = LoadCoalescedMeshFromGLTF(gltf_data, &buffer_sizes, &gltf_mesh, coalesced_mesh->submeshes.buffer, invert_z_axis, options);
 		if (success) {
 			coalesced_mesh->mesh = GLTFMeshToMesh(graphics, gltf_mesh);
+
+			// Check the bounds call
+			FillBoundingBox(&gltf_mesh, options);
 		}
 		// In case of failure it will still have the buffers allocated
 		FreeCoallescedGLTFMesh(gltf_mesh, temporary_buffer_allocator);
@@ -1643,8 +1654,8 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void FreeGLTFMeshes(const GLTFMesh* meshes, size_t count, AllocatorPolymorphic allocator) {
-		for (size_t index = 0; index < count; index++) {
+	void FreeGLTFMeshes(Stream<GLTFMesh> meshes, AllocatorPolymorphic allocator) {
+		for (size_t index = 0; index < meshes.size; index++) {
 			FreeGLTFMesh(meshes[index], allocator);
 		}
 	}
@@ -1671,32 +1682,53 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void ScaleGLTFMeshes(const GLTFMesh* gltf_meshes, size_t count, float scale_factor)
+	void ScaleGLTFMeshes(Stream<GLTFMesh> meshes, float scale_factor)
 	{
 		if (scale_factor != 1.0f) {
 			// Scaling with the same factor on all axis basically means multiplying the coordinates by the given scale factor
 			Vector8 splatted_factor(scale_factor);
 
-			for (size_t index = 0; index < count; index++) {
-				size_t vertex_count = gltf_meshes[index].positions.size;
-
-				size_t float_count = vertex_count * 3;
-				size_t simd_size = 8;
-				size_t simd_count = function::GetSimdCount(float_count, simd_size);
-
-				float* float_positions = (float*)gltf_meshes[index].positions.buffer;
-				for (size_t float_index = 0; float_index < simd_count; float_index += simd_size) {
-					Vector8 positions(float_positions + float_index);
+			for (size_t index = 0; index < meshes.size; index++) {
+				size_t vertex_count = meshes[index].positions.size;
+				Stream<float> float_positions = { meshes[index].positions.buffer, vertex_count * 3 };
+				function::ApplySIMD(float_positions, float_positions, 8, 8, [=](const float* input, float* output, size_t count) {
+					Vector8 positions(input);
 					positions *= splatted_factor;
-					positions.Store(float_positions + float_index);
-				}
-				// There are remainder values
-				if (simd_count < float_count) {
-					for (size_t float_index = simd_count; float_index < float_count; float_index++) {
-						float_positions[float_index] *= scale_factor;
-					}
-				}
+					positions.Store(output);
+					return count;
+				});
 			}
+		}
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	void GetGLTFMeshBoundingBox(const GLTFMesh* mesh, float3* min_bound, float3* max_bound)
+	{
+		GetMeshBoundingBox(mesh->positions, min_bound, max_bound);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, float3* min_bounds, float3* max_bounds)
+	{
+		for (size_t index = 0; index < meshes.size; index++) {
+			GetGLTFMeshBoundingBox(meshes.buffer + index, min_bounds + index, max_bounds + index);
+		}
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	void GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes, float3* min_bound, float3* max_bound)
+	{
+		*min_bound = float3::Splat(FLT_MAX);
+		*max_bound = float3::Splat(-FLT_MAX);
+
+		for (size_t index = 0; index < meshes.size; index++) {
+			float3 current_min, current_max;
+			GetGLTFMeshBoundingBox(meshes.buffer + index, &current_min, &current_max);
+			*min_bound = BasicTypeMin(*min_bound, current_min);
+			*max_bound = BasicTypeMax(*max_bound, current_max);
 		}
 	}
 
