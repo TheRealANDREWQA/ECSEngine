@@ -1,7 +1,7 @@
 #pragma once
-#include "../../Core.h"
-#include "../Mouse.h"
-#include "../Keyboard.h"
+#include "../Core.h"
+#include "Mouse.h"
+#include "Keyboard.h"
 
 namespace ECSEngine {
 

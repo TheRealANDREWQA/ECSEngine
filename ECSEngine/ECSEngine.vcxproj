@@ -240,6 +240,7 @@
     <ClInclude Include="src\ECSEngine\ECS\EntityManagerSerializeTypes.h" />
     <ClInclude Include="src\ECSEngine\ECS\ForEach.h" />
     <ClInclude Include="src\ECSEngine\ECS\LinkComponents.h" />
+    <ClInclude Include="src\ECSEngine\Input\Controller\WASDController.h" />
     <ClInclude Include="src\ECSEngine\Math\Intersection.h" />
     <ClInclude Include="src\ECSEngine\Math\Plane.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\RingBuffer.h" />
@@ -299,9 +300,9 @@
     <ClInclude Include="src\ECSEngine\Tools\UI\UISystem.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Assert.h" />
     <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\ButtonInput.h" />
+    <ClInclude Include="src\ECSEngine\Input\ButtonInput.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\InputMapping.h" />
+    <ClInclude Include="src\ECSEngine\Input\InputMapping.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializationMacro.h" />
@@ -315,14 +316,14 @@
     <ClInclude Include="src\ECSEngine\Utilities\ForEachFiles.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Function.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FunctionInterfaces.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Keyboard.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Mouse.h" />
+    <ClInclude Include="src\ECSEngine\Input\Keyboard.h" />
+    <ClInclude Include="src\ECSEngine\Input\Mouse.h" />
     <ClInclude Include="src\ECSEngine\Utilities\OSFunctions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Path.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionTypes.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Serialization\InputSerialization.h" />
+    <ClInclude Include="src\ECSEngine\Input\InputSerialization.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Text\TextSerialize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Text\TextSerializeFields.h" />
@@ -348,7 +349,7 @@
     <ClInclude Include="src\Includes\ECSEngineEntities.h" />
     <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
     <ClInclude Include="src\Includes\ECSEngineForEach.h" />
-    <ClInclude Include="src\Includes\ECSEngineHID.h" />
+    <ClInclude Include="src\Includes\ECSEngineInput.h" />
     <ClInclude Include="src\Includes\ECSEngineSampleTexture.h" />
     <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />
     <ClInclude Include="src\Includes\ECSEngineThreadTaskExport.h" />
@@ -441,6 +442,7 @@
     <ClCompile Include="src\ECSEngine\ECS\EntityManagerSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\ForEach.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\LinkComponents.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\Controller\WASDController.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\AtomicLinearAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\RingBuffer.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\TaskScheduler.cpp" />
@@ -529,9 +531,9 @@
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Utilities\FunctionInterfaces.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\InputMapping.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Keyboard.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Mouse.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\InputMapping.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\Keyboard.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\Mouse.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\OSFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Path.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ReferenceCountSerialize.cpp" />
@@ -539,7 +541,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\Serialization.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Serialization\InputSerialization.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\InputSerialization.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeMultisection.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeSection.cpp" />

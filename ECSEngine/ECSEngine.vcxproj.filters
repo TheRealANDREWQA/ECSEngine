@@ -112,7 +112,7 @@
     <ClInclude Include="src\ECSEngine\ECS\SystemManager.h" />
     <ClInclude Include="src\ECSEngine\ECS\EntityHierarchy.h" />
     <ClInclude Include="src\ECSEngine\Resources\Scene.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Serialization\InputSerialization.h" />
+    <ClInclude Include="src\ECSEngine\Input\InputSerialization.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetLoading.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetMetadata.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabase.h" />
@@ -163,8 +163,8 @@
     <ClInclude Include="src\ECSEngine\Utilities\ForEachFiles.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Function.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FunctionInterfaces.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Keyboard.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Mouse.h" />
+    <ClInclude Include="src\ECSEngine\Input\Keyboard.h" />
+    <ClInclude Include="src\ECSEngine\Input\Mouse.h" />
     <ClInclude Include="src\ECSEngine\Utilities\OSFunctions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Path.h" />
     <ClInclude Include="src\Includes\ECSEngineSerializationHelpers.h" />
@@ -208,9 +208,8 @@
     <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
     <ClInclude Include="src\Includes\ECSEngineCBufferTags.h" />
     <ClInclude Include="src\ECSEngine\Rendering\RenderingEffects.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\InputMapping.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\ButtonInput.h" />
-    <ClInclude Include="src\Includes\ECSEngineHID.h" />
+    <ClInclude Include="src\ECSEngine\Input\InputMapping.h" />
+    <ClInclude Include="src\ECSEngine\Input\ButtonInput.h" />
     <ClInclude Include="src\ECSEngine\Rendering\VisualizeTexture.h" />
     <ClInclude Include="src\Includes\ECSEngineVisualizeTexture.h" />
     <ClInclude Include="src\ECSEngine\Rendering\SampleTexture.h" />
@@ -218,6 +217,8 @@
     <ClInclude Include="src\ECSEngine\Utilities\TransformTool.h" />
     <ClInclude Include="src\ECSEngine\Math\Plane.h" />
     <ClInclude Include="src\ECSEngine\Math\Intersection.h" />
+    <ClInclude Include="src\Includes\ECSEngineInput.h" />
+    <ClInclude Include="src\ECSEngine\Input\Controller\WASDController.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -274,7 +275,7 @@
     <ClCompile Include="src\ECSEngine\ECS\SystemManager.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\EntityHierarchy.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\Scene.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Serialization\InputSerialization.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\InputSerialization.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetLoading.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetMetadata.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabase.cpp" />
@@ -311,8 +312,8 @@
     <ClCompile Include="src\ECSEngine\Utilities\ForEachFiles.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Function.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\FunctionInterfaces.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Keyboard.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Mouse.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\Keyboard.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\Mouse.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\OSFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Path.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Timer.cpp" />
@@ -331,10 +332,11 @@
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\RenderingEffects.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\InputMapping.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\InputMapping.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\VisualizeTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\SampleTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\TransformTool.cpp" />
+    <ClCompile Include="src\ECSEngine\Input\Controller\WASDController.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

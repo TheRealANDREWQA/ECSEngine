@@ -4,6 +4,9 @@
 #include "InspectorModule.h"
 #include "../../Editor/EditorPalette.h"
 #include "InspectorUtilities.h"
+#include "../../Sandbox/Sandbox.h"
+#include "../../Sandbox/SandboxFile.h"
+#include "../../Sandbox/SandboxModule.h"
 
 #include "../CreateScene.h"
 #include "../../Modules/Module.h"

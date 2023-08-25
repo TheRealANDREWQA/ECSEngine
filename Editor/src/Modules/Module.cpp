@@ -1,13 +1,14 @@
 #include "editorpch.h"
 #include "Module.h"
 #include "ECSEngineUtilities.h"
-#include "..\Editor\EditorState.h"
-#include "..\Editor\EditorEvent.h"
-#include "..\Project\ProjectOperations.h"
+#include "../Editor/EditorState.h"
+#include "../Editor/EditorEvent.h"
+#include "../Project/ProjectOperations.h"
 #include "ECSEngineWorld.h"
 #include "ECSEngineLinkComponents.h"
 #include "ModuleSettings.h"
-#include "..\UI\Inspector.h"
+#include "../UI/Inspector.h"
+#include "../Sandbox/SandboxModule.h"
 
 using namespace ECSEngine;
 

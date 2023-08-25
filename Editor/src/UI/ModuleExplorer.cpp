@@ -8,6 +8,7 @@
 #include "Inspector.h"
 #include "../Editor/EditorEvent.h"
 #include "../Project/ProjectOperations.h"
+#include "../Sandbox/SandboxModule.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;

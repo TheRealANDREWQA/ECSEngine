@@ -4,8 +4,8 @@
 #include "UIMacros.h"
 #include "UIDrawerDescriptor.h"
 #include "../../Application.h"
-#include "../../Utilities/Mouse.h"
-#include "../../Utilities/Keyboard.h"
+#include "../../Input/Mouse.h"
+#include "../../Input/Keyboard.h"
 #include "../../Rendering/ColorUtilities.h"
 #include "../../Multithreading/ThreadTask.h"
 

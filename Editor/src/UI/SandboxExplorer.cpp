@@ -3,7 +3,8 @@
 #include "../Editor/EditorState.h"
 #include "../UI/HelperWindows.h"
 
-#include "../Editor/EditorSandbox.h"
+#include "../Sandbox/Sandbox.h"
+#include "../Sandbox/SandboxFile.h"
 #include "Inspector.h"
 
 using namespace ECSEngine;

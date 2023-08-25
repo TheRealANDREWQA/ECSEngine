@@ -3,6 +3,7 @@
 #include "AssetManagement.h"
 #include "../Project/ProjectFolders.h"
 #include "../Editor/EditorEvent.h"
+#include "../Sandbox/Sandbox.h"
 
 #include "AssetExtensions.h"
 

@@ -1,9 +1,11 @@
 #include "editorpch.h"
 #include "Game.h"
-#include "..\Editor\EditorState.h"
 #include "HelperWindows.h"
 #include "Common.h"
 #include "RenderingCommon.h"
+#include "../Editor/EditorState.h"
+#include "../Sandbox/Sandbox.h"
+#include "../Sandbox/SandboxModule.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;

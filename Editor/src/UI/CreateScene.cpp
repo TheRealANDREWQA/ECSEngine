@@ -4,6 +4,8 @@
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorScene.h"
 #include "../Project/ProjectFolders.h"
+#include "../Sandbox/SandboxScene.h"
+#include "../Sandbox/SandboxFile.h"
 
 #define SAVE_SCENE_POP_UP_NAME "Save Scene"
 

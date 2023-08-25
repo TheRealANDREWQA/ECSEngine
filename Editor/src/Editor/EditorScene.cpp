@@ -7,6 +7,7 @@
 #include "Modules/Module.h"
 #include "ECSEngineScene.h"
 #include "../Assets/EditorSandboxAssets.h"
+#include "../Sandbox/SandboxAccessor.h"
 
 using namespace ECSEngine;
 

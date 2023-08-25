@@ -1,7 +1,7 @@
 #pragma once
 #include "UIStructures.h"
 #include "UISystem.h"
-#include "../../Utilities/Keyboard.h"
+#include "../../Input/Keyboard.h"
 #include "UIDrawerStructures.h"
 #include "UIDrawConfig.h"
 
@@ -9,43 +9,43 @@ namespace ECSEngine {
 
 	namespace Tools {
 
-		inline bool UIDrawerTextInputFilterAll(char character, CharacterType type) {
+		ECS_INLINE bool UIDrawerTextInputFilterAll(char character, CharacterType type) {
 			return true;
 		}
 
-		inline bool UIDrawerTextInputFilterLetters(char character, CharacterType type) {
+		ECS_INLINE bool UIDrawerTextInputFilterLetters(char character, CharacterType type) {
 			return type == CharacterType::LowercaseLetter || type == CharacterType::CapitalLetter || type == CharacterType::Space;
 		}
 
-		inline bool UIDrawerTextInputFilterLowercaseLetters(char character, CharacterType type) {
+		ECS_INLINE bool UIDrawerTextInputFilterLowercaseLetters(char character, CharacterType type) {
 			return type == CharacterType::LowercaseLetter;
 		}
 
-		inline bool UIDrawerTextInputFilterUppercaseLetters(char character, CharacterType type) {
+		ECS_INLINE bool UIDrawerTextInputFilterUppercaseLetters(char character, CharacterType type) {
 			return type == CharacterType::CapitalLetter;
 		}
 		
-		inline bool UIDrawerTextInputFilterDigits(char character, CharacterType type) {
+		ECS_INLINE bool UIDrawerTextInputFilterDigits(char character, CharacterType type) {
 			return type == CharacterType::Digit;
 		}
 
-		inline bool UIDrawerTextInputFilterInteger(char character, CharacterType type) {
+		ECS_INLINE bool UIDrawerTextInputFilterInteger(char character, CharacterType type) {
 			return type == CharacterType::Digit || character == '-';
 		}
 
-		inline bool UIDrawerTextInputFilterSymbols(char character, CharacterType type) {
+		ECS_INLINE bool UIDrawerTextInputFilterSymbols(char character, CharacterType type) {
 			return type == CharacterType::Symbol;
 		}
 
-		inline bool UIDrawerTextInputFilterLettersAndDigits(char character, CharacterType type) {
+		ECS_INLINE bool UIDrawerTextInputFilterLettersAndDigits(char character, CharacterType type) {
 			return UIDrawerTextInputFilterLetters(character, type) || UIDrawerTextInputFilterDigits(character, type);
 		}
 
-		inline bool UIDrawerTextInputFilterNumbers(char character, CharacterType type) {
+		ECS_INLINE bool UIDrawerTextInputFilterNumbers(char character, CharacterType type) {
 			return type == CharacterType::Digit || character == '-' || character == '.';
 		}
 
-		inline bool UIDrawerTextInputHexFilter(char character, CharacterType type) {
+		ECS_INLINE bool UIDrawerTextInputHexFilter(char character, CharacterType type) {
 			return (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f') || (character >= 'A' && character <= 'F');
 		}
 
@@ -433,7 +433,7 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerNumberInputCallbackData {
-			inline void* GetUserData() const {
+			ECS_INLINE void* GetUserData() const {
 				return relative_user_data ? function::OffsetPointer(this, user_action_data_offset) : user_action_data;
 			}
 
@@ -597,7 +597,7 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIDrawerPathInputWithInputsActionData {
-			UIDrawerPathInputWithInputsActionData() {}
+			ECS_INLINE UIDrawerPathInputWithInputsActionData() {}
 
 			UIDrawerTextInput* input;
 			CapacityStream<wchar_t>* path;

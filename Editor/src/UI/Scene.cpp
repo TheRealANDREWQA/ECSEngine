@@ -8,10 +8,13 @@
 #include "ECSEngineForEach.h"
 #include "../Modules/Module.h"
 #include "RenderingCommon.h"
-#include "../Editor/EditorSandboxEntityOperations.h"
+#include "../Sandbox/SandboxEntityOperations.h"
 #include "ECSEngineSampleTexture.h"
 #include "ECSEngineComponents.h"
 #include "../Editor/EditorInputMapping.h"
+#include "../Sandbox/SandboxScene.h"
+#include "../Sandbox/Sandbox.h"
+#include "../Sandbox/SandboxModule.h"
 
 // These defined the bounds under which the mouse
 // is considered that it clicked and not selected yet
@@ -61,7 +64,7 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 	}
 
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	Camera camera = sandbox->camera_parameters[EDITOR_SANDBOX_VIEWPORT_SCENE];
+	Camera camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	int2 unclampped_texel_position = descriptor->system->GetWindowTexelPositionEx(descriptor->window_index, descriptor->mouse_position);
 	uint2 viewport_dimensions = descriptor->system->GetWindowTexelSize(descriptor->window_index);
 
@@ -181,7 +184,7 @@ struct SceneDrawData {
 	uint2 previous_texel_size;
 };
 
-void SceneUIDestroy(ActionData* action_data) {
+static void SceneUIDestroy(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
@@ -197,10 +200,21 @@ struct ScenePrivateActionData {
 
 	// Internal fields
 	TransformToolDrag drag_tool;
-	// This needs to be calculated once when rotating and scaling and updated when translating
-	float3 translation_midpoint;
-	// This needs to be calculated once and then kept the same across calls
-	Quaternion rotation_midpoint;
+	
+	union {
+		// These are used when axes transform are triggered
+		struct {
+			// This needs to be calculated once when rotating and scaling and updated when translating
+			float3 translation_midpoint;
+			// This needs to be calculated once and then kept the same across calls
+			Quaternion rotation_midpoint;
+		};
+		// These are used when the camera wasd movement is activated
+		struct {
+			float3 camera_wasd_initial_translation;
+			float3 camera_wasd_initial_rotation;
+		};
+	};
 
 	// This is the value calculated when the keyboard tool was activated
 	float3 original_translation_midpoint;
@@ -209,7 +223,46 @@ struct ScenePrivateActionData {
 	float3 scale_delta;
 };
 
-void ScenePrivateAction(ActionData* action_data) {
+// For increase/decrease speed
+static void SceneHandleCameraWASDMovement(EditorState* editor_state, unsigned int sandbox_index) {
+	// Check the wasd keys
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	Camera camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	float3 camera_forward = camera.GetForwardVector().AsFloat3Low();
+	float3 camera_right = camera.GetRightVector().AsFloat3Low();
+	float3 delta = WASDController(
+		&editor_state->input_mapping, 
+		EDITOR_INPUT_WASD_W, 
+		EDITOR_INPUT_WASD_A, 
+		EDITOR_INPUT_WASD_S, 
+		EDITOR_INPUT_WASD_D, 
+		sandbox->camera_wasd_speed, 
+		camera_forward, 
+		camera_right
+	);
+
+	TranslateSandboxCamera(editor_state, sandbox_index, delta, EDITOR_SANDBOX_VIEWPORT_SCENE);
+
+	// Check the speed modifiers
+	const float SPEED_INCREASE_STEP = 2.0f;
+	bool changed_speed = false;
+
+	if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_WASD_INCREASE_SPEED)) {
+		// Check for left shift to see if we double the curre
+		changed_speed = true;
+	}
+	if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_WASD_DECREASE_SPEED)) {
+		changed_speed = true;
+	}
+	if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_WASD_RESET_SPEED)) {
+		sandbox->camera_wasd_speed = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED;
+		changed_speed = true;
+	}
+
+	// We need to write the editor sandbox file in order to preserve this
+}
+
+static void ScenePrivateAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ScenePrivateActionData* data = (ScenePrivateActionData*)_data;
@@ -221,132 +274,148 @@ void ScenePrivateAction(ActionData* action_data) {
 	// If values are being entered into a field don't change the tool
 	if (target_sandbox == sandbox_index && !editor_state->Keyboard()->IsCaptureCharacters()) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, target_sandbox);
-		ECS_TRANSFORM_TOOL current_tool = sandbox->transform_tool;
-		if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_TRANSLATION_TOOL)) {
-			sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
+		// Check to see if the camera wasd movement is activated
+		if (sandbox->is_camera_wasd_movement) {
+			SceneHandleCameraWASDMovement(editor_state, sandbox_index);
 		}
-		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_ROTATION_TOOL)) {
-			sandbox->transform_tool = ECS_TRANSFORM_ROTATION;
-		}
-		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_SCALE_TOOL)) {
-			sandbox->transform_tool = ECS_TRANSFORM_SCALE;
-		}
-
-		bool trigger_rerender = false;
-		if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TRANSFORM_SPACE)) {
-			sandbox->transform_space = InvertTransformSpace(sandbox->transform_space);
-			trigger_rerender = true;
-		}
-
-		auto initiate_transform = [&](ECS_TRANSFORM_TOOL tool) {
-			// Check to see if the same transform was pressed to change the space
-			// Don't reset the active axis if the tool is already this one and the keyboard axes are activated
-			if (sandbox->transform_keyboard_tool == tool && sandbox->transform_display_axes) {
-				data->drag_tool.SetSpace(InvertTransformSpace(data->drag_tool.GetSpace()));
-				// If this the rotation tool, we also need to recalculate the rotation midpoint
-				if (tool == ECS_TRANSFORM_ROTATION) {
-					Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-					GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
-				}
+		else {
+			// Check for camera wasd activation first
+			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CAMERA_WALK)) {
+				sandbox->is_camera_wasd_movement = true;
+				// Initialize the camera translation/rotation
+				OrientedPoint camera_point = GetSandboxCameraPoint(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_COUNT);
+				data->camera_wasd_initial_translation = camera_point.position;
+				data->camera_wasd_initial_rotation = camera_point.rotation;
 			}
 			else {
-				data->drag_tool.SetSpace(sandbox->transform_space);
-				ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
-			}
-			sandbox->transform_keyboard_space = data->drag_tool.GetSpace();
-			trigger_rerender = true;
-			sandbox->transform_display_axes = true;
-			sandbox->transform_keyboard_tool = tool;	
+				ECS_TRANSFORM_TOOL current_tool = sandbox->transform_tool;
+					if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_TRANSLATION_TOOL)) {
+						sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
+					}
+					else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_ROTATION_TOOL)) {
+						sandbox->transform_tool = ECS_TRANSFORM_ROTATION;
+					}
+					else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_SCALE_TOOL)) {
+						sandbox->transform_tool = ECS_TRANSFORM_SCALE;
+					}
 
-			// Add the component type if it is missing
-			AddSelectedEntitiesComponentIfMissing(editor_state, sandbox_index, tool);
-		};
-
-		// For each initiate transform check to see if we need to change from 
-		if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INITIATE_TRANSLATION)) {
-			initiate_transform(ECS_TRANSFORM_TRANSLATION);
-		}
-		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INITIATE_ROTATION)) {
-			initiate_transform(ECS_TRANSFORM_ROTATION);
-		}
-		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INITIATE_SCALE)) {
-			initiate_transform(ECS_TRANSFORM_SCALE);
-		}
-
-		// Check to see if the initiated transform mode is selected
-		if (sandbox->transform_display_axes) {
-			auto change_selected_axis = [&](ECS_TRANSFORM_TOOL_AXIS axis) {
-				ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
-				sandbox->transform_tool_selected[axis] = true;
-				trigger_rerender = true;
-
-				// Reinitialize the drag tool
-				switch (sandbox->transform_keyboard_tool) {
-				case ECS_TRANSFORM_TRANSLATION:
-					data->drag_tool.translation.Initialize();
-					break;
-				case ECS_TRANSFORM_ROTATION:
-					data->drag_tool.rotation.InitializeCircle();
-					break;
-				case ECS_TRANSFORM_SCALE:
-					data->drag_tool.scale.Initialize();
-					break;
-				default:
-					ECS_ASSERT(false, "Invalid keyboard transform tool");
+				bool trigger_rerender = false;
+				if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TRANSFORM_SPACE)) {
+					sandbox->transform_space = InvertTransformSpace(sandbox->transform_space);
+					trigger_rerender = true;
 				}
 
-				// Get the rotation and translation midpoints for the selected entities
-				Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-				GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
-				data->drag_tool.SetAxis(axis);
-				data->scale_delta = float3::Splat(0.0f);
-				data->original_translation_midpoint = data->translation_midpoint;
-				data->rotation_delta = QuaternionIdentity();
-			};
+				auto initiate_transform = [&](ECS_TRANSFORM_TOOL tool) {
+					// Check to see if the same transform was pressed to change the space
+					// Don't reset the active axis if the tool is already this one and the keyboard axes are activated
+					if (sandbox->transform_keyboard_tool == tool && sandbox->transform_display_axes) {
+						data->drag_tool.SetSpace(InvertTransformSpace(data->drag_tool.GetSpace()));
+						// If this the rotation tool, we also need to recalculate the rotation midpoint
+						if (tool == ECS_TRANSFORM_ROTATION) {
+							Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+							GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
+						}
+					}
+					else {
+						data->drag_tool.SetSpace(sandbox->transform_space);
+						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+					}
+					sandbox->transform_keyboard_space = data->drag_tool.GetSpace();
+					trigger_rerender = true;
+					sandbox->transform_display_axes = true;
+					sandbox->transform_keyboard_tool = tool;
 
-			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_X)) {
-				change_selected_axis(ECS_TRANSFORM_AXIS_X);
-			}
-			else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_Y)) {
-				change_selected_axis(ECS_TRANSFORM_AXIS_Y);
-			}
-			else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_Z)) {
-				change_selected_axis(ECS_TRANSFORM_AXIS_Z);
-			}
-		
-			// Check to see if we have active keyboard action
-			unsigned char axes_select_count = 0;
-			ECS_TRANSFORM_TOOL_AXIS axis = ECS_TRANSFORM_AXIS_COUNT;
-			for (size_t index = 0; index < ECS_TRANSFORM_AXIS_COUNT; index++) {
-				if (sandbox->transform_tool_selected[index]) {
-					axis = (ECS_TRANSFORM_TOOL_AXIS)index;
-					axes_select_count++;
+					// Add the component type if it is missing
+					AddSelectedEntitiesComponentIfMissing(editor_state, sandbox_index, tool);
+				};
+
+				// For each initiate transform check to see if we need to change from 
+				if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INITIATE_TRANSLATION)) {
+					initiate_transform(ECS_TRANSFORM_TRANSLATION);
+				}
+				else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INITIATE_ROTATION)) {
+					initiate_transform(ECS_TRANSFORM_ROTATION);
+				}
+				else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INITIATE_SCALE)) {
+					initiate_transform(ECS_TRANSFORM_SCALE);
+				}
+
+				// Check to see if the initiated transform mode is selected
+				if (sandbox->transform_display_axes) {
+					auto change_selected_axis = [&](ECS_TRANSFORM_TOOL_AXIS axis) {
+						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+						sandbox->transform_tool_selected[axis] = true;
+						trigger_rerender = true;
+
+						// Reinitialize the drag tool
+						switch (sandbox->transform_keyboard_tool) {
+						case ECS_TRANSFORM_TRANSLATION:
+							data->drag_tool.translation.Initialize();
+							break;
+						case ECS_TRANSFORM_ROTATION:
+							data->drag_tool.rotation.InitializeCircle();
+							break;
+						case ECS_TRANSFORM_SCALE:
+							data->drag_tool.scale.Initialize();
+							break;
+						default:
+							ECS_ASSERT(false, "Invalid keyboard transform tool");
+						}
+
+						// Get the rotation and translation midpoints for the selected entities
+						Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+						GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
+						data->drag_tool.SetAxis(axis);
+						data->scale_delta = float3::Splat(0.0f);
+						data->original_translation_midpoint = data->translation_midpoint;
+						data->rotation_delta = QuaternionIdentity();
+					};
+
+					if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_X)) {
+						change_selected_axis(ECS_TRANSFORM_AXIS_X);
+					}
+					else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_Y)) {
+						change_selected_axis(ECS_TRANSFORM_AXIS_Y);
+					}
+					else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_Z)) {
+						change_selected_axis(ECS_TRANSFORM_AXIS_Z);
+					}
+
+					// Check to see if we have active keyboard action
+					unsigned char axes_select_count = 0;
+					ECS_TRANSFORM_TOOL_AXIS axis = ECS_TRANSFORM_AXIS_COUNT;
+					for (size_t index = 0; index < ECS_TRANSFORM_AXIS_COUNT; index++) {
+						if (sandbox->transform_tool_selected[index]) {
+							axis = (ECS_TRANSFORM_TOOL_AXIS)index;
+							axes_select_count++;
+						}
+					}
+
+					// We have just one axis selected
+					if (axes_select_count == 1) {
+						HandleSelectedEntitiesTransformUpdateDescriptor update_descriptor;
+						update_descriptor.editor_state = editor_state;
+						update_descriptor.mouse_position = mouse_position;
+						update_descriptor.rotation_midpoint = sandbox->transform_keyboard_space == ECS_TRANSFORM_LOCAL_SPACE ? data->rotation_midpoint : QuaternionIdentity();
+						update_descriptor.sandbox_index = sandbox_index;
+						update_descriptor.system = system;
+						update_descriptor.tool_drag = &data->drag_tool;
+						update_descriptor.translation_midpoint = &data->translation_midpoint;
+						update_descriptor.window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+						update_descriptor.tool_to_use = sandbox->transform_keyboard_tool;
+						update_descriptor.launch_at_object_position = true;
+						update_descriptor.rotation_delta = &data->rotation_delta;
+						update_descriptor.scale_delta = &data->scale_delta;
+
+						HandleSelectedEntitiesTransformUpdate(&update_descriptor);
+						trigger_rerender = true;
+					}
+				}
+
+				if (current_tool != sandbox->transform_tool || trigger_rerender) {
+					RenderSandbox(editor_state, target_sandbox, EDITOR_SANDBOX_VIEWPORT_SCENE);
 				}
 			}
-
-			// We have just one axis selected
-			if (axes_select_count == 1) {
-				HandleSelectedEntitiesTransformUpdateDescriptor update_descriptor;
-				update_descriptor.editor_state = editor_state;
-				update_descriptor.mouse_position = mouse_position;
-				update_descriptor.rotation_midpoint = sandbox->transform_keyboard_space == ECS_TRANSFORM_LOCAL_SPACE ? data->rotation_midpoint : QuaternionIdentity();
-				update_descriptor.sandbox_index = sandbox_index;
-				update_descriptor.system = system;
-				update_descriptor.tool_drag = &data->drag_tool;
-				update_descriptor.translation_midpoint = &data->translation_midpoint;
-				update_descriptor.window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
-				update_descriptor.tool_to_use = sandbox->transform_keyboard_tool;
-				update_descriptor.launch_at_object_position = true;
-				update_descriptor.rotation_delta = &data->rotation_delta;
-				update_descriptor.scale_delta = &data->scale_delta;
-
-				HandleSelectedEntitiesTransformUpdate(&update_descriptor);
-				trigger_rerender = true;
-			}
-		}
-
-		if (current_tool != sandbox->transform_tool || trigger_rerender) {
-			RenderSandbox(editor_state, target_sandbox, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
 	}
 
@@ -363,6 +432,10 @@ void ScenePrivateAction(ActionData* action_data) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		if (sandbox->transform_display_axes) {
 			reset_axes_and_rerender();
+		}
+		else if (sandbox->is_camera_wasd_movement) {
+			// End the camera movement
+			sandbox->is_camera_wasd_movement = false;
 		}
 	}
 	else if (mouse->IsPressed(ECS_MOUSE_MIDDLE) || mouse->IsPressed(ECS_MOUSE_RIGHT)) {
@@ -405,6 +478,9 @@ void ScenePrivateAction(ActionData* action_data) {
 
 			reset_axes_and_rerender();
 		}
+		else if (sandbox->is_camera_wasd_movement) {
+			// End the camera wasd movement and restore the previous translation and rotation
+		}
 	}
 }
 
@@ -445,7 +521,7 @@ struct SceneActionData {
 	bool initial_axes_draw;
 };
 
-void SceneRotationAction(ActionData* action_data) {
+static void SceneRotationAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SceneActionData* data = (SceneActionData*)_data;
@@ -492,7 +568,7 @@ void SceneRotationAction(ActionData* action_data) {
 	}
 }
 
-void SceneTranslationAction(ActionData* action_data) {
+static void SceneTranslationAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SceneActionData* data = (SceneActionData*)_data;
@@ -519,7 +595,7 @@ void SceneTranslationAction(ActionData* action_data) {
 			float2 mouse_position = system->GetNormalizeMousePosition();
 			float2 delta = system->GetMouseDelta(mouse_position);
 
-			Camera scene_camera = GetSandboxSceneCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			Camera scene_camera = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 			float3 right_vector = scene_camera.GetRightVector().AsFloat3Low();
 			float3 up_vector = scene_camera.GetUpVector().AsFloat3Low();
 
@@ -541,7 +617,7 @@ void SceneTranslationAction(ActionData* action_data) {
 	}
 }
 
-void SceneZoomAction(ActionData* action_data) {
+static void SceneZoomAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SceneActionData* data = (SceneActionData*)_data;
@@ -590,7 +666,7 @@ struct SceneLeftClickableActionData {
 	Stream<Entity> original_selection;
 };
 
-void SceneLeftClickableAction(ActionData* action_data) {
+static void SceneLeftClickableAction(ActionData* action_data) {
 	// We need to do a trick here in order to prevent multiple render operations to be
 	// transmitted at the same time and cause useless redraws
 	// Disable the viewport rendering for that sandbox on press and enable it

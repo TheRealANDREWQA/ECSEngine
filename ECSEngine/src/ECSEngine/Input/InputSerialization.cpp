@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "InputSerialization.h"
-#include "SerializationHelpers.h"
+#include "../Utilities/Serialization/SerializationHelpers.h"
 
 namespace ECSEngine {
 

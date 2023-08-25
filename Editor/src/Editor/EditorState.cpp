@@ -8,6 +8,7 @@
 #include "../Modules/Module.h"
 #include "../Project/ProjectFolders.h"
 #include "../Project/ProjectBackup.h"
+#include "../Sandbox/Sandbox.h"
 
 #include "../UI/CreateScene.h"
 #include "ECSEngineComponents.h"
@@ -613,7 +614,7 @@ void EditorStateLazyEvaluationSet(EditorState* editor_state, unsigned int index,
 // -----------------------------------------------------------------------------------------------------------------
 
 struct ApplicationQuitHandlerData {
-	char* response;
+	EDITOR_APPLICATION_QUIT_RESPONSE* response;
 };
 
 void ApplicationQuitHandler(ActionData* action_data) {
@@ -623,14 +624,14 @@ void ApplicationQuitHandler(ActionData* action_data) {
 	SaveScenePopUpResult* result = (SaveScenePopUpResult*)_additional_data;
 
 	if (result->cancel_call) {
-		*data->response = 0;
+		*data->response = EDITOR_APPLICATION_QUIT_ABORTED;
 	}
 	else {
-		*data->response = 1;
+		*data->response = EDITOR_APPLICATION_QUIT_APPROVED;
 	}
 }
 
-void EditorStateApplicationQuit(EditorState* editor_state, char* response)
+void EditorStateApplicationQuit(EditorState* editor_state, EDITOR_APPLICATION_QUIT_RESPONSE* response)
 {
 	ApplicationQuitHandlerData quit_data;
 	quit_data.response = response;
@@ -648,6 +649,21 @@ void EditorStateSetDatabasePath(EditorState* editor_state)
 	ECS_STACK_CAPACITY_STREAM(wchar_t, folder, 512);
 	GetProjectMetafilesFolder(editor_state, folder);
 	editor_state->asset_database->SetFileLocation(folder);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void EditorStateBeforeExitCleanup(EditorState* editor_state)
+{
+	editor_state->task_manager->SleepUntilDynamicTasksFinish();
+	
+	unsigned int sandbox_count = editor_state->sandboxes.size;
+	for (size_t index = 0; index < sandbox_count; index++) {
+		DestroySandbox(editor_state, 0);
+	}
+
+	DestroyGraphics(editor_state->RuntimeGraphics());
+	DestroyGraphics(editor_state->UIGraphics());
 }
 
 // -----------------------------------------------------------------------------------------------------------------

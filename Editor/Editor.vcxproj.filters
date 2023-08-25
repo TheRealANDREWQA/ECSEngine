@@ -17,7 +17,7 @@
     <ClInclude Include="src\Project\ProjectFile.h" />
     <ClInclude Include="src\Project\ProjectFolders.h" />
     <ClInclude Include="src\Project\ProjectBackup.h" />
-    <ClInclude Include="src\Editor\EditorSandbox.h" />
+    <ClInclude Include="src\Sandbox\Sandbox.h" />
     <ClInclude Include="src\UI\ToolbarUI.h" />
     <ClInclude Include="src\UI\Backups.h" />
     <ClInclude Include="src\UI\DirectoryExplorer.h" />
@@ -38,7 +38,7 @@
     <ClInclude Include="src\Modules\ModuleFile.h" />
     <ClInclude Include="src\Modules\ModuleSettings.h" />
     <ClInclude Include="src\UI\EntitiesUI.h" />
-    <ClInclude Include="src\Editor\EditorSandboxEntityOperations.h" />
+    <ClInclude Include="src\Sandbox\SandboxEntityOperations.h" />
     <ClInclude Include="src\Editor\EditorComponents.h" />
     <ClInclude Include="src\Editor\EditorScene.h" />
     <ClInclude Include="src\UI\Inspector\InspectorUtilities.h" />
@@ -61,13 +61,17 @@
     <ClInclude Include="src\Editor\EditorEventDef.h" />
     <ClInclude Include="src\Assets\AssetTick.h" />
     <ClInclude Include="src\UI\Common.h" />
-    <ClInclude Include="src\Editor\EditorSandboxTypes.h" />
+    <ClInclude Include="src\Sandbox\SandboxTypes.h" />
     <ClInclude Include="src\UI\RenderingCommon.h" />
     <ClInclude Include="src\Editor\EditorStateTypes.h" />
     <ClInclude Include="src\Editor\EditorInputMapping.h" />
     <ClInclude Include="src\UI\TargetSandboxWindows.h" />
     <ClInclude Include="src\UI\VisualizeTexture.h" />
     <ClInclude Include="src\Editor\EditorVisualizeTexture.h" />
+    <ClInclude Include="src\Sandbox\SandboxScene.h" />
+    <ClInclude Include="src\Sandbox\SandboxFile.h" />
+    <ClInclude Include="src\Sandbox\SandboxAccessor.h" />
+    <ClInclude Include="src\Sandbox\SandboxModule.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -81,7 +85,7 @@
     <ClCompile Include="src\Editor\EditorState.cpp" />
     <ClCompile Include="src\Project\ProjectFolders.cpp" />
     <ClCompile Include="src\Project\ProjectBackup.cpp" />
-    <ClCompile Include="src\Editor\EditorSandbox.cpp" />
+    <ClCompile Include="src\Sandbox\Sandbox.cpp" />
     <ClCompile Include="src\UI\Backups.cpp" />
     <ClCompile Include="src\UI\DirectoryExplorer.cpp" />
     <ClCompile Include="src\UI\FileExplorer.cpp" />
@@ -99,7 +103,7 @@
     <ClCompile Include="src\Modules\ModuleSettings.cpp" />
     <ClCompile Include="src\Modules\ModuleDefinition.cpp" />
     <ClCompile Include="src\UI\EntitiesUI.cpp" />
-    <ClCompile Include="src\Editor\EditorSandboxEntityOperations.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxEntityOperations.cpp" />
     <ClCompile Include="src\Editor\EditorComponents.cpp" />
     <ClCompile Include="src\Editor\EditorScene.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorEntity.cpp" />
@@ -125,6 +129,10 @@
     <ClCompile Include="src\Editor\EditorInputMapping.cpp" />
     <ClCompile Include="src\UI\VisualizeTexture.cpp" />
     <ClCompile Include="src\Editor\EditorVisualizeTexture.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxScene.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxFile.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxAccessor.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxModule.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

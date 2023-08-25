@@ -6,11 +6,11 @@
 #include "../UI/FileExplorerData.h"
 #include "../UI/HubData.h"
 #include "../Modules/ModuleDefinition.h"
-#include "EditorSandbox.h"
+#include "../Sandbox/SandboxTypes.h"
 #include "EditorComponents.h"
 #include "EditorEventDef.h"
 #include "EditorStateTypes.h"
-#include "ECSEngineHID.h"
+#include "ECSEngineInput.h"
 #include "EditorVisualizeTexture.h"
 
 #define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
@@ -175,10 +175,18 @@ void EditorStateLazyEvaluationTrigger(EditorState* editor_state, unsigned int in
 // Can be used to set the evaluation to a certain value (useful for triggering a lazy evaluation a bit latter)
 void EditorStateLazyEvaluationSet(EditorState* editor_state, unsigned int index, unsigned short value);
 
+enum EDITOR_APPLICATION_QUIT_RESPONSE : unsigned char {
+	EDITOR_APPLICATION_QUIT_NOT_READY,
+	EDITOR_APPLICATION_QUIT_ABORTED,
+	EDITOR_APPLICATION_QUIT_APPROVED
+};
+
 // When the application wants to quit, the editor will look to see if there is anything left to do
-// before quitting like saving scenes. Query the response for 0 if the user wants to continue the application,
-// 1 if the quit can be done and -1 if the response is not yet ready
-void EditorStateApplicationQuit(EditorState* editor_state, char* quit_response);
+// before quitting like saving scenes. Use the enum to query for the current state
+void EditorStateApplicationQuit(EditorState* editor_state, EDITOR_APPLICATION_QUIT_RESPONSE* quit_response);
 
 // Updates the asset database path from the current active project
 void EditorStateSetDatabasePath(EditorState* editor_state);
+
+// This function should be called right before the application is about to exit
+void EditorStateBeforeExitCleanup(EditorState* editor_state);

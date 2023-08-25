@@ -21,6 +21,7 @@
 #include "ECSEngineBenchmark.h"
 #include "ECSEngineMath.h"
 #include "ECSEngineVisualizeTexture.h"
+#include "../Sandbox/Sandbox.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -722,14 +723,14 @@ public:
 		Texture2D my_texture = ConvertTextureToVisualize(graphics, RENDER_TARGET.GetResource());*/
 		//graphics->FreeResource(my_texture);
 
-Quaternion some_rotation = QuaternionFromEuler(float3(20.0f, 100.0f, 50.0f));
-Quaternion delta_rotation = QuaternionFromEuler(float3(10.0f, 0.0f, 0.0f));
-Quaternion world = AddWorldRotation(some_rotation, delta_rotation);
-Quaternion local = AddLocalRotation(some_rotation, delta_rotation);
-bool same_orientation = QuaternionSameOrientationLow(world, local);
+//Quaternion some_rotation = QuaternionFromEuler(float3(20.0f, 100.0f, 50.0f));
+//Quaternion delta_rotation = QuaternionFromEuler(float3(10.0f, 0.0f, 0.0f));
+//Quaternion world = AddWorldRotation(some_rotation, delta_rotation);
+//Quaternion local = AddLocalRotation(some_rotation, delta_rotation);
+//bool same_orientation = QuaternionSameOrientationLow(world, local);
 
 		while (true) {
-			auto run_application = [&](char application_quit_value) {
+			auto run_application = [&](EDITOR_APPLICATION_QUIT_RESPONSE application_quit_value) {
 				while (result == 0 && application_quit == application_quit_value) {
 					while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
 						switch (message.message) {
@@ -951,26 +952,19 @@ bool same_orientation = QuaternionSameOrientationLow(world, local);
 				}
 			};
 
-			run_application(0);
+			run_application(EDITOR_APPLICATION_QUIT_APPROVED);
 
 			EditorStateApplicationQuit(&editor_state, &application_quit);
 
-			run_application(-1);
-			if (application_quit == 1) {
+			run_application(EDITOR_APPLICATION_QUIT_NOT_READY);
+			if (application_quit == EDITOR_APPLICATION_QUIT_APPROVED) {
 				break;
 			}
 
-			application_quit = 0;
+			application_quit = EDITOR_APPLICATION_QUIT_APPROVED;
 		}
 
-		editor_state.task_manager->SleepUntilDynamicTasksFinish();
-		unsigned int sandbox_count = editor_state.sandboxes.size;
-
-		for (size_t index = 0; index < sandbox_count; index++) {
-			DestroySandbox(&editor_state, 0);
-		}
-		DestroyGraphics(editor_state.RuntimeGraphics());
-		DestroyGraphics(editor_state.UIGraphics());
+		EditorStateBeforeExitCleanup(&editor_state);
 
 		if (result == -1)
 			return -1;
@@ -991,7 +985,7 @@ bool same_orientation = QuaternionSameOrientationLow(world, local);
 		ECSEngine::Keyboard keyboard;
 		ECSEngine::Stream<HCURSOR> cursors;
 		ECSEngine::ECS_CURSOR_TYPE current_cursor;
-		char application_quit;
+		EDITOR_APPLICATION_QUIT_RESPONSE application_quit;
 
 		// singleton that manages registering and unregistering the editor class
 		class EditorClass {
@@ -1044,7 +1038,7 @@ LPCWSTR Editor::EditorClass::GetName() noexcept {
 Editor::Editor(int _width, int _height, LPCWSTR name)
 {
 	timer.SetNewStart();
-	application_quit = 0;
+	application_quit = EDITOR_APPLICATION_QUIT_APPROVED;
 
 	// calculate window size based on desired client region
 	RECT windowRegion;
@@ -1160,7 +1154,7 @@ LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 	switch (message) {
 	case WM_CLOSE:
-		application_quit = -1;
+		application_quit = EDITOR_APPLICATION_QUIT_NOT_READY;
 		return 0;
 	case WM_ACTIVATEAPP:
 		keyboard.Procedure({ message, wParam, lParam });

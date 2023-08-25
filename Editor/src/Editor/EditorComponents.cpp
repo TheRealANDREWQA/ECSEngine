@@ -8,7 +8,8 @@
 #include "ECSEngineSerializationHelpers.h"
 #include "ECSEngineComponentsAll.h"
 #include "../Editor/EditorEvent.h"
-#include "EditorSandboxEntityOperations.h"
+#include "../Sandbox/Sandbox.h"
+#include "../Sandbox/SandboxEntityOperations.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Reflection;

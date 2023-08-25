@@ -191,9 +191,13 @@
     <ClInclude Include="src\Editor\EditorPalette.h" />
     <ClInclude Include="src\Editor\EditorParameters.h" />
     <ClInclude Include="src\editorpch.h" />
-    <ClInclude Include="src\Editor\EditorSandbox.h" />
-    <ClInclude Include="src\Editor\EditorSandboxEntityOperations.h" />
-    <ClInclude Include="src\Editor\EditorSandboxTypes.h" />
+    <ClInclude Include="src\Sandbox\Sandbox.h" />
+    <ClInclude Include="src\Sandbox\SandboxEntityOperations.h" />
+    <ClInclude Include="src\Sandbox\SandboxFile.h" />
+    <ClInclude Include="src\Sandbox\SandboxAccessor.h" />
+    <ClInclude Include="src\Sandbox\SandboxModule.h" />
+    <ClInclude Include="src\Sandbox\SandboxScene.h" />
+    <ClInclude Include="src\Sandbox\SandboxTypes.h" />
     <ClInclude Include="src\Editor\EditorScene.h" />
     <ClInclude Include="src\Editor\EditorState.h" />
     <ClInclude Include="src\Editor\EditorComponents.h" />
@@ -262,8 +266,8 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\Editor\EditorInputMapping.cpp" />
-    <ClCompile Include="src\Editor\EditorSandbox.cpp" />
-    <ClCompile Include="src\Editor\EditorSandboxEntityOperations.cpp" />
+    <ClCompile Include="src\Sandbox\Sandbox.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxEntityOperations.cpp" />
     <ClCompile Include="src\Editor\EditorScene.cpp" />
     <ClCompile Include="src\Editor\EditorState.cpp" />
     <ClCompile Include="src\Editor\EditorComponents.cpp" />
@@ -277,6 +281,10 @@
     <ClCompile Include="src\Project\ProjectOperations.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplate.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplatePreview.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxFile.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxAccessor.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxModule.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxScene.cpp" />
     <ClCompile Include="src\UI\HelperWindows.cpp" />
     <ClCompile Include="src\UI\AssetExplorer.cpp" />
     <ClCompile Include="src\UI\AssetOverrides.cpp" />

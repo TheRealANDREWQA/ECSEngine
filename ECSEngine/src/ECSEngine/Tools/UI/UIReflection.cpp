@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "UIReflection.h"
-#include "../../Utilities/Mouse.h"
-#include "../../Utilities/Keyboard.h"
+#include "../../Input/Mouse.h"
+#include "../../Input/Keyboard.h"
 #include "../../Utilities/Reflection/ReflectionStringFunctions.h"
 
 #define UI_IGNORE_RANGE_OR_PARAMETERS_TAG "_"
@@ -5038,48 +5038,48 @@ namespace ECSEngine {
 
 			for (size_t index = 0; index < default_data->type.fields.size; index++) {
 				switch (default_data->type.fields[index].element_index) {
-					CASE_START(Color, UIReflectionColorData);
+					CASE_START(Color, UIReflectionColorData)
 					*data->color = data->default_color;
 					CASE_END
 
-					CASE_START(FloatInput, UIReflectionFloatInputData);
+					CASE_START(FloatInput, UIReflectionFloatInputData)
 					*data->value = data->default_value;
 					CASE_END
 
-					CASE_START(DoubleInput, UIReflectionDoubleInputData);
+					CASE_START(DoubleInput, UIReflectionDoubleInputData)
 					*data->value = data->default_value;
 					CASE_END
 
-					CASE_START(IntegerInput, UIReflectionIntInputData);
+					CASE_START(IntegerInput, UIReflectionIntInputData)
 					memcpy(data->value_to_modify, data->default_value, data->byte_size);
 					CASE_END
 
-					CASE_START(FloatSlider, UIReflectionFloatSliderData);
+					CASE_START(FloatSlider, UIReflectionFloatSliderData)
 					*data->value_to_modify = data->default_value;
 					CASE_END
 
-					CASE_START(DoubleSlider, UIReflectionDoubleSliderData);
+					CASE_START(DoubleSlider, UIReflectionDoubleSliderData)
 					*data->value_to_modify = data->default_value;
 					CASE_END
 
-					CASE_START(IntegerSlider, UIReflectionIntSliderData);
+					CASE_START(IntegerSlider, UIReflectionIntSliderData)
 					memcpy(data->value_to_modify, data->default_value, data->byte_size);
 					CASE_END
 
-					CASE_START(FloatInputGroup, UIReflectionGroupData<float>);
+					CASE_START(FloatInputGroup, UIReflectionGroupData<float>)
 					for (size_t subindex = 0; subindex < data->count; subindex++) {
 						*data->values[subindex] = data->default_values[subindex];
 					}
 					CASE_END
 
-					CASE_START(DoubleInputGroup, UIReflectionGroupData<double>);
+					CASE_START(DoubleInputGroup, UIReflectionGroupData<double>)
 					for (size_t subindex = 0; subindex < data->count; subindex++) {
 						*data->values[subindex] = data->default_values[subindex];
 					}
 					CASE_END
 
 					// doesn't matter what type we choose here, because it will simply get memcpy'ed
-					CASE_START(IntegerInputGroup, UIReflectionGroupData<int8_t>);
+					CASE_START(IntegerInputGroup, UIReflectionGroupData<int8_t>)
 					uintptr_t value_ptr = (uintptr_t)data->default_values;
 
 					for (size_t subindex = 0; subindex < data->count; subindex++) {
@@ -5088,20 +5088,20 @@ namespace ECSEngine {
 					}
 					CASE_END
 
-					CASE_START(FloatSliderGroup, UIReflectionGroupData<float>);
+					CASE_START(FloatSliderGroup, UIReflectionGroupData<float>)
 					for (size_t subindex = 0; subindex < data->count; subindex++) {
 						*data->values[subindex] = data->default_values[subindex];
 					}
 					CASE_END
 
-					CASE_START(DoubleSliderGroup, UIReflectionGroupData<double>);
+					CASE_START(DoubleSliderGroup, UIReflectionGroupData<double>)
 					for (size_t subindex = 0; subindex < data->count; subindex++) {
 						*data->values[subindex] = data->default_values[subindex];
 					}
 					CASE_END
 
 					// doesn't matter what type we choose here, because it will simply get memcpy'ed
-					CASE_START(IntegerSliderGroup, UIReflectionGroupData<int8_t>);
+					CASE_START(IntegerSliderGroup, UIReflectionGroupData<int8_t>)
 					uintptr_t value_ptr = (uintptr_t)data->default_values;
 
 					for (size_t subindex = 0; subindex < data->count; subindex++) {

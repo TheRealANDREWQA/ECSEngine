@@ -4,8 +4,6 @@
 #include "../ECSEngine/Utilities/BasicTypes.h"
 #include "../ECSEngine/Utilities/Function.h"
 #include "../ECSEngine/Utilities/FunctionInterfaces.h"
-#include "../ECSEngine/Utilities/Keyboard.h"
-#include "../ECSEngine/Utilities/Mouse.h"
 #include "../ECSEngine/Utilities/Timer.h"
 #include "../ECSEngine/Utilities/OSFunctions.h"
 #include "../ECSEngine/Utilities/Path.h"

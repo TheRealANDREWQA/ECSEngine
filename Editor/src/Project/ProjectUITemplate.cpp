@@ -1,6 +1,7 @@
 #include "editorpch.h"
 #include "ProjectUITemplate.h"
 #include "../Editor/EditorState.h"
+#include "../Sandbox/SandboxAccessor.h"
 #include "ProjectOperations.h"
 
 #include "../UI/DirectoryExplorer.h"
