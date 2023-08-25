@@ -11,8 +11,8 @@
 #include "UIMacros.h"
 #include "../../Application.h"
 #include "../../Utilities/Timer.h"
-#include "../../Utilities/Mouse.h"
-#include "../../Utilities/Keyboard.h"
+#include "../../Input/Mouse.h"
+#include "../../Input/Keyboard.h"
 #include "../../Rendering/Graphics.h"
 
 namespace ECSEngine {

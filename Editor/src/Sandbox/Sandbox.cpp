@@ -1,14 +1,16 @@
 #include "editorpch.h"
-#include "EditorSandbox.h"
-#include "EditorState.h"
-#include "EditorEvent.h"
-#include "EditorPalette.h"
+#include "Sandbox.h"
+#include "SandboxScene.h"
+#include "SandboxModule.h"
+#include "../Editor/EditorState.h"
+#include "../Editor/EditorEvent.h"
+#include "../Editor/EditorPalette.h"
 #include "../Assets/EditorSandboxAssets.h"
 #include "../Modules/Module.h"
 #include "../Project/ProjectFolders.h"
 #include "../Modules/ModuleSettings.h"
 
-#include "EditorScene.h"
+#include "../Editor/EditorScene.h"
 #include "ECSEngineSerializationHelpers.h"
 #include "ECSEngineAssets.h"
 #include "ECSEngineECSRuntimeResources.h"
@@ -21,25 +23,10 @@
 
 using namespace ECSEngine;
 
-#define MODULE_FILE_SETTING_EXTENSION L".config"
-//#define MODULE_FILE_MANUAL_SETTING_EXTENSION L".mconfig"
-
-#define MODULE_ALLOCATOR_SIZE ECS_KB * 32
-#define MODULE_ALLOCATOR_POOL_COUNT 1024
-#define MODULE_ALLOCATOR_BACKUP_SIZE ECS_KB * 128
-
 #define RUNTIME_SETTINGS_STRING_CAPACITY (128)
 #define SCENE_PATH_STRING_CAPACITY (128)
 
-#define SANDBOX_FILE_HEADER_VERSION (0)
-#define SANDBOX_FILE_MAX_SANDBOXES (16)
-
 #define LAZY_EVALUATION_RUNTIME_SETTINGS 500
-
-struct SandboxFileHeader {
-	size_t version;
-	size_t count;
-};
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
@@ -59,189 +46,8 @@ ECS_INLINE void GetVisualizeInstancedTextureName(unsigned int sandbox_index, boo
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxScenePathImpl(const EditorState* editor_state, Stream<wchar_t> scene_path, CapacityStream<wchar_t>& absolute_path) {
-	GetProjectAssetsFolder(editor_state, absolute_path);
-	absolute_path.Add(ECS_OS_PATH_SEPARATOR);
-	absolute_path.AddStream(scene_path);
-	absolute_path[absolute_path.size] = L'\0';
-	absolute_path.AssertCapacity();
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index) {
-	return editor_state->sandboxes.buffer + sandbox_index;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-const EditorSandbox* GetSandbox(const EditorState* editor_state, unsigned int sandbox_index) {
-	return editor_state->sandboxes.buffer + sandbox_index;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-EditorSandboxModule* GetSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
-{
-	return &GetSandbox(editor_state, sandbox_index)->modules_in_use[in_stream_index];
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-const EditorSandboxModule* GetSandboxModule(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
-{
-	return &GetSandbox(editor_state, sandbox_index)->modules_in_use[in_stream_index];
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-const EditorModuleInfo* GetSandboxModuleInfo(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
-{
-	const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_index);
-	return GetModuleInfo(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned int sandbox_index)
-{
-	return GetSandbox(editor_state, sandbox_index)->run_state;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-EDITOR_SANDBOX_VIEWPORT GetSandboxActiveViewport(const EditorState* editor_state, unsigned int sandbox_index)
-{
-	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
-	if (state == EDITOR_SANDBOX_SCENE) {
-		return EDITOR_SANDBOX_VIEWPORT_SCENE;
-	}
-	else if (state == EDITOR_SANDBOX_PAUSED || state == EDITOR_SANDBOX_RUNNING) {
-		return EDITOR_SANDBOX_VIEWPORT_RUNTIME;
-	}
-	else {
-		ECS_ASSERT(false);
-		return EDITOR_SANDBOX_VIEWPORT_COUNT;
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-EDITOR_SANDBOX_VIEWPORT GetSandboxViewportOverride(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	return viewport == EDITOR_SANDBOX_VIEWPORT_COUNT ? GetSandboxActiveViewport(editor_state, sandbox_index) : viewport;
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
-EntityManager* GetSandboxEntityManager(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	switch (viewport) {
-	case EDITOR_SANDBOX_VIEWPORT_SCENE:
-		return &sandbox->scene_entities;
-	case EDITOR_SANDBOX_VIEWPORT_RUNTIME:
-		return sandbox->sandbox_world.entity_manager;
-	case EDITOR_SANDBOX_VIEWPORT_COUNT:
-		return ActiveEntityManager(editor_state, sandbox_index);
-	}
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
-const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	switch (viewport) {
-	case EDITOR_SANDBOX_VIEWPORT_SCENE:
-		return &sandbox->scene_entities;
-	case EDITOR_SANDBOX_VIEWPORT_RUNTIME:
-		return sandbox->sandbox_world.entity_manager;
-	case EDITOR_SANDBOX_VIEWPORT_COUNT:
-		return ActiveEntityManager(editor_state, sandbox_index);
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 bool IsSandboxRuntimePreinitialized(const EditorState* editor_state, unsigned int sandbox_index) {
 	return GetSandbox(editor_state, sandbox_index)->runtime_descriptor.graphics != nullptr;
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
-const EntityManager* ActiveEntityManager(const EditorState* editor_state, unsigned int sandbox_index)
-{
-	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
-	if (state == EDITOR_SANDBOX_SCENE) {
-		return &sandbox->scene_entities;
-	}
-	return sandbox->sandbox_world.entity_manager;
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
-EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandbox_index) {
-	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
-	if (state == EDITOR_SANDBOX_SCENE) {
-		return &sandbox->scene_entities;
-	}
-	return sandbox->sandbox_world.entity_manager;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void ActivateSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
-{
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	ECS_ASSERT(in_stream_index != -1);
-	ActivateSandboxModuleInStream(editor_state, sandbox_index, module_index);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void ActivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
-{
-	editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_index].is_deactivated = false;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, EDITOR_MODULE_CONFIGURATION module_configuration)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
-	unsigned int sandbox_module_index = sandbox->modules_in_use.ReserveNewElement();
-	sandbox->modules_in_use.size++;
-	EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + sandbox_module_index;
-	sandbox_module->module_index = module_index;
-	sandbox_module->module_configuration = module_configuration;
-	sandbox_module->is_deactivated = false;
-
-	sandbox_module->settings_name.buffer = nullptr;
-	sandbox_module->settings_name.size = 0;
-
-	// Create the allocator
-	sandbox_module->settings_allocator = MemoryManager(MODULE_ALLOCATOR_SIZE, MODULE_ALLOCATOR_POOL_COUNT, MODULE_ALLOCATOR_BACKUP_SIZE, sandbox->GlobalMemoryManager());
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_index)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
-	for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
-		if (!sandbox->modules_in_use[index].is_deactivated && UpdateModuleLastWrite(editor_state, sandbox->modules_in_use[index].module_index)) {
-			return false;
-		}
-	}
-
-	return true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -250,7 +56,7 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	SetSandboxCameraAspectRatio(editor_state, sandbox_index, viewport);
-	Camera camera = Camera(sandbox->camera_parameters[viewport]);
+	Camera camera = GetSandboxCamera(editor_state, sandbox_index, viewport);
 
 	SystemManager* system_manager = sandbox->sandbox_world.system_manager;
 	SetRuntimeCamera(system_manager, &camera);
@@ -314,31 +120,6 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, ECSEngine::Stream<wchar_t> settings_name)
-{
-	unsigned int sandbox_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	ECS_ASSERT(sandbox_module_index != -1);
-
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + module_index;
-
-	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_settings_path, 512);
-
-	if (sandbox_module->settings_name.size > 0) {
-		sandbox_module->settings_allocator.Deallocate(sandbox_module->settings_name.buffer);
-	}
-	
-	// Change the path
-	if (settings_name.size > 0) {
-		sandbox_module->settings_name = function::StringCopy(sandbox_module->Allocator(), settings_name);
-	}
-	else {
-		sandbox_module->settings_name = { nullptr, 0 };
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> settings_name)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -377,136 +158,9 @@ bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> new_scene)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	
-	ClearSandboxScene(editor_state, sandbox_index);
-	sandbox->scene_path.size = 0;
-
-	if (new_scene.size == 0) {
-		// Setting the components needs to be done right before exiting
-		editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
-		return true;
-	}
-
-	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-	GetSandboxScenePathImpl(editor_state, new_scene, absolute_path);
-
-	bool success = LoadEditorSceneCore(editor_state, sandbox_index, absolute_path);
-	if (success) {
-		// Copy the contents
-		sandbox->scene_path.Copy(new_scene);
-		sandbox->is_scene_dirty = false;
-
-		// Load the assets
-		LoadSandboxAssets(editor_state, sandbox_index);
-	}
-
-	// If the load failed, the scene will be reset with an empty value
-	editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
-
-	return success;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void ChangeSandboxModuleConfiguration(
-	EditorState* editor_state,
-	unsigned int sandbox_index,
-	unsigned int module_index, 
-	EDITOR_MODULE_CONFIGURATION module_configuration
-) {
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	ECS_ASSERT(in_stream_index != -1);
-	editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_index].module_configuration = module_configuration;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void ClearSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
-{
-	// Unload the assets currently used by this sandbox and reset the scene entities
-	UnloadSandboxAssets(editor_state, sandbox_index);
-
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->scene_entities.Reset();
-	sandbox->database.Reset();
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
-	if (module_index != -1) {
-		unsigned int in_stream_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-		ECS_ASSERT(in_stream_module_index != -1);
-
-		EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + in_stream_module_index;
-
-		ECS_STACK_CAPACITY_STREAM(wchar_t, settings_name, 512);
-		if (sandbox_module->settings_name.buffer != nullptr) {
-			settings_name.Copy(sandbox_module->settings_name);
-		}
-
-		sandbox_module->settings_allocator.Clear();
-
-		// Make the streams nullptr for easier debugging
-		if (settings_name.size > 0) {
-			sandbox_module->settings_name = function::StringCopy(sandbox_module->Allocator(), settings_name);
-		}
-		else {
-			sandbox_module->settings_name = { nullptr, 0 };
-		}
-		sandbox_module->reflected_settings = { nullptr, 0 };
-	}
-	else {
-		// A little bit of overhead, but it is still low
-		for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
-			ClearSandboxModuleSettings(editor_state, sandbox_index, sandbox->modules_in_use[index].module_index);
-		}
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 void ClearSandboxTaskScheduler(EditorState* editor_state, unsigned int sandbox_index)
 {
 	GetSandbox(editor_state, sandbox_index)->sandbox_world.task_scheduler->Reset();
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->sandbox_world.entity_manager->CopyOther(&sandbox->scene_entities);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
-	unsigned int module_count = sandbox->modules_in_use.size;
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(EDITOR_MODULE_CONFIGURATION, compile_configurations, module_count);
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, compile_indices, module_count);
-
-	// Only compile the modules which are not deactivated
-	module_count = 0;
-
-	for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
-		if (!sandbox->modules_in_use[index].is_deactivated) {
-			compile_indices[module_count] = sandbox->modules_in_use[index].module_index;
-			compile_configurations[module_count++] = sandbox->modules_in_use[index].module_configuration;
-		}
-	}
-
-	compile_indices.size = module_count;
-	return BuildModulesAndLoad(editor_state, compile_indices, compile_configurations.buffer);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -526,6 +180,8 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->transform_space = ECS_TRANSFORM_LOCAL_SPACE;
 	sandbox->transform_keyboard_space = ECS_TRANSFORM_LOCAL_SPACE;
 	sandbox->transform_keyboard_tool = ECS_TRANSFORM_COUNT;
+	sandbox->is_camera_wasd_movement = true;
+	sandbox->camera_wasd_speed = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED;
 	memset(sandbox->transform_tool_selected, 0, sizeof(sandbox->transform_tool_selected));
 
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
@@ -606,22 +262,6 @@ bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int san
 	// Now try to solve the graph
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 	return sandbox->sandbox_world.task_scheduler->Solve(disable_error_message ? nullptr : &error_message);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void DeactivateSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
-{
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	ECS_ASSERT(in_stream_index != -1);
-	DeactivateSandboxModuleInStream(editor_state, sandbox_index, module_index);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void DeactivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
-{
-	editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_index].is_deactivated = true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -801,37 +441,6 @@ void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetSandboxModuleInStreamIndex(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
-{
-	auto sandbox_modules = editor_state->sandboxes[sandbox_index].modules_in_use;
-	for (unsigned int index = 0; index < sandbox_modules.size; index++) {
-		if (sandbox_modules[index].module_index == module_index) {
-			return index;
-		}
-	}
-	return -1;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void GetSandboxModuleSettingsPath(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, CapacityStream<wchar_t>& path)
-{
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	ECS_ASSERT(in_stream_index != -1);
-
-	GetSandboxModuleSettingsPathByIndex(editor_state, sandbox_index, in_stream_index, path);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void GetSandboxModuleSettingsPathByIndex(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_module_index, ECSEngine::CapacityStream<wchar_t>& path)
-{
-	unsigned int module_index = editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_module_index].module_index;
-	GetModuleSettingsFilePath(editor_state, module_index, editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_module_index].settings_name, path);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 void GetSandboxRuntimeSettingsPath(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<wchar_t>& path)
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -872,74 +481,6 @@ void GetSandboxAvailableRuntimeSettings(
 		data->paths->AddAssert(function::StringCopy(data->allocator, stem));
 		return true;
 	});
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void GetSandboxScenePath(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<wchar_t>& path)
-{
-	GetSandboxScenePathImpl(editor_state, GetSandbox(editor_state, sandbox_index)->scene_path, path);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-unsigned int GetSandboxCount(const EditorState* editor_state)
-{
-	return editor_state->sandboxes.size;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state, unsigned int sandbox_index)
-{
-	return &GetSandbox(editor_state, sandbox_index)->runtime_descriptor;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-OrientedPoint GetSandboxCameraPoint(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return { sandbox->camera_parameters[viewport].translation, sandbox->camera_parameters[viewport].rotation };
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-Camera GetSandboxSceneCamera(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	return GetSandbox(editor_state, sandbox_index)->camera_parameters[viewport];
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void GetSandboxGraphicsModules(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>& indices)
-{
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	const ProjectModules* modules = editor_state->project_modules;
-	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
-		if (modules->buffer[sandbox->modules_in_use[index].module_index].is_graphics_module) {
-			indices.Add(index);
-		}
-	}
-
-	indices.AssertCapacity();
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned int sandbox_index, bool* multiple_modules)
-{
-	ECS_STACK_CAPACITY_STREAM(unsigned int, indices, 512);
-	GetSandboxGraphicsModules(editor_state, sandbox_index, indices);
-
-	if (indices.size == 1) {
-		return indices[0];
-	}
-
-	if (multiple_modules != nullptr) {
-		*multiple_modules = indices.size > 0;
-	}
-	return -1;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -991,118 +532,6 @@ unsigned int GetSandboxUnusedEntitySlots(EditorState* editor_state, unsigned int
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxModuleDeactivated(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
-{
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	ECS_ASSERT(in_stream_index != -1);
-	return IsSandboxModuleDeactivatedInStream(editor_state, sandbox_index, in_stream_index);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
-{
-	return GetSandbox(editor_state, sandbox_index)->modules_in_use[in_stream_index].is_deactivated;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_index)
-{
-	return GetSandbox(editor_state, sandbox_index)->locked_count.load(ECS_RELAXED) > 0;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-EDITOR_MODULE_CONFIGURATION IsModuleUsedBySandbox(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
-{
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
-		if (sandbox->modules_in_use[index].module_index == module_index) {
-			return sandbox->modules_in_use[index].module_configuration;
-		}
-	}
-	return EDITOR_MODULE_CONFIGURATION_COUNT;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-bool IsSandboxIndexValid(const EditorState* editor_state, unsigned int sandbox_index)
-{
-	return sandbox_index < GetSandboxCount(editor_state);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-bool IsModuleInfoUsed(
-	const EditorState* editor_state, 
-	unsigned int module_index, 
-	bool running_state, 
-	EDITOR_MODULE_CONFIGURATION configuration, 
-	CapacityStream<unsigned int>* sandbox_indices
-)
-{
-	if (sandbox_indices != nullptr) {
-		if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
-			bool is_used = false;
-			for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
-				is_used |= IsModuleInfoUsed(editor_state, module_index, running_state, (EDITOR_MODULE_CONFIGURATION)configuration_index, sandbox_indices);
-			}
-			return is_used;
-		}
-		else {
-			bool is_used = false;
-			unsigned int sandbox_count = editor_state->sandboxes.size;
-			for (unsigned int index = 0; index < sandbox_count; index++) {
-				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, index, module_index);
-				if (sandbox_configuration == configuration) {
-					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, index);
-					if (running_state) {
-						if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
-							is_used = true;
-							sandbox_indices->AddAssert(index);
-						}
-					}
-					else {
-						is_used = true;
-						sandbox_indices->AddAssert(index);
-					}
-				}
-			}
-			return is_used;
-		}
-	}
-	else {
-		if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
-			for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
-				if (IsModuleInfoUsed(editor_state, module_index, (EDITOR_MODULE_CONFIGURATION)configuration_index)) {
-					return true;
-				}
-			}
-		}
-		else {
-			unsigned int sandbox_count = editor_state->sandboxes.size;
-			for (unsigned int index = 0; index < sandbox_count; index++) {
-				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, index, module_index);
-				if (sandbox_configuration == configuration) {
-					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, index);
-					if (running_state) {
-						if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
-							return true;
-						}
-					}
-					else {
-						return true;
-					}
-				}
-			}
-		}
-		return false;
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 void InitializeSandboxes(EditorState* editor_state)
 {
 	// Set the allocator for the resizable strema
@@ -1132,50 +561,9 @@ void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_in
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	return GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport];
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 bool IsSandboxGizmoEntity(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	return FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, entity, viewport) != EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
-{
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_index].modules_in_use.buffer + in_stream_index;
-
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&sandbox_module->settings_allocator);
-	ECS_STACK_CAPACITY_STREAM(EditorModuleReflectedSetting, settings, 64);
-	AllocateModuleSettings(editor_state, module_index, settings, allocator);
-
-	if (sandbox_module->settings_name.buffer != nullptr) {
-		ECS_STACK_CAPACITY_STREAM(wchar_t, settings_path, 512);
-		GetSandboxModuleSettingsPathByIndex(editor_state, sandbox_index, in_stream_index, settings_path);
-		if (!LoadModuleSettings(editor_state, module_index, settings_path, settings, allocator)) {
-			// Copy the settings path such that we can reset after we deallocate the allocator
-			settings_path.Copy(sandbox_module->settings_name);
-
-			sandbox_module->settings_allocator.Clear();
-			sandbox_module->settings_name = function::StringCopy(sandbox_module->Allocator(), settings_path);
-			return false;
-		}
-	}
-	else {
-		// Set the default values
-		SetModuleDefaultSettings(editor_state, module_index, settings);
-	}
-
-	// Now copy the stream into the sandbox module
-	sandbox_module->reflected_settings.Initialize(&sandbox_module->settings_allocator, settings.size);
-	sandbox_module->reflected_settings.Copy(settings);
-	return true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1224,152 +612,6 @@ bool LoadRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filena
 		memcpy(descriptor, &new_descriptor, sizeof(new_descriptor));
 		return true;
 	}
-	return false;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-bool LoadEditorSandboxFile(EditorState* editor_state)
-{
-	ECS_STACK_CAPACITY_STREAM(wchar_t, sandbox_file_path, 512);
-	GetProjectSandboxFile(editor_state, sandbox_file_path);
-
-	const Reflection::ReflectionManager* reflection_manager = editor_state->ReflectionManager();
-
-	const size_t STACK_ALLOCATION_CAPACITY = ECS_KB * 128;
-	const size_t BACKUP_CAPACITY = ECS_MB;
-	void* stack_allocation = ECS_STACK_ALLOC(STACK_ALLOCATION_CAPACITY);
-	
-	// Use malloc for extra large allocations
-	ResizableLinearAllocator linear_allocator(stack_allocation, STACK_ALLOCATION_CAPACITY, BACKUP_CAPACITY, { nullptr });
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&linear_allocator);
-	Stream<void> contents = ReadWholeFileBinary(sandbox_file_path, allocator);
-
-	struct DeallocateAllocator {
-		void operator() () {
-			allocator->ClearBackup();
-		}
-
-		ResizableLinearAllocator* allocator;
-	};
-
-	StackScope<DeallocateAllocator> deallocate_scope({ &linear_allocator });
-
-	if (contents.buffer != nullptr) {
-		// Read the header
-		uintptr_t ptr = (uintptr_t)contents.buffer;
-		
-		SandboxFileHeader header;
-		Read<true>(&ptr, &header, sizeof(header));
-
-		if (header.version != SANDBOX_FILE_HEADER_VERSION) {
-			// Error invalid version
-			ECS_FORMAT_TEMP_STRING(console_error, "Failed to read sandbox file. Expected version {#} but the file has {#}.", SANDBOX_FILE_HEADER_VERSION, header.version);
-			EditorSetConsoleError(console_error);
-			return false;
-		}
-
-		if (header.count > SANDBOX_FILE_MAX_SANDBOXES) {
-			// Error, too many sandboxes
-			ECS_FORMAT_TEMP_STRING(console_error, "Sandbox file has been corrupted. Maximum supported count is {#}, but file says {#}.", SANDBOX_FILE_MAX_SANDBOXES, header.count);
-			EditorSetConsoleError(console_error);
-			return false;
-		}
-
-		// Deserialize the type table now
-		DeserializeFieldTable field_table = DeserializeFieldTableFromData(ptr, allocator);
-		if (field_table.types.size == 0) {
-			// Error
-			EditorSetConsoleError("The field table in the sandbox file is corrupted.");
-			return false;
-		}
-
-		EditorSandbox* sandboxes = (EditorSandbox*)ECS_STACK_ALLOC(sizeof(EditorSandbox) * header.count);
-		DeserializeOptions options;
-		options.field_table = &field_table;
-		options.field_allocator = allocator;
-		options.backup_allocator = allocator;
-		options.read_type_table = false;
-
-		const Reflection::ReflectionType* type = reflection_manager->GetType(STRING(EditorSandbox));
-		for (size_t index = 0; index < header.count; index++) {
-			ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, type, sandboxes + index, ptr, &options);
-			if (code != ECS_DESERIALIZE_OK) {
-				ECS_STACK_CAPACITY_STREAM(char, console_error, 512);
-
-				if (code == ECS_DESERIALIZE_CORRUPTED_FILE) {
-					ECS_FORMAT_STRING(console_error, "Failed to deserialize sandbox {#}. It is corrupted.", index);
-				}
-				else if (code == ECS_DESERIALIZE_MISSING_DEPENDENT_TYPES) {
-					ECS_FORMAT_STRING(console_error, "Failed to deserialize sandbox {#}. It is missing its dependent types.", index);
-				}
-				else if (code == ECS_DESERIALIZE_FIELD_TYPE_MISMATCH) {
-					ECS_FORMAT_STRING(console_error, "Failed to deserialize sandbox {#}. There was a field type mismatch.", index);
-				}
-				else {
-					ECS_FORMAT_STRING(console_error, "Unknown error happened when deserializing sandbox {#}.", index);
-				}
-				EditorSetConsoleError(console_error);
-				return false;
-			}
-		}
-
-		// Deallocate all the current sandboxes if any
-		size_t initial_sandbox_count = editor_state->sandboxes.size;
-		for (size_t index = 0; index < initial_sandbox_count; index++) {
-			DestroySandbox(editor_state, 0);
-		}
-
-		// Now create the "real" sandboxes
-		for (size_t index = 0; index < header.count; index++) {
-			CreateSandbox(editor_state, false);
-
-			EditorSandbox* sandbox = GetSandbox(editor_state, index);
-			// Set the runtime settings path - this will also create the runtime
-			// If it fails, default initialize the runtime
-			if (!ChangeSandboxRuntimeSettings(editor_state, index, sandboxes[index].runtime_settings)) {
-				// Print an error message
-				ECS_FORMAT_TEMP_STRING(console_message, "The runtime settings {#} doesn't exist or is corrupted when trying to deserialize sandbox {#}. "
-					"The sandbox will revert to default settings.", sandboxes[index].runtime_settings, index);
-				EditorSetConsoleWarn(console_message);
-
-				ChangeSandboxRuntimeSettings(editor_state, index, { nullptr, 0 });
-			}
-
-			if (!ChangeSandboxScenePath(editor_state, index, sandboxes[index].scene_path)) {
-				ECS_FORMAT_TEMP_STRING(console_message, "The scene path {#} doesn't exist or is invalid when trying to deserialize sandbox {#}. "
-					"The sandbox will revert to no scene.", sandboxes[index].scene_path, index);
-				EditorSetConsoleWarn(console_message);
-
-				ChangeSandboxScenePath(editor_state, index, { nullptr, 0 });
-			}
-
-			// Copy the camera positions and parameters
-			for (size_t viewport = 0; viewport < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport++) {
-				sandbox->camera_parameters[viewport] = sandboxes[index].camera_parameters[viewport];
-			}
-			memcpy(sandbox->camera_saved_orientations, sandboxes[index].camera_saved_orientations, sizeof(sandbox->camera_saved_orientations));
-
-			// Now the modules
-			for (unsigned int subindex = 0; subindex < sandboxes[index].modules_in_use.size; subindex++) {
-				unsigned int module_index = sandboxes[index].modules_in_use[subindex].module_index;
-				// Only if it is in bounds
-				if (module_index < editor_state->project_modules->size) {
-					AddSandboxModule(editor_state, index, module_index, sandboxes[index].modules_in_use[subindex].module_configuration);
-					ChangeSandboxModuleSettings(editor_state, index, module_index, sandboxes[index].modules_in_use[subindex].settings_name);
-
-					if (sandboxes[index].modules_in_use[subindex].is_deactivated) {
-						DeactivateSandboxModuleInStream(editor_state, index, subindex);
-					}
-				}
-			}
-		}
-
-		return true;
-	}
-	
-	ECS_FORMAT_TEMP_STRING(console_error, "Failed to read or open sandbox file. Path is {#}.", sandbox_file_path);
-	EditorSetConsoleError(console_error);
 	return false;
 }
 
@@ -1525,82 +767,11 @@ void ReinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RegisterSandboxCameraTransform(EditorState* editor_state, unsigned int sandbox_index, unsigned int camera_index, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	ECS_ASSERT(camera_index < std::size(sandbox->camera_saved_orientations));
-
-	EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
-	if (sandbox_state == EDITOR_SANDBOX_SCENE) {
-		sandbox->camera_saved_orientations[camera_index] = { sandbox->camera_parameters[viewport].translation, sandbox->camera_parameters[viewport].rotation };
-	}
-	else {
-		// TODO: Implement the runtime version
-		ECS_ASSERT(false);
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 void ReloadSandboxRuntimeSettings(EditorState* editor_state)
 {
 	for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
 		if (UpdateSandboxRuntimeSettings(editor_state, index)) {
 			LoadSandboxRuntimeSettings(editor_state, index);
-		}
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void RemoveSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index) {
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	ECS_ASSERT(in_stream_index != -1);
-
-	RemoveSandboxModuleInStream(editor_state, sandbox_index, in_stream_index);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
-{
-	EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_index].modules_in_use.buffer + in_stream_index;
-	// Deallocate the reflected settings allocator
-	sandbox_module->settings_allocator.Free();
-
-	editor_state->sandboxes[sandbox_index].modules_in_use.RemoveSwapBack(in_stream_index);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_index)
-{
-	// Find all sandboxes that depend on that module
-	ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_indices, 512);
-	IsModuleInfoUsed(editor_state, module_index, false, EDITOR_MODULE_CONFIGURATION_COUNT, &sandbox_indices);
-
-	if (sandbox_indices.size > 0) {
-		unsigned int loaded_module_index = editor_state->editor_components.ModuleIndexFromReflection(editor_state, module_index);
-		ECS_ASSERT(loaded_module_index != -1);
-
-		// Remove the module from the sandbox
-		// And also update its scene to have any components from the given module be removed
-		for (unsigned int index = 0; index < sandbox_indices.size; index++) {
-			// Remove the module from the entity manager
-			// Do it for the scene entities and also for the runtime entities
-			editor_state->editor_components.RemoveModuleFromManager(editor_state, sandbox_indices[index], EDITOR_SANDBOX_VIEWPORT_SCENE, loaded_module_index);
-			editor_state->editor_components.RemoveModuleFromManager(editor_state, sandbox_indices[index], EDITOR_SANDBOX_VIEWPORT_RUNTIME, loaded_module_index);
-			
-			// Set the scene dirty for that sandbox
-			SetSandboxSceneDirty(editor_state, sandbox_indices[index], EDITOR_SANDBOX_VIEWPORT_SCENE);
-
-			RemoveSandboxModule(editor_state, sandbox_indices[index], module_index);
-		}
-
-		// Save the sandbox file
-		bool success = SaveEditorSandboxFile(editor_state);
-		if (!success) {
-			EditorSetConsoleError("Failed to save editor sandbox file.");
 		}
 	}
 }
@@ -1931,27 +1102,6 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 	runtime_graphics->m_window_size = new_size;
 }
 
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void RotateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 rotation, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->camera_parameters[viewport].rotation += rotation;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void ResetSandboxCameras(EditorState* editor_state, unsigned int sandbox_index)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
-		sandbox->camera_parameters[index].Default();
-	}
-	for (size_t index = 0; index < EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT; index++) {
-		sandbox->camera_saved_orientations[index].ToOrigin();
-	}
-}
-
 // ------------------------------------------------------------------------------------------------------------------------------
 
 void ResetSandboxUnusedEntities(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
@@ -1996,86 +1146,6 @@ bool SaveRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filena
 	}
 
 	return true;
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
-bool SaveSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
-{
-	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	GetSandboxScenePath(editor_state, sandbox_index, absolute_path);
-	bool success = SaveEditorScene(editor_state, &sandbox->scene_entities, &sandbox->database, absolute_path);
-	if (success) {
-		sandbox->is_scene_dirty = false;
-	}
-	return success;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-bool SaveEditorSandboxFile(const EditorState* editor_state)
-{
-	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-	GetProjectSandboxFile(editor_state, absolute_path);
-
-	// Allocate a buffer of ECS_KB * 128 and write into it
-	// Assert that the overall size is less
-	const size_t STACK_CAPACITY = ECS_KB * 128;
-	void* stack_buffer = ECS_STACK_ALLOC(STACK_CAPACITY);
-	uintptr_t ptr = (uintptr_t)stack_buffer;
-
-	SandboxFileHeader header;
-	header.count = editor_state->sandboxes.size;
-	header.version = SANDBOX_FILE_HEADER_VERSION;
-
-	// Write the header first
-	Write<true>(&ptr, &header, sizeof(header));
-
-	const Reflection::ReflectionManager* reflection_manager = editor_state->ui_reflection->reflection;
-
-	// Write the type table
-	const Reflection::ReflectionType* sandbox_type = reflection_manager->GetType(STRING(EditorSandbox));
-	SerializeFieldTable(reflection_manager, sandbox_type, ptr);
-
-	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-	SerializeOptions options;
-	options.write_type_table = false;
-	options.error_message = &error_message;
-
-	for (size_t index = 0; index < editor_state->sandboxes.size; index++) {
-		ECS_SERIALIZE_CODE code = Serialize(reflection_manager, sandbox_type, editor_state->sandboxes.buffer + index, ptr, &options);
-		if (code != ECS_SERIALIZE_OK) {
-			ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Faulty sandbox {#}. Detailed error message: {#}.", index, error_message);
-			EditorSetConsoleError(console_message);
-			return false;
-		}
-	}
-
-	size_t bytes_written = ptr - (uintptr_t)stack_buffer;
-	ECS_ASSERT(bytes_written <= STACK_CAPACITY);
-	// Now commit to the file
-	ECS_FILE_STATUS_FLAGS status = WriteBufferToFileBinary(absolute_path, { stack_buffer, bytes_written });
-	if (status != ECS_FILE_STATUS_OK) {
-		ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Failed to write to path {#}.", absolute_path);
-		EditorSetConsoleError(console_message);
-
-		return false;
-	}
-
-	return true;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void SetSandboxCameraAspectRatio(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	ResourceView view = sandbox->viewport_render_destination[viewport].output_view;
-
-	uint2 dimensions = GetTextureDimensions(view.AsTexture2D());
-	sandbox->camera_parameters[viewport].aspect_ratio = (float)dimensions.x / (float)dimensions.y;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2200,14 +1270,6 @@ void SignalSandboxUnusedEntitiesSlotsCounter(EditorState* editor_state, unsigned
 	event_data.sandbox_index = sandbox_index;
 	event_data.viewport = viewport;
 	EditorAddEvent(editor_state, SignalUnusedEntitiesSlotsCounterEvent, &event_data, sizeof(event_data));
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void TranslateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 translation, EDITOR_SANDBOX_VIEWPORT viewport)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->camera_parameters[viewport].translation += translation;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

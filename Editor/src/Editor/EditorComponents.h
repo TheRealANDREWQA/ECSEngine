@@ -1,6 +1,6 @@
 #pragma once
 #include "ECSEngineContainers.h"
-#include "EditorSandboxTypes.h"
+#include "../Sandbox/SandboxTypes.h"
 
 namespace ECSEngine {
 	struct EntityManager;

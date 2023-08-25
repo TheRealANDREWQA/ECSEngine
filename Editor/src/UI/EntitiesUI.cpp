@@ -1,12 +1,11 @@
 #include "editorpch.h"
 #include "EntitiesUI.h"
-#include "Editor/EditorState.h"
-
-#include "Editor/EditorSandboxEntityOperations.h"
+#include "../Editor/EditorState.h"
+#include "../Sandbox/SandboxEntityOperations.h"
+#include "../Sandbox/Sandbox.h"
 #include "Inspector.h"
 
 #include "ECSEngineComponents.h"
-
 #include "CreateScene.h"
 
 using namespace ECSEngine;

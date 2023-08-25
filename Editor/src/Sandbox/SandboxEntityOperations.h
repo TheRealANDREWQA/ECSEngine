@@ -2,7 +2,7 @@
 #include "ECSEngineEntities.h"
 #include "ECSEngineForEach.h"
 #include "ECSEngineAssets.h"
-#include "EditorSandboxTypes.h"
+#include "SandboxTypes.h"
 
 using namespace ECSEngine;
 

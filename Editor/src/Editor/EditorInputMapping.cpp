@@ -43,6 +43,13 @@ void InitializeInputMapping(EditorState* editor_state) {
 
 	mappings[EDITOR_INPUT_CAMERA_WALK].SetFirstKey(ECS_KEY_LEFT_SHIFT, ECS_BUTTON_DOWN);
 	mappings[EDITOR_INPUT_CAMERA_WALK].SetSecondKey(ECS_KEY_SHARP_QUOTE, ECS_BUTTON_DOWN);
+	mappings[EDITOR_INPUT_WASD_W].SetFirstKey(ECS_KEY_W, ECS_BUTTON_DOWN);
+	mappings[EDITOR_INPUT_WASD_A].SetFirstKey(ECS_KEY_A, ECS_BUTTON_DOWN);
+	mappings[EDITOR_INPUT_WASD_S].SetFirstKey(ECS_KEY_S, ECS_BUTTON_DOWN);
+	mappings[EDITOR_INPUT_WASD_D].SetFirstKey(ECS_KEY_D, ECS_BUTTON_DOWN);
+	mappings[EDITOR_INPUT_WASD_INCREASE_SPEED].SetFirstKey(ECS_KEY_E, ECS_BUTTON_DOWN);
+	mappings[EDITOR_INPUT_WASD_DECREASE_SPEED].SetFirstKey(ECS_KEY_Q, ECS_BUTTON_DOWN);
+	mappings[EDITOR_INPUT_WASD_RESET_SPEED].SetFirstKeyPressed(ECS_KEY_R);
 
 	editor_state->input_mapping.ChangeMapping(mappings);
 }

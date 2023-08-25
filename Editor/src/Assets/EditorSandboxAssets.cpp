@@ -4,8 +4,8 @@
 
 #include "../Editor/EditorEvent.h"
 #include "../Editor/EditorState.h"
-#include "../Editor/EditorSandboxEntityOperations.h"
-#include "../Editor/EditorSandbox.h"
+#include "../Sandbox/SandboxEntityOperations.h"
+#include "../Sandbox/Sandbox.h"
 #include "../Project/ProjectFolders.h"
 #include "EditorSandboxAssets.h"
 #include "AssetManagement.h"

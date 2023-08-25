@@ -2,8 +2,8 @@
 #include "../../Utilities/OSFunctions.h"
 #include "UIOSActions.h"
 #include "UIDrawerWindows.h"
-#include "../../Utilities/Mouse.h"
-#include "../../Utilities/Keyboard.h"
+#include "../../Input/Mouse.h"
+#include "../../Input/Keyboard.h"
 #include "../../Utilities/Path.h"
 
 #include "../../Utilities/StackScope.h"
