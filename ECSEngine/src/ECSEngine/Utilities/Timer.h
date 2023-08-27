@@ -11,6 +11,8 @@ namespace ECSEngine {
 		ECS_TIMER_DURATION_S // Seconds
 	};
 
+	ECSENGINE_API size_t GetFactor(ECS_TIMER_DURATION type);
+
 	struct ECSENGINE_API Timer
 	{
 		ECS_INLINE Timer() {
@@ -19,14 +21,38 @@ namespace ECSEngine {
 		}
 
 		// Increases/Decreases the start point by the given amount
-		void DelayStart(int64_t duration, ECS_TIMER_DURATION type);
+		ECS_INLINE void DelayStart(int64_t duration, ECS_TIMER_DURATION type) {
+			// This is fine even for negative numbers since adding with a negative means adding with a
+			// large positive which will yield the correct result
+			m_start += std::chrono::nanoseconds((size_t)duration) * GetFactor(type);
+		}
 
 		// Increases/Decreases the marker point by the given amount
-		void DelayMarker(int64_t nanoseconds, ECS_TIMER_DURATION type);
+		ECS_INLINE void DelayMarker(int64_t nanoseconds, ECS_TIMER_DURATION type) {
+			// This is fine even for negative numbers since adding with a negative means adding with a
+			// large positive which will yield the correct result
+			m_marker += std::chrono::nanoseconds((size_t)nanoseconds) * GetFactor(type);
+		}
 
-		void SetNewStart();
+		ECS_INLINE bool IsUninitialized() const {
+			size_t start = *(size_t*)&m_start;
+			size_t marker = *(size_t*)&m_marker;
+			return start == 0 && marker == 0;
+		}
 
-		void SetMarker();
+		ECS_INLINE void SetNewStart() {
+			m_start = std::chrono::high_resolution_clock::now();
+		}
+
+		ECS_INLINE void SetMarker() {
+			m_marker = std::chrono::high_resolution_clock::now();
+		}
+
+		ECS_INLINE void SetUninitialized() {
+			// m_start and m_marker are just unsigned long longs but the C++
+			// API makes it hard to even set these to 0
+			memset(this, 0, sizeof(*this));
+		}
 
 		size_t GetDuration(ECS_TIMER_DURATION yep) const;
 

@@ -352,10 +352,20 @@ namespace ECSEngine {
 	void CreateAllocatorForComponent(EntityManager* entity_manager, ComponentInfo& info, size_t allocator_size) {
 		if (allocator_size > 0) {
 			// Allocate the allocator
-			size_t total_allocation_size = sizeof(MemoryArena) + MemoryArena::MemoryOf(allocator_size, COMPONENT_ALLOCATOR_ARENA_COUNT, COMPONENT_ALLOCATOR_BLOCK_COUNT);
+			CreateBaseAllocatorInfo create_info;
+			create_info.allocator_type = ECS_ALLOCATOR_ARENA;
+			create_info.arena_allocator_count = COMPONENT_ALLOCATOR_ARENA_COUNT;
+			create_info.arena_multipool_block_count = COMPONENT_ALLOCATOR_BLOCK_COUNT;
+			create_info.arena_nested_type = ECS_ALLOCATOR_MULTIPOOL;
+			create_info.arena_capacity = allocator_size * COMPONENT_ALLOCATOR_ARENA_COUNT;
+			size_t total_allocation_size = sizeof(MemoryArena) + MemoryArena::MemoryOf(COMPONENT_ALLOCATOR_ARENA_COUNT, create_info);
 			void* allocation = entity_manager->m_memory_manager->Allocate(total_allocation_size);
 			info.allocator = (MemoryArena*)allocation;
-			*info.allocator = MemoryArena(function::OffsetPointer(allocation, sizeof(MemoryArena)), allocator_size, COMPONENT_ALLOCATOR_ARENA_COUNT, COMPONENT_ALLOCATOR_BLOCK_COUNT);
+			*info.allocator = MemoryArena(
+				function::OffsetPointer(allocation, sizeof(MemoryArena)),
+				COMPONENT_ALLOCATOR_ARENA_COUNT,
+				create_info
+			);
 		}
 		else {
 			info.allocator = nullptr;
@@ -2034,7 +2044,7 @@ namespace ECSEngine {
 
 		// Allocate the query cache now - use a separate allocation
 		// Get a default allocator for it for the moment
-		MemoryManager* query_cache_allocator = (MemoryManager*)m_memory_manager->m_backup->Allocate(sizeof(MemoryManager));
+		MemoryManager* query_cache_allocator = (MemoryManager*)Allocate(m_memory_manager->m_backup, sizeof(MemoryManager));
 		*query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(descriptor.memory_manager->m_backup);
 		m_query_cache = (ArchetypeQueryCache*)m_memory_manager->Allocate(sizeof(ArchetypeQueryCache));
 		*m_query_cache = ArchetypeQueryCache(this, GetAllocatorPolymorphic(query_cache_allocator));
@@ -4790,7 +4800,7 @@ namespace ECSEngine {
 
 	void EntityManager::Reset() {
 		// Free the allocator of the query cache
-		FreeAllocatorFrom(m_query_cache->allocator, GetAllocatorPolymorphic(m_memory_manager->m_backup));
+		FreeAllocatorFrom(m_query_cache->allocator, m_memory_manager->m_backup);
 
 		m_hierarchy_allocator->Free();
 		m_memory_manager->Clear();
@@ -5183,7 +5193,7 @@ namespace ECSEngine {
 		// Share the allocator between the memory pool and the entity manager
 		// The entity pool will make few allocations
 		MemoryManager* entity_manager_allocator = (MemoryManager*)allocation;
-		*entity_manager_allocator = MemoryManager(allocator_size, allocator_pool_count, allocator_new_size, global_memory_manager);
+		*entity_manager_allocator = MemoryManager(allocator_size, allocator_pool_count, allocator_new_size, GetAllocatorPolymorphic(global_memory_manager));
 
 		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
 		EntityPool* entity_pool = (EntityPool*)allocation;

@@ -49,12 +49,19 @@ void RegisterSandboxCameraTransform(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	unsigned int camera_index,
-	EDITOR_SANDBOX_VIEWPORT viewport
+	EDITOR_SANDBOX_VIEWPORT viewport,
+	bool disable_file_write = false
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-void RotateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::float3 rotation, EDITOR_SANDBOX_VIEWPORT viewport);
+void RotateSandboxCamera(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ECSEngine::float3 rotation, 
+	EDITOR_SANDBOX_VIEWPORT viewport, 
+	bool disable_file_write = false
+);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -81,6 +88,12 @@ void SetSandboxCameraAspectRatio(EditorState* editor_state, unsigned int sandbox
 
 // -------------------------------------------------------------------------------------------------------------
 
-void TranslateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::float3 translation, EDITOR_SANDBOX_VIEWPORT viewport);
+void TranslateSandboxCamera(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ECSEngine::float3 translation, 
+	EDITOR_SANDBOX_VIEWPORT viewport,
+	bool disable_file_write = false
+);
 
 // -------------------------------------------------------------------------------------------------------------

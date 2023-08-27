@@ -892,53 +892,6 @@ public:
 						// Refresh the graphics object since it might be changed
 						graphics = editor_state.UIGraphics();
 
-						/*CoalescedMesh* trireme = editor_state.UIResourceManager()->LoadCoalescedMesh<true>(L"C:\\Users\\Andrei\\DivideEtImpera\\Assets\\trireme2_should_be_fine.glb");
-						const Matrix CAMERA_MATRIX = MatrixPerspectiveFOV(60.0f, 16.0f / 10.0f, 0.035f, 1000.0f);
-						debug_drawer.UpdateCameraMatrix(CAMERA_MATRIX);
-						float3 TRANSLATION = { 0.0f, 0.0f, 5.0f };*/
-						////debug_drawer.DrawSphere(TRANSLATION, 0.2f, ECS_COLOR_GREEN);
-						////graphics->DisableWireframe();
-
-						//debug_drawer.DrawRectangle(
-						//	{ 1.0f, 0.0f, 1.0f },
-						//	{ 0.0f, 1.0f, 1.0f },
-						//	AxisXColor(),
-						//	{ false, true }
-						//);
-
-						//debug_drawer.DrawRectangle(
-						//	{ 0.0f, 1.0f, 1.0f },
-						//	{ 1.0f, 0.0f, 1.0f },
-						//	AxisYColor(),
-						//	{ false, true }
-						//);
-						//debug_drawer.DrawAll(1.0f);
-
-						//HighlightObjectElement elements[2];
-						//elements[0].is_submesh = false;
-						//elements[0].mesh = &trireme->mesh;
-						//elements[0].gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION), MatrixIdentity(), MatrixScale({0.2f, 0.2f, 0.2f}), CAMERA_MATRIX);
-
-						//elements[1] = elements[0];
-						//elements[1].gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION + float3(0.0f, 0.5f, 0.0f)), MatrixIdentity(), MatrixScale({ 0.2f, 0.2f, 0.2f }), CAMERA_MATRIX);
-						//HighlightObject(graphics, ECS_COLOR_RED, { elements, 1 });
-						//HighlightObject(graphics, ECS_COLOR_MAGENTA, { elements + 1, 1 });
-
-						/*GenerateInstanceFramebufferElement generate_element;
-						generate_element.base.is_submesh = false;
-						generate_element.base.mesh = &trireme->mesh;
-						generate_element.base.gpu_mvp_matrix = MatrixMVPToGPU(MatrixTranslation(TRANSLATION), MatrixIdentity(), MatrixScale({ 0.2f, 0.2f, 0.2f }), CAMERA_MATRIX);
-						generate_element.instance_thickness = 100000;
-						generate_element.pixel_thickness = 10;
-
-						GenerateInstanceFramebuffer(graphics, { &generate_element, 1 }, RENDER_TARGET, DEPTH_STENCIL);
-
-						unsigned int instance_index = GetInstanceFromFramebuffer(graphics, RENDER_TARGET, { 1156, 787 });
-						ECS_FORMAT_TEMP_STRING(CONSOLE_MESSAGE, "Instance index: {#}", instance_index);
-
-						Texture2D my_texture = ConvertTextureToVisualize(graphics, RENDER_TARGET.GetResource());
-						graphics->FreeResource(my_texture);*/
-
 						bool removed = graphics->SwapBuffers(0);
 						if (removed) {
 							__debugbreak();

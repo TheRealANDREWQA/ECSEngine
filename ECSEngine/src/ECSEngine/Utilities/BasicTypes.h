@@ -22,17 +22,6 @@ namespace ECSEngine {
 		unsigned short milliseconds;
 	};
 
-	struct ECSENGINE_API DebugInfo {
-		DebugInfo() : file(nullptr), function(nullptr), line(0) {}
-		DebugInfo(const char* file, const char* function, int line) : file(file), function(function), line(line) {}
-
-		const char* file;
-		const char* function;
-		int line;
-	};
-
-#define ECS_DEBUG_INFO DebugInfo(ECS_LOCATION) 
-
 #pragma region Alphabet and character type
 
 	// Helper Visualing enum

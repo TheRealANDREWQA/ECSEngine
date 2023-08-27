@@ -199,7 +199,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	template<bool write_data>
-	inline size_t Write(CapacityStream<void>& stream, const void* data, size_t data_size) {
+	ECS_INLINE size_t Write(CapacityStream<void>& stream, const void* data, size_t data_size) {
 		if constexpr (write_data) {
 			memcpy((void*)((uintptr_t)stream.buffer + stream.size), data, data_size);
 			stream.size += data_size;
@@ -210,14 +210,14 @@ namespace ECSEngine {
 		}
 	}
 
-	inline size_t Write(CapacityStream<void>& stream, const void* data, size_t data_size, bool write_data) {
+	ECS_INLINE size_t Write(CapacityStream<void>& stream, const void* data, size_t data_size, bool write_data) {
 		return write_data ? Write<true>(stream, data, data_size) : Write<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool write_data>
-	inline size_t Write(uintptr_t* stream, const void* data, size_t data_size) {
+	ECS_INLINE size_t Write(uintptr_t* stream, const void* data, size_t data_size) {
 		if constexpr (write_data) {
 			memcpy((void*)*stream, data, data_size);
 			*stream += data_size;
@@ -229,54 +229,54 @@ namespace ECSEngine {
 		}
 	}
 
-	inline size_t Write(uintptr_t* stream, const void* data, size_t data_size, bool write_data) {
+	ECS_INLINE size_t Write(uintptr_t* stream, const void* data, size_t data_size, bool write_data) {
 		return write_data ? Write<true>(stream, data, data_size) : Write<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool write_data>
-	inline size_t WriteWithSize(uintptr_t* stream, const void* data, size_t data_size) {
+	ECS_INLINE size_t WriteWithSize(uintptr_t* stream, const void* data, size_t data_size) {
 		return Write<write_data>(stream, &data_size, sizeof(data_size)) + Write<write_data>(stream, data, data_size);
 	}
 
 	template<bool write_data>
-	inline size_t WriteWithSize(uintptr_t* stream, Stream<void> data) {
+	ECS_INLINE size_t WriteWithSize(uintptr_t* stream, Stream<void> data) {
 		return WriteWithSize<write_data>(stream, data.buffer, data.size);
 	}
 
-	inline size_t WriteWithSize(uintptr_t* stream, const void* data, size_t data_size, bool write_data) {
+	ECS_INLINE size_t WriteWithSize(uintptr_t* stream, const void* data, size_t data_size, bool write_data) {
 		return write_data ? WriteWithSize<true>(stream, data, data_size) : WriteWithSize<false>(stream, data, data_size);
 	}
 
-	inline size_t WriteWithSize(uintptr_t* stream, Stream<void> data, bool write_data) {
+	ECS_INLINE size_t WriteWithSize(uintptr_t* stream, Stream<void> data, bool write_data) {
 		return write_data ? WriteWithSize<true>(stream, data) : WriteWithSize<false>(stream, data);
 	}
 
 	// -----------------------------------------------------------------------------------------
 	
 	template<bool write_data>
-	inline size_t WriteWithSizeShort(uintptr_t* stream, const void* data, unsigned short data_size) {
+	ECS_INLINE size_t WriteWithSizeShort(uintptr_t* stream, const void* data, unsigned short data_size) {
 		return Write<write_data>(stream, &data_size, sizeof(data_size)) + Write<write_data>(stream, data, data_size);
 	}
 
 	template<bool write_data>
-	inline size_t WriteWithSizeShort(uintptr_t* stream, Stream<void> data) {
+	ECS_INLINE size_t WriteWithSizeShort(uintptr_t* stream, Stream<void> data) {
 		return WriteWithSizeShort<write_data>(stream, data.buffer, data.size);
 	}
 
-	inline size_t WriteWithSizeShort(uintptr_t* stream, const void* data, unsigned short data_size, bool write_data) {
+	ECS_INLINE size_t WriteWithSizeShort(uintptr_t* stream, const void* data, unsigned short data_size, bool write_data) {
 		return write_data ? WriteWithSizeShort<true>(stream, data, data_size) : WriteWithSizeShort<false>(stream, data, data_size);
 	}
 
-	inline size_t WriteWithSizeShort(uintptr_t* stream, Stream<void> data, bool write_data) {
+	ECS_INLINE size_t WriteWithSizeShort(uintptr_t* stream, Stream<void> data, bool write_data) {
 		return write_data ? WriteWithSizeShort<true>(stream, data) : WriteWithSizeShort<false>(stream, data);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline size_t Read(CapacityStream<void>& stream, void* data, size_t data_size) {
+	ECS_INLINE size_t Read(CapacityStream<void>& stream, void* data, size_t data_size) {
 		if constexpr (read_data) {
 			memcpy(data, (const void*)((uintptr_t)stream.buffer + stream.size), data_size);
 			stream.size += data_size;
@@ -288,14 +288,14 @@ namespace ECSEngine {
 		}
 	}
 
-	inline size_t Read(CapacityStream<void>& stream, void* data, size_t data_size, bool read_data) {
+	ECS_INLINE size_t Read(CapacityStream<void>& stream, void* data, size_t data_size, bool read_data) {
 		return read_data ? Read<true>(stream, data, data_size) : Read<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline size_t Read(uintptr_t* stream, void* data, size_t data_size) {
+	ECS_INLINE size_t Read(uintptr_t* stream, void* data, size_t data_size) {
 		if constexpr (read_data) {
 			memcpy(data, (const void*)*stream, data_size);
 			*stream += data_size;
@@ -307,38 +307,38 @@ namespace ECSEngine {
 		}
 	}
 
-	inline size_t Read(uintptr_t* stream, void* data, size_t data_size, bool read_data) {
+	ECS_INLINE size_t Read(uintptr_t* stream, void* data, size_t data_size, bool read_data) {
 		return read_data ? Read<true>(stream, data, data_size) : Read<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline size_t ReadWithSize(uintptr_t* stream, void* data, size_t& data_size) {
+	ECS_INLINE size_t ReadWithSize(uintptr_t* stream, void* data, size_t& data_size) {
 		Read<true>(stream, &data_size, sizeof(data_size));
 		return Read<read_data>(stream, data, data_size);
 	}
 
-	inline size_t ReadWithSize(uintptr_t* stream, void* data, size_t& data_size, bool read_data) {
+	ECS_INLINE size_t ReadWithSize(uintptr_t* stream, void* data, size_t& data_size, bool read_data) {
 		return read_data ? ReadWithSize<true>(stream, data, data_size) : ReadWithSize<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline size_t ReadWithSizeShort(uintptr_t* stream, void* data, unsigned short& data_size) {
+	ECS_INLINE size_t ReadWithSizeShort(uintptr_t* stream, void* data, unsigned short& data_size) {
 		Read<true>(stream, &data_size, sizeof(data_size));
 		return Read<read_data>(stream, data, data_size);
 	}
 
-	inline size_t ReadWithSizeShort(uintptr_t* stream, void* data, unsigned short& data_size, bool read_data) {
+	ECS_INLINE size_t ReadWithSizeShort(uintptr_t* stream, void* data, unsigned short& data_size, bool read_data) {
 		return read_data ? ReadWithSizeShort<true>(stream, data, data_size) : ReadWithSizeShort<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline size_t ReferenceData(uintptr_t* stream, void** pointer, size_t data_size) {
+	ECS_INLINE size_t ReferenceData(uintptr_t* stream, void** pointer, size_t data_size) {
 		if constexpr (read_data) {
 			*pointer = (void*)*stream;
 			*stream += data_size;
@@ -350,38 +350,38 @@ namespace ECSEngine {
 		}
 	}
 
-	inline size_t ReferenceData(uintptr_t* stream, void** data, size_t data_size, bool read_data) {
+	ECS_INLINE size_t ReferenceData(uintptr_t* stream, void** data, size_t data_size, bool read_data) {
 		return read_data ? ReferenceData<true>(stream, data, data_size) : ReferenceData<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline size_t ReferenceDataWithSize(uintptr_t* stream, void** pointer, size_t& data_size) {
+	ECS_INLINE size_t ReferenceDataWithSize(uintptr_t* stream, void** pointer, size_t& data_size) {
 		Read<true>(stream, &data_size, sizeof(data_size));
 		return ReferenceData<read_data>(stream, pointer, data_size);
 	}
 
-	inline size_t ReferenceDataWithSize(uintptr_t* stream, void** data, size_t& data_size, bool read_data) {
+	ECS_INLINE size_t ReferenceDataWithSize(uintptr_t* stream, void** data, size_t& data_size, bool read_data) {
 		return read_data ? ReferenceDataWithSize<true>(stream, data, data_size) : ReferenceDataWithSize<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline size_t ReferenceDataWithSizeShort(uintptr_t* stream, void** pointer, unsigned short& data_size) {
+	ECS_INLINE size_t ReferenceDataWithSizeShort(uintptr_t* stream, void** pointer, unsigned short& data_size) {
 		Read<true>(stream, &data_size, sizeof(data_size));
 		return ReferenceData<read_data>(stream, pointer, data_size);
 	}
 
-	inline size_t ReferenceDataWithSizeShort(uintptr_t* stream, void** data, unsigned short& data_size, bool read_data) {
+	ECS_INLINE size_t ReferenceDataWithSizeShort(uintptr_t* stream, void** data, unsigned short& data_size, bool read_data) {
 		return read_data ? ReferenceDataWithSizeShort<true>(stream, data, data_size) : ReferenceDataWithSizeShort<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline Stream<void> ReadAllocateData(uintptr_t* stream, AllocatorPolymorphic allocator) {
+	Stream<void> ReadAllocateData(uintptr_t* stream, AllocatorPolymorphic allocator) {
 		size_t size;
 		Read<true>(stream, &size, sizeof(size));
 		if constexpr (read_data) {
@@ -395,14 +395,14 @@ namespace ECSEngine {
 		}
 	}
 
-	inline Stream<void> ReadAllocateData(uintptr_t* stream, AllocatorPolymorphic allocator, bool read_data) {
+	ECS_INLINE Stream<void> ReadAllocateData(uintptr_t* stream, AllocatorPolymorphic allocator, bool read_data) {
 		return read_data ? ReadAllocateData<true>(stream, allocator) : ReadAllocateData<false>(stream, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline Stream<void> ReadAllocateDataShort(uintptr_t* stream, AllocatorPolymorphic allocator) {
+	Stream<void> ReadAllocateDataShort(uintptr_t* stream, AllocatorPolymorphic allocator) {
 		unsigned short size;
 		Read<true>(stream, &size, sizeof(size));
 		if constexpr (read_data) {
@@ -416,14 +416,14 @@ namespace ECSEngine {
 		}
 	}
 
-	inline Stream<void> ReadAllocateDataShort(uintptr_t* stream, AllocatorPolymorphic allocator, bool read_data) {
+	ECS_INLINE Stream<void> ReadAllocateDataShort(uintptr_t* stream, AllocatorPolymorphic allocator, bool read_data) {
 		return read_data ? ReadAllocateDataShort<true>(stream, allocator) : ReadAllocateDataShort<false>(stream, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline size_t ReadOrReferenceData(uintptr_t* stream, void** pointer, size_t data_size, bool reference_data) {
+	ECS_INLINE size_t ReadOrReferenceData(uintptr_t* stream, void** pointer, size_t data_size, bool reference_data) {
 		if (reference_data) {
 			return ReferenceData<read_data>(stream, pointer, data_size);
 		}
@@ -432,14 +432,14 @@ namespace ECSEngine {
 		}
 	}
 
-	inline size_t ReadOrReferenceData(uintptr_t* stream, void** data, size_t data_size, bool reference_data, bool read_data) {
+	ECS_INLINE size_t ReadOrReferenceData(uintptr_t* stream, void** data, size_t data_size, bool reference_data, bool read_data) {
 		return read_data ? ReadOrReferenceData<true>(stream, data, data_size, reference_data) : ReadOrReferenceData<false>(stream, data, data_size, reference_data);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline size_t ReadOrReferenceDataWithSize(uintptr_t* stream, void** pointer, size_t& data_size, bool reference_data) {
+	ECS_INLINE size_t ReadOrReferenceDataWithSize(uintptr_t* stream, void** pointer, size_t& data_size, bool reference_data) {
 		if (reference_data) {
 			return ReferenceDataWithSize<read_data>(stream, pointer, data_size);
 		}
@@ -448,14 +448,14 @@ namespace ECSEngine {
 		}
 	}
 
-	inline size_t ReadOrReferenceDataWithSize(uintptr_t* stream, void** data, size_t& data_size, bool reference_data, bool read_data) {
+	ECS_INLINE size_t ReadOrReferenceDataWithSize(uintptr_t* stream, void** data, size_t& data_size, bool reference_data, bool read_data) {
 		return read_data ? ReadOrReferenceDataWithSize<true>(stream, data, data_size, reference_data) : ReadOrReferenceDataWithSize<false>(stream, data, data_size, reference_data);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	inline size_t ReadOrReferenceDataWithSizeShort(uintptr_t* stream, void** pointer, unsigned short& data_size, bool reference_data) {
+	ECS_INLINE size_t ReadOrReferenceDataWithSizeShort(uintptr_t* stream, void** pointer, unsigned short& data_size, bool reference_data) {
 		if (reference_data) {
 			return ReferenceDataWithSizeShort<read_data>(stream, pointer, data_size);
 		}
@@ -464,7 +464,7 @@ namespace ECSEngine {
 		}
 	}
 
-	inline size_t ReadOrReferenceDataWithSizeShort(uintptr_t* stream, void** data, unsigned short& data_size, bool reference_data, bool read_data) {
+	ECS_INLINE size_t ReadOrReferenceDataWithSizeShort(uintptr_t* stream, void** data, unsigned short& data_size, bool reference_data, bool read_data) {
 		return read_data ? ReadOrReferenceDataWithSizeShort<true>(stream, data, data_size, reference_data) : ReadOrReferenceDataWithSizeShort<false>(stream, data, data_size, reference_data);
 	}
 

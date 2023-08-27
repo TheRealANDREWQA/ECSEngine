@@ -5,6 +5,8 @@ bin
 bin-int
 ECSEngine/Dependencies
 Editor/Resources/CompiledShaders
+Editor/DebugAllocations.txt
+Editor/TempDump.txt
 Modules/*/bin-int
 Modules/*/bin
 RunGPUThunk.bat

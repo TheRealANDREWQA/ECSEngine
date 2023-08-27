@@ -18,53 +18,25 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void Timer::DelayStart(int64_t duration, ECS_TIMER_DURATION type)
-	{
-		// This is fine even for negative numbers since adding with a negative means adding with a
-		// large positive which will yield the correct result
-		m_start += std::chrono::nanoseconds((size_t)duration) * GetFactor(type);
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
-	void Timer::DelayMarker(int64_t duration, ECS_TIMER_DURATION type)
-	{
-		// This is fine even for negative numbers since adding with a negative means adding with a
-		// large positive which will yield the correct result
-		m_marker += std::chrono::nanoseconds((size_t)duration) * GetFactor(type);
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
-	void Timer::SetNewStart()
-	{
-		m_start = std::chrono::high_resolution_clock::now();
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
-	void Timer::SetMarker() {
-		m_marker = std::chrono::high_resolution_clock::now();
+	// Inline this function such that it gets inlined for sure in the other functions
+	ECS_INLINE size_t GetDurationImpl(std::chrono::high_resolution_clock::time_point time_point, ECS_TIMER_DURATION type) {
+		auto end = std::chrono::high_resolution_clock::now();
+		size_t duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - time_point).count();
+		bool overflow = duration > end.time_since_epoch().count();
+		duration = overflow ? -duration : duration;
+		return duration / GetFactor(type);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
 	size_t Timer::GetDuration(ECS_TIMER_DURATION type) const {
-		auto end = std::chrono::high_resolution_clock::now();
-		size_t duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - m_start).count();
-		bool overflow = duration > end.time_since_epoch().count();
-		duration = overflow ? -duration : duration;
-		return duration / GetFactor(type);
+		return GetDurationImpl(m_start, type);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
 	size_t Timer::GetDurationSinceMarker(ECS_TIMER_DURATION type) const {
-		auto end = std::chrono::high_resolution_clock::now();
-		size_t duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - m_marker).count();
-		bool overflow = duration > end.time_since_epoch().count();
-		duration = overflow ? -duration : duration;
-		return duration / GetFactor(type);
+		return GetDurationImpl(m_marker, type);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

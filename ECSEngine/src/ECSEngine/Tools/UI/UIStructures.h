@@ -14,15 +14,16 @@
 #include "../../Input/Mouse.h"
 #include "../../Input/Keyboard.h"
 #include "../../Rendering/Graphics.h"
+#include "../../Allocators/MemoryManager.h"
 
 namespace ECSEngine {
 
 	namespace Tools {
 
+		typedef ECSEngine::ResizableMemoryArena UIToolsAllocator;
+
 		struct UISystem;
 		struct UIDockspace;
-
-		typedef ECSEngine::ResizableMemoryArena UIToolsAllocator;
 
 		template<typename T>
 		using UIDynamicStream = ResizableStream<T>;

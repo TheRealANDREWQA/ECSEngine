@@ -24,7 +24,8 @@ namespace ECSEngine {
 
 	World::World(const WorldDescriptor& descriptor) {
 		// first the global allocator
-		memory = new GlobalMemoryManager(descriptor.global_memory_size, descriptor.global_memory_pool_count, descriptor.global_memory_new_allocation_size);
+		memory = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
+		*memory = CreateGlobalMemoryManager(descriptor.global_memory_size, descriptor.global_memory_pool_count, descriptor.global_memory_new_allocation_size);
 		if (descriptor.graphics_descriptor) {
 			MemoryManager* graphics_allocator = (MemoryManager*)memory->Allocate(sizeof(MemoryManager) + sizeof(Graphics));
 			*graphics_allocator = DefaultGraphicsAllocator(memory);
@@ -76,7 +77,7 @@ namespace ECSEngine {
 			descriptor.entity_manager_memory_size,
 			descriptor.entity_manager_memory_pool_count,
 			descriptor.entity_manager_memory_new_allocation_size,
-			memory
+			GetAllocatorPolymorphic(memory)
 		);
 		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
 		

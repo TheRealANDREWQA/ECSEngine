@@ -97,14 +97,27 @@ Camera GetSandboxCamera(const EditorState* editor_state, unsigned int sandbox_in
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RegisterSandboxCameraTransform(EditorState* editor_state, unsigned int sandbox_index, unsigned int camera_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void RegisterSandboxCameraTransform(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	unsigned int camera_index, 
+	EDITOR_SANDBOX_VIEWPORT viewport,
+	bool disable_file_write
+)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_ASSERT(camera_index < std::size(sandbox->camera_saved_orientations));
 
 	EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
 	if (sandbox_state == EDITOR_SANDBOX_SCENE) {
-		sandbox->camera_saved_orientations[camera_index] = { sandbox->camera_parameters[viewport].translation, sandbox->camera_parameters[viewport].rotation };
+		sandbox->camera_saved_orientations[camera_index] = { 
+			sandbox->camera_parameters[viewport].translation,
+			sandbox->camera_parameters[viewport].rotation 
+		};
+
+		if (!disable_file_write) {
+			SaveEditorSandboxFile(editor_state);
+		}
 	}
 	else {
 		// TODO: Implement the runtime version
@@ -114,13 +127,19 @@ void RegisterSandboxCameraTransform(EditorState* editor_state, unsigned int sand
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RotateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 rotation, EDITOR_SANDBOX_VIEWPORT viewport)
+void RotateSandboxCamera(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	float3 rotation, 
+	EDITOR_SANDBOX_VIEWPORT viewport, 
+	bool disable_file_write
+)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->camera_parameters[viewport].rotation += rotation;
 
 	// Also write to the sandbox file this change such that we preserve this change - but only for the scene case
-	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE && !disable_file_write) {
 		SaveEditorSandboxFile(editor_state);
 	}
 }
@@ -176,13 +195,19 @@ void SetSandboxCameraAspectRatio(EditorState* editor_state, unsigned int sandbox
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void TranslateSandboxCamera(EditorState* editor_state, unsigned int sandbox_index, float3 translation, EDITOR_SANDBOX_VIEWPORT viewport)
+void TranslateSandboxCamera(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	float3 translation, 
+	EDITOR_SANDBOX_VIEWPORT viewport,
+	bool disable_file_write
+)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->camera_parameters[viewport].translation += translation;
 
 	// Also write the sandbox file in order to have this value preserved - but only for the scene viewport
-	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE && !disable_file_write) {
 		SaveEditorSandboxFile(editor_state);
 	}
 }

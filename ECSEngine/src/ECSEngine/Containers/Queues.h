@@ -30,8 +30,21 @@ namespace ECSEngine {
 			return m_queue.capacity;
 		}
 
-		ECS_INLINE CapacityStream<T>* GetQueue() const {
+		ECS_INLINE CapacityStream<T>* GetQueue() {
 			return &m_queue;
+		}
+
+		ECS_INLINE void CopyTo(void* memory) const {
+			if (m_first_item + GetSize() <= GetCapacity()) {
+				// Can memcpy directly
+				memcpy(memory, m_queue.buffer + m_first_item, MemoryOf(GetSize()));
+			}
+			else {
+				unsigned int first_copy_count = GetCapacity() - m_first_item;
+				memcpy(memory, m_queue.buffer + m_first_item, MemoryOf(first_copy_count));
+				unsigned int second_copy_count = GetSize() - first_copy_count;
+				memcpy(memory, m_queue.buffer, MemoryOf(second_copy_count));
+			}
 		}
 
 		ECS_INLINE bool Peek(T& element) const {
@@ -63,31 +76,25 @@ namespace ECSEngine {
 		}
 
 		void Push(T element) {
+			unsigned int index = m_first_item + m_queue.size;
+			bool is_greater = index >= m_queue.capacity;
+			m_queue[is_greater ? index - m_queue.capacity : index] = element;
 			if (m_queue.size == m_queue.capacity) {
-				unsigned int index = m_first_item + m_queue.size;
-				bool is_greater = index >= m_queue.capacity;
-				m_queue[is_greater ? index - m_queue.capacity : index] = element;
 				m_first_item = m_first_item + 1 == m_queue.capacity ? 0 : m_first_item + 1;
 			}
 			else {
-				unsigned int index = m_first_item + m_queue.size;
-				bool is_greater = index >= m_queue.capacity;
-				m_queue[is_greater ? index - m_queue.capacity : index] = element;
 				m_queue.size++;
 			}
 		}
 
 		void Push(const T* element) {
+			unsigned int index = m_first_item + m_queue.size;
+			bool is_greater = index >= m_queue.capacity;
+			m_queue[is_greater ? index - m_queue.capacity : index] = *element;
 			if (m_queue.size == m_queue.capacity) {
-				unsigned int index = m_first_item + m_queue.size;
-				bool is_greater = index >= m_queue.capacity;
-				m_queue[is_greater ? index - m_queue.capacity : index] = *element;
 				m_first_item = m_first_item + 1 == m_queue.capacity ? 0 : m_first_item + 1;
 			}
 			else {
-				unsigned int index = m_first_item + m_queue.size;
-				bool is_greater = index >= m_queue.capacity;
-				m_queue[is_greater ? index - m_queue.capacity : index] = *element;
 				m_queue.size++;
 			}
 		}
@@ -119,6 +126,12 @@ namespace ECSEngine {
 		void Initialize(Allocator* allocator, size_t capacity) {
 			size_t memory_size = MemoryOf(capacity);
 			void* allocation = allocator->Allocate(memory_size, alignof(T));
+			InitializeFromBuffer(allocation, capacity);
+		}
+
+		void Initialize(AllocatorPolymorphic allocator, size_t capacity) {
+			size_t memory_size = MemoryOf(capacity);
+			void* allocation = Allocate(allocator, memory_size, alignof(T));
 			InitializeFromBuffer(allocation, capacity);
 		}
 
@@ -381,6 +394,10 @@ namespace ECSEngine {
 			return m_queue.GetCapacity();
 		}
 
+		ECS_INLINE void CopyTo(void* memory) const {
+			m_queue.CopyTo(memory);
+		}
+
 		ECS_INLINE void Lock() {
 			m_lock.lock();
 		}
@@ -450,7 +467,7 @@ namespace ECSEngine {
 
 		void InitializeFromBuffer(void* buffer, size_t capacity) {
 			m_queue.InitializeFromBuffer(buffer, capacity);
-			m_lock.value.store(false);
+			m_lock.clear();
 		}
 
 		void InitializeFromBuffer(uintptr_t& buffer, size_t capacity) {
@@ -461,7 +478,29 @@ namespace ECSEngine {
 		template<typename Allocator>
 		void Initialize(Allocator* allocator, size_t capacity) {
 			m_queue.Initialize(allocator, capacity);
-			m_lock.value.store(false);
+			m_lock.clear();
+		}
+
+		void Initialize(AllocatorPolymorphic allocator, size_t capacity) {
+			m_queue.Initialize(allocator, capacity);
+			m_lock.clear();
+		}
+
+		// This can be used when on single thread - it performs no locking
+		// Return true in the functor to early exit, if desired. The functor takes as parameter a T or T&
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) {
+			return m_queue.ForEach<early_exit>(functor);
+		}
+
+		// This can be used when on single thread - it performs no locking
+		// CONST VARIANT
+		// Return true in the functor to early exit, if desired. The functor takes as parameter a T or const T&
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		ECS_INLINE bool ForEach(Functor&& functor) const {
+			return m_queue.ForEach<early_exit>(functor);
 		}
 
 		Queue<T> m_queue;

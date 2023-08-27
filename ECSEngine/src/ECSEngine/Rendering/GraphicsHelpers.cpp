@@ -459,7 +459,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		DirectX::ScratchImage new_image;
 		if (allocator.allocator != nullptr) {
-			new_image.SetAllocator(allocator.allocator, GetAllocateFunction(allocator), GetDeallocateMutableFunction(allocator));
+			SetInternalImageAllocator(&new_image, allocator);
 		}
 		result = DirectX::Resize(dx_image, new_width, new_height, filter_flag, new_image);
 		if (FAILED(result)) {
@@ -544,7 +544,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		DirectX::ScratchImage new_image;
 		if (allocator.allocator != nullptr) {
-			new_image.SetAllocator(allocator.allocator, GetAllocateFunction(allocator), GetDeallocateMutableFunction(allocator));
+			SetInternalImageAllocator(&new_image, allocator);
 		}
 		result = DirectX::Resize(dx_image, new_width, new_height, filter_flag, new_image);
 		if (FAILED(result)) {

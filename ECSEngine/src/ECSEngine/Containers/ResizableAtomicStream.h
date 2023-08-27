@@ -43,11 +43,23 @@ namespace ECSEngine {
 		}
 
 		// Thread safe
-		unsigned int AddStream(Stream<T> other) {
+		unsigned int AddStream(Stream<T> elements) {
 			lock.lock();
-			unsigned int index = stream.AddStream(other);
+			unsigned int index = stream.AddStream(elements);
 			lock.unlock();
 			return index;
+		}
+
+		ECS_INLINE unsigned int AddNonAtomic(T element) {
+			return stream.Add(element);
+		}
+
+		ECS_INLINE unsigned int AddNonAtomic(const T* element) {
+			return stream.Add(element);
+		}
+
+		ECS_INLINE unsigned int AddStreamNonAtomic(Stream<T> elements) {
+			return stream.AddStream(elements);
 		}
 
 		// it will set the size
@@ -108,11 +120,11 @@ namespace ECSEngine {
 			stream.SwapContents();
 		}
 
-		ECS_INLINE T& operator [](size_t index) {
+		ECS_INLINE T& operator [](unsigned int index) {
 			return stream[index];
 		}
 
-		ECS_INLINE const T& operator [](size_t index) const {
+		ECS_INLINE const T& operator [](unsigned int index) const {
 			return stream[index];
 		}
 

@@ -16,7 +16,7 @@ using namespace ECSEngine::Reflection;
 
 #define HASH_TABLE_DEFAULT_CAPACITY 64
 
-#define ARENA_CAPACITY 75'000
+#define ARENA_CAPACITY 3 * 100'000
 #define ARENA_COUNT 3
 #define ARENA_BLOCK_COUNT 1024
 
@@ -1967,7 +1967,9 @@ void EditorComponents::UpdateComponent(const ReflectionManager* reflection_manag
 void EditorComponents::Initialize(void* buffer)
 {
 	MemoryArena* arena = (MemoryArena*)buffer;
-	*arena = MemoryArena(function::OffsetPointer(arena, sizeof(*arena)), ARENA_CAPACITY, ARENA_COUNT, ARENA_BLOCK_COUNT);
+	CreateBaseAllocatorInfo info;
+	info.allocator_type = ECS_ALLOCATOR_ARENA;
+	*arena = MemoryArena(function::OffsetPointer(arena, sizeof(*arena)), ARENA_COUNT, ARENA_CAPACITY, ARENA_BLOCK_COUNT);
 	Initialize(GetAllocatorPolymorphic(arena));
 }
 
@@ -1988,7 +1990,7 @@ void EditorComponents::Initialize(AllocatorPolymorphic _allocator)
 
 size_t EditorComponents::DefaultAllocatorSize()
 {
-	return sizeof(MemoryArena) + MemoryArena::MemoryOf(ARENA_CAPACITY, ARENA_COUNT, ARENA_BLOCK_COUNT);
+	return sizeof(MemoryArena) + MemoryArena::MemoryOf(ARENA_COUNT, ARENA_CAPACITY, ECS_ALLOCATOR_MULTIPOOL);
 }
 
 // ----------------------------------------------------------------------------------------------

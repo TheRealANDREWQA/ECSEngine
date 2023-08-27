@@ -15,6 +15,7 @@
 #include "../Sandbox/SandboxScene.h"
 #include "../Sandbox/Sandbox.h"
 #include "../Sandbox/SandboxModule.h"
+#include "../Sandbox/SandboxFile.h"
 
 // These defined the bounds under which the mouse
 // is considered that it clicked and not selected yet
@@ -223,35 +224,57 @@ struct ScenePrivateActionData {
 	float3 scale_delta;
 };
 
+// The disable modifiers will make the rotation not change based on shift/ctrl
+// Returns true if the camera was rotated
+static bool HandleCameraRotation(EditorState* editor_state, unsigned int sandbox_index, float delta_time, bool disable_modifiers, bool disable_file_write) {
+	UISystem* system = editor_state->ui_system;
+	float rotation_factor = delta_time * 0.02f;
+	float2 mouse_position = system->GetNormalizeMousePosition();
+	float2 delta = system->GetMouseDelta(mouse_position);
+
+	if (!disable_modifiers) {
+		if (editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_SHIFT)) {
+			rotation_factor *= 0.2f;
+		}
+		else if (editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_CTRL)) {
+			rotation_factor *= 3.0f;
+		}
+	}
+
+	float3 rotation = { delta.y * rotation_factor, delta.x * rotation_factor, 0.0f };
+	// If the rotation has changed, rerender the sandbox
+	if (rotation.x != 0.0f || rotation.y != 0.0f) {
+		RotateSandboxCamera(editor_state, sandbox_index, rotation, EDITOR_SANDBOX_VIEWPORT_SCENE, disable_file_write);
+		return true;
+	}
+	return false;
+}
+
 // For increase/decrease speed
-static void SceneHandleCameraWASDMovement(EditorState* editor_state, unsigned int sandbox_index) {
-	// Check the wasd keys
+static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int sandbox_index, float delta_time) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	Camera camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-	float3 camera_forward = camera.GetForwardVector().AsFloat3Low();
-	float3 camera_right = camera.GetRightVector().AsFloat3Low();
-	float3 delta = WASDController(
-		&editor_state->input_mapping, 
-		EDITOR_INPUT_WASD_W, 
-		EDITOR_INPUT_WASD_A, 
-		EDITOR_INPUT_WASD_S, 
-		EDITOR_INPUT_WASD_D, 
-		sandbox->camera_wasd_speed, 
-		camera_forward, 
-		camera_right
-	);
-
-	TranslateSandboxCamera(editor_state, sandbox_index, delta, EDITOR_SANDBOX_VIEWPORT_SCENE);
-
-	// Check the speed modifiers
-	const float SPEED_INCREASE_STEP = 2.0f;
+	// Check the speed modifiers - since the camera translation will write the sandbox file once
+	// We can just modify the camera wasd speed here and it will get updated as well
+	const float SPEED_INCREASE_STEP = 0.005f;
 	bool changed_speed = false;
 
+	bool is_shift_down = editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_SHIFT);
 	if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_WASD_INCREASE_SPEED)) {
-		// Check for left shift to see if we double the curre
+		if (is_shift_down) {
+			sandbox->camera_wasd_speed *= 2.0f;
+		}
+		else {
+			sandbox->camera_wasd_speed += SPEED_INCREASE_STEP;
+		}
 		changed_speed = true;
 	}
 	if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_WASD_DECREASE_SPEED)) {
+		if (is_shift_down) {
+			sandbox->camera_wasd_speed *= 0.5f;
+		}
+		else {
+			sandbox->camera_wasd_speed -= SPEED_INCREASE_STEP;
+		}
 		changed_speed = true;
 	}
 	if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_WASD_RESET_SPEED)) {
@@ -259,7 +282,41 @@ static void SceneHandleCameraWASDMovement(EditorState* editor_state, unsigned in
 		changed_speed = true;
 	}
 
-	// We need to write the editor sandbox file in order to preserve this
+	bool camera_was_rotated = HandleCameraRotation(editor_state, sandbox_index, delta_time, true, true);
+
+	// Check the wasd keys
+	Camera camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	float3 camera_forward = camera.GetForwardVector().AsFloat3Low();
+	float3 camera_right = camera.GetRightVector().AsFloat3Low();
+	float3 delta = WASDController(
+		&editor_state->input_mapping, 
+		EDITOR_INPUT_WASD_W, 
+		EDITOR_INPUT_WASD_A, 
+		EDITOR_INPUT_WASD_S,
+		EDITOR_INPUT_WASD_D, 
+		sandbox->camera_wasd_speed * delta_time,
+		camera_forward, 
+		camera_right
+	);
+
+	// Change the frame pacing to one a little faster
+	editor_state->ui_system->m_frame_pacing = std::max(editor_state->ui_system->m_frame_pacing, (unsigned short)ECS_UI_FRAME_PACING_HIGH);
+	if (delta != float3::Splat(0.0f)) {
+		TranslateSandboxCamera(editor_state, sandbox_index, delta, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		// Re-render the sandbox as well and increase the frame pacing
+		editor_state->ui_system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	}
+	else if (camera_was_rotated) {
+		// Render the sandbox and save the editor file
+		editor_state->ui_system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		SaveEditorSandboxFile(editor_state);
+	}
+	else if (changed_speed) {
+		// We need to write the editor sandbox file in order to preserve this
+		SaveEditorSandboxFile(editor_state);
+	}
 }
 
 static void ScenePrivateAction(ActionData* action_data) {
@@ -276,16 +333,21 @@ static void ScenePrivateAction(ActionData* action_data) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, target_sandbox);
 		// Check to see if the camera wasd movement is activated
 		if (sandbox->is_camera_wasd_movement) {
-			SceneHandleCameraWASDMovement(editor_state, sandbox_index);
+			HandleCameraWASDMovement(editor_state, sandbox_index, system->GetFrameDeltaTime());
 		}
 		else {
 			// Check for camera wasd activation first
 			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CAMERA_WALK)) {
+				// Enable the mouse ray input and disable the cursor
+				mouse->EnableRawInput();
+				mouse->SetCursorVisibility(false);
 				sandbox->is_camera_wasd_movement = true;
 				// Initialize the camera translation/rotation
 				OrientedPoint camera_point = GetSandboxCameraPoint(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_COUNT);
 				data->camera_wasd_initial_translation = camera_point.position;
 				data->camera_wasd_initial_rotation = camera_point.rotation;
+				// We need this to make the camera movement smoother
+				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 			}
 			else {
 				ECS_TRANSFORM_TOOL current_tool = sandbox->transform_tool;
@@ -436,6 +498,9 @@ static void ScenePrivateAction(ActionData* action_data) {
 		else if (sandbox->is_camera_wasd_movement) {
 			// End the camera movement
 			sandbox->is_camera_wasd_movement = false;
+			// Disable the mouse raw input and make the cursor visible again
+			mouse->DisableRawInput();
+			mouse->SetCursorVisibility(true);
 		}
 	}
 	else if (mouse->IsPressed(ECS_MOUSE_MIDDLE) || mouse->IsPressed(ECS_MOUSE_RIGHT)) {
@@ -518,7 +583,7 @@ struct SceneActionData {
 
 	SceneDrawData* draw_data;
 	unsigned int sandbox_index;
-	bool initial_axes_draw;
+	bool is_disabled;
 };
 
 static void SceneRotationAction(ActionData* action_data) {
@@ -531,13 +596,16 @@ static void SceneRotationAction(ActionData* action_data) {
 
 	if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
-		data->initial_axes_draw = sandbox->transform_display_axes;
-		if (!data->initial_axes_draw) {
+		data->is_disabled = sandbox->transform_display_axes || sandbox->is_camera_wasd_movement;
+		if (!data->is_disabled) {
 			mouse->EnableRawInput();
+			// Make the pacing instant such that we won't have a big frame difference
+			// That can cause the camera to snap
+			system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 		}
 	}
 	
-	if (!data->initial_axes_draw) {
+	if (!data->is_disabled) {
 		if (mouse->IsReleased(ECS_MOUSE_RIGHT)) {
 			mouse->DisableRawInput();
 		}
@@ -546,22 +614,9 @@ static void SceneRotationAction(ActionData* action_data) {
 		}
 
 
-		if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
-			float rotation_factor = 75.0f;
-			float2 mouse_position = system->GetNormalizeMousePosition();
-			float2 delta = system->GetMouseDelta(mouse_position);
-
-			if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-				rotation_factor = 15.0f;
-			}
-			else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-				rotation_factor = 200.0f;
-			}
-
-			float3 rotation = { delta.y * rotation_factor, delta.x * rotation_factor, 0.0f };
-			// If the rotation has changed, rerender the sandbox
-			if (rotation.x != 0.0f || rotation.y != 0.0f) {
-				RotateSandboxCamera(editor_state, data->sandbox_index, rotation, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		if (mouse->IsHeld(ECS_MOUSE_RIGHT)) {
+			bool was_rotated = HandleCameraRotation(editor_state, data->sandbox_index, system->GetFrameDeltaTime(), false, false);
+			if (was_rotated) {
 				RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 			}
 		}
@@ -575,13 +630,13 @@ static void SceneTranslationAction(ActionData* action_data) {
 	EditorState* editor_state = data->draw_data->editor_state;
 	if (mouse->IsPressed(ECS_MOUSE_MIDDLE)) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
-		data->initial_axes_draw = sandbox->transform_display_axes;
-		if (!data->initial_axes_draw) {
+		data->is_disabled = sandbox->transform_display_axes || sandbox->is_camera_wasd_movement;
+		if (!data->is_disabled) {
 			mouse->EnableRawInput();
 		}
 	}
 	
-	if (!data->initial_axes_draw) {
+	if (!data->is_disabled) {
 		if (mouse->IsReleased(ECS_MOUSE_MIDDLE)) {
 			mouse->DisableRawInput();
 		}
@@ -591,7 +646,7 @@ static void SceneTranslationAction(ActionData* action_data) {
 
 		EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxActiveViewport(editor_state, data->sandbox_index);
 
-		if (mouse->IsDown(ECS_MOUSE_MIDDLE)) {
+		if (mouse->IsHeld(ECS_MOUSE_MIDDLE)) {
 			float2 mouse_position = system->GetNormalizeMousePosition();
 			float2 delta = system->GetMouseDelta(mouse_position);
 
@@ -623,27 +678,28 @@ static void SceneZoomAction(ActionData* action_data) {
 	SceneActionData* data = (SceneActionData*)_data;
 
 	EditorState* editor_state = data->draw_data->editor_state;
+	const EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
 	
-	// Zoom start
-	int scroll_delta = mouse->GetScrollDelta();
-	if (scroll_delta != 0) {
-		EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxActiveViewport(editor_state, data->sandbox_index);
-		float factor = 0.015f;
+	if (!sandbox->is_camera_wasd_movement) {
+		int scroll_delta = mouse->GetScrollDelta();
+		if (scroll_delta != 0) {
+			EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxActiveViewport(editor_state, data->sandbox_index);
+			float factor = 0.015f;
 
-		if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-			factor = 0.004f;
+			if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
+				factor = 0.004f;
+			}
+			else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+				factor = 0.06f;
+			}
+
+			float3 camera_rotation = GetSandboxCameraPoint(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).rotation;
+			float3 forward_vector = RotateVectorLow(camera_rotation, GetForwardVector());
+
+			TranslateSandboxCamera(editor_state, data->sandbox_index, forward_vector * float3::Splat(scroll_delta * factor), EDITOR_SANDBOX_VIEWPORT_SCENE);
+			RenderSandbox(editor_state, data->sandbox_index, current_viewport);
 		}
-		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-			factor = 0.06f;
-		}
-
-		float3 camera_rotation = GetSandboxCameraPoint(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).rotation;
-		float3 forward_vector = RotateVectorLow(camera_rotation, GetForwardVector());
-
-		TranslateSandboxCamera(editor_state, data->sandbox_index, forward_vector * float3::Splat(scroll_delta * factor), EDITOR_SANDBOX_VIEWPORT_SCENE);
-		RenderSandbox(editor_state, data->sandbox_index, current_viewport);
 	}
-	// Zoom end
 }
 
 struct SceneLeftClickableActionData {

@@ -23,6 +23,10 @@ namespace ECSEngine {
 			return *this;
 		}
 
+		ECS_INLINE void clear() {
+			value.store(false, ECS_RELAXED);
+		}
+
 		void lock();
 		
 		bool try_lock();
@@ -386,14 +390,14 @@ namespace ECSEngine {
 	}
 
 	template<typename Functor>
-	void ThreadSafeFunctor(SpinLock* spin_lock, Functor&& functor) {
+	ECS_INLINE void ThreadSafeFunctor(SpinLock* spin_lock, Functor&& functor) {
 		spin_lock->lock();
 		functor();
 		spin_lock->unlock();
 	}
 
 	template<typename Functor>
-	auto ThreadSafeFunctorReturn(SpinLock* spin_lock, Functor&& functor) {
+	ECS_INLINE auto ThreadSafeFunctorReturn(SpinLock* spin_lock, Functor&& functor) {
 		spin_lock->lock();
 		auto return_value = functor();
 		spin_lock->unlock();

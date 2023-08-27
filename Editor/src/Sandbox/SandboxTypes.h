@@ -26,7 +26,7 @@ enum EDITOR_SANDBOX_ENTITY_SLOT : unsigned char {
 
 #define EDITOR_SCENE_EXTENSION L".scene"
 #define EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT ECS_CONSTANT_REFLECT(8)
-#define EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED 1.0f
+#define EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED 0.002f
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -45,9 +45,9 @@ struct ECS_REFLECT EditorSandboxModule {
 	ECSEngine::Stream<wchar_t> settings_name;
 
 	ECSEngine::Stream<EditorModuleReflectedSetting> reflected_settings; ECS_SKIP_REFLECTION()
-		ECSEngine::MemoryManager settings_allocator; ECS_SKIP_REFLECTION(static_assert(sizeof(ECSEngine::MemoryManager) == 48))
+	ECSEngine::MemoryManager settings_allocator; ECS_SKIP_REFLECTION(static_assert(sizeof(ECSEngine::MemoryManager) == 72))
 
-		ECS_FIELDS_END_REFLECT;
+	ECS_FIELDS_END_REFLECT;
 };
 
 // -------------------------------------------------------------------------------------------------------------

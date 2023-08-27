@@ -635,17 +635,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	// Target this memory manager to be able to hold 0.2M objects without going to the global allocator
-	// Add a small number to accomodate smaller allocations, like the one for the resizable stream
-	// Support another 0.2M for each global allocator callback
-	MemoryManager DefaultEntityPoolManager(GlobalMemoryManager* global_memory)
-	{
-		size_t whole_chunk_memory = StableReferenceStream<EntityInfo>::MemoryOf(205'000);
-		return MemoryManager(whole_chunk_memory, 4096, whole_chunk_memory, global_memory);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
 #define ENTITY_POOL_SERIALIZE_VERSION 0
 
 	struct SerializeEntityInfo {

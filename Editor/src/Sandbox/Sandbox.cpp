@@ -180,7 +180,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->transform_space = ECS_TRANSFORM_LOCAL_SPACE;
 	sandbox->transform_keyboard_space = ECS_TRANSFORM_LOCAL_SPACE;
 	sandbox->transform_keyboard_tool = ECS_TRANSFORM_COUNT;
-	sandbox->is_camera_wasd_movement = true;
+	sandbox->is_camera_wasd_movement = false;
 	sandbox->camera_wasd_speed = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED;
 	memset(sandbox->transform_tool_selected, 0, sizeof(sandbox->transform_tool_selected));
 
@@ -686,7 +686,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 
 	// Create a sandbox allocator - a global one - such that it can accomodate the default entity manager requirements
 	GlobalMemoryManager* allocator = (GlobalMemoryManager*)editor_state->editor_allocator->Allocate(sizeof(GlobalMemoryManager));
-	*allocator = GlobalMemoryManager(
+	*allocator = CreateGlobalMemoryManager(
 		sandbox->runtime_descriptor.entity_manager_memory_size + ECS_MB * 10,
 		1024,
 		sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size + ECS_MB * 2
@@ -924,7 +924,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		sandbox->sandbox_world.task_manager = editor_state->render_task_manager;
 		sandbox->sandbox_world.task_scheduler = &viewport_task_scheduler;
 
-		MemoryManager runtime_query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(editor_state->GlobalMemoryManager());
+		MemoryManager runtime_query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(GetAllocatorPolymorphic(editor_state->GlobalMemoryManager()));
 		ArchetypeQueryCache runtime_query_cache;
 
 		if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {

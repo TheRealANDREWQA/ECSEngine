@@ -77,7 +77,7 @@ namespace ECSEngine {
 	}
 
 	void Mouse::Reset() {
-		memset(m_states, ECS_BUTTON_UP, sizeof(m_states));
+		memset(m_states, ECS_BUTTON_RAISED, sizeof(m_states));
 		m_current_position = { 0, 0 };
 		m_current_scroll = 0;
 		m_previous_position = { 0, 0 };

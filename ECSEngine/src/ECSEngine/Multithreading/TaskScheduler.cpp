@@ -470,7 +470,7 @@ namespace ECSEngine {
 
 	MemoryManager TaskScheduler::DefaultAllocator(GlobalMemoryManager* memory)
 	{
-		return MemoryManager(ECS_KB * 32, 1024, ECS_KB * 32, memory);
+		return MemoryManager(ECS_KB * 32, 1024, ECS_KB * 32, GetAllocatorPolymorphic(memory));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

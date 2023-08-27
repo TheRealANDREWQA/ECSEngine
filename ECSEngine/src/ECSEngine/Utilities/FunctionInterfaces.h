@@ -4,6 +4,7 @@
 #include "../Containers/Stream.h"
 #include "BasicTypes.h"
 #include "File.h"
+#include "DebugInfo.h"
 
 namespace ECSEngine {
 
@@ -1065,7 +1066,7 @@ string_name.AssertCapacity();
 
 		// -----------------------------------------------------------------------------------------------------------------------
 
-		ECS_INLINE void DebugLocationString(DebugInfo debug_info, CapacityStream<char>* string) {
+		static void DebugLocationString(DebugInfo debug_info, CapacityStream<char>* string) {
 			string->AddStreamAssert("File: ");
 			string->AddStreamAssert(debug_info.file);
 			string->AddStreamAssert(", function: ");

@@ -48,7 +48,12 @@ void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_index, uns
 	sandbox_module->settings_name.size = 0;
 
 	// Create the allocator
-	sandbox_module->settings_allocator = MemoryManager(MODULE_ALLOCATOR_SIZE, MODULE_ALLOCATOR_POOL_COUNT, MODULE_ALLOCATOR_BACKUP_SIZE, sandbox->GlobalMemoryManager());
+	sandbox_module->settings_allocator = MemoryManager(
+		MODULE_ALLOCATOR_SIZE, 
+		MODULE_ALLOCATOR_POOL_COUNT, 
+		MODULE_ALLOCATOR_BACKUP_SIZE, 
+		GetAllocatorPolymorphic(sandbox->GlobalMemoryManager())
+	);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

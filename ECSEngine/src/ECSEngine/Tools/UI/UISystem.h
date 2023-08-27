@@ -14,7 +14,6 @@ namespace ECSEngine {
 	struct Graphics;
 	struct TaskManager;
 	struct ResourceManager;
-	struct GlobalMemoryManager;
 
 	struct World;
 
@@ -1241,6 +1240,9 @@ namespace ECSEngine {
 
 			UIWindowDynamicResource* GetWindowDynamicElement(unsigned int window_index, unsigned int index);
 
+			// Returns the duration in microseconds since the last frame
+			float GetFrameDeltaTime() const;
+
 			void HandleHoverable(float2 mouse_position, unsigned int thread_id, void** buffers, size_t* counts);
 
 			void HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id, ECS_MOUSE_BUTTON button_type);
@@ -1857,6 +1859,9 @@ namespace ECSEngine {
 			// Useful for calculating the normalized mouse value when scaling is being applied
 			// at the OS level and try to remedy it
 			uint2 m_window_os_size;
+			// This is used to keep track of the frame delta time
+			Timer m_frame_timer;
+			float m_frame_delta_time;
 			void* m_event_data;
 			unsigned short m_frame_pacing;
 			unsigned short m_texture_evict_count;
