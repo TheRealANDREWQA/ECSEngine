@@ -219,6 +219,8 @@
     <ClInclude Include="src\ECSEngine\Math\Intersection.h" />
     <ClInclude Include="src\Includes\ECSEngineInput.h" />
     <ClInclude Include="src\ECSEngine\Input\Controller\WASDController.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\AllocatorCallsDebug.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\DebugInfo.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -337,6 +339,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\SampleTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\TransformTool.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Controller\WASDController.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\AllocatorCallsDebug.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

@@ -207,6 +207,7 @@
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="src\ECSEngine\Allocators\AllocatorCallsDebug.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorPolymorphic.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorTypes.h" />
     <ClInclude Include="src\ECSEngine\Allocators\LinearAllocator.h" />
@@ -303,6 +304,7 @@
     <ClInclude Include="src\ECSEngine\Input\ButtonInput.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
     <ClInclude Include="src\ECSEngine\Input\InputMapping.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\DebugInfo.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializationMacro.h" />
@@ -407,6 +409,7 @@
     <ClInclude Include="src\ECSEngine\Multithreading\TaskManager.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\ECSEngine\Allocators\AllocatorCallsDebug.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorPolymorphic.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\MemoryArena.cpp" />

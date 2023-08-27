@@ -261,9 +261,6 @@ namespace ECSEngine {
 
 	typedef CapacityStream<DeferredAction> EntityManagerCommandStream;
 
-	// Returns a memory manager that would suit an EntityPool with the given pool capacity
-	//ECSENGINE_API MemoryManager DefaultEntityPoolManager(GlobalMemoryManager* global_memory);
-
 	struct ECSENGINE_API EntityPool {
 	public:
 		EntityPool(

@@ -3856,7 +3856,7 @@ namespace ECSEngine {
 
 	MemoryManager DefaultGraphicsAllocator(GlobalMemoryManager* manager)
 	{
-		return MemoryManager(100'000, 1024, 100'000, manager);
+		return MemoryManager(100'000, 1024, 100'000, GetAllocatorPolymorphic(manager));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

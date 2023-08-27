@@ -1013,7 +1013,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 			TEMPORARY_DATABASE_ALLOCATOR_CAPACITY,
 			ECS_KB,
 			TEMPORARY_DATABASE_ALLOCATOR_CAPACITY,
-			editor_state->GlobalMemoryManager()
+			GetAllocatorPolymorphic(editor_state->GlobalMemoryManager())
 		);
 		draw_data->temporary_database = AssetDatabase(GetAllocatorPolymorphic(&draw_data->database_allocator), editor_state->asset_database->reflection_manager);
 		draw_data->temporary_database.SetFileLocation(editor_state->asset_database->metadata_file_location);

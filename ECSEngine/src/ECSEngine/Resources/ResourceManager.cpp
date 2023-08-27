@@ -938,17 +938,13 @@ namespace ECSEngine {
 
 		HRESULT result;
 		
-		AllocateFunction allocate_function = DirectX::ECSDefaultAllocation;
-		DeallocateMutableFunction deallocate_function = DirectX::ECSDefaultDeallocation;
 		void* allocator = nullptr;
 		if (descriptor->allocator.allocator != nullptr) {
 			allocator = descriptor->allocator.allocator;
-			allocate_function = GetAllocateFunction(descriptor->allocator);
-			deallocate_function = GetDeallocateMutableFunction(descriptor->allocator);
 		}
 
 		DirectX::ScratchImage image;
-		image.SetAllocator(allocator, allocate_function, deallocate_function);
+		SetInternalImageAllocator(&image, descriptor->allocator);
 		if (is_hdr_texture) {
 			bool apply_tonemapping = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEXTURE_HDR_TONEMAP);
 			result = DirectX::LoadFromHDRFile(filename.buffer, nullptr, image, apply_tonemapping);
@@ -2549,7 +2545,12 @@ namespace ECSEngine {
 
 	MemoryManager DefaultResourceManagerAllocator(GlobalMemoryManager* global_allocator)
 	{
-		return MemoryManager(ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_INITIAL_SIZE, 2048, ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE, global_allocator);
+		return MemoryManager(
+			ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_INITIAL_SIZE, 
+			2048, 
+			ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE, 
+			GetAllocatorPolymorphic(global_allocator)
+		);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------

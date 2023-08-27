@@ -3,11 +3,9 @@
 #include "../Containers/HashTable.h"
 #include "../Allocators/LinearAllocator.h"
 #include "../Containers/DataPointer.h"
+#include "../Allocators/MemoryManager.h"
 
 namespace ECSEngine {
-
-	struct GlobalMemoryManager;
-	struct MemoryManager;
 
 	struct SystemManagerSetting {
 		Stream<char> name;

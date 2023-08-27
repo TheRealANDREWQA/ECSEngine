@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "Stream.h"
 #include "../Math/VCLExtensions.h"
+#include "../Utilities/Function.h"
 
 namespace ECSEngine {
 
@@ -488,6 +489,13 @@ namespace ECSEngine {
 			else {
 				return identifier.Hash();
 			}
+		}
+	};
+
+	struct PointerHash {
+		template<typename T>
+		ECS_INLINE static unsigned int Hash(const T* pointer) {
+			return function::PointerHash(pointer);
 		}
 	};
 

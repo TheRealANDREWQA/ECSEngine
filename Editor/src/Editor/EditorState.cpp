@@ -307,7 +307,7 @@ void PreinitializeRuntime(EditorState* editor_state) {
 
 	// And the asset database
 	ResizableMemoryArena* database_arena = (ResizableMemoryArena*)function::OffsetPointer(editor_state->runtime_resource_manager, sizeof(*editor_state->runtime_resource_manager));
-	*database_arena = ResizableMemoryArena(editor_state->editor_allocator->m_backup, ECS_MB, 4, ECS_KB * 4, ECS_MB * 5, 4, ECS_KB * 4);
+	*database_arena = CreateResizableMemoryArena(ECS_MB, 4, ECS_KB * 4, GetAllocatorPolymorphic(editor_state->GlobalMemoryManager()), ECS_MB * 5, 4, ECS_KB * 4);
 
 	AssetDatabase* database = (AssetDatabase*)function::OffsetPointer(database_arena, sizeof(*database_arena));
 	*database = AssetDatabase(GetAllocatorPolymorphic(database_arena), editor_state->ui_reflection->reflection);
@@ -326,7 +326,12 @@ ECS_THREAD_TASK(InitializeRuntimeGraphicsTask) {
 	MemoryManager* runtime_graphics_allocator = (MemoryManager*)allocation;
 	editor_state->runtime_graphics = (Graphics*)function::OffsetPointer(runtime_graphics_allocator, sizeof(*runtime_graphics_allocator));
 
-	*runtime_graphics_allocator = MemoryManager(GRAPHICS_ALLOCATOR_CAPACITY, GRAPHICS_ALLOCATOR_BLOCK_COUNT, GRAPHICS_ALLOCATOR_CAPACITY, editor_state->GlobalMemoryManager());
+	*runtime_graphics_allocator = MemoryManager(
+		GRAPHICS_ALLOCATOR_CAPACITY, 
+		GRAPHICS_ALLOCATOR_BLOCK_COUNT, 
+		GRAPHICS_ALLOCATOR_CAPACITY, 
+		GetAllocatorPolymorphic(editor_state->GlobalMemoryManager())
+	);
 
 	GraphicsDescriptor graphics_descriptor;
 	graphics_descriptor.allocator = runtime_graphics_allocator;
@@ -351,7 +356,7 @@ void InitializeRuntime(EditorState* editor_state) {
 void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mouse, Keyboard* keyboard)
 {
 	GlobalMemoryManager* hub_allocator = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
-	*hub_allocator = GlobalMemoryManager(ECS_KB * 16, 512, ECS_KB * 16);
+	*hub_allocator = CreateGlobalMemoryManager(ECS_KB * 16, 512, ECS_KB * 16);
 
 	HubData* hub_data = (HubData*)malloc(sizeof(HubData));
 	hub_data->projects.Initialize(hub_allocator, 0, EDITOR_HUB_PROJECT_CAPACITY);
@@ -360,7 +365,7 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 	editor_state->hub_data = hub_data;
 
 	GlobalMemoryManager* console_global_memory = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
-	*console_global_memory = GlobalMemoryManager(ECS_MB * 3, 64, ECS_MB * 2);
+	*console_global_memory = CreateGlobalMemoryManager(ECS_MB * 3, 64, ECS_MB * 2);
 	MemoryManager* console_memory_manager = (MemoryManager*)malloc(sizeof(MemoryManager));
 	*console_memory_manager = DefaultConsoleAllocator(console_global_memory);
 
@@ -377,22 +382,32 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 
 void EditorStateInitialize(Application* application, EditorState* editor_state, HWND hWnd, Mouse* mouse, Keyboard* keyboard)
 {
+	// Initialize the Debug Allocator Manager
+	DebugAllocatorManagerDescriptor debug_allocator_manager_descriptor;
+	debug_allocator_manager_descriptor.capacity = ECS_DEBUG_ALLOCATOR_MANAGER_CAPACITY_HIGH;
+	debug_allocator_manager_descriptor.enable_global_write_to_file = true;
+	DebugAllocatorManagerInitialize(&debug_allocator_manager_descriptor);
+
 	// Create every single member using new for easier class construction
 	editor_state->editor_tick = TickPendingTasks;
 	memset(editor_state->flags, 0, sizeof(editor_state->flags));
 
-	GlobalMemoryManager* global_memory_manager = new GlobalMemoryManager(GLOBAL_MEMORY_COUNT, 512, GLOBAL_MEMORY_RESERVE_COUNT);
+	GlobalMemoryManager* global_memory_manager = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
+	*global_memory_manager = CreateGlobalMemoryManager(GLOBAL_MEMORY_COUNT, 512, GLOBAL_MEMORY_RESERVE_COUNT);
 	Graphics* graphics = (Graphics*)malloc(sizeof(Graphics));
 	// Could have used the integrated GPU to render the UI but since the sandboxes
 	// will use the dedicated GPU then they will have to share the textures through CPU RAM
 	// and that will be slow. So instead we have to use the dedicated GPU for UI as well
 	CreateGraphicsForProcess(graphics, hWnd, global_memory_manager, true);
 
-	MemoryManager* editor_allocator = new MemoryManager(2'000'000, 4096, 10'000'000, global_memory_manager);
+	MemoryManager* editor_allocator = new MemoryManager(2'000'000, 4096, 10'000'000, GetAllocatorPolymorphic(global_memory_manager));
 	editor_state->editor_allocator = editor_allocator;
 	AllocatorPolymorphic polymorphic_editor_allocator = GetAllocatorPolymorphic(editor_allocator);
 
-	MemoryManager* multithreaded_editor_allocator = new MemoryManager(10'000'000, 4096, 10'000'000, global_memory_manager);
+	// Enable the debug allocator on the editor allocator
+	editor_allocator->SetDebugMode("EditorAllocator", false);
+
+	MemoryManager* multithreaded_editor_allocator = new MemoryManager(10'000'000, 4096, 10'000'000, GetAllocatorPolymorphic(global_memory_manager));
 	editor_state->multithreaded_editor_allocator = multithreaded_editor_allocator;
 
 	TaskManager* editor_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
@@ -572,7 +587,7 @@ void EditorStateDestroy(EditorState* editor_state) {
 	editor_state->render_task_manager->DestroyThreads();
 
 	DestroyGraphics(editor_state->ui_system->m_graphics);
-	editor_state->editor_allocator->m_backup->Free();
+	FreeAllocator(GetAllocatorPolymorphic(editor_state->GlobalMemoryManager()));
 
 	// If necessary, free all the malloc's for the individual allocations - but there are very small and insignificant
 	// Not worth freeing them since EditorStateInitialize won't be called more than a couple of times during the runtime of 

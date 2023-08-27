@@ -1,14 +1,14 @@
 #include "ecspch.h";
 #include "LinearAllocator.h"
 #include "../Utilities/Function.h"
-#include "AllocatorPolymorphic.h"
+#include "AllocatorCallsDebug.h"
 
 namespace ECSEngine {
 	
 	LinearAllocator::LinearAllocator(AllocatorPolymorphic allocator, size_t capacity) : m_buffer(ECSEngine::Allocate(allocator, capacity)),
-		m_capacity(capacity), m_top(0), m_marker(0), m_spin_lock() {}
+		m_capacity(capacity), m_top(0), m_marker(0), m_spin_lock(), m_debug_mode(false) {}
 
-	void* LinearAllocator::Allocate(size_t size, size_t alignment) {
+	void* LinearAllocator::Allocate(size_t size, size_t alignment, DebugInfo debug_info) {
 		// calculating the current pointer and aligning it
 		uintptr_t current_pointer = (uintptr_t)m_buffer + m_top;
 
@@ -22,14 +22,33 @@ namespace ECSEngine {
 		void* pointer = (void*)((uintptr_t)m_buffer + offset);
 		m_top = offset + size;
 
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = pointer;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_ALLOCATE;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_LINEAR, &tracked);
+		}
+
 		return pointer;
 	}
 
-	void LinearAllocator::Deallocate(const void* block) {}
+	template<bool trigger_error_if_not_found>
+	bool LinearAllocator::Deallocate(const void* block, DebugInfo debug_info) { return true; }
 
-	void LinearAllocator::Clear() {
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, LinearAllocator::Deallocate, const void*, DebugInfo);
+
+	void LinearAllocator::Clear(DebugInfo debug_info) {
 		m_top = 0;
 		m_marker = 0;
+
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = nullptr;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_CLEAR;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_LINEAR, &tracked);
+		}
 	}
 
 	size_t LinearAllocator::GetMarker() const
@@ -42,15 +61,34 @@ namespace ECSEngine {
 		return m_buffer;
 	}
 
-	void LinearAllocator::ReturnToMarker(size_t marker)
+	void LinearAllocator::ReturnToMarker(size_t marker, DebugInfo debug_info)
 	{
 		ECS_ASSERT(marker <= m_top);
 		m_top = marker;
+
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = (void*)marker;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_RETURN_TO_MARKER;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_LINEAR, &tracked);
+		}
 	}
 
 	bool LinearAllocator::Belongs(const void* buffer) const
 	{
 		return function::IsPointerRange(m_buffer, m_top, buffer);
+	}
+
+	void LinearAllocator::ExitDebugMode()
+	{
+		m_debug_mode = false;
+	}
+
+	void LinearAllocator::SetDebugMode(const char* name, bool resizable)
+	{
+		m_debug_mode = true;
+		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_LINEAR);
 	}
 
 	void LinearAllocator::SetMarker() {
@@ -59,13 +97,16 @@ namespace ECSEngine {
 
 	// ---------------------- Thread safe variants -----------------------------
 
-	void* LinearAllocator::Allocate_ts(size_t size, size_t alignment) {
+	void* LinearAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
 		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
-			return Allocate(size, alignment);
+			return Allocate(size, alignment, debug_info);
 		});
 	}
 
-	void LinearAllocator::Deallocate_ts(const void* block) {}
+	template<bool trigger_error_if_not_found>
+	bool LinearAllocator::Deallocate_ts(const void* block, DebugInfo debug_info) { return true; }
+
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, LinearAllocator::Deallocate_ts, const void*, DebugInfo);
 
 	void LinearAllocator::SetMarker_ts() {
 		ThreadSafeFunctor(&m_spin_lock, [&]() {

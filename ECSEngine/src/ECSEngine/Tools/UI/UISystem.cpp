@@ -99,7 +99,7 @@ namespace ECSEngine {
 
 		UIToolsAllocator DefaultUISystemAllocator(GlobalMemoryManager* global_manager)
 		{
-			return UIToolsAllocator(global_manager, 15'000'000, 8, 512, 5'000'000, 4, 512);
+			return CreateResizableMemoryArena(15'000'000, 8, 512, GetAllocatorPolymorphic(global_manager), 5'000'000, 4, 512);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -113,7 +113,7 @@ namespace ECSEngine {
 			ResourceManager* resource,
 			TaskManager* task_manager,
 			uint2 window_os_size,
-			GlobalMemoryManager* initial_allocator
+			MemoryManager* initial_allocator
 		) : m_graphics(graphics), m_mouse(mouse), m_keyboard(keyboard),
 			m_memory(memory), m_resource_manager(resource), m_task_manager(task_manager), m_application(application), m_frame_index(0),
 			m_texture_evict_count(0), m_texture_evict_target(60), m_window_os_size(window_os_size)
@@ -270,6 +270,9 @@ namespace ECSEngine {
 
 			// focused window data
 			memset(&m_focused_window_data, 0, sizeof(m_focused_window_data));
+
+			// Unitialize the timer
+			m_frame_timer.SetUninitialized();
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3572,6 +3575,14 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::DoFrame() {
+			if (m_frame_timer.IsUninitialized()) {
+				m_frame_delta_time = 0.0f;
+			}
+			else {
+				m_frame_delta_time = m_frame_timer.GetDurationSinceMarker(ECS_TIMER_DURATION_US);
+			}
+			m_frame_timer.SetMarker();
+
 			m_texture_evict_count++;
 			if (m_texture_evict_count == m_texture_evict_target) {
 				m_resource_manager->DecrementReferenceCounts(ResourceType::Texture, m_texture_evict_count);
@@ -3980,7 +3991,7 @@ namespace ECSEngine {
 			if (!m_execute_events && data->mouse_region.dockspace == data->dockspace && data->mouse_region.border_index == data->border_index) {
 				bool active_click_handler = false;
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button) {
-					active_click_handler |= m_focused_window_data.clickable_handler[button].action == nullptr || m_mouse->Get(button) != ECS_BUTTON_DOWN;
+					active_click_handler |= m_focused_window_data.clickable_handler[button].action == nullptr || m_mouse->Get(button) != ECS_BUTTON_HELD;
 				});
 				if ((active_click_handler || m_focused_window_data.always_hoverable)
 					&& data->dockspace->borders[data->border_index].hoverable_handler.position_x.buffer != nullptr) {
@@ -4044,7 +4055,7 @@ namespace ECSEngine {
 
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 					if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_NORMAL) {
-						if (m_mouse->Get(button_type) == ECS_BUTTON_DOWN) {
+						if (m_mouse->Get(button_type) == ECS_BUTTON_HELD) {
 							HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
 						}
 						else if (m_mouse->Get(button_type) == ECS_BUTTON_RELEASED) {
@@ -6813,6 +6824,13 @@ namespace ECSEngine {
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.clickable_handler[button_type].phase;
 			m_execute_events = !m_focused_window_data.ExecuteClickableHandler(&action_data, button_type);
 			m_frame_pacing = (!m_execute_events && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		float UISystem::GetFrameDeltaTime() const
+		{
+			return m_frame_delta_time;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -11889,7 +11907,7 @@ namespace ECSEngine {
 			UIDefaultClickableData* data = (UIDefaultClickableData*)_data;
 
 			ECS_BUTTON_STATE button_state = mouse->Get(data->button_type);
-			if (button_state == ECS_BUTTON_PRESSED || button_state == ECS_BUTTON_DOWN) {
+			if (button_state == ECS_BUTTON_PRESSED || button_state == ECS_BUTTON_HELD) {
 				// The data must be inferred
 				void* handler_data = data->hoverable_handler.data_size == 0 ? data->hoverable_handler.data : function::OffsetPointer(data, sizeof(*data));
 

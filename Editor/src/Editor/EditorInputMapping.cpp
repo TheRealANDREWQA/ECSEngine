@@ -15,7 +15,7 @@ void InitializeInputMapping(EditorState* editor_state) {
 
 	mappings[EDITOR_INPUT_NEW_PROJECT].first.is_key = true;
 	mappings[EDITOR_INPUT_NEW_PROJECT].first.key = ECS_KEY_LEFT_CTRL;
-	mappings[EDITOR_INPUT_NEW_PROJECT].first.state = ECS_BUTTON_DOWN;
+	mappings[EDITOR_INPUT_NEW_PROJECT].first.state = ECS_BUTTON_HELD;
 	mappings[EDITOR_INPUT_NEW_PROJECT].second.is_key = true;
 	mappings[EDITOR_INPUT_NEW_PROJECT].second.key = ECS_KEY_N;
 	mappings[EDITOR_INPUT_NEW_PROJECT].second.state = ECS_BUTTON_PRESSED;
@@ -41,14 +41,14 @@ void InitializeInputMapping(EditorState* editor_state) {
 	mappings[EDITOR_INPUT_CHANGE_TRANSFORM_SPACE].SetFirstKeyPressed(ECS_KEY_L);
 	mappings[EDITOR_INPUT_FOCUS_OBJECT].SetFirstKeyPressed(ECS_KEY_F);
 
-	mappings[EDITOR_INPUT_CAMERA_WALK].SetFirstKey(ECS_KEY_LEFT_SHIFT, ECS_BUTTON_DOWN);
-	mappings[EDITOR_INPUT_CAMERA_WALK].SetSecondKey(ECS_KEY_SHARP_QUOTE, ECS_BUTTON_DOWN);
-	mappings[EDITOR_INPUT_WASD_W].SetFirstKey(ECS_KEY_W, ECS_BUTTON_DOWN);
-	mappings[EDITOR_INPUT_WASD_A].SetFirstKey(ECS_KEY_A, ECS_BUTTON_DOWN);
-	mappings[EDITOR_INPUT_WASD_S].SetFirstKey(ECS_KEY_S, ECS_BUTTON_DOWN);
-	mappings[EDITOR_INPUT_WASD_D].SetFirstKey(ECS_KEY_D, ECS_BUTTON_DOWN);
-	mappings[EDITOR_INPUT_WASD_INCREASE_SPEED].SetFirstKey(ECS_KEY_E, ECS_BUTTON_DOWN);
-	mappings[EDITOR_INPUT_WASD_DECREASE_SPEED].SetFirstKey(ECS_KEY_Q, ECS_BUTTON_DOWN);
+	mappings[EDITOR_INPUT_CAMERA_WALK].SetFirstKey(ECS_KEY_LEFT_SHIFT, ECS_BUTTON_HELD);
+	mappings[EDITOR_INPUT_CAMERA_WALK].SetSecondKey(ECS_KEY_SHARP_QUOTE, ECS_BUTTON_HELD);
+	mappings[EDITOR_INPUT_WASD_W].SetFirstKey(ECS_KEY_W, ECS_BUTTON_HELD);
+	mappings[EDITOR_INPUT_WASD_A].SetFirstKey(ECS_KEY_A, ECS_BUTTON_HELD);
+	mappings[EDITOR_INPUT_WASD_S].SetFirstKey(ECS_KEY_S, ECS_BUTTON_HELD);
+	mappings[EDITOR_INPUT_WASD_D].SetFirstKey(ECS_KEY_D, ECS_BUTTON_HELD);
+	mappings[EDITOR_INPUT_WASD_INCREASE_SPEED].SetFirstKeyPressed(ECS_KEY_E);
+	mappings[EDITOR_INPUT_WASD_DECREASE_SPEED].SetFirstKeyPressed(ECS_KEY_Q);
 	mappings[EDITOR_INPUT_WASD_RESET_SPEED].SetFirstKeyPressed(ECS_KEY_R);
 
 	editor_state->input_mapping.ChangeMapping(mappings);

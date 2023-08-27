@@ -11,7 +11,7 @@ namespace ECSEngine {
 		};
 	};
 	
-	ECSENGINE_API MemoryManager DefaultEntityHierarchyAllocator(GlobalMemoryManager* global_memory);
+	ECSENGINE_API MemoryManager DefaultEntityHierarchyAllocator(AllocatorPolymorphic global_memory);
 
 #define ECS_ENTITY_HIERARCHY_STATIC_STORAGE (3)
 #define ECS_ENTITY_HIERARCHY_MAX_CHILDREN (1 << 11)

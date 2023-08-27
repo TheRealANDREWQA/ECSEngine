@@ -21,6 +21,12 @@ enum EDITOR_INPUT_MAPPING : unsigned char {
 	EDITOR_INPUT_WASD_A,
 	EDITOR_INPUT_WASD_S,
 	EDITOR_INPUT_WASD_D,
+	
+	// The WASD increase/decrease speed have 2 modes
+	// When shift is pressed, the speed will double/halve
+	// When shift is not pressed, the speed will increase/decrease
+	// with a constant step
+
 	EDITOR_INPUT_WASD_INCREASE_SPEED,
 	EDITOR_INPUT_WASD_DECREASE_SPEED,
 	EDITOR_INPUT_WASD_RESET_SPEED,

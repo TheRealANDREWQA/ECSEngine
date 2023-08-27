@@ -190,7 +190,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 			DRAW_MODULE_SETTINGS_ALLOCATOR_CAPACITY,
 			DRAW_MODULE_SETTINGS_ALLOCATOR_POOL_COUNT,
 			DRAW_MODULE_SETTINGS_ALLOCATOR_BACKUP_SIZE,
-			editor_state->GlobalMemoryManager()
+			GetAllocatorPolymorphic(editor_state->GlobalMemoryManager())
 		);
 	}
 	else {

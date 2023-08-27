@@ -1,18 +1,19 @@
 #include "ecspch.h"
 #include "../Utilities/Function.h"
 #include "MultipoolAllocator.h"
+#include "AllocatorCallsDebug.h"
 
 namespace ECSEngine {
 	
-	MultipoolAllocator::MultipoolAllocator() : m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0) {}
-	
-	MultipoolAllocator::MultipoolAllocator(unsigned char* buffer, size_t size, size_t pool_count)
-		: m_buffer((unsigned char*)buffer), m_spin_lock(), m_size(size), m_range((unsigned int*)function::OffsetPointer(buffer, size), pool_count, size) {}
+	MultipoolAllocator::MultipoolAllocator(void* buffer, size_t size, size_t pool_count)
+		: m_buffer((unsigned char*)buffer), m_spin_lock(), m_size(size), m_range((unsigned int*)function::OffsetPointer(buffer, size), pool_count, size),
+		m_debug_mode(false) {}
 
-	MultipoolAllocator::MultipoolAllocator(unsigned char* buffer, void* block_range_buffer, size_t size, size_t pool_count) : m_buffer(buffer), m_spin_lock(), m_size(size),
-		m_range((unsigned int*)block_range_buffer, pool_count, size) {}
+	MultipoolAllocator::MultipoolAllocator(void* buffer, void* block_range_buffer, size_t size, size_t pool_count)
+		: m_buffer((unsigned char*)buffer), m_spin_lock(), m_size(size), m_range((unsigned int*)block_range_buffer, pool_count, size),
+		m_debug_mode(false) {}
 	
-	void* MultipoolAllocator::Allocate(size_t size, size_t alignment) {
+	void* MultipoolAllocator::Allocate(size_t size, size_t alignment, DebugInfo debug_info) {
 		ECS_ASSERT(alignment <= ECS_CACHE_LINE_SIZE);
 		// To make sure that the allocation is aligned we are requesting a surplus of alignment from the block range.
 		// Then we are aligning the pointer like the stack one and placing the offset byte before the allocation
@@ -26,11 +27,19 @@ namespace ECSEngine {
 		ECS_ASSERT(offset - index - 1 < alignment);
 		m_buffer[offset - 1] = offset - index - 1;
 
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = (void*)allocation;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_ALLOCATE;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_MULTIPOOL, &tracked);
+		}
+
 		return (void*)allocation;
 	}
 
 	template<bool trigger_error_if_not_found>
-	bool MultipoolAllocator::Deallocate(const void* block) {
+	bool MultipoolAllocator::Deallocate(const void* block, DebugInfo debug_info) {
 		// Calculating the start index of the block by reading the byte metadata 
 		uintptr_t byte_offset_position = (uintptr_t)block - (uintptr_t)m_buffer - 1;
 		unsigned char byte_offset = m_buffer[byte_offset_position];
@@ -43,48 +52,59 @@ namespace ECSEngine {
 				return false;
 			}
 		}
-		return m_range.Free<trigger_error_if_not_found>((unsigned int)(byte_offset_position - byte_offset));
+		bool was_deallocated = m_range.Free<trigger_error_if_not_found>((unsigned int)(byte_offset_position - byte_offset));
+		if (m_debug_mode && was_deallocated) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = block;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_DEALLOCATE;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_MULTIPOOL, &tracked);
+		}
+		return was_deallocated;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, MultipoolAllocator::Deallocate, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, MultipoolAllocator::Deallocate, const void*, DebugInfo);
 
-	template<typename Functor>
-	void* ReallocateImpl(MultipoolAllocator* allocator, const void* block, size_t new_size, size_t alignment, Functor&& functor) {
-		uintptr_t byte_offset_position = (uintptr_t)block - (uintptr_t)allocator->m_buffer - 1;
-		ECS_ASSERT(allocator->m_buffer[byte_offset_position] < ECS_CACHE_LINE_SIZE);
-		unsigned int previous_start = (unsigned int)(byte_offset_position - allocator->m_buffer[byte_offset_position]);
-		unsigned int new_start = functor(previous_start);
+	void* MultipoolAllocator::Reallocate(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
+	{
+		uintptr_t byte_offset_position = (uintptr_t)block - (uintptr_t)m_buffer - 1;
+		ECS_ASSERT(m_buffer[byte_offset_position] < ECS_CACHE_LINE_SIZE);
+		unsigned int previous_start = (unsigned int)(byte_offset_position - m_buffer[byte_offset_position]);
+		unsigned int new_start = m_range.ReallocateBlock(previous_start, new_size + alignment);
 		if (new_start != -1) {
-			uintptr_t allocation = function::AlignPointerStack((uintptr_t)allocator->m_buffer + new_start, alignment);
+			uintptr_t allocation = function::AlignPointerStack((uintptr_t)m_buffer + new_start, alignment);
 			if (new_start != previous_start) {
-				unsigned int offset = allocation - (uintptr_t)allocator->m_buffer;
+				unsigned int offset = allocation - (uintptr_t)m_buffer;
 				ECS_ASSERT(offset - new_start - 1 < alignment);
-				allocator->m_buffer[offset - 1] = offset - new_start - 1;
+				m_buffer[offset - 1] = offset - new_start - 1;
 			}
+
+			if (m_debug_mode) {
+				TrackedAllocation tracked;
+				tracked.allocated_pointer = block;
+				tracked.secondary_pointer = (void*)allocation;
+				tracked.function_type = ECS_DEBUG_ALLOCATOR_REALLOCATE;
+				tracked.debug_info = debug_info;
+				DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_MULTIPOOL, &tracked);
+			}
+
 			return (void*)allocation;
 		}
-		else {
-			// The request cannot be fulfilled
-			return nullptr;
-		}
+
+		// The request cannot be fulfilled
+		return nullptr;
 	}
 
-	void* MultipoolAllocator::Reallocate(const void* block, size_t new_size, size_t alignment)
-	{
-		return ReallocateImpl(this, block, new_size, alignment, [&](unsigned int previous_start) {
-			return m_range.ReallocateBlock(previous_start, new_size + alignment);
-		});
-	}
-
-	void* MultipoolAllocator::ReallocateAndCopy(const void* block, size_t new_size, size_t alignment)
-	{
-		return ReallocateImpl(this, block, new_size, alignment, [&](unsigned int previous_start) {
-			return m_range.ReallocateBlockAndCopy(previous_start, new_size + alignment, m_buffer);
-		});
-	}
-
-	void MultipoolAllocator::Clear() {
+	void MultipoolAllocator::Clear(DebugInfo debug_info) {
 		m_range.Clear();
+
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = nullptr;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_CLEAR;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_MULTIPOOL, &tracked);
+		}
 	}
 
 	bool MultipoolAllocator::IsEmpty() const
@@ -108,8 +128,28 @@ namespace ECSEngine {
 		return ptr >= (uintptr_t)m_buffer && ptr < (uintptr_t)m_buffer + m_size;
 	}
 
+	void MultipoolAllocator::ExitDebugMode()
+	{
+		m_debug_mode = false;
+	}
+
+	void MultipoolAllocator::SetDebugMode(const char* name, bool resizable)
+	{
+		m_debug_mode = true;
+		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_MULTIPOOL);
+	}
+
 	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count, unsigned int size) {
 		return BlockRange::MemoryOf(pool_count) + size + 8;
+	}
+
+	size_t MultipoolAllocator::CapacityFromFixedSize(unsigned int fixed_size, unsigned int pool_count)
+	{
+		size_t block_range_size = BlockRange::MemoryOf(pool_count);
+		if (fixed_size > block_range_size + 8) {
+			return fixed_size - block_range_size - 8;
+		}
+		return 0;
 	}
 
 	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count) {
@@ -118,40 +158,26 @@ namespace ECSEngine {
 
 	// ---------------------- Thread safe variants -----------------------------
 
-	template<typename Functor>
-	auto TsFunction(MultipoolAllocator* allocator, Functor&& functor) {
-		allocator->m_spin_lock.lock();
-		auto return_value = functor();
-		allocator->m_spin_lock.unlock();
-		return return_value;
-	}
-
-	void* MultipoolAllocator::Allocate_ts(size_t size, size_t alignment) {
-		return TsFunction(this, [&]() {
-			return Allocate(size, alignment);
+	void* MultipoolAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
+		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+			return Allocate(size, alignment, debug_info);
 		});
 	}
 
 	template<bool trigger_error_if_not_found>
-	bool MultipoolAllocator::Deallocate_ts(const void* block) {
-		return TsFunction(this, [&]() {
-			return Deallocate<trigger_error_if_not_found>(block);
+	bool MultipoolAllocator::Deallocate_ts(const void* block, DebugInfo debug_info) {
+		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+			return Deallocate<trigger_error_if_not_found>(block, debug_info);
 		});
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(bool, MultipoolAllocator::Deallocate_ts, const void*);
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, MultipoolAllocator::Deallocate_ts, const void*, DebugInfo);
 
-	void* MultipoolAllocator::Reallocate_ts(const void* block, size_t new_size, size_t alignment)
+	void* MultipoolAllocator::Reallocate_ts(const void* block, size_t new_size, size_t alignment, DebugInfo debug_info)
 	{
-		return TsFunction(this, [&]() {
-			return Reallocate(block, new_size, alignment);
+		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+			return Reallocate(block, new_size, alignment, debug_info);
 		});
 	}
 
-	void* MultipoolAllocator::ReallocateAndCopy_ts(const void* block, size_t new_size, size_t alignment)
-	{
-		return TsFunction(this, [&]() {
-			return ReallocateAndCopy_ts(block, new_size, alignment);
-		});
-	}
 }

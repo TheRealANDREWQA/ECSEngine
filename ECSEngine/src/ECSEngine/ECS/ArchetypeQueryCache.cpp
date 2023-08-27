@@ -238,7 +238,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
-	MemoryManager ArchetypeQueryCache::DefaultAllocator(GlobalMemoryManager* initial_allocator)
+	MemoryManager ArchetypeQueryCache::DefaultAllocator(AllocatorPolymorphic initial_allocator)
 	{
 		// Get an allocator for about 512 queries
 		return DetermineAllocator(initial_allocator, 512);
@@ -246,7 +246,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
-	MemoryManager ArchetypeQueryCache::DetermineAllocator(GlobalMemoryManager* initial_allocator, unsigned int total_query_count)
+	MemoryManager ArchetypeQueryCache::DetermineAllocator(AllocatorPolymorphic initial_allocator, unsigned int total_query_count)
 	{
 		// Use a memory manager as the type of the allocator
 

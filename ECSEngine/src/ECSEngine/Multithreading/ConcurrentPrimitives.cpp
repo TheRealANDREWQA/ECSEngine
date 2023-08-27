@@ -1,5 +1,6 @@
 #include "ecspch.h"
 #include "ConcurrentPrimitives.h"
+#include "../Utilities/Assert.h"
 
 namespace ECSEngine {
 
@@ -403,24 +404,50 @@ namespace ECSEngine {
 		// We should need to make sure that the lock is held
 		bool is_locked_by_us = lock.try_lock();
 
-		// Lock the secondary lock
-		BitLock(reader_count, 7);
+		unsigned char reader_locked_check_value = ECS_BIT(7) | ECS_BIT(0);
+
+		// Try to lock the secondary lock
+		// If we don't get it, it means someone else tried to transition
+		// and got before us and we need to give up our reader count
+		// And acquire the reader lock and writer lock after that
+		// Firstly acquire the writer lock in order to not allow other writers to come in
+		bool reader_lock_gained = BitTryLock(reader_count, 7);
+		if (!reader_lock_gained) {
+			ExitRead();
+			// We also need to acquire the write lock if we haven't previously
+			if (!is_locked_by_us) {
+				lock.lock();
+				is_locked_by_us = true;
+			}
+
+			// Acquire the reader lock
+			BitLock(reader_count, 7);
+
+			// We also need to change the compare value - since we already gave up our reader lock
+			reader_locked_check_value = ECS_BIT(7);
+		}
 
 		// Wait for all the other readers to exit
-		SpinWait<'!'>(reader_count, (unsigned char)ECS_BIT(7));
+		SpinWait<'!'>(reader_count, reader_locked_check_value);
+
+		// This works since if another thread tries to enter in write mode
+		// It will be blocked until reader count gets to 0
+		// And since we locked the top bit it will have to wait for us
 
 		return is_locked_by_us;
 	}
 
 	void ReadWriteLock::ReadToWriteUnlock(bool was_locked_by_us)
 	{
-		if (was_locked_by_us) {
-			lock.unlock();
-		}
+		// We need to update the reader count before unlocking the main lock
 
 		// The reader count should be 1, need to make it 0
 		// Use a simple write for this
 		reader_count.store(0, ECS_RELEASE);
+
+		if (was_locked_by_us) {
+			lock.unlock();
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------
@@ -451,8 +478,11 @@ namespace ECSEngine {
 	{
 		// Test to see if there is a pending write
 		BitWaitLocked(count, 7);
-		count.fetch_add(1, ECS_RELEASE);
+		unsigned int previous_count = count.fetch_add(1, ECS_RELEASE);
 		// No need to retest again since the writer will wait for us to exit
+
+		// Assert that there are not too many readers at the same time
+		ECS_ASSERT(previous_count < ECS_BIT(6) - 1);
 	}
 
 	void ByteReadWriteLock::ExitRead()
@@ -475,10 +505,35 @@ namespace ECSEngine {
 		// Lock the normal writer lock
 		bool is_locked_by_us = BitTryLock(count, 7);
 
-		// Lock the secondary lock
-		BitLock(count, 6);
+		unsigned char reader_value_to_check = ECS_BIT(7) | ECS_BIT(6) | ECS_BIT(0);
 
-		SpinWait<'!'>(count, (unsigned char)(ECS_BIT(7) | ECS_BIT(6)));
+		// Try to lock the secondary lock
+		// If we don't get it, it means someone else tried to transition
+		// and got before us and we need to give up our reader count
+		// And acquire the reader lock and writer lock after that
+		// Firstly acquire the writer lock in order to not allow other writers to come in
+		bool reader_lock_acquired = BitTryLock(count, 6);
+		if (!reader_lock_acquired) {
+			// Give up our read lock
+			ExitRead();
+
+			// Acquire the writer lock if we haven't previously
+			if (!is_locked_by_us) {
+				BitLock(count, 7);
+				is_locked_by_us = true;
+			}
+
+			// Acquire the reader lock
+			BitLock(count, 6);
+
+			// Also change the compare value since we gave up our
+			reader_value_to_check = ECS_BIT(7) | ECS_BIT(6);
+		}
+
+		// If multiple threads try to enter write from read at the same time 
+		// it is fine since, when exiting, the thread will write ECS_BIT(7)
+		// into the value which will preserve the lock bit
+		SpinWait<'!'>(count, reader_value_to_check);
 		return is_locked_by_us;
 	}
 

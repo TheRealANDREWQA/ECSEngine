@@ -758,7 +758,7 @@ namespace ECSEngine {
 		void RestorePreviousRenderState(const GraphicsPipelineRenderState* state);
 
 		ECS_INLINE static MemoryManager DefaultAllocator(GlobalMemoryManager* global_memory) {
-			return MemoryManager(DefaultAllocatorSize(), ECS_KB * 16, DefaultAllocatorSize(), global_memory);
+			return MemoryManager(DefaultAllocatorSize(), ECS_KB * 16, DefaultAllocatorSize(), GetAllocatorPolymorphic(global_memory));
 		}
 
 		ECS_INLINE static size_t DefaultAllocatorSize() {

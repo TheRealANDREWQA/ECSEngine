@@ -806,7 +806,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		void Initialize(AllocatorPolymorphic allocator, unsigned int _size, unsigned int _capacity) {
 			size_t memory_size = MemoryOf(_capacity);
 			if (memory_size > 0) {
-				void* allocation = Allocate(allocator, memory_size, alignof(T));
+				void* allocation = Allocate(allocator, memory_size);
 				InitializeFromBuffer(allocation, _size, _capacity);
 			}
 			else {
@@ -828,7 +828,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		ECS_INLINE ResizableStream() : buffer(nullptr), allocator({nullptr}), capacity(0), size(0) {}
 		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : allocator(_allocator), capacity(_capacity), size(0) {
 			if (_capacity != 0) {
-				buffer = (T*)Allocate(allocator, sizeof(T) * _capacity, alignof(T));
+				ResizeNoCopy(_capacity);
 			}
 			else {
 				buffer = nullptr;
@@ -934,7 +934,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		void FreeBuffer() {
 			if (buffer != nullptr) {
-				Deallocate(allocator, buffer);
+				DeallocateEx(allocator, buffer);
 				buffer = nullptr;
 				size = 0;
 				capacity = 0;
@@ -1002,49 +1002,42 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return index;
 		}
 
-		void Resize(unsigned int new_capacity) {
-			void* new_buffer = nullptr;
+		private:
+			template<bool copy_old_data>
+			void ResizeImpl(unsigned int new_capacity) {
+				void* new_buffer = nullptr;
 
-			if (new_capacity != 0) {
-				if (buffer != nullptr && size > 0) {
-					unsigned int copy_size = size < new_capacity ? size : new_capacity;
-					new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T));
-					ECS_ASSERT(new_buffer != nullptr);
-					if (new_buffer != buffer) {
-						memcpy(new_buffer, buffer, MemoryOf(copy_size));
+				if (new_capacity != 0) {
+					if (buffer != nullptr && size > 0) {
+						unsigned int copy_size = size < new_capacity ? size : new_capacity;
+						new_buffer = ECSEngine::ReallocateEx(allocator, buffer, MemoryOf(new_capacity));
+						ECS_ASSERT(new_buffer != nullptr);
+						if constexpr (copy_old_data) {
+							if (new_buffer != buffer) {
+								memcpy(new_buffer, buffer, MemoryOf(copy_size));
+							}
+						}
+					}
+					else {
+						new_buffer = ECSEngine::AllocateEx(allocator, MemoryOf(new_capacity));
 					}
 				}
 				else {
-					new_buffer = ECSEngine::Allocate(allocator, MemoryOf(new_capacity), alignof(T));
+					FreeBuffer();
 				}
-			}
-			else {
-				FreeBuffer();
+
+				buffer = (T*)new_buffer;
+				capacity = new_capacity;
 			}
 
-			buffer = (T*)new_buffer;
-			capacity = new_capacity;
+		public:
+
+		void Resize(unsigned int new_capacity) {
+			ResizeImpl<true>(new_capacity);
 		}
 
 		void ResizeNoCopy(unsigned int new_capacity) {
-			void* new_buffer = nullptr;
-
-			if (new_capacity > 0) {
-				if (buffer != nullptr && size > 0) {
-					unsigned int copy_size = size < new_capacity ? size : new_capacity;
-					new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T));
-					ECS_ASSERT(new_buffer != nullptr);
-				}
-				else {
-					new_buffer = ECSEngine::Allocate(allocator, MemoryOf(new_capacity), alignof(T));
-				}
-			}
-			else {
-				FreeBuffer();
-			}
-
-			buffer = (T*)new_buffer;
-			capacity = new_capacity;
+			ResizeImpl<false>(new_capacity);
 		}
 
 		ECS_INLINE void Swap(unsigned int first, unsigned int second) {
@@ -1077,10 +1070,12 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 				void* allocation = nullptr;
 				if (buffer != nullptr && elements_to_copy > 0) {
-					allocation = Reallocate(allocator, buffer, MemoryOf(elements_to_copy), alignof(T));
+					allocation = ReallocateEx(allocator, buffer, MemoryOf(elements_to_copy));
 					ECS_ASSERT(allocation != nullptr);
 
-					memcpy(allocation, buffer, sizeof(T) * elements_to_copy);
+					if (allocation != buffer) {
+						memcpy(allocation, buffer, sizeof(T) * elements_to_copy);
+					}
 				}
 
 				buffer = (T*)allocation;
@@ -1211,6 +1206,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return size == other.size && memcmp(buffer, other.buffer, size * element_size) == 0;
 		}
 
+		ECS_INLINE void* Get(size_t index, size_t byte_size) {
+			return (void*)((uintptr_t)buffer + index * byte_size);
+		}
+
+		ECS_INLINE const void* Get(size_t index, size_t byte_size) const {
+			return (const void*)((uintptr_t)buffer + index * byte_size);
+		}
+
 		// If used polymorphically
 		ECS_INLINE void SetElement(size_t index, const void* data, size_t byte_size) {
 			CopySlice(index * byte_size, data, byte_size);
@@ -1220,6 +1223,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		ECS_INLINE void RemoveSwapBack(size_t index, size_t byte_size) {
 			size--;
 			CopySlice(index * byte_size, (void*)((uintptr_t)buffer + size * byte_size), byte_size);
+		}
+
+		void Swap(size_t first, size_t second, size_t byte_size) {
+			void* temporary_storage = ECS_STACK_ALLOC(byte_size);
+			// Copy the first one into temporary storage
+			memcpy(temporary_storage, Get(first, byte_size), byte_size);
+			SetElement(first, Get(second, byte_size), byte_size);
+			SetElement(second, temporary_storage, byte_size);
 		}
 
 		// The size is divided by the sizeof T
@@ -1339,9 +1350,12 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return size == other.size && memcmp(buffer, other.buffer, (size_t)size * element_size) == 0;
 		}
 
-		// If used polymorphically
-		ECS_INLINE void SetElement(unsigned int index, const void* data, unsigned int byte_size) {
-			CopySlice(index * byte_size, data, byte_size);
+		ECS_INLINE void* Get(unsigned int index, unsigned int byte_size) {
+			return (void*)((uintptr_t)buffer + index * byte_size);
+		}
+
+		ECS_INLINE const void* Get(unsigned int index, unsigned int byte_size) const {
+			return (const void*)((uintptr_t)buffer + index * byte_size);
 		}
 
 		ECS_INLINE void Remove(unsigned int index, unsigned int byte_size) {
@@ -1362,6 +1376,19 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		ECS_INLINE void RemoveSwapBack(unsigned int index, unsigned int byte_size) {
 			size--;
 			CopySlice(index * byte_size, (void*)((uintptr_t)buffer + size * byte_size), byte_size);
+		}
+
+		// If used untyped
+		ECS_INLINE void SetElement(unsigned int index, const void* data, unsigned int byte_size) {
+			CopySlice(index * byte_size, data, byte_size);
+		}
+
+		void Swap(unsigned int first, unsigned int second, unsigned int byte_size) {
+			void* temporary_storage = ECS_STACK_ALLOC(byte_size);
+			// Copy the first one into temporary storage
+			memcpy(temporary_storage, Get(first, byte_size), byte_size);
+			SetElement(first, Get(second, byte_size), byte_size);
+			SetElement(second, temporary_storage, byte_size);
 		}
 
 		// Divides the size and the capacity by the sizeof(T)
@@ -1472,6 +1499,11 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return result;
 		}
 
+		// it will not set the size
+		ECS_INLINE void CopySlice(unsigned int offset, const void* memory, unsigned int memory_size) {
+			memcpy((void*)((uintptr_t)buffer + offset), memory, memory_size);
+		}
+
 		ECS_INLINE void CopyTo(void* memory) const {
 			memcpy(memory, buffer, size);
 		}
@@ -1499,6 +1531,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
+		ECS_INLINE void* Get(unsigned int index, unsigned int byte_size) {
+			return (void*)((uintptr_t)buffer + index * byte_size);
+		}
+
+		ECS_INLINE const void* Get(unsigned int index, unsigned int byte_size) const {
+			return (const void*)((uintptr_t)buffer + index * byte_size);
+		}
+
 		ECS_INLINE void Reset() {
 			size = 0;
 		}
@@ -1521,13 +1561,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		void Resize(unsigned int new_capacity, unsigned int element_byte_size) {
 			if (new_capacity > 0) {
-				void* new_buffer = Reallocate(allocator, buffer, new_capacity * element_byte_size);
+				void* new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size);
 				ECS_ASSERT(new_buffer != nullptr);
 
 				unsigned int size_to_copy = size < new_capacity ? size : new_capacity;
-				memcpy(new_buffer, buffer, size_to_copy * element_byte_size);
-
-				buffer = new_buffer;
+				if (new_buffer != buffer) {
+					memcpy(new_buffer, buffer, size_to_copy * element_byte_size);
+					buffer = new_buffer;
+				}
 			}
 			else {
 				if (buffer != nullptr) {
@@ -1543,19 +1584,34 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		void ResizeNoCopy(unsigned int new_capacity, unsigned int element_byte_size) {
-			// Can start with the deallocation
-			if (buffer != nullptr && size > 0) {
+			void* new_buffer = nullptr;
+			if (new_capacity > 0 && size > 0) {
+				new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size);
+				ECS_ASSERT(new_buffer != nullptr);
+			}
+			else if (size > 0) {
 				DeallocateEx(allocator, buffer);
 			}
-
-			void* new_buffer = nullptr;
-			if (new_capacity > 0) {
+			else if (new_capacity > 0) {
 				new_buffer = AllocateEx(allocator, new_capacity * element_byte_size);
 				ECS_ASSERT(new_buffer != nullptr);
 			}
 
 			buffer = new_buffer;
 			capacity = new_capacity;
+		}
+
+		// If used polymorphically
+		ECS_INLINE void SetElement(unsigned int index, const void* data, unsigned int byte_size) {
+			CopySlice(index * byte_size, data, byte_size);
+		}
+
+		void Swap(unsigned int first, unsigned int second, unsigned int byte_size) {
+			void* temporary_storage = ECS_STACK_ALLOC(byte_size);
+			// Copy the first one into temporary storage
+			memcpy(temporary_storage, Get(first, byte_size), byte_size);
+			SetElement(first, Get(second, byte_size), byte_size);
+			SetElement(second, temporary_storage, byte_size);
 		}
 
 		ECS_INLINE Stream<void> ToStream() const {

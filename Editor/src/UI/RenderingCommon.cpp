@@ -1,7 +1,8 @@
 #include "editorpch.h"
 #include "RenderingCommon.h"
 #include "HelperWindows.h"
-#include "Editor/EditorSandbox.h"
+#include "../Sandbox/SandboxModule.h"
+#include "../Sandbox/Sandbox.h"
 #include "../Modules/Module.h"
 #include "../Editor/EditorPalette.h"
 

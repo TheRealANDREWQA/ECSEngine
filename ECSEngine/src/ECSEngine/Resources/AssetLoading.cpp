@@ -935,7 +935,7 @@ namespace ECSEngine {
 		// Create the global allocators
 		control_block->global_managers = (GlobalMemoryManager*)Allocate(persistent_allocator, sizeof(GlobalMemoryManager) * thread_count);
 		for (unsigned int index = 0; index < thread_count; index++) {
-			control_block->global_managers[index] = GlobalMemoryManager(ALLOCATOR_SIZE, ECS_KB * 8, ALLOCATOR_BACKUP);
+			control_block->global_managers[index] = CreateGlobalMemoryManager(ALLOCATOR_SIZE, ECS_KB * 8, ALLOCATOR_BACKUP);
 		}
 
 		return control_block;

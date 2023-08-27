@@ -1156,7 +1156,7 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 	FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
 
 	// Create a temporary global allocator
-	GlobalMemoryManager allocator(FILE_EXPLORER_PRELOAD_TEXTURE_ALLOCATOR_SIZE_PER_THREAD, 128, FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE);
+	GlobalMemoryManager allocator = CreateGlobalMemoryManager(FILE_EXPLORER_PRELOAD_TEXTURE_ALLOCATOR_SIZE_PER_THREAD, 128, FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE);
 
 	// Load the texture normally - don't generate mip maps as that will require the immediate context
 	ResourceManagerTextureDesc descriptor;
@@ -1900,7 +1900,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 			Color rectangle_color = drawer.color_theme.background;
 			float2 rectangle_position = absolute_transform.position - drawer.region_render_offset;
-			if (drawer.IsMouseInRectangle(rectangle_position, absolute_transform.scale) && (mouse_state == ECS_BUTTON_PRESSED || mouse_state == ECS_BUTTON_DOWN)) {
+			if (drawer.IsMouseInRectangle(rectangle_position, absolute_transform.scale) && (mouse_state == ECS_BUTTON_PRESSED || mouse_state == ECS_BUTTON_HELD)) {
 				rectangle_color = drawer.color_theme.theme;
 			}
 			drawer.SolidColorRectangle(UI_CONFIG_LATE_DRAW, rectangle_position, absolute_transform.scale, rectangle_color);
@@ -1944,7 +1944,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		Color rectangle_color = drawer.color_theme.background;
 		float2 rectangle_position = absolute_transform.position - drawer.region_render_offset;
 		float2 rectangle_scale = { label_scale, drawer.layout.default_element_y };
-		if (drawer.IsMouseInRectangle(rectangle_position, rectangle_scale) && (mouse_state == ECS_BUTTON_PRESSED || mouse_state == ECS_BUTTON_DOWN)) {
+		if (drawer.IsMouseInRectangle(rectangle_position, rectangle_scale) && (mouse_state == ECS_BUTTON_PRESSED || mouse_state == ECS_BUTTON_HELD)) {
 			rectangle_color = drawer.color_theme.theme;
 		}
 		drawer.SolidColorRectangle(UI_CONFIG_LATE_DRAW, rectangle_position, rectangle_scale, rectangle_color);

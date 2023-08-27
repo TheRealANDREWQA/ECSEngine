@@ -402,7 +402,7 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    MemoryManager DefaultEntityHierarchyAllocator(GlobalMemoryManager* global_memory)
+    MemoryManager DefaultEntityHierarchyAllocator(AllocatorPolymorphic global_memory)
     {
         return MemoryManager(ENTITY_HIERARCHY_ALLOCATOR_SIZE, ENTITY_HIERARCHY_ALLOCATOR_CHUNKS, ENTITY_HIERARCHY_ALLOCATOR_SIZE, global_memory);
     }

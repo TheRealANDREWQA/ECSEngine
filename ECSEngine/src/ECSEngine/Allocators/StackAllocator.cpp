@@ -1,10 +1,11 @@
 #include "ecspch.h";
 #include "StackAllocator.h"
 #include "../Utilities/Function.h"
+#include "AllocatorCallsDebug.h"
 
 namespace ECSEngine {
 
-	void* StackAllocator::Allocate(size_t size, size_t alignment) {
+	void* StackAllocator::Allocate(size_t size, size_t alignment, DebugInfo debug_info) {
 		ECS_ASSERT(m_buffer != nullptr);
 
 		// calculating the current pointer and aligning it
@@ -22,24 +23,61 @@ namespace ECSEngine {
 		m_last_top = m_top;
 		m_top = offset + size;
 
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = pointer;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_ALLOCATE;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_STACK, &tracked);
+		}
+
 		return pointer;
 	}
 
-	void StackAllocator::Deallocate(const void* block) {
+	template<bool trigger_error_if_not_found>
+	bool StackAllocator::Deallocate(const void* block, DebugInfo debug_info) {
 		ECS_ASSERT(block != nullptr);
 
 		uintptr_t offset_position = (uintptr_t)block - (uintptr_t)m_buffer - 1;
 		m_top = offset_position - m_buffer[offset_position];
+
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = block;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_DEALLOCATE;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_STACK, &tracked);
+		}
+
+		return true;
 	}
 
-	void StackAllocator::Deallocate() {
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, StackAllocator::Deallocate, const void*, DebugInfo);
+
+	void StackAllocator::Deallocate(DebugInfo debug_info) {
 		m_top = m_last_top;
+
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = m_buffer + m_top;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_DEALLOCATE;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_STACK, &tracked);
+		}
 	}
 
-	void StackAllocator::Clear() {
+	void StackAllocator::Clear(DebugInfo debug_info) {
 		m_top = 0;
 		m_marker = 0;
 		m_last_top = 0;
+
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = nullptr;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_CLEAR;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_STACK, &tracked);
+		}
 	}
 
 	bool StackAllocator::Belongs(const void* pointer) const
@@ -57,12 +95,31 @@ namespace ECSEngine {
 		m_marker = m_top;
 	}
 
-	void StackAllocator::ReturnToMarker() {
+	void StackAllocator::ReturnToMarker(DebugInfo debug_info) {
 		m_top = m_marker;
+
+		if (m_debug_mode) {
+			TrackedAllocation tracked;
+			tracked.allocated_pointer = (void*)m_marker;
+			tracked.function_type = ECS_DEBUG_ALLOCATOR_RETURN_TO_MARKER;
+			tracked.debug_info = debug_info;
+			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_STACK, &tracked);
+		}
 	}
 
 	size_t StackAllocator::GetCapacity() const {
 		return m_capacity;
+	}
+
+	void StackAllocator::ExitDebugMode()
+	{
+		m_debug_mode = false;
+	}
+
+	void StackAllocator::SetDebugMode(const char* name, bool resizable)
+	{
+		m_debug_mode = true;
+		DebugAllocatorManagerChangeOrAddEntry(this, name, true, ECS_ALLOCATOR_STACK);
 	}
 
 	size_t StackAllocator::GetTop() const {
@@ -71,17 +128,20 @@ namespace ECSEngine {
 	
 	// ---------------------- Thread safe variants -----------------------------
 
-	void* StackAllocator::Allocate_ts(size_t size, size_t alignment) {
+	void* StackAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {
 		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
-			return Allocate(size, alignment);
+			return Allocate(size, alignment, debug_info);
 		});
 	}
 
-	void StackAllocator::Deallocate_ts(const void* block) {
-		ThreadSafeFunctor(&m_spin_lock, [&]() {
-			Deallocate(block);
+	template<bool trigger_error_if_not_found>
+	bool StackAllocator::Deallocate_ts(const void* block, DebugInfo debug_info) {
+		return ThreadSafeFunctorReturn(&m_spin_lock, [&]() {
+			return Deallocate<trigger_error_if_not_found>(block, debug_info);
 		});
 	}
+
+	ECS_TEMPLATE_FUNCTION_BOOL(bool, StackAllocator::Deallocate_ts, const void*, DebugInfo);
 
 	void StackAllocator::SetMarker_ts() {
 		ThreadSafeFunctor(&m_spin_lock, [&]() {
@@ -89,9 +149,9 @@ namespace ECSEngine {
 		});
 	}
 
-	void StackAllocator::ReturnToMarker_ts() {	
+	void StackAllocator::ReturnToMarker_ts(DebugInfo debug_info) {	
 		ThreadSafeFunctor(&m_spin_lock, [&]() {
-			ReturnToMarker();
+			ReturnToMarker(debug_info);
 		});
 	}
 
