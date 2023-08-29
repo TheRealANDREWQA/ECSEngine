@@ -226,15 +226,15 @@ struct ScenePrivateActionData {
 
 // The disable modifiers will make the rotation not change based on shift/ctrl
 // Returns true if the camera was rotated
-static bool HandleCameraRotation(EditorState* editor_state, unsigned int sandbox_index, float delta_time, bool disable_modifiers, bool disable_file_write) {
+static bool HandleCameraRotation(EditorState* editor_state, unsigned int sandbox_index, bool disable_modifiers, bool disable_file_write) {
 	UISystem* system = editor_state->ui_system;
-	float rotation_factor = delta_time * 0.02f;
+	float rotation_factor = 150.0f;
 	float2 mouse_position = system->GetNormalizeMousePosition();
 	float2 delta = system->GetMouseDelta(mouse_position);
 
 	if (!disable_modifiers) {
 		if (editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_SHIFT)) {
-			rotation_factor *= 0.2f;
+			rotation_factor *= 0.33f;
 		}
 		else if (editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_CTRL)) {
 			rotation_factor *= 3.0f;
@@ -251,11 +251,11 @@ static bool HandleCameraRotation(EditorState* editor_state, unsigned int sandbox
 }
 
 // For increase/decrease speed
-static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int sandbox_index, float delta_time) {
+static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int sandbox_index) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// Check the speed modifiers - since the camera translation will write the sandbox file once
 	// We can just modify the camera wasd speed here and it will get updated as well
-	const float SPEED_INCREASE_STEP = 0.005f;
+	const float SPEED_INCREASE_STEP = 0.2f;
 	bool changed_speed = false;
 
 	bool is_shift_down = editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_SHIFT);
@@ -282,7 +282,7 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 		changed_speed = true;
 	}
 
-	bool camera_was_rotated = HandleCameraRotation(editor_state, sandbox_index, delta_time, true, true);
+	bool camera_was_rotated = HandleCameraRotation(editor_state, sandbox_index, true, true);
 
 	// Check the wasd keys
 	Camera camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
@@ -294,7 +294,7 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 		EDITOR_INPUT_WASD_A, 
 		EDITOR_INPUT_WASD_S,
 		EDITOR_INPUT_WASD_D, 
-		sandbox->camera_wasd_speed * delta_time,
+		sandbox->camera_wasd_speed,
 		camera_forward, 
 		camera_right
 	);
@@ -333,7 +333,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, target_sandbox);
 		// Check to see if the camera wasd movement is activated
 		if (sandbox->is_camera_wasd_movement) {
-			HandleCameraWASDMovement(editor_state, sandbox_index, system->GetFrameDeltaTime());
+			HandleCameraWASDMovement(editor_state, sandbox_index);
 		}
 		else {
 			// Check for camera wasd activation first
@@ -615,7 +615,7 @@ static void SceneRotationAction(ActionData* action_data) {
 
 
 		if (mouse->IsHeld(ECS_MOUSE_RIGHT)) {
-			bool was_rotated = HandleCameraRotation(editor_state, data->sandbox_index, system->GetFrameDeltaTime(), false, false);
+			bool was_rotated = HandleCameraRotation(editor_state, data->sandbox_index, false, false);
 			if (was_rotated) {
 				RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 			}
@@ -647,24 +647,21 @@ static void SceneTranslationAction(ActionData* action_data) {
 		EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxActiveViewport(editor_state, data->sandbox_index);
 
 		if (mouse->IsHeld(ECS_MOUSE_MIDDLE)) {
-			float2 mouse_position = system->GetNormalizeMousePosition();
-			float2 delta = system->GetMouseDelta(mouse_position);
+			if (mouse_delta.x != 0.0f || mouse_delta.y != 0.0f) {
+				Camera scene_camera = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+				float3 right_vector = scene_camera.GetRightVector().AsFloat3Low();
+				float3 up_vector = scene_camera.GetUpVector().AsFloat3Low();
 
-			Camera scene_camera = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-			float3 right_vector = scene_camera.GetRightVector().AsFloat3Low();
-			float3 up_vector = scene_camera.GetUpVector().AsFloat3Low();
+				float translation_factor = 10.0f;
 
-			float translation_factor = 10.0f;
+				if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
+					translation_factor = 2.5f;
+				}
+				else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+					translation_factor = 30.0f;
+				}
 
-			if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-				translation_factor = 2.5f;
-			}
-			else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-				translation_factor = 30.0f;
-			}
-
-			float3 translation = right_vector * float3::Splat(-delta.x * translation_factor) + up_vector * float3::Splat(delta.y * translation_factor);
-			if (translation.x != 0.0f || translation.y != 0.0f || translation.z != 0.0f) {
+				float3 translation = right_vector * float3::Splat(-mouse_delta.x * translation_factor) + up_vector * float3::Splat(mouse_delta.y * translation_factor);
 				TranslateSandboxCamera(editor_state, data->sandbox_index, translation, EDITOR_SANDBOX_VIEWPORT_SCENE);
 				RenderSandbox(editor_state, data->sandbox_index, current_viewport);
 			}

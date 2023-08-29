@@ -167,24 +167,24 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		// Does not change the size or the pointer
 		// It only deallocates if the size is greater than 0
-		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
 			if (size > 0 && buffer != nullptr) {
-				ECSEngine::Deallocate(allocator, buffer);
+				ECSEngine::Deallocate(allocator, buffer, debug_info);
 			}
 		}
 
 		// Does not change the size or the pointer
 		// It only deallocates if the size is greater than 0
 		template<typename Allocator>
-		ECS_INLINE void Deallocate(Allocator* allocator) const {
+		ECS_INLINE void Deallocate(Allocator* allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
 			if (size > 0 && buffer != nullptr) {
-				allocator->Deallocate(buffer);
+				allocator->Deallocate(buffer, debug_info);
 			}
 		}
 
-		ECS_INLINE bool DeallocateIfBelongs(AllocatorPolymorphic allocator) const {
+		ECS_INLINE bool DeallocateIfBelongs(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
 			if (size > 0 && buffer != nullptr) {
-				return ECSEngine::DeallocateIfBelongs(allocator, buffer);
+				return ECSEngine::DeallocateIfBelongs(allocator, buffer, debug_info);
 			}
 			return false;
 		}
@@ -215,19 +215,19 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		// Returns the previous buffer (the size is also updated)
-		ECS_INLINE void* Expand(AllocatorPolymorphic allocator, size_t new_elements, bool deallocate_old = false) {
-			return Resize(allocator, size + new_elements, true, deallocate_old);
+		ECS_INLINE void* Expand(AllocatorPolymorphic allocator, size_t new_elements, bool deallocate_old = false, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			return Resize(allocator, size + new_elements, true, deallocate_old, debug_info);
 		}
 
 		// Returns the previous buffer (the size is also updated)
-		void* Expand(AllocatorPolymorphic allocator, Stream<T> new_elements, bool deallocate_old = false) {
+		void* Expand(AllocatorPolymorphic allocator, Stream<T> new_elements, bool deallocate_old = false, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t old_size = size;
 			void* old_buffer = buffer;
 			if (deallocate_old) {
-				Reallocate(allocator, size + new_elements.size);
+				Reallocate(allocator, size + new_elements.size, debug_info);
 			}
 			else {
-				Resize(allocator, size + new_elements.size, true, deallocate_old);;
+				Resize(allocator, size + new_elements.size, true, deallocate_old, debug_info);
 			}
 			new_elements.CopyTo(buffer + old_size);
 			return old_buffer;
@@ -284,17 +284,17 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		// Returns the previous buffer (the size is also updated)
-		void* Resize(AllocatorPolymorphic allocator, size_t new_size, bool copy_old_elements = true, bool deallocate_old = false) {
+		void* Resize(AllocatorPolymorphic allocator, size_t new_size, bool copy_old_elements = true, bool deallocate_old = false, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			void* old_buffer = buffer;
 
-			void* allocation = Allocate(allocator, MemoryOf(new_size), alignof(T));
+			void* allocation = Allocate(allocator, MemoryOf(new_size), alignof(T), debug_info);
 			if (copy_old_elements) {
 				size_t copy_size = new_size > size ? size : new_size;
 				memcpy(allocation, buffer, sizeof(T) * copy_size);
 			}
 
 			if (deallocate_old) {
-				Deallocate(allocator);
+				Deallocate(allocator, debug_info);
 			}
 
 			InitializeFromBuffer(allocation, new_size);
@@ -302,8 +302,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return old_buffer;
 		}
 
-		void Reallocate(AllocatorPolymorphic allocator, size_t new_size) {
-			void* new_allocation = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_size), alignof(T));
+		void Reallocate(AllocatorPolymorphic allocator, size_t new_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			void* new_allocation = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_size), alignof(T), debug_info);
 			if (new_allocation != buffer) {
 				size_t copy_size = new_size > size ? size : new_size;
 				memcpy(new_allocation, buffer, MemoryOf(copy_size));
@@ -374,16 +374,16 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			Copy(other);
 		}
 
-		void InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other) {
-			Initialize(allocator, other.size);
+		void InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			Initialize(allocator, other.size, debug_info);
 			Copy(other);
 		}
 
 		template<typename Allocator>
-		void Initialize(Allocator* allocator, size_t _size) {
+		void Initialize(Allocator* allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t memory_size = MemoryOf(_size);
 			if (memory_size > 0) {
-				void* allocation = allocator->Allocate(memory_size, alignof(T));
+				void* allocation = allocator->Allocate(memory_size, alignof(T), debug_info);
 				buffer = (T*)allocation;
 			}
 			else {
@@ -392,10 +392,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size = _size;
 		}
 
-		void Initialize(AllocatorPolymorphic allocator, size_t _size) {
+		void Initialize(AllocatorPolymorphic allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t memory_size = MemoryOf(_size);
 			if (memory_size > 0) {
-				void* allocation = Allocate(allocator, memory_size, alignof(T));
+				void* allocation = Allocate(allocator, memory_size, alignof(T), debug_info);
 				buffer = (T*)allocation;
 			}
 			else {
@@ -575,24 +575,24 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		// Does not change the size or the pointer
 		// It only deallocates if the size is greater than 0
-		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
 			if (size > 0 && buffer != nullptr) {
-				ECSEngine::Deallocate(allocator, buffer);
+				ECSEngine::Deallocate(allocator, buffer, debug_info);
 			}
 		}
 
 		// Does not change the size or the pointer
 		// It only deallocates if the size is greater than 0
 		template<typename Allocator>
-		ECS_INLINE void Deallocate(Allocator* allocator) const {
+		ECS_INLINE void Deallocate(Allocator* allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
 			if (size > 0) {
 				allocator->Deallocate(buffer);
 			}
 		}
 
-		ECS_INLINE bool DeallocateIfBelongs(AllocatorPolymorphic allocator) const {
+		ECS_INLINE bool DeallocateIfBelongs(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
 			if (size > 0 && buffer != nullptr) {
-				return ECSEngine::DeallocateIfBelongs(allocator, buffer);
+				return ECSEngine::DeallocateIfBelongs(allocator, buffer, debug_info);
 			}
 			return false;
 		}
@@ -624,16 +624,22 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		// Returns the old buffer if a resize was performed, else nullptr. Can select the amount by which it grows with the growth_count
 		// (the capacity will be necessary_elements + growth_count). 
-		void* Expand(AllocatorPolymorphic allocator, unsigned int expand_count, unsigned int growth_count = 0, bool deallocate_previous = true) {
+		void* Expand(
+			AllocatorPolymorphic allocator, 
+			unsigned int expand_count, 
+			unsigned int growth_count = 0, 
+			bool deallocate_previous = true, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		) {
 			if (size + expand_count > capacity) {
 				void* old_buffer = buffer;
 				unsigned int needed_elements = expand_count + size + growth_count;
 				if (!deallocate_previous) {
-					Initialize(allocator, size, needed_elements);
+					Initialize(allocator, size, needed_elements, debug_info);
 					memcpy(buffer, old_buffer, MemoryOf(size));
 				}
 				else {
-					void* new_buffer = ECSEngine::Reallocate(allocator, buffer, needed_elements, alignof(T));
+					void* new_buffer = ECSEngine::Reallocate(allocator, buffer, needed_elements, alignof(T), debug_info);
 					if (new_buffer != buffer) {
 						memcpy(new_buffer, buffer, MemoryOf(size));
 					}
@@ -784,16 +790,16 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		// It will make a copy with the capacity the same as the stream's size
-		void InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other) {
-			Initialize(allocator, other.size, other.size);
+		void InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			Initialize(allocator, other.size, other.size, debug_info);
 			Copy(other);
 		}
 
 		template<typename Allocator>
-		void Initialize(Allocator* allocator, unsigned int _size, unsigned int _capacity) {
+		void Initialize(Allocator* allocator, unsigned int _size, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t memory_size = MemoryOf(_capacity);
 			if (memory_size > 0) {
-				void* allocation = allocator->Allocate(memory_size, alignof(T));
+				void* allocation = allocator->Allocate(memory_size, alignof(T), debug_info);
 				InitializeFromBuffer(allocation, _size, _capacity);
 			}
 			else {
@@ -803,10 +809,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
-		void Initialize(AllocatorPolymorphic allocator, unsigned int _size, unsigned int _capacity) {
+		void Initialize(AllocatorPolymorphic allocator, unsigned int _size, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t memory_size = MemoryOf(_capacity);
 			if (memory_size > 0) {
-				void* allocation = Allocate(allocator, memory_size);
+				void* allocation = Allocate(allocator, memory_size, alignof(T), debug_info);
 				InitializeFromBuffer(allocation, _size, _capacity);
 			}
 			else {
@@ -932,9 +938,9 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
-		void FreeBuffer() {
+		void FreeBuffer(DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (buffer != nullptr) {
-				DeallocateEx(allocator, buffer);
+				DeallocateEx(allocator, buffer, debug_info);
 				buffer = nullptr;
 				size = 0;
 				capacity = 0;
@@ -1004,13 +1010,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		private:
 			template<bool copy_old_data>
-			void ResizeImpl(unsigned int new_capacity) {
+			void ResizeImpl(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 				void* new_buffer = nullptr;
 
 				if (new_capacity != 0) {
 					if (buffer != nullptr && size > 0) {
 						unsigned int copy_size = size < new_capacity ? size : new_capacity;
-						new_buffer = ECSEngine::ReallocateEx(allocator, buffer, MemoryOf(new_capacity));
+						new_buffer = ECSEngine::ReallocateEx(allocator, buffer, MemoryOf(new_capacity), debug_info);
 						ECS_ASSERT(new_buffer != nullptr);
 						if constexpr (copy_old_data) {
 							if (new_buffer != buffer) {
@@ -1019,11 +1025,11 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 						}
 					}
 					else {
-						new_buffer = ECSEngine::AllocateEx(allocator, MemoryOf(new_capacity));
+						new_buffer = ECSEngine::AllocateEx(allocator, MemoryOf(new_capacity), debug_info);
 					}
 				}
 				else {
-					FreeBuffer();
+					FreeBuffer(debug_info);
 				}
 
 				buffer = (T*)new_buffer;
@@ -1032,11 +1038,11 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		public:
 
-		void Resize(unsigned int new_capacity) {
-			ResizeImpl<true>(new_capacity);
+		void Resize(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			ResizeImpl<true>(new_capacity, debug_info);
 		}
 
-		void ResizeNoCopy(unsigned int new_capacity) {
+		void ResizeNoCopy(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			ResizeImpl<false>(new_capacity);
 		}
 
@@ -1064,13 +1070,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		
 		// It will leave another additional_elements over the current size
 		// Returns true if a resizing was performed, else false
-		bool Trim(unsigned int additional_elements) {
+		bool Trim(unsigned int additional_elements, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (additional_elements < capacity - size) {
 				unsigned int elements_to_copy = size + additional_elements;
 
 				void* allocation = nullptr;
 				if (buffer != nullptr && elements_to_copy > 0) {
-					allocation = ReallocateEx(allocator, buffer, MemoryOf(elements_to_copy));
+					allocation = ReallocateEx(allocator, buffer, MemoryOf(elements_to_copy), debug_info);
 					ECS_ASSERT(allocation != nullptr);
 
 					if (allocation != buffer) {
@@ -1105,10 +1111,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return sizeof(T) * number;
 		}
 
-		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity) {
+		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			allocator = _allocator;
 			if (_capacity > 0) {
-				ResizeNoCopy(_capacity);
+				ResizeNoCopy(_capacity, debug_info);
 			}
 			else {
 				buffer = nullptr;
@@ -1117,10 +1123,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size = 0;
 		}
 
-		void InitializeAndCopy(AllocatorPolymorphic _allocator, Stream<T> stream) {
+		void InitializeAndCopy(AllocatorPolymorphic _allocator, Stream<T> stream, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			allocator = _allocator;
 			if (stream.size > 0) {
-				ResizeNoCopy(stream.size);
+				ResizeNoCopy(stream.size, debug_info);
 				Copy(stream);
 			}
 			else {
@@ -1246,13 +1252,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		template<typename Allocator>
-		void Initialize(Allocator* allocator, size_t _size) {
-			buffer = allocator->Allocate(_size);
+		void Initialize(Allocator* allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			buffer = allocator->Allocate(_size, debug_info);
 			size = _size;
 		}
 
-		void Initialize(AllocatorPolymorphic allocator, size_t _size) {
-			buffer = Allocate(allocator, size);
+		void Initialize(AllocatorPolymorphic allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			buffer = Allocate(allocator, size, alignof(void*), debug_info);
 			size = _size;
 		}
 
@@ -1404,14 +1410,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		template<typename Allocator>
-		void Initialize(Allocator* allocator, unsigned int _capacity) {
-			buffer = allocator->Allocate(_capacity);
+		void Initialize(Allocator* allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			buffer = allocator->Allocate(_capacity, 8, debug_info);
 			size = 0;
 			capacity = _capacity;
 		}
 
-		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity) {
-			buffer = Allocate(allocator, _capacity);
+		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			buffer = Allocate(allocator, _capacity, 8, debug_info);
 			size = 0;
 			capacity = _capacity;
 		}
@@ -1434,9 +1440,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		typedef void T;
 
 		ECS_INLINE ResizableStream() : buffer(nullptr), allocator({ nullptr }), capacity(0), size(0) {}
-		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : allocator(_allocator), capacity(_capacity), size(0) {
+		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) : allocator(_allocator), 
+			capacity(_capacity), size(0) {
 			if (_capacity != 0) {
-				buffer = Allocate(allocator, _capacity);
+				buffer = Allocate(allocator, _capacity, alignof(void*), debug_info);
 			}
 			else {
 				buffer = nullptr;
@@ -1522,9 +1529,9 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return size == other.size && memcmp(buffer, other.buffer, size * element_size) == 0;
 		}
 
-		void FreeBuffer() {
+		void FreeBuffer(DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (buffer != nullptr) {
-				DeallocateEx(allocator, buffer);
+				DeallocateEx(allocator, buffer, debug_info);
 				buffer = nullptr;
 				size = 0;
 				capacity = 0;
@@ -1559,9 +1566,9 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			Resize(new_capacity, 1);
 		}
 
-		void Resize(unsigned int new_capacity, unsigned int element_byte_size) {
+		void Resize(unsigned int new_capacity, unsigned int element_byte_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (new_capacity > 0) {
-				void* new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size);
+				void* new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size, debug_info);
 				ECS_ASSERT(new_buffer != nullptr);
 
 				unsigned int size_to_copy = size < new_capacity ? size : new_capacity;
@@ -1572,28 +1579,28 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 			else {
 				if (buffer != nullptr) {
-					DeallocateEx(allocator, buffer);
+					DeallocateEx(allocator, buffer, debug_info);
 					buffer = nullptr;
 				}
 			}
 			capacity = new_capacity;
 		}
 
-		ECS_INLINE void ResizeNoCopy(unsigned int new_capacity) {
-			ResizeNoCopy(new_capacity, 1);
+		ECS_INLINE void ResizeNoCopy(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			ResizeNoCopy(new_capacity, 1, debug_info);
 		}
 
-		void ResizeNoCopy(unsigned int new_capacity, unsigned int element_byte_size) {
+		void ResizeNoCopy(unsigned int new_capacity, unsigned int element_byte_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			void* new_buffer = nullptr;
 			if (new_capacity > 0 && size > 0) {
-				new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size);
+				new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size, debug_info);
 				ECS_ASSERT(new_buffer != nullptr);
 			}
 			else if (size > 0) {
-				DeallocateEx(allocator, buffer);
+				DeallocateEx(allocator, buffer, debug_info);
 			}
 			else if (new_capacity > 0) {
-				new_buffer = AllocateEx(allocator, new_capacity * element_byte_size);
+				new_buffer = AllocateEx(allocator, new_capacity * element_byte_size, debug_info);
 				ECS_ASSERT(new_buffer != nullptr);
 			}
 
@@ -1634,10 +1641,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return { buffer, size, capacity, allocator };
 		}
 
-		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity) {
+		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			allocator = _allocator;
 			if (_capacity > 0) {
-				ResizeNoCopy(_capacity);
+				ResizeNoCopy(_capacity, debug_info);
 			}
 			else {
 				buffer = nullptr;
@@ -1655,10 +1662,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	// The template parameter of the stream must have as functions
 	// Type Copy(AllocatorPolymorphic allocator) const;
 	template<typename Stream>
-	Stream StreamDeepCopy(Stream input, AllocatorPolymorphic allocator) {
+	Stream StreamDeepCopy(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		Stream result;
 
-		result.Initialize(allocator, input.size);
+		result.Initialize(allocator, input.size, debug_info);
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			result[index] = input[index].Copy(allocator);
 		}
@@ -1670,13 +1677,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	// Type CopyTo(uintptr_t& ptr) const;
 	// size_t CopySize() const;
 	template<typename Stream>
-	Stream StreamDeepCopyTo(Stream input, AllocatorPolymorphic allocator) {
+	Stream StreamDeepCopyTo(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		Stream result;
 
-		result.Initialize(allocator, input.size);
+		result.Initialize(allocator, input.size, debug_info);
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
-			void* allocation = AllocateEx(allocator, copy_size);
+			void* allocation = AllocateEx(allocator, copy_size, debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			result[index] = input[index].CopyTo(ptr);
 		}
@@ -1697,10 +1704,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	// Type CopyTo(uintptr_t& ptr) const;
 	// size_t CopySize() const;
 	template<typename Stream>
-	Stream StreamInPlaceDeepCopyTo(Stream input, AllocatorPolymorphic allocator) {
+	Stream StreamInPlaceDeepCopyTo(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info) {
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
-			void* allocation = AllocateEx(allocator, copy_size);
+			void* allocation = AllocateEx(allocator, copy_size, debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			input[index] = input[index].CopyTo(ptr);
 		}
@@ -1712,7 +1719,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	// If copy size returns 0, it assumes it needs no buffers and does not call
 	// the copy function.
 	template<typename Stream>
-	Stream StreamCoallescedDeepCopy(Stream input, AllocatorPolymorphic allocator) {
+	Stream StreamCoallescedDeepCopy(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		Stream new_stream;
 		
 		ECS_STACK_CAPACITY_STREAM(size_t, copy_sizes, 1024);
@@ -1732,7 +1739,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
-		void* allocation = AllocateEx(allocator, total_size);
+		void* allocation = AllocateEx(allocator, total_size, debug_info);
 		uintptr_t ptr = (uintptr_t)allocation;
 		new_stream.InitializeAndCopy(ptr, input);
 
@@ -1824,9 +1831,9 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	// If copy size returns 0, it assumes it needs no buffers and does not call
 	// the copy function.
 	template<typename Stream>
-	void StreamCoallescedInplaceDeepCopy(Stream input, AllocatorPolymorphic allocator) {
+	void StreamCoallescedInplaceDeepCopy(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		size_t allocation_size = StreamCoallescedInplaceDeepCopySize(input);
-		void* allocation = AllocateEx(allocator, allocation_size);
+		void* allocation = AllocateEx(allocator, allocation_size, debug_info);
 		uintptr_t ptr = (uintptr_t)allocation;
 		return StreamCoallescedInplaceDeepCopy(input, ptr);
 	}

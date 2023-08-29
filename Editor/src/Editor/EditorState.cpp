@@ -163,27 +163,22 @@ void TickModuleStatus(EditorState* editor_state) {
 // -----------------------------------------------------------------------------------------------------------------
 
 void TickEvents(EditorState* editor_state) {
-	editor_state->event_queue_lock.lock();
-
 	// Get the event count and do the events that are now in the queue. Because some events might push them back
 	// in the event queue and doing that will generate an infinite loop
-	unsigned int event_count = editor_state->event_queue.GetSize();
+	ECS_STACK_CAPACITY_STREAM(EditorEvent, current_events, 512);
+	ECS_STACK_CAPACITY_STREAM(EditorEvent, events_to_be_pushed_back, 512);
 
-	editor_state->event_queue_lock.unlock();
+	unsigned int event_count = editor_state->event_queue.PopRangeAll(&current_events);
 
-
-	EditorEvent editor_event;
-	unsigned int event_index = 0;
-	while (event_index < event_count) {
-		editor_state->event_queue.Pop(editor_event);
-		EditorEventFunction event_function = (EditorEventFunction)editor_event.function;
-		bool needs_push = event_function(editor_state, editor_event.data);
+	for (unsigned int event_index = 0; event_index < event_count; event_index++) {
+		EditorEventFunction event_function = (EditorEventFunction)current_events[event_index].function;
+		bool needs_push = event_function(editor_state, current_events[event_index].data);
 		if (needs_push) {
-			editor_state->event_queue.Push(editor_event);
+			events_to_be_pushed_back.Add(current_events[event_index]);
 		}
-		event_index++;
 	}
 
+	editor_state->event_queue.PushRange(events_to_be_pushed_back);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -374,7 +369,6 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 	SetConsole(console_memory_manager, console_task_manager, L"TempDump.txt");
 	console_task_manager->CreateThreads();
 
-	mouse->AttachToProcess({ hwnd });
 	*keyboard = Keyboard(hub_allocator);
 }
 
@@ -475,7 +469,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	*editor_ui_reflection = UIReflectionDrawer(resizable_arena, editor_reflection_manager);
 	editor_state->ui_reflection = editor_ui_reflection;
 
-	editor_state->event_queue.GetQueue()->Initialize(editor_state->EditorAllocator(), EDITOR_EVENT_QUEUE_CAPACITY);
+	editor_state->event_queue.Initialize(editor_state->EditorAllocator(), EDITOR_EVENT_QUEUE_CAPACITY);
 
 	// Update the editor components
 	editor_state->editor_components.UpdateComponents(editor_state, editor_reflection_manager, 0, "ECSEngine");

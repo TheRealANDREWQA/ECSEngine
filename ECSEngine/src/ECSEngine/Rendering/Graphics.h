@@ -148,9 +148,9 @@ namespace ECSEngine {
 	};
 
 	struct GraphicsResourceSnapshot {
-		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
 			// This is maintained as a coallesced buffer
-			ECSEngine::Deallocate(allocator, interface_pointers.buffer);
+			ECSEngine::Deallocate(allocator, interface_pointers.buffer, debug_info);
 		}
 
 		// These are maintained as SoA buffers

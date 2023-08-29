@@ -108,7 +108,7 @@ namespace ECSEngine {
 		AllocatorManager.global_allocator = CreateGlobalMemoryManager(global_allocator_capacity, ECS_KB * 16, backup_allocator_capacity);
 		const wchar_t* log_file = descriptor->log_file ? descriptor->log_file : ECS_DEBUG_ALLOCATOR_DEFAULT_FILE;
 		if (descriptor->enable_global_write_to_file || descriptor->log_file) {
-			ECS_ASSERT(FileCreate(log_file, &AllocatorManager.file_handle) == ECS_FILE_STATUS_OK);
+			ECS_ASSERT(FileCreate(log_file, &AllocatorManager.file_handle, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TRUNCATE_FILE) == ECS_FILE_STATUS_OK);
 		}
 		AllocatorManager.write_to_file_on_fill = descriptor->enable_global_write_to_file;
 		AllocatorManager.hash_table_lock.Clear();
@@ -142,7 +142,7 @@ namespace ECSEngine {
 		if (AllocatorManager.allocators.TryGetValuePtr(allocator, tracked_allocator)) {
 			if (resizable) {
 				ECS_ASSERT(!tracked_allocator->is_resizable);
-				ThreadSafeQueue queue_allocations = tracked_allocator->queue_allocations;
+				ThreadSafeQueue<TrackedAllocation> queue_allocations = tracked_allocator->queue_allocations;
 				unsigned int entries_count = queue_allocations.GetSize();
 				tracked_allocator->resizable_allocations.Initialize({ nullptr }, entries_count);
 				if (entries_count > 0) {
@@ -208,15 +208,15 @@ namespace ECSEngine {
 		allocator.ForEach([&](const TrackedAllocation& allocation) {
 			Stream<char> function_type_name = DebugAllocatorFunctionName(allocation.function_type);
 			if (allocation.function_type == ECS_DEBUG_ALLOCATOR_ALLOCATE || allocation.function_type == ECS_DEBUG_ALLOCATOR_DEALLOCATE) {
-				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tPointer {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n",
+				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tPointer {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
 					function_type_name, allocation.allocated_pointer, allocation.debug_info.file, allocation.debug_info.function, allocation.debug_info.line);
 			}
 			else if (allocation.function_type == ECS_DEBUG_ALLOCATOR_CLEAR || allocation.function_type == ECS_DEBUG_ALLOCATOR_FREE) {
-				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n",
+				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
 					function_type_name, allocation.debug_info.file, allocation.debug_info.function, allocation.debug_info.line);
 			}
 			else if (allocation.function_type == ECS_DEBUG_ALLOCATOR_REALLOCATE) {
-				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tInitial Pointer {#}\n\tReallocated Pointer {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n",
+				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tInitial Pointer {#}\n\tReallocated Pointer {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
 					function_type_name, 
 					allocation.allocated_pointer,
 					allocation.secondary_pointer, 
@@ -226,7 +226,7 @@ namespace ECSEngine {
 				);
 			}
 			else if (allocation.function_type == ECS_DEBUG_ALLOCATOR_RETURN_TO_MARKER) {
-				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tMarker value {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n",
+				ECS_FORMAT_STRING(*characters, "\tType {#}\n\tMarker value {#}\n\tFile {#}\n\tFunction {#}\n\tLine {#}\n\n",
 					function_type_name, (size_t)allocation.allocated_pointer, allocation.debug_info.file, allocation.debug_info.function, allocation.debug_info.line);
 			}
 			else {

@@ -22,10 +22,6 @@ namespace ECSEngine {
 		}
 	}
 
-	struct ECSENGINE_API MouseProcessAttachment {
-		HWND hWnd;
-	};
-
 	struct ECSENGINE_API MouseProcedureInfo {
 		UINT message;
 		WPARAM wParam;
@@ -34,45 +30,71 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API Mouse : ButtonInput<ECS_MOUSE_BUTTON, ECS_MOUSE_BUTTON_COUNT>
 	{
-	public:
 		Mouse();
 
 		Mouse(const Mouse& other) = default;
 		Mouse& operator =(const Mouse& other) = default;
 
-		void AttachToProcess(const MouseProcessAttachment& info);
+		ECS_INLINE void DisableRawInput() {
+			m_get_raw_input = false;
+		}
 
-		void DisableRawInput();
+		ECS_INLINE void EnableRawInput() {
+			m_get_raw_input = true;
+		}
 
-		void EnableRawInput();
+		ECS_INLINE int GetScrollValue() const {
+			return m_current_scroll;
+		}
 
-		int GetScrollValue() const;
+		ECS_INLINE int2 GetPosition() const {
+			return m_current_position;
+		}
 
-		int2 GetPosition() const;
+		ECS_INLINE int2 GetPreviousPosition() const {
+			return m_previous_position;
+		}
 
-		int2 GetPreviousPosition() const;
+		ECS_INLINE int2 GetPositionDelta() const {
+			return m_current_position - m_previous_position;
+		}
 
-		int2 GetPositionDelta() const;
+		ECS_INLINE int GetPreviousScroll() const {
+			return m_previous_scroll;
+		}
 
-		int GetPreviousScroll() const;
+		ECS_INLINE int GetScrollDelta() const {
+			return m_current_scroll - m_previous_scroll;
+		}
 
-		int GetScrollDelta() const;
-
-		bool GetRawInputStatus() const;
+		ECS_INLINE bool GetRawInputStatus() const {
+			return m_get_raw_input;
+		}
 
 		void SetCursorVisibility(bool visible);
 
 		void SetPreviousPositionAndScroll();
 
-		void SetPosition(int x, int y);
+		ECS_INLINE void SetPosition(int x, int y) {
+			m_current_position = { x, y };
+		}
 
-		void AddDelta(int x, int y);
+		ECS_INLINE void AddDelta(int x, int y) {
+			m_current_position += int2(x, y);
+		}
 
-		void ResetCursorWheel();
+		ECS_INLINE void ResetCursorWheel() {
+			m_current_scroll = 0;
+		}
 		
-		void SetCursorWheel(int value);
+		ECS_INLINE void SetCursorWheel(int value) {
+			m_current_scroll = value;
+		}
 
-		void Update();
+		ECS_INLINE void Update() {
+			Tick();
+			SetPreviousPositionAndScroll();
+		}
 
 		void Procedure(const MouseProcedureInfo& info);
 

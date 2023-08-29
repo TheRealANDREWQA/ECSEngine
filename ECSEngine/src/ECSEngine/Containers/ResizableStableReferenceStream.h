@@ -11,9 +11,9 @@ namespace ECSEngine {
 	template<typename T, bool queue_indirection_list = false>
 	struct ResizableStableReferenceStream {
 		ResizableStableReferenceStream() {}
-		ResizableStableReferenceStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : allocator(_allocator)  {
+		ResizableStableReferenceStream(AllocatorPolymorphic _allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) : allocator(_allocator)  {
 			if (_capacity > 0) {
-				void* allocation = Allocate(allocator, stream.MemoryOf(_capacity));
+				void* allocation = Allocate(allocator, stream.MemoryOf(_capacity), alignof(void*), debug_info);
 				stream.InitializeFromBuffer(allocation, 0, _capacity);
 			}
 			else {
@@ -42,9 +42,9 @@ namespace ECSEngine {
 			Reserve({ indices, elements.size });
 		}
 
-		void FreeBuffer() {
+		void FreeBuffer(DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (stream.capacity > 0) {
-				Deallocate(allocator, stream.buffer);
+				Deallocate(allocator, stream.buffer, debug_info);
 			}
 
 			stream.buffer = nullptr;
@@ -83,23 +83,23 @@ namespace ECSEngine {
 		}
 
 		// Only use if new capacity greater than the current size
-		void SetNewCapacity(size_t new_capacity) {
+		void SetNewCapacity(size_t new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			// Create a new buffer
-			void* allocation = Allocate(allocator, stream.MemoryOf(new_capacity));
+			void* allocation = Allocate(allocator, stream.MemoryOf(new_capacity), alignof(void*), debug_info);
 
 			StableReferenceStream<T, queue_indirection_list> old_stream = stream;
 			stream.InitializeFromBuffer(allocation, new_capacity);
 			// Now copy the old content
 			stream.Copy(old_stream);
 			// Deallocate the old buffer
-			Deallocate(allocator, old_stream.buffer);
+			Deallocate(allocator, old_stream.buffer, debug_info);
 		}
 
 		// It will determine how many elements at the end are freed and will move all the existing elements
 		// to a new buffer of that size
 		// The threshold tells the function how many elements are needed to trigger the trim
 		// Since trimming a single element or a handful might not be that helpful
-		void Trim(unsigned int threshold = 1) {
+		void Trim(unsigned int threshold = 1, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			// Get the last index in use. That is the threshold
 			unsigned int last_index = 0;
 			stream.ForEachIndex([&](unsigned int index) {
@@ -109,11 +109,11 @@ namespace ECSEngine {
 			// The capacity to sustain the last index needs to be 1 more
 			last_index++;
 			if (stream.capacity - last_index >= threshold) {
-				void* allocation = Allocate(allocator, stream.MemoryOf(last_index), alignof(T));
+				void* allocation = Allocate(allocator, stream.MemoryOf(last_index), alignof(T), debug_info);
 				StableReferenceStream<T, queue_indirection_list> old_stream = stream;
 				stream.InitializeFromBuffer(allocation, last_index);
 				stream.Copy(old_stream);
-				Deallocate(allocator, old_stream.buffer);
+				Deallocate(allocator, old_stream.buffer, debug_info);
 			}
 		}
 
