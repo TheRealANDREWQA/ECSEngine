@@ -33,7 +33,7 @@ namespace ECSEngine {
 		return value.load(ECS_RELAXED) > 0;
 	}
 
-	void SpinLock::wait_locked()
+	void SpinLock::wait_locked() 
 	{
 		const size_t SPIN_COUNT_UNTIL_WAIT = GLOBAL_SPIN_COUNT;
 

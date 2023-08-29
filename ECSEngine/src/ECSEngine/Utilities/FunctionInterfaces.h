@@ -254,27 +254,43 @@ string_name.AssertCapacity();
 		);
 
 		template<typename Allocator>
-		void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8) {
-			void* allocation = allocator->Allocate(data_size, alignment);
+		ECS_INLINE void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			void* allocation = allocator->Allocate(data_size, alignment, debug_info);
 			memcpy(allocation, data, data_size);
 			return allocation;
 		}
 
-		ECSENGINE_API void* Copy(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = 8);
-
-		ECSENGINE_API Stream<void> Copy(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8);
+		ECS_INLINE Stream<void> Copy(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			void* allocation = Allocate(allocator, data.size, alignment, debug_info);
+			memcpy(allocation, data.buffer, data.size);
+			return { allocation, data.size };
+		}
+		
+		ECS_INLINE void* Copy(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			return Copy(allocator, { data, data_size }, alignment, debug_info).buffer;
+		}
 
 		// If data size is 0, it will return the data back
-		ECSENGINE_API void* CopyNonZero(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = 8);
+		ECS_INLINE void* CopyNonZero(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			if (data_size > 0) {
+				return Copy(allocator, data, data_size, alignment, debug_info);
+			}
+			return (void*)data;
+		}
 
 		// If data size is 0, it will return the data back
-		ECSENGINE_API Stream<void> CopyNonZero(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8);
+		ECS_INLINE Stream<void> CopyNonZero(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			if (data.size > 0) {
+				return Copy(allocator, data, alignment, debug_info);
+			}
+			return data;
+		}
 
 		// If data size is zero, it will return data, else it will make a copy and return that instead
 		template<typename Allocator>
-		void* CopyNonZero(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8) {
+		void* CopyNonZero(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (data_size > 0) {
-				void* allocation = allocator->Allocate(data_size, alignment);
+				void* allocation = allocator->Allocate(data_size, alignment, debug_info);
 				memcpy(allocation, data, data_size);
 				return allocation;
 			}

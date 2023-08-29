@@ -427,9 +427,9 @@ namespace ECSEngine {
 		}
 
 		// It will copy the null termination character
-		ECS_INLINE Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string) {
+		ECS_INLINE Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (string.size > 0) {
-				Stream<char> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
+				Stream<char> result = { Allocate(allocator, string.MemoryOf(string.size + 1), alignof(char), debug_info), string.size };
 				result.Copy(string);
 				result[string.size] = '\0';
 				return result;
@@ -438,9 +438,9 @@ namespace ECSEngine {
 		}
 
 		// It will copy the null termination character
-		ECS_INLINE Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string) {
+		ECS_INLINE Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (string.size > 0) {
-				Stream<wchar_t> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
+				Stream<wchar_t> result = { Allocate(allocator, string.MemoryOf(string.size + 1), alignof(wchar_t), debug_info), string.size };
 				result.Copy(string);
 				result[string.size] = L'\0';
 				return result;

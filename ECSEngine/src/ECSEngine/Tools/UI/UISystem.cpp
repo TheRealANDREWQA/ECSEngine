@@ -170,10 +170,8 @@ namespace ECSEngine {
 			// for some reason the memory must be 0'ed out before using it
 			memset(allocation, 0, total_memory);
 
-			m_thread_tasks = ThreadSafeQueue<ThreadTask>(allocation, m_descriptors.misc.window_count);
-
 			uintptr_t buffer = (uintptr_t)allocation;
-			buffer += ThreadSafeQueue<ThreadTask>::MemoryOf(m_descriptors.misc.window_count);
+			m_thread_tasks.InitializeFromBuffer(buffer, m_descriptors.misc.window_count);
 
 			buffer = function::AlignPointer(buffer, alignof(UIWindow));
 			m_windows.InitializeFromBuffer(buffer, 0, m_descriptors.misc.window_count);
@@ -3706,8 +3704,7 @@ namespace ECSEngine {
 			HandleFrameHandlers();
 			UpdateFocusedWindowCleanupLocation();
 
-			// Get the normalized mouse position again - it could have been changed inside
-			m_previous_mouse_position = GetNormalizeMousePosition();;
+			m_previous_mouse_position = GetNormalizeMousePosition();
 			m_frame_index++;
 
 			return m_frame_pacing;
@@ -3985,9 +3982,6 @@ namespace ECSEngine {
 			bool is_hoverable = false;
 			bool is_clickable = false;
 			bool is_general = false;
-			if (m_mouse->Get(ECS_MOUSE_X2)) {
-				__debugbreak();
-			}
 			if (!m_execute_events && data->mouse_region.dockspace == data->dockspace && data->mouse_region.border_index == data->border_index) {
 				bool active_click_handler = false;
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button) {
@@ -8467,7 +8461,7 @@ namespace ECSEngine {
 		{
 			int2 mouse_position = m_mouse->GetPosition();
 
-			return { static_cast<float>(mouse_position.x) / m_window_os_size.x * 2 - 1.0f,  static_cast<float>(mouse_position.y) / m_window_os_size.y * 2 - 1.0f };
+			return { (float)(mouse_position.x) / m_window_os_size.x * 2 - 1.0f,  (float)(mouse_position.y) / m_window_os_size.y * 2 - 1.0f };
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

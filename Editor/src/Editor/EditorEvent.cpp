@@ -24,26 +24,11 @@ void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, vo
 	AllocateMemory(editor_state, editor_event, event_data, event_data_size);
 	editor_event.data_size = event_data_size;
 
-	editor_state->event_queue_lock.lock();
 	editor_state->event_queue.Push(editor_event);
-	editor_state->event_queue_lock.unlock();
-
 	return editor_event.data;
 }
 
-void EditorAddEventWithPointer(EditorState* editor_state, EditorEventFunction function, void* event_data) {
-	EditorEvent editor_event;
-	editor_event.data_size = 1;
-	editor_event.data = event_data;
-	editor_event.function = function;
-
-	while (editor_state->event_queue.GetSize() == editor_state->event_queue.GetCapacity()) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_FOR_QUEUE_SPACE_SLEEP_TICK));
-	}
-	editor_state->event_queue.Push(editor_event);
-}
-
-void* EditorEventLastData(const EditorState* editor_state)
+void* EditorEventLastData(EditorState* editor_state)
 {
 	EditorEvent event_;
 	if (editor_state->event_queue.Peek(event_)) {

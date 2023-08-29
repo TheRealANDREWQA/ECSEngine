@@ -903,38 +903,6 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		void* Copy(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment)
-		{
-			return Copy(allocator, { data, data_size }, alignment).buffer;
-		}
-
-		Stream<void> Copy(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment)
-		{
-			void* allocation = Allocate(allocator, data.size, alignment);
-			memcpy(allocation, data.buffer, data.size);
-			return { allocation, data.size };
-		}
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		void* CopyNonZero(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment)
-		{
-			if (data_size > 0) {
-				return Copy(allocator, data, data_size, alignment);
-			}
-			return (void*)data;
-		}
-
-		Stream<void> CopyNonZero(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment)
-		{
-			if (data.size > 0) {
-				return Copy(allocator, data, alignment);
-			}
-			return data;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		void MakeSequence(Stream stream, size_t offset)
 		{

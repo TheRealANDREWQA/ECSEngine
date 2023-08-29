@@ -136,8 +136,8 @@ namespace ECSEngine {
 		for (size_t index = 0; index < thread_count; index++) {
 			// Align the thread queue buffer on a new cache line boundary
 			buffer_start = function::AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
-			ThreadQueue temp_queue = ThreadQueue((void*)buffer_start, max_dynamic_tasks);
-			buffer_start += ThreadQueue::MemoryOf(max_dynamic_tasks);
+			ThreadQueue temp_queue;
+			temp_queue.InitializeFromBuffer(buffer_start, max_dynamic_tasks);
 
 			// Align the thread queue such that is on a separate cache line
 			buffer_start = function::AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);

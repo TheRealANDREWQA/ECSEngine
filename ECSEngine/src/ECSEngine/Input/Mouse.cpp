@@ -3,77 +3,8 @@
 
 namespace ECSEngine {
 
-	void Mouse::AttachToProcess(const MouseProcessAttachment& info) {
-		//m_implementation->SetWindow(info.hWnd);
-	}
-
-	void Mouse::DisableRawInput()
-	{
-		m_get_raw_input = false;
-	}
-
-	void Mouse::EnableRawInput()
-	{
-		m_get_raw_input = true;
-	}
-
 	Mouse::Mouse() {
 		Reset();
-	}
-
-	int Mouse::GetScrollValue() const
-	{
-		return m_current_scroll;
-	}
-
-	int2 Mouse::GetPreviousPosition() const
-	{
-		return m_previous_position;
-	}
-
-	int Mouse::GetPreviousScroll() const
-	{
-		return m_previous_scroll;
-	}
-
-	int2 Mouse::GetPositionDelta() const
-	{
-		return m_current_position - m_previous_position;
-	}
-		
-	int Mouse::GetScrollDelta() const
-	{
-		return m_current_scroll - m_previous_scroll;
-	}
-
-	bool Mouse::GetRawInputStatus() const
-	{
-		return m_get_raw_input;
-	}
-
-	int2 Mouse::GetPosition() const
-	{
-		return m_current_position;
-	}
-
-	void Mouse::AddDelta(int x, int y)
-	{
-		m_current_position += int2(x, y);
-	}
-
-	void Mouse::ResetCursorWheel() {
-		m_current_scroll = 0;
-	}
-
-	void Mouse::SetCursorWheel(int value)
-	{
-		m_current_scroll = value;
-	}
-
-	void Mouse::Update()
-	{
-		Tick();
-		SetPreviousPositionAndScroll();
 	}
 
 	void Mouse::Reset() {
@@ -101,13 +32,8 @@ namespace ECSEngine {
 
 	void Mouse::SetPreviousPositionAndScroll()
 	{
-		m_previous_scroll = m_current_scroll;
 		m_previous_position = m_current_position;
-	}
-
-	void Mouse::SetPosition(int x, int y)
-	{
-		m_current_position = { x, y };
+		m_previous_scroll = m_current_scroll;
 	}
 
 	void Mouse::Procedure(const MouseProcedureInfo& info) {

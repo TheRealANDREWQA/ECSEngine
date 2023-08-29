@@ -26,7 +26,7 @@ enum EDITOR_SANDBOX_ENTITY_SLOT : unsigned char {
 
 #define EDITOR_SCENE_EXTENSION L".scene"
 #define EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT ECS_CONSTANT_REFLECT(8)
-#define EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED 0.002f
+#define EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED 0.2f
 
 // -------------------------------------------------------------------------------------------------------------
 

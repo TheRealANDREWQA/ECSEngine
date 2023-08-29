@@ -330,15 +330,15 @@ namespace ECSEngine {
 		}
 
 		template<typename Allocator>
-		void Initialize(Allocator* allocator, unsigned int _capacity) {
+		void Initialize(Allocator* allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t memory_size = MemoryOf(_capacity);
-			void* allocation = allocator->Allocate(memory_size, 8);
+			void* allocation = allocator->Allocate(memory_size, alignof(void*), debug_info);
 			InitializeFromBuffer(allocation, _capacity);
 		}
 
-		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity) {
+		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t memory_size = MemoryOf(_capacity);
-			void* allocation = Allocate(allocator, memory_size, 8);
+			void* allocation = Allocate(allocator, memory_size, alignof(void*), debug_info);
 			InitializeFromBuffer(allocation, _capacity);
 		}
 

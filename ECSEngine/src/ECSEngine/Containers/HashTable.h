@@ -611,9 +611,9 @@ namespace ECSEngine {
 		}
 
 		// Equivalent to memcpy'ing the data from the other table
-		void Copy(AllocatorPolymorphic allocator, const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>* table) {
+		void Copy(AllocatorPolymorphic allocator, const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>* table, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t table_size = MemoryOf(table->GetCapacity());
-			void* allocation = AllocateEx(allocator, table_size);
+			void* allocation = AllocateEx(allocator, table_size, debug_info);
 
 			InitializeFromBuffer(allocation, table->GetCapacity(), 0);
 			m_function = table->m_function;
@@ -625,9 +625,9 @@ namespace ECSEngine {
 
 		// Deallocates the pointer if it is not nullptr and the capacity is
 		// bigger than 0
-		void Deallocate(AllocatorPolymorphic allocator) const {
+		void Deallocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
 			if (GetAllocatedBuffer() != nullptr && GetCapacity() > 0) {
-				ECSEngine::Deallocate(allocator, GetAllocatedBuffer());
+				ECSEngine::Deallocate(allocator, GetAllocatedBuffer(), debug_info);
 			}
 		}
 
@@ -680,10 +680,10 @@ namespace ECSEngine {
 		}
 
 		template<typename Allocator>
-		void Initialize(Allocator* allocator, unsigned int capacity, size_t additional_info = 0) {
+		void Initialize(Allocator* allocator, unsigned int capacity, size_t additional_info = 0, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (capacity > 0) {
 				size_t memory_size = MemoryOf(capacity);
-				void* allocation = allocator->Allocate(memory_size, 8);
+				void* allocation = allocator->Allocate(memory_size, 8, debug_info);
 				InitializeFromBuffer(allocation, capacity, additional_info);
 			}
 			else {
@@ -691,10 +691,10 @@ namespace ECSEngine {
 			}
 		}
 
-		void Initialize(AllocatorPolymorphic allocator, unsigned int capacity, size_t additional_info = 0) {
+		void Initialize(AllocatorPolymorphic allocator, unsigned int capacity, size_t additional_info = 0, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (capacity > 0) {
 				size_t memory_size = MemoryOf(capacity);
-				void* allocation = Allocate(allocator, memory_size, 8);
+				void* allocation = Allocate(allocator, memory_size, 8, debug_info);
 				InitializeFromBuffer(allocation, capacity, additional_info);
 			}
 			else {
@@ -751,15 +751,15 @@ namespace ECSEngine {
 	// Helper function that eases the process of dynamic identifier hash tables; it takes care of allocating and
 	// deallocating when necessary
 	template<typename Table, typename Allocator, typename Value, typename Identifier>
-	void InsertIntoDynamicTable(Table& table, Allocator* allocator, Value value, Identifier identifier) {
+	void InsertIntoDynamicTable(Table& table, Allocator* allocator, Value value, Identifier identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		auto grow = [&]() {
 			unsigned int old_capacity = table.GetCapacity();
 
 			unsigned int new_capacity = Table::NextCapacity(table.GetCapacity());
-			void* new_allocation = allocator->Allocate(table.MemoryOf(new_capacity));
+			void* new_allocation = allocator->Allocate(table.MemoryOf(new_capacity), alignof(void*), debug_info);
 			const void* old_allocation = table.Grow(new_allocation, new_capacity);
 			if (old_capacity > 0) {
-				allocator->Deallocate(old_allocation);
+				allocator->Deallocate(old_allocation, debug_info);
 			}
 		};
 
@@ -772,15 +772,15 @@ namespace ECSEngine {
 	}
 
 	template<typename Table, typename Value, typename Identifier>
-	void InsertIntoDynamicTable(Table& table, AllocatorPolymorphic allocator, Value value, Identifier identifier) {
+	void InsertIntoDynamicTable(Table& table, AllocatorPolymorphic allocator, Value value, Identifier identifier, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		auto grow = [&]() {
 			unsigned int old_capacity = table.GetCapacity();
 
 			unsigned int new_capacity = Table::NextCapacity(table.GetCapacity());
-			void* new_allocation = AllocateEx(allocator, table.MemoryOf(new_capacity));
+			void* new_allocation = AllocateEx(allocator, table.MemoryOf(new_capacity), debug_info);
 			void* old_allocation = table.Grow(new_allocation, new_capacity);
 			if (old_capacity > 0) {
-				DeallocateEx(allocator, old_allocation);
+				DeallocateEx(allocator, old_allocation, debug_info);
 			}
 		};
 
@@ -913,7 +913,7 @@ namespace ECSEngine {
 	// Type CopyTo(uintptr_t& ptr) const;
 	// For multiple allocations only the Type Copy(AllocatorPolymorphic) const; function is needed
 	template<typename Table>
-	void HashTableDeepCopy(const Table& source, Table& destination, AllocatorPolymorphic allocator, bool single_allocation) {	
+	void HashTableDeepCopy(const Table& source, Table& destination, AllocatorPolymorphic allocator, bool single_allocation, DebugInfo debug_info) {	
 		size_t table_copy_size = source.MemoryOf(source.GetCapacity());
 
 		if (single_allocation) {
@@ -923,7 +923,7 @@ namespace ECSEngine {
 				total_size += identifier.CopySize();
 			});
 
-			void* allocation = Allocate(allocator, total_size);
+			void* allocation = Allocate(allocator, total_size, alignof(void*), debug_info);
 			memcpy(allocation, source.GetAllocatedBuffer(), table_copy_size);
 			destination.SetBuffers(allocation, source.GetCapacity());
 			allocation = function::OffsetPointer(allocation, table_copy_size);
@@ -941,7 +941,7 @@ namespace ECSEngine {
 			});
 		}
 		else {
-			void* allocation = Allocate(allocator, table_copy_size);
+			void* allocation = Allocate(allocator, table_copy_size, alignof(void*), debug_info);
 			memcpy(allocation, source.GetAllocatedBuffer(), table_copy_size);
 			destination.SetBuffers(allocation, source.GetCapacity());
 
