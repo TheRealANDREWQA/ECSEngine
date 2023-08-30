@@ -405,8 +405,6 @@ EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 			return true;
 		}
 		else {
-			EditorSetConsoleTrace("LoadMissingAssets...");
-
 			ECS_STACK_CAPACITY_STREAM(char, failure_string, 512);
 			unsigned int failure_count = data->failures->size.load(ECS_RELAXED);
 			for (unsigned int index = 0; index < failure_count; index++) {

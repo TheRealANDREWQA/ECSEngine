@@ -249,10 +249,12 @@
     <ClInclude Include="src\ECSEngine\Multithreading\TaskStealing.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTaskExport.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\Camera.h" />
     <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Profiling.h" />
     <ClInclude Include="src\ECSEngine\Rendering\RenderingEffects.h" />
     <ClInclude Include="src\ECSEngine\Rendering\SampleTexture.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\TransformHelpers.h" />
     <ClInclude Include="src\ECSEngine\Rendering\VisualizeTexture.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabase.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabaseReference.h" />
@@ -339,6 +341,7 @@
     <ClInclude Include="src\Includes\ECSEngineAssets.h" />
     <ClInclude Include="src\Includes\ECSEngineBasics.h" />
     <ClInclude Include="src\Includes\ECSEngineBenchmark.h" />
+    <ClInclude Include="src\Includes\ECSEngineCamera.h" />
     <ClInclude Include="src\Includes\ECSEngineCBufferTags.h" />
     <ClInclude Include="src\Includes\ECSEngineComponents.h" />
     <ClInclude Include="src\Includes\ECSEngineComponentsAll.h" />
@@ -451,10 +454,12 @@
     <ClCompile Include="src\ECSEngine\Multithreading\TaskScheduler.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\TaskSchedulerTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\ThreadTask.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\Camera.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\RenderingEffects.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\SampleTexture.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\TransformHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\VisualizeTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabase.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabaseReference.cpp" />

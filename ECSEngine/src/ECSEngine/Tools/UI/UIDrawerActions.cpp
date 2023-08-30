@@ -108,7 +108,7 @@ namespace ECSEngine {
 				ReleaseCapture();
 			}
 
-			float2 previous_mouse = system->m_previous_mouse_position;
+			float2 previous_mouse = system->GetPreviousMousePosition();
 			float dimming_factor = keyboard->IsDown(ECS_KEY_LEFT_CTRL) ? 0.1f : 1.0f;
 
 			if (slider->is_vertical) {
@@ -934,12 +934,14 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			DataType* data = (DataType*)_data;
+			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
+				system->ActiveWrapCursorPosition();
+			}
+
 			if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				FloatingPoint shift_value = keyboard->IsDown(ECS_KEY_LEFT_SHIFT) ? 1.0f / 5.0f : 1.0f;
 				FloatingPoint ctrl_value = keyboard->IsDown(ECS_KEY_LEFT_CTRL) ? 5.0f : 1.0f;
 				FloatingPoint amount = (FloatingPoint)mouse_delta.x * (FloatingPoint)INPUT_DRAG_FACTOR * shift_value * ctrl_value;
-
-				system->WrapCursorPosition();
 
 				*data->callback_data.number += amount;
 				*data->callback_data.number = function::Clamp(*data->callback_data.number, data->callback_data.min, data->callback_data.max);
@@ -963,6 +965,10 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
+				system->DeactiveWrapCursorPosition();
+			}
 		}
 
 		void DoubleInputDragValue(ActionData* action_data) {
@@ -984,6 +990,7 @@ namespace ECSEngine {
 			UIDrawerIntInputDragData<Integer>* data = (UIDrawerIntInputDragData<Integer>*)_data;
 			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				data->last_position = mouse_position.x;
+				system->ActiveWrapCursorPosition();
 			}
 			else if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				float delta_to_position = mouse_position.x - data->last_position;
@@ -993,8 +1000,6 @@ namespace ECSEngine {
 				
 				bool is_negative = amount < 0.0f;
 				Integer value_before = *data->data.number;
-
-				system->WrapCursorPosition();
 
 				if (abs(amount) > 1.0f) {
 					*data->data.number += (Integer)amount;
@@ -1031,6 +1036,10 @@ namespace ECSEngine {
 					// Make an exit callback
 					data->data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
 				}
+			}
+
+			if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
+				system->DeactiveWrapCursorPosition();
 			}
 		}
 

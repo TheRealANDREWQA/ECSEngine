@@ -23,6 +23,10 @@ namespace ECSEngine {
 			UISystem* system;
 		};
 
+		static float2 NormalizedMousePosition(float2 window_size, float2 mouse_position) {
+			return float2(mouse_position) / float2(window_size) * float2::Splat(2.0f) - float2::Splat(1.0f);
+		}
+
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void ProcessTexture(unsigned int thread_index, World* world, void* data);
@@ -271,6 +275,13 @@ namespace ECSEngine {
 
 			// Unitialize the timer
 			m_frame_timer.SetUninitialized();
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ActiveWrapCursorPosition()
+		{
+			m_mouse->ActivateWrap(m_window_os_size);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2607,6 +2618,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::DeactiveWrapCursorPosition()
+		{
+			m_mouse->DeactivateWrap();
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DeallocateDockspaceBorderResource(UIDockspace* dockspace, unsigned int border_index)
 		{
 			// releasing graphics objects
@@ -3096,6 +3114,11 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::DetectEvents(float2 mouse_position) {
+			// If not visible, do not detect events
+			if (!m_mouse->m_is_visible) {
+				return false;
+			}
+
 			DockspaceType dockspace_type(DockspaceType::FloatingVertical);
 			unsigned int dockspaces_to_search[32];
 			DockspaceType dockspace_types[32];
@@ -3197,6 +3220,10 @@ namespace ECSEngine {
 			float2 mouse_position,
 			unsigned int offset
 		) {
+			if (!m_mouse->m_is_visible) {
+				return false;
+			}
+
 			float dockspace_mask = GetDockspaceMaskFromType(type);
 
 			float2 region_position = GetDockspaceRegionPosition(dockspace, border_index, dockspace_mask);
@@ -3290,6 +3317,10 @@ namespace ECSEngine {
 			unsigned int offset,
 			ECS_MOUSE_BUTTON button_type
 		) {
+			if (!m_mouse->m_is_visible) {
+				return false;
+			}
+
 			float dockspace_mask = GetDockspaceMaskFromType(type);
 
 			float2 region_position = GetDockspaceRegionPosition(dockspace, border_index, dockspace_mask);
@@ -3352,6 +3383,10 @@ namespace ECSEngine {
 			unsigned int thread_id,
 			unsigned int offset
 		) {
+			if (!m_mouse->m_is_visible) {
+				return false;
+			}
+
 			float dockspace_mask = GetDockspaceMaskFromType(type);
 
 			float2 region_position = GetDockspaceRegionPosition(dockspace, border_index, dockspace_mask);
@@ -3704,7 +3739,7 @@ namespace ECSEngine {
 			HandleFrameHandlers();
 			UpdateFocusedWindowCleanupLocation();
 
-			m_previous_mouse_position = GetNormalizeMousePosition();
+			//m_previous_mouse_position = GetNormalizeMousePosition();
 			m_frame_index++;
 
 			return m_frame_pacing;
@@ -4028,14 +4063,17 @@ namespace ECSEngine {
 							);
 						}
 						if (is_clickable || is_general || button_type == ECS_MOUSE_LEFT || button_type == ECS_MOUSE_MIDDLE || button_type == ECS_MOUSE_RIGHT) {
-							DockspaceType floating_type;
-							UIDockspace* floating_dockspace = GetFloatingDockspaceFromDockspace(
-								data->dockspace,
-								dockspace_mask,
-								floating_type
-							);
-							SetNewFocusedDockspace(floating_dockspace, floating_type);
-							SetNewFocusedDockspaceRegion(data->dockspace, data->border_index, data->type);
+							if (m_mouse->m_is_visible) {
+								// Change the active dockspace region only the cursor is visible
+								DockspaceType floating_type;
+								UIDockspace* floating_dockspace = GetFloatingDockspaceFromDockspace(
+									data->dockspace,
+									dockspace_mask,
+									floating_type
+								);
+								SetNewFocusedDockspace(floating_dockspace, floating_type);
+								SetNewFocusedDockspaceRegion(data->dockspace, data->border_index, data->type);
+							}
 						}
 						active_region |= is_clickable | is_general;
 						m_frame_pacing = ((is_clickable || is_general) && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
@@ -5832,7 +5870,8 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::GetMouseDelta(float2 mouse_position) const {
-			return float2(mouse_position.x - m_previous_mouse_position.x, mouse_position.y - m_previous_mouse_position.y);
+			return float2(m_mouse->GetPositionDelta()) / float2(m_window_os_size) * float2::Splat(2.0f);
+			//return float2(mouse_position.x - m_previous_mouse_position.x, mouse_position.y - m_previous_mouse_position.y);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6825,6 +6864,13 @@ namespace ECSEngine {
 		float UISystem::GetFrameDeltaTime() const
 		{
 			return m_frame_delta_time;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		float2 UISystem::GetPreviousMousePosition() const
+		{
+			return NormalizedMousePosition(m_window_os_size, m_mouse->GetPreviousPosition());
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -8459,9 +8505,7 @@ namespace ECSEngine {
 
 		float2 UISystem::GetNormalizeMousePosition() const
 		{
-			int2 mouse_position = m_mouse->GetPosition();
-
-			return { (float)(mouse_position.x) / m_window_os_size.x * 2 - 1.0f,  (float)(mouse_position.y) / m_window_os_size.y * 2 - 1.0f };
+			return NormalizedMousePosition(m_window_os_size, m_mouse->GetPosition());
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9233,41 +9277,6 @@ namespace ECSEngine {
 		{
 			uint2 new_position = ECSEngine::OS::SetCursorPositionRelative(m_application->GetOSWindowHandle(), position);
 			m_mouse->SetPosition(new_position.x, new_position.y);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		void UISystem::WrapCursorPosition()
-		{
-			// We also need to update the current position
-			uint2 cursor_pixel_position = OS::GetCursorPosition();
-			uint2 application_window_size = m_graphics->GetWindowSize();
-			
-			// When it hits the end of the client region it will be 1 less smaller than the value
-			application_window_size.x--;
-			application_window_size.y--;
-
-			uint2 window_position = OS::GetOSWindowPosition(m_application->GetOSWindowHandle());
-
-			uint2 new_position = cursor_pixel_position;
-			if (window_position.x + application_window_size.x == cursor_pixel_position.x) {
-				new_position = { window_position.x + 1, cursor_pixel_position.y };
-			}
-			else if (cursor_pixel_position.x == window_position.x) {
-				new_position = { application_window_size.x - 1, cursor_pixel_position.y };
-			}
-
-			if (window_position.y + application_window_size.y == cursor_pixel_position.y) {
-				new_position = { cursor_pixel_position.x, window_position.y + 1 };
-			}
-			else if (cursor_pixel_position.y == window_position.y) {
-				new_position = { cursor_pixel_position.x, application_window_size.y - 1 };
-			}
-
-			if (new_position.x != cursor_pixel_position.x || new_position.y != cursor_pixel_position.y) {
-				SetCursorPosition(new_position);
-				m_mouse->SetPosition(new_position.x, new_position.y);
-			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

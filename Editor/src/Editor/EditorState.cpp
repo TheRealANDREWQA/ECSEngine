@@ -378,7 +378,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 {
 	// Initialize the Debug Allocator Manager
 	DebugAllocatorManagerDescriptor debug_allocator_manager_descriptor;
-	debug_allocator_manager_descriptor.capacity = ECS_DEBUG_ALLOCATOR_MANAGER_CAPACITY_HIGH;
+	debug_allocator_manager_descriptor.capacity = ECS_DEBUG_ALLOCATOR_MANAGER_CAPACITY_MEDIUM;
 	debug_allocator_manager_descriptor.enable_global_write_to_file = true;
 	DebugAllocatorManagerInitialize(&debug_allocator_manager_descriptor);
 
@@ -397,9 +397,6 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	MemoryManager* editor_allocator = new MemoryManager(2'000'000, 4096, 10'000'000, GetAllocatorPolymorphic(global_memory_manager));
 	editor_state->editor_allocator = editor_allocator;
 	AllocatorPolymorphic polymorphic_editor_allocator = GetAllocatorPolymorphic(editor_allocator);
-
-	// Enable the debug allocator on the editor allocator
-	editor_allocator->SetDebugMode("EditorAllocator", false);
 
 	MemoryManager* multithreaded_editor_allocator = new MemoryManager(10'000'000, 4096, 10'000'000, GetAllocatorPolymorphic(global_memory_manager));
 	editor_state->multithreaded_editor_allocator = multithreaded_editor_allocator;
@@ -562,6 +559,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	// This will be run asynchronously for the graphics object
 	InitializeRuntime(editor_state);
 
+	editor_state->Mouse()->AttachToWindow(application->GetOSWindowHandle());
 	// Change the dump type to none during the hub phase
 	console->SetDumpType(ECS_CONSOLE_DUMP_NONE);
 }

@@ -60,10 +60,6 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 	unsigned int sandbox_index = descriptor->sandbox_index;
 	Keyboard* keyboard = descriptor->system->m_keyboard;
 
-	if (descriptor->system->m_mouse->IsPressed(ECS_MOUSE_X1)) {
-		__debugbreak();
-	}
-
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	Camera camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	int2 unclampped_texel_position = descriptor->system->GetWindowTexelPositionEx(descriptor->window_index, descriptor->mouse_position);
@@ -255,7 +251,7 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// Check the speed modifiers - since the camera translation will write the sandbox file once
 	// We can just modify the camera wasd speed here and it will get updated as well
-	const float SPEED_INCREASE_STEP = 0.2f;
+	const float SPEED_INCREASE_STEP = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED * 0.33f;
 	bool changed_speed = false;
 
 	bool is_shift_down = editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_SHIFT);
@@ -294,7 +290,7 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 		EDITOR_INPUT_WASD_A, 
 		EDITOR_INPUT_WASD_S,
 		EDITOR_INPUT_WASD_D, 
-		sandbox->camera_wasd_speed,
+		sandbox->camera_wasd_speed * editor_state->ui_system->GetFrameDeltaTime() * 0.0002f,
 		camera_forward, 
 		camera_right
 	);
@@ -342,8 +338,9 @@ static void ScenePrivateAction(ActionData* action_data) {
 				mouse->EnableRawInput();
 				mouse->SetCursorVisibility(false);
 				sandbox->is_camera_wasd_movement = true;
+
 				// Initialize the camera translation/rotation
-				OrientedPoint camera_point = GetSandboxCameraPoint(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_COUNT);
+				OrientedPoint camera_point = GetSandboxCameraPoint(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 				data->camera_wasd_initial_translation = camera_point.position;
 				data->camera_wasd_initial_rotation = camera_point.rotation;
 				// We need this to make the camera movement smoother
@@ -489,6 +486,15 @@ static void ScenePrivateAction(ActionData* action_data) {
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	};
 
+	auto reset_camera_wasd = [&]() {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		// End the camera movement
+		sandbox->is_camera_wasd_movement = false;
+		// Disable the mouse raw input and make the cursor visible again
+		mouse->DisableRawInput();
+		mouse->SetCursorVisibility(true);
+	};
+
 	// If the user has clicked somewhere and we have active axes, disable them
 	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -496,11 +502,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 			reset_axes_and_rerender();
 		}
 		else if (sandbox->is_camera_wasd_movement) {
-			// End the camera movement
-			sandbox->is_camera_wasd_movement = false;
-			// Disable the mouse raw input and make the cursor visible again
-			mouse->DisableRawInput();
-			mouse->SetCursorVisibility(true);
+			reset_camera_wasd();
 		}
 	}
 	else if (mouse->IsPressed(ECS_MOUSE_MIDDLE) || mouse->IsPressed(ECS_MOUSE_RIGHT)) {
@@ -545,6 +547,12 @@ static void ScenePrivateAction(ActionData* action_data) {
 		}
 		else if (sandbox->is_camera_wasd_movement) {
 			// End the camera wasd movement and restore the previous translation and rotation
+			SetSandboxCameraTranslation(editor_state, sandbox_index, data->camera_wasd_initial_translation, EDITOR_SANDBOX_VIEWPORT_SCENE, true);
+			SetSandboxCameraRotation(editor_state, sandbox_index, data->camera_wasd_initial_rotation, EDITOR_SANDBOX_VIEWPORT_SCENE);
+
+			// Rerender the sandbox again
+			reset_camera_wasd();
+			RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
 	}
 }

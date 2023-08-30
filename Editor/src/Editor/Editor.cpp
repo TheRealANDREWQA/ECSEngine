@@ -87,16 +87,16 @@ public:
 		}
 	}
 
-	void* GetOSWindowHandle() override {
+	ECS_INLINE void* GetOSWindowHandle() const override {
 		return hWnd;
 	}
 
 	uint2 GetCursorPosition() const {
-		return ECSEngine::OS::GetCursorPosition();
+		return ECSEngine::OS::GetCursorPosition(GetOSWindowHandle());
 	}
 
 	void SetCursorPosition(uint2 position) {
-		ECSEngine::OS::SetCursorPosition(position);
+		ECSEngine::OS::SetCursorPosition(GetOSWindowHandle(), position);
 	}
 
 	void SetCursorPositionRelative(uint2 position) {
@@ -1048,9 +1048,11 @@ Editor::Editor(int _width, int _height, LPCWSTR name)
 		abort();
 	}
 
-	POINT cursor_pos = {};
-	GetCursorPos(&cursor_pos);
-	mouse.SetPosition(cursor_pos.x, cursor_pos.y);
+	uint2 cursor_position = OS::GetCursorPosition(hWnd);
+	// Temporarly set the hWnd to this one
+	mouse.m_window_handle = hWnd;
+	mouse.SetPosition(cursor_position.x, cursor_position.y);
+	mouse.m_window_handle = nullptr;
 
 	// show window since default is hidden
 	ShowWindow(hWnd, SW_SHOWMAXIMIZED);

@@ -52,6 +52,9 @@ namespace ECSEngine {
 			UISystem(const UISystem& other) = default;
 			UISystem& operator= (const UISystem& other) = default;
 
+			// If the cursor is at the border of the window it will be relocated to the other side
+			void ActiveWrapCursorPosition();
+
 			void* AllocateFromHandlerAllocator(unsigned int thread_id, ECS_UI_DRAW_PHASE phase, size_t size);
 
 			void AddActionHandler(
@@ -681,6 +684,8 @@ namespace ECSEngine {
 				float right
 			) const;
 
+			void DeactiveWrapCursorPosition();
+
 			void DeallocateDockspaceBorderResource(UIDockspace* dockspace, unsigned int border_index);
 
 			void DeallocateClickableHandler(ECS_MOUSE_BUTTON button_type);
@@ -1243,6 +1248,8 @@ namespace ECSEngine {
 			// Returns the duration in microseconds since the last frame
 			float GetFrameDeltaTime() const;
 
+			float2 GetPreviousMousePosition() const;
+
 			void HandleHoverable(float2 mouse_position, unsigned int thread_id, void** buffers, size_t* counts);
 
 			void HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id, ECS_MOUSE_BUTTON button_type);
@@ -1673,9 +1680,6 @@ namespace ECSEngine {
 			// The position is relative to the window position
 			void SetCursorPosition(uint2 position);
 
-			// If the cursor is at the border of the window it will be relocated to the other side
-			void WrapCursorPosition();
-
 			// Used for inter window communication
 			// The interested elements need to use AcquireDragDrop() to be notified if they received something
 			void StartDragDrop(Stream<void> data, Stream<char> name);
@@ -1851,8 +1855,7 @@ namespace ECSEngine {
 			// The intended purpose of the global resources is to ease inter-window communication
 			// For example draggables across windows
 			UIGlobalResources m_global_resources;
-			float2 m_previous_mouse_position;
-			// this is used to set the default handler for windows
+			// This is used to set the default handler for windows
 			UIActionHandler m_window_handler;
 			UIElementTransform m_system_draw_region;
 			size_t m_frame_index;

@@ -633,65 +633,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	Camera::Camera(float3 _translation, float3 _rotation) : translation(_translation), rotation(_rotation), is_orthographic(false), is_perspective_fov(false) {}
-
-	Camera::Camera(Matrix _projection, float3 _translation, float3 _rotation) : projection(_projection), 
-		translation(_translation), rotation(_rotation), is_orthographic(false), is_perspective_fov(false) {}
-
-	Camera::Camera(const CameraParameters& parameters) : is_perspective_fov(false) {
-		translation = parameters.translation;
-		rotation = parameters.rotation;
-
-		if (parameters.is_orthographic) {
-			is_orthographic = true;
-			SetOrthographicProjection(parameters.width, parameters.height, parameters.near_z, parameters.far_z);
-		}
-		else {
-			is_orthographic = false;
-			SetPerspectiveProjection(parameters.width, parameters.height, parameters.near_z, parameters.far_z);
-		}
-	}
-
-	Camera::Camera(const CameraParametersFOV& parameters) : is_perspective_fov(true) {
-		translation = parameters.translation;
-		rotation = parameters.rotation;
-
-		SetPerspectiveProjectionFOV(parameters.fov, parameters.aspect_ratio, parameters.near_z, parameters.far_z);
-	}
-
-	void Camera::SetOrthographicProjection(float _width, float _height, float near_z, float far_z) {
-		is_orthographic = true;
-		is_perspective_fov = false;
-
-		width = _width;
-		height = _height;
-		projection = MatrixOrthographic(width, height, near_z, far_z);
-	}
-
-	void Camera::SetPerspectiveProjection(float _width, float _height, float near_z, float far_z) {
-		is_orthographic = false;
-		is_perspective_fov = false;
-
-		width = _width;
-		height = _height;
-		projection = MatrixPerspective(width, height, near_z, far_z);
-	}
-
-	void Camera::SetPerspectiveProjectionFOV(float _fov, float _aspect_ratio, float near_z, float far_z) {
-		is_orthographic = false;
-		is_perspective_fov = true;
-
-		fov = _fov;
-		aspect_ratio = _aspect_ratio;
-		projection = MatrixPerspectiveFOV(fov, aspect_ratio, near_z, far_z);
-	}
-
-	Matrix ECS_VECTORCALL Camera::GetViewProjectionMatrix() const {
-		return GetTranslation() * GetRotation() * GetProjection();
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
 	void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index) {
 		void* base_address = (void*)function::AlignPointer(
 			(uintptr_t)function::OffsetPointer(material, sizeof(const char*) + sizeof(float) + sizeof(float) + sizeof(Color) + sizeof(float3)),
@@ -2043,59 +1984,6 @@ namespace ECSEngine {
 		}
 
 		return uint2(-1, -1);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
-	void CameraParameters::Default()
-	{
-		translation = { 0.0f, 0.0f, 0.0f };
-		rotation = { 0.0f, 0.0f, 0.0f };
-
-		is_orthographic = false;
-		width = 0.0f;
-		height = 0.0f;
-		near_z = ECS_CAMERA_DEFAULT_NEAR_Z;
-		far_z = ECS_CAMERA_DEFAULT_FAR_Z;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
-	void CameraParametersFOV::Default()
-	{
-		translation = { 0.0f, 0.0f, 0.0f };
-		rotation = { 0.0f, 0.0f, 0.0f };
-
-		fov = 60.0f;
-		aspect_ratio = 16.0f / 9.0f;
-		near_z = ECS_CAMERA_DEFAULT_NEAR_Z;
-		far_z = ECS_CAMERA_DEFAULT_FAR_Z;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
-	CameraCached::CameraCached(const Camera* camera)
-	{
-		is_orthographic = camera->is_orthographic;
-		is_perspective_fov = camera->is_perspective_fov;
-		translation = camera->translation;
-		rotation = camera->rotation;
-
-		if (is_orthographic || !is_perspective_fov) {
-			width = camera->width;
-			height = camera->height;
-		}
-		else {
-			fov = camera->fov;
-			aspect_ratio = camera->aspect_ratio;
-			horizontal_fov = HorizontalFOVFromVertical(fov, aspect_ratio);
-		}
-
-		rotation_matrix = camera->GetRotation();
-		rotation_as_is_matrix = camera->GetRotationAsIs();
-		projection_matrix = camera->projection;
-		view_projection_matrix = camera->GetViewProjectionMatrix();
-		inverse_view_projection_matrix = camera->GetInverseViewProjectionMatrix();
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
