@@ -2,6 +2,7 @@
 #include "RuntimeResources.h"
 #include "SystemManager.h"
 #include "../Rendering/RenderingStructures.h"
+#include "../Rendering/Camera.h"
 #include "../ECS/InternalStructures.h"
 
 #define CAMERA_IDENTIFIER "__RuntimeCamera"

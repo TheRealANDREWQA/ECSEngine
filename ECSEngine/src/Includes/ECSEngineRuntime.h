@@ -5,3 +5,4 @@
 #include "ECSEngineResources.h"
 #include "ECSEngineMultithreading.h"
 #include "ECSEngineECSRuntimeResources.h"
+#include "ECSEngineCamera.h"

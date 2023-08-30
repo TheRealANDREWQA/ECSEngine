@@ -49,7 +49,7 @@ namespace ECSEngine {
 		// returns the count of characters written
 		virtual unsigned int CopyTextFromClipboard(char* text, unsigned int max_size) = 0;
 
-		virtual void* GetOSWindowHandle() = 0;
+		virtual void* GetOSWindowHandle() const = 0;
 
 		virtual uint2 GetCursorPosition() const = 0;
 

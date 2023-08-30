@@ -1,6 +1,5 @@
 #pragma once
 #include "../Core.h"
-#include "ecspch.h"
 #include "../Utilities/BasicTypes.h"
 #include "ButtonInput.h"
 
@@ -35,6 +34,10 @@ namespace ECSEngine {
 		Mouse(const Mouse& other) = default;
 		Mouse& operator =(const Mouse& other) = default;
 
+		ECS_INLINE void AttachToWindow(void* window_handle) {
+			m_window_handle = window_handle;
+		}
+
 		ECS_INLINE void DisableRawInput() {
 			m_get_raw_input = false;
 		}
@@ -56,7 +59,12 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE int2 GetPositionDelta() const {
-			return m_current_position - m_previous_position;
+			if (!m_has_wrapped) {
+				return m_current_position - m_previous_position;
+			}
+			else {
+				return m_before_wrap_position - m_previous_position;
+			}
 		}
 
 		ECS_INLINE int GetPreviousScroll() const {
@@ -71,16 +79,20 @@ namespace ECSEngine {
 			return m_get_raw_input;
 		}
 
-		void SetCursorVisibility(bool visible);
+		void SetCursorVisibility(bool visible, bool pin_mouse_on_invisible = true);
 
 		void SetPreviousPositionAndScroll();
 
-		ECS_INLINE void SetPosition(int x, int y) {
-			m_current_position = { x, y };
-		}
+		void SetPosition(int x, int y);
 
 		ECS_INLINE void AddDelta(int x, int y) {
 			m_current_position += int2(x, y);
+		}
+
+		void ActivateWrap(uint2 pixel_bounds);
+
+		ECS_INLINE void DeactivateWrap() {
+			m_wrap_position = false;
 		}
 
 		ECS_INLINE void ResetCursorWheel() {
@@ -100,11 +112,20 @@ namespace ECSEngine {
 
 		void Reset();
 
+		void* m_window_handle;
 		int2 m_previous_position;
 		int m_previous_scroll;
 		int2 m_current_position;
 		int m_current_scroll;
+		uint2 m_wrap_pixel_bounds;
+		// This is set to true when the mouse has wrapped in order to not
+		// have the delta explode
+		int2 m_before_wrap_position;
 		bool m_get_raw_input;
+		bool m_is_visible;
+		bool m_wrap_position;
+		bool m_has_wrapped;
+		bool m_pin_mouse;
 	};
 
 }

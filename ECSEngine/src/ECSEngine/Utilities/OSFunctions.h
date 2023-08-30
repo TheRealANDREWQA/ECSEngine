@@ -167,15 +167,9 @@ namespace ECSEngine {
 
 		ECSENGINE_API void ChangeThreadPriority(ECS_THREAD_PRIORITY priority);
 
-		ECS_INLINE uint2 GetCursorPosition() {
-			POINT point;
-			ECS_ASSERT(GetCursorPos(&point));
-			return { (unsigned int)point.x, (unsigned int)point.y };
-		}
+		ECSENGINE_API uint2 GetCursorPosition(void* window_handle);
 
-		ECS_INLINE void SetCursorPosition(uint2 position) {
-			ECS_ASSERT(SetCursorPos(position.x, position.y));
-		}
+		ECSENGINE_API void SetCursorPosition(void* window_handle, uint2 position);
 
 		// The cursor is placed relative to the OS client region
 		// Returns the final position relative to the window location
