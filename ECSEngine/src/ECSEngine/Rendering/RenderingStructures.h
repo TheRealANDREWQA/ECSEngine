@@ -3,9 +3,7 @@
 #include "../Core.h"
 #include "ecspch.h"
 #include "../Containers/Stream.h"
-#include "../Math/Matrix.h"
-#include "../Math/Quaternion.h"
-#include "../Math/Conversion.h"
+#include "../Math/AABB.h"
 #include "../Allocators/AllocatorTypes.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "ColorUtilities.h"
@@ -1425,6 +1423,7 @@ namespace ECSEngine {
 		ECS_MESH_INDEX mapping[ECS_MESH_BUFFER_COUNT];
 		unsigned char mapping_count;
 		Stream<char> name;
+		AABBStorage bounds;
 	};
 
 	struct ECSENGINE_API Submesh {
@@ -1464,7 +1463,16 @@ namespace ECSEngine {
 		unsigned int vertex_buffer_offset;
 		unsigned int index_count;
 		unsigned int vertex_count;
+		AABBStorage bounds;
 	};
+
+	ECS_INLINE AABBStorage GetSubmeshesBoundingBox(Stream<Submesh> submeshes) {
+		AABBStorage combined = ReverseInfiniteBoundingBox();
+		for (size_t index = 0; index < submeshes.size; index++) {
+			combined = GetCombinedBoundingBox(combined, submeshes[index].bounds);
+		}
+		return combined;
+	}
 
 	// Contains the actual pipeline objects that can be bound to the graphics context
 	struct ECSENGINE_API Material {

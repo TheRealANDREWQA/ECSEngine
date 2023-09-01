@@ -224,6 +224,7 @@
     <ClInclude Include="src\ECSEngine\Rendering\Camera.h" />
     <ClInclude Include="src\ECSEngine\Rendering\TransformHelpers.h" />
     <ClInclude Include="src\Includes\ECSEngineCamera.h" />
+    <ClInclude Include="src\ECSEngine\Math\AABB.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -345,6 +346,7 @@
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorCallsDebug.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Camera.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\TransformHelpers.cpp" />
+    <ClCompile Include="src\ECSEngine\Math\AABB.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

@@ -5,6 +5,7 @@
 #include "../Utilities/BasicTypes.h"
 #include "../Rendering/RenderingStructures.h"
 #include "../Allocators/AllocatorTypes.h"
+#include "../Math/AABB.h"
 
 namespace ECSEngine {
 
@@ -85,13 +86,11 @@ namespace ECSEngine {
 		AllocatorPolymorphic permanent_allocator = { nullptr };
 		CapacityStream<char>* error_message = nullptr;
 		bool allocate_submesh_name = false;
-		bool coallesce_submesh_name_allocations = true;
+		bool coalesce_submesh_name_allocations = true;
 		float scale_factor = 1.0f;
 
-		// If these are set, then it will deduce the bounding box
-		// if the given coalesced mesh
-		float3* min_bound = nullptr;
-		float3* max_bound = nullptr;
+		// If this is set, then it will deduce the AABBStorage of the object
+		bool deduce_submesh_bounds = true;
 	};
 
 	// Coallesces on the CPU side the values to be directly copied to the GPU
@@ -165,27 +164,51 @@ namespace ECSEngine {
 
 	// Can run on multiple threads
 	// Creates the appropriate vertex and index buffers
-	// Currently misc_flags can be set to D3D11_RESOURCE_MISC_SHARED to enable sharing of the vertex buffers across devices
-	ECSENGINE_API Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE);
+	// Currently misc_flags can be set to ECS_GRAPHICS_RESOURCE_SHARED to enable sharing of the vertex buffers across devices
+	ECSENGINE_API Mesh GLTFMeshToMesh(
+		Graphics* graphics, 
+		const GLTFMesh& gltf_mesh, 
+		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE,
+		bool compute_bounding_box = true
+	);
 
 	// Can run on multiple threads
 	// Creates the appropriate vertex and index buffers
-	// Currently misc_flags can be set to D3D11_RESOURCE_MISC_SHARED to enable sharing of the vertex buffers across devices
-	ECSENGINE_API void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count, ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE);
+	// Currently misc_flags can be set to ECS_GRAPHICS_RESOURCE_SHARED to enable sharing of the vertex buffers across devices
+	ECSENGINE_API void GLTFMeshesToMeshes(
+		Graphics* graphics, 
+		const GLTFMesh* gltf_meshes, 
+		Mesh* meshes, 
+		size_t count, 
+		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE
+	);
 
 	// SINGLE THREADED - relies on the context to copy the resources
 	// Merges the submeshes that have the same material into the same buffer
-	// PBRMaterial count submeshes will be created
+	// Material count submeshes will be created
 	// The returned mesh will have no name associated with it
 	// The submeshes will inherit the mesh name
-	// Currently misc_flags can be set to D3D11_RESOURCE_MISC_SHARED to enable sharing of the vertex buffers across devices
+	// Currently misc_flags can be set to ECS_GRAPHICS_RESOURCE_SHARED to enable sharing of the vertex buffers across devices
+	// The gltf_meshes indices_offset value will be modified
 	ECSENGINE_API Mesh GLTFMeshesToMergedMesh(
 		Graphics* graphics, 
-		GLTFMesh* gltf_meshes, 
+		Stream<GLTFMesh> gltf_meshes, 
 		Submesh* submeshes,
 		unsigned int* submesh_material_index, 
 		size_t material_count,
-		size_t count,
+		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE
+	);
+
+	// SINGLE THREADED - relies on the context to copy the resources
+	// Merges the submeshes that have the same material into the same buffer
+	// Material count submeshes will be created
+	// The returned mesh will have no name associated with it
+	// The submeshes will inherit the mesh name
+	// Currently misc_flags can be set to ECS_GRAPHICS_RESOURCE_SHARED to enable sharing of the vertex buffers across devices
+	ECSENGINE_API Mesh GLTFMeshesToMergedMesh(
+		Graphics* graphics,
+		Stream<GLTFMesh> gltf_meshes,
+		Submesh* submeshes,
 		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE
 	);
 
@@ -222,10 +245,10 @@ namespace ECSEngine {
 
 	ECSENGINE_API void ScaleGLTFMeshes(Stream<GLTFMesh> meshes, float scale_factor);
 	
-	ECSENGINE_API void GetGLTFMeshBoundingBox(const GLTFMesh* mesh, float3* min_bound, float3* max_bound);
+	ECSENGINE_API AABBStorage GetGLTFMeshBoundingBox(const GLTFMesh* mesh);
 
-	ECSENGINE_API void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, float3* min_bounds, float3* max_bounds);
+	ECSENGINE_API void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, AABBStorage* bounding_boxes);
 
-	ECSENGINE_API void GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes, float3* min_bound, float3* max_bound);
+	ECSENGINE_API AABBStorage GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes);
 
 }
