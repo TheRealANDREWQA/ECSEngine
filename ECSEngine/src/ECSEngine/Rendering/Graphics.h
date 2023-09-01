@@ -1577,14 +1577,15 @@ namespace ECSEngine {
 	// The mesh will have no name associated with it
 	// It will release the graphics resources of the meshes
 	// The submeshes will inherit the mesh name if it has one
+	// The submeshes and the coalesced mesh don't have their bounds set
 	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE);
 
 	// SINGLE THREADED - It uses the CopyResource which requires the immediate context
 	// Same as the non mask variant - the difference is that it will only convert the meshes specified
-	// in the mesh mask
-	// The mesh will have no name associated with it
+	// in the mesh mask. The mesh will have no name associated with it
 	// It will release the graphics resources of the meshes
 	// The submeshes will inherit the mesh name if it has one
+	// The submeshes and the coalesced mesh don't have their bounds set
 	ECSENGINE_API Mesh MeshesToSubmeshes(
 		Graphics* graphics, 
 		Stream<Mesh> meshes, 

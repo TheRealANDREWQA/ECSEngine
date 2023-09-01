@@ -1,6 +1,7 @@
 #pragma once
 #include "../../Core.h"
 #include "../RenderingStructures.h"
+#include "../../Math/Matrix.h"
 
 namespace ECSEngine {
 

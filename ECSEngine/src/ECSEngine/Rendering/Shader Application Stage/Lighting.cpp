@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "Lighting.h"
-#include "..\Graphics.h"
+#include "../Graphics.h"
+#include "../../Math/Vector.h"
 
 /*
 	CHECK LightingUtilities.hlsli for the exact layout of the HLSL structures that are being mirrored here

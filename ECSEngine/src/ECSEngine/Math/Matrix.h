@@ -1085,6 +1085,21 @@ namespace ECSEngine {
 		return MatrixVectorMultiply(direction, rotation_matrix0, rotation_matrix1);
 	}
 
+	ECS_INLINE float3 ECS_VECTORCALL RotatePointMatrixLow(Matrix rotation_matrix, Vector8 point) {
+		// We can treat the point as a displacement vector that is rotated
+		return RotateVectorMatrixLow(rotation_matrix, point);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL RotatePointMatrixSIMD(Matrix rotation_matrix, Vector8 point) {
+		// We can treat the point as a displacement vector that is rotated
+		return RotateVectorMatrixSIMD(rotation_matrix, point);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL RotatePointMatrixSIMD(Matrix rotation_matrix0, Matrix rotation_matrix1, Vector8 point) {
+		// We can treat the point as a displacement vector that is rotated
+		return RotateVectorMatrixSIMD(rotation_matrix0, rotation_matrix1, point);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE float3 ECS_VECTORCALL RotateVectorLow(float3 rotation, Vector8 direction) {

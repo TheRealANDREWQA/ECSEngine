@@ -717,9 +717,20 @@ namespace ECSEngine {
 		return QuaternionVectorMultiply<preserve>(quaternion, vector);
 	}
 
+	template<bool preserve = false>
+	ECS_INLINE Vector8 ECS_VECTORCALL RotatePointQuaternionSIMD(Quaternion quaternion, Vector8 point) {
+		// We can treat the point as a displacement vector that is rotated
+		return RotateVectorQuaternionSIMD<preserve>(quaternion, point);
+	}
+
 	// This only rotates the low part
 	ECS_INLINE float3 ECS_VECTORCALL RotateVectorQuaternion(Quaternion quaternion, Vector8 vector) {
 		return RotateVectorQuaternionSIMD(quaternion, vector).AsFloat3Low();
+	}
+
+	ECS_INLINE float3 ECS_VECTORCALL RotatePointQuaternion(Quaternion quaternion, Vector8 vector) {
+		// We can treat the point as a displacement vector that is rotated
+		return RotatePointQuaternion(quaternion, vector);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

@@ -297,6 +297,92 @@ string_name.AssertCapacity();
 			return (void*)data;
 		}
 
+		// General binary search algorithm
+		// Returns true if it found a value, else false
+		// The evaluate functor must return an int with the following meaning
+		// 0 - the value was found
+		// -1 - the value is greater than the current mid
+		// 1 - the value is smaller than the current mid
+		// The epsilon is a value that is added/subtracted to the left or right
+		// when a new step is needed. Divide by two is a value that is used to
+		// divide the difference between left and right to obtain the mid
+		template<typename Value, typename EvaluateFunctor>
+		bool BinarySearch(Value left, Value right, Value epsilon, Value divide_by_two, Value* result, EvaluateFunctor&& evaluate_functor) {
+			while (left <= right) {
+				Value mid = left + (right - left) / divide_by_two;
+				int evaluation = evaluate_functor(mid);
+				if (evaluation == 0) {
+					// We found the value
+					*result = mid;
+					return true;
+				}
+				else if (evaluation == -1) {
+					left = mid + epsilon;
+				}
+				else {
+					right = mid - epsilon;
+				}
+			}
+			
+			return false;
+		}
+
+		// General binary search algorithm that switches to a linear step size search
+		// Returns true if it found a value, else false
+		// The evaluate functor must return an int with the following meaning
+		// 0 - switch to linear step size search when in binary search, else the value is found
+		// -1 - the value is greater than the current mid
+		// 1 - the value is smaller than the current mid
+		// The epsilon is a value that is added/subtracted to the left or right
+		// when a new binary search step is needed. Divide by two is a value that is used to
+		// divide the difference between left and right to obtain the mid
+		template<typename Value, typename BinaryEvaluateFunctor, typename LinearEvaluateFunctor>
+		bool BinaryIntoLinearSearch(
+			Value left, 
+			Value right, 
+			Value epsilon, 
+			Value divide_by_two, 
+			Value linear_step, 
+			Value* result, 
+			BinaryEvaluateFunctor&& binary_evaluate_functor,
+			LinearEvaluateFunctor&& linear_evaluate_functor
+		) {
+			while (left <= right) {
+				Value mid = left + (right - left) / divide_by_two;
+				int evaluation = binary_evaluate_functor(mid);
+				if (evaluation == 0) {
+					// Exit the binary search
+					break;
+				}
+				else if (evaluation == -1) {
+					left = mid + epsilon;
+				}
+				else {
+					right = mid - epsilon;
+				}
+			}
+
+			// Linear search mode
+			while (left <= right) {
+				Value current_value = left;
+				int evaluation = linear_evaluate_functor(current_value);
+				if (evaluation == 0) {
+					*result = current_value;
+					return true;
+				}
+				// If it returns 1, meaning that the value is smaller than the current left
+				// Then we overstepped the value. Return the midpoint between the current left
+				// and the previous iteration
+				if (evaluation == 1) {
+					*result = left - linear_step / divide_by_two;
+					return true;
+				}
+				left += linear_step;
+			}
+
+			return false;
+		}
+
 		// The offset is added to the sequence
 		template<typename Stream>
 		ECSENGINE_API void MakeSequence(Stream stream, size_t offset = 0);

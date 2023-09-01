@@ -3,6 +3,7 @@
 #include "../Core.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Math/Conversion.h"
+#include "../Math/AABB.h"
 
 namespace ECSEngine {
 
@@ -305,7 +306,8 @@ namespace ECSEngine {
 		const CameraType* camera, 
 		float3 object_translation, 
 		Quaternion object_rotation, 
-		float3 object_scale, 
+		float3 object_scale,
+		AABBStorage object_bounds,
 		float2 view_space_proportion
 	);
 

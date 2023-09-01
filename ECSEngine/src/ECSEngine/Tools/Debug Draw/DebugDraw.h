@@ -3,6 +3,7 @@
 #include "../../Rendering/Graphics.h"
 #include "../../Allocators/MemoryManager.h"
 #include "../../Math/Matrix.h"
+#include "../../Math/Quaternion.h"
 #include "../../Containers/Deck.h"
 #include "../../Multithreading/ConcurrentPrimitives.h"
 #include "../../Rendering/RenderingStructures.h"

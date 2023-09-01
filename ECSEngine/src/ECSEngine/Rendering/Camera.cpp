@@ -1,5 +1,6 @@
 #include "ecspch.h"
 #include "Camera.h"
+#include "../Utilities/FunctionInterfaces.h"
 
 namespace ECSEngine {
 
@@ -157,8 +158,8 @@ namespace ECSEngine {
 
 	template<typename CameraType>
 	float3 FocusCameraOnObject(const CameraType* camera, float3 object_translation, float distance) {
-		float3 camera_forward = GetCameraForwardVector(camera).AsFloat3();
-		return object_translation - camera_forward * distance
+		float3 camera_forward = GetCameraForwardVector(camera).AsFloat3Low();
+		return object_translation - camera_forward * distance;
 	}
 
 	ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, FocusCameraOnObject, const Camera*, const CameraCached*, float3, float);
@@ -169,11 +170,29 @@ namespace ECSEngine {
 		float3 object_translation,
 		Quaternion object_rotation,
 		float3 object_scale,
+		AABBStorage object_bounds,
 		float2 view_space_proportion
 	) {
+		// Use a binary search of the right distance
+		float min_distance = 0.0f;
+		float max_distance = 10000.0f;
 
+		const float BINARY_SEARCH_EPSILON = 0.1f;
+		const float LINEAR_SEARCH_EPSILON = 0.02f;
+
+		float resulting_distance = 0.0f;
+		if (function::BinaryIntoLinearSearch(min_distance, max_distance, 0.001f, 2.0f, 0.1f, &resulting_distance, 
+			[&](float current_distance) {
+				return 0;
+			},
+			[&](float current_distance) {
+				return 0;
+			}
+		));
+
+		return float3::Splat(0.0f);
 	}
 
-	ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, FocusCameraOnObjectViewSpace, const Camera*, const CameraCached*, float3, Quaternion, float3, float2);
+	ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, FocusCameraOnObjectViewSpace, const Camera*, const CameraCached*, float3, Quaternion, float3, AABBStorage, float2);
 
 }

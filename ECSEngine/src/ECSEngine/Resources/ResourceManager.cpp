@@ -1239,14 +1239,8 @@ namespace ECSEngine {
 		// Scale the gltf meshes, they already have a built in check for scale of 1.0f
 		ScaleGLTFMeshes(gltf_meshes, scale_factor);
 
-		Mesh* temporary_meshes = (Mesh*)ECS_STACK_ALLOC(sizeof(Mesh) * gltf_meshes.size);
-
 		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE;
-		// Convert the gltf meshes into multiple meshes and then convert these to an aggregated mesh
-		GLTFMeshesToMeshes(m_graphics, gltf_meshes.buffer, temporary_meshes, gltf_meshes.size);
-
-		// Convert now to aggregated mesh
-		mesh->mesh = MeshesToSubmeshes(m_graphics, { temporary_meshes, gltf_meshes.size }, mesh->submeshes.buffer, misc_flags);
+		mesh->mesh = GLTFMeshesToMergedMesh(m_graphics, gltf_meshes, mesh->submeshes.buffer, misc_flags);
 
 		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, load_descriptor, ex_desc);
 
@@ -1904,7 +1898,7 @@ namespace ECSEngine {
 		mesh->materials = (PBRMaterial*)buffer;
 
 		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE;
-		mesh->mesh.mesh = GLTFMeshesToMergedMesh(m_graphics, gltf_meshes, mesh->mesh.submeshes.buffer, material_masks, pbr_materials.size, data.mesh_count, misc_flags);
+		mesh->mesh.mesh = GLTFMeshesToMergedMesh(m_graphics, { gltf_meshes, data.mesh_count }, mesh->mesh.submeshes.buffer, material_masks, pbr_materials.size, misc_flags);
 		mesh->mesh.submeshes.size = pbr_materials.size;
 
 		// Copy the pbr materials to this new buffer

@@ -996,6 +996,7 @@ namespace ECSEngine {
 	{
 		bool allocate_names = false;
 		bool coallesce_names = false;
+		bool determine_submesh_bounding_box = true;
 		CapacityStream<char>* error_message = nullptr;
 		AllocatorPolymorphic temporary_allocator = { nullptr };
 		AllocatorPolymorphic permanent_allocator = { nullptr };
@@ -1003,7 +1004,7 @@ namespace ECSEngine {
 
 		if (options != nullptr) {
 			allocate_names = options->allocate_submesh_name;
-			coallesce_names = options->coallesce_submesh_name_allocations;
+			coallesce_names = options->coalesce_submesh_name_allocations;
 			error_message = options->error_message;
 			temporary_allocator = options->temporary_buffer_allocator;
 			permanent_allocator = options->permanent_allocator;
@@ -1060,6 +1061,15 @@ namespace ECSEngine {
 					submesh.name.InitializeFromBuffer(submesh_name_ptr, name.size);
 					submesh.name.Copy(name);
 				}
+				
+				if (determine_submesh_bounding_box) {
+					Stream<float3> positions = { mesh->positions.buffer + submesh.vertex_buffer_offset, submesh.vertex_count };
+					submesh.bounds = GetMeshBoundingBox(positions);
+				}
+				else {
+					submesh.bounds = InfiniteBoundingBox();
+				}
+
 				submeshes[submesh_index++] = submesh;
 			}
 			return success;
@@ -1290,7 +1300,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, ECS_GRAPHICS_MISC_FLAGS misc_flags)
+	Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, ECS_GRAPHICS_MISC_FLAGS misc_flags, bool compute_bounding_box)
 	{
 		Mesh mesh;
 
@@ -1351,6 +1361,9 @@ namespace ECSEngine {
 			mesh.index_buffer = graphics->CreateIndexBuffer(sizeof(unsigned int), gltf_mesh.indices.size, gltf_mesh.indices.buffer, false, ECS_GRAPHICS_USAGE_DEFAULT, cpu_access, misc_flags);
 		}
 
+		if (compute_bounding_box) {
+			mesh.bounds = GetGLTFMeshBoundingBox(&gltf_mesh);
+		}
 		return mesh;
 	}
 
@@ -1365,12 +1378,11 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------------------------------
 
 	Mesh GLTFMeshesToMergedMesh(
-		Graphics* graphics, 
-		GLTFMesh* gltf_meshes, 
+		Graphics* graphics,
+		Stream<GLTFMesh> gltf_meshes,
 		Submesh* submeshes,
-		unsigned int* submesh_material_index, 
-		size_t material_count, 
-		size_t count,
+		unsigned int* submesh_material_index,
+		size_t material_count,
 		ECS_GRAPHICS_MISC_FLAGS misc_flags
 	) {
 		constexpr size_t COUNT_MAX = 2048;
@@ -1380,8 +1392,8 @@ namespace ECSEngine {
 		size_t total_vertex_buffer_count = 0;
 		size_t total_index_buffer_count = 0;
 
-		ECS_ASSERT(count <= COUNT_MAX);
-		unsigned int* sorted_indices = (unsigned int*)ECS_STACK_ALLOC(sizeof(unsigned int) * count);
+		ECS_ASSERT(gltf_meshes.size <= COUNT_MAX);
+		unsigned int* sorted_indices = (unsigned int*)ECS_STACK_ALLOC(sizeof(unsigned int) * gltf_meshes.size);
 
 		// The x component will hold the total vertex count
 		// The y component will hold the total index count
@@ -1391,7 +1403,8 @@ namespace ECSEngine {
 		size_t submesh_offset = 0;
 		// For every material run through the submeshes to combine those that have the same material
 		for (size_t index = 0; index < material_count; index++) {
-			for (size_t subindex = 0; subindex < count; subindex++) {
+			submeshes[index].bounds = InfiniteBoundingBox();
+			for (size_t subindex = 0; subindex < gltf_meshes.size; subindex++) {
 				if (submesh_material_index[subindex] == index) {
 					// Indices must be adjusted per material
 					for (size_t indices_index = 0; indices_index < gltf_meshes[subindex].indices.size; indices_index++) {
@@ -1411,21 +1424,21 @@ namespace ECSEngine {
 		}
 
 		// Create the aggregate mesh
-		
+
 		auto create_vertex_type = [&](unsigned int sizeof_type, ECS_MESH_INDEX mapping_index, unsigned char stream_byte_offset) {
 			mesh.mapping[mesh.mapping_count] = mapping_index;
 			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
 			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(
 				sizeof_type,
 				total_vertex_buffer_count,
-				{}, 
-				ECS_GRAPHICS_USAGE_DEFAULT, 
+				false,
+				ECS_GRAPHICS_USAGE_DEFAULT,
 				ECS_GRAPHICS_CPU_ACCESS_NONE,
 				misc_flags
 			);
 			size_t vertex_buffer_offset = 0;
 
-			for (size_t index = 0; index < count; index++) {
+			for (size_t index = 0; index < gltf_meshes.size; index++) {
 				void** stream_buffer = (void**)function::OffsetPointer(&gltf_meshes[sorted_indices[index]], stream_byte_offset);
 				size_t* stream_size = (size_t*)function::OffsetPointer(&gltf_meshes[sorted_indices[index]], stream_byte_offset + sizeof(void*));
 
@@ -1445,42 +1458,42 @@ namespace ECSEngine {
 		};
 
 		// Positions
-		if (gltf_meshes[0].positions.buffer != nullptr) {
-			create_vertex_type(sizeof(float3), ECS_MESH_POSITION, offsetof(GLTFMesh, positions));
+		if (gltf_meshes[0].positions.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_POSITION), ECS_MESH_POSITION, offsetof(GLTFMesh, positions));
 		}
 
 		// Normals
-		if (gltf_meshes[0].normals.buffer != nullptr) {
-			create_vertex_type(sizeof(float3), ECS_MESH_NORMAL, offsetof(GLTFMesh, normals));
+		if (gltf_meshes[0].normals.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_NORMAL), ECS_MESH_NORMAL, offsetof(GLTFMesh, normals));
 		}
 
 		// UVs
-		if (gltf_meshes[0].uvs.buffer != nullptr) {
-			create_vertex_type(sizeof(float2), ECS_MESH_UV, offsetof(GLTFMesh, uvs));
+		if (gltf_meshes[0].uvs.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_UV), ECS_MESH_UV, offsetof(GLTFMesh, uvs));
 		}
 
 		// Vertex Colors
-		if (gltf_meshes[0].colors.buffer != nullptr) {
-			create_vertex_type(sizeof(Color), ECS_MESH_COLOR, offsetof(GLTFMesh, colors));
+		if (gltf_meshes[0].colors.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_COLOR), ECS_MESH_COLOR, offsetof(GLTFMesh, colors));
 		}
 
 		// Bone weights
-		if (gltf_meshes[0].skin_weights.buffer != nullptr) {
-			create_vertex_type(sizeof(float4), ECS_MESH_BONE_WEIGHT, offsetof(GLTFMesh, skin_weights));
+		if (gltf_meshes[0].skin_weights.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_BONE_WEIGHT), ECS_MESH_BONE_WEIGHT, offsetof(GLTFMesh, skin_weights));
 		}
 
 		// Bone influences
-		if (gltf_meshes[0].skin_influences.buffer != nullptr) {
-			create_vertex_type(sizeof(uint4), ECS_MESH_BONE_INFLUENCE, offsetof(GLTFMesh, skin_influences));
+		if (gltf_meshes[0].skin_influences.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_BONE_INFLUENCE), ECS_MESH_BONE_INFLUENCE, offsetof(GLTFMesh, skin_influences));
 		}
 
 		// Indices
-		if (gltf_meshes[0].indices.buffer != nullptr) {
+		if (gltf_meshes[0].indices.size > 0) {
 			// Create a main index buffer that is DEFAULT usage and then copy into it the smaller index buffers
 			mesh.index_buffer = graphics->CreateIndexBuffer(4, total_index_buffer_count, false, ECS_GRAPHICS_USAGE_DEFAULT, ECS_GRAPHICS_CPU_ACCESS_NONE, misc_flags);
 			size_t index_buffer_offset = 0;
 
-			for (size_t index = 0; index < count; index++) {
+			for (size_t index = 0; index < gltf_meshes.size; index++) {
 				// Create a staging buffer that can be copied to the main buffer
 				size_t buffer_size = gltf_meshes[sorted_indices[index]].indices.size;
 				IndexBuffer current_buffer = graphics->CreateIndexBuffer(gltf_meshes[sorted_indices[index]].indices);
@@ -1490,15 +1503,12 @@ namespace ECSEngine {
 				current_buffer.Release();
 			}
 		}
-
-		// Propragate the names
-		for (size_t index = 0; index < count; index++) {
-			if (gltf_meshes[index].name.buffer != nullptr) {
-				submeshes[index].name = function::StringCopy(graphics->Allocator(), gltf_meshes[index].name);
-			}
-			else {
-				submeshes[index].name = { nullptr, 0 };
-			}
+		
+		// Compute the coalesced bounding box with the intermediate submesh bounding boxes
+		mesh.bounds = ReverseInfiniteBoundingBox();
+		for (size_t index = 0; index < gltf_meshes.size; index++) {
+			AABBStorage current_bounding_box = GetGLTFMeshBoundingBox(gltf_meshes.buffer + index);
+			mesh.bounds = GetCombinedBoundingBox(mesh.bounds, submeshes[index].bounds);
 		}
 
 		size_t submesh_vertex_offset = 0;
@@ -1520,20 +1530,112 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	static void FillBoundingBox(const GLTFMesh* mesh, LoadCoalescedMeshFromGLTFOptions* options) {
-		if (options->min_bound || options->max_bound) {
-			// Need to retrieve the bounds
-			float3 min_bound, max_bound;
-			GetGLTFMeshBoundingBox(mesh, &min_bound, &max_bound);
+	Mesh GLTFMeshesToMergedMesh(Graphics* graphics, Stream<GLTFMesh> gltf_meshes, Submesh* submeshes, ECS_GRAPHICS_MISC_FLAGS misc_flags)
+	{
+		Mesh mesh;
 
-			if (options->min_bound) {
-				*options->min_bound = min_bound;
-			}
-			if (options->max_bound) {
-				*options->max_bound = max_bound;
-			}
+		size_t total_vertex_buffer_count = 0;
+		size_t total_index_buffer_count = 0;
+		for (size_t index = 0; index < gltf_meshes.size; index++) {
+			total_vertex_buffer_count += gltf_meshes[index].positions.size;
+			total_index_buffer_count += gltf_meshes[index].indices.size;
 		}
+
+		auto create_vertex_type = [&](unsigned int sizeof_type, ECS_MESH_INDEX mapping_index, unsigned char stream_byte_offset) {
+			mesh.mapping[mesh.mapping_count] = mapping_index;
+			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(
+				sizeof_type,
+				total_vertex_buffer_count,
+				false,
+				ECS_GRAPHICS_USAGE_DEFAULT,
+				ECS_GRAPHICS_CPU_ACCESS_WRITE,
+				misc_flags
+			);
+			size_t vertex_buffer_offset = 0;
+
+			// Map the current buffer and then write into it
+			void* mapped_data = graphics->MapBuffer(vertex_buffer.buffer);
+
+			for (size_t index = 0; index < gltf_meshes.size; index++) {
+				void** stream_buffer = (void**)function::OffsetPointer(&gltf_meshes[index], stream_byte_offset);
+				size_t* stream_size = (size_t*)function::OffsetPointer(&gltf_meshes[index], stream_byte_offset + sizeof(void*));
+
+				memcpy(mapped_data, *stream_buffer, *stream_size * sizeof_type);
+				mapped_data = function::OffsetPointer(mapped_data, *stream_size * sizeof_type);
+			}
+			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+			graphics->UnmapBuffer(vertex_buffer.buffer);
+		};
+
+		// Positions
+		if (gltf_meshes[0].positions.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_POSITION), ECS_MESH_POSITION, offsetof(GLTFMesh, positions));
+		}
+
+		// Normals
+		if (gltf_meshes[0].normals.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_NORMAL), ECS_MESH_NORMAL, offsetof(GLTFMesh, normals));
+		}
+
+		// UVs
+		if (gltf_meshes[0].uvs.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_UV), ECS_MESH_UV, offsetof(GLTFMesh, uvs));
+		}
+
+		// Vertex Colors
+		if (gltf_meshes[0].colors.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_COLOR), ECS_MESH_COLOR, offsetof(GLTFMesh, colors));
+		}
+
+		// Bone weights
+		if (gltf_meshes[0].skin_weights.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_BONE_WEIGHT), ECS_MESH_BONE_WEIGHT, offsetof(GLTFMesh, skin_weights));
+		}
+
+		// Bone influences
+		if (gltf_meshes[0].skin_influences.size > 0) {
+			create_vertex_type(GetMeshIndexElementByteSize(ECS_MESH_BONE_INFLUENCE), ECS_MESH_BONE_INFLUENCE, offsetof(GLTFMesh, skin_influences));
+		}
+
+		// Indices
+		if (gltf_meshes[0].indices.buffer != nullptr) {
+			// Create a main index buffer that is DEFAULT usage and then copy into it the smaller index buffers
+			mesh.index_buffer = graphics->CreateIndexBuffer(4, total_index_buffer_count, false, ECS_GRAPHICS_USAGE_DEFAULT, ECS_GRAPHICS_CPU_ACCESS_WRITE, misc_flags);
+			size_t index_buffer_offset = 0;
+
+			void* mapped_data = graphics->MapBuffer(mesh.index_buffer.buffer);
+
+			for (size_t index = 0; index < gltf_meshes.size; index++) {
+				gltf_meshes[index].indices.CopyTo(mapped_data);
+				mapped_data = function::OffsetPointer(mapped_data, gltf_meshes[index].indices.MemoryOf(gltf_meshes[index].indices.size));
+			}
+
+			graphics->UnmapBuffer(mesh.index_buffer.buffer);
+		}
+
+		// Now fill in the submeshes and calculate the bounds
+		total_vertex_buffer_count = 0;
+		total_index_buffer_count = 0;
+		mesh.bounds = ReverseInfiniteBoundingBox();
+		for (size_t index = 0; index < gltf_meshes.size; index++) {
+			submeshes[index].vertex_buffer_offset = total_vertex_buffer_count;
+			submeshes[index].index_buffer_offset = total_index_buffer_count;
+			submeshes[index].vertex_count = gltf_meshes[index].positions.size;
+			submeshes[index].index_count = gltf_meshes[index].indices.size;
+
+			total_vertex_buffer_count += gltf_meshes[index].positions.size;
+			total_index_buffer_count += gltf_meshes[index].indices.size;
+
+			submeshes[index].name = { nullptr, 0 };
+			submeshes[index].bounds = GetGLTFMeshBoundingBox(gltf_meshes.buffer + index);
+			mesh.bounds = GetCombinedBoundingBox(mesh.bounds, submeshes[index].bounds);
+		}
+
+		return mesh;
 	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
 
 	CoalescedMesh LoadCoalescedMeshFromGLTFToGPU(
 		Graphics* graphics, 
@@ -1558,7 +1660,7 @@ namespace ECSEngine {
 			temporary_buffer_allocator = options->temporary_buffer_allocator;
 			error_message = options->error_message;
 			allocate_submesh_names = options->allocate_submesh_name;
-			coallesced_submesh_names = options->coallesce_submesh_name_allocations;
+			coallesced_submesh_names = options->coalesce_submesh_name_allocations;
 			previous_permanent_allocator = options->permanent_allocator;
 			options->permanent_allocator = coalesced_mesh_allocator;
 		}
@@ -1566,20 +1668,9 @@ namespace ECSEngine {
 		Submesh* submeshes = (Submesh*)Allocate(coalesced_mesh_allocator, sizeof(Submesh) * gltf_data.mesh_count);
 		bool success = LoadCoalescedMeshFromGLTF(gltf_data, &gltf_mesh, submeshes, invert_z_axis, options);
 		if (success) {
-			result.mesh = GLTFMeshToMesh(graphics, gltf_mesh);
+			result.mesh = GLTFMeshToMesh(graphics, gltf_mesh, ECS_GRAPHICS_MISC_NONE, false);
 			result.submeshes = { submeshes, gltf_data.mesh_count };
-
-			// Check the bounds call
-			FillBoundingBox(&gltf_mesh, options);
-
-		/*	if (allocate_submesh_names) {
-				if (coallesced_submesh_names) {
-					StreamCoallescedInplaceDeepCopy(result.submeshes, coalesced_mesh_allocator);
-				}
-				else {
-					StreamInPlaceDeepCopy(result.submeshes, coalesced_mesh_allocator);
-				}
-			}*/
+			result.mesh.bounds = GetSubmeshesBoundingBox(result.submeshes);
 
 			// The buffers need to be deallocated
 			FreeCoallescedGLTFMesh(gltf_mesh, temporary_buffer_allocator);
@@ -1618,10 +1709,8 @@ namespace ECSEngine {
 
 		success = LoadCoalescedMeshFromGLTF(gltf_data, &buffer_sizes, &gltf_mesh, coalesced_mesh->submeshes.buffer, invert_z_axis, options);
 		if (success) {
-			coalesced_mesh->mesh = GLTFMeshToMesh(graphics, gltf_mesh);
-
-			// Check the bounds call
-			FillBoundingBox(&gltf_mesh, options);
+			coalesced_mesh->mesh = GLTFMeshToMesh(graphics, gltf_mesh, ECS_GRAPHICS_MISC_NONE, false);
+			coalesced_mesh->mesh.bounds = GetSubmeshesBoundingBox(coalesced_mesh->submeshes);
 		}
 		// In case of failure it will still have the buffers allocated
 		FreeCoallescedGLTFMesh(gltf_mesh, temporary_buffer_allocator);
@@ -1703,33 +1792,31 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void GetGLTFMeshBoundingBox(const GLTFMesh* mesh, float3* min_bound, float3* max_bound)
+	AABBStorage GetGLTFMeshBoundingBox(const GLTFMesh* mesh)
 	{
-		GetMeshBoundingBox(mesh->positions, min_bound, max_bound);
+		return GetMeshBoundingBox(mesh->positions);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, float3* min_bounds, float3* max_bounds)
+	void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, AABBStorage* bounding_boxes)
 	{
 		for (size_t index = 0; index < meshes.size; index++) {
-			GetGLTFMeshBoundingBox(meshes.buffer + index, min_bounds + index, max_bounds + index);
+			bounding_boxes[index] = GetGLTFMeshBoundingBox(meshes.buffer + index);
 		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes, float3* min_bound, float3* max_bound)
+	AABBStorage GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes)
 	{
-		*min_bound = float3::Splat(FLT_MAX);
-		*max_bound = float3::Splat(-FLT_MAX);
-
+		AABBStorage bounding_box = ReverseInfiniteBoundingBox();
 		for (size_t index = 0; index < meshes.size; index++) {
-			float3 current_min, current_max;
-			GetGLTFMeshBoundingBox(meshes.buffer + index, &current_min, &current_max);
-			*min_bound = BasicTypeMin(*min_bound, current_min);
-			*max_bound = BasicTypeMax(*max_bound, current_max);
+			AABBStorage current_bounding_box = GetGLTFMeshBoundingBox(meshes.buffer + index);
+			bounding_box = GetCombinedBoundingBox(bounding_box, current_bounding_box);
 		}
+		
+		return bounding_box;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------

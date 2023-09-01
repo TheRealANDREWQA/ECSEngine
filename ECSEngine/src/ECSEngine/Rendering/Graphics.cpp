@@ -5403,6 +5403,7 @@ namespace ECSEngine {
 
 	Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, Stream<unsigned int> mesh_mask, ECS_GRAPHICS_MISC_FLAGS misc_flags) {
 		Mesh result;
+		result.bounds = InfiniteBoundingBox();
 
 		// Walk through the meshes and determine the maximum amount of buffers. The meshes that are missing some buffers will have them
 		// zero'ed in the final mesh
@@ -5466,6 +5467,7 @@ namespace ECSEngine {
 			submeshes[index].index_count = current_mesh->index_buffer.count;
 			submeshes[index].vertex_buffer_offset = vertex_buffer_offset;
 			submeshes[index].vertex_count = current_mesh->vertex_buffers[0].size;
+			submeshes[index].bounds = ReverseInfiniteBoundingBox();
 
 			bool buffers_comitted[ECS_MESH_BUFFER_COUNT] = { false };
 

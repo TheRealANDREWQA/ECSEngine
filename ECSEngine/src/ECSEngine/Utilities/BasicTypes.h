@@ -792,4 +792,18 @@ namespace ECSEngine {
 		});
 	}
 
+	template<typename BasicType>
+	ECS_INLINE BasicType BasicTypeFloatCompare(BasicType a, BasicType b, BasicType epsilon) {
+		return BasicTypeLogicAnd(BasicTypeAction<BasicType>(AbsoluteDifference(a, b), epsilon, [](auto difference_value, auto epsilon_value) {
+			return difference_value < epsilon_value;
+		}));
+	}
+
+	template<typename BasicType>
+	ECS_INLINE bool BasicTypeFloatCompareBoolean(BasicType a, BasicType b, BasicType epsilon) {
+		return BasicTypeLogicAndBoolean(BasicTypeAction<BasicType>(AbsoluteDifference(a, b), epsilon, [](auto difference_value, auto epsilon_value) {
+			return difference_value < epsilon_value;
+		}));
+	}
+
 }
