@@ -3314,7 +3314,7 @@ namespace ECSEngine {
 				size_t allocation_size = StreamCoallescedDeepCopySize(labels);
 				void* allocation = GetMainAllocatorBuffer(allocation_size);
 				uintptr_t ptr = (uintptr_t)allocation;
-				data->labels = StreamCoallescedDeepCopy(labels, ptr);
+				data->labels = StreamCoalescedDeepCopy(labels, ptr);
 
 				if (configuration & UI_CONFIG_COMBO_BOX_PREFIX) {
 					const UIConfigComboBoxPrefix* prefix = (const UIConfigComboBoxPrefix*)config.GetParameter(UI_CONFIG_COMBO_BOX_PREFIX);
@@ -4526,6 +4526,7 @@ namespace ECSEngine {
 				auto draw_user_button = [&](float2& position, float2 square_scale, const UIConfigCollapsingHeaderButton* button) {
 					const float REDUCE_FACTOR = 0.7f;
 					float2 user_button_scale = square_scale * float2(REDUCE_FACTOR, REDUCE_FACTOR);
+					float2 offseted_position = position + drawer->region_render_offset;
 
 					button_config.flag_count = button_config_base_size;
 
@@ -4540,7 +4541,7 @@ namespace ECSEngine {
 							button_config.AddFlag(check_box_callback);
 						}
 
-						float2 check_box_position = AlignMiddle(position, square_scale, user_button_scale);
+						float2 check_box_position = AlignMiddle(offseted_position, square_scale, user_button_scale);
 
 						// The name doesn't need to be specified
 						drawer->CheckBoxDrawer(configuration, button_config, "", button->data.check_box_flag, check_box_position, user_button_scale);
@@ -4551,7 +4552,7 @@ namespace ECSEngine {
 						size_t configuration = user_button_configuration | UI_CONFIG_ABSOLUTE_TRANSFORM;
 						UIConfigAbsoluteTransform absolute_transform;
 						absolute_transform.scale = user_button_scale;
-						absolute_transform.position = AlignMiddle(position, square_scale, user_button_scale);
+						absolute_transform.position = AlignMiddle(offseted_position, square_scale, user_button_scale);
 						button_config.AddFlag(absolute_transform);
 
 						drawer->SpriteButton(configuration, button_config, button->handler, button->data.image_texture, button->data.image_color);
@@ -4560,7 +4561,7 @@ namespace ECSEngine {
 					case ECS_UI_COLLAPSING_HEADER_BUTTON_IMAGE_DISPLAY:
 					{
 						size_t configuration = user_button_configuration;
-						float2 rectangle_position = AlignMiddle(position, square_scale, user_button_scale);
+						float2 rectangle_position = AlignMiddle(offseted_position, square_scale, user_button_scale);
 						drawer->SpriteRectangle(configuration, rectangle_position, user_button_scale, button->data.image_texture, button->data.image_color);
 					}
 					break;
@@ -4573,7 +4574,7 @@ namespace ECSEngine {
 						button_config.AddFlag(sprite);
 
 						UIConfigAbsoluteTransform transform;
-						transform.position = AlignMiddle(position, square_scale, user_button_scale);
+						transform.position = AlignMiddle(offseted_position, square_scale, user_button_scale);
 						transform.scale = user_button_scale;
 						button_config.AddFlag(transform);
 
@@ -4600,7 +4601,7 @@ namespace ECSEngine {
 						config.AddFlag(sprite);
 
 						UIConfigAbsoluteTransform transform;
-						transform.position = AlignMiddle(position, square_scale, user_button_scale);
+						transform.position = AlignMiddle(offseted_position, square_scale, user_button_scale);
 						transform.scale = user_button_scale;
 						config.AddFlag(transform);
 
@@ -10040,7 +10041,7 @@ namespace ECSEngine {
 						RemoveAllocation(data->labels.buffer);
 
 						uintptr_t ptr = (uintptr_t)allocation;
-						data->labels = StreamCoallescedDeepCopy(labels, ptr);
+						data->labels = StreamCoalescedDeepCopy(labels, ptr);
 
 						float current_max_x = 0.0f;
 						for (size_t index = 0; index < labels.size; index++) {
@@ -10671,7 +10672,7 @@ namespace ECSEngine {
 				size_t copy_size = StreamCoallescedDeepCopySize(extensions);
 				void* allocation = drawer->GetMainAllocatorBuffer(copy_size);
 				uintptr_t ptr = (uintptr_t)allocation;
-				callback_data->extensions = StreamCoallescedDeepCopy(extensions, ptr);
+				callback_data->extensions = StreamCoalescedDeepCopy(extensions, ptr);
 			}
 			else {
 				callback_data->extensions = { nullptr, 0 };
@@ -10987,7 +10988,7 @@ namespace ECSEngine {
 			size_t copy_size = StreamCoallescedDeepCopySize(labels);
 			void* copy_allocation = drawer->GetMainAllocatorBuffer(copy_size);
 			uintptr_t copy_ptr = (uintptr_t)copy_allocation;
-			return StreamCoallescedDeepCopy(labels, copy_ptr);
+			return StreamCoalescedDeepCopy(labels, copy_ptr);
 		}
 
 		Stream<Stream<char>> ReallocateFilterMenuCopyLabels(UIDrawer* drawer, Stream<Stream<char>> old_labels, Stream<Stream<char>> new_labels) {

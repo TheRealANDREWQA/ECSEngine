@@ -1560,6 +1560,11 @@ namespace ECSEngine {
 			*allocator = nullptr;
 		}
 
+		// Deallocate every instance as well
+		manager->m_shared_components[data->component.value].instances.stream.ForEachConst([&](void* data) {
+			Deallocate(manager->SmallAllocator(), data);
+		});
+
 		manager->m_shared_components[data->component.value].instances.FreeBuffer();
 		manager->m_shared_components[data->component.value].info.size = -1;
 		manager->m_small_memory_manager.Deallocate(manager->m_shared_components[data->component.value].info.name.buffer);

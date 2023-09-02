@@ -140,12 +140,12 @@ namespace ECSEngine {
 
 		// Returns a quaternion with the low duplicated
 		ECS_INLINE Quaternion ECS_VECTORCALL SplatLow() const {
-			return Permute2f128Helper<0, 0>(value, value);
+			return SplatLowLane(value);
 		}
 
 		// Returns a quaternion with the high duplicated
 		ECS_INLINE Quaternion ECS_VECTORCALL SplatHigh() const {
-			return Permute2f128Helper<1, 1>(value, value);
+			return SplatHighLane(value);
 		}
 
 		Vec8f value;
@@ -713,24 +713,24 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------
 
 	template<bool preserve = false>
-	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorQuaternionSIMD(Quaternion quaternion, Vector8 vector) {
+	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorQuaternionSIMD(Vector8 vector, Quaternion quaternion) {
 		return QuaternionVectorMultiply<preserve>(quaternion, vector);
 	}
 
 	template<bool preserve = false>
-	ECS_INLINE Vector8 ECS_VECTORCALL RotatePointQuaternionSIMD(Quaternion quaternion, Vector8 point) {
+	ECS_INLINE Vector8 ECS_VECTORCALL RotatePointQuaternionSIMD(Vector8 point, Quaternion quaternion) {
 		// We can treat the point as a displacement vector that is rotated
 		return RotateVectorQuaternionSIMD<preserve>(quaternion, point);
 	}
 
 	// This only rotates the low part
-	ECS_INLINE float3 ECS_VECTORCALL RotateVectorQuaternion(Quaternion quaternion, Vector8 vector) {
-		return RotateVectorQuaternionSIMD(quaternion, vector).AsFloat3Low();
+	ECS_INLINE float3 ECS_VECTORCALL RotateVectorQuaternion(Vector8 vector, Quaternion quaternion) {
+		return RotateVectorQuaternionSIMD(vector, quaternion).AsFloat3Low();
 	}
 
-	ECS_INLINE float3 ECS_VECTORCALL RotatePointQuaternion(Quaternion quaternion, Vector8 vector) {
+	ECS_INLINE float3 ECS_VECTORCALL RotatePointQuaternion(Vector8 vector, Quaternion quaternion) {
 		// We can treat the point as a displacement vector that is rotated
-		return RotatePointQuaternion(quaternion, vector);
+		return RotatePointQuaternion(vector, quaternion);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -846,8 +846,8 @@ namespace ECSEngine {
 		// We need to transform the cross product to the forward vector in order
 		// to bring A and B into the XY plane
 		Quaternion from_cross_to_YZ = QuaternionFromVectorsNormalized(cross, ForwardVector());
-		Vector8 a_xy = RotateVectorQuaternionSIMD(from_cross_to_YZ, a);
-		Vector8 b_xy = RotateVectorQuaternionSIMD(from_cross_to_YZ, b);
+		Vector8 a_xy = RotateVectorQuaternionSIMD(a, from_cross_to_YZ);
+		Vector8 b_xy = RotateVectorQuaternionSIMD(b, from_cross_to_YZ);
 
 		float4 values[4];
 		a_xy.Store(values);

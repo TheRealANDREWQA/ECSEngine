@@ -173,23 +173,72 @@ namespace ECSEngine {
 		AABBStorage object_bounds,
 		float2 view_space_proportion
 	) {
+		ECS_ASSERT(view_space_proportion.x == 0.0f || view_space_proportion.y == 0.0f);
+
 		// Use a binary search of the right distance
-		float min_distance = 0.0f;
-		float max_distance = 10000.0f;
+		const float min_distance = 0.0f;
+		const float max_distance = 10000.0f;
 
 		const float BINARY_SEARCH_EPSILON = 0.1f;
 		const float LINEAR_SEARCH_EPSILON = 0.02f;
+		const float LINEAR_SEARCH_STEP_SIZE = 0.1f;
 
-		float resulting_distance = 0.0f;
-		if (function::BinaryIntoLinearSearch(min_distance, max_distance, 0.001f, 2.0f, 0.1f, &resulting_distance, 
-			[&](float current_distance) {
-				return 0;
-			},
-			[&](float current_distance) {
+		// Transform the AABB into the world space position
+		AABB transformed_bounds = TransformAABB(object_bounds, object_translation, QuaternionToMatrixLow(object_rotation), object_scale);
+		Matrix view_projection_matrix = GetCameraViewProjectionMatrix(camera);
+
+		// Bring the center of the world space AABB right at the camera
+		// Inside the binary search and linear search we will offset in alongside the 
+		// negative forward vector of the camera
+		Vector8 transformed_bounds_center = AABBCenter(transformed_bounds);
+		Vector8 camera_translation = camera->translation;
+		Vector8 displacement = camera_translation - transformed_bounds_center;
+		transformed_bounds = TranslateAABB(transformed_bounds, displacement);
+
+		Vector8 negative_camera_forward = -GetCameraForwardVector(camera);
+
+		auto aabb_compare = [&](float current_distance, float epsilon) {
+			Vector8 aabb_translation = negative_camera_forward * Vector8(current_distance);
+			AABB current_aabb = TranslateAABB(transformed_bounds, aabb_translation);
+			// Project the min and max point on the screen and determine the percentage of coverage
+			Vector8 projected_points = ApplyMatrixOnAABB(current_aabb, view_projection_matrix);
+			Vector8 ndc_values = ClipSpaceToNDC(projected_points);
+
+			float4 scalar_ndc_values[2];
+			ndc_values.Store(scalar_ndc_values);
+			float2 min_pos = scalar_ndc_values[0].xy();
+			float2 max_pos = scalar_ndc_values[1].xy();
+			float2 coverage = AbsoluteDifference(min_pos, max_pos);
+			float current_difference = 0.0f;
+			bool is_smaller = false;
+			if (view_space_proportion.x == 0.0f) {
+				// The Y proportion is specified
+				current_difference = AbsoluteDifference(view_space_proportion.y, coverage.y);
+				is_smaller = coverage.y < view_space_proportion.y;
+			}
+			else {
+				// The X proportion is specified
+				current_difference = AbsoluteDifference(view_space_proportion.x, coverage.x);
+				is_smaller = coverage.x < view_space_proportion.x;
+			}
+
+			if (current_difference < epsilon) {
 				return 0;
 			}
-		));
+			return is_smaller ? 1 : -1;
+		};
 
+		float resulting_distance = 0.0f;
+		if (function::BinaryIntoLinearSearch(min_distance, max_distance, 0.001f, 2.0f, LINEAR_SEARCH_STEP_SIZE, &resulting_distance,
+			[&](float current_distance) {
+				return aabb_compare(current_distance, BINARY_SEARCH_EPSILON);
+			},
+			[&](float current_distance) {
+				return aabb_compare(current_distance, LINEAR_SEARCH_EPSILON);
+			}
+		)) {
+			return object_translation + negative_camera_forward.AsFloat3Low() * float3::Splat(resulting_distance);
+		}
 		return float3::Splat(0.0f);
 	}
 

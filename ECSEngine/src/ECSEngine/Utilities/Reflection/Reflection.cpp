@@ -1997,7 +1997,7 @@ namespace ECSEngine {
 		void ReflectionManager::InheritConstants(const ReflectionManager* other)
 		{
 			constants.ReserveNewElements(other->constants.size);
-			Stream<ReflectionConstant> new_constants = StreamCoallescedDeepCopy(other->constants.ToStream(), folders.allocator);
+			Stream<ReflectionConstant> new_constants = StreamCoalescedDeepCopy(other->constants.ToStream(), folders.allocator);
 			// Set the folder hierarchy index for these constants to -1 such that they don't get bound to any
 			// folder index
 			for (size_t index = 0; index < new_constants.size; index++) {

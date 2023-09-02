@@ -3078,9 +3078,10 @@ namespace ECSEngine {
 					window_descriptor.window_data = &window_data;
 					window_descriptor.window_data_size = sizeof(window_data);
 
-					system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_FIXED | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X
+					unsigned int window_index = system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_FIXED | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X
 						| UI_DOCKSPACE_BORDER_FLAG_NO_TITLE | UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER | UI_DOCKSPACE_POP_UP_WINDOW);
-					menu->windows[0] = { window_descriptor.window_name, { window_descriptor.initial_position_x, window_descriptor.initial_position_y }, { window_descriptor.initial_size_x, window_descriptor.initial_size_y } };
+					// The window name is stable and can be referenced
+					menu->windows[0] = { system->GetWindowName(window_index), { window_descriptor.initial_position_x, window_descriptor.initial_position_y }, { window_descriptor.initial_size_x, window_descriptor.initial_size_y } };
 					menu->windows.size = 1;
 				}
 			}

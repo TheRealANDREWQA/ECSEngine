@@ -55,8 +55,10 @@ namespace ECSEngine {
 		HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>& operator = (const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>& other) = default;
 
 		void Clear() {
-			memset(m_metadata, 0, sizeof(unsigned char) * (m_capacity + 31));
-			m_count = 0;
+			if (m_capacity > 0) {
+				memset(m_metadata, 0, sizeof(unsigned char) * (m_capacity + 31));
+				m_count = 0;
+			}
 		}
 
 		unsigned int Find(Identifier identifier) const {
@@ -567,6 +569,17 @@ namespace ECSEngine {
 			}
 		}
 
+		// This is provided for some edge cases when you use templates and you know
+		// That the target type is fine and just wanna retrieve the pointer
+		bool TryGetValuePtrUntyped(Identifier identifier, void*& pointer) {
+			T* ptr = nullptr;
+			if (TryGetValuePtr(identifier, ptr)) {
+				pointer = (void*)ptr;
+				return true;
+			}
+			return false;
+		}
+
 		bool TryGetValuePtr(Identifier identifier, const T*& pointer) const {
 			if (GetCount() == 0) {
 				return false;
@@ -580,6 +593,17 @@ namespace ECSEngine {
 			else {
 				return false;
 			}
+		}
+
+		// This is provided for some edge cases when you use templates and you know
+		// That the target type is fine and just wanna retrieve the pointer
+		bool TryGetValuePtrUntyped(Identifier identifier, const void*& pointer) const {
+			const T* ptr = nullptr;
+			if (TryGetValuePtr(identifier, ptr)) {
+				pointer = (const void*)ptr;
+				return true;
+			}
+			return false;
 		}
 
 		ECS_INLINE static size_t MemoryOf(unsigned int number) {

@@ -285,7 +285,7 @@ void DeallocateAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsi
 	}
 	else {
 		event_data.force_execution = false;
-		event_data.handles = StreamCoallescedDeepCopy(handles, editor_state->EditorAllocator());
+		event_data.handles = StreamCoalescedDeepCopy(handles, editor_state->EditorAllocator());
 		EditorAddEvent(editor_state, DeallocateAssetWithRemappingEvent, &event_data, sizeof(event_data));
 	}
 }
@@ -303,7 +303,7 @@ void DeallocateAssetsWithRemappingMetadataChange(EditorState* editor_state, Stre
 	}
 	else {
 		event_data.force_execution = false;
-		event_data.handles = StreamCoallescedDeepCopy(handles, editor_state->EditorAllocator());
+		event_data.handles = StreamCoalescedDeepCopy(handles, editor_state->EditorAllocator());
 		EditorAddEvent(editor_state, DeallocateAssetWithRemappingMetadataChangeEvent, &event_data, sizeof(event_data));
 	}
 }
@@ -945,7 +945,7 @@ void ReloadAssets(EditorState* editor_state, Stream<Stream<unsigned int>> assets
 
 	if (total_count > 0) {
 		ReloadEventData event_data;
-		event_data.asset_handles = StreamCoallescedDeepCopy(assets_to_reload, editor_state->EditorAllocator());
+		event_data.asset_handles = StreamCoalescedDeepCopy(assets_to_reload, editor_state->EditorAllocator());
 		EditorAddEvent(editor_state, ReloadEvent, &event_data, sizeof(event_data));
 	}
 }
@@ -1244,7 +1244,7 @@ void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigne
 
 	if (total_count > 0) {
 		ReloadAssetsMetadataChangeEventData event_data;
-		event_data.asset_handles = StreamCoallescedDeepCopy(assets_to_reload, editor_state->MultithreadedEditorAllocator());
+		event_data.asset_handles = StreamCoalescedDeepCopy(assets_to_reload, editor_state->MultithreadedEditorAllocator());
 		EditorAddEvent(editor_state, ReloadAssetsMetadataChangeEvent, &event_data, sizeof(event_data));
 	}
 }

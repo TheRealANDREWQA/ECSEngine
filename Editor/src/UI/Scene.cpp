@@ -251,7 +251,7 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// Check the speed modifiers - since the camera translation will write the sandbox file once
 	// We can just modify the camera wasd speed here and it will get updated as well
-	const float SPEED_INCREASE_STEP = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED * 0.33f;
+	const float SPEED_INCREASE_STEP = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED * 0.25f;
 	bool changed_speed = false;
 
 	bool is_shift_down = editor_state->Keyboard()->IsDown(ECS_KEY_LEFT_SHIFT);
@@ -315,6 +315,10 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 	}
 }
 
+static void FocusOnObject(EditorState* editor_state, unsigned int sandbox_index) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+}
+
 static void ScenePrivateAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
@@ -324,9 +328,9 @@ static void ScenePrivateAction(ActionData* action_data) {
 	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
 	// Determine if the transform tool needs to be changed
 	unsigned int target_sandbox = GetActiveWindowSandbox(editor_state);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// If values are being entered into a field don't change the tool
 	if (target_sandbox == sandbox_index && !editor_state->Keyboard()->IsCaptureCharacters()) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, target_sandbox);
 		// Check to see if the camera wasd movement is activated
 		if (sandbox->is_camera_wasd_movement) {
 			HandleCameraWASDMovement(editor_state, sandbox_index);
@@ -345,18 +349,36 @@ static void ScenePrivateAction(ActionData* action_data) {
 				data->camera_wasd_initial_rotation = camera_point.rotation;
 				// We need this to make the camera movement smoother
 				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+
+				// Disable the axes if they are drawn
+				sandbox->transform_display_axes = false;
+				ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 			}
 			else {
+				// Check the focus on object
+				if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_FOCUS_OBJECT)) {
+					// Perform the focusing
+					Camera scene_camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+					Stream<Entity> entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+					AABB selection_bounds = ReverseInfiniteBoundingBox();
+					for (size_t index = 0; index < entities.size; index++) {
+						AABB current_bounds = InfiniteBoundingBox();
+						
+					}
+
+					//float3 camera_translation = FocusCameraOnObjectViewSpace(&scene_camera)
+				}
+
 				ECS_TRANSFORM_TOOL current_tool = sandbox->transform_tool;
-					if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_TRANSLATION_TOOL)) {
-						sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
-					}
-					else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_ROTATION_TOOL)) {
-						sandbox->transform_tool = ECS_TRANSFORM_ROTATION;
-					}
-					else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_SCALE_TOOL)) {
-						sandbox->transform_tool = ECS_TRANSFORM_SCALE;
-					}
+				if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_TRANSLATION_TOOL)) {
+					sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
+				}
+				else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_ROTATION_TOOL)) {
+					sandbox->transform_tool = ECS_TRANSFORM_ROTATION;
+				}
+				else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TO_SCALE_TOOL)) {
+					sandbox->transform_tool = ECS_TRANSFORM_SCALE;
+				}
 
 				bool trigger_rerender = false;
 				if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TRANSFORM_SPACE)) {
@@ -479,7 +501,6 @@ static void ScenePrivateAction(ActionData* action_data) {
 	}
 
 	auto reset_axes_and_rerender = [&]() {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 		sandbox->transform_display_axes = false;
 		// We also need to trigger a re-render
@@ -487,7 +508,6 @@ static void ScenePrivateAction(ActionData* action_data) {
 	};
 
 	auto reset_camera_wasd = [&]() {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		// End the camera movement
 		sandbox->is_camera_wasd_movement = false;
 		// Disable the mouse raw input and make the cursor visible again
@@ -497,7 +517,6 @@ static void ScenePrivateAction(ActionData* action_data) {
 
 	// If the user has clicked somewhere and we have active axes, disable them
 	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		if (sandbox->transform_display_axes) {
 			reset_axes_and_rerender();
 		}
@@ -506,7 +525,6 @@ static void ScenePrivateAction(ActionData* action_data) {
 		}
 	}
 	else if (mouse->IsPressed(ECS_MOUSE_MIDDLE) || mouse->IsPressed(ECS_MOUSE_RIGHT)) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		if (sandbox->transform_display_axes) {
 			// Restore the value to the selected entities
 			Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
@@ -699,7 +717,8 @@ static void SceneZoomAction(ActionData* action_data) {
 			}
 
 			float3 camera_rotation = GetSandboxCameraPoint(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).rotation;
-			float3 forward_vector = RotateVectorLow(camera_rotation, GetForwardVector());
+			float3 forward_vector = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).GetForwardVector().AsFloat3Low();
+			//float3 forward_vector = RotateVectorMatrixLow(GetForwardVector(), MatrixRotation(camera_rotation));
 
 			TranslateSandboxCamera(editor_state, data->sandbox_index, forward_vector * float3::Splat(scroll_delta * factor), EDITOR_SANDBOX_VIEWPORT_SCENE);
 			RenderSandbox(editor_state, data->sandbox_index, current_viewport);

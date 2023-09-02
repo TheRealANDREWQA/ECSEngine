@@ -34,23 +34,23 @@ namespace ECSEngine {
 	ECSENGINE_API void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message = nullptr);
 
 	// It will not release the OS Handle - it must be kept around as long as the tasks are loaded;
-	// It does a single coallesced allocation. Deallocate the buffer to free the memory
+	// It does a single coalesced allocation. Deallocate the buffer to free the memory
 	ECSENGINE_API Stream<TaskSchedulerElement> LoadModuleTasks(
 		const Module* module,
 		AllocatorPolymorphic allocator,
 		CapacityStream<char>* error_message = nullptr
 	);
 
-	// It will not releaase the OS Handle - it must be kept around as long as the descriptors are loaded;
-	// It does a single coallesced allocation. Deallocate the buffer to free the memory
+	// It will not release the OS Handle - it must be kept around as long as the descriptors are loaded;
+	// It does a single coalesced allocation. Deallocate the buffer to free the memory
 	// Returns { nullptr, 0 } if the function does not exist
 	ECSENGINE_API Stream<Tools::UIWindowDescriptor> LoadModuleUIDescriptors(
 		const Module* module,
 		AllocatorPolymorphic allocator
 	);
 
-	// It will not releaase the OS Handle - it must be kept around as long as the build asset types are loaded;
-	// It does a single coallesced allocation. Deallocate the buffer to free the memory
+	// It will not release the OS Handle - it must be kept around as long as the build asset types are loaded;
+	// It does a single coalesced allocation. Deallocate the buffer to free the memory
 	// Returns { nullptr, 0 } if the function does not exist
 	ECSENGINE_API Stream<ModuleBuildAssetType> LoadModuleBuildAssetTypes(
 		const Module* module,
@@ -58,8 +58,8 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message = nullptr
 	);
 
-	// It will not releaase the OS Handle - it must be kept around as long as the functors are loaded;
-	// It does a single coallesced allocation with the allocated buffer being retrieved
+	// It will not release the OS Handle - it must be kept around as long as the functors are loaded;
+	// It does a single coalesced allocation with the allocated buffer being retrieved
 	// using the member function GetAllocatedBuffer()
 	// Returns everything { nullptr, 0 } if the function does not exist
 	ECSENGINE_API ModuleSerializeComponentStreams LoadModuleSerializeComponentFunctors(
@@ -67,13 +67,21 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	);
 
-	// It will not releaase the OS Handle - it must be kept around as long as the link components are loaded;
-	// It does a single coallesced allocation. Deallocate the buffer to free the memory
+	// It will not release the OS Handle - it must be kept around as long as the link components are loaded;
+	// It does a single coalesced allocation. Deallocate the buffer to free the memory
 	// Returns { nullptr, 0 } if the function does not exist
 	ECSENGINE_API Stream<ModuleLinkComponentTarget> LoadModuleLinkComponentTargets(
 		const Module* module,
 		AllocatorPolymorphic allocator,
 		CapacityStream<char>* error_message = nullptr
+	);
+
+	// It will not release the OS Handle
+	// It does a single coalesced allocation. Deallocate the buffer to free the memory
+	// Returns { nullptr, 0 } if the function does not exist
+	ECSENGINE_API ModuleExtraInformation LoadModuleExtraInformation(
+		const Module* module,
+		AllocatorPolymorphic allocator
 	);
 
 	// Frees the OS handle to the valid module function but it does not deallocate the tasks

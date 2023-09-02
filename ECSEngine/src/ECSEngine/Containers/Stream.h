@@ -146,7 +146,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			memcpy(memory, buffer, sizeof(T) * size);
 		}
 
-		// Added return type in order to be compatible with StreamCoallescedDeepCopy
+		// Added return type in order to be compatible with StreamCoalescedDeepCopy
 		ECS_INLINE Stream<T> CopyTo(uintptr_t& memory) const {
 			return CopyTo(memory, size);
 		}
@@ -554,7 +554,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			memcpy(memory, buffer, sizeof(T) * size);
 		}
 
-		// Added return type to be able to be used with StreamCoallescedDeepCopy
+		// Added return type to be able to be used with StreamCoalescedDeepCopy
 		ECS_INLINE CapacityStream<T> CopyTo(uintptr_t& memory) const {
 			return CopyTo(memory, size);
 		}
@@ -850,7 +850,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		ECS_INLINE unsigned int Add(T element) {
 			if (size == capacity) {
-				Resize(static_cast<unsigned int>(ECS_RESIZABLE_STREAM_FACTOR * capacity + 1));
+				Resize((unsigned int)(ECS_RESIZABLE_STREAM_FACTOR * capacity + 1));
 			}
 			buffer[size++] = element;
 			return size - 1;
@@ -858,7 +858,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		ECS_INLINE unsigned int Add(const T* element) {
 			if (size == capacity) {
-				Resize(static_cast<unsigned int>(ECS_RESIZABLE_STREAM_FACTOR * capacity + 1));
+				Resize((unsigned int)(ECS_RESIZABLE_STREAM_FACTOR * capacity + 1));
 			}
 			buffer[size++] = *element;
 			return size - 1;
@@ -905,7 +905,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			memcpy(memory, buffer, sizeof(T) * size);
 		}
 
-		// If it is desirable to be used with StreamCoallescedDeepCopy, the problem is that
+		// If it is desirable to be used with StreamCoalescedDeepCopy, the problem is that
 		// it cannot use coallesced allocation. Wait for a use case to decide
 		ECS_INLINE void CopyTo(uintptr_t& memory) const {
 			CopyTo(memory, size);
@@ -1719,7 +1719,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	// If copy size returns 0, it assumes it needs no buffers and does not call
 	// the copy function.
 	template<typename Stream>
-	Stream StreamCoallescedDeepCopy(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
+	Stream StreamCoalescedDeepCopy(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		Stream new_stream;
 		
 		ECS_STACK_CAPACITY_STREAM(size_t, copy_sizes, 1024);
@@ -1768,7 +1768,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	// If copy size returns 0, it assumes it needs no buffers and does not call
 	// the copy function.
 	template<typename Stream>
-	Stream StreamCoallescedDeepCopy(Stream input, uintptr_t& ptr) {
+	Stream StreamCoalescedDeepCopy(Stream input, uintptr_t& ptr) {
 		Stream new_stream;
 		new_stream.InitializeAndCopy(ptr, input);
 
