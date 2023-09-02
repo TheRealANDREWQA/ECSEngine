@@ -216,7 +216,7 @@ namespace ECSEngine {
 		Vector8 forward = ForwardVector();
 		Vector8 quat_identity = LastElementOneVector();
 
-		return Matrix(blend8<0, 1, 2, 3, 12, 13, 14, 15>(right, up), blend8<0, 1, 2, 3, 12, 13, 14, 15>(forward, quat_identity));
+		return Matrix(BlendLowAndHigh(right, up), BlendLowAndHigh(forward, quat_identity));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
@@ -251,7 +251,7 @@ namespace ECSEngine {
 	// Returns the matrix with the last row set to 0.0f
 	ECS_INLINE Matrix ECS_VECTORCALL Matrix3x4(Matrix matrix) {
 		Vector8 zero_vector = ZeroVector();
-		matrix.v[1] = blend8<0, 1, 2, 3, 12, 13, 14, 15>(matrix.v[1], zero_vector);
+		matrix.v[1] = BlendLowAndHigh(matrix.v[1], zero_vector);
 		return matrix;
 	}
 
@@ -588,7 +588,7 @@ namespace ECSEngine {
 		Vector8 forward = ForwardVector();
 		Vec4f translation_row = { x, y, z, 1.0f };
 
-		result.v[0] = Vec8f(blend8<0, 1, 2, 3, 12, 13, 14, 15>(right, up));
+		result.v[0] = BlendLowAndHigh(right, up);
 		result.v[1] = Vec8f(forward.Low(), translation_row);
 		return result;
 	}
@@ -633,8 +633,8 @@ namespace ECSEngine {
 		sine_cosine = blend8<8, 1, 2, 11, 12, 5, 6, 15>(sine_cosine, zero);
 		Vector8 right = RightVector();
 		Vector8 quat_identity = LastElementOneVector();
-		result.v[0] = Vec8f(blend8<0, 1, 2, 3, 12, 13, 14, 15>(right, sine_cosine.value));
-		result.v[1] = Vec8f(blend8<0, 1, 2, 3, 12, 13, 14, 15>(sine_cosine.value, quat_identity));
+		result.v[0] = BlendLowAndHigh(right, sine_cosine);
+		result.v[1] = BlendLowAndHigh(sine_cosine, quat_identity);
 
 		return result;
 	}
@@ -660,7 +660,7 @@ namespace ECSEngine {
 		Vector8 up = UpVector();
 		Vector8 quat_identity = LastElementOneVector();
 
-		result.v[0] = Vec8f(blend8<0, 1, 2, 3, 12, 13, 14, 15>(sine_cosine.value, up));
+		result.v[0] = BlendLowAndHigh(sine_cosine, up);
 		result.v[1] = Vec8f(Permute2f128Helper<1, 3>(sine_cosine, quat_identity));
 
 		return result;
@@ -689,7 +689,7 @@ namespace ECSEngine {
 		Vector8 forward = ForwardVector();
 		Vector8 quat_identity = LastElementOneVector();
 
-		result.v[1] = Vec8f(blend8<0, 1, 2, 3, 12, 13, 14, 15>(forward, quat_identity));
+		result.v[1] = BlendLowAndHigh(forward, quat_identity);
 
 		return result;
 	}
@@ -828,7 +828,7 @@ namespace ECSEngine {
 
 			*low = Matrix(
 				Vector8(Vec8f(first_row_select.Low(), second_row_select.Low())),
-				blend8<0, 1, 2, 3, 12, 13, 14, 15>(third_row_select, quat_identity)
+				BlendLowAndHigh(third_row_select, quat_identity)
 			);
 			*low = MatrixTranspose(*low);
 
@@ -1072,46 +1072,32 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE float3 ECS_VECTORCALL RotateVectorMatrixLow(Matrix rotation_matrix, Vector8 direction) {
+	ECS_INLINE float3 ECS_VECTORCALL RotateVectorMatrixLow(Vector8 direction, Matrix rotation_matrix) {
 		Vector8 rotated_direction = MatrixVectorMultiply(direction, rotation_matrix);
 		return rotated_direction.AsFloat3Low();
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorMatrixSIMD(Matrix rotation_matrix, Vector8 direction) {
+	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorMatrixSIMD(Vector8 direction, Matrix rotation_matrix) {
 		return MatrixVectorMultiply(direction, rotation_matrix);
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorMatrixSIMD(Matrix rotation_matrix0, Matrix rotation_matrix1, Vector8 direction) {
+	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorMatrixSIMD(Vector8 direction, Matrix rotation_matrix0, Matrix rotation_matrix1) {
 		return MatrixVectorMultiply(direction, rotation_matrix0, rotation_matrix1);
 	}
 
-	ECS_INLINE float3 ECS_VECTORCALL RotatePointMatrixLow(Matrix rotation_matrix, Vector8 point) {
+	ECS_INLINE float3 ECS_VECTORCALL RotatePointMatrixLow(Vector8 point, Matrix rotation_matrix) {
 		// We can treat the point as a displacement vector that is rotated
-		return RotateVectorMatrixLow(rotation_matrix, point);
+		return RotateVectorMatrixLow(point, rotation_matrix);
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL RotatePointMatrixSIMD(Matrix rotation_matrix, Vector8 point) {
+	ECS_INLINE Vector8 ECS_VECTORCALL RotatePointMatrixSIMD(Vector8 point, Matrix rotation_matrix) {
 		// We can treat the point as a displacement vector that is rotated
-		return RotateVectorMatrixSIMD(rotation_matrix, point);
+		return RotateVectorMatrixSIMD(point, rotation_matrix);
 	}
 
-	ECS_INLINE Vector8 ECS_VECTORCALL RotatePointMatrixSIMD(Matrix rotation_matrix0, Matrix rotation_matrix1, Vector8 point) {
+	ECS_INLINE Vector8 ECS_VECTORCALL RotatePointMatrixSIMD(Vector8 point, Matrix rotation_matrix0, Matrix rotation_matrix1) {
 		// We can treat the point as a displacement vector that is rotated
-		return RotateVectorMatrixSIMD(rotation_matrix0, rotation_matrix1, point);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE float3 ECS_VECTORCALL RotateVectorLow(float3 rotation, Vector8 direction) {
-		return RotateVectorMatrixLow(MatrixRotation(rotation), direction);
-	}
-
-	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorSIMD(float3 rotation, Vector8 direction) {
-		return RotateVectorMatrixSIMD(MatrixRotation(rotation), direction);
-	}
-
-	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorSIMD(float3 rotation0, float3 rotation1, Vector8 direction) {
-		return RotateVectorMatrixSIMD(MatrixRotation(rotation0), MatrixRotation(rotation1), direction);
+		return RotateVectorMatrixSIMD(point, rotation_matrix0, rotation_matrix1);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

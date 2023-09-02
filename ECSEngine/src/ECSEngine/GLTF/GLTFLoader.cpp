@@ -141,7 +141,7 @@ namespace ECSEngine {
 			float matrix[16];
 			cgltf_node_transform_world(nodes + current_node_index, matrix);
 			Matrix ecs_matrix(matrix);
-			ecs_matrix.v[1].value = blend8<0, 1, 2, 3, 12, 13, 14, 15>(ecs_matrix.v[1].value, LastElementOneVector());
+			ecs_matrix.v[1] = BlendLowAndHigh(ecs_matrix.v[1], LastElementOneVector());
 
 			const float TOLERANCE_VAL = 0.000001f;
 			Vector8 tolerance(TOLERANCE_VAL);

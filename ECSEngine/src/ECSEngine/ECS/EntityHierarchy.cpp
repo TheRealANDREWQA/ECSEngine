@@ -458,7 +458,7 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    void SerializeEntityHierarchy(const EntityHierarchy* hierarchy, uintptr_t* ptr)
+    void SerializeEntityHierarchy(const EntityHierarchy* hierarchy, uintptr_t& ptr)
     {
         // Write the header first
         SerializeEntityHierarchyHeader header;
@@ -472,17 +472,17 @@ namespace ECSEngine {
             header.children_data_size += children.count * sizeof(Entity);
         });
 
-        Write<true>(ptr, &header, sizeof(header));
+        Write<true>(&ptr, &header, sizeof(header));
 
         // Now write the roots
-        Write<true>(ptr, hierarchy->roots.buffer, hierarchy->roots.size);
+        Write<true>(&ptr, hierarchy->roots.buffer, hierarchy->roots.size);
 
         // Now the children table
         unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
         hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
-            Write<true>(ptr, &parent, sizeof(Entity));
-            Write<true>(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
-            Write<true>(ptr, children.Entities(), sizeof(Entity) * children.count);
+            Write<true>(&ptr, &parent, sizeof(Entity));
+            Write<true>(&ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+            Write<true>(&ptr, children.Entities(), sizeof(Entity) * children.count);
         });
         // The parent table can be deduced from the children table
     }
@@ -644,20 +644,20 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, uintptr_t* ptr)
+    bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, uintptr_t& ptr)
     {
         // Firstly read the header
         SerializeEntityHierarchyHeader header;
-        Read<true>(ptr, &header, sizeof(header));
+        Read<true>(&ptr, &header, sizeof(header));
        
         if (!DeserializeEntityHierarchyPostHeaderOps(hierarchy, &header)) {
             return false;
         }
 
-        Read<true>(ptr, hierarchy->roots.buffer, sizeof(Entity) * header.root_count);
+        Read<true>(&ptr, hierarchy->roots.buffer, sizeof(Entity) * header.root_count);
         hierarchy->roots.size = header.root_count;
 
-        DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, *ptr);
+        DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, ptr);
         return true;
     }
 

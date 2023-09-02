@@ -103,9 +103,8 @@ struct InspectorDrawEntityData {
 		unsigned short byte_size = editor_state->editor_components.GetComponentByteSize(name);
 		link_components[write_index].data = editor_state->editor_allocator->Allocate(byte_size);
 
-		const auto* reflection_manager = editor_state->ModuleReflectionManager();
-		const Reflection::ReflectionType* link_type = reflection_manager->GetType(name);
-		ECSEngine::ResetLinkComponent(reflection_manager, link_type, link_components[write_index].data);
+		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(name);
+		ECSEngine::ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[write_index].data);
 
 		link_components.size++;
 		return write_index;
@@ -984,7 +983,9 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		add_menu_state.row_count++;
 	}
 	// Remove the last '\n'
-	add_menu_state_characters.size--;
+	if (add_menu_state_characters.size > 0) {
+		add_menu_state_characters.size--;
+	}
 	add_menu_state.left_characters = add_menu_state_characters;
 
 	config.flag_count = 0;

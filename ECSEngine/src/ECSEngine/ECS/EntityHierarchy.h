@@ -180,7 +180,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void SerializeEntityHierarchy(const EntityHierarchy* hierarchy, uintptr_t* ptr);
+	ECSENGINE_API void SerializeEntityHierarchy(const EntityHierarchy* hierarchy, uintptr_t& ptr);
 
 	// -----------------------------------------------------------------------------------------------------
 
@@ -194,7 +194,7 @@ namespace ECSEngine {
 
 	// The hierarchy must have its allocator set
 	// Returns true if the data was valid, else false if the data was corrupted
-	ECSENGINE_API bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, uintptr_t* ptr);
+	ECSENGINE_API bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, uintptr_t& ptr);
 
 	// -----------------------------------------------------------------------------------------------------
 

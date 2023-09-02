@@ -53,7 +53,7 @@ namespace ECSEngine {
 
     float3 ECS_VECTORCALL AxisDirectionLocal(ECS_TRANSFORM_TOOL_AXIS axis, Quaternion rotation)
     {
-        return RotateVectorQuaternion(rotation, AxisDirectionSIMD(axis));
+        return RotateVectorQuaternion(AxisDirectionSIMD(axis), rotation);
     }
 
     Vector8 ECS_VECTORCALL AxisDirectionSIMD(ECS_TRANSFORM_TOOL_AXIS axis)
@@ -77,7 +77,7 @@ namespace ECSEngine {
         if (copy_low_to_high) {
             rotation = rotation.SplatLow();
         }
-        return RotateVectorQuaternionSIMD(rotation, AxisDirectionSIMD(axis));
+        return RotateVectorQuaternionSIMD(AxisDirectionSIMD(axis), rotation);
     }
 
     float3 ECS_VECTORCALL AxisDirection(ECS_TRANSFORM_TOOL_AXIS axis, Quaternion rotation, ECS_TRANSFORM_SPACE space, bool copy_low_to_high)
@@ -162,7 +162,7 @@ namespace ECSEngine {
         if (copy_low_to_high) {
             rotation = rotation.SplatLow();
         }
-        return RotateVectorQuaternionSIMD<true>(rotation, AxisPlane(axis, offset).normal_dot);
+        return RotateVectorQuaternionSIMD<true>(AxisPlane(axis, offset).normal_dot, rotation);
     }
 
     Plane ECS_VECTORCALL AxisPlaneLocal(ECS_TRANSFORM_TOOL_AXIS axis, Vector8 view_direction_normalized, Quaternion rotation, float3 offset, bool copy_low_to_high)

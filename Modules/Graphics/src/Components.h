@@ -61,27 +61,6 @@ struct ECS_REFLECT_SHARED_COMPONENT GraphicsMesh {
 	ECSEngine::Stream<char> name;
 };
 
-struct ECS_REFLECT_SHARED_COMPONENT RenderMesh {
-	constexpr static inline short ID() {
-		return GRAPHICS_SHARED_COMPONENT_BASE + 5;
-	}
-
-	constexpr static inline bool IsShared() {
-		return true;
-	}
-
-	inline bool Validate() const {
-		return IsAssetPointerValid(mesh) && IsAssetPointerValid(material);
-	}
-
-	ECSEngine::CoalescedMesh* mesh;
-	ECSEngine::Material* material;
-	unsigned int count;
-	unsigned int new_count;
-	ECSEngine::Color color;
-	ECSEngine::Color new_color;
-};
-
 struct ECS_REFLECT_SHARED_COMPONENT RenderEverything {
 	constexpr static inline short ID() {
 		return GRAPHICS_SHARED_COMPONENT_BASE + 6;
@@ -116,21 +95,21 @@ struct ECS_REFLECT_SHARED_COMPONENT GraphicsTexture {
 	ECSEngine::float3 value;
 };
 
-struct ECS_REFLECT_COMPONENT GraphicsName {
-	constexpr static inline short ID() {
-		return GRAPHICS_SHARED_COMPONENT_BASE + 2;
-	}
-
-	constexpr static inline size_t AllocatorSize() {
-		return ECS_KB_R * 2;
-	}
-
-	constexpr static inline bool IsShared() {
-		return false;
-	}
-
-	ECSEngine::Stream<char> name;
-};
+//struct ECS_REFLECT_COMPONENT GraphicsName {
+//	constexpr static inline short ID() {
+//		return GRAPHICS_SHARED_COMPONENT_BASE + 2;
+//	}
+//
+//	constexpr static inline size_t AllocatorSize() {
+//		return ECS_KB_R * 2;
+//	}
+//
+//	constexpr static inline bool IsShared() {
+//		return false;
+//	}
+//
+//	ECSEngine::Stream<char> name;
+//};
 
 struct ECS_REFLECT_COMPONENT GTranslation {
 	constexpr static inline short ID() {
@@ -142,6 +121,23 @@ struct ECS_REFLECT_COMPONENT GTranslation {
 	}
 
 	ECSEngine::float3 translation = { 0.5f, 10.0f, 0.0f };
+};
+
+struct ECS_REFLECT_SHARED_COMPONENT RenderMesh {
+	constexpr static ECS_INLINE short ID() {
+		return GRAPHICS_SHARED_COMPONENT_BASE + 100;
+	}
+
+	constexpr static ECS_INLINE bool IsShared() {
+		return true;
+	}
+
+	ECS_INLINE bool Validate() const {
+		return IsAssetPointerValid(mesh) && IsAssetPointerValid(material);
+	}
+
+	ECSEngine::CoalescedMesh* mesh;
+	ECSEngine::Material* material;
 };
 
 struct ECS_REFLECT_SETTINGS Settings {

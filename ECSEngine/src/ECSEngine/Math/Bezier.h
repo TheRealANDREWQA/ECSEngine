@@ -189,7 +189,7 @@ namespace ECSEngine {
 		Vector8 shuffle_high_3 = percentages;
 
 		Vector8 three = 3.0f;
-		Vector8 scalar_factors = blend8<0, 1, 2, 3, 12, 13, 14, 15>(one, three);
+		Vector8 scalar_factors = BlendLowAndHigh(one, three);
 		Vector8 scalar_factors_low = scalar_factors;
 		Vector8 scalar_factors_high = permute8<4, 5, 6, 7, 0, 1, 2, 3>(scalar_factors);
 

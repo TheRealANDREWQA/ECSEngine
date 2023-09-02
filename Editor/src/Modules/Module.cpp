@@ -1227,7 +1227,7 @@ void GetModuleDLLImports(EditorState* editor_state, unsigned int index)
 		}
 	}
 
-	editor_state->project_modules->buffer[index].dll_imports = StreamCoallescedDeepCopy(dll_imports, editor_state->EditorAllocator());
+	editor_state->project_modules->buffer[index].dll_imports = StreamCoalescedDeepCopy(dll_imports, editor_state->EditorAllocator());
 
 	_stack_allocator.ClearBackup();
 }
@@ -1570,6 +1570,17 @@ void GetModuleTypesDependencies(const EditorState* editor_state, unsigned int mo
 void GetModulesTypesDependentUpon(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies)
 {
 	editor_state->editor_components.GetModulesTypesDependentUpon(editor_state->editor_components.ModuleIndexFromReflection(editor_state, module_index), &dependencies, editor_state);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+Stream<char> GetModuleExtraInformation(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration, Stream<char> key)
+{
+	const EditorModule* module = editor_state->project_modules->buffer + module_index;
+	if (module->infos[configuration].load_status == EDITOR_MODULE_LOAD_GOOD || module->infos[configuration].load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
+		return module->infos[configuration].ecs_module.extra_information.Find(key);
+	}
+	return { nullptr, 0 };
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

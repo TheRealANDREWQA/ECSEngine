@@ -15,6 +15,9 @@
 
 namespace ECSEngine {
 
+	struct CoalescedMesh;
+	struct Material;
+
 	// The name of the unique and shared components from the engine
 	inline Stream<char> ECS_COMPONENTS[] = {
 		STRING(Translation),

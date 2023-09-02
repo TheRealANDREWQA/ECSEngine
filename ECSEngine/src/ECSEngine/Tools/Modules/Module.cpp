@@ -72,7 +72,7 @@ namespace ECSEngine {
 
 			free(file.buffer);
 			if (dependencies.size > 0) {
-				result = StreamCoallescedDeepCopy(dependencies, allocator);
+				result = StreamCoalescedDeepCopy(dependencies, allocator);
 			}
 		}
 		return result;
@@ -152,7 +152,7 @@ namespace ECSEngine {
 						extension[3] = 'l';
 					}
 				}
-				result = StreamCoallescedDeepCopy(dependencies, allocator);
+				result = StreamCoalescedDeepCopy(dependencies, allocator);
 			}
 
 			stack_allocator.ClearBackup();
@@ -214,6 +214,7 @@ namespace ECSEngine {
 		module.link_components = (ModuleRegisterLinkComponentFunction)GetProcAddress(module_handle, STRING(ModuleRegisterLinkComponentFunction));
 		module.serialize_function = (ModuleSerializeComponentFunction)GetProcAddress(module_handle, STRING(ModuleSerializeComponentFunction));
 		module.set_world = (ModuleSetCurrentWorld)GetProcAddress(module_handle, STRING(ModuleSetCurrentWorld));
+		module.extra_information = (ModuleRegisterExtraInformationFunction)GetProcAddress(module_handle, STRING(ModuleRegisterExtraInformationFunction));
 
 		module.code = ECS_GET_MODULE_OK;
 		module.os_module_handle = module_handle;
@@ -230,6 +231,7 @@ namespace ECSEngine {
 		module->tasks = LoadModuleTasks(&module->base_module, allocator, error_message);
 		module->serialize_streams = LoadModuleSerializeComponentFunctors(&module->base_module, allocator);
 		module->ui_descriptors = LoadModuleUIDescriptors(&module->base_module, allocator);
+		module->extra_information = LoadModuleExtraInformation(&module->base_module, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -253,7 +255,7 @@ namespace ECSEngine {
 		Stream<TaskSchedulerElement> tasks = schedule_tasks;
 		ValidateModuleTasks(tasks, error_message);
 
-		return StreamCoallescedDeepCopy(tasks, allocator);	
+		return StreamCoalescedDeepCopy(tasks, allocator);	
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -383,16 +385,14 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerSharedComponentInfo, serialize_shared_components, MAX_COMPONENTS);
 		ECS_STACK_CAPACITY_STREAM(DeserializeEntityManagerSharedComponentInfo, deserialize_shared_components, MAX_COMPONENTS);
 
-		const size_t TEMP_MEMORY_SIZE = ECS_KB * 8;
-		char _temp_memory[TEMP_MEMORY_SIZE];
-		LinearAllocator temp_memory(_temp_memory, TEMP_MEMORY_SIZE);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 8, ECS_MB);
 
 		ModuleSerializeComponentFunctionData function_data;
 		function_data.serialize_components = &serialize_components;
 		function_data.deserialize_components = &deserialize_components;
 		function_data.serialize_shared_components = &serialize_shared_components;
 		function_data.deserialize_shared_components = &deserialize_shared_components;
-		function_data.allocator = GetAllocatorPolymorphic(&temp_memory);
+		function_data.allocator = GetAllocatorPolymorphic(&_stack_allocator);
 		module->serialize_function(&function_data);
 
 		serialize_components.AssertCapacity();
@@ -410,10 +410,10 @@ namespace ECSEngine {
 		void* allocation = AllocateEx(allocator, total_memory);
 		uintptr_t buffer = (uintptr_t)allocation;
 
-		streams.serialize_components = StreamCoallescedDeepCopy(serialize_components, buffer);
-		streams.deserialize_components = StreamCoallescedDeepCopy(deserialize_components, buffer);
-		streams.serialize_shared_components = StreamCoallescedDeepCopy(serialize_shared_components, buffer);
-		streams.deserialize_shared_components = StreamCoallescedDeepCopy(deserialize_shared_components, buffer);
+		streams.serialize_components = StreamCoalescedDeepCopy(serialize_components, buffer);
+		streams.deserialize_components = StreamCoalescedDeepCopy(deserialize_components, buffer);
+		streams.serialize_shared_components = StreamCoalescedDeepCopy(serialize_shared_components, buffer);
+		streams.deserialize_shared_components = StreamCoalescedDeepCopy(deserialize_shared_components, buffer);
 
 		if (streams.serialize_components.size == 0) {
 			streams.serialize_components.buffer = nullptr;
@@ -431,6 +431,7 @@ namespace ECSEngine {
 			streams.deserialize_shared_components.buffer = nullptr;
 		}
 
+		_stack_allocator.ClearBackup();
 		return streams;
 	}
 
@@ -445,7 +446,7 @@ namespace ECSEngine {
 		const size_t MAX_LINKS = 32;
 		ECS_STACK_CAPACITY_STREAM(ModuleLinkComponentTarget, link_components, MAX_LINKS);
 
-		const size_t MAX_COMPONENT_NAME_SIZE = ECS_KB;
+		const size_t MAX_COMPONENT_NAME_SIZE = ECS_KB * 8;
 		ECS_STACK_CAPACITY_STREAM(char, link_component_names, MAX_COMPONENT_NAME_SIZE);
 		LinearAllocator temp_allocator(link_component_names.buffer, MAX_COMPONENT_NAME_SIZE);
 
@@ -470,6 +471,26 @@ namespace ECSEngine {
 		}
 
 		return { targets, valid_links.size };
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	ModuleExtraInformation LoadModuleExtraInformation(const Module* module, AllocatorPolymorphic allocator)
+	{
+		if (!module->extra_information) {
+			return { {nullptr, 0} };
+		}
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 64, ECS_MB);
+
+		ModuleRegisterExtraInformationFunctionData function_data;
+		function_data.allocator = GetAllocatorPolymorphic(&_stack_allocator);
+		function_data.extra_information.Initialize(function_data.allocator, 0);
+		module->extra_information(&function_data);
+
+		Stream<ModuleMiscInfo> coalesced_data = StreamCoalescedDeepCopy(function_data.extra_information.ToStream(), allocator);
+		_stack_allocator.ClearBackup();
+		return { coalesced_data };
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -513,6 +534,11 @@ namespace ECSEngine {
 		if (module->ui_descriptors.size > 0) {
 			DeallocateIfBelongs(allocator, module->ui_descriptors.buffer);
 			module->ui_descriptors = { nullptr, 0 };
+		}
+
+		if (module->extra_information.pairs.size > 0) {
+			DeallocateIfBelongs(allocator, module->extra_information.pairs.buffer);
+			module->extra_information.pairs = { nullptr, 0 };
 		}
 	}
 

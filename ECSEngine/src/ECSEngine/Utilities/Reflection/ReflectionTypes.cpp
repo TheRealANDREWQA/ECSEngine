@@ -692,8 +692,8 @@ namespace ECSEngine {
 
 			copy.folder_hierarchy_index = folder_hierarchy_index;
 			copy.name.InitializeAndCopy(ptr, name);
-			copy.fields = StreamCoallescedDeepCopy(fields, ptr);
-			copy.original_fields = StreamCoallescedDeepCopy(original_fields, ptr);
+			copy.fields = StreamCoalescedDeepCopy(fields, ptr);
+			copy.original_fields = StreamCoalescedDeepCopy(original_fields, ptr);
 
 			return copy;
 		}

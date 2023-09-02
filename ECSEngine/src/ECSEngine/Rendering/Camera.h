@@ -90,17 +90,17 @@ namespace ECSEngine {
 
 		// The vector is already normalized
 		ECS_INLINE Vector8 ECS_VECTORCALL GetRightVector() const {
-			return RotateVectorQuaternionSIMD(GetRotationQuaternionAsIs(), RightVector());
+			return RotateVector(RightVector(), GetRotationQuaternionAsIs());
 		}
 
 		// The vector is already normalized
 		ECS_INLINE Vector8 ECS_VECTORCALL GetUpVector() const {
-			return RotateVectorQuaternionSIMD(GetRotationQuaternionAsIs(), UpVector());
+			return RotateVector(UpVector(), GetRotationQuaternionAsIs());
 		}
 
 		// The vector is already normalized
 		ECS_INLINE Vector8 ECS_VECTORCALL GetForwardVector() const {
-			return RotateVectorQuaternionSIMD(GetRotationQuaternionAsIs(), ForwardVector());
+			return RotateVector(ForwardVector(), GetRotationQuaternionAsIs());
 		}
 
 		bool is_orthographic;
@@ -168,17 +168,17 @@ namespace ECSEngine {
 
 		// The vector is already normalized
 		ECS_INLINE Vector8 ECS_VECTORCALL GetRightVector() const {
-			return RotateVectorMatrixSIMD(rotation_as_is_matrix, RightVector());
+			return RotateVector(RightVector(), rotation_as_is_matrix);
 		}
 
 		// The vector is already normalized
 		ECS_INLINE Vector8 ECS_VECTORCALL GetUpVector() const {
-			return RotateVectorMatrixSIMD(rotation_as_is_matrix, UpVector());
+			return RotateVector(UpVector(), rotation_as_is_matrix);
 		}
 
 		// The vector is already normalized
 		ECS_INLINE Vector8 ECS_VECTORCALL GetForwardVector() const {
-			return RotateVectorMatrixSIMD(rotation_as_is_matrix, ForwardVector());
+			return RotateVector(ForwardVector(), rotation_as_is_matrix);
 		}
 
 		bool is_orthographic;
@@ -206,6 +206,18 @@ namespace ECSEngine {
 		Matrix view_projection_matrix;
 		Matrix inverse_view_projection_matrix;
 	};
+
+	ECS_INLINE Matrix ECS_VECTORCALL CombineCameraRotationAndProjection(Matrix rotation_matrix, Matrix projection_matrix) {
+		return rotation_matrix * projection_matrix;
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL CombineCameraTranslationAndRotation(Matrix translation_matrix, Matrix rotation_matrix) {
+		return translation_matrix * rotation_matrix;
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL CombineCameraTranslationAndRotationProjection(Matrix translation_matrix, Matrix rotation_projection_matrix) {
+		return translation_matrix * rotation_projection_matrix;
+	}
 
 	// This make it easier to write templated code to make sure that the
 	// correct method is called and not have to go through recompilation

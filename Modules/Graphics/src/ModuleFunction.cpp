@@ -54,3 +54,11 @@ void ModuleSetCurrentWorld(ECSEngine::World* world) {
 }
 
 #endif
+
+#if 1
+
+void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData* data) {
+	
+}
+
+#endif

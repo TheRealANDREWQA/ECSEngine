@@ -373,11 +373,11 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE Vector8 ECS_VECTORCALL SplatLow() const {
-			return Permute2f128Helper<0, 0>(value, value);
+			return SplatLowLane(value);
 		}
 
 		ECS_INLINE Vector8 ECS_VECTORCALL SplatHigh() const {
-			return Permute2f128Helper<1, 1>(value, value);
+			return SplatHighLane(value);
 		}
 
 		Vec8f value;

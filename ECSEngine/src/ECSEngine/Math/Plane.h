@@ -75,7 +75,7 @@ namespace ECSEngine {
 
 		// The normal is already normalized
 		ECS_INLINE Plane ECS_VECTORCALL PlaneFromAxisRotated(Vector8 normal_normalized, Quaternion rotation, Vector8 offset, bool invert_normal = false) {
-			normal_normalized = RotateVectorQuaternionSIMD(rotation, normal_normalized);
+			normal_normalized = RotateVectorQuaternionSIMD(normal_normalized, rotation);
 			return PlaneFromNormalizedAxis(normal_normalized, offset, invert_normal);
 		}
 

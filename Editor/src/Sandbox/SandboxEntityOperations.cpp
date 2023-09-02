@@ -290,8 +290,11 @@ ConvertToOrFromLinkData GetConvertToOrFromLinkData(
 	ECS_ASSERT(target.size > 0);
 
 	unsigned int module_index = editor_state->editor_components.FindComponentModuleInReflection(editor_state, link_component);
-	ECS_ASSERT(module_index != -1);
-	ModuleLinkComponentTarget link_target = GetModuleLinkComponentTarget(editor_state, module_index, link_component);
+	ModuleLinkComponentTarget link_target = { nullptr, nullptr };
+	// If the module index is -1, then it is an engine link component
+	if (module_index != -1) {
+		link_target = GetModuleLinkComponentTarget(editor_state, module_index, link_component);
+	}
 
 	const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_component);
 	const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target);

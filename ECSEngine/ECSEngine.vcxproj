@@ -264,6 +264,7 @@
     <ClInclude Include="src\ECSEngine\Resources\AssetMetadataHandling.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetMetadataMacros.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetMetadataSerialize.h" />
+    <ClInclude Include="src\ECSEngine\Resources\AssetMetadataValidate.h" />
     <ClInclude Include="src\ECSEngine\Resources\ResourceTypes.h" />
     <ClInclude Include="src\ECSEngine\Resources\Scene.h" />
     <ClInclude Include="src\ECSEngine\ECS\SystemManager.h" />

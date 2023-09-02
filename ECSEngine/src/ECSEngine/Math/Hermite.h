@@ -126,13 +126,13 @@ namespace ECSEngine {
 		Vector8 two(2.0f);
 		Vector8 two_percentages = two * percentages;
 
-		Vector8 shuffle_1 = blend8<0, 1, 2, 3, 12, 13, 14, 15>(one_minus, percentages);
+		Vector8 shuffle_1 = BlendLowAndHigh(one_minus, percentages);
 		Vector8 shuffle_2 = shuffle_2;
 		Vector8 point2_value = three - two_percentages;
 		Vector8 point1_value = one + two_percentages;
 		Vector8 shuffle_3_point1_slope1 = blend8<8, 9, 2, 3, V_DC, V_DC, V_DC, V_DC>(percentages, point1_value);
 		Vector8 shuffle_3_point2_slope2 = blend8<V_DC, V_DC, V_DC, V_DC, 12, 13, 6, 7>(percentage_minus_one, point2_value);
-		Vector8 shuffle_3 = blend8<0, 1, 2, 3, 12, 13, 14, 15>(shuffle_3_point1_slope1, shuffle_3_point2_slope2);
+		Vector8 shuffle_3 = BlendLowAndHigh(shuffle_3_point1_slope1, shuffle_3_point2_slope2);
 
 		alignas(32) float values[curve_vector.value.size()];
 		Vector8 result = curve_vector * shuffle_1 * shuffle_2 * shuffle_3;
@@ -206,11 +206,11 @@ namespace ECSEngine {
 		
 		Vector8 shuffle_1_low = one_minus;
 		Vector8 shuffle_2_low = one_minus;
-		Vector8 shuffle_3_low = blend8<0, 1, 2, 3, 12, 13, 14, 15>(point1_value, percentages);
+		Vector8 shuffle_3_low = BlendLowAndHigh(point1_value, percentages);
 
 		Vector8 shuffle_1_high = percentages;
 		Vector8 shuffle_2_high = percentages;
-		Vector8 shuffle_3_high = blend8<0, 1, 2, 3, 12, 13, 14, 15>(point2_value, percentage_minus_one);
+		Vector8 shuffle_3_high = BlendLowAndHigh(point2_value, percentage_minus_one);
 
 		Vector8 low = curve_low * shuffle_1_low * shuffle_2_low * shuffle_3_low;
 		Vector8 high = curve_high * shuffle_1_high * shuffle_2_high * shuffle_3_high;

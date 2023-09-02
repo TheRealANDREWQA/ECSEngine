@@ -106,9 +106,9 @@ namespace ECSEngine {
 
 	ECS_INLINE void ECS_VECTORCALL TransformToMatrix(VectorTransform transform, Matrix* low, Matrix* high) {
 		// Extract the rotation basis of transform
-		Vector8 x = RotateVectorQuaternionSIMD(transform.rotation, RightVector());
-		Vector8 y = RotateVectorQuaternionSIMD(transform.rotation, UpVector());
-		Vector8 z = RotateVectorQuaternionSIMD(transform.rotation, ForwardVector());
+		Vector8 x = RotateVectorQuaternionSIMD(RightVector(), transform.rotation);
+		Vector8 y = RotateVectorQuaternionSIMD(UpVector(), transform.rotation);
+		Vector8 z = RotateVectorQuaternionSIMD(ForwardVector(), transform.rotation);
 
 		// Scale the basis vectors
 		Vector8 splatted_scale_x = PerLaneBroadcast<0>(transform.scale);
@@ -140,11 +140,11 @@ namespace ECSEngine {
 	ECS_INLINE Matrix ECS_VECTORCALL TransformToMatrixLow(VectorTransform transform) {
 		Quaternion splatted_rotation = Permute2f128Helper<0, 0>(transform.rotation, transform.rotation);
 
-		Vector8 right_up = blend8<0, 1, 2, 3, 12, 13, 14, 15>(RightVector(), UpVector());
+		Vector8 right_up = BlendLowAndHigh(RightVector(), UpVector());
 
 		// Extract the rotation basis of transform
-		Vector8 xy = RotateVectorQuaternionSIMD(splatted_rotation, right_up);
-		Vector8 z = RotateVectorQuaternionSIMD(transform.rotation, ForwardVector());
+		Vector8 xy = RotateVectorQuaternionSIMD(right_up, splatted_rotation);
+		Vector8 z = RotateVectorQuaternionSIMD(ForwardVector(), transform.rotation);
 
 		// Scale the basis vectors
 		Vector8 splatted_scale_x = PerLaneBroadcast<0>(transform.scale);
@@ -189,7 +189,7 @@ namespace ECSEngine {
 		rotation_scale_matrix.v[1] = blend8<0, 1, 2, 11, 4, 5, 6, 7>(rotation_scale_matrix.v[1], zero);*/
 
 		Vector8 quat_identity = LastElementOneVector();
-		rotation_scale_matrix.v[1] = blend8<0, 1, 2, 3, 12, 13, 14, 15>(rotation_scale_matrix.v[1], quat_identity);
+		rotation_scale_matrix.v[1] = BlendLowAndHigh(rotation_scale_matrix.v[1], quat_identity);
 		Matrix inverse_rotation = QuaternionToMatrixLow(QuaternionInverse(transform.rotation));
 		Matrix scale_skew_matrix = MatrixMultiply(rotation_scale_matrix, inverse_rotation);
 
@@ -223,8 +223,8 @@ namespace ECSEngine {
 		rotation_scale_matrix.v[1] = blend8<0, 1, 2, 11, 4, 5, 6, 7>(rotation_scale_matrix.v[1], zero);*/
 
 		Vector8 quat_identity = LastElementOneVector();
-		rotation_scale_matrix1.v[1] = blend8<0, 1, 2, 3, 12, 13, 14, 15>(rotation_scale_matrix1.v[1], quat_identity);
-		rotation_scale_matrix2.v[1] = blend8<0, 1, 2, 3, 12, 13, 14, 15>(rotation_scale_matrix2.v[1], quat_identity);
+		rotation_scale_matrix1.v[1] = BlendLowAndHigh(rotation_scale_matrix1.v[1], quat_identity);
+		rotation_scale_matrix2.v[1] = BlendLowAndHigh(rotation_scale_matrix2.v[1], quat_identity);
 
 		Matrix inverse_rotation1, inverse_rotation2;
 		QuaternionToMatrix(QuaternionInverse(transform.rotation), &inverse_rotation1, &inverse_rotation2);

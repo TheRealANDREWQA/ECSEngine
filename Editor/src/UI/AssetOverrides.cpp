@@ -137,7 +137,7 @@ bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 			base_data->asset_name_with_path.size = 0;
 			hash_table.ForEachConst([&](Stream<Stream<char>> streams, ResourceIdentifier identifier) {
 				ResourceIdentifier copy = identifier.Copy(base_allocator);
-				base_data->asset_name_with_path.Add({ StreamCoallescedDeepCopy(streams, base_allocator), { copy.ptr, copy.size / sizeof(wchar_t) } });
+				base_data->asset_name_with_path.Add({ StreamCoalescedDeepCopy(streams, base_allocator), { copy.ptr, copy.size / sizeof(wchar_t) } });
 			});
 		}
 		else {

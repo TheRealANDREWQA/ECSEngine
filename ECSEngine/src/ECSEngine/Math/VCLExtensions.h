@@ -330,6 +330,23 @@ namespace ECSEngine {
 
 #pragma endregion
 
+	template<typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL SplatLowLane(VectorType vector) {
+		return Permute2f128Helper<0, 0>(vector, vector);
+	}
+
+	template<typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL SplatHighLane(VectorType vector) {
+		return Permute2f128Helper<1, 1>(vector, vector);
+	}
+
+	// Blends the low of a with the high of b
+	template<typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL BlendLowAndHigh(VectorType a, VectorType b) {
+		return blend8<0, 1, 2, 3, 12, 13, 14, 15>(a, b);
+	}
+
+
 #pragma region Per Lane Operations
 
 	// At the moment implementations are only for the 4 component and 8 component vectors

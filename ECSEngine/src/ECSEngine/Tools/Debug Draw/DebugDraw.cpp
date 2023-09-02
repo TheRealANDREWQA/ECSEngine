@@ -449,7 +449,7 @@ namespace ECSEngine {
 	float3 OOBBCrossTranslation(float3 translation, Quaternion rotation, float length, bool start_from_same_point) {
 		// Offset in the direction of the by half of the length - if start from same point
 		if (start_from_same_point) {
-			float3 direction = RotateVectorQuaternion(rotation, RightVector());
+			float3 direction = RotateVectorQuaternion(RightVector(), rotation);
 			return translation + direction * float3::Splat(length);
 		}
 		else {

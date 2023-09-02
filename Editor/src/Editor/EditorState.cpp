@@ -12,6 +12,7 @@
 
 #include "../UI/CreateScene.h"
 #include "ECSEngineComponents.h"
+#include "ECSEngineLinkComponents.h"
 #include "../Assets/AssetManagement.h"
 #include "../Assets/AssetTick.h"
 #include "../UI/AssetOverrides.h"
@@ -453,6 +454,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
 	ECS_TEMP_ASCII_STRING(error_message, 256);
 	bool success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)0, editor_task_manager, &error_message);
+	// Create all the link types for the components inside the reflection manager
+	CreateLinkTypesForComponents(editor_reflection_manager, 0);
 	ECS_ASSERT(success);
 
 	success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)1, editor_task_manager, &error_message);
@@ -491,9 +494,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	// Override the module reflection with the assets overrides
 	ECS_STACK_CAPACITY_STREAM_DYNAMIC(UIReflectionFieldOverride, ui_asset_overrides, AssetUIOverrideCount());
 	GetEntityComponentUIOverrides(editor_state, ui_asset_overrides.buffer, GetAllocatorPolymorphic(&ui_asset_override_allocator));
-	// Set the overrides on the module reflection
+	// Set the overrides on the module reflection and on the engine side since we have some link components there as well
 	for (size_t index = 0; index < ui_asset_overrides.capacity; index++) {
 		editor_state->module_reflection->SetFieldOverride(ui_asset_overrides.buffer + index);
+		editor_state->ui_reflection->SetFieldOverride(ui_asset_overrides.buffer + index);
 	}
 	
 	ProjectFile* project_file = (ProjectFile*)malloc(sizeof(ProjectFile));

@@ -9,6 +9,7 @@
 #include "../Rendering/Compression/TextureCompressionTypes.h"
 #include "../Utilities/Serialization/Binary/SerializationMacro.h"
 #include "ResourceTypes.h"
+#include "AssetMetadataValidate.h"
 
 namespace ECSEngine {
 
@@ -171,9 +172,6 @@ namespace ECSEngine {
 		ECS_ASSET_MESH_OPTIMIZE_BASIC,
 		ECS_ASSET_MESH_OPTIMIZE_ADVANCED
 	};
-
-	// This is the limit of assets which can be randomized on asset database load
-#define ECS_ASSET_RANDOMIZED_ASSET_LIMIT 10'000
 
 	// ------------------------------------------------------------------------------------------------------
 
@@ -698,10 +696,6 @@ namespace ECSEngine {
 	ECSENGINE_API void SetValidAssetToMetadata(void* metadata, ECS_ASSET_TYPE type);
 
 	ECSENGINE_API void SetRandomizedAssetToMetadata(void* metadata, ECS_ASSET_TYPE type, unsigned int index);
-
-	ECS_INLINE bool IsAssetPointerValid(const void* pointer) {
-		return (size_t)pointer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
-	}
 
 	ECS_INLINE bool IsAssetPointerFromMetadataValid(Stream<void> asset_pointer) {
 		return IsAssetPointerValid(asset_pointer.buffer);

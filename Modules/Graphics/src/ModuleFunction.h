@@ -30,4 +30,10 @@ extern "C" {
 
 #endif
 
+#if 1
+
+	GRAPHICS_API void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData* data);
+
+#endif
+
 }

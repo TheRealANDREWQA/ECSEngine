@@ -273,6 +273,48 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	struct ModuleMiscInfo {
+		ECS_INLINE size_t CopySize() const {
+			return key.CopySize() + value.CopySize();
+		}
+
+		ECS_INLINE ModuleMiscInfo CopyTo(uintptr_t& ptr) const {
+			ModuleMiscInfo copy;
+
+			copy.key.InitializeAndCopy(ptr, key);
+			copy.value.InitializeAndCopy(ptr, value);
+
+			return copy;
+		}
+
+		Stream<char> key;
+		Stream<char> value;
+	};
+
+	// This structure contains only strings. They can be used to inform the Editor/Runtime
+	// About extra miscellaneous requirements of info. The values as stored as pairs of key
+	// And value in order to ease the finding
+	struct ModuleExtraInformation {
+		ECS_INLINE Stream<char> Find(Stream<char> key) const {
+			size_t index = pairs.Find(key, [](ModuleMiscInfo info) {
+				return info.key;
+			});
+			return index == -1 ? Stream<char>(nullptr, 0) : pairs[index].value;
+		}
+
+		Stream<ModuleMiscInfo> pairs;
+	};
+
+	struct ModuleRegisterExtraInformationFunctionData {
+		ResizableStream<ModuleMiscInfo> extra_information;
+		// The name of the functions either have to be stable - i.e. hard coded - or allocated from this allocator
+		AllocatorPolymorphic allocator;
+	};
+
+	typedef void (*ModuleRegisterExtraInformationFunction)(ModuleRegisterExtraInformationFunctionData* data);
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	// Module function missing is returned for either graphics function missing
 	enum ECS_MODULE_STATUS : unsigned char {
 		ECS_GET_MODULE_OK,
@@ -290,8 +332,9 @@ namespace ECSEngine {
 		ModuleSerializeComponentFunction serialize_function;
 		ModuleRegisterLinkComponentFunction link_components;
 		ModuleSetCurrentWorld set_world;
+		ModuleRegisterExtraInformationFunction extra_information;
 
-		HMODULE os_module_handle;
+		void* os_module_handle;
 	};
 
 	struct AppliedModule {
@@ -303,6 +346,7 @@ namespace ECSEngine {
 		Stream<ModuleBuildAssetType> build_asset_types;
 		Stream<ModuleLinkComponentTarget> link_components;
 		ModuleSerializeComponentStreams serialize_streams;
+		ModuleExtraInformation extra_information;
 	};
 
 	// ----------------------------------------------------------------------------------------------------------------------
