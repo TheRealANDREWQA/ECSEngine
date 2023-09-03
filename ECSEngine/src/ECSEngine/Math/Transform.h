@@ -9,7 +9,7 @@ namespace ECSEngine {
 	// The rotation is a quaternion lane
 	struct Transform {
 		ECS_INLINE Transform() {}
-		ECS_INLINE Transform(float3 _position, float4 _rotation, float3 _scale) : position(_position),
+		ECS_INLINE Transform(float3 _position, QuaternionStorage _rotation, float3 _scale) : position(_position),
 			scale(_scale), rotation(_rotation) {}
 
 		// Translation - 0.0f, 0.0f, 0.0f
@@ -23,7 +23,7 @@ namespace ECSEngine {
 
 		float3 position;
 		float3 scale;
-		float4 rotation;
+		QuaternionStorage rotation;
 	};
 
 	struct VectorTransform {
@@ -252,9 +252,9 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Vector8 ECS_VECTORCALL TransformVector(Transform transform, Vector8 vector) {
+	ECS_INLINE Vector8 ECS_VECTORCALL TransformVector(VectorTransform transform, Vector8 vector) {
 		// Scale and rotate
-		return QuaternionVectorMultiply(transform.rotation, Vector8(transform.scale) * vector);
+		return QuaternionVectorMultiply(transform.rotation, transform.scale * vector);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------

@@ -400,20 +400,25 @@ void InspectorComponentCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	InspectorComponentCallbackData* data = (InspectorComponentCallbackData*)_data;
-	SetSandboxSceneDirty(data->editor_state, data->sandbox_index);
+	
+	EditorState* editor_state = data->editor_state;
+	unsigned int sandbox_index = data->sandbox_index;
+	Entity entity = data->draw_data->entity;
+
+	SetSandboxSceneDirty(editor_state, sandbox_index);
 
 	Stream<char> component_name = data->component_name;
-	const Reflection::ReflectionType* type = data->editor_state->editor_components.GetType(component_name);
+	const Reflection::ReflectionType* type = editor_state->editor_components.GetType(component_name);
 
-	Stream<char> target = data->editor_state->editor_components.GetComponentFromLink(component_name);
-	const Reflection::ReflectionType* target_type = data->editor_state->editor_components.GetType(target);
+	Stream<char> target = editor_state->editor_components.GetComponentFromLink(component_name);
+	const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target);
 
 	const Reflection::ReflectionType* info_type = target_type != nullptr ? target_type : type;
 
 	bool is_shared = IsReflectionTypeSharedComponent(info_type);
 	Component component = { (short)info_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
-	EntityManager* active_manager = ActiveEntityManager(data->editor_state, data->sandbox_index);
+	EntityManager* active_manager = ActiveEntityManager(editor_state, sandbox_index);
 
 	unsigned int matching_index = data->draw_data->FindMatchingInput(data->component_name);
 	if (matching_index != -1) {
@@ -425,7 +430,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 			if (runtime_buffers.size != ui_input_count) {
 				// Give a warning
 				ECS_STACK_CAPACITY_STREAM(char, entity_string, 512);
-				EntityToString(data->draw_data->entity, entity_string);
+				EntityToString(entity, entity_string);
 				ECS_FORMAT_TEMP_STRING(console_message, "Stream input mismatch between UI and underlying type. Entity {#}, component {#}.", entity_string, component_name);
 				EditorSetConsoleWarn(console_message);
 				return;
@@ -436,15 +441,15 @@ void InspectorComponentCallback(ActionData* action_data) {
 			if (is_shared) {
 				arena = active_manager->GetSharedComponentAllocator(component);
 				component_data = GetSandboxSharedInstance(
-					data->editor_state,
-					data->sandbox_index,
+					editor_state,
+					sandbox_index,
 					component,
-					EntitySharedInstance(data->editor_state, data->sandbox_index, data->draw_data->entity, component)
+					EntitySharedInstance(editor_state, sandbox_index, entity, component)
 				);
 			}
 			else {
 				arena = active_manager->GetComponentAllocator(component);
-				component_data = GetSandboxEntityComponent(data->editor_state, data->sandbox_index, data->draw_data->entity, component);
+				component_data = GetSandboxEntityComponent(editor_state, sandbox_index, entity, component);
 			}
 
 			for (unsigned int index = 0; index < runtime_buffers.size; index++) {
@@ -458,11 +463,12 @@ void InspectorComponentCallback(ActionData* action_data) {
 		unsigned int linked_index = data->draw_data->FindLinkComponent(component_name);
 		ECS_ASSERT(linked_index != -1);
 
+		const void* link_data = data->draw_data->link_components[linked_index].data;
 		if (is_shared) {
-			SandboxUpdateLinkComponentForEntity(data->editor_state, data->sandbox_index, data->draw_data->link_components[linked_index].data, component_name, data->draw_data->entity);
+			SandboxUpdateSharedLinkComponentForEntity(editor_state, sandbox_index, link_data, component_name, entity);
 		}
 		else {
-			SandboxSplatLinkComponentAssetFields(data->editor_state, data->sandbox_index, data->draw_data->link_components[linked_index].data, component_name);
+			SandboxUpdateUniqueLinkComponentForEntity(editor_state, sandbox_index, link_data, component_name, entity);
 		}
 	}
 
@@ -625,7 +631,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 	UIConfigNamePadding name_padding;
 	name_padding.alignment = ECS_UI_ALIGN_LEFT;
-	name_padding.total_length = 0.125f;
+	name_padding.total_length = 0.12f;
 	config.AddFlag(name_padding);
 
 	UIConfigWindowDependentSize window_dependent_size;
@@ -811,8 +817,11 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			}
 				
 			// If it is a link component - bind asset overrides
+			// Also, check to see if the values have changed inside the runtime
+			// And we need to update the link component
 			if (link_component.size > 0) {
 				AssetOverrideBindInstanceOverrides(ui_drawer, instance, sandbox_index, modify_value_handler);
+				//ConvertTargetToLinkComponent(editor_state, sandbox_index, link_component, data->entity, current_component);
 			}		
 
 			unsigned int instance_index = data->FindCreatedInstance(instance->name);

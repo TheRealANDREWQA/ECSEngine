@@ -247,16 +247,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned char Archetype::FindUniqueComponentIndex(Component component) const
+	unsigned char Archetype::FindDeallocateComponentIndex(Component component) const
 	{
-		return m_unique_components.Find(component);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	unsigned char Archetype::FindSharedComponentIndex(Component component) const
-	{
-		return m_shared_components.Find(component);
+		for (unsigned char index = 0; index < m_unique_components_to_deallocate_count; index++) {
+			if (m_unique_components[m_unique_components_to_deallocate[index]] == component) {
+				return index;
+			}
+		}
+		return UCHAR_MAX;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -398,31 +396,10 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ComponentSignature Archetype::GetUniqueSignature() const
-	{
-		return m_unique_components;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	ComponentSignature Archetype::GetSharedSignature() const
-	{
-		return m_shared_components;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
 	SharedComponentSignature Archetype::GetSharedSignature(unsigned int base_index) const
 	{
 		ECS_CRASH_RETURN_VALUE(base_index < m_base_archetypes.size, {}, "Incorrect base index {#} when trying to retrieve shared signature from archetype.", base_index);
 		return { m_shared_components.indices, m_base_archetypes[base_index].shared_instances, m_shared_components.count };
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	unsigned int Archetype::GetBaseCount() const
-	{
-		return m_base_archetypes.size;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

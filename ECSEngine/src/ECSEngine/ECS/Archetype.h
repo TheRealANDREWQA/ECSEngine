@@ -60,9 +60,16 @@ namespace ECSEngine {
 		// Which makes expensive the iteration - which all this architecture is about
 		void DestroyBase(unsigned int archetype_index, EntityPool* pool);
 
-		unsigned char FindUniqueComponentIndex(Component component) const;
+		ECS_INLINE unsigned char FindUniqueComponentIndex(Component component) const {
+			return m_unique_components.Find(component);
+		}
 
-		unsigned char FindSharedComponentIndex(Component component) const;
+		ECS_INLINE unsigned char FindSharedComponentIndex(Component component) const {
+			return m_shared_components.Find(component);
+		}
+
+		// Applies only for unique components. Returns UCHAR_MAX if it doesn't exist
+		unsigned char FindDeallocateComponentIndex(Component component) const;
 
 		// It will replace the indices inside the signature with the equivalent indices for the current archetype's mask
 		// If a component cannot be found, it will be set to -1
@@ -99,13 +106,19 @@ namespace ECSEngine {
 
 		const ArchetypeBase* GetBase(unsigned int index) const;
 		
-		ComponentSignature GetUniqueSignature() const;
+		ECS_INLINE ComponentSignature GetUniqueSignature() const {
+			return m_unique_components;
+		}
 
-		ComponentSignature GetSharedSignature() const;
+		ECS_INLINE ComponentSignature GetSharedSignature() const {
+			return m_shared_components;
+		}
 
 		SharedComponentSignature GetSharedSignature(unsigned int base_index) const;
 
-		unsigned int GetBaseCount() const;
+		ECS_INLINE unsigned int GetBaseCount() const {
+			return m_base_archetypes.size;
+		}
 
 		VectorComponentSignature ECS_VECTORCALL GetVectorInstances(unsigned int base_index) const;
 

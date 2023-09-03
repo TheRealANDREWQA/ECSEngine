@@ -10,7 +10,7 @@ struct EditorState;
 
 /*
 	For all functions calls in this file where viewport is specified and left to COUNT it means
-	that it should use the active entity manager. If given it will use the entity manager from that viewport
+	that it should use the active entity manager. If given, it will use the entity manager from that viewport
 */
 
 // Does nothing if the entity doesn't exist
@@ -131,7 +131,8 @@ bool ConvertTargetToLinkComponent(
 
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
 // mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields)
+// the non asset fields). Be careful with shared components, as this will write in place the value (it will overwrite the shared
+// instance directly)
 bool ConvertLinkComponentToTarget(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
@@ -316,7 +317,39 @@ T* GetSandboxEntityComponent(
 	return (T*)GetSandboxEntityComponent<T>((const EditorState*)editor_state, sandbox_index, entity, viewport);
 }
 
-MemoryArena* GetComponentAllocator(
+// Returns { 0.0f, 0.0f, 0.0f } if it doesn't have the translation component
+float3 GetSandboxEntityTranslation(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// Returns QuaternionIdentity() if it doesn't have the rotation component
+QuaternionStorage GetSandboxEntityRotation(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// Returns { 1.0f, 1.0f, 1.0f } if it doesn't have the scale component
+float3 GetSandboxEntityScale(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// Returns a default field if one of the components is missing
+Transform GetSandboxEntityTransform(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+ MemoryArena* GetComponentAllocator(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Component component,
@@ -553,24 +586,34 @@ void SandboxForAllSharedComponents(
 	entity_manager->ForAllSharedInstances<early_exit>(component_functor, functor);
 }
 
-// Unique component only. Splats the corresponding asset fields from the link component into their entity manager storage
-// If the link component needs to be built but the dll function is missing it returns false else true
-bool SandboxSplatLinkComponentAssetFields(
+//// Unique component only. Splats the corresponding asset fields from the link component into their entity manager storage
+//// If the link component needs to be built but the dll function is missing it returns false else true
+//bool SandboxSplatLinkComponentAssetFields(
+//	EditorState* editor_state,
+//	unsigned int sandbox_index,
+//	const void* link_component,
+//	Stream<char> component_name,
+//	bool give_error_when_failing = true,
+//	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+//);
+
+bool SandboxUpdateUniqueLinkComponentForEntity(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	const void* link_component,
-	Stream<char> component_name,
+	Stream<char> link_name,
+	Entity entity,
 	bool give_error_when_failing = true,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
 // It will change the shared instance of the entity, it won't change the data of the current shared instance
-// Called only when asset fields are changed
-bool SandboxUpdateLinkComponentForEntity(
+// This works only for shared components
+bool SandboxUpdateSharedLinkComponentForEntity(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	const void* link_component,
-	Stream<char> component_name,
+	Stream<char> link_name,
 	Entity entity,
 	bool give_error_when_failing = true,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT

@@ -1550,7 +1550,8 @@ namespace ECSEngine {
 		bool is_trivially_copyable;
 	};
 
-	static_assert(sizeof(ReflectionSerializeSharedComponentData) == sizeof(ReflectionSerializeComponentData));
+	static_assert(sizeof(ReflectionSerializeSharedComponentData) == sizeof(ReflectionSerializeComponentData),
+		"Both reflection serialize structures must be the same");
 
 	unsigned int ReflectionSerializeEntityManagerSharedComponent(SerializeEntityManagerSharedComponentData* data) {
 		// The same as the unique version, just the count is 1. The extra data is type punned to the unique data
@@ -1732,7 +1733,8 @@ namespace ECSEngine {
 		convert_base_data.target_type = functor_data->link_base_data.target_type;
 		convert_base_data.asset_fields = functor_data->link_base_data.asset_fields;
 		convert_base_data.asset_database = functor_data->link_base_data.asset_database;
-		convert_base_data.module_link = { nullptr, functor_data->link_base_data.reverse_function };
+		// We need both functions otherwise the function fails
+		convert_base_data.module_link = { functor_data->link_base_data.function, functor_data->link_base_data.reverse_function };
 		convert_base_data.reflection_manager = functor_data->normal_base_data.reflection_manager;
 
 		const void* initial_components = data->components;
@@ -1777,10 +1779,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	struct ReflectionSerializeLinkSharedComponentData {
-		ReflectionSerializeSharedComponentData normal_base_data;
-		ReflectionSerializeLinkComponentBase link_base_data;
-	};
+	typedef ReflectionSerializeLinkComponentData ReflectionSerializeLinkSharedComponentData;
 
 	unsigned int ReflectionSerializeEntityManagerLinkSharedComponent(SerializeEntityManagerSharedComponentData* data) {
 		ReflectionSerializeLinkComponentData* functor_data = (ReflectionSerializeLinkComponentData*)data->extra_data;
@@ -1791,7 +1790,8 @@ namespace ECSEngine {
 		convert_base_data.target_type = functor_data->link_base_data.target_type;
 		convert_base_data.asset_fields = functor_data->link_base_data.asset_fields;
 		convert_base_data.asset_database = functor_data->link_base_data.asset_database;
-		convert_base_data.module_link = { nullptr, functor_data->link_base_data.reverse_function };
+		// We need both functions otherwise the function fails
+		convert_base_data.module_link = { functor_data->link_base_data.function, functor_data->link_base_data.reverse_function };
 		convert_base_data.reflection_manager = functor_data->normal_base_data.reflection_manager;
 
 		bool success = ConvertFromTargetToLinkComponent(
@@ -1840,7 +1840,8 @@ namespace ECSEngine {
 		convert_base_data.target_type = functor_data->link_base_data.target_type;
 		convert_base_data.asset_fields = functor_data->link_base_data.asset_fields;
 		convert_base_data.asset_database = functor_data->link_base_data.asset_database;
-		convert_base_data.module_link = { functor_data->link_base_data.function, nullptr };
+		// We need both functions otherwise the function fails
+		convert_base_data.module_link = { functor_data->link_base_data.function, functor_data->link_base_data.reverse_function };
 		convert_base_data.reflection_manager = functor_data->normal_base_data.reflection_manager;
 		
 		void* initial_component = data->components;
@@ -1898,7 +1899,8 @@ namespace ECSEngine {
 		convert_base_data.target_type = functor_data->link_base_data.target_type;
 		convert_base_data.asset_fields = functor_data->link_base_data.asset_fields;
 		convert_base_data.asset_database = functor_data->link_base_data.asset_database;
-		convert_base_data.module_link = { functor_data->link_base_data.function, nullptr };
+		// We need both functions otherwise the function fails
+		convert_base_data.module_link = { functor_data->link_base_data.function, functor_data->link_base_data.reverse_function };
 		convert_base_data.reflection_manager = functor_data->normal_base_data.reflection_manager;
 
 		void* initial_component = data->component;
@@ -1936,7 +1938,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	template<typename TableType, typename OverrideType, typename Functor>
-	void CreateSerializeDeserializeEntityManagerComponentTable(
+	static void CreateSerializeDeserializeEntityManagerComponentTable(
 		TableType& table,
 		const Reflection::ReflectionManager* reflection_manager,
 		AllocatorPolymorphic allocator,
@@ -2019,61 +2021,24 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	void ConvertLinkTypesToSerializeEntityManagerUnique(
-		const Reflection::ReflectionManager* reflection_manager,
-		const AssetDatabase* database,
-		AllocatorPolymorphic allocator, 
-		Stream<const Reflection::ReflectionType*> link_types,
-		Stream<ModuleLinkComponentTarget> module_links,
-		SerializeEntityManagerComponentInfo* overrides
-	)
-	{
-		for (size_t index = 0; index < link_types.size; index++) {
-			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_types[index]);
-			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
-
-			SerializeEntityManagerComponentInfo info;
-			info.function = ReflectionSerializeEntityManagerLinkComponent;
-			info.header_function = ReflectionSerializeEntityManagerHeaderLinkComponent;
-			ReflectionSerializeLinkComponentData* data = (ReflectionSerializeLinkComponentData*)Allocate(allocator, sizeof(ReflectionSerializeLinkComponentData));
-
-			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
-			GetAssetFieldsFromLinkComponent(link_types[index], asset_fields);
-
-			data->normal_base_data.reflection_manager = reflection_manager;
-			data->normal_base_data.type = link_types[index];
-			data->link_base_data.target_type = target_type;
-			data->link_base_data.asset_database = database;
-			data->link_base_data.reverse_function = module_links[index].reverse_function;
-			data->link_base_data.asset_fields.InitializeAndCopy(allocator, asset_fields);
-			data->link_base_data.written_count_before = 0;
-			data->link_base_data.skipped_count_before = 0;
-
-			info.extra_data = data;
-			info.name = target_type->name;
-			// The version is not really needed
-			info.version = 0;
-
-			overrides[index] = info;
-		}
-	}
-
-
-	void CreateSerializeEntityManagerComponentTable(
-		SerializeEntityManagerComponentTable& table,
+	template<typename Table, typename SerializeInfo, typename CheckFunctor>
+	static void CreateSerializeEntityManagerSharedComponentTableImpl(
+		Table& table,
 		const Reflection::ReflectionManager* reflection_manager,
 		AllocatorPolymorphic allocator,
-		Stream<SerializeEntityManagerComponentInfo> overrides,
+		Stream<SerializeInfo> overrides,
 		Component* override_components,
-		Stream<unsigned int> hierarchy_indices
-	)
-	{
+		Stream<unsigned int> hierarchy_indices,
+		void* serialize_function,
+		void* serialize_header_function,
+		CheckFunctor&& check_functor
+	) {
 		CreateSerializeDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, overrides, override_components, hierarchy_indices, [&](const Reflection::ReflectionType* type) {
-			if (IsReflectionTypeComponent(type)) {
-				SerializeEntityManagerComponentInfo info;
-				info.function = ReflectionSerializeEntityManagerComponent;
-				info.header_function = ReflectionSerializeEntityManagerHeaderComponent;
-				ReflectionSerializeComponentData* data = (ReflectionSerializeComponentData*)Allocate(allocator, sizeof(ReflectionSerializeComponentData));
+			if (check_functor(type)) {
+				SerializeInfo info;
+				info.function = (decltype(info.function))serialize_function;
+				info.header_function = (decltype(info.header_function))serialize_header_function;
+				ReflectionSerializeComponentData* data = (ReflectionSerializeComponentData*)Allocate(allocator, sizeof(ReflectionSerializeSharedComponentData));
 				data->reflection_manager = reflection_manager;
 				data->type = type;
 
@@ -2087,6 +2052,94 @@ namespace ECSEngine {
 				ECS_ASSERT(!table.Insert(info, component));
 			}
 		});
+	}
+
+	template<typename OverrideType>
+	static void ConvertLinkTypesToSerializeEntityManagerImpl(
+		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* database,
+		AllocatorPolymorphic allocator,
+		Stream<const Reflection::ReflectionType*> link_types,
+		Stream<ModuleLinkComponentTarget> module_links,
+		OverrideType* overrides,
+		void* serialize_function,
+		void* serialize_header_function
+	) {
+		for (size_t index = 0; index < link_types.size; index++) {
+			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_types[index]);
+			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
+
+			OverrideType info;
+			info.function = (decltype(info.function))serialize_function;
+			info.header_function = (decltype(info.header_function))serialize_header_function;
+			ReflectionSerializeLinkComponentData* data = (ReflectionSerializeLinkComponentData*)Allocate(allocator, sizeof(ReflectionSerializeLinkComponentData));
+
+			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
+			GetAssetFieldsFromLinkComponent(link_types[index], asset_fields);
+
+			data->normal_base_data.reflection_manager = reflection_manager;
+			data->normal_base_data.type = link_types[index];
+			data->link_base_data.target_type = target_type;
+			data->link_base_data.asset_database = database;
+			data->link_base_data.reverse_function = module_links[index].reverse_function;
+			data->link_base_data.function = module_links[index].build_function;
+			data->link_base_data.asset_fields.InitializeAndCopy(allocator, asset_fields);
+			data->link_base_data.written_count_before = 0;
+			data->link_base_data.skipped_count_before = 0;
+
+			info.extra_data = data;
+			info.name = target_type->name;
+			// The version is not really needed
+			info.version = 0;
+
+			overrides[index] = info;
+		}
+	}
+
+	void ConvertLinkTypesToSerializeEntityManagerUnique(
+		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* database,
+		AllocatorPolymorphic allocator, 
+		Stream<const Reflection::ReflectionType*> link_types,
+		Stream<ModuleLinkComponentTarget> module_links,
+		SerializeEntityManagerComponentInfo* overrides
+	)
+	{		
+		ConvertLinkTypesToSerializeEntityManagerImpl(
+			reflection_manager,
+			database,
+			allocator,
+			link_types,
+			module_links,
+			overrides,
+			ReflectionSerializeEntityManagerLinkComponent,
+			ReflectionSerializeEntityManagerHeaderLinkComponent
+		);
+	}
+
+
+	void CreateSerializeEntityManagerComponentTable(
+		SerializeEntityManagerComponentTable& table,
+		const Reflection::ReflectionManager* reflection_manager,
+		AllocatorPolymorphic allocator,
+		Stream<SerializeEntityManagerComponentInfo> overrides,
+		Component* override_components,
+		Stream<unsigned int> hierarchy_indices
+	)
+	{
+		CreateSerializeEntityManagerSharedComponentTableImpl(
+			table,
+			reflection_manager,
+			allocator,
+			overrides,
+			override_components,
+			hierarchy_indices,
+			ReflectionSerializeEntityManagerComponent,
+			ReflectionSerializeEntityManagerHeaderComponent,
+			[](const Reflection::ReflectionType* type) {
+				return IsReflectionTypeComponent(type);
+			}
+		);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -2132,35 +2185,16 @@ namespace ECSEngine {
 		SerializeEntityManagerSharedComponentInfo* overrides
 	)
 	{
-		for (size_t index = 0; index < link_types.size; index++) {
-			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_types[index]);
-			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
-
-			SerializeEntityManagerSharedComponentInfo info;
-			info.function = ReflectionSerializeEntityManagerLinkSharedComponent;
-			info.header_function = ReflectionSerializeEntityManagerHeaderLinkSharedComponent;
-
-			ReflectionSerializeLinkSharedComponentData* data = (ReflectionSerializeLinkSharedComponentData*)Allocate(allocator, sizeof(ReflectionSerializeLinkSharedComponentData));
-			data->normal_base_data.reflection_manager = reflection_manager;
-			data->normal_base_data.type = link_types[index];
-
-			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
-			GetAssetFieldsFromLinkComponent(link_types[index], asset_fields);
-
-			data->link_base_data.asset_database = asset_database;
-			data->link_base_data.reverse_function = module_links[index].reverse_function;
-			data->link_base_data.target_type = target_type;
-			data->link_base_data.asset_fields.InitializeAndCopy(allocator, asset_fields);
-			data->link_base_data.skipped_count_before = 0;
-			data->link_base_data.written_count_before = 0;
-
-			info.extra_data = data;
-			info.name = target_type->name;
-			// The version is not really needed
-			info.version = 0;
-
-			overrides[index] = info;
-		}
+		ConvertLinkTypesToSerializeEntityManagerImpl(
+			reflection_manager,
+			asset_database,
+			allocator,
+			link_types,
+			module_links,
+			overrides,
+			ReflectionSerializeEntityManagerLinkSharedComponent,
+			ReflectionSerializeEntityManagerHeaderLinkSharedComponent
+		);
 	}
 
 	void CreateSerializeEntityManagerSharedComponentTable(
@@ -2172,25 +2206,19 @@ namespace ECSEngine {
 		Stream<unsigned int> hierarchy_indices
 	)
 	{
-		CreateSerializeDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, overrides, override_components, hierarchy_indices, [&](const Reflection::ReflectionType* type) {
-			if (IsReflectionTypeSharedComponent(type)) {
-				SerializeEntityManagerSharedComponentInfo info;
-				info.function = ReflectionSerializeEntityManagerSharedComponent;
-				info.header_function = ReflectionSerializeEntityManagerHeaderSharedComponent;
-				ReflectionSerializeSharedComponentData* data = (ReflectionSerializeSharedComponentData*)Allocate(allocator, sizeof(ReflectionSerializeSharedComponentData));
-				data->reflection_manager = reflection_manager;
-				data->type = type;
-
-				info.extra_data = data;
-				info.name = type->name;
-				// The version is not really needed
-				info.version = 0;
-
-				Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-
-				ECS_ASSERT(!table.Insert(info, component));
+		CreateSerializeEntityManagerSharedComponentTableImpl(
+			table,
+			reflection_manager,
+			allocator,
+			overrides,
+			override_components,
+			hierarchy_indices,
+			ReflectionSerializeEntityManagerSharedComponent,
+			ReflectionSerializeEntityManagerHeaderSharedComponent,
+			[](const Reflection::ReflectionType* type) {
+				return IsReflectionTypeSharedComponent(type);
 			}
-		});
+		);
 	}
 
 	void AddSerializeEntityManagerSharedComponentTableOverrides(
@@ -2204,23 +2232,33 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	void ConvertLinkTypesToDeserializeEntityManagerUnique(
+	// Receive the functions as typeless void* and cast them inside
+	template<typename OverrideType>
+	static void ConvertLinkTypesToDeserializeEntityManagerImpl(
 		const Reflection::ReflectionManager* reflection_manager,
-		const AssetDatabase* asset_database,
+		const AssetDatabase* database,
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
 		Stream<ModuleLinkComponentTarget> module_links,
-		DeserializeEntityManagerComponentInfo* overrides
-	)
-	{
+		OverrideType* overrides,
+		void* deserialize_function,
+		void* deserialize_header_function
+	) {
+		static_assert(sizeof(ReflectionDeserializeLinkComponentData) == sizeof(ReflectionDeserializeLinkSharedComponentData),
+			"Both deserialize structures must be the same or change the algorithm");
+		static_assert(offsetof(ReflectionDeserializeLinkComponentData, normal_base_data) == offsetof(ReflectionDeserializeLinkSharedComponentData, normal_base_data),
+			"Both deserialize structures must be the same or change the algorithm");
+		static_assert(offsetof(ReflectionDeserializeLinkComponentData, link_base_data) == offsetof(ReflectionDeserializeLinkSharedComponentData, link_base_data),
+			"Both deserialize structures must be the same or change the algorithm");
+
 		for (size_t index = 0; index < link_types.size; index++) {
 			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_types[index]);
 			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
 
-			DeserializeEntityManagerComponentInfo info;
-			info.function = ReflectionDeserializeEntityManagerLinkComponent;
-			info.header_function = ReflectionDeserializeEntityManagerHeaderLinkComponent;
-			
+			OverrideType info;
+			info.function = (decltype(info.function))deserialize_function;
+			info.header_function = (decltype(info.header_function))deserialize_header_function;
+
 			ReflectionDeserializeLinkComponentData* data = (ReflectionDeserializeLinkComponentData*)Allocate(allocator, sizeof(ReflectionDeserializeLinkComponentData));
 			data->normal_base_data.reflection_manager = reflection_manager;
 			data->normal_base_data.type = link_types[index];
@@ -2228,10 +2266,13 @@ namespace ECSEngine {
 
 			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
 			GetAssetFieldsFromLinkComponent(link_types[index], asset_fields);
-			
-			data->link_base_data.asset_database = asset_database;
+
+			data->link_base_data.asset_database = database;
 			data->link_base_data.asset_fields.InitializeAndCopy(allocator, asset_fields);
+			// Put both functions - even tho only the build is actually needed
+			// A function inside the link check verifies that both are set
 			data->link_base_data.function = module_links[index].build_function;
+			data->link_base_data.reverse_function = module_links[index].reverse_function;
 			data->link_base_data.skipped_count_before = 0;
 			data->link_base_data.written_count_before = 0;
 			data->link_base_data.target_type = target_type;
@@ -2252,20 +2293,23 @@ namespace ECSEngine {
 		}
 	}
 
-	void CreateDeserializeEntityManagerComponentTable(
-		DeserializeEntityManagerComponentTable& table,
-		const Reflection::ReflectionManager* reflection_manager, 
+	template<typename Table, typename DeserializeInfo, typename CheckFunctor>
+	static void CreateDeserializeEntityManagerComponentTableImpl(
+		Table& table,
+		const Reflection::ReflectionManager* reflection_manager,
 		AllocatorPolymorphic allocator,
-		Stream<DeserializeEntityManagerComponentInfo> overrides,
-		Component* override_components,
-		Stream<unsigned int> hierarchy_indices
-	)
-	{
-		CreateSerializeDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, overrides, override_components, hierarchy_indices, [&](const Reflection::ReflectionType* type) {
-			if (IsReflectionTypeComponent(type)) {
-				DeserializeEntityManagerComponentInfo info;
-				info.function = ReflectionDeserializeEntityManagerComponent;
-				info.header_function = ReflectionDeserializeEntityManagerHeaderComponent;
+		Stream<DeserializeInfo> overrides,
+		Component* component_overrides,
+		Stream<unsigned int> hierarchy_indices,
+		void* deserialize_function,
+		void* deserialize_header_function,
+		CheckFunctor&& check_functor
+	) {
+		CreateSerializeDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, overrides, component_overrides, hierarchy_indices, [&](const Reflection::ReflectionType* type) {
+			if (check_functor(type)) {
+				DeserializeInfo info;
+				info.function = (decltype(info.function))deserialize_function;
+				info.header_function = (decltype(info.header_function))deserialize_header_function;
 				ReflectionDeserializeComponentData* data = (ReflectionDeserializeComponentData*)Allocate(allocator, sizeof(ReflectionDeserializeComponentData));
 				data->reflection_manager = reflection_manager;
 				data->type = type;
@@ -2289,6 +2333,51 @@ namespace ECSEngine {
 		});
 	}
 
+	void ConvertLinkTypesToDeserializeEntityManagerUnique(
+		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* asset_database,
+		AllocatorPolymorphic allocator,
+		Stream<const Reflection::ReflectionType*> link_types,
+		Stream<ModuleLinkComponentTarget> module_links,
+		DeserializeEntityManagerComponentInfo* overrides
+	)
+	{
+		ConvertLinkTypesToDeserializeEntityManagerImpl(
+			reflection_manager,
+			asset_database,
+			allocator,
+			link_types,
+			module_links,
+			overrides,
+			ReflectionDeserializeEntityManagerLinkComponent,
+			ReflectionDeserializeEntityManagerHeaderLinkComponent
+		);
+	}
+
+	void CreateDeserializeEntityManagerComponentTable(
+		DeserializeEntityManagerComponentTable& table,
+		const Reflection::ReflectionManager* reflection_manager, 
+		AllocatorPolymorphic allocator,
+		Stream<DeserializeEntityManagerComponentInfo> overrides,
+		Component* override_components,
+		Stream<unsigned int> hierarchy_indices
+	)
+	{	
+		CreateDeserializeEntityManagerComponentTableImpl(
+			table,
+			reflection_manager,
+			allocator,
+			overrides,
+			override_components,
+			hierarchy_indices,
+			ReflectionDeserializeEntityManagerComponent,
+			ReflectionDeserializeEntityManagerHeaderComponent,
+			[](const Reflection::ReflectionType* type) {
+				return IsReflectionTypeComponent(type);
+			}
+		);
+	}
+
 	void AddDeserializeEntityManagerComponentTableOverrides(
 		DeserializeEntityManagerComponentTable& table, 
 		const Reflection::ReflectionManager* reflection_manager,
@@ -2302,51 +2391,23 @@ namespace ECSEngine {
 
 	void ConvertLinkTypesToDeserializeEntityManagerShared(
 		const Reflection::ReflectionManager* reflection_manager,
-		const AssetDatabase* database,
+		const AssetDatabase* asset_database,
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
 		Stream<ModuleLinkComponentTarget> module_links,
 		DeserializeEntityManagerSharedComponentInfo* overrides
 	)
 	{
-		for (size_t index = 0; index < link_types.size; index++) {
-			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_types[index]);
-			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
-
-			DeserializeEntityManagerSharedComponentInfo info;
-			info.function = ReflectionDeserializeEntityManagerLinkSharedComponent;
-			info.header_function = ReflectionDeserializeEntityManagerHeaderLinkSharedComponent;
-
-			ReflectionDeserializeLinkSharedComponentData* data = (ReflectionDeserializeLinkSharedComponentData*)Allocate(allocator, sizeof(ReflectionDeserializeLinkSharedComponentData));
-			
-			data->normal_base_data.reflection_manager = reflection_manager;
-			data->normal_base_data.type = link_types[index];
-			data->normal_base_data.allocator = allocator;
-
-			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
-			GetAssetFieldsFromLinkComponent(link_types[index], asset_fields);
-
-			data->link_base_data.asset_database = database;
-			data->link_base_data.asset_fields.InitializeAndCopy(allocator, asset_fields);
-			data->link_base_data.function = module_links[index].build_function;
-			data->link_base_data.skipped_count_before = 0;
-			data->link_base_data.written_count_before = 0;
-			data->link_base_data.target_type = target_type;
-
-			info.extra_data = data;
-			info.name = target_type->name;
-			info.component_fixup.component_byte_size = Reflection::GetReflectionTypeByteSize(target_type);
-			double _allocator_size = target_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-			info.component_fixup.allocator_size = _allocator_size != DBL_MAX ? (size_t)_allocator_size : 0;
-			if (info.component_fixup.allocator_size > 0) {
-				// Look for the buffers
-				CapacityStream<ComponentBuffer> component_buffers = { info.component_fixup.component_buffers, 0, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT };
-				GetReflectionTypeRuntimeBuffers(target_type, component_buffers);
-				info.component_fixup.component_buffer_count = component_buffers.size;
-			}
-			
-			overrides[index] = info;
-		}
+		ConvertLinkTypesToDeserializeEntityManagerImpl(
+			reflection_manager,
+			asset_database,
+			allocator,
+			link_types,
+			module_links,
+			overrides,
+			ReflectionDeserializeEntityManagerLinkSharedComponent,
+			ReflectionDeserializeEntityManagerHeaderLinkSharedComponent
+		);
 	}
 
 	void CreateDeserializeEntityManagerSharedComponentTable(
@@ -2358,32 +2419,19 @@ namespace ECSEngine {
 		Stream<unsigned int> hierarchy_indices
 	)
 	{
-		CreateSerializeDeserializeEntityManagerComponentTable(table, reflection_manager, allocator, overrides, override_components, hierarchy_indices, [&](const Reflection::ReflectionType* type) {
-			if (IsReflectionTypeSharedComponent(type)) {
-				DeserializeEntityManagerSharedComponentInfo info;
-				info.function = ReflectionDeserializeEntityManagerSharedComponent;
-				info.header_function = ReflectionDeserializeEntityManagerHeaderSharedComponent;
-				ReflectionDeserializeSharedComponentData* data = (ReflectionDeserializeSharedComponentData*)Allocate(allocator, sizeof(ReflectionDeserializeSharedComponentData));
-				data->reflection_manager = reflection_manager;
-				data->type = type;
-				data->allocator = allocator;
-
-				info.extra_data = data;
-				info.name = type->name;
-				info.component_fixup.component_byte_size = Reflection::GetReflectionTypeByteSize(type);
-				double _allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-				info.component_fixup.allocator_size = _allocator_size != DBL_MAX ? (size_t)_allocator_size : 0;
-				if (info.component_fixup.allocator_size > 0) {
-					// Look for the buffers
-					CapacityStream<ComponentBuffer> component_buffers = { info.component_fixup.component_buffers, 0, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT };
-					GetReflectionTypeRuntimeBuffers(type, component_buffers);
-					info.component_fixup.component_buffer_count = component_buffers.size;
-				}
-				Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-
-				ECS_ASSERT(!table.Insert(info, component));
+		CreateDeserializeEntityManagerComponentTableImpl(
+			table,
+			reflection_manager,
+			allocator,
+			overrides,
+			override_components,
+			hierarchy_indices,
+			ReflectionDeserializeEntityManagerSharedComponent,
+			ReflectionDeserializeEntityManagerHeaderSharedComponent,
+			[](const Reflection::ReflectionType* type) {
+				return IsReflectionTypeSharedComponent(type);
 			}
-		});
+		);
 	}
 
 	void AddDeserializeEntityManagerSharedComponentTableOverrides(

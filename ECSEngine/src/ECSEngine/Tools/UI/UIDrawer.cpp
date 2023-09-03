@@ -9211,7 +9211,7 @@ namespace ECSEngine {
 		{
 			UIDrawerMenuRightClickData* right_click = (UIDrawerMenuRightClickData*)GetTempBuffer(sizeof(UIDrawerMenuRightClickData));
 			*right_click = PrepareRightClickActionData(name, menu_state, custom_handler);
-			return { RightClickMenu, &right_click, sizeof(right_click), ECS_UI_DRAW_SYSTEM };
+			return { RightClickMenu, right_click, sizeof(*right_click), ECS_UI_DRAW_SYSTEM };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

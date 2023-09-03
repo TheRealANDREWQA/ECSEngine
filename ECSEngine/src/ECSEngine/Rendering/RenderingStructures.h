@@ -1467,9 +1467,9 @@ namespace ECSEngine {
 	};
 
 	ECS_INLINE AABBStorage GetSubmeshesBoundingBox(Stream<Submesh> submeshes) {
-		AABBStorage combined = ReverseInfiniteBoundingBox();
+		AABBStorage combined = ReverseInfiniteAABBStorage();
 		for (size_t index = 0; index < submeshes.size; index++) {
-			combined = GetCombinedBoundingBox(combined, submeshes[index].bounds);
+			combined = GetCombinedAABBStorage(combined, submeshes[index].bounds);
 		}
 		return combined;
 	}

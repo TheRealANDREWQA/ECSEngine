@@ -496,6 +496,19 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// Deallocates any buffers used inside the entity for unique components
+		// If the component doesn't have buffers, it will crash
+		void DeallocateEntityBuffersCommit(Entity entity, Component component);
+
+		// If the given component doesn't have buffers, it will do nothing
+		// Else same behaviour as the other deallocate function
+		void DeallocateEntityBuffersIfExistentCommit(Entity entity, Component component);
+
+		// Deallocates any buffers used inside the shared instance. Valid only for shared components
+		void DeallocateSharedInstanceBuffersCommit(Component component, SharedInstance instance);
+
+		// ---------------------------------------------------------------------------------------------------
+
 		void DeleteEntityCommit(Entity entity);
 
 		// Deferred Call - it will register it inside the command stream

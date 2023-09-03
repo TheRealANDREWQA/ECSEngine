@@ -67,7 +67,8 @@ bool GetLoadSceneDataBase(
 		standalone_database,
 		stack_allocator,
 		unique_overrides,
-		shared_overrides
+		shared_overrides,
+		editor_state->ecs_link_components
 	);
 	if (!link_success) {
 		return false;
@@ -182,7 +183,15 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 	ModulesToAppliedModules(editor_state, applied_modules);
 	ModuleGatherSerializeOverrides(applied_modules, unique_overrides);
 	ModuleGatherSerializeSharedOverrides(applied_modules, shared_overrides);
-	bool link_success = ModuleGatherLinkSerializeUniqueAndSharedOverrides(applied_modules, save_data.reflection_manager, &standalone_database, stack_allocator, unique_overrides, shared_overrides);
+	bool link_success = ModuleGatherLinkSerializeUniqueAndSharedOverrides(
+		applied_modules, 
+		save_data.reflection_manager, 
+		&standalone_database, 
+		stack_allocator, 
+		unique_overrides, 
+		shared_overrides,
+		editor_state->ecs_link_components
+	);
 	if (!link_success) {
 		_stack_allocator.ClearBackup();
 		return false;

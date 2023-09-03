@@ -17,7 +17,7 @@ namespace ECSEngine {
 		return { min, max };
 	}
 
-	AABBStorage GetPointsBoundingBox(Stream<float3> points)
+	AABBStorage GetAABBFromPoints(Stream<float3> points)
 	{
 		Vector8 vector_min(FLT_MAX), vector_max(-FLT_MAX);
 		size_t simd_count = function::GetSimdCount(points.size, vector_min.Lanes());
@@ -44,12 +44,31 @@ namespace ECSEngine {
 		return { current_min, current_max };
 	}
 
-	AABBStorage GetCombinedBoundingBox(AABBStorage first, AABBStorage second)
+	AABBStorage GetCombinedAABBStorage(AABBStorage first, AABBStorage second)
 	{
 		return {
 			BasicTypeMin(first.min, second.min),
 			BasicTypeMax(first.max, second.max)
 		};
+	}
+
+	void GetAABBCorners(AABB aabb, Vector8* corners)
+	{
+		Vector8 max_min = Permute2f128Helper<1, 0>(aabb.value, aabb.value);
+		Vector8 xy_min_z_max = PerLaneBlend<0, 1, 6, V_DC>(aabb.value, max_min);
+		Vector8 x_min_y_max_z_min = PerLaneBlend<0, 5, 2, V_DC>(aabb.value, max_min);
+		Vector8 x_max_yz_min = PerLaneBlend<4, 1, 2, V_DC>(aabb.value, max_min);
+		Vector8 xy_max_z_min = PerLaneBlend<4, 5, 2, V_DC>(aabb.value, max_min);
+		Vector8 x_max_y_min_z_max = PerLaneBlend<4, 1, 6, V_DC>(aabb.value, max_min);
+		Vector8 x_min_yz_max = PerLaneBlend<0, 5, 6, V_DC>(aabb.value, max_min);
+
+		// The left face have the x min
+		// The right face have the x max
+		corners[0] = BlendLowAndHigh(aabb.value, xy_min_z_max);
+		corners[1] = BlendLowAndHigh(x_min_y_max_z_min, x_min_yz_max);
+
+		corners[2] = BlendLowAndHigh(x_max_yz_min, x_max_y_min_z_max);
+		corners[3] = BlendLowAndHigh(xy_max_z_min, aabb.value);
 	}
 
 }

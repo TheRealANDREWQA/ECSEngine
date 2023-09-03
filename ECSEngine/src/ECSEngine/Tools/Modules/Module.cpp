@@ -437,23 +437,23 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	Stream<ModuleLinkComponentTarget> LoadModuleLinkComponentTargets(const Module* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
+	Stream<ModuleLinkComponentTarget> LoadModuleLinkComponentTargets(
+		ModuleRegisterLinkComponentFunction register_function, 
+		AllocatorPolymorphic allocator, 
+		CapacityStream<char>* error_message
+	)
 	{
-		if (!module->link_components) {
-			return { nullptr, 0 };
-		}
-
-		const size_t MAX_LINKS = 32;
+		const size_t MAX_LINKS = 512;
 		ECS_STACK_CAPACITY_STREAM(ModuleLinkComponentTarget, link_components, MAX_LINKS);
 
-		const size_t MAX_COMPONENT_NAME_SIZE = ECS_KB * 8;
+		const size_t MAX_COMPONENT_NAME_SIZE = ECS_KB * 16;
 		ECS_STACK_CAPACITY_STREAM(char, link_component_names, MAX_COMPONENT_NAME_SIZE);
 		LinearAllocator temp_allocator(link_component_names.buffer, MAX_COMPONENT_NAME_SIZE);
 
 		ModuleRegisterLinkComponentFunctionData function_data;
 		function_data.functions = &link_components;
 		function_data.allocator = GetAllocatorPolymorphic(&temp_allocator);
-		module->link_components(&function_data);
+		register_function(&function_data);
 
 		link_components.AssertCapacity();
 		Stream<ModuleLinkComponentTarget> valid_links(link_components);
@@ -469,8 +469,18 @@ namespace ECSEngine {
 		for (size_t index = 0; index < valid_links.size; index++) {
 			targets[index].component_name.buffer = (char*)function::RemapPointerIfInRange(temp_allocator.m_buffer, MAX_COMPONENT_NAME_SIZE, buffer, targets[index].component_name.buffer);
 		}
-
 		return { targets, valid_links.size };
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	Stream<ModuleLinkComponentTarget> LoadModuleLinkComponentTargets(const Module* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
+	{
+		if (!module->link_components) {
+			return { nullptr, 0 };
+		}
+
+		return LoadModuleLinkComponentTargets(module->link_components, allocator, error_message);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

@@ -283,6 +283,7 @@
     <ClInclude Include="src\ECSEngine\Rendering\ShaderInclude.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDrawTypes.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleUtilities.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Benchmark.h" />
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.h" />
@@ -436,6 +437,7 @@
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Containers\SparseSet.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\ComponentHelpers.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\Components.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeResources.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\cgtlf.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
@@ -501,6 +503,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\ShaderReflection.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\Module.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawConfig.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawer.cpp" />

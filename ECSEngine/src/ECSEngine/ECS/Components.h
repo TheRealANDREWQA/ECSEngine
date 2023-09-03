@@ -78,4 +78,12 @@ namespace ECSEngine {
 		Stream<char> name;
 	};
 
+	struct ECS_REFLECT_LINK_COMPONENT(Rotation) RotationLink {
+		float3 value;
+	};
+
+	struct ModuleRegisterLinkComponentFunctionData;
+
+	ECSENGINE_API void RegisterECSLinkComponents(ModuleRegisterLinkComponentFunctionData* register_data);
+
 }

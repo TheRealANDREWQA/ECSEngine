@@ -119,7 +119,7 @@ namespace ECSEngine {
 
 	AABBStorage GetMeshBoundingBox(Stream<float3> positions)
 	{
-		return GetPointsBoundingBox(positions);
+		return GetAABBFromPoints(positions);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

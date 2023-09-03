@@ -1067,7 +1067,7 @@ namespace ECSEngine {
 					submesh.bounds = GetMeshBoundingBox(positions);
 				}
 				else {
-					submesh.bounds = InfiniteBoundingBox();
+					submesh.bounds = InfiniteAABBStorage();
 				}
 
 				submeshes[submesh_index++] = submesh;
@@ -1403,7 +1403,7 @@ namespace ECSEngine {
 		size_t submesh_offset = 0;
 		// For every material run through the submeshes to combine those that have the same material
 		for (size_t index = 0; index < material_count; index++) {
-			submeshes[index].bounds = InfiniteBoundingBox();
+			submeshes[index].bounds = InfiniteAABBStorage();
 			for (size_t subindex = 0; subindex < gltf_meshes.size; subindex++) {
 				if (submesh_material_index[subindex] == index) {
 					// Indices must be adjusted per material
@@ -1505,10 +1505,10 @@ namespace ECSEngine {
 		}
 		
 		// Compute the coalesced bounding box with the intermediate submesh bounding boxes
-		mesh.bounds = ReverseInfiniteBoundingBox();
+		mesh.bounds = ReverseInfiniteAABBStorage();
 		for (size_t index = 0; index < gltf_meshes.size; index++) {
 			AABBStorage current_bounding_box = GetGLTFMeshBoundingBox(gltf_meshes.buffer + index);
-			mesh.bounds = GetCombinedBoundingBox(mesh.bounds, submeshes[index].bounds);
+			mesh.bounds = GetCombinedAABBStorage(mesh.bounds, submeshes[index].bounds);
 		}
 
 		size_t submesh_vertex_offset = 0;
@@ -1617,7 +1617,7 @@ namespace ECSEngine {
 		// Now fill in the submeshes and calculate the bounds
 		total_vertex_buffer_count = 0;
 		total_index_buffer_count = 0;
-		mesh.bounds = ReverseInfiniteBoundingBox();
+		mesh.bounds = ReverseInfiniteAABBStorage();
 		for (size_t index = 0; index < gltf_meshes.size; index++) {
 			submeshes[index].vertex_buffer_offset = total_vertex_buffer_count;
 			submeshes[index].index_buffer_offset = total_index_buffer_count;
@@ -1629,7 +1629,7 @@ namespace ECSEngine {
 
 			submeshes[index].name = { nullptr, 0 };
 			submeshes[index].bounds = GetGLTFMeshBoundingBox(gltf_meshes.buffer + index);
-			mesh.bounds = GetCombinedBoundingBox(mesh.bounds, submeshes[index].bounds);
+			mesh.bounds = GetCombinedAABBStorage(mesh.bounds, submeshes[index].bounds);
 		}
 
 		return mesh;
@@ -1810,10 +1810,10 @@ namespace ECSEngine {
 
 	AABBStorage GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes)
 	{
-		AABBStorage bounding_box = ReverseInfiniteBoundingBox();
+		AABBStorage bounding_box = ReverseInfiniteAABBStorage();
 		for (size_t index = 0; index < meshes.size; index++) {
 			AABBStorage current_bounding_box = GetGLTFMeshBoundingBox(meshes.buffer + index);
-			bounding_box = GetCombinedBoundingBox(bounding_box, current_bounding_box);
+			bounding_box = GetCombinedAABBStorage(bounding_box, current_bounding_box);
 		}
 		
 		return bounding_box;

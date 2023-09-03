@@ -90,17 +90,17 @@ namespace ECSEngine {
 
 		// The vector is already normalized
 		ECS_INLINE Vector8 ECS_VECTORCALL GetRightVector() const {
-			return RotateVector(RightVector(), GetRotationQuaternionAsIs());
+			return RotateVector(RightVector(), GetRotationAsIs());
 		}
 
 		// The vector is already normalized
 		ECS_INLINE Vector8 ECS_VECTORCALL GetUpVector() const {
-			return RotateVector(UpVector(), GetRotationQuaternionAsIs());
+			return RotateVector(UpVector(), GetRotationAsIs());
 		}
 
 		// The vector is already normalized
 		ECS_INLINE Vector8 ECS_VECTORCALL GetForwardVector() const {
-			return RotateVector(ForwardVector(), GetRotationQuaternionAsIs());
+			return RotateVector(ForwardVector(), GetRotationAsIs());
 		}
 
 		bool is_orthographic;
@@ -312,7 +312,7 @@ namespace ECSEngine {
 
 	// Returns the translation such that the camera can see the object with the proportion on the screen specified
 	// Only one of the X or Y proportion can be active at a time. This is helpful if you wanna focus on objects
-	// Regardless of their orientation and size
+	// Regardless of their orientation and size. If the proportion cannot be reached, then it returns Splat(FLT_MAX)
 	template<typename CameraType>
 	ECSENGINE_API float3 FocusCameraOnObjectViewSpace(
 		const CameraType* camera, 

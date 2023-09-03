@@ -383,11 +383,13 @@ namespace ECSEngine {
 		Vec8f value;
 	};
 
+#define ECS_SIMD_VECTOR_EPSILON_VALUE 0.0001f
+
 	namespace VectorGlobals {
 		inline Vector8 ONE = Vector8(1.0f);
 		inline Vector8 INFINITY_MASK = Vector8(0x7F800000);
 		inline Vector8 SIGN_MASK = Vector8(0x7FFFFFFF);
-		inline Vector8 EPSILON = Vector8(0.0001f);
+		inline Vector8 EPSILON = Vector8(ECS_SIMD_VECTOR_EPSILON_VALUE);
 
 		// Investigate if having a global stored value
 		// is faster than doing a blend. If the one vector
@@ -481,6 +483,14 @@ namespace ECSEngine {
 		return ZeroVector() - vector;
 	}
 
+	ECS_INLINE Vector8 ECS_VECTORCALL Abs(Vector8 vector) {
+		return abs(vector.value);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL AbsoluteDifference(Vector8 a, Vector8 b) {
+		return Abs(a - b);
+	}
+	
 	// --------------------------------------------------------------------------------------------------------------
 
 	// By default it will only operate on the first 3 elements (as it is the
@@ -1075,6 +1085,124 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	namespace SIMDHelpers {
+
+		ECS_INLINE Vector8 ECS_VECTORCALL CullClipSpaceXMask(Vector8 vector, Vector8 splatted_w, Vector8 negative_splatted_w) {
+			Vector8 splatted_x = PerLaneBroadcast<0>(vector);
+			Vector8 x_greater = negative_splatted_w <= splatted_x;
+			Vector8 x_smaller = splatted_x <= splatted_w;
+			return x_greater.value & x_smaller.value;
+		}
+
+		ECS_INLINE Vector8 ECS_VECTORCALL CullClipSpaceYMask(Vector8 vector, Vector8 splatted_w, Vector8 negative_splatted_w) {
+			Vector8 splatted_y = PerLaneBroadcast<1>(vector);
+			Vector8 y_greater = negative_splatted_w <= splatted_y;
+			Vector8 y_smaller = splatted_y <= splatted_w;
+			return y_greater.value & y_smaller.value;
+		}
+
+		ECS_INLINE Vector8 ECS_VECTORCALL CullClipSpaceZMask(Vector8 vector, Vector8 splatted_w) {
+			Vector8 splatted_z = PerLaneBroadcast<2>(vector);
+			Vector8 z_greater = ZeroVector() <= splatted_z;
+			Vector8 z_smaller = splatted_z <= splatted_w;
+			return z_greater.value & z_greater.value;
+		}
+
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL CullClipSpaceXMask(Vector8 vector) {
+		Vector8 splatted_w = PerLaneBroadcast<3>(vector);
+		return SIMDHelpers::CullClipSpaceXMask(vector, splatted_w, -splatted_w);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL CullClipSpaceYMask(Vector8 vector) {
+		Vector8 splatted_w = PerLaneBroadcast<3>(vector);
+		return SIMDHelpers::CullClipSpaceYMask(vector, splatted_w, -splatted_w);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL CullClipSpaceZMask(Vector8 vector) {
+		return SIMDHelpers::CullClipSpaceZMask(vector, PerLaneBroadcast<3>(vector));
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL CullClipSpaceWMask(Vector8 vector) {
+		Vector8 w_mask = vector >= ZeroVector();
+		Vector8 splatted_w_mask = PerLaneBroadcast<3>(w_mask);
+		return splatted_w_mask;
+	}
+
+	// Returns a mask where vertices which should be kept have their lane set to true
+	ECS_INLINE Vector8 ECS_VECTORCALL CullClipSpaceMask(Vector8 vector) {
+		// The entire conditions are like this
+		/*
+			w > 0
+			-w <= x <= w
+			-w <= y <= w
+			0 <= z <= w
+		*/
+
+		// Check the w first. If it is negative, than it's behind the camera
+		Vector8 w_mask = CullClipSpaceWMask(vector);
+		// Both w are ngative, can early exit
+		if (!horizontal_or(Vec8fb(w_mask.value))) {
+			return ZeroVector();
+		}
+
+		Vector8 current_mask = w_mask;
+
+		// Continue the testing with the X condition
+		Vector8 splatted_w = PerLaneBroadcast<3>(vector);
+		Vector8 negative_splatted_w = -splatted_w;
+
+		current_mask.value &= SIMDHelpers::CullClipSpaceXMask(vector, splatted_w, negative_splatted_w);
+		// If both tests have failed up until now we can exit
+		if (!horizontal_or(Vec8fb(current_mask.value))) {
+			return ZeroVector();
+		}
+
+		current_mask.value &= SIMDHelpers::CullClipSpaceYMask(vector, splatted_w, negative_splatted_w);
+		if (!horizontal_or(Vec8fb(current_mask.value))) {
+			return ZeroVector();
+		}
+
+		current_mask.value &= SIMDHelpers::CullClipSpaceZMask(vector, splatted_w);
+		return current_mask;
+	}
+
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
+		CullClipSpaceX,
+		4,
+		FORWARD(Vector8 vector),
+		FORWARD(vector)
+	);
+
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
+		CullClipSpaceY,
+		4,
+		FORWARD(Vector8 vector),
+		FORWARD(vector)
+	);
+
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
+		CullClipSpaceZ,
+		4,
+		FORWARD(Vector8 vector),
+		FORWARD(vector)
+	);
+
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
+		CullClipSpaceW,
+		4,
+		FORWARD(Vector8 vector),
+		FORWARD(vector)
+	);
+
+	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
+		CullClipSpace,
+		4,
+		FORWARD(Vector8 vector),
+		FORWARD(vector)
+	);
+
 	// Converts from clip space to NDC
 	ECS_INLINE Vector8 ECS_VECTORCALL ClipSpaceToNDC(Vector8 vector) {
 		// We just need to divide xyz / w, but here we also divide w by w
@@ -1146,6 +1274,29 @@ namespace ECSEngine {
 
 			return Select(is_parallel_to_right, parallel_result, cross_product);
 		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// The origin needs to be splatted in both the low and high
+	// If there are an odd count of points (3D ones, not vector), 
+	// then the last value needs to be splatted to the high lane as well
+	// The point will be splatted in both the low and high
+	ECS_INLINE Vector8 ECS_VECTORCALL ClosestPoint(Stream<Vector8> points, Vector8 origin) {
+		Vector8 smallest_distance = FLT_MAX;
+		Vector8 closest_point;
+		for (size_t index = 0; index < points.size; index++) {
+			Vector8 distance = SquareLength(points[index] - origin);
+			Vector8 is_closer = smallest_distance > distance;
+			smallest_distance = Select(is_closer, distance, smallest_distance);
+			closest_point = Select(is_closer, points[index], closest_point);
+		}
+
+		Vector8 closest_permute = Permute2f128Helper<1, 0>(closest_point, closest_point);
+		Vector8 smallest_distance_permute = Permute2f128Helper<1, 0>(smallest_distance, smallest_distance);
+		Vector8 permute_mask = smallest_distance_permute < smallest_distance;
+		Vector8 final_point = Select(permute_mask, closest_permute, closest_point);
+		return SplatLowLane(final_point);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

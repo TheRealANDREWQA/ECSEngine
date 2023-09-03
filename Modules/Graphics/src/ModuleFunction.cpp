@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "ModuleFunction.h"
 #include "Render.h"
+#include "Components.h"
 
 using namespace ECSEngine;
 
@@ -58,7 +59,7 @@ void ModuleSetCurrentWorld(ECSEngine::World* world) {
 #if 1
 
 void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData* data) {
-	
+	SetGraphicsModuleRenderMeshBounds(data, STRING(RenderMesh), STRING(mesh));
 }
 
 #endif
