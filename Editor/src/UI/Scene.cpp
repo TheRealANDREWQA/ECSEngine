@@ -315,8 +315,96 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 	}
 }
 
-static void FocusOnObject(EditorState* editor_state, unsigned int sandbox_index) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_index) {
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+	if (selected_entities.size > 0) {
+		unsigned int in_sandbox_graphics_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index);
+		if (in_sandbox_graphics_module_index == -1) {
+			// If we can't deduce the graphics module, then don't do anything
+			return;
+		}
+
+		const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_sandbox_graphics_module_index);
+		EDITOR_MODULE_CONFIGURATION configuration = sandbox_module->module_configuration;
+		ModuleExtraInformation extra_information = GetModuleExtraInformation(editor_state, sandbox_module->module_index, configuration);
+
+		GraphicsModuleRenderMeshBounds bounds = GetGraphicsModuleRenderMeshBounds(extra_information);
+		if (bounds.IsValid()) {
+			// Try to retrieve the component and check to see if the field exists
+			const Reflection::ReflectionType* render_mesh_type = editor_state->editor_components.GetType(bounds.component);
+			if (render_mesh_type != nullptr) {
+				// Check the field now
+				unsigned int field_index = render_mesh_type->FindField(bounds.field);
+				if (field_index != -1) {
+					// Check to see that the field is indeed a mesh component
+					if (render_mesh_type->fields[field_index].definition == STRING(CoalescedMesh)) {
+						// We can now deduce the bounds for all selected meshes
+						// Perform the focusing
+
+						bool is_shared_component = editor_state->editor_components.IsSharedComponent(bounds.component);
+						Component component = editor_state->editor_components.GetComponentID(bounds.component);
+
+						AABB selection_bounds = ReverseInfiniteAABB();
+						for (size_t index = 0; index < selected_entities.size; index++) {
+							AABB current_bounds = InfiniteAABB();
+							const void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, selected_entities[index], component, is_shared_component);
+							if (component_data) {
+								// Verify that the asset pointer is valid as well
+								const void** asset_pointer = (const void**)function::OffsetPointer(component_data, render_mesh_type->fields[field_index].info.pointer_offset);
+								if (IsAssetPointerValid(*asset_pointer)) {
+									const CoalescedMesh* coalesced_mesh = (const CoalescedMesh*)*asset_pointer;
+									current_bounds = coalesced_mesh->mesh.bounds;
+								}
+							}
+
+							if (!CompareAABB(current_bounds, InfiniteAABB())) {
+								// We have found a match
+								Transform entity_transform = GetSandboxEntityTransform(editor_state, sandbox_index, selected_entities[index]);
+								// Transform the aabb
+								current_bounds = TransformAABB(current_bounds, entity_transform.position, QuaternionToMatrixLow(entity_transform.rotation), entity_transform.scale);
+								// Combine the current aabb
+								selection_bounds = GetCombinedAABB(selection_bounds, current_bounds);
+							}
+						}
+
+						if (!CompareAABB(selection_bounds, ReverseInfiniteAABB())) {
+							Camera scene_camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+
+							// If we have at least one AABB, then focus on it
+							float3 camera_position = FocusCameraOnObjectViewSpace(
+								&scene_camera,
+								float3::Splat(0.0f),
+								QuaternionIdentity(),
+								float3::Splat(1.0f),
+								selection_bounds.ToStorage(),
+								{ 1.0f, 0.0f }
+							);
+							if (camera_position != float3::Splat(FLT_MAX)) {
+								float3 displacement = camera_position - scene_camera.translation;
+								if (displacement != float3::Splat(0.0f)) {
+									TranslateSandboxCamera(editor_state, sandbox_index, displacement, EDITOR_SANDBOX_VIEWPORT_SCENE);
+									// We must also re-render the scene
+									RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+								}
+							}
+						}
+					}
+					else {
+						EditorSetConsoleWarn("Focus: The given field for the render mesh bounds is not a CoalescedMesh");
+					}
+				}
+				else {
+					EditorSetConsoleWarn("Focus: Missing field for the render mesh bounds");
+				}
+			}
+			else {
+				EditorSetConsoleWarn("Focus: Wrong component for the render mesh bounds");
+			}
+		}
+		else {
+			EditorSetConsoleWarn("Focus: Render mesh bounds not set");
+		}
+	}
 }
 
 static void ScenePrivateAction(ActionData* action_data) {
@@ -357,16 +445,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 			else {
 				// Check the focus on object
 				if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_FOCUS_OBJECT)) {
-					// Perform the focusing
-					Camera scene_camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-					Stream<Entity> entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-					AABB selection_bounds = ReverseInfiniteBoundingBox();
-					for (size_t index = 0; index < entities.size; index++) {
-						AABB current_bounds = InfiniteBoundingBox();
-						
-					}
-
-					//float3 camera_translation = FocusCameraOnObjectViewSpace(&scene_camera)
+					FocusOnSelection(editor_state, sandbox_index);
 				}
 
 				ECS_TRANSFORM_TOOL current_tool = sandbox->transform_tool;

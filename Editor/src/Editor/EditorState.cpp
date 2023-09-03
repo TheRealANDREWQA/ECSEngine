@@ -473,6 +473,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	// Update the editor components
 	editor_state->editor_components.UpdateComponents(editor_state, editor_reflection_manager, 0, "ECSEngine");
+	// Register the link components for the engine components
+	editor_state->ecs_link_components = LoadModuleLinkComponentTargets(RegisterECSLinkComponents, editor_state->EditorAllocator());
 	// Finalize every event
 	for (unsigned int index = 0; index < editor_state->editor_components.events.size; index++) {
 		editor_state->editor_components.FinalizeEvent(editor_state, editor_reflection_manager, editor_state->editor_components.events[index]);

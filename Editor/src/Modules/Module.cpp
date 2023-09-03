@@ -1560,6 +1560,19 @@ ModuleLinkComponentTarget GetModuleLinkComponentTarget(const EditorState* editor
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+ModuleLinkComponentTarget GetEngineLinkComponentTarget(const EditorState* editor_state, Stream<char> name)
+{
+	for (size_t index = 0; index < editor_state->ecs_link_components.size; index++) {
+		ModuleLinkComponentTarget target = editor_state->ecs_link_components[index];
+		if (target.component_name == name) {
+			return target;
+		}
+	}
+	return { nullptr, nullptr };
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 void GetModuleTypesDependencies(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies)
 {
 	editor_state->editor_components.GetModuleTypesDependencies(editor_state->editor_components.ModuleIndexFromReflection(editor_state, module_index), &dependencies, editor_state);
@@ -1581,6 +1594,17 @@ Stream<char> GetModuleExtraInformation(const EditorState* editor_state, unsigned
 		return module->infos[configuration].ecs_module.extra_information.Find(key);
 	}
 	return { nullptr, 0 };
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+ModuleExtraInformation GetModuleExtraInformation(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
+{
+	const EditorModule* module = editor_state->project_modules->buffer + module_index;
+	if (module->infos[configuration].load_status == EDITOR_MODULE_LOAD_GOOD || module->infos[configuration].load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
+		return module->infos[configuration].ecs_module.extra_information;
+	}
+	return { {} };
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

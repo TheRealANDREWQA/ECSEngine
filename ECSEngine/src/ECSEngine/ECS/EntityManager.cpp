@@ -1651,14 +1651,23 @@ namespace ECSEngine {
 	void CommitDestroySharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroySharedInstance* data = (DeferredDestroySharedInstance*)_data;
 
-		size_t index = 0;
 		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component), "EntityManager: The component {#} doesn't exist when trying to destroy a shared instance.",
 			manager->GetSharedComponentName(data->component));
 
 		ECS_CRASH_RETURN(manager->ExistsSharedInstanceOnly(data->component, data->instance), "EntityManager: The shared instance {#} for component {#} "
 			"doesn't exist when trying to destroy it.", data->instance.value, manager->GetSharedComponentName(data->component));
 
-		Deallocate(manager->SmallAllocator(), manager->m_shared_components[data->component.value].instances[data->instance.value]);
+		void* instance_data = manager->m_shared_components[data->component.value].instances[data->instance.value];
+
+		// We also need to deallocate the buffers, if any
+		const ComponentInfo* component_info = &manager->m_shared_components[data->component.value].info;
+		if (component_info->component_buffers_count > 0) {
+			for (unsigned short index = 0; index < component_info->component_buffers_count; index++) {
+				ComponentBufferDeallocate(component_info->component_buffers[index], component_info->allocator, instance_data);
+			}
+		}
+
+		Deallocate(manager->SmallAllocator(), instance_data);
 		manager->m_shared_components[data->component.value].instances.Remove(data->instance.value);
 	}
 
@@ -3225,6 +3234,43 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void EntityManager::DeallocateEntityBuffersCommit(Entity entity, Component component)
+	{
+		EntityInfo entity_info = GetEntityInfo(entity);
+		Archetype* archetype = GetArchetype(entity_info.main_archetype);
+		unsigned char deallocate_index = archetype->FindDeallocateComponentIndex(component);
+		ECS_CRASH_RETURN(deallocate_index != UCHAR_MAX, "EntityManager: Trying to deallocate buffers for component {#} for entity {#} but the "
+			"component doesn't exist", GetComponentName(component), entity.value);
+		archetype->DeallocateEntityBuffers(deallocate_index, entity_info);
+	}
+	
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::DeallocateEntityBuffersIfExistentCommit(Entity entity, Component component)
+	{
+		EntityInfo entity_info = GetEntityInfo(entity);
+		Archetype* archetype = GetArchetype(entity_info.main_archetype);
+		unsigned char deallocate_index = archetype->FindDeallocateComponentIndex(component);
+		if (deallocate_index != UCHAR_MAX) {
+			archetype->DeallocateEntityBuffers(deallocate_index, entity_info);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::DeallocateSharedInstanceBuffersCommit(Component component, SharedInstance instance)
+	{
+		void* instance_data = GetSharedData(component, instance);
+		const ComponentInfo* component_info = &m_shared_components[component.value].info;
+		if (component_info->component_buffers_count > 0) {
+			for (unsigned short index = 0; index < component_info->component_buffers_count; index++) {
+				ComponentBufferDeallocate(component_info->component_buffers[index], component_info->allocator, instance_data);
+			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void EntityManager::DeleteEntityCommit(Entity entity)
 	{
 		DeleteEntitiesCommit({ &entity, 1 });
@@ -4112,7 +4158,7 @@ namespace ECSEngine {
 	{
 		ECS_CRASH_RETURN_VALUE(ExistsSharedComponent(component), nullptr, "EntityManager: Shared component {#} is invalid when trying to retrieve instance {#} data.",
 			GetSharedComponentName(component), instance.value);
-		ECS_CRASH_RETURN_VALUE(m_shared_components[component.value].instances.stream.ExistsItem(instance.value), nullptr, "EntityManager: Shared instance "
+		ECS_CRASH_RETURN_VALUE(ExistsSharedInstanceOnly(component, instance), nullptr, "EntityManager: Shared instance "
 			"{#} for component {#} is invalid.", instance.value, GetSharedComponentName(component));
 		return m_shared_components[component.value].instances[instance.value];
 	}

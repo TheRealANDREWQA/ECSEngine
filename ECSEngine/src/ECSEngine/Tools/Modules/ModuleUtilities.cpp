@@ -69,12 +69,22 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ModuleLinkComponentTarget GetModuleLinkComponentTarget(Stream<const AppliedModule*> applied_module, Stream<char> name)
+	ModuleLinkComponentTarget GetModuleLinkComponentTarget(
+		Stream<const AppliedModule*> applied_module, 
+		Stream<char> name, 
+		Stream<ModuleLinkComponentTarget> extra_targets
+	)
 	{
 		for (size_t index = 0; index < applied_module.size; index++) {
 			ModuleLinkComponentTarget target = GetModuleLinkComponentTarget(applied_module[index], name);
 			if (target.build_function != nullptr) {
 				return target;
+			}
+		}
+		for (size_t index = 0; index < extra_targets.size; index++) {
+			ModuleLinkComponentTarget current_target = extra_targets[index];
+			if (current_target.component_name == name) {
+				return current_target;
 			}
 		}
 		return { nullptr, nullptr };
@@ -85,6 +95,7 @@ namespace ECSEngine {
 	template<typename LinkFunctor, typename ConvertFunctor>
 	bool ModuleGatherLinkOverridesImpl(
 		Stream<const AppliedModule*> applied_modules,
+		Stream<ModuleLinkComponentTarget> extra_targets,
 		LinkFunctor&& link_functor,
 		ConvertFunctor&& convert_functor
 	) {
@@ -95,11 +106,11 @@ namespace ECSEngine {
 
 		link_functor(unique_link_types, shared_link_types);
 
-		auto iterate = [applied_modules](Stream<const Reflection::ReflectionType*> link_types, CapacityStream<ModuleLinkComponentTarget>& link_type_targets) {
+		auto iterate = [applied_modules, extra_targets](Stream<const Reflection::ReflectionType*> link_types, CapacityStream<ModuleLinkComponentTarget>& link_type_targets) {
 			for (size_t index = 0; index < link_types.size; index++) {
 				bool needs_dll = GetReflectionTypeLinkComponentNeedsDLL(link_types[index]);
 				if (needs_dll) {
-					ModuleLinkComponentTarget target = GetModuleLinkComponentTarget(applied_modules, link_types[index]->name);
+					ModuleLinkComponentTarget target = GetModuleLinkComponentTarget(applied_modules, link_types[index]->name, extra_targets);
 					if (target.build_function == nullptr || target.reverse_function == nullptr) {
 						return false;
 					}
@@ -130,10 +141,11 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
-		CapacityStream<SerializeEntityManagerComponentInfo>& infos
+		CapacityStream<SerializeEntityManagerComponentInfo>& infos,
+		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
-		return ModuleGatherLinkOverridesImpl(applied_modules,
+		return ModuleGatherLinkOverridesImpl(applied_modules, extra_targets,
 			[=](auto& unique_link_types, auto& shared_link_types) {
 				GetUniqueLinkComponents(reflection_manager, unique_link_types);
 			},
@@ -152,10 +164,11 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
-		CapacityStream<SerializeEntityManagerSharedComponentInfo>& infos
+		CapacityStream<SerializeEntityManagerSharedComponentInfo>& infos,
+		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
-		return ModuleGatherLinkOverridesImpl(applied_modules,
+		return ModuleGatherLinkOverridesImpl(applied_modules, extra_targets,
 			[=](auto& unique_link_types, auto& shared_link_types) {
 				GetSharedLinkComponents(reflection_manager, shared_link_types);
 			},
@@ -175,10 +188,11 @@ namespace ECSEngine {
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
 		CapacityStream<SerializeEntityManagerComponentInfo>& unique_infos, 
-		CapacityStream<SerializeEntityManagerSharedComponentInfo>& shared_infos
+		CapacityStream<SerializeEntityManagerSharedComponentInfo>& shared_infos,
+		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
-		return ModuleGatherLinkOverridesImpl(applied_modules,
+		return ModuleGatherLinkOverridesImpl(applied_modules, extra_targets,
 			[=](auto& unique_link_types, auto& shared_link_types) {
 				GetUniqueAndSharedLinkComponents(reflection_manager, unique_link_types, shared_link_types);
 			},
@@ -201,10 +215,11 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
-		CapacityStream<DeserializeEntityManagerComponentInfo>& infos
+		CapacityStream<DeserializeEntityManagerComponentInfo>& infos,
+		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
-		return ModuleGatherLinkOverridesImpl(applied_modules,
+		return ModuleGatherLinkOverridesImpl(applied_modules, extra_targets,
 			[=](auto& unique_link_types, auto& shared_link_types) {
 				GetUniqueLinkComponents(reflection_manager, unique_link_types);
 			},
@@ -223,10 +238,11 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
-		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& infos
+		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& infos,
+		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
-		return ModuleGatherLinkOverridesImpl(applied_modules,
+		return ModuleGatherLinkOverridesImpl(applied_modules, extra_targets,
 			[=](auto& unique_link_types, auto& shared_link_types) {
 				GetSharedLinkComponents(reflection_manager, shared_link_types);
 			},
@@ -246,10 +262,11 @@ namespace ECSEngine {
 		const AssetDatabase* database,
 		AllocatorPolymorphic temp_allocator,
 		CapacityStream<DeserializeEntityManagerComponentInfo>& unique_infos,
-		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& shared_infos
+		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& shared_infos,
+		Stream<ModuleLinkComponentTarget> extra_targets
 	)
 	{
-		return ModuleGatherLinkOverridesImpl(applied_modules,
+		return ModuleGatherLinkOverridesImpl(applied_modules, extra_targets,
 			[=](auto& unique_link_types, auto& shared_link_types) {
 				GetUniqueAndSharedLinkComponents(reflection_manager, unique_link_types, shared_link_types);
 			},

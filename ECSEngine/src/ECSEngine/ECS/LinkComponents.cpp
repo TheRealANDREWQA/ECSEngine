@@ -5,13 +5,24 @@
 #include "../Utilities/Serialization/SerializationHelpers.h"
 #include "ComponentHelpers.h"
 
+#define LINK_COMPONENT_SUFFIX "Link"
+#define TAG_GENERATED_SUFFIX "_GENERATED"
+
+/*
+	For link types automatically created by the ECS engine
+	Put an _GENERATED in the link target name such that we can distinguish from
+	User link components without affecting other search functions or conventions
+	We need the generated and user link components to have the same name ending
+	And to use the same type tag LINK_COMPONENT()
+*/
+
 namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
 	bool GetReflectionTypeLinkComponentNeedsDLL(const Reflection::ReflectionType* type)
 	{
-		return function::FindFirstCharacter(type->tag, ',').size > 0;
+		return function::FindFirstToken(type->tag, TAG_GENERATED_SUFFIX).size == 0;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
@@ -27,9 +38,9 @@ namespace ECSEngine {
 		opened_parenthese.size -= 1;
 		opened_parenthese = function::SkipWhitespace(opened_parenthese);
 
-		Stream<char> comma = function::FindFirstCharacter(opened_parenthese, ',');
-		if (comma.size > 0) {
-			opened_parenthese.size = comma.buffer - opened_parenthese.buffer;
+		Stream<char> generated_suffix = function::FindFirstToken(opened_parenthese, TAG_GENERATED_SUFFIX);
+		if (generated_suffix.size > 0) {
+			opened_parenthese.size = generated_suffix.buffer - opened_parenthese.buffer;
 			opened_parenthese = function::SkipWhitespace(opened_parenthese, -1);
 		}
 		else {
@@ -42,8 +53,6 @@ namespace ECSEngine {
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
-
-#define LINK_COMPONENT_SUFFIX "_Link"
 
 	Stream<char> GetReflectionTypeLinkNameBase(Stream<char> name)
 	{
@@ -90,14 +99,15 @@ namespace ECSEngine {
 		}
 
 		result.fields.Initialize(current_allocator, type->fields.size);
-		result.name.Initialize(current_allocator, type->name.size + sizeof("_Link") - 1);
+		result.name.Initialize(current_allocator, type->name.size + sizeof(LINK_COMPONENT_SUFFIX) - 1);
 		result.name.Copy(type->name);
-		result.name.AddStream("_Link");
+		result.name.AddStream(LINK_COMPONENT_SUFFIX);
 		// We also need to add the tag and the parentheses
 		result.tag.Initialize(current_allocator, sizeof(ECS_LINK_COMPONENT_TAG) + type->name.size + 2);
 		result.tag.Copy(ECS_LINK_COMPONENT_TAG);
 		result.tag.Add('(');
 		result.tag.AddStream(type->name);
+		result.tag.AddStream(TAG_GENERATED_SUFFIX);
 		result.tag.Add(')');
 
 		result.evaluations = { nullptr, 0 };
@@ -306,7 +316,7 @@ namespace ECSEngine {
 			}
 		}
 
-		GetLinkComponentForTargets(reflection_manager, { target_names, target_name_count }, link_names, "_Link");
+		GetLinkComponentForTargets(reflection_manager, { target_names, target_name_count }, link_names, LINK_COMPONENT_SUFFIX);
 		AllocatorPolymorphic allocator = reflection_manager->Allocator();
 		if (options != nullptr && options->allocator.allocator != nullptr) {
 			allocator = options->allocator;

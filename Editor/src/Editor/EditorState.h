@@ -103,6 +103,9 @@ struct EditorState {
 	ECSEngine::ResourceManager* runtime_resource_manager;
 	ECSEngine::Graphics* runtime_graphics;
 	
+	// We keep these separately since we don't want to clutter the
+	// ProjectModules with a "fake" module that needs special treatment
+	ECSEngine::Stream<ECSEngine::ModuleLinkComponentTarget> ecs_link_components;
 
 	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> launched_module_compilation[EDITOR_MODULE_CONFIGURATION_COUNT];
 	// Needed to syncronize the threads when removing the launched module compilation

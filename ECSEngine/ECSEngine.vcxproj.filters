@@ -226,6 +226,7 @@
     <ClInclude Include="src\Includes\ECSEngineCamera.h" />
     <ClInclude Include="src\ECSEngine\Math\AABB.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetMetadataValidate.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -348,6 +349,8 @@
     <ClCompile Include="src\ECSEngine\Rendering\Camera.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\TransformHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Math\AABB.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\Components.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

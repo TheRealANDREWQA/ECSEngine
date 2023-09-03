@@ -67,6 +67,13 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	);
 
+	// It does a single coalesced allocation. Deallocate the buffer to free the memory
+	ECSENGINE_API Stream<ModuleLinkComponentTarget> LoadModuleLinkComponentTargets(
+		ModuleRegisterLinkComponentFunction register_function,
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* error_message = nullptr
+	);
+
 	// It will not release the OS Handle - it must be kept around as long as the link components are loaded;
 	// It does a single coalesced allocation. Deallocate the buffer to free the memory
 	// Returns { nullptr, 0 } if the function does not exist

@@ -43,24 +43,24 @@ namespace ECSEngine {
 	// Returns the AABBStorage that encompases all of them
 	ECSENGINE_API AABBStorage GetCoalescedAABB(Stream<AABBStorage> aabbs);
 
-	ECSENGINE_API AABBStorage GetPointsBoundingBox(Stream<float3> points);
+	ECSENGINE_API AABBStorage GetAABBFromPoints(Stream<float3> points);
 
-	ECSENGINE_API AABBStorage GetCombinedBoundingBox(AABBStorage first, AABBStorage second);
+	ECSENGINE_API AABBStorage GetCombinedAABBStorage(AABBStorage first, AABBStorage second);
 
-	ECS_INLINE AABBStorage InfiniteBoundingBox() {
+	ECS_INLINE AABBStorage InfiniteAABBStorage() {
 		return { float3::Splat(-FLT_MAX), float3::Splat(FLT_MAX) };
 	}
 
 	// Can use this to initialized the bounding box when calculating it from points
-	ECS_INLINE AABBStorage ReverseInfiniteBoundingBox() {
+	ECS_INLINE AABBStorage ReverseInfiniteAABBStorage() {
 		return { float3::Splat(FLT_MAX), float3::Splat(-FLT_MAX) };
 	}
 
-	ECS_INLINE bool CompareAABB(AABBStorage first, AABBStorage second, float3 epsilon = float3::Splat(0.0001f)) {
+	ECS_INLINE bool CompareAABBStorage(AABBStorage first, AABBStorage second, float3 epsilon = float3::Splat(ECS_SIMD_VECTOR_EPSILON_VALUE)) {
 		return BasicTypeFloatCompareBoolean(first.min, first.min, epsilon) && BasicTypeFloatCompareBoolean(first.max, second.max, epsilon);
 	}
 
-	ECS_INLINE float3 AABBCenter(AABBStorage aabb) {
+	ECS_INLINE float3 AABBCenterStorage(AABBStorage aabb) {
 		return aabb.min + (aabb.max - aabb.min) * float3::Splat(0.5f);
 	}
 
@@ -176,15 +176,15 @@ namespace ECSEngine {
 			resulting_aabb[1][column] = 0.0f;
 			// Form extent by summing smaller and larger terms respectively
 			for (size_t row = 0; row < 3; row++) {
-				float min_val = scalar_matrix[row][column] * aabb_storage.min[column];
-				float max_val = scalar_matrix[row][column] * aabb_storage.max[column];
+				float min_val = scalar_matrix[row][column] * aabb_storage.min[row];
+				float max_val = scalar_matrix[row][column] * aabb_storage.max[row];
 				if (min_val < max_val) {
 					resulting_aabb[0][column] += min_val;
 					resulting_aabb[1][column] += max_val;
 				}
 				else {
 					resulting_aabb[0][column] += max_val;
-					resulting_aabb[1][column] += max_val;
+					resulting_aabb[1][column] += min_val;
 				}
 			}
 		}
@@ -215,5 +215,30 @@ namespace ECSEngine {
 	ECS_INLINE Vector8 ECS_VECTORCALL ApplyMatrixOnAABB(AABB aabb, Matrix matrix) {
 		return TransformPoint(aabb.value, matrix);
 	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL CompareAABBMask(AABB first, AABB second, Vector8 epsilon = VectorGlobals::EPSILON) {
+		return CompareMask(first.value, second.value, epsilon);
+	}
+
+	ECS_INLINE bool ECS_VECTORCALL CompareAABB(AABB first, AABB second, Vector8 epsilon = VectorGlobals::EPSILON) {
+		return CompareWhole(first.value, second.value, epsilon);
+	}
+
+	ECS_INLINE AABB ECS_VECTORCALL GetCombinedAABB(AABB first, AABB second) {
+		return Vector8(BlendLowAndHigh(min(first.value, second.value), max(first.value, second.value)));
+	}
+
+	ECS_INLINE AABB ECS_VECTORCALL InfiniteAABB() {
+		return InfiniteAABBStorage();
+	}
+
+	ECS_INLINE AABB ECS_VECTORCALL ReverseInfiniteAABB() {
+		return ReverseInfiniteAABBStorage();
+	}
+
+	// There need to be 4 entries for the corners pointer
+	// The first 2 entries are the "left" face and the other
+	// 2 are for the "right" face
+	ECSENGINE_API void GetAABBCorners(AABB aabb, Vector8* corners);
 
 }

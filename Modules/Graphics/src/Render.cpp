@@ -67,6 +67,9 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 			rotation_value = rotation->value;
 			matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
 		}
+		else {
+			matrix_rotation = MatrixIdentity();
+		}
 		if constexpr (has_scale) {
 			const Scale* scale = (const Scale*)for_each_data->unique_components[component_indices[SCALE]];
 			scale_value = scale->value;
@@ -123,6 +126,12 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 		graphics->BindMaterial(*mesh->material);
 
 		graphics->DrawCoalescedMeshCommand(*mesh->mesh);
+
+		/*AABB mesh_bounds = mesh->mesh->mesh.bounds;
+		mesh_bounds = TransformAABB(mesh_bounds, translation_value, matrix_rotation, scale_value);
+		float3 bounds_center = AABBCenter(mesh_bounds).AsFloat3Low();
+		float3 bounds_half_extents = AABBHalfExtents(mesh_bounds).AsFloat3Low();
+		world->debug_drawer->AddAABB(bounds_center, bounds_half_extents, Color(20, 170, 20));*/
 	}
 }
 

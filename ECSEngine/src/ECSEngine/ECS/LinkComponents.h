@@ -17,10 +17,10 @@ namespace ECSEngine {
 	// Returns { nullptr, 0 } if there is no target specified
 	ECSENGINE_API Stream<char> GetReflectionTypeLinkComponentTarget(const Reflection::ReflectionType* type);
 
-	// If it ends in _Link, it will return the name without that end
+	// If it ends in Link, it will return the name without that suffix
 	ECSENGINE_API Stream<char> GetReflectionTypeLinkNameBase(Stream<char> name);
 
-	// Returns the name for the link component (e.g. Translation -> Translation_Link)
+	// Returns the name for the link component (e.g. Translation -> TranslationLink)
 	ECSENGINE_API Stream<char> GetReflectionTypeLinkComponentName(Stream<char> name, CapacityStream<char>& link_name);
 
 	// When searching for asset fields in a target type and the type is a shader, the shader_type can narrow down the
@@ -39,7 +39,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		const Reflection::ReflectionType* type, 
 		AllocatorPolymorphic allocator, 
-		bool coallesced_allocation = false
+		bool coalesced_allocation = false
 	);
 
 	// Returns true if the link_type is default generated - mirros the target type with unsigned int handles
