@@ -701,7 +701,7 @@ namespace ECSEngine {
 			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Slider bring back start time", &misc->slider_bring_back_start, 50, 2'000);
 			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Slider enter values duration", &misc->slider_enter_value_duration, 100, 2'000);
 			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Text input caret display time", &misc->text_input_caret_display_time, 25, 5'000);
-			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Text input coallesce command time", &misc->text_input_coallesce_command, 25, 1'000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Text input coalesce command time", &misc->text_input_coalesce_command, 25, 1'000);
 			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Text input start time", &misc->text_input_repeat_start_duration, 25, 1'000);
 			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Text input repeat time", &misc->text_input_repeat_time, 25, 1'000);
 			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Thread temp memory", &misc->thread_temp_memory, 128, 1'000'000);
@@ -912,12 +912,19 @@ namespace ECSEngine {
 			float total_scroll = 0.0f;
 			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 				if (keyboard->IsPressed(ECS_KEY_Z)) {
-					HandlerCommand command;
-					if (data->revert_commands.Pop(command)) {
-						action_data->data = command.handler.data;
-						command.handler.action(action_data);
-						system->m_memory->Deallocate(command.handler.data);
-						system->RemoveWindowMemoryResource(window_index, command.handler.data);
+					if (system->GetActiveWindow() == window_index) {
+						HandlerCommand command;
+						bool continue_loop = true;
+						while (continue_loop && data->revert_commands.Pop(command)) {
+							// Verify that the command is still valid
+							if (system->ExistsWindowMemoryResource(window_index, command.owning_pointer)) {
+								action_data->data = command.handler.data;
+								command.handler.action(action_data);
+								system->m_memory->Deallocate(command.handler.data);
+								system->RemoveWindowMemoryResource(window_index, command.handler.data);
+								continue_loop = false;
+							}
+						}
 					}
 				}
 				else if (IsPointInRectangle(mouse_position, position, scale) && data->last_frame == system->GetFrameIndex() - 1) {

@@ -268,7 +268,7 @@ namespace ECSEngine {
 				current_selection = current_sprite_position;
 				if (sprite_render_offset > 0)
 					sprite_render_offset--;
-				caret_start = std::chrono::high_resolution_clock::now();
+				caret_start.SetNewStart();
 				is_caret_display = true;
 				text->buffer[text->size] = '\0';
 				return true;
@@ -317,7 +317,7 @@ namespace ECSEngine {
 							sprite_render_offset -= displacement;
 						}
 					}
-					caret_start = std::chrono::high_resolution_clock::now();
+					caret_start.SetNewStart();
 					is_caret_display = true;
 					return true;
 				}

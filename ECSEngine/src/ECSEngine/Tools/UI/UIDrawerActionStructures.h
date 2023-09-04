@@ -90,7 +90,7 @@ namespace ECSEngine {
 			) {
 				if (keyboard->IsPressed(key) && repeat_key == ECS_KEY_NONE) {
 					repeat_key = key;
-					key_repeat_start = std::chrono::high_resolution_clock::now();
+					key_repeat_start.SetNewStart();
 					repeat_key_count = 0;
 					repeat_key_pressed = key;
 
@@ -98,7 +98,7 @@ namespace ECSEngine {
 				}
 				else if (keyboard->IsDown(key) && repeat_key == key) {
 					repeat_key_pressed = key;
-					size_t duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - key_repeat_start).count();
+					size_t duration = key_repeat_start.GetDuration(ECS_TIMER_DURATION_MS);
 
 					if (duration > system->m_descriptors.misc.text_input_repeat_start_duration) {
 						duration -= system->m_descriptors.misc.text_input_repeat_start_duration;
@@ -154,9 +154,9 @@ namespace ECSEngine {
 			unsigned int current_sprite_position;
 			int current_selection;
 			unsigned int sprite_render_offset;
-			std::chrono::high_resolution_clock::time_point caret_start;
-			std::chrono::high_resolution_clock::time_point key_repeat_start;
-			std::chrono::high_resolution_clock::time_point word_click_start;
+			Timer caret_start;
+			Timer key_repeat_start;
+			Timer word_click_start;
 			unsigned int repeat_key_count;
 			unsigned int char_click_index;
 			unsigned int filter_characters_start;

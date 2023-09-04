@@ -62,7 +62,7 @@ namespace ECSEngine {
 			Action action,
 			void* data,
 			size_t data_size,
-			ECS_UI_HANDLER_COMMAND_TYPE command_type
+			void* owning_pointer
 		) {
 			auto handler_data = system->GetDefaultWindowHandlerData(window_index);
 
@@ -71,14 +71,33 @@ namespace ECSEngine {
 			system->AddWindowMemoryResource(allocation, window_index);
 
 			HandlerCommand command;
-			command.type = command_type;
-			command.time = std::chrono::high_resolution_clock::now();
 			command.handler.action = action;
 			command.handler.data = allocation;
 			command.handler.data_size = data_size;
+			command.owning_pointer = owning_pointer;
+
+			if (handler_data->revert_commands.GetSize() == handler_data->revert_commands.GetCapacity()) {
+				// If we are full, check to see if there are any invalid entries
+				// That can be removed such that we don't overwrite elements
+				ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, remove_indices, handler_data->revert_commands.GetCapacity());
+				handler_data->revert_commands.ForEachIndex([&](unsigned int index) {
+					HandlerCommand command = handler_data->revert_commands.GetElement(index);
+					if (command.owning_pointer != nullptr) {
+						// Check that the memory resource exists
+						if (!system->ExistsWindowMemoryResource(window_index, command.owning_pointer)) {
+							remove_indices.AddAssert(index);
+						}
+					}
+				});
+
+				for (unsigned int index = 0; index < remove_indices.size; index++) {
+					handler_data->revert_commands.RemoveAtIndex(remove_indices[index] - index);
+				}
+			}
 
 			auto deallocate_data = handler_data->PushRevertCommand(command);
 			if (deallocate_data.handler.action != nullptr) {
+				// Make the buffers and counts nullptr to signal that this is a clean-up call
 				ActionData clean_up;
 				clean_up.border_index = window_index;
 				clean_up.buffers = nullptr;
@@ -101,11 +120,13 @@ namespace ECSEngine {
 			float initial_value = slider->slider_position;
 			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = true;
-				SetCapture((HWND)system->m_application->GetOSWindowHandle());
+				system->ActiveWrapCursorPosition();
+				//SetCapture((HWND)system->m_application->GetOSWindowHandle());
 			}
 			else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = false;
-				ReleaseCapture();
+				system->DeactiveWrapCursorPosition();
+				//ReleaseCapture();
 			}
 
 			float2 previous_mouse = system->GetPreviousMousePosition();
@@ -416,7 +437,7 @@ namespace ECSEngine {
 				input->SetSpritePositionFromMouse(system, mouse_position);
 			}
 			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
-				size_t initial_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - input->word_click_start).count();
+				size_t initial_duration = input->word_click_start.GetDuration(ECS_TIMER_DURATION_MS);
 
 				auto check_word_boundary = [&](unsigned int& word_start_index, unsigned int& word_end_index) {
 					int64_t index = input->current_sprite_position;
@@ -451,7 +472,7 @@ namespace ECSEngine {
 				if (input->word_click_count == 0) {
 					if (input->text->buffer[input->current_sprite_position] != ' ') {
 						input->word_click_count++;
-						input->word_click_start = std::chrono::high_resolution_clock::now();
+						input->word_click_start.SetNewStart();
 						input->char_click_index = input->current_sprite_position;
 					}
 					else {
@@ -459,7 +480,7 @@ namespace ECSEngine {
 					}
 				}
 				else if (input->word_click_count == 1) {
-					size_t duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - input->word_click_start).count();
+					size_t duration = input->word_click_start.GetDuration(ECS_TIMER_DURATION_MS);
 
 					if (duration < system->m_descriptors.misc.text_input_repeat_start_duration) {
 						unsigned int word_start_index = 0, word_end_index = 0;
@@ -472,7 +493,7 @@ namespace ECSEngine {
 					input->word_click_count++;
 				}
 				else if (input->word_click_count == 2) {
-					size_t duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - input->word_click_start).count();
+					size_t duration = input->word_click_start.GetDuration(ECS_TIMER_DURATION_MS);
 
 					if (duration < system->m_descriptors.misc.text_input_repeat_start_duration * 2) {
 						unsigned int word_start_index = 0, word_end_index = 0;
@@ -486,7 +507,7 @@ namespace ECSEngine {
 					else {
 						input->word_click_count = 1;
 						input->char_click_index = input->current_sprite_position;
-						input->word_click_start = std::chrono::high_resolution_clock::now();
+						input->word_click_start.SetNewStart();
 					}
 				}
 			}
@@ -512,14 +533,14 @@ namespace ECSEngine {
 			bool is_action = false;
 			if (mouse_position.x > position.x + scale.x) {
 				if (input->repeat_key == ECS_KEY_NONE) {
-					input->key_repeat_start = std::chrono::high_resolution_clock::now();
+					input->key_repeat_start.SetNewStart();
 					input->repeat_key = ECS_KEY_APPS;
 					is_action = true;
 					input->repeat_key_count = 0;
 					right_action();
 				}
 				else if (input->repeat_key == ECS_KEY_APPS) {
-					size_t duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - input->key_repeat_start).count();
+					size_t duration = input->key_repeat_start.GetDuration(ECS_TIMER_DURATION_MS);
 					is_action = true;
 					if (duration > system->m_descriptors.misc.text_input_repeat_start_duration) {
 						duration -= system->m_descriptors.misc.text_input_repeat_start_duration;
@@ -532,14 +553,14 @@ namespace ECSEngine {
 			}
 			else if (mouse_position.x < position.x) {
 				if (input->repeat_key == ECS_KEY_NONE) {
-					input->key_repeat_start = std::chrono::high_resolution_clock::now();
+					input->key_repeat_start.SetNewStart();
 					input->repeat_key = ECS_KEY_COUNT;
 					is_action = true;
 					input->repeat_key_count = 0;
 					left_action();
 				}
 				else if (input->repeat_key == ECS_KEY_COUNT) {
-					size_t duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - input->key_repeat_start).count();
+					size_t duration = input->key_repeat_start.GetDuration(ECS_TIMER_DURATION_MS);
 					is_action = true;
 					if (duration > system->m_descriptors.misc.text_input_repeat_start_duration) {
 						duration -= system->m_descriptors.misc.text_input_repeat_start_duration;
@@ -555,7 +576,7 @@ namespace ECSEngine {
 				input->repeat_key = ECS_KEY_NONE;
 			}
 
-			input->caret_start = std::chrono::high_resolution_clock::now();
+			input->caret_start.SetNewStart();
 			input->is_caret_display = true;
 
 			if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
@@ -1709,7 +1730,7 @@ namespace ECSEngine {
 						}
 					}
 
-					input->caret_start = std::chrono::high_resolution_clock::now();
+					input->caret_start.SetNewStart();
 					input->is_caret_display = true;
 				};
 				auto right_arrow_lambda = [&]() {
@@ -1755,7 +1776,7 @@ namespace ECSEngine {
 							input->current_selection = input->current_sprite_position;
 						}
 					}
-					input->caret_start = std::chrono::high_resolution_clock::now();
+					input->caret_start.SetNewStart();
 					input->is_caret_display = true;
 				};
 
@@ -1804,7 +1825,7 @@ namespace ECSEngine {
 						HandlerCommand last_command;
 						system->GetLastRevertCommand(last_command, window_index);
 
-						if (last_command.type == ECS_UI_HANDLER_COMMAND_TEXT_REPLACE) {
+						if (last_command.handler.action == TextInputRevertReplaceText) {
 							UIDrawerTextInputReplaceCommandInfo* command = (UIDrawerTextInputReplaceCommandInfo*)last_command.handler.data;
 							command->text_count -= push_count;
 						}
@@ -1848,7 +1869,7 @@ namespace ECSEngine {
 							memcpy(info_text, backspace_text, *backspace_text_count);
 							info_text[*backspace_text_count] = '\0';
 
-							AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
+							AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, input);
 						}
 
 						size_t text_size = input->text->size;
@@ -1860,7 +1881,14 @@ namespace ECSEngine {
 							revert_info->text_count = character_count;
 							revert_info->text_position = input->current_sprite_position;
 
-							AddWindowHandleCommand(system, window_index, TextInputRevertAddText, revert_info, sizeof(UIDrawerTextInputAddCommandInfo), ECS_UI_HANDLER_COMMAND_TEXT_ADD);
+							AddWindowHandleCommand(
+								system, 
+								window_index, 
+								TextInputRevertAddText, 
+								revert_info, 
+								sizeof(UIDrawerTextInputAddCommandInfo),
+								input
+							);
 
 							input->InsertCharacters(characters, character_count, input->current_sprite_position, system);
 						}
@@ -1889,7 +1917,7 @@ namespace ECSEngine {
 						memcpy((void*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo)), backspace_text, *backspace_text_count);
 						info_text[*backspace_text_count] = '\0';
 
-						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
+						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, input);
 					}
 				}
 
@@ -1899,7 +1927,7 @@ namespace ECSEngine {
 						if (keyboard->IsDown(ECS_KEY_LEFT)) {
 							input->repeat_key_count = 0;
 							input->repeat_key = ECS_KEY_LEFT;
-							input->key_repeat_start = std::chrono::high_resolution_clock::now();
+							input->key_repeat_start.SetNewStart();
 						}
 					}
 					else if (input->repeat_key == ECS_KEY_LEFT && keyboard->IsUp(ECS_KEY_LEFT)) {
@@ -1907,7 +1935,7 @@ namespace ECSEngine {
 						if (keyboard->IsDown(ECS_KEY_RIGHT)) {
 							input->repeat_key_count = 0;
 							input->repeat_key = ECS_KEY_RIGHT;
-							input->key_repeat_start = std::chrono::high_resolution_clock::now();
+							input->key_repeat_start.SetNewStart();
 						}
 					}
 					input->RepeatKeyAction(system, keyboard, ECS_KEY_LEFT, repeat_key, left_arrow_lambda);
@@ -1932,7 +1960,7 @@ namespace ECSEngine {
 						memcpy(info_text, backspace_text, *backspace_text_count);
 						info_text[*backspace_text_count] = '\0';
 
-						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
+						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, input);
 					}
 					else if (keyboard->IsPressed(ECS_KEY_C)) {
 						input->CopyCharacters(system);
@@ -1961,7 +1989,7 @@ namespace ECSEngine {
 							memcpy(info_text, deleted_characters, deleted_character_count);
 							info_text[deleted_character_count] = '\0';
 
-							AddWindowHandleCommand(system, window_index, TextInputRevertReplaceText, replace_info, total_size, ECS_UI_HANDLER_COMMAND_TEXT_REPLACE);
+							AddWindowHandleCommand(system, window_index, TextInputRevertReplaceText, replace_info, total_size, input);
 						}
 					}
 					else if (keyboard->IsPressed(ECS_KEY_A)) {
@@ -1970,10 +1998,10 @@ namespace ECSEngine {
 					}
 				}
 
-				size_t caret_tick = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - input->caret_start).count();
+				size_t caret_tick = input->caret_start.GetDuration(ECS_TIMER_DURATION_MS);
 				if (caret_tick >= system->m_descriptors.misc.text_input_caret_display_time) {
 					input->is_caret_display = !input->is_caret_display;
-					input->caret_start = std::chrono::high_resolution_clock::now();
+					input->caret_start.SetNewStart();
 				}
 
 				if (input->repeat_key != ECS_KEY_APPS && input->repeat_key != ECS_KEY_COUNT) {

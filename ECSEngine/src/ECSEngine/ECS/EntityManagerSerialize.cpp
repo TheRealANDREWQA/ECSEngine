@@ -1745,7 +1745,9 @@ namespace ECSEngine {
 			bool success = ConvertFromTargetToLinkComponent(
 				&convert_base_data,
 				source,
-				link_component_storage
+				link_component_storage,
+				nullptr,
+				nullptr
 			);
 			if (!success) {
 				return -1;
@@ -1797,7 +1799,9 @@ namespace ECSEngine {
 		bool success = ConvertFromTargetToLinkComponent(
 			&convert_base_data,
 			data->component_data,
-			link_component_storage
+			link_component_storage,
+			nullptr,
+			nullptr
 		);
 		if (!success) {
 			return -1;
@@ -1861,7 +1865,9 @@ namespace ECSEngine {
 			success = ConvertLinkComponentToTarget(
 				&convert_base_data,
 				link_component_storage,
-				function::OffsetPointer(initial_component, index * target_byte_size)
+				function::OffsetPointer(initial_component, index * target_byte_size),
+				nullptr,
+				nullptr
 			);
 			if (!success) {
 				return false;
@@ -1917,7 +1923,9 @@ namespace ECSEngine {
 		success = ConvertLinkComponentToTarget(
 			&convert_base_data,
 			link_component_storage,
-			initial_component
+			initial_component,
+			nullptr,
+			nullptr
 		);
 		if (!success) {
 			return false;

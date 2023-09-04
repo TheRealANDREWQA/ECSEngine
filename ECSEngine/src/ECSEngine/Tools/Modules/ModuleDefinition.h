@@ -234,6 +234,11 @@ namespace ECSEngine {
 		const void* link_component;
 		void* component;
 		Stream<Stream<void>> assets;
+
+		// These are optional. They will be provided when a value is changed through the
+		// Inspector panel, else they cannot be provided
+		const void* previous_link_component;
+		const void* previous_component;
 	};
 
 	typedef void (*ModuleLinkComponentFunction)(ModuleLinkComponentFunctionData* data);
@@ -244,6 +249,11 @@ namespace ECSEngine {
 		const void* component;
 		void* link_component;
 		Stream<unsigned int> asset_handles;
+
+		// These are optional. They will be provided when a value is changed through the
+		// Inspector panel, else they cannot be provided
+		const void* previous_component;
+		const void* previous_link_component;
 	};
 
 	typedef void (*ModuleLinkComponentReverseFunction)(ModuleLinkComponentReverseFunctionData* data);

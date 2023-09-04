@@ -107,25 +107,31 @@ bool CopySandboxEntities(
 
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
 // mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields)
+// the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
+// If not given, the conversion function must deal with this case
 bool ConvertTargetToLinkComponent(
 	EditorState* editor_state,
 	unsigned int sandbox_index, 
 	Stream<char> link_component, 
 	Entity entity, 
-	void* link_data, 
+	void* link_data,
+	const void* previous_link_data,
+	const void* previous_target_data,
 	AllocatorPolymorphic allocator = { nullptr },
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
 // mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields)
+// the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
+// If not given, the conversion function must deal with this case
 bool ConvertTargetToLinkComponent(
 	EditorState* editor_state,
 	Stream<char> link_component,
 	const void* target_data,
 	void* link_data,
+	const void* previous_target_data,
+	const void* previous_link_data,
 	AllocatorPolymorphic allocator = { nullptr }
 );
 
@@ -139,6 +145,7 @@ bool ConvertLinkComponentToTarget(
 	Stream<char> link_component,
 	Entity entity,
 	const void* link_data,
+	const void* previous_link_data,
 	AllocatorPolymorphic allocator = { nullptr },
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -151,6 +158,8 @@ bool ConvertLinkComponentToTarget(
 	Stream<char> link_component,
 	void* target_data,
 	const void* link_data,
+	const void* previous_target_data,
+	const void* previous_link_data,
 	AllocatorPolymorphic allocator = { nullptr }
 );
 
@@ -603,6 +612,7 @@ bool SandboxUpdateUniqueLinkComponentForEntity(
 	const void* link_component,
 	Stream<char> link_name,
 	Entity entity,
+	const void* previous_link_component,
 	bool give_error_when_failing = true,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -615,6 +625,7 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 	const void* link_component,
 	Stream<char> link_name,
 	Entity entity,
+	const void* previous_link_component,
 	bool give_error_when_failing = true,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );

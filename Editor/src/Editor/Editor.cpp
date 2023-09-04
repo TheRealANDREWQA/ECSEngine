@@ -728,6 +728,22 @@ public:
 //Quaternion world = AddWorldRotation(some_rotation, delta_rotation);
 //Quaternion local = AddLocalRotation(some_rotation, delta_rotation);
 //bool same_orientation = QuaternionSameOrientationLow(world, local);
+//
+//Quaternion inverse_quat = QuaternionInverse(some_rotation);
+//Quaternion delta_back = AddLocalRotation(world, inverse_quat);
+//Quaternion dd = AddWorldRotation(local, inverse_quat);
+//
+//float3 eeeeeeeee = QuaternionToEulerLow(inverse_quat);
+//float3 ee = QuaternionToEulerLow(QuaternionInverse(delta_rotation));
+//
+//Quaternion XX = AddLocalRotation(inverse_quat, delta_rotation);
+//float3 XX_euler = QuaternionToEulerLow(XX);
+//
+//Quaternion YY = AddWorldRotation(inverse_quat, delta_rotation);
+//float3 YY_euler = QuaternionToEulerLow(YY);
+//
+//float3 euler_backu = QuaternionToEulerLow(delta_back);
+//float3 eulers_backu = QuaternionToEulerLow(dd);
 
 		while (true) {
 			auto run_application = [&](EDITOR_APPLICATION_QUIT_RESPONSE application_quit_value) {

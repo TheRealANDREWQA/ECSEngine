@@ -246,7 +246,7 @@ namespace ECSEngine {
 			unsigned int text_input_caret_display_time;
 			unsigned int text_input_repeat_time;
 			unsigned int text_input_repeat_start_duration;
-			unsigned int text_input_coallesce_command;
+			unsigned int text_input_coalesce_command;
 			unsigned int slider_bring_back_start;
 			unsigned int slider_enter_value_duration;
 			float slider_bring_back_tick;
@@ -885,16 +885,9 @@ namespace ECSEngine {
 
 #pragma endregion
 
-		enum ECS_UI_HANDLER_COMMAND_TYPE {
-			ECS_UI_HANDLER_COMMAND_TEXT_ADD,
-			ECS_UI_HANDLER_COMMAND_TEXT_REMOVE,
-			ECS_UI_HANDLER_COMMAND_TEXT_REPLACE
-		};
-
 		struct HandlerCommand {
-			std::chrono::high_resolution_clock::time_point time;
 			UIActionHandler handler;
-			ECS_UI_HANDLER_COMMAND_TYPE type;
+			void* owning_pointer;
 		};
 
 		struct ECSENGINE_API UIDefaultWindowHandler {

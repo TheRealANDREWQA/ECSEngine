@@ -465,10 +465,10 @@ void InspectorComponentCallback(ActionData* action_data) {
 
 		const void* link_data = data->draw_data->link_components[linked_index].data;
 		if (is_shared) {
-			SandboxUpdateSharedLinkComponentForEntity(editor_state, sandbox_index, link_data, component_name, entity);
+			SandboxUpdateSharedLinkComponentForEntity(editor_state, sandbox_index, link_data, component_name, entity, nullptr);
 		}
 		else {
-			SandboxUpdateUniqueLinkComponentForEntity(editor_state, sandbox_index, link_data, component_name, entity);
+			SandboxUpdateUniqueLinkComponentForEntity(editor_state, sandbox_index, link_data, component_name, entity, nullptr);
 		}
 	}
 
@@ -803,7 +803,16 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 					current_component = data->link_components[link_index].data;
 
 					// Convert the underlying storage into the link component
-					bool success = ConvertTargetToLinkComponent(editor_state, sandbox_index, link_component, data->entity, current_component, editor_state->EditorAllocator());
+					bool success = ConvertTargetToLinkComponent(
+						editor_state, 
+						sandbox_index, 
+						link_component, 
+						data->entity, 
+						current_component, 
+						nullptr, 
+						nullptr, 
+						editor_state->EditorAllocator()
+					);
 					if (!success) {
 						ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
 						Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, data->entity, entity_name_storage);
@@ -821,7 +830,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			// And we need to update the link component
 			if (link_component.size > 0) {
 				AssetOverrideBindInstanceOverrides(ui_drawer, instance, sandbox_index, modify_value_handler);
-				//ConvertTargetToLinkComponent(editor_state, sandbox_index, link_component, data->entity, current_component);
+				ConvertTargetToLinkComponent(editor_state, sandbox_index, link_component, data->entity, current_component, nullptr, nullptr);
 			}		
 
 			unsigned int instance_index = data->FindCreatedInstance(instance->name);

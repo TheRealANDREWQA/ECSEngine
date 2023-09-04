@@ -279,7 +279,7 @@ namespace ECSEngine {
 
 		// TODO: Add this back
 		if (world->debug_drawer != nullptr) {
-			world->debug_drawer->Clear();
+			//world->debug_drawer->Clear();
 		}
 	}
 
