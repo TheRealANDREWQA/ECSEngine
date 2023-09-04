@@ -5108,6 +5108,18 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		bool UISystem::ExistsWindowMemoryResource(unsigned int window_index, const void* pointer) const
+		{
+			return function::SearchBytes(
+				m_windows[window_index].memory_resources.buffer,
+				m_windows[window_index].memory_resources.size,
+				(size_t)pointer,
+				sizeof(pointer)
+			) != -1;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::EvictOutdatedTextures()
 		{
 			m_resource_manager->EvictOutdatedResources(ResourceType::Texture);

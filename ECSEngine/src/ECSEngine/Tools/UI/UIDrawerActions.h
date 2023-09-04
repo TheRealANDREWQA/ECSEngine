@@ -15,13 +15,18 @@ namespace ECSEngine {
 		
 		// --------------------------------------------------------------------------------------------------------------
 
+		// The owning resource is used to identify commands which are no longer valid
+		// For example, commands from a text input which no longer exists. If the pointer
+		// is left at nullptr, then it will consider that the command is always valid.
+		// Else (it is specified), it will search for the pointer in the memory resources
+		// For that window
 		ECSENGINE_API void AddWindowHandleCommand(
 			UISystem* system,
 			unsigned int window_index,
 			Action action,
 			void* data,
 			size_t data_size,
-			ECS_UI_HANDLER_COMMAND_TYPE command_type
+			void* owning_resource
 		);
 
 		// --------------------------------------------------------------------------------------------------------------

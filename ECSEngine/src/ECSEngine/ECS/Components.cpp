@@ -8,7 +8,18 @@ namespace ECSEngine {
 		const RotationLink* rotation_link = (const RotationLink*)data->link_component;
 		Rotation* rotation = (Rotation*)data->component;
 
-		rotation->value = QuaternionFromEuler(rotation_link->value).StorageLow();
+		if (data->previous_link_component != nullptr && data->previous_component != nullptr) {
+			// If we have a previous link component and previous target data,
+			// We can just apply a delta quaternion
+			const RotationLink* previous_rotation_link = (const RotationLink*)data->previous_link_component;
+			const Rotation* previous_rotation = (const Rotation*)data->previous_component;
+
+			Quaternion delta_quaternion = QuaternionFromEuler(rotation_link->value - previous_rotation_link->value);
+			rotation->value = AddWorldRotation(previous_rotation->value, delta_quaternion).StorageLow();
+		}
+		else {
+			rotation->value = QuaternionFromEuler(rotation_link->value).StorageLow();
+		}
 	}
 
 	void ConvertRotationToLink(ModuleLinkComponentReverseFunctionData* data) {

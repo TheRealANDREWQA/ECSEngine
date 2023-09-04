@@ -2438,8 +2438,8 @@ namespace ECSEngine {
 					scale
 				);
 
-				element->caret_start = std::chrono::high_resolution_clock::now();
-				element->key_repeat_start = std::chrono::high_resolution_clock::now();
+				element->caret_start.SetNewStart();
+				element->key_repeat_start.SetNewStart();
 				element->repeat_key_count = 0;
 				element->is_caret_display = false;
 				element->character_spacing = character_spacing;

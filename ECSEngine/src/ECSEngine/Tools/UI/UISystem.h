@@ -871,6 +871,8 @@ namespace ECSEngine {
 
 			bool ExistsWindowResource(unsigned int window_index, Stream<char> name) const;
 
+			bool ExistsWindowMemoryResource(unsigned int window_index, const void* pointer) const;
+
 			void EvictOutdatedTextures();
 			
 			// Removes the given drag drop and deallocates everything used

@@ -354,7 +354,9 @@ namespace ECSEngine {
 	ECSENGINE_API bool ConvertFromTargetToLinkComponent(
 		const ConvertToAndFromLinkBaseData* base_data,
 		const void* target_data,
-		void* link_data
+		void* link_data,
+		const void* previous_target_data,
+		const void* previous_link_data
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -365,7 +367,9 @@ namespace ECSEngine {
 	ECSENGINE_API bool ConvertLinkComponentToTarget(
 		const ConvertToAndFromLinkBaseData* base_data,
 		const void* link_data,
-		void* target_data
+		void* target_data,
+		const void* previous_link_data,
+		const void* previous_target_data
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -375,7 +379,9 @@ namespace ECSEngine {
 	ECSENGINE_API bool ConvertLinkComponentToTargetAssetsOnly(
 		const ConvertToAndFromLinkBaseData* base_data,
 		const void* link_data,
-		void* target_data
+		void* target_data,
+		const void* previous_link_data,
+		const void* previous_target_data
 	);
 
 	// ------------------------------------------------------------------------------------------------------------

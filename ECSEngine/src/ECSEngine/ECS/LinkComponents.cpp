@@ -1075,7 +1075,9 @@ namespace ECSEngine {
 	bool ConvertFromTargetToLinkComponent(
 		const ConvertToAndFromLinkBaseData* base_data,
 		const void* target_data,
-		void* link_data
+		void* link_data,
+		const void* previous_target_data,
+		const void* previous_link_data
 	)
 	{
 		// Determine if the link component has a DLL function
@@ -1126,6 +1128,10 @@ namespace ECSEngine {
 			reverse_data.asset_handles = asset_handles;
 			reverse_data.link_component = link_data;
 			reverse_data.component = target_data;
+
+			// These are forwarded
+			reverse_data.previous_component = previous_target_data;
+			reverse_data.previous_link_component = previous_link_data;
 			base_data->module_link.reverse_function(&reverse_data);
 		}
 		else {
@@ -1226,6 +1232,8 @@ namespace ECSEngine {
 		const ConvertToAndFromLinkBaseData* base_data,
 		const void* link_data,
 		void* target_data,
+		const void* previous_link_data,
+		const void* previous_target_data,
 		Functor&& functor
 	) {
 		// Determine if the link component has a DLL function
@@ -1271,6 +1279,10 @@ namespace ECSEngine {
 			build_data.assets = assets;
 			build_data.component = target_data;
 			build_data.link_component = link_data;
+
+			// These are forwarded
+			build_data.previous_component = previous_target_data;
+			build_data.previous_link_component = previous_link_data;
 			base_data->module_link.build_function(&build_data);
 		}
 		else {
@@ -1337,7 +1349,9 @@ namespace ECSEngine {
 	bool ConvertLinkComponentToTarget(
 		const ConvertToAndFromLinkBaseData* base_data,
 		const void* link_data,
-		void* target_data
+		void* target_data,
+		const void* previous_link_data,
+		const void* previous_target_data
 	)
 	{
 		auto copy_field = [&](size_t index) {
@@ -1366,14 +1380,20 @@ namespace ECSEngine {
 			}
 			return true;
 		};
-		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, copy_field);
+		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, previous_link_data, previous_target_data, copy_field);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	bool ConvertLinkComponentToTargetAssetsOnly(const ConvertToAndFromLinkBaseData* base_data, const void* link_data, void* target_data)
+	bool ConvertLinkComponentToTargetAssetsOnly(
+		const ConvertToAndFromLinkBaseData* base_data, 
+		const void* link_data, 
+		void* target_data,
+		const void* previous_link_data,
+		const void* previous_target_data
+	)
 	{
-		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, [](size_t index) { return true; });
+		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, previous_link_data, previous_target_data, [](size_t index) { return true; });
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

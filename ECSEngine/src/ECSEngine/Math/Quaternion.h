@@ -983,6 +983,18 @@ namespace ECSEngine {
 		return add_rotation * current_rotation;
 	}
 
+	// This computes the delta between a known operand and a final quaternion
+	// delta * operand = final_quaternion -> delta = final_quaternion * inverse(operand)
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionDelta(Quaternion operand, Quaternion final_quaternion) {
+		return final_quaternion * QuaternionInverse(operand);
+	}
+
+	// This computes the delta between a known operand and a final quaternion
+	// delta * operand = final_quaternion -> delta = final_quaternion * inverse(operand)
+	ECS_INLINE Quaternion ECS_VECTORCALL QuaternionDeltaNormalized(Quaternion operand_normalized, Quaternion final_quaternion) {
+		return final_quaternion * QuaternionInverseNormalized(operand_normalized);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	// Converts the given direction into a quaternion

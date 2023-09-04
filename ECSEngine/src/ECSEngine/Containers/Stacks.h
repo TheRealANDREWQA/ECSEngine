@@ -21,6 +21,50 @@ namespace ECSEngine {
 		Stack(const Stack& other) = default;
 		Stack& operator = (const Stack& other) = default;
 
+		// Iterates all elements in the stack order
+		// Return true if you want to early exit. It returns true
+		// If it early exited, else false. The returned indices are given
+		// With respect to the top element (so the 0th element is the top most one)
+		// To retrieve data use GetElement()
+		template<bool early_exit = false, typename Functor>
+		bool ForEachIndex(Functor&& functor) const {
+			unsigned int starting_index = m_first_item + m_stack.size;
+			unsigned int access_index = m_stack.capacity <= starting_index ? starting_index - m_stack.capacity : starting_index;
+			for (unsigned int index = 0; index < m_stack.size; index--) {
+				if constexpr (early_exit) {
+					if (functor(access_index)) {
+						return true;
+					}
+				}
+				else {
+					functor(access_index);
+				}
+				access_index = access_index == 0 ? m_stack.capacity - 1 : access_index - 1;
+			}
+
+			return false;
+		}
+
+		// Iterates all elements in the stack order
+		// Return true if you want to early exit. It returns true
+		// If it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) {
+			return ForEachIndex<early_exit>([&](unsigned int index) {
+				return functor(GetElement(index));
+			});
+		}
+
+		// Iterates all elements in the stack order
+		// Return true if you want to early exit. It returns true
+		// If it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) const {
+			return ForEachIndex<early_exit>([&](unsigned int index) {
+				return functor(GetElement())
+				})
+		}
+
 		ECS_INLINE unsigned int GetSize() const {
 			return m_stack.size;
 		}
@@ -37,13 +81,16 @@ namespace ECSEngine {
 			return m_stack.size + count <= m_stack.capacity;
 		}
 
+	private:
 		// Returns the index of the "first" item
 		// Make sure that there is an item in the stack.
-		ECS_INLINE unsigned int PeekIndex() const {
-			unsigned int last_index = m_first_item + m_stack.size;
+		ECS_INLINE unsigned int PeekIndex(unsigned int top_index = 0) const {
+			unsigned int last_index = m_first_item + m_stack.size - top_index;
 			last_index = last_index >= m_stack.capacity ? last_index - m_stack.capacity : last_index;
 			return last_index - 1;
 		}
+
+	public:
 
 		// Returns a pointer to the "first" element (the one to be popped)
 		// such that it can be modifed while inside the stack.
@@ -98,9 +145,38 @@ namespace ECSEngine {
 			}
 		}
 
-		void Reset() {
+		ECS_INLINE void Reset() {
 			m_first_item = 0;
 			m_stack.Reset();
+		}
+
+		// Niche case function. If you can identify some elements other than at the top
+		// That need to be removed, use this function. The index must be relative to the top element,
+		// You can get such an index from ForEachIndex
+		void RemoveAtIndex(unsigned int index) {
+			unsigned int peek_index = PeekIndex(index);
+			if (m_first_item == 0) {
+				m_stack.Remove(peek_index);
+			}
+			else {
+				unsigned int last_index = PeekIndex(0);
+				if (peek_index < m_first_item) {
+					memmove(m_stack.buffer + peek_index, m_stack.buffer + peek_index + 1, sizeof(T) * (last_index - peek_index));
+				}
+				else {
+					bool overflows = m_stack.size + m_first_item > m_stack.capacity;
+					if (overflows) {
+						unsigned int remaining_elements = m_stack.capacity - peek_index - 1;
+						memmove(m_stack.buffer + peek_index, m_stack.buffer + peek_index + 1, sizeof(T) * remaining_elements);
+						m_stack[m_stack.capacity - 1] = m_stack[0];
+						memmove(m_stack.buffer, m_stack.buffer + 1, sizeof(T) * last_index);
+					}
+					else {
+						memmove(m_stack.buffer + peek_index, m_stack.buffer + peek_index + 1, sizeof(T) * (last_index - peek_index));
+					}
+				}
+				m_stack.size--;
+			}
 		}
 
 		ECS_INLINE void* GetAllocatedBuffer() const {
@@ -131,9 +207,11 @@ namespace ECSEngine {
 		// Returns the i'th element - 0 means the top most one (the one that would be returned by peek)
 		// and increasingly away from it
 		ECS_INLINE T GetElement(unsigned int index) const {
-			unsigned int peek_index = m_first_item + m_stack.size - index;
-			peek_index = peek_index >= m_stack.capacity ? peek_index - m_stack.capacity : peek_index;
-			return m_stack[peek_index];
+			return m_stack[PeekIndex(index)];
+		}
+
+		ECS_INLINE T* GetElementPtr(unsigned int index) {
+			return &m_stack[PeekIndex(index)];
 		}
 
 		CapacityStream<T> m_stack;
@@ -149,6 +227,55 @@ namespace ECSEngine {
 
 		ResizableStack(const ResizableStack& other) = default;
 		ResizableStack& operator = (const ResizableStack& other) = default;
+
+		// Iterates all elements in the stack order
+		// Return true if you want to early exit. It returns true
+		// If it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEachIndex(Functor&& functor) {
+			for (unsigned int index = m_stack.size; index > 0; index--) {
+				if constexpr (early_exit) {
+					if (functor(index - 1)) {
+						return true;
+					}
+				}
+				else {
+					functor(index - 1);
+				}
+			}
+
+			return false;
+		}
+
+		// Iterates all elements in the stack order
+		// Return true if you want to early exit. It returns true
+		// If it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) {
+			return ForEachIndex<early_exit>([&](unsigned int index) {
+				if constexpr (early_exit) {
+					return functor(m_stack[index]);
+				}
+				else {
+					functor(m_stack[index]);
+				}
+			});
+		}
+
+		// Iterates all elements in the stack order
+		// Return true if you want to early exit. It returns true
+		// If it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEach(Functor&& functor) const {
+			return ForEachIndex<early_exit>([&](unsigned int index) {
+				if constexpr (early_exit) {
+					return functor(m_stack[index]);
+				}
+				else {
+					functor(m_stack[index]);
+				}
+			});
+		}
 
 		ECS_INLINE void FreeBuffer() {
 			m_stack.FreeBuffer();
@@ -190,16 +317,22 @@ namespace ECSEngine {
 			return false;
 		}
 
-		void Push(T element) {
+		ECS_INLINE void Push(T element) {
 			m_stack.Add(element);
 		}
 
-		void Push(const T* element) {
+		ECS_INLINE void Push(const T* element) {
 			m_stack.Add(element);
 		}
 
-		void Reset() {
+		ECS_INLINE void Reset() {
 			m_stack.Reset();
+		}
+
+		// Niche case function. If you can identify some elements other than at the top
+		// That need to be removed, use this function
+		ECS_INLINE void RemoveAtIndex(unsigned int index) {
+			m_stack.Remove(index);
 		}
 
 		ResizableStream<T> m_stack;

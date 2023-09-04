@@ -326,7 +326,9 @@ bool ConvertTargetToLinkComponent(
 	unsigned int sandbox_index, 
 	Stream<char> link_component,
 	Entity entity,
-	void* link_data, 
+	void* link_data,
+	const void* previous_link_data,
+	const void* previous_target_data,
 	AllocatorPolymorphic allocator,
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
@@ -344,7 +346,9 @@ bool ConvertTargetToLinkComponent(
 	return ConvertFromTargetToLinkComponent(
 		&convert_data.base_data,
 		target_data,
-		link_data
+		link_data,
+		previous_target_data,
+		previous_link_data
 	);
 }
 
@@ -355,10 +359,12 @@ bool ConvertTargetToLinkComponent(
 	Stream<char> link_component,
 	const void* target_data,
 	void* link_data,
+	const void* previous_target_data,
+	const void* previous_link_data,
 	AllocatorPolymorphic allocator
 ) {
 	ConvertToOrFromLinkData convert_data = GetConvertToOrFromLinkData(editor_state, link_component, allocator);
-	return ConvertFromTargetToLinkComponent(&convert_data.base_data, target_data, link_data);
+	return ConvertFromTargetToLinkComponent(&convert_data.base_data, target_data, link_data, previous_target_data, previous_link_data);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -368,35 +374,46 @@ bool ConvertLinkComponentToTarget(
 	unsigned int sandbox_index,
 	Stream<char> link_component, 
 	Entity entity, 
-	const void* link_data, 
+	const void* link_data,
+	const void* previous_link_data,
 	AllocatorPolymorphic allocator,
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
 	// Convert into a temporary component storage such that we don't get to write only partially to the component
 	ConvertToOrFromLinkData convert_data = GetConvertToOrFromLinkData(editor_state, link_component, allocator);
+
+	EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	void* target_data = nullptr;
+	unsigned short component_byte_size = 0;
+
+	// Deallocate the buffers for that entity component
+	if (convert_data.is_shared_component) {
+		SharedInstance instance = active_entity_manager->GetSharedComponentInstance(convert_data.component, entity);
+		target_data = active_entity_manager->GetSharedData(convert_data.component, instance);
+		component_byte_size = active_entity_manager->SharedComponentSize(convert_data.component);
+	}
+	else {
+		target_data = active_entity_manager->GetComponent(entity, convert_data.component);		
+		component_byte_size = active_entity_manager->ComponentSize(convert_data.component);
+	}
+
 	ECS_STACK_CAPACITY_STREAM(size_t, component_storage, ECS_KB * 4);
 	bool conversion_success = ConvertLinkComponentToTarget(
 		&convert_data.base_data,
 		link_data,
-		component_storage.buffer
+		component_storage.buffer,
+		previous_link_data,
+		target_data
 	);
 	if (conversion_success) {
-		EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-		void* target_data = nullptr;
-		unsigned short component_byte_size = 0;
-
-		// Deallocate the buffers for that entity component
+		// Deallocate any existing buffers
 		if (convert_data.is_shared_component) {
 			SharedInstance instance = active_entity_manager->GetSharedComponentInstance(convert_data.component, entity);
-			target_data = active_entity_manager->GetSharedData(convert_data.component, instance);
 			active_entity_manager->DeallocateSharedInstanceBuffersCommit(convert_data.component, instance);
-			component_byte_size = active_entity_manager->SharedComponentSize(convert_data.component);
 		}
 		else {
-			target_data = active_entity_manager->GetComponent(entity, convert_data.component);
 			active_entity_manager->DeallocateEntityBuffersIfExistentCommit(entity, convert_data.component);
-			component_byte_size = active_entity_manager->ComponentSize(convert_data.component);
 		}
 
 		// We can copy directly into target data from the component storage
@@ -413,10 +430,12 @@ bool ConvertLinkComponentToTarget(
 	Stream<char> link_component,
 	void* target_data,
 	const void* link_data,
+	const void* previous_target_data,
+	const void* previous_link_data,
 	AllocatorPolymorphic allocator
 ) {
 	ConvertToOrFromLinkData convert_data = GetConvertToOrFromLinkData(editor_state, link_component, allocator);
-	return ConvertLinkComponentToTarget(&convert_data.base_data, link_data, target_data);
+	return ConvertLinkComponentToTarget(&convert_data.base_data, link_data, target_data, previous_link_data, previous_target_data);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1359,96 +1378,98 @@ void SplatLinkComponentBuild(ForEachEntityFunctorData* functor_data) {
 // ------------------------------------------------------------------------------------------------------------------------------
 
 // The functor receives the component as parameter
-template<typename GetData>
-bool UpdateLinkComponentBaseAssetsOnly(
-	EditorState* editor_state,
-	unsigned int sandbox_index,
-	const void* link_component,
-	Stream<char> component_name,
-	bool give_error_when_failing,
-	GetData&& get_data
-) {
-	const Reflection::ReflectionType* type = editor_state->editor_components.GetType(component_name);
-	if (type == nullptr) {
-		if (give_error_when_failing) {
-			ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The component doesn't exist.", component_name);
-			EditorSetConsoleError(error_message);
-		}
-		return false;
-	}
-
-	Stream<char> target = editor_state->editor_components.GetComponentFromLink(component_name);
-	if (target.size == 0) {
-		if (give_error_when_failing) {
-			ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The component does not have a target.", component_name);
-			EditorSetConsoleError(error_message);
-		}
-		return false;
-	}
-	const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target);
-	if (target_type == nullptr) {
-		if (give_error_when_failing) {
-			ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The target {#} does not exist.", component_name, target);
-			EditorSetConsoleError(error_message);
-		}
-		return false;
-	}
-
-	unsigned int module_index = editor_state->editor_components.FindComponentModuleInReflection(editor_state, component_name);
-	if (module_index == -1) {
-		if (give_error_when_failing) {
-			ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The module from which it came could not be identified.", component_name);
-			EditorSetConsoleError(error_message);
-		}
-		return false;
-	}
-
-	ModuleLinkComponentTarget link_target = GetModuleLinkComponentTarget(editor_state, module_index, component_name);
-	Component component = { (short)target_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-
-	void* converted_data = get_data(component);
-	if (converted_data == nullptr) {
-		return false;
-	}
-
-	ConvertToAndFromLinkBaseData convert_data;
-	convert_data.reflection_manager = editor_state->GlobalReflectionManager();
-	convert_data.link_type = type;
-	convert_data.target_type = target_type;
-	convert_data.asset_database = editor_state->asset_database;
-	convert_data.module_link = link_target;
-	bool success = ConvertLinkComponentToTargetAssetsOnly(&convert_data, link_component, converted_data);
-	if (!success) {
-		if (give_error_when_failing) {
-			ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The dll function is missing or the default link is incompatible.", component_name);
-			EditorSetConsoleError(error_message);
-		}
-	}
-	return success;
-}
-
-bool SandboxUpdateLinkComponentSharedInstance(
-	EditorState* editor_state,
-	unsigned int sandbox_index,
-	const void* link_component, 
-	Stream<char> component_name,
-	SharedInstance instance,
-	bool give_error_when_failing,
-	EDITOR_SANDBOX_VIEWPORT viewport
-)
-{
-	return UpdateLinkComponentBaseAssetsOnly(editor_state, sandbox_index, link_component, component_name, give_error_when_failing, [=](Component component) {
-		void* shared_data = GetSandboxSharedInstance(editor_state, sandbox_index, component, instance, viewport);
-		if (shared_data == nullptr) {
-			if (give_error_when_failing) {
-				ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The given shared instance {#} is invalid for {#}.", 
-					component_name, instance.value, ViewportString(viewport));
-				EditorSetConsoleError(error_message);
-			}
-		}
-		return shared_data;
-	});
-}
+//template<typename GetData>
+//bool UpdateLinkComponentBaseAssetsOnly(
+//	EditorState* editor_state,
+//	unsigned int sandbox_index,
+//	const void* link_component,
+//	Stream<char> component_name,
+//	const void* previous_link_component,
+//	const void* previous_target_component,
+//	bool give_error_when_failing,
+//	GetData&& get_data
+//) {
+//	const Reflection::ReflectionType* type = editor_state->editor_components.GetType(component_name);
+//	if (type == nullptr) {
+//		if (give_error_when_failing) {
+//			ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The component doesn't exist.", component_name);
+//			EditorSetConsoleError(error_message);
+//		}
+//		return false;
+//	}
+//
+//	Stream<char> target = editor_state->editor_components.GetComponentFromLink(component_name);
+//	if (target.size == 0) {
+//		if (give_error_when_failing) {
+//			ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The component does not have a target.", component_name);
+//			EditorSetConsoleError(error_message);
+//		}
+//		return false;
+//	}
+//	const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target);
+//	if (target_type == nullptr) {
+//		if (give_error_when_failing) {
+//			ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The target {#} does not exist.", component_name, target);
+//			EditorSetConsoleError(error_message);
+//		}
+//		return false;
+//	}
+//
+//	unsigned int module_index = editor_state->editor_components.FindComponentModuleInReflection(editor_state, component_name);
+//	if (module_index == -1) {
+//		if (give_error_when_failing) {
+//			ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The module from which it came could not be identified.", component_name);
+//			EditorSetConsoleError(error_message);
+//		}
+//		return false;
+//	}
+//
+//	ModuleLinkComponentTarget link_target = GetModuleLinkComponentTarget(editor_state, module_index, component_name);
+//	Component component = { (short)target_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+//
+//	void* converted_data = get_data(component);
+//	if (converted_data == nullptr) {
+//		return false;
+//	}
+//
+//	ConvertToAndFromLinkBaseData convert_data;
+//	convert_data.reflection_manager = editor_state->GlobalReflectionManager();
+//	convert_data.link_type = type;
+//	convert_data.target_type = target_type;
+//	convert_data.asset_database = editor_state->asset_database;
+//	convert_data.module_link = link_target;
+//	bool success = ConvertLinkComponentToTargetAssetsOnly(&convert_data, link_component, converted_data, previous_link_data, previous_target_component);
+//	if (!success) {
+//		if (give_error_when_failing) {
+//			ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The dll function is missing or the default link is incompatible.", component_name);
+//			EditorSetConsoleError(error_message);
+//		}
+//	}
+//	return success;
+//}
+//
+//bool SandboxUpdateLinkComponentSharedInstance(
+//	EditorState* editor_state,
+//	unsigned int sandbox_index,
+//	const void* link_component, 
+//	Stream<char> component_name,
+//	SharedInstance instance,
+//	bool give_error_when_failing,
+//	EDITOR_SANDBOX_VIEWPORT viewport
+//)
+//{
+//	return UpdateLinkComponentBaseAssetsOnly(editor_state, sandbox_index, link_component, component_name, give_error_when_failing, [=](Component component) {
+//		void* shared_data = GetSandboxSharedInstance(editor_state, sandbox_index, component, instance, viewport);
+//		if (shared_data == nullptr) {
+//			if (give_error_when_failing) {
+//				ECS_FORMAT_TEMP_STRING(error_message, "Failed to update link component {#} asset fields. The given shared instance {#} is invalid for {#}.", 
+//					component_name, instance.value, ViewportString(viewport));
+//				EditorSetConsoleError(error_message);
+//			}
+//		}
+//		return shared_data;
+//	});
+//}
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
@@ -1458,12 +1479,13 @@ bool SandboxUpdateUniqueLinkComponentForEntity(
 	const void* link_component,
 	Stream<char> link_name,
 	Entity entity,
+	const void* previous_link_component,
 	bool give_error_when_failing,
 	EDITOR_SANDBOX_VIEWPORT viewport
 ) {
 	Component component = editor_state->editor_components.GetComponentIDWithLink(link_name);
 	AllocatorPolymorphic component_allocator = GetAllocatorPolymorphic(GetComponentAllocator(editor_state, sandbox_index, component));
-	bool success = ConvertLinkComponentToTarget(editor_state, sandbox_index, link_name, entity, link_component, component_allocator);
+	bool success = ConvertLinkComponentToTarget(editor_state, sandbox_index, link_name, entity, link_component, previous_link_component, component_allocator);
 	if (!success) {
 		ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
 		Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, entity, entity_name_storage);
@@ -1482,13 +1504,27 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 	const void* link_component, 
 	Stream<char> link_name, 
 	Entity entity,
+	const void* previous_link_component,
 	bool give_error_when_failing,
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
+	// Get the component data first to help the conversion
+	Component target_component = editor_state->editor_components.GetComponentIDWithLink(link_name);
+	SharedInstance current_instance = EntitySharedInstance(editor_state, sandbox_index, entity, target_component, viewport);
+	const void* shared_component_data = GetSandboxSharedInstance(editor_state, sandbox_index, target_component, current_instance);
+
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	size_t converted_link_storage[ECS_KB * 4];
-	bool success = ConvertLinkComponentToTarget(editor_state, link_name, converted_link_storage, link_component, GetAllocatorPolymorphic(&stack_allocator));
+	bool success = ConvertLinkComponentToTarget(
+		editor_state, 
+		link_name, 
+		converted_link_storage, 
+		link_component, 
+		shared_component_data, 
+		previous_link_component, 
+		GetAllocatorPolymorphic(&stack_allocator)
+	);
 	if (!success) {
 		if (give_error_when_failing) {
 			ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 256);
@@ -1502,9 +1538,7 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 	}
 
 	// Find or create the shared instance that matches this data
-	Component target_component = editor_state->editor_components.GetComponentIDWithLink(link_name);
 	SharedInstance new_shared_instance = FindOrCreateSharedComponentInstance(editor_state, sandbox_index, target_component, converted_link_storage, viewport);
-	SharedInstance current_instance = EntitySharedInstance(editor_state, sandbox_index, entity, target_component, viewport);
 
 	stack_allocator.ClearBackup();
 
