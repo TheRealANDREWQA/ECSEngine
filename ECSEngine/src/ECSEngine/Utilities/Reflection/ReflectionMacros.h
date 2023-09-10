@@ -30,6 +30,8 @@
 #define ECS_REFLECT_COMPONENT
 #define ECS_REFLECT_SHARED_COMPONENT
 #define ECS_REFLECT_LINK_COMPONENT()
+#define ECS_LINK_MODIFIER_FIELD
+#define ECS_LINK_COMPONENT_NEEDS_BUTTON_FUNCTION "NeedsButton"
 
 // Used to describe the type of element that the data pointer is used for
 #define ECS_DATA_POINTER_TAG(a)

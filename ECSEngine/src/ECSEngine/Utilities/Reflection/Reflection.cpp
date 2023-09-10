@@ -4943,6 +4943,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						while (pointer_indirection > 0) {
 							first = *(void**)first;
 							second = *(void**)second;
+							pointer_indirection--;
 						}
 						// Compare the pointer values
 						return first == second || memcmp(first, second, basic_byte_size) == 0;
@@ -4968,15 +4969,30 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const ReflectionField* field, 
 			const void* first, 
 			const void* second, 
-			bool offset_into_data
+			bool offset_into_data,
+			const CompareReflectionTypeInstancesOptions* options
 		)
 		{
-			if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
-				if (offset_into_data) {
-					first = function::OffsetPointer(first, field->info.pointer_offset);
-					second = function::OffsetPointer(second, field->info.pointer_offset);
-				}
+			if (offset_into_data) {
+				first = function::OffsetPointer(first, field->info.pointer_offset);
+				second = function::OffsetPointer(second, field->info.pointer_offset);
+			}
 
+			// Check to see if this is a blittable field according to the options
+			if (options->blittable_types.size > 0) {
+				unsigned int index = function::FindString(field->definition, options->blittable_types, [](CompareReflectionTypeInstanceBlittableType blittable_type) {
+					return blittable_type.field_definition;
+				});
+				if (index != -1) {
+					// Check to see if the stream type is matched
+					if (field->info.stream_type == options->blittable_types[index].stream_type) {
+						// Blittable type - use memcmp
+						return memcmp(first, second, field->info.byte_size) == 0;
+					}
+				}
+			}
+
+			if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
 				size_t element_byte_size = field->info.byte_size;
 
 				// The size is the actual count
@@ -4991,6 +5007,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					while (pointer_indirection > 0) {
 						first = *(void**)first;
 						second = *(void**)second;
+						pointer_indirection--;
 					}
 					first_stream = { first, 1 };
 					second_stream = { second, 1 };
@@ -5013,11 +5030,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					return true;
 				}
 
-				return CompareReflectionTypeInstances(reflection_manager, field->definition, first_stream.buffer, second_stream.buffer, first_stream.size);
+				return CompareReflectionTypeInstances(reflection_manager, field->definition, first_stream.buffer, second_stream.buffer, first_stream.size, options);
 			}
 			else {
 				// Can forward to the field info variant
-				return CompareReflectionFieldInfoInstances(&field->info, first, second, offset_into_data);
+				return CompareReflectionFieldInfoInstances(&field->info, first, second, false);
 			}
 		}
 
@@ -5027,7 +5044,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const ReflectionManager* reflection_manager, 
 			const ReflectionType* type, 
 			const void* first, 
-			const void* second
+			const void* second,
+			const CompareReflectionTypeInstancesOptions* options
 		)
 		{
 			bool is_blittable = IsBlittable(type);
@@ -5039,7 +5057,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// Not blittable
 				// Has some pointer data that needs to be checked
 				for (size_t index = 0; index < type->fields.size; index++) {
-					if (!CompareReflectionFieldInstances(reflection_manager, type->fields.buffer + index, first, second)) {
+					if (!CompareReflectionFieldInstances(reflection_manager, type->fields.buffer + index, first, second, true, options)) {
 						return false;
 					}
 				}
@@ -5054,7 +5072,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			Stream<char> definition, 
 			const void* first, 
 			const void* second, 
-			size_t count
+			size_t count,
+			const CompareReflectionTypeInstancesOptions* options
 		)
 		{
 			// Try with a reflection type
@@ -5071,12 +5090,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					const void* current_first = first;
 					const void* current_second = second;
 					for (size_t index = 0; index < count; index++) {
-						if (!CompareReflectionTypeInstances(reflection_manager, &nested_type, current_first, current_second)) {
+						if (!CompareReflectionTypeInstances(reflection_manager, &nested_type, current_first, current_second, options)) {
 							return false;
 						}
 						current_first = function::OffsetPointer(current_first, nested_byte_size);
 						current_second = function::OffsetPointer(current_second, nested_byte_size);
 					}
+					return true;
 				}
 			}
 			else {

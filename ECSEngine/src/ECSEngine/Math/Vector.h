@@ -1301,4 +1301,42 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	// This assumes that both a and b are in the 360 range
+	static bool SameQuadrantRange360(float degrees_a, float degrees_b) {
+		degrees_a = degrees_a < 0.0f ? 360.0f + degrees_a : degrees_a;
+		degrees_b = degrees_b < 0.0f ? 360.0f + degrees_b : degrees_b;
+
+		// Don't include "Function.h" just for this function
+
+		auto is_in_range = [](float val, float min, float max) {
+			return val >= min && val <= max;
+		};
+
+		if (is_in_range(degrees_a, 0.0f, 90.0f)) {
+			return is_in_range(degrees_b, 0.0f, 90.0f);
+		}
+		else if (is_in_range(degrees_a, 90.0f, 180.0f)) {
+			return is_in_range(degrees_b, 90.0f, 180.0f);
+		}
+		else if (is_in_range(degrees_a, 180.0f, 270.0f)) {
+			return is_in_range(degrees_b, 180.0f, 270.0f);
+		}
+		else {
+			return is_in_range(degrees_b, 270.0f, 360.0f);
+		}
+	}
+
+	static bool SameQuadrant(float degrees_a, float degrees_b) {
+		auto is_in_range = [](float val, float min, float max) {
+			return val >= min && val <= max;
+		};
+
+		if (is_in_range(degrees_a, -360.0f, 360.0f) && is_in_range(degrees_b, -360.0f, 360.0f)) {
+			return SameQuadrantRange360(degrees_a, degrees_b);
+		}
+		return SameQuadrantRange360(fmodf(degrees_a, 360.0f), fmodf(degrees_b, 360.0f));
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
 }

@@ -98,12 +98,14 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 			ray_direction
 		);
 
-		for (size_t index = 0; index < selected_entities.size; index++) {
-			Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
-			translation->value += translation_delta;
+		if (translation_delta != float3::Splat(0.0f)) {
+			for (size_t index = 0; index < selected_entities.size; index++) {
+				Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
+				translation->value += translation_delta;
+			}
+			// Also translate the midpoint along
+			*descriptor->translation_midpoint += translation_delta;
 		}
-		// Also translate the midpoint along
-		*descriptor->translation_midpoint += translation_delta;
 	}
 	break;
 	case ECS_TRANSFORM_ROTATION:

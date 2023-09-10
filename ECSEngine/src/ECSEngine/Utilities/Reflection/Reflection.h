@@ -524,6 +524,16 @@ namespace ECSEngine {
 			bool offset_into_data = true
 		);
 
+		struct CompareReflectionTypeInstanceBlittableType {
+			Stream<char> field_definition;
+			ReflectionStreamFieldType stream_type;
+		};
+
+		struct CompareReflectionTypeInstancesOptions {
+			// Optional list of field definitions to be considered blittable
+			Stream<CompareReflectionTypeInstanceBlittableType> blittable_types = {};
+		};
+
 		// Returns true if the instances of the reflection field match. Works for all cases (including custom types
 		// or user defined types, streams, pointers and basic arrays). Can optionally specify whether or not should use the pointer offset in the info
 		ECSENGINE_API bool CompareReflectionFieldInstances(
@@ -531,7 +541,8 @@ namespace ECSEngine {
 			const ReflectionField* field,
 			const void* first,
 			const void* second,
-			bool offset_into_data = true
+			bool offset_into_data = true,
+			const CompareReflectionTypeInstancesOptions* options = {}
 		);
 
 		// Compares two instances of the same type to see if they contain the same data.
@@ -540,7 +551,8 @@ namespace ECSEngine {
 			const ReflectionManager* reflection_manager,
 			const ReflectionType* type,
 			const void* first,
-			const void* second
+			const void* second,
+			const CompareReflectionTypeInstancesOptions* options = {}
 		);
 
 		// Compares two instances of a certain type to see if they contain the same data.
@@ -550,7 +562,8 @@ namespace ECSEngine {
 			Stream<char> definition,
 			const void* first,
 			const void* second,
-			size_t count
+			size_t count,
+			const CompareReflectionTypeInstancesOptions* options = {}
 		);
 
 		// Copies the data from the old_type into the new type and checks for remappings

@@ -199,10 +199,15 @@ unsigned int GetModuleReflectionHierarchyIndex(const EditorState* editor_state, 
 EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfiguration(const EditorState* editor_state, unsigned int module_index);
 
 // Returns a structures with both functions nullptr in case there is no such component. (Fine for components
-// that only expose handles to assets). If there is no dll loaded, then it will simply return
+// that only expose handles to assets). If there is no dll loaded, then it will simply return nullptrs
 ModuleLinkComponentTarget GetModuleLinkComponentTarget(const EditorState* editor_state, unsigned int module_index, Stream<char> name);
 
+// Returns nullptrs if it doesn't exist
 ModuleLinkComponentTarget GetEngineLinkComponentTarget(const EditorState* editor_state, Stream<char> name);
+
+// Searches firstly in the engine side, then in the module side.
+// Returns nullptrs if it doesn't exist
+ModuleLinkComponentTarget GetModuleLinkComponentTarget(const EditorState* editor_state, Stream<char> name);
 
 // Fills in the indices of the modules that the types from the given module index depend upon
 void GetModuleTypesDependencies(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies);

@@ -178,56 +178,66 @@ namespace ECSEngine {
 
 #pragma region Fmaddsub
 
+	// Here interestingly, _mm/_mm256_fmaddsub_ps/pd firstly it subtracts and then adds
+	// Use the reverse intrinsic
+
 	// Multiply packed single-precision (32-bit) floating-point elements in a and b, alternatively add and subtract packed 
 	// elements in c to/from the intermediate result, and store the results in dst.
+	// The first element is added, the second subtracted, the third added and so on
 	ECS_INLINE Vec4f ECS_VECTORCALL Fmaddsub(Vec4f a, Vec4f b, Vec4f c) {
-		return _mm_fmaddsub_ps(a, b, c);
+		return _mm_fmsubadd_ps(a, b, c);
 	}
 
 	// Multiply packed single-precision (32-bit) floating-point elements in a and b, alternatively add and subtract packed 
 	// elements in c to/from the intermediate result, and store the results in dst.
+	// The first element is added, the second subtracted, the third added and so on
 	ECS_INLINE Vec8f ECS_VECTORCALL Fmaddsub(Vec8f a, Vec8f b, Vec8f c) {
-		return _mm256_fmaddsub_ps(a, b, c);
+		return _mm256_fmsubadd_ps(a, b, c);
 	}
 
 	// Multiply packed double-precision (32-bit) floating-point elements in a and b, alternatively add and subtract packed 
 	// elements in c to/from the intermediate result, and store the results in dst.
+	// The first element is added, the second subtracted, the third added and so on
 	ECS_INLINE Vec2d ECS_VECTORCALL Fmaddsub(Vec2d a, Vec2d b, Vec2d c) {
-		return _mm_fmaddsub_pd(a, b, c);
+		return _mm_fmsubadd_pd(a, b, c);
 	}
 
 	// Multiply packed double-precision (32-bit) floating-point elements in a and b, alternatively add and subtract packed 
 	// elements in c to/from the intermediate result, and store the results in dst.
+	// The first element is added, the second subtracted, the third added and so on
 	ECS_INLINE Vec4d ECS_VECTORCALL Fmaddsub(Vec4d a, Vec4d b, Vec4d c) {
-		return _mm256_fmaddsub_pd(a, b, c);
+		return _mm256_fmsubadd_pd(a, b, c);
 	}
 
 #pragma endregion
 
 #pragma region Fmsubadd
 
+	// Here interestingly, _mm/_mm256_fmsubadd_ps/pd firstly it adds and then subtracts.
+	// Use the reverse intrinsic
+
 	// Multiply packed single-precision (32-bit) floating-point elements in a and b, alternatively subtract and add packed 
 	// elements in c from/to the intermediate result, and store the results in dst.
 	ECS_INLINE Vec4f ECS_VECTORCALL Fmsubadd(Vec4f a, Vec4f b, Vec4f c) {
-		return _mm_fmsubadd_ps(a, b, c);
+		return _mm_fmaddsub_ps(a, b, c);
 	}
 
 	// Multiply packed single-precision (32-bit) floating-point elements in a and b, alternatively subtract and add packed 
 	// elements in c from/to the intermediate result, and store the results in dst.
 	ECS_INLINE Vec8f ECS_VECTORCALL Fmsubadd(Vec8f a, Vec8f b, Vec8f c) {
-		return _mm256_fmsubadd_ps(a, b, c);
+		return _mm256_fmaddsub_ps(a, b, c);
 	}
 
 	// Multiply packed double-precision (32-bit) floating-point elements in a and b, alternatively subtract and add packed 
 	// elements in c from/to the intermediate result, and store the results in dst.
 	ECS_INLINE Vec2d ECS_VECTORCALL Fmsubadd(Vec2d a, Vec2d b, Vec2d c) {
-		return _mm_fmsubadd_pd(a, b, c);
+		return _mm_fmaddsub_pd(a, b, c);
 	}
 
 	// Multiply packed double-precision (32-bit) floating-point elements in a and b, alternatively subtract and add packed 
 	// elements in c from/to the intermediate result, and store the results in dst.
 	ECS_INLINE Vec4d ECS_VECTORCALL Fmsubadd(Vec4d a, Vec4d b, Vec4d c) {
-		return _mm256_fmsubadd_pd(a, b, c);
+		return _mm256_fmaddsub_pd(a, b, c);
 	}
 
 #pragma endregion
@@ -344,6 +354,11 @@ namespace ECSEngine {
 	template<typename VectorType>
 	ECS_INLINE VectorType ECS_VECTORCALL BlendLowAndHigh(VectorType a, VectorType b) {
 		return blend8<0, 1, 2, 3, 12, 13, 14, 15>(a, b);
+	}
+
+	template<typename VectorType>
+	ECS_INLINE VectorType ECS_VECTORCALL BlendHighAndLow(VectorType a, VectorType b) {
+		return Permute2f128Helper<3, 0>(a, b);
 	}
 
 

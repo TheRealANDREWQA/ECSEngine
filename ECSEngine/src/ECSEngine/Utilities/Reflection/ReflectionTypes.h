@@ -346,64 +346,64 @@ namespace ECSEngine {
 		// If it is a 2, 3 or 4 type then it will return the basic one with a single component
 		ECSENGINE_API ReflectionBasicFieldType ReduceMultiComponentReflectionType(ReflectionBasicFieldType type);
 
-		inline bool IsBlittable(const ReflectionType* type) {
+		ECS_INLINE bool IsBlittable(const ReflectionType* type) {
 			return type->is_blittable;
 		}
 
-		inline bool IsBlittableWithPointer(const ReflectionType* type) {
+		ECS_INLINE bool IsBlittableWithPointer(const ReflectionType* type) {
 			return type->is_blittable_with_pointer;
 		}
 
-		inline bool IsBoolBasicTypeMultiComponent(ReflectionBasicFieldType type) {
+		ECS_INLINE bool IsBoolBasicTypeMultiComponent(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Bool4;
 		}
 
-		inline bool IsBoolBasicType(ReflectionBasicFieldType type) {
+		ECS_INLINE bool IsBoolBasicType(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Bool || IsBoolBasicTypeMultiComponent(type);
 		}
 
 		// Checks for float2, float3, float4
-		inline bool IsFloatBasicTypeMultiComponent(ReflectionBasicFieldType type) {
+		ECS_INLINE bool IsFloatBasicTypeMultiComponent(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Float2 || type == ReflectionBasicFieldType::Float3 || type == ReflectionBasicFieldType::Float4;
 		}
 
 		// Checks for float, float2, float3, float4
-		inline bool IsFloatBasicType(ReflectionBasicFieldType type) {
+		ECS_INLINE bool IsFloatBasicType(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Float || IsFloatBasicTypeMultiComponent(type);
 		}
 
 		// Checks for double2, double3, double4
-		inline bool IsDoubleBasicTypeMultiComponent(ReflectionBasicFieldType type) {
+		ECS_INLINE bool IsDoubleBasicTypeMultiComponent(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Double2 || type == ReflectionBasicFieldType::Double3 || type == ReflectionBasicFieldType::Double4;
 		}
 
 		// Checks for double, double2, double3, double4
-		inline bool IsDoubleBasicType(ReflectionBasicFieldType type) {
+		ECS_INLINE bool IsDoubleBasicType(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Double || IsDoubleBasicTypeMultiComponent(type);
 		}
 
 		// Checks for float, float2, float3, float4, double, double2, double3, double4
-		inline bool IsFloating(ReflectionBasicFieldType type) {
+		ECS_INLINE bool IsFloating(ReflectionBasicFieldType type) {
 			return IsFloatBasicType(type) || IsDoubleBasicType(type);
 		}
 
-		inline bool IsUserDefined(ReflectionBasicFieldType type) {
+		ECS_INLINE bool IsUserDefined(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::UserDefined;
 		}
 
-		inline bool IsPointer(ReflectionStreamFieldType type) {
+		ECS_INLINE bool IsPointer(ReflectionStreamFieldType type) {
 			return type == ReflectionStreamFieldType::Pointer;
 		}
 
-		inline bool IsEnum(ReflectionBasicFieldType type) {
+		ECS_INLINE bool IsEnum(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Enum;
 		}
 
-		inline bool IsArray(ReflectionStreamFieldType type) {
+		ECS_INLINE bool IsArray(ReflectionStreamFieldType type) {
 			return type == ReflectionStreamFieldType::BasicTypeArray;
 		}
 
-		inline bool IsStream(ReflectionStreamFieldType type) {
+		ECS_INLINE bool IsStream(ReflectionStreamFieldType type) {
 			return type == ReflectionStreamFieldType::Stream || type == ReflectionStreamFieldType::CapacityStream
 				|| type == ReflectionStreamFieldType::ResizableStream;
 		}

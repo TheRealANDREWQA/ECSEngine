@@ -280,7 +280,7 @@ struct ConvertToOrFromLinkData {
 };
 
 ConvertToOrFromLinkData GetConvertToOrFromLinkData(
-	EditorState* editor_state, 
+	const EditorState* editor_state, 
 	Stream<char> link_component, 
 	AllocatorPolymorphic allocator
 ) {
@@ -322,7 +322,7 @@ ConvertToOrFromLinkData GetConvertToOrFromLinkData(
 // ------------------------------------------------------------------------------------------------------------------------------
 
 bool ConvertTargetToLinkComponent(
-	EditorState* editor_state, 
+	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Stream<char> link_component,
 	Entity entity,
@@ -355,7 +355,7 @@ bool ConvertTargetToLinkComponent(
 // ------------------------------------------------------------------------------------------------------------------------------
 
 bool ConvertTargetToLinkComponent(
-	EditorState* editor_state,
+	const EditorState* editor_state,
 	Stream<char> link_component,
 	const void* target_data,
 	void* link_data,
@@ -376,6 +376,8 @@ bool ConvertLinkComponentToTarget(
 	Entity entity, 
 	const void* link_data,
 	const void* previous_link_data,
+	bool apply_modifier_function,
+	const void* previous_target_data,
 	AllocatorPolymorphic allocator,
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
@@ -398,13 +400,16 @@ bool ConvertLinkComponentToTarget(
 		component_byte_size = active_entity_manager->ComponentSize(convert_data.component);
 	}
 
+	previous_target_data = previous_target_data != nullptr ? previous_target_data : target_data;
+
 	ECS_STACK_CAPACITY_STREAM(size_t, component_storage, ECS_KB * 4);
 	bool conversion_success = ConvertLinkComponentToTarget(
 		&convert_data.base_data,
 		link_data,
 		component_storage.buffer,
 		previous_link_data,
-		target_data
+		previous_target_data,
+		apply_modifier_function
 	);
 	if (conversion_success) {
 		// Deallocate any existing buffers
@@ -432,10 +437,11 @@ bool ConvertLinkComponentToTarget(
 	const void* link_data,
 	const void* previous_target_data,
 	const void* previous_link_data,
+	bool apply_modifier_function,
 	AllocatorPolymorphic allocator
 ) {
 	ConvertToOrFromLinkData convert_data = GetConvertToOrFromLinkData(editor_state, link_component, allocator);
-	return ConvertLinkComponentToTarget(&convert_data.base_data, link_data, target_data, previous_link_data, previous_target_data);
+	return ConvertLinkComponentToTarget(&convert_data.base_data, link_data, target_data, previous_link_data, previous_target_data, apply_modifier_function);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1017,6 +1023,22 @@ bool IsSandboxEntityValid(const EditorState* editor_state, unsigned int sandbox_
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+bool NeedsApplyModifierLinkComponent(const EditorState* editor_state, Stream<char> link_name)
+{
+	ModuleLinkComponentTarget link_target = GetModuleLinkComponentTarget(editor_state, link_name);
+	return link_target.build_function != nullptr && link_target.apply_modifier != nullptr;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+bool NeedsApplyModifierButtonLinkComponent(const EditorState* editor_state, Stream<char> link_name)
+{
+	ModuleLinkComponentTarget link_target = GetModuleLinkComponentTarget(editor_state, link_name);
+	return link_target.build_function != nullptr && link_target.apply_modifier != nullptr && link_target.apply_modifier_needs_button;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 void ParentSandboxEntity(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -1480,18 +1502,31 @@ bool SandboxUpdateUniqueLinkComponentForEntity(
 	Stream<char> link_name,
 	Entity entity,
 	const void* previous_link_component,
-	bool give_error_when_failing,
-	EDITOR_SANDBOX_VIEWPORT viewport
+	SandboxUpdateLinkComponentForEntityInfo info
 ) {
 	Component component = editor_state->editor_components.GetComponentIDWithLink(link_name);
-	AllocatorPolymorphic component_allocator = GetAllocatorPolymorphic(GetComponentAllocator(editor_state, sandbox_index, component));
-	bool success = ConvertLinkComponentToTarget(editor_state, sandbox_index, link_name, entity, link_component, previous_link_component, component_allocator);
+	AllocatorPolymorphic component_allocator = GetAllocatorPolymorphic(GetComponentAllocator(editor_state, sandbox_index, component, info.viewport));
+	bool success = ConvertLinkComponentToTarget(
+		editor_state, 
+		sandbox_index, 
+		link_name, 
+		entity, 
+		link_component, 
+		previous_link_component, 
+		info.apply_modifier_function,
+		info.target_previous_data,
+		component_allocator, 
+		info.viewport
+	);
 	if (!success) {
-		ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-		Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, entity, entity_name_storage);
+		if (info.give_error_when_failing) {
+			ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
+			Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, entity, entity_name_storage);
 
-		ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert link component {#} to target for entity {#} in sandbox {#}.", link_name, entity_name, sandbox_index);
-		EditorSetConsoleError(error_message);
+			ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert link component {#} to target for entity {#} in sandbox {#} for {#}.",
+				link_name, entity_name, sandbox_index, ViewportString(info.viewport));
+			EditorSetConsoleError(error_message);
+		}
 	}
 	return success;
 }
@@ -1505,14 +1540,20 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 	Stream<char> link_name, 
 	Entity entity,
 	const void* previous_link_component,
-	bool give_error_when_failing,
-	EDITOR_SANDBOX_VIEWPORT viewport
+	SandboxUpdateLinkComponentForEntityInfo info
 )
 {
 	// Get the component data first to help the conversion
 	Component target_component = editor_state->editor_components.GetComponentIDWithLink(link_name);
-	SharedInstance current_instance = EntitySharedInstance(editor_state, sandbox_index, entity, target_component, viewport);
-	const void* shared_component_data = GetSandboxSharedInstance(editor_state, sandbox_index, target_component, current_instance);
+	SharedInstance current_instance = EntitySharedInstance(editor_state, sandbox_index, entity, target_component, info.viewport);
+
+	const void* previous_shared_data = nullptr;
+	if (info.target_previous_data != nullptr) {
+		previous_shared_data = info.target_previous_data;
+	}
+	else {
+		previous_shared_data = GetSandboxSharedInstance(editor_state, sandbox_index, target_component, current_instance);
+	}
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	size_t converted_link_storage[ECS_KB * 4];
@@ -1521,16 +1562,17 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 		link_name, 
 		converted_link_storage, 
 		link_component, 
-		shared_component_data, 
-		previous_link_component, 
+		previous_shared_data,
+		previous_link_component,
+		info.apply_modifier_function,
 		GetAllocatorPolymorphic(&stack_allocator)
 	);
 	if (!success) {
-		if (give_error_when_failing) {
+		if (info.give_error_when_failing) {
 			ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 256);
 			Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, entity, entity_name_storage);
 			ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert link component {#} to target for entity {#} in sandbox {#} for {#}.", 
-				link_name, entity_name, sandbox_index, ViewportString(viewport));
+				link_name, entity_name, sandbox_index, ViewportString(info.viewport));
 			EditorSetConsoleError(error_message);
 		}
 		stack_allocator.ClearBackup();
@@ -1538,12 +1580,12 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 	}
 
 	// Find or create the shared instance that matches this data
-	SharedInstance new_shared_instance = FindOrCreateSharedComponentInstance(editor_state, sandbox_index, target_component, converted_link_storage, viewport);
+	SharedInstance new_shared_instance = FindOrCreateSharedComponentInstance(editor_state, sandbox_index, target_component, converted_link_storage, info.viewport);
 
 	stack_allocator.ClearBackup();
 
 	if (new_shared_instance != current_instance) {
-		EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+		EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, info.viewport);
 		SharedInstance old_instance = entity_manager->ChangeEntitySharedInstanceCommit(entity, target_component, new_shared_instance, true);
 
 		// Unregister the shared instance if it longer is referenced

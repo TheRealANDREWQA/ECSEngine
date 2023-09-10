@@ -148,6 +148,10 @@ namespace ECSEngine {
 			return SplatHighLane(value);
 		}
 
+		ECS_INLINE void Store(void* destination) const {
+			value.store((float*)destination);
+		}
+
 		Vec8f value;
 	};
 
@@ -903,6 +907,8 @@ namespace ECSEngine {
 			// y rotation = -PI/2 + 2 * atan2(sqrt(1 + 2 * y_factor), sqrt(1 - 2 * y_factor))
 			// z_rotation = atan2(2 * z_factor_first, 1 - 2 * z_factor_second)
 
+			//return QuaternionToEulerRadScalarHelper(quaternion);
+
 			Vector8 one = VectorGlobals::ONE;
 			Vector8 two = Vector8(2.0f);
 
@@ -945,7 +951,12 @@ namespace ECSEngine {
 
 		// This can be used to finish the transformation into euler rotation from quaternion
 		ECS_INLINE float3 FinishEulerRotation(float3 euler_rotation) {
-			euler_rotation.y = euler_rotation.y * 2.0f - PI * 0.5f;
+			if (isnan(euler_rotation.y)) {
+				euler_rotation.y = PI / 2;
+			}
+			else {
+				euler_rotation.y = euler_rotation.y * 2.0f - PI * 0.5f;
+			}
 			return euler_rotation;
 		}
 
@@ -1023,8 +1034,10 @@ namespace ECSEngine {
 		Vector8 float_count = (float)count;
 		Vector8 count_inverse = OneDividedVector<ECS_VECTOR_ACCURATE>(float_count);
 
+		Vector8 is_zero = cumulator.value == ZeroVector();
+
 		Vector8 average_values = cumulator.value * count_inverse;
-		return QuaternionNormalize(average_values);
+		return Select(is_zero, QuaternionIdentity().value, QuaternionNormalize(average_values).value);
 	}
 
 	// The reference quaternion is used to changed the sign of the current quaternion if they are in different hyperplanes

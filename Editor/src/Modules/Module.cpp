@@ -1474,7 +1474,7 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 2048);
 
 		// Launch thread tasks to process this new entry
-		success = module_reflection->ProcessFolderHierarchy(folder_hierarchy, /*editor_state->task_manager,*/ &error_message);
+		success = module_reflection->ProcessFolderHierarchy(folder_hierarchy, editor_state->task_manager, &error_message);
 
 		// We'll need the name for the editor components module
 		ECS_STACK_CAPACITY_STREAM(char, ascii_name, 512);
@@ -1566,6 +1566,26 @@ ModuleLinkComponentTarget GetEngineLinkComponentTarget(const EditorState* editor
 		ModuleLinkComponentTarget target = editor_state->ecs_link_components[index];
 		if (target.component_name == name) {
 			return target;
+		}
+	}
+	return { nullptr, nullptr };
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+ModuleLinkComponentTarget GetModuleLinkComponentTarget(const EditorState* editor_state, Stream<char> name)
+{
+	ModuleLinkComponentTarget target = GetEngineLinkComponentTarget(editor_state, name);
+	if (target.build_function != nullptr) {
+		return target;
+	}
+	else {
+		unsigned int module_count = editor_state->project_modules->size;
+		for (unsigned int index = 0; index < module_count; index++) {
+			target = GetModuleLinkComponentTarget(editor_state, index, name);
+			if (target.build_function != nullptr) {
+				return target;
+			}
 		}
 	}
 	return { nullptr, nullptr };
