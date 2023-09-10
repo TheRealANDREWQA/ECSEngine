@@ -1754,7 +1754,7 @@ namespace ECSEngine {
 			}
 
 			data->extra_data = &functor_data->normal_base_data;
-			data->components = source;
+			data->components = link_component_storage;
 			unsigned int current_write_size = ReflectionSerializeEntityManagerComponent(data);
 			if (current_write_size <= data->buffer_capacity) {
 				data->buffer_capacity -= current_write_size;
@@ -1867,7 +1867,8 @@ namespace ECSEngine {
 				link_component_storage,
 				function::OffsetPointer(initial_component, index * target_byte_size),
 				nullptr,
-				nullptr
+				nullptr,
+				false
 			);
 			if (!success) {
 				return false;
@@ -1925,7 +1926,8 @@ namespace ECSEngine {
 			link_component_storage,
 			initial_component,
 			nullptr,
-			nullptr
+			nullptr,
+			false
 		);
 		if (!success) {
 			return false;

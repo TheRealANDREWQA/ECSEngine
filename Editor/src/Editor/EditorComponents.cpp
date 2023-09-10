@@ -1277,7 +1277,7 @@ bool EditorComponents::HasBuffers(Stream<char> name) const
 {
 	ReflectionType reflection_type;
 	if (internal_manager->type_definitions.TryGetValue(name, reflection_type)) {
-		return IsBlittableWithPointer(&reflection_type);
+		return !IsBlittableWithPointer(&reflection_type);
 	}
 
 	ECS_ASSERT(false);
@@ -2047,6 +2047,7 @@ void EditorComponents::UpdateComponents(
 					if (!ValidateLinkComponent(type, target_type)) {
 						// Generate a mismatch event
 						events.Add({ EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT, type->name });
+						//return;
 					}
 					else {
 						// Generate an event
@@ -2056,6 +2057,7 @@ void EditorComponents::UpdateComponents(
 				else {
 					// Generate an invalid event
 					events.Add({ EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET, type->name });
+					//return;
 				}
 			}
 		}

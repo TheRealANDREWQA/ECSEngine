@@ -80,6 +80,7 @@ namespace ECSEngine {
 
 	struct ECS_REFLECT_LINK_COMPONENT(Rotation) RotationLink {
 		float3 value;
+		//float3 add_rotation; ECS_LINK_MODIFIER_FIELD
 	};
 
 	struct ModuleRegisterLinkComponentFunctionData;

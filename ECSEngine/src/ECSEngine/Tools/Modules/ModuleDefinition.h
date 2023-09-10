@@ -260,10 +260,28 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	struct ModuleLinkComponentApplyModifierFieldsFunctionData {
+		const void* link_component;
+		void* component;
+		Stream<Stream<void>> asset_handles;
+
+		const void* previous_link_component;
+		const void* previous_component;
+	};
+
+	// This function will be called when a modifier field (or if you activated the button when it is pressed)
+	// Such that the values from the link can be applied to the target
+	typedef void (*ModuleLinkComponentApplyModifierFunction)(ModuleLinkComponentApplyModifierFieldsFunctionData* data);
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	struct ModuleLinkComponentTarget {
 		ModuleLinkComponentFunction build_function;
 		ModuleLinkComponentReverseFunction reverse_function;
 		Stream<char> component_name;
+
+		ModuleLinkComponentApplyModifierFunction apply_modifier = nullptr;
+		bool apply_modifier_needs_button = false;
 	};
 
 	struct ModuleRegisterLinkComponentFunctionData {

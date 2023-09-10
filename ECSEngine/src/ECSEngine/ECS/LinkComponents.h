@@ -261,11 +261,19 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	// If the link component is a default linked component, it verifies that the target
-	// can be obtained from the linked component. For user supplied linked components it assumes
+	// can be obtained from the linked component. For user supplied linked components, it assumes
 	// that it is always the case.
 	ECSENGINE_API bool ValidateLinkComponent(
 		const Reflection::ReflectionType* link_type,
 		const Reflection::ReflectionType* target_type
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	// If the link component has modifier fields but there is no such function, it will return false
+	ECSENGINE_API bool ValidateLinkComponentTarget(
+		const Reflection::ReflectionType* link_type,
+		ModuleLinkComponentTarget target
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -369,7 +377,8 @@ namespace ECSEngine {
 		const void* link_data,
 		void* target_data,
 		const void* previous_link_data,
-		const void* previous_target_data
+		const void* previous_target_data,
+		bool apply_modifier_function
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -409,6 +418,19 @@ namespace ECSEngine {
 		const AssetDatabase* asset_database,
 		Stream<unsigned int>* asset_fields_reference_count
 	);
+
+	// ------------------------------------------------------------------------------------------------------------
+	
+	// Returns true if the link type has any modifier fields
+	ECSENGINE_API bool HasModifierFieldsLinkComponent(const Reflection::ReflectionType* link_type);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void CopyModifierFieldsLinkComponent(const Reflection::ReflectionType* link_type, void* destination, const void* source);
+
+	// ------------------------------------------------------------------------------------------------------------
+	
+	ECSENGINE_API void ResetModifierFieldsLinkComponent(const Reflection::ReflectionType* link_type, void* link_component);
 
 	// ------------------------------------------------------------------------------------------------------------
 

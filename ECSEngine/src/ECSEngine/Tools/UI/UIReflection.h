@@ -58,6 +58,8 @@ namespace ECSEngine {
 			size_t configuration;
 			void* data;
 			Stream<char> name;
+			// This field will only reference the value from the reflection type
+			Stream<char> tags;
 			UIReflectionStreamType stream_type;
 			UIReflectionElement element_index;
 			unsigned short byte_size;
@@ -295,6 +297,33 @@ namespace ECSEngine {
 			CapacityStream<unsigned int>* indices = nullptr;
 		};
 
+		struct UIReflectionDrawInstanceFieldTagCallbackData {
+			void* field_data;
+			void* user_data;
+			Stream<char> field_name;
+			UIReflectionElement element;
+			UIReflectionStreamType stream_type;
+		};
+
+		typedef void (*UIReflectionDrawInstanceFieldTagCallback)(UIReflectionDrawInstanceFieldTagCallbackData* data);
+
+		// The config will be applied if the tag is matched by that field
+		struct UIReflectionDrawInstanceFieldTagOption {
+			// If this is set to true, then the matching is done with Is instead of Has
+			bool is_tag = false;
+			// If this is set to true, all fields that don't match the tag will receive this config
+			bool exclude_match = false;
+			// If this is set to true, a field that matches the tag won't receive additional draw configs
+			// From the additional_configs field of the UIReflectionDrawInstanceOptions
+			bool disable_additional_configs = false;
+			Stream<char> tag;
+			UIReflectionDrawConfig draw_config;
+
+			// Can optionally provide a callback when a field is matched
+			UIReflectionDrawInstanceFieldTagCallback callback = nullptr;
+			void* callback_data = nullptr;
+		};
+
 		struct UIReflectionDrawInstanceOptions {
 			UIDrawer* drawer;
 			UIDrawConfig* config;
@@ -303,6 +332,7 @@ namespace ECSEngine {
 			Stream<UIReflectionOverrideDrawConfig> override_additional_configs = { nullptr, 0 };
 			const UIReflectionInstanceDrawCustomFunctors* custom_draw = nullptr;
 			Stream<char> default_value_button = { nullptr, 0 };
+			Stream<UIReflectionDrawInstanceFieldTagOption> field_tag_options = { nullptr, 0 };
 		};
 
 		struct UIReflectionDrawerCreateTypeOptions {
@@ -622,8 +652,6 @@ namespace ECSEngine {
 			UIReflectionType type;
 			UIReflectionInstance instance;
 		};
-
-		void UIReflectionDefaultValueAction(ActionData* action_data);
 
 	}
 }

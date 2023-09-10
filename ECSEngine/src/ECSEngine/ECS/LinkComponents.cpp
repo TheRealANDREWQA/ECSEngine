@@ -973,6 +973,23 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	bool ValidateLinkComponentTarget(const Reflection::ReflectionType* link_type, ModuleLinkComponentTarget target)
+	{
+		bool has_modifier_fields = false;
+		for (size_t index = 0; index < link_type->fields.size && !has_modifier_fields; index++) {
+			if (link_type->fields[index].GetTag(STRING(ECS_LINK_MODIFIER_FIELD)).size > 0) {
+				has_modifier_fields = true;
+			}
+		}
+
+		if (has_modifier_fields && target.apply_modifier == nullptr) {
+			return false;
+		}
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	void ResetLinkComponent(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
@@ -1234,6 +1251,7 @@ namespace ECSEngine {
 		void* target_data,
 		const void* previous_link_data,
 		const void* previous_target_data,
+		bool use_apply_modifier_function,
 		Functor&& functor
 	) {
 		// Determine if the link component has a DLL function
@@ -1274,16 +1292,35 @@ namespace ECSEngine {
 		GetLinkComponentAssetData(base_data->link_type, link_data, base_data->asset_database, asset_fields, &assets);
 
 		if (needs_dll) {
-			// Build it using the function
-			ModuleLinkComponentFunctionData build_data;
-			build_data.assets = assets;
-			build_data.component = target_data;
-			build_data.link_component = link_data;
+			if (use_apply_modifier_function) {
+				// Use the apply modifier function
+				ModuleLinkComponentApplyModifierFieldsFunctionData apply_data;
+				apply_data.asset_handles = assets;
+				apply_data.component = target_data;
+				apply_data.link_component = link_data;
 
-			// These are forwarded
-			build_data.previous_component = previous_target_data;
-			build_data.previous_link_component = previous_link_data;
-			base_data->module_link.build_function(&build_data);
+				// These are forwarded
+				apply_data.previous_component = previous_target_data;
+				apply_data.previous_link_component = previous_link_data;
+				if (base_data->module_link.apply_modifier != nullptr) {
+					base_data->module_link.apply_modifier(&apply_data);
+				}
+				else {
+					return false;
+				}
+			}
+			else {
+				// Build it using the function
+				ModuleLinkComponentFunctionData build_data;
+				build_data.assets = assets;
+				build_data.component = target_data;
+				build_data.link_component = link_data;
+
+				// These are forwarded
+				build_data.previous_component = previous_target_data;
+				build_data.previous_link_component = previous_link_data;
+				base_data->module_link.build_function(&build_data);
+			}
 		}
 		else {
 			if (base_data->link_type->fields.size != base_data->target_type->fields.size) {
@@ -1351,7 +1388,8 @@ namespace ECSEngine {
 		const void* link_data,
 		void* target_data,
 		const void* previous_link_data,
-		const void* previous_target_data
+		const void* previous_target_data,
+		bool apply_modifier_function
 	)
 	{
 		auto copy_field = [&](size_t index) {
@@ -1380,7 +1418,7 @@ namespace ECSEngine {
 			}
 			return true;
 		};
-		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, previous_link_data, previous_target_data, copy_field);
+		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, previous_link_data, previous_target_data, apply_modifier_function, copy_field);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -1393,7 +1431,7 @@ namespace ECSEngine {
 		const void* previous_target_data
 	)
 	{
-		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, previous_link_data, previous_target_data, [](size_t index) { return true; });
+		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, previous_link_data, previous_target_data, false, [](size_t index) { return true; });
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -1542,6 +1580,57 @@ namespace ECSEngine {
 				});
 			}
 		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool HasModifierFieldsLinkComponent(const Reflection::ReflectionType* link_type)
+	{
+		for (size_t index = 0; index < link_type->fields.size; index++) {
+			if (link_type->fields[index].Has(STRING(ECS_LINK_MODIFIER_FIELD))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool NeedsButtonModifierFieldsLinkComponent(const Reflection::ReflectionType* link_type)
+	{
+		return link_type->GetEvaluation(ECS_LINK_COMPONENT_NEEDS_BUTTON_FUNCTION) != DBL_MAX;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void CopyModifierFieldsLinkComponent(const Reflection::ReflectionType* link_type, void* destination, const void* source)
+	{
+		for (size_t index = 0; index < link_type->fields.size; index++) {
+			if (link_type->fields[index].Has(STRING(ECS_LINK_MODIFIER_FIELD))) {
+				memcpy(
+					function::OffsetPointer(destination, link_type->fields[index].info.pointer_offset),
+					function::OffsetPointer(source, link_type->fields[index].info.pointer_offset),
+					link_type->fields[index].info.byte_size
+				);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ResetModifierFieldsLinkComponent(const Reflection::ReflectionType* link_type, void* link_component)
+	{
+		for (size_t index = 0; index < link_type->fields.size; index++) {
+			if (link_type->fields[index].Has(STRING(ECS_LINK_MODIFIER_FIELD))) {
+				void* value = function::OffsetPointer(link_component, link_type->fields[index].info.pointer_offset);
+				if (link_type->fields[index].info.has_default_value) {
+					memcpy(value, &link_type->fields[index].info.default_bool, link_type->fields[index].info.byte_size);
+				}
+				else {
+					memset(value, 0, link_type->fields[index].info.byte_size);
+				}
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

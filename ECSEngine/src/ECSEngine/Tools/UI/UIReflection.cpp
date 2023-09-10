@@ -3233,7 +3233,7 @@ namespace ECSEngine {
 			ResourceIdentifier identifier(name);
 			ECS_ASSERT(type_definition.Find(identifier) == -1);
 
-			return CreateType(reflection->GetType(name));
+			return CreateType(reflection->GetType(name), options);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -3800,6 +3800,7 @@ namespace ECSEngine {
 					type.fields[type.fields.size].name = reflected_type->fields[index].name;
 					type.fields[type.fields.size].pointer_offset = reflected_type->fields[index].info.pointer_offset;
 					type.fields[type.fields.size].reflection_type_index = index;
+					type.fields[type.fields.size].tags = reflected_type->fields[index].tag;
 					if (field_info.stream_type == ReflectionStreamFieldType::Pointer) {
 						// The basic type count tells the indirection count: e.g void* - indirection 1; void** indirection 2
 						// Only reflect single indirection pointers
@@ -4448,6 +4449,8 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
+		void UIReflectionDefaultValueAction(ActionData* action_data);
+
 		void UIReflectionDrawer::DrawInstance(
 			UIReflectionInstance* instance,
 			const UIReflectionDrawInstanceOptions* options
@@ -4540,16 +4543,58 @@ namespace ECSEngine {
 						}
 
 						UIReflectionElement element_index = type->fields[index].element_index;
-
-						size_t config_flag_count = options->config->flag_count;
 						size_t current_configuration = type->fields[index].configuration;
-						for (size_t subindex = 0; subindex < options->additional_configs.size; subindex++) {
-							for (size_t type_index = 0; type_index < options->additional_configs[subindex].index_count; type_index++) {
-								if (options->additional_configs[subindex].index[type_index] == element_index ||
-									options->additional_configs[subindex].index[type_index] == UIReflectionElement::Count) {
-									current_configuration |= options->additional_configs[subindex].configurations;
+						size_t config_flag_count = options->config->flag_count;
 
-									UIReflectionDrawConfigCopyToNormalConfig(options->additional_configs.buffer + subindex, *options->config);
+						bool disable_additional_configs = false;
+						if (options->field_tag_options.size > 0) {
+							for (size_t subindex = 0; subindex < options->field_tag_options.size; subindex++) {
+								bool matches = false;
+								if (options->field_tag_options[subindex].is_tag) {
+									matches = type->fields[index].tags == options->field_tag_options[subindex].tag;
+								}
+								else {
+									matches = function::FindFirstToken(type->fields[index].tags, options->field_tag_options[subindex].tag).size > 0;
+								}
+
+								auto matched = [&]() {
+									current_configuration |= options->field_tag_options[subindex].draw_config.configurations;
+									UIReflectionDrawConfigCopyToNormalConfig(&options->field_tag_options[subindex].draw_config, *options->config);
+									disable_additional_configs = options->field_tag_options[subindex].disable_additional_configs;
+									// Check the callback
+									if (options->field_tag_options[subindex].callback != nullptr) {
+										UIReflectionDrawInstanceFieldTagCallbackData callback_data;
+										callback_data.element = element_index;
+										callback_data.field_data = instance->data[index];
+										callback_data.field_name = type->fields[index].name;
+										callback_data.user_data = options->field_tag_options[subindex].callback_data;
+										callback_data.stream_type = type->fields[index].stream_type;
+										options->field_tag_options[subindex].callback(&callback_data);
+									}
+								};
+
+								if (options->field_tag_options[subindex].exclude_match) {
+									if (!matches) {
+										matched();
+									}
+								}
+								else {
+									if (matches) {
+										matched();
+									}
+								}
+							}
+						}
+
+						if (!disable_additional_configs) {
+							for (size_t subindex = 0; subindex < options->additional_configs.size; subindex++) {
+								for (size_t type_index = 0; type_index < options->additional_configs[subindex].index_count; type_index++) {
+									if (options->additional_configs[subindex].index[type_index] == element_index ||
+										options->additional_configs[subindex].index[type_index] == UIReflectionElement::Count) {
+										current_configuration |= options->additional_configs[subindex].configurations;
+
+										UIReflectionDrawConfigCopyToNormalConfig(options->additional_configs.buffer + subindex, *options->config);
+									}
 								}
 							}
 						}
@@ -4577,7 +4622,7 @@ namespace ECSEngine {
 							current_configuration,
 							current_field_name,
 							instance->data[index],
-							type->fields[index].element_index,
+							element_index,
 							type->fields[index].stream_type
 						);
 

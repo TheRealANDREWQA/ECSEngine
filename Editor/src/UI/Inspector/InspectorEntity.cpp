@@ -36,30 +36,53 @@ struct InspectorDrawEntityData {
 	struct LinkComponent {
 		Stream<char> name;
 		void* data;
+		void* previous_data;
+
+		// We keep a copy of the target data such that we trigger a conversion from target to link
+		// only if they are different
+		void* target_data_copy;
+
+		// This is the allocator used to make allocations for the fields of the target_data_copy
+		MemoryManager target_allocator;
+
+		void* apply_modifier_initial_target_data;
+		bool is_apply_modifier_in_progress;
 	};
 
+	ECS_INLINE AllocatorPolymorphic Allocator() const {
+		return GetAllocatorPolymorphic(&allocator);
+	}
+
+	ECS_INLINE MemoryManager CreateLinkTargetAllocator(EditorState* editor_state) {
+		return MemoryManager(ECS_KB * 32, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
+	}
+
+	ECS_INLINE AllocatorPolymorphic TargetAllocator(unsigned int link_index) const {
+		return GetAllocatorPolymorphic(&link_components[link_index].target_allocator);
+	}
+
 	unsigned int AddCreatedInstance(EditorState* editor_state, Stream<char> name, void* pointer_bound) {
-		name = function::StringCopy(editor_state->EditorAllocator(), name);
+		name = function::StringCopy(Allocator(), name);
 		void* old_buffer = created_instances.buffer;
 		size_t previous_size = created_instances.size;
 
-		void* allocation = editor_state->editor_allocator->Allocate(created_instances.MemoryOf(created_instances.size + 1));
+		void* allocation = allocator.Allocate(created_instances.MemoryOf(created_instances.size + 1));
 		uintptr_t ptr = (uintptr_t)allocation;
 		created_instances.InitializeAndCopy(ptr, created_instances);
 		unsigned int index = created_instances.Add({ name, pointer_bound });
 		if (previous_size > 0) {
-			editor_state->editor_allocator->Deallocate(old_buffer);
+			allocator.Deallocate(old_buffer);
 		}
 		return index;
 	}
 
 	// Resizes the matching inputs
 	unsigned int AddComponent(EditorState* editor_state, Stream<char> component_name) {
-		void* allocation = editor_state->editor_allocator->Allocate(matching_inputs.MemoryOf(matching_inputs.size + 1));
+		void* allocation = allocator.Allocate(matching_inputs.MemoryOf(matching_inputs.size + 1));
 		uintptr_t ptr = (uintptr_t)allocation;
 
 		if (matching_inputs.size > 0) {
-			editor_state->editor_allocator->Deallocate(matching_inputs.buffer);
+			allocator.Deallocate(matching_inputs.buffer);
 		}
 		matching_inputs.InitializeAndCopy(ptr, matching_inputs);
 
@@ -75,7 +98,7 @@ struct InspectorDrawEntityData {
 	CapacityStream<void>* AddComponentInput(EditorState* editor_state, Stream<char> component_name, size_t input_capacity, size_t element_byte_size) {
 		unsigned int index = FindMatchingInput(component_name);
 		ECS_ASSERT(index != -1);
-		void* allocation = editor_state->editor_allocator->Allocate(input_capacity * element_byte_size + sizeof(CapacityStream<void>));
+		void* allocation = allocator.Allocate(input_capacity * element_byte_size + sizeof(CapacityStream<void>));
 		CapacityStream<void>* new_input = (CapacityStream<void>*)allocation;
 		uintptr_t ptr = (uintptr_t)allocation;
 		ptr += sizeof(CapacityStream<void>);
@@ -89,35 +112,41 @@ struct InspectorDrawEntityData {
 		// Add it to the matching inputs
 		AddComponent(editor_state, name);
 
-		void* allocation = editor_state->editor_allocator->Allocate(link_components.MemoryOf(link_components.size + 1));
+		void* allocation = allocator.Allocate(link_components.MemoryOf(link_components.size + 1));
 		uintptr_t ptr = (uintptr_t)allocation;
 
 		unsigned int write_index = link_components.size;
 
 		if (link_components.size > 0) {
-			editor_state->editor_allocator->Deallocate(link_components.buffer);
+			allocator.Deallocate(link_components.buffer);
 		}
 		link_components.InitializeAndCopy(ptr, link_components);
 		link_components[write_index].name = name;
 
+		// We need to allocate the link component twice and the target data once
 		unsigned short byte_size = editor_state->editor_components.GetComponentByteSize(name);
-		link_components[write_index].data = editor_state->editor_allocator->Allocate(byte_size);
+		link_components[write_index].data = allocator.Allocate(byte_size);
+		link_components[write_index].previous_data = allocator.Allocate(byte_size);
+		link_components[write_index].apply_modifier_initial_target_data = nullptr;
+		link_components[write_index].is_apply_modifier_in_progress = false;
+		link_components[write_index].target_allocator = CreateLinkTargetAllocator(editor_state);
+
+		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(name);
+		const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target_name);
+		unsigned short target_type_byte_size = Reflection::GetReflectionTypeByteSize(target_type);
+		link_components[write_index].target_data_copy = allocator.Allocate(target_type_byte_size);
+		editor_state->editor_components.internal_manager->SetInstanceDefaultData(target_type, link_components[write_index].target_data_copy);
 
 		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(name);
 		ECSEngine::ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[write_index].data);
+		ECSEngine::ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[write_index].previous_data);
 
 		link_components.size++;
 		return write_index;
 	}
 
-	// Deallocates everything
+	// Deallocates everything and deletes the UI instances
 	void Clear(EditorState* editor_state) {
-		if (matching_inputs.size > 0) {
-			for (size_t index = 0; index < matching_inputs.size; index++) {
-				ClearComponent(editor_state, index);
-			}
-			editor_state->editor_allocator->Deallocate(matching_inputs.buffer);
-		}
 		if (created_instances.size > 0) {
 			for (size_t index = 0; index < created_instances.size; index++) {
 				if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
@@ -131,25 +160,23 @@ struct InspectorDrawEntityData {
 						editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
 					}
 				}
-				editor_state->editor_allocator->Deallocate(created_instances[index].name.buffer);
 			}
-			editor_state->editor_allocator->Deallocate(created_instances.buffer);
 		}
-		if (link_components.size > 0) {
-			for (size_t index = 0; index < link_components.size; index++) {
-				editor_state->editor_allocator->Deallocate(link_components[index].data);
-			}
-			editor_state->editor_allocator->Deallocate(link_components.buffer);
+
+		// Free the main allocator and the target allocator for each link component
+		for (size_t index = 0; index < link_components.size; index++) {
+			link_components[index].target_allocator.Free();
 		}
+		allocator.Free();
 	}
 
 	void ClearComponent(EditorState* editor_state, unsigned int index) {
 		for (size_t buffer_index = 0; buffer_index < matching_inputs[index].capacity_inputs.size; buffer_index++) {
-			editor_state->editor_allocator->Deallocate(matching_inputs[index].capacity_inputs[buffer_index]);
+			allocator.Deallocate(matching_inputs[index].capacity_inputs[buffer_index]);
 			matching_inputs[index].capacity_inputs[buffer_index]->size = 0;
 		}
 		if (matching_inputs[index].capacity_inputs.size > 0) {
-			editor_state->editor_allocator->Deallocate(matching_inputs[index].capacity_inputs.buffer);
+			allocator.Deallocate(matching_inputs[index].capacity_inputs.buffer);
 		}
 		matching_inputs[index].capacity_inputs.size = 0;
 	}
@@ -169,11 +196,50 @@ struct InspectorDrawEntityData {
 		unsigned short new_byte_size = editor_state->editor_components.GetComponentByteSize(link_components[index].name);
 		ECS_ASSERT(new_byte_size != USHORT_MAX);
 
-		editor_state->editor_allocator->Deallocate(link_components[index].data);
-		link_components[index].data = editor_state->editor_allocator->Allocate(new_byte_size);
+		allocator.Deallocate(link_components[index].data);
+		allocator.Deallocate(link_components[index].previous_data);
+		allocator.Deallocate(link_components[index].target_data_copy);
+		link_components[index].data = allocator.Allocate(new_byte_size);
+		link_components[index].previous_data = allocator.Allocate(new_byte_size);
+		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[index].name);
+		unsigned short target_byte_size = editor_state->editor_components.GetComponentByteSize(target_name);
+		link_components[index].target_data_copy = allocator.Allocate(target_byte_size);
+		editor_state->editor_components.internal_manager->SetInstanceDefaultData(target_name, link_components[index].target_data_copy);
 
 		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_components[index].name);
 		ECSEngine::ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[index].data);
+		ECSEngine::ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[index].previous_data);
+	}
+
+	const void* TargetComponentData(const EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) const {
+		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
+		Component component = editor_state->editor_components.GetComponentID(target_name);
+		bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
+
+		return GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+	}
+
+	void* TargetComponentData(EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) const {
+		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
+		Component component = editor_state->editor_components.GetComponentID(target_name);
+		bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
+
+		return GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+	}
+
+	void CopyLinkComponentData(const EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) {
+		ClearAllocator(TargetAllocator(link_index));
+
+		const void* target_data = TargetComponentData(editor_state, sandbox_index, link_index);
+		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
+		const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target_name);
+		Reflection::CopyReflectionType(
+			editor_state->editor_components.internal_manager, 
+			target_type, 
+			target_data, 
+			link_components[link_index].target_data_copy, 
+			TargetAllocator(link_index)
+		);
 	}
 
 	Stream<char> CreatedInstanceComponentName(unsigned int index) const {
@@ -182,15 +248,31 @@ struct InspectorDrawEntityData {
 		return { created_instances[index].name.buffer, created_instances[index].name.size - separator.size };
 	}
 
-	unsigned int FindMatchingInput(Stream<char> component_name) const {
+	ECS_INLINE void DeallocateLinkApplyModifierAndResetData(const EditorState* editor_state, unsigned int link_index) {
+		allocator.Deallocate(link_components[link_index].apply_modifier_initial_target_data);
+		link_components[link_index].apply_modifier_initial_target_data = nullptr;
+		link_components[link_index].is_apply_modifier_in_progress = false;
+
+		const Reflection::ReflectionType* reflection_type = editor_state->editor_components.GetType(link_components[link_index].name);
+		ResetModifierFieldsLinkComponent(reflection_type, link_components[link_index].data);
+		Reflection::CopyReflectionType(
+			editor_state->editor_components.internal_manager,
+			reflection_type,
+			link_components[link_index].data,
+			link_components[link_index].previous_data,
+			Allocator()
+		);
+	}
+
+	ECS_INLINE unsigned int FindMatchingInput(Stream<char> component_name) const {
 		return function::FindString(component_name, matching_inputs, [](MatchingInputs input) { return input.component_name; });
 	}
 
-	unsigned int FindCreatedInstance(Stream<char> name) const {
+	ECS_INLINE unsigned int FindCreatedInstance(Stream<char> name) const {
 		return function::FindString(name, created_instances, [](CreatedInstance instance) { return instance.name; });
 	}
 
-	unsigned int FindLinkComponent(Stream<char> name) const {
+	ECS_INLINE unsigned int FindLinkComponent(Stream<char> name) const {
 		return function::FindString(name, link_components, [](LinkComponent component) { return component.name; });
 	}
 
@@ -206,6 +288,26 @@ struct InspectorDrawEntityData {
 		return false;
 	}
 
+	void InitializeLinkApplyModifierData(const EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) {
+		Stream<char> target_type_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
+		const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target_type_name);
+		size_t byte_size = Reflection::GetReflectionTypeByteSize(target_type);
+		link_components[link_index].apply_modifier_initial_target_data = allocator.Allocate(byte_size);
+		
+		Component target_component = editor_state->editor_components.GetComponentID(target_type_name);
+		bool is_shared = editor_state->editor_components.IsSharedComponent(target_type_name);
+		const void* entity_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, target_component, is_shared);
+		Reflection::CopyReflectionType(
+			editor_state->editor_components.internal_manager,
+			target_type_name,
+			entity_data,
+			link_components[link_index].apply_modifier_initial_target_data,
+			GetAllocatorPolymorphic(&allocator)
+		);
+
+		link_components[link_index].is_apply_modifier_in_progress = true;
+	}
+
 	void RemoveCreatedInstance(EditorState* editor_state, unsigned int index) {
 		if (editor_state->module_reflection->GetInstance(created_instances[index].name) != nullptr) {
 			// It is from the module side
@@ -218,7 +320,7 @@ struct InspectorDrawEntityData {
 				editor_state->ui_reflection->DestroyInstance(created_instances[index].name);
 			}
 		}
-		editor_state->editor_allocator->Deallocate(created_instances[index].name.buffer);
+		allocator.Deallocate(created_instances[index].name.buffer);
 		created_instances.RemoveSwapBack(index);
 	}
 
@@ -246,7 +348,13 @@ struct InspectorDrawEntityData {
 	void RemoveLinkComponent(EditorState* editor_state, Stream<char> name) {
 		unsigned int index = FindLinkComponent(name);
 		ECS_ASSERT(index != -1);
-		editor_state->editor_allocator->Deallocate(link_components[index].data);
+		allocator.Deallocate(link_components[index].data);
+		allocator.Deallocate(link_components[index].previous_data);
+		allocator.Deallocate(link_components[index].target_data_copy);
+		FreeAllocatorFrom(TargetAllocator(index), editor_state->EditorAllocator());
+		if (link_components[index].apply_modifier_initial_target_data != nullptr) {
+			allocator.Deallocate(link_components[index].apply_modifier_initial_target_data);
+		}
 		link_components.RemoveSwapBack(index);
 
 		// Also remove it from the matching inputs
@@ -270,13 +378,136 @@ struct InspectorDrawEntityData {
 
 		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_components[link_index].name);
 		ECSEngine::ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[link_index].data);
+		ECSEngine::ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[link_index].previous_data);
 	}
 
 	void SetComponentInputCount(EditorState* editor_state, Stream<char> component_name, size_t count) {
 		unsigned int index = FindMatchingInput(component_name);
 		ECS_ASSERT(index != -1);
-		void* allocation = editor_state->editor_allocator->Allocate(matching_inputs[index].capacity_inputs.MemoryOf(count));
+		void* allocation = allocator.Allocate(matching_inputs[index].capacity_inputs.MemoryOf(count));
 		matching_inputs[index].capacity_inputs.InitializeFromBuffer(allocation, 0);
+	}
+
+	void UpdateLinkComponentsApplyModifier(const EditorState* editor_state) {
+		for (size_t index = 0; index < link_components.size; index++) {
+			if (!link_components[index].is_apply_modifier_in_progress && link_components[index].apply_modifier_initial_target_data != nullptr) {
+				DeallocateLinkApplyModifierAndResetData(editor_state, index);
+			}
+			if (editor_state->ui_system->m_mouse->IsRaised(ECS_MOUSE_LEFT)) {
+				// This is a hack for the moment. Think of a way such that when an input doesn't produce a change
+				// (Like when the mouse is not moved but held down), that it won't trigger a deallocate
+				link_components[index].is_apply_modifier_in_progress = false;
+			}
+		}
+	}
+
+	void UIUpdateLinkComponent(EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index, bool apply_modifier) {
+		Stream<char> link_name = link_components[link_index].name;
+
+		void* link_data = link_components[link_index].data;
+		void* previous_link_data = link_components[link_index].previous_data;
+		SandboxUpdateLinkComponentForEntityInfo info;
+		info.apply_modifier_function = apply_modifier;
+
+		if (apply_modifier) {
+			if (link_components[link_index].apply_modifier_initial_target_data == nullptr) {
+				InitializeLinkApplyModifierData(editor_state, sandbox_index, link_index);
+			}
+			link_components[link_index].is_apply_modifier_in_progress = true;
+			info.target_previous_data = link_components[link_index].apply_modifier_initial_target_data;
+		}
+
+		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_name);
+		bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
+		if (is_shared) {
+			SandboxUpdateSharedLinkComponentForEntity(editor_state, sandbox_index, link_data, link_name, entity, previous_link_data, info);
+		}
+		else {
+			SandboxUpdateUniqueLinkComponentForEntity(editor_state, sandbox_index, link_data, link_name, entity, previous_link_data, info);
+		}
+
+		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_name);
+		if (!apply_modifier) {
+			Reflection::CopyReflectionType(
+				editor_state->editor_components.internal_manager,
+				link_type,
+				link_data,
+				previous_link_data,
+				Allocator()
+			);
+		}
+		// The else branch is executed before the update
+		
+		// Update the target data copy
+		ClearAllocator(TargetAllocator(link_index));
+		const void* target_data = TargetComponentData(editor_state, sandbox_index, link_index);
+		Reflection::CopyReflectionType(
+			editor_state->editor_components.internal_manager,
+			target_name,
+			target_data,
+			link_components[link_index].target_data_copy,
+			TargetAllocator(link_index)
+		);
+	}
+
+	// Updates all link components whose targets have changed
+	void UpdateLinkComponentsFromTargets(const EditorState* editor_state, unsigned int sandbox_index) {
+		for (size_t index = 0; index < link_components.size; index++) {
+			const void* target_data = TargetComponentData(editor_state, sandbox_index, index);
+			void* current_data = link_components[index].target_data_copy;
+			Stream<char> link_name = link_components[index].name;
+			Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_name);
+
+			ECS_STACK_CAPACITY_STREAM(Reflection::CompareReflectionTypeInstanceBlittableType, blittable_types, 32);
+			size_t blittable_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
+			// This will include the misc Stream<void> with a pointer but that is no problem, shouldn't really happen in code
+			for (size_t blittable_index = 0; blittable_index < blittable_count; blittable_index++) {
+				blittable_types.AddAssert({ ECS_ASSET_TARGET_FIELD_NAMES[blittable_index].name, Reflection::ReflectionStreamFieldType::Pointer });
+			}
+			blittable_types.AddAssert({ STRING(Stream<void>), Reflection::ReflectionStreamFieldType::Stream });
+			Reflection::CompareReflectionTypeInstancesOptions compare_options;
+			compare_options.blittable_types = blittable_types;
+			if (!Reflection::CompareReflectionTypeInstances(editor_state->editor_components.internal_manager, target_name, target_data, current_data, 1, &compare_options)) {
+				// We need to convert the target to the link and update the target data copy
+				bool success = ConvertTargetToLinkComponent(
+					editor_state,
+					link_name,
+					target_data,
+					link_components[index].data,
+					link_components[index].target_data_copy,
+					link_components[index].previous_data,
+					Allocator()
+				);
+				if (!success) {
+					ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
+					Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, entity, entity_name_storage);
+
+					ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.", 
+						link_components[index].name, entity_name, sandbox_index);
+					EditorSetConsoleError(error_message);
+				}
+				else {
+					const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_name);
+					Reflection::CopyReflectionType(
+						editor_state->editor_components.internal_manager,
+						link_type,
+						link_components[index].data,
+						link_components[index].previous_data,
+						Allocator()
+					);
+				}
+
+				// Also copy the target data copy
+				ClearAllocator(TargetAllocator(index));
+				Reflection::CopyReflectionType(
+					editor_state->editor_components.internal_manager,
+					target_name,
+					target_data,
+					current_data,
+					TargetAllocator(index)
+				);
+			}
+		}
 	}
 
 	Entity entity;
@@ -290,6 +521,9 @@ struct InspectorDrawEntityData {
 
 	// Destroy these when changing to another entity such that when returning to it it won't crash
 	Stream<CreatedInstance> created_instances;
+
+	// All allocations for internal components need to be made from this allocator
+	MemoryManager allocator;
 };
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -384,6 +618,8 @@ void ResetComponentCallback(ActionData* action_data) {
 	}
 
 	ResetSandboxEntityComponent(data->editor_state, data->sandbox_index, data->draw_data->entity, data->component_name);
+	// Re-render the sandbox as well
+	RenderSandboxViewports(data->editor_state, data->sandbox_index);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -391,6 +627,7 @@ void ResetComponentCallback(ActionData* action_data) {
 struct InspectorComponentCallbackData {
 	EditorState* editor_state;
 	unsigned int sandbox_index;
+	bool apply_modifier;
 
 	Stream<char> component_name;
 	InspectorDrawEntityData* draw_data;
@@ -462,14 +699,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 	if (target.size > 0) {
 		unsigned int linked_index = data->draw_data->FindLinkComponent(component_name);
 		ECS_ASSERT(linked_index != -1);
-
-		const void* link_data = data->draw_data->link_components[linked_index].data;
-		if (is_shared) {
-			SandboxUpdateSharedLinkComponentForEntity(editor_state, sandbox_index, link_data, component_name, entity, nullptr);
-		}
-		else {
-			SandboxUpdateUniqueLinkComponentForEntity(editor_state, sandbox_index, link_data, component_name, entity, nullptr);
-		}
+		data->draw_data->UIUpdateLinkComponent(editor_state, data->sandbox_index, linked_index, data->apply_modifier);
 	}
 
 	// Re-render the sandbox - for the scene and the game as well
@@ -657,6 +887,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		change_component_data.editor_state = editor_state;
 		change_component_data.sandbox_index = sandbox_index;
 		change_component_data.draw_data = data;
+		change_component_data.apply_modifier = false;
 		UIActionHandler modify_value_handler = { InspectorComponentCallback, &change_component_data, sizeof(change_component_data) };
 		size_t written_configs = UIReflectionDrawConfigSplatCallback(
 			{ ui_draw_configs, std::size(ui_draw_configs) }, 
@@ -795,23 +1026,20 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 						if (data->created_instances[created_instance_index].pointer_bound == nullptr) {
 							data->created_instances[created_instance_index].pointer_bound = data->link_components[link_index].data;
 						}
-						
 					}
 					else {
 						data->ClearLinkComponentSkipAssets(editor_state, link_index);
 					}
 					current_component = data->link_components[link_index].data;
 
-					// Convert the underlying storage into the link component
 					bool success = ConvertTargetToLinkComponent(
-						editor_state, 
-						sandbox_index, 
-						link_component, 
-						data->entity, 
-						current_component, 
-						nullptr, 
-						nullptr, 
-						editor_state->EditorAllocator()
+						editor_state,
+						sandbox_index,
+						link_component,
+						data->entity,
+						current_component,
+						data->link_components[link_index].previous_data,
+						nullptr
 					);
 					if (!success) {
 						ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
@@ -820,17 +1048,29 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 						ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.", link_component, entity_name, sandbox_index);
 						EditorSetConsoleError(error_message);
 					}
+					else {
+						const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_component);
+						Reflection::CopyReflectionType(
+							editor_state->editor_components.internal_manager,
+							link_type,
+							current_component,
+							data->link_components[link_index].previous_data,
+							editor_state->EditorAllocator()
+						);
+					}
 				}
 				ui_drawer->BindInstancePtrs(instance, current_component);
+				if (link_component.size > 0) {
+					// We must do this after the pointer have been bound
+					AssetOverrideBindInstanceOverrides(ui_drawer, instance, sandbox_index, modify_value_handler);
+				}
 				set_instance_inputs();
 			}
+
+			bool link_needs_apply_modifier = false;
 				
-			// If it is a link component - bind asset overrides
-			// Also, check to see if the values have changed inside the runtime
-			// And we need to update the link component
 			if (link_component.size > 0) {
-				AssetOverrideBindInstanceOverrides(ui_drawer, instance, sandbox_index, modify_value_handler);
-				ConvertTargetToLinkComponent(editor_state, sandbox_index, link_component, data->entity, current_component, nullptr, nullptr);
+				link_needs_apply_modifier = NeedsApplyModifierLinkComponent(editor_state, link_component);
 			}		
 
 			unsigned int instance_index = data->FindCreatedInstance(instance->name);
@@ -865,16 +1105,47 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				component_name_to_display = GetReflectionTypeLinkNameBase(component_name_to_display);
 			}
 
+			ECS_STACK_CAPACITY_STREAM(UIReflectionDrawInstanceFieldTagOption, field_tag_options, 32);
+			UIConfigActiveState inactive_state;
+			inactive_state.state = false;
+			if (link_needs_apply_modifier) {
+				// The first field disables the fields which are not modifiers
+				field_tag_options[0].disable_additional_configs = true;
+				field_tag_options[0].exclude_match = true;
+				field_tag_options[0].tag = STRING(ECS_LINK_MODIFIER_FIELD);
+				field_tag_options[0].draw_config.config_count = 0;
+				UIReflectionDrawConfigAddConfig(&field_tag_options[0].draw_config, &inactive_state);
+
+				// The second field adds the callback to set the boolean apply modifier for the change data
+				field_tag_options[1].tag = STRING(ECS_LINK_MODIFIER_FIELD);
+				auto matched_field_callback = [](UIReflectionDrawInstanceFieldTagCallbackData* data) {
+					InspectorComponentCallbackData* callback_data = (InspectorComponentCallbackData*)data->user_data;
+					callback_data->apply_modifier = true;
+				};
+				field_tag_options[1].callback = matched_field_callback;
+				field_tag_options[1].callback_data = &change_component_data;
+
+				field_tag_options.size = 2;
+				field_tag_options.AssertCapacity();
+			}
+
 			drawer->CollapsingHeader(UI_CONFIG_COLLAPSING_HEADER_BUTTONS, collapsing_config, component_name_to_display, data->header_state + index + header_state_offset, [&]() {
 				UIReflectionDrawInstanceOptions options;
 				options.drawer = drawer;
 				options.config = &config;
 				options.global_configuration = UI_CONFIG_NAME_PADDING | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_WINDOW_DEPENDENT_SIZE;
 				options.additional_configs = valid_ui_draw_configs;
+				options.field_tag_options = field_tag_options;
 				ui_drawer->DrawInstance(instance, &options);
 			});
 		}
 	};
+
+	// Before drawing the components, go through the link components and deallocate the apply modifiers data
+	data->UpdateLinkComponentsApplyModifier(editor_state);
+
+	// Perform the update from target to link for normal components
+	data->UpdateLinkComponentsFromTargets(editor_state, sandbox_index);
 
 	// Now draw the entity using the reflection drawer
 	draw_component(unique_signature, false, 0, get_unique_data);
@@ -1059,9 +1330,9 @@ void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_ind
 	draw_data->matching_inputs.size = 0;
 	draw_data->created_instances.size = 0;
 	draw_data->link_components.size = 0;
+	draw_data->allocator = MemoryManager(ECS_KB * 64, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
 
 	memset(draw_data->header_state, 1, sizeof(bool) * (ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS));
-
 
 	ChangeInspectorDrawFunction(
 		editor_state,

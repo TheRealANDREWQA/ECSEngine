@@ -110,7 +110,7 @@ bool CopySandboxEntities(
 // the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
 // If not given, the conversion function must deal with this case
 bool ConvertTargetToLinkComponent(
-	EditorState* editor_state,
+	const EditorState* editor_state,
 	unsigned int sandbox_index, 
 	Stream<char> link_component, 
 	Entity entity, 
@@ -126,7 +126,7 @@ bool ConvertTargetToLinkComponent(
 // the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
 // If not given, the conversion function must deal with this case
 bool ConvertTargetToLinkComponent(
-	EditorState* editor_state,
+	const EditorState* editor_state,
 	Stream<char> link_component,
 	const void* target_data,
 	void* link_data,
@@ -146,6 +146,8 @@ bool ConvertLinkComponentToTarget(
 	Entity entity,
 	const void* link_data,
 	const void* previous_link_data,
+	bool apply_modifier_function,
+	const void* previous_target_data = nullptr,
 	AllocatorPolymorphic allocator = { nullptr },
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -160,6 +162,7 @@ bool ConvertLinkComponentToTarget(
 	const void* link_data,
 	const void* previous_target_data,
 	const void* previous_link_data,
+	bool apply_modifier_function,
 	AllocatorPolymorphic allocator = { nullptr }
 );
 
@@ -463,6 +466,18 @@ bool IsSandboxEntityValid(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// Returns true if the link component has an apply modifiers function given
+bool NeedsApplyModifierLinkComponent(
+	const EditorState* editor_state,
+	Stream<char> link_name
+);
+
+// Returns true if the link component has an apply button for the modifiers function
+bool NeedsApplyModifierButtonLinkComponent(
+	const EditorState* editor_state,
+	Stream<char> link_name
+);
+
 void ParentSandboxEntity(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -606,6 +621,15 @@ void SandboxForAllSharedComponents(
 //	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 //);
 
+struct SandboxUpdateLinkComponentForEntityInfo {
+	bool give_error_when_failing = true;
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT;
+	bool apply_modifier_function = false;
+
+	// Can provide a previous data pointer to be supplied instead of the current data stored
+	const void* target_previous_data = nullptr;
+};
+
 bool SandboxUpdateUniqueLinkComponentForEntity(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
@@ -613,8 +637,7 @@ bool SandboxUpdateUniqueLinkComponentForEntity(
 	Stream<char> link_name,
 	Entity entity,
 	const void* previous_link_component,
-	bool give_error_when_failing = true,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	SandboxUpdateLinkComponentForEntityInfo info = {}
 );
 
 // It will change the shared instance of the entity, it won't change the data of the current shared instance
@@ -626,6 +649,5 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 	Stream<char> link_name,
 	Entity entity,
 	const void* previous_link_component,
-	bool give_error_when_failing = true,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	SandboxUpdateLinkComponentForEntityInfo info = {}
 );
