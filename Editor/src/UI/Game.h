@@ -32,6 +32,8 @@ void DestroyInvalidGameUIWindows(EditorState* editor_state);
 
 void GetGameUIWindowName(unsigned int index, ECSEngine::CapacityStream<char>& name);
 
+unsigned int GetGameUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index);
+
 // Does nothing if the old_index doesn't exist
 void UpdateGameUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);
 

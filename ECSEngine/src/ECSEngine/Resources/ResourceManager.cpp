@@ -2171,7 +2171,7 @@ namespace ECSEngine {
 						ECS_FORMAT_STRING(
 							*mismatch_string, 
 							"Resource {#}, type {#}, was added in between snapshots and deleted\n", 
-							identifier_without_suffix.AsASCII(), 
+							identifier_without_suffix.AsWide(),
 							current_type_string
 						);
 					}
@@ -2195,7 +2195,7 @@ namespace ECSEngine {
 						ECS_FORMAT_STRING(
 							*mismatch_string, 
 							"Resource {#}, type {#}, was removed in between snapshots\n", 
-							identifier_without_suffix.AsASCII(), 
+							identifier_without_suffix.AsWide(),
 							current_type_string
 						);
 					}

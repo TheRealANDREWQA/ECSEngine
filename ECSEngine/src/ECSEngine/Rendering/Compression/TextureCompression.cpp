@@ -225,7 +225,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < texture_descriptor.mip_levels; index++) {
 			const DirectX::Image* image = final_image.GetImage(index, 0, 0);
 			mip_data[index].buffer = image->pixels;
-			mip_data[index].size = image->height * image->rowPitch;
+			mip_data[index].size = image->slicePitch;
 		}
 
 		ID3D11Texture2D* old_texture = texture.tex;

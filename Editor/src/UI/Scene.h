@@ -32,6 +32,9 @@ void DestroyInvalidSceneUIWindows(EditorState* editor_state);
 
 void GetSceneUIWindowName(unsigned int index, ECSEngine::CapacityStream<char>& name);
 
+// Returns the UI index of the scene window (-1 if it doesn't exist)
+unsigned int GetSceneUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index);
+
 // Does nothing if the old_index doesn't exist
 void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);
 

@@ -2687,6 +2687,23 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void EntityManager::ClearEntitiesAndAllocator()
+	{
+		m_memory_manager->Clear();
+		m_small_memory_manager.Clear();
+		m_temporary_allocator.Clear();
+		m_entity_pool->Reset();
+		m_query_cache->Reset();
+
+		EntityManagerDescriptor descriptor;
+		descriptor.memory_manager = m_memory_manager;
+		descriptor.entity_pool = m_entity_pool;
+		descriptor.deferred_action_capacity = m_deferred_actions.capacity;
+		*this = EntityManager(descriptor);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void EntityManager::ClearFrame()
 	{
 		m_temporary_allocator.Clear();
@@ -2824,6 +2841,7 @@ namespace ECSEngine {
 		);
 		m_hierarchy.CopyOther(&entity_manager->m_hierarchy);
 
+		m_query_cache->entity_manager = this;
 		m_query_cache->CopyOther(entity_manager->m_query_cache);
 	}
 

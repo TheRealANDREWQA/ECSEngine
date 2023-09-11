@@ -65,6 +65,15 @@ void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sand
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Restores the scene world into the runtime world
+void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void EndSandboxWorldSimulations(EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Returns -1 if the entity is not selected
 unsigned int FindSandboxSelectedEntityIndex(
 	const EditorState* editor_state,
@@ -207,6 +216,11 @@ void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Pauses all sandboxes that want to be paused using the general button
+void PauseSandboxWorlds(EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Some objects need to be created just once and used accros runtime executions
 void PreinitializeSandboxRuntime(
 	EditorState* editor_state,
@@ -285,7 +299,14 @@ void ResetSandboxUnusedEntities(
 
 // -------------------------------------------------------------------------------------------------------------
 
-void RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index);
+// Returns true if the simulation was successful, else false. It prints the according error messages inside
+bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if all sandboxes that want to be stepped using the general button managed to perform their step
+// Else it returns false
+bool RunSandboxWorlds(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -370,6 +391,19 @@ void SignalSandboxUnusedEntitiesSlotsCounter(EditorState* editor_state, unsigned
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns true if it managed to launch it, else false (it can fail, for example, if the scheduling order could not be created)
+bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool disable_error_message = false);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if all sandboxes that wanted to be run successfully started, else false
+// This function checks to see if the sandbox wants to be run using the global button
+// And starts it if it is in accordance. Can optionally allow the start to start those sandboxes
+// That are paused only
+bool StartSandboxWorlds(EditorState* editor_state, bool only_paused = false);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Returns true if the runtime settings where changed from outside
 bool UpdateSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index);
 
@@ -391,5 +425,10 @@ void WaitSandboxUnlock(const EditorState* editor_state, unsigned int sandbox_ind
 // -------------------------------------------------------------------------------------------------------------
 
 void TickSandboxes(EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Runs all the worlds of active sandboxes
+void TickSandboxRuntimes(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------

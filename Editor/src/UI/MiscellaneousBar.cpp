@@ -1,9 +1,10 @@
 #include "editorpch.h"
 #include "MiscellaneousBar.h"
 #include "ToolbarUI.h"
-#include "..\Editor\EditorState.h"
-#include "..\Editor\EditorPalette.h"
-#include "..\Modules\Module.h"
+#include "../Editor/EditorState.h"
+#include "../Editor/EditorPalette.h"
+#include "../Modules/Module.h"
+#include "../Sandbox/Sandbox.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
@@ -15,18 +16,18 @@ constexpr float TOOP_TIP_OFFSET = 0.01f;
 void RunProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	//EditorState* editor_state = (EditorState*)_data;
-	//// Check to see that all modules can be compiled and loaded
-	//if (BuildProjectModulesAndLoad(editor_state)) {
-	//	EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
-	//	// Check to see if the editor still has to commit copying the main world to other worlds
-
-	//	// Now the runtime should be launched - the tasks should be commited into the system manager
-	//	
-	//}
-	//else {
-	//	EditorSetConsoleError("Could not start the runtime: the modules could not be compiled or loaded.");
-	//}
+	EditorState* editor_state = (EditorState*)_data;
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
+		EndSandboxWorldSimulations(editor_state);
+		EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+		if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
+			EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+		}
+	}
+	else {
+		StartSandboxWorlds(editor_state);
+		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------
@@ -34,14 +35,17 @@ void RunProjectAction(ActionData* action_data) {
 void PauseProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	/*EditorState* editor_state = (EditorState*)_data;
+	EditorState* editor_state = (EditorState*)_data;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
 		EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PLAYING);
 		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+		PauseSandboxWorlds(editor_state);
 	}
-	else {
-		EditorSetConsoleWarn("Could not pause the runtime - the runtime is not active.");
-	}*/
+	else if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
+		EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+		StartSandboxWorlds(editor_state, true);
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------
@@ -51,10 +55,7 @@ void StepProjectAction(ActionData* action_data) {
 
 	EditorState* editor_state = (EditorState*)_data;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
-		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_STEP);
-	}
-	else {
-		EditorSetConsoleWarn("Could not step the runtime - the runtime is not yet paused");
+		RunSandboxWorlds(editor_state);
 	}
 }
 
@@ -135,7 +136,7 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	float2 bar_position = { AlignMiddle(transform.position.x, button_scale.x, bar_scale_x * 3), AlignMiddle(transform.position.y, button_scale.y, bar_scale_y) };
 	drawer.SpriteRectangle(configuration, bar_position, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, EDITOR_GREEN_COLOR);
 	drawer.SpriteRectangle(configuration, { bar_position.x + bar_scale.x * 2, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, EDITOR_GREEN_COLOR);
-	drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { PauseProjectAction, nullptr, 0 });
+	drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { PauseProjectAction, editor_state, 0 });
 	drawer.TextToolTip("Pause", transform.position, transform.scale, &base_tool_tip);
 
 	transform.position.x += transform.scale.x;
@@ -149,7 +150,7 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	Color frame_color = drawer.color_theme.unavailable_text;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
 		frame_color = EDITOR_GREEN_COLOR;
-		drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { StepProjectAction, nullptr, 0 });
+		drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { StepProjectAction, editor_state, 0 });
 		drawer.TextToolTip("Frame", transform.position, transform.scale, &base_tool_tip);
 	}
 	drawer.SpriteRectangle(configuration, triangle_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, frame_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });

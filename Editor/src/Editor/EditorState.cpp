@@ -254,6 +254,9 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickAsset(editor_state);
 
 		TickEvents(editor_state);
+
+		// At the end we need to tick the sandboxes that are running
+		TickSandboxRuntimes(editor_state);
 	}
 }
 

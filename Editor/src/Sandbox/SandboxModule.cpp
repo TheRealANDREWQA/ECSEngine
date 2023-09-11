@@ -62,12 +62,35 @@ bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_i
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-	for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated && UpdateModuleLastWrite(editor_state, sandbox->modules_in_use[index].module_index)) {
 			return false;
 		}
 	}
 
+	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandbox_index, bool exclude_out_of_date)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		if (!sandbox->modules_in_use[index].is_deactivated) {
+			const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration);
+			if (exclude_out_of_date) {
+				if (info->load_status != EDITOR_MODULE_LOAD_GOOD) {
+					return false;
+				}
+			}
+			else {
+				if (info->load_status == EDITOR_MODULE_LOAD_FAILED) {
+					return false;
+				}
+			}
+		}
+	}
 	return true;
 }
 

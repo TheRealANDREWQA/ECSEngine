@@ -859,7 +859,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			data->cpu_framebuffer = { nullptr, {0, 0} };
 			mouse->EnableRawInput();
 
-			DisableSandboxViewportRendering(editor_state, sandbox_index);
+			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
 			if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 				RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
@@ -872,7 +872,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 				// Check for the case nothing is selected
 				Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
 				// Check to see if this a gizmo Entity
-				EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, selected_entity);
+				EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, selected_entity, EDITOR_SANDBOX_VIEWPORT_SCENE);
 				if (entity_slot != EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
 					switch (entity_slot) {
 					case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X:
@@ -910,7 +910,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 		}
 		else {
 			// Render the viewport once since we need to update the visuals that the keyboard axes are disabled
-			RenderSandbox(editor_state, sandbox_index, GetSandboxActiveViewport(editor_state, sandbox_index));
+			RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
 	}
 	else if (!data->was_keyboard_transform_on_click) {
@@ -1015,7 +1015,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 					// Check for the case nothing is selected
 					Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
 					// Check to see if this a gizmo Entity
-					EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, selected_entity);
+					EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, selected_entity, EDITOR_SANDBOX_VIEWPORT_SCENE);
 					if (entity_slot == EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
 						// We have selected an actual entity, not a gizmo or some other pseudo entity
 						if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) || keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
@@ -1067,12 +1067,12 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 		}
 
-		EnableSandboxViewportRendering(editor_state, sandbox_index);
+		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		// We need to render one more time in order for the transform tool to appear normal
-		RenderSandbox(editor_state, sandbox_index, GetSandboxActiveViewport(editor_state, sandbox_index));
+		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 		if (!mouse->IsReleased(ECS_MOUSE_LEFT)) {
-			DisableSandboxViewportRendering(editor_state, sandbox_index);
+			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
 		mouse->DisableRawInput();
 	}
@@ -1085,7 +1085,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	EditorState* editor_state = data->editor_state;
 
 	unsigned int sandbox_index = GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
-	EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
+	EDITOR_SANDBOX_VIEWPORT current_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	if (initialize) {
 		data->previous_texel_size = { 0, 0 };
@@ -1153,6 +1153,13 @@ void DestroyInvalidSceneUIWindows(EditorState* editor_state)
 void GetSceneUIWindowName(unsigned int index, CapacityStream<char>& name) {
 	name.Copy(SCENE_WINDOW_NAME);
 	function::ConvertIntToChars(name, index);
+}
+
+unsigned int GetSceneUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
+	GetSceneUIWindowName(sandbox_index, window_name);
+	return editor_state->ui_system->GetWindowFromName(window_name);
 }
 
 void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index) {
