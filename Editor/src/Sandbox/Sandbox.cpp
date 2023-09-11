@@ -349,6 +349,43 @@ void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sand
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_RUNNING);
+
+	ClearWorld(&sandbox->sandbox_world);
+	sandbox->run_state = EDITOR_SANDBOX_SCENE;
+
+	const UISystem* ui_system = editor_state->ui_system;
+	// We need to reinstate the viewport rendering
+	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
+	if (scene_window_index != -1) {
+		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	}
+
+	unsigned int game_window_index = GetGameUIWindowIndex(editor_state, sandbox_index);
+	if (game_window_index != -1) {
+		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void EndSandboxWorldSimulations(EditorState* editor_state)
+{
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		bool paused_or_running = sandbox->run_state == EDITOR_SANDBOX_RUNNING || sandbox->run_state == EDITOR_SANDBOX_PAUSED;
+		if (sandbox->should_play && paused_or_running) {
+			EndSandboxWorldSimulation(editor_state, index);
+		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -680,6 +717,45 @@ bool LaunchSandboxRuntime(EditorState* editor_state, unsigned int index)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_for_pause)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, index);
+	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_RUNNING);
+
+	if (wait_for_pause) {
+		PauseWorld(&sandbox->sandbox_world);
+	}
+
+	sandbox->run_state = EDITOR_SANDBOX_PAUSED;
+
+	// Bring back the viewport rendering since it was disabled
+	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, index);
+	if (scene_window_index != -1) {
+		EnableSandboxViewportRendering(editor_state, index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	}
+
+	unsigned int game_window_index = GetGameUIWindowIndex(editor_state, index);
+	if (game_window_index != -1) {
+		EnableSandboxViewportRendering(editor_state, index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void PauseSandboxWorlds(EditorState* editor_state)
+{
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		if (sandbox->should_pause && sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+			// We don't need to wait for the pause
+			PauseSandboxWorld(editor_state, index, false);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -860,14 +936,27 @@ EDITOR_EVENT(WaitResourceLoadingRenderSandboxEvent) {
 bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, uint2 new_texture_size, bool disable_logging)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	// Change the new_texture_size if we have a pending request and this is { 0, 0 }
+	if (new_texture_size.x == 0 && new_texture_size.y == 0) {
+		new_texture_size = sandbox->viewport_pending_resize[viewport];
+	}
+
 	// If the rendering is disabled skip
 	if (!IsSandboxViewportRendering(editor_state, sandbox_index, viewport)) {
+		if (new_texture_size.x != 0 && new_texture_size.y != 0) {
+			// Put the resize on hold
+			sandbox->viewport_pending_resize[viewport] = new_texture_size;
+		}
 		return true;
 	}
 
 	// We assume that the Graphics module won't modify any entities
 	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index);
 	if (in_stream_module_index == -1) {
+		if (new_texture_size.x != 0 && new_texture_size.y != 0) {
+			// Put the resize on hold
+			sandbox->viewport_pending_resize[viewport] = new_texture_size;
+		}
 		return false;
 	}
 
@@ -875,8 +964,12 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	ECS_STACK_CAPACITY_STREAM(void*, events_data, 256);
 	EditorGetEventTypeData(editor_state, WaitCompilationRenderSandboxEvent, &events_data);
 	for (unsigned int index = 0; index < events_data.size; index++) {
-		const WaitCompilationRenderSandboxEventData* data = (const WaitCompilationRenderSandboxEventData*)events_data[index];
+		WaitCompilationRenderSandboxEventData* data = (WaitCompilationRenderSandboxEventData*)events_data[index];
 		if (data->sandbox_index == sandbox_index) {
+			if (new_texture_size.x != 0 && new_texture_size.y != 0) {
+				// Change the resize value
+				data->new_texture_size = new_texture_size;
+			}
 			return true;
 		}
 	}
@@ -927,7 +1020,8 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		MemoryManager runtime_query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(GetAllocatorPolymorphic(editor_state->GlobalMemoryManager()));
 		ArchetypeQueryCache runtime_query_cache;
 
-		if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
+		if (active_viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			viewport_entity_manager = &sandbox->scene_entities;
 
 			// Bind to the sandbox the scene entity manager
@@ -1099,7 +1193,8 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 	visualize_element.texture = sandbox->scene_viewport_depth_stencil_framebuffer.GetResource();
 	SetVisualizeTexture(editor_state, visualize_element);
 
-	runtime_graphics->m_window_size = new_size;
+	// Disable the pending resize
+	sandbox->viewport_pending_resize[viewport] = { 0, 0 };
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1110,6 +1205,85 @@ void ResetSandboxUnusedEntities(EditorState* editor_state, unsigned int sandbox_
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->unused_entities_slots[viewport].FreeBuffer();
 	SignalSandboxUnusedEntitiesSlotsCounter(editor_state, sandbox_index, viewport);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index)
+{
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 256, ECS_MB * 8);
+	ECS_STACK_CAPACITY_STREAM(char, snapshot_message, ECS_KB * 64);
+
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_RUNNING);
+
+	// Perform the world simulation - before that we need to set the graphics buffers up
+	// And retrieve the graphics snapshot and the resource manager snapshot
+	// If any resources that were loaded by the editor are missing after the simulation has run,
+	// Stop all simulations and notify the user
+
+	// If we have a pending texture resize, perform it
+	if (sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME].x != 0 && sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME].y != 0) {
+		ResizeSandboxRenderTextures(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME, sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME]);
+	}
+
+	GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(GetAllocatorPolymorphic(&stack_allocator));
+	DoFrame(&sandbox->sandbox_world);
+
+	bool graphics_snapshot_success = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(graphics_snapshot, &snapshot_message);
+	if (snapshot_message.size > 0) {
+		ECS_FORMAT_TEMP_STRING(console_message, "There are mismatches in the graphics resource snapshot after running sandbox {#}", sandbox_index);
+		EditorSetConsoleError(console_message);
+		EditorSetConsoleError(snapshot_message);
+	}
+
+	snapshot_message.size = 0;
+	bool resource_snapshot_success = editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot, &snapshot_message);
+	if (snapshot_message.size > 0) {
+		ECS_FORMAT_TEMP_STRING(console_message, "There are mismatches in the resource manager snapshot after running sandbox {#}", sandbox_index);
+		EditorSetConsoleError(console_message);
+		EditorSetConsoleError(snapshot_message);
+	}
+
+	stack_allocator.Clear();
+	// The graphics snapshot was allocated from the editor allocator, we need to deallocate it
+	graphics_snapshot.Deallocate(editor_state->EditorAllocator());
+
+	// Render the scene if it is visible - the runtime is rendered by the game now		
+	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
+	if (scene_window_index != -1) {
+		bool is_scene_visible = editor_state->ui_system->IsWindowVisible(scene_window_index);
+		if (is_scene_visible) {
+			EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		}
+	}
+
+	RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+
+	// Disable this irrespective if it was enabled here or not
+	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+
+	if (!graphics_snapshot_success || !resource_snapshot_success) {
+		__debugbreak();
+	}
+
+	return graphics_snapshot_success && resource_snapshot_success;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool RunSandboxWorlds(EditorState* editor_state)
+{
+	bool success = true;
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		if (sandbox->should_step && sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
+			success &= RunSandboxWorld(editor_state, index);
+		}
+	}
+	return success;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1263,13 +1437,71 @@ EDITOR_EVENT(SignalUnusedEntitiesSlotsCounterEvent) {
 	return false;
 }
 
-
 void SignalSandboxUnusedEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	SignalUnusedEntitiesSlotsCounterEventData event_data;
 	event_data.sandbox_index = sandbox_index;
 	event_data.viewport = viewport;
 	EditorAddEvent(editor_state, SignalUnusedEntitiesSlotsCounterEvent, &event_data, sizeof(event_data));
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool disable_error_messages)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_SCENE);
+
+	bool success = true;
+	// If we are in the scene state, we need to construct the scheduling order and prepare the world
+	if (sandbox->run_state == EDITOR_SANDBOX_SCENE) {
+		success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, disable_error_messages);
+		if (success) {
+			// Copy the entities from the scene to the runtime
+			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
+			// Prepare the sandbox world
+			PrepareWorld(&sandbox->sandbox_world);
+		}
+	}
+	// Else if we are in the paused state we just need to change the state
+	if (success) {
+		// Check to see if the modules referenced by the sandbox are loaded
+		bool success = AreSandboxModulesLoaded(editor_state, sandbox_index, true);
+		if (!success) {
+			// Launch the build command for those modules that are not yet updated
+			success = CompileSandboxModules(editor_state, sandbox_index);
+		}
+
+		if (success) {
+			// Disable the rendering of the scene and game windows - we will draw them every frame
+			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+			sandbox->run_state = EDITOR_SANDBOX_RUNNING;
+		}
+	}
+	return success;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool StartSandboxWorlds(EditorState* editor_state, bool paused_only)
+{
+	bool success = true;
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		if (paused_only) {
+			if (sandbox->should_pause && sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
+				success &= StartSandboxWorld(editor_state, index);
+			}
+		}
+		else {
+			if (sandbox->should_play && (sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_SCENE)) {
+				success &= StartSandboxWorld(editor_state, index);
+			}
+		}
+	}
+	return success;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1351,6 +1583,35 @@ void TickSandboxes(EditorState* editor_state)
 {
 	TickSandboxesRuntimeSettings(editor_state);
 	TickSandboxesSelectedEntities(editor_state);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void TickSandboxRuntimes(EditorState* editor_state)
+{
+	const UISystem* ui_system = editor_state->ui_system;
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) && !EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		for (unsigned int index = 0; index < sandbox_count; index++) {
+			EditorSandbox* sandbox = GetSandbox(editor_state, index);
+			// Check to see if the current sandbox is being run
+			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+				bool simulation_success = RunSandboxWorld(editor_state, index);
+
+				// If there was an error with the snapshot, then pause all other sandboxes
+				if (!simulation_success) {
+					for (unsigned int subindex = 0; subindex < sandbox_count; subindex++) {
+						if (GetSandboxState(editor_state, subindex) == EDITOR_SANDBOX_RUNNING) {
+							// Don't wait for each one to wait. The threads will simply stop when they are finished
+							PauseSandboxWorld(editor_state, subindex, false);
+						}
+					}
+					// We can exit the loop now
+					break;
+				}
+			}
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

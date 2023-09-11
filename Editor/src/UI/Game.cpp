@@ -106,6 +106,13 @@ void GetGameUIWindowName(unsigned int index, CapacityStream<char>& name)
 	function::ConvertIntToChars(name, index);
 }
 
+unsigned int GetGameUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
+	GetGameUIWindowName(sandbox_index, window_name);
+	return editor_state->ui_system->GetWindowFromName(window_name);
+}
+
 void UpdateGameUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index) {
 	UpdateUIWindowIndex(editor_state, GAME_WINDOW_NAME, old_index, new_index);
 }

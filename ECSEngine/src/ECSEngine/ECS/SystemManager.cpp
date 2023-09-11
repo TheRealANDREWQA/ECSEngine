@@ -213,9 +213,10 @@ namespace ECSEngine {
 		temporary_allocator.Clear();
 		allocator->Clear();
 
-		temporary_table.Clear();
-		data_table.Clear();
-		system_settings.Clear();
+		// We need to reset these since we cleared the allocator
+		temporary_table.Reset();
+		data_table.Reset();
+		system_settings.Reset();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------

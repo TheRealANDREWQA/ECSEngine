@@ -894,6 +894,15 @@ namespace ECSEngine {
 
 			void FinalizeElementDescriptor();
 
+			// Returns the index in the pop_up_windows stream
+			unsigned int FindPopUpWindow(unsigned int window_index) const;
+
+			// Returns the index in the pop_up_windows stream
+			unsigned int FindPopUpWindow(const UIDockspace* dockspace) const;
+
+			// Returns the index in the pop_up_windows stream
+			unsigned int FindPopUpWindow(const UIDockspaceBorder* border) const;
+
 			unsigned int FindCharacterType(char character) const;
 
 			unsigned int FindCharacterType(char character, CharacterType& character_type) const;
@@ -977,7 +986,9 @@ namespace ECSEngine {
 
 			UIDockspace* GetDockspaceFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type);
 
-			unsigned int GetDockspaceIndexFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type);
+			const UIDockspace* GetDockspaceFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type) const;
+
+			unsigned int GetDockspaceIndexFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type) const;
 
 			float2 GetDockspaceRegionPosition(const UIDockspace* dockspace, unsigned int border_index, float offset_mask) const;
 
@@ -1032,9 +1043,9 @@ namespace ECSEngine {
 
 			float2 GetTextSpriteSize(float size) const;
 
-			void GetVisibleDockspaceRegions(Stream<UIVisibleDockspaceRegion>& windows);
+			void GetVisibleDockspaceRegions(CapacityStream<UIVisibleDockspaceRegion>& windows) const;
 
-			void GetVisibleDockspaceRegions(Stream<UIVisibleDockspaceRegion>& windows, bool from_lowest_layer_to_highest);
+			void GetVisibleDockspaceRegions(CapacityStream<UIVisibleDockspaceRegion>& windows, bool from_lowest_layer_to_highest) const;
 
 			// returns the expanded position
 			float2 GetOuterDockspaceBorderPosition(const UIDockspace* dockspace, ECS_UI_BORDER_TYPE type) const;
@@ -1153,6 +1164,8 @@ namespace ECSEngine {
 			) const;
 
 			UIDockspace* GetDockspace(unsigned int dockspace_index, DockspaceType type);
+
+			const UIDockspace* GetDockspace(unsigned int dockspace_index, DockspaceType type) const;
 
 			const UIDockspace* GetConstDockspace(UIDockspaceLayer layer) const;
 
@@ -1320,17 +1333,11 @@ namespace ECSEngine {
 
 			bool IsBackgroundDockspace(const UIDockspaceBorder* border) const;
 
-			// Returns the index in the pop_up_windows stream
-			unsigned int FindPopUpWindow(unsigned int window_index) const;
-
-			// Returns the index in the pop_up_windows stream
-			unsigned int FindPopUpWindow(const UIDockspace* dockspace) const;
-
-			// Returns the index in the pop_up_windows stream
-			unsigned int FindPopUpWindow(const UIDockspaceBorder* border) const;
-
 			// Returns whether or not the window is currently drawing
-			bool IsWindowDrawing(unsigned int window_index);
+			bool IsWindowDrawing(unsigned int window_index) const;
+
+			// Returns whether or not the viewer can see this window or not
+			bool IsWindowVisible(unsigned int window_index) const;
 			
 			bool LoadUIFile(Stream<wchar_t> filename, Stream<Stream<char>>& window_names);
 

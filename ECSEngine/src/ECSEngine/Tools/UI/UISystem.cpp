@@ -3472,9 +3472,8 @@ namespace ECSEngine {
 			PushBackgroundDockspace();
 
 			m_thread_tasks.Reset();
-			void* allocation = ECS_STACK_ALLOC(sizeof(UIVisibleDockspaceRegion) * m_thread_tasks.GetCapacity());
-			Stream<UIVisibleDockspaceRegion> regions = Stream<UIVisibleDockspaceRegion>(allocation, 0);
-			GetVisibleDockspaceRegions(regions, true);
+			ECS_STACK_CAPACITY_STREAM(UIVisibleDockspaceRegion, visible_regions, 256);
+			GetVisibleDockspaceRegions(visible_regions, true);
 
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
 			// if there are more regions to draw than command lists, expand the stream and nullptr every entry
@@ -3490,14 +3489,15 @@ namespace ECSEngine {
 			}
 #endif
 
-			UIDrawDockspaceRegionData* data_allocation = (UIDrawDockspaceRegionData*)ECS_STACK_ALLOC(sizeof(UIDrawDockspaceRegionData) * regions.size);
+			UIDrawDockspaceRegionData* data_allocation = (UIDrawDockspaceRegionData*)ECS_STACK_ALLOC(sizeof(UIDrawDockspaceRegionData) * visible_regions.size);
 			UIDockspace* mouse_dockspace = nullptr;
 			DockspaceType mouse_type;
 			unsigned int mouse_dockspace_region = GetDockspaceRegionFromMouse(mouse_position, &mouse_dockspace, mouse_type);
 
 			unsigned int active_region_index = 0;
-			for (size_t index = 0; index < regions.size; index++) {
-				if (regions[index].dockspace == m_focused_window_data.active_location.dockspace && regions[index].border_index == m_focused_window_data.active_location.border_index) {
+			for (size_t index = 0; index < visible_regions.size; index++) {
+				if (visible_regions[index].dockspace == m_focused_window_data.active_location.dockspace &&
+					visible_regions[index].border_index == m_focused_window_data.active_location.border_index) {
 					active_region_index = index;
 					break;
 				}
@@ -3529,14 +3529,14 @@ namespace ECSEngine {
 				return task;
 			};
 			// if there are more windows to draw, add them to the queue
-			for (int64_t index = m_task_manager->GetThreadCount(); index < (int64_t)regions.size; index++) {
-				ThreadTask task = initialize_thread_task(data_allocation + index, this, regions, index);
+			for (int64_t index = m_task_manager->GetThreadCount(); index < (int64_t)visible_regions.size; index++) {
+				ThreadTask task = initialize_thread_task(data_allocation + index, this, visible_regions, index);
 				m_thread_tasks.PushNonAtomic(task);
 			}
 
 			// initializing threads with tasks
-			for (int64_t index = 0; index < m_task_manager->GetThreadCount() && index < (int64_t)regions.size; index++) {
-				ThreadTask task = initialize_thread_task(data_allocation + index, this, regions, index);
+			for (int64_t index = 0; index < m_task_manager->GetThreadCount() && index < (int64_t)visible_regions.size; index++) {
+				ThreadTask task = initialize_thread_task(data_allocation + index, this, visible_regions, index);
 
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
 				m_task_manager->AddDynamicTask(task, index, true);
@@ -5334,44 +5334,31 @@ namespace ECSEngine {
 
 		UIDockspace* UISystem::GetDockspaceFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type)
 		{
-			auto search_lambda = [&](CapacityStream<UIDockspace>& dockspaces, DockspaceType current_type) {
-				for (size_t index = 0; index < dockspaces.size; index++) {
-					UIDockspace* dockspace = &dockspaces[index];
-					for (size_t subindex = 0; subindex < dockspace->borders.size; subindex++) {
-						if (!dockspace->borders[subindex].is_dock) {
-							for (size_t window_idx = 0; window_idx < dockspace->borders[subindex].window_indices.size; window_idx++) {
-								if (dockspace->borders[subindex].window_indices[window_idx] == window_index) {
-									border_index = subindex;
-									type = current_type;
-									return dockspace;
-								}
-							}
-						}
-					}
-				}
-				return (UIDockspace*)nullptr;
-			};
-
-			auto pointer = search_lambda(m_floating_horizontal_dockspaces, DockspaceType::FloatingHorizontal);
-			if (pointer == nullptr) {
-				pointer = search_lambda(m_floating_vertical_dockspaces, DockspaceType::FloatingVertical);
-				if (pointer == nullptr) {
-					pointer = search_lambda(m_horizontal_dockspaces, DockspaceType::Horizontal);
-					if (pointer == nullptr) {
-						pointer = search_lambda(m_vertical_dockspaces, DockspaceType::Vertical);
-					}
-				}
+			unsigned int dockspace_index = GetDockspaceIndexFromWindow(window_index, border_index, type);
+			if (dockspace_index != -1) {
+				return GetDockspace(dockspace_index, type);
 			}
-			return pointer;
+			return nullptr;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetDockspaceIndexFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type)
+		const UIDockspace* UISystem::GetDockspaceFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type) const
 		{
-			auto search_lambda = [&](CapacityStream<UIDockspace>& dockspaces, DockspaceType current_type) {
+			unsigned int dockspace_index = GetDockspaceIndexFromWindow(window_index, border_index, type);
+			if (dockspace_index != -1) {
+				return GetDockspace(dockspace_index, type);
+			}
+			return nullptr;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int UISystem::GetDockspaceIndexFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type) const
+		{
+			auto search_lambda = [&](const CapacityStream<UIDockspace>& dockspaces, DockspaceType current_type) {
 				for (size_t index = 0; index < dockspaces.size; index++) {
-					UIDockspace* dockspace = &dockspaces[index];
+					const UIDockspace* dockspace = &dockspaces[index];
 					for (size_t subindex = 0; subindex < dockspace->borders.size; subindex++) {
 						if (!dockspace->borders[subindex].is_dock) {
 							for (size_t window_idx = 0; window_idx < dockspace->borders[subindex].window_indices.size; window_idx++) {
@@ -6013,9 +6000,8 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::GetVisibleDockspaceRegions(Stream<UIVisibleDockspaceRegion>& regions)
+		void UISystem::GetVisibleDockspaceRegions(CapacityStream<UIVisibleDockspaceRegion>& regions) const
 		{
-			regions.size = 0;
 			UIDockspace* dockspaces[4] = {
 				m_horizontal_dockspaces.buffer,
 				m_vertical_dockspaces.buffer,
@@ -6058,10 +6044,13 @@ namespace ECSEngine {
 
 							}
 							if (floating_dockspace_index >= dockspace_count) {
-								regions[regions.size].dockspace = dockspace;
-								regions[regions.size].border_index = border_index;
-								regions[regions.size].type = children_types[subindex];
-								regions[regions.size++].layer = index;
+								UIVisibleDockspaceRegion visible_region;
+								visible_region.dockspace = dockspace;
+								visible_region.border_index = border_index;
+								visible_region.layer = index;
+								visible_region.type = children_types[subindex];
+
+								regions.AddAssert(visible_region);
 							}
 						}
 					}
@@ -6087,19 +6076,25 @@ namespace ECSEngine {
 
 							}
 							if (floating_dockspace_index >= dockspace_count) {
-								regions[regions.size].dockspace = current_dockspace;
-								regions[regions.size].border_index = border_index;
-								regions[regions.size].type = m_dockspace_layers[index].type;
-								regions[regions.size++].layer = index;
+								UIVisibleDockspaceRegion visible_region;
+								visible_region.dockspace = current_dockspace;
+								visible_region.border_index = border_index;
+								visible_region.layer = index;
+								visible_region.type = m_dockspace_layers[index].type;
+
+								regions.AddAssert(visible_region);
 							}
 						}
 					}
 				}
 				else {
-					regions[regions.size].dockspace = current_dockspace;
-					regions[regions.size].border_index = 0;
-					regions[regions.size].type = m_dockspace_layers[index].type;
-					regions[regions.size++].layer = index;
+					UIVisibleDockspaceRegion visible_region;
+					visible_region.dockspace = current_dockspace;
+					visible_region.border_index = 0;
+					visible_region.layer = index;
+					visible_region.type = m_dockspace_layers[index].type;
+
+					regions.AddAssert(visible_region);
 				}
 				size_t floating_dockspace_index = 0;
 				for (; floating_dockspace_index < dockspace_count; floating_dockspace_index++) {
@@ -6120,7 +6115,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::GetVisibleDockspaceRegions(Stream<UIVisibleDockspaceRegion>& regions, bool from_lowest_layer_to_highest)
+		void UISystem::GetVisibleDockspaceRegions(CapacityStream<UIVisibleDockspaceRegion>& regions, bool from_lowest_layer_to_highest) const
 		{
 			GetVisibleDockspaceRegions(regions);
 			for (size_t index = 0; index < regions.size >> 1; index++) {
@@ -6141,19 +6136,19 @@ namespace ECSEngine {
 			float horizontal_border_size = m_descriptors.dockspaces.border_size * height / width;
 			float vertical_border_size = m_descriptors.dockspaces.border_size;
 			switch (type) {
-			case ECS_UI_BORDER_TYPE::ECS_UI_BORDER_TOP:
+			case ECS_UI_BORDER_TOP:
 				return {
 					dockspace->transform.position.x, dockspace->transform.position.y - vertical_half_margin + vertical_border_size * 0.5f
 				};
-			case ECS_UI_BORDER_TYPE::ECS_UI_BORDER_LEFT:
+			case ECS_UI_BORDER_LEFT:
 				return  {
 					dockspace->transform.position.x - horizontal_half_margin + horizontal_border_size * 0.5f, dockspace->transform.position.y
 				};
-			case ECS_UI_BORDER_TYPE::ECS_UI_BORDER_BOTTOM:
+			case ECS_UI_BORDER_BOTTOM:
 				return {
 					dockspace->transform.position.x, dockspace->transform.position.y + dockspace->transform.scale.y - vertical_half_margin + vertical_border_size * 0.5f
 				};
-			case ECS_UI_BORDER_TYPE::ECS_UI_BORDER_RIGHT:
+			case ECS_UI_BORDER_RIGHT:
 				return {
 					dockspace->transform.position.x + dockspace->transform.scale.x - horizontal_half_margin + horizontal_border_size * 0.5f, dockspace->transform.position.y
 				};
@@ -6175,7 +6170,7 @@ namespace ECSEngine {
 				{dockspace->transform.scale.x, vertical_margin}, 
 				{horizontal_margin, dockspace->transform.scale.y} 
 			};
-			bool is_horizontal = ECS_UI_BORDER_TYPE::ECS_UI_BORDER_LEFT == type || ECS_UI_BORDER_TYPE::ECS_UI_BORDER_RIGHT == type;
+			bool is_horizontal = ECS_UI_BORDER_LEFT == type || ECS_UI_BORDER_RIGHT == type;
 			return sizes[is_horizontal];
 		}
 
@@ -6606,7 +6601,8 @@ namespace ECSEngine {
 			unsigned int border_index
 		) const {
 			float2 position;
-			position.x = region_position.x + region_scale.x - NormalizeHorizontalToWindowDimensions(m_descriptors.dockspaces.border_size) - m_descriptors.misc.render_slider_vertical_size;
+			position.x = region_position.x + region_scale.x - NormalizeHorizontalToWindowDimensions(m_descriptors.dockspaces.border_size) 
+				- m_descriptors.misc.render_slider_vertical_size;
 			position.y = region_position.y + m_descriptors.misc.title_y_scale;
 			if (!dockspace->borders[border_index].draw_region_header && !dockspace->borders[border_index].draw_close_x) {
 				position.y -= m_descriptors.misc.title_y_scale;
@@ -6633,7 +6629,12 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		float2 UISystem::GetDockspaceRegionVerticalRenderSliderScale(float2 region_scale, const UIDockspace* dockspace, unsigned int border_index, unsigned int window_index) const {
+		float2 UISystem::GetDockspaceRegionVerticalRenderSliderScale(
+			float2 region_scale, 
+			const UIDockspace* dockspace, 
+			unsigned int border_index, 
+			unsigned int window_index
+		) const {
 			float2 scale;
 			scale.x = m_descriptors.misc.render_slider_vertical_size;
 			scale.y = region_scale.y - m_descriptors.misc.title_y_scale - m_descriptors.dockspaces.border_size;
@@ -6650,7 +6651,12 @@ namespace ECSEngine {
 
 		UIDockspace* UISystem::GetDockspace(unsigned int dockspace_index, DockspaceType type)
 		{
-			UIDockspace* dockspaces[] = {
+			return (UIDockspace*)((const UISystem*)this)->GetDockspace(dockspace_index, type);
+		}
+
+		const UIDockspace* UISystem::GetDockspace(unsigned int dockspace_index, DockspaceType type) const
+		{
+			const UIDockspace* dockspaces[] = {
 				m_horizontal_dockspaces.buffer,
 				m_vertical_dockspaces.buffer,
 				m_floating_horizontal_dockspaces.buffer,
@@ -6663,13 +6669,7 @@ namespace ECSEngine {
 
 		const UIDockspace* UISystem::GetConstDockspace(UIDockspaceLayer layer) const
 		{
-			const UIDockspace* dockspaces[] = {
-				m_horizontal_dockspaces.buffer,
-				m_vertical_dockspaces.buffer,
-				m_floating_horizontal_dockspaces.buffer,
-				m_floating_vertical_dockspaces.buffer
-			};
-			return &dockspaces[(unsigned int)layer.type][layer.index];
+			return GetDockspace(layer.index, layer.type);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -8404,15 +8404,38 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		bool UISystem::IsWindowDrawing(unsigned int window_index)
+		bool UISystem::IsWindowDrawing(unsigned int window_index) const
 		{
 			unsigned int border_index;
 			DockspaceType type;
-			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
+			const UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
 			if (dockspace == nullptr) {
 				return false;
 			}
 			return dockspace->borders[border_index].window_indices[dockspace->borders[border_index].active_window] == window_index;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		bool UISystem::IsWindowVisible(unsigned int window_index) const
+		{
+			// Check to see if this window is actually displayed in its dockspace
+			unsigned int border_index = 0;
+			DockspaceType type = DockspaceType::Horizontal;
+			const UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
+
+			if (GetWindowIndexFromBorder(dockspace, border_index) == window_index) {
+				// Get the list of visible dockspace regions and then search for the dockspace region
+				ECS_STACK_CAPACITY_STREAM(UIVisibleDockspaceRegion, visible_regions, 256);
+				GetVisibleDockspaceRegions(visible_regions);
+
+				for (unsigned int index = 0; index < visible_regions.size; index++) {
+					if (visible_regions[index].dockspace == dockspace && visible_regions[index].border_index == border_index) {
+						return true;
+					}
+				}
+			}
+			return false;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

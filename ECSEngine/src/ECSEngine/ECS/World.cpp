@@ -277,9 +277,25 @@ namespace ECSEngine {
 		// Finish the static task registration
 		world->task_manager->FinishStaticTasks();
 
-		// TODO: Add this back
 		if (world->debug_drawer != nullptr) {
-			//world->debug_drawer->Clear();
+			world->debug_drawer->Clear();
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------
+
+	void ClearWorld(World* world)
+	{
+		// Clear everything that can be cleared
+		world->task_manager->ClearTaskStream();
+		world->task_manager->ClearThreadAllocators();
+		
+		world->entity_manager->ClearEntitiesAndAllocator();
+		world->task_scheduler->Reset();
+		world->system_manager->Clear();
+
+		if (world->debug_drawer != nullptr) {
+			world->debug_drawer->Clear();
 		}
 	}
 

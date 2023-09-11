@@ -517,7 +517,9 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 		if (shader_field->basic_component_count > 1) {
 			// A space and the integer value will be written
-			size_t name_resize_size = reflection_fields[0].name.size + 2;
+			// We also need to add another byte since ConvertIntToChars places a '\0' at the end
+			// After it converts and it can override the shader field tag
+			size_t name_resize_size = reflection_fields[0].name.size + 3;
 
 			Deallocate(allocator, reflection_fields[0].name.buffer);
 

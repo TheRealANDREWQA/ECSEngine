@@ -340,6 +340,9 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// Clears everything, it will be the same as if creating a new entity manager
+		void ClearEntitiesAndAllocator();
+
 		void ClearFrame();
 
 		void ClearCache();

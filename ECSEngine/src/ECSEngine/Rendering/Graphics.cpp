@@ -3652,10 +3652,16 @@ namespace ECSEngine {
 	bool Graphics::RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot, CapacityStream<char>* mismatch_string) {
 		m_internal_resources_lock.lock();
 		unsigned int current_resource_count = m_internal_resources.SpinWaitWrites();
+		bool size_success = true;
 		if (current_resource_count < snapshot.interface_pointers.size) {
 			if (mismatch_string == nullptr) {
 				m_internal_resources_lock.unlock();
 				return false;
+			}
+			else {
+				ECS_FORMAT_STRING(*mismatch_string, "Expected {#} resources in the graphics object, instead there are {#}.",
+					snapshot.interface_pointers.size, current_resource_count);
+				size_success = false;
 			}
 		}
 
@@ -3716,7 +3722,7 @@ namespace ECSEngine {
 			// Now check for all the old resources to see if they have been accidentally removed
 			// If there is a false value then it means that an old resources was removed
 			size_t first_missing = function::SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool));
-			return first_missing == -1;
+			return first_missing == -1 && size_success;
 		}
 		else {
 			bool is_missing = false;
@@ -3731,7 +3737,7 @@ namespace ECSEngine {
 				missing += function::SearchBytes(was_found.buffer + missing, snapshot.interface_pointers.size - missing, (size_t)false, sizeof(bool));
 			}
 
-			return is_missing;
+			return !is_missing && size_success;
 		}
 	}
 

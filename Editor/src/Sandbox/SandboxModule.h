@@ -24,6 +24,12 @@ bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_i
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns true when all the modules that are currently used by the sandbox are loaded into the editor
+// Else false
+bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandbox_index, bool exclude_out_of_date);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, ECSEngine::Stream<wchar_t> settings_name);
 
 // -------------------------------------------------------------------------------------------------------------

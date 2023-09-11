@@ -117,6 +117,9 @@ struct ECS_REFLECT EditorSandbox {
 	// These are set used to make calls to RenderSandbox ignore the request if the output is
 	// not going to be visualized
 	bool viewport_enable_rendering[EDITOR_SANDBOX_VIEWPORT_COUNT];
+	// If a call to a render sandbox that wanted to resize the textures was issued but the rendering
+	// Is not allowed, it will put the value to be read from here for the next render
+	ECSEngine::uint2 viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_COUNT];
 
 
 	ECSEngine::EntityManager scene_entities;

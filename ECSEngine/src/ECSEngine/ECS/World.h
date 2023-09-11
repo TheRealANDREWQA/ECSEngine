@@ -100,6 +100,8 @@ namespace ECSEngine {
 	// before calling PrepareWorld
 	ECSENGINE_API void PrepareWorld(World* world, Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 });
 
+	ECSENGINE_API void ClearWorld(World* world);
+
 	// Can choose whether or not to wait for the frame to finish
 	ECSENGINE_API void DoFrame(World* world, bool wait_for_frame = true);
 

@@ -428,7 +428,7 @@ EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 				if (data->insert_time_stamps) {
 					// Insert the time stamps for all assets since they all have loaded successfully
 					data->database.ForEachAsset([&](unsigned int handle, ECS_ASSET_TYPE type) {
-						InsertAssetTimeStamp(editor_state, data->database.GetAsset(handle, type), type);
+						InsertAssetTimeStamp(editor_state, data->database.GetAsset(handle, type), type, true);
 					});
 				}
 			}
@@ -448,7 +448,7 @@ EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 							asset_mask[current_type].Add(current_handle);
 
 							if (data->insert_time_stamps) {
-								InsertAssetTimeStamp(editor_state, current_handle, current_type);
+								InsertAssetTimeStamp(editor_state, current_handle, current_type, true);
 							}
 						}
 					}
@@ -1139,10 +1139,7 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 										GetAssetDependencies(file_metadata, asset_type, &file_internal_dependencies);
 
 										for (unsigned int subindex = 0; subindex < file_internal_dependencies.size; subindex++) {
-											bool has_time_stamp = HasAssetTimeStamp(editor_state, file_internal_dependencies[subindex].handle, file_internal_dependencies[subindex].type);
-											if (!has_time_stamp) {
-												InsertAssetTimeStamp(editor_state, file_internal_dependencies[subindex].handle, file_internal_dependencies[subindex].type);
-											}
+											InsertAssetTimeStamp(editor_state, file_internal_dependencies[subindex].handle, file_internal_dependencies[subindex].type, true);
 										}
 									}
 								}
