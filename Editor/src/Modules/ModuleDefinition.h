@@ -42,6 +42,12 @@ struct EditorModuleInfo {
 };
 
 struct EditorModuleReflectedSetting {
+	ECS_INLINE EditorModuleReflectedSetting Copy(ECSEngine::AllocatorPolymorphic allocator) const {
+		ECSEngine::Stream<char> new_name;
+		new_name.InitializeAndCopy(allocator, name);
+		return { data, name };
+	}
+
 	void* data;
 	ECSEngine::Stream<char> name;
 };

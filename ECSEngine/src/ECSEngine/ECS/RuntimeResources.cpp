@@ -6,7 +6,7 @@
 #include "../ECS/InternalStructures.h"
 
 #define CAMERA_IDENTIFIER "__RuntimeCamera"
-#define EDITOR_IDENTIFIER "__Editor"
+#define EDITOR_RUNTIME_TYPE_IDENTIFIER "__EditorRuntimeType"
 #define SELECTED_ENTITIES_IDENTIFIER "__SelectedEntities"
 #define SELECT_COLOR_IDENTIFIER "__SelectColor"
 #define TRANSFORM_TOOL_IDENTIFIER "__TransformTool"
@@ -61,17 +61,25 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	bool IsEditorRuntime(const SystemManager* system_manager) {
-		return system_manager->TryGetData(EDITOR_IDENTIFIER) != nullptr;
+	ECS_EDITOR_RUNTIME_TYPE GetEditorRuntimeType(const SystemManager* system_manager)
+	{
+		ECS_EDITOR_RUNTIME_TYPE type;
+		if (GetRuntimeResource(system_manager, &type, EDITOR_RUNTIME_TYPE_IDENTIFIER)) {
+			return type;
+		}
+		else {
+			return ECS_EDITOR_RUNTIME_TYPE_COUNT;
+		}
 	}
 
-	void SetEditorRuntime(SystemManager* system_manager) {
-		bool dummy = false;
-		system_manager->BindData(EDITOR_IDENTIFIER, &dummy, sizeof(dummy));
+	void SetEditorRuntimeType(SystemManager* system_manager, ECS_EDITOR_RUNTIME_TYPE runtime_type)
+	{
+		system_manager->BindData(EDITOR_RUNTIME_TYPE_IDENTIFIER, &runtime_type, sizeof(runtime_type));
 	}
 
-	void RemoveEditorRuntime(SystemManager* system_manager) {
-		system_manager->RemoveData(EDITOR_IDENTIFIER);
+	void RemoveEditorRuntimeType(SystemManager* system_manager)
+	{
+		system_manager->RemoveData(EDITOR_RUNTIME_TYPE_IDENTIFIER);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

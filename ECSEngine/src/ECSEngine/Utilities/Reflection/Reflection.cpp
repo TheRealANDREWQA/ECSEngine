@@ -138,8 +138,9 @@ namespace ECSEngine {
 		}
 
 		ReflectionTypeTagHandler ECS_REFLECTION_TYPE_TAG_HANDLER[] = {
-			{ STRING(COMPONENT), TypeTagComponent, TypeTagComponent },
-			{ STRING(SHARED_COMPONENT), TypeTagComponent, TypeTagComponent }
+			{ ECS_COMPONENT_TAG, TypeTagComponent, TypeTagComponent },
+			{ ECS_SHARED_COMPONENT_TAG, TypeTagComponent, TypeTagComponent },
+			{ ECS_GLOBAL_COMPONENT_TAG, TypeTagComponent, TypeTagComponent }
 		};
 
 		// ----------------------------------------------------------------------------------------------------------------------------

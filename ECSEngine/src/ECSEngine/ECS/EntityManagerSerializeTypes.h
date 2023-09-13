@@ -94,7 +94,7 @@ namespace ECSEngine {
 
 	struct DeserializeEntityManagerHeaderSharedComponentData {
 		const void* file_data;
-		unsigned int data_size;
+		unsigned int size;
 		unsigned char version;
 		void* extra_data;
 	};
@@ -103,10 +103,20 @@ namespace ECSEngine {
 	// Used to extract the header from the file. Must return true if the data is valid, else false
 	typedef bool (*DeserializeEntityManagerHeaderSharedComponent)(DeserializeEntityManagerHeaderSharedComponentData* data);
 
+	// At the moment, these can be handled like unique components with a count of 1
+	typedef SerializeEntityManagerComponentData SerializeEntityManagerGlobalComponentData;
+	typedef SerializeEntityManagerComponent SerializeEntityManagerGlobalComponent;
+	typedef SerializeEntityManagerHeaderComponentData SerializeEntityManagerHeaderGlobalComponentData;
+	typedef SerializeEntityManagerHeaderComponent SerializeEntityManagerHeaderGlobalComponent;
+	typedef DeserializeEntityManagerComponentData DeserializeEntityManagerGlobalComponentData;
+	typedef DeserializeEntityManagerComponent DeserializeEntityManagerGlobalComponent;
+	typedef DeserializeEntityManagerHeaderComponentData DeserializeEntityManagerHeaderGlobalComponentData;
+	typedef DeserializeEntityManagerHeaderComponent DeserializeEntityManagerHeaderGlobalComponent;
+
 	// If the name is specified, then it will match the component using the name instead of the index
 	struct SerializeEntityManagerComponentInfo {
 		// The copy functions are used for stream deep copy
-		inline size_t CopySize() const {
+		ECS_INLINE size_t CopySize() const {
 			return name.MemoryOf(name.size);
 		}
 
@@ -129,7 +139,7 @@ namespace ECSEngine {
 	// If the name is specified, then it will match the component using the name instead of the index
 	struct SerializeEntityManagerSharedComponentInfo {
 		// The copy functions are used for stream deep copy
-		inline size_t CopySize() const {
+		ECS_INLINE size_t CopySize() const {
 			return name.MemoryOf(name.size);
 		}
 
@@ -159,7 +169,7 @@ namespace ECSEngine {
 	// If the name is specified, then it will match the component using the name instead of the index
 	struct DeserializeEntityManagerComponentInfo {
 		// The copy functions are used for stream deep copy
-		inline size_t CopySize() const {
+		ECS_INLINE size_t CopySize() const {
 			return name.MemoryOf(name.size);
 		}
 
@@ -182,7 +192,7 @@ namespace ECSEngine {
 	// If the name is specified, then it will match the component using the name instead of the index
 	struct DeserializeEntityManagerSharedComponentInfo {
 		// The copy functions are used for stream deep copy
-		inline size_t CopySize() const {
+		ECS_INLINE size_t CopySize() const {
 			return name.MemoryOf(name.size);
 		}
 
@@ -202,13 +212,20 @@ namespace ECSEngine {
 		Stream<char> name = { nullptr, 0 };
 	};
 
+	typedef SerializeEntityManagerComponentInfo SerializeEntityManagerGlobalComponentInfo;
+	typedef DeserializeEntityManagerComponentInfo DeserializeEntityManagerGlobalComponentInfo;
+
 	typedef HashTable<SerializeEntityManagerComponentInfo, Component, HashFunctionPowerOfTwo> SerializeEntityManagerComponentTable;
 
 	typedef HashTable<SerializeEntityManagerSharedComponentInfo, Component, HashFunctionPowerOfTwo> SerializeEntityManagerSharedComponentTable;
 
+	typedef HashTable<SerializeEntityManagerGlobalComponentInfo, Component, HashFunctionPowerOfTwo> SerializeEntityManagerGlobalComponentTable;
+
 	typedef HashTable<DeserializeEntityManagerComponentInfo, Component, HashFunctionPowerOfTwo> DeserializeEntityManagerComponentTable;
 
 	typedef HashTable<DeserializeEntityManagerSharedComponentInfo, Component, HashFunctionPowerOfTwo> DeserializeEntityManagerSharedComponentTable;
+
+	typedef HashTable<DeserializeEntityManagerGlobalComponentInfo, Component, HashFunctionPowerOfTwo> DeserializeEntityManagerGlobalComponentTable;
 
 	enum ECS_DESERIALIZE_ENTITY_MANAGER_STATUS {
 		ECS_DESERIALIZE_ENTITY_MANAGER_OK,

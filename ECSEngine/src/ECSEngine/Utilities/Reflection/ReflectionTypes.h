@@ -2,6 +2,7 @@
 #include "../../Core.h"
 #include "../../Containers/Stream.h"
 #include "../BasicTypes.h"
+#include "../Function.h"
 
 namespace ECSEngine {
 
@@ -141,12 +142,21 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API ReflectionField {
 			// It returns true if the string appears in the tag, else returns false in both cases
-			bool Has(Stream<char> string) const;
+			ECS_INLINE bool Has(Stream<char> string) const {
+				if (tag.size > 0) {
+					return function::FindFirstToken(tag, string).buffer != nullptr;
+				}
+				return false;
+			}
 
-			bool Is(Stream<char> string) const;
+			ECS_INLINE bool Is(Stream<char> string) const {
+				return function::CompareStrings(tag, string);
+			}
 
 			// Returns the tag isolated from others
-			Stream<char> GetTag(Stream<char> string) const;
+			ECS_INLINE Stream<char> GetTag(Stream<char> string) const {
+				return function::IsolateString(tag, string, ECS_REFLECTION_TYPE_TAG_DELIMITER_STRING);
+			}
 
 			// Each buffer will be allocated separately. To deallocate call DeallocateSeparate
 			ReflectionField Copy(AllocatorPolymorphic allocator) const;
@@ -156,10 +166,14 @@ namespace ECSEngine {
 			void DeallocateSeparate(AllocatorPolymorphic allocator) const;
 
 			// Only the buffer size is needed
-			size_t CopySize() const;
+			ECS_INLINE size_t CopySize() const {
+				return name.CopySize() + definition.CopySize() + tag.CopySize();
+			}
 
 			// Returns true if they have the same representation
-			bool Compare(const ReflectionField& field) const;
+			ECS_INLINE bool Compare(const ReflectionField& field) const {
+				return function::CompareStrings(field.definition, definition);
+			}
 
 			Stream<char> name;
 			Stream<char> definition;
@@ -171,7 +185,9 @@ namespace ECSEngine {
 			ReflectionEvaluation CopyTo(uintptr_t& ptr) const;
 
 			// Only the buffer size is needed
-			size_t CopySize() const;
+			ECS_INLINE size_t CopySize() const {
+				return name.CopySize();
+			}
 
 			Stream<char> name;
 			double value;
@@ -185,13 +201,22 @@ namespace ECSEngine {
 			void Deallocate(AllocatorPolymorphic allocator) const;
 
 			// If the tag is nullptr, it returns false. If it is set, it will check if the substring exists
-			bool HasTag(Stream<char> string) const;
+			ECS_INLINE bool HasTag(Stream<char> string) const {
+				if (tag.size == 0) {
+					return false;
+				}
+				return function::FindFirstToken(tag, string).buffer != nullptr;
+			}
 
 			// Does a CompareStrings, not a FindFirstToken
-			bool IsTag(Stream<char> string) const;
+			ECS_INLINE bool IsTag(Stream<char> string) const {
+				return function::CompareStrings(string, tag);
+			}
 
 			// In case the tag has multiple separated elements it will return the value separated
-			Stream<char> GetTag(Stream<char> string, Stream<char> separator) const;
+			ECS_INLINE Stream<char> GetTag(Stream<char> string, Stream<char> separator) const {
+				return function::IsolateString(tag, string, separator);
+			}
 
 			unsigned int FindField(Stream<char> name) const;
 

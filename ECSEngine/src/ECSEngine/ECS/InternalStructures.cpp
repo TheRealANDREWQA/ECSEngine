@@ -106,15 +106,15 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	unsigned int GetEntityIndexFromPoolOffset(unsigned int pool_index, unsigned int pool_power_of_two, unsigned int index) {
+	static unsigned int GetEntityIndexFromPoolOffset(unsigned int pool_index, unsigned int pool_power_of_two, unsigned int index) {
 		return (pool_index << pool_power_of_two) + index;
 	}
 
-	uint2 GetPoolAndEntityIndex(const EntityPool* entity_pool, Entity entity) {
+	static uint2 GetPoolAndEntityIndex(const EntityPool* entity_pool, Entity entity) {
 		return { entity.index >> entity_pool->m_pool_power_of_two, entity.index & ((1 << entity_pool->m_pool_power_of_two) - 1) };
 	}
 
-	Entity EntityPoolAllocateImplementation(EntityPool* entity_pool, unsigned short archetype = -1, unsigned short base_archetype = -1, unsigned int stream_index = -1) {	
+	static Entity EntityPoolAllocateImplementation(EntityPool* entity_pool, unsigned short archetype = -1, unsigned short base_archetype = -1, unsigned int stream_index = -1) {	
 		EntityInfo info;
 		info.main_archetype = archetype;
 		info.base_archetype = base_archetype;
@@ -171,7 +171,7 @@ namespace ECSEngine {
 	};
 	
 	template<EntityPoolAllocateType additional_data_type>
-	ECS_INLINE void EntityPoolAllocateImplementation(EntityPool* entity_pool, Stream<Entity> entities, EntityPoolAllocateAdditionalData additional_data = {}) {
+	void EntityPoolAllocateImplementation(EntityPool* entity_pool, Stream<Entity> entities, EntityPoolAllocateAdditionalData additional_data = {}) {
 		auto loop_iteration = [&entities, entity_pool, additional_data](unsigned int index) {
 			if constexpr (additional_data_type == ENTITY_POOL_ALLOCATE_WITH_INFOS) {
 				entity_pool->m_entity_infos[index].stream.Reserve({ entities.buffer, entities.size });
@@ -260,7 +260,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	EntityInfo GetInfoCrashCheck(
+	static EntityInfo GetInfoCrashCheck(
 		const EntityPool* entity_pool,
 		Entity entity,
 		const char* file,
@@ -308,7 +308,7 @@ namespace ECSEngine {
 		return info;
 	}
 
-	EntityInfo* GetInfoCrashCheck(
+	static EntityInfo* GetInfoCrashCheck(
 		EntityPool* entity_pool,
 		Entity entity, 
 		const char* file,

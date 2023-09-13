@@ -1023,9 +1023,9 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void GetUniqueLinkComponents(const Reflection::ReflectionManager* reflection_manager, CapacityStream<const Reflection::ReflectionType*>& link_types)
-	{
-		ECS_STACK_CAPACITY_STREAM(unsigned int, link_type_indices, ECS_KB * 2);
+	template<typename Functor>
+	static void GetLinkComponentsImpl(const Reflection::ReflectionManager* reflection_manager, Functor&& functor) {
+		ECS_STACK_CAPACITY_STREAM(unsigned int, link_type_indices, ECS_KB * 4);
 		GetLinkComponentIndices(reflection_manager, link_type_indices);
 
 		for (unsigned int index = 0; index < link_type_indices.size; index++) {
@@ -1034,57 +1034,61 @@ namespace ECSEngine {
 
 			Reflection::ReflectionType target_type;
 			if (reflection_manager->TryGetType(target, target_type)) {
-				if (IsReflectionTypeComponent(&target_type)) {
-					link_types.AddAssert(link_type);
-				}
+				functor(link_type, &target_type);
 			}
 		}
+	}
+
+	void GetUniqueLinkComponents(const Reflection::ReflectionManager* reflection_manager, CapacityStream<const Reflection::ReflectionType*>& link_types)
+	{
+		GetLinkComponentsImpl(reflection_manager, [&](const Reflection::ReflectionType* link_type, const Reflection::ReflectionType* target_type) {
+			if (IsReflectionTypeComponent(target_type)) {
+				link_types.AddAssert(link_type);
+			}
+		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
 	void GetSharedLinkComponents(const Reflection::ReflectionManager* reflection_manager, CapacityStream<const Reflection::ReflectionType*>& link_types)
 	{
-		ECS_STACK_CAPACITY_STREAM(unsigned int, link_type_indices, ECS_KB * 2);
-		GetLinkComponentIndices(reflection_manager, link_type_indices);
-
-		for (unsigned int index = 0; index < link_type_indices.size; index++) {
-			const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_type_indices[index]);
-			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_type);
-
-			Reflection::ReflectionType target_type;
-			if (reflection_manager->TryGetType(target, target_type)) {
-				if (IsReflectionTypeSharedComponent(&target_type)) {
-					link_types.AddAssert(link_type);
-				}
+		GetLinkComponentsImpl(reflection_manager, [&](const Reflection::ReflectionType* link_type, const Reflection::ReflectionType* target_type) {
+			if (IsReflectionTypeSharedComponent(target_type)) {
+				link_types.AddAssert(link_type);
 			}
-		}
+		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void GetUniqueAndSharedLinkComponents(
+	void GetGlobalLinkComponents(const Reflection::ReflectionManager* reflection_manager, CapacityStream<const Reflection::ReflectionType*>& link_types)
+	{
+		GetLinkComponentsImpl(reflection_manager, [&](const Reflection::ReflectionType* link_type, const Reflection::ReflectionType* target_type) {
+			if (IsReflectionTypeGlobalComponent(target_type)) {
+				link_types.AddAssert(link_type);
+			}
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetAllLinkComponents(
 		const Reflection::ReflectionManager* reflection_manager,
 		CapacityStream<const Reflection::ReflectionType*>& unique_link_types,
-		CapacityStream<const Reflection::ReflectionType*>& shared_link_types
+		CapacityStream<const Reflection::ReflectionType*>& shared_link_types,
+		CapacityStream<const Reflection::ReflectionType*>& global_link_types
 	) {
-		ECS_STACK_CAPACITY_STREAM(unsigned int, link_type_indices, ECS_KB * 2);
-		GetLinkComponentIndices(reflection_manager, link_type_indices);
-
-		for (unsigned int index = 0; index < link_type_indices.size; index++) {
-			const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_type_indices[index]);
-			Stream<char> target = GetReflectionTypeLinkComponentTarget(link_type);
-
-			Reflection::ReflectionType target_type;
-			if (reflection_manager->TryGetType(target, target_type)) {
-				if (IsReflectionTypeSharedComponent(&target_type)) {
-					shared_link_types.AddAssert(link_type);
-				}
-				else if (IsReflectionTypeComponent(&target_type)) {
-					unique_link_types.AddAssert(link_type);
-				}
+		GetLinkComponentsImpl(reflection_manager, [&](const Reflection::ReflectionType* link_type, const Reflection::ReflectionType* target_type) {
+			if (IsReflectionTypeComponent(target_type)) {
+				unique_link_types.AddAssert(link_type);
 			}
-		}
+			else if (IsReflectionTypeSharedComponent(target_type)) {
+				shared_link_types.AddAssert(link_type);
+			}
+			else if (IsReflectionTypeGlobalComponent(target_type)) {
+				global_link_types.AddAssert(link_type);
+			}
+		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

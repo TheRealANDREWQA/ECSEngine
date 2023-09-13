@@ -86,6 +86,10 @@ void GetLinkComponentWithAssetFieldsShared(
 
 // -------------------------------------------------------------------------------------------------------------
 
+
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Increments the reference count for that asset in the given sandbox
 void IncrementAssetReferenceInSandbox(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index, unsigned int count = 1);
 

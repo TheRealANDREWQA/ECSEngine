@@ -295,6 +295,52 @@ unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned 
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>& in_stream_indices)
+{
+	// We need to acquire the lock to inspect the modules which are being compiled right now
+	ECS_STACK_CAPACITY_STREAM(unsigned int, active_sandbox_modules, 512);
+	ECS_STACK_CAPACITY_STREAM(EDITOR_MODULE_CONFIGURATION, active_sandbox_module_configurations, 512);
+
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		if (!sandbox->modules_in_use[index].is_deactivated) {
+			active_sandbox_modules.AddAssert(sandbox->modules_in_use[index].module_index);
+			active_sandbox_module_configurations.Add(sandbox->modules_in_use[index].module_configuration);
+		}
+	}
+
+	GetCompilingModules(editor_state, active_sandbox_modules, active_sandbox_module_configurations.buffer);
+
+	for (unsigned int index = 0; index < active_sandbox_modules.size; index++) {
+		unsigned int in_stream_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, active_sandbox_modules[index]);
+		ECS_ASSERT(in_stream_module_index != -1);
+		in_stream_indices.AddAssert(in_stream_module_index);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxNeededButMissingModules(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ECSEngine::CapacityStream<unsigned int>& in_stream_indices, 
+	bool include_out_of_date
+)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration);
+		if (info->load_status == EDITOR_MODULE_LOAD_FAILED) {
+			in_stream_indices.AddAssert(index);
+		}
+		else if (include_out_of_date && info->load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
+			in_stream_indices.AddAssert(index);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool IsSandboxModuleDeactivated(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
 {
 	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);

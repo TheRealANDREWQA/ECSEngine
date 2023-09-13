@@ -101,7 +101,7 @@ namespace ECSEngine {
 		void AddComponentCommit(Entity entity, Component component);
 
 		// Deferred Call
-		void AddComponent(Entity entity, Component component, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
+		void AddComponent(Entity entity, Component component, DeferredActionParameters parameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -113,7 +113,7 @@ namespace ECSEngine {
 			Component component,
 			const void* data,
 			DeferredActionParameters parameters = {},
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -121,7 +121,7 @@ namespace ECSEngine {
 		void AddComponentCommit(Entity entity, ComponentSignature components);
 
 		// Deferred Call - it will register it inside the command stream
-		void AddComponent(Entity entity, ComponentSignature components, DeferredActionParameters = {}, DebugInfo debug_info = { ECS_LOCATION });
+		void AddComponent(Entity entity, ComponentSignature components, DeferredActionParameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -133,7 +133,7 @@ namespace ECSEngine {
 			ComponentSignature components,
 			const void** data,
 			DeferredActionParameters = {},
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -147,7 +147,7 @@ namespace ECSEngine {
 			Stream<Entity> entities,
 			Component component,
 			DeferredActionParameters parameters = {},
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -158,7 +158,7 @@ namespace ECSEngine {
 		// Deferred Call - it will register it inside a command stream
 		// entities must belong to the same base archetype; data will be used to initialize all components to the same value
 		void AddComponent(Stream<Entity> entities, Component component, const void* data, DeferredActionParameters parameters = {},
-			DebugInfo debug_info = { ECS_LOCATION });
+			DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -168,7 +168,7 @@ namespace ECSEngine {
 		// Deferred Call - it will register it inside a command stream
 		// entities must belong to the same base archetype
 		void AddComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {},
-			DebugInfo debug_info = { ECS_LOCATION });
+			DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -185,7 +185,7 @@ namespace ECSEngine {
 			const void** data,
 			EntityManagerCopyEntityDataType copy_type,
 			DeferredActionParameters parameters = {},
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -198,7 +198,7 @@ namespace ECSEngine {
 			Component shared_component,
 			SharedInstance instance,
 			DeferredActionParameters parameters = {},
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -213,7 +213,7 @@ namespace ECSEngine {
 			Component shared_component,
 			SharedInstance instance,
 			DeferredActionParameters parameters = {},
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -272,7 +272,7 @@ namespace ECSEngine {
 			Stream<Entity> entities,
 			SharedComponentSignature components,
 			DeferredActionParameters parameters = {},
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -371,7 +371,7 @@ namespace ECSEngine {
 			ComponentSignature unique_signature,
 			ComponentSignature shared_signature,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -391,7 +391,7 @@ namespace ECSEngine {
 			SharedComponentSignature shared_signature,
 			EntityManagerCommandStream* command_stream = nullptr,
 			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -409,7 +409,7 @@ namespace ECSEngine {
 			SharedComponentSignature shared_signature,
 			EntityManagerCommandStream* command_stream = nullptr,
 			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -428,7 +428,7 @@ namespace ECSEngine {
 			SharedComponentSignature shared_components,
 			bool exclude_from_hierarchy = false,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -454,7 +454,7 @@ namespace ECSEngine {
 			SharedComponentSignature shared_components,
 			bool exclude_from_hierarchy = false,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -488,14 +488,19 @@ namespace ECSEngine {
 			bool copy_buffers = true,
 			bool exclude_from_hierarchy = false,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
+
+		// ---------------------------------------------------------------------------------------------------
 
 		// Returns the byte size of a component
 		unsigned int ComponentSize(Component component) const;
 
-		// Returns the byte size of a component
+		// Returns the byte size of a shared component instance
 		unsigned int SharedComponentSize(Component component) const;
+
+		// Returns the byte size of the global component
+		unsigned int GlobalComponentSize(Component component) const;
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -515,21 +520,21 @@ namespace ECSEngine {
 		void DeleteEntityCommit(Entity entity);
 
 		// Deferred Call - it will register it inside the command stream
-		void DeleteEntity(Entity entity, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void DeleteEntity(Entity entity, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
 		void DeleteEntitiesCommit(Stream<Entity> entities);
 
 		// Deferred Call 
-		void DeleteEntities(Stream<Entity> entities, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
+		void DeleteEntities(Stream<Entity> entities, DeferredActionParameters parameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
 		void DestroyArchetypeCommit(unsigned int archetype_index);
 
 		// Deferred Call
-		void DestroyArchetype(unsigned int archetype_index, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void DestroyArchetype(unsigned int archetype_index, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -540,7 +545,7 @@ namespace ECSEngine {
 			ComponentSignature unique_components, 
 			ComponentSignature shared_components, 
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -558,7 +563,7 @@ namespace ECSEngine {
 			unsigned int archetype_index,
 			unsigned int archetype_subindex,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -570,7 +575,7 @@ namespace ECSEngine {
 			ComponentSignature unique_components, 
 			SharedComponentSignature shared_components, 
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -1057,25 +1062,48 @@ namespace ECSEngine {
 		void Flush(EntityManagerCommandStream command_stream);
 
 		// Verifies if the entity is still valid. It might become invalid if another system deleted it in the meantime
-		bool ExistsEntity(Entity entity) const;
+		ECS_INLINE bool ExistsEntity(Entity entity) const {
+			return m_entity_pool->IsValid(entity);
+		}
 
 		// Verifies if a component already exists at that slot
-		bool ExistsComponent(Component component) const;
+		ECS_INLINE bool ExistsComponent(Component component) const {
+			return component.value < m_unique_components.size&& m_unique_components[component.value].size != -1;
+		}
 
 		// Verifies if a shared component was already allocated at that slot
-		bool ExistsSharedComponent(Component component) const;
+		ECS_INLINE bool ExistsSharedComponent(Component component) const {
+			return component.value < m_shared_components.size&& m_shared_components[component.value].info.size != -1;
+		}
+
+		// Verifies if a shared component was already allocated at that slot
+		ECS_INLINE bool ExistsGlobalComponent(Component component) const {
+			return function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component)) != -1;
+		}
 
 		// Verifies if a shared instance is a valid instance - checks to see if the component also exists
-		bool ExistsSharedInstance(Component component, SharedInstance instance) const;
+		ECS_INLINE bool ExistsSharedInstance(Component component, SharedInstance instance) const {
+			return ExistsSharedComponent(component) && ExistsSharedInstanceOnly(component, instance);
+		}
 
 		// Verifies if a shared instance is a valid instance - checks to see if the component also exists
 		// Returns in the x component the shared component status and in the y the instance status
-		bool2 ExistsSharedInstanceEx(Component component, SharedInstance instance) const;
+		ECS_INLINE bool2 ExistsSharedInstanceEx(Component component, SharedInstance instance) const {
+			if (!ExistsSharedComponent(component)) {
+				return { false, false };
+			}
+
+			return { true, ExistsSharedInstanceOnly(component, instance) };
+		}
 
 		// Verifies if a shared instance is a valid instance - does not check to see if the component also exist
-		bool ExistsSharedInstanceOnly(Component component, SharedInstance instance) const;
+		ECS_INLINE bool ExistsSharedInstanceOnly(Component component, SharedInstance instance) const {
+			return m_shared_components[component.value].instances.stream.ExistsItem(instance.value);
+		}
 
-		unsigned int GetArchetypeCount() const;
+		ECS_INLINE unsigned int GetArchetypeCount() const {
+			return m_archetypes.size;
+		}
 
 		Archetype* GetArchetype(unsigned int index);
 
@@ -1141,6 +1169,20 @@ namespace ECSEngine {
 			}
 		}
 
+		void* GetGlobalComponent(Component component);
+
+		const void* GetGlobalComponent(Component component) const;
+
+		template<typename T>
+		ECS_INLINE T* GetGlobalComponent() {
+			return (T*)GetGlobalComponent(T::ID());
+		}
+
+		template<typename T>
+		ECS_INLINE const T* GetGlobalComponent() const {
+			return (const T*)GetGlobalComponent(T::ID());
+		}
+
 		MemoryArena* GetComponentAllocator(Component component);
 
 		AllocatorPolymorphic GetComponentAllocatorPolymorphic(Component component);
@@ -1149,13 +1191,21 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic GetSharedComponentAllocatorPolymorphic(Component component);
 
+		MemoryArena* GetGlobalComponentAllocator(Component component);
+
+		AllocatorPolymorphic GetGlobalComponentAllocatorPolymorphic(Component component);
+
 		// Returns how many entities exist
-		unsigned int GetEntityCount() const;
+		ECS_INLINE unsigned int GetEntityCount() const {
+			return m_entity_pool->GetCount();
+		}
 
 		// Returns the entity which is alive at the indicated stream index, or an invalid entity if it doesn't exist
 		Entity GetEntityFromIndex(unsigned int stream_index) const;
 
-		EntityInfo GetEntityInfo(Entity entity) const;
+		ECS_INLINE EntityInfo GetEntityInfo(Entity entity) const {
+			return m_entity_pool->GetInfo(entity);
+		}
 
 		ComponentSignature GetEntitySignature(Entity entity, Component* components) const;
 
@@ -1179,6 +1229,10 @@ namespace ECSEngine {
 		// Returns a stringified version of the shared component. If the name was not specified when inserting the component
 		// then it will just use the index as string
 		Stream<char> GetSharedComponentName(Component component) const;
+
+		// Returns a stringified version of the shared component. If the name was not specified when inserting the component
+		// then it will just use the index as string
+		Stream<char> GetGlobalComponentName(Component component) const;
 
 		// Returns a stringified concatenation of the names of the components. It will use the given storage to build the string
 		Stream<char> GetComponentSignatureString(ComponentSignature signature, CapacityStream<char>& storage, Stream<char> separator = ", ") const;
@@ -1305,7 +1359,7 @@ namespace ECSEngine {
 			Stream<Entity> entities,
 			DeferredActionParameters parameters = {},
 			bool default_child_destroy = true,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -1315,10 +1369,10 @@ namespace ECSEngine {
 		void RemoveComponentCommit(Stream<Entity> entities, ComponentSignature components);
 
 		// Deferred call
-		void RemoveComponent(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void RemoveComponent(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Deferred call
-		void RemoveComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });	
+		void RemoveComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);	
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1326,9 +1380,9 @@ namespace ECSEngine {
 
 		void RemoveSharedComponentCommit(Stream<Entity> entity, ComponentSignature components);
 
-		void RemoveSharedComponent(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void RemoveSharedComponent(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		void RemoveSharedComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
+		void RemoveSharedComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1364,7 +1418,7 @@ namespace ECSEngine {
 			Stream<char> name = { nullptr, 0 },
 			Stream<ComponentBuffer> buffer_offsets = { nullptr, 0 },
 			EntityManagerCommandStream* command_stream = nullptr, 
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -1395,8 +1449,48 @@ namespace ECSEngine {
 			Stream<char> name = { nullptr, 0 },
 			Stream<ComponentBuffer> buffer_offset = { nullptr, 0 },
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// The component needs to be a shared component - with the appropriate reflection set
+		// The allocator size can be provided to have an allocator just for this component
+		// It makes it useful if the component needs buffers and they are allocated from here
+		// Since when destroying the world, no buffers will be leaked. The component buffers don't
+		// Need to be provided here - since the whole allocator will be deallocated when being removed
+		// The name is optional - for debugging purposes only
+		// It returns the newly allocated data back to you - if there are any buffers you must
+		// Copy them manually
+		void* RegisterGlobalComponentCommit(
+			Component component,
+			unsigned int size,
+			const void* data,
+			size_t allocator_size = 0,
+			Stream<char> name = { nullptr, 0 }
+		);
+
+		// The component needs to be a shared component - with the appropriate reflection set
+		// The allocator size can be provided to have an allocator just for this component
+		// It makes it useful if the component needs buffers and they are allocated from here
+		// Since when destroying the world, no buffers will be leaked. The component buffers don't
+		// Need to be provided here - since the whole allocator will be deallocated when being removed
+		// The name is optional - for debugging purposes only
+		// It returns the newly allocated data back to you - if there are any buffers you must
+		// Copy them manually
+		template<typename T>
+		void* RegisterGlobalComponentCommit(
+			const T* data,
+			Stream<char> name = { nullptr, 0 }
+		) {
+			return RegisterGlobalComponentCommit(
+				T::ID(),
+				sizeof(T),
+				data,
+				ComponentAllocatorSize<T>(),
+				name
+			);
+		}
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1410,7 +1504,7 @@ namespace ECSEngine {
 			const void* data, 
 			bool copy_buffers = true,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -1426,7 +1520,7 @@ namespace ECSEngine {
 			const void* data, 
 			bool copy_buffers = true,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -1439,7 +1533,7 @@ namespace ECSEngine {
 			Stream<char> identifier,
 			SharedInstance instance,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -1512,6 +1606,12 @@ namespace ECSEngine {
 		// If the entity doesn't have the shared component, it will return nullptr
 		const void* TryGetSharedComponent(Entity entity, Component component) const;
 
+		// If the component was not registered or not set, it returns nullptr
+		void* TryGetGlobalComponent(Component component);
+
+		// If the component was not registered or not set, it returns nullptr
+		const void* TryGetGlobalComponent(Component component) const;
+
 		template<typename T>
 		ECS_INLINE T* TryGetComponent(Entity entity) {
 			return (T*)((const EntityManager*)this)->TryGetComponent<T>(entity);
@@ -1544,7 +1644,7 @@ namespace ECSEngine {
 
 		// Deferred call
 		// Frees the slot used by that component.
-		void UnregisterComponent(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void UnregisterComponent(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1553,21 +1653,26 @@ namespace ECSEngine {
 
 		// Deferred call
 		// Frees the slot used by that component.
-		void UnregisterSharedComponent(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void UnregisterSharedComponent(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Frees the component allocator - if it has one and deallocates the space for it
+		void UnregisterGlobalComponentCommit(Component component);
 
 		// ---------------------------------------------------------------------------------------------------
 
 		void UnregisterSharedInstanceCommit(Component component, SharedInstance instance);
 
 		// Deferred call
-		void UnregisterSharedInstance(Component component, SharedInstance instance, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void UnregisterSharedInstance(Component component, SharedInstance instance, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
 		void UnregisterNamedSharedInstanceCommit(Component component, Stream<char> name);
 
 		// Deferred call
-		void UnregisterNamedSharedInstance(Component component, Stream<char> name, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void UnregisterNamedSharedInstance(Component component, Stream<char> name, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1575,7 +1680,7 @@ namespace ECSEngine {
 		bool UnregisterUnreferencedSharedInstanceCommit(Component component, SharedInstance instance);
 
 		// Deferred call
-		void UnregisterUnreferencedSharedInstance(Component component, SharedInstance instance, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void UnregisterUnreferencedSharedInstance(Component component, SharedInstance instance, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Returns true if the shared instance is no longer present in any archetype
 		bool IsUnreferencedSharedInstance(Component component, SharedInstance instance) const;
@@ -1585,7 +1690,7 @@ namespace ECSEngine {
 		void UnregisterUnreferencedSharedInstancesCommit(Component component);
 
 		// Deferred call
-		void UnregisterUnreferencedSharedInstances(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void UnregisterUnreferencedSharedInstances(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1671,6 +1776,14 @@ namespace ECSEngine {
 
 		MemoryManager* m_hierarchy_allocator;
 		EntityHierarchy m_hierarchy;
+
+		// The global components are stored in a SoA manner in order to use a fast SIMD
+		// Determination in order to obtain the global component
+		void** m_global_components_data;
+		Component* m_global_components;
+		ComponentInfo* m_global_components_info;
+		unsigned int m_global_component_count;
+		unsigned int m_global_component_capacity;
 
 		MemoryManager* m_memory_manager;
 		EntityPool* m_entity_pool;

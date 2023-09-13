@@ -45,12 +45,18 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	// Returns true if the module runs in the editor context
-	ECSENGINE_API bool IsEditorRuntime(const SystemManager* system_manager);
+	enum ECS_EDITOR_RUNTIME_TYPE : unsigned char {
+		ECS_EDITOR_RUNTIME_SCENE,
+		ECS_EDITOR_RUNTIME_GAME,
+		ECS_EDITOR_RUNTIME_TYPE_COUNT
+	};
 
-	ECSENGINE_API void SetEditorRuntime(SystemManager* system_manager);
+	// Returns ECS_EDITOR_RUNTIME_TYPE_COUNT if there is no editor attached
+	ECSENGINE_API ECS_EDITOR_RUNTIME_TYPE GetEditorRuntimeType(const SystemManager* system_manager);
 
-	ECSENGINE_API void RemoveEditorRuntime(SystemManager* system_manager);
+	ECSENGINE_API void SetEditorRuntimeType(SystemManager* system_manager, ECS_EDITOR_RUNTIME_TYPE runtime_type);
+
+	ECSENGINE_API void RemoveEditorRuntimeType(SystemManager* system_manager);
 
 	// ------------------------------------------------------------------------------------------------------------
 

@@ -16,6 +16,24 @@ ECS_TOOLS;
 
 #define INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY (256)
 
+// ----------------------------------------------------------------------------------------------------------------------------
+
+static void InspectorComponentUIIInstanceName(Stream<char> component_name, Stream<char> base_entity_name, unsigned int sandbox_index, CapacityStream<char>& instance_name) {
+	instance_name.Copy(component_name);
+	instance_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+	instance_name.AddStream(base_entity_name);
+	function::ConvertIntToChars(instance_name, sandbox_index);
+}
+
+static Stream<char> InspectorComponentNameFromUIInstanceName(Stream<char> instance_name) {
+	Stream<char> pattern = function::FindFirstToken(instance_name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+	ECS_ASSERT(pattern.size > 0);
+
+	return { instance_name.buffer, instance_name.size - pattern.size };
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 // The name structure is embedded in the structure
 struct InspectorDrawEntityData {
 	struct MatchingInputs {
@@ -388,6 +406,59 @@ struct InspectorDrawEntityData {
 		matching_inputs[index].capacity_inputs.InitializeFromBuffer(allocation, 0);
 	}
 
+	// This removes components which no longer are attached to the entity
+	void UpdateStoredComponents(EditorState* editor_state, unsigned int sandbox_index) {
+		const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+		ComponentSignature unique_signature = active_entity_manager->GetEntitySignatureStable(entity);
+		SharedComponentSignature shared_signature = active_entity_manager->GetEntitySharedSignatureStable(entity);
+		
+		ECS_STACK_CAPACITY_STREAM(bool, valid_created_instances, 512);
+		ECS_ASSERT(valid_created_instances.capacity >= created_instances.size);
+		memset(valid_created_instances.buffer, 0, valid_created_instances.MemoryOf(valid_created_instances.capacity));
+
+		ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
+		EntityToString(entity, entity_name_storage, true);
+		Stream<char> entity_name = entity_name_storage;
+
+		ECS_STACK_CAPACITY_STREAM(char, full_component_name_storage, 1024);
+
+		auto validate_component = [&](Stream<char> component_name) {
+			Stream<char> link_name = editor_state->editor_components.GetLinkComponentForTarget(component_name);
+			if (link_name.size > 0) {
+				component_name = link_name;
+			}
+			full_component_name_storage.size = 0;
+			InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_index, full_component_name_storage);
+			unsigned int created_instance_index = FindCreatedInstance(full_component_name_storage);
+			if (created_instance_index != -1) {
+				valid_created_instances[created_instance_index] = true;
+			}
+		};
+
+		for (size_t index = 0; index < unique_signature.count; index++) {
+			Stream<char> component_name = active_entity_manager->GetComponentName(unique_signature[index]);
+			validate_component(component_name);
+		}
+
+		for (size_t index = 0; index < shared_signature.count; index++) {
+			Stream<char> component_name = active_entity_manager->GetSharedComponentName(shared_signature.indices[index]);
+			validate_component(component_name);
+		}
+
+		for (size_t index = 0; index < created_instances.size; index++) {
+			if (!valid_created_instances[index]) {
+				Stream<char> component_name = InspectorComponentNameFromUIInstanceName(created_instances[index].name);
+				unsigned int link_index = FindLinkComponent(component_name);
+				if (link_index != -1) {
+					RemoveLinkComponent(editor_state, component_name);
+				}
+				else {
+					RemoveComponent(editor_state, component_name);
+				}
+			}
+		}
+	}
+
 	void UpdateLinkComponentsApplyModifier(const EditorState* editor_state) {
 		for (size_t index = 0; index < link_components.size; index++) {
 			if (!link_components[index].is_apply_modifier_in_progress && link_components[index].apply_modifier_initial_target_data != nullptr) {
@@ -531,15 +602,6 @@ struct InspectorDrawEntityData {
 void InspectorCleanEntity(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawEntityData* data = (InspectorDrawEntityData*)_data;
 	data->Clear(editor_state);
-}
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
-void InspectorComponentUIIInstanceName(Stream<char> component_name, Stream<char> base_entity_name, unsigned int sandbox_index, CapacityStream<char>& instance_name) {
-	instance_name.Copy(component_name);
-	instance_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-	instance_name.AddStream(base_entity_name);
-	function::ConvertIntToChars(instance_name, sandbox_index);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -790,6 +852,15 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			index--;
 		}
 	}
+
+	// Before drawing, we need to remove all components which have been removed from the entity but are still being stored here
+	data->UpdateStoredComponents(editor_state, sandbox_index);
+
+	// Before drawing the components, go through the link components and deallocate the apply modifiers data
+	data->UpdateLinkComponentsApplyModifier(editor_state);
+
+	// Perform the update from target to link for normal components
+	data->UpdateLinkComponentsFromTargets(editor_state, sandbox_index);
 
 	Color icon_color = drawer->color_theme.theme;
 	icon_color = RGBToHSV(icon_color);
@@ -1140,12 +1211,6 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			});
 		}
 	};
-
-	// Before drawing the components, go through the link components and deallocate the apply modifiers data
-	data->UpdateLinkComponentsApplyModifier(editor_state);
-
-	// Perform the update from target to link for normal components
-	data->UpdateLinkComponentsFromTargets(editor_state, sandbox_index);
 
 	// Now draw the entity using the reflection drawer
 	draw_component(unique_signature, false, 0, get_unique_data);

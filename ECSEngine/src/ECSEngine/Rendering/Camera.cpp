@@ -30,35 +30,70 @@ namespace ECSEngine {
 		SetPerspectiveProjectionFOV(parameters.fov, parameters.aspect_ratio, parameters.near_z, parameters.far_z);
 	}
 
-	void Camera::SetOrthographicProjection(float _width, float _height, float near_z, float far_z) {
+	void Camera::SetOrthographicProjection(float _width, float _height, float _near_z, float _far_z) {
 		is_orthographic = true;
 		is_perspective_fov = false;
 
 		width = _width;
 		height = _height;
+		near_z = _near_z;
+		far_z = _far_z;
 		projection = MatrixOrthographic(width, height, near_z, far_z);
 	}
 
-	void Camera::SetPerspectiveProjection(float _width, float _height, float near_z, float far_z) {
+	void Camera::SetPerspectiveProjection(float _width, float _height, float _near_z, float _far_z) {
 		is_orthographic = false;
 		is_perspective_fov = false;
 
 		width = _width;
 		height = _height;
+		near_z = _near_z;
+		far_z = _far_z;
 		projection = MatrixPerspective(width, height, near_z, far_z);
 	}
 
-	void Camera::SetPerspectiveProjectionFOV(float _fov, float _aspect_ratio, float near_z, float far_z) {
+	void Camera::SetPerspectiveProjectionFOV(float _fov, float _aspect_ratio, float _near_z, float _far_z) {
 		is_orthographic = false;
 		is_perspective_fov = true;
 
 		fov = _fov;
 		aspect_ratio = _aspect_ratio;
+		near_z = _near_z;
+		far_z = _far_z;
 		projection = MatrixPerspectiveFOV(fov, aspect_ratio, near_z, far_z);
 	}
 
 	Matrix ECS_VECTORCALL Camera::GetViewProjectionMatrix() const {
 		return GetTranslation() * GetRotation() * GetProjection();
+	}
+
+	CameraParameters Camera::AsParameters() const
+	{
+		CameraParameters parameters;
+
+		parameters.near_z = near_z;
+		parameters.far_z = far_z;
+		parameters.width = width;
+		parameters.height = height;
+		parameters.is_orthographic = is_orthographic;
+		parameters.rotation = rotation;
+		parameters.translation = translation;
+
+		return parameters;
+	}
+
+	CameraParametersFOV Camera::AsParametersFOV() const
+	{
+		CameraParametersFOV parameters;
+
+		parameters.near_z = near_z;
+		parameters.far_z = far_z;
+		parameters.aspect_ratio = aspect_ratio;
+		parameters.fov = fov;
+		parameters.rotation = rotation;
+		parameters.translation = translation;
+
+		return parameters;
 	}
 
 	void CameraParameters::Default()
@@ -90,15 +125,24 @@ namespace ECSEngine {
 		is_perspective_fov = camera->is_perspective_fov;
 		translation = camera->translation;
 		rotation = camera->rotation;
+		near_z = camera->near_z;
+		far_z = camera->far_z;
 
 		if (is_orthographic || !is_perspective_fov) {
 			width = camera->width;
 			height = camera->height;
+
+			fov = 0.0f;
+			aspect_ratio = 0.0f;
+			horizontal_fov = 0.0f;
 		}
 		else {
 			fov = camera->fov;
 			aspect_ratio = camera->aspect_ratio;
 			horizontal_fov = HorizontalFOVFromVertical(fov, aspect_ratio);
+		
+			width = 0.0f;
+			height = 0.0f;
 		}
 
 		rotation_matrix = camera->GetRotation();
@@ -106,6 +150,53 @@ namespace ECSEngine {
 		projection_matrix = camera->projection;
 		view_projection_matrix = camera->GetViewProjectionMatrix();
 		inverse_view_projection_matrix = camera->GetInverseViewProjectionMatrix();
+	}
+
+	void CameraCached::Recalculate()
+	{
+		Camera camera;
+		if (is_orthographic) {
+			camera.SetOrthographicProjection(width, height, near_z, far_z);
+		}
+		else if (is_perspective_fov) {
+			camera.SetPerspectiveProjectionFOV(fov, aspect_ratio, near_z, far_z);
+		}
+		else {
+			camera.SetPerspectiveProjection(width, height, near_z, far_z);
+		}
+
+		camera.translation = translation;
+		camera.rotation = rotation;
+		*this = CameraCached(&camera);
+	}
+
+	CameraParameters CameraCached::AsParameters() const
+	{
+		CameraParameters parameters;
+
+		parameters.near_z = near_z;
+		parameters.far_z = far_z;
+		parameters.width = width;
+		parameters.height = height;
+		parameters.is_orthographic = is_orthographic;
+		parameters.rotation = rotation;
+		parameters.translation = translation;
+
+		return parameters;
+	}
+
+	CameraParametersFOV CameraCached::AsParametersFOV() const
+	{
+		CameraParametersFOV parameters;
+
+		parameters.near_z = near_z;
+		parameters.far_z = far_z;
+		parameters.aspect_ratio = aspect_ratio;
+		parameters.fov = fov;
+		parameters.rotation = rotation;
+		parameters.translation = translation;
+
+		return parameters;
 	}
 
 	float2 MouseToNDC(uint2 window_size, int2 mouse_texel_position)

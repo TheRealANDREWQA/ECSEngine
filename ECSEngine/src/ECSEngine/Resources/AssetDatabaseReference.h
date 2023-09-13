@@ -110,26 +110,68 @@ namespace ECSEngine {
 			return false;
 		}
 
-		MeshMetadata* GetMesh(unsigned int index);
+		// The functor will be called for each appearance of a handle - so if a handle
+		// has a reference count of 2 here, it means it will be called 2 times with that handle value
+		// The functor is called as (unsigned int handle)
+		// Return true in the functor to early exit
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEachAssetDuplicates(ECS_ASSET_TYPE type, Functor&& functor) {
+			unsigned int count = GetCount(type);
+			for (unsigned int index = 0; index < count; index++) {
+				unsigned int handle = GetHandle(index, type);
+				if constexpr (early_exit) {
+					if (functor(handle)) {
+						return true;
+					}
+				}
+				else {
+					functor(handle);
+				}
+			}
+			return false;
+		}
 
-		TextureMetadata* GetTexture(unsigned int index);
+		ECS_INLINE MeshMetadata* GetMesh(unsigned int index) {
+			return (MeshMetadata*)GetAsset(index, ECS_ASSET_MESH);
+		}
 
-		GPUSamplerMetadata* GetGPUSampler(unsigned int index);
+		ECS_INLINE TextureMetadata* GetTexture(unsigned int index) {
+			return (TextureMetadata*)GetAsset(index, ECS_ASSET_TEXTURE);
+		}
 
-		ShaderMetadata* GetShader(unsigned int index);
+		ECS_INLINE GPUSamplerMetadata* GetGPUSampler(unsigned int index) {
+			return (GPUSamplerMetadata*)GetAsset(index, ECS_ASSET_GPU_SAMPLER);
+		}
 
-		MaterialAsset* GetMaterial(unsigned int index);
+		ECS_INLINE ShaderMetadata* GetShader(unsigned int index) {
+			return (ShaderMetadata*)GetAsset(index, ECS_ASSET_SHADER);
+		}
 
-		MiscAsset* GetMisc(unsigned int index);
+		ECS_INLINE MaterialAsset* GetMaterial(unsigned int index) {
+			return (MaterialAsset*)GetAsset(index, ECS_ASSET_MATERIAL);
+		}
+
+		ECS_INLINE MiscAsset* GetMisc(unsigned int index) {
+			return (MiscAsset*)GetAsset(index, ECS_ASSET_MISC);
+		}
 
 		void* GetAsset(unsigned int index, ECS_ASSET_TYPE type);
 
-		unsigned int GetHandle(unsigned int index, ECS_ASSET_TYPE type) const;
+		ECS_INLINE unsigned int GetHandle(unsigned int index, ECS_ASSET_TYPE type) const {
+			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+			return streams[type][index];
+		}
 
 		// It returns -1 if it doesn't find it
-		unsigned int GetIndex(unsigned int handle, ECS_ASSET_TYPE type) const;
+		ECS_INLINE unsigned int GetIndex(unsigned int handle, ECS_ASSET_TYPE type) const {
+			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+			return function::SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(handle));
+		}
 
-		unsigned int GetReferenceCountIndex(unsigned int index, ECS_ASSET_TYPE type) const;
+		ECS_INLINE unsigned int GetReferenceCountIndex(unsigned int index, ECS_ASSET_TYPE type) const {
+			return GetReferenceCountHandle(GetHandle(index, type), type);
+		}
 
 		unsigned int GetReferenceCountHandle(unsigned int handle, ECS_ASSET_TYPE type) const;
 
@@ -137,7 +179,15 @@ namespace ECSEngine {
 			return database;
 		}
 
-		unsigned int GetCount(ECS_ASSET_TYPE type) const;
+		ECS_INLINE unsigned int GetCount(ECS_ASSET_TYPE type) const {
+			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+			return streams[type].size;
+		}
+
+		ECS_INLINE Stream<unsigned int> GetHandlesForType(ECS_ASSET_TYPE type) const {
+			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+			return streams[type].ToStream();
+		}
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
 		// Can optionally fill in the fields of the evicted asset such that you can use it
@@ -191,7 +241,8 @@ namespace ECSEngine {
 		void Reset(bool decrement_reference_counts = false);
 
 		// Increases the reference count of all assets by one
-		void IncrementReferenceCounts();
+		// Can choose whether or not the reflected reference count increase to be reflected in this reference or not
+		void IncrementReferenceCounts(bool add_here = false);
 
 		// Converts a standalone database into a reference to the one being stored.
 		void FromStandalone(const AssetDatabase* database, AssetDatabaseReferenceFromStandaloneOptions options = {});

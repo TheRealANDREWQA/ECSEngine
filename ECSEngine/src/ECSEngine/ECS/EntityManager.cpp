@@ -2049,6 +2049,9 @@ namespace ECSEngine {
 			m_shared_components[index].info.allocator = nullptr;
 		}
 
+		m_global_component_count = 0;
+		m_global_component_capacity = 0;
+
 		// Allocate the atomic streams - the deferred actions, clear tags and set tags
 		m_deferred_actions.Initialize(m_memory_manager, descriptor.deferred_action_capacity);
 
@@ -3240,6 +3243,7 @@ namespace ECSEngine {
 
 	unsigned int EntityManager::ComponentSize(Component component) const
 	{
+		ECS_CRASH_RETURN_VALUE(component.value < m_unique_components.size, -1, "EntityManager: Trying to retrieve invalid component byte size for {#}", component.value);
 		return m_unique_components[component.value].size;
 	}
 
@@ -3247,7 +3251,17 @@ namespace ECSEngine {
 
 	unsigned int EntityManager::SharedComponentSize(Component component) const
 	{
+		ECS_CRASH_RETURN_VALUE(component.value < m_shared_components.size, -1, "EntityManager: Trying to retrieve invalid shared component byte size for {#}", component.value);
 		return m_shared_components[component.value].info.size;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	unsigned int EntityManager::GlobalComponentSize(Component component) const
+	{
+		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		ECS_CRASH_RETURN_VALUE(index != -1, -1, "EntityManager: Trying to retrieve invalid global component byte size for {#}", component.value);
+		return m_global_components_info[component.value].size;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3696,58 +3710,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	bool EntityManager::ExistsEntity(Entity entity) const {
-		return m_entity_pool->IsValid(entity);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	bool EntityManager::ExistsComponent(Component component) const
-	{
-		return component.value < m_unique_components.size && m_unique_components[component.value].size != -1;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	bool EntityManager::ExistsSharedComponent(Component component) const
-	{
-		return component.value < m_shared_components.size && m_shared_components[component.value].info.size != -1;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	bool EntityManager::ExistsSharedInstance(Component component, SharedInstance instance) const
-	{
-		return ExistsSharedComponent(component) && ExistsSharedInstanceOnly(component, instance);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	bool2 EntityManager::ExistsSharedInstanceEx(Component component, SharedInstance instance) const
-	{
-		if (!ExistsSharedComponent(component)) {
-			return { false, false };
-		}
-
-		return { true, ExistsSharedInstanceOnly(component, instance) };
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	bool EntityManager::ExistsSharedInstanceOnly(Component component, SharedInstance instance) const
-	{
-		return m_shared_components[component.value].instances.stream.ExistsItem(instance.value);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	unsigned int EntityManager::GetArchetypeCount() const
-	{
-		return m_archetypes.size;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
 	Archetype* EntityManager::GetArchetype(unsigned int index) {
 		ECS_CRASH_RETURN_VALUE(index < m_archetypes.size, nullptr, "EntityManager: Invalid archetype index {#} when trying to retrive archetype pointer.", index);
 		return &m_archetypes[index];
@@ -3940,6 +3902,24 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void* EntityManager::GetGlobalComponent(Component component)
+	{
+		return (void*)((const EntityManager*)this)->GetGlobalComponent(component);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	const void* EntityManager::GetGlobalComponent(Component component) const
+	{
+		ECS_CRASH_RETURN_VALUE(ExistsGlobalComponent(component), nullptr, "The global component {#} doesn't exist when trying to retrieve the value.",
+			GetGlobalComponentName(component));
+		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		ECS_CRASH_RETURN_VALUE(index != -1, nullptr, "Missing global component {#} in SoA stream", GetGlobalComponentName(component));
+		return m_global_components_data[index];
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	MemoryArena* EntityManager::GetComponentAllocator(Component component)
 	{
 		ECS_CRASH_RETURN_VALUE(ExistsComponent(component), nullptr, "The component {#} doesn't exist when retrieving its allocator.", GetComponentName(component));
@@ -3970,9 +3950,18 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned int EntityManager::GetEntityCount() const
+	MemoryArena* EntityManager::GetGlobalComponentAllocator(Component component)
 	{
-		return m_entity_pool->GetCount();
+		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		ECS_CRASH_RETURN_VALUE(index != -1, nullptr, "The global component {#} doesn't exist when retrieving its allocator.", component.value);
+		return m_global_components_info[index].allocator;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	AllocatorPolymorphic EntityManager::GetGlobalComponentAllocatorPolymorphic(Component component)
+	{
+		return GetAllocatorPolymorphic(GetGlobalComponentAllocator(component));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3983,13 +3972,6 @@ namespace ECSEngine {
 		entity.index = stream_index;
 		EntityInfo info = m_entity_pool->GetInfoNoChecks(entity);
 		return { stream_index, info.generation_count };
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	EntityInfo EntityManager::GetEntityInfo(Entity entity) const
-	{
-		return m_entity_pool->GetInfo(entity);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4057,6 +4039,12 @@ namespace ECSEngine {
 	Stream<char> EntityManager::GetSharedComponentName(Component component) const
 	{
 		return component.value >= 0 && component.value < m_shared_components.size ? m_shared_components[component.value].info.name : "Invalid component";
+	}
+
+	Stream<char> EntityManager::GetGlobalComponentName(Component component) const
+	{
+		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		return index == -1 ? "Invalid component" : m_global_components_info[index].name;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4658,6 +4646,57 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void* EntityManager::RegisterGlobalComponentCommit(Component component, unsigned int size, const void* data, size_t allocator_size, Stream<char> name)
+	{
+		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 64);
+		Stream<char> component_name = name;
+		if (name.size == 0) {
+			function::ConvertIntToChars(component_name_storage, component.value);
+			component_name = component_name_storage;
+		}
+
+		size_t existing_index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		ECS_CRASH_RETURN_VALUE(existing_index == 1, "EntityManager: Trying to create global component {#} when it already exists", component_name);
+
+		// Allocate a new slot in the SoA stream
+		// Firstly write the void* and then the Component
+		if (m_global_component_count == m_global_component_capacity) {
+			m_global_component_capacity = (unsigned int)((float)m_global_component_capacity * 1.5f + 3);
+			size_t allocation_size = m_global_component_capacity * (sizeof(Component) + sizeof(void*) + sizeof(ComponentInfo));
+			void* new_allocation = m_small_memory_manager.Allocate(allocation_size);
+
+			void** old_data = m_global_components_data;
+			Component* old_components = m_global_components;
+			ComponentInfo* old_infos = m_global_components_info;
+
+			m_global_components_data = (void**)new_allocation;
+			m_global_components = (Component*)function::OffsetPointer(m_global_components_data, sizeof(void*) * m_global_component_capacity);
+			m_global_components_info = (ComponentInfo*)function::OffsetPointer(m_global_components, sizeof(Component) * m_global_component_capacity);
+
+			memcpy(m_global_components_data, old_data, sizeof(void*) * m_global_component_count);
+			memcpy(m_global_components, old_components, sizeof(Component) * m_global_component_count);
+			memcpy(m_global_components_info, old_infos, sizeof(ComponentInfo) * m_global_component_count);
+			m_small_memory_manager.Deallocate(m_global_components_data);
+		}
+
+		ComponentInfo* component_info = m_global_components_info + m_global_component_count;
+		component_info->size = size;
+		component_info->component_buffers_count = 0;
+		component_info->name = function::StringCopy(SmallAllocator(), component_name);
+
+		CreateAllocatorForComponent(this, *component_info, allocator_size);
+
+		void* component_allocation = m_small_memory_manager.Allocate(size);
+		m_global_components_data[m_global_component_count] = component_allocation;
+		memcpy(component_allocation, data, size);
+		m_global_components[m_global_component_count] = component;
+
+		m_global_component_count++;
+		return component_allocation;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	SharedInstance EntityManager::RegisterSharedInstanceCommit(Component component, const void* data, bool copy_buffers) {
 		DeferredCreateSharedInstance commit_data;
 		commit_data.component = component;
@@ -4991,6 +5030,22 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void* EntityManager::TryGetGlobalComponent(Component component)
+	{
+		return (void*)((const EntityManager*)this)->TryGetGlobalComponent(component);
+	}
+
+	const void* EntityManager::TryGetGlobalComponent(Component component) const
+	{
+		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		if (index == -1) {
+			return nullptr;
+		}
+		return m_global_components_data[index];
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	bool EntityManager::TryRemoveEntityFromHierarchyCommit(Entity entity, bool default_child_destroy)
 	{
 		return TryRemoveEntityFromHierarchyCommit({ &entity, 1 }, default_child_destroy);
@@ -5065,6 +5120,28 @@ namespace ECSEngine {
 
 		DeferredActionParameters parameters = { command_stream };
 		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_DESTROY_SHARED_COMPONENT), debug_info });
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::UnregisterGlobalComponentCommit(Component component)
+	{
+		Stream<char> component_name = GetGlobalComponentName(component);
+		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		ECS_CRASH_RETURN(index != -1, "Missing global component {#} when trying to unregister it", component_name);
+
+		// If it has an allocator deallocate it
+		MemoryArena** allocator = &m_global_components_info[index].allocator;
+		if (*allocator != nullptr) {
+			m_memory_manager->Deallocate(*allocator);
+			*allocator = nullptr;
+		}
+		m_small_memory_manager.Deallocate(m_global_components_info[index].name.buffer);
+
+		m_global_component_count--;
+		m_global_components[index] = m_global_components[m_global_component_count];
+		m_global_components_data[index] = m_global_components_data[m_global_component_count];
+		m_global_components_info[index] = m_global_components_info[m_global_component_count];
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

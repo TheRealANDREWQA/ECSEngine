@@ -1,6 +1,5 @@
 #include "ecspch.h"
 #include "ReflectionTypes.h"
-#include "../../Utilities/Function.h"
 
 namespace ECSEngine {
 
@@ -66,30 +65,6 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-        bool ReflectionField::Has(Stream<char> string) const
-        {
-			if (tag.size > 0) {
-				return function::FindFirstToken(tag, string).buffer != nullptr;
-			}
-			return false;
-        }
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool ReflectionField::Is(Stream<char> string) const
-		{
-			return function::CompareStrings(tag, string);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		Stream<char> ReflectionField::GetTag(Stream<char> string) const
-		{
-			return function::IsolateString(tag, string, ECS_REFLECTION_TYPE_TAG_DELIMITER_STRING);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
 		ReflectionField ReflectionField::Copy(AllocatorPolymorphic allocator) const
 		{
 			ReflectionField field;
@@ -133,19 +108,6 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		size_t ReflectionField::CopySize() const {
-			return name.CopySize() + definition.CopySize() + tag.CopySize();
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool ReflectionField::Compare(const ReflectionField& field) const
-		{
-			return function::CompareStrings(field.definition, definition);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
 		ReflectionEvaluation ReflectionEvaluation::CopyTo(uintptr_t& ptr) const {
 			ReflectionEvaluation copy;
 
@@ -153,12 +115,6 @@ namespace ECSEngine {
 			copy.value = value;
 
 			return copy;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		size_t ReflectionEvaluation::CopySize() const {
-			return name.CopySize();
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -516,30 +472,6 @@ namespace ECSEngine {
 			DeallocateIfBelongs(allocator, name.buffer);
 			DeallocateIfBelongs(allocator, fields.buffer);
 			DeallocateIfBelongs(allocator, evaluations.buffer);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool ReflectionType::HasTag(Stream<char> string) const
-		{
-			if (tag.size == 0) {
-				return false;
-			}
-			return function::FindFirstToken(tag, string).buffer != nullptr;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool ReflectionType::IsTag(Stream<char> string) const
-		{
-			return function::CompareStrings(string, tag);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		Stream<char> ReflectionType::GetTag(Stream<char> string, Stream<char> separator) const
-		{
-			return function::IsolateString(tag, string, separator);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

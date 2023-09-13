@@ -23,6 +23,13 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
+	bool IsReflectionTypeGlobalComponent(const Reflection::ReflectionType* type)
+	{
+		return type->IsTag(ECS_GLOBAL_COMPONENT_TAG);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
 	bool IsReflectionTypeLinkComponent(const ReflectionType* type)
 	{
 		return type->HasTag(ECS_LINK_COMPONENT_TAG);

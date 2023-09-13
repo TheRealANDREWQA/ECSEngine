@@ -1552,7 +1552,7 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 		previous_shared_data = info.target_previous_data;
 	}
 	else {
-		previous_shared_data = GetSandboxSharedInstance(editor_state, sandbox_index, target_component, current_instance);
+		previous_shared_data = GetSandboxSharedInstance(editor_state, sandbox_index, target_component, current_instance, info.viewport);
 	}
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);

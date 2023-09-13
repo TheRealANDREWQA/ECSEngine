@@ -208,7 +208,8 @@ ECS_THREAD_TASK(RenderSelectables) {
 	if constexpr (!schedule_element) {
 		SystemManager* system_manager = world->system_manager;
 		EntityManager* entity_manager = world->entity_manager;
-		if (IsEditorRuntime(system_manager)) {
+		ECS_EDITOR_RUNTIME_TYPE runtime_type = GetEditorRuntimeType(system_manager);
+		if (runtime_type != ECS_EDITOR_RUNTIME_TYPE_COUNT) {
 			Camera camera;
 			if (GetRuntimeCamera(system_manager, &camera)) {
 				Color select_color = GetEditorRuntimeSelectColor(system_manager);
@@ -570,7 +571,8 @@ template<bool schedule_element>
 ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 	if constexpr (!schedule_element) {
 		SystemManager* system_manager = world->system_manager;
-		if (IsEditorRuntime(system_manager)) {
+		ECS_EDITOR_RUNTIME_TYPE runtime_type = GetEditorRuntimeType(system_manager);
+		if (runtime_type != ECS_EDITOR_RUNTIME_TYPE_COUNT) {
 			Camera camera;
 			if (GetRuntimeCamera(system_manager, &camera)) {
 				GraphicsBoundViews instanced_views;

@@ -102,11 +102,20 @@ void EditorComponents::GetSharedLinkComponents(CapacityStream<const ReflectionTy
 	ECSEngine::GetSharedLinkComponents(internal_manager, link_types);
 }
 
+void EditorComponents::GetGlobalLinkComponents(ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& link_types) const
+{
+	ECSEngine::GetGlobalLinkComponents(internal_manager, link_types);
+}
+
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::GetLinkComponents(CapacityStream<const ReflectionType*>& unique_types, CapacityStream<const ReflectionType*>& shared_types) const
+void EditorComponents::GetLinkComponents(
+	CapacityStream<const ReflectionType*>& unique_types, 
+	CapacityStream<const ReflectionType*>& shared_types,
+	CapacityStream<const ReflectionType*>& global_types
+) const
 {
-	ECSEngine::GetUniqueAndSharedLinkComponents(internal_manager, unique_types, shared_types);
+	ECSEngine::GetAllLinkComponents(internal_manager, unique_types, shared_types, global_types);
 }
 
 // ----------------------------------------------------------------------------------------------

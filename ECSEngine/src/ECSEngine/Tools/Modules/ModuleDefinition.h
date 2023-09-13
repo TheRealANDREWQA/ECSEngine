@@ -77,19 +77,23 @@ namespace ECSEngine {
 
 		Stream<SerializeEntityManagerComponentInfo> serialize_components;
 		Stream<SerializeEntityManagerSharedComponentInfo> serialize_shared_components;
+		Stream<SerializeEntityManagerGlobalComponentInfo> serialize_global_components;
 		Stream<DeserializeEntityManagerComponentInfo> deserialize_components;
 		Stream<DeserializeEntityManagerSharedComponentInfo> deserialize_shared_components;
+		Stream<DeserializeEntityManagerGlobalComponentInfo> deserialize_global_components;
 	};
 
 	struct ModuleSerializeComponentFunctionData {
 		CapacityStream<SerializeEntityManagerComponentInfo>* serialize_components;
 		CapacityStream<SerializeEntityManagerSharedComponentInfo>* serialize_shared_components;
+		CapacityStream<SerializeEntityManagerGlobalComponentInfo>* serialize_global_components;
 		CapacityStream<DeserializeEntityManagerComponentInfo>* deserialize_components;
 		CapacityStream<DeserializeEntityManagerSharedComponentInfo>* deserialize_shared_components;
+		CapacityStream<DeserializeEntityManagerGlobalComponentInfo>* deserialize_global_components;
 		AllocatorPolymorphic allocator;
 	};
 
-	// With this function the module can override the default serialization (bit blitting) of the components into a custom serialization.
+	// With this function the module can override the default serialization (reflection serialization) of the components into a custom serialization.
 	// The names must be used to refer to the component that is being overridden
 	typedef void (*ModuleSerializeComponentFunction)(
 		ModuleSerializeComponentFunctionData* data
