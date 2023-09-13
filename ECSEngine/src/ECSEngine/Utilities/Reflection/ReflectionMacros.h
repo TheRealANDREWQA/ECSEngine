@@ -29,6 +29,7 @@
 #define ECS_REFLECT_SETTINGS
 #define ECS_REFLECT_COMPONENT
 #define ECS_REFLECT_SHARED_COMPONENT
+#define ECS_REFLECT_GLOBAL_COMPONENT
 #define ECS_REFLECT_LINK_COMPONENT()
 #define ECS_LINK_MODIFIER_FIELD
 #define ECS_LINK_COMPONENT_NEEDS_BUTTON_FUNCTION "NeedsButton"
@@ -45,6 +46,8 @@
 #define ECS_COMPONENT_TAG "COMPONENT"
 // Used with the IsTag function of the ReflectionType
 #define ECS_SHARED_COMPONENT_TAG "SHARED_COMPONENT"
+// Used with the IsTag function of the ReflectionType
+#define ECS_GLOBAL_COMPONENT_TAG "GLOBAL_COMPONENT"
 // Used with the HasTag function of the ReflectionType
 #define ECS_LINK_COMPONENT_TAG "LINK_COMPONENT"
 

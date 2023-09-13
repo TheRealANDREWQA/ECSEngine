@@ -50,6 +50,18 @@ struct ECS_REFLECT EditorSandboxModule {
 	ECS_FIELDS_END_REFLECT;
 };
 
+// This structure keeps the information about the status of the module when the runtime is running
+// This is useful to detect modules that are being added/removed dynamically or to detect changes
+// In the settings of the module or of the configuration that is being run
+struct EditorSandboxModuleSnapshot {
+	EDITOR_MODULE_CONFIGURATION module_configuration;
+	EDITOR_MODULE_LOAD_STATUS load_status;
+	size_t library_timestamp;
+	ECSEngine::Stream<wchar_t> library_name;
+	ECSEngine::Stream<wchar_t> solution_path;
+	ECSEngine::Stream<EditorModuleReflectedSetting> reflected_settings;
+};
+
 // -------------------------------------------------------------------------------------------------------------
 
 struct ECS_REFLECT EditorSandbox {
@@ -132,6 +144,9 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::ResizableStream<EDITOR_SANDBOX_ENTITY_SLOT> unused_entity_slot_type[EDITOR_SANDBOX_VIEWPORT_COUNT];
 	// These flags indicate when the unused slots need to be recomputed (after a clear/reset for example)
 	bool unused_entities_slots_recompute[EDITOR_SANDBOX_VIEWPORT_COUNT];
+
+	ECSEngine::MemoryManager runtime_module_snapshot_allocator;
+	ECSEngine::ResizableStream<EditorSandboxModuleSnapshot> runtime_module_snapshots;
 };
 
 ECS_INLINE ECSEngine::Stream<char> ViewportString(EDITOR_SANDBOX_VIEWPORT viewport) {

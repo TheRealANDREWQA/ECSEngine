@@ -103,6 +103,21 @@ unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned 
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Fills in the in_stream_indices of the modules that this sandbox targets and are currently being compiled
+void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>& in_stream_indices);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Fills in the in_stream_indices of the modules that are not loaded but are being referenced, can optionally include out of date modules as well
+void GetSandboxNeededButMissingModules(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ECSEngine::CapacityStream<unsigned int>& in_stream_indices, 
+	bool include_out_of_date
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 bool IsSandboxModuleDeactivated(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------

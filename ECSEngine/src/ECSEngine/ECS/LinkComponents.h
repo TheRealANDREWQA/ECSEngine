@@ -333,11 +333,20 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	// Fills in all the link components which target a global component
+	ECSENGINE_API void GetGlobalLinkComponents(
+		const Reflection::ReflectionManager* reflection_manager,
+		CapacityStream<const Reflection::ReflectionType*>& link_types
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	// Fills in all link components which target a shared component or unique component
-	ECSENGINE_API void GetUniqueAndSharedLinkComponents(
+	ECSENGINE_API void GetAllLinkComponents(
 		const Reflection::ReflectionManager* reflection_manager,
 		CapacityStream<const Reflection::ReflectionType*>& unique_link_types,
-		CapacityStream<const Reflection::ReflectionType*>& shared_link_types
+		CapacityStream<const Reflection::ReflectionType*>& shared_link_types,
+		CapacityStream<const Reflection::ReflectionType*>& global_link_types
 	);
 
 	// ------------------------------------------------------------------------------------------------------------

@@ -95,22 +95,20 @@ namespace ECSEngine {
 
 		// Create the deserialize tables firstly
 		DeserializeEntityManagerComponentTable component_table;
-		CreateDeserializeEntityManagerComponentTable(component_table, load_data->reflection_manager, stack_allocator, load_data->unique_overrides);
-		if (load_data->unique_overrides.size > 0) {
-			AddDeserializeEntityManagerComponentTableOverrides(component_table, load_data->reflection_manager, load_data->unique_overrides);
-		}
+		CreateDeserializeEntityManagerComponentTableAddOverrides(component_table, load_data->reflection_manager, stack_allocator, load_data->unique_overrides);
 
 		DeserializeEntityManagerSharedComponentTable shared_component_table;
-		CreateDeserializeEntityManagerSharedComponentTable(shared_component_table, load_data->reflection_manager, stack_allocator, load_data->shared_overrides);
-		if (load_data->shared_overrides.size > 0) {
-			AddDeserializeEntityManagerSharedComponentTableOverrides(shared_component_table, load_data->reflection_manager, load_data->shared_overrides);
-		}
+		CreateDeserializeEntityManagerSharedComponentTableAddOverrides(shared_component_table, load_data->reflection_manager, stack_allocator, load_data->shared_overrides);
+
+		DeserializeEntityManagerGlobalComponentTable global_component_table;
+		CreateDeserializeEntityManagerGlobalComponentTableAddOverrides(global_component_table, load_data->reflection_manager, stack_allocator, load_data->global_overrides);
 
 		ECS_DESERIALIZE_ENTITY_MANAGER_STATUS deserialize_status = DeserializeEntityManager(
 			load_data->entity_manager,
 			ptr,
 			&component_table,
-			&shared_component_table
+			&shared_component_table,
+			&global_component_table
 		);
 		
 		if (deserialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
@@ -205,18 +203,15 @@ namespace ECSEngine {
 
 		// Create the deserialize tables firstly
 		SerializeEntityManagerComponentTable component_table;
-		CreateSerializeEntityManagerComponentTable(component_table, save_data->reflection_manager, stack_allocator, save_data->unique_overrides);
-		if (save_data->unique_overrides.size > 0) {
-			AddSerializeEntityManagerComponentTableOverrides(component_table, save_data->reflection_manager, save_data->unique_overrides);
-		}
+		CreateSerializeEntityManagerComponentTableAddOverrides(component_table, save_data->reflection_manager, stack_allocator, save_data->unique_overrides);
 
 		SerializeEntityManagerSharedComponentTable shared_component_table;
-		CreateSerializeEntityManagerSharedComponentTable(shared_component_table, save_data->reflection_manager, stack_allocator, save_data->shared_overrides);
-		if (save_data->shared_overrides.size > 0) {
-			AddSerializeEntityManagerSharedComponentTableOverrides(shared_component_table, save_data->reflection_manager, save_data->shared_overrides);
-		}
+		CreateSerializeEntityManagerSharedComponentTableAddOverrides(shared_component_table, save_data->reflection_manager, stack_allocator, save_data->shared_overrides);
 
-		success = SerializeEntityManager(save_data->entity_manager, file_handle, &component_table, &shared_component_table);
+		SerializeEntityManagerGlobalComponentTable global_component_table;
+		CreateSerializeEntityManagerGlobalComponentTableAddOverrides(global_component_table, save_data->reflection_manager, stack_allocator, save_data->global_overrides);
+
+		success = SerializeEntityManager(save_data->entity_manager, file_handle, &component_table, &shared_component_table, &global_component_table);
 		if (!success) {
 			return false;
 		}

@@ -34,6 +34,7 @@ namespace ECSEngine {
 		bool randomize_assets = false;
 		Stream<DeserializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
 		Stream<DeserializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
+		Stream<DeserializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
 
 		// These options are valid only for the reference asset database
 
@@ -62,6 +63,7 @@ namespace ECSEngine {
 		// ------------------------- Optional ----------------------------
 		Stream<SerializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
 		Stream<SerializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
+		Stream<SerializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
 	};
 
 	ECSENGINE_API bool SaveScene(SaveSceneData* save_data);

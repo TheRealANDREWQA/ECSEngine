@@ -994,33 +994,50 @@ bool IsGraphicsModule(const EditorState* editor_state, unsigned int index)
 
 bool IsModuleBeingCompiled(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
 {
+	return IsAnyModuleBeingCompiled(editor_state, { &module_index, 1 }, &configuration);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool IsAnyModuleBeingCompiled(EditorState* editor_state, Stream<unsigned int> module_indices, const EDITOR_MODULE_CONFIGURATION* configurations)
+{
+	ECS_STACK_CAPACITY_STREAM(bool, is_compiled, 512);
+	ECS_ASSERT(module_indices.size <= is_compiled.capacity);
+
 	editor_state->launched_module_compilation_lock.lock();
-	const EditorModule* module = editor_state->project_modules->buffer + module_index;
-	bool is_compiled = function::FindString(module->library_name, editor_state->launched_module_compilation[configuration].ToStream()) != -1;
+	for (size_t index = 0; index < module_indices.size; index++) {
+		const EditorModule* module = editor_state->project_modules->buffer + module_indices[index];
+		is_compiled[index] = function::FindString(module->library_name, editor_state->launched_module_compilation[configurations[index]].ToStream()) != -1;
+	}
 	editor_state->launched_module_compilation_lock.unlock();
 
-	if (!is_compiled) {
-		// Check for events as well
-		ECS_STACK_CAPACITY_STREAM(void*, events_data, 512);
-		EditorGetEventTypeData(editor_state, RunCmdCommandDLLImport, &events_data);
+	// Check for events as well - retrieve these outside the loop
+	ECS_STACK_CAPACITY_STREAM(void*, dll_import_events_data, 512);
+	EditorGetEventTypeData(editor_state, RunCmdCommandDLLImport, &dll_import_events_data);
 
-		for (unsigned int index = 0; index < events_data.size; index++) {
-			RunCmdCommandDLLImportData* data = (RunCmdCommandDLLImportData*)events_data[index];
-			if (data->module_index == module_index && data->configuration == configuration) {
+	ECS_STACK_CAPACITY_STREAM(void*, external_dependency_events_data, 512);
+	EditorGetEventTypeData(editor_state, RunCmdCommandAfterExternalDependency, &external_dependency_events_data);
+
+	for (size_t index = 0; index < module_indices.size; index++) {
+		if (is_compiled[index]) {
+			return true;
+		}
+
+		for (unsigned int subindex = 0; subindex < dll_import_events_data.size; subindex++) {
+			RunCmdCommandDLLImportData* data = (RunCmdCommandDLLImportData*)dll_import_events_data[subindex];
+			if (data->module_index == module_indices[index] && data->configuration == configurations[index]) {
 				return true;
 			}
 		}
 
-		events_data.size = 0;
-		EditorGetEventTypeData(editor_state, RunCmdCommandAfterExternalDependency, &events_data);
-		for (unsigned int index = 0; index < events_data.size; index++) {
-			RunCmdCommandAfterExternalDependencyData* data = (RunCmdCommandAfterExternalDependencyData*)events_data[index];
-			if (data->module_index == module_index && data->configuration == configuration) {
+		for (unsigned int subindex = 0; subindex < external_dependency_events_data.size; subindex++) {
+			RunCmdCommandAfterExternalDependencyData* data = (RunCmdCommandAfterExternalDependencyData*)external_dependency_events_data[subindex];
+			if (data->module_index == module_indices[index] && data->configuration == configurations[index]) {
 				return true;
 			}
 		}
 	}
-	return is_compiled;
+	return false;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1037,6 +1054,54 @@ bool IsModuleUsedBySandboxes(const EditorState* editor_state, unsigned int modul
 		}
 	}
 	return false;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetCompilingModules(EditorState* editor_state, CapacityStream<unsigned int>& module_indices, EDITOR_MODULE_CONFIGURATION* configurations)
+{
+	// Check for events as well - retrieve these outside the loop
+	ECS_STACK_CAPACITY_STREAM(void*, dll_import_events_data, 512);
+	EditorGetEventTypeData(editor_state, RunCmdCommandDLLImport, &dll_import_events_data);
+
+	ECS_STACK_CAPACITY_STREAM(void*, external_dependency_events_data, 512);
+	EditorGetEventTypeData(editor_state, RunCmdCommandAfterExternalDependency, &external_dependency_events_data);
+
+	editor_state->launched_module_compilation_lock.lock();
+
+	for (unsigned int index = 0; index < module_indices.size; index++) {
+		const EditorModule* module = editor_state->project_modules->buffer + module_indices[index];
+		bool is_compiled = function::FindString(module->library_name, editor_state->launched_module_compilation[configurations[index]].ToStream()) != -1;
+		if (!is_compiled) {
+			// Check the events now
+			unsigned int subindex = 0;
+			for (; subindex < dll_import_events_data.size; subindex++) {
+				RunCmdCommandDLLImportData* data = (RunCmdCommandDLLImportData*)dll_import_events_data[subindex];
+				if (data->module_index == module_indices[index] && data->configuration == configurations[index]) {
+					break;
+				}
+			}
+
+			if (subindex == dll_import_events_data.size) {
+				subindex = 0;
+				for (; subindex < external_dependency_events_data.size; subindex++) {
+					RunCmdCommandAfterExternalDependencyData* data = (RunCmdCommandAfterExternalDependencyData*)external_dependency_events_data[subindex];
+					if (data->module_index == module_indices[index] && data->configuration == configurations[index]) {
+						break;
+					}
+				}
+
+				if (subindex == external_dependency_events_data.size) {
+					module_indices.RemoveSwapBack(index);
+					configurations[index] = configurations[module_indices.size];
+					// Decrement the index since the value is swapped in this place
+					index--;
+				}
+			}
+		}
+	}
+
+	editor_state->launched_module_compilation_lock.unlock();
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1880,6 +1945,19 @@ void UpdateModulesDLLImports(EditorState* editor_state)
 {
 	for (unsigned int index = 0; index < editor_state->project_modules->size; index++) {
 		GetModuleDLLImports(editor_state, index);
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void WaitModulesCompilation(EditorState* editor_state, Stream<unsigned int> module_indices, EDITOR_MODULE_CONFIGURATION* configurations)
+{
+	while (true) {
+		bool is_any_modules_being_compiled = IsAnyModuleBeingCompiled(editor_state, module_indices, configurations);
+		if (!is_any_modules_being_compiled) {
+			return;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(15));
 	}
 }
 

@@ -7,11 +7,14 @@
 #include "../Utilities/Reflection/ReflectionConstants.h"
 #include "../Containers/Stream.h"
 #include "../Utilities/BasicTypes.h"
+#include "../Rendering/Camera.h"
 
 // The base of the ECSEngine unique components
 #define ECS_COMPONENT_BASE ECS_CONSTANT_REFLECT(0)
 // The base of the ECSEngine shared components
 #define ECS_SHARED_COMPONENT_BASE ECS_CONSTANT_REFLECT(0)
+// The base of the ECSEngine global components
+#define ECS_GLOBAL_COMPONENT_BASE ECS_CONSTANT_REFLECT(0)
 
 namespace ECSEngine {
 
@@ -23,15 +26,16 @@ namespace ECSEngine {
 		STRING(Translation),
 		STRING(Rotation),
 		STRING(Scale),
-		STRING(Name)
+		STRING(Name),
+		STRING(CameraComponent)
 	};
 
 	struct ECS_REFLECT_COMPONENT Translation {
-		constexpr static inline short ID() {
+		constexpr static ECS_INLINE short ID() {
 			return ECS_COMPONENT_BASE + 0;
 		}
 
-		constexpr static inline bool IsShared() {
+		constexpr static ECS_INLINE bool IsShared() {
 			return false;
 		}
 
@@ -39,11 +43,11 @@ namespace ECSEngine {
 	};
 
 	struct ECS_REFLECT_COMPONENT Rotation {
-		constexpr static inline short ID() {
+		constexpr static ECS_INLINE short ID() {
 			return ECS_COMPONENT_BASE + 1;
 		}
 
-		constexpr static inline bool IsShared() {
+		constexpr static ECS_INLINE bool IsShared() {
 			return false;
 		}
 
@@ -51,11 +55,11 @@ namespace ECSEngine {
 	};
 
 	struct ECS_REFLECT_COMPONENT Scale {
-		constexpr static inline short ID() {
+		constexpr static ECS_INLINE short ID() {
 			return ECS_COMPONENT_BASE + 2;
 		}
 
-		constexpr static inline bool IsShared() {
+		constexpr static ECS_INLINE bool IsShared() {
 			return false;
 		}
 
@@ -63,24 +67,37 @@ namespace ECSEngine {
 	};
 
 	struct ECS_REFLECT_COMPONENT Name {
-		constexpr static short ID() {
+		constexpr static ECS_INLINE short ID() {
 			return ECS_COMPONENT_BASE + 4;
 		}
 
-		constexpr static size_t AllocatorSize() {
+		constexpr static ECS_INLINE size_t AllocatorSize() {
 			return ECS_KB_R * 256;
 		}
 
-		constexpr static inline bool IsShared() {
+		constexpr static ECS_INLINE bool IsShared() {
 			return false;
 		}
 
 		Stream<char> name;
 	};
 
+	struct ECS_REFLECT_GLOBAL_COMPONENT CameraComponent {
+		constexpr static ECS_INLINE short ID() {
+			return ECS_GLOBAL_COMPONENT_BASE + 0;
+		}
+
+		CameraCached value;
+	};
+
+	// ------------------------------------ Link Components -----------------------------------------------------------
+
 	struct ECS_REFLECT_LINK_COMPONENT(Rotation) RotationLink {
 		float3 value;
-		//float3 add_rotation; ECS_LINK_MODIFIER_FIELD
+	};
+
+	struct ECS_REFLECT_LINK_COMPONENT(CameraComponent) CameraComponentLink {
+		CameraParametersFOV value;
 	};
 
 	struct ModuleRegisterLinkComponentFunctionData;

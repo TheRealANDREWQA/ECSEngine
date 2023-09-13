@@ -103,6 +103,10 @@ namespace ECSEngine {
 			return RotateVector(ForwardVector(), GetRotationAsIs());
 		}
 
+		CameraParameters AsParameters() const;
+
+		CameraParametersFOV AsParametersFOV() const;
+
 		bool is_orthographic;
 		bool is_perspective_fov;
 		union {
@@ -115,13 +119,15 @@ namespace ECSEngine {
 				float aspect_ratio;
 			};
 		};
-
-		Matrix projection;
+		float near_z;
+		float far_z;
+		
 		float3 translation;
 		float3 rotation;
+		Matrix projection;
 	};
 
-	struct ECSENGINE_API CameraCached {
+	struct ECSENGINE_API ECS_REFLECT CameraCached {
 		ECS_INLINE CameraCached() {}
 		CameraCached(const Camera* camera);
 
@@ -181,22 +187,30 @@ namespace ECSEngine {
 			return RotateVector(ForwardVector(), rotation_as_is_matrix);
 		}
 
+		// Recalculates all the stored matrices
+		void Recalculate();
+
+		CameraParameters AsParameters() const;
+
+		CameraParametersFOV AsParametersFOV() const;
+
+		ECS_FIELDS_START_REFLECT;
+
 		bool is_orthographic;
 		bool is_perspective_fov;
-		union {
-			struct {
-				float width;
-				float height;
-			};
-			struct {
-				float fov;
-				float horizontal_fov;
-				float aspect_ratio;
-			};
-		};
+		// Store the values without a union in order for this to be reflected by the reflection system
+		float width;
+		float height;
+		float fov;
+		float horizontal_fov;
+		float aspect_ratio;
+		float near_z;
+		float far_z;
 
 		float3 translation;
 		float3 rotation;
+
+		ECS_FIELDS_END_REFLECT;
 
 		// This is the rotation that should be applied on objects
 		Matrix rotation_matrix;

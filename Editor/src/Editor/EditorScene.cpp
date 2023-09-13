@@ -52,6 +52,8 @@ bool GetLoadSceneDataBase(
 	unique_overrides.Initialize(stack_allocator, 0, 256);
 	CapacityStream<DeserializeEntityManagerSharedComponentInfo> shared_overrides;
 	shared_overrides.Initialize(stack_allocator, 0, 256);
+	CapacityStream<DeserializeEntityManagerGlobalComponentInfo> global_overrides;
+	global_overrides.Initialize(stack_allocator, 0, 256);
 
 	// We need to manually create the standalone asset database because the link components will wrongly
 	// take the handles to the master database that will not coincide with the standalone database
@@ -59,15 +61,15 @@ bool GetLoadSceneDataBase(
 	database->ToStandalone(stack_allocator, standalone_database);
 
 	ModulesToAppliedModules(editor_state, applied_modules);
-	ModuleGatherDeserializeOverrides(applied_modules, unique_overrides);
-	ModuleGatherDeserializeSharedOverrides(applied_modules, shared_overrides);
-	bool link_success = ModuleGatherLinkDeserializeUniqueAndSharedOverrides(
+	ModuleGatherDeserializeAllOverrides(applied_modules, unique_overrides, shared_overrides, global_overrides);
+	bool link_success = ModuleGatherLinkDeserializeAllOverrides(
 		applied_modules,
 		editor_state->GlobalReflectionManager(),
 		standalone_database,
 		stack_allocator,
 		unique_overrides,
 		shared_overrides,
+		global_overrides,
 		editor_state->ecs_link_components
 	);
 	if (!link_success) {
@@ -80,6 +82,7 @@ bool GetLoadSceneDataBase(
 	load_data->reflection_manager = editor_state->editor_components.internal_manager;
 	load_data->unique_overrides = unique_overrides;
 	load_data->shared_overrides = shared_overrides;
+	load_data->global_overrides = global_overrides;
 	load_data->randomize_assets = true;
 	return true;
 }
@@ -179,17 +182,18 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
 	ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerComponentInfo, unique_overrides, ECS_KB);
 	ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerSharedComponentInfo, shared_overrides, ECS_KB);
+	ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerGlobalComponentInfo, global_overrides, ECS_KB);
 
 	ModulesToAppliedModules(editor_state, applied_modules);
-	ModuleGatherSerializeOverrides(applied_modules, unique_overrides);
-	ModuleGatherSerializeSharedOverrides(applied_modules, shared_overrides);
-	bool link_success = ModuleGatherLinkSerializeUniqueAndSharedOverrides(
+	ModuleGatherSerializeAllOverrides(applied_modules, unique_overrides, shared_overrides, global_overrides);
+	bool link_success = ModuleGatherLinkSerializeAllOverrides(
 		applied_modules, 
 		save_data.reflection_manager, 
 		&standalone_database, 
 		stack_allocator, 
 		unique_overrides, 
 		shared_overrides,
+		global_overrides,
 		editor_state->ecs_link_components
 	);
 	if (!link_success) {
@@ -199,6 +203,7 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 
 	save_data.unique_overrides = unique_overrides;
 	save_data.shared_overrides = shared_overrides;
+	save_data.global_overrides = global_overrides;
 
 	entity_manager->DestroyArchetypesBaseEmptyCommit(true);
 

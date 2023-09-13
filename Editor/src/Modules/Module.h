@@ -118,9 +118,15 @@ bool IsGraphicsModule(const EditorState* editor_state, unsigned int index);
 
 bool IsModuleBeingCompiled(EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
 
+// Returns true if any of the given modules in currently being compiled
+bool IsAnyModuleBeingCompiled(EditorState* editor_state, Stream<unsigned int> module_indices, const EDITOR_MODULE_CONFIGURATION* configurations);
+
 // Returns true if the given configuration of the module is being used in at least one sandbox, else false
 // If the configuration is left to COUNT, then it will look for all configurations
 bool IsModuleUsedBySandboxes(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_COUNT);
+
+// Modifies the list of indices and configurations such that only the modules which are currently being compiled are kept
+void GetCompilingModules(EditorState* editor_state, CapacityStream<unsigned int>& module_indices, EDITOR_MODULE_CONFIGURATION* configurations);
 
 // Fills in all the sandboxes that reference the given module configuration
 // Returns true if at least a sandbox reference was added
@@ -280,6 +286,10 @@ bool UpdateModuleLibraryLastWrite(EditorState* editor_state, unsigned int index,
 
 // Updates the DLL imports of all modules
 void UpdateModulesDLLImports(EditorState* editor_state);
+
+// Given a list of module indices and their respective configurations, it will wait for all of these to finish their compilation
+// (If they are not being compiled or it has finished, it won't wait)
+void WaitModulesCompilation(EditorState* editor_state, Stream<unsigned int> module_indices, const EDITOR_MODULE_CONFIGURATION* configurations);
 
 void TickUpdateModulesDLLImports(EditorState* editor_state);
 

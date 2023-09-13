@@ -164,10 +164,13 @@ struct EditorComponents {
 
 	void GetSharedLinkComponents(ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& link_types) const;
 
+	void GetGlobalLinkComponents(ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& link_types) const;
+
 	// Both unique and shared types
 	void GetLinkComponents(
 		ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& unique_types, 
-		ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& shared_types
+		ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& shared_types,
+		ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& global_types
 	) const;
 
 	// Fills in the events which must be handled by the user

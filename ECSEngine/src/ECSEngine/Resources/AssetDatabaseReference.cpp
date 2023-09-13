@@ -156,48 +156,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	MeshMetadata* AssetDatabaseReference::GetMesh(unsigned int index)
-	{
-		return (MeshMetadata*)GetAsset(index, ECS_ASSET_MESH);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	TextureMetadata* AssetDatabaseReference::GetTexture(unsigned int index)
-	{
-		return (TextureMetadata*)GetAsset(index, ECS_ASSET_TEXTURE);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	GPUSamplerMetadata* AssetDatabaseReference::GetGPUSampler(unsigned int index)
-	{
-		return (GPUSamplerMetadata*)GetAsset(index, ECS_ASSET_GPU_SAMPLER);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	ShaderMetadata* AssetDatabaseReference::GetShader(unsigned int index)
-	{
-		return (ShaderMetadata*)GetAsset(index, ECS_ASSET_SHADER);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	MaterialAsset* AssetDatabaseReference::GetMaterial(unsigned int index)
-	{
-		return (MaterialAsset*)GetAsset(index, ECS_ASSET_MATERIAL);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	MiscAsset* AssetDatabaseReference::GetMisc(unsigned int index)
-	{
-		return (MiscAsset*)GetAsset(index, ECS_ASSET_MISC);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
 	void* AssetDatabaseReference::GetAsset(unsigned int index, ECS_ASSET_TYPE type)
 	{
 		return database->GetAsset(GetHandle(index, type), type);
@@ -205,40 +163,9 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	unsigned int AssetDatabaseReference::GetHandle(unsigned int index, ECS_ASSET_TYPE type) const
-	{
-		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
-		return streams[type][index];
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	unsigned int AssetDatabaseReference::GetIndex(unsigned int handle, ECS_ASSET_TYPE type) const
-	{
-		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
-		return function::SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(handle));
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	unsigned int AssetDatabaseReference::GetReferenceCountIndex(unsigned int index, ECS_ASSET_TYPE type) const
-	{
-		return GetReferenceCountHandle(GetHandle(index, type), type);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
 	unsigned int AssetDatabaseReference::GetReferenceCountHandle(unsigned int handle, ECS_ASSET_TYPE type) const
 	{
 		return database->GetReferenceCount(handle, type);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	unsigned int AssetDatabaseReference::GetCount(ECS_ASSET_TYPE type) const
-	{
-		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
-		return streams[type].size;
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -333,16 +260,22 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::IncrementReferenceCounts()
+	void AssetDatabaseReference::IncrementReferenceCounts(bool add_here)
 	{
 		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
 
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)index;
-
-			for (unsigned int stream_index = 0; stream_index < streams[index].size; stream_index++) {
+			// Keep a stack reference since, if we need to add here, they additions will be registered ad infinitum
+			unsigned int current_count = streams[index].size;
+			for (unsigned int stream_index = 0; stream_index < current_count; stream_index++) {
 				unsigned int handle = GetHandle(stream_index, asset_type);
-				database->AddAsset(handle, asset_type);
+				if (add_here) {
+					AddAsset(handle, asset_type, true);
+				}
+				else {
+					database->AddAsset(handle, asset_type);
+				}
 			}
 		}
 	}

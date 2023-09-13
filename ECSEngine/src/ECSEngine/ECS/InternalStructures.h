@@ -115,6 +115,31 @@ namespace ECSEngine {
 		short value;
 	};
 
+	// Here we implement a SFINAE to check whether or not a component has the AllocatorSize function
+	template<typename T, typename = void>
+	struct has_AllocatorSize_t : std::false_type {};
+
+	template<typename T>
+	struct has_AllocatorSize_t<T, std::void_t<decltype(std::declval<T>().AllocatorSize())>> : std::true_type {};
+
+	template<typename T, typename std::enable_if_t<has_AllocatorSize_t<T>::value, bool>::type = false>
+	constexpr ECS_INLINE size_t ComponentAllocatorSize() {
+		return 0;
+	}
+
+	template<typename T, typename std::enable_if<has_AllocatorSize_t<T>::value, bool>::type = true>
+	constexpr ECS_INLINE size_t ComponentAllocatorSize()
+	{
+		return T::AllocatorSize();
+	};
+
+	enum ECS_COMPONENT_TYPE : unsigned char {
+		ECS_COMPONENT_UNIQUE,
+		ECS_COMPONENT_SHARED,
+		ECS_COMPONENT_GLOBAL,
+		ECS_COMPONENT_TYPE_COUNT
+	};
+
 	struct SharedInstance {
 		// This just returns true if the value is different from -1,
 		// And not if the entity is valid in the context of an entity manager

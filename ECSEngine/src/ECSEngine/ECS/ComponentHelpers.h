@@ -14,6 +14,8 @@ namespace ECSEngine {
 
 	ECSENGINE_API bool IsReflectionTypeSharedComponent(const Reflection::ReflectionType* type);
 
+	ECSENGINE_API bool IsReflectionTypeGlobalComponent(const Reflection::ReflectionType* type);
+
 	ECSENGINE_API bool IsReflectionTypeLinkComponent(const Reflection::ReflectionType* type);
 
 	// Walks through the fields and returns the component buffer and optionally the index of the field that

@@ -287,9 +287,7 @@ namespace ECSEngine {
 	void ClearWorld(World* world)
 	{
 		// Clear everything that can be cleared
-		world->task_manager->ClearTaskStream();
-		world->task_manager->ClearThreadAllocators();
-		
+		world->task_manager->Reset();
 		world->entity_manager->ClearEntitiesAndAllocator();
 		world->task_scheduler->Reset();
 		world->system_manager->Clear();

@@ -44,6 +44,21 @@ namespace ECSEngine {
 	//	}
 	//}
 
+	void ConvertLinkToCameraComponent(ModuleLinkComponentFunctionData* data) {
+		const CameraComponentLink* link = (const CameraComponentLink*)data->link_component;
+		CameraComponent* component = (CameraComponent*)data->component;
+
+		Camera temp_camera = link->value;
+		component->value = &temp_camera;
+	}
+
+	void ConvertCameraComponentToLink(ModuleLinkComponentReverseFunctionData* data) {
+		const CameraComponent* component = (const CameraComponent*)data->component;
+		CameraComponentLink* link = (CameraComponentLink*)data->link_component;
+
+		link->value = component->value.AsParametersFOV();
+	}
+
 	void RegisterECSLinkComponents(ModuleRegisterLinkComponentFunctionData* register_data)
 	{
 		ModuleLinkComponentTarget target;
@@ -51,7 +66,12 @@ namespace ECSEngine {
 		target.reverse_function = ConvertRotationToLink;
 		target.component_name = STRING(RotationLink);
 		//target.apply_modifier = ApplyLinkToRotation;
-		register_data->functions->Add(target);
+		register_data->functions->AddAssert(target);
+
+		target.build_function = ConvertLinkToCameraComponent;
+		target.reverse_function = ConvertCameraComponentToLink;
+		target.component_name = STRING(CameraComponentLink);
+		register_data->functions->AddAssert(target);
 	}
 
 }
