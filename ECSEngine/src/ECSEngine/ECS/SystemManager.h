@@ -36,14 +36,16 @@ namespace ECSEngine {
 		// Returns the pointer stored in the hash table
 		void* BindTemporaryData(Stream<char> identifier, const void* data, size_t data_size = 0);
 
-		// The names will be allocated separately
 		void BindSystemSettings(Stream<char> system_name, Stream<SystemManagerSetting> settings);
 		
-		// Clears all the memory used and the hash tables (the memory is still being used
+		// Clears all the memory used and the hash tables (the memory is still being used)
 		void Clear();
 
 		// Clears any temporary tables
 		void ClearFrame();
+
+		// Clears all the memory used by the system settings
+		void ClearSystemSettings();
 
 		// Frees the memory of the allocators
 		void FreeMemory();

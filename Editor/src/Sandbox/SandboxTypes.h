@@ -64,6 +64,10 @@ struct EditorSandboxModuleSnapshot {
 
 // -------------------------------------------------------------------------------------------------------------
 
+enum EDITOR_SANDBOX_FLAG : size_t {
+	EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION = 1 << 0
+};
+
 struct ECS_REFLECT EditorSandbox {
 	ECS_INLINE ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
 		return (ECSEngine::GlobalMemoryManager*)modules_in_use.allocator.allocator;
@@ -133,7 +137,6 @@ struct ECS_REFLECT EditorSandbox {
 	// Is not allowed, it will put the value to be read from here for the next render
 	ECSEngine::uint2 viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_COUNT];
 
-
 	ECSEngine::EntityManager scene_entities;
 	ECSEngine::World sandbox_world;
 
@@ -147,6 +150,9 @@ struct ECS_REFLECT EditorSandbox {
 
 	ECSEngine::MemoryManager runtime_module_snapshot_allocator;
 	ECSEngine::ResizableStream<EditorSandboxModuleSnapshot> runtime_module_snapshots;
+
+	// Miscellaneous flags
+	size_t flags;
 };
 
 ECS_INLINE ECSEngine::Stream<char> ViewportString(EDITOR_SANDBOX_VIEWPORT viewport) {

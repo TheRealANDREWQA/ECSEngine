@@ -30,6 +30,11 @@ bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandb
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Binds the module settings to the system manager in the runtime
+void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, ECSEngine::Stream<wchar_t> settings_name);
 
 // -------------------------------------------------------------------------------------------------------------

@@ -96,6 +96,31 @@ bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandb
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		Stream<EditorModuleReflectedSetting> reflected_settings = sandbox->modules_in_use[index].reflected_settings;
+		if (reflected_settings.size > 0) {
+			ECS_STACK_CAPACITY_STREAM(char, ascii_name, 512);
+			function::ConvertWideCharsToASCII(editor_state->project_modules->buffer[sandbox->modules_in_use[index].module_index].library_name, ascii_name);
+
+			ECS_STACK_CAPACITY_STREAM(SystemManagerSetting, system_settings, 512);
+			ECS_ASSERT(system_settings.capacity >= reflected_settings.size);
+			for (size_t subindex = 0; subindex < reflected_settings.size; subindex++) {
+				system_settings[subindex].name = reflected_settings[subindex].name;
+				system_settings[subindex].data = reflected_settings[subindex].data;
+				// Here we indicate to the system manager that we want the data to be referenced instead of copied
+				system_settings[subindex].byte_size = 0;
+			}
+			system_settings.size = reflected_settings.size;
+			sandbox->sandbox_world.system_manager->BindSystemSettings(ascii_name, system_settings);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, ECSEngine::Stream<wchar_t> settings_name)
 {
 	unsigned int sandbox_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);

@@ -91,9 +91,12 @@ enum SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT : unsigned char {
 static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(EditorState* editor_state, unsigned int sandbox_index) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-	auto reset_task_manager_and_scheduler = [&]() {
+	auto reset_concurrency_and_module_settings = [&]() {
 		sandbox->sandbox_world.task_scheduler->Reset();
 		sandbox->sandbox_world.task_manager->Reset();
+		// We also need to reset the entity manager query cache
+		sandbox->sandbox_world.entity_manager->ClearCache();
+		sandbox->sandbox_world.system_manager->ClearSystemSettings();
 	};
 
 	// Returns true if all out of date or failed modules are being compiled, else false
@@ -118,10 +121,6 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 		return true;
 	};
 
-	auto try_reset_modules = [&]() {
-
-	};
-
 	bool are_modules_loaded = AreSandboxModulesLoaded(editor_state, sandbox_index, false);
 	if (!are_modules_loaded) {
 		// Check if the there are modules being compiled and wait for them if that is the case
@@ -130,8 +129,9 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 			return SOLVE_SANDBOX_MODULE_SNAPSHOT_WAIT;
 		}
 
-		// We need to halt the continuation - also reset the task manager and the task scheduler
-		reset_task_manager_and_scheduler();
+		// We need to halt the continuation - also re-register the snapshot
+		reset_concurrency_and_module_settings();
+		RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
 		return SOLVE_SANDBOX_MODULE_SNAPSHOT_FAILURE;
 	}
 
@@ -172,6 +172,28 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 							}
 							else {
 								// Check to see if the module settings have changed
+								const EditorSandboxModule* sandbox_module = &sandbox->modules_in_use[in_stream_module_index];
+								Stream<EditorModuleReflectedSetting> snapshot_settings = sandbox->runtime_module_snapshots[index].reflected_settings;
+								Stream<EditorModuleReflectedSetting> module_settings = sandbox_module->reflected_settings;
+								if (snapshot_settings.size != module_settings.size) {
+									snapshot_has_changed = true;
+								}
+								else {
+									for (size_t subindex = 0; subindex < snapshot_settings.size && !snapshot_has_changed; subindex++) {
+										size_t existing_setting = function::FindString(snapshot_settings[subindex].name, module_settings, [](EditorModuleReflectedSetting setting) {
+											return setting.name;
+										});
+										if (existing_setting == -1) {
+											snapshot_has_changed = true;
+										}
+										else {
+											// Check to see if the pointer has changed
+											if (snapshot_settings[subindex].data != module_settings[existing_setting].data) {
+												snapshot_has_changed = true;
+											}
+										}
+									}
+								}
 							}
 						}
 					}
@@ -179,6 +201,24 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 			}
 		}
 	}
+
+	if (snapshot_has_changed) {
+		// The snapshot has changed, we need to restore the module settings and rebind the task scheduler and task manager
+		reset_concurrency_and_module_settings();
+		// We need to discard the current snapshot and recreate it
+		RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
+		
+		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index);
+		if (success) {
+			// Bind again the module settings
+			BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
+		}
+		else {
+			return SOLVE_SANDBOX_MODULE_SNAPSHOT_FAILURE;
+		}
+	}
+	// Nothing was changed
+	return SOLVE_SANDBOX_MODULE_SNAPSHOT_OK;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -317,6 +357,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	sandbox->locked_count = 0;
+	sandbox->flags = 0;
 
 	// Initialize the runtime settings string
 	sandbox->runtime_descriptor = GetDefaultWorldDescriptor();
@@ -489,9 +530,7 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 4);
 
-	// Before clearing the world, we need to retrieve all the asset reference and decrement them by one
-	// Such that the references of the scene entities remain
-	// The size is used as a capacity here, we need a minimum of size entries
+	// Before clearing the world, we need to retrieve all the asset references of the scene world and restore those counts
 	AssetDatabase* database = editor_state->asset_database;
 	ECS_STACK_CAPACITY_STREAM(Stream<unsigned int>, asset_handles, ECS_ASSET_TYPE_COUNT);
 	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
@@ -500,15 +539,22 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 		asset_handles[index].Initialize(GetAllocatorPolymorphic(&stack_allocator), asset_count);
 		memset(asset_handles[index].buffer, 0, asset_handles[index].MemoryOf(asset_handles[index].size));
 	}
-	GetAssetReferenceCountsFromEntities(sandbox->sandbox_world.entity_manager, editor_state->editor_components.internal_manager, database, asset_handles.buffer);
+	GetAssetReferenceCountsFromEntities(&sandbox->scene_entities, editor_state->editor_components.internal_manager, database, asset_handles.buffer);
 
 	// We need now to decrement the reference counts for this sandbox
 	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 		ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
 		for (size_t subindex = 0; subindex < asset_handles[index].size; subindex++) {
 			unsigned int handle = database->GetAssetHandleFromIndex(subindex, current_type);
-			for (unsigned int reference_index = 0; reference_index < asset_handles[index][subindex]; reference_index++) {
-				DecrementAssetReference(editor_state, handle, current_type, sandbox_index);
+			unsigned int current_reference_count = database->GetReferenceCount(handle, current_type);
+			unsigned int scene_reference_count = asset_handles[index][subindex];
+			if (current_reference_count > scene_reference_count) {
+				for (unsigned int reference_index = 0; reference_index < current_reference_count - scene_reference_count; reference_index++) {
+					DecrementAssetReference(editor_state, handle, current_type, sandbox_index);
+				}
+			}
+			else if (current_reference_count < scene_reference_count) {
+				IncrementAssetReferenceInSandbox(editor_state, handle, current_type, sandbox_index, scene_reference_count - current_reference_count);
 			}
 		}
 	}
@@ -517,6 +563,8 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 
 	ClearWorld(&sandbox->sandbox_world);
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
+	// Clear the waiting compilation flag
+	sandbox->flags = function::ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 
 	const UISystem* ui_system = editor_state->ui_system;
 	// We need to reinstate the viewport rendering
@@ -891,18 +939,13 @@ void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_
 		PauseWorld(&sandbox->sandbox_world);
 	}
 
+	// Clear the sandbox waiting compilation flag - since it might be still on
+	sandbox->flags = function::ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 	sandbox->run_state = EDITOR_SANDBOX_PAUSED;
 
 	// Bring back the viewport rendering since it was disabled
-	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, index);
-	if (scene_window_index != -1) {
-		EnableSandboxViewportRendering(editor_state, index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-	}
-
-	unsigned int game_window_index = GetGameUIWindowIndex(editor_state, index);
-	if (game_window_index != -1) {
-		EnableSandboxViewportRendering(editor_state, index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
-	}
+	EnableSceneUIRendering(editor_state, index);
+	EnableGameUIRendering(editor_state, index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1392,6 +1435,24 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index)
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_RUNNING);
 
+	// Clear the sandbox waiting compilation flag - it will be reset if it is still valid
+	sandbox->flags = function::ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+
+	// Before running the simulation, we need to check to see if the modules are still valid - they might have been changed
+	// That's why check the snapshot
+	SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT solve_module_snapshot_result = SolveSandboxModuleSnapshotsChanges(editor_state, sandbox_index);
+	if (solve_module_snapshot_result == SOLVE_SANDBOX_MODULE_SNAPSHOT_FAILURE) {
+		// The simulation needs to be halted
+		// We don't need to wait for the pause since the world is not running
+		PauseSandboxWorld(editor_state, sandbox_index);
+		return false;
+	}
+	else if (solve_module_snapshot_result == SOLVE_SANDBOX_MODULE_SNAPSHOT_WAIT) {
+		sandbox->flags = function::SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+		return true;
+	}
+	// If it returned OK, then we can proceed as normal
+
 	// Perform the world simulation - before that we need to set the graphics buffers up
 	// And retrieve the graphics snapshot and the resource manager snapshot
 	// If any resources that were loaded by the editor are missing after the simulation has run,
@@ -1426,22 +1487,12 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index)
 	graphics_snapshot.Deallocate(editor_state->EditorAllocator());
 
 	// Render the scene if it is visible - the runtime is rendered by the game now		
-	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
-	if (scene_window_index != -1) {
-		bool is_scene_visible = editor_state->ui_system->IsWindowVisible(scene_window_index);
-		if (is_scene_visible) {
-			EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-		}
-	}
+	EnableSceneUIRendering(editor_state, sandbox_index);
 
 	RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
 	// Disable this irrespective if it was enabled here or not
 	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-
-	if (!graphics_snapshot_success || !resource_snapshot_success) {
-		__debugbreak();
-	}
 
 	return graphics_snapshot_success && resource_snapshot_success;
 }
@@ -1660,7 +1711,10 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 			sandbox->run_state = EDITOR_SANDBOX_RUNNING;
 
-			// We need to record the 
+			// We need to record the snapshot of the current sandbox state
+			// We also need to bind the module runtime settings
+			RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
+			BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
 		}
 	}
 	return success;

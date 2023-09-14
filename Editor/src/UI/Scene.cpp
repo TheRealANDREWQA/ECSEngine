@@ -1162,6 +1162,28 @@ unsigned int GetSceneUIWindowIndex(const EditorState* editor_state, unsigned int
 	return editor_state->ui_system->GetWindowFromName(window_name);
 }
 
+void DisableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index)
+{
+	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
+	if (scene_window_index != -1) {
+		bool is_scene_visible = editor_state->ui_system->IsWindowVisible(scene_window_index);
+		if (is_scene_visible) {
+			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		}
+	}
+}
+
+void EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index)
+{
+	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
+	if (scene_window_index != -1) {
+		bool is_scene_visible = editor_state->ui_system->IsWindowVisible(scene_window_index);
+		if (is_scene_visible) {
+			EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		}
+	}
+}
+
 void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index) {
 	UpdateUIWindowIndex(editor_state, SCENE_WINDOW_NAME, old_index, new_index);
 }
