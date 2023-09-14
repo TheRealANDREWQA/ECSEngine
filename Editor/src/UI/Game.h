@@ -34,6 +34,12 @@ void GetGameUIWindowName(unsigned int index, ECSEngine::CapacityStream<char>& na
 
 unsigned int GetGameUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index);
 
+// If the window is present, it will enable the UI rendering
+void DisableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index);
+
+// If the window is present, it will enable the UI rendering
+void EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index);
+
 // Does nothing if the old_index doesn't exist
 void UpdateGameUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);
 

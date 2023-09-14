@@ -158,7 +158,7 @@ namespace ECSEngine {
 	{
 		unsigned int setting_index = system_settings.Find(system_name);
 		
-		// Allocate the pointers - do a single coallesced allocation
+		// Allocate the pointers - do a single coalesced allocation
 		size_t total_size = 0;
 
 		for (size_t index = 0; index < settings.size; index++) {
@@ -168,6 +168,7 @@ namespace ECSEngine {
 			total_size += alignof(void*);
 		}
 		total_size += settings.MemoryOf(settings.size);
+		total_size += system_name.MemoryOf(system_name.size);
 
 		Stream<SystemManagerSetting> new_settings;
 		void* allocation = allocator->Allocate(total_size);
@@ -196,11 +197,14 @@ namespace ECSEngine {
 		ECS_ASSERT(ptr - (uintptr_t)allocation <= total_size);
 
 		if (setting_index == -1) {
+			// Copy the system name to the final ptr location - such that we have a stable name
+			system_name.InitializeAndCopy(ptr, system_name);
+			ECS_ASSERT(ptr - (uintptr_t)allocation <= total_size);
 			InsertIntoDynamicTable(system_settings, allocator, new_settings, system_name);
 		}
 		else {
 			Stream<SystemManagerSetting>* settings_ptr = system_settings.GetValuePtrFromIndex(setting_index);
-			// Coallesced allocation starting on the buffer - safe to deallocate
+			// Coalesced allocation starting on the buffer - safe to deallocate
 			allocator->Deallocate(settings_ptr->buffer);
 			*settings_ptr = new_settings;
 		}
@@ -225,6 +229,16 @@ namespace ECSEngine {
 	{
 		temporary_allocator.Clear();
 		temporary_table.Clear();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------------
+
+	void SystemManager::ClearSystemSettings()
+	{
+		system_settings.ForEachConst([&](Stream<SystemManagerSetting> settings, ResourceIdentifier identifier) {
+			allocator->Deallocate(settings.buffer);
+		});
+		system_settings.Clear();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
