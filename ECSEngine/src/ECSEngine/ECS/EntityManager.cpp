@@ -2772,10 +2772,10 @@ namespace ECSEngine {
 					m_shared_components[index].instances.stream.Copy(entity_manager->m_shared_components[index].instances.stream);
 					
 					// For every value allocate the data
-					for (size_t subindex = 0; subindex < m_shared_components[index].instances.stream.size; subindex++) {
-						void* new_data = function::Copy(GetAllocatorPolymorphic(&m_small_memory_manager), entity_manager->m_shared_components[index].instances[subindex], component_size);
+					m_shared_components[index].instances.stream.ForEachIndex([&](unsigned int subindex) {
+						void* new_data = function::Copy(SmallAllocator(), entity_manager->m_shared_components[index].instances[subindex], component_size);
 						m_shared_components[index].instances[subindex] = new_data;
-					}
+					});
 				}
 
 				// If there are any named instances, allocate them separately
@@ -4357,6 +4357,34 @@ namespace ECSEngine {
 		return { -1 };
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------
+
+	unsigned int EntityManager::GetNumberOfEntitiesForSharedInstance(Component component, SharedInstance instance) const
+	{
+		unsigned int total_count = 0;
+
+		SharedComponentSignature signature;
+		signature.indices = &component;
+		signature.instances = &instance;
+		signature.count = 1;
+
+		ArchetypeQuery query;
+		query.shared.InitializeSharedComponent(signature);
+		// This does not prune by instance - only the component
+		ForEachArchetype(query, [&](const Archetype* archetype) {
+			unsigned int base_archetype_count = archetype->GetBaseCount();
+			unsigned char component_index = archetype->FindSharedComponentIndex(component);
+			ECS_ASSERT(component_index != UCHAR_MAX);
+			for (unsigned int index = 0; index < base_archetype_count; index++) {
+				SharedInstance current_instance = archetype->GetBaseInstanceUnsafe(component_index, index);
+				if (current_instance == instance) {
+					total_count += archetype->GetBase(index)->EntityCount();
+				}
+			}
+		});
+
+		return total_count;
+	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
@@ -4629,7 +4657,7 @@ namespace ECSEngine {
 		size_t allocation_size = sizeof(DeferredCreateSharedComponent) + name.size;
 
 		void* allocation = AllocateTemporaryBuffer(allocation_size);
-		uintptr_t allocation_ptr = (uintptr_t)allocation_ptr;
+		uintptr_t allocation_ptr = (uintptr_t)allocation;
 		DeferredCreateSharedComponent* data = (DeferredCreateSharedComponent*)allocation;
 		data->component = component;
 		data->size = size;

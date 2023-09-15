@@ -676,9 +676,9 @@ namespace ECSEngine {
 
 			mount_point = load_desc->mount_point;
 
-			early_exit &= ~has_typed_handles;
-			early_exit &= ~has_error_string;
-			early_exit &= ~has_segmened_error_string;
+			early_exit &= !has_typed_handles;
+			early_exit &= !has_error_string;
+			early_exit &= !has_segmened_error_string;
 		}
 
 		bool success = true;

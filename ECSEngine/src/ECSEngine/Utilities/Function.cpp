@@ -614,7 +614,7 @@ namespace ECSEngine {
 				current_opened = current_closed;
 				current_closed = function::FindFirstCharacter(Stream<CharacterType>(current_closed + 1, function::PointerDifference(end_character, current_closed + 1) / sizeof(CharacterType)), closed_char).buffer;
 				if (current_closed == nullptr) {
-					return nullptr;
+					return;
 				}
 
 				while (current_opened < end_character) {

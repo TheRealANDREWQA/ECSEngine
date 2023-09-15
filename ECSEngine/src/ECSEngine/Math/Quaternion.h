@@ -808,6 +808,9 @@ namespace ECSEngine {
 				return a.y > b.y;
 				break;
 			}
+
+			// Shouldn't be reached
+			return false;
 		};
 
 		if (a_quadrant == b_quadrant) {

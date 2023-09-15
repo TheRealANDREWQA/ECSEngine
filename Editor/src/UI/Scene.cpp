@@ -724,7 +724,7 @@ static void SceneRotationAction(ActionData* action_data) {
 		if (mouse->IsHeld(ECS_MOUSE_RIGHT)) {
 			bool was_rotated = HandleCameraRotation(editor_state, data->sandbox_index, false, false);
 			if (was_rotated) {
-				RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+				RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
 			}
 		}
 	}
@@ -751,8 +751,6 @@ static void SceneTranslationAction(ActionData* action_data) {
 			system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 		}
 
-		EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxActiveViewport(editor_state, data->sandbox_index);
-
 		if (mouse->IsHeld(ECS_MOUSE_MIDDLE)) {
 			if (mouse_delta.x != 0.0f || mouse_delta.y != 0.0f) {
 				Camera scene_camera = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
@@ -770,7 +768,7 @@ static void SceneTranslationAction(ActionData* action_data) {
 
 				float3 translation = right_vector * float3::Splat(-mouse_delta.x * translation_factor) + up_vector * float3::Splat(mouse_delta.y * translation_factor);
 				TranslateSandboxCamera(editor_state, data->sandbox_index, translation, EDITOR_SANDBOX_VIEWPORT_SCENE);
-				RenderSandbox(editor_state, data->sandbox_index, current_viewport);
+				RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
 			}
 		}
 	}
@@ -787,7 +785,6 @@ static void SceneZoomAction(ActionData* action_data) {
 	if (!sandbox->is_camera_wasd_movement) {
 		int scroll_delta = mouse->GetScrollDelta();
 		if (scroll_delta != 0) {
-			EDITOR_SANDBOX_VIEWPORT current_viewport = GetSandboxActiveViewport(editor_state, data->sandbox_index);
 			float factor = 0.015f;
 
 			if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
@@ -802,7 +799,7 @@ static void SceneZoomAction(ActionData* action_data) {
 			//float3 forward_vector = RotateVectorMatrixLow(GetForwardVector(), MatrixRotation(camera_rotation));
 
 			TranslateSandboxCamera(editor_state, data->sandbox_index, forward_vector * float3::Splat(scroll_delta * factor), EDITOR_SANDBOX_VIEWPORT_SCENE);
-			RenderSandbox(editor_state, data->sandbox_index, current_viewport);
+			RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
 		}
 	}
 }
@@ -1162,26 +1159,30 @@ unsigned int GetSceneUIWindowIndex(const EditorState* editor_state, unsigned int
 	return editor_state->ui_system->GetWindowFromName(window_name);
 }
 
-void DisableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index)
+bool DisableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index)
 {
 	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
 	if (scene_window_index != -1) {
 		bool is_scene_visible = editor_state->ui_system->IsWindowVisible(scene_window_index);
 		if (is_scene_visible) {
 			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			return true;
 		}
 	}
+	return false;
 }
 
-void EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index)
+bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index)
 {
 	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
 	if (scene_window_index != -1) {
 		bool is_scene_visible = editor_state->ui_system->IsWindowVisible(scene_window_index);
 		if (is_scene_visible) {
 			EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			return true;
 		}
 	}
+	return false;
 }
 
 void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index) {

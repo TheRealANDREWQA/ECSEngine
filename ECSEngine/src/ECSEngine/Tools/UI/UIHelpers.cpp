@@ -757,7 +757,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		template<bool is_inner = true>
+		template<bool is_inner>
 		void CreateSolidColorRectangleBorder(
 			float2 position,
 			float2 scale,
@@ -815,7 +815,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		template<bool is_inner = true>
+		template<bool is_inner>
 		void CreateSolidColorRectangleBorder(
 			float2 position,
 			float2 scale,

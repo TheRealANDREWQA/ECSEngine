@@ -339,24 +339,24 @@ namespace ECSEngine {
 				SYSTEMTIME sys_creation_time, sys_access_time, sys_last_write_time;
 				if (creation_time != nullptr) {
 					SYSTEMTIME local_creation_time;
-					success &= FileTimeToSystemTime(&os_creation_time, &sys_creation_time);
-					success &= SystemTimeToTzSpecificLocalTime(nullptr, &sys_creation_time, &local_creation_time);
+					success &= (bool)FileTimeToSystemTime(&os_creation_time, &sys_creation_time);
+					success &= (bool)SystemTimeToTzSpecificLocalTime(nullptr, &sys_creation_time, &local_creation_time);
 					if (success) {
 						ConvertSystemTimeToDate(&local_creation_time, creation_time);
 					}
 				}
 				if (access_time != nullptr && success) {
 					SYSTEMTIME local_access_time;
-					success &= FileTimeToSystemTime(&os_access_time, &sys_access_time);
-					success &= SystemTimeToTzSpecificLocalTime(nullptr, &sys_access_time, &local_access_time);
+					success &= (bool)FileTimeToSystemTime(&os_access_time, &sys_access_time);
+					success &= (bool)SystemTimeToTzSpecificLocalTime(nullptr, &sys_access_time, &local_access_time);
 					if (success) {
 						ConvertSystemTimeToDate(&local_access_time, access_time);
 					}
 				}
 				if (last_write_time != nullptr && success) {
 					SYSTEMTIME local_write_time;
-					success &= FileTimeToSystemTime(&os_last_write_time, &sys_last_write_time);
-					success &= SystemTimeToTzSpecificLocalTime(nullptr, &sys_last_write_time, &local_write_time);
+					success &= (bool)FileTimeToSystemTime(&os_last_write_time, &sys_last_write_time);
+					success &= (bool)SystemTimeToTzSpecificLocalTime(nullptr, &sys_last_write_time, &local_write_time);
 					if (success) {
 						ConvertSystemTimeToDate(&local_write_time, last_write_time);
 					}

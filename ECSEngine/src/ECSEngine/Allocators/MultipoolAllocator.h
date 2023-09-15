@@ -11,9 +11,8 @@ namespace ECSEngine {
 	* allocations as low as possible. The parameter pool_count given to the constructor represents the maximum 
 	* number of pools that it can track of, including the ones occupied.
 	*/
-	class ECSENGINE_API MultipoolAllocator
+	struct ECSENGINE_API MultipoolAllocator
 	{
-	public:
 		ECS_INLINE MultipoolAllocator() : m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0), m_debug_mode(false) {}
 		MultipoolAllocator(void* buffer, size_t size, size_t pool_count);
 		MultipoolAllocator(void* buffer, void* block_range_buffer, size_t size, size_t pool_count);

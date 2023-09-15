@@ -4993,6 +4993,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 			}
 
+			// Check if the field has given byte size
+			ulong2 given_size = GetReflectionTypeGivenFieldTag(field);
+			if (given_size.x != -1) {
+				return memcmp(first, second, given_size.x) == 0;
+			}
+
 			if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
 				size_t element_byte_size = field->info.byte_size;
 
@@ -5055,6 +5061,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return memcmp(first, second, byte_size) == 0;
 			}
 			else {
+				// Compare t
+
 				// Not blittable
 				// Has some pointer data that needs to be checked
 				for (size_t index = 0; index < type->fields.size; index++) {

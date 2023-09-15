@@ -1554,7 +1554,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		void Reserve(unsigned int byte_count) {
 			unsigned int new_size = size + byte_count;
 			if (new_size > capacity) {
-				unsigned int resize_capacity = ECS_RESIZABLE_STREAM_FACTOR * capacity + 1;
+				unsigned int resize_capacity = (unsigned int)(ECS_RESIZABLE_STREAM_FACTOR * capacity + 3);
 				if (resize_capacity < new_size) {
 					resize_capacity = new_size * ECS_RESIZABLE_STREAM_FACTOR;
 				}

@@ -12050,13 +12050,14 @@ namespace ECSEngine {
 							DynamicConfiguration(configuration)
 						);
 					}
-					Hierarchy(DynamicConfiguration(configuration), config, name);
+					return Hierarchy(DynamicConfiguration(configuration), config, name);
 				}
 			}
 			else {
 				if (configuration & UI_CONFIG_DO_CACHE) {
 					return HierarchyInitializer(configuration, config, name);
 				}
+				return nullptr;
 			}
 		}
 
@@ -12197,6 +12198,7 @@ namespace ECSEngine {
 				if (configuration & UI_CONFIG_DO_CACHE) {
 					return FilesystemHierarchyInitializer(configuration, config, identifier);
 				}
+				return nullptr;
 			}
 		}
 
@@ -12634,6 +12636,7 @@ namespace ECSEngine {
 				if (configuration & UI_CONFIG_DO_CACHE) {
 					return ListInitializer(configuration, config, name);
 				}
+				return nullptr;
 			}
 		}
 

@@ -243,6 +243,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 
 		TickModuleStatus(editor_state);
 		TickSandboxes(editor_state);
+		TickSandboxUpdateMasterButtons(editor_state);
 
 		TickDirectoryExplorer(editor_state);
 		TickFileExplorer(editor_state);

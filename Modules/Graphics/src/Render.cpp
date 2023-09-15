@@ -58,7 +58,11 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 		}
 
 		if constexpr (has_translation) {
-			const Translation* translation = (const Translation*)for_each_data->unique_components[component_indices[TRANSLATION]];
+			Translation* translation = (Translation*)for_each_data->unique_components[component_indices[TRANSLATION]];
+			ECS_EDITOR_RUNTIME_TYPE runtime_type_count = GetEditorRuntimeType(world->system_manager);
+			if (runtime_type_count == ECS_EDITOR_RUNTIME_GAME) {
+				translation->value.x += 0.01f;
+			}
 			translation_value = translation->value;
 			matrix_translation = MatrixTranslation(translation_value);
 		}
@@ -126,7 +130,7 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 		graphics->BindMaterial(*mesh->material);
 
 		graphics->DrawCoalescedMeshCommand(*mesh->mesh);
-
+		 
 		/*AABB mesh_bounds = mesh->mesh->mesh.bounds;
 		mesh_bounds = TransformAABB(mesh_bounds, translation_value, matrix_rotation, scale_value);
 		float3 bounds_center = AABBCenter(mesh_bounds).AsFloat3Low();

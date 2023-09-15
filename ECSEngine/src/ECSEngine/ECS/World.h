@@ -95,6 +95,11 @@ namespace ECSEngine {
 	// and the other systems
 	ECSENGINE_API bool ValidateWorldDescriptor(const WorldDescriptor* world_descriptor);
 
+	// This function sets up the necessary task_scheduler and task manager functions
+	// If the scheduler_elements are not specified, they need to be added to the world's task scheduler
+	// before calling PrepareWorld
+	ECSENGINE_API void PrepareWorldConcurrency(World* world, Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 });
+
 	// Initializes all the necessary one time actions needed before the actual run of the world
 	// If the scheduler_elements are not specified, they need to be added to the world's task scheduler
 	// before calling PrepareWorld

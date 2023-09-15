@@ -140,6 +140,9 @@ namespace ECSEngine {
 			return sizeof(MiscAsset);
 		}
 		ECS_ASSERT(false, "Incorrect asset type");
+
+		// Shouldn't reach here
+		return 0;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -159,6 +162,9 @@ namespace ECSEngine {
 		default:
 			ECS_ASSERT(false, "Incorrect asset type");
 		}
+
+		// Shouldn't reach here
+		return 0;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -998,24 +1004,24 @@ namespace ECSEngine {
 		switch (type) {
 		case ECS_ASSET_TEXTURE:
 		{
-			TextureMetadata* metadata = (TextureMetadata*)metadata;
-			return material_pointer->ContainsTexture(metadata->texture);
+			TextureMetadata* texture_metadata = (TextureMetadata*)metadata;
+			return material_pointer->ContainsTexture(texture_metadata->texture);
 		}
 		break;
 		case ECS_ASSET_GPU_SAMPLER:
 		{
-			GPUSamplerMetadata* metadata = (GPUSamplerMetadata*)metadata;
-			return material_pointer->ContainsSampler(metadata->sampler);
+			GPUSamplerMetadata* gpu_sampler_metadata = (GPUSamplerMetadata*)metadata;
+			return material_pointer->ContainsSampler(gpu_sampler_metadata->sampler);
 		}
 		break;
 		case ECS_ASSET_SHADER:
 		{
-			ShaderMetadata* metadata = (ShaderMetadata*)metadata;
-			if (metadata->shader_type == ECS_SHADER_VERTEX) {
-				return material_pointer->ContainsShader(VertexShader::FromInterface(metadata->shader_interface));
+			ShaderMetadata* shader_metadata = (ShaderMetadata*)metadata;
+			if (shader_metadata->shader_type == ECS_SHADER_VERTEX) {
+				return material_pointer->ContainsShader(VertexShader::FromInterface(shader_metadata->shader_interface));
 			}
-			else if (metadata->shader_type == ECS_SHADER_PIXEL) {
-				return material_pointer->ContainsShader(PixelShader::FromInterface(metadata->shader_interface));
+			else if (shader_metadata->shader_type == ECS_SHADER_PIXEL) {
+				return material_pointer->ContainsShader(PixelShader::FromInterface(shader_metadata->shader_interface));
 			}
 			else {
 				return false;
@@ -1029,6 +1035,9 @@ namespace ECSEngine {
 		default:
 			ECS_ASSERT(false, "Invalid asset type");
 		}
+
+		// Shouldn't be reached here
+		return false;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1470,29 +1479,38 @@ namespace ECSEngine {
 		{
 			return ((MeshMetadata*)asset)->file;
 		}
+		break;
 		case ECS_ASSET_TEXTURE:
 		{
 			return ((TextureMetadata*)asset)->file;
 		}
+		break;
 		case ECS_ASSET_GPU_SAMPLER:
 		{
 			return {};
 		}
+		break;
 		case ECS_ASSET_SHADER:
 		{
 			return ((ShaderMetadata*)asset)->file;
 		}
+		break;
 		case ECS_ASSET_MATERIAL:
 		{
 			return {};
 		}
+		break;
 		case ECS_ASSET_MISC:
 		{
 			return ((MiscAsset*)asset)->file;
 		}
+		break;
 		default:
 			ECS_ASSERT(false, "Invalid asset type");
 		}
+
+		// Shouldn't be reached here
+		return {};
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1744,6 +1762,9 @@ namespace ECSEngine {
 		default:
 			ECS_ASSERT(false, "Invalid asset type");
 		}
+
+		// Shouldn't be reached here
+		return CompareAssetsResult(false);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1758,6 +1779,8 @@ namespace ECSEngine {
 
 #undef CASE
 
+		// Shouldn't be reached here
+		return CompareAssetsResult(false);
 	}
 
 	// ------------------------------------------------------------------------------------------------------

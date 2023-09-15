@@ -319,16 +319,36 @@ namespace ECSEngine {
 			}
 
 			ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
+			return true;
 		};
 
 		SerializeEntityManagerHeaderComponentData unique_header_data;
-		write_header_component_data(Stream<ComponentPair>(component_pairs, header->component_count), component_table, &unique_header_data);
+		bool success = write_header_component_data(Stream<ComponentPair>(component_pairs, header->component_count), component_table, &unique_header_data);
+		if (!success) {
+			return false;
+		}
 		
 		SerializeEntityManagerHeaderSharedComponentData shared_header_data;
-		write_header_component_data(Stream<SharedComponentPair>(shared_component_pairs, header->shared_component_count), shared_component_table, &shared_header_data);
+		success = write_header_component_data(Stream<SharedComponentPair>(
+			shared_component_pairs, 
+			header->shared_component_count), 
+			shared_component_table, 
+			&shared_header_data
+		);
+		if (!success) {
+			return false;
+		}
 
 		SerializeEntityManagerHeaderGlobalComponentData global_header_data;
-		write_header_component_data(Stream<GlobalComponentPair>(global_component_pairs, header->global_component_count), global_component_table, &global_header_data);
+		success = write_header_component_data(Stream<GlobalComponentPair>(
+			global_component_pairs, 
+			header->global_component_count), 
+			global_component_table, 
+			&global_header_data
+		);
+		if (!success) {
+			return false;
+		}
 
 		uintptr_t shared_component_buffering_instances_ptr = (uintptr_t)function::OffsetPointer(buffering, buffering_size);
 
@@ -420,7 +440,7 @@ namespace ECSEngine {
 			header->global_component_data_byte_size += write_count;
 		}
 
-		bool success = true;
+		success = true;
 
 		// Flush the buffering - this includes everything from the header up to the global data size
 		if (buffering_size > 0) {
@@ -953,36 +973,46 @@ namespace ECSEngine {
 					// If the component is not found, then the initialization is skipped
 				}
 			}
+			return ECS_DESERIALIZE_ENTITY_MANAGER_OK;
 		};
 
 		DeserializeEntityManagerHeaderComponentData header_unique_data;
-		initialize_cached_infos(
+		ECS_DESERIALIZE_ENTITY_MANAGER_STATUS initialize_status = initialize_cached_infos(
 			Stream<ComponentPair>(component_pairs, header.component_count),
 			cached_component_infos,
 			search_matching_component_unique,
 			&header_unique_data,
 			&header_component_data
 		);
+		if (initialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
+			return initialize_status;
+		}
 		ECS_ASSERT(header_component_data <= header_shared_component_data);	
 
 		DeserializeEntityManagerHeaderSharedComponentData header_shared_data;
-		initialize_cached_infos(
+		initialize_status = initialize_cached_infos(
 			Stream<SharedComponentPair>(shared_component_pairs, header.shared_component_count),
 			cached_shared_infos,
 			search_matching_component_shared,
 			&header_shared_data,
 			&header_shared_component_data
 		);
+		if (initialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
+			return initialize_status;
+		}
 		ECS_ASSERT(header_shared_component_data <= header_global_component_data);
 
 		DeserializeEntityManagerHeaderGlobalComponentData header_global_data;
-		initialize_cached_infos(
+		initialize_status = initialize_cached_infos(
 			Stream<GlobalComponentPair>(global_component_pairs, header.global_component_count),
 			cached_global_infos,
 			search_matching_component_global,
 			&header_global_data,
 			&header_global_component_data
 		);
+		if (initialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
+			return initialize_status;
+		}
 
 		// Now read the identifier buffer data from the named shared instances
 		unsigned int named_shared_instances_identifier_total_size = 0;

@@ -254,11 +254,8 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-	void PrepareWorld(World* world, Stream<TaskSchedulerElement> scheduler_elements)
+	void PrepareWorldConcurrency(World* world, Stream<TaskSchedulerElement> scheduler_elements)
 	{
-		world->entity_manager->ClearCache();
-		world->entity_manager->ClearFrame();
-
 		if (scheduler_elements.size > 0) {
 			world->task_scheduler->Add(scheduler_elements);
 		}
@@ -276,6 +273,16 @@ namespace ECSEngine {
 
 		// Finish the static task registration
 		world->task_manager->FinishStaticTasks();
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------
+
+	void PrepareWorld(World* world, Stream<TaskSchedulerElement> scheduler_elements)
+	{
+		world->entity_manager->ClearCache();
+		world->entity_manager->ClearFrame();
+
+		PrepareWorldConcurrency(world, scheduler_elements);
 
 		if (world->debug_drawer != nullptr) {
 			world->debug_drawer->Clear();

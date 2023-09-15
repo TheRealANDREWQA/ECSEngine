@@ -924,7 +924,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		
 		ConstantBuffer vertex_constants = graphics->CreateConstantBuffer(sizeof(Matrix), true);
 		graphics->BindVertexConstantBuffer(vertex_constants);
-		GraphicsViewport cube_viewport = { 0.0f, 0.0f, face_size.x, face_size.y, 0.0f, 1.0f };
+		GraphicsViewport cube_viewport = { 0.0f, 0.0f, (float)face_size.x, (float)face_size.y, 0.0f, 1.0f };
 		graphics->BindViewport(cube_viewport);
 		graphics->DisableDepth();
 		graphics->DisableCulling();
