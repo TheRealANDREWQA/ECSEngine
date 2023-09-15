@@ -326,15 +326,15 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE Vec4fb AsMaskLow() const {
-			return value.get_low();
+			return value.get_low().operator __m128();
 		}
 
 		ECS_INLINE Vec4fb AsMaskHigh() const {
-			return value.get_high();
+			return value.get_high().operator __m128();
 		}
 
 		ECS_INLINE Vec8fb AsMask() const {
-			return value;
+			return Vec8fb(value.operator __m256());
 		}
 
 		template<int element_count>

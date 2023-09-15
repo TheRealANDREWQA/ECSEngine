@@ -5211,6 +5211,8 @@ namespace ECSEngine {
 
 	ECS_GRAPHICS_RESOURCES(EXPORT_TRANSFER_GPU);
 
+#undef EXPORT_TRANSFER_GPU
+
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	template<typename View>

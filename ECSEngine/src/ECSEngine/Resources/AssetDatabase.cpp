@@ -1235,8 +1235,8 @@ namespace ECSEngine {
 						return true;
 					}
 				}
-				return false;
 			}
+			return false;
 		});
 	}
 

@@ -11621,7 +11621,7 @@ namespace ECSEngine {
 			Texture2D old_texture(data->texture->GetResource());
 
 			data->system->m_resources.texture_spinlock.lock();
-			Texture2D new_texture = ResizeTextureWithStaging(data->system->m_graphics, old_texture, 256, 256, { true }, ECS_RESIZE_TEXTURE_FILTER_BOX);
+			Texture2D new_texture = ResizeTextureWithStaging(data->system->m_graphics, old_texture, 256, 256, ECS_RESIZE_TEXTURE_FILTER_BOX, true);
 			data->system->m_resources.texture_spinlock.unlock();
 			if (new_texture.tex != nullptr) {
 				uint2 texture_dimensions = GetTextureDimensions(old_texture);

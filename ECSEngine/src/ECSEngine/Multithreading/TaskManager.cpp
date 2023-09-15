@@ -669,8 +669,9 @@ namespace ECSEngine {
 		else {
 			if (GetThreadQueue(thread_id)->GetSize() == 0) {
 				// If the static index is out of bounds assume that the thread is spinning
-				return GetThreadTaskIndex() < m_tasks.size;
+				return GetThreadTaskIndex() >= m_tasks.size;
 			}
+			return false;
 		}
 	}
 

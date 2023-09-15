@@ -92,13 +92,11 @@ namespace ECSEngine {
 		}
 		elements.FreeBuffer();
 
-		if (task_barriers.size > 0) {
-			Deallocate(elements.allocator, task_barriers.buffer);
-		}
+		task_barriers.Deallocate(elements.allocator);
+		task_barriers.size = 0;
 
-		if (query_infos.size > 0) {
-			Deallocate(elements.allocator, query_infos.buffer);
-		}
+		query_infos.Deallocate(elements.allocator);
+		query_infos.size = 0;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

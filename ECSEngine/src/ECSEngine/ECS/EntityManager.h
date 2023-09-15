@@ -1323,6 +1323,9 @@ namespace ECSEngine {
 		// Returns the index of the shared component with the maximum index
 		Component GetMaxSharedComponent() const;
 
+		// Returns the number of entities that have this shared instance in use
+		unsigned int GetNumberOfEntitiesForSharedInstance(Component component, SharedInstance instance) const;
+
 		// Tag should only be the bit index, not the actual value
 		bool HasEntityTag(Entity entity, unsigned char tag) const;
 

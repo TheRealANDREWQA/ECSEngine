@@ -763,6 +763,9 @@ namespace ECSEngine {
 			}
 			break;
 			}
+
+			// Shouldn't reach here
+			return false;
 		});
 	}
 
@@ -1509,7 +1512,8 @@ namespace ECSEngine {
 		const EntityManager* entity_manager, 
 		const Reflection::ReflectionManager* reflection_manager, 
 		const AssetDatabase* asset_database, 
-		Stream<unsigned int>* asset_fields_reference_count
+		Stream<unsigned int>* asset_fields_reference_count,
+		GetAssetReferenceCountsFromEntitiesOptions options
 	)
 	{
 		// Make sure that there are enough slots for each asset type
@@ -1522,7 +1526,12 @@ namespace ECSEngine {
 
 		GetHierarchyComponentTypes(reflection_manager, -1, &unique_types, &shared_types);
 
-		auto increment_reference_counts = [&](Stream<LinkComponentAssetField> asset_fields, const Reflection::ReflectionType* reflection_type, const void* data) {
+		auto increment_reference_counts = [&](
+			Stream<LinkComponentAssetField> asset_fields, 
+			const Reflection::ReflectionType* reflection_type, 
+			const void* data, 
+			unsigned int increment_count
+		) {
 			ECS_STACK_CAPACITY_STREAM(unsigned int, handles, 512);
 			GetLinkComponentTargetHandles(reflection_type, asset_database, data, asset_fields, handles.buffer);
 
@@ -1530,7 +1539,7 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < asset_fields.size; index++) {
 				if (handles[index] != -1) {
 					unsigned int asset_index = asset_database->GetIndexFromAssetHandle(handles[index], asset_fields[index].type.type);
-					asset_fields_reference_count[asset_fields[index].type.type][asset_index]++;
+					asset_fields_reference_count[asset_fields[index].type.type][asset_index] += increment_count;
 				}
 			}
 		};
@@ -1562,7 +1571,7 @@ namespace ECSEngine {
 			if (asset_fields.size > 0) {
 				// If it has asset fields, then retrieve them and keep the count of reference counts
 				entity_manager->ForEachEntityComponent(component, [&](Entity entity, const void* data) {
-					increment_reference_counts(asset_fields, reflection_type, data);
+					increment_reference_counts(asset_fields, reflection_type, data, 1);
 				});
 			}
 		});
@@ -1580,10 +1589,31 @@ namespace ECSEngine {
 				// Now go for each shared instance
 				entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
 					const void* data = entity_manager->GetSharedData(component, instance);
-					increment_reference_counts(asset_fields, reflection_type, data);
+					unsigned int increase_count = 1;
+					if (!options.shared_instance_only_once) {
+						increase_count = entity_manager->GetNumberOfEntitiesForSharedInstance(component, instance);
+					}
+					// If the options is activated, count the number of entities that reference this instance
+					increment_reference_counts(asset_fields, reflection_type, data, increase_count);
 				});
 			}
 		});
+
+		if (options.add_reference_counts_to_dependencies) {
+			// After we retrieved the reference counts for all assets from the scene, we need to increase reference counts
+			// for assets that are being referenced by other assets
+			function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
+				ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, asset_dependencies, 512);
+				for (size_t index = 0; index < asset_fields_reference_count[asset_type].size; index++) {
+					asset_dependencies.size = 0;
+					asset_database->GetDependencies(asset_database->GetAssetHandleFromIndex(index, asset_type), asset_type, &asset_dependencies);
+					for (unsigned int subindex = 0; subindex < asset_dependencies.size; subindex++) {
+						unsigned int asset_index = asset_database->GetIndexFromAssetHandle(asset_dependencies[subindex].handle, asset_dependencies[subindex].type);
+						asset_fields_reference_count[asset_dependencies[subindex].type][asset_index]++;
+					}
+				}
+			});
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

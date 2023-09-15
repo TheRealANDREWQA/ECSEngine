@@ -52,6 +52,44 @@ static ECS_INLINE bool IsSandboxRuntimePreinitialized(const EditorState* editor_
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+template<bool early_exit = false, typename Functor>
+static bool ForEachSandbox(const EditorState* editor_state, Functor&& functor) {
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		if constexpr (early_exit) {
+			if (functor(sandbox, index)) {
+				return true;
+			}
+		}
+		else {
+			functor(sandbox, index);
+		}
+	}
+	return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+template<bool early_exit = false, typename Functor>
+static bool ForEachSandbox(EditorState* editor_state, Functor&& functor) {
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		if constexpr (early_exit) {
+			if (functor(sandbox, index)) {
+				return true;
+			}
+		}
+		else {
+			functor(sandbox, index);
+		}
+	}
+	return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 // Stores all the current state of the modules being used such that changes to them can be detected dynamically
 static void RegisterSandboxModuleSnapshots(EditorState* editor_state, unsigned int sandbox_index) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -210,8 +248,14 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 		
 		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index);
 		if (success) {
+			// We also need to prepare the world concurrency
+			PrepareWorldConcurrency(&sandbox->sandbox_world);
+			
 			// Bind again the module settings
 			BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
+
+			// We also need to bind the scene info
+			BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 		}
 		else {
 			return SOLVE_SANDBOX_MODULE_SNAPSHOT_FAILURE;
@@ -219,6 +263,40 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 	}
 	// Nothing was changed
 	return SOLVE_SANDBOX_MODULE_SNAPSHOT_OK;
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+bool AreAllDefaultSandboxesRunning(const EditorState* editor_state) {
+	return !ForEachSandbox<true>(editor_state, [](const EditorSandbox* sandbox, unsigned int index) {
+		if (sandbox->should_play && sandbox->run_state != EDITOR_SANDBOX_RUNNING) {
+			return true;
+		}
+		return false;
+	});
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+bool AreAllDefaultSandboxesPaused(const EditorState* editor_state) {
+	return !ForEachSandbox<true>(editor_state, [](const EditorSandbox* sandbox, unsigned int index) {
+		if (sandbox->should_pause && sandbox->run_state != EDITOR_SANDBOX_PAUSED) {
+			return true;
+		}
+		return false;
+	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool AreAllDefaultSandboxesNotStarted(const EditorState* editor_state)
+{
+	return !ForEachSandbox<true>(editor_state, [](const EditorSandbox* sandbox, unsigned int index) {
+		if (sandbox->should_play && sandbox->run_state != EDITOR_SANDBOX_SCENE) {
+			return true;
+		}
+		return false;
+	});
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -539,7 +617,9 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 		asset_handles[index].Initialize(GetAllocatorPolymorphic(&stack_allocator), asset_count);
 		memset(asset_handles[index].buffer, 0, asset_handles[index].MemoryOf(asset_handles[index].size));
 	}
-	GetAssetReferenceCountsFromEntities(&sandbox->scene_entities, editor_state->editor_components.internal_manager, database, asset_handles.buffer);
+	GetAssetReferenceCountsFromEntitiesOptions get_counts_options;
+	get_counts_options.add_reference_counts_to_dependencies = true;
+	GetAssetReferenceCountsFromEntities(&sandbox->scene_entities, editor_state->editor_components.internal_manager, database, asset_handles.buffer, get_counts_options);
 
 	// We need now to decrement the reference counts for this sandbox
 	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
@@ -566,19 +646,10 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	// Clear the waiting compilation flag
 	sandbox->flags = function::ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 
-	const UISystem* ui_system = editor_state->ui_system;
-	// We need to reinstate the viewport rendering
-	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
-	if (scene_window_index != -1) {
-		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-		// Re render the scene since it was changed
+	if (EnableSceneUIRendering(editor_state, sandbox_index)) {
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	}
-
-	unsigned int game_window_index = GetGameUIWindowIndex(editor_state, sandbox_index);
-	if (game_window_index != -1) {
-		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
-		// Re render the scene since it was changed
+	if (EnableGameUIRendering(editor_state, sandbox_index)) {
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 }
@@ -587,14 +658,12 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 
 void EndSandboxWorldSimulations(EditorState* editor_state)
 {
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	for (unsigned int index = 0; index < sandbox_count; index++) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+	ForEachSandbox(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
 		bool paused_or_running = sandbox->run_state == EDITOR_SANDBOX_RUNNING || sandbox->run_state == EDITOR_SANDBOX_PAUSED;
 		if (sandbox->should_play && paused_or_running) {
-			EndSandboxWorldSimulation(editor_state, index);
+			EndSandboxWorldSimulation(editor_state, sandbox_index);
 		}
-	}
+	});
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -604,7 +673,7 @@ unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, uns
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	return sandbox->selected_entities.Find(entity, [](Entity entity) {
 		return entity;
-		});
+	});
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -818,6 +887,42 @@ bool IsSandboxGizmoEntity(const EditorState* editor_state, unsigned int sandbox_
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool IsAnyDefaultSandboxRunning(const EditorState* editor_state)
+{
+	return ForEachSandbox<true>(editor_state, [](const EditorSandbox* sandbox, unsigned int sandbox_index) {
+		if (sandbox->should_play && sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+			return true;
+		}
+		return false;
+	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsAnyDefaultSandboxPaused(const EditorState* editor_state)
+{
+	return ForEachSandbox<true>(editor_state, [](const EditorSandbox* sandbox, unsigned int sandbox_index) {
+		if (sandbox->should_pause && sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
+			return true;
+		}
+		return false;
+	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsAnyDefaultSandboxNotStarted(const EditorState* editor_state)
+{
+	return ForEachSandbox<true>(editor_state, [](const EditorSandbox* sandbox, unsigned int sandbox_index) {
+		if (sandbox->should_play && sandbox->run_state == EDITOR_SANDBOX_SCENE) {
+			return true;
+		}
+		return false;
+	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool LoadSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -952,14 +1057,12 @@ void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_
 
 void PauseSandboxWorlds(EditorState* editor_state)
 {
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	for (unsigned int index = 0; index < sandbox_count; index++) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+	ForEachSandbox(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
 		if (sandbox->should_pause && sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
 			// We don't need to wait for the pause
-			PauseSandboxWorld(editor_state, index, false);
+			PauseSandboxWorld(editor_state, sandbox_index, false);
 		}
-	}
+	});
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1427,13 +1530,18 @@ void ResetSandboxUnusedEntities(EditorState* editor_state, unsigned int sandbox_
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index)
+bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool is_step)
 {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 256, ECS_MB * 8);
 	ECS_STACK_CAPACITY_STREAM(char, snapshot_message, ECS_KB * 64);
 
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_RUNNING);
+	if (is_step) {
+		ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED);
+	}
+	else {
+		ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_RUNNING);
+	}
 
 	// Clear the sandbox waiting compilation flag - it will be reset if it is still valid
 	sandbox->flags = function::ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
@@ -1499,16 +1607,14 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool RunSandboxWorlds(EditorState* editor_state)
+bool RunSandboxWorlds(EditorState* editor_state, bool is_step)
 {
 	bool success = true;
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	for (unsigned int index = 0; index < sandbox_count; index++) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+	ForEachSandbox(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
 		if (sandbox->should_step && sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
-			success &= RunSandboxWorld(editor_state, index);
+			success &= RunSandboxWorld(editor_state, sandbox_index, is_step);
 		}
-	}
+	});
 	return success;
 }
 
@@ -1678,7 +1784,13 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_SCENE);
 
-	bool success = true;
+	// Check to see if the modules referenced by the sandbox are loaded
+	bool success = AreSandboxModulesLoaded(editor_state, sandbox_index, true);
+	if (!success) {
+		// Launch the build command for those modules that are not yet updated
+		success = CompileSandboxModules(editor_state, sandbox_index);
+	}
+
 	// If we are in the scene state, we need to construct the scheduling order and prepare the world
 	if (sandbox->run_state == EDITOR_SANDBOX_SCENE) {
 		success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, disable_error_messages);
@@ -1698,24 +1810,16 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 	}
 	// Else if we are in the paused state we just need to change the state
 	if (success) {
-		// Check to see if the modules referenced by the sandbox are loaded
-		bool success = AreSandboxModulesLoaded(editor_state, sandbox_index, true);
-		if (!success) {
-			// Launch the build command for those modules that are not yet updated
-			success = CompileSandboxModules(editor_state, sandbox_index);
-		}
+		// Disable the rendering of the scene and game windows - we will draw them every frame
+		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		sandbox->run_state = EDITOR_SANDBOX_RUNNING;
 
-		if (success) {
-			// Disable the rendering of the scene and game windows - we will draw them every frame
-			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
-			sandbox->run_state = EDITOR_SANDBOX_RUNNING;
-
-			// We need to record the snapshot of the current sandbox state
-			// We also need to bind the module runtime settings
-			RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
-			BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
-		}
+		// We need to record the snapshot of the current sandbox state
+		// We also need to bind the module runtime settings
+		RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
+		BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
+		BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 	return success;
 }
@@ -1725,20 +1829,18 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 bool StartSandboxWorlds(EditorState* editor_state, bool paused_only)
 {
 	bool success = true;
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	for (unsigned int index = 0; index < sandbox_count; index++) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+	ForEachSandbox(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
 		if (paused_only) {
 			if (sandbox->should_pause && sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
-				success &= StartSandboxWorld(editor_state, index);
+				success &= StartSandboxWorld(editor_state, sandbox_index);
 			}
 		}
 		else {
 			if (sandbox->should_play && (sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_SCENE)) {
-				success &= StartSandboxWorld(editor_state, index);
+				success &= StartSandboxWorld(editor_state, sandbox_index);
 			}
 		}
-	}
+	});
 	return success;
 }
 
@@ -1797,44 +1899,49 @@ void TickSandboxesRuntimeSettings(EditorState* editor_state) {
 }
 
 void TickSandboxesSelectedEntities(EditorState* editor_state) {
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	for (unsigned int index = 0; index < sandbox_count; index++) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+	ForEachSandbox(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
 		if (sandbox->selected_entities_changed_counter > 0) {
-			RenderSandbox(editor_state, index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
+			RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
 		}
 		sandbox->selected_entities_changed_counter = function::SaturateSub(sandbox->selected_entities_changed_counter, (unsigned char)1);
-	}
+	});
 }
 
 void TickSandboxesClearUnusedSlots(EditorState* editor_state) {
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	for (unsigned int index = 0; index < sandbox_count; index++) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+	ForEachSandbox(editor_state, [](EditorSandbox* sandbox, unsigned int sandbox_index) {
 		for (size_t viewport = 0; viewport < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport++) {
 			sandbox->unused_entities_slots_recompute[viewport] = function::SaturateSub<unsigned char>(sandbox->unused_entities_slots_recompute[viewport], 1);
 		}
-	}
+	});
 }
 
 void TickSandboxes(EditorState* editor_state)
 {
 	TickSandboxesRuntimeSettings(editor_state);
 	TickSandboxesSelectedEntities(editor_state);
+	TickSandboxesClearUnusedSlots(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void UISetInstantFramePacing(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+	system->RemoveFrameHandler(UISetInstantFramePacing, nullptr);
+}
+
 void TickSandboxRuntimes(EditorState* editor_state)
 {
-	const UISystem* ui_system = editor_state->ui_system;
+	// Add a system frame handler to the UI that will set the frame pacing to INSTANT no matter what
+	bool added_instant_frame_handle = false;
+
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) && !EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		for (unsigned int index = 0; index < sandbox_count; index++) {
-			EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		ForEachSandbox<true>(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
 			// Check to see if the current sandbox is being run
 			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-				bool simulation_success = RunSandboxWorld(editor_state, index);
+				bool simulation_success = RunSandboxWorld(editor_state, sandbox_index);
 
 				// If there was an error with the snapshot, then pause all other sandboxes
 				if (!simulation_success) {
@@ -1845,8 +1952,86 @@ void TickSandboxRuntimes(EditorState* editor_state)
 						}
 					}
 					// We can exit the loop now
-					break;
+					return true;
 				}
+				else {
+					if (!added_instant_frame_handle) {
+						added_instant_frame_handle = true;
+						editor_state->ui_system->PushFrameHandler({ UISetInstantFramePacing, nullptr, 0 });
+					}
+				}
+			}
+			return false;
+		});
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void TickSandboxUpdateMasterButtons(EditorState* editor_state)
+{
+	return;
+	// Each frame check to see if we need to update the state of the master buttons
+	bool are_all_default_running = AreAllDefaultSandboxesRunning(editor_state);
+	bool are_all_default_paused = AreAllDefaultSandboxesPaused(editor_state);
+	bool are_all_default_not_started = AreAllDefaultSandboxesNotStarted(editor_state);
+
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
+		if (!are_all_default_running) {
+			EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+
+			if (!are_all_default_paused) {
+				// If any of them is terminated, terminate all of them - if the are not already
+				if (!are_all_default_not_started) {
+					EndSandboxWorldSimulations(editor_state);
+				}
+				else {
+					// We need to pause all of them
+					PauseSandboxWorlds(editor_state);
+					if (!EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
+						EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+					}
+				}
+			}
+		}
+	}
+	else {
+		bool is_any_running = IsAnyDefaultSandboxRunning(editor_state);
+		if (is_any_running) {
+			EndSandboxWorldSimulations(editor_state);
+		}
+	}
+
+	// These need to be refreshed since some action before might have changed the values
+	are_all_default_running = AreAllDefaultSandboxesRunning(editor_state);
+	are_all_default_paused = AreAllDefaultSandboxesPaused(editor_state);
+	are_all_default_not_started = AreAllDefaultSandboxesNotStarted(editor_state);
+
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
+		if (!are_all_default_paused) {
+			EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+
+			if (!are_all_default_running) {
+				// If any of them is terminated, terminate all of them - if they are not already
+				if (!are_all_default_not_started) {
+					EndSandboxWorldSimulations(editor_state);
+				}
+				else {
+					// Try to run those sandboxes
+					RunSandboxWorlds(editor_state);
+					if (!EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
+						EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+					}
+				}
+			}
+		}
+	}
+	else {
+		bool is_any_paused = IsAnyDefaultSandboxPaused(editor_state);
+		if (is_any_paused) {
+			RunSandboxWorlds(editor_state);
+			if (!EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
+				EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
 			}
 		}
 	}

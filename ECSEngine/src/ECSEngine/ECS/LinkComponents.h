@@ -406,6 +406,15 @@ namespace ECSEngine {
 
 	struct EntityManager;
 
+	struct GetAssetReferenceCountsFromEntitiesOptions {
+		// If add_reference_counts_from_dependencies is set to true, then assets which have dependencies will increase
+		// The reference count for the asset in the streams given
+		bool add_reference_counts_to_dependencies = false;
+		// If this is set to true, then shared assets will have a reference count of one instead of the per entity
+		// That references it
+		bool shared_instance_only_once = false;
+	};
+
 	// Determines the reference counts of the assets from the data stored in the entity manager's components
 	// using the reflection types from the reflection manager. It does not convert the target data into link components
 	// using DLL functions or the implicit conversion (TODO: Determine if there is a use case for this)
@@ -425,7 +434,8 @@ namespace ECSEngine {
 		const EntityManager* entity_manager,
 		const Reflection::ReflectionManager* reflection_manager,
 		const AssetDatabase* asset_database,
-		Stream<unsigned int>* asset_fields_reference_count
+		Stream<unsigned int>* asset_fields_reference_count,
+		GetAssetReferenceCountsFromEntitiesOptions options = {}
 	);
 
 	// ------------------------------------------------------------------------------------------------------------

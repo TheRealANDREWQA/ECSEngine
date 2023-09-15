@@ -3323,7 +3323,7 @@ namespace ECSEngine {
 		drawer->AddPoint({ 0.0f, 0.0f, -10.0f }, Color(255, 255, 255), debug_options);
 		drawer->AddTriangle({ 2.0f, 0.0f, 0.0f }, { 5.0f, 0.0f, 0.0f }, { 0.0f, 5.0f, 0.0f }, Color(10, 50, 200), debug_options);
 
-		drawer->AddString({ 0.0f, 10.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 1.0f, "Hey there fellas!\nNice to see this working!\n\PogU", Color(255, 255, 255), debug_options);
+		drawer->AddString({ 0.0f, 10.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 1.0f, "Hey there fellas!\nNice to see this working!\nPogU", Color(255, 255, 255), debug_options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

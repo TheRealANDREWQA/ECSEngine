@@ -227,7 +227,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<bool unaligned = false>
+		template<bool unaligned>
 		void avx2_copy_32multiple(void* destination, const void* source, size_t bytes) {
 			// destination, source -> alignment 32 bytes 
 			// bytes -> multiple 32
@@ -252,7 +252,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<bool unaligned = false>
+		template<bool unaligned>
 		void avx2_copy_128multiple(void* destination, const void* source, size_t bytes) {
 			// destination, source -> alignment 128 bytes
 			// bytes -> multiple of 128

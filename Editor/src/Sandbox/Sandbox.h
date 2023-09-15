@@ -9,6 +9,21 @@ struct EditorState;
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns true if all of the sandboxes that want to be run by the master button are running, else false
+bool AreAllDefaultSandboxesRunning(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if all of the sandboxes that want to be run by the master button are paused, else false
+bool AreAllDefaultSandboxesPaused(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if all of the sandboxes that want to be run by the master button are in the scene state (not running or paused), else false
+bool AreAllDefaultSandboxesNotStarted(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------
@@ -180,6 +195,21 @@ bool IsSandboxGizmoEntity(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns true if any of the sandboxes that want to be run on the global run button is currently running
+bool IsAnyDefaultSandboxRunning(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if any of the sandboxes that want to be run on the global run button is currently paused
+bool IsAnyDefaultSandboxPaused(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if any of the sandboxes that want to be run on the global run button is currently not even started
+bool IsAnyDefaultSandboxNotStarted(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Returns the world descriptor from the settings assigned.
 // Returns true if the deserialization succeded, if it fails it prints
 // an error message
@@ -300,13 +330,13 @@ void ResetSandboxUnusedEntities(
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns true if the simulation was successful, else false. It prints the according error messages inside
-bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index);
+bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool is_step = false);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns true if all sandboxes that want to be stepped using the general button managed to perform their step
 // Else it returns false
-bool RunSandboxWorlds(EditorState* editor_state);
+bool RunSandboxWorlds(EditorState* editor_state, bool is_step = false);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -430,5 +460,9 @@ void TickSandboxes(EditorState* editor_state);
 
 // Runs all the worlds of active sandboxes
 void TickSandboxRuntimes(EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void TickSandboxUpdateMasterButtons(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------

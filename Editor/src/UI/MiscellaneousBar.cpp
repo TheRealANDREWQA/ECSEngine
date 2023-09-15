@@ -36,15 +36,13 @@ void PauseProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
-	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
-		EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
+		EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+		StartSandboxWorlds(editor_state, true);
+	}
+	else {
 		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
 		PauseSandboxWorlds(editor_state);
-	}
-	else if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
-		EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PAUSED);
-		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
-		StartSandboxWorlds(editor_state, true);
 	}
 }
 
@@ -55,7 +53,7 @@ void StepProjectAction(ActionData* action_data) {
 
 	EditorState* editor_state = (EditorState*)_data;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
-		RunSandboxWorlds(editor_state);
+		RunSandboxWorlds(editor_state, true);
 	}
 }
 

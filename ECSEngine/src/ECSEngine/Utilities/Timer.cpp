@@ -14,6 +14,9 @@ namespace ECSEngine {
 		case ECS_TIMER_DURATION_S:
 			return ECS_GB_10;
 		}
+
+		// Shouldn't be reached
+		return 0;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

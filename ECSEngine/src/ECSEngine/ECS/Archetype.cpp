@@ -263,7 +263,7 @@ namespace ECSEngine {
 	{
 		for (size_t index = 0; index < signature.count; index++) {
 			unsigned char component_index = FindUniqueComponentIndex(signature.indices[index]);
-			signature.indices[index].value = component_index == (unsigned char)-1 ? (unsigned short)-1 : component_index;
+			signature.indices[index].value = component_index == UCHAR_MAX ? -1 : component_index;
 		}
 	}
 
@@ -380,9 +380,19 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	SharedInstance Archetype::GetBaseInstance(unsigned char shared_component_index, unsigned int base_index) const
+	{
+		ECS_CRASH_RETURN_VALUE(shared_component_index < m_shared_components.count, { -1 }, "Invalid shared component index {#} when trying "
+			"to access shared instance for base archetype {#}.", shared_component_index, base_index);
+		return GetBaseInstanceUnsafe(shared_component_index, base_index);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	ArchetypeBase* Archetype::GetBase(unsigned int index)
 	{
-		ECS_CRASH_RETURN_VALUE(index < m_base_archetypes.size, nullptr, "Incorrect base index {#} when trying to retrieve archetype base pointer from archetype.", index);
+		ECS_CRASH_RETURN_VALUE(index < m_base_archetypes.size, nullptr, "Incorrect base index {#} when trying to retrieve archetype base "
+			"pointer from archetype.", index);
 		return &m_base_archetypes[index].archetype;
 	}
 
