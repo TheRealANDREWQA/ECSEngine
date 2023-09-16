@@ -287,7 +287,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		void* Resize(AllocatorPolymorphic allocator, size_t new_size, bool copy_old_elements = true, bool deallocate_old = false, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			void* old_buffer = buffer;
 
-			void* allocation = Allocate(allocator, MemoryOf(new_size), alignof(T), debug_info);
+			void* allocation = nullptr;
+			if (new_size > 0) {
+				allocation = Allocate(allocator, MemoryOf(new_size), alignof(T), debug_info);
+			}
 			if (copy_old_elements) {
 				size_t copy_size = new_size > size ? size : new_size;
 				memcpy(allocation, buffer, sizeof(T) * copy_size);
@@ -298,7 +301,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 
 			InitializeFromBuffer(allocation, new_size);
-
 			return old_buffer;
 		}
 
@@ -1878,6 +1880,17 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
+		ECS_INLINE unsigned int Size() const {
+			// Both of them have the same layout, we can return the size directly
+			return capacity_stream.size;
+		}
+		
+		// This sets the size directly, it does not perform a resize for the resizable stream
+		ECS_INLINE void SetSize(unsigned int value) {
+			// We can alias the 2 streams since they have the same layout
+			capacity_stream.size = value;
+		}
+
 		ECS_INLINE bool IsCapacity() const {
 			return is_capacity;
 		}
@@ -1893,6 +1906,16 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		ECS_INLINE bool IsInitialized() const {
 			return is_capacity ? capacity_stream.capacity > 0 : resizable_stream.allocator.allocator != nullptr;
+		}
+		
+		ECS_INLINE T& operator[](unsigned int index) {
+			// Both have the same layout, we can index into the buffer
+			return capacity_stream.buffer[index];
+		}
+
+		ECS_INLINE const T& operator[](unsigned int index) const {
+			// Both have the same layout, we can index into the buffer
+			return capacity_stream.buffer[index];
 		}
 
 		bool is_capacity;

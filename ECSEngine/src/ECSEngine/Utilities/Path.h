@@ -182,6 +182,26 @@ namespace ECSEngine {
 		ECSENGINE_API ASCIIPath MountPathOnlyRel(ASCIIPath base, ASCIIPath mount_point, AllocatorPolymorphic allocator);
 
 		// -------------------------------------------------------------------------------------------------
+		
+		// Returns the filename immediately after the base path in the path
+		// For example, path is C:\a\b\c\d\e and base_path is C:\a\b\c
+		// It will return d
+		ECSENGINE_API Path PathFilenameAfter(Path path, Path base_path);
+
+		// Returns the filename immediately after the base path in the path
+		// For example, path is C:\a\b\c\d\e and base_path is C:\a\b\c
+		// It will return d
+		ECSENGINE_API ASCIIPath PathFilenameAfter(ASCIIPath path, ASCIIPath base_path);
+
+		// -------------------------------------------------------------------------------------------------
+
+		// Ensures that all parents up to that path are valid. It needs a hint as valid parent
+		// To make it easier to detect when to stop
+		// Works for both relative and absolute paths.
+		// Returns true if it succeeded, else false
+		ECSENGINE_API bool PathEnsureParents(Path path, Path valid_parent);
+
+		// -------------------------------------------------------------------------------------------------
 
 	}
 

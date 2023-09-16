@@ -973,7 +973,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		for (size_t index = 0; index < signature.count; index++) {
 			// Verify that the instance exists because it might have been destroyed in the meantime
 			instance_name.size = 0;
-			Stream<char> current_component_name = editor_state->editor_components.TypeFromID(signature[index].value, shared);
+			Stream<char> current_component_name = editor_state->editor_components.ComponentFromID(signature[index].value, shared);
 			ECS_ASSERT(current_component_name.size > 0);
 			Stream<char> original_component_name = current_component_name;
 

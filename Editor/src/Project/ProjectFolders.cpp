@@ -87,7 +87,7 @@ void GetProjectModulesFilePath(const EditorState* editor_state, ECSEngine::Capac
 
 // -------------------------------------------------------------------------------------------------------------------
 
-void GetProjectMetafilesFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path)
+void GetProjectMetadataFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path)
 {
 	GetProjectOrganizationFolder(editor_state, path, PROJECT_METADATA_RELATIVE_PATH);
 }

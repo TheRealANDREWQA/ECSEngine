@@ -485,7 +485,7 @@ bool OpenProjectFile(ProjectOperationData data, bool info_only) {
 		file_data = &temp_project_file;
 	}
 
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_allocator, ECS_KB * 16, ECS_MB);
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_allocator, ECS_KB * 32, ECS_MB);
 	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&_allocator);
 
 	bool success = true;

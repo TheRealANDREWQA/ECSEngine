@@ -101,7 +101,6 @@ bool LoadEditorSceneCore(
 	LoadSceneData load_data;
 	bool initialize_data = GetLoadSceneDataBase(&load_data, editor_state, entity_manager, database, filename, stack_allocator);
 	if (!initialize_data) {
-		_stack_allocator.ClearBackup();
 		return false;
 	}
 
@@ -125,7 +124,6 @@ bool LoadEditorSceneCore(
 		ReloadAssetMetadataFromFilesParameters(editor_state->RuntimeResourceManager(), database, &reload_options);
 	}
 
-	_stack_allocator.ClearBackup();
 	return success;
 }
 
@@ -197,7 +195,6 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 		editor_state->ecs_link_components
 	);
 	if (!link_success) {
-		_stack_allocator.ClearBackup();
 		return false;
 	}
 
@@ -207,9 +204,7 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 
 	entity_manager->DestroyArchetypesBaseEmptyCommit(true);
 
-	bool success = SaveScene(&save_data);
-	_stack_allocator.ClearBackup();
-	return success;
+	return SaveScene(&save_data);
 }
 
 // ----------------------------------------------------------------------------------------------

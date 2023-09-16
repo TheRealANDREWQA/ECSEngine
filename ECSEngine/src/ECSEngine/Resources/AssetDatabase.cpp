@@ -1978,7 +1978,6 @@ namespace ECSEngine {
 			CopyAssetBase(metadata, temporary_asset, type, Allocator());
 		}
 
-		stack_allocator.ClearBackup();
 		return success;
 	}
 
@@ -2029,7 +2028,6 @@ namespace ECSEngine {
 			});	
 		});
 
-		stack_allocator.ClearBackup();
 		return success;
 	}
 

@@ -76,8 +76,6 @@ EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 
 		// Update the link components
 		UpdateAssetsToComponents(editor_state, update_assets);
-
-		stack_allocator.ClearBackup();
 		return false;
 	}
 	else {
@@ -231,9 +229,6 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 
 		// Update the link components
 		UpdateAssetsToComponents(editor_state, update_assets);
-
-		update_assets_allocator.ClearBackup();
-		_file_asset_allocator.ClearBackup();
 		return false;
 	}
 	else {
@@ -557,17 +552,18 @@ void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandb
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-LinkComponentWithAssetFields GetLinkComponentWithAssetFieldForComponent(
+static LinkComponentWithAssetFields GetLinkComponentWithAssetFieldForComponent(
 	const EditorState* editor_state,
 	Component component,
 	bool shared,
+	bool global,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
 	bool deep_search
 ) {
 	LinkComponentWithAssetFields info_type;
 
-	Stream<char> target_type_name = editor_state->editor_components.TypeFromID(component.value, shared);
+	Stream<char> target_type_name = editor_state->editor_components.ComponentFromID(component.value, shared, global);
 	ECS_ASSERT(target_type_name.size > 0);
 
 	ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 64);
@@ -606,6 +602,22 @@ LinkComponentWithAssetFields GetLinkComponentWithAssetFieldForComponent(
 	return info_type;
 }
 
+static void GetLinkComponentWithAssetFieldsImpl(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	LinkComponentWithAssetFields* link_with_fields,
+	AllocatorPolymorphic allocator,
+	Stream<ECS_ASSET_TYPE> asset_types,
+	bool deep_search,
+	bool shared,
+	bool global
+) {
+	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	entity_manager->ForEachComponent([&](Component component) {
+		link_with_fields[component.value] = GetLinkComponentWithAssetFieldForComponent(editor_state, component, shared, global, allocator, asset_types, deep_search);
+	});
+}
+
 void GetLinkComponentsWithAssetFieldsUnique(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -615,10 +627,7 @@ void GetLinkComponentsWithAssetFieldsUnique(
 	bool deep_search
 )
 {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-	entity_manager->ForEachComponent([&](Component component) {
-		link_with_fields[component.value] = GetLinkComponentWithAssetFieldForComponent(editor_state, component, false, allocator, asset_types, deep_search);
-	});
+	GetLinkComponentWithAssetFieldsImpl(editor_state, sandbox_index, link_with_fields, allocator, asset_types, deep_search, false, false);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -632,10 +641,21 @@ void GetLinkComponentWithAssetFieldsShared(
 	bool deep_search
 )
 {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-	entity_manager->ForEachSharedComponent([&](Component component) {
-		link_with_fields[component.value] = GetLinkComponentWithAssetFieldForComponent(editor_state, component, true, allocator, asset_types, deep_search);
-	});
+	GetLinkComponentWithAssetFieldsImpl(editor_state, sandbox_index, link_with_fields, allocator, asset_types, deep_search, true, false);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetLinkComponentWithAssetFieldsGlobal(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	LinkComponentWithAssetFields* link_with_fields, 
+	AllocatorPolymorphic allocator, 
+	Stream<ECS_ASSET_TYPE> asset_types, 
+	bool deep_search
+)
+{
+	GetLinkComponentWithAssetFieldsImpl(editor_state, sandbox_index, link_with_fields, allocator, asset_types, deep_search, false, true);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -688,8 +708,11 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 		const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 		unsigned int unique_component_count = entity_manager->GetMaxComponent().value + 1;
 		unsigned int shared_component_count = entity_manager->GetMaxSharedComponent().value + 1;
+		unsigned int global_component_count = entity_manager->GetGlobalComponentCount() + 1;
 
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(LinkComponentWithAssetFields, link_with_fields, std::max(unique_component_count, shared_component_count));
+		unsigned int max_component_count = std::max(std::max(unique_component_count, shared_component_count), global_component_count);
+
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(LinkComponentWithAssetFields, link_with_fields, max_component_count);
 		GetLinkComponentsWithAssetFieldsUnique(editor_state, sandbox_index, link_with_fields.buffer, allocator, { &type, 1 });
 
 		unsigned char components_to_visit[ECS_ARCHETYPE_MAX_COMPONENTS];
@@ -703,14 +726,14 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 				for (unsigned char index = 0; index < signature.count; index++) {
 					if (link_with_fields[signature[index]].asset_fields.size > 0) {
 						components_to_visit[component_to_visit_count] = index;
-						component_reflection_types[component_to_visit_count++] = editor_state->editor_components.GetType(editor_state->editor_components.TypeFromID(signature[index], false));
+						component_reflection_types[component_to_visit_count++] = editor_state->editor_components.GetType(signature[index], false);
 						ECS_ASSERT(component_reflection_types[component_to_visit_count - 1] != nullptr);
 					}
 				}
 			},
 			[&](const Archetype* archetype, const ArchetypeBase* base, Entity entity, void** unique_components) {
 				ComponentSignature signature = archetype->GetUniqueSignature();
-				ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, ECS_ARCHETYPE_MAX_COMPONENTS);
+				ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, 128);
 				for (unsigned char index = 0; index < component_to_visit_count; index++) {
 					Stream<LinkComponentAssetField> asset_fields = link_with_fields[signature[components_to_visit[index]]].asset_fields;
 					GetLinkComponentAssetDataForTargetDeep(
@@ -733,18 +756,18 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 			}
 		);
 
-		_stack_allocator.ClearBackup();
+		_stack_allocator.Clear();
 		if (!return_value) {
-			GetLinkComponentWithAssetFieldsShared(editor_state, sandbox_index, link_with_fields.buffer, allocator, { &type,1 });
+			GetLinkComponentWithAssetFieldsShared(editor_state, sandbox_index, link_with_fields.buffer, allocator, { &type, 1 });
 
 			// Check the shared components as well
 			SandboxForAllSharedComponents<true>(editor_state, sandbox_index,
 				[&](Component component) {
-					component_reflection_types[0] = editor_state->editor_components.GetType(editor_state->editor_components.TypeFromID(component, true));
+					component_reflection_types[0] = editor_state->editor_components.GetType(component, true);
 					ECS_ASSERT(component_reflection_types[0] != nullptr);
 				}, 
 				[&](Component component, SharedInstance shared_instance) {
-					ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, ECS_ARCHETYPE_MAX_COMPONENTS);
+					ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, 128);
 					Stream<LinkComponentAssetField> asset_fields = link_with_fields[component].asset_fields;
 					GetLinkComponentAssetDataForTargetDeep(
 						component_reflection_types[0],
@@ -765,7 +788,38 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 					return return_value;
 				}
 			);
-			_stack_allocator.ClearBackup();
+		}
+
+		_stack_allocator.Clear();
+		if (!return_value) {
+			GetLinkComponentWithAssetFieldsGlobal(editor_state, sandbox_index, link_with_fields.buffer, allocator, { &type, 1 });
+
+			// Check the global components as well
+			SandboxForAllGlobalComponents<true>(editor_state, sandbox_index,
+				[&](const void* data, Component component) {
+					component_reflection_types[0] = editor_state->editor_components.GetType(component, false, true);
+					ECS_ASSERT(component_reflection_types[0] != nullptr);
+					ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, 128);
+					Stream<LinkComponentAssetField> asset_fields = link_with_fields[component].asset_fields;
+					GetLinkComponentAssetDataForTargetDeep(
+						component_reflection_types[0],
+						data,
+						asset_fields,
+						editor_state->asset_database,
+						type,
+						&asset_data
+					);
+
+					for (unsigned int subindex = 0; subindex < asset_data.size; subindex++) {
+						if (CompareAssetPointers(asset_data[subindex].buffer, asset_pointer.buffer, type)) {
+							return_value = true;
+							return true;
+						}
+					}
+
+					return return_value;
+				}
+			);
 		}
 
 		return return_value;
@@ -1221,10 +1275,6 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 		}
 
 		FinishReloadAsset(editor_state, update_elements, dirty_sandboxes);
-
-		stack_allocator.ClearBackup();
-		temporary_allocator.ClearBackup();
-
 		return false;
 	}
 	else {
@@ -1383,8 +1433,8 @@ void UpdateAssetToComponents(EditorState* editor_state, Stream<void> old_asset, 
 	CapacityStream<ComponentInfo> unique_types;
 	unique_types.Initialize(stack_allocator, 0, max_unique_count.value);
 
-	auto for_each_component = [&](Component component, ComponentInfo* info_type, bool shared) {
-		Stream<char> target_type_name = editor_state->editor_components.TypeFromID(component.value, shared);
+	auto for_each_component = [&](Component component, ComponentInfo* info_type, bool shared, bool global) {
+		Stream<char> target_type_name = editor_state->editor_components.ComponentFromID(component.value, shared, global);
 		ECS_ASSERT(target_type_name.size > 0);
 
 		ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 64);
@@ -1404,8 +1454,8 @@ void UpdateAssetToComponents(EditorState* editor_state, Stream<void> old_asset, 
 	};
 
 	entity_manager->ForEachComponent([&](Component component) {
-		for_each_component(component, &unique_types[component.value], false);
-		});
+		for_each_component(component, &unique_types[component.value], false, false);
+	});
 
 	Component components_to_check[ECS_ARCHETYPE_MAX_COMPONENTS];
 	unsigned char components_indices[ECS_ARCHETYPE_MAX_COMPONENTS];
@@ -1453,7 +1503,7 @@ void UpdateAssetToComponents(EditorState* editor_state, Stream<void> old_asset, 
 	// Do the same for shared components
 	ComponentInfo shared_info;
 	entity_manager->ForEachSharedComponent([&](Component component) {
-		for_each_component(component, &shared_info, true);
+		for_each_component(component, &shared_info, true, false);
 
 		if (shared_info.asset_fields.size > 0) {
 			entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
@@ -1469,11 +1519,30 @@ void UpdateAssetToComponents(EditorState* editor_state, Stream<void> old_asset, 
 					);
 					ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_MATCHED);
 				}
-				});
+			});
 		}
-		});
+	});
 
-	_stack_allocator.ClearBackup();
+	// Clear the allocator
+	_stack_allocator.Clear();
+
+	// Do the same for global components
+	ComponentInfo global_info;
+	entity_manager->ForAllGlobalComponents([&](void* component_data, Component component) {
+		for_each_component(component, &global_info, false, true);
+
+		for (size_t index = 0; index < shared_info.asset_fields.size; index++) {
+			ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
+				shared_info.type,
+				shared_info.asset_fields[index].field_index,
+				component_data,
+				new_asset,
+				asset_type,
+				old_asset
+			);
+			ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_MATCHED);
+		}
+	});
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1569,7 +1638,15 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 
 	// Do the same for shared components
 	entity_manager->ForEachSharedComponent([&](Component component) {
-		LinkComponentWithAssetFields link_with_fields = GetLinkComponentWithAssetFieldForComponent(editor_state, component, true, stack_allocator, assets_to_check, false);
+		LinkComponentWithAssetFields link_with_fields = GetLinkComponentWithAssetFieldForComponent(
+			editor_state, 
+			component, 
+			true, 
+			false, 
+			stack_allocator, 
+			assets_to_check, 
+			false
+		);
 
 		if (link_with_fields.asset_fields.size > 0) {
 			entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
@@ -1594,7 +1671,39 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 		}
 	});
 
-	_stack_allocator.ClearBackup();
+	_stack_allocator.Clear();
+
+	// Do the same for global components
+	entity_manager->ForAllGlobalComponents([&](void* data, Component component) {
+		LinkComponentWithAssetFields link_with_fields = GetLinkComponentWithAssetFieldForComponent(
+			editor_state,
+			component,
+			true,
+			true,
+			stack_allocator,
+			assets_to_check,
+			false
+		);
+
+		if (link_with_fields.asset_fields.size > 0) {
+			for (size_t index = 0; index < link_with_fields.asset_fields.size; index++) {
+				for (size_t element_index = 0; element_index < elements.size; element_index++) {
+					ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
+						link_with_fields.type,
+						link_with_fields.asset_fields[index].field_index,
+						data,
+						elements[element_index].new_asset,
+						elements[element_index].type,
+						elements[element_index].old_asset
+					);
+					if (result == ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
+						break;
+					}
+					ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_NONE);
+				}
+			}
+		}
+	});
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

@@ -9,64 +9,12 @@
 
 #define GRAPHICS_SHARED_COMPONENT_BASE ECS_CONSTANT_REFLECT(100)
 
-struct ECS_REFLECT_COMPONENT GraphicsTranslation {
-	constexpr static inline short ID() {
-		return GRAPHICS_COMPONENT_BASE + 25;
-	}
-
-	constexpr static inline bool IsShared() {
-		return false;
-	}
-
-	ECSEngine::float3 translation;
-};
-
-struct ECS_REFLECT_COMPONENT GraphicsRotation {
-	constexpr static inline short ID() {
-		return GRAPHICS_COMPONENT_BASE + 26;
-	}
-
-	constexpr static inline bool IsShared() {
-		return false;
-	}
-
-	ECSEngine::float3 rotation;
-};
-
-struct ECS_REFLECT_COMPONENT GraphicsScale {
-	constexpr static inline short ID() {
-		return GRAPHICS_COMPONENT_BASE + 27;
-	}
-
-	constexpr static inline bool IsShared() {
-		return false;
-	}
-
-	ECSEngine::float3 scale = { 1.0f, 1.0f, 1.0f };
-};
-
-struct ECS_REFLECT_SHARED_COMPONENT GraphicsMesh {
-	constexpr static inline short ID() {
-		return GRAPHICS_SHARED_COMPONENT_BASE + 0;
-	}
-
-	constexpr static inline size_t AllocatorSize() {
-		return 120;
-	}
-
-	constexpr static inline bool IsShared() {
-		return true;
-	}
-
-	ECSEngine::Stream<char> name;
-};
-
-struct ECS_REFLECT_SHARED_COMPONENT RenderEverything {
-	constexpr static inline short ID() {
+struct ECS_REFLECT_COMPONENT RenderEverything {
+	constexpr static ECS_INLINE short ID() {
 		return GRAPHICS_SHARED_COMPONENT_BASE + 6;
 	}
 
-	constexpr static inline bool IsShared() {
+	constexpr static ECS_INLINE bool IsShared() {
 		return true;
 	}
 
@@ -76,23 +24,6 @@ struct ECS_REFLECT_SHARED_COMPONENT RenderEverything {
 	ECSEngine::PixelShader pixel_shader;
 	ECSEngine::Material* material;
 	ECSEngine::Stream<void> misc_data;
-};
-
-struct ECS_REFLECT_SHARED_COMPONENT GraphicsTexture {
-	constexpr static inline short ID() {
-		return GRAPHICS_SHARED_COMPONENT_BASE + 1;
-	}
-
-	constexpr static inline size_t AllocatorSize() {
-		return ECS_KB_R * 2;
-	}
-
-	constexpr static inline bool IsShared() {
-		return false;
-	}
-
-	ECSEngine::Stream<char> name;
-	ECSEngine::float3 value;
 };
 
 //struct ECS_REFLECT_COMPONENT GraphicsName {
@@ -112,18 +43,20 @@ struct ECS_REFLECT_SHARED_COMPONENT GraphicsTexture {
 //};
 
 struct ECS_REFLECT_COMPONENT GTranslation {
-	constexpr static inline short ID() {
+	constexpr static ECS_INLINE short ID() {
 		return GRAPHICS_COMPONENT_BASE + 3;
 	}
 
-	constexpr static inline bool IsShared() {
+	constexpr static ECS_INLINE bool IsShared() {
 		return true;
 	}
 
-	ECSEngine::float3 translation = { 0.5f, 10.0f, 0.0f };
+	ECSEngine::float3 translation = { 1.0f, 10.0f, 0.0f };
+	ECSEngine::float3 interesting_new_field;
+	ECSEngine::CoalescedMesh* POGGERSmesh;
 };
 
-struct ECS_REFLECT_SHARED_COMPONENT RenderMesh {
+struct ECS_REFLECT_COMPONENT RenderMesh {
 	constexpr static ECS_INLINE short ID() {
 		return GRAPHICS_SHARED_COMPONENT_BASE + 100;
 	}

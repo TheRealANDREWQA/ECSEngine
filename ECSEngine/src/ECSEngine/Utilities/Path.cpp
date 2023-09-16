@@ -2,6 +2,7 @@
 #include "Path.h"
 #include "Function.h"
 #include "FunctionInterfaces.h"
+#include "File.h"
 
 namespace ECSEngine {
 
@@ -419,6 +420,59 @@ namespace ECSEngine {
 		}
 
 		// -------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType, typename PathType>
+		PathType PathFilenameAfterImpl(PathType path, PathType base_path) {
+			ECS_ASSERT(path.size > base_path.size);
+
+			CharacterType delimitator = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII);
+			if (PathIsRelative(path)) {
+				delimitator = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII_REL);
+			}
+
+			PathType remaining_path = { path.buffer + base_path.size + 1, path.size - base_path.size - 1 };
+			PathType after_filename = function::FindFirstCharacter(remaining_path, delimitator);
+			if (after_filename.size == 0) {
+				return remaining_path;
+			}
+			return { remaining_path.buffer, remaining_path.size - after_filename.size };
+		}
+
+		Path PathFilenameAfter(Path path, Path base_path) {
+			return PathFilenameAfterImpl<wchar_t>(path, base_path);
+		}
+
+		ASCIIPath PathFilenameAfter(ASCIIPath path, ASCIIPath base_path) {
+			return PathFilenameAfterImpl<char>(path, base_path);
+		}
+
+		// -------------------------------------------------------------------------------------------------
+
+		bool PathEnsureParents(Path path, Path valid_parent)
+		{
+			ECS_STACK_CAPACITY_STREAM(wchar_t, new_valid_parent, 512);
+			new_valid_parent.Copy(valid_parent);
+
+			bool is_relative = PathIsRelative(path);
+			wchar_t delimitator = is_relative ? ECS_OS_PATH_SEPARATOR_REL : ECS_OS_PATH_SEPARATOR;
+
+			while (new_valid_parent.size < path.size) {
+				Path next_filename = PathFilenameAfter(path, new_valid_parent);
+				new_valid_parent.Add(delimitator);
+				new_valid_parent.AddStreamAssert(next_filename);
+				if (!ExistsFileOrFolder(new_valid_parent)) {
+					// Try to create it
+					bool success = CreateFolder(new_valid_parent);
+					if (!success) {
+						return false;
+					}
+				}
+			}
+
+			return true;
+		}
+
+		// --------------------------------------------------------------------------------------------------
 
 	}
 

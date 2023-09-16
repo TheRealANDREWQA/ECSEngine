@@ -41,7 +41,7 @@ void GetProjectUIFolder(const EditorState* editor_state, ECSEngine::CapacityStre
 
 void GetProjectAssetsFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
-void GetProjectMetafilesFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
+void GetProjectMetadataFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 void GetProjectConfigurationFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 

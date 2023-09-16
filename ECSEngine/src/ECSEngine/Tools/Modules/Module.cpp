@@ -154,8 +154,6 @@ namespace ECSEngine {
 				}
 				result = StreamCoalescedDeepCopy(dependencies, allocator);
 			}
-
-			stack_allocator.ClearBackup();
 		}
 
 		return result;
@@ -431,7 +429,6 @@ namespace ECSEngine {
 			streams.deserialize_shared_components.buffer = nullptr;
 		}
 
-		_stack_allocator.ClearBackup();
 		return streams;
 	}
 
@@ -499,7 +496,6 @@ namespace ECSEngine {
 		module->extra_information(&function_data);
 
 		Stream<ModuleMiscInfo> coalesced_data = StreamCoalescedDeepCopy(function_data.extra_information.ToStream(), allocator);
-		_stack_allocator.ClearBackup();
 		return { coalesced_data };
 	}
 

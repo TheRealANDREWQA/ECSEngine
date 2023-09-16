@@ -818,8 +818,6 @@ void ForEachAssetMetadata(const EditorState* editor_state, Stream<ECS_ASSET_TYPE
 	}
 
 	functor(extensions.buffer, files.buffer);
-
-	stack_allocator.ClearBackup();
 }
 
 void CreateAssetDefaultSetting(const EditorState* editor_state)
@@ -995,7 +993,6 @@ bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE t
 					//}
 				}
 			}
-			stack_allocator.ClearBackup();
 		}
 
 		// Randomize the asset
@@ -1612,6 +1609,27 @@ size_t GetAssetTargetFileTimeStamp(const void* metadata, ECS_ASSET_TYPE type, St
 unsigned int GetAssetReferenceCount(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
 {
 	return editor_state->asset_database->GetReferenceCount(handle, type);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+Stream<Stream<wchar_t>> GetAssetsFromAssetsFolder(const EditorState* editor_state, AllocatorPolymorphic allocator)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+	GetProjectAssetsFolder(editor_state, assets_folder);
+
+	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, valid_extensions, 64);
+	GetAssetExtensionsWithThunkOrForwardingFile(valid_extensions);
+
+	AdditionStream<Stream<wchar_t>> asset_files;
+	asset_files.is_capacity = false;
+	asset_files.resizable_stream.Initialize(allocator, 0);
+
+	GetDirectoriesOrFilesOptions options;
+	options.relative_root = assets_folder;
+	GetDirectoryFilesWithExtensionRecursive(assets_folder, allocator, asset_files, valid_extensions, options);
+
+	return asset_files.resizable_stream.ToStream();
 }
 
 // ----------------------------------------------------------------------------------------------

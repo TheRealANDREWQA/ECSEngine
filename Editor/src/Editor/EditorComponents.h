@@ -24,7 +24,7 @@ enum EDITOR_COMPONENT_EVENT : unsigned char {
 	// Handled by the user
 	EDITOR_COMPONENT_EVENT_SAME_ID,
 	// Handled by the user
-	EDITOR_COMPONENT_EVENT_IS_MISSING_ID,
+	EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION,
 	// Handled internally
 	EDITOR_COMPONENT_EVENT_ALLOCATOR_SIZE_CHANGED,
 	// Handled internally
@@ -53,9 +53,10 @@ struct EditorComponentEvent {
 	ECSEngine::Stream<char> name;
 
 	ECSEngine::Stream<char> conflicting_name; // used by the SAME_ID event
+	ECSEngine::Stream<char> missing_function_name; // used by the IS_MISSING_FUNCTION
 
 	short new_id; // used by the changed ID events or IS_REMOVED
-	bool is_shared; // used only by IS_REMOVED
+	ECS_COMPONENT_TYPE component_type; // used only by IS_REMOVED
 	bool is_link_component; // used by IS_REMOVED
 };
 
@@ -158,7 +159,7 @@ struct EditorComponents {
 
 	const ECSEngine::Reflection::ReflectionType* GetType(unsigned int module_index, unsigned int type_index) const;
 
-	const ECSEngine::Reflection::ReflectionType* GetType(ECSEngine::Component component, bool shared) const;
+	const ECSEngine::Reflection::ReflectionType* GetType(ECSEngine::Component component, ECS_COMPONENT_TYPE type) const;
 
 	void GetUniqueLinkComponents(ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& link_types) const;
 
@@ -217,13 +218,17 @@ struct EditorComponents {
 
 	// Returns true if all the component (unique and/or shared) which have link components have
 	// their DLL function ready
-	bool HasLinkComponentDLLFunction(const EditorState* modules, const ECSEngine::EntityManager* entity_manager, ECSEngine::bool2 select_unique_shared = { true, true }) const;
+	bool HasLinkComponentDLLFunction(
+		const EditorState* modules, 
+		const ECSEngine::EntityManager* entity_manager, 
+		ECSEngine::bool3 select_unique_shared_global = { true, true, true }
+	) const;
 	
 	// Returns true if the unique/shared component has assets, else false
 	bool HasComponentAssets(ECSEngine::Stream<char> component_name) const;
 
 	// Returns true if the unique/shared component has assets, else false
-	bool HasComponentAssets(ECSEngine::Component component, bool shared) const;
+	bool HasComponentAssets(ECSEngine::Component component, ECS_COMPONENT_TYPE type) const;
 
 	// Returns true if the component (unique or shared) exists or not
 	bool IsComponent(ECSEngine::Stream<char> name) const;
@@ -234,19 +239,18 @@ struct EditorComponents {
 	// Returns true if the shared component exists or not
 	bool IsSharedComponent(ECSEngine::Stream<char> name) const;
 
+	// Returns true if the global component exists or not
+	bool IsGlobalComponent(ECSEngine::Stream<char> name) const;
+
 	// Returns true if it is a link component
 	bool IsLinkComponent(ECSEngine::Stream<char> name) const;
 
 	// Returns true if it is a target of a link component
 	bool IsLinkComponentTarget(ECSEngine::Stream<char> name) const;
 
-	unsigned int ModuleComponentCount(ECSEngine::Stream<char> name) const;
+	unsigned int ModuleComponentCount(ECSEngine::Stream<char> name, ECS_COMPONENT_TYPE type) const;
 
-	unsigned int ModuleComponentCount(unsigned int index) const;
-
-	unsigned int ModuleSharedComponentCount(ECSEngine::Stream<char> name) const;
-
-	unsigned int ModuleSharedComponentCount(unsigned int index) const;
+	unsigned int ModuleComponentCount(unsigned int index, ECS_COMPONENT_TYPE type) const;
 
 	// Returns the loaded_modules index given the index from ProjectModules*
 	unsigned int ModuleIndexFromReflection(const EditorState* editor_state, unsigned int module_index) const;
@@ -334,15 +338,15 @@ struct EditorComponents {
 		unsigned int sandbox_index,
 		EDITOR_SANDBOX_VIEWPORT viewport, 
 		ECSEngine::Component component, 
-		bool shared, 
+		ECS_COMPONENT_TYPE type,
 		ECSEngine::SpinLock* lock = nullptr
 	) const;
 
-	// Does not deallocate any buffers. It will only set the default values.
+	// Does not deallocate any buffers or remove asset references that would be overwritten. It will only set the default values.
 	void ResetComponent(ECSEngine::Stream<char> component_name, void* component_data) const;
 
-	// Does not deallocate any buffers. It will only set the default values.
-	void ResetComponent(ECSEngine::Component component, void* component_data, bool shared) const;
+	// Does not deallocate any buffers or remove asset references that would be overwritten. It will only set the default values.
+	void ResetComponent(ECSEngine::Component component, void* component_data, ECS_COMPONENT_TYPE type) const;
 
 	// Allocates the buffers for an entity from the stack memory into the component_buffers parameter
 	// and sets the data to its default values. The buffers will be set to 0.
@@ -385,7 +389,7 @@ struct EditorComponents {
 	);
 
 	// Returns { nullptr, 0 } if it doesn't find it. Else a stable reference of the name
-	ECSEngine::Stream<char> TypeFromID(short id, bool shared) const;
+	ECSEngine::Stream<char> ComponentFromID(short id, ECS_COMPONENT_TYPE) const;
 
 	// Initializes a default allocator. The size must be the one given from default allocator size
 	void Initialize(void* buffer);

@@ -69,6 +69,23 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	EditorState* editor_state = (EditorState*)window_data;
 
 #pragma region Start, Pause, Frame
+	
+	UIDrawConfig config;
+
+	// If the start button is active, then display a small black overlay to indicate to the user that we are in run mode
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
+		UIConfigAbsoluteTransform overlay_transform;
+		overlay_transform.position = { -1.0f, -1.0f };
+		overlay_transform.scale = { 2.0f, 2.0f };
+		config.AddFlag(overlay_transform);
+		drawer.SpriteRectangle(
+			UI_CONFIG_SYSTEM_DRAW | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_VALIDATE_POSITION, 
+			config, 
+			ECS_TOOLS_UI_TEXTURE_MASK,
+			Color((unsigned char)0, 0, 0, 25)
+		);
+		config.flag_count--;
+	}
 
 	const float button_scale_y = 0.05f;
 	float2 button_scale = drawer.GetSquareScale(button_scale_y);
@@ -76,7 +93,6 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	float2 total_button_scale = { button_scale.x * 3, button_scale.y };
 	float2 starting_position = drawer.GetAlignedToCenter(total_button_scale);
 
-	UIDrawConfig config;
 
 	UIConfigAbsoluteTransform transform;
 	UIConfigBorder border;
@@ -93,19 +109,26 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	const float triangle_scale_factor = 0.8f;
 	const float stop_scale_factor = 0.45f;
 
+	Color theme_color = drawer.color_theme.theme;
+	Color accent_color = EDITOR_GREEN_COLOR;
+
 	// Start button
 	UITooltipBaseData base_tool_tip;
 	base_tool_tip.offset.y = TOOP_TIP_OFFSET;
 	base_tool_tip.offset_scale.y = true;
 	base_tool_tip.next_row_offset = 0.005f;
 
-	drawer.SolidColorRectangle(configuration, config, drawer.color_theme.theme);
+	bool is_playing = EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+	Color playing_theme_color = is_playing ? accent_color : theme_color;
+	Color playing_accent_color = is_playing ? theme_color : accent_color;
+
+	drawer.SolidColorRectangle(configuration, config, playing_theme_color);
 
 	float2 scaled_scale;
 	float2 scaled_position;
-	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
+	if (is_playing) {
 		scaled_position = ExpandRectangle(transform.position, transform.scale, { stop_scale_factor, stop_scale_factor }, scaled_scale);
-		drawer.SpriteRectangle(configuration, scaled_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_MASK, EDITOR_GREEN_COLOR);
+		drawer.SpriteRectangle(configuration, scaled_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_MASK, playing_accent_color);
 		drawer.TextToolTip("Stop", transform.position, transform.scale, &base_tool_tip);
 
 		// for the step button, must reestablish the scale
@@ -113,29 +136,38 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	}
 	else {
 		scaled_position = ExpandRectangle(transform.position, transform.scale, { triangle_scale_factor, triangle_scale_factor }, scaled_scale);
-		drawer.SpriteRectangle(configuration, scaled_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, EDITOR_GREEN_COLOR, { 1.0f, 0.0f }, { 0.0f, 1.0f });
+		drawer.SpriteRectangle(configuration, scaled_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, playing_accent_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
 		drawer.TextToolTip("Play", transform.position, transform.scale, &base_tool_tip);
 	}
 	
 	float2 action_scale = { transform.scale.x - border_size_horizontal, transform.scale.y };
-	drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { RunProjectAction, editor_state, 0 }, drawer.color_theme.theme);
+	drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { RunProjectAction, editor_state, 0 }, playing_theme_color);
 	
 	config.flag_count--;
 	transform.position.x += button_scale.x;
 	config.AddFlag(transform);
 
+	bool is_paused = EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+	Color paused_theme_color = is_paused ? accent_color : theme_color;
+	Color paused_accent_color = is_paused ? theme_color : accent_color;
+	if (!is_playing) {
+		paused_accent_color = drawer.color_theme.unavailable_text;
+	}
+
 	// Pause button - two bars as mask textures
-	drawer.SolidColorRectangle(configuration, config, drawer.color_theme.theme);
+	drawer.SolidColorRectangle(configuration, config, paused_theme_color);
 
 	float bar_scale_x = button_scale.x / 8;
 	const float bar_scale_y = button_scale_y * 0.55f;
 
 	float2 bar_scale = { bar_scale_x, bar_scale_y };
 	float2 bar_position = { AlignMiddle(transform.position.x, button_scale.x, bar_scale_x * 3), AlignMiddle(transform.position.y, button_scale.y, bar_scale_y) };
-	drawer.SpriteRectangle(configuration, bar_position, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, EDITOR_GREEN_COLOR);
-	drawer.SpriteRectangle(configuration, { bar_position.x + bar_scale.x * 2, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, EDITOR_GREEN_COLOR);
-	drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { PauseProjectAction, editor_state, 0 });
-	drawer.TextToolTip("Pause", transform.position, transform.scale, &base_tool_tip);
+	drawer.SpriteRectangle(configuration, bar_position, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, paused_accent_color);
+	drawer.SpriteRectangle(configuration, { bar_position.x + bar_scale.x * 2, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, paused_accent_color);
+	if (is_playing) {
+		drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { PauseProjectAction, editor_state, 0 }, paused_theme_color);
+		drawer.TextToolTip("Pause", transform.position, transform.scale, &base_tool_tip);
+	}
 
 	transform.position.x += transform.scale.x;
 	config.flag_count--;

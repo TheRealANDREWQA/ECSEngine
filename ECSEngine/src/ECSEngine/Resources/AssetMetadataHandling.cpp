@@ -291,7 +291,6 @@ namespace ECSEngine {
 		ResourceManagerLoadDesc load_desc;
 		load_desc.load_flags |= dont_load_referenced ? ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS : 0;
 		bool success = resource_manager->LoadUserMaterial(&user_material, &runtime_material, load_desc);
-		stack_allocator.ClearBackup();
 
 		if (success) {
 			AllocatorPolymorphic database_allocator = asset_database->Allocator();
@@ -1026,8 +1025,6 @@ namespace ECSEngine {
 		load_desc.load_flags = check_resource ? ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE : 0;
 		load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS;
 		resource_manager->UnloadUserMaterial(&user_material, (Material*)material->material_pointer, load_desc);
-
-		stack_allocator.ClearBackup();
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -1837,7 +1834,6 @@ namespace ECSEngine {
 			}
 		}
 
-		stack_allocator.ClearBackup();
 		// We could deallocate the material - but it will result in data loss
 		// on subsequent calls - so let it the same
 		return status;

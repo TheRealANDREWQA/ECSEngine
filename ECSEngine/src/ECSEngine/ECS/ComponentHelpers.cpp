@@ -2,6 +2,7 @@
 #include "ComponentHelpers.h"
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
+#include "../Allocators/ResizableLinearAllocator.h"
 
 namespace ECSEngine {
 
@@ -11,14 +12,35 @@ namespace ECSEngine {
 
 	bool IsReflectionTypeComponent(const ReflectionType* type)
 	{
-		return type->IsTag(ECS_COMPONENT_TAG);
+		bool is_tag = type->IsTag(ECS_COMPONENT_TAG);
+		if (is_tag) {
+			double evaluation = type->GetEvaluation(ECS_COMPONENT_IS_SHARED_FUNCTION);
+			return evaluation != DBL_MAX ? evaluation == 0.0 : false;
+		}
+		return false;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
 	bool IsReflectionTypeSharedComponent(const ReflectionType* type)
 	{
-		return type->IsTag(ECS_SHARED_COMPONENT_TAG);
+		bool is_tag = type->IsTag(ECS_COMPONENT_TAG);
+		if (is_tag) {
+			double evaluation = type->GetEvaluation(ECS_COMPONENT_IS_SHARED_FUNCTION);
+			return evaluation != DBL_MAX ? evaluation == 1.0 : false;
+		}
+		return false;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	bool IsReflectionTypeMaybeComponent(const Reflection::ReflectionType* type)
+	{
+		bool is_tag = type->IsTag(ECS_COMPONENT_TAG);
+		if (is_tag && type->GetEvaluation(ECS_COMPONENT_IS_SHARED_FUNCTION) == DBL_MAX) {
+			return true;
+		}
+		return false;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
@@ -120,30 +142,82 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager, 
 		unsigned int hierarchy_index, 
 		CapacityStream<unsigned int>* unique_indices, 
-		CapacityStream<unsigned int>* shared_indices
+		CapacityStream<unsigned int>* shared_indices,
+		CapacityStream<unsigned int>* global_indices
 	) 
 	{
-		ECS_STACK_CAPACITY_STREAM(CapacityStream<unsigned int>, stream_of_indices, 2);
-		stream_of_indices[0] = *unique_indices;
-		stream_of_indices[1] = *shared_indices;
-		stream_of_indices.size = 2;
-
+		ECS_STACK_CAPACITY_STREAM(unsigned, all_indices, ECS_KB * 16);
 		Stream<char> tags[] = {
 			ECS_COMPONENT_TAG,
-			ECS_SHARED_COMPONENT_TAG
+			ECS_GLOBAL_COMPONENT_TAG
 		};
 
 		ReflectionManagerGetQuery query_options;
 		query_options.tags = { tags, std::size(tags) };
-		query_options.stream_indices = stream_of_indices;
+		query_options.indices = &all_indices;
 		query_options.strict_compare = true;
-		query_options.use_stream_indices = true;
 
 		reflection_manager->GetHierarchyTypes(query_options, hierarchy_index);
 
-		unique_indices->size = stream_of_indices[0].size;
-		shared_indices->size = stream_of_indices[1].size;
+		for (unsigned int index = 0; index < all_indices.size; index++) {
+			const Reflection::ReflectionType* reflection_type = reflection_manager->GetType(all_indices[index]);
+			ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(reflection_type);
+
+			if (component_type == ECS_COMPONENT_UNIQUE) {
+				unique_indices->AddAssert(all_indices[index]);
+			}
+			else if (component_type == ECS_COMPONENT_SHARED) {
+				shared_indices->AddAssert(all_indices[index]);
+			}
+			else if (component_type == ECS_COMPONENT_GLOBAL) {
+				global_indices->AddAssert(all_indices[index]);
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
+
+	size_t GetReflectionComponentAllocatorSize(const Reflection::ReflectionType* type)
+	{
+		double evaluation = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+		return evaluation == DBL_MAX ? 0 : (size_t)evaluation;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	ECS_COMPONENT_TYPE GetReflectionTypeComponentType(const Reflection::ReflectionType* type)
+	{
+		if (IsReflectionTypeComponent(type)) {
+			return ECS_COMPONENT_UNIQUE;
+		}
+		else if (IsReflectionTypeSharedComponent(type)) {
+			return ECS_COMPONENT_SHARED;
+		}
+		else if (IsReflectionTypeGlobalComponent(type)) {
+			return ECS_COMPONENT_GLOBAL;
+		}
+		return ECS_COMPONENT_TYPE_COUNT;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT ValidateReflectionTypeComponent(const Reflection::ReflectionType* type)
+	{
+		ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(type);
+		if (component_type != ECS_COMPONENT_TYPE_COUNT) {
+			// Verify that it has the ID function
+			if (type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) == DBL_MAX) {
+				return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ID_FUNCTION;
+			}
+
+			// Now check the buffers
+			
+		}
+	}
+	
+	// ----------------------------------------------------------------------------------------------------------------------------
+
 }

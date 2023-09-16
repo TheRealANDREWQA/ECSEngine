@@ -133,6 +133,7 @@
     <ClCompile Include="src\Sandbox\SandboxFile.cpp" />
     <ClCompile Include="src\Sandbox\SandboxAccessor.cpp" />
     <ClCompile Include="src\Sandbox\SandboxModule.cpp" />
+    <ClCompile Include="src\Assets\AssetExtensions.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
