@@ -316,7 +316,7 @@ void RestoreBackupWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descr
 	drawer.NextRow();
 
 	for (size_t index = 0; index < PROJECT_BACKUP_COUNT; index++) {
-		drawer.CheckBox(PROJECT_BACKUP_FILES_NAMES[index], data->selected + index);
+		drawer.CheckBox(PROJECT_BACKUP_FILE_NAMES[index], data->selected + index);
 		drawer.NextRow();
 	}
 

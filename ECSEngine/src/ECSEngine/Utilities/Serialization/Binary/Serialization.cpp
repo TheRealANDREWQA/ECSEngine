@@ -1802,8 +1802,6 @@ namespace ECSEngine {
 		DeserializeFieldTable field_table;
 		field_table = DeserializeFieldTableFromData(data, GetAllocatorPolymorphic(&stack_allocator));
 		IgnoreDeserialize(data, field_table, options);
-
-		stack_allocator.ClearBackup();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------

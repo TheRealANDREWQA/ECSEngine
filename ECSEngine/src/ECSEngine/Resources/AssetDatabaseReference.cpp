@@ -481,10 +481,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(&temp_allocator);
 		reference->ToStandalone(allocator_polymorphic, &temp_database);
 
-		ReturnType return_value = functor(&temp_database);
-
-		temp_allocator.ClearBackup();
-		return return_value;
+		return functor(&temp_database);
 	}
 
 	bool AssetDatabaseReference::SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file) const {
@@ -543,10 +540,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(&temp_allocator);
 		temp_database.SetAllocator(allocator_polymorphic);
 
-		size_t return_value = functor(&temp_database);
-
-		temp_allocator.ClearBackup();
-		return return_value;
+		return functor(&temp_database);
 	}
 
 	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file, AssetDatabaseReferenceFromStandaloneOptions options) {

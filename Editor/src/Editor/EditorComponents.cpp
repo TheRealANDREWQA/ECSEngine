@@ -83,9 +83,9 @@ const ReflectionType* EditorComponents::GetType(unsigned int module_index, unsig
 
 // ----------------------------------------------------------------------------------------------
 
-const ECSEngine::Reflection::ReflectionType* EditorComponents::GetType(ECSEngine::Component component, bool shared) const
+const ReflectionType* EditorComponents::GetType(Component component, ECS_COMPONENT_TYPE type) const
 {
-	return GetType(TypeFromID(component.value, shared));
+	return GetType(ComponentFromID(component.value, type));
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -176,6 +176,20 @@ bool EditorComponents::IsSharedComponent(Stream<char> name) const
 
 // ----------------------------------------------------------------------------------------------
 
+bool EditorComponents::IsGlobalComponent(ECSEngine::Stream<char> name) const
+{
+	ReflectionType type;
+	if (internal_manager->TryGetType(name, type)) {
+		if (IsReflectionTypeGlobalComponent(&type)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// ----------------------------------------------------------------------------------------------
+
 bool EditorComponents::IsLinkComponent(Stream<char> name) const
 {
 	ReflectionType type;
@@ -196,42 +210,21 @@ bool EditorComponents::IsLinkComponentTarget(ECSEngine::Stream<char> name) const
 
 // ----------------------------------------------------------------------------------------------
 
-unsigned int EditorComponents::ModuleComponentCount(Stream<char> name) const
+unsigned int EditorComponents::ModuleComponentCount(Stream<char> name, ECS_COMPONENT_TYPE component_type) const
 {
 	unsigned int module_index = FindModule(name);
 	ECS_ASSERT(module_index != -1);
-	return ModuleComponentCount(module_index);
+	return ModuleComponentCount(module_index, component_type);
 }
 
 // ----------------------------------------------------------------------------------------------
 
-unsigned int EditorComponents::ModuleComponentCount(unsigned int module_index) const
+unsigned int EditorComponents::ModuleComponentCount(unsigned int module_index, ECS_COMPONENT_TYPE component_type) const
 {
 	unsigned int count = 0;
 	for (size_t index = 0; index < loaded_modules[module_index].types.size; index++) {
 		const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(loaded_modules[module_index].types[index]);
-		count += IsReflectionTypeComponent(type);
-	}
-	return count;
-}
-
-// ----------------------------------------------------------------------------------------------
-
-unsigned int EditorComponents::ModuleSharedComponentCount(ECSEngine::Stream<char> name) const
-{
-	unsigned int module_index = FindModule(name);
-	ECS_ASSERT(module_index != -1);
-	return ModuleSharedComponentCount(module_index);
-}
-
-// ----------------------------------------------------------------------------------------------
-
-unsigned int EditorComponents::ModuleSharedComponentCount(unsigned int module_index) const
-{
-	unsigned int count = 0;
-	for (size_t index = 0; index < loaded_modules[module_index].types.size; index++) {
-		const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(loaded_modules[module_index].types[index]);
-		count += IsReflectionTypeSharedComponent(type);
+		count += GetReflectionTypeComponentType(type) == component_type;
 	}
 	return count;
 }
@@ -373,6 +366,11 @@ void EditorComponents::RecoverData(
 	deserialize_options.field_table = &field_table;
 	deserialize_options.default_initialize_missing_fields = true;
 
+	Reflection::ReflectionManager deserialized_temporary_manager;
+	deserialized_temporary_manager.type_definitions.Initialize(&stack_allocator, HashTableCapacityForElements(field_table.types.size));
+	field_table.ToNormalReflection(&deserialized_temporary_manager, GetAllocatorPolymorphic(&stack_allocator));
+	deserialize_options.deserialized_field_manager = &deserialized_temporary_manager;
+
 	SerializeOptions serialize_options;
 	serialize_options.write_type_table = false;
 	serialize_options.verify_dependent_types = false;
@@ -414,7 +412,7 @@ void EditorComponents::RecoverData(
 					unsigned int entity_count = base_archetype->EntityCount();
 					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
 						const void* entity_data = base_archetype->GetComponentByIndex(entity_index, component_index);
-						RemoveSandboxComponentAssets(editor_state, sandbox_index, component, entity_data, false, missing_asset_fields);
+						RemoveSandboxComponentAssets(editor_state, sandbox_index, component, entity_data, ECS_COMPONENT_UNIQUE, missing_asset_fields);
 					}
 				}
 
@@ -440,7 +438,7 @@ void EditorComponents::RecoverData(
 
 				unsigned int base_count = archetype->GetBaseCount();
 				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-					ArchetypeBase* base = archetype->GetBase(base_count);
+					ArchetypeBase* base = archetype->GetBase(base_index);
 					unsigned int entity_count = base->EntityCount();		
 
 					const void* component_buffer = base->GetComponentByIndex(0, component_index);
@@ -500,7 +498,7 @@ void EditorComponents::RecoverData(
 
 					unsigned int base_count = archetype->GetBaseCount();
 					for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-						ArchetypeBase* base = archetype->GetBase(base_count);
+						ArchetypeBase* base = archetype->GetBase(base_index);
 						unsigned int entity_count = base->EntityCount();
 
 						void* component_buffer = base->GetComponentByIndex(0, component_index);
@@ -555,7 +553,7 @@ void EditorComponents::RecoverData(
 
 					unsigned int base_count = archetype->GetBaseCount();
 					for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-						ArchetypeBase* base = archetype->GetBase(base_count);
+						ArchetypeBase* base = archetype->GetBase(base_index);
 						unsigned int entity_count = base->EntityCount();
 
 						const void* component_buffer = base->GetComponentByIndex(0, component_index);
@@ -592,12 +590,20 @@ void EditorComponents::RecoverData(
 					for (unsigned int component_index = 0; component_index < current_signature.count; component_index++) {
 						component_sizes[component_index] = entity_manager->ComponentSize(current_signature.indices[component_index]);
 					}
+					
+					// Use this to copy the the entities into a temporary buffer since resizing a base will lose the entities
+					ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 256, ECS_MB);
 
 					unsigned int base_count = archetype->GetBaseCount();
 					for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-						ArchetypeBase* base = archetype->GetBase(base_count);
+						ArchetypeBase* base = archetype->GetBase(base_index);
 						unsigned int entity_count = base->EntityCount();
 						void** previous_base_buffers = base->m_buffers;
+
+						temporary_allocator.Clear();
+
+						Entity* entities_copy = (Entity*)temporary_allocator.Allocate(sizeof(Entity) * entity_count);
+						memcpy(entities_copy, base->m_entities, sizeof(Entity) * entity_count);
 
 						// Need to copy these on the stack because they will get deallocated when resizing
 						ECS_STACK_CAPACITY_STREAM(void*, previous_buffers, 64);
@@ -617,6 +623,7 @@ void EditorComponents::RecoverData(
 						}
 
 						unsigned int previous_capacity = base->m_capacity;
+						unsigned int previous_size = base->m_size;
 						base->m_size = 0;
 
 						// We need to lock because resize does an allocation inside
@@ -629,6 +636,10 @@ void EditorComponents::RecoverData(
 						if (has_locks) {
 							entity_manager_lock->unlock();
 						}
+
+						base->m_size = previous_size;
+						// Copy back the entity values
+						memcpy(base->m_entities, entities_copy, sizeof(Entity) * entity_count);
 
 						void** new_buffers = base->m_buffers;
 
@@ -743,7 +754,7 @@ void EditorComponents::RecoverData(
 		if (missing_asset_fields.size > 0) {
 			entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
 				const void* component_data = entity_manager->GetSharedData(component, instance);
-				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, component_data, true, missing_asset_fields);
+				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, component_data, ECS_COMPONENT_SHARED, missing_asset_fields);
 			});
 		}
 
@@ -841,7 +852,6 @@ void EditorComponents::RecoverData(
 	}
 
 	free(temporary_allocation);
-	stack_allocator.ClearBackup();
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1316,12 +1326,12 @@ bool EditorComponents::HasLinkComponentDLLFunction(const EditorState* editor_sta
 
 // ----------------------------------------------------------------------------------------------
 
-bool EditorComponents::HasLinkComponentDLLFunction(const EditorState* editor_state, const EntityManager* entity_manager, bool2 select_unique_shared) const
+bool EditorComponents::HasLinkComponentDLLFunction(const EditorState* editor_state, const EntityManager* entity_manager, bool3 select_unique_shared_global) const
 {
 	bool has_failed = false;
 
-	auto component_functor = [&](Component component) {
-		Stream<char> component_name = TypeFromID(component.value, false);
+	auto component_functor_impl = [&](Component component, ECS_COMPONENT_TYPE component_type) {
+		Stream<char> component_name = ComponentFromID(component.value, component_type);
 		Stream<char> link_component = GetLinkComponentForTarget(component_name);
 		if (link_component.size > 0) {
 			// Test it
@@ -1332,7 +1342,19 @@ bool EditorComponents::HasLinkComponentDLLFunction(const EditorState* editor_sta
 		return false;
 	};
 
-	if (select_unique_shared.x) {
+	auto component_functor = [&](Component component) {
+		return component_functor_impl(component, ECS_COMPONENT_UNIQUE);
+	};
+
+	auto shared_component_functor = [&](Component component) {
+		return component_functor_impl(component, ECS_COMPONENT_SHARED);
+	};
+
+	auto global_component_functor = [&](Component component) {
+		return component_functor_impl(component, ECS_COMPONENT_GLOBAL);
+	};
+
+	if (select_unique_shared_global.x) {
 		entity_manager->ForEachComponent<true>(component_functor);
 
 		if (has_failed) {
@@ -1340,13 +1362,22 @@ bool EditorComponents::HasLinkComponentDLLFunction(const EditorState* editor_sta
 		}
 	}
 
-	if (select_unique_shared.y) {
-		entity_manager->ForEachSharedComponent<true>(component_functor);
+	if (select_unique_shared_global.y) {
+		entity_manager->ForEachSharedComponent<true>(shared_component_functor);
 
 		if (has_failed) {
 			return false;
 		}
 	}
+
+	if (select_unique_shared_global.z) {
+		entity_manager->ForAllGlobalComponents<true>(global_component_functor);
+
+		if (has_failed) {
+			return false;
+		}
+	}
+
 	return true;
 }
 
@@ -1360,9 +1391,9 @@ bool EditorComponents::HasComponentAssets(Stream<char> component_name) const
 
 // ----------------------------------------------------------------------------------------------
 
-bool EditorComponents::HasComponentAssets(Component component, bool shared) const
+bool EditorComponents::HasComponentAssets(Component component, ECS_COMPONENT_TYPE component_type) const
 {
-	return HasComponentAssets(TypeFromID(component, shared));
+	return HasComponentAssets(ComponentFromID(component, component_type));
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1531,7 +1562,7 @@ void EditorComponents::RemoveTypeFromManager(
 	unsigned int sandbox_index,
 	EDITOR_SANDBOX_VIEWPORT viewport,
 	Component component, 
-	bool shared, 
+	ECS_COMPONENT_TYPE component_type,
 	SpinLock* lock
 ) const
 {
@@ -1544,11 +1575,11 @@ void EditorComponents::RemoveTypeFromManager(
 		lock->lock();
 	}
 
-	bool has_assets = editor_state->editor_components.HasComponentAssets(component, shared);
+	bool has_assets = editor_state->editor_components.HasComponentAssets(component, component_type);
 
 	ComponentSignature signature = { &component, 1 };
 	ArchetypeQuery query;
-	if (shared) {
+	if (component_type == ECS_COMPONENT_SHARED) {
 		// Get all archetypes with that component and remove it from them
 		query.shared.ConvertComponents(signature);
 		entity_manager->GetArchetypes(query, archetype_indices);
@@ -1572,13 +1603,13 @@ void EditorComponents::RemoveTypeFromManager(
 			// Now for each shared component remove the asset handles
 			entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
 				const void* instance_data = entity_manager->GetSharedData(component, instance);
-				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, instance_data, true);
+				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, instance_data, component_type);
 			});
 		}
 
 		entity_manager->UnregisterSharedComponentCommit(component);
 	}
-	else {
+	else if (component_type == ECS_COMPONENT_UNIQUE) {
 		// Get all archetypes with that component and remove it from them
 		query.unique.ConvertComponents(signature);
 		entity_manager->GetArchetypes(query, archetype_indices);
@@ -1596,7 +1627,7 @@ void EditorComponents::RemoveTypeFromManager(
 				// Determine if we need to remove assets
 				if (has_assets) {
 					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
-						RemoveSandboxComponentAssets(editor_state, sandbox_index, component, base->GetComponentByIndex(entity_index, component_index), false);
+						RemoveSandboxComponentAssets(editor_state, sandbox_index, component, base->GetComponentByIndex(entity_index, component_index), component_type);
 					}
 				}
 
@@ -1606,8 +1637,14 @@ void EditorComponents::RemoveTypeFromManager(
 
 		// Destroy all matched archetypes now - since they will be empty
 		entity_manager->DestroyArchetypesCommit(archetype_indices);
-
 		entity_manager->UnregisterComponentCommit(component);
+	}
+	else if (component_type == ECS_COMPONENT_GLOBAL) {
+		// Here we simply just need to remove the global component, nothing else to do
+		RemoveSandboxGlobalComponent(editor_state, sandbox_index, component, viewport);
+	}
+	else {
+		ECS_ASSERT(false, "Invalid component type for RemoveTypeFromManager");
 	}
 
 	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
@@ -1628,15 +1665,18 @@ void EditorComponents::RemoveModuleFromManager(
 	// Go through the types and see which is a component or shared component
 	for (size_t index = 0; index < loaded_modules[loaded_module_index].types.size; index++) {
 		const ReflectionType* type = GetType(loaded_modules[loaded_module_index].types[index]);
+		Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (IsReflectionTypeComponent(type)) {
-			// Unique component
-			Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-			RemoveTypeFromManager(editor_state, sandbox_index, viewport, component, false);
+			// Unique component		
+			RemoveTypeFromManager(editor_state, sandbox_index, viewport, component, ECS_COMPONENT_UNIQUE);
 		}
 		else if (IsReflectionTypeSharedComponent(type)) {
 			// Shared component
-			Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-			RemoveTypeFromManager(editor_state, sandbox_index, viewport, component, true);
+			RemoveTypeFromManager(editor_state, sandbox_index, viewport, component, ECS_COMPONENT_UNIQUE);
+		}
+		else if (IsReflectionTypeGlobalComponent(type)) {
+			// Global component
+			RemoveTypeFromManager(editor_state, sandbox_index, viewport, component, ECS_COMPONENT_GLOBAL);
 		}
 	}
 }
@@ -1651,9 +1691,9 @@ void EditorComponents::ResetComponent(Stream<char> component_name, void* compone
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::ResetComponent(ECSEngine::Component component, void* component_data, bool shared) const
+void EditorComponents::ResetComponent(ECSEngine::Component component, void* component_data, ECS_COMPONENT_TYPE type) const
 {
-	Stream<char> name = TypeFromID(component, shared);
+	Stream<char> name = ComponentFromID(component, type);
 	ECS_ASSERT(name.size != 0);
 	ResetComponent(name, component_data);
 }
@@ -1663,7 +1703,7 @@ void EditorComponents::ResetComponent(ECSEngine::Component component, void* comp
 void EditorComponents::ResetComponents(ComponentSignature component_signature, void* stack_memory, void** component_buffers) const
 {
 	for (unsigned int index = 0; index < component_signature.count; index++) {
-		Stream<char> component_name = TypeFromID(component_signature[index], false);
+		Stream<char> component_name = ComponentFromID(component_signature[index], ECS_COMPONENT_UNIQUE);
 
 		// Determine the byte size
 		unsigned short byte_size = GetComponentByteSize(component_name);
@@ -1806,7 +1846,7 @@ bool EditorComponents::ResolveEvent(
 		break;
 	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
 	{
-		RemoveTypeFromManager(editor_state, sandbox_index, viewport, { event.new_id }, event.is_shared, entity_manager_lock);
+		RemoveTypeFromManager(editor_state, sandbox_index, viewport, { event.new_id }, event.component_type, entity_manager_lock);
 		return true;
 	}
 		break;
@@ -2027,7 +2067,7 @@ void EditorComponents::UpdateComponents(
 	// Walk through the list of the types and separate the components (unique, shared and link) from the rest of the types
 	for (int32_t index = 0; index < (int32_t)hierarchy_types.size; index++) {
 		const ReflectionType* type = reflection_manager->GetType(hierarchy_types[index]);
-		if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
+		if (GetReflectionTypeComponentType(type) != ECS_COMPONENT_TYPE_COUNT) {
 			component_indices.AddAssert(hierarchy_types[index]);
 			hierarchy_types.RemoveSwapBack(index);
 			index--;
@@ -2051,7 +2091,7 @@ void EditorComponents::UpdateComponents(
 			if (target_index != -1) {
 				// The target exists. Check to see that it has a valid component
 				const ReflectionType* target_type = internal_manager->type_definitions.GetValuePtrFromIndex(target_index);
-				if (IsReflectionTypeComponent(target_type) || IsReflectionTypeSharedComponent(target_type)) {
+				if (GetReflectionTypeComponentType(target_type) != ECS_COMPONENT_TYPE_COUNT) {
 					// Verify that the types are matched
 					if (!ValidateLinkComponent(type, target_type)) {
 						// Generate a mismatch event
@@ -2087,11 +2127,14 @@ void EditorComponents::UpdateComponents(
 			if constexpr (check_id) {
 				double evaluation = type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
 				if (evaluation == DBL_MAX) {
-					events.Add({ EDITOR_COMPONENT_EVENT_IS_MISSING_ID, type->name });
+					events.Add({ EDITOR_COMPONENT_EVENT_IS_MISSING_FUNCTION, type->name, ECS_COMPONENT_ID_FUNCTION });
 					continue;
 				}
 
-				Stream<char> existing_type = TypeFromID((unsigned short)evaluation, IsReflectionTypeSharedComponent(type));
+				ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(type);
+				
+
+				Stream<char> existing_type = ComponentFromID((unsigned short)evaluation, component_type);
 				if (existing_type.size > 0) {
 					// A conflict - multiple components with the same ID
 					events.Add({ EDITOR_COMPONENT_EVENT_SAME_ID, type->name, existing_type });
@@ -2151,7 +2194,7 @@ void EditorComponents::UpdateComponents(
 						continue;
 					}
 
-					Stream<char> existing_type = TypeFromID((unsigned short)evaluation, IsReflectionTypeSharedComponent(type));
+					Stream<char> existing_type = ComponentFromID((unsigned short)evaluation, GetReflectionTypeComponentType(type));
 					if (existing_type.size > 0) {
 						// A conflict - multiple components with the same ID
 						events.Add({ EDITOR_COMPONENT_EVENT_SAME_ID, type->name, existing_type });
@@ -2196,7 +2239,7 @@ void EditorComponents::UpdateComponents(
 					}
 					else {
 						// Same component but it changed its ID and possibly itself
-						Stream<char> existing_type_id = TypeFromID((unsigned short)new_id, IsReflectionTypeSharedComponent(type));
+						Stream<char> existing_type_id = ComponentFromID((unsigned short)new_id, GetReflectionTypeComponentType(type));
 						if (existing_type_id.size > 0) {
 							// There is already a type with that ID
 							// Generate an event and prevent further processing
@@ -2244,11 +2287,11 @@ void EditorComponents::UpdateComponents(
 		for (unsigned int index = 0; index < temporary_module_types.size; index++) {
 			const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(temporary_module_types[index]);
 			bool is_link_component = IsReflectionTypeLinkComponent(type);
-			bool is_shared = IsReflectionTypeSharedComponent(type);
-			if (IsReflectionTypeComponent(type) || is_shared || is_link_component) {
+			ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(type);
+			if (component_type != ECS_COMPONENT_TYPE_COUNT || is_link_component) {
 				// Emit a removed event
 				if (!is_link_component) {
-					events.Add({ EDITOR_COMPONENT_EVENT_IS_REMOVED, type->name, type->name, {(short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION)}, is_shared, false });
+					events.Add({ EDITOR_COMPONENT_EVENT_IS_REMOVED, type->name, type->name, {(short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION)}, component_type, false });
 					// We cannot remove the type since it is needed for asset determination
 					// Remove it once the event is finalized
 				}
@@ -2318,23 +2361,15 @@ void EditorComponents::UpdateComponents(
 
 // ----------------------------------------------------------------------------------------------
 
-Stream<char> EditorComponents::TypeFromID(short id, bool shared) const
+Stream<char> EditorComponents::ComponentFromID(short id, ECS_COMPONENT_TYPE component_type) const
 {
 	Stream<char> name = { nullptr, 0 };
 	internal_manager->type_definitions.ForEachConst<true>([&](const ReflectionType& type, ResourceIdentifier identifier) {
 		double evaluation = type.GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
 		if (evaluation != DBL_MAX && (unsigned short)evaluation == id) {
-			if (shared) {
-				if (IsReflectionTypeSharedComponent(&type)) {
-					name = type.name;
-					return true;
-				}
-			}
-			else {
-				if (IsReflectionTypeComponent(&type)) {
-					name = type.name;
-					return true;
-				}
+			if (component_type == GetReflectionTypeComponentType(&type)) {
+				name = type.name;
+				return true;
 			}
 		}
 		return false;

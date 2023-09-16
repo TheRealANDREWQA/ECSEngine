@@ -56,7 +56,7 @@ void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandb
 
 // -------------------------------------------------------------------------------------------------------------
 
-// There must be unique_count elements in the given pointer
+// There must be unique_count elements (can be retrieved with GetMaxComponent() on the entity_manager) in the given pointer
 // These are mapped to the component value - can index directly
 // When the deep search is set to true, for assets that can be referenced by other assets
 // (i.e. textures and samplers by materials) it will report those fields as well
@@ -71,7 +71,7 @@ void GetLinkComponentsWithAssetFieldsUnique(
 
 // -------------------------------------------------------------------------------------------------------------
 
-// There must be shared_count elements in the given pointer
+// There must be shared_count elements (can be retrieved with GetMaxSharedComponent() on the entity_manager) in the given pointer
 // These are mapped to the component value - can index directly
 // When the deep search is set to true, for assets that can be referenced by other assets
 // (i.e. textures, samplers and shaders by materials) it will report those fields as well
@@ -86,7 +86,18 @@ void GetLinkComponentWithAssetFieldsShared(
 
 // -------------------------------------------------------------------------------------------------------------
 
-
+// There must be global_count elements (can be retrieved with GetGlobalComponentCount() on the entity_manager) in the given pointer
+// These are mapped to the component value - can index directly
+// When the deep search is set to true, for assets that can be referenced by other assets
+// (i.e. textures, samplers and shaders by materials) it will report those fields as well
+void GetLinkComponentWithAssetFieldsGlobal(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	LinkComponentWithAssetFields* link_with_fields,
+	AllocatorPolymorphic allocator,
+	Stream<ECS_ASSET_TYPE> asset_types,
+	bool deep_search = true
+);
 
 // -------------------------------------------------------------------------------------------------------------
 

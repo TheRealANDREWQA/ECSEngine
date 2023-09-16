@@ -267,6 +267,11 @@ size_t GetAssetTargetFileTimeStamp(const void* metadata, ECS_ASSET_TYPE type, St
 
 unsigned int GetAssetReferenceCount(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
+// Returns an array with all the assets files (those like .mat, .vshader, .pshader or .sampler) found in the assets folder.
+// These paths are relative paths to the assets folder. To deallocate them, you need to deallocate each string and then
+// Then buffer itself
+Stream<Stream<wchar_t>> GetAssetsFromAssetsFolder(const EditorState* editor_state, AllocatorPolymorphic allocator);
+
 bool HasAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
 bool HasAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);

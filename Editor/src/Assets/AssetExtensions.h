@@ -66,3 +66,6 @@ inline ECSEngine::Stream<ECSEngine::Stream<wchar_t>> ASSET_EXTENSIONS[] = {
 	{ ASSET_MATERIAL_EXTENSIONS, std::size(ASSET_MATERIAL_EXTENSIONS) },
 	{ ASSET_MISC_EXTENSIONS, std::size(ASSET_MISC_EXTENSIONS) }
 };
+
+// Fills in the extensions for those assets that have thunk or forwarding file
+void GetAssetExtensionsWithThunkOrForwardingFile(ECSEngine::CapacityStream<ECSEngine::Stream<wchar_t>>& extensions);

@@ -16116,7 +16116,8 @@ namespace ECSEngine {
 
 			float text_y_scale = system->GetTextSpriteYScale(font_size.y);
 			if (configuration & UI_CONFIG_ALIGN_TO_ROW_Y) {
-				position.y = AlignMiddle(position.y, current_row_y_scale, text_y_scale);
+				float row_scale = current_row_y_scale < text_y_scale ? text_y_scale : current_row_y_scale;
+				position.y = AlignMiddle(position.y, row_scale, text_y_scale);
 			}
 
 			ECS_UI_ALIGN text_horizontal_alignment, text_vertical_alignment;

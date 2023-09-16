@@ -639,8 +639,6 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 		}
 	}
 
-	stack_allocator.ClearBackup();
-
 	ClearWorld(&sandbox->sandbox_world);
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	// Clear the waiting compilation flag
@@ -1590,7 +1588,6 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		EditorSetConsoleError(snapshot_message);
 	}
 
-	stack_allocator.Clear();
 	// The graphics snapshot was allocated from the editor allocator, we need to deallocate it
 	graphics_snapshot.Deallocate(editor_state->EditorAllocator());
 
@@ -1799,8 +1796,6 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
 			// Prepare the sandbox world
 			PrepareWorld(&sandbox->sandbox_world);
-
-			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 
 			// Here we also need to double the reference counts of the assets stored in the runtime
 			// Since when returning to the scene representation, we can have the scene assets still loaded

@@ -1,22 +1,28 @@
 #include "editorpch.h"
 #include "ProjectBackup.h"
-#include "Editor\EditorState.h"
+#include "Editor/EditorState.h"
 #include "ProjectFolders.h"
-#include "..\Modules\ModuleFile.h"
+#include "../Modules/ModuleFile.h"
+#include "../Assets/AssetManagement.h"
+#include "../Sandbox/SandboxScene.h"
+#include "../Assets/AssetExtensions.h"
 
 using namespace ECSEngine;
 
-Stream<char> PROJECT_BACKUP_FILES_NAMES[] = {
-	"UI File",
+Stream<char> PROJECT_BACKUP_FILE_NAMES[] = {
+	"UI Folder",
 	"Project File",
 	"Modules File",
-	"Module Settings Files",
-	"Runtime Settings Files",
-	"Sandbox File"
+	"Sandbox File",
+	"Configuration Folder",
+	"Asset Metadata Files",
+	"Scene Files"
 };
 
+static_assert(PROJECT_BACKUP_COUNT == std::size(PROJECT_BACKUP_FILE_NAMES));
+
 // Every 20 minutes save a backup of the project
-#define BACKUP_PROJECT_LAZY_COUNTER (1000 * 60 * 20)
+#define BACKUP_PROJECT_LAZY_COUNTER ECS_MINUTES_AS_MILLISECONDS(20)
 
 // -------------------------------------------------------------------------------------------------
 
@@ -50,8 +56,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	GetProjectBackupFolder(editor_state, path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
 	Date date = OS::GetLocalTime();
-	function::ConvertDateToString(date, path, ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_DAY
-		| ECS_LOCAL_TIME_FORMAT_MONTH | ECS_LOCAL_TIME_FORMAT_YEAR | ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON);
+	function::ConvertDateToString(date, path, ECS_LOCAL_TIME_FORMAT_ALL_FROM_MINUTES | ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON);
 
 	auto error_lambda = [&](Stream<char> reason) {
 		ECS_STACK_CAPACITY_STREAM(char, message, 1024);
@@ -61,7 +66,8 @@ bool SaveProjectBackup(const EditorState* editor_state)
 		EditorSetConsoleError(message);
 		bool success = RemoveFolder(path);
 		if (!success) {
-			ECS_FORMAT_TEMP_STRING(error_message, "An error occured when trying to remove the backup folder which failed. Conside doing this manually. File name is {#}.", function::PathFilename(path));
+			ECS_FORMAT_TEMP_STRING(error_message, "An error occured when trying to remove the backup folder which failed. Consider doing this manually. "
+				"File name is {#}.", function::PathFilename(path));
 			EditorSetConsoleError(error_message);
 		}
 	};
@@ -82,29 +88,137 @@ bool SaveProjectBackup(const EditorState* editor_state)
 		return false;
 	}
 
+	// Copy the .ecsmodules file
 	file_or_folder_to_copy.size = 0;
 	GetProjectModulesFilePath(editor_state, file_or_folder_to_copy);
 	success = FileCopy(file_or_folder_to_copy, path, true);
 	if (!success) {
-		error_lambda("Could not copy the module file.");
+		error_lambda("Could not copy the project modules file");
 		return false;
 	}
 
-	// Now copy the UI and Configuration folders
+	// Copy the .ecss file
+	file_or_folder_to_copy.size = 0;
+	GetProjectSandboxFile(editor_state, file_or_folder_to_copy);
+	success = FileCopy(file_or_folder_to_copy, path, true);
+	if (!success) {
+		error_lambda("Could not copy the project sandbox file");
+		return false;
+	}
+
+	// Copy the UI folder
 	file_or_folder_to_copy.size = 0;
 	GetProjectUIFolder(editor_state, file_or_folder_to_copy);
 	success = FolderCopy(file_or_folder_to_copy, path);
 	if (!success) {
-		error_lambda("An error has occured when a project backup was saved. The project's UI folder could not be copied.");
+		error_lambda("The project's UI folder could not be copied.");
 		return false;
 	}
 
+	// Copy the Configuration folder
 	file_or_folder_to_copy.size = 0;
 	GetProjectConfigurationFolder(editor_state, file_or_folder_to_copy);
 	success = FolderCopy(file_or_folder_to_copy, path);
 	if (!success) {
-		error_lambda("An error has occured when a project backup was saved. The project's Configuration folder could not be copied.");
+		error_lambda("The project's Configuration folder could not be copied.");
 		return false;
+	}
+
+	// Copy the Metadata folder
+	file_or_folder_to_copy.size = 0;
+	GetProjectMetadataFolder(editor_state, file_or_folder_to_copy);
+	success = FolderCopy(file_or_folder_to_copy, path);
+	if (!success) {
+		error_lambda("The project's Metadata folder could not be copied.");
+		return false;
+	}
+
+	// Copy the asset files now - we need to gather them
+	CapacityStream<wchar_t> backup_assets_path = path;
+	backup_assets_path.Add(ECS_OS_PATH_SEPARATOR);
+	backup_assets_path.AddStreamAssert(PROJECT_ASSETS_RELATIVE_PATH);
+
+	success = CreateFolder(backup_assets_path);
+	if (!success) {
+		error_lambda("The project's Assets directory could not be created.");
+		return false;
+	}
+
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+
+	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, assets_folder_directories_storage, ECS_KB);
+	AdditionStream<Stream<wchar_t>> asset_folder_directories;
+	asset_folder_directories.is_capacity = true;
+	asset_folder_directories.capacity_stream = assets_folder_directories_storage;
+
+	// Create all the folders in the assets folder such that we don't need to check manually for each asset file
+	// If its parent exist or not
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+	GetProjectAssetsFolder(editor_state, assets_folder);
+	GetDirectoriesOrFilesOptions get_directories_options;
+	get_directories_options.relative_root = assets_folder;
+
+	GetDirectoriesRecursive(assets_folder, GetAllocatorPolymorphic(&stack_allocator), asset_folder_directories, get_directories_options);
+
+	// Create the directories first
+	unsigned int backup_asset_folder_base_size = backup_assets_path.size;
+	for (unsigned int index = 0; index < asset_folder_directories.Size(); index++) {
+		backup_assets_path.size = backup_asset_folder_base_size;
+		backup_assets_path.Add(ECS_OS_PATH_SEPARATOR);
+		backup_assets_path.AddStreamAssert(asset_folder_directories[index]);
+		function::ReplaceCharacter(backup_assets_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+
+		success = CreateFolder(backup_assets_path);
+		if (!success) {
+			error_lambda("The project's Assets child directories could not be created.");
+			return false;
+		}
+	}
+
+	stack_allocator.Clear();
+	
+	Stream<Stream<wchar_t>> asset_paths = GetAssetsFromAssetsFolder(editor_state, GetAllocatorPolymorphic(&stack_allocator));
+	unsigned int asset_folder_size = assets_folder.size;
+	// Now copy the asset thunk or forwarding files
+	for (size_t index = 0; index < asset_paths.size; index++) {
+		backup_assets_path.size = backup_asset_folder_base_size;
+		backup_assets_path.Add(ECS_OS_PATH_SEPARATOR);
+		backup_assets_path.AddStreamAssert(asset_paths[index]);
+
+		assets_folder.size = asset_folder_size;
+		assets_folder.Add(ECS_OS_PATH_SEPARATOR);
+		assets_folder.AddStreamAssert(asset_paths[index]);
+
+		success = FileCopy(assets_folder, backup_assets_path, false);
+		if (!success) {
+			error_lambda("The project's Asset forward facing files could not be copied.");
+			return false;
+		}
+	}
+
+	assets_folder.size = asset_folder_size;
+	backup_assets_path.size = backup_asset_folder_base_size;
+
+	ECS_STACK_CAPACITY_STREAM(wchar_t, sandbox_scene_path, 512);
+	// Now copy the scenes in use by the sandboxes
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	for (unsigned int index = 0; index < sandbox_count; index++) {
+		sandbox_scene_path.size = 0;
+		GetSandboxScenePath(editor_state, index, sandbox_scene_path);
+		if (sandbox_scene_path.size > 0) {
+			// Copy the scene
+			Stream<wchar_t> relative_path = function::PathRelativeToAbsolute(sandbox_scene_path, assets_folder);
+			backup_assets_path.size = backup_asset_folder_base_size;
+			backup_assets_path.Add(ECS_OS_PATH_SEPARATOR);
+			backup_assets_path.AddStreamAssert(relative_path);
+
+			success = FileCopy(sandbox_scene_path, backup_assets_path, false);
+			if (!success) {
+				ECS_FORMAT_TEMP_STRING(error_message, "The project's scene {#} could not be copied.", relative_path);
+				error_lambda(error_message);
+				return false;
+			}
+		}
 	}
 
 	return true;
@@ -137,7 +251,8 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 	auto rename_file_or_folder_temporary = [](Stream<wchar_t> to_path, Stream<wchar_t> temporary_name) {
 		bool rename_success = RenameFolderOrFile(to_path, temporary_name);
 		if (!rename_success) {
-			ECS_FORMAT_TEMP_STRING(error_message, "An error has occured when trying to rename a file/folder to temporary during backup. The file/folder {#} was not recovered from the backup.", to_path);
+			ECS_FORMAT_TEMP_STRING(error_message, "An error has occured when trying to rename a file/folder to temporary during backup. "
+				"The file / folder {#} was not recovered from the backup.", to_path);
 			EditorSetConsoleWarn(error_message);
 		}
 		return rename_success;
@@ -157,7 +272,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		bool rename_success = RenameFolderOrFile(absolute_temp_path, path_filename);
 		if (!rename_success) {
 			ECS_FORMAT_TEMP_STRING(error_message, "An error has occured when trying to rename a temporary file/folder to it's initial name. "
-				"The file/folder {#} should be renamed manually to {1}.", absolute_temp_path, path_filename);
+				"The file/folder {#} should be renamed manually to {#}.", absolute_temp_path, path_filename);
 			EditorSetConsoleError(error_message);
 		}
 	};
@@ -182,31 +297,42 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		}
 
 		if (!delete_success) {
-			ECS_FORMAT_TEMP_STRING(error_message, "An error has occured when trying to delete a temporary file/folder during backup restore. Consider deleting {#} manually.", absolute_temp_path);
+			ECS_FORMAT_TEMP_STRING(error_message, "An error has occured when trying to delete a temporary file/folder during backup restore. " 
+				"Consider deleting{#} manually.", absolute_temp_path);
 			EditorSetConsoleWarn(error_message);
 		}
 	};
 
+	// We can handle all the files and folder copies generally by abstracting away some information
+	// The scenes and the assets forwarding or thunk files cannot be copied like that
+
 	const wchar_t* temporary_names[PROJECT_BACKUP_COUNT] = {
-		L"temporary_ui",
+		L"temporary.ui",
 		L"temporary.ecsproj",
 		L"temporary.ecsmodules",
-		L"temporary_configuration"
+		L"temporary.ecss",
+		L"temporary_configuration",
+		L"temporary_metadata",
 	};
 
-	const char* base_error_string = "An error occured when trying to recover the project's {#} from the backup. The backup will continue with the rest of the specified files.";
+	const char* base_error_string = "An error occured when trying to recover the project's {#} from the backup. "
+		"The backup will continue with the rest of the specified files";
 
-	const char* error_strings[PROJECT_BACKUP_COUNT] = {
+	const char* error_strings[PROJECT_BACKUP_COUNT - 1] = {
 		"UI folder",
 		"file",
 		"module file",
-		"Configuration folder"
+		"sandbox file",
+		"Configuration folder",
+		"Metadata folder"
 	};
 
-	bool file_copy[PROJECT_BACKUP_COUNT] = {
+	bool file_copy[PROJECT_BACKUP_COUNT - 1] = {
 		false,
 		true,
 		true,
+		true,
+		false,
 		false
 	};
 
@@ -215,11 +341,13 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 	};
 
 	typedef void (*GetPath)(const EditorState* editor_state, CapacityStream<wchar_t>& path);
-	GetPath get_paths[PROJECT_BACKUP_COUNT] = {
+	GetPath get_paths[PROJECT_BACKUP_COUNT - 1] = {
 		GetProjectUIFolder,
 		get_project_file_path,
 		GetProjectModulesFilePath,
-		GetProjectConfigurationFolder
+		GetProjectSandboxFile,
+		GetProjectConfigurationFolder,
+		GetProjectMetadataFolder
 	};
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, backup_file_or_folder_copy, 512);
@@ -227,7 +355,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 	unsigned int backup_file_or_folder_copy_size = backup_file_or_folder_copy.size;
 
 	bool success = true;
-	for (size_t index = 0; index < PROJECT_BACKUP_COUNT; index++) {
+	for (size_t index = 0; index < PROJECT_BACKUP_COUNT - 1; index++) {
 		to_path.size = 0;
 		if (valid_files[index]) {
 			get_paths[index](editor_state, to_path);
@@ -255,6 +383,92 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 					delete_file_or_folder_temporary(to_path, temporary_names[index]);
 				}
 				success &= current_success;
+			}
+		}
+	}
+
+	if (valid_files[PROJECT_BACKUP_ASSETS_METADATA]) {
+		// We need to copy the assets forwaring or thunking files as well
+		ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, assets_valid_extensions, 64);
+		GetAssetExtensionsWithThunkOrForwardingFile(assets_valid_extensions);
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
+
+		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+		AdditionStream<Stream<wchar_t>> asset_files_paths;
+		asset_files_paths.is_capacity = false;
+		asset_files_paths.resizable_stream.Initialize(stack_allocator, 0);
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, backup_assets_folder, 512);
+		backup_assets_folder.Copy(folder);
+		backup_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
+		backup_assets_folder.AddStreamAssert(PROJECT_ASSETS_RELATIVE_PATH);
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, project_assets_folder, 512);
+		GetProjectAssetsFolder(editor_state, project_assets_folder);
+
+		GetDirectoriesOrFilesOptions get_files_options;
+		get_files_options.relative_root = backup_assets_folder;
+		GetDirectoryFilesWithExtensionRecursive(folder, stack_allocator, asset_files_paths, assets_valid_extensions, get_files_options);
+
+		unsigned int base_project_assets_folder_size = project_assets_folder.size;
+		unsigned int base_backup_assets_folder_size = backup_assets_folder.size;
+		for (unsigned int index = 0; index < asset_files_paths.Size(); index++) {
+			project_assets_folder.size = base_project_assets_folder_size;
+			project_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
+			project_assets_folder.AddStreamAssert(asset_files_paths[index]);
+
+			backup_assets_folder.size = base_backup_assets_folder_size;
+			backup_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
+			backup_assets_folder.AddStreamAssert(asset_files_paths[index]);
+
+			bool current_success = FileCopy(backup_assets_folder, project_assets_folder, false);
+			success &= current_success;
+			if (!current_success) {
+				ECS_FORMAT_TEMP_STRING(error_message, "An error occured when trying to recover the asset file {#} from the backup. "
+					"The backup will continue with the rest of the specified files", asset_files_paths[index]);
+				EditorSetConsoleWarn(error_message);
+			}
+		}
+	}
+
+	if (valid_files[PROJECT_BACKUP_SCENE]) {
+		ECS_STACK_CAPACITY_STREAM(wchar_t, backup_assets_folder, 512);
+		backup_assets_folder.Copy(folder);
+		backup_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
+		backup_assets_folder.AddStreamAssert(PROJECT_ASSETS_RELATIVE_PATH);
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, project_assets_folder, 512);
+		GetProjectAssetsFolder(editor_state, project_assets_folder);
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
+		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+
+		AdditionStream<Stream<wchar_t>> scene_files;
+		scene_files.is_capacity = false;
+		scene_files.resizable_stream.Initialize(stack_allocator, 0);
+		Stream<wchar_t> scene_extension = EDITOR_SCENE_EXTENSION;
+		GetDirectoriesOrFilesOptions get_options;
+		get_options.relative_root = backup_assets_folder;
+		GetDirectoryFilesWithExtensionRecursive(backup_assets_folder, stack_allocator, scene_files, { &scene_extension, 1 }, get_options);
+
+		unsigned int backup_assets_folder_base_size = backup_assets_folder.size;
+		unsigned int project_assets_folder_base_size = project_assets_folder.size;
+		for (unsigned int index = 0; index < scene_files.Size(); index++) {
+			backup_assets_folder.size = backup_assets_folder_base_size;
+			backup_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
+			backup_assets_folder.AddStreamAssert(scene_files[index]);
+
+			project_assets_folder.size = project_assets_folder_base_size;
+			project_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
+			project_assets_folder.AddStreamAssert(scene_files[index]);
+
+			bool current_success = FileCopy(backup_assets_folder, project_assets_folder, false);
+			success &= current_success;
+			if (!current_success) {
+				ECS_FORMAT_TEMP_STRING(error_message, "An error occured when trying to recover the scene file {#} from the backup. "
+					"The backup will continue with the rest of the specified files", scene_files[index]);
+				EditorSetConsoleWarn(error_message);
 			}
 		}
 	}

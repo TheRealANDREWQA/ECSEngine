@@ -1293,8 +1293,6 @@ void GetModuleDLLImports(EditorState* editor_state, unsigned int index)
 	}
 
 	editor_state->project_modules->buffer[index].dll_imports = StreamCoalescedDeepCopy(dll_imports, editor_state->EditorAllocator());
-
-	_stack_allocator.ClearBackup();
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1325,8 +1323,6 @@ void GetModuleDLLImports(const EditorState* editor_state, unsigned int index, Ca
 			}
 		}
 	}
-
-	_stack_allocator.ClearBackup();
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1568,7 +1564,6 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			// Don't create the UI types here for components because they might contain references to assets and fail
 			UIReflectionDrawerTag component_tags[] = {
 				{ ECS_COMPONENT_TAG, false },
-				{ ECS_SHARED_COMPONENT_TAG, false },
 				{ ECS_LINK_COMPONENT_TAG, true }
 			};
 			ECS_STACK_CAPACITY_STREAM(unsigned int, type_indices, 512);

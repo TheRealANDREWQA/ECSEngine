@@ -57,6 +57,7 @@ namespace ECSEngine {
 
 		Stream<char> ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_FUNCTIONS[] = {
 			STRING(ID),
+			STRING(IsShared),
 			STRING(AllocatorSize)
 		};
 
@@ -139,7 +140,6 @@ namespace ECSEngine {
 
 		ReflectionTypeTagHandler ECS_REFLECTION_TYPE_TAG_HANDLER[] = {
 			{ ECS_COMPONENT_TAG, TypeTagComponent, TypeTagComponent },
-			{ ECS_SHARED_COMPONENT_TAG, TypeTagComponent, TypeTagComponent },
 			{ ECS_GLOBAL_COMPONENT_TAG, TypeTagComponent, TypeTagComponent }
 		};
 
@@ -1034,7 +1034,6 @@ namespace ECSEngine {
 
 			typedef HashTableDefault<Stream<SkippedField>> SkippedFieldsTable;
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-			ScopedClearAllocator scoped_stack_allocator({ GetAllocatorPolymorphic(&stack_allocator) });
 
 			size_t total_type_count = 0;
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
@@ -2197,13 +2196,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				L".hpp"
 			};
 
-			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files, ECS_KB);
-			bool status = GetDirectoryFileWithExtensionRecursive(folders[index].root, allocator, files, { c_file_extensions, std::size(c_file_extensions) });
+			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files_storage, ECS_KB);
+			AdditionStream<Stream<wchar_t>> files;
+			files.is_capacity = true;
+			files.capacity_stream = files_storage;
+			bool status = GetDirectoryFilesWithExtensionRecursive(folders[index].root, allocator, files, { c_file_extensions, std::size(c_file_extensions) });
 			if (!status) {
 				return false;
 			}
 
-			return ProcessFolderHierarchyImplementation(this, index, files, error_message);
+			return ProcessFolderHierarchyImplementation(this, index, files.capacity_stream, error_message);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -2223,19 +2225,22 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				L".hpp"
 			};
 
-			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files, ECS_KB);
-			bool status = GetDirectoryFileWithExtensionRecursive(folders[folder_index].root, allocator, files, { c_file_extensions, std::size(c_file_extensions) });
+			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files_storage, ECS_KB);
+			AdditionStream<Stream<wchar_t>> files;
+			files.is_capacity = true;
+			files.capacity_stream = files_storage;
+			bool status = GetDirectoryFilesWithExtensionRecursive(folders[folder_index].root, allocator, files, { c_file_extensions, std::size(c_file_extensions) });
 			if (!status) {
 				return false;
 			}
 
 			// Preparsing the files in order to have thread act only on files that actually need to process
 			// Otherwise unequal distribution of files will result in poor multithreaded performance
-			unsigned int files_count = files.size;
+			unsigned int files_count = files.Size();
 
 			// Process these files on separate threads only if their number is greater than thread count
 			if (files_count < thread_count) {
-				return ProcessFolderHierarchyImplementation(this, folder_index, files, error_message);
+				return ProcessFolderHierarchyImplementation(this, folder_index, files.capacity_stream, error_message);
 			}
 
 			unsigned int* path_indices_buffer = (unsigned int*)Allocate(folders.allocator, sizeof(unsigned int) * files_count, alignof(unsigned int));
@@ -2270,7 +2275,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				reflect_thread_data[thread_index].reflection_manager = this;
 				reflect_thread_data[thread_index].valid_paths = &path_indices;
 				reflect_thread_data[thread_index].semaphore = &reflect_semaphore;
-				reflect_thread_data[thread_index].files = files;
+				reflect_thread_data[thread_index].files = files.capacity_stream;
 
 				// Launch the task
 				ThreadTask task = ECS_THREAD_TASK_NAME(ReflectionManagerHasReflectStructuresThreadTask, reflect_thread_data + thread_index, 0);
@@ -2343,7 +2348,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				DeallocateThreadTaskData(parse_thread_data[thread_index]);
 			}
 			Deallocate(folders.allocator, path_indices_buffer);
-			for (size_t index = 0; index < files.size; index++) {
+			for (size_t index = 0; index < files.Size(); index++) {
 				Deallocate(folders.allocator, files[index].buffer);
 			}
 
@@ -4854,6 +4859,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// Now compare the definitions. If they changed, the types have changed
 				if (!function::CompareStrings(first->fields[index].definition, second->fields[index].definition)) {
 					return false;
+				}
+
+				// Now check the name - if they have different names and the name can be found on other spot,
+				// Consider them to be different. Else, allow it to be the same to basically support renaming
+				if (!function::CompareStrings(first->fields[index].name, second->fields[index].name)) {
+					unsigned int second_field_index = second->FindField(first->fields[index].name);
+					if (second_field_index != -1) {
+						return false;
+					}
 				}
 
 				// If a user defined type is here, check that it too didn't change

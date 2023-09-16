@@ -13,6 +13,15 @@ namespace ECSEngine {
 
 	ECSENGINE_API size_t GetFactor(ECS_TIMER_DURATION type);
 
+#define ECS_MINUTES_AS_SECONDS(minutes) (60 * (minutes))
+#define ECS_MINUTES_AS_MILLISECONDS(minutes) (1000 * ECS_MINUTES_AS_SECONDS(minutes))
+
+#define ECS_HOURS_AS_SECONDS(hours) (60 * 60 * (hours))
+#define ECS_HOURS_AS_MILLISECONDS(hours) (1000 * ECS_HOURS_AS_SECONDS(hours))
+
+#define ECS_DAYS_AS_SECONDS(days) (24 * 60 * 60 * (days))
+#define ECS_DAYS_AS_MILLISECONDS(days) (1000 * ECS_DAYS_AS_SECONDS(days))
+
 	struct ECSENGINE_API Timer
 	{
 		ECS_INLINE Timer() {

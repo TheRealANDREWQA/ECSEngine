@@ -181,16 +181,24 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 struct SceneDrawData {
 	EditorState* editor_state;
 	uint2 previous_texel_size;
+	
+	// Keep the list of copied entities here since we need to deallocate it when the window is destroyed
+	Stream<Entity> copied_entities;
 };
 
 static void SceneUIDestroy(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
+	SceneDrawData* draw_data = (SceneDrawData*)_additional_data;
+
 	// Determine the sandbox index
 	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
 	// Disable the viewport rendering
 	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+
+	// Release the copied_entities buffer
+	draw_data->copied_entities.Deallocate(editor_state->EditorAllocator());
 }
 
 struct ScenePrivateActionData {
@@ -413,6 +421,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ScenePrivateActionData* data = (ScenePrivateActionData*)_data;
+	SceneDrawData* draw_data = (SceneDrawData*)_additional_data;
 	EditorState* editor_state = data->editor_state;
 
 	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
@@ -578,6 +587,57 @@ static void ScenePrivateAction(ActionData* action_data) {
 					RenderSandbox(editor_state, target_sandbox, EDITOR_SANDBOX_VIEWPORT_SCENE);
 				}
 			}
+		}
+
+		// Remove all copied entities which are no longer valid
+		Stream<Entity>& copied_entities = draw_data->copied_entities;
+		for (size_t index = 0; index < copied_entities.size; index++) {
+			if (!IsSandboxEntityValid(editor_state, sandbox_index, copied_entities[index])) {
+				copied_entities.RemoveSwapBack(index);
+				// Decrement the index as well
+				index--;
+			}
+		}
+
+		auto delete_current_selection = [&]() {
+			Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+			for (size_t index = 0; index < current_selected_entities.size; index++) {
+				DeleteSandboxEntity(editor_state, sandbox_index, current_selected_entities[index]);
+			}
+		};
+
+		// Handle the Ctrl+C,X,V, D and Delete actions as well
+		if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+			if (keyboard->IsPressed(ECS_KEY_C)) {
+				// Make a new allocation and deallocate the old
+				Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+				copied_entities.Resize(editor_state->EditorAllocator(), current_selected_entities.size, false, true);
+				copied_entities.Copy(current_selected_entities);
+			}
+			else if (keyboard->IsPressed(ECS_KEY_X)) {
+				// Delete the selected entities
+				delete_current_selection();
+			}
+			else if (keyboard->IsPressed(ECS_KEY_V)) {
+				for (size_t index = 0; index < copied_entities.size; index++) {
+					CopySandboxEntity(editor_state, sandbox_index, copied_entities[index]);
+				}
+			}
+			else if (keyboard->IsPressed(ECS_KEY_D)) {
+				Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+				if (current_selected_entities.size > 0) {
+					for (size_t index = 0; index < current_selected_entities.size; index++) {
+						// Also replace the selected entities with the new one
+						current_selected_entities[index] = CopySandboxEntity(editor_state, sandbox_index, current_selected_entities[index]);
+					}
+					// We need to signal the selected entities counter
+					SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
+				}
+			}
+		}
+
+		if (keyboard->IsPressed(ECS_KEY_DELETE)) {
+			delete_current_selection();
 		}
 	}
 

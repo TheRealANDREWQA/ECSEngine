@@ -77,7 +77,10 @@ void GetScenePath(const EditorState* editor_state, Stream<wchar_t> scene_path, C
 
 void GetSandboxScenePath(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<wchar_t>& path)
 {
-	GetScenePath(editor_state, GetSandbox(editor_state, sandbox_index)->scene_path, path);
+	Stream<wchar_t> scene_path = GetSandbox(editor_state, sandbox_index)->scene_path;
+	if (scene_path.size > 0) {
+		GetScenePath(editor_state, scene_path, path);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

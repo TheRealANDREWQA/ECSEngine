@@ -250,6 +250,7 @@
     <ClInclude Include="src\UI\VisualizeTexture.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Assets\AssetExtensions.cpp" />
     <ClCompile Include="src\Assets\AssetManagement.cpp" />
     <ClCompile Include="src\Assets\AssetTick.cpp" />
     <ClCompile Include="src\Assets\EditorSandboxAssets.cpp" />

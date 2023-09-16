@@ -208,8 +208,6 @@ namespace ECSEngine {
 		result.is_blittable = Reflection::SearchIsBlittable(reflection_manager, &result);
 		result.is_blittable_with_pointer = Reflection::SearchIsBlittableWithPointer(reflection_manager, &result);
 
-		_stack_allocator.ClearBackup();
-
 		return result;
 	}
 
@@ -335,8 +333,6 @@ namespace ECSEngine {
 				reflection_manager->AddTypeToHierarchy(&link_type, folder_index, allocator, true);
 			}
 		}
-
-		stack_allocator.ClearBackup();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -1502,8 +1498,6 @@ namespace ECSEngine {
 				asset_database->RemoveAssetForced(handles_to_be_removed[index], asset_type, &remove_info);
 			}
 		}
-
-		stack_allocator.ClearBackup();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

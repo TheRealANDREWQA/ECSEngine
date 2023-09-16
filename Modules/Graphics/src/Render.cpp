@@ -61,7 +61,7 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 			Translation* translation = (Translation*)for_each_data->unique_components[component_indices[TRANSLATION]];
 			ECS_EDITOR_RUNTIME_TYPE runtime_type_count = GetEditorRuntimeType(world->system_manager);
 			if (runtime_type_count == ECS_EDITOR_RUNTIME_GAME) {
-				translation->value.x += 0.01f;
+				//translation->value.x += 0.01f;
 			}
 			translation_value = translation->value;
 			matrix_translation = MatrixTranslation(translation_value);

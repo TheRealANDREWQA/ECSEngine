@@ -470,7 +470,6 @@ namespace ECSEngine {
 			read_size += IgnoreWithSizeShort(data->stream);
 		}
 
-		stack_allocator.ClearBackup();
 		return read_size;
 	}
 

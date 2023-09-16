@@ -1318,7 +1318,6 @@ namespace ECSEngine {
 			GetConditionalPreprocessorDirectivesCSource(&directives);
 			source_code = RemoveConditionalPreprocessorBlock(source_code, &directives, macros);
 
-			temp_allocator.ClearBackup();
 			return source_code;
 		}
 

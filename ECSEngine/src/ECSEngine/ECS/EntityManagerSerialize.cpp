@@ -703,17 +703,15 @@ namespace ECSEngine {
 			void operator()() {
 				// Don't forget to reset the crash handler
 				functor.FreeBuffering();
-				stack_allocator->ClearBackup();
 				ResetRecoveryCrashHandler();
 				ECS_GLOBAL_ASSERT_CRASH = assert_crash_value;
 			}
 
-			ResizableLinearAllocator* stack_allocator;
 			Functor functor;
 			bool assert_crash_value;
 		};
 
-		StackScope<Deallocator> scope_deallocator({ &stack_allocator, functor, previous_assert_crash });
+		StackScope<Deallocator> scope_deallocator({ functor, previous_assert_crash });
 
 		// Read the header first
 		SerializeEntityManagerHeader header;
@@ -1073,20 +1071,24 @@ namespace ECSEngine {
 				return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
 			}
 
-			const auto* component_fixup = &cached_shared_infos[index].info->component_fixup;
+			// If the info is still nullptr after this call, it means that the component was removed
+			// And never used. We can just skip it
+			if (cached_shared_infos[index].info != nullptr) {
+				const auto* component_fixup = &cached_shared_infos[index].info->component_fixup;
 
-			// If even after this call the component byte size is still 0, then fail
-			if (component_fixup->component_byte_size == 0) {
-				return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
+				// If even after this call the component byte size is still 0, then fail
+				if (component_fixup->component_byte_size == 0) {
+					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
+				}
+
+				entity_manager->RegisterSharedComponentCommit(
+					shared_component_pairs[index].component,
+					component_fixup->component_byte_size,
+					component_fixup->allocator_size,
+					cached_shared_infos[index].info->name,
+					{ component_fixup->component_buffers, component_fixup->component_buffer_count }
+				);
 			}
-
-			entity_manager->RegisterSharedComponentCommit(
-				shared_component_pairs[index].component,
-				component_fixup->component_byte_size,
-				component_fixup->allocator_size,
-				cached_shared_infos[index].info->name,
-				{ component_fixup->component_buffers, component_fixup->component_buffer_count }
-			);
 		}
 
 		for (unsigned int index = 0; index < header.global_component_count; index++) {
@@ -2790,7 +2792,7 @@ namespace ECSEngine {
 			// If the type table doesn't exist then proceed with the proxy
 			Stream<char> current_name = deserialize_field_table->types[index].name;
 			Reflection::ReflectionType current_type;
-			if (!current_reflection_manager->TryGetType(current_name, current_type)) {
+			if (current_reflection_manager->TryGetType(current_name, current_type)) {
 				// Check to see if the file type was a link type and now it's not
 				Stream<char> target_type_name = GetReflectionTypeLinkNameBase(current_name);
 				if (target_type_name.size < current_name.size) {

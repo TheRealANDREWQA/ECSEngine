@@ -55,15 +55,13 @@ namespace ECSEngine {
 			void operator() () {
 				CloseFile(file_handle);
 				free(allocation);
-				allocator->ClearBackup();
 			}
 
 			ECS_FILE_HANDLE file_handle;
 			void* allocation;
-			ResizableLinearAllocator* allocator;
 		};
 
-		StackScope<DeallocateMalloc> deallocate_malloc({ file_handle, file_allocation, &_stack_allocator });
+		StackScope<DeallocateMalloc> deallocate_malloc({ file_handle, file_allocation });
 
 		bool success = ReadFile(file_handle, { file_allocation, file_byte_size });
 		if (!success) {
@@ -138,8 +136,6 @@ namespace ECSEngine {
 
 		struct StackDeallocator {
 			void operator()() {
-				linear_allocator->ClearBackup();
-
 				renamed_file.Copy(original_file);
 				renamed_file.AddStream(L".temp");
 
@@ -167,10 +163,9 @@ namespace ECSEngine {
 			Stream<wchar_t> renamed_file;
 			ECS_FILE_HANDLE file_handle;
 			bool destroy_temporary;
-			ResizableLinearAllocator* linear_allocator;
 		};
 
-		StackScope<StackDeallocator> stack_deallocator({ save_data->file, renamed_file, -1, false, &_stack_allocator });
+		StackScope<StackDeallocator> stack_deallocator({ save_data->file, renamed_file, -1, false });
 
 		// Start with writing the entity manager first
 		// Open the file first

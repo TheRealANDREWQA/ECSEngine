@@ -738,9 +738,28 @@ namespace ECSEngine {
 						functor(component, instance);
 					}
 					return early_return;
-				});
+					});
 				return early_return;
 			});
+		}
+
+		// The functor receives as parameters (void* data, Component component) 
+		// Return true if you want to early exit.
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForAllGlobalComponents(Functor&& functor) const {
+			unsigned int count = m_global_component_count;
+			for (unsigned int index = 0; index < count; index++) {
+				if constexpr (early_exit) {
+					if (functor(m_global_components_data[index], m_global_components[index])) {
+						return true;
+					}
+				}
+				else {
+					functor(m_global_components_data[index], m_global_components[index]);
+				}
+			}
+			return false;
 		}
 
 		// Return true to exit early, if desired.
@@ -1322,6 +1341,10 @@ namespace ECSEngine {
 
 		// Returns the index of the shared component with the maximum index
 		Component GetMaxSharedComponent() const;
+
+		ECS_INLINE unsigned int GetGlobalComponentCount() const {
+			return m_global_component_count;
+		}
 
 		// Returns the number of entities that have this shared instance in use
 		unsigned int GetNumberOfEntitiesForSharedInstance(Component component, SharedInstance instance) const;

@@ -24,8 +24,6 @@ void TickAsset(EditorState* editor_state) {
 
 			Stream<Stream<unsigned int>> target_file_out_of_date_assets = GetOutOfDateAssetsTargetFile(editor_state, allocator);
 			ReloadAssets(editor_state, target_file_out_of_date_assets);
-
-			_stack_allocator.ClearBackup();
 		}
 	}
 }

@@ -85,6 +85,16 @@ Entity CreateSandboxEntity(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// Returns true if the operation succeded, else false. It can fail if the global component already exists
+// If the data pointer is nullptr it will set the component with the default values
+bool CreateSandboxGlobalComponent(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component component, 
+	const void* data = nullptr, 
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 // Creates an identical copy of the entity and returns it. If for some reason the entity doesn't exist
 // it returns -1
 Entity CopySandboxEntity(
@@ -307,6 +317,14 @@ const void* GetSandboxEntityComponentEx(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// Returns nullptr if it doesn't exist
+const void* GetSandboxGlobalComponent(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 // Returns a component from an entity unique or shared. If it doesn't exist it returns nullptr
 template<typename T>
 const T* GetSandboxEntityComponent(
@@ -417,6 +435,16 @@ void GetSandboxSharedInstanceComponentAssets(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// Fills in the asset handles for the given global component
+// (some can repeat if the component has multiple handles of the same type)
+void GetSandboxGlobalComponentAssets(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Component component,
+	CapacityStream<AssetTypedHandle>* handles,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 // Fills in the asset handles that the entity uses (some can repeat if they appear multiple
 // times in the same component or in different components)
 void GetSandboxEntityAssets(
@@ -521,6 +549,13 @@ void RemoveSandboxEntityComponentEx(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+void RemoveSandboxGlobalComponent(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 void RemoveSandboxEntityFromHierarchy(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -538,7 +573,7 @@ void RemoveSandboxComponentAssets(
 	unsigned int sandbox_index,
 	Component component,
 	const void* data,
-	bool shared,
+	ECS_COMPONENT_TYPE type,
 	Stream<LinkComponentAssetField> asset_fields = { nullptr, 0 }
 );
 
@@ -573,7 +608,7 @@ void SandboxForEachEntity(
 
 // The functor takes as parameters Archetype*, ArchetypeBase*, Entity, void** unique_components
 template<bool early_exit = false, typename ArchetypeInitialize, typename Functor>
-void SandboxForAllUniqueComponents(
+bool SandboxForAllUniqueComponents(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	ArchetypeInitialize&& archetype_initialize,
@@ -581,12 +616,12 @@ void SandboxForAllUniqueComponents(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-	entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](Archetype* archetype, ArchetypeBase* base_archetype) {}, functor);
+	return entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](Archetype* archetype, ArchetypeBase* base_archetype) {}, functor);
 }
 
 // The functor receives as parameters const Archetype*, const ArchetypeBase*, Entity, void** unique_components
 template<bool early_exit = false, typename ArchetypeInitialize, typename Functor>
-void SandboxForAllUniqueComponents(
+bool SandboxForAllUniqueComponents(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	ArchetypeInitialize&& archetype_initialize,
@@ -594,12 +629,12 @@ void SandboxForAllUniqueComponents(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
 	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-	entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](const Archetype* archetype, const ArchetypeBase* base_archetype) {}, functor);
+	return entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](const Archetype* archetype, const ArchetypeBase* base_archetype) {}, functor);
 }
 
 // Return true to early exit, else false
 template<bool early_exit = false, typename ComponentFunctor, typename Functor>
-void SandboxForAllSharedComponents(
+bool SandboxForAllSharedComponents(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	ComponentFunctor&& component_functor,
@@ -607,7 +642,19 @@ void SandboxForAllSharedComponents(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
 	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-	entity_manager->ForAllSharedInstances<early_exit>(component_functor, functor);
+	return entity_manager->ForAllSharedInstances<early_exit>(component_functor, functor);
+}
+
+// Return true to early exit, else false
+template<bool early_exit = false, typename Functor>
+bool SandboxForAllGlobalComponents(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Functor&& functor,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+) {
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	return entity_manager->ForAllGlobalComponents<early_exit>(functor);
 }
 
 //// Unique component only. Splats the corresponding asset fields from the link component into their entity manager storage

@@ -236,9 +236,8 @@ void EditorStateProjectTick(EditorState* editor_state) {
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_FREEZE_TICKS)) {
 		if (ProjectNeedsBackup(editor_state)) {
 			bool autosave_success = SaveProjectBackup(editor_state);
-			if (autosave_success) {
-				ResetProjectNeedsBackup(editor_state);
-			}
+			// Reset the project backup anyway, since it will cause an explosion of error messages if left to retry
+			ResetProjectNeedsBackup(editor_state);
 		}
 
 		TickModuleStatus(editor_state);
@@ -664,7 +663,7 @@ void EditorStateApplicationQuit(EditorState* editor_state, EDITOR_APPLICATION_QU
 void EditorStateSetDatabasePath(EditorState* editor_state)
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, folder, 512);
-	GetProjectMetafilesFolder(editor_state, folder);
+	GetProjectMetadataFolder(editor_state, folder);
 	editor_state->asset_database->SetFileLocation(folder);
 }
 
