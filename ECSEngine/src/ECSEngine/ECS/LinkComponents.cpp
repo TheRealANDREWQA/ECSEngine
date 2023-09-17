@@ -266,8 +266,9 @@ namespace ECSEngine {
 	{
 		ECS_STACK_CAPACITY_STREAM(unsigned int, unique_indices, 1024);
 		ECS_STACK_CAPACITY_STREAM(unsigned int, shared_indices, 1024);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, global_indices, 1024);
 
-		GetHierarchyComponentTypes(reflection_manager, folder_index, &unique_indices, &shared_indices);
+		GetHierarchyComponentTypes(reflection_manager, folder_index, &unique_indices, &shared_indices, &global_indices);
 
 		// Determine the unique and shared components that actually require a link type
 		auto reduce_loop = [=](CapacityStream<unsigned int>& indices) {
@@ -287,8 +288,9 @@ namespace ECSEngine {
 
 		reduce_loop(unique_indices);
 		reduce_loop(shared_indices);
+		reduce_loop(global_indices);
 
-		unsigned int total_count = unique_indices.size + shared_indices.size;
+		unsigned int total_count = unique_indices.size + shared_indices.size + global_indices.size;
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 		Stream<char>* target_names = (Stream<char>*)stack_allocator.Allocate(sizeof(Stream<char>) * total_count);
 		Stream<char>* link_names = (Stream<char>*)stack_allocator.Allocate(sizeof(Stream<char>) * total_count);
@@ -300,19 +302,18 @@ namespace ECSEngine {
 			exceptions = options->exceptions;
 		}
 
-		for (unsigned int index = 0; index < unique_indices.size; index++) {
-			target_names[target_name_count] = reflection_manager->GetType(unique_indices[index])->name;
-			if (exceptions.size == 0 || function::FindString(target_names[target_name_count], exceptions) == -1) {
-				target_name_count++;
+		auto register_names = [&](Stream<unsigned int> indices) {
+			for (unsigned int index = 0; index < indices.size; index++) {
+				target_names[target_name_count] = reflection_manager->GetType(indices[index])->name;
+				if (exceptions.size == 0 || function::FindString(target_names[target_name_count], exceptions) == -1) {
+					target_name_count++;
+				}
 			}
-		}
+		};
 
-		for (unsigned int index = 0; index < shared_indices.size; index++) {
-			target_names[target_name_count] = reflection_manager->GetType(shared_indices[index])->name;
-			if (exceptions.size == 0 || function::FindString(target_names[target_name_count], exceptions) == -1) {
-				target_name_count++;
-			}
-		}
+		register_names(unique_indices);
+		register_names(shared_indices);
+		register_names(global_indices);
 
 		GetLinkComponentForTargets(reflection_manager, { target_names, target_name_count }, link_names, LINK_COMPONENT_SUFFIX);
 		AllocatorPolymorphic allocator = reflection_manager->Allocator();
@@ -1517,8 +1518,9 @@ namespace ECSEngine {
 
 		ECS_STACK_CAPACITY_STREAM(unsigned int, unique_types, ECS_KB * 16);
 		ECS_STACK_CAPACITY_STREAM(unsigned int, shared_types, ECS_KB * 16);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, global_types, ECS_KB * 4);
 
-		GetHierarchyComponentTypes(reflection_manager, -1, &unique_types, &shared_types);
+		GetHierarchyComponentTypes(reflection_manager, -1, &unique_types, &shared_types, &global_types);
 
 		auto increment_reference_counts = [&](
 			Stream<LinkComponentAssetField> asset_fields, 
@@ -1590,6 +1592,22 @@ namespace ECSEngine {
 					// If the options is activated, count the number of entities that reference this instance
 					increment_reference_counts(asset_fields, reflection_type, data, increase_count);
 				});
+			}
+		});
+
+		// Global components
+		entity_manager->ForAllGlobalComponents([&](const void* global_data, Component component) {
+			// For each component determine its reflection type and the asset fields
+			const Reflection::ReflectionType* reflection_type = get_corresponding_reflection_type(component, global_types);
+
+			ECS_ASSERT(reflection_type != nullptr);
+
+			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
+			GetAssetFieldsFromLinkComponentTarget(reflection_type, asset_fields);
+
+			if (asset_fields.size > 0) {
+				// If it has asset fields, then retrieve them and keep the count of reference counts
+				increment_reference_counts(asset_fields, reflection_type, global_data, 1);
 			}
 		});
 

@@ -1090,6 +1090,13 @@ namespace ECSEngine {
 			// We also need to scale the gltf mesh, if required
 			if (scale_factor != 1.0f) {
 				ScaleGLTFMeshes({ mesh, 1 }, scale_factor);
+				// Check the bounding boxes as well - those need to be scaled here
+				if (determine_submesh_bounding_box) {
+					Vector8 vector_scaling = { float3::Splat(scale_factor), float3::Splat(scale_factor) };
+					for (size_t index = 0; index < data.mesh_count; index++) {
+						submeshes[index].bounds = ScaleAABBFromOrigin(submeshes[index].bounds, vector_scaling).ToStorage();
+					}
+				}
 			}
 		}
 		return success;

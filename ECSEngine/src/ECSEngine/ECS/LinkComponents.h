@@ -61,7 +61,7 @@ namespace ECSEngine {
 	};
 
 	// It will create the link types for all components (unique and shared) that require such a type and insert them
-	// into the reflection manager. The link reflection type is made with a coallesced allocation
+	// into the reflection manager. The link reflection type is made with a coalesced allocation
 	ECSENGINE_API void CreateLinkTypesForComponents(
 		Reflection::ReflectionManager* reflection_manager, 
 		unsigned int folder_index, 

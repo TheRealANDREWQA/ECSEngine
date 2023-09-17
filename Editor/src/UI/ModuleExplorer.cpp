@@ -412,9 +412,9 @@ void ModuleExplorerCommandAll(ActionData* action_data, void (*function)
 	(
 		EditorState*,
 		Stream<unsigned int>,
-		EDITOR_MODULE_CONFIGURATION*,
+		const EDITOR_MODULE_CONFIGURATION*,
 		EDITOR_LAUNCH_BUILD_COMMAND_STATUS*,
-		EDITOR_FINISH_BUILD_COMMAND_STATUS*,
+		std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>*,
 		bool
 	)
 ) {

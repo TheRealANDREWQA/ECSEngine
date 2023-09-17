@@ -60,6 +60,8 @@ namespace ECSEngine {
 		ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NO_BUFFERS_BUT_ALLOCATOR_SIZE_FUNCTION
 	};
 
+	ECSENGINE_API bool HasReflectionTypeComponentBuffers(const Reflection::ReflectionType* type);
+
 	// Determines if the reflection type as a component respects all the necessary features
 	ECSENGINE_API ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT ValidateReflectionTypeComponent(const Reflection::ReflectionType* type);
 

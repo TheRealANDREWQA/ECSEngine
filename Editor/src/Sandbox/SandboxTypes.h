@@ -50,6 +50,8 @@ struct ECS_REFLECT EditorSandboxModule {
 	ECS_FIELDS_END_REFLECT;
 };
 
+// -------------------------------------------------------------------------------------------------------------
+
 // This structure keeps the information about the status of the module when the runtime is running
 // This is useful to detect modules that are being added/removed dynamically or to detect changes
 // In the settings of the module or of the configuration that is being run
@@ -60,6 +62,12 @@ struct EditorSandboxModuleSnapshot {
 	ECSEngine::Stream<wchar_t> library_name;
 	ECSEngine::Stream<wchar_t> solution_path;
 	ECSEngine::Stream<EditorModuleReflectedSetting> reflected_settings;
+};
+
+// -------------------------------------------------------------------------------------------------------------
+
+struct EditorSandboxAssetHandlesSnapshot {
+	
 };
 
 // -------------------------------------------------------------------------------------------------------------

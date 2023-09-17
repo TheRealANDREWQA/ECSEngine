@@ -1573,7 +1573,7 @@ namespace ECSEngine {
 			}
 			m_frame_handlers.size = 0;
 
-			m_focused_window_data.locked_window = false;
+			m_focused_window_data.locked_window = 0;
 
 			ECS_ASSERT(m_horizontal_dockspaces.size == 0);
 			ECS_ASSERT(m_vertical_dockspaces.size == 0);
@@ -4017,7 +4017,9 @@ namespace ECSEngine {
 			bool is_hoverable = false;
 			bool is_clickable = false;
 			bool is_general = false;
-			if (!m_execute_events && data->mouse_region.dockspace == data->dockspace && data->mouse_region.border_index == data->border_index) {
+			bool is_locked = active_region ? false : m_focused_window_data.locked_window != 0;
+			if (!m_execute_events && data->mouse_region.dockspace == data->dockspace && data->mouse_region.border_index == data->border_index
+				&& !is_locked) {
 				bool active_click_handler = false;
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button) {
 					active_click_handler |= m_focused_window_data.clickable_handler[button].action == nullptr || m_mouse->Get(button) != ECS_BUTTON_HELD;
