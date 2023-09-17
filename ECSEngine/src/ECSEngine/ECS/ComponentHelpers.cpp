@@ -173,7 +173,8 @@ namespace ECSEngine {
 				global_indices->AddAssert(all_indices[index]);
 			}
 			else {
-				ECS_ASSERT(false);
+				// It might be a maybe component
+				ECS_ASSERT(IsReflectionTypeMaybeComponent(reflection_type));
 			}
 		}
 	}
@@ -204,6 +205,13 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
+	bool HasReflectionTypeComponentBuffers(const Reflection::ReflectionType* type)
+	{
+		return !IsBlittableWithPointer(type);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
 	ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT ValidateReflectionTypeComponent(const Reflection::ReflectionType* type)
 	{
 		ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(type);
@@ -214,8 +222,28 @@ namespace ECSEngine {
 			}
 
 			// Now check the buffers
-			
+			bool has_buffers = HasReflectionTypeComponentBuffers(type);
+			size_t allocator_size = GetReflectionComponentAllocatorSize(type);
+			if (allocator_size == 0 && has_buffers) {
+				return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ALLOCATOR_SIZE_FUNCTION;
+			}
+
+			if (allocator_size != 0 && !has_buffers) {
+				return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NO_BUFFERS_BUT_ALLOCATOR_SIZE_FUNCTION;
+			}
 		}
+
+		// Now check if it has the ECS_REFLECT_COMPONENT tag and is missing the is_shared function
+		if (component_type == ECS_COMPONENT_TYPE_COUNT) {
+			if (IsReflectionTypeMaybeComponent(type)) {
+				return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_MISSING_ID_FUNCTION;
+			}
+			else {
+				return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_NOT_A_COMPONENT;
+			}
+		}
+
+		return ECS_VALIDATE_REFLECTION_TYPE_AS_COMPONENT_VALID;
 	}
 	
 	// ----------------------------------------------------------------------------------------------------------------------------

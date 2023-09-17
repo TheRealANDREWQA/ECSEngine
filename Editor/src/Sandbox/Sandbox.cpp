@@ -977,62 +977,6 @@ void LockSandbox(EditorState* editor_state, unsigned int sandbox_index)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool LaunchSandboxRuntime(EditorState* editor_state, unsigned int index)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, index);
-	// Compile all modules in use by this sandbox
-	if (!AreSandboxModulesCompiled(editor_state, index)) {
-		// Compile the modules
-		if (!CompileSandboxModules(editor_state, index)) {
-			return false;
-		}
-	}
-
-	// Now initialize the task scheduler with the tasks retrieved
-	TaskScheduler* task_scheduler = sandbox->sandbox_world.task_scheduler;
-	task_scheduler->Reset();
-
-	// Push all the tasks into it
-	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
-		const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration);	
-		task_scheduler->Add(info->ecs_module.tasks);
-	}
-
-	ECS_STACK_CAPACITY_STREAM(char, solve_error_message, 2048);
-	solve_error_message.Copy("Could not solve task dependencies. ");
-
-	// Try to solve the scheduling order
-	bool success = task_scheduler->Solve(&solve_error_message);
-	if (!success) {
-		EditorSetConsoleError(solve_error_message);
-		return false;
-	}
-
-	// Now write the module settings into the system manager
-	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
-		EditorModule* editor_module = &editor_state->project_modules->buffer[sandbox->modules_in_use[index].module_index];
-		Stream<wchar_t> library_name = editor_module->library_name;
-		ECS_STACK_CAPACITY_STREAM(char, ascii_name, 512);
-		function::ConvertWideCharsToASCII(library_name, ascii_name);
-
-		size_t reflected_settings_size = sandbox->modules_in_use[index].reflected_settings.size;
-		ECS_STACK_CAPACITY_STREAM(SystemManagerSetting, settings, 32);
-
-		for (size_t setting_index = 0; setting_index < reflected_settings_size; setting_index++) {
-			settings[index].data = sandbox->modules_in_use[index].reflected_settings[setting_index].data;
-			settings[index].name = sandbox->modules_in_use[index].reflected_settings[setting_index].name;
-			settings[index].byte_size = 0;
-		}
-
-		settings.size = reflected_settings_size;
-		sandbox->sandbox_world.system_manager->BindSystemSettings(ascii_name, settings);
-	}
-
-	return true;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_for_pause)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, index);
@@ -1248,6 +1192,9 @@ EDITOR_EVENT(WaitResourceLoadingRenderSandboxEvent) {
 
 bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, uint2 new_texture_size, bool disable_logging)
 {
+	// TODO: The messages are kinda annoying since they are called many times. Is this fine to always disable them?
+	disable_logging = true;
+
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// Change the new_texture_size if we have a pending request and this is { 0, 0 }
 	if (new_texture_size.x == 0 && new_texture_size.y == 0) {
@@ -1783,14 +1730,21 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 
 	// Check to see if the modules referenced by the sandbox are loaded
 	bool success = AreSandboxModulesLoaded(editor_state, sandbox_index, true);
+	bool waiting_sandbox_compile = false;
 	if (!success) {
 		// Launch the build command for those modules that are not yet updated
-		success = CompileSandboxModules(editor_state, sandbox_index);
+		bool all_are_skipped = CompileSandboxModules(editor_state, sandbox_index);
+		// Set the success to true even tho we don't know if the modules have actually compiled.
+		// We let the runtime decide later to stop this world when the compilation ends
+		success = true;
+		waiting_sandbox_compile = !all_are_skipped;
 	}
 
 	// If we are in the scene state, we need to construct the scheduling order and prepare the world
 	if (sandbox->run_state == EDITOR_SANDBOX_SCENE) {
-		success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, disable_error_messages);
+		if (!waiting_sandbox_compile) {
+			success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, disable_error_messages);
+		}
 		if (success) {
 			// Copy the entities from the scene to the runtime
 			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
@@ -1965,7 +1919,6 @@ void TickSandboxRuntimes(EditorState* editor_state)
 
 void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 {
-	return;
 	// Each frame check to see if we need to update the state of the master buttons
 	bool are_all_default_running = AreAllDefaultSandboxesRunning(editor_state);
 	bool are_all_default_paused = AreAllDefaultSandboxesPaused(editor_state);
@@ -1979,13 +1932,6 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 				// If any of them is terminated, terminate all of them - if the are not already
 				if (!are_all_default_not_started) {
 					EndSandboxWorldSimulations(editor_state);
-				}
-				else {
-					// We need to pause all of them
-					PauseSandboxWorlds(editor_state);
-					if (!EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
-						EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
-					}
 				}
 			}
 		}
@@ -2010,13 +1956,6 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 				// If any of them is terminated, terminate all of them - if they are not already
 				if (!are_all_default_not_started) {
 					EndSandboxWorldSimulations(editor_state);
-				}
-				else {
-					// Try to run those sandboxes
-					RunSandboxWorlds(editor_state);
-					if (!EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
-						EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
-					}
 				}
 			}
 		}

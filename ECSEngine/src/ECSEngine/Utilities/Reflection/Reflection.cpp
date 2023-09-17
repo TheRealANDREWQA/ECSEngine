@@ -886,7 +886,7 @@ namespace ECSEngine {
 			ReflectionType copied_type;
 			const ReflectionType* final_type = type;
 			if (allocator.allocator != nullptr) {
-				copied_type = coallesced ? type->CopyCoallesced(allocator) : type->Copy(allocator);
+				copied_type = coallesced ? type->CopyCoalesced(allocator) : type->Copy(allocator);
 				final_type = &copied_type;
 			}
 			InsertIntoDynamicTable(type_definitions, Allocator(), *final_type, ResourceIdentifier(final_type->name));
@@ -1684,7 +1684,7 @@ namespace ECSEngine {
 
 				const ReflectionType* type = GetType(added_type.type_name);
 				if (added_type.coallesced_allocation) {
-					type->DeallocateCoallesced(added_type.allocator);
+					type->DeallocateCoalesced(added_type.allocator);
 				}
 				else {
 					type->Deallocate(added_type.allocator);

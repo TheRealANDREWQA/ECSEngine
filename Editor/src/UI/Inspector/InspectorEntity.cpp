@@ -948,7 +948,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		return entity_manager->GetSharedData(shared_signature.indices[index], shared_signature.instances[index]);
 	};
 
-	auto draw_component = [&](ComponentSignature signature, bool shared, unsigned int header_state_offset, auto get_current_data) {
+	auto draw_component = [&](ComponentSignature signature, ECS_COMPONENT_TYPE component_type, unsigned int header_state_offset, auto get_current_data) {
 		UIReflectionDrawConfig ui_draw_configs[(unsigned int)UIReflectionElement::Count];
 		memset(ui_draw_configs, 0, sizeof(ui_draw_configs));
 
@@ -973,7 +973,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		for (size_t index = 0; index < signature.count; index++) {
 			// Verify that the instance exists because it might have been destroyed in the meantime
 			instance_name.size = 0;
-			Stream<char> current_component_name = editor_state->editor_components.ComponentFromID(signature[index].value, shared);
+			Stream<char> current_component_name = editor_state->editor_components.ComponentFromID(signature[index].value, component_type);
 			ECS_ASSERT(current_component_name.size > 0);
 			Stream<char> original_component_name = current_component_name;
 
@@ -1011,8 +1011,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 			auto set_instance_inputs = [&]() {
 				// Check to see if it has any buffers and bind their allocators
-				AllocatorPolymorphic component_allocator = shared ? entity_manager->GetSharedComponentAllocatorPolymorphic(signature[index]) :
-					entity_manager->GetComponentAllocatorPolymorphic(signature[index]);
+				AllocatorPolymorphic component_allocator = entity_manager->GetComponentAllocatorPolymorphicFromType(signature[index], component_type);
 				if (component_allocator.allocator != nullptr) {
 					unsigned int exists_component = data->FindMatchingInput(current_component_name);
 					if (exists_component != -1) {
@@ -1213,8 +1212,8 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	};
 
 	// Now draw the entity using the reflection drawer
-	draw_component(unique_signature, false, 0, get_unique_data);
-	draw_component({ shared_signature.indices, shared_signature.count }, true, unique_signature.count, get_shared_data);
+	draw_component(unique_signature, ECS_COMPONENT_UNIQUE, 0, get_unique_data);
+	draw_component({ shared_signature.indices, shared_signature.count }, ECS_COMPONENT_SHARED, unique_signature.count, get_shared_data);
 
 	config.flag_count = 0;
 

@@ -376,9 +376,11 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			Copy(other);
 		}
 
-		void InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		Stream<T> InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			Initialize(allocator, other.size, debug_info);
 			Copy(other);
+
+			return *this;
 		}
 
 		template<typename Allocator>
@@ -786,15 +788,19 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		// Helpful for temp memory copy and initialization
-		void InitializeAndCopy(uintptr_t& buffer, Stream<T> other) {
+		CapacityStream<T> InitializeAndCopy(uintptr_t& buffer, Stream<T> other) {
 			InitializeFromBuffer(buffer, other.size, other.size);
 			Copy(other);
+
+			return *this;
 		}
 
 		// It will make a copy with the capacity the same as the stream's size
-		void InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		CapacityStream<T> InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			Initialize(allocator, other.size, other.size, debug_info);
 			Copy(other);
+
+			return *this;
 		}
 
 		template<typename Allocator>
@@ -1125,7 +1131,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size = 0;
 		}
 
-		void InitializeAndCopy(AllocatorPolymorphic _allocator, Stream<T> stream, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		ResizableStream<T> InitializeAndCopy(AllocatorPolymorphic _allocator, Stream<T> stream, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			allocator = _allocator;
 			if (stream.size > 0) {
 				ResizeNoCopy(stream.size, debug_info);
@@ -1136,6 +1142,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 				capacity = 0;
 				size = 0;
 			}
+
+			return *this;
 		}
 
 		T* buffer;

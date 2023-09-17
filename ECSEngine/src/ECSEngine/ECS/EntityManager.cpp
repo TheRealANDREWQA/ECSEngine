@@ -3966,6 +3966,30 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	MemoryArena* EntityManager::GetComponentAllocatorFromType(Component component, ECS_COMPONENT_TYPE type) {
+		switch (type) {
+		case ECS_COMPONENT_UNIQUE:
+			return GetComponentAllocator(component);
+		case ECS_COMPONENT_SHARED:
+			return GetSharedComponentAllocator(component);
+		case ECS_COMPONENT_GLOBAL:
+			return GetGlobalComponentAllocator(component);
+		}
+
+		ECS_CRASH_RETURN_VALUE(false, nullptr, "EntityManager: invalid component type when trying to retrieve component memory allocator.");
+
+		// Shouldn't reach here
+		return nullptr;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	AllocatorPolymorphic EntityManager::GetComponentAllocatorPolymorphicFromType(Component component, ECS_COMPONENT_TYPE type) {
+		return GetAllocatorPolymorphic(GetComponentAllocatorFromType(component, type));
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	Entity EntityManager::GetEntityFromIndex(unsigned int stream_index) const
 	{
 		Entity entity;

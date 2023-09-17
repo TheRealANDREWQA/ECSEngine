@@ -199,7 +199,7 @@ Entity CreateSandboxEntity(
 	
 	for (size_t index = 0; index < unique.count; index++) {
 		void* component_data = entity_manager->GetComponent(entity, unique[index]);
-		editor_state->editor_components.ResetComponent(unique[index], component_data, false);
+		editor_state->editor_components.ResetComponent(unique[index], component_data, ECS_COMPONENT_UNIQUE);
 	}
 	
 	// For every shared component, check to see if the instance exists
@@ -208,7 +208,7 @@ Entity CreateSandboxEntity(
 		if (!exists) {
 			// Look for a default component and associate it
 			size_t _component_storage[512];
-			editor_state->editor_components.ResetComponent(shared.indices[index], _component_storage, true);
+			editor_state->editor_components.ResetComponent(shared.indices[index], _component_storage, ECS_COMPONENT_SHARED);
 			entity_manager->RegisterSharedInstanceCommit(shared.indices[index], _component_storage);
 		}
 	}
@@ -238,7 +238,7 @@ bool CreateSandboxGlobalComponent(
 	}
 
 	ECS_STACK_CAPACITY_STREAM(size_t, component_storage, ECS_KB);
-	Stream<char> component_name = editor_state->editor_components.GlobalComponentFromID(component);
+	Stream<char> component_name = editor_state->editor_components.ComponentFromID(component, ECS_COMPONENT_GLOBAL);
 	unsigned short component_size = editor_state->editor_components.GetComponentByteSize(component_name);
 	const Reflection::ReflectionType* component_type = editor_state->editor_components.GetType(component_name);
 	if (data == nullptr) {
@@ -658,7 +658,7 @@ SharedInstance GetSharedComponentDefaultInstance(
 )
 {
 	size_t component_storage[ECS_KB * 8];
-	editor_state->editor_components.ResetComponent(component, component_storage, true);
+	editor_state->editor_components.ResetComponent(component, component_storage, ECS_COMPONENT_SHARED);
 	return FindOrCreateSharedComponentInstance(editor_state, sandbox_index, component, component_storage, viewport);
 }
 
@@ -876,13 +876,13 @@ static void GetSandboxComponentAssetsImplementation(
 	CapacityStream<AssetTypedHandle>* handles
 ) {
 	if (component_data != nullptr) {
-		const Reflection::ReflectionType* component_type = editor_state->editor_components.GetType(component, component_type);
+		const Reflection::ReflectionType* component_reflection_type = editor_state->editor_components.GetType(component, component_type);
 
 		ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 128);
 		ECS_STACK_CAPACITY_STREAM(unsigned int, int_handles, 128);
 
-		GetAssetFieldsFromLinkComponentTarget(component_type, asset_fields);
-		GetLinkComponentTargetHandles(component_type, editor_state->asset_database, component_data, asset_fields, int_handles.buffer);
+		GetAssetFieldsFromLinkComponentTarget(component_reflection_type, asset_fields);
+		GetLinkComponentTargetHandles(component_reflection_type, editor_state->asset_database, component_data, asset_fields, int_handles.buffer);
 
 		for (unsigned int index = 0; index < asset_fields.size; index++) {
 			handles->AddAssert({ int_handles[index], asset_fields[index].type.type });
@@ -896,19 +896,18 @@ static void GetSandboxEntityComponentAssetsImplementation(
 	Entity entity,
 	Component component,
 	CapacityStream<AssetTypedHandle>* handles,
-	bool shared,
-	bool global,
+	ECS_COMPONENT_TYPE component_type,
 	EDITOR_SANDBOX_VIEWPORT viewport
 ) {
 	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-	if (global) {
+	if (component_type == ECS_COMPONENT_GLOBAL) {
 		const void* component_data = GetSandboxGlobalComponent(editor_state, sandbox_index, component, viewport);
-		GetSandboxComponentAssetsImplementation(editor_state, component_data, component, shared, global, handles);
+		GetSandboxComponentAssetsImplementation(editor_state, component_data, component, component_type, handles);
 	}
 	else {
 		if (entity_manager->ExistsEntity(entity)) {
-			const void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, shared, viewport);
-			GetSandboxComponentAssetsImplementation(editor_state, component_data, component, shared, global, handles);
+			const void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, component_type == ECS_COMPONENT_SHARED, viewport);
+			GetSandboxComponentAssetsImplementation(editor_state, component_data, component, component_type, handles);
 		}
 	}
 }
@@ -922,7 +921,7 @@ void GetSandboxEntityComponentAssets(
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
-	GetSandboxEntityComponentAssetsImplementation(editor_state, sandbox_index, entity, component, handles, false, false, viewport);
+	GetSandboxEntityComponentAssetsImplementation(editor_state, sandbox_index, entity, component, handles, ECS_COMPONENT_UNIQUE, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -936,7 +935,7 @@ void GetSandboxEntitySharedComponentAssets(
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
-	GetSandboxEntityComponentAssetsImplementation(editor_state, sandbox_index, entity, component, handles, true, false, viewport);
+	GetSandboxEntityComponentAssetsImplementation(editor_state, sandbox_index, entity, component, handles, ECS_COMPONENT_SHARED, viewport);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -951,7 +950,7 @@ void GetSandboxSharedInstanceComponentAssets(
 )
 {
 	const void* instance_data = GetSandboxSharedInstance(editor_state, sandbox_index, component, shared_instance, viewport);
-	GetSandboxComponentAssetsImplementation(editor_state, instance_data, component, true, false, handles);
+	GetSandboxComponentAssetsImplementation(editor_state, instance_data, component, ECS_COMPONENT_SHARED, handles);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -965,7 +964,7 @@ void GetSandboxGlobalComponentAssets(
 )
 {
 	const void* component_data = GetSandboxGlobalComponent(editor_state, sandbox_index, component, viewport);
-	GetSandboxComponentAssetsImplementation(editor_state, component_data, component, false, true, handles);
+	GetSandboxComponentAssetsImplementation(editor_state, component_data, component, ECS_COMPONENT_GLOBAL, handles);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1157,7 +1156,7 @@ void RemoveSandboxEntityComponent(
 		Component component = editor_state->editor_components.GetComponentID(component_name);
 		if (entity_manager->HasComponent(entity, component)) {
 			const void* data = GetSandboxEntityComponent(editor_state, sandbox_index, entity, component, viewport);
-			RemoveSandboxComponentAssets(editor_state, sandbox_index, component, data, false, false);
+			RemoveSandboxComponentAssets(editor_state, sandbox_index, component, data, ECS_COMPONENT_UNIQUE);
 
 			EntityInfo previous_info = entity_manager->GetEntityInfo(entity);
 			entity_manager->RemoveComponentCommit(entity, { &component, 1 });
@@ -1190,7 +1189,7 @@ void RemoveSandboxEntitySharedComponent(
 			bool is_unreferenced = entity_manager->IsUnreferencedSharedInstance(component, previous_instance);
 			if (is_unreferenced) {
 				const void* instance_data = entity_manager->GetSharedData(component, previous_instance);
-				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, instance_data, true, false);
+				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, instance_data, ECS_COMPONENT_SHARED);
 				entity_manager->UnregisterSharedInstanceCommit(component, previous_instance);
 			}
 
@@ -1269,9 +1268,9 @@ void RemoveSandboxComponentAssets(
 		unregister_elements.size = component_asset_handles.size;
 	}
 	else {
-		const Reflection::ReflectionType* component_type = editor_state->editor_components.GetType(component, component_type);
+		const Reflection::ReflectionType* component_reflection_type = editor_state->editor_components.GetType(component, component_type);
 		ECS_STACK_CAPACITY_STREAM(unsigned int, handles, 512);
-		GetLinkComponentTargetHandles(component_type, editor_state->asset_database, data, asset_fields, handles.buffer);
+		GetLinkComponentTargetHandles(component_reflection_type, editor_state->asset_database, data, asset_fields, handles.buffer);
 
 		for (unsigned int index = 0; index < asset_fields.size; index++) {
 			unregister_elements[index].handle = handles[index];

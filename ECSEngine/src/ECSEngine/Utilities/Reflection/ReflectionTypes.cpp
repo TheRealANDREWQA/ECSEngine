@@ -446,7 +446,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionType::DeallocateCoallesced(AllocatorPolymorphic allocator) const
+		void ReflectionType::DeallocateCoalesced(AllocatorPolymorphic allocator) const
 		{
 			ECSEngine::Deallocate(allocator, name.buffer);
 		}
@@ -526,7 +526,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionType ReflectionType::CopyCoallesced(AllocatorPolymorphic allocator) const
+		ReflectionType ReflectionType::CopyCoalesced(AllocatorPolymorphic allocator) const
 		{
 			size_t copy_size = CopySize();
 			void* allocation = Allocate(allocator, copy_size);

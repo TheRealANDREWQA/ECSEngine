@@ -270,7 +270,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 struct CheckBuildStatusThreadData {
 	EditorState* editor_state;
 	Stream<wchar_t> path;
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status;
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status;
 	bool disable_logging;
 };
 
@@ -356,12 +356,12 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 		}
 
 		if (data->report_status != nullptr) {
-			*data->report_status = EDITOR_FINISH_BUILD_COMMAND_OK;
+			data->report_status->store(EDITOR_FINISH_BUILD_COMMAND_OK, ECS_RELAXED);
 		}
 
 	}
 	else if (data->report_status != nullptr) {
-		*data->report_status = EDITOR_FINISH_BUILD_COMMAND_FAILED;
+		data->report_status->store(EDITOR_FINISH_BUILD_COMMAND_FAILED, ECS_RELAXED);
 	}
 
 	if (int_configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
@@ -383,35 +383,30 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void ForEachProjectModule(
+typedef EDITOR_LAUNCH_BUILD_COMMAND_STATUS (*ForEachProjectModuleFunction)(
+	EditorState*, 
+	unsigned int, 
+	EDITOR_MODULE_CONFIGURATION, 
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>*, 
+	bool
+);
+
+static void ForEachProjectModule(
 	EditorState* editor_state,
 	Stream<unsigned int> indices,
-	EDITOR_MODULE_CONFIGURATION* configurations,
+	const EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_statuses,
 	bool disable_logging,
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS(*build_function)(EditorState*, unsigned int, EDITOR_MODULE_CONFIGURATION, EDITOR_FINISH_BUILD_COMMAND_STATUS*, bool)
+	ForEachProjectModuleFunction build_function
 ) {
 	// Clear the log file first
 	const ProjectModules* project_modules = (const ProjectModules*)editor_state->project_modules;
 
 	if (build_statuses) {
 		for (unsigned int index = 0; index < indices.size; index++) {
-			build_statuses[index] = EDITOR_FINISH_BUILD_COMMAND_WAITING;
+			build_statuses[index].store(EDITOR_FINISH_BUILD_COMMAND_WAITING, ECS_RELAXED);
 			statuses[index] = build_function(editor_state, indices[index], configurations[index], build_statuses + index, disable_logging);
-		}
-
-		auto have_finished = [build_statuses, indices]() {
-			for (size_t index = 0; index < indices.size; index++) {
-				if (build_statuses[index] == -1) {
-					return false;
-				}
-			}
-			return true;
-		};
-
-		while (!have_finished()) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(BLOCK_THREAD_FOR_MODULE_STATUS_SLEEP_TICK));
 		}
 	}
 	else {
@@ -475,22 +470,34 @@ void CommandLineString(
 struct ReloadModuleEventData {
 	bool allocated_finish_status;
 	EDITOR_MODULE_CONFIGURATION configuration;
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* finish_status;
+	// This is a single value - not an array
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* finish_status;
+	// These are allocated inside the event
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* dependencies_finish_status;
 	Stream<unsigned int> dependencies;
 };
 
-// This is used to reload modules that have been unloaded
-// during a build/reload/clean
+// This is used to reload modules that have been unloaded during a build/reload/clean
 EDITOR_EVENT(ReloadModuleEvent) {
 	ReloadModuleEventData* data = (ReloadModuleEventData*)_data;
 
-	if (*data->finish_status != EDITOR_FINISH_BUILD_COMMAND_WAITING) {
+	if (data->finish_status->load(ECS_RELAXED) != EDITOR_FINISH_BUILD_COMMAND_WAITING) {
+		data->dependencies_finish_status = (std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>*)editor_state->editor_allocator->Allocate(
+			sizeof(std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>) * data->dependencies.size
+		);
+
 		// No matter what the outcome is, we need to rebuild the old modules
 		for (size_t index = 0; index < data->dependencies.size; index++) {
 			const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index], data->configuration);
-			EDITOR_LAUNCH_BUILD_COMMAND_STATUS build_status = BuildModule(editor_state, data->dependencies[index], data->configuration);
+			EDITOR_LAUNCH_BUILD_COMMAND_STATUS build_status = BuildModule(
+				editor_state, 
+				data->dependencies[index],
+				data->configuration, 
+				data->dependencies_finish_status + index
+			);
 			if (build_status == EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING) {
-				ECS_FORMAT_TEMP_STRING(console_message, "Failed to reload module {#} after unloading it to let a build/rebuild operation be performed.", editor_state->project_modules->buffer[data->dependencies[index]].library_name);
+				ECS_FORMAT_TEMP_STRING(console_message, "Failed to reload module {#} after unloading it to let a build/rebuild operation be performed.", 
+					editor_state->project_modules->buffer[data->dependencies[index]].library_name);
 				EditorSetConsoleError(console_message);
 			}
 		}
@@ -501,7 +508,19 @@ EDITOR_EVENT(ReloadModuleEvent) {
 		if (data->allocated_finish_status) {
 			editor_state->editor_allocator->Deallocate(data->finish_status);
 		}
-		return false;
+		return true;
+	}
+	else if (data->dependencies_finish_status != nullptr) {
+		// Verify the launch statuses
+		bool have_finished = true;
+		for (size_t index = 0; index < data->dependencies.size && have_finished; index++) {
+			have_finished &= data->dependencies_finish_status[index].load(ECS_RELAXED) != EDITOR_FINISH_BUILD_COMMAND_WAITING;
+		}
+		if (have_finished) {
+			// Deallocate the buffer
+			editor_state->editor_allocator->Deallocate(data->dependencies_finish_status);
+		}
+		return !have_finished;
 	}
 	return true;
 }
@@ -513,7 +532,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 	unsigned int index,
 	Stream<wchar_t> command,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status,
 	bool disable_logging
 );
 
@@ -522,7 +541,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 struct RunCmdCommandDLLImportData {
 	struct Dependency {
 		unsigned int module_index;
-		EDITOR_FINISH_BUILD_COMMAND_STATUS status;
+		std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS> status;
 		bool verified_once;
 	};
 
@@ -531,7 +550,7 @@ struct RunCmdCommandDLLImportData {
 	bool disable_logging;
 	Stream<wchar_t> command;
 	Stream<Dependency> dependencies;
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* original_status;
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* original_status;
 };
 
 EDITOR_EVENT(RunCmdCommandDLLImport) {
@@ -547,13 +566,32 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 			Stream<wchar_t> library_name = editor_state->project_modules->buffer[data->dependencies[index].module_index].library_name;
 			unsigned int launched_index = function::FindString(library_name, editor_state->launched_module_compilation[data->configuration]);
 			if (launched_index == -1) {
-				// See if the module exists
 				const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index].module_index, data->configuration);
-				if (info->load_status != EDITOR_MODULE_LOAD_GOOD) {
+				if (data->command == BUILD_PROJECT_STRING_WIDE) {
+					if (info->load_status != EDITOR_MODULE_LOAD_GOOD) {
+						editor_state->launched_module_compilation_lock.unlock();
+						BuildModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
+						editor_state->launched_module_compilation_lock.lock();
+						have_not_finished = true;
+					}
+				}
+				else if (data->command == CLEAN_PROJECT_STRING_WIDE) {
+					if (info->load_status != EDITOR_MODULE_LOAD_FAILED) {
+						editor_state->launched_module_compilation_lock.unlock();
+						CleanModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
+						editor_state->launched_module_compilation_lock.lock();
+						have_not_finished = true;
+					}
+				}
+				else if (data->command == REBUILD_PROJECT_STRING_WIDE) {
+					// Here we need to perform the command no matter what
 					editor_state->launched_module_compilation_lock.unlock();
-					BuildModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
+					RebuildModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status, data->disable_logging);
 					editor_state->launched_module_compilation_lock.lock();
 					have_not_finished = true;
+				}
+				else {
+					ECS_ASSERT(false);
 				}
 				data->dependencies[index].verified_once = true;
 			}
@@ -593,7 +631,7 @@ struct RunCmdCommandAfterExternalDependencyData {
 	Stream<wchar_t> command;
 	EDITOR_MODULE_CONFIGURATION configuration;
 	bool disable_logging;
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status;
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status;
 	Stream<unsigned int> dependencies;
 	ResizableStream<unsigned int> unloaded_dependencies;
 };
@@ -627,20 +665,26 @@ EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 	if (data->dependencies.size == 0) {
 		editor_state->editor_allocator->Deallocate(data->dependencies.buffer);
 		bool allocated_report_status = false;
-		if (data->report_status == nullptr) {
-			data->report_status = (EDITOR_FINISH_BUILD_COMMAND_STATUS*)editor_state->editor_allocator->Allocate(sizeof(EDITOR_FINISH_BUILD_COMMAND_STATUS));
-			*data->report_status = EDITOR_FINISH_BUILD_COMMAND_WAITING;
+		// We need to allocate the report_status only if there are actual unloaded dependencies
+		if (data->report_status == nullptr && data->unloaded_dependencies.size > 0) {
+			data->report_status = (std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>*)editor_state->editor_allocator->Allocate(
+				sizeof(std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>)
+			);
+			data->report_status->store(EDITOR_FINISH_BUILD_COMMAND_WAITING, ECS_RELAXED);
 			allocated_report_status = true;
 		}
 		RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->report_status, data->disable_logging);
-		
+
 		if (!function::CompareStrings(data->command, CLEAN_PROJECT_STRING_WIDE)) {
-			ReloadModuleEventData reload_data;
-			reload_data.configuration = data->configuration;
-			reload_data.dependencies = data->unloaded_dependencies.ToStream();
-			reload_data.finish_status = data->report_status;
-			reload_data.allocated_finish_status = allocated_report_status;
-			EditorAddEvent(editor_state, ReloadModuleEvent, &reload_data, sizeof(reload_data));
+			if (data->unloaded_dependencies.size > 0) {
+				ReloadModuleEventData reload_data;
+				reload_data.configuration = data->configuration;
+				reload_data.dependencies = data->unloaded_dependencies.ToStream();
+				reload_data.finish_status = data->report_status;
+				reload_data.allocated_finish_status = allocated_report_status;
+				reload_data.dependencies_finish_status = nullptr;
+				EditorAddEvent(editor_state, ReloadModuleEvent, &reload_data, sizeof(reload_data));
+			}
 		}
 
 		return false;
@@ -656,7 +700,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 	unsigned int index,
 	Stream<wchar_t> command,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status,
 	bool disable_logging
 ) {
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
@@ -700,6 +744,9 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		if (!disable_logging) {
 			EditorSetConsoleError("An error occured when creating the command prompt that builds the module.");
 		}
+		if (report_status != nullptr) {
+			report_status->store(EDITOR_FINISH_BUILD_COMMAND_FAILED, ECS_RELAXED);
+		}
 		return EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING;
 	}
 	else {
@@ -729,7 +776,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	unsigned int index,
 	Stream<wchar_t> command,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status,
 	bool disable_logging
 ) {
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
@@ -810,7 +857,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status,
 	bool disable_logging
 ) {
 	ProjectModules* modules = editor_state->project_modules;
@@ -821,7 +868,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 		return RunBuildCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status, disable_logging);
 	}
 	if (report_status != nullptr) {
-		*report_status = EDITOR_FINISH_BUILD_COMMAND_OK;
+		report_status->store(EDITOR_FINISH_BUILD_COMMAND_OK, ECS_RELAXED);
 	}
 	// The callback will check the status of this function and report accordingly to the console
 	return EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED;
@@ -829,38 +876,12 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool BuildModulesAndLoad(EditorState* editor_state, Stream<unsigned int> module_indices, EDITOR_MODULE_CONFIGURATION* configurations, bool disable_logging)
-{
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * module_indices.size);
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = (EDITOR_FINISH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_FINISH_BUILD_COMMAND_STATUS) * module_indices.size);
-
-	BuildModules(editor_state, module_indices, configurations, launch_statuses, build_status, disable_logging);
-
-	for (size_t index = 0; index < module_indices.size; index++) {
-		if (launch_statuses[index] == EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING || build_status[index] == 0) {
-			return false;
-		}
-	}
-
-	// Go through all modules and try to load their modules
-	for (size_t index = 0; index < module_indices.size; index++) {
-		bool load_success = LoadEditorModule(editor_state, module_indices[index], configurations[index]);
-		if (!load_success) {
-			return false;
-		}
-	}
-
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
 void BuildModules(
 	EditorState* editor_state,
 	Stream<unsigned int> indices,
-	EDITOR_MODULE_CONFIGURATION* configurations,
+	const EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_statuses,
 	bool disable_logging
 )
 {
@@ -873,11 +894,11 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_status,
 	bool disable_logging
 ) {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
-	info->load_status = EDITOR_MODULE_LOAD_STATUS::EDITOR_MODULE_LOAD_FAILED;
+	info->load_status = EDITOR_MODULE_LOAD_FAILED;
 	return RunBuildCommand(editor_state, index, CLEAN_PROJECT_STRING_WIDE, configuration, build_status, disable_logging);
 }
 
@@ -886,9 +907,9 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanModule(
 void CleanModules(
 	EditorState* editor_state,
 	Stream<unsigned int> indices,
-	EDITOR_MODULE_CONFIGURATION* configurations,
+	const EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_statuses,
 	bool disable_logging
 ) {
 	ForEachProjectModule(editor_state, indices, configurations, launch_statuses, build_statuses, disable_logging, CleanModule);
@@ -900,7 +921,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_status,
 	bool disable_logging
 ) {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
@@ -945,9 +966,9 @@ void PrintConsoleMessageForBuildCommand(
 void RebuildModules(
 	EditorState* editor_state,
 	Stream<unsigned int> indices,
-	EDITOR_MODULE_CONFIGURATION* configurations,
+	const EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_statuses,
 	bool disable_logging
 ) {
 	ForEachProjectModule(editor_state, indices, configurations, launch_statuses, build_statuses, disable_logging, RebuildModule);

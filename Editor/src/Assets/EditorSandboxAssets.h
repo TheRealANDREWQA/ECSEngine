@@ -75,7 +75,7 @@ void GetLinkComponentsWithAssetFieldsUnique(
 // These are mapped to the component value - can index directly
 // When the deep search is set to true, for assets that can be referenced by other assets
 // (i.e. textures, samplers and shaders by materials) it will report those fields as well
-void GetLinkComponentWithAssetFieldsShared(
+void GetLinkComponentsWithAssetFieldsShared(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	LinkComponentWithAssetFields* link_with_fields,
@@ -90,7 +90,7 @@ void GetLinkComponentWithAssetFieldsShared(
 // These are mapped to the component value - can index directly
 // When the deep search is set to true, for assets that can be referenced by other assets
 // (i.e. textures, samplers and shaders by materials) it will report those fields as well
-void GetLinkComponentWithAssetFieldsGlobal(
+void GetLinkComponentsWithAssetFieldsGlobal(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	LinkComponentWithAssetFields* link_with_fields,

@@ -193,6 +193,7 @@ namespace ECSEngine {
 	}
 
 	// The low and high lanes of the scale need to be the same
+	// This one scales the dimensions of the aabb (the center stays the same)
 	ECS_INLINE AABB ECS_VECTORCALL ScaleAABB(AABB aabb, Vector8 scale) {
 		Vector8 center = AABBCenter(aabb);
 		Vector8 half_extents = AABBHalfExtents(aabb);
@@ -200,6 +201,13 @@ namespace ECSEngine {
 		Vector8 min_corner = center - new_extents;
 		Vector8 max_corner = center + new_extents;
 		return BlendLowAndHigh(min_corner, max_corner);
+	}
+
+	// The low and high lanes of the scale need to be the same
+	// This version scales the values from the origin (it is as if the
+	// min and max are multiplied with the factor scale)
+	ECS_INLINE AABB ECS_VECTORCALL ScaleAABBFromOrigin(AABB aabb, Vector8 scale) {
+		return aabb.value * scale;
 	}
 
 	// Returns an encompasing AABB from the given transformation

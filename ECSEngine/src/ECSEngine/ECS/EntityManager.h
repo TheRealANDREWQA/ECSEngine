@@ -1214,6 +1214,10 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic GetGlobalComponentAllocatorPolymorphic(Component component);
 
+		MemoryArena* GetComponentAllocatorFromType(Component component, ECS_COMPONENT_TYPE type);
+
+		AllocatorPolymorphic GetComponentAllocatorPolymorphicFromType(Component component, ECS_COMPONENT_TYPE type);
+
 		// Returns how many entities exist
 		ECS_INLINE unsigned int GetEntityCount() const {
 			return m_entity_pool->GetCount();

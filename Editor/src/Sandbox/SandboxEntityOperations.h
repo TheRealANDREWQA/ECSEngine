@@ -573,7 +573,7 @@ void RemoveSandboxComponentAssets(
 	unsigned int sandbox_index,
 	Component component,
 	const void* data,
-	ECS_COMPONENT_TYPE type,
+	ECS_COMPONENT_TYPE component_type,
 	Stream<LinkComponentAssetField> asset_fields = { nullptr, 0 }
 );
 

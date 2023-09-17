@@ -29,13 +29,12 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 
 // Runs on multiple threads
 // It will report the status, in order, for each module - the launch status and optionally the build status.
-// If the build status is used, this function will block the thread - it will wait until all the modules are compiled
 void BuildModules(
 	EditorState* editor_state,
 	Stream<unsigned int> module_indices,
-	EDITOR_MODULE_CONFIGURATION* configurations,
+	const EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses = nullptr,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_statuses = nullptr,
 	bool disable_logging = false
 );
 
@@ -47,15 +46,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr,
-	bool disable_logging = false
-);
-
-// Returns true if the projects were built and the modules could be successfully loaded
-bool BuildModulesAndLoad(
-	EditorState* editor_state,
-	Stream<unsigned int> module_indices,
-	EDITOR_MODULE_CONFIGURATION* configurations,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_status = nullptr,
 	bool disable_logging = false
 );
 
@@ -64,9 +55,9 @@ bool BuildModulesAndLoad(
 void CleanModules(
 	EditorState* editor_state,
 	Stream<unsigned int> module_indices,
-	EDITOR_MODULE_CONFIGURATION* configurations,
+	const EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses = nullptr,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_statuses = nullptr,
 	bool disable_logging = false
 );
 
@@ -77,7 +68,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_status = nullptr,
 	bool disable_logging = false
 );
 
@@ -86,9 +77,9 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanModule(
 void RebuildModules(
 	EditorState* editor_state,
 	Stream<unsigned int> indices,
-	EDITOR_MODULE_CONFIGURATION* configurations,
+	const EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses = nullptr,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_statuses = nullptr,
 	bool disable_logging = false
 );
 
@@ -99,7 +90,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_status = nullptr,
 	bool disable_logging = false
 );
 

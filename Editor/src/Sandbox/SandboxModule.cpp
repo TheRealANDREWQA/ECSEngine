@@ -199,9 +199,11 @@ bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
+	ECS_STACK_CAPACITY_STREAM(EDITOR_MODULE_CONFIGURATION, compile_configurations, 512);
+	ECS_STACK_CAPACITY_STREAM(unsigned int, compile_indices, 512);
+	ECS_STACK_CAPACITY_STREAM(EDITOR_LAUNCH_BUILD_COMMAND_STATUS, launch_statuses, 512);
 	unsigned int module_count = sandbox->modules_in_use.size;
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(EDITOR_MODULE_CONFIGURATION, compile_configurations, module_count);
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, compile_indices, module_count);
+	ECS_ASSERT(module_count <= 512);
 
 	// Only compile the modules which are not deactivated
 	module_count = 0;
@@ -214,7 +216,17 @@ bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index
 	}
 
 	compile_indices.size = module_count;
-	return BuildModulesAndLoad(editor_state, compile_indices, compile_configurations.buffer);
+
+	BuildModules(editor_state, compile_indices, compile_configurations.buffer, launch_statuses.buffer);
+
+	bool are_all_skipped = true;
+	for (unsigned int index = 0; index < module_count && are_all_skipped; index++) {
+		if (launch_statuses[index] != EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED) {
+			are_all_skipped = false;
+		}
+	}
+
+	return are_all_skipped;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

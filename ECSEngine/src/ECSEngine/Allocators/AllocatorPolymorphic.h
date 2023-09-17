@@ -224,7 +224,7 @@ namespace ECSEngine {
 		}
 	}
 
-	template<bool trigger_error_if_not_found>
+	template<bool trigger_error_if_not_found = true>
 	ECS_INLINE bool Deallocate(AllocatorPolymorphic allocator, const void* block, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if constexpr (trigger_error_if_not_found) {
 			Deallocate(allocator, block, debug_info);
@@ -235,7 +235,7 @@ namespace ECSEngine {
 		}
 	}
 
-	template<bool trigger_error_if_not_found>
+	template<bool trigger_error_if_not_found = true>
 	ECS_INLINE bool DeallocateTs(AllocatorPolymorphic allocator, const void* block, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if constexpr (trigger_error_if_not_found) {
 			DeallocateTs(allocator.allocator, allocator.allocator_type, block, debug_info);

@@ -194,7 +194,7 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API ReflectionType {
-			void DeallocateCoallesced(AllocatorPolymorphic allocator) const;
+			void DeallocateCoalesced(AllocatorPolymorphic allocator) const;
 
 			// It will try to deallocate anything that can be deallocated (when using
 			// non coallesced allocations). It uses IfBelongs deallocations
@@ -226,7 +226,7 @@ namespace ECSEngine {
 			// Every buffer will be individually allocated
 			ReflectionType Copy(AllocatorPolymorphic allocator) const;
 
-			ReflectionType CopyCoallesced(AllocatorPolymorphic allocator) const;
+			ReflectionType CopyCoalesced(AllocatorPolymorphic allocator) const;
 
 			// Copies everything that needs to be copied into this buffer
 			ReflectionType CopyTo(uintptr_t& ptr) const;
