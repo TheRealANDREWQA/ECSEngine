@@ -754,6 +754,7 @@ namespace ECSEngine {
 					continue;
 				}
 
+				bool texture_failure = false;
 				Stream<MaterialAssetResource> combined_textures = material_asset->GetCombinedTextures();
 				size_t subindex = 0;
 				for (; subindex < combined_textures.size; subindex++) {
@@ -761,19 +762,22 @@ namespace ECSEngine {
 						unsigned int texture_index = data->FindTexture(combined_textures[subindex].metadata_handle);
 						if (texture_index == -1) {
 							fail(index, true);
-							continue;
+							texture_failure = true;
+							break;
 						}
 					}
 				}
 
-				// Everything is in order. Can pass the material to the creation call
-				bool success = CreateMaterialFromMetadata(data->resource_manager, data->database, material_asset, data->load_info.mount_point);
-				if (!success) {
-					fail(index, false);
-				}
-				else {
-					// Call the callback
-					CallOnPreloadCallback(data, thread_id, material_handle, material_asset, ECS_ASSET_MATERIAL);
+				if (!texture_failure) {
+					// Everything is in order. Can pass the material to the creation call
+					bool success = CreateMaterialFromMetadata(data->resource_manager, data->database, material_asset, data->load_info.mount_point);
+					if (!success) {
+						fail(index, false);
+					}
+					else {
+						// Call the callback
+						CallOnPreloadCallback(data, thread_id, material_handle, material_asset, ECS_ASSET_MATERIAL);
+					}
 				}
 			}
 		}

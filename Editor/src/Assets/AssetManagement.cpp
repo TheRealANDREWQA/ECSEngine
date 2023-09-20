@@ -15,6 +15,8 @@ struct CreateAssetAsyncTaskData {
 	EditorState* editor_state;
 	ECS_ASSET_TYPE asset_type;
 	unsigned int handle;
+	// This value is used only to pass to the callback
+	unsigned int previous_handle;
 	// The sandbox index is needed to unlock the sandbox at the end
 	// It can be -1
 	unsigned int sandbox_index = -1;
@@ -45,6 +47,7 @@ ECS_THREAD_TASK(CreateAssetAsyncTask) {
 		info.handle = data->handle;
 		info.success = success;
 		info.type = data->asset_type;
+		info.previous_handle = data->previous_handle;
 
 		ActionData dummy_data;
 		dummy_data.data = data->callback.data;
@@ -109,11 +112,11 @@ EDITOR_EVENT(RegisterEvent) {
 	RegisterEventData* data = (RegisterEventData*)_data;
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		if (data->unregister_if_exists) {
-			unsigned int current_handle = *data->handle;
-			if (current_handle != -1) {
+		unsigned int previous_handle = *data->handle;
+		if (data->unregister_if_exists) {;
+			if (previous_handle != -1) {
 				UnregisterSandboxAssetElement element;
-				element.handle = current_handle;
+				element.handle = previous_handle;
 				element.type = data->type;
 				AddUnregisterAssetEvent(editor_state, { &element, 1 }, data->sandbox_index != -1, data->sandbox_index);
 			}
@@ -149,6 +152,7 @@ EDITOR_EVENT(RegisterEvent) {
 				info.handle = handle;
 				info.type = data->type;
 				info.success = false;
+				info.previous_handle = previous_handle;
 
 				ActionData dummy_data;
 				dummy_data.data = data->callback.data;
@@ -182,6 +186,7 @@ EDITOR_EVENT(RegisterEvent) {
 			task_data.handle = handle;
 			task_data.callback = data->callback;
 			task_data.sandbox_index = data->sandbox_index;
+			task_data.previous_handle = previous_handle;
 			EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(CreateAssetAsyncTask, &task_data, sizeof(task_data)));
 		}
 		return false;
@@ -315,6 +320,10 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 			SandboxAction(editor_state, data->sandbox_index, [=](unsigned int sandbox_index) {
 				UnlockSandbox(editor_state, sandbox_index);
 			});
+		}
+
+		if (data->callback.data_size > 0) {
+			editor_state->editor_allocator->Deallocate(data->callback.data);
 		}
 		return false;
 	}
@@ -457,6 +466,7 @@ void AddUnregisterAssetEvent(
 		return;
 	}
 
+	callback.data = function::CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
 	UnregisterEventData event_data = { { sandbox_index, sandbox_assets, callback } };
 	event_data.elements.InitializeAndCopy(editor_state->EditorAllocator(), elements);
 	EditorAddEvent(editor_state, UnregisterAssetEvent, &event_data, sizeof(event_data));
@@ -562,6 +572,7 @@ bool AddRegisterAssetEvent(
 			info.handle = existing_handle;
 			info.type = type;
 			info.success = true;
+			info.previous_handle = previous_handle;
 
 			ActionData dummy_data;
 			dummy_data.data = callback.data;

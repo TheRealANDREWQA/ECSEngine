@@ -1260,8 +1260,14 @@ namespace ECSEngine {
 				UserMaterial current_user_material;
 				ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 				ConvertMaterialAssetToUserMaterial(database, current_material, &current_user_material, GetAllocatorPolymorphic(&stack_allocator), mount_point);
-				ConvertMaterialAssetToUserMaterial(database, previous_material, &previous_user_material, GetAllocatorPolymorphic(&stack_allocator), mount_point);
-				
+				// Perform the conversion only if the previous was valid
+				if (IsAssetPointerValid(previous_material->material_pointer)) {
+					ConvertMaterialAssetToUserMaterial(database, previous_material, &previous_user_material, GetAllocatorPolymorphic(&stack_allocator), mount_point);
+				}
+				else {
+					memset(&previous_user_material, 0, sizeof(previous_user_material));
+				}
+
 				ResourceManagerLoadDesc load_desc;
 				load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE;
 				load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS;

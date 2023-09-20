@@ -1016,6 +1016,9 @@ namespace ECSEngine {
 
 			CompressTextureDescriptor compress_descriptor;
 			compress_descriptor.spin_lock = load_descriptor.gpu_lock;
+			if (descriptor->srgb) {
+				compress_descriptor.flags |= ECS_TEXTURE_COMPRESS_SRGB;
+			}
 			Texture2D texture = CompressTexture(m_graphics, Stream<Stream<void>>(data, image.GetImageCount()), images[0].width, images[0].height, descriptor->compression, temporary, compress_descriptor);
 			if (texture.Interface() == nullptr) {
 				return nullptr;
@@ -1844,6 +1847,7 @@ namespace ECSEngine {
 		if (!LoadUserMaterialTextures(this, user_material, converted_material, load_descriptor)) {
 			UnloadUserMaterialVertexShader(this, user_material, converted_material, load_descriptor);
 			UnloadUserMaterialPixelShader(this, user_material, converted_material, load_descriptor);
+			return false;
 		}
 
 		LoadUserMaterialBuffers(this, user_material, converted_material, load_descriptor);
@@ -2728,10 +2732,12 @@ namespace ECSEngine {
 	{
 		Material temporary_material;
 
+		// TODO: Determine what to do on failure for these cases
+
 		// Validate the new material - if it is not valid do not proceed.
 		if (new_user_material->vertex_shader.size == 0 || new_user_material->pixel_shader.size == 0) {
 			// Deallocate the material and return
-			resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
+			//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
 			return false;
 		}
 
@@ -2743,7 +2749,7 @@ namespace ECSEngine {
 			bool success = LoadUserMaterialVertexShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
 			if (!success) {
 				// Deallocate the material
-				resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
+				//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
 				return false;
 			}
 
@@ -2753,12 +2759,9 @@ namespace ECSEngine {
 		if (options.reload_pixel_shader) {
 			bool success = LoadUserMaterialPixelShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
 			if (!success) {
-				// Also unload the vertex shader
-				if (options.reload_vertex_shader) {
-					UnloadUserMaterialVertexShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
-				}
+				// We don't have to unload the vertex shader if it was reloaded - that is not the correct behaviour
 				// Deallocate the material
-				resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
+				//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
 				return false;
 			}
 
@@ -2768,15 +2771,9 @@ namespace ECSEngine {
 		if (options.reload_textures) {
 			bool success = LoadUserMaterialTextures(resource_manager, new_user_material, &temporary_material, load_descriptor);
 			if (!success) {
-				// Also unload the vertex and pixel shaders
-				if (options.reload_vertex_shader) {
-					UnloadUserMaterialVertexShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
-				}
-				if (options.reload_pixel_shader) {
-					UnloadUserMaterialPixelShader(resource_manager, new_user_material, &temporary_material, load_descriptor);
-				}
+				// We don't have to unload the shaders if they were reloaded - that is not the correct behaviour
 				// Deallocate the material
-				resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
+				//resource_manager->UnloadUserMaterial(old_user_material, material, load_descriptor);
 				return false;
 			}
 

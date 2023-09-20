@@ -898,6 +898,9 @@ void FinishReloadAsset(EditorState* editor_state, Stream<UpdateAssetToComponentE
 		for (size_t index = 0; index < update_elements.size; index++) {
 			ECS_STACK_CAPACITY_STREAM(unsigned int, current_sandboxes, 512);
 			unsigned int handle = editor_state->asset_database->FindAssetEx(update_elements[index].new_asset, update_elements[index].type);
+			if (handle == -1) {
+				handle = editor_state->asset_database->FindAssetEx(update_elements[index].old_asset, update_elements[index].type);
+			}
 			const void* metadata = editor_state->asset_database->GetAssetConst(handle, update_elements[index].type);
 			GetAssetSandboxesInUse(editor_state, metadata, update_elements[index].type, &current_sandboxes);
 
@@ -1198,8 +1201,6 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 											DecrementAssetReference(editor_state, old_dependencies[dependency].handle, old_dependencies[dependency].type);
 										}
 
-										add_external_dependencies(metadata, asset_type);
-
 										// We also need to get the internal dependencies for the file metadata and insert time stamps for
 										// assets that have been missing
 										ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, file_internal_dependencies, 128);
@@ -1209,6 +1210,9 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 											InsertAssetTimeStamp(editor_state, file_internal_dependencies[subindex].handle, file_internal_dependencies[subindex].type, true);
 										}
 									}
+									
+									// The external dependencies need to be added no matter what if the asset succeeded or not
+									add_external_dependencies(metadata, asset_type);
 								}
 								else {
 									// We need to remove the reference count additions made by the file read

@@ -55,7 +55,8 @@ static void AddSelectedEntitiesComponentIfMissing(EditorState* editor_state, uns
 	}
 }
 
-static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTransformUpdateDescriptor* descriptor) {
+// Returns true if a modification was made, else false (can be used to update the render viewports)
+static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTransformUpdateDescriptor* descriptor) {
 	EditorState* editor_state = descriptor->editor_state;
 	unsigned int sandbox_index = descriptor->sandbox_index;
 	Keyboard* keyboard = descriptor->system->m_keyboard;
@@ -105,6 +106,7 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 			}
 			// Also translate the midpoint along
 			*descriptor->translation_midpoint += translation_delta;
+			return true;
 		}
 	}
 	break;
@@ -141,6 +143,7 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 			if (descriptor->rotation_delta != nullptr) {
 				*descriptor->rotation_delta = AddLocalRotation(*descriptor->rotation_delta, rotation_delta);
 			}
+			return true;
 		}
 	}
 	break;
@@ -172,10 +175,13 @@ static void HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 			if (descriptor->scale_delta != nullptr) {
 				*descriptor->scale_delta += scale_delta;
 			}
+			return true;
 		}
 	}
 	break;
 	}
+
+	return false;
 }
 
 struct SceneDrawData {
@@ -470,10 +476,11 @@ static void ScenePrivateAction(ActionData* action_data) {
 					sandbox->transform_tool = ECS_TRANSFORM_SCALE;
 				}
 
-				bool trigger_rerender = false;
+				// COUNT means no rerender, SCENE only scene, RUNTIME both scene and the runtime
+				EDITOR_SANDBOX_VIEWPORT trigger_rerender_viewport = EDITOR_SANDBOX_VIEWPORT_COUNT;
 				if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CHANGE_TRANSFORM_SPACE)) {
 					sandbox->transform_space = InvertTransformSpace(sandbox->transform_space);
-					trigger_rerender = true;
+					trigger_rerender_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
 				}
 
 				auto initiate_transform = [&](ECS_TRANSFORM_TOOL tool) {
@@ -492,7 +499,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 					}
 					sandbox->transform_keyboard_space = data->drag_tool.GetSpace();
-					trigger_rerender = true;
+					trigger_rerender_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
 					sandbox->transform_display_axes = true;
 					sandbox->transform_keyboard_tool = tool;
 
@@ -516,7 +523,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 					auto change_selected_axis = [&](ECS_TRANSFORM_TOOL_AXIS axis) {
 						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 						sandbox->transform_tool_selected[axis] = true;
-						trigger_rerender = true;
+						trigger_rerender_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
 
 						// Reinitialize the drag tool
 						switch (sandbox->transform_keyboard_tool) {
@@ -578,13 +585,20 @@ static void ScenePrivateAction(ActionData* action_data) {
 						update_descriptor.rotation_delta = &data->rotation_delta;
 						update_descriptor.scale_delta = &data->scale_delta;
 
-						HandleSelectedEntitiesTransformUpdate(&update_descriptor);
-						trigger_rerender = true;
+						bool should_rerender = HandleSelectedEntitiesTransformUpdate(&update_descriptor);
+						if (should_rerender) {
+							trigger_rerender_viewport = EDITOR_SANDBOX_VIEWPORT_RUNTIME;
+						}
 					}
 				}
 
-				if (current_tool != sandbox->transform_tool || trigger_rerender) {
-					RenderSandbox(editor_state, target_sandbox, EDITOR_SANDBOX_VIEWPORT_SCENE);
+				if (current_tool != sandbox->transform_tool || trigger_rerender_viewport != EDITOR_SANDBOX_VIEWPORT_COUNT) {
+					if (trigger_rerender_viewport == EDITOR_SANDBOX_VIEWPORT_RUNTIME) {
+						RenderSandboxViewports(editor_state, target_sandbox);
+					}
+					else {
+						RenderSandbox(editor_state, target_sandbox, EDITOR_SANDBOX_VIEWPORT_SCENE);
+					}
 				}
 			}
 		}
@@ -599,13 +613,16 @@ static void ScenePrivateAction(ActionData* action_data) {
 			}
 		}
 
+		// Returns true if there are entities to be deleted, else false
 		auto delete_current_selection = [&]() {
 			Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
 			for (size_t index = 0; index < current_selected_entities.size; index++) {
 				DeleteSandboxEntity(editor_state, sandbox_index, current_selected_entities[index]);
 			}
+			return current_selected_entities.size > 0;
 		};
 
+		bool control_action_trigger_rerender = false;
 		// Handle the Ctrl+C,X,V, D and Delete actions as well
 		if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 			if (keyboard->IsPressed(ECS_KEY_C)) {
@@ -616,12 +633,13 @@ static void ScenePrivateAction(ActionData* action_data) {
 			}
 			else if (keyboard->IsPressed(ECS_KEY_X)) {
 				// Delete the selected entities
-				delete_current_selection();
+				control_action_trigger_rerender = delete_current_selection();
 			}
 			else if (keyboard->IsPressed(ECS_KEY_V)) {
 				for (size_t index = 0; index < copied_entities.size; index++) {
 					CopySandboxEntity(editor_state, sandbox_index, copied_entities[index]);
 				}
+				control_action_trigger_rerender = copied_entities.size > 0;
 			}
 			else if (keyboard->IsPressed(ECS_KEY_D)) {
 				Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
@@ -632,12 +650,17 @@ static void ScenePrivateAction(ActionData* action_data) {
 					}
 					// We need to signal the selected entities counter
 					SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
+					control_action_trigger_rerender = true;
 				}
 			}
 		}
 
 		if (keyboard->IsPressed(ECS_KEY_DELETE)) {
-			delete_current_selection();
+			control_action_trigger_rerender = delete_current_selection();
+		}
+		if (control_action_trigger_rerender) {
+			// We need to re-render both views
+			RenderSandboxViewports(editor_state, sandbox_index);
 		}
 	}
 
@@ -1111,7 +1134,10 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			update_descriptor.window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			update_descriptor.tool_to_use = GetSandbox(editor_state, sandbox_index)->transform_tool;
 
-			HandleSelectedEntitiesTransformUpdate(&update_descriptor);
+			bool should_render_runtime = HandleSelectedEntitiesTransformUpdate(&update_descriptor);
+			if (should_render_runtime) {
+				RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+			}
 		}
 
 		if (mouse->IsReleased(ECS_MOUSE_LEFT)) {

@@ -142,7 +142,7 @@ void LoadAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsigned i
 // It writes the handle of the asset. If the deserialization failed, it will write -1
 // The reason for which it takes a pointer to the handle is that this may not run when called
 // due to a prevention of resource loads. It returns true if the resource already exists and no asynchronous load is done
-// Can optionally give a callback to call when the load is finalized. A structure of type CreateAssetAsyncCallbackInfo
+// Can optionally give a callback to call when the load is finalized. A structure of type RegisterAssetEventCallbackInfo
 // will be given in the additional_data member
 bool RegisterSandboxAsset(
 	EditorState* editor_state,

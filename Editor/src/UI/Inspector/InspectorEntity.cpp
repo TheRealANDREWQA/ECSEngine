@@ -1131,8 +1131,50 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				}
 				ui_drawer->BindInstancePtrs(instance, current_component);
 				if (link_component.size > 0) {
+					// We need a different modify value handler since we need to
+					// Not increment the reference count of the asset in runtime mode when it is already loaded
+					auto modify_asset_value = [](ActionData* action_data) {
+						UI_UNPACK_ACTION_DATA;
+
+						const InspectorComponentCallbackData* inspector_data = (const InspectorComponentCallbackData*)_data;
+						const AssetOverrideCallbackAdditionalInfo* callback_info = (const AssetOverrideCallbackAdditionalInfo*)_additional_data;
+
+						EditorState* editor_state = inspector_data->editor_state;
+						unsigned int sandbox_index = inspector_data->sandbox_index;
+
+						EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+						if (IsSandboxStateRuntime(sandbox_state)) {
+							unsigned int handle = callback_info->handle;
+							ECS_ASSET_TYPE type = callback_info->type;
+
+							// Get the reference count of the asset
+							unsigned int reference_count = GetAssetReferenceCount(editor_state, handle, type);
+							if (callback_info->is_selection) {
+								// If the asset is loaded for the first time, we shouldn't do anyting
+								if (reference_count > 1) {
+									// We need to reduce the count by one
+									DecrementAssetReference(editor_state, handle, type, sandbox_index);
+								}
+							}
+							else {
+								// Here, where the asset reference count is decremented, we need to always increase the count by one
+								IncrementAssetReferenceInSandbox(editor_state, handle, type, sandbox_index);
+							}
+						}
+						else {
+							// If selection, we need to unregister the previous asset
+							if (callback_info->is_selection) {
+								UnregisterSandboxAsset(editor_state, sandbox_index, callback_info->previous_handle, callback_info->type);
+							}
+						}
+
+						InspectorComponentCallback(action_data);
+					};
+
+					UIActionHandler modify_asset_handler = modify_value_handler;
+					modify_asset_handler.action = modify_asset_value;
 					// We must do this after the pointer have been bound
-					AssetOverrideBindInstanceOverrides(ui_drawer, instance, sandbox_index, modify_value_handler);
+					AssetOverrideBindInstanceOverrides(ui_drawer, instance, sandbox_index, modify_asset_handler, true);
 				}
 				set_instance_inputs();
 			}

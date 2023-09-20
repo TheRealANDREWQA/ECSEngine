@@ -20,6 +20,8 @@ struct CreateAssetInternalDependenciesElement {
 
 // Mirrors AssetOverrideCallbackAdditionalInfo in AssetOverrides.h
 struct RegisterAssetEventCallbackInfo {
+	// This is the handle value before the selection
+	unsigned int previous_handle;
 	unsigned int handle;
 	ECS_ASSET_TYPE type;
 	bool success;

@@ -267,6 +267,123 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 
 // -------------------------------------------------------------------------------------------------------------
 
+// This will automatically change the reference counts accordingly
+static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state, unsigned int sandbox_index, bool initialize) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
+	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+
+	const AssetDatabase* database = editor_state->asset_database;
+	ECS_STACK_CAPACITY_STREAM(Stream<unsigned int>, asset_reference_counts, ECS_ASSET_TYPE_COUNT);
+	GetAssetReferenceCountsFromEntitiesPrepare(asset_reference_counts.buffer, stack_allocator, database);
+
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
+	GetAssetReferenceCountsFromEntities(entity_manager, editor_state->editor_components.internal_manager, database, asset_reference_counts.buffer);
+
+	if (!initialize) {
+		// Determine the difference between the 2 snapshots
+		// Allocate for each handle in the stored snapshot a boolean such that we mark those that were already found
+		size_t snapshot_size = sandbox->runtime_asset_handle_snapshot.total_size;
+		bool* was_found = (bool*)editor_state->editor_allocator->Allocate(sizeof(bool) * snapshot_size);
+		memset(was_found, 0, sizeof(bool) * snapshot_size);
+
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
+			size_t handle_start_offset = sandbox->runtime_asset_handle_snapshot.StartOffset(current_type);
+			size_t handle_snapshot_count = sandbox->runtime_asset_handle_snapshot.asset_type_count[current_type];
+			for (size_t subindex = 0; subindex < asset_reference_counts[index].size; subindex++) {
+				// Search for the handle in the stored snapshot
+				unsigned int current_handle = database->GetAssetHandleFromIndex(subindex, current_type);
+				size_t found_index = function::SearchBytes(
+					sandbox->runtime_asset_handle_snapshot.handles + handle_start_offset,
+					handle_snapshot_count,
+					current_handle,
+					sizeof(current_handle)
+				);
+				if (found_index != -1) {
+					found_index += handle_start_offset;
+					was_found[found_index] = true;
+					// Compare the reference count
+					unsigned int snapshot_reference_count = sandbox->runtime_asset_handle_snapshot.reference_counts[found_index];
+
+					if (snapshot_reference_count < asset_reference_counts[index][subindex]) {
+						// Increment the asset reference count
+						IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_index, asset_reference_counts[index][subindex] - snapshot_reference_count);
+					}
+					else if (snapshot_reference_count > asset_reference_counts[index][subindex]) {
+						unsigned int difference = snapshot_reference_count - asset_reference_counts[index][subindex];
+						for (unsigned int reference_index = 0; reference_index < difference; reference_index++) {
+							DecrementAssetReference(editor_state, current_handle, current_type, sandbox_index);
+						}
+					}
+				}
+				else {
+					// The handle didn't exist before, now it exists - it will be added to the snapshot anyway
+					// We shouldn't increment the reference count
+				}
+			}
+		}
+
+		// Now check for asset handles that were previously in the snapshot but they are no longer
+		size_t was_found_size = snapshot_size;
+		size_t was_found_offset = 0;
+		size_t missing_index = function::SearchBytes(was_found + was_found_offset, was_found_size, false, sizeof(bool));
+		while (missing_index != -1) {
+			size_t final_index = missing_index + was_found_offset;
+			// Decrement all the reference counts from this sandbox
+			unsigned int reference_count = sandbox->runtime_asset_handle_snapshot.reference_counts[final_index];
+			for (unsigned int index = 0; index < reference_count; index++) {
+				DecrementAssetReference(
+					editor_state, 
+					sandbox->runtime_asset_handle_snapshot.handles[final_index],
+					sandbox->runtime_asset_handle_snapshot.TypeFromIndex(final_index),
+					sandbox_index
+				);
+			}
+
+			was_found_offset += missing_index;
+			was_found_size -= missing_index + 1;
+
+			missing_index = function::SearchBytes(was_found + was_found_offset, was_found_size, false, sizeof(bool));
+		}
+	}
+
+	size_t total_count = 0;
+	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		size_t starting_total_count = total_count;
+		for (size_t subindex = 0; subindex < asset_reference_counts[index].size; subindex++) {
+			total_count += asset_reference_counts[index][subindex] > 0;
+		}
+		sandbox->runtime_asset_handle_snapshot.asset_type_count[index] = total_count - starting_total_count;
+	}
+
+	sandbox->runtime_asset_handle_snapshot.allocator.Clear();
+	SoAInitialize(
+		GetAllocatorPolymorphic(&sandbox->runtime_asset_handle_snapshot.allocator),
+		total_count,
+		&sandbox->runtime_asset_handle_snapshot.handles,
+		&sandbox->runtime_asset_handle_snapshot.reference_counts
+	);
+	// We will increase the size in the loop
+	sandbox->runtime_asset_handle_snapshot.total_size = 0;
+
+	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
+		for (size_t subindex = 0; subindex < asset_reference_counts[index].size; subindex++) {
+			if (asset_reference_counts[index][subindex] > 0) {
+				// Only add elements that have a reference count greater than 0
+				size_t current_index = sandbox->runtime_asset_handle_snapshot.total_size;
+				sandbox->runtime_asset_handle_snapshot.handles[current_index] = database->GetAssetHandleFromIndex(subindex, current_type);
+				sandbox->runtime_asset_handle_snapshot.reference_counts[current_index] = asset_reference_counts[index][subindex];
+				sandbox->runtime_asset_handle_snapshot.total_size++;
+			}
+		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
 bool AreAllDefaultSandboxesRunning(const EditorState* editor_state) {
 	return !ForEachSandbox<true>(editor_state, [](const EditorSandbox* sandbox, unsigned int index) {
 		if (sandbox->should_play && sandbox->run_state != EDITOR_SANDBOX_RUNNING) {
@@ -1079,6 +1196,10 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->runtime_module_snapshot_allocator = MemoryManager(ECS_KB * 8, 1024, ECS_KB * 256, sandbox_allocator);
 	sandbox->runtime_module_snapshots.Initialize(GetAllocatorPolymorphic(&sandbox->runtime_module_snapshot_allocator), 0);
 
+	// Initialize the asset handle snapshots and their allocator
+	sandbox->runtime_asset_handle_snapshot.allocator = MemoryManager(ECS_KB * 128, ECS_KB, ECS_MB, sandbox_allocator);
+	sandbox->runtime_asset_handle_snapshot.total_size = 0;
+
 	// Resize the textures for the viewport to a 1x1 texture such that rendering commands will fallthrough even
 	// when the UI has not yet run to resize them
 	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
@@ -1506,6 +1627,9 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 	// If it returned OK, then we can proceed as normal
 
+	// Before actually running, we also need to check the asset reference snapshot
+	HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_index, false);
+
 	// Perform the world simulation - before that we need to set the graphics buffers up
 	// And retrieve the graphics snapshot and the resource manager snapshot
 	// If any resources that were loaded by the editor are missing after the simulation has run,
@@ -1767,6 +1891,7 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 		// We need to record the snapshot of the current sandbox state
 		// We also need to bind the module runtime settings
 		RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
+		HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_index, true);
 		BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
 		BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
