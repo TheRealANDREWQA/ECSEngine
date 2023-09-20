@@ -228,6 +228,7 @@
     </ClInclude>
     <ClInclude Include="src\ECSEngine\Containers\ResizableAtomicStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\ResizableStableReferenceStream.h" />
+    <ClInclude Include="src\ECSEngine\Containers\SoA.h" />
     <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
     <ClInclude Include="src\ECSEngine\Containers\StableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />

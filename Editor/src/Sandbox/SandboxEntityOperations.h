@@ -593,6 +593,14 @@ void ResetSandboxEntityComponent(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// Reverts the component to default values
+void ResetSandboxGlobalComponent(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
 // Single threaded at the moment
 void SandboxForEachEntity(
 	EditorState* editor_state,

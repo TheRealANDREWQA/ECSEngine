@@ -139,3 +139,10 @@ bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sa
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
+
+const EntityManager* RuntimeSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	return GetSandbox(editor_state, sandbox_index)->sandbox_world.entity_manager;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------

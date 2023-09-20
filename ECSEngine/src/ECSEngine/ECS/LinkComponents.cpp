@@ -1630,6 +1630,22 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void GetAssetReferenceCountsFromEntitiesPrepare(
+		Stream<unsigned int>* asset_fields_reference_counts, 
+		AllocatorPolymorphic allocator, 
+		const AssetDatabase* asset_database
+	)
+	{
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
+			unsigned int count = asset_database->GetAssetCount(current_type);
+			asset_fields_reference_counts[index].Initialize(allocator, count);
+			memset(asset_fields_reference_counts[index].buffer, 0, asset_fields_reference_counts[index].MemoryOf(count));
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	bool HasModifierFieldsLinkComponent(const Reflection::ReflectionType* link_type)
 	{
 		for (size_t index = 0; index < link_type->fields.size; index++) {

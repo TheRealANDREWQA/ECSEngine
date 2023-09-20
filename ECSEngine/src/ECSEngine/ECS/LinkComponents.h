@@ -438,6 +438,14 @@ namespace ECSEngine {
 		GetAssetReferenceCountsFromEntitiesOptions options = {}
 	);
 
+	// Prepares the Stream<unsigned int>* from a given allocator. There must be ECS_ASSET_TYPE_COUNT
+	// Entries in the pointer
+	ECSENGINE_API void GetAssetReferenceCountsFromEntitiesPrepare(
+		Stream<unsigned int>* asset_fields_reference_counts, 
+		AllocatorPolymorphic allocator,
+		const AssetDatabase* asset_database
+	);
+
 	// ------------------------------------------------------------------------------------------------------------
 	
 	// Returns true if the link type has any modifier fields

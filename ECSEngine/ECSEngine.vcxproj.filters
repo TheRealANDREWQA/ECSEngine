@@ -227,6 +227,7 @@
     <ClInclude Include="src\ECSEngine\Math\AABB.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetMetadataValidate.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.h" />
+    <ClInclude Include="src\ECSEngine\Containers\SoA.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

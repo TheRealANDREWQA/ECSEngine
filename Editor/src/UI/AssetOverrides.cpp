@@ -17,18 +17,20 @@ struct GlobalOverrideData {
 	EditorState* editor_state;
 };
 
-void ConvertMetadataNameAndFileToSelection(Stream<char> name, Stream<wchar_t> file, CapacityStream<char>& characters) {
+ECS_INLINE void ConvertMetadataNameAndFileToSelection(Stream<char> name, Stream<wchar_t> file, CapacityStream<char>& characters) {
 	ECS_FORMAT_STRING(characters, "{#} ({#})", file, name);
 }
 
 struct BaseDrawData {
-	BaseDrawData() {}
+	ECS_INLINE BaseDrawData() {}
 
 	Action callback_action;
 	void* callback_action_data;
 	bool callback_verify;
 	// Used only for deselection
 	bool callback_before_handle_update;
+	// Used only for selection
+	bool callback_disable_selection_unregistering;
 
 	EditorState* editor_state;
 	AssetDatabase* target_database;
@@ -43,7 +45,7 @@ struct BaseDrawData {
 	unsigned int* handle;
 };
 
-void FilterBar(UIDrawer* drawer, BaseDrawData* base_data) {
+static void FilterBar(UIDrawer* drawer, BaseDrawData* base_data) {
 	if (drawer->initializer) {
 		const size_t capacity = 256;
 		base_data->filter.buffer = (char*)drawer->GetMainAllocatorBuffer(sizeof(char) * capacity);
@@ -74,7 +76,7 @@ void FilterBar(UIDrawer* drawer, BaseDrawData* base_data) {
 	drawer->NextRow();
 }
 
-void InitializeBaseData(BaseDrawData* base_data) {
+static void InitializeBaseData(BaseDrawData* base_data) {
 	const size_t initial_allocation_size = ECS_KB * 64;
 	const size_t backup_allocation_size = ECS_KB * 256;
 	base_data->resizable_allocator = ResizableLinearAllocator(
@@ -88,7 +90,7 @@ void InitializeBaseData(BaseDrawData* base_data) {
 }
 
 // Returns true if the lazy evaluation was triggered
-bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
+static bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 	if (base_data->timer.GetDuration(ECS_TIMER_DURATION_MS) > LAZY_EVALUATION_MILLISECONDS) {
 		base_data->resizable_allocator.Clear();
 
@@ -163,6 +165,9 @@ struct SelectActionData {
 
 	Action action;
 	void* action_data;
+	// You can set this boolean to indicate that the sandbox will be unregistered manually (or possibly skipped)
+	// By default this is set to false, as to not create leaks
+	bool do_not_unregister_asset;
 	bool verify_action;
 
 	// Used only for deselection
@@ -196,10 +201,47 @@ void SelectAction(ActionData* action_data) {
 
 		if (register_asset) {
 			// If now it is loaded, launch the resource manager load task as well
-			RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->handle, true, { data->action, data->action_data, 0 });
+			// We need to wrap the callback into a wrapper such that we respect the
+			// AssetOverrideCallbackAdditionalInfo* additional_data field
+
+			struct WrapperData {
+				Action action;
+				// We just reference this
+				void* action_data;
+			};
+
+			auto callback_wrapper = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				const RegisterAssetEventCallbackInfo* register_info = (const RegisterAssetEventCallbackInfo*)_additional_data;
+				AssetOverrideCallbackAdditionalInfo override_info;
+				override_info.handle = register_info->handle;
+				override_info.success = true;
+				override_info.type = register_info->type;
+				override_info.is_selection = true;
+				override_info.previous_handle = register_info->previous_handle;
+				action_data->additional_data = &override_info;
+				
+				const WrapperData* data = (const WrapperData*)_data;
+				action_data->data = data->action_data;
+				data->action(action_data);
+			};
+
+			WrapperData wrapper_data;
+			UIActionHandler callback_handler = {};
+			if (data->action != nullptr) {
+				callback_handler.action = callback_wrapper;
+				callback_handler.data = &wrapper_data;
+				callback_handler.data_size = sizeof(wrapper_data);
+
+				wrapper_data.action = data->action;
+				wrapper_data.action_data = data->action_data;
+			}
+			RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->handle, !data->do_not_unregister_asset, callback_handler);
 		}
 	}
 	else {
+		unsigned int previous_handle = *data->handle;
 		*data->handle = data->target_database->AddAsset(data->name, data->file, data->type);
 		if (data->action != nullptr) {
 			AssetOverrideCallbackAdditionalInfo info;
@@ -208,6 +250,7 @@ void SelectAction(ActionData* action_data) {
 			info.success = *data->handle != -1;
 			info.is_selection = true;
 			info.previous_asset = nullptr;
+			info.previous_handle = previous_handle;
 
 			ActionData dummy_data;
 			dummy_data.data = data->action_data;
@@ -284,11 +327,49 @@ void DeselectAction(ActionData* action_data) {
 
 		if (unregister_asset) {
 			// If the index is -1, then it is a global asset
+			// We need to wrap the callback into a wrapper such that we respect the AssetOverrideCallbackAdditionalInfo*
+			// additional_data field convention
+
+			struct WrapperData {
+				Action action;
+				void* action_data;
+			};
+
+			auto callback_wrapper = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				const WrapperData* data = (const WrapperData*)_data;
+				const UnregisterAssetEventCallbackInfo* unregister_info = (const UnregisterAssetEventCallbackInfo*)_additional_data;
+
+				AssetOverrideCallbackAdditionalInfo info;
+				info.handle = unregister_info->handle;
+				info.type = unregister_info->type;
+				info.success = true;
+				info.is_selection = false;
+				// We cannot provide this value
+				info.previous_asset = nullptr;
+				info.previous_handle = -1;
+				action_data->additional_data = &info;
+
+				action_data->data = data->action_data;
+				data->action(action_data);
+			};
+
+			WrapperData wrapper_data;
+			UIActionHandler callback_handler = {};
+			if (data->callback_action != nullptr) {
+				callback_handler.action = callback_wrapper;
+				callback_handler.data = &wrapper_data;
+				callback_handler.data_size = sizeof(wrapper_data);
+
+				wrapper_data.action = data->callback_action;
+				wrapper_data.action_data = data->callback_action_data;
+			}
 			if (data->sandbox_index != -1) {
-				UnregisterSandboxAsset(data->editor_state, data->sandbox_index, *data->handle, data->asset_type, { data->callback_action, data->callback_action_data, 0 });
+				UnregisterSandboxAsset(data->editor_state, data->sandbox_index, *data->handle, data->asset_type, callback_handler);
 			}
 			else {
-				UnregisterGlobalAsset(data->editor_state, *data->handle, data->asset_type, { data->callback_action, data->callback_action_data, 0 });
+				UnregisterGlobalAsset(data->editor_state, *data->handle, data->asset_type, callback_handler);
 			}
 		}
 	}
@@ -312,8 +393,7 @@ void DeselectAction(ActionData* action_data) {
 	}
 }
 
-// Returns the total written size
-void CreateSelectActionData(SelectActionData* select_data, const BaseDrawData* base_data, ECS_ASSET_TYPE asset_type) {
+static void CreateSelectActionData(SelectActionData* select_data, const BaseDrawData* base_data, ECS_ASSET_TYPE asset_type) {
 	select_data->editor_state = base_data->editor_state;
 	select_data->handle = base_data->handle;
 	select_data->sandbox_index = base_data->sandbox_index;
@@ -323,10 +403,11 @@ void CreateSelectActionData(SelectActionData* select_data, const BaseDrawData* b
 	select_data->verify_action = base_data->callback_verify;
 	select_data->target_database = base_data->target_database;
 	select_data->callback_before_handle_update = base_data->callback_before_handle_update;
+	select_data->do_not_unregister_asset = base_data->callback_disable_selection_unregistering;
 }
 
 // The stack allocation must be at least ECS_KB * 4 large
-UIDrawerMenuState GetMenuForSelection(const BaseDrawData* base_data, ECS_ASSET_TYPE type, unsigned int index, void* stack_allocation) {
+static UIDrawerMenuState GetMenuForSelection(const BaseDrawData* base_data, ECS_ASSET_TYPE type, unsigned int index, void* stack_allocation) {
 	UIDrawerMenuState menu_state;
 
 	unsigned int count = base_data->asset_name_with_path[index].value.size;
@@ -371,7 +452,7 @@ struct AcquireCallbackData {
 	CapacityStream<char>* selection;
 };
 
-void AcquireCallback(ActionData* action_data) {
+static void AcquireCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	AcquireCallbackData* data = (AcquireCallbackData*)_data;
@@ -407,7 +488,7 @@ struct DrawBaseReturn {
 };
 
 // Returns true if the lazy evaluation was triggered, else false
-bool DrawBaseSelectionInput(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE type, DrawBaseReturn* return_value) {
+static bool DrawBaseSelectionInput(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE type, DrawBaseReturn* return_value) {
 	FilterBar(&drawer, base_data);
 	if (drawer.initializer) {
 		InitializeBaseData(base_data);
@@ -443,7 +524,7 @@ bool DrawBaseSelectionInput(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET
 	return trigger_lazy_evaluation;
 }
 
-void DrawDeselectButton(UIDrawer& drawer, DrawBaseReturn* base_return, ECS_ASSET_TYPE type) {
+static void DrawDeselectButton(UIDrawer& drawer, DrawBaseReturn* base_return, ECS_ASSET_TYPE type) {
 	// Do this only if the handle is different from -1
 	if (*base_return->select_data->handle != -1) {
 		DeselectActionData deselect_data;
@@ -463,7 +544,7 @@ void DrawDeselectButton(UIDrawer& drawer, DrawBaseReturn* base_return, ECS_ASSET
 	}
 }
 
-void SetColumnDrawFitSpace(UIDrawer& drawer) {
+ECS_INLINE void SetColumnDrawFitSpace(UIDrawer& drawer) {
 	drawer.SetDrawMode(ECS_UI_DRAWER_COLUMN_DRAW_FIT_SPACE, 2, 0.01f * drawer.zoom_ptr->y);
 }
 
@@ -471,7 +552,7 @@ void SetColumnDrawFitSpace(UIDrawer& drawer) {
 // alongside a CapacityStream<wchar_t>& having the assets_folder and the index. It can reject the current asset
 // by not setting the resource view or the filename
 template<typename LazyEvaluation, typename GetTexture>
-void DrawFileAndName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE type, LazyEvaluation&& lazy_evaluation, GetTexture&& get_texture) {
+static void DrawFileAndName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE type, LazyEvaluation&& lazy_evaluation, GetTexture&& get_texture) {
 	size_t _stack_allocation[ECS_KB];
 
 	DrawBaseReturn base_return;
@@ -573,7 +654,7 @@ void DrawFileAndName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE t
 // The GetTexture must take in as parameter a Stream<wchar_t>*
 // alongside a CapacityStream<wchar_t>& having the assets_folder and the index
 template<typename GetTexture>
-void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE type, GetTexture&& get_texture) {
+static void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TYPE type, GetTexture&& get_texture) {
 	size_t _stack_allocation[ECS_KB];
 
 	DrawBaseReturn base_return;
@@ -788,6 +869,7 @@ struct OverrideBaseData {
 	unsigned int sandbox_index;
 	bool callback_is_ptr;
 	Action callback;
+	bool callback_disable_selection_unregistering;
 	bool callback_verify;
 	// Used for deselection
 	bool callback_before_handle_update;
@@ -823,6 +905,8 @@ void OverrideAssetHandle(
 	base_window_data->callback_action_data = base_data->callback_is_ptr ? base_data->callback_data_ptr : base_data->callback_data;
 	base_window_data->callback_verify = base_data->callback_verify;
 	base_window_data->callback_before_handle_update = base_data->callback_before_handle_update;
+	base_window_data->callback_disable_selection_unregistering = base_data->callback_disable_selection_unregistering;
+
 	base_window_data->target_database = base_data->database;
 
 	UIWindowDescriptor window_descriptor;
@@ -982,7 +1066,6 @@ ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetSandboxIndex) {
 	data->sandbox_index = modify_data->sandbox_index;
 }
 
-
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback) {
 	OverrideBaseData* data = (OverrideBaseData*)_data;
 	AssetOverrideBindCallbackData* modify_data = (AssetOverrideBindCallbackData*)user_data;
@@ -999,6 +1082,7 @@ ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback) {
 	}
 	data->callback_verify = modify_data->verify_handler;
 	data->callback_before_handle_update = modify_data->callback_before_handle_update;
+	data->callback_disable_selection_unregistering = modify_data->disable_selection_registering;
 }
 
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindNewDatabase) {
@@ -1085,12 +1169,14 @@ void AssetOverrideBindInstanceOverrides(
 	UIReflectionDrawer* drawer, 
 	UIReflectionInstance* instance, 
 	unsigned int sandbox_index, 
-	UIActionHandler modify_action_handler
+	UIActionHandler modify_action_handler,
+	bool disable_selection_unregistering
 )
 {
 	AssetOverrideSetAllData set_data;
 	set_data.set_index.sandbox_index = sandbox_index;
 	set_data.callback.handler = modify_action_handler;
+	set_data.callback.disable_selection_registering = disable_selection_unregistering;
 
 	size_t count = AssetUIOverrideCount();
 	for (size_t index = 0; index < count; index++) {

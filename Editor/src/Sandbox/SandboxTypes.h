@@ -11,6 +11,11 @@ enum EDITOR_SANDBOX_STATE : unsigned char {
 	EDITOR_SANDBOX_PAUSED
 };
 
+// Returns true if the sandbox is in runtime mode (running or paused), else false
+ECS_INLINE bool IsSandboxStateRuntime(EDITOR_SANDBOX_STATE state) {
+	return state == EDITOR_SANDBOX_RUNNING || state == EDITOR_SANDBOX_PAUSED;
+}
+
 enum ECS_REFLECT EDITOR_SANDBOX_VIEWPORT : unsigned char {
 	EDITOR_SANDBOX_VIEWPORT_SCENE,
 	EDITOR_SANDBOX_VIEWPORT_RUNTIME,
@@ -67,7 +72,32 @@ struct EditorSandboxModuleSnapshot {
 // -------------------------------------------------------------------------------------------------------------
 
 struct EditorSandboxAssetHandlesSnapshot {
-	
+	ECSEngine::MemoryManager allocator;
+
+	ECS_INLINE size_t StartOffset(ECSEngine::ECS_ASSET_TYPE type) const {
+		size_t offset = 0;
+		for (size_t index = 0; index < type; index++) {
+			offset += asset_type_count[index];
+		}
+		return offset;
+	}
+
+	ECS_INLINE ECSEngine::ECS_ASSET_TYPE TypeFromIndex(size_t index) const {
+		size_t offset = 0;
+		for (size_t asset_type = 0; asset_type < ECSEngine::ECS_ASSET_TYPE_COUNT; asset_type++) {
+			if (offset <= index && index < offset + asset_type_count[asset_type]) {
+				return (ECSEngine::ECS_ASSET_TYPE)asset_type;
+			}
+			offset += asset_type_count[asset_type];
+		}
+		return ECSEngine::ECS_ASSET_TYPE_COUNT;
+	}
+
+	// Use a SoA approach to make the search fast - we will use the handle to look for the values
+	unsigned int* handles;
+	unsigned int* reference_counts;
+	size_t asset_type_count[ECSEngine::ECS_ASSET_TYPE_COUNT];
+	size_t total_size;
 };
 
 // -------------------------------------------------------------------------------------------------------------
@@ -158,6 +188,8 @@ struct ECS_REFLECT EditorSandbox {
 
 	ECSEngine::MemoryManager runtime_module_snapshot_allocator;
 	ECSEngine::ResizableStream<EditorSandboxModuleSnapshot> runtime_module_snapshots;
+
+	EditorSandboxAssetHandlesSnapshot runtime_asset_handle_snapshot;
 
 	// Miscellaneous flags
 	size_t flags;

@@ -288,12 +288,14 @@ bool CopySandboxEntities(
 		entity_manager->CopyEntityCommit(entity, count, true, copied_entities);
 		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 
-		// Increment the reference count for all assets that this entity references
-		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, entity_assets, 128);
-		GetSandboxEntityAssets(editor_state, sandbox_index, entity, &entity_assets, viewport);
+		if (entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
+			// Increment the reference count for all assets that this entity references
+			ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, entity_assets, 128);
+			GetSandboxEntityAssets(editor_state, sandbox_index, entity, &entity_assets, viewport);
 
-		for (unsigned int index = 0; index < entity_assets.size; index++) {
-			IncrementAssetReferenceInSandbox(editor_state, entity_assets[index].handle, entity_assets[index].type, sandbox_index, count);
+			for (unsigned int index = 0; index < entity_assets.size; index++) {
+				IncrementAssetReferenceInSandbox(editor_state, entity_assets[index].handle, entity_assets[index].type, sandbox_index, count);
+			}
 		}
 
 		return true;
@@ -505,13 +507,17 @@ void DeleteSandboxEntity(
 		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, entity_assets, 128);
 		GetSandboxEntityAssets(editor_state, sandbox_index, entity, &entity_assets, viewport);
 
-		ECS_STACK_CAPACITY_STREAM(UnregisterSandboxAssetElement, unregister_elements, 128);
-		for (unsigned int index = 0; index < entity_assets.size; index++) {
-			unregister_elements[index].handle = entity_assets[index].handle;
-			unregister_elements[index].type = entity_assets[index].type;
+		// If we are in the runtime entity manager, we shouldn't remove the sandbox assets
+		// Since they are handled by the snapshot
+		if (entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
+			ECS_STACK_CAPACITY_STREAM(UnregisterSandboxAssetElement, unregister_elements, 128);
+			for (unsigned int index = 0; index < entity_assets.size; index++) {
+				unregister_elements[index].handle = entity_assets[index].handle;
+				unregister_elements[index].type = entity_assets[index].type;
+			}
+			unregister_elements.size = entity_assets.size;
+			UnregisterSandboxAsset(editor_state, sandbox_index, unregister_elements);
 		}
-		unregister_elements.size = entity_assets.size;
-		UnregisterSandboxAsset(editor_state, sandbox_index, unregister_elements);
 
 		entity_manager->DeleteEntityCommit(entity);
 		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
@@ -1156,7 +1162,10 @@ void RemoveSandboxEntityComponent(
 		Component component = editor_state->editor_components.GetComponentID(component_name);
 		if (entity_manager->HasComponent(entity, component)) {
 			const void* data = GetSandboxEntityComponent(editor_state, sandbox_index, entity, component, viewport);
-			RemoveSandboxComponentAssets(editor_state, sandbox_index, component, data, ECS_COMPONENT_UNIQUE);
+			// If we are in runtime, we don't have to unload the assets - they are automatically handled
+			if (entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
+				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, data, ECS_COMPONENT_UNIQUE);
+			}
 
 			EntityInfo previous_info = entity_manager->GetEntityInfo(entity);
 			entity_manager->RemoveComponentCommit(entity, { &component, 1 });
@@ -1187,7 +1196,8 @@ void RemoveSandboxEntitySharedComponent(
 			entity_manager->DestroyArchetypeBaseEmptyCommit(previous_info.main_archetype, previous_info.base_archetype, true);
 
 			bool is_unreferenced = entity_manager->IsUnreferencedSharedInstance(component, previous_instance);
-			if (is_unreferenced) {
+			// We need to remove the sandbox references only in scene mode
+			if (is_unreferenced && entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
 				const void* instance_data = entity_manager->GetSharedData(component, previous_instance);
 				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, instance_data, ECS_COMPONENT_SHARED);
 				entity_manager->UnregisterSharedInstanceCommit(component, previous_instance);
@@ -1222,8 +1232,11 @@ void RemoveSandboxGlobalComponent(EditorState* editor_state, unsigned int sandbo
 	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	ECS_ASSERT(entity_manager->ExistsGlobalComponent(component));
 
-	const void* component_data = entity_manager->GetGlobalComponent(component);
-	RemoveSandboxComponentAssets(editor_state, sandbox_index, component, component_data, ECS_COMPONENT_GLOBAL);
+	// We only need to remove the sandbox references in scene mode
+	if (entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
+		const void* component_data = entity_manager->GetGlobalComponent(component);
+		RemoveSandboxComponentAssets(editor_state, sandbox_index, component, component_data, ECS_COMPONENT_GLOBAL);
+	}
 
 	entity_manager->UnregisterGlobalComponentCommit(component);
 	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
@@ -1317,14 +1330,35 @@ void ResetSandboxEntityComponent(
 	}
 
 	if (!is_shared) {
+		// We also need to remove the sandbox asset references
+		if (entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
+			Component component = editor_state->editor_components.GetComponentID(component_name);
+			const void* component_data = GetSandboxEntityComponent(editor_state, sandbox_index, entity, component, viewport);
+			RemoveSandboxComponentAssets(editor_state, sandbox_index, component, component_data, ECS_COMPONENT_UNIQUE);
+		}
+
 		// It has built in checks for not crashing
 		editor_state->editor_components.ResetComponentFromManager(entity_manager, component_name, entity);
 	}
 	else {
 		// Remove it and then add it again with the default component
+		// This takes care of the asset handles being removed
 		RemoveSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name, viewport);
 		AddSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name, { -1 }, viewport);
 	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void ResetSandboxGlobalComponent(EditorState* editor_state, unsigned int sandbox_index, Component component, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+
+	void* component_data = entity_manager->GetGlobalComponent(component);
+	if (entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
+		RemoveSandboxComponentAssets(editor_state, sandbox_index, component, component_data, ECS_COMPONENT_GLOBAL);
+	}
+	editor_state->editor_components.ResetComponent(component, component_data, ECS_COMPONENT_GLOBAL);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

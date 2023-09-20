@@ -2,6 +2,7 @@
 #include "TextureCompression.h"
 #include "../../../../Dependencies/DirectXTex/DirectXTex/DirectXTex.h"
 #include "../../Utilities/Function.h"
+#include "../../Utilities/FunctionInterfaces.h"
 #include "../GraphicsHelpers.h"
 #include "../../Utilities/Path.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
@@ -9,7 +10,7 @@
 
 namespace ECSEngine {
 
-	constexpr ECS_GRAPHICS_FORMAT COMPRESSED_FORMATS[] = {
+	ECS_GRAPHICS_FORMAT COMPRESSED_FORMATS[] = {
 		ECS_GRAPHICS_FORMAT_UNKNOWN,
 		ECS_GRAPHICS_FORMAT_BC1,
 		ECS_GRAPHICS_FORMAT_BC3,
@@ -20,7 +21,7 @@ namespace ECSEngine {
 	};
 
 	// Only BC1, BC3 and BC7 are affected
-	constexpr ECS_GRAPHICS_FORMAT COMPRESSED_FORMATS_SRGB[] = {
+	ECS_GRAPHICS_FORMAT COMPRESSED_FORMATS_SRGB[] = {
 		ECS_GRAPHICS_FORMAT_UNKNOWN,
 		ECS_GRAPHICS_FORMAT_BC1_SRGB,
 		ECS_GRAPHICS_FORMAT_BC3_SRGB,
@@ -30,7 +31,7 @@ namespace ECSEngine {
 		ECS_GRAPHICS_FORMAT_BC7_SRGB
 	};
 
-	constexpr ECS_TEXTURE_COMPRESSION EXPLICIT_COMPRESSION_MAPPING[] = {
+	ECS_TEXTURE_COMPRESSION EXPLICIT_COMPRESSION_MAPPING[] = {
 		ECS_TEXTURE_COMPRESSION_NONE,
 		ECS_TEXTURE_COMPRESSION_BC1,
 		ECS_TEXTURE_COMPRESSION_BC1,
@@ -43,7 +44,7 @@ namespace ECSEngine {
 		ECS_TEXTURE_COMPRESSION_BC7
 	};
 
-	constexpr ECS_TEXTURE_COMPRESS_FLAGS EXPLICIT_COMPRESSION_FLAGS[] = {
+	ECS_TEXTURE_COMPRESS_FLAGS EXPLICIT_COMPRESSION_FLAGS[] = {
 		ECS_TEXTURE_COMPRESS_NONE,
 		ECS_TEXTURE_COMPRESS_NONE,
 		ECS_TEXTURE_COMPRESS_NONE,
@@ -69,22 +70,22 @@ namespace ECSEngine {
 	}
 
 	// the format must come from the UNORM formats
-	DXGI_FORMAT ToTypelessFormat(DXGI_FORMAT format) {
+	ECS_INLINE DXGI_FORMAT ToTypelessFormat(DXGI_FORMAT format) {
 		return (DXGI_FORMAT)(format - 1);
 	}
 
-	void SetErrorMessage(CapacityStream<char>* error_message, const char* error) {
+	static void SetErrorMessage(CapacityStream<char>* error_message, Stream<char> error) {
 		if (error_message != nullptr) {
 			error_message->Copy(error);
 			error_message->AssertCapacity();
 		}
 	}
 
-	DirectX::TEX_COMPRESS_FLAGS AddCompressionFlag(DirectX::TEX_COMPRESS_FLAGS initial, DirectX::TEX_COMPRESS_FLAGS flag, bool state) {
+	ECS_INLINE DirectX::TEX_COMPRESS_FLAGS AddCompressionFlag(DirectX::TEX_COMPRESS_FLAGS initial, DirectX::TEX_COMPRESS_FLAGS flag, bool state) {
 		return (DirectX::TEX_COMPRESS_FLAGS)((unsigned int)initial | ((unsigned int)flag * state));
 	}
 
-	DirectX::TEX_COMPRESS_FLAGS GetCompressionFlag(size_t flags) {
+	static DirectX::TEX_COMPRESS_FLAGS GetCompressionFlag(size_t flags) {
 		DirectX::TEX_COMPRESS_FLAGS compress_flag = DirectX::TEX_COMPRESS_DEFAULT;
 		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_UNIFORM, function::HasFlag(flags, ECS_TEXTURE_COMPRESS_DISABLE_PERCEPTUAL_WEIGHTING));
 		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_PARALLEL, !function::HasFlag(flags, ECS_TEXTURE_COMPRESS_DISABLE_MULTICORE));
@@ -316,8 +317,20 @@ namespace ECSEngine {
 			DirectX::TEX_COMPRESS_FLAGS compress_flag = GetCompressionFlag(descriptor.flags);
 
 			ECS_GRAPHICS_FORMAT non_compressed_format = compression_type == ECS_TEXTURE_COMPRESSION_BC7 ? ECS_GRAPHICS_FORMAT_RGBA8_UNORM : ECS_GRAPHICS_FORMAT_RGBA32_FLOAT;
+			if (function::HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB)) {
+				non_compressed_format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB;
+			}
 			DirectX::ScratchImage initial_image;
 			initial_image.Initialize2DNoMemory((const void**)mip_data, data.size, initial_images, GetGraphicsNativeFormat(non_compressed_format), width, height, 1, data.size);
+
+			// Validate that the buffer has enough data to be read - for example if mistankenly choosing HDR compression for a texture
+			// That does not sufficient byte size might cause a crash
+			if (initial_image.GetImage(0, 0, 0)->slicePitch > data[0].size) {
+				Stream<char> compression_string = compression_type == ECS_TEXTURE_COMPRESSION_BC7 ? "BC7" : "BC6";
+				ECS_FORMAT_TEMP_STRING(message, "Texture compression {#} not adequate for the given texture. There is not enough data to be read", compression_string);
+				SetErrorMessage(descriptor.error_message, message);
+				return texture_result;
+			}
 
 			// Lock the gpu lock, if any
 			if (descriptor.spin_lock != nullptr) {
@@ -338,6 +351,11 @@ namespace ECSEngine {
 
 			if (descriptor.spin_lock != nullptr) {
 				descriptor.spin_lock->unlock();
+			}
+
+			if (!temporary_texture) {
+				// Add the resource to the graphics internal tracked resources
+				graphics->AddInternalResource(Texture2D(final_texture));
 			}
 
 			if (FAILED(result)) {
