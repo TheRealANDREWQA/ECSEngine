@@ -329,6 +329,15 @@ void ResetSandboxUnusedEntities(
 
 // -------------------------------------------------------------------------------------------------------------
 
+void RemoveSandboxUnusedEntitiesSlot(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Returns true if the simulation was successful, else false. It prints the according error messages inside
 bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool is_step = false);
 

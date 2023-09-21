@@ -16,27 +16,6 @@ namespace ECSEngine {
 #define ECS_ENTITY_HIERARCHY_STATIC_STORAGE (3)
 #define ECS_ENTITY_HIERARCHY_MAX_CHILDREN (1 << 11)
 
-	struct EntityHierarchy;
-
-	struct ECSENGINE_API EntityHierarchyIteratorImpl {
-		using storage_type = Entity;
-		using return_type = Entity;
-
-		Stream<storage_type> GetChildren(storage_type value, AllocatorPolymorphic allocator) const;
-
-		bool HasChildren(storage_type value) const;
-
-		Stream<storage_type> GetRoots(AllocatorPolymorphic allocator) const;
-
-		return_type GetReturnValue(storage_type value, AllocatorPolymorphic allocator) const;
-
-		const EntityHierarchy* hierarchy;
-	};
-
-	typedef DFSIterator<EntityHierarchyIteratorImpl> DFSEntityHierarchyIterator;
-
-	typedef BFSIterator<EntityHierarchyIteratorImpl> BFSEntityHierarchyIterator;
-
 	struct ECSENGINE_API EntityHierarchy {
 		EntityHierarchy() = default;
 		// children and parent table initial size must be a power of two
@@ -106,12 +85,6 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// Preferably a temporary allocator. If nullptr it uses the internal allocator
-		BFSEntityHierarchyIterator GetBFSIterator(AllocatorPolymorphic allocator = { nullptr }) const;
-
-		// Preferably a temporary allocator. If nullptr it uses the internal allocator
-		DFSEntityHierarchyIterator GetDFSIterator(AllocatorPolymorphic allocator = { nullptr }) const;
-
 		unsigned int GetEntityCount() const;
 
 		// It will alias the children from inside the table. Do not modify !!
@@ -146,15 +119,15 @@ namespace ECSEngine {
 		union Children {
 			Children() {}
 
-			inline Entity* Entities() {
+			ECS_INLINE Entity* Entities() {
 				return IsPointer() ? entities : static_children;
 			}
 
-			inline const Entity* Entities() const {
+			ECS_INLINE const Entity* Entities() const {
 				return IsPointer() ? entities : static_children;
 			}
 
-			inline bool IsPointer() const {
+			ECS_INLINE bool IsPointer() const {
 				return count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE;
 			}
 
@@ -200,6 +173,41 @@ namespace ECSEngine {
 
 	// Returns the amount of pointer data required for the children table entries
 	ECSENGINE_API size_t DeserializeEntityHierarchySize(uintptr_t ptr);
+
+	// -----------------------------------------------------------------------------------------------------
+
+	struct ECSENGINE_API EntityHierarchyIteratorImpl {
+		using StorageType = Entity;
+		using ReturnType = Entity;
+
+		ECS_INLINE Stream<StorageType> GetChildren(StorageType value, AllocatorPolymorphic allocator) const {
+			return hierarchy->GetChildren(value);
+		}
+
+		ECS_INLINE bool HasChildren(StorageType value) const {
+			return hierarchy->GetChildren(value).size > 0;
+		}
+
+		ECS_INLINE Stream<StorageType> GetRoots(AllocatorPolymorphic allocator) const {
+			return hierarchy->roots;
+		}
+
+		ECS_INLINE ReturnType GetReturnValue(StorageType value, AllocatorPolymorphic allocator) const {
+			return value;
+		}
+
+		const EntityHierarchy* hierarchy;
+	};
+
+	typedef DFSIterator<EntityHierarchyIteratorImpl> DFSEntityHierarchyIterator;
+
+	typedef BFSIterator<EntityHierarchyIteratorImpl> BFSEntityHierarchyIterator;
+
+	// Preferably a temporary allocator. If nullptr it uses the internal allocator
+	ECSENGINE_API BFSEntityHierarchyIterator GetEntityHierarchyBFSIterator(const EntityHierarchy* hierarchy, AllocatorPolymorphic allocator = { nullptr });
+
+	// Preferably a temporary allocator. If nullptr it uses the internal allocator
+	ECSENGINE_API DFSEntityHierarchyIterator GetEntityHierarchyDFSIterator(const EntityHierarchy* hierarchy, AllocatorPolymorphic allocator = { nullptr });
 
 	// -----------------------------------------------------------------------------------------------------
 

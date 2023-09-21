@@ -778,6 +778,14 @@ const void* GetSandboxEntityComponentEx(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+void* GetSandboxGlobalComponent(EditorState* editor_state, unsigned int sandbox_index, Component component, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	return entity_manager->TryGetGlobalComponent(component);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 const void* GetSandboxGlobalComponent(const EditorState* editor_state, unsigned int sandbox_index, Component component, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);

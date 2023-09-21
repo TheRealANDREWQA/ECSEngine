@@ -1191,10 +1191,18 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size = memory_size;
 		}
 
-		ECS_INLINE Stream<void> Copy(AllocatorPolymorphic allocator) const {
+		Stream<void> Copy(AllocatorPolymorphic allocator) const {
 			Stream<void> result;
 			result.Initialize(allocator, size);
 			result.Copy(buffer, size);
+			return result;
+		}
+
+		Stream<void> Copy(AllocatorPolymorphic allocator, unsigned int element_byte_size) const {
+			Stream<void> result;
+			result.Initialize(allocator, size * element_byte_size);
+			result.Copy(buffer, size * element_byte_size);
+			result.size = size;
 			return result;
 		}
 

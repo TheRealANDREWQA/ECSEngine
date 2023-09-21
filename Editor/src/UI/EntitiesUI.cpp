@@ -15,51 +15,123 @@ struct EntitiesUIData {
 	EditorState* editor_state;
 	unsigned char sandbox_index;
 	CapacityStream<char> filter_string;
+
+	// Each entity corresponds to the global component at that index inside the entity manager
+	Stream<Entity> virtual_global_components_entities;
 };
 
-const size_t ITERATOR_LABEL_CAPACITY = 128;
+#define ITERATOR_LABEL_CAPACITY 128
+
+static ECS_INLINE Entity GlobalComponentsParent() {
+	return Entity((unsigned int)-2);
+}
+
+// Returns -1 if the entity is not a virtual global component, else return the component that corresponds to that virtual entity
+static Component DecodeVirtualEntityToComponent(const EntitiesUIData* entities_data, Entity virtual_entity) {
+	const EntityManager* entity_manager = ActiveEntityManager(entities_data->editor_state, entities_data->sandbox_index);
+	size_t component_index = function::SearchBytes(
+		entities_data->virtual_global_components_entities.buffer, 
+		entities_data->virtual_global_components_entities.size, 
+		virtual_entity.value, 
+		sizeof(virtual_entity)
+	);
+
+	if (component_index != -1) {
+		return entity_manager->m_global_components[component_index];
+	}
+	return -1;
+}
+
+static bool IsNormalEntity(const EntitiesUIData* entities_data, Entity entity) {
+	if (entity == GlobalComponentsParent()) {
+		return false;
+	}
+
+	return !DecodeVirtualEntityToComponent(entities_data, entity).Valid();
+}
 
 // Special UI iterator for the entities
+// We need to create a virtual entity that is the parent of all global components such that it can be collapsed
+// and allow access to the global components
 struct HierarchyIteratorImpl {
-	HierarchyIteratorImpl() {}
+	using StorageType = Entity;
 
-	HierarchyIteratorImpl(const EntityHierarchy* hierarchy, const EntityManager* entity_manager, Component name_component) {
-		Initialize(hierarchy, entity_manager, name_component);
+	using ReturnType = Stream<char>;
+
+	ECS_INLINE HierarchyIteratorImpl() {}
+
+	ECS_INLINE HierarchyIteratorImpl(const EntitiesUIData* ui_data, const EntityHierarchy* hierarchy, const EntityManager* entity_manager, Component name_component) {
+		Initialize(ui_data, hierarchy, entity_manager, name_component);
+	}
+	
+	ECS_INLINE AllocatorPolymorphic GetAllocator() const {
+		return GetAllocatorPolymorphic(implementation.hierarchy->allocator);
 	}
 
-	using storage_type = Entity;
-	 
-	using return_type = Stream<char>;
-	 
-	Stream<storage_type> GetChildren(storage_type value, AllocatorPolymorphic allocator) {
-		return implementation.GetChildren(value, allocator);
-	}
-	 
-	bool HasChildren(storage_type value) const {
-		return implementation.HasChildren(value);
-	}
-	 
-	Stream<storage_type> GetRoots(AllocatorPolymorphic allocator) {
-		return implementation.GetRoots(allocator);
-	}
-	 
-	return_type GetReturnValue(storage_type value, AllocatorPolymorphic allocator) {
-		Entity entity = implementation.GetReturnValue(value, allocator);
-		entity_label.size = 0;
-		const void* component = entity_manager->TryGetComponent(entity, name_component);
-		const Name* name = (const Name*)component;
-		if (component != nullptr) {
-			return name->name;
+	ECS_INLINE Stream<StorageType> GetChildren(StorageType value, AllocatorPolymorphic allocator) {
+		if (value == GlobalComponentsParent()) {
+			return ui_data->virtual_global_components_entities;
 		}
-			
-		EntityToString(entity, entity_label);
-		return entity_label;
+		else {
+			return implementation.GetChildren(value, allocator);
+		}
+	}
+	 
+	ECS_INLINE bool HasChildren(StorageType value) const {
+		if (value == GlobalComponentsParent()) {
+			return entity_manager->GetGlobalComponentCount() > 0;
+		}
+		else {
+			return implementation.HasChildren(value);
+		}
+	}
+	 
+	Stream<StorageType> GetRoots(AllocatorPolymorphic allocator) {
+		// Unfortunately, we need to make an allocation here just for that single addition
+		// The original roots don't need to be deallocated
+		Stream<Entity> original_roots = implementation.GetRoots(allocator);
+		Stream<Entity> new_roots;
+		new_roots.Initialize(allocator, original_roots.size + 1);
+		new_roots.size = 0;
+		// Add the global component root first
+		new_roots.Add(GlobalComponentsParent());
+		new_roots.AddStream(original_roots);
+		return new_roots;
+	}
+	 
+	ReturnType GetReturnValue(StorageType value, AllocatorPolymorphic allocator) {
+		// We need a separate branch for the global components parent
+		if (value == GlobalComponentsParent()) {
+			entity_label.size = 0;
+			entity_label.Copy("Global Components");
+			return entity_label;
+		}
+		else {
+			// Check now the global components themselves
+			Component component = DecodeVirtualEntityToComponent(ui_data, value);
+			if (component.Valid()) {
+				return entity_manager->GetGlobalComponentName(component);
+			}
+			else {
+				Entity entity = implementation.GetReturnValue(value, allocator);
+				entity_label.size = 0;
+				const void* component = entity_manager->TryGetComponent(entity, name_component);
+				const Name* name = (const Name*)component;
+				if (component != nullptr) {
+					return name->name;
+				}
+
+				EntityToString(entity, entity_label);
+				return entity_label;
+			}
+		}
 	}
 
-	void Initialize(const EntityHierarchy* hierarchy, const EntityManager* _entity_manager, Component _name_component) {
+	void Initialize(const EntitiesUIData* _ui_data, const EntityHierarchy* hierarchy, const EntityManager* _entity_manager, Component _name_component) {
 		implementation = { hierarchy };
 		entity_manager = _entity_manager;
 		name_component = _name_component;
+		ui_data = _ui_data;
 		// Allocate the buffer here
 		entity_label.Initialize(hierarchy->allocator, 0, ITERATOR_LABEL_CAPACITY);
 	};
@@ -68,6 +140,7 @@ struct HierarchyIteratorImpl {
 		implementation.hierarchy->allocator->Deallocate(entity_label.buffer);
 	}
 
+	const EntitiesUIData* ui_data;
 	EntityHierarchyIteratorImpl implementation;
 	const EntityManager* entity_manager;
 	Component name_component;
@@ -80,7 +153,7 @@ typedef DFSIterator<HierarchyIteratorImpl> DFSUIHierarchy;
 
 // -------------------------------------------------------------------------------------------------------------
 
-void EntitiesWholeWindowCreateEmpty(ActionData* action_data) {
+static void EntitiesWholeWindowCreateEmpty(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EntitiesUIData* data = (EntitiesUIData*)_data;
@@ -89,21 +162,86 @@ void EntitiesWholeWindowCreateEmpty(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
+struct EntitiesCreateGlobalComponentData {
+	EntitiesUIData* entities_data;
+	Component global_component;
+};
+
+static void EntitiesCreateGlobalComponent(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	const EntitiesCreateGlobalComponentData* data = (const EntitiesCreateGlobalComponentData*)_data;
+	CreateSandboxGlobalComponent(data->entities_data->editor_state, data->entities_data->sandbox_index, data->global_component);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Add a right click hoverable on the whole window
-void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_data) {
+static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_data) {
 	UIActionHandler handlers[] = {
 		{ EntitiesWholeWindowCreateEmpty, entities_data, 0 }
 	};
 
+	constexpr size_t handlers_size = std::size(handlers);
+
 	UIDrawerMenuState state;
 	state.left_characters = "Create Empty";
 	state.click_handlers = handlers;
-	state.row_count = std::size(handlers);
+	state.row_count = handlers_size;
+
+	ECS_STACK_CAPACITY_STREAM(Component, all_global_components, ECS_KB * 4);
+	entities_data->editor_state->editor_components.FillAllComponents(&all_global_components, ECS_COMPONENT_GLOBAL);
+
+	const EntityManager* entity_manager = ActiveEntityManager(entities_data->editor_state, entities_data->sandbox_index);
+	// Determine which global components have not been created yet
+	for (unsigned int index = 0; index < all_global_components.size; index++) {
+		if (entity_manager->ExistsGlobalComponent(all_global_components[index])) {
+			all_global_components.RemoveSwapBack(index);
+			index--;
+		}
+	}
+
+	bool row_has_submenu[handlers_size + 1];
+	UIDrawerMenuState submenu_states[handlers_size + 1];
+
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 256, ECS_MB);
+	if (all_global_components.size > 0) {
+		UIActionHandler* global_component_handlers = (UIActionHandler*)stack_allocator.Allocate(sizeof(UIActionHandler) * all_global_components.size);
+		ResizableStream<char> global_components_string;
+		global_components_string.Initialize(GetAllocatorPolymorphic(&stack_allocator), 0);
+		global_components_string.ResizeNoCopy(ECS_KB * 4);
+		for (unsigned int index = 0; index < all_global_components.size; index++) {
+			EntitiesCreateGlobalComponentData* global_handler_data = (EntitiesCreateGlobalComponentData*)stack_allocator.Allocate(sizeof(EntitiesCreateGlobalComponentData));
+			global_handler_data->entities_data = entities_data;
+			global_handler_data->global_component = all_global_components[index];
+
+			global_component_handlers[index] = { EntitiesCreateGlobalComponent, global_handler_data, sizeof(*global_handler_data) };
+
+			global_components_string.AddStream(entities_data->editor_state->editor_components.ComponentFromID(all_global_components[index], ECS_COMPONENT_GLOBAL));
+			global_components_string.Add('\n');
+		}
+		// Remove the last '\n'
+		global_components_string.size--;
+
+		memset(row_has_submenu, 0, sizeof(bool) * handlers_size);
+		row_has_submenu[handlers_size] = true;
+
+		memset(submenu_states + handlers_size, 0, sizeof(UIDrawerMenuState));
+		submenu_states[handlers_size].left_characters = global_components_string;
+		submenu_states[handlers_size].click_handlers = global_component_handlers;
+		submenu_states[handlers_size].row_count = all_global_components.size;
+		submenu_states[handlers_size].submenu_index = 1;
+
+		state.left_characters = "Create Empty\nGlobal Components";
+		state.row_count++;
+		state.row_has_submenu = row_has_submenu;
+		state.submenues = submenu_states;
+	}
 
 	drawer.SetWindowClickable(&drawer.PrepareRightClickHandler("Entities Right Click", &state), ECS_MOUSE_RIGHT);
 }
 
-void RenameCallback(ActionData* action_data) {
+static void RenameCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	UIDrawerLabelHierarchyRenameData* rename_data = (UIDrawerLabelHierarchyRenameData*)_data;
@@ -115,7 +253,7 @@ void RenameCallback(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
-void SelectableCallback(ActionData* action_data) {
+static void SelectableCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	UIDrawerLabelHierarchySelectableData* select_data = (UIDrawerLabelHierarchySelectableData*)_data;
@@ -123,7 +261,17 @@ void SelectableCallback(ActionData* action_data) {
 	
 	if (select_data->labels.size == 1) {
 		Entity* first_entity = (Entity*)select_data->labels.buffer;
-		ChangeInspectorToEntity(data->editor_state, data->sandbox_index, *first_entity);
+		// Check global component
+		Component global_component = DecodeVirtualEntityToComponent(data, *first_entity);
+		if (global_component.Valid()) {
+			ChangeInspectorToGlobalComponent(data->editor_state, data->sandbox_index, global_component);
+		}
+		else {
+			// Only change the entity if it is not the global component parent
+			if (*first_entity != GlobalComponentsParent()) {
+				ChangeInspectorToEntity(data->editor_state, data->sandbox_index, *first_entity);
+			}
+		}
 	}
 	else if (select_data->labels.size == 0) {
 		unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
@@ -144,7 +292,7 @@ void SelectableCallback(ActionData* action_data) {
 // -------------------------------------------------------------------------------------------------------------
 
 // Placeholder at the moment
-void DoubleClickCallback(ActionData* action_data) {
+static void DoubleClickCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	UIDrawerLabelHierarchyDoubleClickData* double_data = (UIDrawerLabelHierarchyDoubleClickData*)_data;
@@ -153,7 +301,7 @@ void DoubleClickCallback(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
-void DragCallback(ActionData* action_data) {
+static void DragCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	UIDrawerLabelHierarchyDragData* drag_data = (UIDrawerLabelHierarchyDragData*)_data;
@@ -161,12 +309,16 @@ void DragCallback(ActionData* action_data) {
 
 	Entity* given_parent = (Entity*)drag_data->destination_label;
 	Entity parent = given_parent != nullptr ? *given_parent : Entity{ (unsigned int)-1 };
-	ParentSandboxEntities(data->editor_state, data->sandbox_index, drag_data->source_labels.AsIs<Entity>(), parent);
+
+	// Make sure that we don't parent to virtual entities
+	if (IsNormalEntity(data, parent)) {
+		ParentSandboxEntities(data->editor_state, data->sandbox_index, drag_data->source_labels.AsIs<Entity>(), parent);
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------
 
-void CopyEntityCallback(ActionData* action_data) {
+static void CopyEntityCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	UIDrawerLabelHierarchyCopyData* copy_data = (UIDrawerLabelHierarchyCopyData*)_data;
@@ -176,29 +328,47 @@ void CopyEntityCallback(ActionData* action_data) {
 	Entity parent = given_parent != nullptr ? *given_parent : Entity((unsigned int)-1);
 
 	Stream<Entity> source_labels = copy_data->source_labels.AsIs<Entity>();
-	for (size_t index = 0; index < copy_data->source_labels.size; index++) {
-		Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
-		if (parent.value != -1) {
-			ParentSandboxEntity(data->editor_state, data->sandbox_index, copied_entity, parent);
+	if (IsNormalEntity(data, parent)) {
+		for (size_t index = 0; index < copy_data->source_labels.size; index++) {
+			if (IsNormalEntity(data, source_labels[index])) {
+				Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
+				if (parent.value != -1) {
+					ParentSandboxEntity(data->editor_state, data->sandbox_index, copied_entity, parent);
+				}
+			}
 		}
 	}
 }
 
 // -------------------------------------------------------------------------------------------------------------
 
-void CutEntityCallback(ActionData* action_data) {
+static void CutEntityCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	UIDrawerLabelHierarchyCutData* cut_data = (UIDrawerLabelHierarchyCutData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)cut_data->data;
 
-	const Entity* entities = (const Entity*)cut_data->source_labels.buffer;
-	ParentSandboxEntities(data->editor_state, data->sandbox_index, { entities, cut_data->source_labels.size }, *(Entity*)cut_data->destination_label);
+	Stream<Entity> entities = cut_data->source_labels.AsIs<Entity>();
+	Entity parent = *(Entity*)cut_data->destination_label;
+	if (IsNormalEntity(data, parent)) {
+		if (entities.size > 0) {
+			// Determine which labels are valid labels
+			Stream<Entity> copy = entities.Copy(data->editor_state->EditorAllocator());
+			for (size_t index = 0; index < copy.size; index++) {
+				if (!IsNormalEntity(data, copy[index])) {
+					copy.RemoveSwapBack(index);
+					index--;
+				}
+			}
+			ParentSandboxEntities(data->editor_state, data->sandbox_index, copy, parent);
+			data->editor_state->editor_allocator->Deallocate(copy.buffer);
+		}
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------
 
-void DeleteEntityCallback(ActionData* action_data) {
+static void DeleteEntityCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	UIDrawerLabelHierarchyDeleteData* delete_data = (UIDrawerLabelHierarchyDeleteData*)_data;
@@ -206,7 +376,17 @@ void DeleteEntityCallback(ActionData* action_data) {
 
 	Stream<Entity> source_labels = delete_data->source_labels.AsIs<Entity>();
 	for (size_t index = 0; index < delete_data->source_labels.size; index++) {
-		DeleteSandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
+		// We shouldn't delete the global parent
+		// The global components we have to delete
+		if (source_labels[index] != GlobalComponentsParent()) {
+			Component global_component = DecodeVirtualEntityToComponent(data, source_labels[index]);
+			if (global_component.Valid()) {
+				RemoveSandboxGlobalComponent(data->editor_state, data->sandbox_index, global_component);
+			}
+			else {
+				DeleteSandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
+			}
+		}
 	}
 }
 
@@ -218,7 +398,7 @@ struct RightClickHandlerData {
 	unsigned int sandbox_index;
 };
 
-void RightClickCopy(ActionData* action_data) {
+static void RightClickCopy(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	RightClickHandlerData* data = (RightClickHandlerData*)_data;
@@ -228,7 +408,7 @@ void RightClickCopy(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
-void RightClickCut(ActionData* action_data) {
+static void RightClickCut(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	RightClickHandlerData* data = (RightClickHandlerData*)_data;
@@ -238,7 +418,7 @@ void RightClickCut(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
-void RightClickDelete(ActionData* action_data) {
+static void RightClickDelete(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	RightClickHandlerData* data = (RightClickHandlerData*)_data;
@@ -247,7 +427,7 @@ void RightClickDelete(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
-void RightClickCallback(ActionData* action_data) {
+static void RightClickCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	UIDrawerLabelHierarchyRightClickData* right_click_data = (UIDrawerLabelHierarchyRightClickData*)_data;
@@ -290,6 +470,13 @@ void RightClickCallback(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
+static void EntitiesUIDestroyAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EntitiesUIData* draw_data = (EntitiesUIData*)_additional_data;
+	draw_data->virtual_global_components_entities.Deallocate(draw_data->editor_state->EditorAllocator());
+}
+
 void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
 {
 	unsigned int window_index = *(unsigned int*)stack_memory;
@@ -299,6 +486,7 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 	EntitiesUIData* data = (EntitiesUIData*)function::OffsetPointer(stack_memory, sizeof(unsigned int));
 	data->editor_state = editor_state;
 	data->sandbox_index = -1;
+	data->virtual_global_components_entities.InitializeFromBuffer(nullptr, 0);
 
 	CapacityStream<char> window_name(function::OffsetPointer(data, sizeof(*data)), 0, 128);
 	GetEntitiesUIWindowName(window_index, window_name);
@@ -307,6 +495,8 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 	descriptor.draw = EntitiesUIDraw;
 	descriptor.window_data = data;
 	descriptor.window_data_size = sizeof(*data);
+
+	descriptor.destroy_action = EntitiesUIDestroyAction;
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -317,6 +507,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 	EntitiesUIData* data = (EntitiesUIData*)window_data;
 	EditorState* editor_state = data->editor_state;
+	unsigned int sandbox_index = data->sandbox_index;
 
 	UIDrawConfig config;
 
@@ -335,9 +526,23 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 	drawer.DisablePaddingForRenderSliders();
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 	if (editor_state->sandboxes.size > 0) {
+		const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+
+		// Get the count of global components and update the virtual mapping of the global components if the count is different
+		unsigned int global_component_count = entity_manager->GetGlobalComponentCount();
+		if (global_component_count != data->virtual_global_components_entities.size && global_component_count > 0) {
+			// Reset the virtual entities first
+			RemoveSandboxUnusedEntitiesSlot(editor_state, sandbox_index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
+			data->virtual_global_components_entities.Resize(editor_state->EditorAllocator(), global_component_count, false, true);
+			unsigned int slot_start_index = GetSandboxUnusedEntitySlots(editor_state, sandbox_index, data->virtual_global_components_entities);
+			for (size_t index = 0; index < data->virtual_global_components_entities.size; index++) {
+				SetSandboxUnusedEntitySlotType(editor_state, sandbox_index, slot_start_index + index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
+			}
+		}
+
 		EntitiesWholeWindowMenu(drawer, data);
 
 		// Display the combo box for the sandbox selection
@@ -439,7 +644,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 			config.flag_count = 0;
 			// Now draw the hierarchy, if there is a sandbox at all
 			if (sandbox_count > 0) {
-				EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+				EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 				UIConfigLabelHierarchyFilter filter;
 				filter.filter = data->filter_string;
@@ -455,11 +660,30 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 				selectable.data_size = 0;
 				config.AddFlag(selectable);
 
+				auto monitor_selection_callback = [](ActionData* action_data) {
+					UI_UNPACK_ACTION_DATA;
+
+					const EntitiesUIData* entities_data = (const EntitiesUIData*)_data;
+					UIConfigLabelHierarchyMonitorSelectionInfo* info = (UIConfigLabelHierarchyMonitorSelectionInfo*)_additional_data;
+
+					Stream<Entity> entity_selection = info->selected_labels.AsIs<Entity>();
+					// Remove any virtual entities
+					for (size_t index = 0; index < entity_selection.size; index++) {
+						if (!IsNormalEntity(entities_data, entity_selection[index])) {
+							entity_selection.RemoveSwapBack(index);
+							index--;
+						}
+					}
+
+					info->selected_labels.size = entity_selection.size;
+				};
+
 				UIConfigLabelHierarchyMonitorSelection monitor_selection;
 				monitor_selection.is_capacity_selection = false;
 				monitor_selection.boolean_changed_flag = false;
 				monitor_selection.is_changed_counter = &sandbox->selected_entities_changed_counter;
 				monitor_selection.resizable_selection = (ResizableStream<void>*)&sandbox->selected_entities;
+				monitor_selection.callback = { monitor_selection_callback, data, 0 };
 				config.AddFlag(monitor_selection);
 
 				UIConfigLabelHierarchyRightClick right_click_callback;
@@ -480,10 +704,8 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 				rename_callback.data_size = 0;
 				config.AddFlag(rename_callback);
 
-				const EntityManager* entity_manager = ActiveEntityManager(editor_state, data->sandbox_index);
-
 				const EntityHierarchy* hierarchy = &entity_manager->m_hierarchy;
-				HierarchyIteratorImpl implementation(hierarchy, entity_manager, editor_state->editor_components.GetComponentID(STRING(Name)));
+				HierarchyIteratorImpl implementation(data, hierarchy, entity_manager, editor_state->editor_components.GetComponentID(STRING(Name)));
 
 				AllocatorPolymorphic iterator_allocator = GetAllocatorPolymorphic(entity_manager->m_memory_manager);
 

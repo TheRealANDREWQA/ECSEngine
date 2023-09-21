@@ -318,6 +318,14 @@ const void* GetSandboxEntityComponentEx(
 );
 
 // Returns nullptr if it doesn't exist
+void* GetSandboxGlobalComponent(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// Returns nullptr if it doesn't exist
 const void* GetSandboxGlobalComponent(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,

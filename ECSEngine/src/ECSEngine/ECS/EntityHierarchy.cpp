@@ -25,7 +25,7 @@ namespace ECSEngine {
         unsigned int children_data_size;
     };
 
-    void RemoveEntityFromParent(EntityHierarchy* hierarchy, Entity entity, Entity parent) {
+    static void RemoveEntityFromParent(EntityHierarchy* hierarchy, Entity entity, Entity parent) {
         // Remove the entity from its parent and the entry from the parent table
         unsigned int parent_children_index = hierarchy->children_table.Find(parent);
         ECS_CRASH_RETURN(parent_children_index != -1, "EntityHierarchy: Could not find the parent's {#} children data when trying to remove entity {#} as its child.", parent.value, entity.value);
@@ -255,30 +255,6 @@ namespace ECSEngine {
         else {
             RemoveEntityFromParent(this, entity, parent);
         }
-    }
-
-    // -----------------------------------------------------------------------------------------------------------------------------
-
-    BFSEntityHierarchyIterator EntityHierarchy::GetBFSIterator(AllocatorPolymorphic _allocator) const
-    {
-        if (_allocator.allocator == nullptr) {
-            _allocator = GetAllocatorPolymorphic(allocator);
-        }
-
-        // Use a default capacity of the number of entries in the children table
-        return BFSEntityHierarchyIterator(_allocator, { this }, children_table.GetCount());
-    }
-
-    // -----------------------------------------------------------------------------------------------------------------------------
-
-    DFSEntityHierarchyIterator EntityHierarchy::GetDFSIterator(AllocatorPolymorphic _allocator) const
-    {
-        if (_allocator.allocator == nullptr) {
-            _allocator = GetAllocatorPolymorphic(allocator);
-        }
-
-        // Use a default capacity of the number of entries in the children table
-        return DFSEntityHierarchyIterator(_allocator, { this }, children_table.GetCount());
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
@@ -680,32 +656,26 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    Stream<EntityHierarchyIteratorImpl::storage_type> EntityHierarchyIteratorImpl::GetChildren(storage_type value, AllocatorPolymorphic allocator) const
+    BFSEntityHierarchyIterator GetEntityHierarchyBFSIterator(const EntityHierarchy* hierarchy, AllocatorPolymorphic allocator)
     {
-        return hierarchy->GetChildren(value);
+        if (allocator.allocator == nullptr) {
+            allocator = GetAllocatorPolymorphic(hierarchy->allocator);
+        }
+
+        // Use a default capacity of the number of entries in the children table
+        return BFSEntityHierarchyIterator(allocator, { hierarchy }, hierarchy->children_table.GetCount());
+    }
+
+    DFSEntityHierarchyIterator GetEntityHierarchyDFSIterator(const EntityHierarchy* hierarchy, AllocatorPolymorphic allocator)
+    {
+        if (allocator.allocator == nullptr) {
+            allocator = GetAllocatorPolymorphic(hierarchy->allocator);
+        }
+
+        // Use a default capacity of the number of entries in the children table
+        return DFSEntityHierarchyIterator(allocator, { hierarchy }, hierarchy->children_table.GetCount());
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    bool EntityHierarchyIteratorImpl::HasChildren(storage_type value) const
-    {
-        return hierarchy->GetChildren(value).size > 0;
-    }
-
-    // -----------------------------------------------------------------------------------------------------------------------------
-
-    Stream<EntityHierarchyIteratorImpl::storage_type> EntityHierarchyIteratorImpl::GetRoots(AllocatorPolymorphic allocator) const
-    {
-        return hierarchy->roots;
-    }
-
-    // -----------------------------------------------------------------------------------------------------------------------------
-
-    EntityHierarchyIteratorImpl::return_type EntityHierarchyIteratorImpl::GetReturnValue(storage_type value, AllocatorPolymorphic allocator) const
-    {
-        return value;
-    }
-
-    // -----------------------------------------------------------------------------------------------------------------------------
-   
 }

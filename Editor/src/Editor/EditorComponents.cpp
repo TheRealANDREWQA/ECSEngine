@@ -1064,6 +1064,17 @@ void EditorComponents::EmptyEventStream()
 
 // ----------------------------------------------------------------------------------------------
 
+void EditorComponents::FillAllComponents(CapacityStream<Component>* components, ECS_COMPONENT_TYPE component_type) const
+{
+	internal_manager->type_definitions.ForEachConst([&](const ReflectionType& reflection_type, ResourceIdentifier identifier) {
+		if (GetReflectionTypeComponentType(&reflection_type) == component_type) {
+			components->AddAssert(GetReflectionTypeComponent(&reflection_type));
+		}
+	});
+}
+
+// ----------------------------------------------------------------------------------------------
+
 struct FinalizeEventSingleThreadedData {
 	EditorComponentEvent event_;
 	const ReflectionManager* reflection_manager;
