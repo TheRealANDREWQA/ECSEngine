@@ -317,7 +317,7 @@ namespace ECSEngine {
 			DirectX::TEX_COMPRESS_FLAGS compress_flag = GetCompressionFlag(descriptor.flags);
 
 			ECS_GRAPHICS_FORMAT non_compressed_format = compression_type == ECS_TEXTURE_COMPRESSION_BC7 ? ECS_GRAPHICS_FORMAT_RGBA8_UNORM : ECS_GRAPHICS_FORMAT_RGBA32_FLOAT;
-			if (function::HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB)) {
+			if (function::HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB) && compression_type == ECS_TEXTURE_COMPRESSION_BC7) {
 				non_compressed_format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB;
 			}
 			DirectX::ScratchImage initial_image;

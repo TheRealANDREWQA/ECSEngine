@@ -4708,7 +4708,7 @@ namespace ECSEngine {
 		}
 
 		size_t existing_index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
-		ECS_CRASH_RETURN_VALUE(existing_index == 1, "EntityManager: Trying to create global component {#} when it already exists", component_name);
+		ECS_CRASH_RETURN_VALUE(existing_index == -1, "EntityManager: Trying to create global component {#} when it already exists", component_name);
 
 		// Allocate a new slot in the SoA stream
 		// Firstly write the void* and then the Component
@@ -4728,7 +4728,9 @@ namespace ECSEngine {
 			memcpy(m_global_components_data, old_data, sizeof(void*) * m_global_component_count);
 			memcpy(m_global_components, old_components, sizeof(Component) * m_global_component_count);
 			memcpy(m_global_components_info, old_infos, sizeof(ComponentInfo) * m_global_component_count);
-			m_small_memory_manager.Deallocate(m_global_components_data);
+			if (m_global_component_count > 0) {
+				m_small_memory_manager.Deallocate(old_data);
+			}
 		}
 
 		ComponentInfo* component_info = m_global_components_info + m_global_component_count;

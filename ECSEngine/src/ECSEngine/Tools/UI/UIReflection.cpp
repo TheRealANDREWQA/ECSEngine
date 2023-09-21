@@ -377,6 +377,10 @@ namespace ECSEngine {
 		// ------------- Structures for the draw part - They need to have as the first member a pointer to the field value ----------------
 
 		struct UIReflectionUserDefinedData {
+			// We don't need this pointer, but we need to have one
+			// Since, when using BindInstancePtrs, the first field will always
+			void* field_pointer;
+
 			Stream<char> instance_name;
 			UIReflectionDrawer* ui_drawer;
 		};
@@ -3522,6 +3526,7 @@ namespace ECSEngine {
 				// The actual instance name will be remembered when the instance is created
 				data->instance_name = name;
 				data->ui_drawer = this;
+				data->field_pointer = nullptr;
 
 				field.configuration = 0;
 				field.stream_type = UIReflectionStreamType::None;

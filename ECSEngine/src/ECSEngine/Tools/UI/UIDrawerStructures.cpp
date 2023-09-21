@@ -3,6 +3,7 @@
 #include "../../Utilities/FunctionInterfaces.h"
 #include "UIHelpers.h"
 #include "UIDrawConfig.h"
+#include "../../Allocators/ResizableLinearAllocator.h"
 
 namespace ECSEngine {
 
@@ -875,12 +876,38 @@ namespace ECSEngine {
 
 		void UIDrawerLabelHierarchyData::UpdateMonitorSelection(UIConfigLabelHierarchyMonitorSelection* monitor_selection) const
 		{
+			Stream<void> final_selection = selected_labels;
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 4);
+
+			// Check the callback
+			if (monitor_selection->callback.action != nullptr) {
+				ActionData dummy_data;
+				dummy_data.buffers = nullptr;
+				dummy_data.counts = nullptr;
+				dummy_data.system = nullptr;
+				// We can reference it directly
+				dummy_data.data = monitor_selection->callback.data;
+
+				Stream<void> user_selected_labels = selected_labels.Copy(GetAllocatorPolymorphic(&stack_allocator), label_size == 0 ? sizeof(Stream<char>) : label_size);
+
+				UIConfigLabelHierarchyMonitorSelectionInfo monitor_info;
+				monitor_info.monitor_selection = monitor_selection;
+				monitor_info.selected_labels = user_selected_labels;
+				dummy_data.additional_data = &monitor_info;
+				monitor_selection->callback.action(&dummy_data);
+
+				final_selection = monitor_info.selected_labels;
+				if (monitor_info.override_labels.size > 0) {
+					final_selection = monitor_info.override_labels;
+				}
+			}
+
 			// Deallocate the current labels
 			monitor_selection->Deallocate(label_size != 0);
 
 			if (label_size == 0) {
 				// Strings
-				Stream<Stream<char>> char_selected_labels = selected_labels.AsIs<Stream<char>>();
+				Stream<Stream<char>> char_selected_labels = final_selection.AsIs<Stream<char>>();
 				if (monitor_selection->is_capacity_selection) {
 					CapacityStream<Stream<char>>* destination_labels = (CapacityStream<Stream<char>>*)monitor_selection->capacity_selection;
 					ECS_ASSERT(char_selected_labels.size <= destination_labels->capacity);
@@ -901,10 +928,10 @@ namespace ECSEngine {
 			else {
 				// Blittable data
 				if (monitor_selection->is_capacity_selection) {
-					monitor_selection->capacity_selection->Copy(selected_labels, label_size);
+					monitor_selection->capacity_selection->Copy(final_selection, label_size);
 				}
 				else {
-					monitor_selection->resizable_selection->Copy(selected_labels, label_size);
+					monitor_selection->resizable_selection->Copy(final_selection, label_size);
 				}
 			}
 
@@ -978,6 +1005,54 @@ namespace ECSEngine {
 			if (descriptor.destroy_action_data_size > 0) {
 				descriptor.destroy_action_data = function::OffsetPointer(this, write_size);
 				write_size += descriptor.destroy_action_data_size;
+			}
+		}
+
+		UIDrawerMenuState* UIDrawerMenuDrawWindowData::GetState() const {
+			if (submenu_offsets[0] == (unsigned char)-1) {
+				return &menu->state;
+			}
+
+			UIDrawerMenuState* state = &menu->state.submenues[submenu_offsets[0]];
+			for (unsigned char index = 1; index < 8; index++) {
+				if (submenu_offsets[index] == (unsigned char)-1) {
+					return state;
+				}
+				state = &state->submenues[submenu_offsets[index]];
+			}
+
+			return state;
+		}
+
+		unsigned char UIDrawerMenuDrawWindowData::GetLastPosition() const {
+			unsigned char index = 0;
+			for (; index < 8; index++) {
+				if (submenu_offsets[index] == (unsigned char)-1) {
+					return index;
+				}
+			}
+
+			ECS_ASSERT(false, "Too many submenues");
+			return 8;
+		}
+
+		void UIConfigLabelHierarchyMonitorSelection::Deallocate(bool is_blittable) {
+			AllocatorPolymorphic allocator = Allocator();
+
+			if (!is_blittable) {
+				// Strings
+				Stream<void> selection = Selection();
+				Stream<Stream<char>> selection_strings = selection.AsIs<Stream<char>>();
+				for (size_t index = 0; index < selection.size; index++) {
+					selection_strings[index].Deallocate(allocator);
+				}
+			}
+
+			if (is_capacity_selection) {
+				capacity_selection->size = 0;
+			}
+			else {
+				resizable_selection->FreeBuffer();
 			}
 		}
 

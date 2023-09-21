@@ -230,19 +230,33 @@ struct InspectorDrawEntityData {
 	}
 
 	const void* TargetComponentData(const EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) const {
-		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
-		Component component = editor_state->editor_components.GetComponentID(target_name);
-		bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
+		if (is_global_component) {
+			ECS_ASSERT(link_index == 0);
+			// There is a single link
+			return GetSandboxGlobalComponent(editor_state, sandbox_index, global_component);
+		}
+		else {
+			Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
+			Component component = editor_state->editor_components.GetComponentID(target_name);
+			bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
 
-		return GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+			return GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+		}
 	}
 
 	void* TargetComponentData(EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) const {
-		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
-		Component component = editor_state->editor_components.GetComponentID(target_name);
-		bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
+		if (is_global_component) {
+			ECS_ASSERT(link_index == 0);
+			// There is a single link
+			return GetSandboxGlobalComponent(editor_state, sandbox_index, global_component);
+		}
+		else {
+			Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
+			Component component = editor_state->editor_components.GetComponentID(target_name);
+			bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
 
-		return GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+			return GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+		}
 	}
 
 	void CopyLinkComponentData(const EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) {
@@ -313,12 +327,18 @@ struct InspectorDrawEntityData {
 		link_components[link_index].apply_modifier_initial_target_data = allocator.Allocate(byte_size);
 		
 		Component target_component = editor_state->editor_components.GetComponentID(target_type_name);
-		bool is_shared = editor_state->editor_components.IsSharedComponent(target_type_name);
-		const void* entity_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, target_component, is_shared);
+		const void* component_data = nullptr;
+		if (is_global_component) {
+			component_data = GetSandboxGlobalComponent(editor_state, sandbox_index, global_component);
+		}
+		else {
+			bool is_shared = editor_state->editor_components.IsSharedComponent(target_type_name);
+			component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, target_component, is_shared);
+		}
 		Reflection::CopyReflectionType(
 			editor_state->editor_components.internal_manager,
 			target_type_name,
-			entity_data,
+			component_data,
 			link_components[link_index].apply_modifier_initial_target_data,
 			GetAllocatorPolymorphic(&allocator)
 		);
@@ -407,6 +427,7 @@ struct InspectorDrawEntityData {
 	}
 
 	// This removes components which no longer are attached to the entity
+	// Only works for the entity case
 	void UpdateStoredComponents(EditorState* editor_state, unsigned int sandbox_index) {
 		const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 		ComponentSignature unique_signature = active_entity_manager->GetEntitySignatureStable(entity);
@@ -477,6 +498,7 @@ struct InspectorDrawEntityData {
 
 		void* link_data = link_components[link_index].data;
 		void* previous_link_data = link_components[link_index].previous_data;
+		const void* previous_target_data = link_components[link_index].target_data_copy;
 		SandboxUpdateLinkComponentForEntityInfo info;
 		info.apply_modifier_function = apply_modifier;
 
@@ -489,12 +511,25 @@ struct InspectorDrawEntityData {
 		}
 
 		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_name);
-		bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
-		if (is_shared) {
-			SandboxUpdateSharedLinkComponentForEntity(editor_state, sandbox_index, link_data, link_name, entity, previous_link_data, info);
+		if (is_global_component) {
+			ConvertLinkComponentToTarget(
+				editor_state,
+				link_name,
+				ActiveEntityManager(editor_state, sandbox_index)->GetGlobalComponent(global_component),
+				link_data,
+				previous_target_data,
+				previous_link_data,
+				apply_modifier
+			);
 		}
 		else {
-			SandboxUpdateUniqueLinkComponentForEntity(editor_state, sandbox_index, link_data, link_name, entity, previous_link_data, info);
+			bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
+			if (is_shared) {
+				SandboxUpdateSharedLinkComponentForEntity(editor_state, sandbox_index, link_data, link_name, entity, previous_link_data, info);
+			}
+			else {
+				SandboxUpdateUniqueLinkComponentForEntity(editor_state, sandbox_index, link_data, link_name, entity, previous_link_data, info);
+			}
 		}
 
 		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_name);
@@ -550,12 +585,19 @@ struct InspectorDrawEntityData {
 					Allocator()
 				);
 				if (!success) {
-					ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-					Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, entity, entity_name_storage);
+					if (!is_global_component) {
+						ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
+						Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, entity, entity_name_storage);
 
-					ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.", 
-						link_components[index].name, entity_name, sandbox_index);
-					EditorSetConsoleError(error_message);
+						ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.",
+							link_components[index].name, entity_name, sandbox_index);
+						EditorSetConsoleError(error_message);
+					}
+					else {
+						Stream<char> component_name = editor_state->editor_components.ComponentFromID(global_component, ECS_COMPONENT_GLOBAL);
+						ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for global component {#} in sandbox {#}.",
+							link_components[index].name, component_name, sandbox_index);
+					}
 				}
 				else {
 					const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_name);
@@ -581,9 +623,15 @@ struct InspectorDrawEntityData {
 		}
 	}
 
-	Entity entity;
-	CapacityStream<char> name_input;
+	// Use the same implementation for global components and entities - global components
+	// can be treated like entities with a single unique component
 	bool header_state[ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+	bool is_global_component;
+	union {
+		Entity entity;
+		Component global_component;
+	};
+	CapacityStream<char> name_input;
 	// Used for text input, file input and directory input in order to set their capacity streams
 	// Every component gets a resizable stream with capacity streams for their fields
 	Stream<MatchingInputs> matching_inputs;
@@ -596,6 +644,20 @@ struct InspectorDrawEntityData {
 	// All allocations for internal components need to be made from this allocator
 	MemoryManager allocator;
 };
+
+static ECS_INLINE Stream<char> InspectorTargetName(
+	const InspectorDrawEntityData* draw_data, 
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	CapacityStream<char> name_storage
+) {
+	if (draw_data->is_global_component) {
+		return ActiveEntityManager(editor_state, sandbox_index)->GetGlobalComponentName(draw_data->global_component);
+	}
+	else {
+		return GetEntityName(editor_state, sandbox_index, draw_data->entity, name_storage);
+	}
+}
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
@@ -679,7 +741,12 @@ void ResetComponentCallback(ActionData* action_data) {
 		data->draw_data->ResetComponent(data->editor_state, matching_index);
 	}
 
-	ResetSandboxEntityComponent(data->editor_state, data->sandbox_index, data->draw_data->entity, data->component_name);
+	if (data->draw_data->is_global_component) {
+		ResetSandboxGlobalComponent(data->editor_state, data->sandbox_index, data->draw_data->global_component);
+	}
+	else {
+		ResetSandboxEntityComponent(data->editor_state, data->sandbox_index, data->draw_data->entity, data->component_name);
+	}
 	// Re-render the sandbox as well
 	RenderSandboxViewports(data->editor_state, data->sandbox_index);
 }
@@ -703,6 +770,9 @@ void InspectorComponentCallback(ActionData* action_data) {
 	EditorState* editor_state = data->editor_state;
 	unsigned int sandbox_index = data->sandbox_index;
 	Entity entity = data->draw_data->entity;
+	EntityManager* active_manager = ActiveEntityManager(editor_state, sandbox_index);
+	bool is_global_component = data->draw_data->is_global_component;
+	Component global_component = data->draw_data->global_component;
 
 	SetSandboxSceneDirty(editor_state, sandbox_index);
 
@@ -711,15 +781,12 @@ void InspectorComponentCallback(ActionData* action_data) {
 
 	Stream<char> target = editor_state->editor_components.GetComponentFromLink(component_name);
 	const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target);
-
 	const Reflection::ReflectionType* info_type = target_type != nullptr ? target_type : type;
 
 	bool is_shared = IsReflectionTypeSharedComponent(info_type);
-	Component component = { (short)info_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+	Component component = GetReflectionTypeComponent(info_type);
 
-	EntityManager* active_manager = ActiveEntityManager(editor_state, sandbox_index);
-
-	unsigned int matching_index = data->draw_data->FindMatchingInput(data->component_name);
+	unsigned int matching_index = data->draw_data->FindMatchingInput(component_name);
 	if (matching_index != -1) {
 		// Check to see if it has buffers and copy them if they have changed
 		unsigned int ui_input_count = data->draw_data->matching_inputs[matching_index].capacity_inputs.size;
@@ -728,27 +795,46 @@ void InspectorComponentCallback(ActionData* action_data) {
 			GetReflectionTypeRuntimeBuffers(type, runtime_buffers);
 			if (runtime_buffers.size != ui_input_count) {
 				// Give a warning
-				ECS_STACK_CAPACITY_STREAM(char, entity_string, 512);
-				EntityToString(entity, entity_string);
-				ECS_FORMAT_TEMP_STRING(console_message, "Stream input mismatch between UI and underlying type. Entity {#}, component {#}.", entity_string, component_name);
+				ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
+
+				if (is_global_component) {
+					ECS_FORMAT_STRING(console_message, "Stream input mismatch between UI and underlying type. Global component {#}.", component_name);
+				}
+				else {
+					ECS_STACK_CAPACITY_STREAM(char, entity_string, 512);
+					EntityToString(entity, entity_string);
+					ECS_FORMAT_TEMP_STRING(
+						console_message, 
+						"Stream input mismatch between UI and underlying type. Entity {#}, component {#}.",
+						entity_string, 
+						component_name
+					);
+				}
+				
 				EditorSetConsoleWarn(console_message);
 				return;
 			}
 
 			MemoryArena* arena = nullptr;
 			void* component_data = nullptr;
-			if (is_shared) {
-				arena = active_manager->GetSharedComponentAllocator(component);
-				component_data = GetSandboxSharedInstance(
-					editor_state,
-					sandbox_index,
-					component,
-					EntitySharedInstance(editor_state, sandbox_index, entity, component)
-				);
+			if (data->draw_data->is_global_component) {
+				arena = active_manager->GetGlobalComponentAllocator(component);
+				component_data = active_manager->GetGlobalComponent(component);
 			}
 			else {
-				arena = active_manager->GetComponentAllocator(component);
-				component_data = GetSandboxEntityComponent(editor_state, sandbox_index, entity, component);
+				if (is_shared) {
+					arena = active_manager->GetSharedComponentAllocator(component);
+					component_data = GetSandboxSharedInstance(
+						editor_state,
+						sandbox_index,
+						component,
+						EntitySharedInstance(editor_state, sandbox_index, entity, component)
+					);
+				}
+				else {
+					arena = active_manager->GetComponentAllocator(component);
+					component_data = GetSandboxEntityComponent(editor_state, sandbox_index, entity, component);
+				}
 			}
 
 			for (unsigned int index = 0; index < runtime_buffers.size; index++) {
@@ -775,12 +861,11 @@ void InspectorComponentCallback(ActionData* action_data) {
 #define HEADER_BUTTON_COUNT 2
 
 // There must be HEADER_BUTTON_COUNT of buttons. Stack memory should be at least ECS_KB in size
-void InspectorEntityHeaderConstructButtons(
+static void InspectorEntityHeaderConstructButtons(
 	InspectorDrawEntityData* draw_data,
 	UIDrawer* drawer, 
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	Entity entity,
 	Stream<char> component_name,
 	UIConfigCollapsingHeaderButton* header_buttons, 
 	void* stack_memory
@@ -830,10 +915,18 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 
-	// Check to see if the entity still exists - else revert to draw nothing
-	if (!entity_manager->ExistsEntity(data->entity)) {
-		ChangeInspectorToNothing(editor_state, inspector_index);
-		return;
+	// Check to see if the entity or global component still exists - else revert to draw nothing
+	if (!data->is_global_component) {
+		if (!entity_manager->ExistsEntity(data->entity)) {
+			ChangeInspectorToNothing(editor_state, inspector_index);
+			return;
+		}
+	}
+	else {
+		if (entity_manager->TryGetGlobalComponent(data->global_component) == nullptr) {
+			ChangeInspectorToNothing(editor_state, sandbox_index);
+			return;
+		}
 	}
 
 	// For each created instance, verify that its instance still exists - it can happen that the reflection
@@ -853,8 +946,11 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		}
 	}
 
-	// Before drawing, we need to remove all components which have been removed from the entity but are still being stored here
-	data->UpdateStoredComponents(editor_state, sandbox_index);
+	if (!data->is_global_component) {
+		// Before drawing, we need to remove all components which have been removed from the entity but are still being stored here
+		// This needs to be done only for the entity case
+		data->UpdateStoredComponents(editor_state, sandbox_index);
+	}
 
 	// Before drawing the components, go through the link components and deallocate the apply modifiers data
 	data->UpdateLinkComponentsApplyModifier(editor_state);
@@ -868,67 +964,79 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	icon_color = HSVToRGB(icon_color);
 	InspectorIcon(drawer, ECS_TOOLS_UI_TEXTURE_FILE_MESH, icon_color);
 
-	Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
-	Name* name = (Name*)entity_manager->TryGetComponent(data->entity, name_component);
+	UIDrawConfig config;
 
 	ECS_STACK_CAPACITY_STREAM(char, base_entity_name, 256);
-	EntityToString(data->entity, base_entity_name, true);
+	if (!data->is_global_component) {
+		Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
+		Name* name = (Name*)entity_manager->TryGetComponent(data->entity, name_component);
 
-	UIDrawConfig config;
-	if (name != nullptr) {
-		UIConfigRelativeTransform transform;
-		transform.scale.x = 2.0f;
-		config.AddFlag(transform);
+		EntityToString(data->entity, base_entity_name, true);
 
-		struct CallbackData {
-			EditorState* editor_state;
-			unsigned int sandbox_index;
-			InspectorDrawEntityData* data;
-		};
+		if (name != nullptr) {
+			UIConfigRelativeTransform transform;
+			transform.scale.x = 2.0f;
+			config.AddFlag(transform);
 
-		auto name_input_callback = [](ActionData* action_data) {
-			UI_UNPACK_ACTION_DATA;
+			struct CallbackData {
+				EditorState* editor_state;
+				unsigned int sandbox_index;
+				InspectorDrawEntityData* data;
+			};
 
-			CallbackData* data = (CallbackData*)_data;
-			ChangeEntityName(data->editor_state, data->sandbox_index, data->data->entity, data->data->name_input);
-		};
+			auto name_input_callback = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
 
-		CallbackData callback_data;
-		callback_data.editor_state = editor_state;
-		callback_data.sandbox_index = sandbox_index;
-		callback_data.data = data;
-		UIConfigTextInputCallback input_callback = { { name_input_callback, &callback_data, sizeof(callback_data) } };
-		config.AddFlag(input_callback);
+				CallbackData* data = (CallbackData*)_data;
+				ChangeEntityName(data->editor_state, data->sandbox_index, data->data->entity, data->data->name_input);
+			};
 
-		// Cannot use a constant name because it will be transported to other entities when changing to them
-		// without changing the buffer being pointed
-		UIDrawerTextInput* text_input = drawer->TextInput(
-			UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_ALIGN_TO_ROW_Y,
-			config,
-			base_entity_name,
-			&data->name_input
-		);
-		if (!text_input->is_currently_selected) {
-			if (!function::CompareStrings(name->name, *text_input->text)) {
-				text_input->text->Copy(name->name);
+			CallbackData callback_data;
+			callback_data.editor_state = editor_state;
+			callback_data.sandbox_index = sandbox_index;
+			callback_data.data = data;
+			UIConfigTextInputCallback input_callback = { { name_input_callback, &callback_data, sizeof(callback_data) } };
+			config.AddFlag(input_callback);
+
+			// Cannot use a constant name because it will be transported to other entities when changing to them
+			// without changing the buffer being pointed
+			UIDrawerTextInput* text_input = drawer->TextInput(
+				UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_ALIGN_TO_ROW_Y,
+				config,
+				base_entity_name,
+				&data->name_input
+			);
+			if (!text_input->is_currently_selected) {
+				if (!function::CompareStrings(name->name, *text_input->text)) {
+					text_input->text->Copy(name->name);
+				}
 			}
-		}
-		drawer->NextRow();
+			drawer->NextRow();
 
-		UIConfigAlignElement align_element;
-		align_element.horizontal = ECS_UI_ALIGN_MIDDLE;
-		config.AddFlag(align_element);
-		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_ALIGN_ELEMENT, config, base_entity_name);
-		config.flag_count = 0;
+			UIConfigAlignElement align_element;
+			align_element.horizontal = ECS_UI_ALIGN_MIDDLE;
+			config.AddFlag(align_element);
+			drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_ALIGN_ELEMENT, config, base_entity_name);
+			config.flag_count = 0;
+		}
+		else {
+			drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, base_entity_name);
+		}
 	}
 	else {
-		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, base_entity_name);
+		ECS_STACK_CAPACITY_STREAM(char, name_storage, 512);
+		Stream<char> component_name = InspectorTargetName(data, editor_state, sandbox_index, name_storage);
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, component_name);
 	}
 
 	drawer->NextRow();
 
-	ComponentSignature unique_signature = entity_manager->GetEntitySignatureStable(data->entity);
-	SharedComponentSignature shared_signature = entity_manager->GetEntitySharedSignatureStable(data->entity);
+	ComponentSignature unique_signature;
+	SharedComponentSignature shared_signature;
+	if (!data->is_global_component) {
+		unique_signature = entity_manager->GetEntitySignatureStable(data->entity);
+		shared_signature = entity_manager->GetEntitySharedSignatureStable(data->entity);
+	}
 
 	UIConfigNamePadding name_padding;
 	name_padding.alignment = ECS_UI_ALIGN_LEFT;
@@ -948,11 +1056,15 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		return entity_manager->GetSharedData(shared_signature.indices[index], shared_signature.instances[index]);
 	};
 
+	auto get_global_data = [&](size_t index) {
+		return entity_manager->GetGlobalComponent(data->global_component);
+	};
+
 	auto draw_component = [&](ComponentSignature signature, ECS_COMPONENT_TYPE component_type, unsigned int header_state_offset, auto get_current_data) {
 		UIReflectionDrawConfig ui_draw_configs[(unsigned int)UIReflectionElement::Count];
 		memset(ui_draw_configs, 0, sizeof(ui_draw_configs));
 
-		void* ui_draw_configs_stack_memory = ECS_STACK_ALLOC(ECS_KB);
+		ECS_STACK_CAPACITY_STREAM(char, ui_draw_configs_stack_memory, ECS_KB);
 
 		InspectorComponentCallbackData change_component_data;
 		change_component_data.editor_state = editor_state;
@@ -964,7 +1076,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			{ ui_draw_configs, std::size(ui_draw_configs) }, 
 			modify_value_handler, 
 			ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ALL,
-			ui_draw_configs_stack_memory,
+			ui_draw_configs_stack_memory.buffer,
 			false
 		);
 
@@ -995,8 +1107,8 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			}
 
 			change_component_data.component_name = current_component_name;
-
-			InspectorComponentUIIInstanceName(current_component_name, base_entity_name, sandbox_index, instance_name);
+			Stream<char> base_instance_name = data->is_global_component ? current_component_name : base_entity_name;
+			InspectorComponentUIIInstanceName(current_component_name, base_instance_name, sandbox_index, instance_name);
 
 			// Check to see whether or not the component is from the engine side or from the module side
 			UIReflectionDrawer* ui_drawer = editor_state->module_reflection;
@@ -1102,21 +1214,41 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 					}
 					current_component = data->link_components[link_index].data;
 
-					bool success = ConvertTargetToLinkComponent(
-						editor_state,
-						sandbox_index,
-						link_component,
-						data->entity,
-						current_component,
-						data->link_components[link_index].previous_data,
-						nullptr
-					);
+					bool success = false;
+					if (!data->is_global_component) {
+						success = ConvertTargetToLinkComponent(
+							editor_state,
+							sandbox_index,
+							link_component,
+							data->entity,
+							current_component,
+							data->link_components[link_index].previous_data,
+							data->link_components[link_index].target_data_copy
+						);
+					}
+					else {
+						success = ConvertTargetToLinkComponent(
+							editor_state,
+							link_component,
+							entity_manager->GetGlobalComponent(data->global_component),
+							current_component,
+							data->link_components[link_index].target_data_copy,
+							data->link_components[link_index].previous_data
+						);
+					}
 					if (!success) {
-						ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-						Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, data->entity, entity_name_storage);
+						if (!data->is_global_component) {
+							ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
+							Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, data->entity, entity_name_storage);
 
-						ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.", link_component, entity_name, sandbox_index);
-						EditorSetConsoleError(error_message);
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.", link_component, entity_name, sandbox_index);
+							EditorSetConsoleError(error_message);
+						}
+						else {
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert global component {#} to link component in sandbox {#}.", 
+								entity_manager->GetGlobalComponentName(data->global_component), sandbox_index);
+							EditorSetConsoleError(error_message);
+						}
 					}
 					else {
 						const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_component);
@@ -1200,7 +1332,6 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				drawer,
 				editor_state,
 				sandbox_index,
-				data->entity,
 				current_component_name,
 				header_buttons,
 				button_stack_allocation.buffer
@@ -1209,6 +1340,10 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			UIDrawConfig collapsing_config;
 			UIConfigCollapsingHeaderButtons config_buttons;
 			config_buttons.buttons = { header_buttons, HEADER_BUTTON_COUNT };
+			if (data->is_global_component) {
+				// Don't add the remove button for global components
+				config_buttons.buttons.size--;
+			}
 			collapsing_config.AddFlag(config_buttons);
 
 			Stream<char> component_name_to_display = instance->name;
@@ -1254,155 +1389,168 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	};
 
 	// Now draw the entity using the reflection drawer
-	draw_component(unique_signature, ECS_COMPONENT_UNIQUE, 0, get_unique_data);
-	draw_component({ shared_signature.indices, shared_signature.count }, ECS_COMPONENT_SHARED, unique_signature.count, get_shared_data);
+	if (!data->is_global_component) {
+		draw_component(unique_signature, ECS_COMPONENT_UNIQUE, 0, get_unique_data);
+		draw_component({ shared_signature.indices, shared_signature.count }, ECS_COMPONENT_SHARED, unique_signature.count, get_shared_data);
+	}
+	else {
+		draw_component({ &data->global_component, 1 }, ECS_COMPONENT_GLOBAL, 0, get_global_data);
+	}
 
 	config.flag_count = 0;
 
-	unsigned int module_count = editor_state->editor_components.loaded_modules.size;
-	bool* is_submenu = (bool*)ECS_STACK_ALLOC(sizeof(bool) * module_count);
-	memset(is_submenu, 1, sizeof(bool) * module_count);
+	if (!data->is_global_component) {
+		unsigned int module_count = editor_state->editor_components.loaded_modules.size;
+		bool* is_submenu = (bool*)ECS_STACK_ALLOC(sizeof(bool) * module_count);
+		memset(is_submenu, 1, sizeof(bool) * module_count);
 
-	UIDrawerMenuState* submenues = (UIDrawerMenuState*)ECS_STACK_ALLOC(sizeof(UIDrawerMenuState) * module_count);
-	// These won't be used, but still need to be provided with data size 0
-	UIActionHandler* dummy_handlers = (UIActionHandler*)ECS_STACK_ALLOC(sizeof(UIActionHandler) * module_count);
+		UIDrawerMenuState* submenues = (UIDrawerMenuState*)ECS_STACK_ALLOC(sizeof(UIDrawerMenuState) * module_count);
+		// These won't be used, but still need to be provided with data size 0
+		UIActionHandler* dummy_handlers = (UIActionHandler*)ECS_STACK_ALLOC(sizeof(UIActionHandler) * module_count);
 
-	UIDrawerMenuState add_menu_state;
-	add_menu_state.row_count = 0;
-	add_menu_state.row_has_submenu = is_submenu;
-	add_menu_state.submenues = submenues;
-	add_menu_state.submenu_index = 0;
-	add_menu_state.click_handlers = dummy_handlers;
+		UIDrawerMenuState add_menu_state;
+		add_menu_state.row_count = 0;
+		add_menu_state.row_has_submenu = is_submenu;
+		add_menu_state.submenues = submenues;
+		add_menu_state.submenu_index = 0;
+		add_menu_state.click_handlers = dummy_handlers;
 
-	ECS_STACK_CAPACITY_STREAM(char, add_menu_state_characters, 512);
+		ECS_STACK_CAPACITY_STREAM(char, add_menu_state_characters, 512);
 
-	for (unsigned int index = 0; index < module_count; index++) {
-		ECS_STACK_CAPACITY_STREAM(unsigned int, component_indices, 256);
-		ECS_STACK_CAPACITY_STREAM(unsigned int, shared_indices, 256);
+		for (unsigned int index = 0; index < module_count; index++) {
+			ECS_STACK_CAPACITY_STREAM(unsigned int, component_indices, 256);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, shared_indices, 256);
 
-		editor_state->editor_components.GetModuleComponentIndices(index, &component_indices, true);
-		editor_state->editor_components.GetModuleSharedComponentIndices(index, &shared_indices, true);
+			editor_state->editor_components.GetModuleComponentIndices(index, &component_indices, true);
+			editor_state->editor_components.GetModuleSharedComponentIndices(index, &shared_indices, true);
 
-		ECS_STACK_CAPACITY_STREAM(unsigned int, valid_component_indices, 256);
-		ECS_STACK_CAPACITY_STREAM(unsigned int, valid_shared_indices, 256);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, valid_component_indices, 256);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, valid_shared_indices, 256);
 
-		auto has_unique_component = [&](Component id) {
-			return entity_manager->HasComponent(data->entity, id);
-		};
+			auto has_unique_component = [&](Component id) {
+				return entity_manager->HasComponent(data->entity, id);
+			};
 
-		auto has_shared_component = [&](Component id) {
-			return entity_manager->HasSharedComponent(data->entity, id);
-		};
+			auto has_shared_component = [&](Component id) {
+				return entity_manager->HasSharedComponent(data->entity, id);
+			};
 
-		auto get_valid_indices = [&](CapacityStream<unsigned int> component_indices, CapacityStream<unsigned int>& valid_indices, auto has_component) {
-			for (unsigned int component_index = 0; component_index < component_indices.size; component_index++) {
-				Stream<char> component_name = editor_state->editor_components.loaded_modules[index].types[component_indices[component_index]];
-				Component id = editor_state->editor_components.GetComponentIDWithLink(component_name);
-				ECS_ASSERT(id.value != -1);
-				if (!has_component(id)) {
-					valid_indices.Add(component_indices[component_index]);
+			auto get_valid_indices = [&](CapacityStream<unsigned int> component_indices, CapacityStream<unsigned int>& valid_indices, auto has_component) {
+				for (unsigned int component_index = 0; component_index < component_indices.size; component_index++) {
+					Stream<char> component_name = editor_state->editor_components.loaded_modules[index].types[component_indices[component_index]];
+					Component id = editor_state->editor_components.GetComponentIDWithLink(component_name);
+					ECS_ASSERT(id.value != -1);
+					if (!has_component(id)) {
+						valid_indices.Add(component_indices[component_index]);
+					}
 				}
+			};
+
+			get_valid_indices(component_indices, valid_component_indices, has_unique_component);
+			get_valid_indices(shared_indices, valid_shared_indices, has_shared_component);
+
+			// If the module doesn't have any more valid components left, eliminate it
+			if (valid_component_indices.size == 0 && valid_shared_indices.size == 0) {
+				continue;
 			}
-		};
 
-		get_valid_indices(component_indices, valid_component_indices, has_unique_component);
-		get_valid_indices(shared_indices, valid_shared_indices, has_shared_component);
+			// Increment the row count as we go
+			unsigned int valid_module_index = add_menu_state.row_count;
 
-		// If the module doesn't have any more valid components left, eliminate it
-		if (valid_component_indices.size == 0 && valid_shared_indices.size == 0) {
-			continue;
+			add_menu_state_characters.AddStream(editor_state->editor_components.loaded_modules[index].name);
+			add_menu_state_characters.Add('\n');
+			dummy_handlers[valid_module_index].data_size = 0;
+
+			component_indices = valid_component_indices;
+			shared_indices = valid_shared_indices;
+
+			unsigned int total_component_count = component_indices.size + shared_indices.size;
+
+			// The ECS_STACK_ALLOC references are going to be valid outside the scope of the for because _alloca is deallocated on function exit
+			UIActionHandler* handlers = (UIActionHandler*)ECS_STACK_ALLOC(sizeof(UIActionHandler) * total_component_count);
+			AddComponentCallbackData* handler_data = (AddComponentCallbackData*)ECS_STACK_ALLOC(sizeof(AddComponentCallbackData) * total_component_count);
+			submenues[valid_module_index].click_handlers = handlers;
+			submenues[valid_module_index].right_characters = { nullptr, 0 };
+			submenues[valid_module_index].row_has_submenu = nullptr;
+			submenues[valid_module_index].submenues = nullptr;
+			submenues[valid_module_index].separation_line_count = 0;
+
+			void* _left_character_allocation = ECS_STACK_ALLOC(sizeof(char) * 512);
+			CapacityStream<char> left_characters;
+			left_characters.InitializeFromBuffer(_left_character_allocation, 0, 512);
+
+			auto write_menu = [&](size_t module_index, Stream<unsigned int> indices, unsigned int write_offset) {
+				for (unsigned int subindex = 0; subindex < indices.size; subindex++) {
+					Stream<char> component_name = editor_state->editor_components.loaded_modules[module_index].types[indices[subindex]];
+					Stream<char> initial_name = component_name;
+					// If it is a link component, prettify it
+					if (editor_state->editor_components.IsLinkComponent(component_name)) {
+						component_name = GetReflectionTypeLinkNameBase(component_name);
+					}
+
+					left_characters.AddStream(component_name);
+					left_characters.AddAssert('\n');
+					handler_data[subindex + write_offset] = { editor_state, sandbox_index, initial_name, data->entity };
+					handlers[subindex + write_offset] = { AddComponentCallback, handler_data + subindex + write_offset, sizeof(AddComponentCallbackData), ECS_UI_DRAW_NORMAL };
+				}
+			};
+
+			write_menu(index, component_indices, 0);
+			write_menu(index, shared_indices, component_indices.size);
+
+			// Remove the last '\n'
+			left_characters.size--;
+
+			submenues[valid_module_index].left_characters = left_characters;
+			submenues[valid_module_index].row_count = total_component_count;
+			if (component_indices.size > 0 && shared_indices.size) {
+				submenues[valid_module_index].separation_lines[0] = component_indices.size;
+				submenues[valid_module_index].separation_line_count = 1;
+			}
+			submenues[valid_module_index].submenu_index = 1;
+
+			bool* is_unavailable = (bool*)ECS_STACK_ALLOC(sizeof(bool) * total_component_count);
+			bool can_have_unique = unique_signature.count < ECS_ARCHETYPE_MAX_COMPONENTS;
+			bool can_have_shared = shared_signature.count < ECS_ARCHETYPE_MAX_SHARED_COMPONENTS;
+			memset(is_unavailable, !can_have_unique, sizeof(bool) * component_indices.size);
+			memset(is_unavailable + component_indices.size, !can_have_shared, sizeof(bool) * shared_indices.size);
+			submenues[valid_module_index].unavailables = is_unavailable;
+
+			add_menu_state.row_count++;
 		}
-
-		// Increment the row count as we go
-		unsigned int valid_module_index = add_menu_state.row_count;
-
-		add_menu_state_characters.AddStream(editor_state->editor_components.loaded_modules[index].name);
-		add_menu_state_characters.Add('\n');
-		dummy_handlers[valid_module_index].data_size = 0;
-
-		component_indices = valid_component_indices;
-		shared_indices = valid_shared_indices;
-
-		unsigned int total_component_count = component_indices.size + shared_indices.size;
-
-		// The ECS_STACK_ALLOC references are going to be valid outside the scope of the for because _alloca is deallocated on function exit
-		UIActionHandler* handlers = (UIActionHandler*)ECS_STACK_ALLOC(sizeof(UIActionHandler) * total_component_count);
-		AddComponentCallbackData* handler_data = (AddComponentCallbackData*)ECS_STACK_ALLOC(sizeof(AddComponentCallbackData) * total_component_count);
-		submenues[valid_module_index].click_handlers = handlers;
-		submenues[valid_module_index].right_characters = { nullptr, 0 };
-		submenues[valid_module_index].row_has_submenu = nullptr;
-		submenues[valid_module_index].submenues = nullptr;
-		submenues[valid_module_index].separation_line_count = 0;
-
-		void* _left_character_allocation = ECS_STACK_ALLOC(sizeof(char) * 512);
-		CapacityStream<char> left_characters;
-		left_characters.InitializeFromBuffer(_left_character_allocation, 0, 512);
-		
-		auto write_menu = [&](size_t module_index, Stream<unsigned int> indices, unsigned int write_offset) {
-			for (unsigned int subindex = 0; subindex < indices.size; subindex++) {
-				Stream<char> component_name = editor_state->editor_components.loaded_modules[module_index].types[indices[subindex]];
-				Stream<char> initial_name = component_name;
-				// If it is a link component, prettify it
-				if (editor_state->editor_components.IsLinkComponent(component_name)) {
-					component_name = GetReflectionTypeLinkNameBase(component_name);
-				}
-
-				left_characters.AddStream(component_name);
-				left_characters.AddAssert('\n');
-				handler_data[subindex + write_offset] = { editor_state, sandbox_index, initial_name, data->entity };
-				handlers[subindex + write_offset] = { AddComponentCallback, handler_data + subindex + write_offset, sizeof(AddComponentCallbackData), ECS_UI_DRAW_NORMAL };
-			}
-		};
-		
-		write_menu(index, component_indices, 0);
-		write_menu(index, shared_indices, component_indices.size);
-
 		// Remove the last '\n'
-		left_characters.size--;
-
-		submenues[valid_module_index].left_characters = left_characters;
-		submenues[valid_module_index].row_count = total_component_count;
-		if (component_indices.size > 0 && shared_indices.size) {
-			submenues[valid_module_index].separation_lines[0] = component_indices.size;
-			submenues[valid_module_index].separation_line_count = 1;
+		if (add_menu_state_characters.size > 0) {
+			add_menu_state_characters.size--;
 		}
-		submenues[valid_module_index].submenu_index = 1;
+		add_menu_state.left_characters = add_menu_state_characters;
 
-		bool* is_unavailable = (bool*)ECS_STACK_ALLOC(sizeof(bool) * total_component_count);
-		bool can_have_unique = unique_signature.count < ECS_ARCHETYPE_MAX_COMPONENTS;
-		bool can_have_shared = shared_signature.count < ECS_ARCHETYPE_MAX_SHARED_COMPONENTS;
-		memset(is_unavailable, !can_have_unique, sizeof(bool) * component_indices.size);
-		memset(is_unavailable + component_indices.size, !can_have_shared, sizeof(bool) * shared_indices.size);
-		submenues[valid_module_index].unavailables = is_unavailable;
+		config.flag_count = 0;
+		UIConfigAlignElement align_element;
+		align_element.horizontal = ECS_UI_ALIGN_MIDDLE;
+		config.AddFlag(align_element);
 
-		add_menu_state.row_count++;
+		UIConfigActiveState active_state;
+		active_state.state = add_menu_state.row_count > 0;
+		config.AddFlag(active_state);
+		drawer->Menu(UI_CONFIG_ALIGN_ELEMENT | UI_CONFIG_ACTIVE_STATE | UI_CONFIG_MENU_COPY_STATES, config, "Add Component", &add_menu_state);
 	}
-	// Remove the last '\n'
-	if (add_menu_state_characters.size > 0) {
-		add_menu_state_characters.size--;
-	}
-	add_menu_state.left_characters = add_menu_state_characters;
-
-	config.flag_count = 0;
-	UIConfigAlignElement align_element;
-	align_element.horizontal = ECS_UI_ALIGN_MIDDLE;
-	config.AddFlag(align_element);
-
-	UIConfigActiveState active_state;
-	active_state.state = add_menu_state.row_count > 0;
-	config.AddFlag(active_state);
-	drawer->Menu(UI_CONFIG_ALIGN_ELEMENT | UI_CONFIG_ACTIVE_STATE | UI_CONFIG_MENU_COPY_STATES, config, "Add Component", &add_menu_state);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index)
-{
+template<typename CompareFunctor, typename SetInfoFunctor>
+static void ChangeInspectorToEntityOrGlobalComponentImpl(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	unsigned int inspector_index,
+	CompareFunctor&& compare_functor,
+	SetInfoFunctor&& set_info_functor
+) {
 	// Look to see if there is already an inspector with that entity and highlight it instead
 	if (inspector_index != -1) {
 		if (editor_state->inspector_manager.data[inspector_index].draw_function == InspectorDrawEntity) {
 			InspectorDrawEntityData* draw_data = (InspectorDrawEntityData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
-			if (draw_data->entity == entity) {
+			if (compare_functor(draw_data)) {
 				// Don't do anything if it is the same entity, just highlight it
 				ECS_STACK_CAPACITY_STREAM(char, inspector_name, 64);
 				GetInspectorName(inspector_index, inspector_name);
@@ -1416,7 +1564,7 @@ void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_ind
 		FindInspectorWithDrawFunction(editor_state, InspectorDrawEntity, &inspector_entity_target, sandbox_index);
 		for (unsigned int index = 0; index < inspector_entity_target.size; index++) {
 			InspectorDrawEntityData* draw_data = (InspectorDrawEntityData*)GetInspectorDrawFunctionData(editor_state, inspector_entity_target[index]);
-			if (draw_data->entity == entity) {
+			if (compare_functor(draw_data)) {
 				// Highlight this inspector
 				ECS_STACK_CAPACITY_STREAM(char, inspector_name, 64);
 				GetInspectorName(inspector_entity_target[index], inspector_name);
@@ -1425,11 +1573,11 @@ void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_ind
 			}
 		}
 	}
-	
+
 	size_t _draw_data[128];
 
 	InspectorDrawEntityData* draw_data = (InspectorDrawEntityData*)_draw_data;
-	draw_data->entity = entity;
+	set_info_functor(draw_data);
 	draw_data->name_input.buffer = nullptr;
 	draw_data->name_input.size = 0;
 	draw_data->name_input.capacity = INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY;
@@ -1448,6 +1596,31 @@ void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_ind
 		sizeof(*draw_data) + INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY,
 		sandbox_index
 	);
+}
+
+void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index)
+{
+	ChangeInspectorToEntityOrGlobalComponentImpl(editor_state, sandbox_index, inspector_index,
+		[=](const InspectorDrawEntityData* draw_data) {
+			return !draw_data->is_global_component && draw_data->entity == entity;
+		},
+		[=](InspectorDrawEntityData* draw_data) {
+			draw_data->is_global_component = false;
+			draw_data->entity = entity;
+		});
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void ChangeInspectorToGlobalComponent(EditorState* editor_state, unsigned int sandbox_index, Component component, unsigned int inspector_index) {
+	ChangeInspectorToEntityOrGlobalComponentImpl(editor_state, sandbox_index, inspector_index,
+		[=](const InspectorDrawEntityData* draw_data) {
+			return draw_data->is_global_component && draw_data->global_component == component;
+		},
+		[=](InspectorDrawEntityData* draw_data) {
+			draw_data->is_global_component = true;
+			draw_data->global_component = component;
+		});
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

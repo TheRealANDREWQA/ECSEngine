@@ -301,18 +301,20 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 					current_handle,
 					sizeof(current_handle)
 				);
+
+				unsigned int current_reference_count = asset_reference_counts[index][subindex];
 				if (found_index != -1) {
 					found_index += handle_start_offset;
 					was_found[found_index] = true;
 					// Compare the reference count
 					unsigned int snapshot_reference_count = sandbox->runtime_asset_handle_snapshot.reference_counts[found_index];
 
-					if (snapshot_reference_count < asset_reference_counts[index][subindex]) {
+					if (snapshot_reference_count < current_reference_count) {
 						// Increment the asset reference count
-						IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_index, asset_reference_counts[index][subindex] - snapshot_reference_count);
+						IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_index, current_reference_count - snapshot_reference_count);
 					}
-					else if (snapshot_reference_count > asset_reference_counts[index][subindex]) {
-						unsigned int difference = snapshot_reference_count - asset_reference_counts[index][subindex];
+					else if (snapshot_reference_count > current_reference_count) {
+						unsigned int difference = snapshot_reference_count - current_reference_count;
 						for (unsigned int reference_index = 0; reference_index < difference; reference_index++) {
 							DecrementAssetReference(editor_state, current_handle, current_type, sandbox_index);
 						}
@@ -320,7 +322,8 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 				}
 				else {
 					// The handle didn't exist before, now it exists - it will be added to the snapshot anyway
-					// We shouldn't increment the reference count
+					// Increment the reference count
+					IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_index, current_reference_count);
 				}
 			}
 		}
@@ -804,7 +807,7 @@ Entity FindSandboxUnusedEntitySlot(
 	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
 	unsigned int slot_index = sandbox->unused_entity_slot_type[viewport].Find(slot_type, [](EDITOR_SANDBOX_ENTITY_SLOT current_slot) {
 		return current_slot;
-		});
+	});
 
 	return slot_index != -1 ? sandbox->unused_entities_slots[viewport][slot_index] : Entity(-1);
 }
@@ -1591,6 +1594,37 @@ void ResetSandboxUnusedEntities(EditorState* editor_state, unsigned int sandbox_
 	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->unused_entities_slots[viewport].FreeBuffer();
+	SignalSandboxUnusedEntitiesSlotsCounter(editor_state, sandbox_index, viewport);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void RemoveSandboxUnusedEntitiesSlot(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_ENTITY_SLOT slot_type, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
+
+	unsigned int size = sandbox->unused_entities_slots[viewport].size;
+	unsigned int offset = 0;
+
+	auto find = [&]() {
+		for (unsigned int index = 0; index < size; index++) {
+			if (sandbox->unused_entity_slot_type[viewport][offset + index] == slot_type) {
+				unsigned int return_value = offset + index;
+				offset += index + 1;
+				size -= index + 1;
+				return return_value;
+			}
+		}
+		return (unsigned int)-1;
+	};
+
+	unsigned int slot_index = find();
+	while (slot_index != -1) {
+		sandbox->unused_entities_slots[viewport].RemoveSwapBack(slot_index);
+		sandbox->unused_entity_slot_type[viewport].RemoveSwapBack(slot_index);
+		slot_index = find();
+	}
 	SignalSandboxUnusedEntitiesSlotsCounter(editor_state, sandbox_index, viewport);
 }
 

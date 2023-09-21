@@ -6,42 +6,42 @@
 namespace ECSEngine {
 
 	// Iterator Handler Interface - can copy paste
-	// using storage_type = ;
+	// using StorageType = ;
 	// 
-	// using return_type = ;
+	// using ReturnType = ;
 	// 
-	// Stream<storage_type> GetChildren(storage_type value, AllocatorPolymorphic allocator);
+	// Stream<StorageType> GetChildren(StorageType value, AllocatorPolymorphic allocator);
 	// 
-	// bool HasChildren(storage_type value) const;
+	// bool HasChildren(StorageType value) const;
 	// 
-	// Stream<storage_type> GetRoots(AllocatorPolymorphic allocator);
+	// Stream<StorageType> GetRoots(AllocatorPolymorphic allocator);
 	// 
-	// return_type GetReturnValue(storage_type value, AllocatorPolymorphic allocator);
+	// ReturnType GetReturnValue(StorageType value, AllocatorPolymorphic allocator);
 	// 
 	// void Free();
 
 	struct IteratorPolymorphic {
-		inline bool Valid() const {
+		ECS_INLINE bool Valid() const {
 			return valid(iterator);
 		}
 
-		inline void Next(void* return_type, unsigned int* level = nullptr) {
+		ECS_INLINE void Next(void* return_type, unsigned int* level = nullptr) {
 			next(iterator, return_type, level);
 		}
 
-		inline void Peek(void* return_type, unsigned int* level = nullptr, bool* has_children = nullptr) {
+		ECS_INLINE void Peek(void* return_type, unsigned int* level = nullptr, bool* has_children = nullptr) {
 			peek(iterator, return_type, level, has_children);
 		}
 
-		inline void PeekStorage(void* storage_type) {
+		ECS_INLINE void PeekStorage(void* storage_type) {
 			peek_storage(iterator, storage_type);
 		}
 
-		inline void Has() {
+		ECS_INLINE void Has() {
 			skip(iterator);
 		}
 
-		inline void Deallocate(const void* buffer) {
+		ECS_INLINE void Deallocate(const void* buffer) {
 			deallocate(iterator, buffer);
 		}
 
@@ -97,49 +97,49 @@ namespace ECSEngine {
 		iterator.peek_storage = peek_storage;
 		iterator.skip = skip;
 		iterator.valid = valid;
-		iterator.storage_type_size = sizeof(typename Type::storage_type);
-		iterator.return_type_size = sizeof(typename Type::return_type);
+		iterator.storage_type_size = sizeof(typename Type::StorageType);
+		iterator.return_type_size = sizeof(typename Type::ReturnType);
 
 		return iterator;
 	}
 
-	// The handler needs to have as typedefs return_type and storage_type
-	// As functions:	Stream<storage_type> GetChildren(storage_type, AllocatorPolymorphic allocator) - returns a stream of elements to be added from a certain node 
-	// 					bool HasChildren(storage_type) const - returns true if the value has children, false otherwise
+	// The handler needs to have as typedefs ReturnType and StorageType
+	// As functions:	Stream<StorageType> GetChildren(StorageType, AllocatorPolymorphic allocator) - returns a stream of elements to be added from a certain node 
+	// 					bool HasChildren(StorageType) const - returns true if the value has children, false otherwise
 	//					(the stream returned needs to be stable, either from an internal allocator or from the one given)
-	//					Stream<storage_type> GetRoots(AllocatorPolymorphic allocator) - returns the root nodes
-	//					return_type GetReturnValue(storage_type) - returns a user-facing value from a node
+	//					Stream<StorageType> GetRoots(AllocatorPolymorphic allocator) - returns the root nodes
+	//					ReturnType GetReturnValue(StorageType) - returns a user-facing value from a node
 	//					If bytes are allocated during GetReturnValue, its the caller's responsability to deallocate them or at the end of the iterator's usage
 	//					to clear the allocator
 	template<typename Handler>
 	struct BFSIterator {
-		using return_type = typename Handler::return_type;
-		using storage_type = typename Handler::storage_type;
+		using ReturnType = typename Handler::ReturnType;
+		using StorageType = typename Handler::StorageType;
 
 		struct Node {
-			storage_type value;
+			StorageType value;
 			unsigned int level;
 		};
 
-		BFSIterator() {}
+		ECS_INLINE BFSIterator() {}
 
-		BFSIterator(AllocatorPolymorphic allocator, Handler _handler, unsigned int default_capacity = 0) {
+		ECS_INLINE BFSIterator(AllocatorPolymorphic allocator, Handler _handler, unsigned int default_capacity = 0) {
 			Initialize(allocator, _handler, default_capacity);
 		}
 
-		bool Valid() const {
+		ECS_INLINE bool Valid() const {
 			return resizable_storage.GetSize() != 0;
 		}
 
 		// Pop the element from the queue and returns the value
 		// Can optionally give a pointer to a uint to get its level in the hierarchy
 		// Level 0 means it is a root
-		return_type Next(unsigned int* level = nullptr) {
+		ReturnType Next(unsigned int* level = nullptr) {
 			Node current_value;
 			resizable_storage.Pop(current_value);
 
 			// Get the children of the current node
-			Stream<storage_type> children = handler.GetChildren(current_value.value, resizable_storage.m_queue.allocator);
+			Stream<StorageType> children = handler.GetChildren(current_value.value, resizable_storage.m_queue.allocator);
 			for (size_t index = 0; index < children.size; index++) {
 				resizable_storage.Push({ children[index], current_value.level + 1 });
 			}
@@ -154,7 +154,7 @@ namespace ECSEngine {
 		// Peek the next element without removing it
 		// Can optionally give a pointer to a uint to get its level in the hierarchy
 		// Level 0 means it is a root
-		return_type Peek(unsigned int* level = nullptr, bool* has_children = nullptr) {
+		ReturnType Peek(unsigned int* level = nullptr, bool* has_children = nullptr) {
 			Node current_value;
 			resizable_storage.Peek(current_value);
 			
@@ -169,28 +169,28 @@ namespace ECSEngine {
 			return handler.GetReturnValue(current_value.value, resizable_storage.m_queue.allocator);
 		}
 
-		storage_type PeekStorage() const {
+		StorageType PeekStorage() const {
 			Node node;
 			resizable_storage.Peek(node);
 			return node.value;
 		}
 
 		// Skips the next node without visiting its children
-		void Has() {
+		ECS_INLINE void Has() {
 			Node temp;
 			resizable_storage.Pop(temp);
 		}
 
 		// Retrieves a new node from the handler
 		void Roots() {
-			Stream<storage_type> roots = handler.GetRoots(resizable_storage.m_queue.allocator);
+			Stream<StorageType> roots = handler.GetRoots(resizable_storage.m_queue.allocator);
 			for (size_t index = 0; index < roots.size; index++) {
 				resizable_storage.Push({ roots[index], 0 });
 			}
 			Deallocate(roots.buffer);
 		}
 
-		void Deallocate(const void* buffer) {
+		ECS_INLINE void Deallocate(const void* buffer) {
 			ECSEngine::DeallocateIfBelongs(resizable_storage.m_queue.allocator, buffer);
 		}
 
@@ -207,7 +207,7 @@ namespace ECSEngine {
 			Roots();
 		}
 
-		IteratorPolymorphic AsPolymorphic() {
+		ECS_INLINE IteratorPolymorphic AsPolymorphic() {
 			return IteratorToPolymorphic(this);
 		}
 
@@ -215,40 +215,40 @@ namespace ECSEngine {
 		Handler handler;
 	};
 
-	// The handler needs to have as typedefs return_type and storage_type
-	// As functions:	Stream<storage_type> GetChildren(storage_type, AllocatorPolymorphic allocator) - returns a stream of elements to be added from a certain node 
-	//					bool HasChildren(storage_type) const - returns true if the value has children, false otherwise
+	// The handler needs to have as typedefs ReturnType and StorageType
+	// As functions:	Stream<StorageType> GetChildren(StorageType, AllocatorPolymorphic allocator) - returns a stream of elements to be added from a certain node 
+	//					bool HasChildren(StorageType) const - returns true if the value has children, false otherwise
 	//					(the stream returned needs to be stable, either from an internal allocator or from the one given)
-	//					Stream<storage_type> GetRoots(AllocatorPolymorphic allocator) - returns the root nodes
-	//					return_type GetReturnValue(storage_type, AllocatorPolymorphic allocator) - returns a user-facing value from a node
+	//					Stream<StorageType> GetRoots(AllocatorPolymorphic allocator) - returns the root nodes
+	//					ReturnType GetReturnValue(StorageType, AllocatorPolymorphic allocator) - returns a user-facing value from a node
 	//					If bytes are allocated during GetReturnValue, its the caller's responsability to deallocate them or at the end of the iterator's usage
 	//					to clear the allocator
 	template<typename Handler>
 	struct DFSIterator {
-		using return_type = typename Handler::return_type;
-		using storage_type = typename Handler::storage_type;
+		using ReturnType = typename Handler::ReturnType;
+		using StorageType = typename Handler::StorageType;
 
 		struct Node {
-			storage_type value;
+			StorageType value;
 			unsigned int level;
 		};
 
-		DFSIterator() {}
+		ECS_INLINE DFSIterator() {}
 
-		DFSIterator(AllocatorPolymorphic allocator, Handler _handler, unsigned int default_capacity = 0) {
+		ECS_INLINE DFSIterator(AllocatorPolymorphic allocator, Handler _handler, unsigned int default_capacity = 0) {
 			Initialize(allocator, _handler, default_capacity);
 		}
 
-		bool Valid() const {
+		ECS_INLINE bool Valid() const {
 			return stack_frames.GetElementCount() != 0;
 		}
 
-		return_type Next(unsigned int* level = nullptr) {
+		ReturnType Next(unsigned int* level = nullptr) {
 			Node current_node;
 			stack_frames.Pop(current_node);
 
 			// Get its children
-			Stream<storage_type> children = handler.GetChildren(current_node.value, stack_frames.m_stack.allocator);
+			Stream<StorageType> children = handler.GetChildren(current_node.value, stack_frames.m_stack.allocator);
 			PushChildren(children, current_node.level);
 
 			if (level != nullptr) {
@@ -258,7 +258,7 @@ namespace ECSEngine {
 		}
 
 		// Returns the next node without popping it from the stack
-		return_type Peek(unsigned int* level = nullptr, bool* has_children = nullptr) {
+		ReturnType Peek(unsigned int* level = nullptr, bool* has_children = nullptr) {
 			Node current_node;
 			stack_frames.Peek(current_node);
 
@@ -273,35 +273,35 @@ namespace ECSEngine {
 			return handler.GetReturnValue(current_node.value, stack_frames.m_stack.allocator);
 		}
 
-		storage_type PeekStorage() const {
+		StorageType PeekStorage() const {
 			Node node;
 			stack_frames.Peek(node);
 			return node.value;
 		}
 
 		// Skips the next node, without visiting its children
-		void Has() {
+		ECS_INLINE void Has() {
 			Node temp;
 			stack_frames.Pop(temp);
 		}
 
 		// Retrieves the root nodes
 		void Roots() {
-			Stream<storage_type> roots = handler.GetRoots(stack_frames.m_stack.allocator);
+			Stream<StorageType> roots = handler.GetRoots(stack_frames.m_stack.allocator);
 			// After the increment the roots will have the level 0
 			PushChildren(roots, -1);
 
 			Deallocate(roots.buffer);
 		}
 
-		void PushChildren(Stream<storage_type> children, unsigned int parent_level) {
+		void PushChildren(Stream<StorageType> children, unsigned int parent_level) {
 			// Push them in reverse order such that they appear in the normal order
 			for (size_t index = 0; index < children.size; index++) {
 				stack_frames.Push({ children[children.size - 1 - index], parent_level + 1 });
 			}
 		}
 
-		void Deallocate(const void* buffer) {
+		ECS_INLINE void Deallocate(const void* buffer) {
 			ECSEngine::DeallocateIfBelongs(stack_frames.m_stack.allocator, buffer);
 		}
 
@@ -318,7 +318,7 @@ namespace ECSEngine {
 			Roots();
 		}
 
-		IteratorPolymorphic AsPolymorphic() {
+		ECS_INLINE IteratorPolymorphic AsPolymorphic() {
 			return IteratorToPolymorphic(this);
 		}
 
