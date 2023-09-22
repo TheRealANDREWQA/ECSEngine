@@ -782,7 +782,7 @@ namespace ECSEngine {
 
 					if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr) {
 						if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name != nullptr) {
-							char* hyphon = strchr(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, '-');
+							char* hyphon = function::FindFirstCharacter(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, '-').buffer;
 							if (hyphon != nullptr) {
 								*hyphon = '\0';
 								add_mapping(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, ECS_PBR_MATERIAL_METALLIC);

@@ -310,10 +310,10 @@ bool CopySandboxEntities(
 struct ConvertToOrFromLinkData {
 	ConvertToAndFromLinkBaseData base_data;
 	Component component;
-	bool is_shared_component;
+	ECS_COMPONENT_TYPE component_type;
 };
 
-ConvertToOrFromLinkData GetConvertToOrFromLinkData(
+static ConvertToOrFromLinkData GetConvertToOrFromLinkData(
 	const EditorState* editor_state, 
 	Stream<char> link_component, 
 	AllocatorPolymorphic allocator
@@ -337,9 +337,8 @@ ConvertToOrFromLinkData GetConvertToOrFromLinkData(
 	const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_component);
 	const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target);
 
-	bool is_shared = IsReflectionTypeSharedComponent(target_type);
-
-	Component target_id = { (short)target_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+	ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(target_type);
+	Component target_id = GetReflectionTypeComponent(target_type);
 
 	convert_data.base_data.allocator = allocator;
 	convert_data.base_data.asset_database = editor_state->asset_database;
@@ -348,7 +347,7 @@ ConvertToOrFromLinkData GetConvertToOrFromLinkData(
 	convert_data.base_data.reflection_manager = editor_state->editor_components.internal_manager;
 	convert_data.base_data.target_type = target_type;
 	convert_data.component = target_id;
-	convert_data.is_shared_component = is_shared;
+	convert_data.component_type = component_type;
 
 	return convert_data;
 }
@@ -370,7 +369,7 @@ bool ConvertTargetToLinkComponent(
 	ConvertToOrFromLinkData convert_data = GetConvertToOrFromLinkData(editor_state, link_component, allocator);
 	const EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	const void* target_data = nullptr;
-	if (convert_data.is_shared_component) {
+	if (convert_data.component_type == ECS_COMPONENT_SHARED) {
 		target_data = active_entity_manager->GetSharedData(convert_data.component, active_entity_manager->GetSharedComponentInstance(convert_data.component, entity));
 	}
 	else {
@@ -424,14 +423,17 @@ bool ConvertLinkComponentToTarget(
 	unsigned short component_byte_size = 0;
 
 	// Deallocate the buffers for that entity component
-	if (convert_data.is_shared_component) {
+	if (convert_data.component_type == ECS_COMPONENT_SHARED) {
 		SharedInstance instance = active_entity_manager->GetSharedComponentInstance(convert_data.component, entity);
 		target_data = active_entity_manager->GetSharedData(convert_data.component, instance);
 		component_byte_size = active_entity_manager->SharedComponentSize(convert_data.component);
 	}
-	else {
+	else if (convert_data.component_type == ECS_COMPONENT_UNIQUE) {
 		target_data = active_entity_manager->GetComponent(entity, convert_data.component);		
 		component_byte_size = active_entity_manager->ComponentSize(convert_data.component);
+	}
+	else {
+		ECS_ASSERT(false, "Requesting global component is illegal for link to target conversion for an entity");
 	}
 
 	previous_target_data = previous_target_data != nullptr ? previous_target_data : target_data;
@@ -447,7 +449,7 @@ bool ConvertLinkComponentToTarget(
 	);
 	if (conversion_success) {
 		// Deallocate any existing buffers
-		if (convert_data.is_shared_component) {
+		if (convert_data.component_type == ECS_COMPONENT_SHARED) {
 			SharedInstance instance = active_entity_manager->GetSharedComponentInstance(convert_data.component, entity);
 			active_entity_manager->DeallocateSharedInstanceBuffersCommit(convert_data.component, instance);
 		}

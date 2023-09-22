@@ -56,6 +56,10 @@ unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned
 
 bool IsInspectorLocked(const EditorState* editor_state, unsigned int inspector_index);
 
+// Returns true if the inspector display information about an entity.
+// If include_global_components is set to true, then it will include global components as well
+bool IsInspectorDrawEntity(const EditorState* editor_state, unsigned int inspector_index, bool include_global_components = false);
+
 // If the index is already known, can be used to directly index into the array
 void LockInspector(EditorState* editor_state, unsigned int inspector_index);
 

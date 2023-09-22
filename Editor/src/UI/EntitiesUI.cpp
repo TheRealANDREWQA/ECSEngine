@@ -281,8 +281,7 @@ static void SelectableCallback(ActionData* action_data) {
 		ECS_STACK_CAPACITY_STREAM(unsigned int, inspector_indices, 512);
 		GetInspectorsForSandbox(data->editor_state, target_sandbox, &inspector_indices);
 		for (unsigned int index = 0; index < inspector_indices.size; index++) {
-			if (!IsInspectorLocked(data->editor_state, inspector_indices[index]) && 
-				GetInspectorDrawFunction(data->editor_state, inspector_indices[index]) == InspectorDrawEntity) {
+			if (!IsInspectorLocked(data->editor_state, inspector_indices[index]) && IsInspectorDrawEntity(data->editor_state, inspector_indices[index])) {		
 				ChangeInspectorToNothing(data->editor_state, inspector_indices[index]);
 			}
 		}
