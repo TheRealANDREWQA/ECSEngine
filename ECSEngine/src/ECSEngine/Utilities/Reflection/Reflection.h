@@ -103,6 +103,10 @@ namespace ECSEngine {
 			ReflectionManager(const ReflectionManager& other) = default;
 			ReflectionManager& operator = (const ReflectionManager& other) = default;
 
+			static void GetKnownBlittableExceptions(CapacityStream<BlittableType>* blittable_types);
+
+			void AddKnownBlittableExceptions();
+
 			void AddBlittableException(Stream<char> definition, size_t byte_size, size_t alignment);
 
 			// Adds a type which is not bound to any folder hierarchy. If the allocator is nullptr

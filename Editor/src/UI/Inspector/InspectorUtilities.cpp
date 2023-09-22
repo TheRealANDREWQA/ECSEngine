@@ -257,6 +257,12 @@ void FindInspectorWithDrawFunction(
 // ----------------------------------------------------------------------------------------------------------------------------
 
 void* GetInspectorDrawFunctionData(EditorState* editor_state, unsigned int inspector_index) {
+	return (void*)GetInspectorDrawFunctionData((const EditorState*)editor_state, inspector_index);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+const void* GetInspectorDrawFunctionData(const EditorState* editor_state, unsigned int inspector_index) {
 	return editor_state->inspector_manager.data[inspector_index].draw_data;
 }
 

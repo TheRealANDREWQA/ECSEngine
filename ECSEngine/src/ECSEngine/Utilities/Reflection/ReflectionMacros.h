@@ -9,6 +9,7 @@
 #define ECS_FIELDS_END_REFLECT
 
 // Used to skip fields for determination of byte size and alignment
+// If the type can be deduced, you don't need to specify the static assert
 // Use a static assert in order to be sure that the size/alignment is correct
 // The alignment is optional - it is assumed to be the maximal alignment of the platform
 // if left unspecified

@@ -194,8 +194,6 @@ namespace ECSEngine {
 
 		CameraParametersFOV AsParametersFOV() const;
 
-		ECS_FIELDS_START_REFLECT;
-
 		bool is_orthographic;
 		bool is_perspective_fov;
 		// Store the values without a union in order for this to be reflected by the reflection system
@@ -210,15 +208,13 @@ namespace ECSEngine {
 		float3 translation;
 		float3 rotation;
 
-		ECS_FIELDS_END_REFLECT;
-
 		// This is the rotation that should be applied on objects
-		Matrix rotation_matrix;
+		Matrix rotation_matrix; ECS_SKIP_REFLECTION()
 		// This is the rotation that is used to get the Right, Up and Forward directions
-		Matrix rotation_as_is_matrix;
-		Matrix projection_matrix;
-		Matrix view_projection_matrix;
-		Matrix inverse_view_projection_matrix;
+		Matrix rotation_as_is_matrix; ECS_SKIP_REFLECTION()
+		Matrix projection_matrix; ECS_SKIP_REFLECTION()
+		Matrix view_projection_matrix; ECS_SKIP_REFLECTION()
+		Matrix inverse_view_projection_matrix; ECS_SKIP_REFLECTION()
 	};
 
 	ECS_INLINE Matrix ECS_VECTORCALL CombineCameraRotationAndProjection(Matrix rotation_matrix, Matrix projection_matrix) {

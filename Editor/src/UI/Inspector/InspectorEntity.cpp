@@ -1624,3 +1624,20 @@ void ChangeInspectorToGlobalComponent(EditorState* editor_state, unsigned int sa
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
+
+bool IsInspectorDrawEntity(const EditorState* editor_state, unsigned int inspector_index, bool include_global_components)
+{
+	InspectorDrawFunction draw_function = GetInspectorDrawFunction(editor_state, inspector_index);
+	if (draw_function == InspectorDrawEntity) {
+		if (include_global_components) {
+			return true;
+		}
+		else {
+			const InspectorDrawEntityData* draw_data = (const InspectorDrawEntityData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
+			return !draw_data->is_global_component;
+		}
+	}
+	return false;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------

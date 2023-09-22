@@ -9,6 +9,7 @@
 #include "../ReferenceCountSerialize.h"
 #include "../../Containers/SparseSet.h"
 #include "../../Resources/AssetMetadataSerialize.h"
+#include "../../Math/MathTypeSizes.h"
 
 namespace ECSEngine {
 
@@ -865,11 +866,37 @@ namespace ECSEngine {
 			constants.Initialize(allocator, 0);
 			blittable_types.Initialize(allocator, 0);
 
-			AddBlittableException(STRING(Stream<void>), sizeof(Stream<void>), alignof(Stream<void>));
+			AddKnownBlittableExceptions();
+		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::GetKnownBlittableExceptions(CapacityStream<BlittableType>* blittable_types)
+		{
+			// Stream<void> is here for assets
+			blittable_types->AddAssert({ STRING(Stream<void>), sizeof(Stream<void>), alignof(Stream<void>) });
+			
 			// Don't add an additional include just for the Color and ColorFloat types
-			AddBlittableException(STRING(Color), sizeof(unsigned char) * 4, alignof(unsigned char));
-			AddBlittableException(STRING(ColorFloat), sizeof(float) * 4, alignof(float));
+			blittable_types->AddAssert({ STRING(Color), sizeof(unsigned char) * 4, alignof(unsigned char) });
+			blittable_types->AddAssert({ STRING(ColorFloat), sizeof(float) * 4, alignof(float) });
+
+			// Add the math types now
+			// Don't include the headers just for the byte sizes - use the MathTypeSizes.h
+			for (size_t index = 0; index < ECS_MATH_STRUCTURE_TYPE_COUNT; index++) {
+				blittable_types->AddAssert({ ECS_MATH_STRUCTURE_TYPE_STRINGS[index], ECS_MATH_STRUCTURE_TYPE_BYTE_SIZES[index], MathStructureAlignment() });
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::AddKnownBlittableExceptions()
+		{
+			ECS_STACK_CAPACITY_STREAM(BlittableType, blittable_types, 64);
+			GetKnownBlittableExceptions(&blittable_types);
+
+			for (unsigned int index = 0; index < blittable_types.size; index++) {
+				AddBlittableException(blittable_types[index].name, blittable_types[index].byte_size, blittable_types[index].alignment);
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -2451,6 +2478,17 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		{
 			for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
 				SetInstanceFieldDefaultData(&type->fields[field_index], data);
+			}
+
+			// Now go through all padding bytes and set them to 0
+			for (size_t field_index = 0; field_index < type->fields.size - 1; field_index++) {
+				size_t current_offset = type->fields[field_index].info.pointer_offset;
+				size_t current_size = type->fields[field_index].info.byte_size;
+				size_t next_offset = type->fields[field_index + 1].info.pointer_offset;
+				size_t difference = next_offset - current_offset - current_size;
+				if (difference > 0) {
+					memset(function::OffsetPointer(data, current_offset + current_size), 0, difference);
+				}
 			}
 		}
 

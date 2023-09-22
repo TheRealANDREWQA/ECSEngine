@@ -67,8 +67,19 @@ namespace ECSEngine {
 			unsigned short reflection_type_index;
 		};
 
+		struct UIReflectionDrawInstanceOptions;
+
+		struct UIReflectionFieldDrawData {
+			UIDrawer* drawer;
+			UIDrawConfig* config;
+			size_t configuration;
+			Stream<char> name;
+			void* data;
+			const UIReflectionDrawInstanceOptions* draw_options;
+		};
+
 		// Only drawer will be called, the initializer is not involved
-		typedef void (*UIReflectionFieldDraw)(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, Stream<char> name, void* data);
+		typedef void (*UIReflectionFieldDraw)(UIReflectionFieldDrawData* options);
 
 		// Used for TextInput, FileInput and DirectoryInput to not write the stream to the target
 		// (useful for example if it is desired to have a callback do a change)

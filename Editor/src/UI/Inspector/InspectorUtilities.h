@@ -166,6 +166,10 @@ void* GetInspectorDrawFunctionData(EditorState* editor_state, unsigned int inspe
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+const void* GetInspectorDrawFunctionData(const EditorState* editor_state, unsigned int inspector_index);
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorFunctions& function, Stream<wchar_t> _identifier);
 
 // ----------------------------------------------------------------------------------------------------------------------------

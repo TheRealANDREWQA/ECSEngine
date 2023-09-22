@@ -658,13 +658,13 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	)
 	{
-		size_t total_allocation_size = name.size;
+		size_t total_allocation_size = sizeof(char) * (name.size + 1);
 
 		for (size_t index = 0; index < mappings.size; index++) {
 			total_allocation_size += (mappings[index].texture.size + 1) * sizeof(wchar_t);
 		}
 
-		void* allocation = Allocate(allocator, total_allocation_size, alignof(wchar_t));
+		void* allocation = AllocateEx(allocator, total_allocation_size);
 
 		uintptr_t ptr = (uintptr_t)allocation;
 		char* mutable_ptr = (char*)ptr;
@@ -686,7 +686,7 @@ namespace ECSEngine {
 	void FreePBRMaterial(const PBRMaterial& material, AllocatorPolymorphic allocator)
 	{
 		if (material.name.buffer != nullptr) {
-			Deallocate(allocator, material.name.buffer);
+			DeallocateEx(allocator, material.name.buffer);
 		}
 	}
 
