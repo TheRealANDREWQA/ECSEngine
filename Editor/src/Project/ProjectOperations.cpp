@@ -37,7 +37,7 @@ void CreateProjectMisc(ProjectOperationData* data) {
 
 	wchar_t hub_characters[256];
 	CapacityStream<wchar_t> hub_path(hub_characters, 0, 256);
-	hub_path.Copy(data->file_data->path);
+	hub_path.CopyOther(data->file_data->path);
 	hub_path.Add(ECS_OS_PATH_SEPARATOR);
 	hub_path.AddStream(data->file_data->project_name);
 	hub_path.AddStreamSafe(PROJECT_EXTENSION);
@@ -60,7 +60,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 	wchar_t temp_characters[512];
 	CapacityStream<wchar_t> new_directory_path(temp_characters, 0, 512);
 
-	new_directory_path.Copy(data->file_data->path);
+	new_directory_path.CopyOther(data->file_data->path);
 	new_directory_path.AddAssert(ECS_OS_PATH_SEPARATOR);
 
 	size_t predirectory_size = new_directory_path.size;
@@ -119,7 +119,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 	bool success = HideFolder(backup_folder);
 
 	ECS_TEMP_STRING(default_template, 256);
-	default_template.Copy(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
+	default_template.CopyOther(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
 	default_template.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 	ProjectOperationData temp_data = *data;
 	// data will be invalidated by the template load since it will release all the memory
@@ -144,7 +144,7 @@ void CreateProject(ProjectOperationData* data)
 		ECS_TEMP_ASCII_STRING(error_message, 256);
 		error_message.size = function::FormatString(error_message.buffer, "A project in {#} already exists. Do you want to overwrite it?", data->file_data->path);
 		if (data->error_message.buffer != nullptr) {
-			data->error_message.Copy(error_message);
+			data->error_message.CopyOther(error_message);
 		}
 
 		struct DeleteData {
@@ -324,7 +324,7 @@ void GetProjectCurrentUI(wchar_t* characters, const ProjectFile* project_file, s
 // -------------------------------------------------------------------------------------------------------------------
 
 void GetProjectCurrentUI(CapacityStream<wchar_t>& characters, const ProjectFile* project_file) {
-	characters.Copy(project_file->path);
+	characters.CopyOther(project_file->path);
 	characters.Add(ECS_OS_PATH_SEPARATOR);
 	characters.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);
 }
@@ -597,7 +597,7 @@ bool OpenProject(ProjectOperationData data)
 	DeallocateCurrentProject(data.editor_state);
 
 	ECS_TEMP_STRING(ui_template_stream, 256);
-	ui_template_stream.Copy(data.file_data->path);
+	ui_template_stream.CopyOther(data.file_data->path);
 	ui_template_stream.Add(ECS_OS_PATH_SEPARATOR);
 	ui_template_stream.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);
 
@@ -610,7 +610,7 @@ bool OpenProject(ProjectOperationData data)
 	// Change the dump path early on
 	wchar_t console_dump_path_characters[256];
 	Stream<wchar_t> console_dump_path(console_dump_path_characters, 0);
-	console_dump_path.Copy(data.file_data->path);
+	console_dump_path.CopyOther(data.file_data->path);
 	console_dump_path.AddStream(CONSOLE_RELATIVE_DUMP_PATH);
 	ECS_ASSERT(console_dump_path.size < 256);
 	GetConsole()->ChangeDumpPath(console_dump_path);
@@ -647,7 +647,7 @@ bool OpenProject(ProjectOperationData data)
 	}
 	else {
 		ECS_TEMP_STRING(default_template_path, 256);
-		default_template_path.Copy(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
+		default_template_path.CopyOther(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
 		default_template_path.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 
 		if (ExistsFileOrFolder(default_template_path)) {
@@ -735,7 +735,7 @@ void OpenProjectAction(ActionData* action_data)
 void RepairProjectAuxiliaryDirectories(ProjectOperationData data)
 {
 	ECS_TEMP_STRING(project_path, 256);
-	project_path.Copy(data.file_data->path);
+	project_path.CopyOther(data.file_data->path);
 	project_path.Add(ECS_OS_PATH_SEPARATOR);
 	
 	unsigned int path_base_size = project_path.size;
@@ -938,7 +938,7 @@ ECS_THREAD_TASK(SaveProjectThreadTask) {
 	ProjectFile* project_file = editor_state->project_file;
 
 	ECS_TEMP_STRING(template_path, 256);
-	template_path.Copy(project_file->path);
+	template_path.CopyOther(project_file->path);
 	template_path.Add(ECS_OS_PATH_SEPARATOR);
 	template_path.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);
 

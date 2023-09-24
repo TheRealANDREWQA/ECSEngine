@@ -1,6 +1,6 @@
 #pragma once
 #include "AssetMetadata.h"
-#include "../Rendering/GraphicsHelpers.h"
+#include "../Rendering/TextureOperations.h"
 
 namespace ECSEngine {
 	

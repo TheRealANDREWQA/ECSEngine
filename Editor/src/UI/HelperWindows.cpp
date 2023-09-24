@@ -38,7 +38,7 @@ void CreateDockspaceFromWindowWithIndex(const char* window_name, EditorState* ed
 
 	// Construct the name as well
 	ECS_STACK_CAPACITY_STREAM(char, constructed_name, 128);
-	constructed_name.Copy(window_name);
+	constructed_name.CopyOther(window_name);
 	function::ConvertIntToChars(constructed_name, index);
 
 	unsigned int window_index = ui_system->GetWindowFromName(constructed_name);
@@ -94,7 +94,7 @@ unsigned int CreateDefaultWindowWithIndex(
 
 unsigned int UpdateUIWindowIndex(EditorState* editor_state, const char* base_name, unsigned int old_index, unsigned int new_index) {
 	ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
-	window_name.Copy(base_name);
+	window_name.CopyOther(base_name);
 	unsigned int base_name_size = window_name.size;
 	function::ConvertIntToChars(window_name, old_index);
 
@@ -245,7 +245,7 @@ unsigned int CreateRenameFileWizard(Stream<wchar_t> path, UISystem* system)
 	wizard_data.callback = RenameFileWizardCallback;
 	
 	ECS_TEMP_STRING(null_terminated_path, 512);
-	null_terminated_path.Copy(path);
+	null_terminated_path.CopyOther(path);
 	null_terminated_path[path.size] = L'\0';
 	wizard_data.callback_data = null_terminated_path.buffer;
 	wizard_data.callback_data_size = sizeof(wchar_t) * (path.size + 1);
@@ -283,7 +283,7 @@ unsigned int CreateRenameFolderWizard(Stream<wchar_t> path, UISystem* system) {
 	wizard_data.callback = RenameFolderWizardCallback;
 
 	ECS_TEMP_STRING(null_terminated_path, 512);
-	null_terminated_path.Copy(path);
+	null_terminated_path.CopyOther(path);
 	null_terminated_path[path.size] = L'\0';
 	wizard_data.callback_data = null_terminated_path.buffer;
 	wizard_data.callback_data_size = sizeof(wchar_t) * (path.size + 1);

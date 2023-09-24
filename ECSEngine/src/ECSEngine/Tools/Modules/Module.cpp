@@ -184,7 +184,7 @@ namespace ECSEngine {
 
 		ECS_TEMP_STRING(library_path, 256);
 		if (path[path.size] != L'\0') {
-			library_path.Copy(path);
+			library_path.CopyOther(path);
 			library_path[library_path.size] = L'\0';
 		}
 		else {
@@ -400,9 +400,9 @@ namespace ECSEngine {
 		ECS_ASSERT(serialize_components.size == deserialize_components.size);
 		ECS_ASSERT(serialize_shared_components.size == deserialize_shared_components.size);
 
-		// Make a single coallesced allocation
-		size_t total_memory = StreamCoallescedDeepCopySize(serialize_components) + StreamCoallescedDeepCopySize(deserialize_components) + StreamCoallescedDeepCopySize(serialize_shared_components)
-			+ StreamCoallescedDeepCopySize(deserialize_shared_components);
+		// Make a single coalesced allocation
+		size_t total_memory = StreamCoalescedDeepCopySize(serialize_components) + StreamCoalescedDeepCopySize(deserialize_components) + StreamCoalescedDeepCopySize(serialize_shared_components)
+			+ StreamCoalescedDeepCopySize(deserialize_shared_components);
 
 		ModuleSerializeComponentStreams streams;
 		void* allocation = AllocateEx(allocator, total_memory);

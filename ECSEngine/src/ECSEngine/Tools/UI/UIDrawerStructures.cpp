@@ -578,7 +578,7 @@ namespace ECSEngine {
 
 			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, identifier);
 
-			// There is only a single coallesced allocation
+			// There is only a single coalesced allocation
 			if (copied_labels.size > 0) {
 				system->RemoveWindowBufferFromAll(window_index, copied_labels.buffer, dynamic_index);
 			}
@@ -725,10 +725,10 @@ namespace ECSEngine {
 		void UIDrawerLabelHierarchySetCapacityLabel(CapacityStream<void>& label_to_set, const void* untyped_label, unsigned int label_size) {
 			if (label_size == 0) {
 				Stream<char> string = *(Stream<char>*)untyped_label;
-				label_to_set.Copy(string.buffer, string.size);
+				label_to_set.CopyOther(string.buffer, string.size);
 			}
 			else {
-				label_to_set.Copy(untyped_label, label_size);
+				label_to_set.CopyOther(untyped_label, label_size);
 			}
 		}
 
@@ -928,10 +928,10 @@ namespace ECSEngine {
 			else {
 				// Blittable data
 				if (monitor_selection->is_capacity_selection) {
-					monitor_selection->capacity_selection->Copy(final_selection, label_size);
+					monitor_selection->capacity_selection->CopyOther(final_selection, label_size);
 				}
 				else {
-					monitor_selection->resizable_selection->Copy(final_selection, label_size);
+					monitor_selection->resizable_selection->CopyOther(final_selection, label_size);
 				}
 			}
 

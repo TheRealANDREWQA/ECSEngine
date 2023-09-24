@@ -629,7 +629,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 				// Make a new allocation and deallocate the old
 				Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
 				copied_entities.Resize(editor_state->EditorAllocator(), current_selected_entities.size, false, true);
-				copied_entities.Copy(current_selected_entities);
+				copied_entities.CopyOther(current_selected_entities);
 			}
 			else if (keyboard->IsPressed(ECS_KEY_X)) {
 				// Delete the selected entities
@@ -1234,7 +1234,7 @@ void DestroyInvalidSceneUIWindows(EditorState* editor_state)
 }
 
 void GetSceneUIWindowName(unsigned int index, CapacityStream<char>& name) {
-	name.Copy(SCENE_WINDOW_NAME);
+	name.CopyOther(SCENE_WINDOW_NAME);
 	function::ConvertIntToChars(name, index);
 }
 

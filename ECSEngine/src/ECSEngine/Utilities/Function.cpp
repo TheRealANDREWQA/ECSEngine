@@ -380,7 +380,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		template<typename VectorType, typename CharacterType>
-		void FindTokenImpl(Stream<CharacterType> string, CharacterType token, CapacityStream<unsigned int>& tokens)
+		void FindTokenImpl(Stream<CharacterType> string, CharacterType token, AdditionStream<unsigned int>& tokens)
 		{
 			VectorType simd_token(token);
 			VectorType compare;
@@ -403,54 +403,52 @@ namespace ECSEngine {
 					return false;
 				});
 			}
-
-			tokens.AssertCapacity();
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<char> string, char token, CapacityStream<unsigned int>& tokens)
+		void FindToken(Stream<char> string, char token, AdditionStream<unsigned int>& tokens)
 		{
 			FindTokenImpl<Vec32c>(string, token, tokens);
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<char> string, Stream<char> token, CapacityStream<unsigned int>& tokens)
+		void FindToken(Stream<char> string, Stream<char> token, AdditionStream<unsigned int>& tokens)
 		{
 			FindTokenImpl<Vec32c>(string, token, [&](unsigned int index) {
-				tokens.AddAssert(index);
+				tokens.Add(index);
 			});
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<wchar_t> string, wchar_t token, CapacityStream<unsigned int>& tokens)
+		void FindToken(Stream<wchar_t> string, wchar_t token, AdditionStream<unsigned int>& tokens)
 		{
 			FindTokenImpl<Vec16s>(string, token, tokens);
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<unsigned int>& tokens) {
+		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<unsigned int>& tokens) {
 			FindTokenImpl<Vec16s>(string, token, [&](unsigned int index) {
-				tokens.AddAssert(index);
+				tokens.Add(index);
 			});
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<char> string, Stream<char> token, CapacityStream<Stream<char>>& tokens) {
+		void FindToken(Stream<char> string, Stream<char> token, AdditionStream<Stream<char>>& tokens) {
 			FindTokenImpl<Vec32c>(string, token, [&](unsigned int index) {
-				tokens.AddAssert({ string.buffer + index, string.size - index });
+				tokens.Add({ string.buffer + index, string.size - index });
 			});
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<Stream<wchar_t>>& tokens) {
+		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<Stream<wchar_t>>& tokens) {
 			FindTokenImpl<Vec16s>(string, token, [&](unsigned int index) {
-				tokens.AddAssert({ string.buffer + index, string.size - index });
+				tokens.Add({ string.buffer + index, string.size - index });
 			});
 		}
 		
@@ -1299,7 +1297,7 @@ namespace ECSEngine {
 			Stream<Stream<char>> macros = external_macros;
 
 			if (add_internal_macro_defines) {
-				total_macros.Copy(external_macros);
+				total_macros.CopyOther(external_macros);
 
 				// Copy these macros with the stack allocator - if they reference the source code
 				// and things get moved around then they will become invalid
@@ -1505,7 +1503,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		template<typename CharacterType>
-		void ConvertDateToStringImplementation(Date date, Stream<CharacterType>& characters, size_t format_flags) {
+		static void ConvertDateToStringImplementation(Date date, Stream<CharacterType>& characters, size_t format_flags) {
 			auto flag = [&](size_t integer) {
 				CharacterType temp[256];
 				Stream<CharacterType> temp_stream = Stream<CharacterType>(temp, 0);
@@ -1625,7 +1623,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		template<typename CharacterType>
-		Date ConvertStringToDateImplementation(Stream<CharacterType> characters, size_t format_flags) {
+		static Date ConvertStringToDateImplementation(Stream<CharacterType> characters, size_t format_flags) {
 			Date date;
 
 			if (characters[0] == Character<CharacterType>('[')) {
@@ -1747,7 +1745,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		template<typename CharacterType, typename StreamType>
-		void ConvertByteSizeToStringImplementation(size_t byte_size, StreamType& characters) {
+		static void ConvertByteSizeToStringImplementation(size_t byte_size, StreamType& characters) {
 			if (byte_size < ECS_KB) {
 				function::ConvertIntToChars(characters, byte_size);
 				characters.Add(Character<CharacterType>(' '));
@@ -1877,7 +1875,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		template<typename CharacterType>
-		void ReplaceCharacterImpl(Stream<CharacterType> string, CharacterType token_to_be_replaced, CharacterType replacement) {
+		static void ReplaceCharacterImpl(Stream<CharacterType> string, CharacterType token_to_be_replaced, CharacterType replacement) {
 			auto character = function::FindFirstCharacter(string, token_to_be_replaced);
 			while (character.size > 0) {
 				character[0] = replacement;
@@ -1903,7 +1901,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		template<typename CharacterType>
-		Stream<CharacterType> ReplaceTokenImpl(Stream<CharacterType> string, Stream<CharacterType> token, Stream<CharacterType> replacement, AllocatorPolymorphic allocator) {
+		static Stream<CharacterType> ReplaceTokenImpl(Stream<CharacterType> string, Stream<CharacterType> token, Stream<CharacterType> replacement, AllocatorPolymorphic allocator) {
 			Stream<CharacterType> result;
 			
 			Stream<CharacterType> original_string = string;
@@ -1939,7 +1937,6 @@ namespace ECSEngine {
 
 			// Copy the last part
 			result.AddStream(string);
-
 			return result;
 		}
 
@@ -1954,14 +1951,61 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		template<typename CharacterType>
-		void ReplaceOccurencesImpl(CapacityStream<CharacterType>& string, Stream<ReplaceOccurence<CharacterType>> occurences, CapacityStream<CharacterType>* output_string) {
+		static Stream<CharacterType> ReplaceCharacterImpl(CapacityStream<CharacterType>& string, Stream<CharacterType> token, Stream<CharacterType> replacement) {
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+			AdditionStream<unsigned int> token_appereances;
+			token_appereances.is_capacity = false;
+			token_appereances.resizable_stream.Initialize(GetAllocatorPolymorphic(&stack_allocator), ECS_KB);
+			function::FindToken(string, token, token_appereances);
+
+			unsigned int token_difference = replacement.size - token.size;
+			unsigned int total_size = string.size + token_difference * token_appereances.Size();
+			ECS_ASSERT(total_size <= string.capacity);
+
+			// Copy the parts of the string that are not being replaced first such that we don't lose the data
+			if (token_difference != 0) {
+				unsigned int token_count = token_appereances.Size();
+				for (unsigned int index = token_count; index > 0; index--) {
+					unsigned int current_index = token_appereances[index - 1] + token.size;
+					unsigned int new_index = token_appereances[index - 1] + token.size + token_difference * index;
+					if (current_index != new_index) {
+						unsigned int copy_count = index != token_count ? token_appereances[index] - current_index : string.size - current_index;
+						memmove(string.buffer + new_index, string.buffer + current_index, copy_count * sizeof(CharacterType));
+					}
+				}
+			}
+
+			for (unsigned int index = 0; index < token_appereances.Size(); index++) {
+				// Replace the tokens now
+				unsigned int write_index = token_appereances[index] + index * token_difference;
+				string.CopySlice(write_index, replacement);
+			}
+
+			string.size = total_size;
+			return string;
+		}
+
+		Stream<char> ReplaceToken(CapacityStream<char>& string, Stream<char> token, Stream<char> replacement)
+		{
+			return ReplaceCharacterImpl<char>(string, token, replacement);
+		}
+
+		Stream<wchar_t> ReplaceToken(CapacityStream<wchar_t>& string, Stream<wchar_t> token, Stream<wchar_t> replacement)
+		{
+			return ReplaceCharacterImpl<wchar_t>(string, token, replacement);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		static void ReplaceOccurencesImpl(CapacityStream<CharacterType>& string, Stream<ReplaceOccurence<CharacterType>> occurences, CapacityStream<CharacterType>* output_string) {
 			// Null terminate the string
 			CharacterType previous_character = string[string.size];
 			string[string.size] = Character<CharacterType>('\0');
 
 			// Get the list of occurences for all types
 			ECS_STACK_CAPACITY_STREAM(uint2, replacement_positions, 512);
-			ECS_STACK_CAPACITY_STREAM(unsigned int, current_occurence_positions, 1024);
+			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, current_occurence_positions, 1024);
 
 			size_t insert_index = 0;
 			auto insert_occurences = [&](uint2 occurence) {
@@ -1978,7 +2022,7 @@ namespace ECSEngine {
 				function::FindToken(string, occurences[index].string, current_occurence_positions);
 				// Insert now the positions into the global buffer
 				insert_index = 0;
-				for (unsigned int occurence_index = 0; occurence_index < current_occurence_positions.size; occurence_index++) {
+				for (unsigned int occurence_index = 0; occurence_index < current_occurence_positions.Size(); occurence_index++) {
 					insert_occurences({ current_occurence_positions[occurence_index], (unsigned int)index });
 				}
 			}
@@ -2434,22 +2478,22 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		template<typename CharacterType>
-		double EvaluateExpressionImpl(Stream<CharacterType> characters) {
+		static double EvaluateExpressionImpl(Stream<CharacterType> characters) {
 			// Start by looking at braces
 
 			// Get the pairs of braces
-			ECS_STACK_CAPACITY_STREAM(unsigned int, opened_braces, 512);
-			ECS_STACK_CAPACITY_STREAM(unsigned int, closed_braces, 512);
+			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, opened_braces, 512);
+			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, closed_braces, 512);
 			// Add an invisible pair of braces, in order to make processing easier
 			opened_braces.Add((unsigned int)0);
 			FindToken(characters, Character<CharacterType>('('), opened_braces);
 			FindToken(characters, Character<CharacterType>(')'), closed_braces);
-			closed_braces.AddAssert(characters.size + 1);
+			closed_braces.Add(characters.size + 1);
 
 			auto get_matching_brace = [=](size_t closed_index) {
 				size_t subindex = 0;
-				if (closed_index < closed_braces.size - 1) {
-					for (; subindex < opened_braces.size - 1; subindex++) {
+				if (closed_index < closed_braces.Size() - 1) {
+					for (; subindex < opened_braces.Size() - 1; subindex++) {
 						if (opened_braces[subindex] < closed_braces[closed_index] && opened_braces[subindex + 1] > closed_braces[closed_index]) {
 							break;
 						}
@@ -2463,18 +2507,18 @@ namespace ECSEngine {
 			};
 
 			// If the closed_braces count is different from opened braces count, fail with DBL_MAX
-			if (opened_braces.size != closed_braces.size) {
+			if (opened_braces.Size() != closed_braces.Size()) {
 				return DBL_MAX;
 			}
 
 			// Increase the indices by one for the braces in order to keep order between the first invisible
 			// pair of braces and the rest
-			for (size_t index = 1; index < opened_braces.size; index++) {
+			for (size_t index = 1; index < opened_braces.Size(); index++) {
 				opened_braces[index]++;
 				closed_braces[index]++;
 			}
 			// This one gets incremented when it shouldn't
-			closed_braces[closed_braces.size - 1]--;
+			closed_braces[closed_braces.Size() - 1]--;
 
 			ECS_STACK_CAPACITY_STREAM(EvaluateExpressionNumber, variables, 512);
 			ECS_STACK_CAPACITY_STREAM(EvaluateExpressionOperator, operators, 512);
@@ -2507,7 +2551,7 @@ namespace ECSEngine {
 			GetEvaluateExpressionOperators(characters, operators);
 			GetEvaluateExpressionNumbers(characters, variables);
 
-			for (size_t index = 0; index < closed_braces.size; index++) {
+			for (size_t index = 0; index < closed_braces.Size(); index++) {
 				operator_order.size = 0;
 
 				size_t opened_brace_index = get_matching_brace(index);

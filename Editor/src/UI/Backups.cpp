@@ -227,7 +227,7 @@ void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 	}
 	else {
 		ECS_STACK_CAPACITY_STREAM(char, total_backup_size, 128);
-		total_backup_size.Copy("Total backup byte size: ");
+		total_backup_size.CopyOther("Total backup byte size: ");
 		function::ConvertByteSizeToString(functor_data.backup_total_byte_size, total_backup_size);
 		drawer.Text(total_backup_size.buffer);
 		drawer.NextRow();

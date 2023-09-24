@@ -4,6 +4,7 @@
 #include "../../Utilities/Function.h"
 #include "../../Utilities/FunctionInterfaces.h"
 #include "../GraphicsHelpers.h"
+#include "../TextureOperations.h"
 #include "../../Utilities/Path.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
 #include "../Graphics.h"
@@ -76,7 +77,7 @@ namespace ECSEngine {
 
 	static void SetErrorMessage(CapacityStream<char>* error_message, Stream<char> error) {
 		if (error_message != nullptr) {
-			error_message->Copy(error);
+			error_message->CopyOther(error);
 			error_message->AssertCapacity();
 		}
 	}

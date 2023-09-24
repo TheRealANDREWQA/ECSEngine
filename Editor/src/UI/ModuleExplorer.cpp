@@ -296,7 +296,7 @@ void ModuleExplorerRemoveModule(ActionData* action_data) {
 			bool is_used = IsModuleInfoUsed(data->editor_state, data->selected_module, false, EDITOR_MODULE_CONFIGURATION_COUNT, &dependent_modules);
 			if (is_used) {
 				ECS_STACK_CAPACITY_STREAM(char, description, 1024);
-				description.Copy("Are you sure you want to remove the selected module? It is being used by the following sandboxes: ");
+				description.CopyOther("Are you sure you want to remove the selected module? It is being used by the following sandboxes: ");
 				for (unsigned int index = 0; index < dependent_modules.size; index++) {
 					function::ConvertIntToChars(description, dependent_modules[index]);
 					if (index < dependent_modules.size - 1) {
@@ -312,7 +312,8 @@ void ModuleExplorerRemoveModule(ActionData* action_data) {
 		else {
 			// It has dependent modules - cannot delete the current one without deleting the dependent modules
 			ECS_STACK_CAPACITY_STREAM(char, description, 1024);
-			description.Copy("The selected module is being referenced by other modules. In order to remove this one you must remove all the others before hand. The dependent modules: ");
+			description.CopyOther("The selected module is being referenced by other modules. In order to remove this one you must remove all "
+				"the others before hand. The dependent modules: ");
 			for (unsigned int index = 0; index < dependent_modules.size; index++) {
 				Stream<wchar_t> library_name = data->editor_state->project_modules->buffer[dependent_modules[index]].library_name;
 				function::ConvertWideCharsToASCII(library_name, description);
@@ -504,7 +505,7 @@ void ModuleExplorerOpenModuleFolder(ActionData* action_data) {
 	
 	const ProjectFile* project_file = (const ProjectFile*)data->project_file;
 	ECS_TEMP_STRING(path, 256);
-	path.Copy(project_file->path);
+	path.CopyOther(project_file->path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
 	path.AddStream(PROJECT_MODULES_RELATIVE_PATH);
 	path.AddAssert(L'\\');

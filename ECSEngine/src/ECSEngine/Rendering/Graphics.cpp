@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "Graphics.h"
 #include "../Utilities/FunctionInterfaces.h"
+#include "TextureOperations.h"
 #include "GraphicsHelpers.h"
 #include "../Utilities/Function.h"
 #include "../Utilities/File.h"
@@ -5382,10 +5383,10 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void FreeCoalescedMesh(Graphics* graphics, CoalescedMesh* mesh, bool coallesced_allocation, AllocatorPolymorphic allocator)
+	void FreeCoalescedMesh(Graphics* graphics, CoalescedMesh* mesh, bool coalesced_allocation, AllocatorPolymorphic allocator)
 	{
 		graphics->FreeMesh(mesh->mesh);
-		if (coallesced_allocation) {
+		if (coalesced_allocation) {
 			Deallocate(allocator, mesh->submeshes[0].name.buffer);
 		}
 		else {

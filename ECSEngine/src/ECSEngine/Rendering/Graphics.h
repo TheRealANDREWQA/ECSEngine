@@ -149,7 +149,7 @@ namespace ECSEngine {
 
 	struct GraphicsResourceSnapshot {
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
-			// This is maintained as a coallesced buffer
+			// This is maintained as a coalesced buffer
 			ECSEngine::Deallocate(allocator, interface_pointers.buffer, debug_info);
 		}
 
@@ -889,7 +889,7 @@ namespace ECSEngine {
 		// If count > 1, it will use instanced rendering
 		void DrawSubmeshCommand(Submesh submesh, unsigned int count = 1);
 
-		// This only issues the draw command for the coallesced mesh, it does not bind the mesh itself or the material
+		// This only issues the draw command for the coalesced mesh, it does not bind the mesh itself or the material
 		// If count > 1, it will use instanced rendering
 		void DrawCoalescedMeshCommand(const CoalescedMesh& mesh, unsigned int count = 1);
 
@@ -1567,7 +1567,7 @@ namespace ECSEngine {
 	ECSENGINE_API void FreeMaterial(Graphics* graphics, const Material* material);
 
 	// Releases the mesh GPU resources and the names of the submeshes if any
-	ECSENGINE_API void FreeCoalescedMesh(Graphics* graphics, CoalescedMesh* mesh, bool coallesced_allocation, AllocatorPolymorphic allocator);
+	ECSENGINE_API void FreeCoalescedMesh(Graphics* graphics, CoalescedMesh* mesh, bool coalesced_allocation, AllocatorPolymorphic allocator);
 
 	// SINGLE THREADED - It uses the CopyResource which requires the immediate context
 	// Merges the vertex buffers and the index buffers into a single resource that can reduce 

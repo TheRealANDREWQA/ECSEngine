@@ -221,9 +221,9 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 	module->library_name.InitializeFromBuffer(buffer, library_name.size);
 	buffer += sizeof(wchar_t);
 
-	module->solution_path.Copy(solution_path);
+	module->solution_path.CopyOther(solution_path);
 	module->solution_path[module->solution_path.size] = L'\0';
-	module->library_name.Copy(library_name);
+	module->library_name.CopyOther(library_name);
 	module->library_name[module->library_name.size] = L'\0';
 	module->solution_last_write_time = 0;
 	module->is_graphics_module = is_graphics_module;
@@ -284,7 +284,7 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 	Stream<wchar_t> extension = function::PathExtension(data->path);
 	ECS_TEMP_STRING(log_path, 512);
 
-	log_path.Copy(data->path);
+	log_path.CopyOther(data->path);
 	Stream<wchar_t> log_extension = function::PathExtension(log_path);
 	// Make the dot into an underscore
 	log_extension[0] = L'_';
@@ -421,7 +421,7 @@ static void ForEachProjectModule(
 
 // For system() - the CRT function
 void CommandLineString(CapacityStream<char>& string, Stream<wchar_t> solution_path, Stream<char> command, Stream<char> configuration, Stream<wchar_t> log_file) {
-	string.Copy(CMB_BUILD_SYSTEM_PATH);
+	string.CopyOther(CMB_BUILD_SYSTEM_PATH);
 	string.AddStream(" && ");
 	string.AddStream(CMD_BUILD_SYSTEM);
 	string.Add(' ');
@@ -448,7 +448,7 @@ void CommandLineString(
 ) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 
-	string.Copy(L"/c ");
+	string.CopyOther(L"/c ");
 	string.AddStream(CMD_BUILD_SYSTEM_WIDE);
 	string.Add(L' ');
 	string.AddStream(modules->buffer[module_index].solution_path);
@@ -759,7 +759,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		CheckBuildStatusThreadData check_data;
 		check_data.editor_state = editor_state;
 		check_data.path.buffer = (wchar_t*)Allocate(editor_state->MultithreadedEditorAllocator(), sizeof(wchar_t) * flag_file.size);
-		check_data.path.Copy(flag_file);
+		check_data.path.CopyOther(flag_file);
 		check_data.report_status = report_status;
 		check_data.disable_logging = disable_logging;
 
@@ -1205,7 +1205,7 @@ void GetModuleBuildLogPath(
 {
 	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
-	log_path.Copy(project_file->path);
+	log_path.CopyOther(project_file->path);
 	log_path.AddStream(CMD_BUILD_SYSTEM_LOG_FILE_PATH);
 	log_path.AddStream(modules->buffer[index].library_name);
 	log_path.Add(L'_');
@@ -1235,7 +1235,7 @@ EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, u
 
 void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path) {
 	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
-	path.Copy(project_file->path);
+	path.CopyOther(project_file->path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
 	path.AddStreamSafe(PROJECT_MODULES_RELATIVE_PATH);
 	path[path.size] = L'\0';
@@ -1401,7 +1401,7 @@ size_t GetModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 	};
 
 	ECS_TEMP_STRING(null_terminated_path, 256);
-	null_terminated_path.Copy(solution_path);
+	null_terminated_path.CopyOther(solution_path);
 	null_terminated_path.AddAssert(L'\0');
 	size_t solution_last_write = 0;
 
@@ -1440,7 +1440,7 @@ bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int 
 {
 	Stream<wchar_t> solution_path = editor_state->project_modules->buffer[index].solution_path;
 	Stream<wchar_t> solution_parent = function::PathParent(solution_path);
-	path.Copy(solution_parent);
+	path.CopyOther(solution_parent);
 	path.Add(ECS_OS_PATH_SEPARATOR);
 
 	size_t base_path_size = path.size;
@@ -1470,7 +1470,7 @@ unsigned int GetModuleReflectionHierarchyIndex(const EditorState* editor_state, 
 // -------------------------------------------------------------------------------------------------------------------------
 
 bool CreateEditorModuleTemporaryDLL(CapacityStream<wchar_t> library_path, CapacityStream<wchar_t>& temporary_path) {
-	temporary_path.Copy(library_path);
+	temporary_path.CopyOther(library_path);
 	temporary_path.size -= wcslen(ECS_MODULE_EXTENSION);
 	temporary_path.AddStream(L"_temp");
 	temporary_path.AddStreamSafe(ECS_MODULE_EXTENSION);

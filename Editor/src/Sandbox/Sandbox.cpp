@@ -507,7 +507,7 @@ bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 		}
 
 		// No need to deallocate and reallocate since the buffer is fixed from the creation
-		sandbox->runtime_settings.Copy(settings_name);
+		sandbox->runtime_settings.CopyOther(settings_name);
 		sandbox->runtime_settings[settings_name.size] = L'\0';
 
 		// This will also reinitialize the runtime

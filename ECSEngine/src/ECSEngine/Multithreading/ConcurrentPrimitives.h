@@ -59,7 +59,9 @@ namespace ECSEngine {
 			return value.load(ECS_RELAXED);
 		}
 
-		void signal();
+		ECS_INLINE void signal() {
+			value.store(false, ECS_RELAXED);
+		}
 
 		std::atomic<bool> value = false;
 	};
@@ -161,6 +163,14 @@ namespace ECSEngine {
 		// The difference between the two variants is that this uses
 		// a futex call to wake any waiting threads
 		unsigned int ExitEx(unsigned int count = 1);
+
+		ECS_INLINE bool CheckCount(unsigned int value) const {
+			return count.load(ECS_RELAXED) == value;
+		}
+
+		ECS_INLINE bool CheckTarget(unsigned int value) const {
+			return target.load(ECS_RELAXED) == value;
+		}
 
 		// Default behaviour - waits until count is the same as target
 		// If one of the parameters is not -1, then it will wait until that value is reached
@@ -403,5 +413,22 @@ namespace ECSEngine {
 		spin_lock->unlock();
 		return return_value;
 	}
+
+	struct AsyncCallbackData {
+		bool success;
+		// Data that you register
+		void* data;
+		// Data provided by the async action
+		void* async_data;
+	};
+
+	typedef void (*AsyncCallbackFunction)(AsyncCallbackData* callback_data);
+
+	// Data_size 0 means that the data is stable and doesn't need to be copied
+	struct AsyncCallback {
+		AsyncCallbackFunction function = nullptr;
+		void* data;
+		size_t data_size;
+	};
 
 }

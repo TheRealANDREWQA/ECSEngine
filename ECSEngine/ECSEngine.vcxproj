@@ -233,6 +233,7 @@
     <ClInclude Include="src\ECSEngine\Containers\StableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />
     <ClInclude Include="src\ECSEngine\ECS\RuntimeResources.h" />
+    <ClInclude Include="src\ECSEngine\GLTF\GLTFExportTextures.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFThumbnail.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFLoader.h" />
     <ClInclude Include="src\ECSEngine\ECS\ArchetypeQueryCache.h" />
@@ -257,6 +258,7 @@
     <ClInclude Include="src\ECSEngine\Rendering\Profiling.h" />
     <ClInclude Include="src\ECSEngine\Rendering\RenderingEffects.h" />
     <ClInclude Include="src\ECSEngine\Rendering\SampleTexture.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\TextureOperations.h" />
     <ClInclude Include="src\ECSEngine\Rendering\TransformHelpers.h" />
     <ClInclude Include="src\ECSEngine\Rendering\VisualizeTexture.h" />
     <ClInclude Include="src\ECSEngine\Resources\AssetDatabase.h" />
@@ -284,6 +286,7 @@
     <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\PBR.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderInclude.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
+    <ClInclude Include="src\ECSEngine\Resources\WriteTexture.h" />
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDrawTypes.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleUtilities.h" />
@@ -446,6 +449,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="src\ECSEngine\GLTF\GLTFExportTextures.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\GLTFLoader.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\GLTFThumbnail.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\Archetype.cpp" />
@@ -467,6 +471,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\RenderingEffects.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\SampleTexture.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\TextureOperations.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\TransformHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\VisualizeTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\AssetDatabase.cpp" />
@@ -504,6 +509,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\Shader Application Stage\PBR.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\ShaderInclude.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\ShaderReflection.cpp" />
+    <ClCompile Include="src\ECSEngine\Resources\WriteTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\Module.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.cpp" />

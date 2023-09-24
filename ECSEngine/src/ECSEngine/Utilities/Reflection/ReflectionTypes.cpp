@@ -599,7 +599,7 @@ namespace ECSEngine {
 
 		size_t ReflectionType::CopySize() const
 		{
-			return name.CopySize() + tag.CopySize() + StreamCoallescedDeepCopySize(fields) + StreamCoallescedDeepCopySize(evaluations);
+			return name.CopySize() + tag.CopySize() + StreamCoalescedDeepCopySize(fields) + StreamCoalescedDeepCopySize(evaluations);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

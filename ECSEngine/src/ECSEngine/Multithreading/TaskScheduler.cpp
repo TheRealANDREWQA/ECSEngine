@@ -87,7 +87,7 @@ namespace ECSEngine {
 	void TaskScheduler::Reset()
 	{
 		for (size_t index = 0; index < elements.size; index++) {
-			// There is a single coallesced allocation
+			// There is a single coalesced allocation
 			DeallocateIfBelongs(elements.allocator, elements[index].GetAllocatedBuffer());
 		}
 		elements.FreeBuffer();
@@ -104,7 +104,7 @@ namespace ECSEngine {
 	void TaskScheduler::Remove(Stream<char> task_name) {
 		for (size_t index = 0; index < elements.size; index++) {
 			if (function::CompareStrings(elements[index].task_name, task_name)) {
-				// The task has a single coallesced block
+				// The task has a single coalesced block
 				DeallocateIfBelongs(elements.allocator, elements[index].GetAllocatedBuffer());
 				elements.Remove(index);
 				return;
@@ -370,7 +370,7 @@ namespace ECSEngine {
 
 		scheduler->task_barriers.Initialize(elements->allocator, elements->size);
 		// Copy the barriers
-		scheduler->task_barriers.Copy(waiting_barriers);
+		scheduler->task_barriers.CopyOther(waiting_barriers);
 
 		// Remaps the index from the task scheduler element to the packed conflicting_queries
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, query_index_remapping, elements->size);

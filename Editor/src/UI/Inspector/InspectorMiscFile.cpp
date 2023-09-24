@@ -68,7 +68,7 @@ void ChangeInspectorToMiscFile(EditorState* editor_state, Stream<wchar_t> path, 
 		// Get the data and set the path
 		InspectorDrawMiscFileData* draw_data = (InspectorDrawMiscFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 		draw_data->asset.file = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->asset.file.Copy(path);
+		draw_data->asset.file.CopyOther(path);
 
 		// Retrieve the name
 		ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);

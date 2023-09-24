@@ -21,7 +21,7 @@ namespace ECSEngine {
 
 	void AssetDatabaseFileDirectory(Stream<wchar_t> file_location, CapacityStream<wchar_t>& path, ECS_ASSET_TYPE type)
 	{
-		path.Copy(file_location);
+		path.CopyOther(file_location);
 		function::ConvertASCIIToWide(path, Stream<char>(ConvertAssetTypeString(type)));
 		path.Add(ECS_OS_PATH_SEPARATOR);
 	}
@@ -663,7 +663,7 @@ namespace ECSEngine {
 				temp_file.AddStream({ file.buffer + 2, file.size - 2 });
 			}
 			else {
-				temp_file.Copy(file);
+				temp_file.CopyOther(file);
 			}
 
 			// Place the file first separated from the name by 3 _
@@ -680,6 +680,7 @@ namespace ECSEngine {
 		function::ConvertASCIIToWide(path, name);
 		Stream<wchar_t> converted_name = { path.buffer + path_size, name.size };
 		function::ReplaceCharacter(converted_name, ECS_OS_PATH_SEPARATOR_REL, SEPARATOR_CHAR);
+		function::ReplaceCharacter(converted_name, ECS_OS_PATH_SEPARATOR, SEPARATOR_CHAR);
 		path.AddStreamSafe(ECS_ASSET_DATABASE_FILE_EXTENSION);
 	}
 
@@ -1278,7 +1279,7 @@ namespace ECSEngine {
 		}
 
 		if (randomized_values != &values) {
-			values.Copy(*randomized_values);
+			values.CopyOther(*randomized_values);
 		}
 	}
 
@@ -2238,11 +2239,20 @@ namespace ECSEngine {
 
 	void AssetDatabase::ExtractNameFromFile(Stream<wchar_t> path, CapacityStream<char>& name)
 	{
+		ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 512);
+		ExtractNameFromFileWide(path, wide_name);
+		function::ConvertWideCharsToASCII(wide_name, name);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::ExtractNameFromFileWide(Stream<wchar_t> path, CapacityStream<wchar_t>& name)
+	{
 		Stream<wchar_t> filename = function::PathFilename(path);
 		Stream<wchar_t> separator = function::FindFirstToken(filename, PATH_SEPARATOR);
 		if (separator.size == 0) {
 			// No separator, copy the entire filename
-			function::ConvertWideCharsToASCII(filename, name);
+			name.CopyOther(filename);
 		}
 		else {
 			// Copy everything after the separator except the extension
@@ -2251,11 +2261,11 @@ namespace ECSEngine {
 			separator.size -= size;
 
 			Stream<wchar_t> wide_name = function::PathStem(separator);
-			function::ConvertWideCharsToASCII(wide_name, name);
+			name.CopyOther(wide_name);
 		}
 
 		// If it contains relative path separators, put them back
-		function::ReplaceCharacter(name, SEPARATOR_CHAR, ECS_OS_PATH_SEPARATOR_REL);
+		function::ReplaceCharacter(name, TEXT(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR_REL);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -2293,10 +2303,19 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
+	Stream<wchar_t> AssetDatabase::ExtractAssetTargetFromFile(Stream<wchar_t> path, Stream<wchar_t> base_path, CapacityStream<wchar_t>& target_path)
+	{
+		ECS_STACK_CAPACITY_STREAM(wchar_t, file, 512);
+		ExtractFileFromFile(path, file);
+		return function::MountPath(file, base_path, target_path);
+	}
+
+	// --------------------------------------------------------------------------------------
+
 	template<typename Functor>
 	size_t SerializeAssetDatabaseImpl(const AssetDatabase* database, Functor&& functor) {
 		ECS_STACK_CAPACITY_STREAM(SerializeOmitField, omit_fields, 64);
-		Stream<char> fields_to_keep[] = {
+		Stream<char> fields_to_keep[] = { 
 			STRING(name),
 			STRING(file)
 		};

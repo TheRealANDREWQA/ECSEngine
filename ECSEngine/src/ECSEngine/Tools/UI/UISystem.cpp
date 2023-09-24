@@ -1271,7 +1271,7 @@ namespace ECSEngine {
 				memory_size += table_resources[index].size;
 			}
 			
-			// Make a coallesced allocation
+			// Make a coalesced allocation
 			void* allocation = m_memory->Allocate(memory_size);
 			uintptr_t ptr = (uintptr_t)allocation;
 
@@ -1422,7 +1422,7 @@ namespace ECSEngine {
 		{
 			ECS_STACK_CAPACITY_STREAM(char, full_name, 256);
 
-			full_name.Copy(base_name);
+			full_name.CopyOther(base_name);
 			function::ConvertIntToChars(full_name, current_index);
 
 			unsigned int window_index = GetWindowFromName(full_name);
@@ -4676,8 +4676,14 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(unsigned int, left_new_lines, 256);
 			ECS_STACK_CAPACITY_STREAM(unsigned int, right_new_lines, 256);
 
-			function::FindToken(aligned_to_left_text, '\n', left_new_lines);
-			function::FindToken(aligned_to_right_text, '\n', right_new_lines);
+			AdditionStream<unsigned int> left_new_lines_add = left_new_lines;
+			AdditionStream<unsigned int> right_new_lines_add = right_new_lines;
+
+			function::FindToken(aligned_to_left_text, '\n', left_new_lines_add);
+			function::FindToken(aligned_to_right_text, '\n', right_new_lines_add);
+
+			left_new_lines = left_new_lines_add.capacity_stream;
+			right_new_lines = right_new_lines_add.capacity_stream;
 
 			left_new_lines.Add(aligned_to_left_text.size);
 			right_new_lines.Add(aligned_to_right_text.size);
@@ -4936,8 +4942,14 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(unsigned int, left_new_lines, 256);
 			ECS_STACK_CAPACITY_STREAM(unsigned int, right_new_lines, 256);
 
-			function::FindToken(aligned_to_left_text, '\n', left_new_lines);
-			function::FindToken(aligned_to_right_text, '\n', right_new_lines);
+			AdditionStream<unsigned int> left_new_lines_add = left_new_lines;
+			AdditionStream<unsigned int> right_new_lines_add = right_new_lines;
+
+			function::FindToken(aligned_to_left_text, '\n', left_new_lines_add);
+			function::FindToken(aligned_to_right_text, '\n', right_new_lines_add);
+
+			left_new_lines = left_new_lines_add.capacity_stream;
+			right_new_lines = right_new_lines_add.capacity_stream;
 
 			left_new_lines.Add(aligned_to_left_text.size);
 			right_new_lines.Add(aligned_to_right_text.size);
@@ -9516,7 +9528,7 @@ namespace ECSEngine {
 				m_windows[window_index].table.Erase(identifier);
 			}
 
-			// The element allocations contains the starting coallesced allocation
+			// The element allocations contains the starting coalesced allocation
 			m_memory->Deallocate(resource->element_allocations.buffer);
 			m_windows[window_index].dynamic_resources.EraseFromIndex(index);
 		}
@@ -11344,7 +11356,7 @@ namespace ECSEngine {
 
 				UIDockspaceLayer dockspace_layers[32];
 				Stream<UIDockspaceLayer> stack_dockspace_layers(dockspace_layers, 0);
-				stack_dockspace_layers.Copy(m_dockspace_layers);
+				stack_dockspace_layers.CopyOther(m_dockspace_layers);
 
 				unsigned short _valid_layers[32];
 				Stream<unsigned short> valid_layers(_valid_layers, m_dockspace_layers.size);
@@ -11376,10 +11388,10 @@ namespace ECSEngine {
 				function::MakeSequence(valid_verticals);
 				function::MakeSequence(valid_floating_horizontals);
 				function::MakeSequence(valid_floating_verticals);
-				valid_fixed.Copy(m_fixed_dockspaces);
-				original_fixed.Copy(m_fixed_dockspaces);
-				valid_background.Copy(m_background_dockspaces);
-				original_background.Copy(m_background_dockspaces);
+				valid_fixed.CopyOther(m_fixed_dockspaces);
+				original_fixed.CopyOther(m_fixed_dockspaces);
+				valid_background.CopyOther(m_background_dockspaces);
+				original_background.CopyOther(m_background_dockspaces);
 
 				for (size_t index = 0; index < m_pop_up_windows.size; index++) {
 					unsigned int layer_index = m_pop_up_windows[index];

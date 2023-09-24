@@ -172,7 +172,7 @@ void SaveScenePopUpDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbox_indices, UIActionHandler continue_handler)
 {
 	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, initial_indices, sandbox_indices.size);
-	initial_indices.Copy(sandbox_indices);
+	initial_indices.CopyOther(sandbox_indices);
 
 	// Go through the sandboxes and verify it they are dirty. If they are not dirty, then skip them
 	for (int32_t index = 0; index < (int32_t)sandbox_indices.size; index++) {
@@ -241,7 +241,7 @@ void CreateEmptySceneActualCallback(ActionData* action_data) {
 	Stream<wchar_t> current_folder = editor_state->file_explorer_data->current_directory;
 	current_folder = function::PathRelativeToAbsolute(current_folder, assets_folder);
 	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 512);
-	wide_name.Copy(current_folder);
+	wide_name.CopyOther(current_folder);
 	function::ConvertASCIIToWide(wide_name, *name);
 	wide_name.AddStreamSafe(EDITOR_SCENE_EXTENSION);
 

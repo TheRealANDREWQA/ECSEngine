@@ -78,7 +78,7 @@ void GetProjectAssetsFolder(const EditorState* editor_state, CapacityStream<wcha
 void GetProjectModulesFilePath(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path)
 {
 	const ProjectFile* project_file = editor_state->project_file;
-	path.Copy(project_file->path);
+	path.CopyOther(project_file->path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
 	path.AddStreamSafe(PROJECT_MODULES_FILE_EXTENSION);
 	path[path.size] = L'\0';
@@ -124,7 +124,7 @@ void GetProjectConfigurationRuntimeFolder(const EditorState* editor_state, Capac
 
 void GetProjectRootPath(const EditorState* editor_state, CapacityStream<wchar_t>& path)
 {
-	path.Copy(editor_state->project_file->path);
+	path.CopyOther(editor_state->project_file->path);
 }
 
 // -------------------------------------------------------------------------------------------------------------

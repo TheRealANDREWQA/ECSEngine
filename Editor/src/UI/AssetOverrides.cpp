@@ -470,7 +470,7 @@ static void AcquireCallback(ActionData* action_data) {
 			final_selection = converted_name;
 
 		}
-		data->selection->Copy(final_selection);
+		data->selection->CopyOther(final_selection);
 	}
 	else {
 		EditorSetConsoleError("Failed to acquire the drag.");
@@ -670,8 +670,7 @@ static void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TY
 		base_return.absolute_path.size = base_size;
 		base_return.converted_filename.size = 0;
 		
-		Stream<wchar_t> filename = function::PathFilenameBoth(base_data->asset_paths[index]);
-		function::ConvertWideCharsToASCII(filename, base_return.converted_filename);
+		AssetDatabase::ExtractNameFromFile(base_data->asset_paths[index], base_return.converted_filename);
 
 		if (base_data->filter.size > 0) {
 			if (function::FindFirstToken(base_return.converted_filename, base_data->filter).size == 0) {
@@ -945,7 +944,7 @@ void OverrideAssetHandle(
 			composite_string = name;
 		}
 	}
-	base_data->selection.Copy(composite_string);
+	base_data->selection.CopyOther(composite_string);
 
 	// Draw the field as a selection input
 	drawer->SelectionInput(configuration, *config, field_name, &base_data->selection, ECS_TOOLS_UI_TEXTURE_FOLDER, &window_descriptor);

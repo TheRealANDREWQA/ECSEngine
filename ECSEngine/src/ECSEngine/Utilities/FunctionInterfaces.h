@@ -989,7 +989,7 @@ string_name.AssertCapacity();
 		// Writes the stream data right after the type and sets the size
 		// Returns the total write size
 		template<typename Type>
-		unsigned int CoallesceStreamIntoType(Type* type, Stream<void> stream) {
+		unsigned int CoalesceStreamIntoType(Type* type, Stream<void> stream) {
 			void* location = function::OffsetPointer(type, sizeof(*type));
 			memcpy(location, stream.buffer, stream.size);
 			*type->Size() = stream.size;
@@ -999,7 +999,7 @@ string_name.AssertCapacity();
 		// -----------------------------------------------------------------------------------------------------------------------
 
 		template<typename Type>
-		ECS_INLINE Stream<void> GetCoallescedStreamFromType(Type* type) {
+		ECS_INLINE Stream<void> GetCoalescedStreamFromType(Type* type) {
 			void* location = function::OffsetPointer(type, sizeof(*type));
 			return { location, *type->Size() };
 		}
@@ -1007,9 +1007,9 @@ string_name.AssertCapacity();
 		// -----------------------------------------------------------------------------------------------------------------------
 
 		template<typename Type>
-		ECS_INLINE Type* CreateCoallescedStreamIntoType(void* buffer, Stream<void> stream, unsigned int* write_size) {
+		ECS_INLINE Type* CreateCoalescedStreamIntoType(void* buffer, Stream<void> stream, unsigned int* write_size) {
 			Type* type = (Type*)buffer;
-			*write_size = CoallesceStreamIntoType(type, stream);
+			*write_size = CoalesceStreamIntoType(type, stream);
 			return type;
 		}
 
@@ -1017,7 +1017,7 @@ string_name.AssertCapacity();
 
 		// Does not set the data size inside the type
 		template<typename Type>
-		Type* CreateCoallescedStreamsIntoType(void* buffer, Stream<Stream<void>> buffers, unsigned int* write_size) {
+		Type* CreateCoalescedStreamsIntoType(void* buffer, Stream<Stream<void>> buffers, unsigned int* write_size) {
 			Type* type = (Type*)buffer;
 			unsigned int offset = 0;
 			for (size_t index = 0; index < buffers.size; index++) {
@@ -1028,9 +1028,9 @@ string_name.AssertCapacity();
 			return type;
 		}
 
-		// Sizes needs to be byte sizes of the coallesced streams
+		// Sizes needs to be byte sizes of the coalesced streams
 		template<typename Type>
-		Stream<void> GetCoallescedStreamFromType(Type* type, unsigned int stream_index, unsigned int* sizes) {
+		Stream<void> GetCoalescedStreamFromType(Type* type, unsigned int stream_index, unsigned int* sizes) {
 			unsigned int offset = 0;
 			for (unsigned int index = 0; index < stream_index; index++) {
 				offset += sizes[index];

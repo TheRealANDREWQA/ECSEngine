@@ -152,7 +152,7 @@ namespace ECSEngine {
 			wizard_data.window_name = RENAME_FOLDER_WIZARD_NAME;
 			wizard_data.callback = RenameFolderWizardCallback;
 
-			temp_path.Copy(*data);
+			temp_path.CopyOther(*data);
 			temp_path[data->size] = L'\0';
 			wizard_data.callback_data = temp_path.buffer;
 			wizard_data.callback_data_size = sizeof(wchar_t) * (data->size + 1);
@@ -206,7 +206,7 @@ namespace ECSEngine {
 			wizard_data.window_name = RENAME_FILE_WIZARD_NAME;
 			wizard_data.callback = RenameFileWizardCallback;
 
-			temp_path.Copy(*data);
+			temp_path.CopyOther(*data);
 			temp_path[data->size] = L'\0';
 			wizard_data.callback_data = temp_path.buffer;
 			wizard_data.callback_data_size = sizeof(wchar_t) * (data->size + 1);
@@ -260,7 +260,7 @@ namespace ECSEngine {
 			wizard_data.window_name = CHANGE_FILE_EXTENSION_WIZARD_NAME;
 			wizard_data.callback = ChangeFileExtensionWizardCallback;
 
-			temp_path.Copy(*data);
+			temp_path.CopyOther(*data);
 			temp_path[data->size] = L'\0';
 			wizard_data.callback_data = temp_path.buffer;
 			wizard_data.callback_data_size = sizeof(wchar_t) * (data->size + 1);
@@ -348,7 +348,7 @@ namespace ECSEngine {
 						data->input->DeleteAllCharacters();
 						data->input->InsertCharacters(temp_chars, written_chars, 0, system);
 						if (data->update_stream) {
-							data->update_stream->Copy(data->get_file_data.path);
+							data->update_stream->CopyOther(data->get_file_data.path);
 						}
 					}
 				}
@@ -379,7 +379,7 @@ namespace ECSEngine {
 						data->input->DeleteAllCharacters();
 						data->input->InsertCharacters(temp_chars, written_chars, 0, system);
 						if (data->update_stream != nullptr) {
-							data->update_stream->Copy(data->get_directory_data.path);
+							data->update_stream->CopyOther(data->get_directory_data.path);
 						}
 					}
 				}

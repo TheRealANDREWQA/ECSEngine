@@ -58,6 +58,10 @@ namespace ECSEngine {
 			m_lock.unlock();
 		}
 
+		ECS_INLINE size_t InitialArenaCapacity() const {
+			return m_size_per_allocator * (size_t)m_allocator_count;
+		}
+
 		AllocatorPolymorphic GetAllocator(size_t index) const;
 
 		// The return value is only useful when using assert_if_not_found set to false

@@ -127,8 +127,8 @@ EDITOR_EVENT(RegisterEvent) {
 			data->file_size
 		};
 
-		Stream<char> name = function::GetCoallescedStreamFromType(data, 0, data_sizes).AsIs<char>();
-		Stream<wchar_t> file = function::GetCoallescedStreamFromType(data, 1, data_sizes).AsIs<wchar_t>();
+		Stream<char> name = function::GetCoalescedStreamFromType(data, 0, data_sizes).AsIs<char>();
+		Stream<wchar_t> file = function::GetCoalescedStreamFromType(data, 1, data_sizes).AsIs<wchar_t>();
 		bool loaded_now = false;
 
 		unsigned int handle = -1;
@@ -530,7 +530,7 @@ bool AddRegisterAssetEvent(
 			name,
 			file
 		};
-		RegisterEventData* data = function::CreateCoallescedStreamsIntoType<RegisterEventData>(storage, { streams, std::size(streams) }, &write_size);
+		RegisterEventData* data = function::CreateCoalescedStreamsIntoType<RegisterEventData>(storage, { streams, std::size(streams) }, &write_size);
 		data->handle = handle;
 		data->sandbox_index = sandbox_index;
 		data->type = type;
@@ -640,7 +640,7 @@ bool CreateAssetSetting(const EditorState* editor_state, Stream<char> name, Stre
 	else {
 		// Convert the file to a name - since it will be ignored
 		ECS_STACK_CAPACITY_STREAM(char, converted_file, 512);
-		file = function::PathStem(file);
+		//file = function::PathStem(file);
 		function::ConvertWideCharsToASCII(file, converted_file);
 		CreateDefaultAsset(storage, converted_file, file, type);
 	}
@@ -1033,8 +1033,8 @@ EDITOR_EVENT(DeleteAssetSettingEvent) {
 			data->file_size * sizeof(wchar_t)
 		};
 
-		Stream<char> name = function::GetCoallescedStreamFromType(data, 0, sizes).As<char>();
-		Stream<wchar_t> file = function::GetCoallescedStreamFromType(data, 1, sizes).As<wchar_t>();
+		Stream<char> name = function::GetCoalescedStreamFromType(data, 0, sizes).As<char>();
+		Stream<wchar_t> file = function::GetCoalescedStreamFromType(data, 1, sizes).As<wchar_t>();
 
 		unsigned int handle = editor_state->asset_database->FindAsset(name, file, data->type);
 		if (handle != -1) {
@@ -1083,7 +1083,7 @@ void DeleteAssetSetting(EditorState* editor_state, Stream<char> name, Stream<wch
 		file
 	};
 
-	DeleteAssetSettingEventData* data = function::CreateCoallescedStreamsIntoType<DeleteAssetSettingEventData>(storage, { buffers, std::size(buffers) }, &write_size);
+	DeleteAssetSettingEventData* data = function::CreateCoalescedStreamsIntoType<DeleteAssetSettingEventData>(storage, { buffers, std::size(buffers) }, &write_size);
 	data->name_size = name.size;
 	data->file_size = file.size;
 	data->type = type;
@@ -1119,11 +1119,10 @@ void DeleteMissingAssetSettings(const EditorState* editor_state)
 		AssetDatabase::ExtractFileFromFile(path, current_file);
 
 		if (current_file.size == 0) {
-			current_file = function::PathFilename(path);
+			AssetDatabase::ExtractNameFromFileWide(path, current_file);
 		}
 
 		if (current_file.size > 0) {
-			function::ReplaceCharacter(current_file, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 			ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path_storage, 512);
 			Stream<wchar_t> absolute_path = function::MountPathOnlyRel(current_file, *data->assets_folder, absolute_path_storage);
 			bool exists = ExistsFileOrFolder(absolute_path);
@@ -1255,8 +1254,8 @@ unsigned int FindOrAddAsset(EditorState* editor_state, Stream<char> name, Stream
 void FromAssetNameToThunkOrForwardingFile(Stream<char> name, Stream<wchar_t> extension, CapacityStream<wchar_t>& relative_path)
 {
 	function::ConvertASCIIToWide(relative_path, name);
-	// Replace underscores with path separators
-	function::ReplaceCharacter(relative_path, L'_', ECS_OS_PATH_SEPARATOR);
+	// Replace relative slashes with absolute ones
+	function::ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 	relative_path.AddStreamSafe(extension);
 }
 
@@ -1304,9 +1303,8 @@ void GetAssetNameFromThunkOrForwardingFileRelative(const EditorState* editor_sta
 	relative_path.size -= extension.size;
 
 	function::ConvertWideCharsToASCII(relative_path, name);
-	// Replace backslashes or forward slashes with underscores
-	function::ReplaceCharacter(name, ECS_OS_PATH_SEPARATOR_ASCII, '_');
-	function::ReplaceCharacter(name, ECS_OS_PATH_SEPARATOR_ASCII_REL, '_');
+	// Replace absolute separators with relative ones
+	function::ReplaceCharacter(name, ECS_OS_PATH_SEPARATOR_ASCII, ECS_OS_PATH_SEPARATOR_ASCII_REL);
 }
 
 // ----------------------------------------------------------------------------------------------

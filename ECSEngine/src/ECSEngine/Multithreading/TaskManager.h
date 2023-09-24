@@ -178,21 +178,39 @@ namespace ECSEngine {
 		// when all the tasks have been finished
 		void FinishStaticTasks();
 
-		void IncrementThreadTaskIndex();
+		ECS_INLINE void IncrementThreadTaskIndex() {
+			m_thread_task_index->fetch_add(1, ECS_ACQ_REL);
+		}
 
-		unsigned int GetTaskCount() const;
+		ECS_INLINE unsigned int GetTaskCount() const {
+			return m_tasks.size;
+		}
 
-		unsigned int GetThreadCount() const;
+		ECS_INLINE unsigned int GetThreadCount() const {
+			return m_thread_queue.size;
+		}
 
-		ThreadQueue* GetThreadQueue(unsigned int thread_id) const;
+		ECS_INLINE ThreadQueue* GetThreadQueue(unsigned int thread_id) const {
+			return m_thread_queue[thread_id];
+		}
 
-		ThreadTask GetTask(unsigned int task_index) const;
+		ECS_INLINE ThreadTask GetTask(unsigned int task_index) const {
+			ECS_ASSERT(task_index >= 0 && task_index < m_tasks.capacity);
+			return m_tasks[task_index].task;
+		}
 
-		ThreadTask* GetTaskPtr(unsigned int task_index);
+		ECS_INLINE ThreadTask* GetTaskPtr(unsigned int task_index) {
+			ECS_ASSERT(task_index >= 0 && task_index < m_tasks.capacity);
+			return &m_tasks[task_index].task;
+		}
 
-		unsigned int GetThreadTaskIndex() const;
+		ECS_INLINE unsigned int GetThreadTaskIndex() const {
+			return m_thread_task_index->load(ECS_ACQUIRE);
+		}
 
-		AllocatorPolymorphic GetThreadTempAllocator(unsigned int thread_id) const;
+		ECS_INLINE AllocatorPolymorphic GetThreadTempAllocator(unsigned int thread_id) const {
+			return GetAllocatorPolymorphic(m_thread_linear_allocators[thread_id]);
+		}
 
 		// Returns the current static thread wrapper. If the data pointer is specified, it will copy the thread
 		// wrapper data into it (it must have a byte size of at least 64 bytes)

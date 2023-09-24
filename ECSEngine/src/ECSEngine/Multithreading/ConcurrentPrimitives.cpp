@@ -221,7 +221,7 @@ namespace ECSEngine {
 					}
 					_mm_pause();
 				}
-				// Use SwitchToThread to try and give the quantum to a thread on the same process
+				// Use SwitchToThread to try and give the quantum to a thread on the same core
 				BOOL switched = SwitchToThread();
 				if (!switched) {
 					// Use Sleep(0) to try to give the quantum to a thread on other processors as well
@@ -561,11 +561,6 @@ namespace ECSEngine {
 			BOOL success = WaitOnAddress(&value, &current_value, sizeof(unsigned char), INFINITE);
 			current_value = value.load(ECS_RELAXED);
 		}
-	}
-
-	void AtomicFlag::signal()
-	{
-		value.store(false, ECS_RELAXED);
 	}
 
 	// ----------------------------------------------------------------------------------------------

@@ -102,7 +102,7 @@ void DestroyInvalidGameUIWindows(EditorState* editor_state)
 
 void GetGameUIWindowName(unsigned int index, CapacityStream<char>& name)
 {
-	name.Copy(GAME_WINDOW_NAME);
+	name.CopyOther(GAME_WINDOW_NAME);
 	function::ConvertIntToChars(name, index);
 }
 

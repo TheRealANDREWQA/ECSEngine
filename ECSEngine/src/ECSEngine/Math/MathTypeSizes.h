@@ -24,9 +24,9 @@ namespace ECSEngine {
 	// The number of entries is given by ECS_MATH_STRUCTURE_COUNT
 	ECSENGINE_API extern size_t ECS_MATH_STRUCTURE_TYPE_BYTE_SIZES[];
 
-	// At the moment, leave the math structure type alignment to 8 even tho they are SIMD types
+	// At the moment, hardcode the value. The SIMD types appararently have an alignment of 16 bytes
 	ECS_INLINE size_t MathStructureAlignment() {
-		return alignof(void*);
+		return 16;
 	}
 
 }

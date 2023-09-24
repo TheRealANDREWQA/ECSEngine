@@ -32,8 +32,8 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	// The allocation will be made from the given allocator. Can specify whether or not the allocation should be coallesced or not.
-	// When the allocation is coallesced in order to deallocate just deallocate the name buffer of the type
+	// The allocation will be made from the given allocator. Can specify whether or not the allocation should be coalesced or not.
+	// When the allocation is coalesced in order to deallocate just deallocate the name buffer of the type
 	// The type will not be inserted into the reflection manager. The reflection manager is used to determine the alignments of different fields
 	ECSENGINE_API Reflection::ReflectionType CreateLinkTypeForComponent(
 		const Reflection::ReflectionManager* reflection_manager, 

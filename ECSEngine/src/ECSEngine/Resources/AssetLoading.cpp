@@ -13,7 +13,7 @@
 
 namespace ECSEngine {
 
-	AllocatorPolymorphic GetPersistentAllocator(AssetDatabase* database) {
+	ECS_INLINE AllocatorPolymorphic GetPersistentAllocator(AssetDatabase* database) {
 		return database->Allocator();
 	}
 
@@ -63,7 +63,7 @@ namespace ECSEngine {
 	};
 
 	union ControlBlockExtra {
-		ControlBlockExtra() {}
+		ECS_INLINE ControlBlockExtra() {}
 
 		struct {
 			PackedFile* packed_file;
@@ -78,12 +78,12 @@ namespace ECSEngine {
 
 	// A master block of data that all the threads will reference
 	struct AssetLoadingControlBlock {
-		inline AllocatorPolymorphic GetThreadAllocator(unsigned int index) {
+		ECS_INLINE AllocatorPolymorphic GetThreadAllocator(unsigned int index) {
 			return GetAllocatorPolymorphic(&global_managers[index]);
 		}
 
 		// Sets the success flag to false
-		inline void Fail(LoadAssetFailure failure) {
+		void Fail(LoadAssetFailure failure) {
 			if (load_info.success != nullptr) {
 				*load_info.success = false;
 			}
@@ -107,13 +107,13 @@ namespace ECSEngine {
 
 		// Returns the index inside the textures stream where the given handle is located
 		// It returns -1 if the slot could not be loaded/processed
-		unsigned int FindTexture(unsigned int handle) const {
+		ECS_INLINE unsigned int FindTexture(unsigned int handle) const {
 			return FindIndex(textures, handle);
 		}
 
 		// Returns the index inside the textures stream where the given handle is located
 		// It returns -1 if the slot could not be loaded/processed
-		unsigned int FindShader(unsigned int handle) const {
+		ECS_INLINE unsigned int FindShader(unsigned int handle) const {
 			return FindIndex(shaders, handle);
 		}
 
@@ -705,7 +705,7 @@ namespace ECSEngine {
 
 	ECS_THREAD_TASK(ProcessFinalTask) {
 		AssetLoadingControlBlock* data = (AssetLoadingControlBlock*)_data;
-	
+		
 		// Create the samplers - this can be done in parallel with other tasks
 		auto samplers = data->database->gpu_sampler_metadata.ToStream();
 
@@ -718,9 +718,18 @@ namespace ECSEngine {
 			CallOnPreloadCallback(data, thread_id, data->database->GetAssetHandleFromIndex(index, ECS_ASSET_GPU_SAMPLER), metadata, ECS_ASSET_GPU_SAMPLER);
 		}
 
+		// Before waiting for the finish semaphore, we need to fully pop our thread queue such that
+		// We don't wait for the semaphore while nobody runs that task
+		TaskManager* task_manager = world->task_manager;
+		ThreadQueue* thread_queue = task_manager->GetThreadQueue(thread_id);
+		DynamicThreadTask this_thread_queue_task;
+		while (thread_queue->Pop(this_thread_queue_task)) {
+			task_manager->ExecuteDynamicTask(this_thread_queue_task.task, thread_id, thread_id);
+		}
+
 		// Wait until all threads have finished - the value is 2 since
 		// by default the semaphore should have 1 and another one incremented for this task
-		data->load_info.finish_semaphore->TickWait(5, 2);
+		data->load_info.finish_semaphore->TickWait(15, 2);
 
 		auto materials = data->database->material_asset.ToStream();
 
@@ -933,8 +942,8 @@ namespace ECSEngine {
 			control_block->miscs[index].different_handles.InitializeAndCopy(persistent_allocator, same_target.miscs[index].other_handles);
 		}
 
-		const size_t ALLOCATOR_SIZE = ECS_MB * 50;
-		const size_t ALLOCATOR_BACKUP = ECS_MB * 200;
+		const size_t ALLOCATOR_SIZE = ECS_MB * 100;
+		const size_t ALLOCATOR_BACKUP = ECS_MB * 400;
 
 		// Create the global allocators
 		control_block->global_managers = (GlobalMemoryManager*)Allocate(persistent_allocator, sizeof(GlobalMemoryManager) * thread_count);
@@ -1222,7 +1231,7 @@ namespace ECSEngine {
 
 		if (file.size > 0) {
 			ECS_STACK_CAPACITY_STREAM(char, failure_string, 512);
-			failure_string.Copy(failure_string_base);
+			failure_string.CopyOther(failure_string_base);
 			failure_string.AddStream(" with target file {#}");
 			failure_string.Add('\0');
 			ECS_FORMAT_STRING(characters, failure_string.buffer, name, type_string, file);

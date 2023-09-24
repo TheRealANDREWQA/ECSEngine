@@ -19,7 +19,7 @@ struct InspectorDrawTextureData {
 	}
 
 	inline Stream<wchar_t> Path() {
-		return function::GetCoallescedStreamFromType(this).As<wchar_t>();
+		return function::GetCoalescedStreamFromType(this).As<wchar_t>();
 	}
 
 	unsigned int path_size;
@@ -114,7 +114,7 @@ void ChangeInspectorToTextureFile(EditorState* editor_state, Stream<wchar_t> pat
 {
 	size_t _draw_data_storage[128];
 	unsigned int write_size = 0;
-	InspectorDrawTextureData* draw_data = function::CreateCoallescedStreamIntoType<InspectorDrawTextureData>(_draw_data_storage, path, &write_size);
+	InspectorDrawTextureData* draw_data = function::CreateCoalescedStreamIntoType<InspectorDrawTextureData>(_draw_data_storage, path, &write_size);
 	memset(&draw_data->helper_data, 0, sizeof(draw_data->helper_data));
 
 	uint3 indices = ChangeInspectorDrawFunctionWithSearchEx(

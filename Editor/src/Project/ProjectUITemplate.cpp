@@ -111,7 +111,7 @@ unsigned int VerifyIndexedWindowIndexOnly(
 		// At the moment check for at max 
 		for (unsigned int index = 0; index < max_search; index++) {
 			window_name.size = 0;
-			window_name.Copy(base_name_stream);
+			window_name.CopyOther(base_name_stream);
 			function::ConvertIntToChars(window_name, index);
 
 			if (function::CompareStrings(window_name, file_window_name)) {
@@ -154,7 +154,7 @@ unsigned int VerifyIndexedWindow(
 		// At the moment check for at max 
 		for (unsigned int index = 0; index < max_search; index++) {
 			window_name.size = 0;
-			window_name.Copy(base_name_stream);
+			window_name.CopyOther(base_name_stream);
 			function::ConvertIntToChars(window_name, index);
 
 			if (function::CompareStrings(window_name, file_window_name)) {
@@ -326,7 +326,7 @@ bool SaveProjectUITemplate(UISystem* system, ProjectUITemplate _template, Capaci
 	}
 	else {
 		ECS_TEMP_STRING(temp_string, 256);
-		temp_string.Copy(_template.ui_file);
+		temp_string.CopyOther(_template.ui_file);
 		temp_string.AddAssert(L'\0');
 		_template.ui_file.buffer = temp_string.buffer;
 	}

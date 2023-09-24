@@ -103,7 +103,7 @@ struct HierarchyIteratorImpl {
 		// We need a separate branch for the global components parent
 		if (value == GlobalComponentsParent()) {
 			entity_label.size = 0;
-			entity_label.Copy("Global Components");
+			entity_label.CopyOther("Global Components");
 			return entity_label;
 		}
 		else {
@@ -790,7 +790,7 @@ unsigned int CreateEntitiesUIWindow(EditorState* editor_state, unsigned int wind
 
 void GetEntitiesUIWindowName(unsigned int window_index, CapacityStream<char>& name)
 {
-	name.Copy(ENTITIES_UI_WINDOW_NAME);
+	name.CopyOther(ENTITIES_UI_WINDOW_NAME);
 	function::ConvertIntToChars(name, window_index);
 }
 

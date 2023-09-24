@@ -21,7 +21,7 @@ namespace ECSEngine {
 		ForEachFileInDirectoryWithExtension(path, { &extension, 1 }, &for_data, [](Stream<wchar_t> path, void* _data) {
 			ForData* for_data = (ForData*)_data;
 			if (for_data->filename.buffer != nullptr) {
-				for_data->filename.Copy((path));
+				for_data->filename.CopyOther((path));
 			}
 			for_data->has_file = true;
 			return false;
@@ -46,7 +46,7 @@ namespace ECSEngine {
 		ForEachFileInDirectoryRecursiveWithExtension(path, { &extension, 1 }, &for_data, [](Stream<wchar_t> path, void* _data) {
 			ForData* for_data = (ForData*)_data;
 			if (for_data->filename.buffer != nullptr) {
-				for_data->filename.Copy((path));
+				for_data->filename.CopyOther((path));
 			}
 			for_data->has_file = true;
 			return false;
@@ -57,8 +57,8 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	void SetSearchAllStringForEachFile(CapacityStream<wchar_t> string, Stream<wchar_t> directory) {
-		string.Copy(directory);
+	void SetSearchAllStringForEachFile(CapacityStream<wchar_t>& string, Stream<wchar_t> directory) {
+		string.CopyOther(directory);
 		wchar_t separator = function::PathIsRelative(string) ? ECS_OS_PATH_SEPARATOR_REL : ECS_OS_PATH_SEPARATOR;
 		string.Add(separator);
 		string.Add(L'*');

@@ -271,7 +271,7 @@ namespace ECSEngine {
 
 #pragma region Helpers
 
-	void WriteCommandStream(EntityManager* manager, DeferredActionParameters parameters, DeferredAction action) {
+	static void WriteCommandStream(EntityManager* manager, DeferredActionParameters parameters, DeferredAction action) {
 		if (parameters.command_stream == nullptr) {
 			unsigned int index = manager->m_deferred_actions.Add(action);
 			ECS_CRASH_RETURN(index < manager->m_deferred_actions.capacity, "EntityManager: Insufficient space for the entity manager command stream.");
@@ -282,13 +282,13 @@ namespace ECSEngine {
 		}
 	}
 
-	void GetComponentSizes(unsigned int* sizes, ComponentSignature signature, const ComponentInfo* info) {
+	ECS_INLINE static void GetComponentSizes(unsigned int* sizes, ComponentSignature signature, const ComponentInfo* info) {
 		for (size_t index = 0; index < signature.count; index++) {
 			sizes[index] = info[signature.indices[index].value].size;
 		}
 	}
 
-	unsigned int GetComponentsSizePerEntity(const unsigned int* sizes, unsigned char count) {
+	static unsigned int GetComponentsSizePerEntity(const unsigned int* sizes, unsigned char count) {
 		short total = 0;
 		for (size_t index = 0; index < count; index++) {
 			total += sizes[index];
@@ -297,12 +297,12 @@ namespace ECSEngine {
 		return total;
 	}
 
-	void GetCombinedSignature(Component* components, ComponentSignature base, ComponentSignature addition) {
+	static void GetCombinedSignature(Component* components, ComponentSignature base, ComponentSignature addition) {
 		memcpy(components, base.indices, base.count * sizeof(Component));
 		memcpy(components + base.count, addition.indices, addition.count * sizeof(Component));
 	}
 
-	size_t GetDeferredCallDataAllocationSize(
+	static size_t GetDeferredCallDataAllocationSize(
 		EntityManager* manager,
 		unsigned int entity_count,
 		unsigned int* component_sizes, 
@@ -337,10 +337,10 @@ namespace ECSEngine {
 		return allocation_size;
 	}
 
-	Stream<Entity> GetEntitiesFromActionParameters(Stream<Entity> entities, DeferredActionParameters parameters, uintptr_t& buffer) {
+	static Stream<Entity> GetEntitiesFromActionParameters(Stream<Entity> entities, DeferredActionParameters parameters, uintptr_t& buffer) {
 		if (!parameters.entities_are_stable) {
 			Stream<Entity> new_entities((void*)buffer, entities.size);
-			new_entities.Copy(entities);
+			new_entities.CopyOther(entities);
 			buffer += sizeof(Entity) * entities.size;
 			return new_entities;
 		}
@@ -349,7 +349,7 @@ namespace ECSEngine {
 		}
 	}
 
-	void CreateAllocatorForComponent(EntityManager* entity_manager, ComponentInfo& info, size_t allocator_size) {
+	static void CreateAllocatorForComponent(EntityManager* entity_manager, ComponentInfo& info, size_t allocator_size) {
 		if (allocator_size > 0) {
 			// Allocate the allocator
 			CreateBaseAllocatorInfo create_info;
@@ -372,7 +372,7 @@ namespace ECSEngine {
 		}
 	}
 
-	const void** GetDeferredCallData(
+	static const void** GetDeferredCallData(
 		ComponentSignature components,
 		const void** component_data,
 		unsigned int entity_count,
@@ -465,7 +465,7 @@ namespace ECSEngine {
 		return data;
 	}
 
-	void UpdateEntityInfos(
+	static void UpdateEntityInfos(
 		Stream<Entity> entities, 
 		unsigned int copy_position,
 		EntityPool* entity_pool,
@@ -480,9 +480,56 @@ namespace ECSEngine {
 		}
 	}
 
+	static void DeallocateGlobalComponent(EntityManager* entity_manager, unsigned int index) {
+		// If it has an allocator deallocate it
+		MemoryArena** allocator = &entity_manager->m_global_components_info[index].allocator;
+		if (*allocator != nullptr) {
+			entity_manager->m_memory_manager->Deallocate(*allocator);
+			*allocator = nullptr;
+		}
+		entity_manager->m_small_memory_manager.Deallocate(entity_manager->m_global_components_data[index]);
+		// We also need to deallocate the name
+		Stream<char> component_name = entity_manager->m_global_components_info[index].name;
+		entity_manager->m_small_memory_manager.Deallocate(component_name.buffer);
+	}
+
+	static void ResizeGlobalComponents(EntityManager* entity_manager, unsigned int new_capacity, bool copy_old_data) {
+		size_t allocation_size = new_capacity * (sizeof(Component) + sizeof(void*) + sizeof(ComponentInfo));
+		void* new_allocation = entity_manager->m_small_memory_manager.Allocate(allocation_size);
+
+		if (!copy_old_data) {
+			for (unsigned int index = 0; index < entity_manager->m_global_component_count; index++) {
+				DeallocateGlobalComponent(entity_manager, index);
+			}
+			entity_manager->m_global_component_count = 0;
+		}
+
+		void** old_data = entity_manager->m_global_components_data;
+		Component* old_components = entity_manager->m_global_components;
+		ComponentInfo* old_infos = entity_manager->m_global_components_info;
+
+		entity_manager->m_global_components_data = (void**)new_allocation;
+		entity_manager->m_global_components = (Component*)function::OffsetPointer(entity_manager->m_global_components_data, sizeof(void*) * new_capacity);
+		entity_manager->m_global_components_info = (ComponentInfo*)function::OffsetPointer(entity_manager->m_global_components, sizeof(Component) * new_capacity);
+
+		if (copy_old_data) {
+			unsigned int copy_count = entity_manager->m_global_component_count < new_capacity ? entity_manager->m_global_component_count : new_capacity;
+
+			memcpy(entity_manager->m_global_components_data, old_data, sizeof(void*) * copy_count);
+			memcpy(entity_manager->m_global_components, old_components, sizeof(Component) * copy_count);
+			memcpy(entity_manager->m_global_components_info, old_infos, sizeof(ComponentInfo) * copy_count);
+		}
+		
+		if (entity_manager->m_global_component_count > 0) {
+			entity_manager->m_small_memory_manager.Deallocate(old_data);
+		}
+
+		entity_manager->m_global_component_capacity = new_capacity;
+	}
+
 #pragma region Write Component
 
-	void CommitWriteComponent(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitWriteComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredWriteComponent* data = (DeferredWriteComponent*)_data;
 		ECS_STACK_CAPACITY_STREAM(unsigned int, component_sizes, ECS_ARCHETYPE_MAX_COMPONENTS);
 		GetComponentSizes(component_sizes.buffer, data->write_signature, manager->m_unique_components.buffer);
@@ -495,7 +542,7 @@ namespace ECSEngine {
 		}
 	}
 
-	void RegisterWriteComponent(
+	static void RegisterWriteComponent(
 		EntityManager* manager, 
 		Stream<Entity> entities, 
 		ComponentSignature component_signature, 
@@ -545,7 +592,7 @@ namespace ECSEngine {
 
 #pragma region Write Archetype
 
-	void CommitWriteArchetype(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitWriteArchetype(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredWriteArchetypes* data = (DeferredWriteArchetypes*)_data;
 		ECS_STACK_CAPACITY_STREAM(unsigned int, component_sizes, ECS_ARCHETYPE_MAX_COMPONENTS);
 		GetComponentSizes(component_sizes.buffer, data->write_signature, manager->m_unique_components.buffer);
@@ -562,7 +609,7 @@ namespace ECSEngine {
 		}
 	}
 
-	void RegisterWriteArchetype(
+	static void RegisterWriteArchetype(
 		EntityManager* manager,
 		Stream<ushort2> archetypes,
 		ComponentSignature component_signature,
@@ -631,7 +678,7 @@ namespace ECSEngine {
 	// Can specifiy get_chunk_positions true in order to fill the additional_data interpreted as a CapacityStream<uint3>*
 	// with the chunk positions of the entities
 	template<bool get_copy_position>
-	void CommitEntityAddComponent(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitEntityAddComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredAddComponentEntities* data = (DeferredAddComponentEntities*)_data;
 
 		Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
@@ -685,7 +732,7 @@ namespace ECSEngine {
 	}
 
 	template<typename CopyFunction>
-	void CommitEntityAddComponentWithData(EntityManager* manager, void* _data, CopyFunction&& copy_function) {
+	static void CommitEntityAddComponentWithData(EntityManager* manager, void* _data, CopyFunction&& copy_function) {
 		CommitEntityAddComponentAdditionalData additional_data = {};
 		CommitEntityAddComponent<true>(manager, _data, &additional_data);
 
@@ -706,37 +753,37 @@ namespace ECSEngine {
 		UpdateEntityInfos(data->entities, additional_data.copy_position, manager->m_entity_pool, additional_data.archetype_indices.x, additional_data.archetype_indices.y);
 	}
 
-	void CommitEntityAddComponentSplatted(EntityManager* manager, void* _data, void* _additional_data) {
+	ECS_INLINE static void CommitEntityAddComponentSplatted(EntityManager* manager, void* _data, void* _additional_data) {
 		CommitEntityAddComponentWithData(manager, _data, [](ArchetypeBase* base_archetype, uint2 copy_position, const void** data, ComponentSignature components) {
 			base_archetype->CopySplatComponents(copy_position, data, components);
 		});
 	}
 
-	void CommitEntityAddComponentByEntities(EntityManager* manager, void* _data, void* _additional_data) {
+	ECS_INLINE static void CommitEntityAddComponentByEntities(EntityManager* manager, void* _data, void* _additional_data) {
 		CommitEntityAddComponentWithData(manager, _data, [](ArchetypeBase* base_archetype, uint2 copy_position, const void** data, ComponentSignature components) {
 			base_archetype->CopyByEntity(copy_position, data, components);
 		});
 	}
 
-	void CommitEntityAddComponentScattered(EntityManager* manager, void* _data, void* _additional_data) {
+	ECS_INLINE static void CommitEntityAddComponentScattered(EntityManager* manager, void* _data, void* _additional_data) {
 		CommitEntityAddComponentWithData(manager, _data, [](ArchetypeBase* base_archetype, uint2 copy_position, const void** data, ComponentSignature components) {
 			base_archetype->CopyByComponents(copy_position, data, components);
 		});
 	}
 
-	void CommitEntityAddComponentContiguous(EntityManager* manager, void* _data, void* _additional_data) {
+	ECS_INLINE static void CommitEntityAddComponentContiguous(EntityManager* manager, void* _data, void* _additional_data) {
 		CommitEntityAddComponentWithData(manager, _data, [](ArchetypeBase* base_archetype, uint2 copy_position, const void** data, ComponentSignature components) {
 			base_archetype->CopyByComponentsContiguous(copy_position, data, components);
 		});
 	}
 
-	void CommitEntityAddComponentByEntitiesContiguous(EntityManager* manager, void* _data, void* _additional_data) {
+	ECS_INLINE static void CommitEntityAddComponentByEntitiesContiguous(EntityManager* manager, void* _data, void* _additional_data) {
 		CommitEntityAddComponentWithData(manager, _data, [](ArchetypeBase* base_archetype, uint2 copy_position, const void** data, ComponentSignature components) {
 			base_archetype->CopyByEntityContiguous(copy_position, data, components);
 		});
 	}
 
-	void RegisterEntityAddComponent(
+	static void RegisterEntityAddComponent(
 		EntityManager* manager,
 		Stream<Entity> entities,
 		ComponentSignature components,
@@ -798,7 +845,7 @@ namespace ECSEngine {
 
 #pragma region Remove Components
 
-	void CommitEntityRemoveComponent(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitEntityRemoveComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredRemoveComponentEntities* data = (DeferredRemoveComponentEntities*)_data;
 
 		Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
@@ -868,7 +915,7 @@ namespace ECSEngine {
 	// Can specifiy get_chunk_positions true in order to fill the additional_data interpreted as a CapacityStream<uint3>*
 	// with the chunk positions of the entities
 	template<CreateEntitiesTemplateType type>
-	void CommitCreateEntities(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitCreateEntities(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCreateEntities* data = (DeferredCreateEntities*)_data;
 		CommitCreateEntitiesAdditionalData* additional_data = (CommitCreateEntitiesAdditionalData*)_additional_data;
 
@@ -917,7 +964,7 @@ namespace ECSEngine {
 	}
 
 	template<typename CopyFunction>
-	void CommitCreateEntitiesWithData(EntityManager* manager, void* _data, void* _additional_data, CopyFunction&& copy_function) {
+	static void CommitCreateEntitiesWithData(EntityManager* manager, void* _data, void* _additional_data, CopyFunction&& copy_function) {
 		CommitCreateEntitiesAdditionalData additional_data = {};
 		if (_additional_data != nullptr) {
 			CommitCreateEntitiesAdditionalData* __additional_data = (CommitCreateEntitiesAdditionalData*)_additional_data;
@@ -947,57 +994,41 @@ namespace ECSEngine {
 		}
 	}
 
-	void CommitCreateEntitiesDataSplatted(EntityManager* manager, void* _data, void* _additional_data) {
+	ECS_INLINE static void CommitCreateEntitiesDataSplatted(EntityManager* manager, void* _data, void* _additional_data) {
 		CommitCreateEntitiesWithData(manager, _data, _additional_data, [](ArchetypeBase* base_archetype, uint2 copy_position, const void** data, ComponentSignature components) {
 			base_archetype->CopySplatComponents(copy_position, data, components);
 		});
 	}
 
-	void CommitCreateEntitiesDataByEntities(EntityManager* manager, void* _data, void* _additional_data) {
+	ECS_INLINE static void CommitCreateEntitiesDataByEntities(EntityManager* manager, void* _data, void* _additional_data) {
 		CommitCreateEntitiesWithData(manager, _data, _additional_data, [](ArchetypeBase* base_archetype, uint2 copy_position, const void** data, ComponentSignature components) {
 			base_archetype->CopyByEntity(copy_position, data, components);
 		});
 	}
 
-	void CommitCreateEntitiesDataScattered(EntityManager* manager, void* _data, void* _additional_data) {
+	ECS_INLINE static void CommitCreateEntitiesDataScattered(EntityManager* manager, void* _data, void* _additional_data) {
 		CommitCreateEntitiesWithData(manager, _data, _additional_data, [](ArchetypeBase* base_archetype, uint2 copy_position, const void** data, ComponentSignature components) {
 			base_archetype->CopyByComponents(copy_position, data, components);
 		});
 	}
 
-	void CommitCreateEntitiesDataContiguous(EntityManager* manager, void* _data, void* _additional_data) {
+	ECS_INLINE static void CommitCreateEntitiesDataContiguous(EntityManager* manager, void* _data, void* _additional_data) {
 		CommitCreateEntitiesWithData(manager, _data, _additional_data, [](ArchetypeBase* base_archetype, uint2 copy_position, const void** data, ComponentSignature components) {
 			base_archetype->CopyByComponentsContiguous(copy_position, data, components);
 		});
 	}
 
-	void CommitCreateEntitiesDataByEntitiesContiguous(EntityManager* manager, void* _data, void* _additional_data) {
+	ECS_INLINE static void CommitCreateEntitiesDataByEntitiesContiguous(EntityManager* manager, void* _data, void* _additional_data) {
 		CommitCreateEntitiesWithData(manager, _data, _additional_data, [](ArchetypeBase* base_archetype, uint2 copy_position, const void** data, ComponentSignature components) {
 			base_archetype->CopyByEntityContiguous(copy_position, data, components);
 		});
-	}
-
-	void RegisterCreateEntities(
-		EntityManager* manager,
-		unsigned int entity_count,
-		ComponentSignature unique_components,
-		SharedComponentSignature shared_components,
-		ComponentSignature components_to_copy,
-		const void** component_data,
-		DeferredActionType type,
-		bool exclude_from_hierarchy,
-		bool copy_buffers,
-		DeferredActionParameters parameters,
-		DebugInfo debug_info
-	) {
-		
 	}
 
 #pragma endregion
 
 #pragma region Copy entities
 
-	void CommitCopyEntities(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitCopyEntities(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCopyEntities* data = (DeferredCopyEntities*)_data;
 		Entity* entities = (Entity*)_additional_data;
 
@@ -1070,7 +1101,7 @@ namespace ECSEngine {
 
 #pragma region Delete Entities
 
-	void CommitDeleteEntities(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitDeleteEntities(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDeleteEntities* data = (DeferredDeleteEntities*)_data;
 
 		for (size_t index = 0; index < data->entities.size; index++) {
@@ -1094,7 +1125,7 @@ namespace ECSEngine {
 
 #pragma region Add Shared Component
 
-	void CommitEntityAddSharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitEntityAddSharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredAddSharedComponentEntities* data = (DeferredAddSharedComponentEntities*)_data;
 
 		EntityInfo info = manager->GetEntityInfo(data->entities[0]);
@@ -1134,7 +1165,7 @@ namespace ECSEngine {
 
 #pragma region Remove Shared Component
 
-	void CommitEntityRemoveSharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitEntityRemoveSharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredRemoveSharedComponentEntities* data = (DeferredRemoveSharedComponentEntities*)_data;
 
 		EntityInfo info = manager->GetEntityInfo(data->entities[0]);
@@ -1187,7 +1218,7 @@ namespace ECSEngine {
 
 #pragma region Change Entity Shared Instance
 
-	void CommitEntityChangeSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitEntityChangeSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredChangeSharedInstanceEntities* data = (DeferredChangeSharedInstanceEntities*)_data;
 
 		for (size_t index = 0; index < data->elements.size; index++) {
@@ -1238,7 +1269,7 @@ namespace ECSEngine {
 
 #pragma region Create Archetype
 
-	void CommitCreateArchetype(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitCreateArchetype(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCreateArchetype* data = (DeferredCreateArchetype*)_data;
 
 		size_t old_capacity = manager->m_archetypes.capacity;
@@ -1294,7 +1325,7 @@ namespace ECSEngine {
 #pragma region Destroy Archetype
 
 	template<bool use_component_search>
-	void CommitDestroyArchetype(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitDestroyArchetype(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroyArchetype* data = (DeferredDestroyArchetype*)_data;
 
 		unsigned int archetype_index = data->archetype_index;
@@ -1368,7 +1399,7 @@ namespace ECSEngine {
 
 #pragma region Create Archetype Base
 
-	void CommitCreateArchetypeBase(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitCreateArchetypeBase(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCreateArchetypeBase* data = (DeferredCreateArchetypeBase*)_data;
 
 		VectorComponentSignature vector_shared;
@@ -1391,7 +1422,7 @@ namespace ECSEngine {
 #pragma region Destroy Archetype Base
 
 	template<bool use_component_search>
-	void CommitDestroyArchetypeBase(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitDestroyArchetypeBase(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroyArchetypeBase* data = (DeferredDestroyArchetypeBase*)_data;
 
 		Archetype* archetype = nullptr;
@@ -1425,7 +1456,7 @@ namespace ECSEngine {
 
 #pragma region Create Component
 
-	void CommitCreateComponent(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitCreateComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCreateComponent* data = (DeferredCreateComponent*)_data;
 
 		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 16);
@@ -1478,7 +1509,7 @@ namespace ECSEngine {
 
 #pragma region Destroy Component
 
-	void CommitDestroyComponent(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitDestroyComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroyComponent* data = (DeferredDestroyComponent*)_data;
 
 		ECS_CRASH_RETURN(data->component.value < manager->m_unique_components.size, "EntityManager: Incorrect component index {#} when trying to delete it.", data->component.value);
@@ -1500,7 +1531,7 @@ namespace ECSEngine {
 
 #pragma region Create shared component
 
-	void CommitCreateSharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitCreateSharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCreateSharedComponent* data = (DeferredCreateSharedComponent*)_data;
 
 		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 64);
@@ -1545,7 +1576,7 @@ namespace ECSEngine {
 
 #pragma region Destroy shared component
 
-	void CommitDestroySharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitDestroySharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroySharedComponent* data = (DeferredDestroySharedComponent*)_data;
 
 		ECS_CRASH_RETURN(data->component.value < manager->m_shared_components.size, "EntityManager: Invalid shared component {#} when trying to destroy it.", data->component.value);
@@ -1579,7 +1610,7 @@ namespace ECSEngine {
 
 #pragma region Create shared instance
 
-	void CommitCreateSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitCreateSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCreateSharedInstance* data = (DeferredCreateSharedInstance*)_data;
 
 		// If no component is allocated at that slot, fail
@@ -1616,7 +1647,7 @@ namespace ECSEngine {
 
 #pragma region Create Named Shared Instance
 
-	void CommitCreateNamedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitCreateNamedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCreateNamedSharedInstance* data = (DeferredCreateNamedSharedInstance*)_data;
 
 		SharedInstance instance;
@@ -1628,7 +1659,7 @@ namespace ECSEngine {
 		InsertIntoDynamicTable(manager->m_shared_components[data->component.value].named_instances, manager->SmallAllocator(), instance, allocated_identifier);
 	}
 
-	void CommitBindNamedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitBindNamedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredBindNamedSharedInstance* data = (DeferredBindNamedSharedInstance*)_data;
 
 		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component),
@@ -1648,7 +1679,7 @@ namespace ECSEngine {
 
 #pragma region Destroy Shared Instance
 
-	void CommitDestroySharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitDestroySharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroySharedInstance* data = (DeferredDestroySharedInstance*)_data;
 
 		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component), "EntityManager: The component {#} doesn't exist when trying to destroy a shared instance.",
@@ -1675,7 +1706,7 @@ namespace ECSEngine {
 
 #pragma region Destroy Named Shared Instance
 
-	void CommitDestroyNamedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitDestroyNamedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroyNamedSharedInstance* data = (DeferredDestroyNamedSharedInstance*)_data;
 
 		Stream<char> identifier = data->identifier;
@@ -1696,7 +1727,7 @@ namespace ECSEngine {
 
 #pragma region Destroy Unreferenced Shared Instance (single instance)
 
-	void CommitDestroyUnreferencedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitDestroyUnreferencedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroyUnreferencedSharedInstance* data = (DeferredDestroyUnreferencedSharedInstance*)_data;
 		DeferredDestroyUnreferencedSharedInstanceAdditional* return_value = (DeferredDestroyUnreferencedSharedInstanceAdditional*)_additional_data;
 
@@ -1741,7 +1772,7 @@ namespace ECSEngine {
 
 #pragma region Destroy Unreferenced Shared Instances
 
-	void CommitDestroyUnreferencedSharedInstances(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitDestroyUnreferencedSharedInstances(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroyUnreferencedSharedInstances* data = (DeferredDestroyUnreferencedSharedInstances*)_data;
 
 		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component), "EntityManager: Incorrect shared component {#} when trying to destroy "
@@ -1789,7 +1820,7 @@ namespace ECSEngine {
 
 #pragma region Clear Tags
 
-	void CommitClearEntityTags(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitClearEntityTags(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredClearEntityTag* data = (DeferredClearEntityTag*)_data;
 
 		for (size_t index = 0; index < data->entities.size; index++) {
@@ -1819,7 +1850,7 @@ namespace ECSEngine {
 
 #pragma region Set Tags
 
-	void CommitSetEntityTags(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitSetEntityTags(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredSetEntityTag* data = (DeferredSetEntityTag*)_data;
 
 		for (size_t index = 0; index < data->entities.size; index++) {
@@ -1831,7 +1862,7 @@ namespace ECSEngine {
 
 #pragma region Add Entities To Hierarchy
 
-	void CommitAddEntitiesToHierarchyPairs(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitAddEntitiesToHierarchyPairs(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredAddEntitiesToHierarchyPairs* data = (DeferredAddEntitiesToHierarchyPairs*)_data;
 		
 		for (size_t index = 0; index < data->pairs.size; index++) {
@@ -1839,7 +1870,7 @@ namespace ECSEngine {
 		}
 	}
 
-	void CommitAddEntitiesToHierarchyContiguous(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitAddEntitiesToHierarchyContiguous(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredAddEntitiesToHierarchyContiguous* data = (DeferredAddEntitiesToHierarchyContiguous*)_data;
 
 		for (unsigned int index = 0; index < data->count; index++) {
@@ -1851,7 +1882,7 @@ namespace ECSEngine {
 
 #pragma region Add Entities To Parent Hierarchy
 
-	void CommitAddEntitiesToParentHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitAddEntitiesToParentHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredAddEntitiesToParentHierarchy* data = (DeferredAddEntitiesToParentHierarchy*)_data;
 
 		for (size_t index = 0; index < data->entities.size; index++) {
@@ -1863,7 +1894,7 @@ namespace ECSEngine {
 
 #pragma region Remove Entities From Hierarchy
 
-	void CommitRemoveEntitiesFromHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitRemoveEntitiesFromHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredRemoveEntitiesFromHierarchy* data = (DeferredRemoveEntitiesFromHierarchy*)_data;
 
 		bool destroy_children = !data->default_destroy_children;
@@ -1896,7 +1927,7 @@ namespace ECSEngine {
 
 #pragma region Try Remove Entities From Hierarchy
 
-	void CommitTryRemoveEntitiesFromHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitTryRemoveEntitiesFromHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredTryRemoveEntitiesFromHierarchy* data = (DeferredTryRemoveEntitiesFromHierarchy*)_data;
 
 		bool destroy_children = !data->default_destroy_children;
@@ -1943,7 +1974,7 @@ namespace ECSEngine {
 
 #pragma region Change Entity Parent From Hierarchy
 
-	void CommitChangeEntityParentHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitChangeEntityParentHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredChangeEntityParentHierarchy* data = (DeferredChangeEntityParentHierarchy*)_data;
 
 		for (size_t index = 0; index < data->pairs.size; index++) {
@@ -1955,7 +1986,7 @@ namespace ECSEngine {
 
 #pragma region Change Or Set Entity Parent From Hierarchy
 
-	void CommitChangeOrSetEntityParentHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
+	static void CommitChangeOrSetEntityParentHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredChangeOrSetEntityParentHierarchy* data = (DeferredChangeOrSetEntityParentHierarchy*)_data;
 
 		for (size_t index = 0; index < data->pairs.size; index++) {
@@ -2391,7 +2422,7 @@ namespace ECSEngine {
 		else {
 			data = (DeferredAddEntitiesToParentHierarchy*)AllocateTemporaryBuffer(sizeof(DeferredAddEntitiesToParentHierarchy) + sizeof(EntityPair) * entities.size);
 			data->entities.buffer = (Entity*)function::OffsetPointer(data, sizeof(DeferredAddEntitiesToParentHierarchy));
-			data->entities.Copy(entities);
+			data->entities.CopyOther(entities);
 		}
 
 		data->parent = parent;
@@ -2814,6 +2845,26 @@ namespace ECSEngine {
 		m_archetype_vector_signatures = (VectorComponentSignature*)m_small_memory_manager.Allocate(sizeof(VectorComponentSignature) * entity_manager->m_archetypes.capacity * 2);
 		// Blit the data
 		memcpy(m_archetype_vector_signatures, entity_manager->m_archetype_vector_signatures, sizeof(VectorComponentSignature) * entity_manager->m_archetypes.size * 2);
+
+		// Copy the global components
+		ResizeGlobalComponents(this, entity_manager->m_global_component_capacity, false);
+		// We need to register the components one by one because we need to copy the buffers
+		for (unsigned int index = 0; index < entity_manager->m_global_component_count; index++) {
+			ComponentInfo component_info = entity_manager->m_global_components_info[index];
+			ECS_ASSERT(component_info.allocator == nullptr, "Copying global components with allocators is not yet implemented");
+
+			size_t allocator_size = 0;
+			if (component_info.allocator != nullptr) {
+				allocator_size = component_info.allocator->InitialArenaCapacity();
+			}
+			RegisterGlobalComponentCommit(
+				entity_manager->m_global_components[index],
+				component_info.size,
+				entity_manager->m_global_components_data[index],
+				allocator_size,
+				component_info.name
+			);
+		}
 
 		// Copy the actual archetypes now
 		m_archetypes.FreeBuffer();
@@ -3402,7 +3453,7 @@ namespace ECSEngine {
 	void EntityManager::DestroyArchetypesCommit(Stream<unsigned int> indices)
 	{
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, remapping, 512);
-		remapping.Copy(indices);
+		remapping.CopyOther(indices);
 
 		for (size_t index = 0; index < remapping.size; index++) {
 			DestroyArchetypeCommit(remapping[index]);
@@ -4713,24 +4764,7 @@ namespace ECSEngine {
 		// Allocate a new slot in the SoA stream
 		// Firstly write the void* and then the Component
 		if (m_global_component_count == m_global_component_capacity) {
-			m_global_component_capacity = (unsigned int)((float)m_global_component_capacity * 1.5f + 3);
-			size_t allocation_size = m_global_component_capacity * (sizeof(Component) + sizeof(void*) + sizeof(ComponentInfo));
-			void* new_allocation = m_small_memory_manager.Allocate(allocation_size);
-
-			void** old_data = m_global_components_data;
-			Component* old_components = m_global_components;
-			ComponentInfo* old_infos = m_global_components_info;
-
-			m_global_components_data = (void**)new_allocation;
-			m_global_components = (Component*)function::OffsetPointer(m_global_components_data, sizeof(void*) * m_global_component_capacity);
-			m_global_components_info = (ComponentInfo*)function::OffsetPointer(m_global_components, sizeof(Component) * m_global_component_capacity);
-
-			memcpy(m_global_components_data, old_data, sizeof(void*) * m_global_component_count);
-			memcpy(m_global_components, old_components, sizeof(Component) * m_global_component_count);
-			memcpy(m_global_components_info, old_infos, sizeof(ComponentInfo) * m_global_component_count);
-			if (m_global_component_count > 0) {
-				m_small_memory_manager.Deallocate(old_data);
-			}
+			ResizeGlobalComponents(this, (unsigned int)((float)m_global_component_capacity * 1.5f + 3), true);
 		}
 
 		ComponentInfo* component_info = m_global_components_info + m_global_component_count;
@@ -5180,17 +5214,10 @@ namespace ECSEngine {
 
 	void EntityManager::UnregisterGlobalComponentCommit(Component component)
 	{
-		Stream<char> component_name = GetGlobalComponentName(component);
 		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
-		ECS_CRASH_RETURN(index != -1, "Missing global component {#} when trying to unregister it", component_name);
+		ECS_CRASH_RETURN(index != -1, "Missing global component {#} when trying to unregister it", component.value);
 
-		// If it has an allocator deallocate it
-		MemoryArena** allocator = &m_global_components_info[index].allocator;
-		if (*allocator != nullptr) {
-			m_memory_manager->Deallocate(*allocator);
-			*allocator = nullptr;
-		}
-		m_small_memory_manager.Deallocate(m_global_components_info[index].name.buffer);
+		DeallocateGlobalComponent(this, index);
 
 		m_global_component_count--;
 		m_global_components[index] = m_global_components[m_global_component_count];

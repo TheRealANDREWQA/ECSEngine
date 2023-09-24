@@ -2248,7 +2248,7 @@ namespace ECSEngine {
 					input->sprite_render_offset = 0;
 					input->current_sprite_position = 0;
 					input->current_selection = 0;
-					input->previous_text.Copy(*input->text);
+					input->previous_text.CopyOther(*input->text);
 				}
 			}
 
@@ -2468,7 +2468,7 @@ namespace ECSEngine {
 				if (text_to_fill->size > 0) {
 					unsigned int character_count = text_to_fill->size;
 					ECS_STACK_CAPACITY_STREAM_DYNAMIC(char, temp_characters, character_count);
-					temp_characters.Copy(*text_to_fill);
+					temp_characters.CopyOther(*text_to_fill);
 
 					text_to_fill->size = 0;
 					element->InsertCharacters(temp_characters.buffer, character_count, 0, system);
@@ -2648,7 +2648,7 @@ namespace ECSEngine {
 					}
 
 					ECS_STACK_CAPACITY_STREAM(char, stack_memory, 256);
-					stack_memory.Copy(identifier);
+					stack_memory.CopyOther(identifier);
 					stack_memory.AddStream("TextInput");
 
 					if (~configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
@@ -3311,7 +3311,7 @@ namespace ECSEngine {
 
 				InitializeElementName(configuration, UI_CONFIG_COMBO_BOX_NO_NAME, config, identifier, &data->name, position, scale);
 
-				size_t allocation_size = StreamCoallescedDeepCopySize(labels);
+				size_t allocation_size = StreamCoalescedDeepCopySize(labels);
 				void* allocation = GetMainAllocatorBuffer(allocation_size);
 				uintptr_t ptr = (uintptr_t)allocation;
 				data->labels = StreamCoalescedDeepCopy(labels, ptr);
@@ -6071,7 +6071,7 @@ namespace ECSEngine {
 
 		// The name is not deallocated - the state only gets deallocated
 		void DeallocateMenuState(UIDrawer* drawer, UIDrawerMenu* menu) {
-			// The allocation is coallesced - only left_characters needs to be deallocated
+			// The allocation is coalesced - only left_characters needs to be deallocated
 			drawer->RemoveAllocation(menu->state.left_characters.buffer);
 		}
 
@@ -6101,7 +6101,7 @@ namespace ECSEngine {
 
 				if (~configuration & UI_CONFIG_MENU_SPRITE) {
 					ECS_STACK_CAPACITY_STREAM(char, temp_characters, 512);
-					temp_characters.Copy(identifier);
+					temp_characters.CopyOther(identifier);
 					temp_characters.AddStream("##Separate");
 
 					// separate the identifier for the text label
@@ -7879,7 +7879,7 @@ namespace ECSEngine {
 		) {
 			UIDrawConfig null_config;
 			ECS_STACK_CAPACITY_STREAM(char, stack_name, 128);
-			stack_name.Copy(name);
+			stack_name.CopyOther(name);
 			stack_name.AddStream("VerticalSlider");
 
 			// bounds, position and scale here don't matter
@@ -9477,7 +9477,7 @@ namespace ECSEngine {
 			UIDrawerArrayData* data = nullptr;
 
 			ECS_TEMP_ASCII_STRING(data_name, 256);
-			data_name.Copy(name);
+			data_name.CopyOther(name);
 			data_name.AddStream(" data");
 			data_name.AddAssert('\0');
 
@@ -9707,7 +9707,7 @@ namespace ECSEngine {
 								UIDefaultTextHoverableData* handler_hoverable_data = (UIDefaultTextHoverableData*)system->GetLastHoverableData(dockspace, border_index);
 								Stream<char> identifier = HandleResourceIdentifier(text);
 								handler_hoverable_data->text.buffer = (char*)GetHandlerBuffer(identifier.size, hoverable_phase);
-								handler_hoverable_data->text.Copy(identifier);
+								handler_hoverable_data->text.CopyOther(identifier);
 							}
 						}
 					}
@@ -10032,7 +10032,7 @@ namespace ECSEngine {
 
 					if (has_changed) {
 						// Need to update manually the labels before calling into it
-						size_t allocation_size = StreamCoallescedDeepCopySize(labels);
+						size_t allocation_size = StreamCoalescedDeepCopySize(labels);
 						void* allocation = GetMainAllocatorBuffer(allocation_size);
 						// Notify the dynamic element that the allocation has changed
 						unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, HandleResourceIdentifier(name));
@@ -10269,7 +10269,7 @@ namespace ECSEngine {
 
 			// The resource must be taken from the table with manual parsing
 			ECS_STACK_CAPACITY_STREAM(char, resource_name, 512);
-			resource_name.Copy(identifier);
+			resource_name.CopyOther(identifier);
 			resource_name.AddStream("resource");
 			UIDrawerColorFloatInput* data = (UIDrawerColorFloatInput*)system->FindWindowResource(window_index, resource_name);
 
@@ -10336,7 +10336,7 @@ namespace ECSEngine {
 			// Create a temporary name for resource, in order to avoid poluting the color input's
 			// name - if there is any
 			ECS_STACK_CAPACITY_STREAM(char, color_input_name, 256);
-			color_input_name.Copy(identifier);
+			color_input_name.CopyOther(identifier);
 			color_input_name.AddStream("resource");
 			color_input_name.AssertCapacity();
 			input = GetMainAllocatorBufferAndStoreAsResource<UIDrawerColorFloatInput>(color_input_name);
@@ -10383,7 +10383,7 @@ namespace ECSEngine {
 			
 			// The callback must be intercepted
 			if (has_color_callback) {
-				// Make a coallesced allocation for the callback data
+				// Make a coalesced allocation for the callback data
 				UIActionHandler current_callback = {};
 
 				if (has_callback) {
@@ -10669,7 +10669,7 @@ namespace ECSEngine {
 			config.flag_count--;
 
 			if (extensions.size > 0) {
-				size_t copy_size = StreamCoallescedDeepCopySize(extensions);
+				size_t copy_size = StreamCoalescedDeepCopySize(extensions);
 				void* allocation = drawer->GetMainAllocatorBuffer(copy_size);
 				uintptr_t ptr = (uintptr_t)allocation;
 				callback_data->extensions = StreamCoalescedDeepCopy(extensions, ptr);
@@ -10985,7 +10985,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		Stream<Stream<char>> AllocateFilterMenuCopyLabels(UIDrawer* drawer, Stream<Stream<char>> labels) {
-			size_t copy_size = StreamCoallescedDeepCopySize(labels);
+			size_t copy_size = StreamCoalescedDeepCopySize(labels);
 			void* copy_allocation = drawer->GetMainAllocatorBuffer(copy_size);
 			uintptr_t copy_ptr = (uintptr_t)copy_allocation;
 			return StreamCoalescedDeepCopy(labels, copy_ptr);
@@ -12490,7 +12490,7 @@ namespace ECSEngine {
 
 						float2 action_scale = { horizontal_bound - initial_label_position.x, scale.y };
 						if (IsMouseInRectangle(initial_label_position, action_scale) && system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
-							data->selected_label_temporary.Copy(label_stream);
+							data->selected_label_temporary.CopyOther(label_stream);
 						}
 
 						AddClickable(configuration, initial_label_position, action_scale, { FilesystemHierarchySelectable, data, 0, selectable_callback_phase });
@@ -12524,8 +12524,8 @@ namespace ECSEngine {
 						if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_RIGHT_CLICK) {
 							bool trigger = IsMouseInRectangle(initial_label_position, action_scale) && system->m_mouse->IsReleased(ECS_MOUSE_RIGHT);
 							if (trigger) {
-								data->right_click_label_temporary.Copy(label_stream);
-								data->selected_label_temporary.Copy(label_stream);
+								data->right_click_label_temporary.CopyOther(label_stream);
+								data->selected_label_temporary.CopyOther(label_stream);
 							}
 
 							UIDrawerFilesystemHierarchyRightClickData right_click;
@@ -12540,7 +12540,7 @@ namespace ECSEngine {
 							);
 
 							if (trigger) {
-								data->active_label.Copy(data->selected_label_temporary);
+								data->active_label.CopyOther(data->selected_label_temporary);
 								data->active_label[data->active_label.size] = '\0';
 
 								if (data->selectable_callback != nullptr) {
@@ -12832,7 +12832,7 @@ namespace ECSEngine {
 			unsigned char determine_count = 0;
 			if (data->determine_selection) {
 				ECS_STACK_CAPACITY_STREAM(char, temp_first, 512);
-				temp_first.Copy(data->first_selected_label.buffer, data->first_selected_label.size);
+				temp_first.CopyOther(data->first_selected_label.buffer, data->first_selected_label.size);
 				Stream<char> last_label = { nullptr, 0 };
 				const void* untyped_label = data->last_selected_label.buffer;
 				if (data->label_size == 0) {
@@ -12841,7 +12841,7 @@ namespace ECSEngine {
 				}
 
 				data->ChangeSelection(untyped_label, &action_data);
-				data->first_selected_label.Copy(temp_first.buffer, temp_first.size);
+				data->first_selected_label.CopyOther(temp_first.buffer, temp_first.size);
 			}
 
 			if (data->is_dragging) {
@@ -12939,12 +12939,12 @@ namespace ECSEngine {
 							unsigned char rename_was_1 = data->is_rename_label == 1;
 							if (rename_was_1) {
 								data->is_rename_label = 2;
-								data->rename_label_storage.Copy(current_label);
+								data->rename_label_storage.CopyOther(current_label);
 
 								// Copy the current label into the rename label
 								if (data->label_size == 0) {
 									Stream<char>* char_label = (Stream<char>*)data->rename_label;
-									char_label->Copy(current_label);
+									char_label->CopyOther(current_label);
 								}
 								else {
 									memcpy(data->rename_label, untyped_label, data->label_size);
@@ -14062,7 +14062,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM_DYNAMIC(char, identifier_final, identifier.size);
 			Stream<char> pattern = function::FindFirstToken(identifier, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 			if (pattern.size > 0) {
-				identifier_final.Copy(Stream<char>(identifier.buffer, pattern.buffer - identifier.buffer));
+				identifier_final.CopyOther(Stream<char>(identifier.buffer, pattern.buffer - identifier.buffer));
 				pattern.buffer += ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT;
 				pattern.size -= ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT;
 				identifier_final.AddStream(pattern);
@@ -14300,14 +14300,14 @@ namespace ECSEngine {
 				UI_UNPACK_ACTION_DATA;
 
 				SelectData* data = (SelectData*)_data;
-				Stream<char> label = function::GetCoallescedStreamFromType(data).As<char>();
-				data->selected_label->Copy(label);
+				Stream<char> label = function::GetCoalescedStreamFromType(data).As<char>();
+				data->selected_label->CopyOther(label);
 			};
 
 			for (size_t index = 0; index < labels.size; index++) {
 				size_t storage[512];
 				unsigned int write_size;
-				SelectData* select_data = function::CreateCoallescedStreamIntoType<SelectData>(storage, labels[index], &write_size);
+				SelectData* select_data = function::CreateCoalescedStreamIntoType<SelectData>(storage, labels[index], &write_size);
 				select_data->selected_label = selected_label;
 
 				Button(configuration, config, labels[index], { select_action, select_data, write_size });

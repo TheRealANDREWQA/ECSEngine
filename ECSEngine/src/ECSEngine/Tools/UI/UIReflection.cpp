@@ -2532,7 +2532,7 @@ namespace ECSEngine {
 							// Must create an instance of that user defined type here
 							ECS_STACK_CAPACITY_STREAM(char, nested_instance_name, 512);
 							// Append to the type_and_field_name the current instance name
-							nested_instance_name.Copy(data->type_and_field_name);
+							nested_instance_name.CopyOther(data->type_and_field_name);
 							nested_instance_name.AddStreamSafe(instance->name);
 
 							// In order to determine the type name, just look for the separator from the type
@@ -4173,7 +4173,7 @@ namespace ECSEngine {
 		// Returns the full name
 		Stream<char> CreateForHierarchyGetSuffixName(CapacityStream<char>& full_name, Stream<char> name, UIReflectionDrawerSearchOptions options) {
 			if (options.suffix.size > 0) {
-				full_name.Copy(name);
+				full_name.CopyOther(name);
 				full_name.AddStreamSafe(options.suffix);
 				full_name[full_name.size] = '\0';
 
@@ -4332,7 +4332,7 @@ namespace ECSEngine {
 		{
 			const UIReflectionType* type = GetType(instance->type_name);
 			// The individual instance.data[index] must not be deallocated
-			// since they were coallesced into a single allocation
+			// since they were coalesced into a single allocation
 			for (size_t index = 0; index < type->fields.size; index++) {
 				bool is_stream = IsStream(type->fields[index].stream_type);
 				if (!is_stream) {

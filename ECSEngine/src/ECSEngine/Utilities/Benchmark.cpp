@@ -140,7 +140,7 @@ namespace ECSEngine {
                         }
 
                         valid_count = new_valid_values.size;
-                        iteration_values.Copy(new_valid_values);
+                        iteration_values.CopyOther(new_valid_values);
                     }
 
                     // Recalculate the median

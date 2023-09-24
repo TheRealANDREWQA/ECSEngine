@@ -157,7 +157,7 @@ void ChangeEntityName(
 void ChangeSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> entities)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->selected_entities.Copy(entities);
+	sandbox->selected_entities.CopyOther(entities);
 	SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
 }
 

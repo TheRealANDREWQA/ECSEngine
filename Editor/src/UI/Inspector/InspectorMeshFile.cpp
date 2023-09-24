@@ -331,7 +331,7 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 		// Get the data and set the path
 		InspectorDrawMeshFileData* draw_data = (InspectorDrawMeshFileData*)GetInspectorDrawFunctionData(editor_state, inspector_indices.y);
 		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->path.Copy(path);
+		draw_data->path.CopyOther(path);
 		draw_data->path[draw_data->path.size] = L'\0';
 	}
 

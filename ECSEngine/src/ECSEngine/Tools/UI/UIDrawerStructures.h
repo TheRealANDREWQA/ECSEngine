@@ -1717,7 +1717,7 @@ namespace ECSEngine {
 
 			Stream<void> selected_labels;
 
-			// These are coallesced into a single allocation
+			// These are coalesced into a single allocation
 			Stream<void> copied_labels;
 
 			UIConfigLabelHierarchyMonitorSelection monitor_selection;

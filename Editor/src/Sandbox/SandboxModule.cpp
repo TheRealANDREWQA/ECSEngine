@@ -171,7 +171,7 @@ void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, settings_name, 512);
 		if (sandbox_module->settings_name.buffer != nullptr) {
-			settings_name.Copy(sandbox_module->settings_name);
+			settings_name.CopyOther(sandbox_module->settings_name);
 		}
 
 		sandbox_module->settings_allocator.Clear();
@@ -490,7 +490,7 @@ bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_i
 		GetSandboxModuleSettingsPathByIndex(editor_state, sandbox_index, in_stream_index, settings_path);
 		if (!LoadModuleSettings(editor_state, module_index, settings_path, settings, allocator)) {
 			// Copy the settings path such that we can reset after we deallocate the allocator
-			settings_path.Copy(sandbox_module->settings_name);
+			settings_path.CopyOther(sandbox_module->settings_name);
 
 			sandbox_module->settings_allocator.Clear();
 			sandbox_module->settings_name = function::StringCopy(sandbox_module->Allocator(), settings_path);
@@ -504,7 +504,7 @@ bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_i
 
 	// Now copy the stream into the sandbox module
 	sandbox_module->reflected_settings.Initialize(&sandbox_module->settings_allocator, settings.size);
-	sandbox_module->reflected_settings.Copy(settings);
+	sandbox_module->reflected_settings.CopyOther(settings);
 	return true;
 }
 

@@ -197,7 +197,7 @@ namespace ECSEngine {
 			void DeallocateCoalesced(AllocatorPolymorphic allocator) const;
 
 			// It will try to deallocate anything that can be deallocated (when using
-			// non coallesced allocations). It uses IfBelongs deallocations
+			// non coalesced allocations). It uses IfBelongs deallocations
 			void Deallocate(AllocatorPolymorphic allocator) const;
 
 			// If the tag is nullptr, it returns false. If it is set, it will check if the substring exists

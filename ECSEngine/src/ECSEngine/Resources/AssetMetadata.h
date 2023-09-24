@@ -403,7 +403,7 @@ namespace ECSEngine {
 	}
 
 	// The name is separately allocated from the other buffers
-	// The MaterialAssetResource buffers are maintained as a single coallesced buffer
+	// The MaterialAssetResource buffers are maintained as a single coalesced buffer
 	struct ECSENGINE_API MaterialAsset {
 		MaterialAsset() = default;
 		MaterialAsset(Stream<char> name, AllocatorPolymorphic allocator);
@@ -598,7 +598,7 @@ namespace ECSEngine {
 		bool DependsUpon(const void* metadata, ECS_ASSET_TYPE type) const;
 
 		Stream<char> name;
-		// These are maintained as a coallesced buffer
+		// These are maintained as a coalesced buffer
 		Stream<MaterialAssetResource> textures[ECS_MATERIAL_SHADER_COUNT];
 		Stream<MaterialAssetResource> samplers[ECS_MATERIAL_SHADER_COUNT];
 		Stream<MaterialAssetBuffer> buffers[ECS_MATERIAL_SHADER_COUNT];

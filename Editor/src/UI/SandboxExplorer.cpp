@@ -115,7 +115,7 @@ void CreateNewRuntimeSettingCallback(ActionData* action_data) {
 	}
 	else {
 		// Change the path and the world descriptor now
-		data->selected_runtime_setting.Copy(wide_name);
+		data->selected_runtime_setting.CopyOther(wide_name);
 		memcpy(&data->world_descriptor, &default_descriptor, sizeof(default_descriptor));
 	}
 }
@@ -176,7 +176,7 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		row_layout.AddSquareLabel();
 
 		ECS_STACK_CAPACITY_STREAM(char, display_labels, 128);
-		display_labels.Copy("Sandbox ");
+		display_labels.CopyOther("Sandbox ");
 
 		size_t button_configuration = UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_TEXT_ALIGNMENT;
 		size_t sprite_configuration = 0;
@@ -312,7 +312,7 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 			}
 			
 			UpdateRuntimeSettings(data->data->editor_state, data->path, &data->data->setting_last_write);
-			data->data->selected_runtime_setting.Copy(data->path);
+			data->data->selected_runtime_setting.CopyOther(data->path);
 		};
 
 		struct DeleteData {

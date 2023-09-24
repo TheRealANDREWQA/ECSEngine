@@ -19,7 +19,7 @@ ECS_TOOLS;
 // ----------------------------------------------------------------------------------------------------------------------------
 
 static void InspectorComponentUIIInstanceName(Stream<char> component_name, Stream<char> base_entity_name, unsigned int sandbox_index, CapacityStream<char>& instance_name) {
-	instance_name.Copy(component_name);
+	instance_name.CopyOther(component_name);
 	instance_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 	instance_name.AddStream(base_entity_name);
 	function::ConvertIntToChars(instance_name, sandbox_index);
@@ -1008,7 +1008,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			);
 			if (!text_input->is_currently_selected) {
 				if (!function::CompareStrings(name->name, *text_input->text)) {
-					text_input->text->Copy(name->name);
+					text_input->text->CopyOther(name->name);
 				}
 			}
 			drawer->NextRow();

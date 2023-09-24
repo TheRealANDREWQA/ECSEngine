@@ -39,7 +39,8 @@ namespace ECSEngine {
 		ECS_TEXTURE_EXTENSION_TIFF,
 		ECS_TEXTURE_EXTENSION_BMP,
 		ECS_TEXTURE_EXTENSION_TGA,
-		ECS_TEXTURE_EXTENSION_HDR
+		ECS_TEXTURE_EXTENSION_HDR,
+		ECS_TEXTURE_EXTENSION_COUNT
 	};
 
 	constexpr const wchar_t* ECS_TEXTURE_EXTENSIONS[] = {
@@ -51,6 +52,8 @@ namespace ECSEngine {
 		L".hdr"
 	};
 
+	static_assert(std::size(ECS_TEXTURE_EXTENSIONS) == ECS_TEXTURE_EXTENSION_COUNT);
+
 	constexpr const char* ECS_TEXTURE_EXTENSIONS_ASCII[] = {
 		".jpg",
 		".png",
@@ -59,5 +62,7 @@ namespace ECSEngine {
 		".tga",
 		".hdr"
 	};
+
+	static_assert(std::size(ECS_TEXTURE_EXTENSIONS_ASCII) == ECS_TEXTURE_EXTENSION_COUNT);
 
 }

@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "SampleTexture.h"
 #include "Graphics.h"
-#include "GraphicsHelpers.h"
+#include "TextureOperations.h"
 
 namespace ECSEngine {
 

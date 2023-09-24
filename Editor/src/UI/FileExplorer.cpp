@@ -139,7 +139,7 @@ void FileExplorerResetSelectedFiles(EditorState* editor_state) {
 }
 
 void FileExplorerResetCopiedFiles(FileExplorerData* data) {
-	// Cut/Copy will make a coallesced allocation
+	// Cut/Copy will make a coalesced allocation
 	if (data->copied_files.size > 0) {
 		Deallocate(data->selected_files.allocator, data->copied_files.buffer);
 		data->copied_files.size = 0;
@@ -163,7 +163,7 @@ void FileExplorerSetShiftIndices(EditorState* editor_state, unsigned int index) 
 
 void ChangeFileExplorerDirectory(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
 	FileExplorerData* data = editor_state->file_explorer_data;
-	data->current_directory.Copy(path);
+	data->current_directory.CopyOther(path);
 	data->current_directory[path.size] = L'\0';
 
 	FileExplorerResetSelectedFiles(data);
@@ -388,7 +388,7 @@ void FileExplorerPasteElements(ActionData* action_data) {
 
 		char* _error_message = (char*)ECS_MALLOCA(sizeof(char) * total_buffer_size);
 		CapacityStream<char> error_message(_error_message, 0, total_buffer_size);
-		error_message.Copy(BASE_ERROR_MESSAGE);
+		error_message.CopyOther(BASE_ERROR_MESSAGE);
 
 		for (size_t index = 0; index < invalid_files.size; index++) {
 			error_message.Add('\n');
@@ -424,7 +424,7 @@ void FileExplorerCopySelection(ActionData* action_data) {
 	data->copied_files.InitializeFromBuffer(buffer, data->selected_files.size);
 	for (size_t index = 0; index < data->copied_files.size; index++) {
 		data->copied_files[index].InitializeFromBuffer(buffer, data->selected_files[index].size);
-		data->copied_files[index].Copy(data->selected_files[index]);
+		data->copied_files[index].CopyOther(data->selected_files[index]);
 	}
 
 	data->flags = function::ClearFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT);
@@ -486,7 +486,7 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 		char* temp_allocation = (char*)ECS_MALLOCA(sizeof(char) * total_size + 8);
 		CapacityStream<char> error_message(temp_allocation, 0, total_size + 8);
 
-		error_message.Copy(ERROR_MESSAGE);
+		error_message.CopyOther(ERROR_MESSAGE);
 		for (size_t index = 0; index < invalid_files.size; index++) {
 			error_message.Add('\n');
 			function::ConvertWideCharsToASCII(data->selected_files[invalid_files[index]], error_message);
@@ -508,7 +508,7 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 		new_copy_files.InitializeFromBuffer(buffer, valid_copy_files.size);
 		for (size_t index = 0; index < new_copy_files.size; index++) {
 			new_copy_files[index].InitializeFromBuffer(buffer, data->copied_files[valid_copy_files[index]].size);
-			new_copy_files[index].Copy(data->copied_files[valid_copy_files[index]]);
+			new_copy_files[index].CopyOther(data->copied_files[valid_copy_files[index]]);
 		}
 		FileExplorerResetCopiedFiles(data);
 		data->copied_files = new_copy_files;
@@ -529,7 +529,7 @@ void FileExplorerSelectFromIndexShift(FileExplorerData* data, unsigned int index
 		data->selected_files.size++;
 		void* new_allocation = Allocate(data->selected_files.allocator, data->selected_files[index].MemoryOf(path.size));
 		data->selected_files[index].InitializeFromBuffer(new_allocation, path.size);
-		data->selected_files[index].Copy(path);
+		data->selected_files[index].CopyOther(path);
 	}
 }
 
@@ -849,7 +849,7 @@ void FileExplorerDrag(ActionData* action_data) {
 				bool success = explorer_data->file_functors.TryGetValue(identifier, action);
 				if (success) {
 					if (action == FileTextureDraw) {
-						texture_draw.Copy(last_file);
+						texture_draw.CopyOther(last_file);
 						texture_draw.Add(L'\0');
 						texture = texture_draw.buffer;
 					}
@@ -967,7 +967,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, UIDrawerDescriptor*
 	InternalData internal_data;
 	internal_data.data = data;
 	if (initialize) {
-		// Make a single coallesced allocation
+		// Make a single coalesced allocation
 		size_t total_memory = sizeof(Stream<const char*>);
 		for (size_t index = 0; index < data->overwrite_files.size; index++) {
 			total_memory += sizeof(char) * (data->explorer_data->selected_files[data->overwrite_files[index]].size + 1);
@@ -1073,7 +1073,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, UIDrawerDescriptor*
 
 		InternalData* data = (InternalData*)_data;
 		ECS_TEMP_ASCII_STRING(error_message, 1024);
-		error_message.Copy("One or more files could not be copied. These are:");
+		error_message.CopyOther("One or more files could not be copied. These are:");
 		unsigned int error_files_count = 0;
 		for (size_t index = 0; index < data->data->overwrite_files.size; index++) {
 			if (data->states[index]) {
@@ -1502,7 +1502,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 				GLTFThumbnail gltf_thumbnail = GLTFGenerateThumbnail(data->resource_manager->m_graphics, FILE_EXPLORER_MESH_THUMBNAIL_TEXTURE_SIZE, &mesh->mesh);
 				thumbnail.texture = gltf_thumbnail.texture;
 
-				// Free the coallesced mesh
+				// Free the coalesced mesh
 				data->resource_manager->UnloadCoalescedMeshImplementation(mesh);
 			}
 
@@ -1538,7 +1538,7 @@ struct CreateAssetFileStruct {
 		EditorState* editor_state = (EditorState*)_data;
 		CapacityStream<char>* additional_data = (CapacityStream<char>*)_additional_data;
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		absolute_path.Copy(editor_state->file_explorer_data->current_directory);
+		absolute_path.CopyOther(editor_state->file_explorer_data->current_directory);
 		absolute_path.Add(ECS_OS_PATH_SEPARATOR);
 		function::ConvertASCIIToWide(absolute_path, *additional_data);
 
@@ -1570,7 +1570,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 			//InitializeFileExplorer(editor_state);
 
 			ProjectFile* project_file = editor_state->project_file;
-			data->current_directory.Copy(project_file->path);
+			data->current_directory.CopyOther(project_file->path);
 			data->current_directory.AddAssert(ECS_OS_PATH_SEPARATOR);
 			data->current_directory.AddStreamAssert(Path(PROJECT_ASSETS_RELATIVE_PATH, wcslen(PROJECT_ASSETS_RELATIVE_PATH)));
 			data->current_directory[data->current_directory.size] = L'\0';
@@ -1657,7 +1657,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 
 				ECS_STACK_CAPACITY_STREAM(Stream<char>, labels, ECS_ASSET_TYPE_COUNT + 1);
 				Stream<Stream<char>> shader_type_labels = editor_state->ReflectionManager()->GetEnum(STRING(ECS_SHADER_TYPE))->fields;
-				labels.Copy(shader_type_labels);
+				labels.CopyOther(shader_type_labels);
 				labels.Add("Unspecified");
 				drawer->ComboBox(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Shader Type", labels, labels.size, (unsigned char*)shader_type);
 			};
@@ -2079,7 +2079,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 				// Update the mouse index if it hovers this directory - only directories must make this check
 				if (drawer->IsMouseInRectangle(rectangle_position, rectangle_scale)) {
-					_data->mouse_element_path->Copy(stream_path);
+					_data->mouse_element_path->CopyOther(stream_path);
 				}
 
 				config->flag_count -= 3;
@@ -2234,7 +2234,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 				}
 
 				ECS_TEMP_STRING(null_terminated_path, 256);
-				null_terminated_path.Copy(stream_path);
+				null_terminated_path.CopyOther(stream_path);
 				null_terminated_path[stream_path.size] = L'\0';
 
 				drawer->AddDoubleClickAction(
@@ -2282,7 +2282,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					constexpr size_t ERROR_BUFFER_SIZE = 8192;
 					size_t drawer_temp_allocator_marker = drawer.GetTempAllocatorMarker();
 					CapacityStream<char> error_files(drawer.GetTempBuffer(ERROR_BUFFER_SIZE), 0, ERROR_BUFFER_SIZE);
-					error_files.Copy("One or more files/folders could not be copied. These are: ");
+					error_files.CopyOther("One or more files/folders could not be copied. These are: ");
 
 					// For the files that already exist, allocate a buffer of indices that will point to
 					// the invalid ones and at the final stage when commiting to the overwrite window

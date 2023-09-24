@@ -282,7 +282,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	void UnloadCoalescedMeshHandler(void* parameter, ResourceManager* resource_manager) {
-		// Free the coallesced mesh - the submeshes get the deallocated at the same time as this resource
+		// Free the coalesced mesh - the submeshes get the deallocated at the same time as this resource
 		CoalescedMesh* mesh = (CoalescedMesh*)parameter;
 		FreeCoalescedMesh(resource_manager->m_graphics, mesh, true, resource_manager->Allocator());
 	}
@@ -1275,7 +1275,7 @@ namespace ECSEngine {
 		mesh->submeshes.InitializeAndCopy(buffer, submeshes);
 
 		// We also need to coallesce the names of the submeshes
-		StreamCoallescedInplaceDeepCopy(mesh->submeshes, AllocatorTs());
+		StreamCoalescedInplaceDeepCopy(mesh->submeshes, AllocatorTs());
 
 		ScaleGLTFMeshes({ gltf_mesh, 1 }, scale_factor);
 
@@ -1495,10 +1495,10 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_p_texture_slots, 16);
 		ECS_STACK_CAPACITY_STREAM(ResourceView, temporary_v_textures, 16);
 		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_v_texture_slots, 16);
-		temporary_p_textures.Copy(Stream<ResourceView>(material->p_textures, material->p_texture_count));
-		temporary_p_texture_slots.Copy(Stream<unsigned char>(material->p_texture_slot, material->p_texture_count));
-		temporary_v_textures.Copy(Stream<ResourceView>(material->v_textures, material->v_texture_count));
-		temporary_v_texture_slots.Copy(Stream<unsigned char>(material->v_texture_slot, material->v_texture_count));
+		temporary_p_textures.CopyOther(Stream<ResourceView>(material->p_textures, material->p_texture_count));
+		temporary_p_texture_slots.CopyOther(Stream<unsigned char>(material->p_texture_slot, material->p_texture_count));
+		temporary_v_textures.CopyOther(Stream<ResourceView>(material->v_textures, material->v_texture_count));
+		temporary_v_texture_slots.CopyOther(Stream<unsigned char>(material->v_texture_slot, material->v_texture_count));
 
 		for (size_t index = 0; index < user_material->textures.size; index++) {
 			ResourceView resource_view;
@@ -1556,10 +1556,10 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_p_buffer_slots, 16);
 		ECS_STACK_CAPACITY_STREAM(ConstantBuffer, temporary_v_buffers, 16);
 		ECS_STACK_CAPACITY_STREAM(unsigned char, temporary_v_buffer_slots, 16);
-		temporary_p_buffers.Copy(Stream<ConstantBuffer>(material->p_buffers, material->p_buffer_count));
-		temporary_p_buffer_slots.Copy(Stream<unsigned char>(material->p_buffer_slot, material->p_buffer_count));
-		temporary_v_buffers.Copy(Stream<ConstantBuffer>(material->v_buffers, material->v_buffer_count));
-		temporary_v_buffer_slots.Copy(Stream<unsigned char>(material->v_buffer_slot, material->v_buffer_count));
+		temporary_p_buffers.CopyOther(Stream<ConstantBuffer>(material->p_buffers, material->p_buffer_count));
+		temporary_p_buffer_slots.CopyOther(Stream<unsigned char>(material->p_buffer_slot, material->p_buffer_count));
+		temporary_v_buffers.CopyOther(Stream<ConstantBuffer>(material->v_buffers, material->v_buffer_count));
+		temporary_v_buffer_slots.CopyOther(Stream<unsigned char>(material->v_buffer_slot, material->v_buffer_count));
 
 		for (size_t index = 0; index < user_material->buffers.size; index++) {
 			ConstantBuffer buffer;

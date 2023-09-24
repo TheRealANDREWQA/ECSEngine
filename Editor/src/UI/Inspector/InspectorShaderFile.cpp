@@ -254,8 +254,8 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 					data->shader_macros[index].name_stream.Initialize(editor_state->editor_allocator, 0, MACRO_INPUT_CAPACITY);
 					data->shader_macros[index].definition_stream.Initialize(editor_state->editor_allocator, 0, MACRO_INPUT_CAPACITY);
 
-					data->shader_macros[index].name_stream.Copy(data->shader_metadata.macros[index].name);
-					data->shader_macros[index].definition_stream.Copy(data->shader_metadata.macros[index].definition);
+					data->shader_macros[index].name_stream.CopyOther(data->shader_metadata.macros[index].name);
+					data->shader_macros[index].definition_stream.CopyOther(data->shader_metadata.macros[index].definition);
 				}
 				data->shader_macros.size = data->shader_metadata.macros.size;
 			}		
@@ -524,7 +524,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 			AddMacroCallback(action_data);
 
 			// Now copy the macro
-			data->data->shader_macros[write_index].name_stream.Copy(data->data->conditional_macros[data->conditional_index]);
+			data->data->shader_macros[write_index].name_stream.CopyOther(data->data->conditional_macros[data->conditional_index]);
 			data->data->shader_macros[write_index].name_stream[data->data->shader_macros[write_index].name_stream.size] = '\0';
 			data->data->shader_metadata.AddMacro(data->data->shader_macros[write_index].name_stream.buffer, "", data->editor_state->asset_database->Allocator());
 
@@ -683,7 +683,7 @@ void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path
 		// Get the data and set the path
 		InspectorDrawShaderFileData* draw_data = (InspectorDrawShaderFileData*)GetInspectorDrawFunctionData(editor_state, inspector_indices.y);
 		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->path.Copy(path);
+		draw_data->path.CopyOther(path);
 	}
 }
 

@@ -36,7 +36,7 @@ bool IsProtectedFolderSelected(DirectoryExplorerData* data) {
 
 	EditorState* editor_state = (EditorState*)data->editor_state;
 	ProjectFile* project_file = editor_state->project_file;
-	folder.Copy(project_file->path);
+	folder.CopyOther(project_file->path);
 	folder.Add(L'\\');
 	size_t folder_base_size = folder.size;
 	
@@ -61,7 +61,7 @@ void DirectoryExplorerHierarchySelectableCallback(ActionData* action_data) {
 
 	Stream<char> label_stream(label, strlen(label));
 	ProjectFile* project_file = editor_state->project_file;
-	data->current_path->Copy(project_file->path);
+	data->current_path->CopyOther(project_file->path);
 	data->current_path->Add(ECS_OS_PATH_SEPARATOR);
 
 	wchar_t temp_characters[256];
@@ -111,7 +111,7 @@ void DirectoryExplorerCreateFolderCallback(ActionData* action_data) {
 	ProjectFile* project_file = editor_state->project_file;
 	ascii.size = data->current_path->size - project_file->path.size - 1;
 	ascii.buffer += project_file->path.size + 1;
-	data->drawer_hierarchy->active_label.Copy(ascii);
+	data->drawer_hierarchy->active_label.CopyOther(ascii);
 }
 
 void DirectoryExplorerCreateFolder(ActionData* action_data) {
@@ -160,7 +160,7 @@ void DirectoryExplorerRenameFolderCallback(ActionData* action_data) {
 
 	OS::RenameFolderOrFileWithError(*data->current_path, *choose_data->wide, system);
 
-	data->current_path->Copy(*data->current_path);
+	data->current_path->CopyOther(*data->current_path);
 	data->current_path->AddStream(*choose_data->wide);
 	data->current_path->buffer[data->current_path->size] = L'\0';
 	data->current_path->AssertCapacity();
@@ -173,7 +173,7 @@ void DirectoryExplorerRenameFolderCallback(ActionData* action_data) {
 	ProjectFile* project_file = editor_state->project_file;
 	ascii.size = data->current_path->size - project_file->path.size - 1;
 	ascii.buffer += project_file->path.size + 1;
-	data->drawer_hierarchy->active_label.Copy(ascii);
+	data->drawer_hierarchy->active_label.CopyOther(ascii);
 }
 
 void DirectoryExplorerRenameFolder(ActionData* action_data) {
@@ -438,7 +438,7 @@ void TickDirectoryExplorer(EditorState* editor_state)
 			starting_path.size -= project_file->path.size + 1;
 			function::ConvertWideCharsToASCII(starting_path, ascii_stream);
 
-			data->drawer_hierarchy->active_label.Copy(ascii_stream);
+			data->drawer_hierarchy->active_label.CopyOther(ascii_stream);
 
 			ASCIIPath parent_path = function::PathParent(ascii_stream);
 			ResourceIdentifier identifier(parent_path.buffer, parent_path.size);

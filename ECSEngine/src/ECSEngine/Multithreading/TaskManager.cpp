@@ -586,57 +586,6 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::IncrementThreadTaskIndex() {
-		m_thread_task_index->fetch_add(1, ECS_ACQ_REL);
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	unsigned int TaskManager::GetTaskCount() const {
-		return m_tasks.size;
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	unsigned int TaskManager::GetThreadCount() const {
-		return m_thread_queue.size;
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	ThreadTask TaskManager::GetTask(unsigned int task_index) const {
-		ECS_ASSERT(task_index >= 0 && task_index < m_tasks.capacity);
-		return m_tasks[task_index].task;
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	ThreadTask* TaskManager::GetTaskPtr(unsigned int task_index) {
-		ECS_ASSERT(task_index >= 0 && task_index < m_tasks.capacity);
-		return &m_tasks[task_index].task;
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	ThreadQueue* TaskManager::GetThreadQueue(unsigned int thread_id) const {
-		return m_thread_queue[thread_id];
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	unsigned int TaskManager::GetThreadTaskIndex() const {
-		return m_thread_task_index->load(ECS_ACQUIRE);
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	AllocatorPolymorphic TaskManager::GetThreadTempAllocator(unsigned int thread_id) const
-	{
-		return GetAllocatorPolymorphic(m_thread_linear_allocators[thread_id]);
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
 	ThreadFunctionWrapperData TaskManager::GetStaticThreadWrapper(CapacityStream<void>* data) const
 	{
 		ThreadFunctionWrapperData wrapper = m_static_wrapper;

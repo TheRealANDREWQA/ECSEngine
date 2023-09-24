@@ -69,7 +69,7 @@ namespace ECSEngine {
 
 	Stream<char> GetReflectionTypeLinkComponentName(Stream<char> name, CapacityStream<char>& link_name)
 	{
-		link_name.Copy(name);
+		link_name.CopyOther(name);
 		link_name.AddStream(LINK_COMPONENT_SUFFIX);
 		return link_name;
 	}
@@ -80,7 +80,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type, 
 		AllocatorPolymorphic allocator, 
-		bool coallesced_allocation
+		bool coalesced_allocation
 	)
 	{
 		Reflection::ReflectionType result;
@@ -94,17 +94,17 @@ namespace ECSEngine {
 		GetAssetFieldsFromLinkComponentTarget(type, asset_fields);
 
 		AllocatorPolymorphic current_allocator = allocator;
-		if (coallesced_allocation) {
+		if (coalesced_allocation) {
 			current_allocator = stack_allocator;		
 		}
 
 		result.fields.Initialize(current_allocator, type->fields.size);
 		result.name.Initialize(current_allocator, type->name.size + sizeof(LINK_COMPONENT_SUFFIX) - 1);
-		result.name.Copy(type->name);
+		result.name.CopyOther(type->name);
 		result.name.AddStream(LINK_COMPONENT_SUFFIX);
 		// We also need to add the tag and the parentheses
 		result.tag.Initialize(current_allocator, sizeof(ECS_LINK_COMPONENT_TAG) + type->name.size + 2);
-		result.tag.Copy(ECS_LINK_COMPONENT_TAG);
+		result.tag.CopyOther(ECS_LINK_COMPONENT_TAG);
 		result.tag.Add('(');
 		result.tag.AddStream(type->name);
 		result.tag.AddStream(TAG_GENERATED_SUFFIX);
@@ -135,11 +135,11 @@ namespace ECSEngine {
 				result.fields[index].info.stream_type = Reflection::ReflectionStreamFieldType::Basic;
 				result.fields[index].info.pointer_offset = current_pointer_offset;
 				result.fields[index].info.byte_size = sizeof(unsigned int);
-				result.fields[index].name = coallesced_allocation ? type->fields[index].name : function::StringCopy(allocator, type->fields[index].name);
+				result.fields[index].name = coalesced_allocation ? type->fields[index].name : function::StringCopy(allocator, type->fields[index].name);
 
 				current_pointer_offset += sizeof(unsigned int);
 
-#define TAG(handle_name) result.fields[index].tag = coallesced_allocation ? Stream<char>(STRING(handle_name)) : function::StringCopy(allocator, Stream<char>(STRING(handle_name)));
+#define TAG(handle_name) result.fields[index].tag = coalesced_allocation ? Stream<char>(STRING(handle_name)) : function::StringCopy(allocator, Stream<char>(STRING(handle_name)));
 
 				// It is an asset field
 				switch (asset_fields[subindex].type.type) {
@@ -183,7 +183,7 @@ namespace ECSEngine {
 				size_t alignment = GetFieldTypeAlignmentEx(reflection_manager, type->fields[index]);
 				current_pointer_offset = function::AlignPointer(current_pointer_offset, alignment);
 
-				if (coallesced_allocation) {
+				if (coalesced_allocation) {
 					result.fields[index] = type->fields[index];
 				}
 				else {
@@ -196,7 +196,7 @@ namespace ECSEngine {
 
 #undef TAG
 
-		if (coallesced_allocation) {
+		if (coalesced_allocation) {
 			size_t copy_size = result.CopySize();
 			void* allocation = Allocate(allocator, copy_size);
 			uintptr_t ptr = (uintptr_t)allocation;
@@ -359,7 +359,7 @@ namespace ECSEngine {
 			// Search for the suffixed variant first
 			ECS_STACK_CAPACITY_STREAM(char, link_name, 1024);
 			for (size_t index = 0; index < targets.size; index++) {
-				link_name.Copy(targets[index]);
+				link_name.CopyOther(targets[index]);
 				link_name.AddStream(suffixed_name);
 
 				Reflection::ReflectionType link_type;
