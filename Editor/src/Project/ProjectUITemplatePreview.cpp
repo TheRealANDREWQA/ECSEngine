@@ -154,7 +154,7 @@ void SaveLayoutWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 		ECS_TEMP_ASCII_STRING(error_message, 256);
 		wchar_t path_chars[256];
 		CapacityStream<wchar_t> path(path_chars, 0, 256);
-		path.Copy(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
+		path.CopyOther(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
 		path.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 		path[path.size] = L'\0';
 		bool success = system->WriteUIFile(path.buffer, error_message);

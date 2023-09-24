@@ -131,7 +131,7 @@ namespace ECSEngine {
 		unsigned int string_bytes_written = 0;
 		// Populate it first
 		for (size_t index = 0; index < input.size; index++) {
-			encrypted_input.Copy(input[index]);
+			encrypted_input.CopyOther(input[index]);
 
 			unsigned int input_hash = input[index].size * sizeof(wchar_t);
 			// Encrypt the input now

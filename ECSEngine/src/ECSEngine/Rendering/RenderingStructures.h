@@ -1733,6 +1733,11 @@ namespace ECSEngine {
 	};
 
 	struct PBRMaterial {
+		// Returns the start of the textures as paths, can use indices to index into them
+		ECS_INLINE Stream<wchar_t>* TextureStart() {
+			return &color_texture;
+		}
+
 		Stream<char> name;
 		float metallic_factor;
 		float roughness_factor;
@@ -1848,7 +1853,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	);
 
-	// Releases the memory used for the texture names and the material name - it's coallesced
+	// Releases the memory used for the texture names and the material name - it's coalesced
 	// in the name buffer
 	ECSENGINE_API void FreePBRMaterial(const PBRMaterial& material, AllocatorPolymorphic allocator);
 

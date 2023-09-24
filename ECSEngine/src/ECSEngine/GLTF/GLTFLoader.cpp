@@ -16,7 +16,7 @@ namespace ECSEngine {
 		// -------------------------------------------------------------------------------------------------------------------------------
 
 		// This makes an allocation
-		Stream<float> GetScalarValues(
+		static Stream<float> GetScalarValues(
 			AllocatorPolymorphic allocator,
 			const cgltf_accessor* accessor, 
 			unsigned int component_count,
@@ -24,7 +24,7 @@ namespace ECSEngine {
 		) {
 			Stream<float> values;
 
-			values.buffer = (float*)Allocate(allocator, component_count * accessor->count * sizeof(float));
+			values.buffer = (float*)AllocateEx(allocator, component_count * accessor->count * sizeof(float));
 			ECS_ASSERT(values.buffer != nullptr);
 
 			values.size = accessor->count * component_count;
@@ -38,7 +38,7 @@ namespace ECSEngine {
 		// -------------------------------------------------------------------------------------------------------------------------------
 
 		// Does not make an allocation
-		bool GetScalarValues(const cgltf_accessor* accessor, unsigned int component_count, Stream<float>* values) {
+		static bool GetScalarValues(const cgltf_accessor* accessor, unsigned int component_count, Stream<float>* values) {
 			values->size = accessor->count * component_count;
 			bool success = true;
 			for (size_t index = 0; index < accessor->count && success; index++) {
@@ -49,7 +49,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int GetNodeIndex(const cgltf_node* target, const cgltf_node* nodes, size_t node_count) {
+		static unsigned int GetNodeIndex(const cgltf_node* target, const cgltf_node* nodes, size_t node_count) {
 			if (target == nullptr) {
 				return -1;
 			}
@@ -65,7 +65,7 @@ namespace ECSEngine {
 		// -------------------------------------------------------------------------------------------------------------------------------
 
 		// It returns -1 if it fails
-		unsigned int MeshBufferSizeFromAttribute(
+		static unsigned int MeshBufferSizeFromAttribute(
 			const cgltf_attribute* attribute,
 			CapacityStream<char>* error_message
 		) {
@@ -96,7 +96,7 @@ namespace ECSEngine {
 			return accessor->count;
 		}
 
-		void AddToMeshBufferSizes(GLTFMeshBufferSizes* sizes, cgltf_attribute_type attribute_type, unsigned int count) {
+		static void AddToMeshBufferSizes(GLTFMeshBufferSizes* sizes, cgltf_attribute_type attribute_type, unsigned int count) {
 			switch (attribute_type) {
 			case cgltf_attribute_type_position:
 				sizes->count[ECS_MESH_POSITION] += count;
@@ -121,7 +121,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		void ProcessMeshPositions(Stream<float3> mesh_positions, const cgltf_node* nodes, size_t current_node_index) {
+		static void ProcessMeshPositions(Stream<float3> mesh_positions, const cgltf_node* nodes, size_t current_node_index) {
 			float world_matrix[16];
 			cgltf_node_transform_world(nodes + current_node_index, world_matrix);
 
@@ -137,7 +137,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		void ProcessMeshNormals(Stream<float3> mesh_normals, const cgltf_node* nodes, size_t current_node_index) {
+		static void ProcessMeshNormals(Stream<float3> mesh_normals, const cgltf_node* nodes, size_t current_node_index) {
 			float matrix[16];
 			cgltf_node_transform_world(nodes + current_node_index, matrix);
 			Matrix ecs_matrix(matrix);
@@ -185,7 +185,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		bool ProcessMeshBoneInfluences(
+		static bool ProcessMeshBoneInfluences(
 			Stream<float> file_values,
 			Stream<uint4> influences, 
 			const cgltf_node* nodes, 
@@ -232,7 +232,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		bool MeshFromAttribute(
+		static bool MeshFromAttribute(
 			GLTFMesh& mesh,
 			const cgltf_attribute* attribute,
 			const cgltf_skin* skin,
@@ -304,7 +304,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		bool CoalescedMeshFromAttribute(
+		static bool CoalescedMeshFromAttribute(
 			const GLTFMesh& mesh,
 			GLTFMeshBufferSizes* buffer_sizes,
 			const cgltf_attribute* attribute,
@@ -416,7 +416,7 @@ namespace ECSEngine {
 		
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		bool ValidateMesh(const GLTFMesh& mesh) {
+		static bool ValidateMesh(const GLTFMesh& mesh) {
 			// Validation - all vertex buffers must have the same size
 			size_t size = mesh.positions.size;
 
@@ -449,7 +449,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		size_t GLTFMeshCount(const cgltf_data* data) {
+		static size_t GLTFMeshCount(const cgltf_data* data) {
 			size_t count = 0;
 
 			unsigned int node_count = data->nodes_count;
@@ -466,15 +466,14 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 		
-		Stream<char> GetMaterialName(const cgltf_primitive* primitives, unsigned int primitive_index) {
+		static Stream<char> GetMaterialName(const cgltf_primitive* primitives, unsigned int primitive_index) {
 			const cgltf_material* gltf_material = primitives[primitive_index].material;
-
 			return gltf_material->name;
 		}
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		void InvertMeshZAxis(Stream<float3> positions, Stream<float3> normals, Stream<unsigned int> indices) {
+		static void InvertMeshZAxis(Stream<float3> positions, Stream<float3> normals, Stream<unsigned int> indices) {
 			// Invert the position Z axis
 			for (size_t subindex = 0; subindex < positions.size; subindex++) {
 				positions[subindex].z = -positions[subindex].z;
@@ -653,7 +652,7 @@ namespace ECSEngine {
 			if (primitive->indices != nullptr) {
 				unsigned int index_count = primitive->indices->count;
 
-				mesh.indices = Stream<unsigned int>(Allocate(allocator, (sizeof(unsigned int) * index_count)), index_count);
+				mesh.indices = Stream<unsigned int>(AllocateEx(allocator, (sizeof(unsigned int) * index_count)), index_count);
 				for (unsigned int index_index = 0; index_index < index_count; index_index++) {
 					mesh.indices[index_index] = cgltf_accessor_read_index(primitive->indices, index_index);
 				}
@@ -731,158 +730,22 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadMaterialFromGLTF(
+	// Returns true if a material was found, else false
+	static bool LoadMaterialFromGLTF(
 		PBRMaterial& material,
 		AllocatorPolymorphic allocator,
 		const cgltf_node* nodes,
 		unsigned int node_index,
 		CapacityStream<char>* error_message
 	) {
-		unsigned int primitive_count = nodes[node_index].mesh->primitives_count;
-
-		for (size_t primitive_index = 0; primitive_index < primitive_count; primitive_index++) {
-			const cgltf_material* gltf_material = nodes[node_index].mesh->primitives[primitive_index].material;
-
-			if (gltf_material != nullptr) {
-				// material name
-				Stream<char> material_name = gltf_material->name;
-
-				ECS_TEMP_STRING(temp_texture_names, 1024);
-
-				PBRMaterialMapping mappings[ECS_PBR_MATERIAL_MAPPING_COUNT];
-				size_t mapping_count = 0;
-
-				auto add_mapping = [&](const char* name, PBRMaterialTextureIndex mapping) {
-					Stream<char> texture_name = name;
-					unsigned int old_texture_size = temp_texture_names.size;
-					function::ConvertASCIIToWide(temp_texture_names, texture_name);
-					mappings[mapping_count].texture = { temp_texture_names.buffer + old_texture_size, texture_name.size };
-					mappings[mapping_count].index = mapping;
-					mapping_count++;
-				};
-
-				material.emissive_factor = gltf_material->emissive_factor;
-				if (gltf_material->has_pbr_metallic_roughness) {
-					material.tint = Color(gltf_material->pbr_metallic_roughness.base_color_factor);
-					material.metallic_factor = gltf_material->pbr_metallic_roughness.metallic_factor;
-					material.roughness_factor = gltf_material->pbr_metallic_roughness.roughness_factor;
-					if (gltf_material->pbr_metallic_roughness.base_color_texture.texture != nullptr) {
-						if (gltf_material->pbr_metallic_roughness.base_color_texture.texture->image->name != nullptr) {
-							add_mapping(gltf_material->pbr_metallic_roughness.base_color_texture.texture->image->name, ECS_PBR_MATERIAL_COLOR);
-						}
-						// Set non existing texture
-						else {
-							material.color_texture = { nullptr,0 };
-						}
-					}
-					// Set non existing texture
-					else {
-						material.color_texture = { nullptr, 0 };
-					}
-
-					if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr) {
-						if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name != nullptr) {
-							char* hyphon = function::FindFirstCharacter(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, '-').buffer;
-							if (hyphon != nullptr) {
-								*hyphon = '\0';
-								add_mapping(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, ECS_PBR_MATERIAL_METALLIC);
-								add_mapping(hyphon + 1, ECS_PBR_MATERIAL_ROUGHNESS);
-							}
-							// Do not add it at all if it isn't specified - could be roughness, could be roughness
-							// Set non existing texture
-							else {
-								material.metallic_texture = { nullptr, 0 };
-								material.roughness_texture = { nullptr, 0 };
-							}
-						}
-						// Set non existing texture
-						else {
-							material.metallic_texture = { nullptr, 0 };
-							material.roughness_texture = { nullptr, 0 };
-						}
-					}
-					// Set non existing texture
-					else {
-						material.metallic_texture = { nullptr, 0 };
-						material.roughness_texture = { nullptr, 0 };
-					}
-
-				}
-				// Set non existing textures
-				else {
-					material.color_texture = { nullptr, 0 };
-					material.metallic_texture = { nullptr, 0 };
-					material.roughness_texture = { nullptr, 0 };
-				}
-
-				if (gltf_material->emissive_texture.texture != nullptr) {
-					if (gltf_material->emissive_texture.texture->image->name != nullptr) {
-						add_mapping(gltf_material->emissive_texture.texture->image->name, ECS_PBR_MATERIAL_EMISSIVE);
-					}
-					// Set non existing texture
-					else {
-						material.emissive_texture = { nullptr, 0 };
-					}
-				}
-				// Set non existing texture
-				else {
-					material.emissive_texture = { nullptr, 0 };
-				}
-
-				if (gltf_material->normal_texture.texture != nullptr) {
-					if (gltf_material->normal_texture.texture->image->name != nullptr) {
-						add_mapping(gltf_material->normal_texture.texture->image->name, ECS_PBR_MATERIAL_NORMAL);
-					}
-					// Set non existing texture
-					else {
-						material.normal_texture = { nullptr, 0 };
-					}
-				}
-				// Set non existing texture
-				else {
-					material.normal_texture = { nullptr, 0 };
-				}
-
-				if (gltf_material->occlusion_texture.texture != nullptr) {
-					if (gltf_material->occlusion_texture.texture->image->name != nullptr) {
-						add_mapping(gltf_material->occlusion_texture.texture->image->name, ECS_PBR_MATERIAL_OCCLUSION);
-					}
-					// Set non existing texture
-					else {
-						material.occlusion_texture = { nullptr, 0 };
-					}
-				}
-				// Set non existing texture
-				else {
-					material.occlusion_texture = { nullptr,0 };
-				}
-
+		return internal::ForMaterialFromGLTF(
+			nodes,
+			node_index,
+			material,
+			[&](Stream<char> material_name, size_t mapping_count, PBRMaterialMapping* mappings, Stream<void>* texture_mapping_data, TextureExtension* texture_extension) {
 				AllocatePBRMaterial(material, material_name, Stream<PBRMaterialMapping>(mappings, mapping_count), allocator);
 			}
-		}
-		return true;
-	}
-
-	// -------------------------------------------------------------------------------------------------------------------------------
-
-	// The functor receives a const cgltf_node*, a size_t node index and a size_t node count
-	template<typename Functor>
-	bool ForEachMeshInGLTF(
-		GLTFData data,
-		Functor&& functor
-	) {
-		size_t node_count = data.data->nodes_count;
-		const cgltf_node* nodes = data.data->nodes;
-
-		unsigned int current_mesh_index = 0;
-		for (size_t index = 0; index < node_count; index++) {
-			if (nodes[index].mesh != nullptr) {
-				if (!functor(nodes, index, node_count)) {
-					return false;
-				}
-			}
-		}
-		return true;
+		);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -896,7 +759,7 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message
 	) {
 		unsigned int current_mesh_index = 0;
-		bool success = ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
+		bool success = internal::ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
 			if (mesh_index == current_mesh_index) {
 				return LoadMeshFromGLTF(mesh, allocator, nodes, index, node_count, invert_z_axis, error_message);
 			}
@@ -920,7 +783,7 @@ namespace ECSEngine {
 	bool LoadMaterialFromGLTF(GLTFData data, PBRMaterial& material, AllocatorPolymorphic allocator, unsigned int mesh_index, CapacityStream<char>* error_message)
 	{
 		unsigned int current_mesh_index = 0;
-		bool success = ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
+		bool success = internal::ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
 			if (mesh_index == current_mesh_index) {
 				return LoadMaterialFromGLTF(material, allocator, nodes, index, error_message);
 			}
@@ -949,7 +812,7 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message
 	) {
 		unsigned int mesh_index = 0;
-		bool success = ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
+		bool success = internal::ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
 			bool success = LoadMeshFromGLTF(
 				meshes[mesh_index],
 				allocator,
@@ -976,7 +839,7 @@ namespace ECSEngine {
 
 	bool DetermineMeshesFromGLTFBufferSizes(GLTFData data, GLTFMeshBufferSizes* sizes, CapacityStream<char>* error_message)
 	{
-		bool success = ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
+		bool success = internal::ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
 			return LoadMeshBufferSizesFromGLTF(&nodes[index], sizes, error_message);
 		});
 
@@ -1042,7 +905,7 @@ namespace ECSEngine {
 		GLTFMeshBufferSizes resetted_buffer_sizes;
 
 		unsigned int submesh_index = 0;
-		bool success = ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
+		bool success = internal::ForEachMeshInGLTF(data, [&](const cgltf_node* nodes, size_t index, size_t node_count) {
 			GLTFMeshBufferSizes previous_buffer_size = resetted_buffer_sizes;
 			bool success = LoadCoalescedMeshFromGLTF(*mesh, &resetted_buffer_sizes, nodes, index, node_count, invert_z_axis, error_message);
 			if (success) {
@@ -1059,7 +922,7 @@ namespace ECSEngine {
 						submesh_name_ptr = (uintptr_t)submesh_name_allocation;
 					}
 					submesh.name.InitializeFromBuffer(submesh_name_ptr, name.size);
-					submesh.name.Copy(name);
+					submesh.name.CopyOther(name);
 				}
 				
 				if (determine_submesh_bounding_box) {
@@ -1077,7 +940,7 @@ namespace ECSEngine {
 
 		if (!success) {
 			// Deallocate the buffer
-			FreeCoallescedGLTFMesh(*mesh, temporary_allocator);
+			FreeCoalescedGLTFMesh(*mesh, temporary_allocator);
 		}
 		else {
 			// We need to remap the indices according to the vertex offset of the submesh
@@ -1128,21 +991,17 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadMaterialsFromGLTF(GLTFData data, PBRMaterial* materials, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
+	bool LoadMaterialsFromGLTF(GLTFData data, CapacityStream<PBRMaterial>* materials, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
 	{
 		unsigned int node_count = data.data->nodes_count;
 		const cgltf_node* nodes = data.data->nodes;
 
-		size_t material_index = 0;
 		for (size_t index = 0; index < node_count; index++) {
 			if (nodes[index].mesh != nullptr) {
-				bool success = LoadMaterialFromGLTF(materials[material_index], allocator, nodes, index, error_message);
-				if (!success) {
-					ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {#}.", material_index);
-					error_message->AddStreamSafe(additional_info);
-					return false;
-				}
-				material_index++;
+				// No matter what if the material is present or not, we should
+				bool was_loaded = LoadMaterialFromGLTF(materials->buffer[materials->size], allocator, nodes, index, error_message);
+				materials->size++;
+				materials->AssertCapacity();
 			}
 		}
 
@@ -1660,14 +1519,14 @@ namespace ECSEngine {
 		AllocatorPolymorphic temporary_buffer_allocator = { nullptr };
 		CapacityStream<char>* error_message = nullptr;
 		bool allocate_submesh_names = false;
-		bool coallesced_submesh_names = true;
+		bool coalesced_submesh_names = true;
 		AllocatorPolymorphic previous_permanent_allocator = { nullptr };
 
 		if (options != nullptr) {
 			temporary_buffer_allocator = options->temporary_buffer_allocator;
 			error_message = options->error_message;
 			allocate_submesh_names = options->allocate_submesh_name;
-			coallesced_submesh_names = options->coalesce_submesh_name_allocations;
+			coalesced_submesh_names = options->coalesce_submesh_name_allocations;
 			previous_permanent_allocator = options->permanent_allocator;
 			options->permanent_allocator = coalesced_mesh_allocator;
 		}
@@ -1680,7 +1539,7 @@ namespace ECSEngine {
 			result.mesh.bounds = GetSubmeshesBoundingBox(result.submeshes);
 
 			// The buffers need to be deallocated
-			FreeCoallescedGLTFMesh(gltf_mesh, temporary_buffer_allocator);
+			FreeCoalescedGLTFMesh(gltf_mesh, temporary_buffer_allocator);
 		}
 
 		if (options) {
@@ -1720,7 +1579,7 @@ namespace ECSEngine {
 			coalesced_mesh->mesh.bounds = GetSubmeshesBoundingBox(coalesced_mesh->submeshes);
 		}
 		// In case of failure it will still have the buffers allocated
-		FreeCoallescedGLTFMesh(gltf_mesh, temporary_buffer_allocator);
+		FreeCoalescedGLTFMesh(gltf_mesh, temporary_buffer_allocator);
 
 		return success;
 	}
@@ -1729,22 +1588,22 @@ namespace ECSEngine {
 
 	void FreeGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator) {
 		if (mesh.positions.buffer != nullptr) {
-			Deallocate(allocator, mesh.positions.buffer);
+			DeallocateEx(allocator, mesh.positions.buffer);
 		}
 		if (mesh.indices.buffer != nullptr) {
-			Deallocate(allocator, mesh.indices.buffer);
+			DeallocateEx(allocator, mesh.indices.buffer);
 		}
 		if (mesh.normals.buffer != nullptr) {
-			Deallocate(allocator, mesh.normals.buffer);
+			DeallocateEx(allocator, mesh.normals.buffer);
 		}
 		if (mesh.skin_influences.buffer != nullptr) {
-			Deallocate(allocator, mesh.skin_influences.buffer);
+			DeallocateEx(allocator, mesh.skin_influences.buffer);
 		}
 		if (mesh.skin_weights.buffer != nullptr) {
-			Deallocate(allocator, mesh.skin_weights.buffer);
+			DeallocateEx(allocator, mesh.skin_weights.buffer);
 		}
 		if (mesh.uvs.buffer != nullptr) {
-			Deallocate(allocator, mesh.uvs.buffer);
+			DeallocateEx(allocator, mesh.uvs.buffer);
 		}
 	}
 
@@ -1758,9 +1617,9 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void FreeCoallescedGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator)
+	void FreeCoalescedGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator)
 	{
-		// Everything is coallesced into a single big allocation
+		// Everything is coalesced into a single big allocation
 		if (mesh.positions.buffer != nullptr) {
 			DeallocateEx(allocator, mesh.positions.buffer);
 		}

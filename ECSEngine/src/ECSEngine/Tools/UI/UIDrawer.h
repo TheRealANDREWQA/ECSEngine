@@ -749,7 +749,7 @@ namespace ECSEngine {
 				// kinda unnecessary memcpy's here but should not cost too much
 				ECS_STACK_CAPACITY_STREAM(char, full_name, 256);
 				Stream<char> identifier = HandleResourceIdentifier(name);
-				full_name.Copy(identifier);
+				full_name.CopyOther(identifier);
 				full_name.AddStream("stream");
 				full_name.AssertCapacity();
 				
@@ -888,7 +888,7 @@ namespace ECSEngine {
 					Stream<char> tool_tip_stream;
 					Stream<char> identifier = HandleResourceIdentifier(name);
 					ECS_STACK_CAPACITY_STREAM(char, tool_tip_name, 512);
-					tool_tip_name.Copy(identifier);
+					tool_tip_name.CopyOther(identifier);
 					tool_tip_name.AddStream("tool tip");
 					tool_tip_name.AssertCapacity();
 
@@ -1892,7 +1892,7 @@ namespace ECSEngine {
 				HandleTransformFlags(configuration, config, position, scale);
 
 				ECS_TEMP_ASCII_STRING(data_name, 256);
-				data_name.Copy(name);
+				data_name.CopyOther(name);
 				data_name.AddStream(" data");
 				data_name = HandleResourceIdentifier(data_name);
 
@@ -2022,7 +2022,7 @@ namespace ECSEngine {
 					}
 
 					ECS_TEMP_ASCII_STRING(temp_name, 64);
-					temp_name.Copy("Element ");
+					temp_name.CopyOther("Element ");
 					size_t base_name_size = temp_name.size;
 
 					// Set the draw mode to indent if it is different
@@ -2466,7 +2466,7 @@ namespace ECSEngine {
 
 				if (~configuration & UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT) {
 					ECS_TEMP_ASCII_STRING(temp_input_name, 256);
-					temp_input_name.Copy(name);
+					temp_input_name.CopyOther(name);
 					temp_input_name.AddStream("Size input");
 					temp_input_name.AddAssert('\0');
 
@@ -2974,7 +2974,7 @@ namespace ECSEngine {
 					/* Copy the old contents to temp buffers */
 					for (size_t index = 0; index < elements.size; index++) {
 						copied_elements[index].InitializeFromBuffer(drawer.GetTempBuffer(sizeof(char) * elements[index].size), elements[index].size, elements[index].size);
-						copied_elements[index].Copy(elements[index]);
+						copied_elements[index].CopyOther(elements[index]);
 					}
 					for (size_t index = 0; index < elements.size; index++) {
 						if (new_order[index] != index) {

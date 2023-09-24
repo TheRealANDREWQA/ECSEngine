@@ -30,7 +30,7 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 	bool success = LoadEditorSceneCore(editor_state, sandbox_index, absolute_path);
 	if (success) {
 		// Copy the contents
-		sandbox->scene_path.Copy(new_scene);
+		sandbox->scene_path.CopyOther(new_scene);
 		sandbox->is_scene_dirty = false;
 
 		// Load the assets

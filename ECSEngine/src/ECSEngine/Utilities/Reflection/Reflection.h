@@ -82,7 +82,7 @@ namespace ECSEngine {
 			struct AddedType {
 				Stream<char> type_name;
 				AllocatorPolymorphic allocator;
-				bool coallesced_allocation;
+				bool coalesced_allocation;
 			};
 			
 			struct FolderHierarchy {
@@ -111,10 +111,10 @@ namespace ECSEngine {
 
 			// Adds a type which is not bound to any folder hierarchy. If the allocator is nullptr
 			// then it will only reference the type streams, not actually copy
-			void AddType(const ReflectionType* type, AllocatorPolymorphic allocator = { nullptr }, bool coallesced = true);
+			void AddType(const ReflectionType* type, AllocatorPolymorphic allocator = { nullptr }, bool coalesced = true);
 
 			// Adds a type to a certain hierarchy. It will add it as is, it will be deallocated when the hierarchy is freed using the allocator given
-			void AddTypeToHierarchy(const ReflectionType* type, unsigned int folder_hierarchy, AllocatorPolymorphic allocator, bool coallesced);
+			void AddTypeToHierarchy(const ReflectionType* type, unsigned int folder_hierarchy, AllocatorPolymorphic allocator, bool coalesced);
 
 			ECS_INLINE AllocatorPolymorphic Allocator() const {
 				return folders.allocator;

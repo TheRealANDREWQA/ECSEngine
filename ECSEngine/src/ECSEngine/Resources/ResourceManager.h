@@ -9,7 +9,7 @@
 #include "../Utilities/Function.h"
 #include "../Containers/DataPointer.h"
 #include "../Rendering/Graphics.h"
-#include "../Rendering/GraphicsHelpers.h"
+#include "../Rendering/TextureOperations.h"
 #include "../Rendering/Compression/TextureCompressionTypes.h"
 #include "../Multithreading/TaskManager.h"
 #include "ResourceTypes.h"
@@ -136,7 +136,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
-			// Everything is allocated in a single coallesced allocation
+			// Everything is allocated in a single coalesced allocation
 			ECSEngine::Deallocate(allocator, resources[0].buffer);
 		}
 
@@ -374,7 +374,7 @@ namespace ECSEngine {
 			ResourceManagerExDesc* ex_desc = {}
 		);
 
-		// Loads all meshes from a gltf file and creates a coallesced mesh
+		// Loads all meshes from a gltf file and creates a coalesced mesh
 		template<bool reference_counted = false>
 		CoalescedMesh* LoadCoalescedMesh(
 			Stream<wchar_t> filename,
@@ -382,7 +382,7 @@ namespace ECSEngine {
 			ResourceManagerLoadDesc load_descriptor = {}
 		);
 
-		// Loads all meshes from a gltf file and creates a coallesced mesh
+		// Loads all meshes from a gltf file and creates a coalesced mesh
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
 		CoalescedMesh* LoadCoalescedMeshImplementation(Stream<wchar_t> filename, float scale_factor = 1.0f, ResourceManagerLoadDesc load_descriptor = {});
 

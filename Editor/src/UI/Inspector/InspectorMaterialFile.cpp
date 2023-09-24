@@ -283,7 +283,7 @@ void RegisterNewCBuffers(
 	draw_data->material_asset.WriteCounts(true, true, true, counts);
 	counts[ECS_MATERIAL_SHADER_COUNT * 2 + material_shader_type] = new_cbuffers.size;
 	draw_data->material_asset.Resize(counts, draw_data->MaterialAssetAlllocator());
-	draw_data->material_asset.buffers[material_shader_type].Copy(new_buffers);
+	draw_data->material_asset.buffers[material_shader_type].CopyOther(new_buffers);
 
 	draw_data->cbuffers[order].InitializeAndCopy(current_allocator, new_cbuffers);
 	for (size_t index = 0; index < new_cbuffers.size; index++) {
@@ -391,7 +391,7 @@ void RegisterNewTextures(
 	draw_data->material_asset.WriteCounts(true, true, true, counts);
 	counts[material_shader_type] = new_textures.size;
 	draw_data->material_asset.Resize(counts, draw_data->MaterialAssetAlllocator());
-	draw_data->material_asset.textures[material_shader_type].Copy(textures);
+	draw_data->material_asset.textures[material_shader_type].CopyOther(textures);
 	draw_data->texture_override_data[order] = override_data;
 
 	// Update the name to reflect the one stored in the material_asset.textures
@@ -463,7 +463,7 @@ void RegisterNewSamplers(
 	draw_data->material_asset.WriteCounts(true, true, true, counts);
 	counts[ECS_MATERIAL_SHADER_COUNT + material_shader_type] = new_samplers.size;
 	draw_data->material_asset.Resize(counts, draw_data->MaterialAssetAlllocator());
-	draw_data->material_asset.samplers[material_shader_type].Copy(samplers);
+	draw_data->material_asset.samplers[material_shader_type].CopyOther(samplers);
 	draw_data->sampler_override_data[order] = new_override_data;
 
 	// Update the name to reflect the one stored in the material_asset.samplers
@@ -1003,7 +1003,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 		InspectorDrawMaterialFileData* draw_data = (InspectorDrawMaterialFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 		memset(draw_data->success, 0, sizeof(draw_data->success));
 		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->path.Copy(path);
+		draw_data->path.CopyOther(path);
 		draw_data->shader_override_data[VERTEX_ORDER] = editor_state->module_reflection->InitializeFieldOverride(VERTEX_TAG, "Vertex Shader");
 		draw_data->shader_override_data[PIXEL_ORDER] = editor_state->module_reflection->InitializeFieldOverride(PIXEL_TAG, "Pixel Shader");
 		// Initialize the reflection manager

@@ -1,5 +1,6 @@
 #include "ecspch.h"
 #include "RenderingEffects.h"
+#include "TextureOperations.h"
 #include "GraphicsHelpers.h"
 #include "Graphics.h"
 #include "../Utilities/FunctionInterfaces.h"

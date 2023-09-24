@@ -434,9 +434,9 @@ namespace ECSEngine {
 	{
 		Resize(asset, allocator, true);
 		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
-			textures[index].Copy(asset->textures[index]);
-			samplers[index].Copy(asset->samplers[index]);
-			buffers[index].Copy(asset->buffers[index]);
+			textures[index].CopyOther(asset->textures[index]);
+			samplers[index].CopyOther(asset->samplers[index]);
+			buffers[index].CopyOther(asset->buffers[index]);
 		}
 
 		vertex_shader_handle = asset->vertex_shader_handle;

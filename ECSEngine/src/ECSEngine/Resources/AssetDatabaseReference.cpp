@@ -299,7 +299,7 @@ namespace ECSEngine {
 				// Create a temporary copy of the stream and eliminate the duplicates
 				ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, stream_copy, stream.size);
 				ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, reference_count, stream.size);
-				stream_copy.Copy(stream);
+				stream_copy.CopyOther(stream);
 
 				// If the stream copy has size of 1, we still need to initialize the first reference count to 1
 				bool had_duplicates = false;

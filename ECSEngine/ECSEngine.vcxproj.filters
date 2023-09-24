@@ -229,6 +229,9 @@
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.h" />
     <ClInclude Include="src\ECSEngine\Containers\SoA.h" />
     <ClInclude Include="src\ECSEngine\Math\MathTypeSizes.h" />
+    <ClInclude Include="src\ECSEngine\GLTF\GLTFExportTextures.h" />
+    <ClInclude Include="src\ECSEngine\Resources\WriteTexture.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\TextureOperations.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -354,6 +357,9 @@
     <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\Components.cpp" />
     <ClCompile Include="src\ECSEngine\Math\MathTypeSizes.cpp" />
+    <ClCompile Include="src\ECSEngine\GLTF\GLTFExportTextures.cpp" />
+    <ClCompile Include="src\ECSEngine\Resources\WriteTexture.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\TextureOperations.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

@@ -432,7 +432,7 @@ namespace ECSEngine {
 		ECS_INLINE Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (string.size > 0) {
 				Stream<char> result = { Allocate(allocator, string.MemoryOf(string.size + 1), alignof(char), debug_info), string.size };
-				result.Copy(string);
+				result.CopyOther(string);
 				result[string.size] = '\0';
 				return result;
 			}
@@ -443,7 +443,7 @@ namespace ECSEngine {
 		ECS_INLINE Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (string.size > 0) {
 				Stream<wchar_t> result = { Allocate(allocator, string.MemoryOf(string.size + 1), alignof(wchar_t), debug_info), string.size };
-				result.Copy(string);
+				result.CopyOther(string);
 				result[string.size] = L'\0';
 				return result;
 			}
@@ -742,20 +742,20 @@ namespace ECSEngine {
 		ECSENGINE_API size_t ConvertDurationToChars(size_t duration_milliseconds, char* characters);
 
 		// finds the tokens that appear in the current string
-		ECSENGINE_API void FindToken(Stream<char> string, char token, CapacityStream<unsigned int>& tokens);
+		ECSENGINE_API void FindToken(Stream<char> string, char token, AdditionStream<unsigned int>& tokens);
 
 		// finds the tokens that appear in the current string
-		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, CapacityStream<unsigned int>& tokens);
+		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, AdditionStream<unsigned int>& tokens);
 
-		ECSENGINE_API void FindToken(Stream<wchar_t> string, wchar_t token, CapacityStream<unsigned int>& tokens);
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, wchar_t token, AdditionStream<unsigned int>& tokens);
 
-		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<unsigned int>& tokens);
-
-		// Convenience function - the more efficient is the unsigned int version that returns offsets into the string
-		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, CapacityStream<Stream<char>>& tokens);
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<unsigned int>& tokens);
 
 		// Convenience function - the more efficient is the unsigned int version that returns offsets into the string
-		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<Stream<wchar_t>>& tokens);
+		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, AdditionStream<Stream<char>>& tokens);
+
+		// Convenience function - the more efficient is the unsigned int version that returns offsets into the string
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<Stream<wchar_t>>& tokens);
 
 		// It will return the first appereance of the token inside the character stream
 		// It will not call strstr, it uses a SIMD search, this function being well suited if searching a large string
@@ -999,6 +999,10 @@ namespace ECSEngine {
 		ECSENGINE_API Stream<char> ReplaceToken(Stream<char> string, Stream<char> token, Stream<char> replacement, AllocatorPolymorphic allocator);
 
 		ECSENGINE_API Stream<wchar_t> ReplaceToken(Stream<wchar_t> string, Stream<wchar_t> token, Stream<wchar_t> replacement, AllocatorPolymorphic allocator);
+
+		ECSENGINE_API Stream<char> ReplaceToken(CapacityStream<char>& string, Stream<char> token, Stream<char> replacement);
+
+		ECSENGINE_API Stream<wchar_t> ReplaceToken(CapacityStream<wchar_t>& string, Stream<wchar_t> token, Stream<wchar_t> replacement);
 
 		template<typename CharacterType>
 		struct ReplaceOccurence {

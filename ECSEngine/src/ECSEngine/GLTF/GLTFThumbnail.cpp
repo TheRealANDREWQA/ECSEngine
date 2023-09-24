@@ -2,6 +2,7 @@
 #include "GLTFThumbnail.h"
 #include "../Rendering/Graphics.h"
 #include "../Rendering/GraphicsHelpers.h"
+#include "../Rendering/TextureOperations.h"
 #include "../Rendering/Camera.h"
 #include "../Math/Transform.h"
 #include "../Utilities/Timer.h"

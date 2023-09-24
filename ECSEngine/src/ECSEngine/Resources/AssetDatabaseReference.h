@@ -87,7 +87,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, temporary_values, count);
 			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
 			temporary_values.size = count;
-			temporary_values.Copy(streams[type].ToStream());
+			temporary_values.CopyOther(streams[type].ToStream());
 
 			for (unsigned int index = 0; index < temporary_values.size; index++) {
 				unsigned int handle = GetHandle(index, type);

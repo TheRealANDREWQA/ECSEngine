@@ -295,7 +295,7 @@ namespace ECSEngine {
 		template<typename PathType, typename CharacterType>
 		PathType MountPathImpl(PathType base, PathType mount_point, CapacityStream<CharacterType> storage) {
 			if (mount_point.size > 0) {
-				storage.Copy(mount_point);
+				storage.CopyOther(mount_point);
 				bool is_absolute = PathIsAbsolute(mount_point);
 				CharacterType character_to_check;
 				CharacterType absolute_separator = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII);
@@ -344,7 +344,7 @@ namespace ECSEngine {
 				PathType new_path;
 				new_path.buffer = (CharacterType*)allocation;
 
-				new_path.Copy(mount_point);
+				new_path.CopyOther(mount_point);
 				bool is_absolute = PathIsAbsolute(mount_point);
 				CharacterType absolute_separator = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII);
 				CharacterType relative_separator = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII_REL);
@@ -451,7 +451,7 @@ namespace ECSEngine {
 		bool PathEnsureParents(Path path, Path valid_parent)
 		{
 			ECS_STACK_CAPACITY_STREAM(wchar_t, new_valid_parent, 512);
-			new_valid_parent.Copy(valid_parent);
+			new_valid_parent.CopyOther(valid_parent);
 
 			bool is_relative = PathIsRelative(path);
 			wchar_t delimitator = is_relative ? ECS_OS_PATH_SEPARATOR_REL : ECS_OS_PATH_SEPARATOR;

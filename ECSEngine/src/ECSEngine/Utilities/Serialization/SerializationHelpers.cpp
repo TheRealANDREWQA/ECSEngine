@@ -718,7 +718,7 @@ namespace ECSEngine {
 		if (user_data != nullptr && *user_data) {
 			// Serialize as a stream instead
 			ECS_STACK_CAPACITY_STREAM(char, stream_name, 256);
-			stream_name.Copy("Stream<");
+			stream_name.CopyOther("Stream<");
 			stream_name.AddStream(template_type);
 			stream_name.Add('>');
 

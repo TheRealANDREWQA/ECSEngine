@@ -127,7 +127,7 @@ void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> 
 		// Get the data and set the path
 		InspectorDrawGPUSamplerFileData* draw_data = (InspectorDrawGPUSamplerFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->path.Copy(path);
+		draw_data->path.CopyOther(path);
 
 		// Retrieve the name
 		ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);

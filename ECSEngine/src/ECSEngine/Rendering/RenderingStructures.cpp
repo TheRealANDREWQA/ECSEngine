@@ -634,18 +634,11 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------------------
 
 	void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index) {
-		void* base_address = (void*)function::AlignPointer(
-			(uintptr_t)function::OffsetPointer(material, sizeof(const char*) + sizeof(float) + sizeof(float) + sizeof(Color) + sizeof(float3)),
-			alignof(Stream<wchar_t>)
-		);
+		Stream<wchar_t>* material_texture = material->TextureStart() + texture_index;
 
-		Stream<wchar_t>* texture_name = (Stream<wchar_t>*)function::OffsetPointer(
-			base_address,
-			sizeof(Stream<wchar_t>) * texture_index
-		);
-		texture_name->InitializeFromBuffer(memory, texture.size);
-		texture_name->Copy(texture);
-		texture_name->buffer[texture_name->size] = L'\0';
+		material_texture->InitializeFromBuffer(memory, texture.size);
+		material_texture->CopyOther(texture);
+		material_texture->buffer[material_texture->size] = L'\0';
 		memory += sizeof(wchar_t);
 	}
 
@@ -682,7 +675,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	// Everything is coallesced into a single allocation
+	// Everything is coalesced into a single allocation
 	void FreePBRMaterial(const PBRMaterial& material, AllocatorPolymorphic allocator)
 	{
 		if (material.name.buffer != nullptr) {
@@ -748,7 +741,7 @@ namespace ECSEngine {
 
 		ECS_TEMP_STRING(temp_memory, 2048);
 		ECS_TEMP_STRING(__base_name, 256);
-		__base_name.Copy(texture_base_name);
+		__base_name.CopyOther(texture_base_name);
 		__base_name[texture_base_name.size] = L'\0';
 		texture_base_name.buffer = __base_name.buffer;
 

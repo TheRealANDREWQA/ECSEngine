@@ -902,7 +902,7 @@ namespace ECSEngine {
 
 			Stream<char> window_name = system->GetWindowName(window_index);
 			ECS_STACK_CAPACITY_STREAM(char, new_name, 256);
-			new_name.Copy(window_name);
+			new_name.CopyOther(window_name);
 			new_name.AddStream(" Parameters");
 
 			unsigned int parameter_window_index = system->GetWindowFromName(new_name);
@@ -2097,7 +2097,7 @@ namespace ECSEngine {
 
 			InjectWindowData* data = (InjectWindowData*)window_data;
 			if (initializer) {
-				// Make a coallesced allocation for all streams
+				// Make a coalesced allocation for all streams
 				size_t allocation_size = 0;
 				allocation_size += sizeof(InjectWindowSection) * data->sections.size;
 				for (size_t index = 0; index < data->sections.size; index++) {
@@ -2619,7 +2619,7 @@ namespace ECSEngine {
 								if (select_elements[index].name == data->selected_element) {
 									found_selected = index;
 									if (up_key && previous_filtered != -1) {
-										data->selected_element.Copy(select_elements[previous_filtered].name);
+										data->selected_element.CopyOther(select_elements[previous_filtered].name);
 									}
 									else if (down_key) {
 										get_down_label = true;
@@ -2628,7 +2628,7 @@ namespace ECSEngine {
 							}
 							previous_filtered = index;
 							if (get_down_label) {
-								data->selected_element.Copy(select_elements[index].name);
+								data->selected_element.CopyOther(select_elements[index].name);
 								get_down_label = false;
 							}
 

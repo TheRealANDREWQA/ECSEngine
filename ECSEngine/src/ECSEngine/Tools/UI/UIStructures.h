@@ -539,7 +539,7 @@ namespace ECSEngine {
 		struct ECSENGINE_API UIWindowDynamicResource {
 			Stream<void*> element_allocations;
 			Stream<ResourceIdentifier> table_resources;
-			// The resource can add allocations without changing the coallesced allocation
+			// The resource can add allocations without changing the coalesced allocation
 			Stream<void*> added_allocations;
 			unsigned int reference_count;
 		};

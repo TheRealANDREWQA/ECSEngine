@@ -22,7 +22,7 @@ namespace ECSEngine {
 		}
 
 		ECS_STACK_CAPACITY_STREAM(char, full_error_message, ECS_KB);
-		full_error_message.Copy(error_string);
+		full_error_message.CopyOther(error_string);
 		full_error_message.AddStream("\nThe call stack of the crash: ");
 
 		Console* console = GetConsole();

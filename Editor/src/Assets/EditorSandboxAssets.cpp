@@ -1044,7 +1044,7 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 		ECS_STACK_CAPACITY_STREAM(CapacityStream<unsigned int>, new_assets_to_add, ECS_ASSET_TYPE_COUNT);
 		for (size_t type = 0; type < ECS_ASSET_TYPE_COUNT; type++) {
 			initial_assets[type].Initialize(&temporary_allocator, 0, 64);
-			initial_assets[type].Copy(data->asset_handles[type]);
+			initial_assets[type].CopyOther(data->asset_handles[type]);
 			new_assets_to_add[type].Initialize(&temporary_allocator, 0, 64);
 		}
 

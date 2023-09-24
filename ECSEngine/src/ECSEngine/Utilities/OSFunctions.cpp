@@ -1313,7 +1313,7 @@ namespace ECSEngine {
 							return false;
 						}
 
-						data->path.Copy(temp_path, wcslen(temp_path));
+						data->path.CopyOther(temp_path, wcslen(temp_path));
 						data->path[data->path.size] = L'\0';
 						CoTaskMemFree(temp_path);
 						item->Release();
@@ -1372,7 +1372,7 @@ namespace ECSEngine {
 							if (SUCCEEDED(result)) {
 								wchar_t* temp_path;
 								result = item->GetDisplayName(SIGDN_FILESYSPATH, &temp_path);
-								data->path.Copy(temp_path, wcslen(temp_path));
+								data->path.CopyOther(temp_path, wcslen(temp_path));
 								data->path[data->path.size] = L'\0';
 								CoTaskMemFree(temp_path);
 								item->Release();

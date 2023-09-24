@@ -30,13 +30,13 @@ namespace ECSEngine {
 #define ECS_STRING_CONCAT_INNER(a, b) a ## b
 #define ECS_STRING_CONCAT(a, b) ECS_STRING_CONCAT_INNER(a, b)
 
-#define ECS_CRASH_IMPLEMENTATION(error_string, crash_function, ...) ECS_STACK_CAPACITY_STREAM(char, base_characters, 512); base_characters.Copy("Engine crash in file {#}, function {#}, line {#}. "); \
+#define ECS_CRASH_IMPLEMENTATION(error_string, crash_function, ...) ECS_STACK_CAPACITY_STREAM(char, base_characters, 512); base_characters.CopyOther("Engine crash in file {#}, function {#}, line {#}. "); \
 	base_characters.AddStreamSafe(error_string); \
 	base_characters[base_characters.size] = '\0'; \
 	ECS_FORMAT_TEMP_STRING(ECS_STRING_CONCAT(crash_string_name, __LINE__), base_characters.buffer, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__); \
 	crash_function(ECS_STRING_CONCAT(crash_string_name, __LINE__).buffer);
 
-#define ECS_CRASH_IMPLEMENTATION_EX(error_string, crash_function, file, function, line, ...) ECS_STACK_CAPACITY_STREAM(char, base_characters, 512); base_characters.Copy("Engine crash in file {#}, function {#}, line {#}. "); \
+#define ECS_CRASH_IMPLEMENTATION_EX(error_string, crash_function, file, function, line, ...) ECS_STACK_CAPACITY_STREAM(char, base_characters, 512); base_characters.CopyOther("Engine crash in file {#}, function {#}, line {#}. "); \
 	base_characters.AddStreamSafe(error_string); \
 	base_characters[base_characters.size] = '\0'; \
 	ECS_FORMAT_TEMP_STRING(ECS_STRING_CONCAT(crash_string_name, line), base_characters.buffer, file, function, line, __VA_ARGS__); \

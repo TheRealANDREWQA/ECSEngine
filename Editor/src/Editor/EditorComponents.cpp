@@ -2311,7 +2311,7 @@ void EditorComponents::UpdateComponents(
 	// Check to see if the module has any components already stored
 	if (module_index != -1) {
 		// Copy the module names into the temporary list
-		temporary_module_types.Copy(loaded_modules[module_index].types);
+		temporary_module_types.CopyOther(loaded_modules[module_index].types);
 
 		register_existing_types(component_indices, std::true_type{});
 		register_existing_types(hierarchy_types, std::false_type{});

@@ -60,7 +60,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 
 	auto error_lambda = [&](Stream<char> reason) {
 		ECS_STACK_CAPACITY_STREAM(char, message, 1024);
-		message.Copy("An error has occured when trying to save a project backup. Reason: ");
+		message.CopyOther("An error has occured when trying to save a project backup. Reason: ");
 		message.AddStreamSafe(reason);
 
 		EditorSetConsoleError(message);
@@ -263,7 +263,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_temp_path, 512);
 
 		Stream<wchar_t> parent_path = function::PathParent(to_path);
-		absolute_temp_path.Copy(parent_path);
+		absolute_temp_path.CopyOther(parent_path);
 		absolute_temp_path.Add(ECS_OS_PATH_SEPARATOR);
 		absolute_temp_path.AddStreamSafe(temp_name);
 		absolute_temp_path[absolute_temp_path.size] = L'\0';
@@ -282,7 +282,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_temp_path, 512);
 
 		Stream<wchar_t> parent_path = function::PathParent(to_path);
-		absolute_temp_path.Copy(parent_path);
+		absolute_temp_path.CopyOther(parent_path);
 		absolute_temp_path.Add(ECS_OS_PATH_SEPARATOR);
 		absolute_temp_path.AddStreamSafe(temp_name);
 		absolute_temp_path[absolute_temp_path.size] = L'\0';
@@ -351,7 +351,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 	};
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, backup_file_or_folder_copy, 512);
-	backup_file_or_folder_copy.Copy(folder);
+	backup_file_or_folder_copy.CopyOther(folder);
 	unsigned int backup_file_or_folder_copy_size = backup_file_or_folder_copy.size;
 
 	bool success = true;
@@ -400,7 +400,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		asset_files_paths.resizable_stream.Initialize(stack_allocator, 0);
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, backup_assets_folder, 512);
-		backup_assets_folder.Copy(folder);
+		backup_assets_folder.CopyOther(folder);
 		backup_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
 		backup_assets_folder.AddStreamAssert(PROJECT_ASSETS_RELATIVE_PATH);
 
@@ -434,7 +434,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 
 	if (valid_files[PROJECT_BACKUP_SCENE]) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, backup_assets_folder, 512);
-		backup_assets_folder.Copy(folder);
+		backup_assets_folder.CopyOther(folder);
 		backup_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
 		backup_assets_folder.AddStreamAssert(PROJECT_ASSETS_RELATIVE_PATH);
 

@@ -58,7 +58,7 @@ void DefaultUITemplate(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ECS_TEMP_STRING(template_path, 256);
-	template_path.Copy(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
+	template_path.CopyOther(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
 	template_path.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 	template_path[template_path.size] = L'\0';
 	if (ExistsFileOrFolder(template_path)) {
@@ -150,7 +150,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 			allocation, sizeof(LoadProjectUITemplateData) * (TOOLBAR_DATA_LAYOUT_ROW_COUNT - 1)
 		);
 		ECS_TEMP_STRING(system_string, 256);
-		system_string.Copy(EDITOR_SYSTEM_PROJECT_UI_TEMPLATE_PREFIX);
+		system_string.CopyOther(EDITOR_SYSTEM_PROJECT_UI_TEMPLATE_PREFIX);
 		system_string.Add(L' ');
 
 		size_t prefix_size = system_string.size;
@@ -161,7 +161,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 
 		wchar_t __temp_project_memory[256];
 		CapacityStream<wchar_t> project_string(__temp_project_memory, 0, 256);
-		project_string.Copy(project_file->path);
+		project_string.CopyOther(project_file->path);
 		project_string.Add(ECS_OS_PATH_SEPARATOR);
 
 		project_string.AddStream(L"UI");
@@ -385,7 +385,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 
 	char layout_state_characters[256];
 	CapacityStream<char> layout_state_stream(layout_state_characters, 0, 256);
-	layout_state_stream.Copy("Default");
+	layout_state_stream.CopyOther("Default");
 
 	Stream<char> layout_system_string = "System ";
 	for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT; index++) {

@@ -182,7 +182,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
 
 	auto get_name = [](unsigned int index, CapacityStream<char>& name) {
-		name.Copy("Sandbox ");
+		name.CopyOther("Sandbox ");
 		function::ConvertIntToChars(name, index);
 	};
 
@@ -290,7 +290,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		// Display the count of modules in use
 
 		ECS_STACK_CAPACITY_STREAM(char, in_use_stream, 256);
-		in_use_stream.Copy("In use: ");
+		in_use_stream.CopyOther("In use: ");
 		function::ConvertIntToChars(in_use_stream, sandbox->modules_in_use.size);
 		drawer->Text(in_use_stream);
 		drawer->NextRow();

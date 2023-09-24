@@ -127,7 +127,7 @@ namespace ECSEngine {
 
 		// Rename the file to a temporary name such that if we fail to serialize we don't lose the previous data
 		ECS_STACK_CAPACITY_STREAM(wchar_t, renamed_file, 512);
-		renamed_file.Copy(function::PathFilename(save_data->file));
+		renamed_file.CopyOther(function::PathFilename(save_data->file));
 		renamed_file.AddStream(L".temp");
 		if (!RenameFolderOrFile(save_data->file, renamed_file)) {
 			// If we fail, then return now.
@@ -136,7 +136,7 @@ namespace ECSEngine {
 
 		struct StackDeallocator {
 			void operator()() {
-				renamed_file.Copy(original_file);
+				renamed_file.CopyOther(original_file);
 				renamed_file.AddStream(L".temp");
 
 				Stream<wchar_t> original_file_filename = function::PathFilename(original_file);

@@ -681,8 +681,12 @@ namespace ECSEngine {
 
 		// Returns the name from the given metadata file
 		static void ExtractNameFromFile(Stream<wchar_t> path, CapacityStream<char>& name);
+
+		static void ExtractNameFromFileWide(Stream<wchar_t> path, CapacityStream<wchar_t>& name);
 		
 		static void ExtractFileFromFile(Stream<wchar_t> path, CapacityStream<wchar_t>& file);
+
+		static Stream<wchar_t> ExtractAssetTargetFromFile(Stream<wchar_t> path, Stream<wchar_t> base_path, CapacityStream<wchar_t>& target_path);
 
 		ECS_FIELDS_START_REFLECT;
 

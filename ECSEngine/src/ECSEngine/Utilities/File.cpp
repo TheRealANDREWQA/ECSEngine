@@ -475,7 +475,7 @@ namespace ECSEngine {
 		ECS_TEMP_STRING(complete_to_path, 512);
 		const wchar_t* to_path = to.buffer;
 		if (use_filename_from) {
-			complete_to_path.Copy(to);
+			complete_to_path.CopyOther(to);
 			bool is_absolute = function::PathIsAbsolute(complete_to_path);
 			complete_to_path.Add(is_absolute ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
 			Stream<wchar_t> from_filename = function::PathFilenameBoth(from);
@@ -509,8 +509,8 @@ namespace ECSEngine {
 		// Copy to a temporary buffer and null terminate both
 		ECS_STACK_CAPACITY_STREAM(wchar_t, from_terminated, 512);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, to_terminated, 512);
-		from_terminated.Copy(from);
-		to_terminated.Copy(to);
+		from_terminated.CopyOther(from);
+		to_terminated.CopyOther(to);
 
 		from_terminated.Add(L'\0');
 		from_terminated.Add(L'\0');
@@ -546,7 +546,7 @@ namespace ECSEngine {
 
 		ECS_TEMP_STRING(new_name_stream, 512);
 		Stream<wchar_t> folder_parent = function::PathParentBoth(path);
-		new_name_stream.Copy(folder_parent);
+		new_name_stream.CopyOther(folder_parent);
 		new_name_stream.Add(ECS_OS_PATH_SEPARATOR);
 		new_name_stream.AddStream(new_name);
 		new_name_stream.AddAssert(L'\0');
@@ -563,7 +563,7 @@ namespace ECSEngine {
 		// one into a temp buffer
 		bool do_alias = function::AreAliasing(path, new_absolute_path);
 		if (do_alias) {
-			temp_path.Copy(path);
+			temp_path.CopyOther(path);
 			path = temp_path;
 		}
 
@@ -593,7 +593,7 @@ namespace ECSEngine {
 	bool ChangeFileExtension(Stream<wchar_t> file, Stream<wchar_t> extension) {
 		ECS_TEMP_STRING(new_name, 512);
 		Stream<wchar_t> original_extension = function::PathExtensionBoth(file);
-		new_name.Copy(Stream<wchar_t>(file.buffer, original_extension.buffer - file.buffer));
+		new_name.CopyOther(Stream<wchar_t>(file.buffer, original_extension.buffer - file.buffer));
 		new_name.AddStream(extension);
 		new_name.AddAssert(L'\0');
 		return RenameFolderOrFile(file, new_name.buffer);

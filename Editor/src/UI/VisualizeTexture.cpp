@@ -143,7 +143,7 @@ void CreateVisualizeTextureUIWindowAction(ActionData* action_data)
 
 void GetVisualizeTextureUIWindowName(unsigned int index, CapacityStream<char>& name)
 {
-	name.Copy(VISUALIZE_TEXTURE_WINDOW_NAME);
+	name.CopyOther(VISUALIZE_TEXTURE_WINDOW_NAME);
 	name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 	function::ConvertIntToChars(name, index);
 }

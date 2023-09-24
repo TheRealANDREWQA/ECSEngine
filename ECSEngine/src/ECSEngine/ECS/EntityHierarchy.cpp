@@ -144,7 +144,7 @@ namespace ECSEngine {
         roots.FreeBuffer();
         roots.Initialize(GetAllocatorPolymorphic(allocator), other->roots.size);
 
-        roots.Copy(other->roots);
+        roots.CopyOther(other->roots);
 
         // Copy the parent table - this can be blitted
         const void* allocated_buffer = parent_table.GetAllocatedBuffer();

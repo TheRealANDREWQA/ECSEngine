@@ -1137,7 +1137,7 @@ namespace ECSEngine {
 				system->m_windows[window_index].table.EraseFromIndex(index);
 
 				ECS_STACK_CAPACITY_STREAM(char, temp_characters, 512);
-				temp_characters.Copy(data->menu_resource_name);
+				temp_characters.CopyOther(data->menu_resource_name);
 				temp_characters.AddStream("##Separate");
 				identifier.ptr = temp_characters.buffer;
 				identifier.size = temp_characters.size;
@@ -1569,7 +1569,7 @@ namespace ECSEngine {
 			UIDrawerFilesystemHierarchy* data = (UIDrawerFilesystemHierarchy*)_data;
 
 			if (mouse->IsReleased(ECS_MOUSE_LEFT) && IsPointInRectangle(mouse_position, position, scale)) {
-				data->active_label.Copy(data->selected_label_temporary);
+				data->active_label.CopyOther(data->selected_label_temporary);
 				data->active_label[data->active_label.size] = '\0';
 
 				if (data->selectable_callback != nullptr) {
@@ -2892,7 +2892,7 @@ namespace ECSEngine {
 						// For example if we have a Sandbox 0 window and a Sandbox 0 menu window
 						// we want to deallocate the menu window
 						ECS_STACK_CAPACITY_STREAM(char, tagged_name, 512);
-						tagged_name.Copy(state->submenues[data->row_index].left_characters);
+						tagged_name.CopyOther(state->submenues[data->row_index].left_characters);
 						tagged_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 						tagged_name.AddStream("menu_windows");
 
@@ -3469,7 +3469,7 @@ namespace ECSEngine {
 					// Use wcsstr, check to see if the files is null terminated
 					const wchar_t* search_string = data->files[index].buffer;
 					if (data->files[index][data->files[index].size] != L'\0') {
-						null_terminated_path.Copy(data->files[index]);
+						null_terminated_path.CopyOther(data->files[index]);
 						null_terminated_path.Add(L'\0');
 						search_string = null_terminated_path.buffer;
 					}
@@ -3538,7 +3538,7 @@ namespace ECSEngine {
 					ECS_STACK_CAPACITY_STREAM(char, converted_stream, 512);
 					function::ConvertWideCharsToASCII(data->draw_data->files[*data->active_index], converted_stream);
 					data->draw_data->input->InsertCharacters(converted_stream.buffer, converted_stream.size, 0, system);
-					data->draw_data->path->Copy(data->draw_data->files[*data->active_index]);
+					data->draw_data->path->CopyOther(data->draw_data->files[*data->active_index]);
 					if (data->draw_data->path->size < data->draw_data->path->capacity) {
 						data->draw_data->path->buffer[data->draw_data->path->size] = L'\0';
 					}

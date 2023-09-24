@@ -164,7 +164,7 @@ void SaveEditorFileThreadTask(unsigned int thread_index, World* world, void* dat
 	bool success = SaveEditorFile((EditorState*)data);
 	if (!success) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
-		error_message.Copy(SAVE_FILE_ERROR_MESSAGE);
+		error_message.CopyOther(SAVE_FILE_ERROR_MESSAGE);
 		EditorSetConsoleError(error_message);
 	}
 }
@@ -175,7 +175,7 @@ void SaveEditorFileAction(ActionData* action_data) {
 	bool success = SaveEditorFile((EditorState*)_data);
 	if (!success) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
-		error_message.Copy(SAVE_FILE_ERROR_MESSAGE);
+		error_message.CopyOther(SAVE_FILE_ERROR_MESSAGE);
 		EditorSetConsoleError(error_message);
 	}
 }
@@ -186,7 +186,7 @@ void LoadEditorFileAction(ActionData* action_data) {
 	bool success = LoadEditorFile((EditorState*)_data);
 	if (!success) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
-		error_message.Copy(LOAD_FILE_ERROR_MESSAGE);
+		error_message.CopyOther(LOAD_FILE_ERROR_MESSAGE);
 		EditorSetConsoleError(error_message);
 	}
 }

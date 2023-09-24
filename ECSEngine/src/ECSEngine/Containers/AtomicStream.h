@@ -5,16 +5,18 @@
 
 namespace ECSEngine {
 
+#define ECS_STACK_ATOMIC_STREAM(type, name, capacity) type _##name[capacity]; AtomicStream<type> name(_##name, 0, capacity)
+
 	// Atomic adds and requests are atomic, the rest of operations are not - The equivalent of the CapacityStream<T>
 	// It has 2 atomic uints, one for the size, telling how many items have been written, and another one where allocations
 	// for are being made
 	// Cannot create atomic streams with void as template argument - use char to express byte streams
 	template<typename T>
 	struct AtomicStream {
-		AtomicStream() : buffer(nullptr), size(0), capacity(0), write_index(0) {}
-		AtomicStream(const void* buffer, unsigned int size) : buffer((T*)buffer), size(size), capacity(size), write_index(size) {}
-		AtomicStream(const void* buffer, unsigned int size, unsigned int capacity) : buffer((T*)buffer), size(size), capacity(capacity), write_index(size) {}
-		AtomicStream(Stream<T> other) : buffer(other.buffer), size(other.size), capacity(other.size), write_index(other.size) {}
+		ECS_INLINE AtomicStream() : buffer(nullptr), size(0), capacity(0), write_index(0) {}
+		ECS_INLINE AtomicStream(const void* buffer, unsigned int size) : buffer((T*)buffer), size(size), capacity(size), write_index(size) {}
+		ECS_INLINE AtomicStream(const void* buffer, unsigned int size, unsigned int capacity) : buffer((T*)buffer), size(size), capacity(capacity), write_index(size) {}
+		ECS_INLINE AtomicStream(Stream<T> other) : buffer(other.buffer), size(other.size), capacity(other.size), write_index(other.size) {}
 
 		AtomicStream(const AtomicStream<T>& other) {
 			buffer = other.buffer;
@@ -200,7 +202,7 @@ namespace ECSEngine {
 			return size.load(ECS_RELAXED);
 		}
 
-		static size_t MemoryOf(size_t number) {
+		ECS_INLINE static size_t MemoryOf(size_t number) {
 			return sizeof(T) * number;
 		}
 

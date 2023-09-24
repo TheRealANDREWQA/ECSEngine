@@ -324,11 +324,11 @@ namespace ECSEngine {
 			// It will help with fragmentation
 			ECS_ASSERT(results.size < STACK_CAPACITY);
 
-			temporary_values.Copy(results);
+			temporary_values.CopyOther(results);
 			results.Deallocate(allocator);
 
 			results.Initialize(allocator, results.size + 1);
-			results.Copy(temporary_values);
+			results.CopyOther(temporary_values);
 			results.Add(new_archetype_index);
 		};
 
@@ -359,11 +359,11 @@ namespace ECSEngine {
 				values.RemoveSwapBack(result_index);
 
 				// Reduce fragmentation by first deallocating and then allocating
-				temporary_values.Copy(values);
+				temporary_values.CopyOther(values);
 				Deallocate(allocator, values.buffer);
 
 				values.Initialize(allocator, values.size);
-				values.Copy(temporary_values);
+				values.CopyOther(temporary_values);
 			}
 		};
 
@@ -380,7 +380,7 @@ namespace ECSEngine {
 
 	void ArchetypeQueryCache::Update(Stream<unsigned int> new_archetypes, Stream<unsigned int> remove_archetypes)
 	{
-		// The checks can be coallesced
+		// The checks can be coalesced
 		ECS_STACK_CAPACITY_STREAM(unsigned int, new_additions_for_query, ECS_KB);
 
 		const size_t STACK_CAPACITY = ECS_KB * 8;
@@ -421,11 +421,11 @@ namespace ECSEngine {
 
 				// Now commit all of them at once
 				if (new_additions_for_query.size > 0) {
-					temporary_values.Copy(query_results.results[index]);
+					temporary_values.CopyOther(query_results.results[index]);
 					Deallocate(allocator, query_results.results[index].buffer);
 
 					query_results.results[index].Initialize(allocator, query_results.results[index].size + new_additions_for_query.size);
-					query_results.results[index].Copy(temporary_values);
+					query_results.results[index].CopyOther(temporary_values);
 
 					for (size_t index = 0; index < new_additions_for_query.size; index++) {
 						query_results.results[index].Add(new_additions_for_query[index]);

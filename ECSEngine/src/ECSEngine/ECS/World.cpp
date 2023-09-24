@@ -46,7 +46,7 @@ namespace ECSEngine {
 		keyboard = descriptor.keyboard;
 
 		// Coallesce all the allocations for these objects such that as to not take useful slots from the global memory manager
-		size_t coallesced_allocation_size =
+		size_t coalesced_allocation_size =
 			sizeof(MemoryManager) + // Entity manager allocator
 			sizeof(EntityPool) +
 			sizeof(EntityManager) +
@@ -56,21 +56,21 @@ namespace ECSEngine {
 			task_manager = descriptor.task_manager;
 		}
 		else {
-			coallesced_allocation_size += sizeof(TaskManager);
+			coalesced_allocation_size += sizeof(TaskManager);
 		}
 
 		if (descriptor.resource_manager == nullptr) {
-			coallesced_allocation_size += sizeof(MemoryManager) + sizeof(ResourceManager);
+			coalesced_allocation_size += sizeof(MemoryManager) + sizeof(ResourceManager);
 		}
 		else {
 			resource_manager = descriptor.resource_manager;
 		}
 
 		if (descriptor.debug_drawer == nullptr && descriptor.debug_drawer_allocator_size > 0) {
-			coallesced_allocation_size += sizeof(MemoryManager) + sizeof(DebugDrawer);
+			coalesced_allocation_size += sizeof(MemoryManager) + sizeof(DebugDrawer);
 		}
 
-		void* allocation = memory->Allocate(coallesced_allocation_size);
+		void* allocation = memory->Allocate(coalesced_allocation_size);
 
 		MemoryManager* entity_manager_memory = (MemoryManager*)allocation;
 		new (entity_manager_memory) MemoryManager(

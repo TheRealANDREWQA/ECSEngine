@@ -379,7 +379,7 @@ namespace ECSEngine {
 		ECS_UNLOCK_ALLOCATOR_FUNCTIONS[allocator.allocator_type](allocator.allocator);
 	}
 
-	// Only linear/stack/multipool are considered base allocator types
+	// Only linear/stack/multipool/arena are considered base allocator types
 	ECSENGINE_API size_t BaseAllocatorSize(ECS_ALLOCATOR_TYPE type);
 
 	ECSENGINE_API size_t BaseAllocatorBufferSize(CreateBaseAllocatorInfo info);

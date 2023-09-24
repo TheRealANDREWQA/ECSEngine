@@ -473,7 +473,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	) {
 		if (matrix_field != nullptr && shader_field->basic_component_count > 1) {
 			matrix_field->buffer[matrix_field->size].name.buffer = matrix_field_name_storage->buffer + matrix_field_name_storage->size;
-			matrix_field->buffer[matrix_field->size].name.Copy(shader_field->name);
+			matrix_field->buffer[matrix_field->size].name.CopyOther(shader_field->name);
 			matrix_field_name_storage->size += shader_field->name.size;
 			matrix_field_name_storage->AssertCapacity();
 		}
@@ -572,7 +572,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			// See if it has any lower bounds/upper bound
 			// Use a high precision of 5 when writing the doubles
 			if (shader_field->min_value.x != DBL_MAX) {
-				range_tag.Copy(STRING(ECS_UI_RANGE_REFLECT));
+				range_tag.CopyOther(STRING(ECS_UI_RANGE_REFLECT));
 				range_tag.Add('(');
 				unsigned char basic_type_count = Reflection::BasicTypeComponentCount(shader_field->basic_type);
 				// Write the values as is
@@ -588,7 +588,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				range_tag.AddAssert(')');
 			}
 			else if (shader_field->max_value.x != DBL_MAX) {
-				range_tag.Copy(STRING(ECS_UI_RANGE_REFLECT));
+				range_tag.CopyOther(STRING(ECS_UI_RANGE_REFLECT));
 				range_tag.Add('(');
 				range_tag.Add('_');
 				range_tag.Add(',');

@@ -1589,7 +1589,7 @@ namespace ECSEngine {
 			MaterialAsset temporary_material;
 			memcpy(&temporary_material, material, sizeof(temporary_material));
 			ECS_STACK_CAPACITY_STREAM(MaterialAssetBuffer, previous_material_buffers, 512);
-			previous_material_buffers.Copy(material->buffers[shader]);
+			previous_material_buffers.CopyOther(material->buffers[shader]);
 
 			material->ResizeBufferNewValue(cbuffers.size, shader, allocator);
 			material->reflection_manager->ClearTypesFromAllocator();
