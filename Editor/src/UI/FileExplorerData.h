@@ -28,6 +28,7 @@ struct FileExplorerData {
 	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> add_handlers;
 	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> file_right_click_handlers;
 	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> folder_right_click_handlers;
+	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> mesh_export_materials_click_handlers;
 
 	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> deselection_menu_handlers;
 	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> deselection_create_menu_handlers;

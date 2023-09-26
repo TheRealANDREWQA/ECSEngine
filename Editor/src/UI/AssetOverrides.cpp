@@ -5,6 +5,7 @@
 #include "../Assets/AssetManagement.h"
 #include "../Assets/EditorSandboxAssets.h"
 #include "../Project/ProjectFolders.h"
+#include "../UI/Inspector.h"
 
 #include "AssetIcons.h"
 
@@ -946,11 +947,59 @@ void OverrideAssetHandle(
 	}
 	base_data->selection.CopyOther(composite_string);
 
+	struct DoubleClickActionData {
+		EditorState* editor_state;
+		unsigned int handle_value;
+		ECS_ASSET_TYPE asset_type;
+		const AssetDatabase* target_database;
+	};
+
+	auto double_click_action = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		DoubleClickActionData* data = (DoubleClickActionData*)_data;
+		unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+		Stream<char> window_name = system->GetWindowName(window_index);
+		unsigned int inspector_index = GetInspectorIndex(window_name);
+		if (inspector_index != -1) {
+			if (data->target_database == data->editor_state->asset_database) {
+				ChangeInspectorToAsset(data->editor_state, data->handle_value, data->asset_type, inspector_index);
+			}
+			else {
+				// Get the metadata
+				const void* metadata = data->target_database->GetAssetConst(data->handle_value, data->asset_type);
+				ChangeInspectorToAsset(data->editor_state, metadata, data->asset_type, inspector_index);
+			}
+		}
+	};
+
+	DoubleClickActionData double_click_data;
+	double_click_data.asset_type = type;
+	double_click_data.handle_value = *handle;
+	double_click_data.editor_state = base_data->editor_state;
+	double_click_data.target_database = base_data->database;
+
+	UIConfigSelectionInputLabelClickable selection_clickable;
+	selection_clickable.double_click_action = true;
+	selection_clickable.double_click_duration_between_clicks = 200;
+	selection_clickable.handler = { double_click_action, &double_click_data, sizeof(double_click_data), ECS_UI_DRAW_SYSTEM };
+
+	config->AddFlag(selection_clickable);
+
 	// Draw the field as a selection input
-	drawer->SelectionInput(configuration, *config, field_name, &base_data->selection, ECS_TOOLS_UI_TEXTURE_FOLDER, &window_descriptor);
+	drawer->SelectionInput(
+		configuration | UI_CONFIG_SELECTION_INPUT_LABEL_CLICKABLE, 
+		*config, 
+		field_name, 
+		&base_data->selection, 
+		ECS_TOOLS_UI_TEXTURE_FOLDER, 
+		&window_descriptor
+	);
 	if (configuration & UI_CONFIG_SELECTION_INPUT_OVERRIDE_HOVERABLE) {
 		config->flag_count--;
 	}
+	// For the selection_clickable
+	config->flag_count--;
 }
 
 struct OverrideMeshData {

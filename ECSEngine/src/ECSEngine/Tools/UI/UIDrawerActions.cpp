@@ -1151,6 +1151,9 @@ namespace ECSEngine {
 				system->m_windows[window_index].table.EraseFromIndex(index);
 
 				system->RemoveFrameHandler(RightClickMenuReleaseResource, data);
+
+				// Deallocate the menu resource name - it was previously allocated
+				data->menu_resource_name.Deallocate(system->Allocator());
 			}
 		}
 
@@ -3197,7 +3200,8 @@ namespace ECSEngine {
 
 				UIDrawerRightClickMenuSystemHandlerData release_data;
 
-				release_data.menu_resource_name = data->name;
+				// Allocate the menu resource name - in order to make sure that it is stable
+				release_data.menu_resource_name = data->name.Copy(system->Allocator());
 				release_data.parent_window_name = system->m_windows[data->window_index].name;
 				release_data.menu_window_name = data->state.left_characters;
 

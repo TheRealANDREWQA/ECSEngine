@@ -146,17 +146,41 @@ void GetSandboxAvailableRuntimeSettings(
 
 // -------------------------------------------------------------------------------------------------------------
 
-ECSEngine::RenderTargetView GetSandboxInstancedFramebuffer(const EditorState* editor_state, unsigned int sandbox_index);
+ECS_INLINE ECSEngine::RenderTargetView GetSandboxInstancedFramebuffer(const EditorState* editor_state, unsigned int sandbox_index) {
+	return GetSandbox(editor_state, sandbox_index)->scene_viewport_instance_framebuffer;
+}
 
 // -------------------------------------------------------------------------------------------------------------
 
-ECSEngine::DepthStencilView GetSandboxInstancedDepthFramebuffer(const EditorState* editor_state, unsigned int sandbox_index);
+ECS_INLINE ECSEngine::DepthStencilView GetSandboxInstancedDepthFramebuffer(const EditorState* editor_state, unsigned int sandbox_index) {
+	return GetSandbox(editor_state, sandbox_index)->scene_viewport_depth_stencil_framebuffer;
+}
 
 // -------------------------------------------------------------------------------------------------------------
 
-ECSEngine::Stream<ECSEngine::Entity> GetSandboxSelectedEntities(
+ECS_INLINE ECSEngine::Stream<ECSEngine::Entity> GetSandboxSelectedEntities(
 	const EditorState* editor_state,
 	unsigned int sandbox_index
+) {
+	return GetSandbox(editor_state, sandbox_index)->selected_entities.ToStream();
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+ECS_INLINE size_t GetSandboxSelectedEntitiesCount(const EditorState* editor_state, unsigned int sandbox_index) {
+	return GetSandboxSelectedEntities(editor_state, sandbox_index).size;
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+// This version will filter any virtual entities (unused entity slots) that appear here
+// The filtered entities must have a capacity equal or greater than the selected entities size
+// With the viewport you can specify 
+void GetSandboxSelectedEntitiesFiltered(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::CapacityStream<ECSEngine::Entity>* filtered_entities,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -170,6 +194,16 @@ unsigned int GetSandboxUnusedEntitySlots(
 	ECSEngine::Stream<ECSEngine::Entity> entities,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
+
+// -------------------------------------------------------------------------------------------------------------
+
+ECS_INLINE ECSEngine::Stream<ECSEngine::Entity> GetSandboxUnusedEntitySlots(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+) {
+	return GetSandbox(editor_state, sandbox_index)->unused_entities_slots[viewport].ToStream();
+}
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -232,7 +266,9 @@ bool LoadRuntimeSettings(
 
 // Useful for example for not letting the sandbox be destroyed while a load operation is in progress
 // This can be called multiple times, it is a counter, not a boolean and it is atomic.
-void LockSandbox(EditorState* editor_state, unsigned int sandbox_index);
+ECS_INLINE void LockSandbox(EditorState* editor_state, unsigned int sandbox_index) {
+	GetSandbox(editor_state, sandbox_index)->locked_count.fetch_add(1, ECS_RELAXED);
+}
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -454,7 +490,9 @@ bool UpdateRuntimeSettings(const EditorState* editor_state, ECSEngine::Stream<wc
 // -------------------------------------------------------------------------------------------------------------
 
 // This is a counter, not a boolean, so it can be called multiple times and it is atomic.
-void UnlockSandbox(EditorState* editor_state, unsigned int sandbox_index);
+ECS_INLINE void UnlockSandbox(EditorState* editor_state, unsigned int sandbox_index) {
+	GetSandbox(editor_state, sandbox_index)->locked_count.fetch_sub(1, ECS_RELAXED);
+}
 
 // -------------------------------------------------------------------------------------------------------------
 

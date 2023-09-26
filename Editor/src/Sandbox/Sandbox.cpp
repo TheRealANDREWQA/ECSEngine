@@ -30,23 +30,23 @@ using namespace ECSEngine;
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-static ECS_INLINE Stream<char> ColorDepthTextureString(bool color_texture) {
+ECS_INLINE static Stream<char> ColorDepthTextureString(bool color_texture) {
 	return color_texture ? "render" : "depth";
 }
 
-static ECS_INLINE void GetVisualizeTextureName(Stream<char> viewport_description, unsigned int sandbox_index, bool color_texture, CapacityStream<char>& name) {
+ECS_INLINE static void GetVisualizeTextureName(Stream<char> viewport_description, unsigned int sandbox_index, bool color_texture, CapacityStream<char>& name) {
 	ECS_FORMAT_STRING(name, "{#} {#} {#}", viewport_description, sandbox_index, ColorDepthTextureString(color_texture));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-static ECS_INLINE void GetVisualizeInstancedTextureName(unsigned int sandbox_index, bool color_texture, CapacityStream<char>& name) {
+ECS_INLINE static void GetVisualizeInstancedTextureName(unsigned int sandbox_index, bool color_texture, CapacityStream<char>& name) {
 	ECS_FORMAT_STRING(name, "Scene {#} instanced {#}", sandbox_index, ColorDepthTextureString(color_texture));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-static ECS_INLINE bool IsSandboxRuntimePreinitialized(const EditorState* editor_state, unsigned int sandbox_index) {
+ECS_INLINE static bool IsSandboxRuntimePreinitialized(const EditorState* editor_state, unsigned int sandbox_index) {
 	return GetSandbox(editor_state, sandbox_index)->runtime_descriptor.graphics != nullptr;
 }
 
@@ -432,7 +432,11 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 	SetEditorRuntimeType(system_manager, viewport == EDITOR_SANDBOX_VIEWPORT_SCENE ? ECS_EDITOR_RUNTIME_SCENE : ECS_EDITOR_RUNTIME_GAME);
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 		SetEditorRuntimeSelectColor(system_manager, EDITOR_SELECT_COLOR);
-		SetEditorRuntimeSelectedEntities(system_manager, sandbox->selected_entities);
+		size_t selected_count = sandbox->selected_entities.size;
+		CapacityStream<Entity> filtered_selected_entities;
+		filtered_selected_entities.Initialize(editor_state->editor_allocator, 0, selected_count);
+		GetSandboxSelectedEntitiesFiltered(editor_state, sandbox_index, &filtered_selected_entities, viewport);
+		SetEditorRuntimeSelectedEntities(system_manager, filtered_selected_entities);
 		
 		ECSTransformToolEx transform_tool;
 		transform_tool.tool = sandbox->transform_tool;
@@ -920,25 +924,25 @@ void GetSandboxAvailableRuntimeSettings(
 	});
 }
 
-// -----------------------------------------------------------------------------------------------------------------------------
-
-ECSEngine::RenderTargetView GetSandboxInstancedFramebuffer(const EditorState* editor_state, unsigned int sandbox_index)
-{
-	return GetSandbox(editor_state, sandbox_index)->scene_viewport_instance_framebuffer;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-ECSEngine::DepthStencilView GetSandboxInstancedDepthFramebuffer(const EditorState* editor_state, unsigned int sandbox_index)
-{
-	return GetSandbox(editor_state, sandbox_index)->scene_viewport_depth_stencil_framebuffer;
-}
-
 // ------------------------------------------------------------------------------------------------------------------------------
 
-Stream<Entity> GetSandboxSelectedEntities(const EditorState* editor_state, unsigned int sandbox_index)
+void GetSandboxSelectedEntitiesFiltered(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	CapacityStream<Entity>* filtered_entities,
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
 {
-	return GetSandbox(editor_state, sandbox_index)->selected_entities.ToStream();
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+	Stream<Entity> virtual_entities = GetSandboxUnusedEntitySlots(editor_state, sandbox_index, viewport);
+
+	filtered_entities->CopyOther(selected_entities);
+	for (size_t index = 0; index < virtual_entities.size && selected_entities.size > 0; index++) {
+		size_t found_index = function::SearchBytes(filtered_entities->buffer, filtered_entities->size, virtual_entities[index].value, sizeof(virtual_entities[index]));
+		if (found_index != -1) {
+			filtered_entities->RemoveSwapBack(found_index);
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1086,13 +1090,6 @@ bool LoadRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filena
 		return true;
 	}
 	return false;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void LockSandbox(EditorState* editor_state, unsigned int sandbox_index)
-{
-	GetSandbox(editor_state, sandbox_index)->locked_count.fetch_add(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1625,7 +1622,6 @@ void RemoveSandboxUnusedEntitiesSlot(EditorState* editor_state, unsigned int san
 		sandbox->unused_entity_slot_type[viewport].RemoveSwapBack(slot_index);
 		slot_index = find();
 	}
-	SignalSandboxUnusedEntitiesSlotsCounter(editor_state, sandbox_index, viewport);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1973,13 +1969,6 @@ bool UpdateRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> file
 	}
 
 	return false;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void UnlockSandbox(EditorState* editor_state, unsigned int sandbox_index)
-{
-	GetSandbox(editor_state, sandbox_index)->locked_count.fetch_sub(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

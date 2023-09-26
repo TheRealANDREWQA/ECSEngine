@@ -580,7 +580,9 @@ namespace ECSEngine {
 			unsigned int window_index
 		);
 
-		// --------------------------------------------------------------------------------------------------------------
+		// Draws a row with an "Ok" button on the left and a "Cancel" button on the right
+		// When the action is performed, the window will be destroyed automatically
+		ECSENGINE_API void UIDrawerOKCancelRow(UIDrawer& drawer, Stream<char> ok_label, Stream<char> cancel_label, UIActionHandler ok_handler, UIActionHandler cancel_handler);
 
 	}
 

@@ -18,6 +18,9 @@ struct EntitiesUIData {
 
 	// Each entity corresponds to the global component at that index inside the entity manager
 	Stream<Entity> virtual_global_components_entities;
+	// We need to record this to change the entities that we stored here when a change of
+	// runtime happens
+	EDITOR_SANDBOX_VIEWPORT virtual_components_viewport;
 };
 
 #define ITERATOR_LABEL_CAPACITY 128
@@ -381,6 +384,14 @@ static void DeleteEntityCallback(ActionData* action_data) {
 			Component global_component = DecodeVirtualEntityToComponent(data, source_labels[index]);
 			if (global_component.Valid()) {
 				RemoveSandboxGlobalComponent(data->editor_state, data->sandbox_index, global_component);
+				// We must also remove it from our internal list of components
+				size_t component_index = function::SearchBytes(
+					data->virtual_global_components_entities.buffer,
+					data->virtual_global_components_entities.size,
+					source_labels[index].value,
+					sizeof(source_labels[index])
+				);
+				data->virtual_global_components_entities.RemoveSwapBack(component_index);
 			}
 			else {
 				DeleteSandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
@@ -486,6 +497,7 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 	data->editor_state = editor_state;
 	data->sandbox_index = -1;
 	data->virtual_global_components_entities.InitializeFromBuffer(nullptr, 0);
+	data->virtual_components_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
 
 	CapacityStream<char> window_name(function::OffsetPointer(data, sizeof(*data)), 0, 128);
 	GetEntitiesUIWindowName(window_index, window_name);
@@ -532,14 +544,19 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 		// Get the count of global components and update the virtual mapping of the global components if the count is different
 		unsigned int global_component_count = entity_manager->GetGlobalComponentCount();
-		if (global_component_count != data->virtual_global_components_entities.size && global_component_count > 0) {
+		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
+		if (global_component_count != data->virtual_global_components_entities.size || ShouldSandboxRecomputeEntitySlots(editor_state, sandbox_index) 
+			|| data->virtual_components_viewport != active_viewport) {
 			// Reset the virtual entities first
 			RemoveSandboxUnusedEntitiesSlot(editor_state, sandbox_index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
 			data->virtual_global_components_entities.Resize(editor_state->EditorAllocator(), global_component_count, false, true);
-			unsigned int slot_start_index = GetSandboxUnusedEntitySlots(editor_state, sandbox_index, data->virtual_global_components_entities);
-			for (size_t index = 0; index < data->virtual_global_components_entities.size; index++) {
-				SetSandboxUnusedEntitySlotType(editor_state, sandbox_index, slot_start_index + index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
+			if (global_component_count > 0) {
+				unsigned int slot_start_index = GetSandboxUnusedEntitySlots(editor_state, sandbox_index, data->virtual_global_components_entities);
+				for (size_t index = 0; index < data->virtual_global_components_entities.size; index++) {
+					SetSandboxUnusedEntitySlotType(editor_state, sandbox_index, slot_start_index + index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
+				}
 			}
+			data->virtual_components_viewport = active_viewport;
 		}
 
 		EntitiesWholeWindowMenu(drawer, data);
@@ -668,7 +685,11 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 					Stream<Entity> entity_selection = info->selected_labels.AsIs<Entity>();
 					// Remove any virtual entities
 					for (size_t index = 0; index < entity_selection.size; index++) {
-						if (!IsNormalEntity(entities_data, entity_selection[index])) {
+						/*if (!IsNormalEntity(entities_data, entity_selection[index])) {
+							entity_selection.RemoveSwapBack(index);
+							index--;
+						}*/
+						if (entity_selection[index] == GlobalComponentsParent()) {
 							entity_selection.RemoveSwapBack(index);
 							index--;
 						}

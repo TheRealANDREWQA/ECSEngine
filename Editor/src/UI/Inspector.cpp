@@ -408,14 +408,19 @@ void DestroyInspectorInstance(EditorState* editor_state, unsigned int inspector_
 unsigned int GetInspectorIndex(Stream<char> window_name) {
 	size_t current_index = window_name.size - 1;
 
-	unsigned int number = 0;
-	while (function::IsNumberCharacter(window_name[current_index])) {
-		number *= 10;
-		number += window_name[current_index] - '0';
-		current_index--;
-	}
+	if (window_name.StartsWith(INSPECTOR_WINDOW_NAME)) {
+		unsigned int number = 0;
+		while (function::IsNumberCharacter(window_name[current_index])) {
+			number *= 10;
+			number += window_name[current_index] - '0';
+			current_index--;
+		}
 
-	return number;
+		return number;
+	}
+	else {
+		return -1;
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

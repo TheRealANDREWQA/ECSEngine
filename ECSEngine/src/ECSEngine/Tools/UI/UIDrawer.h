@@ -1736,14 +1736,26 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// The identifier is used to differentiate between multiple double click actions
 			void AddDoubleClickAction(
 				size_t configuration,
 				float2 position,
 				float2 scale,
-				unsigned int identifier,
 				size_t duration_between_clicks,
 				UIActionHandler first_click_handler,
-				UIActionHandler second_click_handler
+				UIActionHandler second_click_handler,
+				unsigned int identifier
+			);
+
+			// The identifier is used to differentiate between multiple double click actions
+			void AddDoubleClickAction(
+				size_t configuration,
+				float2 position,
+				float2 scale,
+				size_t duration_between_clicks,
+				UIActionHandler first_click_handler,
+				UIActionHandler second_click_handler,
+				Stream<char> identifier
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -4997,7 +5009,6 @@ namespace ECSEngine {
 
 #pragma endregion
 
-		//private:
 			UISystem* system;
 			UIDockspace* dockspace;
 			unsigned int thread_id;

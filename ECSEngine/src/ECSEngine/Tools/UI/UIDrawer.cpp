@@ -30,19 +30,19 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		bool IsElementNameFirst(size_t configuration, size_t no_name_flag) {
+		ECS_INLINE bool IsElementNameFirst(size_t configuration, size_t no_name_flag) {
 			return ((configuration & UI_CONFIG_ELEMENT_NAME_FIRST) != 0) && ((configuration & no_name_flag) == 0);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		bool IsElementNameAfter(size_t configuration, size_t no_name_flag) {
+		ECS_INLINE bool IsElementNameAfter(size_t configuration, size_t no_name_flag) {
 			return ((configuration & UI_CONFIG_ELEMENT_NAME_FIRST) == 0) && ((configuration & no_name_flag) == 0);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void AlignToRowY(UIDrawer* drawer, size_t configuration, float2& position, float2 scale) {
+		ECS_INLINE void AlignToRowY(UIDrawer* drawer, size_t configuration, float2& position, float2 scale) {
 			if (configuration & UI_CONFIG_ALIGN_TO_ROW_Y) {
 				position.y = AlignMiddle(position.y, drawer->current_row_y_scale, scale.y);
 			}
@@ -50,14 +50,14 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		bool IsLateOrSystemConfiguration(size_t configuration) {
+		ECS_INLINE bool IsLateOrSystemConfiguration(size_t configuration) {
 			return function::HasFlag(configuration, UI_CONFIG_LATE_DRAW) || function::HasFlag(configuration, UI_CONFIG_SYSTEM_DRAW);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// Add to the late_hoverable, late_clickable or late_generals the last action in order to be added later on
-		ECS_INLINE void AddLateOrSystemAction(UIDrawer* drawer, size_t configuration, bool hoverable, bool general, ECS_MOUSE_BUTTON click_button) {
+		static void AddLateOrSystemAction(UIDrawer* drawer, size_t configuration, bool hoverable, bool general, ECS_MOUSE_BUTTON click_button) {
 			if (IsLateOrSystemConfiguration(configuration)) {
 				if (hoverable) {
 					drawer->late_hoverables.AddAssert(drawer->system->GetLastHoverableIndex(drawer->dockspace, drawer->border_index));
@@ -9143,23 +9143,57 @@ namespace ECSEngine {
 			size_t configuration,
 			float2 position,
 			float2 scale,
-			unsigned int identifier,
 			size_t duration_between_clicks,
 			UIActionHandler first_click_handler,
-			UIActionHandler second_click_handler
+			UIActionHandler second_click_handler,
+			unsigned int identifier
 		) {
 			if (!initializer) {
-				system->AddDoubleClickActionToDockspaceRegion(
-					thread_id,
-					dockspace,
-					border_index,
-					position,
-					scale,
-					identifier,
-					duration_between_clicks,
-					first_click_handler,
-					second_click_handler
-				);
+				UISystemDoubleClickData register_data;
+				register_data.border_index = border_index;
+				register_data.dockspace = dockspace;
+				register_data.thread_id = thread_id;
+				register_data.position = position;
+				register_data.scale = scale;
+				register_data.duration_between_clicks = duration_between_clicks;
+				register_data.first_click_handler = first_click_handler;
+				register_data.second_click_handler = second_click_handler;
+				
+				register_data.is_identifier_int = true;
+				register_data.identifier = identifier;
+				system->AddDoubleClickActionToDockspaceRegion(register_data);
+
+				AddLateOrSystemAction(this, configuration, false, true, ECS_MOUSE_BUTTON_COUNT);
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::AddDoubleClickAction(
+			size_t configuration,
+			float2 position,
+			float2 scale,
+			size_t duration_between_clicks,
+			UIActionHandler first_click_handler,
+			UIActionHandler second_click_handler,
+			Stream<char> identifier
+		) {
+			if (!initializer) {
+				UISystemDoubleClickData register_data;
+				register_data.border_index = border_index;
+				register_data.dockspace = dockspace;
+				register_data.thread_id = thread_id;
+				register_data.position = position;
+				register_data.scale = scale;
+				register_data.duration_between_clicks = duration_between_clicks;
+				register_data.first_click_handler = first_click_handler;
+				register_data.second_click_handler = second_click_handler;
+
+				register_data.is_identifier_int = false;
+				ECS_ASSERT(identifier.size <= sizeof(register_data.identifier_char));
+				identifier.CopyTo(register_data.identifier_char);
+				register_data.identifier_char_count = identifier.size;
+				system->AddDoubleClickActionToDockspaceRegion(register_data);
 
 				AddLateOrSystemAction(this, configuration, false, true, ECS_MOUSE_BUTTON_COUNT);
 			}
@@ -14894,11 +14928,11 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::SelectionInput(
-			size_t configuration, 
-			const UIDrawConfig& config, 
-			Stream<char> name, 
-			CapacityStream<char>* selection, 
-			Stream<wchar_t> texture, 
+			size_t configuration,
+			const UIDrawConfig& config,
+			Stream<char> name,
+			CapacityStream<char>* selection,
+			Stream<wchar_t> texture,
 			const UIWindowDescriptor* window_descriptor,
 			UIActionHandler selection_callback
 		)
@@ -14907,7 +14941,7 @@ namespace ECSEngine {
 
 			// There is no need for an initializer
 			configuration = function::ClearFlag(configuration, UI_CONFIG_DO_CACHE);
-			
+
 			bool window_dependent = function::HasFlag(configuration, UI_CONFIG_WINDOW_DEPENDENT_SIZE);
 
 			bool has_name = name.size > 0;
@@ -14916,7 +14950,7 @@ namespace ECSEngine {
 			// Draw the name, if any
 			float2 icon_size = GetSquareScale(scale.y);
 			scale.x = function::ClampMin(scale.x, icon_size.x + layout.element_indentation + 0.005f);
-			
+
 			float2 total_scale = window_dependent ? scale : float2(name_size + scale.x, scale.y);
 
 			HandleFitSpaceRectangle(configuration, position, total_scale);
@@ -14949,6 +14983,26 @@ namespace ECSEngine {
 			float2 label_scale = { _label_scale, scale.y };
 			// The fixed scale label doesn't finalize the rectangle
 			FixedScaleTextLabel(configuration, config, *selection, position, label_scale);
+
+			// Check the clickable handler
+			if (function::HasFlag(configuration, UI_CONFIG_SELECTION_INPUT_LABEL_CLICKABLE)) {
+				const UIConfigSelectionInputLabelClickable* clickable = (const UIConfigSelectionInputLabelClickable*)config.GetParameter(UI_CONFIG_SELECTION_INPUT_LABEL_CLICKABLE);
+				if (clickable->double_click_action) {
+					AddDoubleClickAction(
+						configuration, 
+						position, 
+						label_scale, 
+						clickable->double_click_duration_between_clicks, 
+						clickable->first_click_handler, 
+						clickable->handler, 
+						name
+					);
+				}
+				else {
+					AddDefaultClickable(configuration, position, label_scale, {}, clickable->handler);
+				}
+			}
+
 			FinalizeRectangle(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, position, label_scale);
 
 			Stream<char> tooltip_text = *selection;

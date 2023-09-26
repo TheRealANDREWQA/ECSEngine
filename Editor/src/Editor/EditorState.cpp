@@ -398,11 +398,16 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	// and that will be slow. So instead we have to use the dedicated GPU for UI as well
 	CreateGraphicsForProcess(graphics, hWnd, global_memory_manager, true);
 
-	MemoryManager* editor_allocator = new MemoryManager(2'000'000, 4096, 10'000'000, GetAllocatorPolymorphic(global_memory_manager));
+	MemoryManager* editor_allocator = new MemoryManager(MEMORY_MANAGER_CAPACITY, 4 * ECS_KB, MEMORY_MANAGER_RESERVE_CAPACITY, GetAllocatorPolymorphic(global_memory_manager));
 	editor_state->editor_allocator = editor_allocator;
 	AllocatorPolymorphic polymorphic_editor_allocator = GetAllocatorPolymorphic(editor_allocator);
 
-	MemoryManager* multithreaded_editor_allocator = new MemoryManager(10'000'000, 4096, 10'000'000, GetAllocatorPolymorphic(global_memory_manager));
+	MemoryManager* multithreaded_editor_allocator = new MemoryManager(
+		MULTITHREADED_MEMORY_MANAGER_CAPACITY, 
+		4 * ECS_KB, 
+		MULTITHREADED_MEMORY_MANAGER_RESERVE_CAPACITY, 
+		GetAllocatorPolymorphic(global_memory_manager)
+	);
 	editor_state->multithreaded_editor_allocator = multithreaded_editor_allocator;
 
 	TaskManager* editor_task_manager = (TaskManager*)malloc(sizeof(TaskManager));

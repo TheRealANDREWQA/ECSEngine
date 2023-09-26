@@ -2,8 +2,14 @@
 #include <stdint.h>
 
 constexpr size_t SLEEP_AMOUNT[] = { 20, 15, 10, 5, 0 };
-constexpr size_t GLOBAL_MEMORY_COUNT = 200'000'000;
-constexpr size_t GLOBAL_MEMORY_RESERVE_COUNT = 75'000'000;
+constexpr size_t GLOBAL_MEMORY_COUNT = 100 * ECS_MB;
+constexpr size_t GLOBAL_MEMORY_RESERVE_COUNT = 75 * ECS_MB;
+
+constexpr size_t MEMORY_MANAGER_CAPACITY = 5 * ECS_MB;
+constexpr size_t MEMORY_MANAGER_RESERVE_CAPACITY = 20 * ECS_MB;
+
+constexpr size_t MULTITHREADED_MEMORY_MANAGER_CAPACITY = 10 * ECS_MB;
+constexpr size_t MULTITHREADED_MEMORY_MANAGER_RESERVE_CAPACITY = 10 * ECS_MB;
 
 constexpr const char VERSION_DESCRIPTION[] = "0.1.0";
 constexpr unsigned char VERSION_INDEX = 1;

@@ -561,44 +561,44 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::AddDoubleClickActionToDockspaceRegion(
-			unsigned int thread_id, 
-			UIDockspace* dockspace, 
-			unsigned int border_index, 
-			float2 position, 
-			float2 scale, 
-			unsigned int identifier,
-			size_t duration_between_clicks,
-			UIActionHandler first_click_handler,
-			UIActionHandler second_click_handler
-		)
+		void UISystem::AddDoubleClickActionToDockspaceRegion(const UISystemDoubleClickData& data)
 		{
 			UIDoubleClickData click_data;
-			click_data.first_click_handler = first_click_handler;
-			click_data.double_click_handler = second_click_handler;
-			click_data.max_duration_between_clicks = duration_between_clicks;
+			click_data.first_click_handler = data.first_click_handler;
+			click_data.double_click_handler = data.second_click_handler;
+			click_data.max_duration_between_clicks = data.duration_between_clicks;
 			click_data.first_click_handler.data = nullptr;
-			click_data.identifier = identifier;
-			void* first_click_data = first_click_handler.data == nullptr ? &click_data : first_click_handler.data;
-			void* second_click_data = second_click_handler.data == nullptr ? &click_data : second_click_handler.data;
-			ECS_UI_DRAW_PHASE phase = first_click_handler.phase > second_click_handler.phase ? first_click_handler.phase : second_click_handler.phase;
+			if (data.is_identifier_int) {
+				click_data.is_identifier_int = true;
+				click_data.identifier = data.identifier;
+			}
+			else {
+				click_data.is_identifier_int = false;
+				ECS_ASSERT(sizeof(click_data.identifier_char) >= data.identifier_char_count);
+				memcpy(click_data.identifier_char, data.identifier_char, data.identifier_char_count);
+				click_data.identifier_char_count = data.identifier_char_count;
+			}
+			click_data.identifier = data.identifier;
+			void* first_click_data = data.first_click_handler.data == nullptr ? &click_data : data.first_click_handler.data;
+			void* second_click_data = data.second_click_handler.data == nullptr ? &click_data : data.second_click_handler.data;
+			ECS_UI_DRAW_PHASE phase = data.first_click_handler.phase > data.second_click_handler.phase ? data.first_click_handler.phase : data.second_click_handler.phase;
 			AddGeneralActionToDockspaceRegion(
-				thread_id, 
-				dockspace, 
-				border_index, 
-				position,
-				scale, 
-				{DoubleClickAction, &click_data, sizeof(click_data) + first_click_handler.data_size + second_click_handler.data_size, phase}
+				data.thread_id, 
+				data.dockspace, 
+				data.border_index, 
+				data.position,
+				data.scale, 
+				{DoubleClickAction, &click_data, sizeof(click_data) + data.first_click_handler.data_size + data.second_click_handler.data_size, phase}
 			);
 
 			// Copy the data manually such that it is relocatable
-			auto* current_handler = dockspace->borders[border_index].general_handler.GetLastHandler();
+			auto* current_handler = data.dockspace->borders[data.border_index].general_handler.GetLastHandler();
 			uintptr_t current_memory = (uintptr_t)current_handler->data;
 			current_memory += sizeof(click_data);
 
-			memcpy((void*)current_memory, first_click_handler.data, first_click_handler.data_size);
-			current_memory += first_click_handler.data_size;
-			memcpy((void*)current_memory, second_click_handler.data, second_click_handler.data_size);
+			memcpy((void*)current_memory, data.first_click_handler.data, data.first_click_handler.data_size);
+			current_memory += data.first_click_handler.data_size;
+			memcpy((void*)current_memory, data.second_click_handler.data, data.second_click_handler.data_size);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2264,8 +2264,11 @@ namespace ECSEngine {
 
 		void UISystem::CreateSpriteTexture(Stream<wchar_t> filename, UISpriteTexture* sprite_texture)
 		{
+			bool is_loaded_the_first_time = false;
+
 			ResourceManagerTextureDesc descriptor;
 			ResourceManagerLoadDesc load_desc;
+			load_desc.reference_counted_is_loaded = &is_loaded_the_first_time;
 			load_desc.load_flags |= ECS_RESOURCE_MANAGER_TEXTURE_HDR_TONEMAP;
 			ResourceView view = m_resource_manager->LoadTexture<true>(filename, &descriptor, load_desc);
 
@@ -2273,6 +2276,12 @@ namespace ECSEngine {
 			if (view.view == nullptr) {
 				*sprite_texture = m_resources.invalid_texture;
 				return;
+			}
+
+			if (is_loaded_the_first_time) {
+				// Load once more the texture such that we have a reference count of +1 when the
+				// Dereference will come
+				m_resource_manager->LoadTexture<true>(filename, &descriptor);
 			}
 
 			Texture2D texture(view.GetResource());
@@ -12107,9 +12116,11 @@ namespace ECSEngine {
 					data->timer.SetMarker();
 
 					// The data must be inferred
-					void* first_click_data = data->first_click_handler.data_size == 0 ? data->first_click_handler.data : function::OffsetPointer(data, sizeof(*data));
-					action_data->data = first_click_data;
-					data->first_click_handler.action(action_data);
+					if (data->first_click_handler.action != nullptr) {
+						void* first_click_data = data->first_click_handler.data_size == 0 ? data->first_click_handler.data : function::OffsetPointer(data, sizeof(*data));
+						action_data->data = first_click_data;
+						data->first_click_handler.action(action_data);
+					}
 				}
 			}
 		}
