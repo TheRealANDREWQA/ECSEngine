@@ -224,17 +224,8 @@ namespace ECSEngine {
 			}
 
 			// This is a general action
-			void AddDoubleClickActionToDockspaceRegion(
-				unsigned int thread_id,
-				UIDockspace* dockspace,
-				unsigned int border_index,
-				float2 position,
-				float2 scale,
-				unsigned int identifier,
-				size_t duration_between_clicks,
-				UIActionHandler first_click_handler,
-				UIActionHandler second_click_handler
-			);
+			// The identifier is used to differentiate between multiple double click actions
+			void AddDoubleClickActionToDockspaceRegion(const UISystemDoubleClickData& data);
 
 			void AddGeneralActionToDockspaceRegion(
 				unsigned int thread_id,

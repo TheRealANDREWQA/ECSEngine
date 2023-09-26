@@ -84,7 +84,7 @@ namespace ECSEngine {
 			UIConfigSliderChangedValueCallback callback;
 			callback.handler = { WindowParameterLayoutCallback, descriptor, 0 };
 			config.AddFlag(callback);
-			auto system = drawer.GetSystem();
+			UISystem* system = drawer.GetSystem();
 
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_descriptors.window_layout;
@@ -3130,6 +3130,53 @@ namespace ECSEngine {
 			unsigned int window_index
 		) {
 			TransitionVisualizeTextureWindowSelection(system->GetWindowData(window_index));
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void UIDrawerOKCancelRow(UIDrawer& drawer, Stream<char> ok_label, Stream<char> cancel_label, UIActionHandler ok_handler, UIActionHandler cancel_handler)
+		{
+			UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+
+			row_layout.AddLabel(ok_label);
+			row_layout.AddLabel(cancel_label, ECS_UI_ALIGN_RIGHT);
+
+			UIDrawConfig config;
+			size_t configuration = 0;
+
+			row_layout.GetTransform(config, configuration);
+
+			struct WrapperData {
+				UIActionHandler handler_data;
+			};
+
+			auto wrapper = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				WrapperData* wrapper_data = (WrapperData*)_data;
+				void* callback_data = wrapper_data->handler_data.data_size == 0 ? wrapper_data->handler_data.data : function::OffsetPointer(wrapper_data, sizeof(wrapper_data));
+				action_data->data = callback_data;
+				wrapper_data->handler_data.action(action_data);
+				system->PushDestroyWindowHandler(system->GetWindowIndexFromBorder(dockspace, border_index));
+			};
+
+			ECS_STACK_CAPACITY_STREAM(size_t, wrapper_data_storage, 512);
+			WrapperData* wrapper_data = (WrapperData*)wrapper_data_storage.buffer;
+			wrapper_data->handler_data = ok_handler;
+			if (ok_handler.data_size > 0) {
+				memcpy(function::OffsetPointer(wrapper_data, sizeof(*wrapper_data)), ok_handler.data, ok_handler.data_size);
+			}
+			drawer.Button(configuration, config, ok_label, UIActionHandler{wrapper, wrapper_data, (unsigned int)sizeof(*wrapper_data) + ok_handler.data_size });
+
+			wrapper_data->handler_data = cancel_handler;
+			if (cancel_handler.data_size > 0) {
+				memcpy(function::OffsetPointer(wrapper_data, sizeof(*wrapper_data)), cancel_handler.data, cancel_handler.data_size);
+			}
+
+			config.flag_count = 0;
+			configuration = 0;
+			row_layout.GetTransform(config, configuration);
+			drawer.Button(configuration, config, cancel_label, UIActionHandler{ wrapper, wrapper_data, (unsigned int)sizeof(*wrapper_data) + cancel_handler.data_size });
 		}
 
 		// -------------------------------------------------------------------------------------------------------

@@ -639,11 +639,6 @@ namespace ECSEngine {
 			return ptr - (uintptr_t)buffer;
 		}
 
-		bool UIDoubleClickData::IsTheSameData(const UIDoubleClickData* other) const
-		{
-			return (other != nullptr) && (identifier == other->identifier);
-		}
-
 		void UITooltipDrawData::NextRow()
 		{
 			position.x = initial_position.x + x_padding;
@@ -886,6 +881,23 @@ namespace ECSEngine {
 		void* UIReservedHandler::WrittenBuffer() const
 		{
 			return handler->action[index].data;
+		}
+
+		bool UIDoubleClickData::IsTheSameData(const UIDoubleClickData* other) const
+		{
+			if (other != nullptr) {
+				if (other->is_identifier_int == is_identifier_int) {
+					if (other->is_identifier_int) {
+						return identifier == other->identifier;
+					}
+					else {
+						Stream<char> identifier_string = { identifier_char, (size_t)identifier_char_count };
+						Stream<char> other_identifier_string = { other->identifier_char, (size_t)other->identifier_char_count };
+						return identifier_string == other_identifier_string;
+					}
+				}
+			}
+			return false;
 		}
 
 	}

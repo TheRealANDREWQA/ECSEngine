@@ -32,13 +32,27 @@ constexpr size_t FILE_FUNCTORS_CAPACITY = 32;
 constexpr size_t FILE_EXPLORER_RESET_SELECTED_FREE_LIMIT = 64;
 constexpr size_t FILE_EXPLORER_RESET_COPIED_FREE_LIMIT = 64;
 
-constexpr size_t ADD_ROW_COUNT = 2;
-
 constexpr size_t FILE_RIGHT_CLICK_ROW_COUNT = 7;
 char* FILE_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCopy Path\nCut\nCopy";
 
 constexpr size_t FOLDER_RIGHT_CLICK_ROW_COUNT = 7;
 char* FOLDER_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCopy Path\nCut\nCopy";
+
+constexpr size_t MESH_FILE_RIGHT_CLICK_ROW_COUNT = 8;
+char* MESH_FILE_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCopy Path\nCut\nCopy\nExport Materials";
+bool MESH_FILE_HAS_SUBMENUES[MESH_FILE_RIGHT_CLICK_ROW_COUNT] = {
+	false,
+	false,
+	false,
+	false,
+	false,
+	false,
+	false,
+	true
+};
+
+constexpr size_t MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT = 4;
+char* MESH_EXPORT_MATERIALS_CLICK_CHARACTERS = "All Here\nAll To Folder\nSelection Here\nSelection To Folder";
 
 constexpr size_t FILE_EXPLORER_DESELECTION_MENU_ROW_COUNT = 3;
 char* FILE_EXPLORER_DESELECTION_MENU_CHARACTERS = "Create\nPaste\nReset Copied Files";
@@ -120,6 +134,13 @@ enum DESELECTION_MENU_CREATE_INDEX {
 	DESELECTION_MENU_CREATE_MISC
 };
 
+enum MESH_EXPORT_MATERIALS_INDEX : unsigned char {
+	MESH_EXPORT_MATERIALS_ALL_HERE,
+	MESH_EXPORT_MATERIALS_ALL_TO_FOLDER,
+	MESH_EXPORT_MATERIALS_SELECTION_HERE,
+	MESH_EXPORT_MATERIALS_SELECTION_TO_FOLDER
+};
+
 void FileExplorerResetSelectedFiles(FileExplorerData* data) {
 	// Deallocate every string stored
 	for (size_t index = 0; index < data->selected_files.size; index++) {
@@ -181,7 +202,7 @@ void ChangeFileExplorerFile(EditorState* editor_state, Stream<wchar_t> path, uns
 }
 
 struct SelectableData {
-	bool IsTheSameData(const SelectableData* other) {
+	ECS_INLINE bool IsTheSameData(const SelectableData* other) const {
 		return (other != nullptr) && function::CompareStrings(selection, other->selection);
 	}
 
@@ -519,7 +540,7 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 	FileExplorerResetSelectedFiles(data);
 }
 
-using FileExplorerSelectFromIndex = void (*)(FileExplorerData* data, unsigned int index, Stream<wchar_t> path);
+typedef void (*FileExplorerSelectFromIndex)(FileExplorerData* data, unsigned int index, Stream<wchar_t> path);
 
 void FileExplorerSelectFromIndexNothing(FileExplorerData* data, unsigned int index, Stream<wchar_t> path) {}
 
@@ -796,10 +817,319 @@ constexpr Action filter_functors[] = { FilterNothing, FilterActive };
 
 #pragma endregion
 
-#pragma region Add Functions - for the plus sign
+#pragma region Mesh Export Click Actions
 
-void FileExplorerImportFile(ActionData* action_data) {
+struct MonitorMeshExportAllEventData {
+	GLTFData gltf_data;
+	GLTFExportTexturesOptions export_options;
+};
 
+// This is used to wait for the export to finish and report to the user any errors that may have happened
+EDITOR_EVENT(MonitorMeshExportAllEvent) {
+	MonitorMeshExportAllEventData* data = (MonitorMeshExportAllEventData*)_data;
+
+	if (!data->export_options.semaphore->CheckCount(0)) {
+		return true;
+	}
+
+	// Deallocate everything from the multithreaded allocator - the base of the allocation
+	// Is the atomic stream itself
+	if (data->export_options.failure_string->size > 0) {
+		data->export_options.failure_string->SpinWaitWrites();
+		EditorSetConsoleError(data->export_options.failure_string->ToStream());
+	}
+	GLTFExportTexturesOptionsDeallocateAll(&data->export_options, editor_state->MultithreadedEditorAllocator());
+
+	// We also need to free the gltf data
+	FreeGLTFFile(data->gltf_data);
+	return false;
+}
+
+struct MeshExportAllTaskData {
+	EditorState* editor_state;
+	Stream<wchar_t> mesh_path;
+	bool search_to_folder;
+};
+
+// For export all to here/folder we need to add a background task to take care of this since
+// Exporting can take quite a bit of time
+ECS_THREAD_TASK(MeshExportAllTask) {
+	MeshExportAllTaskData* data = (MeshExportAllTaskData*)_data;
+
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+	GLTFData gltf_data = LoadGLTFFile(data->mesh_path, { nullptr }, &error_message);
+	if (gltf_data.data == nullptr) {
+		// Failed, print the error message
+		EditorSetConsoleError(error_message);
+	}
+	else {
+		ECS_STACK_CAPACITY_STREAM(wchar_t, write_directory_storage, 512);
+		Stream<wchar_t> write_directory = function::PathParentBoth(data->mesh_path);
+		if (data->search_to_folder) {
+			ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder_path, 512);
+			GetProjectAssetsFolder(data->editor_state, assets_folder_path);
+			GLTFExportTexturesToFolderSearch(write_directory, assets_folder_path, write_directory_storage);
+			write_directory = write_directory_storage;
+		}
+
+		size_t ERROR_STRING_CAPACITY = ECS_KB;
+		GLTFExportTexturesOptions export_options;
+		export_options.task_manager = data->editor_state->task_manager;
+		GLTFExportTexturesOptionsAllocateAll(&export_options, ERROR_STRING_CAPACITY, data->editor_state->MultithreadedEditorAllocator());
+		
+		bool has_textures = GLTFExportTexturesDirectly(gltf_data, write_directory, &export_options);
+
+		if (!has_textures) {
+			EditorSetConsoleInfo("The selected mesh file has no textures embedded in it");
+		}
+
+		// Add the monitor event - we need to add this regardless whether or not there are textures
+		// Since the deallocation are done there
+		MonitorMeshExportAllEventData monitor_data;
+		monitor_data.gltf_data = gltf_data;
+		monitor_data.export_options = export_options;
+		if (has_textures) {
+			EditorAddEvent(data->editor_state, MonitorMeshExportAllEvent, &monitor_data, sizeof(monitor_data));
+		}
+		else {
+			MonitorMeshExportAllEvent(data->editor_state, &monitor_data);
+		}
+	}
+	data->editor_state->multithreaded_editor_allocator->Deallocate_ts(data->mesh_path.buffer);
+}
+
+struct MeshExportAllActionData {
+	EditorState* editor_state;
+	const FileExplorerData* explorer_data;
+};
+
+template<bool search_folder>
+void MeshExportAllAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	MeshExportAllActionData* data = (MeshExportAllActionData*)_data;
+	MeshExportAllTaskData background_data;
+	background_data.editor_state = data->editor_state;
+	background_data.mesh_path.InitializeAndCopy(data->editor_state->MultithreadedEditorAllocator(), data->explorer_data->right_click_stream);
+	background_data.search_to_folder = search_folder;
+
+	EditorStateAddBackgroundTask(data->editor_state, ECS_THREAD_TASK_NAME(MeshExportAllTask, &background_data, sizeof(background_data)));
+}
+
+struct MeshExportSelectionDrawWindowData {
+	GLTFData gltf_data;
+	Stream<wchar_t> mesh_path;
+	bool search_to_folder;
+	EditorState* editor_state;
+
+	// These do not need to be provided
+
+	// These are allocated from the window
+	bool* is_selected;
+	CapacityStream<PBRMaterialMapping> export_textures;
+	Stream<Stream<char>> ascii_texture_names;
+};
+
+void MeshExportSelectionDrawWindow(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
+	UI_PREPARE_DRAWER(initialize);
+
+	MeshExportSelectionDrawWindowData* data = (MeshExportSelectionDrawWindowData*)window_data;
+
+	const size_t EXPORT_TEXTURE_CAPACITY = 512;
+	if (initialize) {
+		void* allocation = drawer.GetMainAllocatorBuffer(sizeof(GLTFExportTexture) * EXPORT_TEXTURE_CAPACITY);
+		data->export_textures.InitializeFromBuffer(allocation, 0, EXPORT_TEXTURE_CAPACITY);
+		GLTFGetExportTexturesNames(data->gltf_data, &data->export_textures, data->editor_state->EditorAllocator());
+
+		data->is_selected = (bool*)drawer.GetMainAllocatorBuffer(sizeof(bool) * data->export_textures.size);
+		memset(data->is_selected, true, sizeof(bool) * data->export_textures.size);
+
+
+		size_t ascii_allocation_size = sizeof(Stream<char>) * data->export_textures.size;
+		for (unsigned int index = 0; index < data->export_textures.size; index++) {
+			ascii_allocation_size += sizeof(char) * (data->export_textures[index].texture.size + 1);
+		}
+		void* ascii_allocation = drawer.GetMainAllocatorBuffer(ascii_allocation_size);
+		uintptr_t ascii_allocation_ptr = (uintptr_t)ascii_allocation;
+		data->ascii_texture_names.InitializeFromBuffer(ascii_allocation_ptr, data->export_textures.size);
+		for (unsigned int index = 0; index < data->export_textures.size; index++) {
+			size_t texture_size = data->export_textures[index].texture.size;
+			data->ascii_texture_names[index].InitializeFromBuffer(ascii_allocation_ptr, texture_size);
+			function::ConvertWideCharsToASCII(data->export_textures[index].texture.buffer, data->ascii_texture_names[index].buffer, texture_size, texture_size + 1);
+		}
+	}
+	else {
+		// Draw Select All and Deselect All buttons at the top
+
+		auto select_all_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+			MeshExportSelectionDrawWindowData* data = (MeshExportSelectionDrawWindowData*)_data;
+			memset(data->is_selected, true, sizeof(bool) * data->export_textures.size);
+		};
+
+		auto deselect_all_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+			MeshExportSelectionDrawWindowData* data = (MeshExportSelectionDrawWindowData*)_data;
+			memset(data->is_selected, false, sizeof(bool) * data->export_textures.size);
+		};
+
+		drawer.Button("Select All", { select_all_action, data, 0 });
+		drawer.Button("Deselect All", { deselect_all_action, data, 0 });
+
+		drawer.NextRow();
+
+		for (unsigned int index = 0; index < data->export_textures.size; index++) {
+			drawer.CheckBox(data->ascii_texture_names[index], data->is_selected + index);
+			drawer.NextRow();
+		}
+		
+		auto export_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+			MeshExportSelectionDrawWindowData* window_data = (MeshExportSelectionDrawWindowData*)_data;
+
+			ECS_STACK_CAPACITY_STREAM(wchar_t, write_directory_storage, 512);
+			Stream<wchar_t> write_directory = function::PathParentBoth(window_data->mesh_path);
+			if (window_data->search_to_folder) {
+				ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+				GetProjectAssetsFolder(window_data->editor_state, assets_folder);
+				GLTFExportTexturesToFolderSearch(write_directory, assets_folder, write_directory_storage);
+				write_directory = write_directory_storage;
+			}
+
+			GLTFExportTexturesOptions options;
+			options.task_manager = window_data->editor_state->task_manager;
+			// Use the multithreaded editor allocator such that we conform to the monitor event
+			GLTFExportTexturesOptionsAllocateAll(&options, ECS_KB, window_data->editor_state->MultithreadedEditorAllocator());
+
+			// Remove those who are deselected
+			unsigned int remove_count = 0;
+			for (unsigned int index = 0; index < window_data->export_textures.size; index++) {
+				if (!window_data->is_selected[index]) {
+					window_data->export_textures.RemoveSwapBack(index);
+					// Also swap in place that texture's selected status
+					window_data->is_selected[index] = window_data->is_selected[window_data->export_textures.size];
+					index--;
+				}
+			}
+
+			options.textures_to_write = window_data->export_textures;
+			GLTFExportTexturesDirectly(window_data->gltf_data, write_directory, &options);
+
+			// We don't need to handle the case where there is nothing written
+
+			// Add the monitor event to inform the user
+			MonitorMeshExportAllEventData monitor_data;
+			monitor_data.export_options = options;
+			monitor_data.gltf_data = window_data->gltf_data;
+			EditorAddEvent(window_data->editor_state, MonitorMeshExportAllEvent, &monitor_data, sizeof(monitor_data));
+
+			// Disable the freeing of the gltf data
+			window_data->gltf_data.data = nullptr;
+		};
+
+		// Export and Cancel buttons
+		UIDrawerOKCancelRow(drawer, "Export", "Cancel", { export_action, window_data, 0 }, {});
+	}
+}
+
+void MeshExportSelectionDestroyWindow(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	MeshExportSelectionDrawWindowData* window_data = (MeshExportSelectionDrawWindowData*)_additional_data;
+
+	// It can be disabled by the Export action such that the monitor event is the one deallocating the gltf data
+	if (window_data->gltf_data.data != nullptr) {
+		FreeGLTFFile(window_data->gltf_data);
+	}
+	window_data->editor_state->multithreaded_editor_allocator->Deallocate_ts(window_data->mesh_path.buffer);
+	for (unsigned int index = 0; index < window_data->export_textures.size; index++) {
+		window_data->export_textures[index].texture.Deallocate(window_data->editor_state->EditorAllocator());
+	}
+}
+
+struct MeshExportSelectionEventData {
+	GLTFData gltf_data;
+	Stream<wchar_t> mesh_path;
+	bool search_to_folder;
+};
+
+EDITOR_EVENT(MeshExportSelectionEvent) {
+	MeshExportSelectionEventData* data = (MeshExportSelectionEventData*)_data;
+
+	UIWindowDescriptor window_descriptor;
+
+	MeshExportSelectionDrawWindowData draw_data;
+	draw_data.gltf_data = data->gltf_data;
+	draw_data.mesh_path = data->mesh_path;
+	draw_data.search_to_folder = data->search_to_folder;
+	draw_data.editor_state = editor_state;
+
+	window_descriptor.draw = MeshExportSelectionDrawWindow;
+	window_descriptor.window_data = &draw_data;
+	window_descriptor.window_data_size = sizeof(draw_data);
+
+	window_descriptor.initial_size_x = 0.7f;
+	window_descriptor.initial_size_y = 0.5f;
+
+	window_descriptor.window_name = "Mesh Export Textures";
+	window_descriptor.destroy_action = MeshExportSelectionDestroyWindow;
+
+	editor_state->ui_system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_FIT_TO_VIEW | UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING);
+	return false;
+}
+
+struct MeshExportSelectionTaskData {
+	EditorState* editor_state;
+	Stream<wchar_t> mesh_path;
+	bool search_to_folder;
+};
+
+ECS_THREAD_TASK(MeshExportSelectionTask) {
+	MeshExportSelectionTaskData* data = (MeshExportSelectionTaskData*)_data;
+
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+	GLTFData gltf_data = LoadGLTFFile(data->mesh_path, { nullptr }, &error_message);
+	if (gltf_data.data == nullptr) {
+		// Failed, print the error message
+		EditorSetConsoleError(error_message);
+		data->editor_state->multithreaded_editor_allocator->Deallocate_ts(data->mesh_path.buffer);
+	}
+	else {
+		// Determine if there are textures at all in this file
+		// If not, don't bother to add the event
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+		ECS_STACK_CAPACITY_STREAM(PBRMaterialMapping, textures, ECS_KB);
+		GLTFGetExportTexturesNames(gltf_data, &textures, GetAllocatorPolymorphic(&stack_allocator));
+
+		if (textures.size > 0) {
+			MeshExportSelectionEventData event_data;
+			event_data.mesh_path = data->mesh_path;
+			event_data.search_to_folder = data->search_to_folder;
+			event_data.gltf_data = gltf_data;
+			EditorAddEvent(data->editor_state, MeshExportSelectionEvent, &event_data, sizeof(event_data));
+		}
+		else {
+			EditorSetConsoleInfo("The selected mesh file has no textures embedded in it");
+		}
+	}
+}
+
+struct MeshExportSelectionActionData {
+	EditorState* editor_state;
+	const FileExplorerData* explorer_data;
+};
+
+template<bool search_folder>
+void MeshExportSelectionAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	MeshExportSelectionActionData* data = (MeshExportSelectionActionData*)_data;
+	MeshExportSelectionTaskData background_data;
+	background_data.editor_state = data->editor_state;
+	background_data.mesh_path.InitializeAndCopy(data->editor_state->MultithreadedEditorAllocator(), data->explorer_data->right_click_stream);
+	background_data.search_to_folder = search_folder;
+
+	EditorStateAddBackgroundTask(data->editor_state, ECS_THREAD_TASK_NAME(MeshExportSelectionTask, &background_data, sizeof(background_data)));
 }
 
 #pragma endregion
@@ -1581,15 +1911,6 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 			allocation = drawer.GetMainAllocatorBuffer(data->file_functors.MemoryOf(FILE_FUNCTORS_CAPACITY));
 			data->file_functors.InitializeFromBuffer(allocation, FILE_FUNCTORS_CAPACITY);
 
-#pragma region Add Handlers
-
-			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * ADD_ROW_COUNT);
-			data->add_handlers.InitializeFromBuffer(allocation, ADD_ROW_COUNT, ADD_ROW_COUNT);
-			data->add_handlers[0] = { SkipAction, nullptr, 0 };
-			data->add_handlers[1] = { SkipAction, nullptr, 0 };
-
-#pragma endregion
-
 #pragma region Deselection Handlers - Main
 
 			// The main menu
@@ -1720,6 +2041,27 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 
 #pragma endregion
 
+#pragma region Mesh Export Materials Click Handlers
+
+			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT);
+			data->mesh_export_materials_click_handlers.InitializeFromBuffer(allocation, MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT, MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT);
+
+			size_t mesh_exports_total_data_size = sizeof(MeshExportAllActionData) + sizeof(MeshExportSelectionActionData);
+			allocation = drawer.GetMainAllocatorBuffer(mesh_exports_total_data_size);
+			MeshExportAllActionData* export_all_data = (MeshExportAllActionData*)allocation;
+			export_all_data->editor_state = editor_state;
+			export_all_data->explorer_data = data;
+			MeshExportSelectionActionData* export_selection_data = (MeshExportSelectionActionData*)function::OffsetPointer(export_all_data, sizeof(*export_all_data));
+			export_selection_data->editor_state = editor_state;
+			export_selection_data->explorer_data = data;
+
+			data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_ALL_HERE] = { MeshExportAllAction<false>, export_all_data, 0 };
+			data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_ALL_TO_FOLDER] = { MeshExportAllAction<true>, export_all_data, 0 };
+			data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_SELECTION_HERE] = { MeshExportSelectionAction<false>, export_selection_data, 0 };
+			data->mesh_export_materials_click_handlers[MESH_EXPORT_MATERIALS_SELECTION_TO_FOLDER] = { MeshExportSelectionAction<true>, export_selection_data, 0 };
+
+#pragma endregion
+
 			ResourceIdentifier identifier;
 			unsigned int hash;
 
@@ -1804,11 +2146,6 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 	UIDrawConfig header_config;
 
-	UIConfigAbsoluteTransform absolute_transform;
-	absolute_transform.position = drawer.GetCurrentPositionStatic();
-	absolute_transform.scale = drawer.GetSquareScale(drawer.layout.default_element_y);
-	header_config.AddFlag(absolute_transform);
-
 	UIConfigBorder border;
 	border.color = drawer.color_theme.borders;
 	header_config.AddFlag(border);
@@ -1818,39 +2155,18 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	plus_sprite.color = drawer.color_theme.text;
 	header_config.AddFlag(plus_sprite);
 
-	constexpr size_t HEADER_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LATE_DRAW | UI_CONFIG_DO_NOT_ADVANCE;
-
-	UIDrawerMenuState menu_state;
-	menu_state.click_handlers = data->add_handlers.buffer;
-	menu_state.left_characters = "Folder\nMaterial";
-	menu_state.row_count = ADD_ROW_COUNT;
-	menu_state.row_has_submenu = nullptr;
-	menu_state.submenues = nullptr;
-	menu_state.submenu_index = 0;
-	menu_state.unavailables = nullptr;
-	drawer.SolidColorRectangle(HEADER_CONFIGURATION, header_config, drawer.color_theme.theme);
-	drawer.Menu(HEADER_CONFIGURATION | UI_CONFIG_MENU_SPRITE | UI_CONFIG_BORDER, header_config, "Menu", &menu_state);
-
-	header_config.flag_count = 0;
-	header_config.AddFlag(border);
-	absolute_transform.position.x += absolute_transform.scale.x + border.thickness;
-	absolute_transform.scale.x = drawer.GetLabelScale("Import").x;
+	const size_t HEADER_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LATE_DRAW | UI_CONFIG_DO_NOT_ADVANCE;
+	
+	UIConfigAbsoluteTransform absolute_transform;
+	absolute_transform.position = drawer.GetCurrentPositionStatic();
+	absolute_transform.scale.x = drawer.layout.default_element_x * 2.5f;
+	absolute_transform.scale.y = drawer.layout.default_element_y;
 	header_config.AddFlag(absolute_transform);
-	drawer.Button(
-		HEADER_CONFIGURATION | UI_CONFIG_BORDER | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
-		header_config, 
-		"Import",
-		{ FileExplorerImportFile, nullptr, 0 }
-	);
 	
 	UIConfigTextInputHint hint;
 	hint.characters = "Search";
+	header_config.AddFlag(hint);
 
-	header_config.flag_count--;
-	absolute_transform.position.x += absolute_transform.scale.x + border.thickness;
-	absolute_transform.scale.x = drawer.layout.default_element_x * 2.5f;
-	absolute_transform.scale.y = drawer.layout.default_element_y;
-	header_config.AddFlags(hint, absolute_transform);
 	drawer.TextInput(
 		HEADER_CONFIGURATION | UI_CONFIG_BORDER | UI_CONFIG_TEXT_INPUT_HINT | UI_CONFIG_TEXT_INPUT_NO_NAME,
 		header_config, 
@@ -2131,6 +2447,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 				// Functor was initialized outside the if with FileBlankDraw
 				bool has_functor = data->file_functors.TryGetValue(identifier, functor);
+				bool is_mesh_draw = false;
 				if (has_functor) {
 					if (functor == FileTextureDraw) {
 						if (function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED)) {
@@ -2146,6 +2463,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 						}
 					}
 					else if (functor == FileMeshDraw) {
+						is_mesh_draw = true;
 						FileExplorerMeshThumbnail thumbnail;
 						// If the thumbnail has been generated, check to see if the texture has been finalized
 						if (data->mesh_thumbnails.TryGetValue(ResourceIdentifier(stream_path.buffer, stream_path.size * sizeof(wchar_t)), thumbnail)) {
@@ -2164,13 +2482,32 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 				UIConfigHoverableAction hoverable_action;
 
-				UIDrawerMenuRightClickData right_click_data;
-				right_click_data.name = "File File Explorer Menu";
-				right_click_data.window_index = drawer->window_index;
-				right_click_data.state.click_handlers = data->file_right_click_handlers.buffer;
-				right_click_data.state.left_characters = FILE_RIGHT_CLICK_CHARACTERS;
-				right_click_data.state.row_count = FILE_RIGHT_CLICK_ROW_COUNT;
-				right_click_data.state.submenu_index = 0;
+				UIDrawerMenuState nested_state[MESH_FILE_RIGHT_CLICK_ROW_COUNT];
+				UIDrawerMenuState main_state;
+
+				// This is not visible, it is used only for identification purposes
+				// We need to change this identificator when using the file mesh menu
+				Stream<char> right_click_menu_name = "File File Explorer Menu";
+				main_state.submenu_index = 0;
+				main_state.click_handlers = data->file_right_click_handlers.buffer;
+				if (is_mesh_draw) {
+					main_state.left_characters = MESH_FILE_RIGHT_CLICK_CHARACTERS;
+					main_state.row_count = MESH_FILE_RIGHT_CLICK_ROW_COUNT;
+					main_state.row_has_submenu = MESH_FILE_HAS_SUBMENUES;
+
+					UIDrawerMenuState* mesh_export_state = nested_state + MESH_FILE_RIGHT_CLICK_ROW_COUNT - 1;
+					mesh_export_state->left_characters = MESH_EXPORT_MATERIALS_CLICK_CHARACTERS;
+					mesh_export_state->row_count = MESH_EXPORT_MATERIALS_CLICK_ROW_COUNT;
+					mesh_export_state->click_handlers = data->mesh_export_materials_click_handlers.buffer;
+					mesh_export_state->submenu_index = 1;
+
+					main_state.submenues = nested_state;
+					right_click_menu_name = "Mesh File Explorer Menu";
+				}
+				else {
+					main_state.left_characters = FILE_RIGHT_CLICK_CHARACTERS;
+					main_state.row_count = FILE_RIGHT_CLICK_ROW_COUNT;
+				}
 
 				struct OnRightClickData {
 					EditorState* editor_state;
@@ -2178,10 +2515,10 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					Stream<wchar_t> path;
 				};
 
-				OnRightClickData* action_data = (OnRightClickData*)right_click_data.action_data;
-				action_data->editor_state = _data->editor_state;
-				action_data->path = stream_path;
-				action_data->index = _data->element_count;
+				OnRightClickData action_data;
+				action_data.editor_state = _data->editor_state;
+				action_data.path = stream_path;
+				action_data.index = _data->element_count;
 
 				auto OnRightClickAction = [](ActionData* action_data) {
 					UI_UNPACK_ACTION_DATA;
@@ -2198,9 +2535,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					}
 				};
 				
-				right_click_data.action = OnRightClickAction;
-				right_click_data.is_action_data_ptr = false;
-				hoverable_action.handler = { RightClickMenu, &right_click_data, sizeof(right_click_data), ECS_UI_DRAW_SYSTEM };
+				hoverable_action.handler = drawer->PrepareRightClickHandler(right_click_menu_name, &main_state, { OnRightClickAction, &action_data, sizeof(action_data) });
 				config->AddFlag(hoverable_action);
 
 				float2 rectangle_position;
@@ -2241,10 +2576,10 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					0,
 					rectangle_position,
 					rectangle_scale,
-					_data->element_count,
 					DOUBLE_CLICK_DURATION,
 					{ FileExplorerSelectableBase, &selectable_data, sizeof(selectable_data) },
-					{ OpenFileWithDefaultApplicationAction, null_terminated_path.buffer, (unsigned int)(sizeof(wchar_t) * (stream_path.size + 1)) }
+					{ OpenFileWithDefaultApplicationAction, null_terminated_path.buffer, (unsigned int)(sizeof(wchar_t) * (stream_path.size + 1)) },
+					_data->element_count
 				);
 
 				config->flag_count -= 2;

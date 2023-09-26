@@ -742,7 +742,10 @@ namespace ECSEngine {
 			UIActionHandler first_click_handler;
 			size_t max_duration_between_clicks;
 			Timer timer;
+			bool is_identifier_int;
+			char identifier_char_count;
 			unsigned int identifier;
+			char identifier_char[64];
 		};
 
 		struct UICloseXClickData {
@@ -793,7 +796,7 @@ namespace ECSEngine {
 				return characters;
 			}
 
-			unsigned int WriteSize() const {
+			ECS_INLINE unsigned int WriteSize() const {
 				return characters.buffer != nullptr ? sizeof(*this) : sizeof(*this) + characters.size;
 			}
 
@@ -819,7 +822,7 @@ namespace ECSEngine {
 			float indentation;
 		};
 
-		using TooltipDrawFunction = void (*)(void* data, UITooltipDrawData& draw_data);
+		typedef void (*TooltipDrawFunction)(void* data, UITooltipDrawData& draw_data);
 
 		struct UITooltipHoverableData {
 			UITooltipBaseData base;
@@ -881,6 +884,23 @@ namespace ECSEngine {
 			ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL;
 			bool disable_system_phase_retarget = false;
 			ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT;
+		};
+
+		struct UISystemDoubleClickData {
+			unsigned int thread_id;
+			unsigned int border_index;
+			UIDockspace* dockspace;
+			float2 position;
+			float2 scale;
+			size_t duration_between_clicks;
+			UIActionHandler first_click_handler;
+			UIActionHandler second_click_handler;
+
+			// The identifier is used to differentiate between different double click actions
+			bool is_identifier_int;
+			unsigned char identifier_char_count;
+			unsigned int identifier;
+			char identifier_char[64];
 		};
 
 #pragma endregion

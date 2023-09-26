@@ -35,7 +35,32 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void GLTFGetExportTextures(GLTFData gltf_data, CapacityStream<GLTFExportTexture>* export_textures, AllocatorPolymorphic allocator, bool unique_entries)
+	void GLTFExportTexturesOptionsAllocateAll(GLTFExportTexturesOptions* options, size_t failure_string_capacity, AllocatorPolymorphic allocator)
+	{
+		size_t allocation_size = sizeof(AtomicStream<char>) + sizeof(Semaphore) + sizeof(char) * failure_string_capacity;
+		void* allocation = AllocateEx(allocator, allocation_size);
+		uintptr_t allocation_ptr = (uintptr_t)allocation;
+
+		AtomicStream<char>* write_error_message = (AtomicStream<char>*)allocation_ptr;
+		allocation_ptr += sizeof(AtomicStream<char>);
+		write_error_message->InitializeFromBuffer(allocation_ptr, 0, failure_string_capacity);
+		Semaphore* finish_semaphore = (Semaphore*)allocation_ptr;
+		finish_semaphore->ClearCount();
+
+		options->failure_string = write_error_message;
+		options->semaphore = finish_semaphore;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GLTFExportTexturesOptionsDeallocateAll(const GLTFExportTexturesOptions* options, AllocatorPolymorphic allocator) 
+	{
+		DeallocateEx(allocator, options->failure_string);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GLTFGetExportTextures(GLTFData gltf_data, CapacityStream<GLTFExportTexture>* export_textures, AllocatorPolymorphic allocator, bool unique_material_entries)
 	{
 		// Keep track of all materials found up until now for unique entries
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
@@ -103,7 +128,43 @@ namespace ECSEngine {
 						}
 					};
 
-					if (unique_entries) {
+					if (unique_material_entries) {
+						bool is_tracked = function::FindString(material_name, tracked_materials.ToStream()) != -1;
+						if (!is_tracked) {
+							tracked_materials.Add(material_name.Copy(GetAllocatorPolymorphic(&stack_allocator)));
+							add_entries();
+						}
+					}
+					else {
+						add_entries();
+					}
+				});
+			return true;
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GLTFGetExportTexturesNames(GLTFData gltf_data, CapacityStream<PBRMaterialMapping>* mappings, AllocatorPolymorphic allocator, bool unique_material_entries)
+	{
+		// Keep track of all materials found up until now for unique entries
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+		ResizableStream<Stream<char>> tracked_materials;
+		tracked_materials.Initialize(GetAllocatorPolymorphic(&stack_allocator), 0);
+
+		internal::ForEachMeshInGLTF(gltf_data, [&](const cgltf_node* nodes, size_t node_index, size_t node_count) {
+			PBRMaterial placeholder;
+			bool was_found = internal::ForMaterialFromGLTF(nodes, node_index, placeholder,
+				[&](Stream<char> material_name, size_t mapping_count, PBRMaterialMapping* current_mappings, Stream<void>* texture_data, TextureExtension* texture_extensions) {
+					auto add_entries = [&]() {
+						for (size_t index = 0; index < mapping_count; index++) {
+							PBRMaterialMapping current_mapping = current_mappings[index];
+							current_mapping.texture.InitializeAndCopy(allocator, current_mapping.texture);
+							mappings->AddAssert(current_mapping);
+						}
+					};
+
+					if (unique_material_entries) {
 						bool is_tracked = function::FindString(material_name, tracked_materials.ToStream()) != -1;
 						if (!is_tracked) {
 							tracked_materials.Add(material_name.Copy(GetAllocatorPolymorphic(&stack_allocator)));
@@ -151,6 +212,15 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void GLTFDeallocateExportTextureNames(Stream<PBRMaterialMapping> mappings, AllocatorPolymorphic allocator)
+	{
+		for (size_t index = 0; index < mappings.size; index++) {
+			mappings[index].texture.Deallocate(allocator);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	void GLTFDeallocateExportTextures(Stream<GLTFExportTexture> export_textures, AllocatorPolymorphic allocator)
 	{
 		for (size_t index = 0; index < export_textures.size; index++) {
@@ -161,7 +231,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	struct ExportOrmTextureData {
-		GLTFExportTexturesDirectlyOptions* options;
+		GLTFExportTexturesOptions options;
 		Stream<void> texture_data;
 		TextureExtension texture_extension;
 		Stream<wchar_t> directory;
@@ -187,9 +257,9 @@ namespace ECSEngine {
 				GetExportTextureWriteName(data->directory, texture_filename, texture_path);
 				bool success = WriteJPGTexture(texture_path, single_channel_data[0].buffer, { decoded_texture.width, decoded_texture.height }, 1, write_options);
 				if (!success) {
-					if (data->options->failure_string != nullptr) {
+					if (data->options.failure_string != nullptr) {
 						ECS_FORMAT_TEMP_STRING(message, "Failed to write texture {#}\n", texture_path);
-						data->options->failure_string->AddStream(message);
+						data->options.failure_string->AddStream(message);
 					}
 				}
 
@@ -205,7 +275,7 @@ namespace ECSEngine {
 
 		free(decoded_texture.data.buffer);
 
-		unsigned int exit_count = data->options->semaphore->ExitEx();
+		unsigned int exit_count = data->options.semaphore->ExitEx();
 		if (exit_count == 0) {
 			// Deallocate the directory
 			free(data->directory.buffer);
@@ -213,7 +283,7 @@ namespace ECSEngine {
 	}
 
 	struct ExportEncodedTextureData {
-		GLTFExportTexturesDirectlyOptions* options;
+		GLTFExportTexturesOptions options;
 		Stream<void> encoded_data;
 		Stream<wchar_t> texture_filename;
 		Stream<wchar_t> directory;
@@ -227,22 +297,22 @@ namespace ECSEngine {
 		GetExportTextureWriteName(data->directory, data->texture_filename, texture_path);
 		bool success = WriteBufferToFileBinary(texture_path, data->encoded_data) == ECS_FILE_STATUS_OK;
 		if (!success) {
-			if (data->options->failure_string != nullptr) {
+			if (data->options.failure_string != nullptr) {
 				ECS_FORMAT_TEMP_STRING(message, "Failed to write texture {#}\n", texture_path);
-				data->options->failure_string->AddStream(message);
+				data->options.failure_string->AddStream(message);
 			}
 		}
 
 		// Deallocate the texture filename - the encoded data comes from GLTF, we shouldn't free that
 		free(data->texture_filename.buffer);
-		unsigned int exit_count = data->options->semaphore->ExitEx();
+		unsigned int exit_count = data->options.semaphore->ExitEx();
 		if (exit_count == 0) {
 			// Deallocate the directory
 			free(data->directory.buffer);
 		}
 	}
 
-	void GLTFExportTexturesDirectly(GLTFData gltf_data, Stream<wchar_t> directory, GLTFExportTexturesDirectlyOptions* options)
+	bool GLTFExportTexturesDirectly(GLTFData gltf_data, Stream<wchar_t> directory, GLTFExportTexturesOptions* options)
 	{
 		// Keep track of all materials found up until now for unique entries
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
@@ -258,6 +328,7 @@ namespace ECSEngine {
 		// We have finished
 		options->semaphore->Enter();
 
+		bool at_least_one_export = false;
 		internal::ForEachMeshInGLTF(gltf_data, [&](const cgltf_node* nodes, size_t node_index, size_t node_count) {
 			PBRMaterial placeholder;
 			bool was_found = internal::ForMaterialFromGLTF(nodes, node_index, placeholder,
@@ -272,6 +343,17 @@ namespace ECSEngine {
 						for (size_t index = 0; index < mapping_count; index++) {
 							DecodedTexture current_decoded_texture;
 							PBRMaterialTextureIndex pbr_index = mappings[index].index;
+
+							// Verify that the texture is matched in the options
+							if (options->textures_to_write.size > 0) {
+								unsigned int found_index = options->textures_to_write.Find(mappings[index].texture, [](PBRMaterialMapping mapping) {
+									return mapping.texture;
+								});
+								if (found_index == -1) {
+									// Skip the entry
+									continue;
+								}
+							}
 
 							Stream<wchar_t> texture_name = mappings[index].texture;
 							wchar_t* stable_texture_name = (wchar_t*)malloc(texture_name.MemoryOf(texture_name.size));
@@ -298,20 +380,21 @@ namespace ECSEngine {
 								ExportEncodedTextureData thread_data;
 								thread_data.directory = directory;
 								thread_data.encoded_data = texture_data[index];
-								thread_data.options = options;
+								thread_data.options = *options;
 								thread_data.texture_filename = texture_name;
 
 								// Increase the semaphore count
 								options->semaphore->Enter();
 								options->task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(ExportEncodedTexture, &thread_data, sizeof(thread_data)));
 							}
+							at_least_one_export = true;
 						}
 
 						// Check to see if we need an ORM thread task as well
 						if (occlusion_name.size > 0 || roughness_name.size > 0 || metallic_name.size > 0) {
 							ExportOrmTextureData thread_data;
 							thread_data.directory = directory;
-							thread_data.options = options;
+							thread_data.options = *options;
 							thread_data.texture_data = orm_data;
 							thread_data.texture_extension = orm_extension;
 
@@ -339,9 +422,41 @@ namespace ECSEngine {
 			// Deallocate the directory
 			free(directory.buffer);
 		}
+		
+		return at_least_one_export;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
+
+	bool GLTFExportTexturesToFolderSearch(
+		Stream<wchar_t> current_directory,
+		Stream<wchar_t> root_stop,
+		CapacityStream<wchar_t>& write_path
+	) {
+		Stream<wchar_t> SEARCH_FOLDER_NAMES[] = {
+			L"Textures",
+			L"Texture",
+			L"Material",
+			L"Materials"
+		};
+		write_path.CopyOther(current_directory);
+
+		while (write_path.size >= root_stop.size) {
+			unsigned int initial_size = write_path.size;
+			for (size_t index = 0; index < std::size(SEARCH_FOLDER_NAMES); index++) {
+				write_path.Add(ECS_OS_PATH_SEPARATOR);
+				write_path.AddStreamAssert(SEARCH_FOLDER_NAMES[index]);
+				if (ExistsFileOrFolder(write_path)) {
+					return true;
+				}
+				write_path.size = initial_size;
+			}
+			write_path.size = function::PathParentBoth(write_path).size;
+		}
+
+		write_path.CopyOther(current_directory);
+		return false;
+	}
 
 	// ------------------------------------------------------------------------------------------------------------
 

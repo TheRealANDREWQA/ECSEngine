@@ -208,6 +208,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_LABEL_LIST_NO_NAME = (size_t)1 << 45;
 
 		constexpr size_t UI_CONFIG_SELECTION_INPUT_OVERRIDE_HOVERABLE = (size_t)1 << 45;
+		constexpr size_t UI_CONFIG_SELECTION_INPUT_LABEL_CLICKABLE = (size_t)1 << 46;
 
 		constexpr size_t UI_CONFIG_ARRAY_ADD_CALLBACK = (size_t)1 << 53;
 		constexpr size_t UI_CONFIG_ARRAY_REMOVE_CALLBACK = (size_t)1 << 54;

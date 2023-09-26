@@ -1616,6 +1616,19 @@ namespace ECSEngine {
 			bool stable = false;
 		};
 
+		struct UIConfigSelectionInputLabelClickable {
+			ECS_INLINE static size_t GetAssociatedBit() {
+				return UI_CONFIG_SELECTION_INPUT_LABEL_CLICKABLE;
+			}
+
+			bool double_click_action = false;
+			size_t double_click_duration_between_clicks = 0;
+			UIActionHandler first_click_handler = {};
+			// This is the second click handler when using double click
+			// And also the one taken into consideration for normal callback
+			UIActionHandler handler;
+		};
+
 		struct UIConfigSliderMouseDraggable {
 			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_MOUSE_DRAGGABLE;

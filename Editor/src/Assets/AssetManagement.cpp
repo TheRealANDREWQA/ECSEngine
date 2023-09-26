@@ -1373,7 +1373,14 @@ bool GetAssetFileFromAssetMetadata(const EditorState* editor_state, const void* 
 		function::ConvertASCIIToWide(path, name);
 		function::ReplaceCharacter(path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 
-		path.AddStream(ASSET_EXTENSIONS[type][0]);
+		if (type != ECS_ASSET_SHADER) {
+			path.AddStream(ASSET_EXTENSIONS[type][0]);
+		}
+		else {
+			// Check the type of the shader and add the corresponding extension
+			const ShaderMetadata* shader_metadata = (const ShaderMetadata*)metadata;
+			path.AddStream(AssetExtensionFromType(shader_metadata->shader_type));
+		}
 	}
 		break;
 	default:
