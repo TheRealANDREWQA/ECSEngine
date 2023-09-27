@@ -1657,6 +1657,16 @@ namespace ECSEngine {
 			}
 		}
 
+		template<typename T>
+		ECS_INLINE T* TryGetGlobalComponent() {
+			return (T*)((const EntityManager*)this)->TryGetGlobalComponent(T::ID());
+		}
+
+		template<typename T>
+		ECS_INLINE const T* TryGetGlobalComponent() const {
+			return (const T*)TryGetGlobalComponent(T::ID());
+		}
+
 		// ---------------------------------------------------------------------------------------------------
 
 		// Returns true if the entity was removed, else false

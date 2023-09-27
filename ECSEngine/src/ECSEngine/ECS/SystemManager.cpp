@@ -118,7 +118,10 @@ namespace ECSEngine {
 		void* data = nullptr;
 		if (table_index == -1) {
 			// Allocate the space and insert into the table
-			data = allocator->Allocate(data_size);
+			void* allocation = allocator->Allocate(data_size + identifier.size);
+			uintptr_t ptr = (uintptr_t)allocation;
+			identifier.InitializeAndCopy(ptr, identifier);
+			data = (void*)ptr;
 			InsertIntoDynamicTable(data_table, allocator, DataPointer(data, data_size), identifier);
 		}
 		else {

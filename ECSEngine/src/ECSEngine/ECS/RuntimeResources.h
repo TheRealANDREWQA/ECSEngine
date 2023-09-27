@@ -19,6 +19,7 @@ namespace ECSEngine {
 	struct Camera;
 	struct CameraCached;
 	struct GraphicsBoundViews;
+	struct World;
 
 	// The entity ids are used to output the values to the instanced framebuffer
 	// And the booleans is_selected informs the module if the tool is selected or not
@@ -104,4 +105,11 @@ namespace ECSEngine {
 	ECSENGINE_API void RemoveEditorRuntimeInstancedFramebuffer(SystemManager* system_manager);
 
 	// ------------------------------------------------------------------------------------------------------------
+
+	// Returns true if it found a camera, else false. It will search for the runtime camera first,
+	// then after the CameraComponent
+	ECSENGINE_API bool GetWorldCamera(const World* world, CameraCached& camera);
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

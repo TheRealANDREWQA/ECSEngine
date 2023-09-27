@@ -952,7 +952,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 				// Check for the case nothing is selected
 				Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
 				// Check to see if this a gizmo Entity
-				EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, selected_entity, EDITOR_SANDBOX_VIEWPORT_SCENE);
+				EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxVirtualEntitySlotType(editor_state, sandbox_index, selected_entity);
 				if (entity_slot != EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
 					switch (entity_slot) {
 					case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X:
@@ -1095,7 +1095,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 					// Check for the case nothing is selected
 					Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
 					// Check to see if this a gizmo Entity
-					EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, selected_entity, EDITOR_SANDBOX_VIEWPORT_SCENE);
+					EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxVirtualEntitySlotType(editor_state, sandbox_index, selected_entity);
 					if (entity_slot == EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
 						// We have selected an actual entity, not a gizmo or some other pseudo entity
 						if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) || keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {

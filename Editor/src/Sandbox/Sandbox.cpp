@@ -424,18 +424,20 @@ bool AreAllDefaultSandboxesNotStarted(const EditorState* editor_state)
 void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	SetSandboxCameraAspectRatio(editor_state, sandbox_index, viewport);
-	Camera camera = GetSandboxCamera(editor_state, sandbox_index, viewport);
-
 	SystemManager* system_manager = sandbox->sandbox_world.system_manager;
-	SetRuntimeCamera(system_manager, &camera);
+
 	SetEditorRuntimeType(system_manager, viewport == EDITOR_SANDBOX_VIEWPORT_SCENE ? ECS_EDITOR_RUNTIME_SCENE : ECS_EDITOR_RUNTIME_GAME);
+
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+		SetSandboxCameraAspectRatio(editor_state, sandbox_index, viewport);
+		Camera camera = GetSandboxCamera(editor_state, sandbox_index, viewport);
+		SetRuntimeCamera(system_manager, &camera, true);
+
 		SetEditorRuntimeSelectColor(system_manager, EDITOR_SELECT_COLOR);
 		size_t selected_count = sandbox->selected_entities.size;
 		CapacityStream<Entity> filtered_selected_entities;
 		filtered_selected_entities.Initialize(editor_state->editor_allocator, 0, selected_count);
-		GetSandboxSelectedEntitiesFiltered(editor_state, sandbox_index, &filtered_selected_entities, viewport);
+		GetSandboxSelectedEntitiesFiltered(editor_state, sandbox_index, &filtered_selected_entities);
 		SetEditorRuntimeSelectedEntities(system_manager, filtered_selected_entities);
 		
 		ECSTransformToolEx transform_tool;
@@ -453,11 +455,10 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 		bool entity_ids_are_valid = true;
 		// If one entity id is invalid, all should be invalid since these are created and released all at once
 		for (size_t index = 0; index < 3; index++) {
-			transform_tool.entity_ids[index] = FindSandboxUnusedEntitySlot(
+			transform_tool.entity_ids[index] = FindSandboxVirtualEntitySlot(
 				editor_state, 
 				sandbox_index, 
-				(EDITOR_SANDBOX_ENTITY_SLOT)(EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X + index), 
-				viewport
+				(EDITOR_SANDBOX_ENTITY_SLOT)(EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X + index)
 			);
 			if (!transform_tool.entity_ids[index].Valid()) {
 				entity_ids_are_valid = false;
@@ -465,20 +466,18 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 		}
 
 		// Check to see if we need to recompute the unused slots
-		if (ShouldSandboxRecomputeEntitySlots(editor_state, sandbox_index, viewport) || !entity_ids_are_valid) {
-			unsigned int slot_write_index = GetSandboxUnusedEntitySlots(
+		if (ShouldSandboxRecomputeVirtualEntitySlots(editor_state, sandbox_index) || !entity_ids_are_valid) {
+			unsigned int slot_write_index = GetSandboxVirtualEntitySlots(
 				editor_state, 
 				sandbox_index, 
-				{ transform_tool.entity_ids, std::size(transform_tool.entity_ids) }, 
-				viewport
+				{ transform_tool.entity_ids, std::size(transform_tool.entity_ids) }
 			);
 			for (unsigned int index = 0; index < std::size(transform_tool.entity_ids); index++) {
-				SetSandboxUnusedEntitySlotType(
+				SetSandboxVirtualEntitySlotType(
 					editor_state, 
 					sandbox_index, 
 					slot_write_index + index, 
-					(EDITOR_SANDBOX_ENTITY_SLOT)(EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X + index), 
-					viewport
+					(EDITOR_SANDBOX_ENTITY_SLOT)(EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X + index)
 				);
 			}
 		}
@@ -489,6 +488,15 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 		instanced_views.target = sandbox->scene_viewport_instance_framebuffer;
 		SetEditorRuntimeInstancedFramebuffer(system_manager, &instanced_views);
 	}
+	else {
+		// Set the camera aspect ratio for the camera component, if there is one
+		EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+		CameraComponent* camera_component = (CameraComponent*)entity_manager->TryGetGlobalComponent<CameraComponent>();
+		if (camera_component) {
+			camera_component->value.aspect_ratio = GetSandboxViewportAspectRatio(editor_state, sandbox_index, viewport);
+		}
+	}
+
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -800,37 +808,32 @@ unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, uns
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-Entity FindSandboxUnusedEntitySlot(
+Entity FindSandboxVirtualEntitySlot(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
-	EDITOR_SANDBOX_ENTITY_SLOT slot_type,
-	EDITOR_SANDBOX_VIEWPORT viewport
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type
 )
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
-	unsigned int slot_index = sandbox->unused_entity_slot_type[viewport].Find(slot_type, [](EDITOR_SANDBOX_ENTITY_SLOT current_slot) {
+	unsigned int slot_index = sandbox->unused_entity_slot_type.Find(slot_type, [](EDITOR_SANDBOX_ENTITY_SLOT current_slot) {
 		return current_slot;
 	});
-
-	return slot_index != -1 ? sandbox->unused_entities_slots[viewport][slot_index] : Entity(-1);
+	return slot_index != -1 ? sandbox->unused_entities_slots[slot_index] : Entity(-1);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-EDITOR_SANDBOX_ENTITY_SLOT FindSandboxUnusedEntitySlotType(
+EDITOR_SANDBOX_ENTITY_SLOT FindSandboxVirtualEntitySlotType(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	ECSEngine::Entity entity, 
-	EDITOR_SANDBOX_VIEWPORT viewport
+	Entity entity
 )
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
-	size_t slot_index = function::SearchBytes(sandbox->unused_entities_slots[viewport].buffer, sandbox->unused_entities_slots[viewport].size, entity.value, sizeof(entity));
+	size_t slot_index = function::SearchBytes(sandbox->unused_entities_slots.buffer, sandbox->unused_entities_slots.size, entity.value, sizeof(entity));
 	if (slot_index != -1) {
-		ECS_ASSERT(sandbox->unused_entity_slot_type[viewport][slot_index] != EDITOR_SANDBOX_ENTITY_SLOT_COUNT);
-		return sandbox->unused_entity_slot_type[viewport][slot_index];
+		ECS_ASSERT(sandbox->unused_entity_slot_type[slot_index] != EDITOR_SANDBOX_ENTITY_SLOT_COUNT);
+		return sandbox->unused_entity_slot_type[slot_index];
 	}
 	return EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
 }
@@ -929,12 +932,11 @@ void GetSandboxAvailableRuntimeSettings(
 void GetSandboxSelectedEntitiesFiltered(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	CapacityStream<Entity>* filtered_entities,
-	EDITOR_SANDBOX_VIEWPORT viewport
+	CapacityStream<Entity>* filtered_entities
 )
 {
 	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-	Stream<Entity> virtual_entities = GetSandboxUnusedEntitySlots(editor_state, sandbox_index, viewport);
+	Stream<Entity> virtual_entities = GetSandboxVirtualEntitySlots(editor_state, sandbox_index);
 
 	filtered_entities->CopyOther(selected_entities);
 	for (size_t index = 0; index < virtual_entities.size && selected_entities.size > 0; index++) {
@@ -947,26 +949,27 @@ void GetSandboxSelectedEntitiesFiltered(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetSandboxUnusedEntitySlots(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> entities, EDITOR_SANDBOX_VIEWPORT viewport)
+unsigned int GetSandboxVirtualEntitySlots(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> entities)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
-	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	// We need to retrieve the unused entity slots just for a single entity manager,
+	// these are valid for both
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
 	// Limit the bit count to the available space for the instance bitness for the instanced buffer
-	ECS_ASSERT(entity_manager->m_entity_pool->GetUnusedEntities(
+	ECS_ASSERT(entity_manager->m_entity_pool->GetVirtualEntities(
 		entities, 
-		sandbox->unused_entities_slots[viewport].ToStream(), 
+		sandbox->unused_entities_slots.ToStream(), 
 		32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS - 1
 	));
-	unsigned int write_index = sandbox->unused_entities_slots[viewport].AddStream(entities);
-	if (sandbox->unused_entities_slots[viewport].capacity != sandbox->unused_entity_slot_type[viewport].capacity) {
-		sandbox->unused_entity_slot_type[viewport].Resize(sandbox->unused_entities_slots[viewport].capacity);
+	unsigned int write_index = sandbox->unused_entities_slots.AddStream(entities);
+	if (sandbox->unused_entities_slots.capacity != sandbox->unused_entity_slot_type.capacity) {
+		sandbox->unused_entity_slot_type.Resize(sandbox->unused_entities_slots.capacity);
 		for (size_t index = 0; index < entities.size; index++) {
 			// Default initialize to invalid value
-			sandbox->unused_entity_slot_type[viewport][write_index + index] = EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
+			sandbox->unused_entity_slot_type[write_index + index] = EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
 		}
-		sandbox->unused_entity_slot_type[viewport].size = sandbox->unused_entities_slots[viewport].size;
 	}
+	sandbox->unused_entity_slot_type.size = sandbox->unused_entities_slots.size;
 
 	return write_index;
 }
@@ -1002,9 +1005,9 @@ void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_in
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxGizmoEntity(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, EDITOR_SANDBOX_VIEWPORT viewport)
+bool IsSandboxGizmoEntity(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
-	return FindSandboxUnusedEntitySlotType(editor_state, sandbox_index, entity, viewport) != EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
+	return FindSandboxVirtualEntitySlotType(editor_state, sandbox_index, entity) != EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1200,12 +1203,13 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->runtime_asset_handle_snapshot.allocator = MemoryManager(ECS_KB * 128, ECS_KB, ECS_MB, sandbox_allocator);
 	sandbox->runtime_asset_handle_snapshot.total_size = 0;
 
+	sandbox->unused_entities_slots.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
+	sandbox->unused_entity_slot_type.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
+	sandbox->unused_entities_slots_recompute = false;
+
 	// Resize the textures for the viewport to a 1x1 texture such that rendering commands will fallthrough even
 	// when the UI has not yet run to resize them
 	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
-		sandbox->unused_entities_slots[index].Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
-		sandbox->unused_entity_slot_type[index].Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
-		sandbox->unused_entities_slots_recompute[index] = false;
 		ResizeSandboxRenderTextures(editor_state, sandbox_index, (EDITOR_SANDBOX_VIEWPORT)index, { 1, 1 });
 	}
 
@@ -1253,9 +1257,9 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 
 	// Remove from the system manager bound resources
 	SystemManager* system_manager = GetSandbox(editor_state, sandbox_index)->sandbox_world.system_manager;
-	RemoveRuntimeCamera(system_manager);
 	RemoveEditorRuntimeType(system_manager);
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+		RemoveRuntimeCamera(system_manager);
 		RemoveEditorRuntimeSelectColor(system_manager);
 		RemoveEditorRuntimeSelectedEntities(system_manager);
 		RemoveEditorRuntimeTransformToolEx(system_manager);
@@ -1586,27 +1590,25 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void ResetSandboxUnusedEntities(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void ResetSandboxVirtualEntities(EditorState* editor_state, unsigned int sandbox_index)
 {
-	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->unused_entities_slots[viewport].FreeBuffer();
-	SignalSandboxUnusedEntitiesSlotsCounter(editor_state, sandbox_index, viewport);
+	sandbox->unused_entities_slots.FreeBuffer();
+	SignalSandboxVirtualEntitiesSlotsCounter(editor_state, sandbox_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RemoveSandboxUnusedEntitiesSlot(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_ENTITY_SLOT slot_type, EDITOR_SANDBOX_VIEWPORT viewport)
+void RemoveSandboxVirtualEntitiesSlot(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_ENTITY_SLOT slot_type)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
 
-	unsigned int size = sandbox->unused_entities_slots[viewport].size;
+	unsigned int size = sandbox->unused_entities_slots.size;
 	unsigned int offset = 0;
 
 	auto find = [&]() {
 		for (unsigned int index = 0; index < size; index++) {
-			if (sandbox->unused_entity_slot_type[viewport][offset + index] == slot_type) {
+			if (sandbox->unused_entity_slot_type[offset + index] == slot_type) {
 				unsigned int return_value = offset + index;
 				offset += index + 1;
 				size -= index + 1;
@@ -1618,8 +1620,8 @@ void RemoveSandboxUnusedEntitiesSlot(EditorState* editor_state, unsigned int san
 
 	unsigned int slot_index = find();
 	while (slot_index != -1) {
-		sandbox->unused_entities_slots[viewport].RemoveSwapBack(slot_index);
-		sandbox->unused_entity_slot_type[viewport].RemoveSwapBack(slot_index);
+		sandbox->unused_entities_slots.RemoveSwapBack(slot_index);
+		sandbox->unused_entity_slot_type.RemoveSwapBack(slot_index);
 		slot_index = find();
 	}
 }
@@ -1812,26 +1814,22 @@ void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void SetSandboxUnusedEntitySlotType(
+void SetSandboxVirtualEntitySlotType(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	unsigned int slot_index,
-	EDITOR_SANDBOX_ENTITY_SLOT slot_type,
-	EDITOR_SANDBOX_VIEWPORT viewport
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type
 )
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
-	sandbox->unused_entity_slot_type[viewport][slot_index] = slot_type;
+	sandbox->unused_entity_slot_type[slot_index] = slot_type;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool ShouldSandboxRecomputeEntitySlots(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+bool ShouldSandboxRecomputeVirtualEntitySlots(const EditorState* editor_state, unsigned int sandbox_index)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
-	return sandbox->unused_entities_slots_recompute[viewport];
+	return GetSandbox(editor_state, sandbox_index)->unused_entities_slots_recompute;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1855,24 +1853,21 @@ void SignalSandboxSelectedEntitiesCounter(EditorState* editor_state, unsigned in
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-struct SignalUnusedEntitiesSlotsCounterEventData {
+struct SignalVirtualEntitiesSlotsCounterEventData {
 	unsigned int sandbox_index;
-	EDITOR_SANDBOX_VIEWPORT viewport;
 };
 
-EDITOR_EVENT(SignalUnusedEntitiesSlotsCounterEvent) {
-	SignalUnusedEntitiesSlotsCounterEventData* data = (SignalUnusedEntitiesSlotsCounterEventData*)_data;
-	EDITOR_SANDBOX_VIEWPORT viewport = GetSandboxViewportOverride(editor_state, data->sandbox_index, data->viewport);
-	GetSandbox(editor_state, data->sandbox_index)->unused_entities_slots_recompute[viewport] = true;
+EDITOR_EVENT(SignalVirtualEntitiesSlotsCounterEvent) {
+	SignalVirtualEntitiesSlotsCounterEventData* data = (SignalVirtualEntitiesSlotsCounterEventData*)_data;
+	GetSandbox(editor_state, data->sandbox_index)->unused_entities_slots_recompute = true;
 	return false;
 }
 
-void SignalSandboxUnusedEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void SignalSandboxVirtualEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_index)
 {
-	SignalUnusedEntitiesSlotsCounterEventData event_data;
+	SignalVirtualEntitiesSlotsCounterEventData event_data;
 	event_data.sandbox_index = sandbox_index;
-	event_data.viewport = viewport;
-	EditorAddEvent(editor_state, SignalUnusedEntitiesSlotsCounterEvent, &event_data, sizeof(event_data));
+	EditorAddEvent(editor_state, SignalVirtualEntitiesSlotsCounterEvent, &event_data, sizeof(event_data));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2006,9 +2001,7 @@ void TickSandboxesSelectedEntities(EditorState* editor_state) {
 
 void TickSandboxesClearUnusedSlots(EditorState* editor_state) {
 	ForEachSandbox(editor_state, [](EditorSandbox* sandbox, unsigned int sandbox_index) {
-		for (size_t viewport = 0; viewport < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport++) {
-			sandbox->unused_entities_slots_recompute[viewport] = function::SaturateSub<unsigned char>(sandbox->unused_entities_slots_recompute[viewport], 1);
-		}
+		sandbox->unused_entities_slots_recompute = function::SaturateSub<unsigned char>(sandbox->unused_entities_slots_recompute, 1);
 	});
 }
 

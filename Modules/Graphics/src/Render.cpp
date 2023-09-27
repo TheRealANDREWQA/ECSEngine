@@ -17,7 +17,7 @@ ECS_INLINE unsigned int GizmoRenderIndex(unsigned int instance_index, bool extra
 }
 
 struct BasicDrawForEachData {
-	const Camera* camera;
+	float3 camera_translation;
 	Matrix camera_matrix;
 };
 
@@ -118,7 +118,7 @@ void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
 		object_matrix = MatrixGPU(object_matrix);
 		mvp_matrix = MatrixGPU(mvp_matrix);
 
-		float3 camera_position = data->camera->translation;
+		float3 camera_position = data->camera_translation;
 		const void* injected_values[ECS_CB_INJECT_TAG_COUNT];
 		injected_values[ECS_CB_INJECT_CAMERA_POSITION] = &camera_position;
 		injected_values[ECS_CB_INJECT_MVP_MATRIX] = &mvp_matrix;
@@ -145,9 +145,8 @@ ECS_THREAD_TASK(RenderTask) {
 		world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.5f, 0.6f, 1.0f, 1.0f));
 		world->graphics->ClearDepth(world->graphics->GetBoundDepthStencil());
 
-		Camera camera;
-
-		if (GetRuntimeCamera(world->system_manager, &camera)) {
+		CameraCached camera;
+		if (GetWorldCamera(world, camera)) {
 			Graphics* graphics = world->graphics;
 			DebugDrawer* drawer = world->debug_drawer;
 
@@ -162,7 +161,7 @@ ECS_THREAD_TASK(RenderTask) {
 
 			BasicDrawForEachData for_each_data;
 			for_each_data.camera_matrix = camera_matrix;
-			for_each_data.camera = &camera;
+			for_each_data.camera_translation = camera.translation;
 
 			unique_components[0] = Translation::ID();
 			exclude_unique_components[0] = Rotation::ID();
@@ -214,8 +213,8 @@ ECS_THREAD_TASK(RenderSelectables) {
 		EntityManager* entity_manager = world->entity_manager;
 		ECS_EDITOR_RUNTIME_TYPE runtime_type = GetEditorRuntimeType(system_manager);
 		if (runtime_type != ECS_EDITOR_RUNTIME_TYPE_COUNT) {
-			Camera camera;
-			if (GetRuntimeCamera(system_manager, &camera)) {
+			CameraCached camera;
+			if (GetWorldCamera(world, camera)) {
 				Color select_color = GetEditorRuntimeSelectColor(system_manager);
 				Stream<Entity> selected_entities = GetEditorRuntimeSelectedEntities(system_manager);
 				if (selected_entities.size > 0) {
@@ -469,7 +468,6 @@ ECS_THREAD_TASK(RenderFlush) {
 ECS_THREAD_TASK_TEMPLATE_BOOL(RenderFlush);
 
 struct InstancedFramebufferForEachData {
-	const Camera* camera;
 	Matrix camera_matrix;
 	ResizableStream<GenerateInstanceFramebufferElement>* elements;
 };
@@ -577,8 +575,8 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 		SystemManager* system_manager = world->system_manager;
 		ECS_EDITOR_RUNTIME_TYPE runtime_type = GetEditorRuntimeType(system_manager);
 		if (runtime_type != ECS_EDITOR_RUNTIME_TYPE_COUNT) {
-			Camera camera;
-			if (GetRuntimeCamera(system_manager, &camera)) {
+			CameraCached camera;
+			if (GetWorldCamera(world, camera)) {
 				GraphicsBoundViews instanced_views;
 				if (GetEditorRuntimeInstancedFramebuffer(system_manager, &instanced_views)) {
 					// Render the elements
@@ -593,7 +591,6 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 
 					InstancedFramebufferForEachData for_each_data;
 					for_each_data.camera_matrix = camera.GetViewProjectionMatrix();
-					for_each_data.camera = &camera;
 					for_each_data.elements = &elements;
 
 					unique_components[0] = Translation::ID();

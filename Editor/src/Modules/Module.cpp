@@ -482,23 +482,26 @@ EDITOR_EVENT(ReloadModuleEvent) {
 	ReloadModuleEventData* data = (ReloadModuleEventData*)_data;
 
 	if (data->finish_status->load(ECS_RELAXED) != EDITOR_FINISH_BUILD_COMMAND_WAITING) {
-		data->dependencies_finish_status = (std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>*)editor_state->editor_allocator->Allocate(
-			sizeof(std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>) * data->dependencies.size
-		);
-
-		// No matter what the outcome is, we need to rebuild the old modules
-		for (size_t index = 0; index < data->dependencies.size; index++) {
-			const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index], data->configuration);
-			EDITOR_LAUNCH_BUILD_COMMAND_STATUS build_status = BuildModule(
-				editor_state, 
-				data->dependencies[index],
-				data->configuration, 
-				data->dependencies_finish_status + index
+		// Only do the reloading if the current compilation succeeded, otherwise it will trigger a useless build command
+		if (data->finish_status->load(ECS_RELAXED) == EDITOR_FINISH_BUILD_COMMAND_OK) {
+			data->dependencies_finish_status = (std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>*)editor_state->editor_allocator->Allocate(
+				sizeof(std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>) * data->dependencies.size
 			);
-			if (build_status == EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING) {
-				ECS_FORMAT_TEMP_STRING(console_message, "Failed to reload module {#} after unloading it to let a build/rebuild operation be performed.", 
-					editor_state->project_modules->buffer[data->dependencies[index]].library_name);
-				EditorSetConsoleError(console_message);
+
+			// No matter what the outcome is, we need to rebuild the old modules
+			for (size_t index = 0; index < data->dependencies.size; index++) {
+				const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index], data->configuration);
+				EDITOR_LAUNCH_BUILD_COMMAND_STATUS build_status = BuildModule(
+					editor_state,
+					data->dependencies[index],
+					data->configuration,
+					data->dependencies_finish_status + index
+				);
+				if (build_status == EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING) {
+					ECS_FORMAT_TEMP_STRING(console_message, "Failed to reload module {#} after unloading it to let a build/rebuild operation be performed.",
+						editor_state->project_modules->buffer[data->dependencies[index]].library_name);
+					EditorSetConsoleError(console_message);
+				}
 			}
 		}
 
@@ -508,7 +511,7 @@ EDITOR_EVENT(ReloadModuleEvent) {
 		if (data->allocated_finish_status) {
 			editor_state->editor_allocator->Deallocate(data->finish_status);
 		}
-		return true;
+		return false;
 	}
 	else if (data->dependencies_finish_status != nullptr) {
 		// Verify the launch statuses
@@ -519,6 +522,7 @@ EDITOR_EVENT(ReloadModuleEvent) {
 		if (have_finished) {
 			// Deallocate the buffer
 			editor_state->editor_allocator->Deallocate(data->dependencies_finish_status);
+			editor_state->editor_allocator->Deallocate(data->dependencies.buffer);
 		}
 		return !have_finished;
 	}
@@ -685,6 +689,12 @@ EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 				reload_data.dependencies_finish_status = nullptr;
 				EditorAddEvent(editor_state, ReloadModuleEvent, &reload_data, sizeof(reload_data));
 			}
+			else {
+				data->unloaded_dependencies.FreeBuffer();
+			}
+		}
+		else {
+			data->unloaded_dependencies.FreeBuffer();
 		}
 
 		return false;

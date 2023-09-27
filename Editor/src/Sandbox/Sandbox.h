@@ -99,22 +99,20 @@ unsigned int FindSandboxSelectedEntityIndex(
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns -1 if it doesn't find slot with the given value
-ECSEngine::Entity FindSandboxUnusedEntitySlot(
+ECSEngine::Entity FindSandboxVirtualEntitySlot(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
-	EDITOR_SANDBOX_ENTITY_SLOT slot_type,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns EDITOR_SANDBOX_ENTITY_SLOT_COUNT if the entity could not be found
 // It will assert that the slot was assigned beforehand
-EDITOR_SANDBOX_ENTITY_SLOT FindSandboxUnusedEntitySlotType(
+EDITOR_SANDBOX_ENTITY_SLOT FindSandboxVirtualEntitySlotType(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
-	ECSEngine::Entity entity,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	ECSEngine::Entity entity
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -179,8 +177,7 @@ ECS_INLINE size_t GetSandboxSelectedEntitiesCount(const EditorState* editor_stat
 void GetSandboxSelectedEntitiesFiltered(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
-	ECSEngine::CapacityStream<ECSEngine::Entity>* filtered_entities,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	ECSEngine::CapacityStream<ECSEngine::Entity>* filtered_entities
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -188,21 +185,19 @@ void GetSandboxSelectedEntitiesFiltered(
 // Fills in entity slots that are not yet used in the runtime
 // or somewhere else in the editor. Returns an index that needs to be used
 // to set the transform type afterwards with the function SetSandboxUnusedEntitySlotType
-unsigned int GetSandboxUnusedEntitySlots(
+unsigned int GetSandboxVirtualEntitySlots(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	ECSEngine::Stream<ECSEngine::Entity> entities,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	ECSEngine::Stream<ECSEngine::Entity> entities
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-ECS_INLINE ECSEngine::Stream<ECSEngine::Entity> GetSandboxUnusedEntitySlots(
+ECS_INLINE ECSEngine::Stream<ECSEngine::Entity> GetSandboxVirtualEntitySlots(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	unsigned int sandbox_index
 ) {
-	return GetSandbox(editor_state, sandbox_index)->unused_entities_slots[viewport].ToStream();
+	return GetSandbox(editor_state, sandbox_index)->unused_entities_slots.ToStream();
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -223,8 +218,7 @@ void InitializeSandboxRuntime(
 bool IsSandboxGizmoEntity(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
-	ECSEngine::Entity entity,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	ECSEngine::Entity entity
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -357,19 +351,17 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 
 // -------------------------------------------------------------------------------------------------------------
 
-void ResetSandboxUnusedEntities(
+void ResetSandboxVirtualEntities(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	unsigned int sandbox_index
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-void RemoveSandboxUnusedEntitiesSlot(
+void RemoveSandboxVirtualEntitiesSlot(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	EDITOR_SANDBOX_ENTITY_SLOT slot_type,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -435,21 +427,19 @@ void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_
 
 // -------------------------------------------------------------------------------------------------------------
 
-// The slot index needs to be obtained through the GetSandboxUnusedEntitySlots
-void SetSandboxUnusedEntitySlotType(
+// The slot index needs to be obtained through the GetSandboxVirtualEntitySlots
+void SetSandboxVirtualEntitySlotType(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	unsigned int slot_index,
-	EDITOR_SANDBOX_ENTITY_SLOT slot_type,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-bool ShouldSandboxRecomputeEntitySlots(
+bool ShouldSandboxRecomputeVirtualEntitySlots(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+	unsigned int sandbox_index
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -462,7 +452,7 @@ void SignalSandboxSelectedEntitiesCounter(EditorState* editor_state, unsigned in
 
 // This will add an event to increment the counter in order to be picked up by all systems
 // next frame
-void SignalSandboxUnusedEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
+void SignalSandboxVirtualEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

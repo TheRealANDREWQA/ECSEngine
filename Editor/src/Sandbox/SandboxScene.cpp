@@ -100,6 +100,17 @@ Camera GetSandboxCamera(const EditorState* editor_state, unsigned int sandbox_in
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+float GetSandboxViewportAspectRatio(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	ResourceView view = sandbox->viewport_render_destination[viewport].output_view;
+
+	uint2 dimensions = GetTextureDimensions(view.AsTexture2D());
+	return (float)dimensions.x / (float)dimensions.y;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void RegisterSandboxCameraTransform(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -190,10 +201,7 @@ bool SaveSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
 void SetSandboxCameraAspectRatio(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	ResourceView view = sandbox->viewport_render_destination[viewport].output_view;
-
-	uint2 dimensions = GetTextureDimensions(view.AsTexture2D());
-	sandbox->camera_parameters[viewport].aspect_ratio = (float)dimensions.x / (float)dimensions.y;
+	sandbox->camera_parameters[viewport].aspect_ratio = GetSandboxViewportAspectRatio(editor_state, sandbox_index, viewport);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
