@@ -4,6 +4,8 @@
 #include "../Rendering/RenderingStructures.h"
 #include "../Rendering/Camera.h"
 #include "../ECS/InternalStructures.h"
+#include "World.h"
+#include "Components.h"
 
 #define CAMERA_IDENTIFIER "__RuntimeCamera"
 #define EDITOR_RUNTIME_TYPE_IDENTIFIER "__EditorRuntimeType"
@@ -35,11 +37,16 @@ namespace ECSEngine {
 
 	bool GetRuntimeCamera(const SystemManager* system_manager, Camera* camera, CameraCached** camera_cached)
 	{
-		bool success = GetRuntimeResource(system_manager, camera, CAMERA_IDENTIFIER);
-		if (success && camera_cached != nullptr) {
-			*camera_cached = (CameraCached*)function::OffsetPointer(camera, sizeof(*camera));
+		void* runtime_resource = system_manager->TryGetData(CAMERA_IDENTIFIER);
+		if (runtime_resource) {
+			TableCamera* table_camera = (TableCamera*)runtime_resource;
+			*camera = table_camera->camera;
+			if (camera_cached != nullptr) {
+				*camera_cached = &table_camera->camera_cached;
+			}
+			return true;
 		}
-		return success;
+		return false;
 	}
 
 	void SetRuntimeCamera(SystemManager* system_manager, const Camera* camera, bool set_cached_camera)
@@ -182,6 +189,28 @@ namespace ECSEngine {
 	void RemoveEditorRuntimeInstancedFramebuffer(SystemManager* system_manager)
 	{
 		system_manager->RemoveData(INSTANCED_FRAMEBUFFER_IDENTIFIER);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool GetWorldCamera(const World* world, CameraCached& camera)
+	{	
+		Camera normal_camera;
+		CameraCached* camera_cached;
+		if (GetRuntimeCamera(world->system_manager, &normal_camera, &camera_cached)) {
+			camera = *camera_cached;
+			return true;
+		}
+		
+		const EntityManager* entity_manager = world->entity_manager;
+		const CameraComponent* camera_component = entity_manager->TryGetGlobalComponent<CameraComponent>();
+
+		if (camera_component) {
+			camera = camera_component->value;
+			return true;
+		}
+
+		return false;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

@@ -44,6 +44,10 @@ ECSEngine::Camera GetSandboxCamera(const EditorState* editor_state, unsigned int
 
 // -------------------------------------------------------------------------------------------------------------
 
+float GetSandboxViewportAspectRatio(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Records the current position of the camera into the given slot
 void RegisterSandboxCameraTransform(
 	EditorState* editor_state,

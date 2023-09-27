@@ -12,35 +12,45 @@ using namespace ECSEngine;
 ECS_TOOLS;
 
 struct EntitiesUIData {
+	ECS_INLINE size_t FindVirtualEntity(Entity entity) const {
+		return function::SearchBytes(
+			virtual_global_components_entities.buffer,
+			virtual_global_components_entities.size,
+			entity.value,
+			sizeof(entity)
+		);
+	}
+
+	ECS_INLINE size_t FindVirtualComponent(Component component) const {
+		return function::SearchBytes(
+			virtual_global_component,
+			virtual_global_components_entities.size,
+			component.value,
+			sizeof(component)
+		);
+	}
+
 	EditorState* editor_state;
 	unsigned char sandbox_index;
 	CapacityStream<char> filter_string;
 
-	// Each entity corresponds to the global component at that index inside the entity manager
+	// These are SoA streams
 	Stream<Entity> virtual_global_components_entities;
-	// We need to record this to change the entities that we stored here when a change of
-	// runtime happens
-	EDITOR_SANDBOX_VIEWPORT virtual_components_viewport;
+	Component* virtual_global_component;
 };
 
 #define ITERATOR_LABEL_CAPACITY 128
 
-static ECS_INLINE Entity GlobalComponentsParent() {
+ECS_INLINE static Entity GlobalComponentsParent() {
 	return Entity((unsigned int)-2);
 }
 
 // Returns -1 if the entity is not a virtual global component, else return the component that corresponds to that virtual entity
 static Component DecodeVirtualEntityToComponent(const EntitiesUIData* entities_data, Entity virtual_entity) {
-	const EntityManager* entity_manager = ActiveEntityManager(entities_data->editor_state, entities_data->sandbox_index);
-	size_t component_index = function::SearchBytes(
-		entities_data->virtual_global_components_entities.buffer, 
-		entities_data->virtual_global_components_entities.size, 
-		virtual_entity.value, 
-		sizeof(virtual_entity)
-	);
+	size_t component_index = entities_data->FindVirtualEntity(virtual_entity);
 
 	if (component_index != -1) {
-		return entity_manager->m_global_components[component_index];
+		return entities_data->virtual_global_component[component_index];
 	}
 	return -1;
 }
@@ -484,6 +494,9 @@ static void EntitiesUIDestroyAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EntitiesUIData* draw_data = (EntitiesUIData*)_additional_data;
+	if (draw_data->virtual_global_components_entities.size > 0) {
+		draw_data->editor_state->editor_allocator->Deallocate(draw_data->virtual_global_component);
+	}
 	draw_data->virtual_global_components_entities.Deallocate(draw_data->editor_state->EditorAllocator());
 }
 
@@ -497,7 +510,6 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 	data->editor_state = editor_state;
 	data->sandbox_index = -1;
 	data->virtual_global_components_entities.InitializeFromBuffer(nullptr, 0);
-	data->virtual_components_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
 
 	CapacityStream<char> window_name(function::OffsetPointer(data, sizeof(*data)), 0, 128);
 	GetEntitiesUIWindowName(window_index, window_name);
@@ -545,18 +557,64 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		// Get the count of global components and update the virtual mapping of the global components if the count is different
 		unsigned int global_component_count = entity_manager->GetGlobalComponentCount();
 		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
-		if (global_component_count != data->virtual_global_components_entities.size || ShouldSandboxRecomputeEntitySlots(editor_state, sandbox_index) 
-			|| data->virtual_components_viewport != active_viewport) {
+		if (global_component_count != data->virtual_global_components_entities.size || ShouldSandboxRecomputeVirtualEntitySlots(editor_state, sandbox_index)) {
 			// Reset the virtual entities first
-			RemoveSandboxUnusedEntitiesSlot(editor_state, sandbox_index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
-			data->virtual_global_components_entities.Resize(editor_state->EditorAllocator(), global_component_count, false, true);
-			if (global_component_count > 0) {
-				unsigned int slot_start_index = GetSandboxUnusedEntitySlots(editor_state, sandbox_index, data->virtual_global_components_entities);
-				for (size_t index = 0; index < data->virtual_global_components_entities.size; index++) {
-					SetSandboxUnusedEntitySlotType(editor_state, sandbox_index, slot_start_index + index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
+			// Check to see if there are any selected entities and update their value
+			struct RemapSelectedEntity {
+				unsigned int selected_index;
+				Component component;
+			};
+			ECS_STACK_CAPACITY_STREAM(RemapSelectedEntity, remap_selected_entities, ECS_KB * 8);
+			Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+			for (size_t index = 0; index < selected_entities.size; index++) {
+				size_t virtual_index = data->FindVirtualEntity(selected_entities[index]);
+				if (virtual_index != -1) {
+					remap_selected_entities.AddAssert({ (unsigned int)index, data->virtual_global_component[index] });
 				}
 			}
-			data->virtual_components_viewport = active_viewport;
+			RemoveSandboxVirtualEntitiesSlot(editor_state, sandbox_index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
+			if (data->virtual_global_components_entities.size > 0) {
+				editor_state->editor_allocator->Deallocate(data->virtual_global_component);
+			}
+			data->virtual_global_components_entities.Resize(editor_state->EditorAllocator(), global_component_count, false, true);
+			if (global_component_count > 0) {
+				unsigned int slot_start_index = GetSandboxVirtualEntitySlots(editor_state, sandbox_index, data->virtual_global_components_entities);
+				for (size_t index = 0; index < data->virtual_global_components_entities.size; index++) {
+					SetSandboxVirtualEntitySlotType(editor_state, sandbox_index, slot_start_index + index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
+				}
+				data->virtual_global_component = (Component*)editor_state->editor_allocator->Allocate(sizeof(Component) * global_component_count);
+				memcpy(data->virtual_global_component, GetSandboxEntityManager(editor_state, sandbox_index)->m_global_components, sizeof(Component) * global_component_count);
+			}
+			else {
+				data->virtual_global_component = nullptr;
+			}
+
+			ECS_STACK_CAPACITY_STREAM(Entity, selected_entities_to_be_removed, ECS_KB * 8);
+			// Go through each selected entity that is a virtual global component and check to see if it exists or a 
+			// remapping needs to be performed
+			for (unsigned int index = 0; index < remap_selected_entities.size; index++) {
+				size_t new_index = data->FindVirtualComponent(remap_selected_entities[index].component);
+				if (new_index == -1) {
+					// Remove the entity
+					selected_entities_to_be_removed.AddAssert(selected_entities[remap_selected_entities[index].selected_index]);
+				}
+				else {
+					selected_entities[remap_selected_entities[index].selected_index] = data->virtual_global_components_entities[new_index];
+				}
+			}
+
+			for (unsigned int index = 0; index < selected_entities_to_be_removed.size; index++) {
+				size_t found_index = function::SearchBytes(
+					selected_entities.buffer,
+					selected_entities.size,
+					selected_entities_to_be_removed[index].value,
+					sizeof(selected_entities_to_be_removed[index])
+				);
+				ECS_ASSERT(found_index != -1);
+				selected_entities.RemoveSwapBack(found_index);
+			}
+
+			SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
 		}
 
 		EntitiesWholeWindowMenu(drawer, data);

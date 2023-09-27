@@ -182,10 +182,10 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::ResizableStream<ECSEngine::Entity> selected_entities;
 	unsigned char selected_entities_changed_counter;
 
-	ECSEngine::ResizableStream<ECSEngine::Entity> unused_entities_slots[EDITOR_SANDBOX_VIEWPORT_COUNT];
-	ECSEngine::ResizableStream<EDITOR_SANDBOX_ENTITY_SLOT> unused_entity_slot_type[EDITOR_SANDBOX_VIEWPORT_COUNT];
+	ECSEngine::ResizableStream<ECSEngine::Entity> unused_entities_slots;
+	ECSEngine::ResizableStream<EDITOR_SANDBOX_ENTITY_SLOT> unused_entity_slot_type;
 	// These flags indicate when the unused slots need to be recomputed (after a clear/reset for example)
-	bool unused_entities_slots_recompute[EDITOR_SANDBOX_VIEWPORT_COUNT];
+	bool unused_entities_slots_recompute;
 
 	ECSEngine::MemoryManager runtime_module_snapshot_allocator;
 	ECSEngine::ResizableStream<EditorSandboxModuleSnapshot> runtime_module_snapshots;

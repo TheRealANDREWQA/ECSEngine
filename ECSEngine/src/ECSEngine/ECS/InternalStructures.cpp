@@ -520,7 +520,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	bool EntityPool::GetUnusedEntities(Stream<Entity> entities, unsigned int bit_count) const
+	bool EntityPool::GetVirtualEntities(Stream<Entity> entities, unsigned int bit_count) const
 	{
 		const size_t total_iterations = function::ClampMin<size_t>(entities.size * 2, 1000);
 		size_t current_count = 0;
@@ -561,7 +561,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	bool EntityPool::GetUnusedEntities(Stream<Entity> entities, Stream<Entity> excluded_entities, unsigned int bit_count) const
+	bool EntityPool::GetVirtualEntities(Stream<Entity> entities, Stream<Entity> excluded_entities, unsigned int bit_count) const
 	{
 		const size_t ITERATION_STOP_COUNT = function::ClampMin<size_t>(entities.size * 2 + excluded_entities.size, 1'000);
 		unsigned int uint_exclude_size = (unsigned int)excluded_entities.size;

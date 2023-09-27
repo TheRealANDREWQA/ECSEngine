@@ -374,7 +374,7 @@ namespace ECSEngine {
 		// Fills in entity identifiers that are not in use at this moment
 		// The bit count limits the amount of bits that the entity can have
 		// Returns true if there were enough entities, else false
-		bool GetUnusedEntities(Stream<Entity> entities, unsigned int bit_count = 32) const;
+		bool GetVirtualEntities(Stream<Entity> entities, unsigned int bit_count = 32) const;
 
 		// Returns an Entity identifier that is not in use at this moment.
 		// The bit count limits the amount of bits that the entity can have
@@ -386,7 +386,7 @@ namespace ECSEngine {
 		// The bit count limits the amount of bits that the entity can have
 		// Additionally, this version takes in a stream of already used slots from previous calls
 		// to omit them. Returns true if there were enough entities, else false
-		bool GetUnusedEntities(Stream<Entity> entities, Stream<Entity> excluded_entities, unsigned int bit_count = 32) const;
+		bool GetVirtualEntities(Stream<Entity> entities, Stream<Entity> excluded_entities, unsigned int bit_count = 32) const;
 
 		// The tag should be the bit position, not the actual value
 		bool HasTag(Entity entity, unsigned char tag) const;
