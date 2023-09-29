@@ -66,7 +66,6 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 	int2 unclampped_texel_position = descriptor->system->GetWindowTexelPositionEx(descriptor->window_index, descriptor->mouse_position);
 	uint2 viewport_dimensions = descriptor->system->GetWindowTexelSize(descriptor->window_index);
 
-	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
 	switch (descriptor->tool_to_use) {
 	case ECS_TRANSFORM_TRANSLATION:
 	{
@@ -100,10 +99,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 		);
 
 		if (translation_delta != float3::Splat(0.0f)) {
-			for (size_t index = 0; index < selected_entities.size; index++) {
-				Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
-				translation->value += translation_delta;
-			}
+			TranslateSandboxSelectedEntities(editor_state, sandbox_index, translation_delta);
 			// Also translate the midpoint along
 			*descriptor->translation_midpoint += translation_delta;
 			return true;
@@ -119,7 +115,6 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 		else if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 			factor *= 5.0f;
 		}
-		Rotation* first_rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[0]);
 		float4 rotation_delta = HandleRotationToolDeltaCircleMapping(
 			&camera,
 			*descriptor->translation_midpoint,
@@ -131,14 +126,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 		);
 
 		if (rotation_delta != QuaternionIdentity().StorageLow()) {
-			for (size_t index = 0; index < selected_entities.size; index++) {
-				Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[index]);
-				Quaternion original_quat = Quaternion(rotation->value);
-				// We need to use local rotation regardless of the transform space
-				// The transform tool takes care of the correct rotation delta
-				Quaternion combined_quaternion = AddLocalRotation(original_quat, rotation_delta);
-				rotation->value = combined_quaternion.StorageLow();
-			}
+			RotateSandboxSelectedEntities(editor_state, sandbox_index, rotation_delta);
 
 			if (descriptor->rotation_delta != nullptr) {
 				*descriptor->rotation_delta = AddLocalRotation(*descriptor->rotation_delta, rotation_delta);
@@ -167,10 +155,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 		);
 
 		if (scale_delta != float3::Splat(0.0f)) {
-			for (size_t index = 0; index < selected_entities.size; index++) {
-				Scale* scale = GetSandboxEntityComponent<Scale>(editor_state, sandbox_index, selected_entities[index]);
-				scale->value += scale_delta;
-			}
+			ScaleSandboxSelectedEntities(editor_state, sandbox_index, scale_delta);
 
 			if (descriptor->scale_delta != nullptr) {
 				*descriptor->scale_delta += scale_delta;
@@ -952,9 +937,9 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 				// Check for the case nothing is selected
 				Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
 				// Check to see if this a gizmo Entity
-				EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxVirtualEntitySlotType(editor_state, sandbox_index, selected_entity);
-				if (entity_slot != EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
-					switch (entity_slot) {
+				EditorSandboxEntitySlot entity_slot = FindSandboxVirtualEntitySlot(editor_state, sandbox_index, selected_entity);
+				if (entity_slot.slot_type != EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
+					switch (entity_slot.slot_type) {
 					case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X:
 						data->tool_axis = ECS_TRANSFORM_AXIS_X;
 						break;
@@ -1095,8 +1080,8 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 					// Check for the case nothing is selected
 					Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
 					// Check to see if this a gizmo Entity
-					EDITOR_SANDBOX_ENTITY_SLOT entity_slot = FindSandboxVirtualEntitySlotType(editor_state, sandbox_index, selected_entity);
-					if (entity_slot == EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
+					EditorSandboxEntitySlot entity_slot = FindSandboxVirtualEntitySlot(editor_state, sandbox_index, selected_entity);
+					if (entity_slot.slot_type == EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
 						// We have selected an actual entity, not a gizmo or some other pseudo entity
 						if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) || keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 							if (IsSandboxEntityValid(editor_state, sandbox_index, selected_entity)) {

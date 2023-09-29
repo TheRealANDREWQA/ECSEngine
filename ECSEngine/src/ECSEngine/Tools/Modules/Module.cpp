@@ -5,6 +5,7 @@
 #include "../../Allocators/AllocatorPolymorphic.h"
 #include "../../Utilities/FunctionInterfaces.h"
 #include "../../Utilities/Path.h"
+#include "../UI/UIStructures.h"
 
 
 namespace ECSEngine {
@@ -488,12 +489,17 @@ namespace ECSEngine {
 			return { {nullptr, 0} };
 		}
 
+		return LoadModuleExtraInformation(module->extra_information, allocator);
+	}
+
+	ModuleExtraInformation LoadModuleExtraInformation(ModuleRegisterExtraInformationFunction function, AllocatorPolymorphic allocator)
+	{
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 64, ECS_MB);
 
 		ModuleRegisterExtraInformationFunctionData function_data;
 		function_data.allocator = GetAllocatorPolymorphic(&_stack_allocator);
 		function_data.extra_information.Initialize(function_data.allocator, 0);
-		module->extra_information(&function_data);
+		function(&function_data);
 
 		Stream<ModuleMiscInfo> coalesced_data = StreamCoalescedDeepCopy(function_data.extra_information.ToStream(), allocator);
 		return { coalesced_data };

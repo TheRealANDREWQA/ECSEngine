@@ -91,6 +91,12 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	);
 
+	// It does a single coalesced allocation. Dealloate the buffer to free the memory
+	ECSENGINE_API ModuleExtraInformation LoadModuleExtraInformation(
+		ModuleRegisterExtraInformationFunction function,
+		AllocatorPolymorphic allocator
+	);
+
 	// Frees the OS handle to the valid module function but it does not deallocate the tasks
 	// or any other stream that was previously allocated. They must be manually deallocated.
 	ECSENGINE_API void ReleaseModule(Module* module);

@@ -1371,6 +1371,48 @@ void ResetSandboxGlobalComponent(EditorState* editor_state, unsigned int sandbox
 	editor_state->editor_components.ResetComponent(component, component_data, ECS_COMPONENT_GLOBAL);
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, Quaternion rotation_delta)
+{
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+	ECS_STACK_CAPACITY_STREAM(TransformGizmoPointers, transform_gizmo_pointers, ECS_KB);
+	ECS_STACK_CAPACITY_STREAM(Entity, transform_gizmo_entities, ECS_KB);
+	GetSandboxSelectedVirtualEntitiesTransformPointers(editor_state, sandbox_index, &transform_gizmo_pointers, &transform_gizmo_entities);
+
+	auto apply_delta = [rotation_delta](float4* rotation_storage) {
+		Quaternion original_quat = Quaternion(*rotation_storage);
+		// We need to use local rotation regardless of the transform space
+		// The transform tool takes care of the correct rotation delta
+		Quaternion combined_quaternion = AddLocalRotation(original_quat, rotation_delta);
+		*rotation_storage = combined_quaternion.StorageLow();
+	};
+
+	for (size_t index = 0; index < selected_entities.size; index++) {
+		Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[index]);
+		if (rotation != nullptr) {
+			apply_delta(&rotation->value);
+		}
+		else {
+			// Check the virtual entities
+			size_t gizmo_index = function::SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
+			if (gizmo_index != -1) {
+				if (transform_gizmo_pointers[gizmo_index].euler_rotation != nullptr) {
+					if (transform_gizmo_pointers[gizmo_index].is_euler_rotation) {
+						Quaternion gizmo_rotation = QuaternionFromEuler(*transform_gizmo_pointers[gizmo_index].euler_rotation);
+						// Here it seems that we need to add world rotations for the euler angles to remain valid
+						gizmo_rotation = AddWorldRotation(gizmo_rotation, rotation_delta);
+						*transform_gizmo_pointers[gizmo_index].euler_rotation = QuaternionToEulerLow(gizmo_rotation);
+					}
+					else {
+						apply_delta(transform_gizmo_pointers[gizmo_index].quaternion_rotation);
+					}
+				}
+			}
+		}
+	}
+}
+
 // ------------------------------------------------------------------------------------------------------------------------------
 
 void SandboxForEachEntity(
@@ -1710,6 +1752,60 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 	// It can happen that the handle is not modified and so it will, in fact, have the same shared instance
 	// Only change the shared instance in that case
 	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void ScaleSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 scale_delta)
+{
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+	ECS_STACK_CAPACITY_STREAM(TransformGizmoPointers, transform_gizmo_pointers, ECS_KB);
+	ECS_STACK_CAPACITY_STREAM(Entity, transform_gizmo_entities, ECS_KB);
+	GetSandboxSelectedVirtualEntitiesTransformPointers(editor_state, sandbox_index, &transform_gizmo_pointers, &transform_gizmo_entities);
+
+	for (size_t index = 0; index < selected_entities.size; index++) {
+		Scale* scale = GetSandboxEntityComponent<Scale>(editor_state, sandbox_index, selected_entities[index]);
+		if (scale != nullptr) {
+			// It is a real entity
+			scale->value += scale_delta;
+		}
+		else {
+			// Check the virtual entity gizmos
+			size_t gizmo_index = function::SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
+			if (gizmo_index != -1) {
+				if (transform_gizmo_pointers[gizmo_index].scale != nullptr) {
+					*transform_gizmo_pointers[gizmo_index].scale += scale_delta;
+				}
+			}
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void TranslateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 delta)
+{
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+	ECS_STACK_CAPACITY_STREAM(TransformGizmoPointers, transform_gizmo_pointers, ECS_KB);
+	ECS_STACK_CAPACITY_STREAM(Entity, transform_gizmo_entities, ECS_KB);
+	GetSandboxSelectedVirtualEntitiesTransformPointers(editor_state, sandbox_index, &transform_gizmo_pointers, &transform_gizmo_entities);
+
+	for (size_t index = 0; index < selected_entities.size; index++) {
+		Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
+		if (translation != nullptr) {
+			// It is a real entity
+			translation->value += delta;
+		}
+		else {
+			// Check the virtual entity gizmos
+			size_t gizmo_index = function::SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
+			if (gizmo_index != -1) {
+				if (transform_gizmo_pointers[gizmo_index].position != nullptr) {
+					*transform_gizmo_pointers[gizmo_index].position += delta;
+				}
+			}
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

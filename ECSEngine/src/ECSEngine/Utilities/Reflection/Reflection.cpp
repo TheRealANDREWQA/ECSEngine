@@ -5754,6 +5754,48 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		ReflectionTypeFieldDeep FindReflectionTypeFieldDeep(
+			const ReflectionManager* reflection_manager, 
+			const ReflectionType* reflection_type, 
+			Stream<char> field
+		)
+		{
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, subfields, 32);
+			// Split the field by dots
+			function::SplitString(field, ".", subfields);
+
+			ReflectionTypeFieldDeep deep_field;
+			deep_field.type = nullptr;
+			deep_field.field_index = -1;
+			deep_field.type_offset_from_original = 0;
+
+			if (subfields.size == 1) {
+				// Normal find
+				deep_field.type = reflection_type;
+				deep_field.field_index = reflection_type->FindField(field);
+				return deep_field;
+			}
+			else {
+				while (subfields.size > 1) {
+					unsigned int current_field_index = reflection_type->FindField(subfields[0]);
+					if (current_field_index == -1) {
+						return deep_field;
+					}
+
+					deep_field.type_offset_from_original += reflection_type->fields[current_field_index].info.pointer_offset;
+					Stream<char> nested_type_definition = reflection_type->fields[current_field_index].definition;
+					reflection_type = reflection_manager->GetType(nested_type_definition);
+					subfields.Advance();
+				}
+
+				deep_field.type = reflection_type;
+				deep_field.field_index = reflection_type->FindField(subfields[0]);
+				return deep_field;
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool ConstructReflectionTypeDependencyGraph(Stream<ReflectionType> types, CapacityStream<Stream<char>>& ordered_types, CapacityStream<uint2>& subgroups)
 		{
 			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, valid_mask, types.size);

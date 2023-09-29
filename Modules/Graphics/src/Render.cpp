@@ -217,7 +217,11 @@ ECS_THREAD_TASK(RenderSelectables) {
 			if (GetWorldCamera(world, camera)) {
 				Color select_color = GetEditorRuntimeSelectColor(system_manager);
 				Stream<Entity> selected_entities = GetEditorRuntimeSelectedEntities(system_manager);
-				if (selected_entities.size > 0) {
+
+				Stream<TransformGizmo> transform_gizmos;
+				GetEditorExtraTransformGizmos(system_manager, &transform_gizmos);
+
+				if (selected_entities.size + transform_gizmos.size > 0) {
 					Matrix camera_matrix = camera.GetViewProjectionMatrix();
 					// Highlight the entities - if they have meshes
 					size_t valid_entities = 0;
@@ -230,7 +234,8 @@ ECS_THREAD_TASK(RenderSelectables) {
 
 					float3 translation_midpoint = { 0.0f, 0.0f, 0.0f };
 					Quaternion rotation_midpoint = QuaternionAverageCumulatorInitialize();
-					if (valid_entities > 0) {
+					size_t total_valid_count = valid_entities + transform_gizmos.size;
+					if (total_valid_count > 0) {
 						HighlightObjectElement* highlight_elements = nullptr;
 						size_t allocate_size = sizeof(highlight_elements[0]) * valid_entities;
 						bool stack_allocated = false;
@@ -243,70 +248,79 @@ ECS_THREAD_TASK(RenderSelectables) {
 							highlight_elements = (HighlightObjectElement*)world->task_manager->AllocateTempBuffer(thread_id, allocate_size);
 						}
 
-						for (size_t index = 0; index < selected_entities.size; index++) {
-							const RenderMesh* render_mesh = entity_manager->TryGetComponent<RenderMesh>(selected_entities[index]);
-							if (render_mesh != nullptr && render_mesh->Validate()) {
-								highlight_elements[index].base.is_submesh = false;
-								highlight_elements[index].base.mesh = &render_mesh->mesh->mesh;
+						if (valid_entities > 0) {
+							for (size_t index = 0; index < selected_entities.size; index++) {
+								const RenderMesh* render_mesh = entity_manager->TryGetComponent<RenderMesh>(selected_entities[index]);
+								if (render_mesh != nullptr && render_mesh->Validate()) {
+									highlight_elements[index].base.is_submesh = false;
+									highlight_elements[index].base.mesh = &render_mesh->mesh->mesh;
 
-								Matrix entity_matrix;
-								const Translation* translation = entity_manager->TryGetComponent<Translation>(selected_entities[index]);
-								const Rotation* rotation = entity_manager->TryGetComponent<Rotation>(selected_entities[index]);
-								const Scale* scale = entity_manager->TryGetComponent<Scale>(selected_entities[index]);
+									Matrix entity_matrix;
+									const Translation* translation = entity_manager->TryGetComponent<Translation>(selected_entities[index]);
+									const Rotation* rotation = entity_manager->TryGetComponent<Rotation>(selected_entities[index]);
+									const Scale* scale = entity_manager->TryGetComponent<Scale>(selected_entities[index]);
 
-								if (translation != nullptr) {
-									Matrix translation_matrix = MatrixTranslation(translation->value);
-									if (rotation != nullptr) {
+									if (translation != nullptr) {
+										Matrix translation_matrix = MatrixTranslation(translation->value);
+										if (rotation != nullptr) {
+											Quaternion rotation_quaternion = Quaternion(rotation->value);
+											Matrix rotation_matrix = QuaternionToMatrixLow(rotation_quaternion);
+											if (scale != nullptr) {
+												entity_matrix = MatrixTRS(translation_matrix, rotation_matrix, MatrixScale(scale->value));
+											}
+											else {
+												entity_matrix = MatrixTR(translation_matrix, rotation_matrix);
+											}
+											if (transform_tool.space == ECS_TRANSFORM_LOCAL_SPACE) {
+												QuaternionAddToAverageStep(&rotation_midpoint, rotation_quaternion);
+											}
+										}
+										else if (scale != nullptr) {
+											entity_matrix = MatrixTS(translation_matrix, MatrixScale(scale->value));
+										}
+										else {
+											entity_matrix = translation_matrix;
+										}
+										translation_midpoint += translation->value;
+									}
+									else if (rotation != nullptr) {
 										Quaternion rotation_quaternion = Quaternion(rotation->value);
 										Matrix rotation_matrix = QuaternionToMatrixLow(rotation_quaternion);
 										if (scale != nullptr) {
-											entity_matrix = MatrixTRS(translation_matrix, rotation_matrix, MatrixScale(scale->value));
+											entity_matrix = MatrixRS(rotation_matrix, MatrixScale(scale->value));
 										}
 										else {
-											entity_matrix = MatrixTR(translation_matrix, rotation_matrix);
+											entity_matrix = rotation_matrix;
 										}
 										if (transform_tool.space == ECS_TRANSFORM_LOCAL_SPACE) {
 											QuaternionAddToAverageStep(&rotation_midpoint, rotation_quaternion);
 										}
 									}
 									else if (scale != nullptr) {
-										entity_matrix = MatrixTS(translation_matrix, MatrixScale(scale->value));
+										entity_matrix = MatrixScale(scale->value);
 									}
-									else {
-										entity_matrix = translation_matrix;
-									}
-									translation_midpoint += translation->value;
-								}
-								else if (rotation != nullptr) {
-									Quaternion rotation_quaternion = Quaternion(rotation->value);
-									Matrix rotation_matrix = QuaternionToMatrixLow(rotation_quaternion);
-									if (scale != nullptr) {
-										entity_matrix = MatrixRS(rotation_matrix, MatrixScale(scale->value));
-									}
-									else {
-										entity_matrix = rotation_matrix;
-									}
-									if (transform_tool.space == ECS_TRANSFORM_LOCAL_SPACE) {
-										QuaternionAddToAverageStep(&rotation_midpoint, rotation_quaternion);
-									}
-								}
-								else if (scale != nullptr) {
-									entity_matrix = MatrixScale(scale->value);
-								}
 
-								highlight_elements[index].base.gpu_mvp_matrix = MatrixMVPToGPU(entity_matrix, camera_matrix);
+									highlight_elements[index].base.gpu_mvp_matrix = MatrixMVPToGPU(entity_matrix, camera_matrix);
+								}
 							}
+
+
+							HighlightObject(world->graphics, select_color, { highlight_elements, valid_entities });
 						}
 
-						HighlightObject(world->graphics, select_color, { highlight_elements, valid_entities });
+						// Now the transform gizmos
+						for (size_t index = 0; index < transform_gizmos.size; index++) {
+							translation_midpoint += transform_gizmos[index].position;
+							QuaternionAddToAverageStep(&rotation_midpoint, transform_gizmos[index].rotation);
+						}
 
 						if (!stack_allocated) {
 							world->task_manager->ClearThreadAllocator(thread_id);
 						}
 
-						translation_midpoint /= float3::Splat((float)valid_entities);
+						translation_midpoint /= float3::Splat((float)total_valid_count);
 						if (transform_tool.space == ECS_TRANSFORM_LOCAL_SPACE) {
-							rotation_midpoint = QuaternionAverageFromCumulator(rotation_midpoint, valid_entities);
+							rotation_midpoint = QuaternionAverageFromCumulator(rotation_midpoint, total_valid_count);
 						}
 						else {
 							rotation_midpoint = QuaternionIdentity();

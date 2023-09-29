@@ -30,6 +30,28 @@ enum EDITOR_SANDBOX_ENTITY_SLOT : unsigned char {
 	EDITOR_SANDBOX_ENTITY_SLOT_COUNT
 };
 
+struct EditorSandboxEntitySlot {
+	ECS_INLINE EditorSandboxEntitySlot() {}
+
+	template<typename DataType>
+	ECS_INLINE DataType Data() const {
+		return *(DataType*)data;
+	}
+
+	template<typename DataType>
+	ECS_INLINE void SetData(DataType value) {
+		static_assert(sizeof(DataType) <= sizeof(data));
+		*(DataType*)data = value;
+	}
+
+	EDITOR_SANDBOX_ENTITY_SLOT slot_type;
+	union {
+		size_t uinteger;
+		int64_t sinteger;
+		char data[8];
+	};
+};
+
 #define EDITOR_SCENE_EXTENSION L".scene"
 #define EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT ECS_CONSTANT_REFLECT(8)
 #define EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED 0.1f
@@ -182,10 +204,10 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::ResizableStream<ECSEngine::Entity> selected_entities;
 	unsigned char selected_entities_changed_counter;
 
-	ECSEngine::ResizableStream<ECSEngine::Entity> unused_entities_slots;
-	ECSEngine::ResizableStream<EDITOR_SANDBOX_ENTITY_SLOT> unused_entity_slot_type;
+	ECSEngine::ResizableStream<ECSEngine::Entity> virtual_entities_slots;
+	ECSEngine::ResizableStream<EditorSandboxEntitySlot> virtual_entity_slot_type;
 	// These flags indicate when the unused slots need to be recomputed (after a clear/reset for example)
-	bool unused_entities_slots_recompute;
+	bool virtual_entities_slots_recompute;
 
 	ECSEngine::MemoryManager runtime_module_snapshot_allocator;
 	ECSEngine::ResizableStream<EditorSandboxModuleSnapshot> runtime_module_snapshots;

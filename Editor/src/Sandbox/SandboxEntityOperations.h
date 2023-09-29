@@ -478,12 +478,14 @@ Quaternion ECS_VECTORCALL GetSandboxEntitiesRotationMidpoint(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// You can optionally provide transform gizmos besides these entities
 void GetSandboxEntitiesMidpoint(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	Stream<Entity> entities,
 	float3* translation_midpoint,
 	Quaternion* rotation_midpoint,
+	Stream<TransformGizmo> transform_gizmos = {},
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
@@ -609,6 +611,8 @@ void ResetSandboxGlobalComponent(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, Quaternion rotation_delta);
+
 // Single threaded at the moment
 void SandboxForEachEntity(
 	EditorState* editor_state,
@@ -714,3 +718,7 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 	const void* previous_link_component,
 	SandboxUpdateLinkComponentForEntityInfo info = {}
 );
+
+void ScaleSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 scale_delta);
+
+void TranslateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 delta);

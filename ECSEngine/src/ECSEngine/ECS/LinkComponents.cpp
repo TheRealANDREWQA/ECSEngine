@@ -4,6 +4,7 @@
 #include "../Resources/AssetDatabase.h"
 #include "../Utilities/Serialization/SerializationHelpers.h"
 #include "ComponentHelpers.h"
+#include "../ECS/Entitymanager.h"
 
 #define LINK_COMPONENT_SUFFIX "Link"
 #define TAG_GENERATED_SUFFIX "_GENERATED"

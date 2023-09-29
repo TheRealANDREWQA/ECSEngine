@@ -4,16 +4,17 @@
 #include "../../Multithreading/TaskSchedulerTypes.h"
 #include "../../Resources/AssetMetadata.h"
 #include "../../Tools/UI/UIStructures.h"
-#include "../../ECS/World.h"
 
 namespace ECSEngine {
 
 	namespace Tools {
 		struct UIDrawer;
 		struct UIReflectionDrawer;
+		struct UIWindowDescriptor;
 	}
 
 	struct AssetDatabase;
+	struct TaskManager;
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
@@ -71,7 +72,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	struct ModuleSerializeComponentStreams {
-		inline const void* GetAllocatedBuffer() const {
+		ECS_INLINE const void* GetAllocatedBuffer() const {
 			return serialize_components.buffer;
 		}
 
@@ -307,31 +308,35 @@ namespace ECSEngine {
 
 	struct ModuleMiscInfo {
 		ECS_INLINE size_t CopySize() const {
-			return key.CopySize() + value.CopySize();
+			return key.CopySize() + StreamCoalescedDeepCopySize(value);
 		}
 
 		ECS_INLINE ModuleMiscInfo CopyTo(uintptr_t& ptr) const {
 			ModuleMiscInfo copy;
 
 			copy.key.InitializeAndCopy(ptr, key);
-			copy.value.InitializeAndCopy(ptr, value);
+			copy.value = StreamCoalescedDeepCopy(value, ptr);
 
 			return copy;
 		}
 
 		Stream<char> key;
-		Stream<char> value;
+		Stream<Stream<void>> value;
 	};
 
-	// This structure contains only strings. They can be used to inform the Editor/Runtime
-	// About extra miscellaneous requirements of info. The values as stored as pairs of key
-	// And value in order to ease the finding
+	// This structure can be used to inform the Editor/Runtime About extra miscellaneous requirements of info. 
+	// The values as stored as pairs of key and value in order to ease the finding
 	struct ModuleExtraInformation {
-		ECS_INLINE Stream<char> Find(Stream<char> key) const {
+		ECS_INLINE Stream<Stream<void>> Find(Stream<char> key) const {
 			size_t index = pairs.Find(key, [](ModuleMiscInfo info) {
 				return info.key;
 			});
-			return index == -1 ? Stream<char>(nullptr, 0) : pairs[index].value;
+			return index == -1 ? Stream<Stream<void>>(nullptr, 0) : pairs[index].value;
+		}
+
+		// Returns true if it has at least one entry
+		ECS_INLINE bool IsValid() const {
+			return pairs.size > 0;
 		}
 
 		Stream<ModuleMiscInfo> pairs;
@@ -374,7 +379,7 @@ namespace ECSEngine {
 
 		// The streams for the module
 		Stream<TaskSchedulerElement> tasks;
-		Stream<UIWindowDescriptor> ui_descriptors;
+		Stream<Tools::UIWindowDescriptor> ui_descriptors;
 		Stream<ModuleBuildAssetType> build_asset_types;
 		Stream<ModuleLinkComponentTarget> link_components;
 		ModuleSerializeComponentStreams serialize_streams;

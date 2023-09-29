@@ -220,6 +220,10 @@ namespace ECSEngine {
 
 			unsigned int FindField(Stream<char> name) const;
 
+			ECS_INLINE void* GetField(const void* data, unsigned int field_index) const {
+				return function::OffsetPointer(data, fields[field_index].info.pointer_offset);
+			}
+
 			// Returns DBL_MAX if it doesn't exist
 			double GetEvaluation(Stream<char> name) const;
 
