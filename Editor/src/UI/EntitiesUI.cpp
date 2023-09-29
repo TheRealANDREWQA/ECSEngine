@@ -579,11 +579,15 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 			data->virtual_global_components_entities.Resize(editor_state->EditorAllocator(), global_component_count, false, true);
 			if (global_component_count > 0) {
 				unsigned int slot_start_index = GetSandboxVirtualEntitySlots(editor_state, sandbox_index, data->virtual_global_components_entities);
-				for (size_t index = 0; index < data->virtual_global_components_entities.size; index++) {
-					SetSandboxVirtualEntitySlotType(editor_state, sandbox_index, slot_start_index + index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
-				}
 				data->virtual_global_component = (Component*)editor_state->editor_allocator->Allocate(sizeof(Component) * global_component_count);
-				memcpy(data->virtual_global_component, GetSandboxEntityManager(editor_state, sandbox_index)->m_global_components, sizeof(Component) * global_component_count);
+				memcpy(data->virtual_global_component, GetSandboxEntityManager(editor_state, sandbox_index)->m_global_components, sizeof(Component)* global_component_count);
+
+				for (size_t index = 0; index < data->virtual_global_components_entities.size; index++) {
+					EditorSandboxEntitySlot slot;
+					slot.slot_type = EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS;
+					slot.SetData(data->virtual_global_component[index]);
+					SetSandboxVirtualEntitySlotType(editor_state, sandbox_index, slot_start_index + index, slot);
+				}
 			}
 			else {
 				data->virtual_global_component = nullptr;

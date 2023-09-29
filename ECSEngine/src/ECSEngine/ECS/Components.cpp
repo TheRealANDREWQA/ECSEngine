@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "Components.h"
 #include "../Tools/Modules/ModuleDefinition.h"
+#include "../Tools/Modules/ModuleExtraInformation.h"
 
 namespace ECSEngine {
 
@@ -72,6 +73,16 @@ namespace ECSEngine {
 		target.reverse_function = ConvertCameraComponentToLink;
 		target.component_name = STRING(CameraComponentLink);
 		register_data->functions->AddAssert(target);
+	}
+
+	void RegisterECSModuleExtraInformation(ModuleRegisterExtraInformationFunctionData* register_data)
+	{
+		GlobalComponentTransformGizmos camera_gizmo;
+		camera_gizmo.component = STRING(CameraComponent);
+		camera_gizmo.translation_field = STRING(value.translation);
+		camera_gizmo.rotation_field = STRING(value.rotation);
+
+		SetGlobalComponentTransformGizmos(register_data, { { &camera_gizmo, 1} });
 	}
 
 }

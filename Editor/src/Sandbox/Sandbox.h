@@ -109,7 +109,7 @@ ECSEngine::Entity FindSandboxVirtualEntitySlot(
 
 // Returns EDITOR_SANDBOX_ENTITY_SLOT_COUNT if the entity could not be found
 // It will assert that the slot was assigned beforehand
-EDITOR_SANDBOX_ENTITY_SLOT FindSandboxVirtualEntitySlotType(
+EditorSandboxEntitySlot FindSandboxVirtualEntitySlot(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	ECSEngine::Entity entity
@@ -173,11 +173,35 @@ ECS_INLINE size_t GetSandboxSelectedEntitiesCount(const EditorState* editor_stat
 
 // This version will filter any virtual entities (unused entity slots) that appear here
 // The filtered entities must have a capacity equal or greater than the selected entities size
-// With the viewport you can specify 
+// The rejected entities will be placed at the end after the filtered ones. To iterate over them,
+// Just iterate starting from size until capacity
 void GetSandboxSelectedEntitiesFiltered(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	ECSEngine::CapacityStream<ECSEngine::Entity>* filtered_entities
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Fills in all the components that are to be controlled using transform widgets
+void GetSandboxComponentTransformGizmos(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	ECSEngine::CapacityStream<ECSEngine::GlobalComponentTransformGizmos>* components
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void GetSandboxSelectedVirtualEntities(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<ECSEngine::Entity>* entities);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Can optionally give a pointer with the virtual entities that are selected with gizmo pointers
+void GetSandboxSelectedVirtualEntitiesTransformPointers(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::CapacityStream<ECSEngine::TransformGizmoPointers>* pointers,
+	ECSEngine::CapacityStream<ECSEngine::Entity>* entities = nullptr
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -197,7 +221,7 @@ ECS_INLINE ECSEngine::Stream<ECSEngine::Entity> GetSandboxVirtualEntitySlots(
 	const EditorState* editor_state,
 	unsigned int sandbox_index
 ) {
-	return GetSandbox(editor_state, sandbox_index)->unused_entities_slots.ToStream();
+	return GetSandbox(editor_state, sandbox_index)->virtual_entities_slots.ToStream();
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -432,7 +456,7 @@ void SetSandboxVirtualEntitySlotType(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	unsigned int slot_index,
-	EDITOR_SANDBOX_ENTITY_SLOT slot_type
+	EditorSandboxEntitySlot slot
 );
 
 // -------------------------------------------------------------------------------------------------------------

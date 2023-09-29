@@ -316,7 +316,7 @@ void PreinitializeRuntime(EditorState* editor_state) {
 ECS_THREAD_TASK(InitializeRuntimeGraphicsTask) {
 	EditorState* editor_state = (EditorState*)_data;
 
-	const size_t GRAPHICS_ALLOCATOR_CAPACITY = ECS_KB * 50;
+	const size_t GRAPHICS_ALLOCATOR_CAPACITY = ECS_KB * 75;
 	const size_t GRAPHICS_ALLOCATOR_BLOCK_COUNT = 1024;
 
 	// Coallesce the allocations
@@ -400,6 +400,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	MemoryManager* editor_allocator = new MemoryManager(MEMORY_MANAGER_CAPACITY, 4 * ECS_KB, MEMORY_MANAGER_RESERVE_CAPACITY, GetAllocatorPolymorphic(global_memory_manager));
 	editor_state->editor_allocator = editor_allocator;
+	
 	AllocatorPolymorphic polymorphic_editor_allocator = GetAllocatorPolymorphic(editor_allocator);
 
 	MemoryManager* multithreaded_editor_allocator = new MemoryManager(
@@ -481,6 +482,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	// Register the link components for the engine components
 	editor_state->ecs_link_components = LoadModuleLinkComponentTargets(RegisterECSLinkComponents, editor_state->EditorAllocator());
+	editor_state->ecs_extra_information = LoadModuleExtraInformation(RegisterECSModuleExtraInformation, editor_state->EditorAllocator());
 	// Update the editor components
 	editor_state->editor_components.UpdateComponents(editor_state, editor_reflection_manager, 0, "ECSEngine");
 	// Finalize every event

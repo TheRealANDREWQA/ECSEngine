@@ -112,4 +112,15 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	struct TransformGizmo;
+
+	// The extra_gizmos are stable, you don't need to make an allocation
+	ECSENGINE_API bool GetEditorExtraTransformGizmos(const SystemManager* system_manager, Stream<TransformGizmo>* extra_gizmos);
+
+	ECSENGINE_API void SetEditorExtraTransformGizmos(SystemManager* system_manager, Stream<TransformGizmo> extra_gizmos);
+
+	ECSENGINE_API void RemoveEditorExtraTransformGizmos(SystemManager* system_manager);
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

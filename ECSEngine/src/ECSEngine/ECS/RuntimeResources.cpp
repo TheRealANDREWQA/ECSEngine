@@ -6,6 +6,7 @@
 #include "../ECS/InternalStructures.h"
 #include "World.h"
 #include "Components.h"
+#include "../Tools/Modules/ModuleExtraInformation.h"
 
 #define CAMERA_IDENTIFIER "__RuntimeCamera"
 #define EDITOR_RUNTIME_TYPE_IDENTIFIER "__EditorRuntimeType"
@@ -14,6 +15,7 @@
 #define TRANSFORM_TOOL_IDENTIFIER "__TransformTool"
 #define TRANSFORM_TOOL_EX_IDENTIFIER "__TransformToolEx"
 #define INSTANCED_FRAMEBUFFER_IDENTIFIER "__InstancedFramebuffer"
+#define TRANSFORM_GIZMOS "__TransformGizmos"
 
 namespace ECSEngine {
 	
@@ -211,6 +213,24 @@ namespace ECSEngine {
 		}
 
 		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool GetEditorExtraTransformGizmos(const SystemManager* system_manager, Stream<TransformGizmo>* extra_gizmos)
+	{
+		return GetRuntimeResource(system_manager, extra_gizmos, TRANSFORM_GIZMOS);
+	}
+
+	void SetEditorExtraTransformGizmos(SystemManager* system_manager, Stream<TransformGizmo> extra_gizmos)
+	{
+		void* allocated_data = function::CoallesceStreamWithData(system_manager->Allocator(), extra_gizmos, sizeof(extra_gizmos[0]));
+		system_manager->BindData(TRANSFORM_GIZMOS, allocated_data, 0);
+	}
+
+	void RemoveEditorExtraTransformGizmos(SystemManager* system_manager)
+	{
+		system_manager->RemoveData(TRANSFORM_GIZMOS);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

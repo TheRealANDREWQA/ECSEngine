@@ -101,7 +101,10 @@ namespace ECSEngine {
 	};
 
 	struct ModuleRegisterLinkComponentFunctionData;
+	struct ModuleRegisterExtraInformationFunctionData;
 
 	ECSENGINE_API void RegisterECSLinkComponents(ModuleRegisterLinkComponentFunctionData* register_data);
+
+	ECSENGINE_API void RegisterECSModuleExtraInformation(ModuleRegisterExtraInformationFunctionData* register_data);
 
 }

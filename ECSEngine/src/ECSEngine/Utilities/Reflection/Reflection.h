@@ -648,6 +648,31 @@ namespace ECSEngine {
 			CapacityStream<size_t>* second_surplus_fields = nullptr
 		);
 
+		struct ReflectionTypeFieldDeep {
+			ECS_INLINE bool IsValid() const {
+				return type != nullptr && field_index != -1;
+			}
+
+			ECS_INLINE void* GetFieldData(const void* data) const {
+				return type->GetField(function::OffsetPointer(data, type_offset_from_original), field_index);
+			}
+
+			const ReflectionType* type;
+			unsigned int field_index;
+			// This is the offset needed to index this value
+			// From the original given type
+			unsigned short type_offset_from_original;
+		};
+
+		// The addressing is like for normal structs, with dots in between
+		// Nested type fields. If it doesn't find the field, it will return nullptr
+		// type and -1 field index
+		ECSENGINE_API ReflectionTypeFieldDeep FindReflectionTypeFieldDeep(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* reflection_type,
+			Stream<char> field
+		);
+
 		// Determines the dependency graph for these reflection types. The first types are those ones
 		// that have no dependencies, the second group depends only on the first and so on.
 		// Returns true if the dependencies are valid, else false. It will fill in the two buffers given,

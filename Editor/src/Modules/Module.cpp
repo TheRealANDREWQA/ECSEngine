@@ -1698,13 +1698,13 @@ void GetModulesTypesDependentUpon(const EditorState* editor_state, unsigned int 
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-Stream<char> GetModuleExtraInformation(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration, Stream<char> key)
+Stream<void> GetModuleExtraInformation(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration, Stream<char> key)
 {
-	const EditorModule* module = editor_state->project_modules->buffer + module_index;
-	if (module->infos[configuration].load_status == EDITOR_MODULE_LOAD_GOOD || module->infos[configuration].load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
-		return module->infos[configuration].ecs_module.extra_information.Find(key);
+	ModuleExtraInformation extra_information = GetModuleExtraInformation(editor_state, module_index, configuration);
+	if (extra_information.pairs.size > 0) {
+		return extra_information.Find(key);
 	}
-	return { nullptr, 0 };
+	return {};
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

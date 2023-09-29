@@ -1037,7 +1037,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 						new_buffer = ECSEngine::ReallocateEx(allocator, buffer, MemoryOf(new_capacity), debug_info);
 						ECS_ASSERT(new_buffer != nullptr);
 						if constexpr (copy_old_data) {
-							if (new_buffer != buffer) {
+							// When using realloc, the data is copied by default
+							if (new_buffer != buffer && allocator.allocator != nullptr) {
 								memcpy(new_buffer, buffer, MemoryOf(copy_size));
 							}
 						}
@@ -1229,6 +1230,17 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		// the byte size such that it can copy to other buffers
 		ECS_INLINE void CopyTo(void* memory, size_t byte_size) const {
 			memcpy(memory, buffer, size * byte_size);
+		}
+
+		ECS_INLINE Stream<void> CopyTo(uintptr_t& ptr) const {
+			Stream<void> copy;
+			copy.InitializeFromBuffer(ptr, size);
+			copy.CopyOther(buffer, size);
+			return copy;
+		}
+
+		ECS_INLINE size_t CopySize() const {
+			return size;
 		}
 
 		ECS_INLINE bool Equals(Stream<void> other) const {

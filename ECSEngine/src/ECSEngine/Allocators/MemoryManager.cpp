@@ -252,7 +252,7 @@ namespace ECSEngine {
 	void MemoryManager::CreateAllocator(CreateBaseAllocatorInfo info) {
 		ECS_ASSERT(m_allocator_count < ECS_MEMORY_MANAGER_SIZE);
 		AllocatorPolymorphic allocator_to_be_constructed = GetAllocator(m_allocator_count);
-		CreateBaseAllocator(m_backup, m_backup_info, allocator_to_be_constructed.allocator);
+		CreateBaseAllocator(m_backup, info, allocator_to_be_constructed.allocator);
 		m_allocator_count++;
 	}
 
