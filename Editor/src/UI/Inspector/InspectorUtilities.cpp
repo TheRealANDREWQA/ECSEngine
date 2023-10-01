@@ -60,7 +60,7 @@ void InspectorIconDouble(UIDrawer* drawer, Stream<wchar_t> icon0, Stream<wchar_t
 void InspectorIconNameAndPath(UIDrawer* drawer, Stream<wchar_t> path) {
 	UIDrawConfig config;
 
-	ECS_TEMP_ASCII_STRING(ascii_path, 256);
+	ECS_STACK_CAPACITY_STREAM(char, ascii_path, 256);
 	function::ConvertWideCharsToASCII(path, ascii_path);
 	Stream<char> folder_name = function::PathStem(ascii_path);
 	drawer->TextLabel(UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_LABEL_TRANSPARENT, config, folder_name);

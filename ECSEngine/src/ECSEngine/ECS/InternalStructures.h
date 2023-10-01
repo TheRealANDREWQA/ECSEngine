@@ -140,6 +140,30 @@ namespace ECSEngine {
 		ECS_COMPONENT_TYPE_COUNT
 	};
 
+	static Stream<char> ComponentTypeToString(ECS_COMPONENT_TYPE type) {
+		switch (type) {
+		case ECS_COMPONENT_UNIQUE:
+			return "Unique";
+		case ECS_COMPONENT_SHARED:
+			return "Shared";
+		case ECS_COMPONENT_GLOBAL:
+			return "Global";
+		}
+
+		// Shouldn't reach here
+		ECS_ASSERT(false, "Invalid component type value");
+		return "";
+	}
+
+	struct ComponentWithType {
+		ECS_INLINE bool operator == (ComponentWithType other) const {
+			return component == other.component && type == other.type;
+		}
+
+		Component component;
+		ECS_COMPONENT_TYPE type;
+	};
+
 	struct SharedInstance {
 		// This just returns true if the value is different from -1,
 		// And not if the entity is valid in the context of an entity manager

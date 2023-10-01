@@ -742,20 +742,20 @@ namespace ECSEngine {
 		ECSENGINE_API size_t ConvertDurationToChars(size_t duration_milliseconds, char* characters);
 
 		// finds the tokens that appear in the current string
-		ECSENGINE_API void FindToken(Stream<char> string, char token, AdditionStream<unsigned int>& tokens);
+		ECSENGINE_API void FindToken(Stream<char> string, char token, AdditionStream<unsigned int> tokens);
 
 		// finds the tokens that appear in the current string
-		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, AdditionStream<unsigned int>& tokens);
+		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, AdditionStream<unsigned int> tokens);
 
-		ECSENGINE_API void FindToken(Stream<wchar_t> string, wchar_t token, AdditionStream<unsigned int>& tokens);
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, wchar_t token, AdditionStream<unsigned int> tokens);
 
-		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<unsigned int>& tokens);
-
-		// Convenience function - the more efficient is the unsigned int version that returns offsets into the string
-		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, AdditionStream<Stream<char>>& tokens);
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<unsigned int> tokens);
 
 		// Convenience function - the more efficient is the unsigned int version that returns offsets into the string
-		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<Stream<wchar_t>>& tokens);
+		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, AdditionStream<Stream<char>> tokens);
+
+		// Convenience function - the more efficient is the unsigned int version that returns offsets into the string
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<Stream<wchar_t>> tokens);
 
 		// It will return the first appereance of the token inside the character stream
 		// It will not call strstr, it uses a SIMD search, this function being well suited if searching a large string

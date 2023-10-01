@@ -105,7 +105,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool GetDirectories(
 		Stream<wchar_t> root, 
 		AllocatorPolymorphic allocator, 
-		AdditionStream<Stream<wchar_t>>& directories_paths,
+		AdditionStream<Stream<wchar_t>> directories_paths,
 		GetDirectoriesOrFilesOptions options = {}
 	);
 
@@ -113,7 +113,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool GetDirectoriesRecursive(
 		Stream<wchar_t> root, 
 		AllocatorPolymorphic allocator, 
-		AdditionStream<Stream<wchar_t>>& directories_paths,
+		AdditionStream<Stream<wchar_t>> directories_paths,
 		GetDirectoriesOrFilesOptions options = {}
 	);
 
@@ -121,7 +121,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool GetDirectoryFiles(
 		Stream<wchar_t> directory, 
 		AllocatorPolymorphic allocator, 
-		AdditionStream<Stream<wchar_t>>& file_paths,
+		AdditionStream<Stream<wchar_t>> file_paths,
 		GetDirectoriesOrFilesOptions options = {}
 	);
 
@@ -129,14 +129,14 @@ namespace ECSEngine {
 	ECSENGINE_API bool GetDirectoryFilesRecursive(
 		Stream<wchar_t> directory,
 		AllocatorPolymorphic allocator, 
-		AdditionStream<Stream<wchar_t>>& file_paths,
+		AdditionStream<Stream<wchar_t>> file_paths,
 		GetDirectoriesOrFilesOptions options = {}
 	);
 
 	ECSENGINE_API bool GetDirectoryFilesWithExtension(
 		Stream<wchar_t> directory,
 		AllocatorPolymorphic allocator,
-		AdditionStream<Stream<wchar_t>>& file_path,
+		AdditionStream<Stream<wchar_t>> file_path,
 		Stream<Stream<wchar_t>> extensions,
 		GetDirectoriesOrFilesOptions options = {}
 	);
@@ -144,7 +144,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool GetDirectoryFilesWithExtensionRecursive(
 		Stream<wchar_t> directory,
 		AllocatorPolymorphic allocator,
-		AdditionStream<Stream<wchar_t>>& file_paths,
+		AdditionStream<Stream<wchar_t>> file_paths,
 		Stream<Stream<wchar_t>> extensions,
 		GetDirectoriesOrFilesOptions options = {}
 	);

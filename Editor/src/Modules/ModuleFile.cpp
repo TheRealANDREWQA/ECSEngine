@@ -29,7 +29,7 @@ bool LoadModuleFile(EditorState* editor_state) {
 	Stream<void> _temp_memory[TEMP_STREAMS * SERIALIZE_COUNT];
 	CapacityStream<void> memory_pool(_temp_memory, 0, sizeof(Stream<void>) * TEMP_STREAMS * SERIALIZE_COUNT);
 	
-	ECS_TEMP_STRING(module_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, module_path, 256);
 	GetProjectModulesFilePath(editor_state, module_path);
 
 	Stream<void> file_contents = ReadWholeFileBinary(module_path, editor_allocator);
@@ -126,7 +126,7 @@ bool SaveModuleFile(EditorState* editor_state) {
 		);
 	}
 
-	ECS_TEMP_STRING(module_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, module_path, 256);
 	GetProjectModulesFilePath(editor_state, module_path);
 	return SerializeMultisection(serialize_data, module_path);
 }

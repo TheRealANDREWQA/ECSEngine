@@ -1014,6 +1014,8 @@ static void GetSandboxEntitiesMidpointImpl(
 	Stream<Entity> entities,
 	float3* translation_midpoint,
 	Quaternion* rotation_midpoint,
+	Stream<TransformGizmo> transform_gizmos,
+	bool add_transform_gizmos_to_total_count,
 	EDITOR_SANDBOX_VIEWPORT viewport
 ) {
 	float3 translation_average = float3::Splat(0.0f);
@@ -1034,11 +1036,25 @@ static void GetSandboxEntitiesMidpointImpl(
 		}
 	}
 
+	for (size_t index = 0; index < transform_gizmos.size; index++) {
+		if constexpr (has_translation) {
+			translation_average += transform_gizmos[index].position;
+		}
+		if constexpr (has_rotation) {
+			QuaternionAddToAverageStep(&rotation_average, transform_gizmos[index].rotation);
+		}
+	}
+
+	size_t total_count = entities.size;
+	if (add_transform_gizmos_to_total_count) {
+		total_count += transform_gizmos.size;
+	}
+
 	if constexpr (has_translation) {
-		*translation_midpoint = translation_average * float3::Splat(1.0f / entities.size);
+		*translation_midpoint = translation_average * float3::Splat(1.0f / (float)total_count);
 	}
 	if constexpr (has_rotation) {
-		*rotation_midpoint = QuaternionAverageFromCumulator(rotation_average, entities.size);
+		*rotation_midpoint = QuaternionAverageFromCumulator(rotation_average, total_count);
 	}
 }
 
@@ -1050,7 +1066,7 @@ float3 GetSandboxEntitiesTranslationMidpoint(
 )
 {
 	float3 midpoint;
-	GetSandboxEntitiesMidpointImpl<true, false>(editor_state, sandbox_index, entities, &midpoint, nullptr, viewport);
+	GetSandboxEntitiesMidpointImpl<true, false>(editor_state, sandbox_index, entities, &midpoint, nullptr, {}, false, viewport);
 	return midpoint;
 }
 
@@ -1064,7 +1080,7 @@ Quaternion ECS_VECTORCALL GetSandboxEntitiesRotationMidpoint(
 )
 {
 	Quaternion midpoint;
-	GetSandboxEntitiesMidpointImpl<false, true>(editor_state, sandbox_index, entities, nullptr, &midpoint, viewport);
+	GetSandboxEntitiesMidpointImpl<false, true>(editor_state, sandbox_index, entities, nullptr, &midpoint, {}, false, viewport);
 	return midpoint;
 }
 
@@ -1075,11 +1091,22 @@ void GetSandboxEntitiesMidpoint(
 	unsigned int sandbox_index, 
 	Stream<Entity> entities, 
 	float3* translation_midpoint, 
-	Quaternion* rotation_midpoint, 
+	Quaternion* rotation_midpoint,
+	Stream<TransformGizmo> transform_gizmos,
+	bool add_transform_gizmos_to_total_count,
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
-	GetSandboxEntitiesMidpointImpl<true, true>(editor_state, sandbox_index, entities, translation_midpoint, rotation_midpoint, viewport);
+	GetSandboxEntitiesMidpointImpl<true, true>(
+		editor_state, 
+		sandbox_index, 
+		entities, 
+		translation_midpoint, 
+		rotation_midpoint, 
+		transform_gizmos, 
+		add_transform_gizmos_to_total_count, 
+		viewport
+	);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1399,10 +1426,9 @@ void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandb
 			if (gizmo_index != -1) {
 				if (transform_gizmo_pointers[gizmo_index].euler_rotation != nullptr) {
 					if (transform_gizmo_pointers[gizmo_index].is_euler_rotation) {
-						Quaternion gizmo_rotation = QuaternionFromEuler(*transform_gizmo_pointers[gizmo_index].euler_rotation);
-						// Here it seems that we need to add world rotations for the euler angles to remain valid
-						gizmo_rotation = AddWorldRotation(gizmo_rotation, rotation_delta);
-						*transform_gizmo_pointers[gizmo_index].euler_rotation = QuaternionToEulerLow(gizmo_rotation);
+						float4 rotation_storage = QuaternionFromEuler(*transform_gizmo_pointers[gizmo_index].euler_rotation).StorageLow();
+						apply_delta(&rotation_storage);
+						*transform_gizmo_pointers[gizmo_index].euler_rotation = QuaternionToEulerLow(rotation_storage);
 					}
 					else {
 						apply_delta(transform_gizmo_pointers[gizmo_index].quaternion_rotation);

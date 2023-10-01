@@ -2754,19 +2754,19 @@ namespace ECSEngine {
 
 #pragma region Flush
 
-	template<typename Deck>
-	void FlushType(DebugDrawer* drawer, Deck* deck, DebugPrimitive debug_primitive, unsigned int thread_index) {
-		if (drawer->thread_lines[thread_index].size > 0) {
+	template<typename Deck, typename ThreadStream>
+	void FlushType(DebugDrawer* drawer, Deck* deck, ThreadStream* thread_buffering, DebugPrimitive debug_primitive, unsigned int thread_index) {
+		if (thread_buffering[thread_index].size > 0) {
 			drawer->thread_locks[debug_primitive]->lock();
-			auto* copy_position = deck->GetEntries(drawer->thread_lines[thread_index].size);
+			auto* copy_position = deck->GetEntries(thread_buffering[thread_index].size);
 			if (copy_position == nullptr) {
 				drawer->allocator->Lock();
 				deck->AllocateChunks(1);
-				copy_position = deck->GetEntries(drawer->thread_lines[thread_index].size);
+				copy_position = deck->GetEntries(thread_buffering[thread_index].size);
 				drawer->allocator->Unlock();
 			}
-			drawer->thread_lines[thread_index].CopyTo(copy_position);
-			drawer->thread_lines[thread_index].size = 0;
+			thread_buffering[thread_index].CopyTo(copy_position);
+			thread_buffering[thread_index].size = 0;
 			drawer->thread_locks[debug_primitive]->unlock();
 		}
 	}
@@ -2794,77 +2794,77 @@ namespace ECSEngine {
 
 	void DebugDrawer::FlushLine(unsigned int thread_index)
 	{
-		FlushType(this, &lines, ECS_DEBUG_PRIMITIVE_LINE, thread_index);
+		FlushType(this, &lines, thread_lines, ECS_DEBUG_PRIMITIVE_LINE, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::FlushSphere(unsigned int thread_index)
 	{
-		FlushType(this, &spheres, ECS_DEBUG_PRIMITIVE_SPHERE, thread_index);
+		FlushType(this, &spheres, thread_spheres, ECS_DEBUG_PRIMITIVE_SPHERE, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::FlushPoint(unsigned int thread_index)
 	{
-		FlushType(this, &points, ECS_DEBUG_PRIMITIVE_POINT, thread_index);
+		FlushType(this, &points, thread_points, ECS_DEBUG_PRIMITIVE_POINT, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::FlushRectangle(unsigned int thread_index)
 	{
-		FlushType(this, &rectangles, ECS_DEBUG_PRIMITIVE_RECTANGLE, thread_index);
+		FlushType(this, &rectangles, thread_rectangles, ECS_DEBUG_PRIMITIVE_RECTANGLE, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::FlushCross(unsigned int thread_index)
 	{
-		FlushType(this, &crosses, ECS_DEBUG_PRIMITIVE_CROSS, thread_index);
+		FlushType(this, &crosses, thread_crosses, ECS_DEBUG_PRIMITIVE_CROSS, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::FlushCircle(unsigned int thread_index)
 	{
-		FlushType(this, &circles, ECS_DEBUG_PRIMITIVE_CIRCLE, thread_index);
+		FlushType(this, &circles, thread_circles, ECS_DEBUG_PRIMITIVE_CIRCLE, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::FlushArrow(unsigned int thread_index)
 	{
-		FlushType(this, &arrows, ECS_DEBUG_PRIMITIVE_ARROW, thread_index);
+		FlushType(this, &arrows, thread_arrows, ECS_DEBUG_PRIMITIVE_ARROW, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::FlushTriangle(unsigned int thread_index)
 	{
-		FlushType(this, &triangles, ECS_DEBUG_PRIMITIVE_TRIANGLE, thread_index);
+		FlushType(this, &triangles, thread_triangles, ECS_DEBUG_PRIMITIVE_TRIANGLE, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::FlushAABB(unsigned int thread_index)
 	{
-		FlushType(this, &aabbs, ECS_DEBUG_PRIMITIVE_AABB, thread_index);
+		FlushType(this, &aabbs, thread_aabbs, ECS_DEBUG_PRIMITIVE_AABB, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::FlushOOBB(unsigned int thread_index)
 	{
-		FlushType(this, &oobbs, ECS_DEBUG_PRIMITIVE_OOBB, thread_index);
+		FlushType(this, &oobbs, thread_oobbs, ECS_DEBUG_PRIMITIVE_OOBB, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::FlushString(unsigned int thread_index)
 	{
-		FlushType(this, &strings, ECS_DEBUG_PRIMITIVE_STRING, thread_index);
+		FlushType(this, &strings, thread_strings, ECS_DEBUG_PRIMITIVE_STRING, thread_index);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

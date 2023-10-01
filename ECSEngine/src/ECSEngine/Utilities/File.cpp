@@ -15,7 +15,7 @@ namespace ECSEngine {
 	// For file operations
 	void SetErrorMessage(CapacityStream<char>* error_message, int error, Stream<wchar_t> path) {
 		if (error_message != nullptr) {
-			ECS_TEMP_ASCII_STRING(temp_string, 256);
+			ECS_STACK_CAPACITY_STREAM(char, temp_string, 256);
 			switch (error) {
 			case ECS_FILE_STATUS_ACCESS_DENIED:
 				ECS_FORMAT_STRING(temp_string, "Access to {#} was not granted. Possible causes: tried to open a read-only file for writing,"
@@ -437,7 +437,7 @@ namespace ECSEngine {
 		//}
 
 		//// Append the filename (the stem and the extension) to the to path
-		//ECS_TEMP_STRING(complete_to_path, 512);
+		//ECS_STACK_CAPACITY_STREAM(wchar_t, complete_to_path, 512);
 		//complete_to_path.Copy(to);
 		//bool is_absolute = function::PathIsAbsolute(complete_to_path);
 		//complete_to_path.Add(is_absolute ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
@@ -472,7 +472,7 @@ namespace ECSEngine {
 
 		//return true;
 
-		ECS_TEMP_STRING(complete_to_path, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, complete_to_path, 512);
 		const wchar_t* to_path = to.buffer;
 		if (use_filename_from) {
 			complete_to_path.CopyOther(to);
@@ -544,7 +544,7 @@ namespace ECSEngine {
 	bool RenameFolderOrFile(Stream<wchar_t> path, Stream<wchar_t> new_name) {
 		NULL_TERMINATE_WIDE(path);
 
-		ECS_TEMP_STRING(new_name_stream, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, new_name_stream, 512);
 		Stream<wchar_t> folder_parent = function::PathParentBoth(path);
 		new_name_stream.CopyOther(folder_parent);
 		new_name_stream.Add(ECS_OS_PATH_SEPARATOR);
@@ -591,7 +591,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	bool ChangeFileExtension(Stream<wchar_t> file, Stream<wchar_t> extension) {
-		ECS_TEMP_STRING(new_name, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, new_name, 512);
 		Stream<wchar_t> original_extension = function::PathExtensionBoth(file);
 		new_name.CopyOther(Stream<wchar_t>(file.buffer, original_extension.buffer - file.buffer));
 		new_name.AddStream(extension);

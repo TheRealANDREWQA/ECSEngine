@@ -284,9 +284,11 @@ namespace ECSEngine {
 
 		PrepareWorldConcurrency(world, scheduler_elements);
 
-		if (world->debug_drawer != nullptr) {
+		// Don't clear the debug drawer - at the moment it is a use case to fill in
+		// The debug drawer before calling prepare world
+		/*if (world->debug_drawer != nullptr) {
 			world->debug_drawer->Clear();
-		}
+		}*/
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------

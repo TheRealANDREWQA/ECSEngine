@@ -58,7 +58,9 @@ namespace ECSEngine {
 		QuaternionStorage rotation;
 	};
 
-	struct TransformGizmoPointers {
+	struct ECSENGINE_API TransformGizmoPointers {
+		TransformGizmo ToValue() const;
+
 		bool is_euler_rotation;
 		float3* position;
 		union {

@@ -56,7 +56,7 @@ UIDockspace* CreateProjectBackgroundDockspace(UISystem* system)
 
 bool OpenProjectUI(ProjectOperationData data)
 {
-	ECS_TEMP_STRING(template_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, template_path, 256);
 	GetProjectCurrentUI(template_path, data.file_data);
 	return LoadProjectUITemplate(data.editor_state, { template_path }, data.error_message);
 }
@@ -72,7 +72,7 @@ void OpenProjectUIAction(ActionData* action_data) {
 
 bool SaveProjectUI(ProjectOperationData data)
 {
-	ECS_TEMP_STRING(template_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, template_path, 256);
 	GetProjectCurrentUI(template_path, data.file_data);
 	return SaveProjectUITemplate(data.editor_state->ui_system, { template_path }, data.error_message);
 }
@@ -293,7 +293,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 void LoadProjectUITemplateSystemHandler(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	ECS_TEMP_ASCII_STRING(error_message, 256);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 	LoadProjectUITemplateData* data = (LoadProjectUITemplateData*)_data;
 	bool success = LoadProjectUITemplate(data->editor_state, data->ui_template, error_message);
 
@@ -325,7 +325,7 @@ bool SaveProjectUITemplate(UISystem* system, ProjectUITemplate _template, Capaci
 		_template.ui_file[_template.ui_file.size] = L'\0';
 	}
 	else {
-		ECS_TEMP_STRING(temp_string, 256);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_string, 256);
 		temp_string.CopyOther(_template.ui_file);
 		temp_string.AddAssert(L'\0');
 		_template.ui_file.buffer = temp_string.buffer;
@@ -340,7 +340,7 @@ void SaveProjectUITemplateAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SaveProjectUITemplateData* data = (SaveProjectUITemplateData*)_data;
-	ECS_TEMP_ASCII_STRING(error_message, 256);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 	bool success = SaveProjectUITemplate(system, data->ui_template, error_message);
 
 	if (!success) {

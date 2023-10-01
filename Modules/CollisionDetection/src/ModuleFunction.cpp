@@ -30,11 +30,3 @@ void ModuleRegisterLinkComponentFunction(ECSEngine::ModuleRegisterLinkComponentF
 }
 
 #endif
-
-#if 0
-
-void ModuleSetCurrentWorld(ECSEngine::World* world) {
-
-}
-
-#endif

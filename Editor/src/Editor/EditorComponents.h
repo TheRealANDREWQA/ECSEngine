@@ -198,6 +198,8 @@ struct EditorComponents {
 
 	// Returns true if the link components needs to be built using DLL functions
 	bool GetLinkComponentDLLStatus(Stream<char> name) const;
+	
+	ECS_COMPONENT_TYPE GetComponentType(Stream<char> name) const;
 
 	// Fills in the names of the types that the given type depends upon
 	void GetTypeDependencies(

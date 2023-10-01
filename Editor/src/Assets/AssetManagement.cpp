@@ -1637,15 +1637,18 @@ Stream<Stream<wchar_t>> GetAssetsFromAssetsFolder(const EditorState* editor_stat
 	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, valid_extensions, 64);
 	GetAssetExtensionsWithThunkOrForwardingFile(valid_extensions);
 
-	AdditionStream<Stream<wchar_t>> asset_files;
-	asset_files.is_capacity = false;
-	asset_files.resizable_stream.Initialize(allocator, 0);
+	ResizableStream<Stream<wchar_t>> asset_files;
+	asset_files.Initialize(allocator, 0);
+
+	AdditionStream<Stream<wchar_t>> asset_files_addition;
+	asset_files_addition.is_capacity = false;
+	asset_files_addition.resizable_stream = &asset_files;
 
 	GetDirectoriesOrFilesOptions options;
 	options.relative_root = assets_folder;
-	GetDirectoryFilesWithExtensionRecursive(assets_folder, allocator, asset_files, valid_extensions, options);
+	GetDirectoryFilesWithExtensionRecursive(assets_folder, allocator, asset_files_addition, valid_extensions, options);
 
-	return asset_files.resizable_stream.ToStream();
+	return asset_files.ToStream();
 }
 
 // ----------------------------------------------------------------------------------------------

@@ -274,7 +274,7 @@ namespace ECSEngine {
 					// material name
 					Stream<char> material_name = gltf_material->name;
 
-					ECS_TEMP_STRING(temp_texture_names, 1024);
+					ECS_STACK_CAPACITY_STREAM(wchar_t, temp_texture_names, 1024);
 
 					// Parallel arrays
 					PBRMaterialMapping mappings[ECS_PBR_MATERIAL_MAPPING_COUNT];

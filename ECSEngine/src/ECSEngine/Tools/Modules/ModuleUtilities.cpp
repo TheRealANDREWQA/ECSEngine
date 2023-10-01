@@ -383,4 +383,84 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	bool ModuleValidateDebugDrawComponentsExist(
+		Stream<ModuleDebugDrawElement> debug_draw_elements, 
+		const Reflection::ReflectionManager* reflection_manager, 
+		CapacityStream<char>* error_message
+	)
+	{
+		const size_t MAX_ELEMENTS_CAPACITY = ECS_KB;
+		ECS_ASSERT(debug_draw_elements.size <= MAX_ELEMENTS_CAPACITY);
+		// For each entry in the elements stream, keep a boolean to see if has a matching type or not
+		ECS_STACK_CAPACITY_STREAM(bool, has_type, MAX_ELEMENTS_CAPACITY);
+		// We can use memset to initialize to -1 everything
+		memset(has_type.buffer, false, debug_draw_elements.size * sizeof(bool));
+		has_type.size = debug_draw_elements.size;
+
+		ECS_STACK_CAPACITY_STREAM(unsigned int, unique_components, ECS_KB * 8);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, shared_components, ECS_KB * 8);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, global_components, ECS_KB);
+
+		GetHierarchyComponentTypes(reflection_manager, -1, &unique_components, &shared_components, &global_components);
+
+		auto set_indices_for_type = [&](Stream<unsigned int> indices, ECS_COMPONENT_TYPE component_type) {
+			for (unsigned int index = 0; index < indices.size; index++) {
+				const Reflection::ReflectionType* type = reflection_manager->GetType(indices[index]);
+				Component component = GetReflectionTypeComponent(type);
+				size_t debug_index = debug_draw_elements.Find(component, [=](ModuleDebugDrawElement element) {
+					if (element.component_type == component_type) {
+						return element.component;
+					}
+					return Component(-1);
+				});
+				if (debug_index != -1) {
+					has_type[debug_index] = true;
+				}
+			}
+		};
+
+		set_indices_for_type(unique_components, ECS_COMPONENT_UNIQUE);
+		set_indices_for_type(shared_components, ECS_COMPONENT_SHARED);
+		set_indices_for_type(global_components, ECS_COMPONENT_GLOBAL);
+
+		// Go through each type now and check to see if it has a type
+		if (error_message == nullptr) {
+			return function::SearchBytes(has_type.buffer, has_type.size, false, sizeof(bool)) != -1;
+		}
+		else {
+			bool success = true;
+
+			size_t offset = 0;
+			size_t found_index = function::SearchBytes(has_type.buffer + offset, has_type.size - offset, false, sizeof(bool));
+			while (found_index != -1) {
+				success = false;
+				ECS_FORMAT_STRING(*error_message, "You have assigned a draw function for component {#}, type {#} which doesn't exist\n", 
+					debug_draw_elements[found_index + offset].component.value, ComponentTypeToString(debug_draw_elements[found_index + offset].component_type));
+				offset += found_index;
+				found_index = function::SearchBytes(has_type.buffer + offset, has_type.size - offset, false, sizeof(bool));
+			}
+
+			return success;
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ModuleMatchDebugDrawElements(
+		Stream<ComponentWithType> components,
+		Stream<ModuleDebugDrawElement> match_elements,
+		ModuleDebugDrawElement* output_elements
+	) {
+		for (size_t index = 0; index < components.size; index++) {
+			size_t found_index = match_elements.Find(components[index], [](const ModuleDebugDrawElement& element) {
+				return ComponentWithType{ element.component, element.component_type };
+				});
+			if (found_index != -1) {
+				output_elements[index] = match_elements[found_index];
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

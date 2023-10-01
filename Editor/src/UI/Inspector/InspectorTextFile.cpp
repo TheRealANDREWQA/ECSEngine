@@ -82,7 +82,7 @@ void ChangeInspectorToTextFile(EditorState* editor_state, Stream<wchar_t> path, 
 	InspectorFunctions functions;
 	Stream<wchar_t> extension = function::PathExtension(path);
 
-	ECS_TEMP_STRING(null_terminated_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 256);
 	null_terminated_path.CopyOther(path);
 	null_terminated_path[null_terminated_path.size] = L'\0';
 	if (extension.size == 0 || !TryGetInspectorTableFunction(editor_state, functions, extension)) {

@@ -1903,7 +1903,7 @@ namespace ECSEngine {
 				float2 scale;
 				HandleTransformFlags(configuration, config, position, scale);
 
-				ECS_TEMP_ASCII_STRING(data_name, 256);
+				ECS_STACK_CAPACITY_STREAM(char, data_name, 256);
 				data_name.CopyOther(name);
 				data_name.AddStream(" data");
 				data_name = HandleResourceIdentifier(data_name);
@@ -2033,7 +2033,7 @@ namespace ECSEngine {
 						}
 					}
 
-					ECS_TEMP_ASCII_STRING(temp_name, 64);
+					ECS_STACK_CAPACITY_STREAM(char, temp_name, 64);
 					temp_name.CopyOther("Element ");
 					size_t base_name_size = temp_name.size;
 
@@ -2477,7 +2477,7 @@ namespace ECSEngine {
 				);
 
 				if (~configuration & UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT) {
-					ECS_TEMP_ASCII_STRING(temp_input_name, 256);
+					ECS_STACK_CAPACITY_STREAM(char, temp_input_name, 256);
 					temp_input_name.CopyOther(name);
 					temp_input_name.AddStream("Size input");
 					temp_input_name.AddAssert('\0');

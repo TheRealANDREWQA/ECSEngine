@@ -213,6 +213,10 @@ void UpdateAssetToComponents(
 // -------------------------------------------------------------------------------------------------------------
 
 struct UpdateAssetToComponentElement {
+	ECS_INLINE bool IsAssetDifferent() const {
+		return old_asset.buffer != new_asset.buffer || old_asset.size != new_asset.size;
+	}
+
 	Stream<void> old_asset;
 	Stream<void> new_asset;
 	ECS_ASSET_TYPE type;

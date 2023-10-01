@@ -4685,14 +4685,11 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(unsigned int, left_new_lines, 256);
 			ECS_STACK_CAPACITY_STREAM(unsigned int, right_new_lines, 256);
 
-			AdditionStream<unsigned int> left_new_lines_add = left_new_lines;
-			AdditionStream<unsigned int> right_new_lines_add = right_new_lines;
+			AdditionStream<unsigned int> left_new_lines_add = &left_new_lines;
+			AdditionStream<unsigned int> right_new_lines_add = &right_new_lines;
 
 			function::FindToken(aligned_to_left_text, '\n', left_new_lines_add);
 			function::FindToken(aligned_to_right_text, '\n', right_new_lines_add);
-
-			left_new_lines = left_new_lines_add.capacity_stream;
-			right_new_lines = right_new_lines_add.capacity_stream;
 
 			left_new_lines.Add(aligned_to_left_text.size);
 			right_new_lines.Add(aligned_to_right_text.size);
@@ -4951,14 +4948,11 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(unsigned int, left_new_lines, 256);
 			ECS_STACK_CAPACITY_STREAM(unsigned int, right_new_lines, 256);
 
-			AdditionStream<unsigned int> left_new_lines_add = left_new_lines;
-			AdditionStream<unsigned int> right_new_lines_add = right_new_lines;
+			AdditionStream<unsigned int> left_new_lines_add = &left_new_lines;
+			AdditionStream<unsigned int> right_new_lines_add = &right_new_lines;
 
 			function::FindToken(aligned_to_left_text, '\n', left_new_lines_add);
 			function::FindToken(aligned_to_right_text, '\n', right_new_lines_add);
-
-			left_new_lines = left_new_lines_add.capacity_stream;
-			right_new_lines = right_new_lines_add.capacity_stream;
 
 			left_new_lines.Add(aligned_to_left_text.size);
 			right_new_lines.Add(aligned_to_right_text.size);

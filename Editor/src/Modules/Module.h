@@ -130,7 +130,7 @@ bool GetSandboxesForModule(
 
 unsigned int GetModuleIndex(const EditorState* editor_state, Stream<wchar_t> solution_path);
 
-unsigned int GetModuleIndexFromName(const EditorState* editor_state, Stream<wchar_t> library_Name);
+unsigned int GetModuleIndexFromName(const EditorState* editor_state, Stream<wchar_t> library_name);
 
 void GetModuleBuildFlagFile(
 	const EditorState* editor_state,
@@ -215,6 +215,23 @@ void GetModulesTypesDependentUpon(const EditorState* editor_state, unsigned int 
 Stream<void> GetModuleExtraInformation(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration, Stream<char> key);
 
 ModuleExtraInformation GetModuleExtraInformation(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
+
+void GetModuleDebugDrawComponents(
+	const EditorState* editor_state, 
+	unsigned int module_index, 
+	EDITOR_MODULE_CONFIGURATION configuration, 
+	AdditionStream<ComponentWithType> components
+);
+
+// The debug_elements must have components.size entries in it
+// In case a component is not matched, it will leave it as it is
+void GetModuleMatchedDebugDrawComponents(
+	const EditorState* editor_state,
+	unsigned int module_index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	Stream<ComponentWithType> components,
+	ModuleDebugDrawElement* debug_elements
+);
 
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration);
 

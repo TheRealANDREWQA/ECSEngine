@@ -626,6 +626,7 @@ struct InspectorDrawEntityData {
 	// Use the same implementation for global components and entities - global components
 	// can be treated like entities with a single unique component
 	bool header_state[ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+	bool is_debug_draw_enabled[ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
 	bool is_global_component;
 	union {
 		Entity entity;
@@ -645,7 +646,7 @@ struct InspectorDrawEntityData {
 	MemoryManager allocator;
 };
 
-static ECS_INLINE Stream<char> InspectorTargetName(
+ECS_INLINE static Stream<char> InspectorTargetName(
 	const InspectorDrawEntityData* draw_data, 
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -661,6 +662,30 @@ static ECS_INLINE Stream<char> InspectorTargetName(
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+static void DetermineDebugDrawStates(const EditorState* editor_state, unsigned int sandbox_index, InspectorDrawEntityData* draw_data) {
+	if (draw_data->is_global_component) {
+		// Just check for the single global component
+		draw_data->is_debug_draw_enabled[0] = IsSandboxDebugDrawEnabled(editor_state, sandbox_index, draw_data->global_component, ECS_COMPONENT_GLOBAL);
+	}
+	else {
+		ComponentSignature unique_signature = EntityUniqueComponents(editor_state, sandbox_index, draw_data->entity);
+		ComponentSignature shared_signature = EntitySharedComponents(editor_state, sandbox_index, draw_data->entity);
+		for (unsigned int index = 0; index < unique_signature.count; index++) {
+			draw_data->is_debug_draw_enabled[index] = IsSandboxDebugDrawEnabled(editor_state, sandbox_index, unique_signature[index], ECS_COMPONENT_UNIQUE);
+		}
+		for (unsigned int index = 0; index < shared_signature.count; index++) {
+			draw_data->is_debug_draw_enabled[index + unique_signature.count] = IsSandboxDebugDrawEnabled(
+				editor_state, 
+				sandbox_index, 
+				shared_signature[index], 
+				ECS_COMPONENT_SHARED
+			);
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void InspectorCleanEntity(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawEntityData* data = (InspectorDrawEntityData*)_data;
 	data->Clear(editor_state);
@@ -670,6 +695,7 @@ void InspectorCleanEntity(EditorState* editor_state, unsigned int inspector_inde
 
 // This is what the click handlers will use
 struct AddComponentCallbackData {
+	InspectorDrawEntityData* draw_data;
 	EditorState* editor_state;
 	unsigned int sandbox_index;
 	Stream<char> component_name;
@@ -684,6 +710,9 @@ void AddComponentCallback(ActionData* action_data) {
 	AddSandboxEntityComponentEx(data->editor_state, data->sandbox_index, data->entity, link_target.size > 0 ? link_target : data->component_name);
 	// Re-render the sandbox as well
 	RenderSandboxViewports(data->editor_state, data->sandbox_index);
+
+	// Redetermine the debug states
+	DetermineDebugDrawStates(data->editor_state, data->sandbox_index, data->draw_data);
 };
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -709,6 +738,41 @@ void RemoveComponentCallback(ActionData* action_data) {
 	}
 	RemoveSandboxEntityComponentEx(data->editor_state, data->sandbox_index, data->draw_data->entity, data->component_name);
 	// Re-render the sandbox as well
+	RenderSandboxViewports(data->editor_state, data->sandbox_index);
+
+	// Redetermine the debug states
+	DetermineDebugDrawStates(data->editor_state, data->sandbox_index, data->draw_data);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+struct EnableDebugDrawCallbackData {
+	EditorState* editor_state;
+	unsigned int sandbox_index;
+	Stream<char> component_name;
+};
+
+void EnableDebugDrawCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EnableDebugDrawCallbackData* data = (EnableDebugDrawCallbackData*)_data;
+	bool* flag = (bool*)_additional_data;
+	Stream<char> component_name = data->editor_state->editor_components.GetComponentFromLink(data->component_name);
+	if (component_name.size == 0) {
+		component_name = data->component_name;
+	}
+	Component component = data->editor_state->editor_components.GetComponentID(component_name);
+	ECS_COMPONENT_TYPE type = data->editor_state->editor_components.GetComponentType(component_name);
+	if (*flag) {
+		// Now it is enable
+		AddSandboxDebugDrawComponent(data->editor_state, data->sandbox_index, component, type);
+	}
+	else {
+		// Now it is disabled
+		RemoveSandboxDebugDrawComponent(data->editor_state, data->sandbox_index, component, type);
+	}
+
+	// Rerender the viewport
 	RenderSandboxViewports(data->editor_state, data->sandbox_index);
 }
 
@@ -858,7 +922,8 @@ void InspectorComponentCallback(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-#define HEADER_BUTTON_COUNT 2
+// There can be at max 3 buttons - the debug draw one is optional
+#define HEADER_BUTTON_COUNT 3
 
 // There must be HEADER_BUTTON_COUNT of buttons. Stack memory should be at least ECS_KB in size
 static void InspectorEntityHeaderConstructButtons(
@@ -867,9 +932,19 @@ static void InspectorEntityHeaderConstructButtons(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	Stream<char> component_name,
-	UIConfigCollapsingHeaderButton* header_buttons, 
-	void* stack_memory
+	UIConfigCollapsingHeaderButton* header_buttons,
+	void* stack_memory,
+	bool* debug_draw_enabled
 ) {
+	EnableDebugDrawCallbackData* enable_data = (EnableDebugDrawCallbackData*)stack_memory;
+	if (debug_draw_enabled != nullptr) {
+		enable_data->editor_state = editor_state;
+		enable_data->component_name = component_name;
+		enable_data->sandbox_index = sandbox_index;
+
+		stack_memory = function::OffsetPointer(stack_memory, sizeof(*enable_data));
+	}
+
 	ResetComponentCallbackData* reset_data = (ResetComponentCallbackData*)stack_memory;
 	reset_data->component_name = component_name;
 	reset_data->sandbox_index = sandbox_index;
@@ -883,21 +958,34 @@ static void InspectorEntityHeaderConstructButtons(
 	remove_data->sandbox_index = sandbox_index;
 	remove_data->editor_state = editor_state;
 
+	size_t current_index = 0;
+	if (debug_draw_enabled != nullptr) {
+		// The enable button
+		header_buttons[current_index].alignment = ECS_UI_ALIGN_RIGHT;
+		header_buttons[current_index].type = ECS_UI_COLLAPSING_HEADER_BUTTON_CHECK_BOX;
+		header_buttons[current_index].data.check_box_flag = debug_draw_enabled;
+
+		header_buttons[current_index].handler = { EnableDebugDrawCallback, enable_data, sizeof(*enable_data) };
+		current_index++;
+	}
+
 	// The reset button
-	header_buttons[0].alignment = ECS_UI_ALIGN_RIGHT;
-	header_buttons[0].type = ECS_UI_COLLAPSING_HEADER_BUTTON_IMAGE_BUTTON;
-	header_buttons[0].data.image_texture = ECS_TOOLS_UI_TEXTURE_COG;
-	header_buttons[0].data.image_color = drawer->color_theme.text;
+	header_buttons[current_index].alignment = ECS_UI_ALIGN_RIGHT;
+	header_buttons[current_index].type = ECS_UI_COLLAPSING_HEADER_BUTTON_IMAGE_BUTTON;
+	header_buttons[current_index].data.image_texture = ECS_TOOLS_UI_TEXTURE_COG;
+	header_buttons[current_index].data.image_color = drawer->color_theme.text;
 
-	header_buttons[0].handler = { ResetComponentCallback, reset_data, sizeof(*reset_data) };
-	
+	header_buttons[current_index].handler = { ResetComponentCallback, reset_data, sizeof(*reset_data) };
+	current_index++;
+
 	// The X, delete component button
-	header_buttons[1].alignment = ECS_UI_ALIGN_RIGHT;
-	header_buttons[1].type = ECS_UI_COLLAPSING_HEADER_BUTTON_IMAGE_BUTTON;
-	header_buttons[1].data.image_texture = ECS_TOOLS_UI_TEXTURE_X;
-	header_buttons[1].data.image_color = drawer->color_theme.text;
+	header_buttons[current_index].alignment = ECS_UI_ALIGN_RIGHT;
+	header_buttons[current_index].type = ECS_UI_COLLAPSING_HEADER_BUTTON_IMAGE_BUTTON;
+	header_buttons[current_index].data.image_texture = ECS_TOOLS_UI_TEXTURE_X;
+	header_buttons[current_index].data.image_color = drawer->color_theme.text;
 
-	header_buttons[1].handler = { RemoveComponentCallback, remove_data, sizeof(*remove_data) };
+	header_buttons[current_index].handler = { RemoveComponentCallback, remove_data, sizeof(*remove_data) };
+	current_index++;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -1325,6 +1413,10 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				set_instance_inputs();
 			}
 
+			bool has_debug_draw = ExistsSandboxDebugDrawComponentFunction(editor_state, sandbox_index, signature[index], component_type);
+			size_t header_count = has_debug_draw ? HEADER_BUTTON_COUNT : HEADER_BUTTON_COUNT - 1;
+			bool* debug_draw_state = data->is_debug_draw_enabled + header_state_offset + index;
+
 			ECS_STACK_VOID_STREAM(button_stack_allocation, ECS_KB);
 			UIConfigCollapsingHeaderButton header_buttons[HEADER_BUTTON_COUNT];
 			InspectorEntityHeaderConstructButtons(
@@ -1334,12 +1426,13 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				sandbox_index,
 				current_component_name,
 				header_buttons,
-				button_stack_allocation.buffer
+				button_stack_allocation.buffer,
+				has_debug_draw ? debug_draw_state : nullptr
 			);
 
 			UIDrawConfig collapsing_config;
 			UIConfigCollapsingHeaderButtons config_buttons;
-			config_buttons.buttons = { header_buttons, HEADER_BUTTON_COUNT };
+			config_buttons.buttons = { header_buttons, header_count };
 			if (data->is_global_component) {
 				// Don't add the remove button for global components
 				config_buttons.buttons.size--;
@@ -1490,7 +1583,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 					left_characters.AddStream(component_name);
 					left_characters.AddAssert('\n');
-					handler_data[subindex + write_offset] = { editor_state, sandbox_index, initial_name, data->entity };
+					handler_data[subindex + write_offset] = { data, editor_state, sandbox_index, initial_name, data->entity };
 					handlers[subindex + write_offset] = { AddComponentCallback, handler_data + subindex + write_offset, sizeof(AddComponentCallbackData), ECS_UI_DRAW_NORMAL };
 				}
 			};
@@ -1587,6 +1680,8 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 	draw_data->allocator = MemoryManager(ECS_KB * 64, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
 
 	memset(draw_data->header_state, 1, sizeof(bool) * (ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS));
+
+	DetermineDebugDrawStates(editor_state, sandbox_index, draw_data);
 
 	ChangeInspectorDrawFunction(
 		editor_state,

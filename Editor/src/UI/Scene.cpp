@@ -967,8 +967,20 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 						// If the entity is missing the corresponding component, add it
 						Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
 
+						// Determine the additional gizmo widgets
+						ECS_STACK_CAPACITY_STREAM(TransformGizmo, transform_gizmos, ECS_KB);
+						GetSandboxSelectedVirtualEntitiesTransformGizmos(editor_state, sandbox_index, &transform_gizmos);
+
 						// Calculate the midpoint here such that it won't need to be calculated each frame
-						GetSandboxEntitiesMidpoint(editor_state, sandbox_index, selected_entities, &data->gizmo_translation_midpoint, &data->gizmo_rotation_midpoint);
+						GetSandboxEntitiesMidpoint(
+							editor_state, 
+							sandbox_index, 
+							selected_entities, 
+							&data->gizmo_translation_midpoint, 
+							&data->gizmo_rotation_midpoint, 
+							transform_gizmos,
+							false
+						);
 					}
 				}
 			}

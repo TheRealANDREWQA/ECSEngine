@@ -227,7 +227,7 @@ void RenameFileWizardCallback(ActionData* action_data) {
 	const wchar_t* path = (const wchar_t*)_data;
 	CapacityStream<char>* new_name = (CapacityStream<char>*)_additional_data;
 
-	ECS_TEMP_STRING(wide_name, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
 	function::ConvertASCIIToWide(wide_name, *new_name);
 
 	RenameFileActionData rename_data;
@@ -244,7 +244,7 @@ unsigned int CreateRenameFileWizard(Stream<wchar_t> path, UISystem* system)
 	wizard_data.window_name = RENAME_FILE_WIZARD_NAME;
 	wizard_data.callback = RenameFileWizardCallback;
 	
-	ECS_TEMP_STRING(null_terminated_path, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 512);
 	null_terminated_path.CopyOther(path);
 	null_terminated_path[path.size] = L'\0';
 	wizard_data.callback_data = null_terminated_path.buffer;
@@ -266,7 +266,7 @@ void RenameFolderWizardCallback(ActionData* action_data) {
 	const wchar_t* path = (const wchar_t*)_data;
 	CapacityStream<char>* new_name = (CapacityStream<char>*)_additional_data;
 
-	ECS_TEMP_STRING(wide_name, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
 	function::ConvertASCIIToWide(wide_name, *new_name);
 
 	RenameFolderActionData rename_data;
@@ -282,7 +282,7 @@ unsigned int CreateRenameFolderWizard(Stream<wchar_t> path, UISystem* system) {
 	wizard_data.window_name = RENAME_FOLDER_WIZARD_NAME;
 	wizard_data.callback = RenameFolderWizardCallback;
 
-	ECS_TEMP_STRING(null_terminated_path, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 512);
 	null_terminated_path.CopyOther(path);
 	null_terminated_path[path.size] = L'\0';
 	wizard_data.callback_data = null_terminated_path.buffer;

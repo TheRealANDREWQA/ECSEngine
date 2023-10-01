@@ -693,7 +693,7 @@ namespace ECSEngine {
 		Stream<PBRMaterialTextureIndex>* texture_mask
 	)
 	{
-		ECS_TEMP_STRING(wide_base_name, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, wide_base_name, 512);
 		ECS_ASSERT(texture_base_name.size < 512);
 		function::ConvertASCIIToWide(wide_base_name, texture_base_name);
 
@@ -739,8 +739,8 @@ namespace ECSEngine {
 			texture_mask = &default_mappings;
 		}
 
-		ECS_TEMP_STRING(temp_memory, 2048);
-		ECS_TEMP_STRING(__base_name, 256);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_memory, 2048);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, __base_name, 256);
 		__base_name.CopyOther(texture_base_name);
 		__base_name[texture_base_name.size] = L'\0';
 		texture_base_name.buffer = __base_name.buffer;

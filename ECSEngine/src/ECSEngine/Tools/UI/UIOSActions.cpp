@@ -127,7 +127,7 @@ namespace ECSEngine {
 			CapacityStream<char>* new_name = (CapacityStream<char>*)_additional_data;
 			const wchar_t* path = (const wchar_t*)_data;
 
-			ECS_TEMP_STRING(wide_name, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
 			function::ConvertASCIIToWide(wide_name, *new_name);
 
 			RenameFolderActionData rename_data;
@@ -146,7 +146,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			Stream<wchar_t>* data = (Stream<wchar_t>*)_data;
-			ECS_TEMP_STRING(temp_path, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, temp_path, 256);
 			TextInputWizardData wizard_data;
 			wizard_data.input_name = RENAME_FOLDER_WIZARD_INPUT_NAME;
 			wizard_data.window_name = RENAME_FOLDER_WIZARD_NAME;
@@ -181,7 +181,7 @@ namespace ECSEngine {
 			CapacityStream<char>* new_name = (CapacityStream<char>*)_additional_data;
 			const wchar_t* path = (const wchar_t*)_data;
 
-			ECS_TEMP_STRING(wide_name, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
 			function::ConvertASCIIToWide(wide_name, *new_name);
 
 			RenameFileActionData rename_data;
@@ -200,7 +200,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			Stream<wchar_t>* data = (Stream<wchar_t>*)_data;
-			ECS_TEMP_STRING(temp_path, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, temp_path, 256);
 			TextInputWizardData wizard_data;
 			wizard_data.input_name = RENAME_FILE_WIZARD_INPUT_NAME;
 			wizard_data.window_name = RENAME_FILE_WIZARD_NAME;
@@ -235,7 +235,7 @@ namespace ECSEngine {
 			CapacityStream<char>* new_extension = (CapacityStream<char>*)_additional_data;
 			const wchar_t* path = (const wchar_t*)_data;
 
-			ECS_TEMP_STRING(wide_name, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
 			function::ConvertASCIIToWide(wide_name, *new_extension);
 
 			ChangeFileExtensionActionData change_data;
@@ -254,7 +254,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			Stream<wchar_t>* data = (Stream<wchar_t>*)_data;
-			ECS_TEMP_STRING(temp_path, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, temp_path, 256);
 			TextInputWizardData wizard_data;
 			wizard_data.input_name = CHANGE_FILE_EXTENSION_WIZARD_INPUT_NAME;
 			wizard_data.window_name = CHANGE_FILE_EXTENSION_WIZARD_NAME;
@@ -295,7 +295,7 @@ namespace ECSEngine {
 
 			const wchar_t* data = (const wchar_t*)_data;
 
-			ECS_TEMP_ASCII_STRING(ascii_string, 512);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_string, 512);
 			function::ConvertWideCharsToASCII(Stream<wchar_t>(data), ascii_string);
 			ascii_string[ascii_string.size] = '\0';
 			system->m_application->WriteTextToClipboard(ascii_string.buffer);
@@ -307,7 +307,7 @@ namespace ECSEngine {
 
 			Stream<wchar_t>* data = (Stream<wchar_t>*)_data;
 
-			ECS_TEMP_ASCII_STRING(temp_characters, 512);
+			ECS_STACK_CAPACITY_STREAM(char, temp_characters, 512);
 			function::ConvertWideCharsToASCII(*data, temp_characters);
 			temp_characters[temp_characters.size] = '\0';
 

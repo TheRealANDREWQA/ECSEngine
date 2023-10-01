@@ -183,7 +183,7 @@ namespace ECSEngine {
 		Module module;
 		memset(&module, 0, sizeof(module));
 
-		ECS_TEMP_STRING(library_path, 256);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, library_path, 256);
 		if (path[path.size] != L'\0') {
 			library_path.CopyOther(path);
 			library_path[library_path.size] = L'\0';
@@ -214,6 +214,7 @@ namespace ECSEngine {
 		module.serialize_function = (ModuleSerializeComponentFunction)GetProcAddress(module_handle, STRING(ModuleSerializeComponentFunction));
 		module.set_world = (ModuleSetCurrentWorld)GetProcAddress(module_handle, STRING(ModuleSetCurrentWorld));
 		module.extra_information = (ModuleRegisterExtraInformationFunction)GetProcAddress(module_handle, STRING(ModuleRegisterExtraInformationFunction));
+		module.debug_draw = (ModuleRegisterDebugDrawFunction)GetProcAddress(module_handle, STRING(ModuleRegisterDebugDrawFunction));
 
 		module.code = ECS_GET_MODULE_OK;
 		module.os_module_handle = module_handle;
@@ -231,6 +232,7 @@ namespace ECSEngine {
 		module->serialize_streams = LoadModuleSerializeComponentFunctors(&module->base_module, allocator);
 		module->ui_descriptors = LoadModuleUIDescriptors(&module->base_module, allocator);
 		module->extra_information = LoadModuleExtraInformation(&module->base_module, allocator);
+		module->debug_draw_elements = LoadModuleDebugDrawElements(&module->base_module, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -507,6 +509,29 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
+	Stream<ModuleDebugDrawElement> LoadModuleDebugDrawElements(const Module* module, AllocatorPolymorphic allocator)
+	{
+		if (!module->debug_draw) {
+			return {};
+		}
+
+		return LoadModuleDebugDrawElements(module->debug_draw, allocator);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	Stream<ModuleDebugDrawElement> LoadModuleDebugDrawElements(ModuleRegisterDebugDrawFunction function, AllocatorPolymorphic allocator)
+	{
+		ECS_STACK_CAPACITY_STREAM(ModuleDebugDrawElement, debug_draw_elements, ECS_KB * 2);
+		ModuleRegisterDebugDrawFunctionData function_data;
+		function_data.elements = &debug_draw_elements;
+		function(&function_data);
+
+		return debug_draw_elements.Copy(allocator);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
 	void ReleaseModule(Module* module) {
 		if (module->code != ECS_GET_MODULE_FAULTY_PATH) {
 			ReleaseModuleHandle(module->os_module_handle);
@@ -551,6 +576,11 @@ namespace ECSEngine {
 		if (module->extra_information.pairs.size > 0) {
 			DeallocateIfBelongs(allocator, module->extra_information.pairs.buffer);
 			module->extra_information.pairs = { nullptr, 0 };
+		}
+
+		if (module->debug_draw_elements.size > 0) {
+			DeallocateIfBelongs(allocator, module->debug_draw_elements.buffer);
+			module->debug_draw_elements = { nullptr, 0 };
 		}
 	}
 

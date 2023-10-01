@@ -1191,7 +1191,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------
 
 		void OpenFileWithDefaultApplicationWithError(Stream<wchar_t> path, UISystem* system) {
-			ECS_TEMP_ASCII_STRING(error_message, 256);
+			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 			bool success = OpenFileWithDefaultApplication(path, &error_message);
 			if (!success) {
 				CreateErrorMessageWindow(system, error_message);
@@ -1199,7 +1199,7 @@ namespace ECSEngine {
 		}
 
 		void OpenFileWithDefaultApplicationWithError(Stream<wchar_t> path) {
-			ECS_TEMP_ASCII_STRING(error_message, 256);
+			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 			bool success = OpenFileWithDefaultApplication(path, &error_message);
 			if (!success) {
 				GetConsole()->Error(error_message);

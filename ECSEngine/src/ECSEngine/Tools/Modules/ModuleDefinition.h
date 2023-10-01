@@ -352,6 +352,48 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	struct DebugDrawer;
+
+	struct ModuleDebugDrawComponentFunctionData {
+		const void* component;
+		unsigned int thread_id;
+		DebugDrawer* debug_drawer;
+
+		// These are filled in the same order as you provide them
+		// May be null if the entity doesn't have it
+		const void** dependency_components;
+	};
+
+	typedef void (*ModuleDebugDrawComponentFunction)(ModuleDebugDrawComponentFunctionData* data);
+
+	// A dependency component may or may not be there - you should check to see if the pointer
+	// Is valid before accesing it
+	struct ModuleDebugDrawElement {
+		ECS_INLINE void AddDependency(ComponentWithType component_with_type) {
+			ECS_ASSERT(dependency_component_count < std::size(dependency_components));
+			dependency_components[dependency_component_count++] = component_with_type;
+		}
+
+		ECS_INLINE Stream<ComponentWithType> Dependencies() const {
+			return { dependency_components, dependency_component_count };
+		}
+
+		ModuleDebugDrawComponentFunction draw_function = nullptr;
+		Component component = -1;
+		ECS_COMPONENT_TYPE component_type = ECS_COMPONENT_TYPE_COUNT;
+
+		unsigned char dependency_component_count = 0;
+		ComponentWithType dependency_components[4];
+	};
+
+	struct ModuleRegisterDebugDrawFunctionData {
+		CapacityStream<ModuleDebugDrawElement>* elements;
+	};
+
+	typedef void (*ModuleRegisterDebugDrawFunction)(ModuleRegisterDebugDrawFunctionData* data);
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	// Module function missing is returned for either graphics function missing
 	enum ECS_MODULE_STATUS : unsigned char {
 		ECS_GET_MODULE_OK,
@@ -370,6 +412,7 @@ namespace ECSEngine {
 		ModuleRegisterLinkComponentFunction link_components;
 		ModuleSetCurrentWorld set_world;
 		ModuleRegisterExtraInformationFunction extra_information;
+		ModuleRegisterDebugDrawFunction debug_draw;
 
 		void* os_module_handle;
 	};
@@ -384,6 +427,7 @@ namespace ECSEngine {
 		Stream<ModuleLinkComponentTarget> link_components;
 		ModuleSerializeComponentStreams serialize_streams;
 		ModuleExtraInformation extra_information;
+		Stream<ModuleDebugDrawElement> debug_draw_elements;
 	};
 
 	// ----------------------------------------------------------------------------------------------------------------------

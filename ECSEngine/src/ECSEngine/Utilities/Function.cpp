@@ -380,7 +380,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		template<typename VectorType, typename CharacterType>
-		void FindTokenImpl(Stream<CharacterType> string, CharacterType token, AdditionStream<unsigned int>& tokens)
+		void FindTokenImpl(Stream<CharacterType> string, CharacterType token, AdditionStream<unsigned int> tokens)
 		{
 			VectorType simd_token(token);
 			VectorType compare;
@@ -407,14 +407,14 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<char> string, char token, AdditionStream<unsigned int>& tokens)
+		void FindToken(Stream<char> string, char token, AdditionStream<unsigned int> tokens)
 		{
 			FindTokenImpl<Vec32c>(string, token, tokens);
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<char> string, Stream<char> token, AdditionStream<unsigned int>& tokens)
+		void FindToken(Stream<char> string, Stream<char> token, AdditionStream<unsigned int> tokens)
 		{
 			FindTokenImpl<Vec32c>(string, token, [&](unsigned int index) {
 				tokens.Add(index);
@@ -423,14 +423,14 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<wchar_t> string, wchar_t token, AdditionStream<unsigned int>& tokens)
+		void FindToken(Stream<wchar_t> string, wchar_t token, AdditionStream<unsigned int> tokens)
 		{
 			FindTokenImpl<Vec16s>(string, token, tokens);
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<unsigned int>& tokens) {
+		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<unsigned int> tokens) {
 			FindTokenImpl<Vec16s>(string, token, [&](unsigned int index) {
 				tokens.Add(index);
 			});
@@ -438,7 +438,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<char> string, Stream<char> token, AdditionStream<Stream<char>>& tokens) {
+		void FindToken(Stream<char> string, Stream<char> token, AdditionStream<Stream<char>> tokens) {
 			FindTokenImpl<Vec32c>(string, token, [&](unsigned int index) {
 				tokens.Add({ string.buffer + index, string.size - index });
 			});
@@ -446,7 +446,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<Stream<wchar_t>>& tokens) {
+		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, AdditionStream<Stream<wchar_t>> tokens) {
 			FindTokenImpl<Vec16s>(string, token, [&](unsigned int index) {
 				tokens.Add({ string.buffer + index, string.size - index });
 			});
@@ -1953,18 +1953,17 @@ namespace ECSEngine {
 		template<typename CharacterType>
 		static Stream<CharacterType> ReplaceCharacterImpl(CapacityStream<CharacterType>& string, Stream<CharacterType> token, Stream<CharacterType> replacement) {
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-			AdditionStream<unsigned int> token_appereances;
-			token_appereances.is_capacity = false;
-			token_appereances.resizable_stream.Initialize(GetAllocatorPolymorphic(&stack_allocator), ECS_KB);
-			function::FindToken(string, token, token_appereances);
+			ResizableStream<unsigned int> token_appereances(GetAllocatorPolymorphic(&stack_allocator), ECS_KB);
+			AdditionStream<unsigned int> token_appereances_addition = &token_appereances;
+			function::FindToken(string.ToStream(), token, token_appereances_addition);
 
 			unsigned int token_difference = replacement.size - token.size;
-			unsigned int total_size = string.size + token_difference * token_appereances.Size();
+			unsigned int total_size = string.size + token_difference * token_appereances.size;
 			ECS_ASSERT(total_size <= string.capacity);
 
 			// Copy the parts of the string that are not being replaced first such that we don't lose the data
 			if (token_difference != 0) {
-				unsigned int token_count = token_appereances.Size();
+				unsigned int token_count = token_appereances.size;
 				for (unsigned int index = token_count; index > 0; index--) {
 					unsigned int current_index = token_appereances[index - 1] + token.size;
 					unsigned int new_index = token_appereances[index - 1] + token.size + token_difference * index;
@@ -1975,7 +1974,7 @@ namespace ECSEngine {
 				}
 			}
 
-			for (unsigned int index = 0; index < token_appereances.Size(); index++) {
+			for (unsigned int index = 0; index < token_appereances.size; index++) {
 				// Replace the tokens now
 				unsigned int write_index = token_appereances[index] + index * token_difference;
 				string.CopySlice(write_index, replacement);
@@ -2005,7 +2004,7 @@ namespace ECSEngine {
 
 			// Get the list of occurences for all types
 			ECS_STACK_CAPACITY_STREAM(uint2, replacement_positions, 512);
-			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, current_occurence_positions, 1024);
+			ECS_STACK_ADDITION_STREAM(unsigned int, current_occurence_positions, 1024);
 
 			size_t insert_index = 0;
 			auto insert_occurences = [&](uint2 occurence) {
@@ -2019,10 +2018,10 @@ namespace ECSEngine {
 			};
 
 			for (size_t index = 0; index < occurences.size; index++) {
-				function::FindToken(string, occurences[index].string, current_occurence_positions);
+				function::FindToken(string, occurences[index].string, current_occurence_positions_addition);
 				// Insert now the positions into the global buffer
 				insert_index = 0;
-				for (unsigned int occurence_index = 0; occurence_index < current_occurence_positions.Size(); occurence_index++) {
+				for (unsigned int occurence_index = 0; occurence_index < current_occurence_positions.size; occurence_index++) {
 					insert_occurences({ current_occurence_positions[occurence_index], (unsigned int)index });
 				}
 			}
@@ -2482,18 +2481,18 @@ namespace ECSEngine {
 			// Start by looking at braces
 
 			// Get the pairs of braces
-			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, opened_braces, 512);
-			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, closed_braces, 512);
+			ECS_STACK_ADDITION_STREAM(unsigned int, opened_braces, 512);
+			ECS_STACK_ADDITION_STREAM(unsigned int, closed_braces, 512);
 			// Add an invisible pair of braces, in order to make processing easier
 			opened_braces.Add((unsigned int)0);
-			FindToken(characters, Character<CharacterType>('('), opened_braces);
-			FindToken(characters, Character<CharacterType>(')'), closed_braces);
+			FindToken(characters, Character<CharacterType>('('), opened_braces_addition);
+			FindToken(characters, Character<CharacterType>(')'), closed_braces_addition);
 			closed_braces.Add(characters.size + 1);
 
 			auto get_matching_brace = [=](size_t closed_index) {
 				size_t subindex = 0;
-				if (closed_index < closed_braces.Size() - 1) {
-					for (; subindex < opened_braces.Size() - 1; subindex++) {
+				if (closed_index < closed_braces.size - 1) {
+					for (; subindex < opened_braces.size - 1; subindex++) {
 						if (opened_braces[subindex] < closed_braces[closed_index] && opened_braces[subindex + 1] > closed_braces[closed_index]) {
 							break;
 						}
@@ -2507,18 +2506,18 @@ namespace ECSEngine {
 			};
 
 			// If the closed_braces count is different from opened braces count, fail with DBL_MAX
-			if (opened_braces.Size() != closed_braces.Size()) {
+			if (opened_braces.size != closed_braces.size) {
 				return DBL_MAX;
 			}
 
 			// Increase the indices by one for the braces in order to keep order between the first invisible
 			// pair of braces and the rest
-			for (size_t index = 1; index < opened_braces.Size(); index++) {
+			for (size_t index = 1; index < opened_braces.size; index++) {
 				opened_braces[index]++;
 				closed_braces[index]++;
 			}
 			// This one gets incremented when it shouldn't
-			closed_braces[closed_braces.Size() - 1]--;
+			closed_braces[closed_braces.size - 1]--;
 
 			ECS_STACK_CAPACITY_STREAM(EvaluateExpressionNumber, variables, 512);
 			ECS_STACK_CAPACITY_STREAM(EvaluateExpressionOperator, operators, 512);
@@ -2551,7 +2550,7 @@ namespace ECSEngine {
 			GetEvaluateExpressionOperators(characters, operators);
 			GetEvaluateExpressionNumbers(characters, variables);
 
-			for (size_t index = 0; index < closed_braces.Size(); index++) {
+			for (size_t index = 0; index < closed_braces.size; index++) {
 				operator_order.size = 0;
 
 				size_t opened_brace_index = get_matching_brace(index);

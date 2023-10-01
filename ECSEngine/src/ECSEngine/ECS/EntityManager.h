@@ -1072,6 +1072,65 @@ namespace ECSEngine {
 			});
 		}
 
+		// CONST VARIANT
+		// Return true to exit early, if desired.
+		// The functor receives as parameters (Entity entity, const void** unique_components, const void** shared_components)
+		// This iterates over all entities that satisfy the given query
+		template<bool early_exit = false, typename Functor>
+		bool ForEachEntityWithSignature(ArchetypeQuery query, Functor&& functor) const {
+			return ForEachArchetype<early_exit>(query, [&](const Archetype* archetype) {
+				unsigned int base_count = archetype->GetBaseCount();
+
+				Component shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+				Component shared_components_mask[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+				ComponentSignature shared_signature = query.shared.ToNormalSignature(shared_components);
+				memcpy(shared_components_mask, shared_components, sizeof(Component) * shared_signature.count);
+				archetype->FindSharedComponents({ shared_components_mask, shared_signature.count });
+
+				Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+				ComponentSignature unique_signature = query.unique.ToNormalSignature(unique_components);
+				unsigned char archetype_unique_component_index[ECS_ARCHETYPE_MAX_COMPONENTS];
+				unsigned int unique_components_byte_size[ECS_ARCHETYPE_MAX_COMPONENTS];
+				for (unsigned int unique_index = 0; unique_index < unique_signature.count; unique_index++) {
+					archetype_unique_component_index[unique_index] = archetype->FindUniqueComponentIndex(unique_components[unique_index]);
+					unique_components_byte_size[unique_index] = ComponentSize(unique_components[unique_index]);
+				}				
+
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					const ArchetypeBase* base = archetype->GetBase(base_index);
+					unsigned int entity_count = base->EntityCount();
+					
+					const void* shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+					const void* unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+					// Get all the shared components according to the signature
+					const SharedInstance* shared_instances = archetype->GetBaseInstances(base_index);
+					for (unsigned int shared_index = 0; shared_index < shared_signature.count; shared_index++) {
+						shared_components[shared_index] = GetSharedData(shared_signature.indices[shared_index], shared_instances[shared_components_mask[shared_index].value]);
+					}
+
+					for (unsigned int unique_index = 0; unique_index < unique_signature.count; unique_index++) {
+						unique_components[unique_index] = base->GetComponentByIndex(0, archetype_unique_component_index[unique_index]);
+					}
+
+					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
+						if constexpr (early_exit) {
+							if (functor(base->GetEntityAtIndex(entity_index), unique_components, shared_components)) {
+								return true;
+							}
+						}
+						else {
+							functor(base->GetEntityAtIndex(entity_index), unique_components, shared_components);
+						}
+						for (unsigned int unique_index = 0; unique_index < unique_signature.count; unique_index++) {
+							unique_components[unique_index] = function::OffsetPointer(unique_components[unique_index], unique_components_byte_size[unique_index]);
+						}
+					}
+				}
+
+				return false;
+			});
+		}
+
 		// ---------------------------------------------------------------------------------------------------
 
 		// Executes all deferred calls, including clearing tags and setting them

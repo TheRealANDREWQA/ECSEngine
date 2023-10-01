@@ -57,7 +57,7 @@ struct ToolbarData {
 void DefaultUITemplate(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	ECS_TEMP_STRING(template_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, template_path, 256);
 	template_path.CopyOther(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
 	template_path.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 	template_path[template_path.size] = L'\0';
@@ -70,7 +70,7 @@ void DefaultUITemplate(ActionData* action_data) {
 		LoadProjectUITemplateAction(action_data);
 	}
 	else {
-		ECS_TEMP_ASCII_STRING(error_message, 256);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 		error_message.size = function::FormatString(error_message.buffer, "Could not find default template {#}. It has been deleted.", template_path);
 		error_message.AssertCapacity();
 		CreateErrorMessageWindow(system, error_message);
@@ -149,7 +149,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		SaveProjectUITemplateData* layout_save_data = (SaveProjectUITemplateData*)function::OffsetPointer(
 			allocation, sizeof(LoadProjectUITemplateData) * (TOOLBAR_DATA_LAYOUT_ROW_COUNT - 1)
 		);
-		ECS_TEMP_STRING(system_string, 256);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, system_string, 256);
 		system_string.CopyOther(EDITOR_SYSTEM_PROJECT_UI_TEMPLATE_PREFIX);
 		system_string.Add(L' ');
 
@@ -436,7 +436,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 
 	UIConfigAbsoluteTransform project_transform;
 	const ProjectFile* project_file = (const ProjectFile*)data->editor_state->project_file;
-	ECS_TEMP_ASCII_STRING(project_name, 256);
+	ECS_STACK_CAPACITY_STREAM(char, project_name, 256);
 	function::ConvertWideCharsToASCII(project_file->project_name, project_name);
 	project_transform.scale = drawer.GetLabelScale(project_name);
 	project_transform.position.x = drawer.GetAlignedToRightOverLimit(project_transform.scale.x).x;
