@@ -1170,7 +1170,7 @@ void FileExplorerDrag(ActionData* action_data) {
 			Stream<wchar_t> last_type_extension = function::PathExtension(last_file);
 			const wchar_t* texture = ECS_TOOLS_UI_TEXTURE_FOLDER;
 			ResourceView thumbnail_texture = nullptr;
-			ECS_TEMP_STRING(texture_draw, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, texture_draw, 256);
 
 			// If it has an extension, check to see existing files
 			if (last_type_extension.size != 0) {
@@ -1402,7 +1402,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, UIDrawerDescriptor*
 		UI_UNPACK_ACTION_DATA;
 
 		InternalData* data = (InternalData*)_data;
-		ECS_TEMP_ASCII_STRING(error_message, 1024);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 1024);
 		error_message.CopyOther("One or more files could not be copied. These are:");
 		unsigned int error_files_count = 0;
 		for (size_t index = 0; index < data->data->overwrite_files.size; index++) {
@@ -1688,7 +1688,7 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 		return true;
 	};
 
-	ECS_TEMP_STRING(assests_folder, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assests_folder, 256);
 	GetProjectAssetsFolder(editor_state, assests_folder);
 	Stream<wchar_t> extensions[] = {
 		L".jpg",
@@ -1847,7 +1847,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 		return true;
 	};
 
-	ECS_TEMP_STRING(assests_folder, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assests_folder, 256);
 	GetProjectAssetsFolder(editor_state, assests_folder);
 	ForEachFileInDirectoryRecursiveWithExtension(assests_folder, { ASSET_MESH_EXTENSIONS, std::size(ASSET_MESH_EXTENSIONS) }, &functor_data, functor);
 
@@ -2008,7 +2008,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 			auto CopyPath = [](ActionData* action_data) {
 				UI_UNPACK_ACTION_DATA;
 
-				ECS_TEMP_ASCII_STRING(ascii_path, 256);
+				ECS_STACK_CAPACITY_STREAM(char, ascii_path, 256);
 				Stream<wchar_t>* path = (Stream<wchar_t>*)_data;
 				function::ConvertWideCharsToASCII(*path, ascii_path);
 				ascii_path[ascii_path.size] = '\0';
@@ -2568,7 +2568,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					drawer->Rectangle(RECTANGLE_CONFIGURATION, *config);
 				}
 
-				ECS_TEMP_STRING(null_terminated_path, 256);
+				ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 256);
 				null_terminated_path.CopyOther(stream_path);
 				null_terminated_path[stream_path.size] = L'\0';
 
@@ -2594,7 +2594,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 		data->temporary_allocator.Clear();
 
-		ECS_TEMP_STRING(mouse_element_path, 256);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, mouse_element_path, 256);
 		for_each_data.mouse_element_path = &mouse_element_path;
 
 		if (data->current_directory.size > 0) {

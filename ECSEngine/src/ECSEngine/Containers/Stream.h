@@ -22,13 +22,7 @@ namespace ECSEngine {
 #define ECS_STACK_VOID_STREAM(name, capacity) char __storage##name[capacity]; ECSEngine::CapacityStream<void> name(__storage##name, 0, capacity);
 #define ECS_STACK_VOID_STREAM_DYNAMIC(name, capacity) void* __storage##name = ECS_STACK_ALLOC(capacity); ECSEngine::CapacityStream<void> name(__storage##name, 0, capacity);
 
-#define ECS_TEMP_ASCII_STRING(name, size) char name##_temp_memory[size]; \
-ECSEngine::CapacityStream<char> name(name##_temp_memory, 0, size);
-
-#define ECS_TEMP_STRING(name, size) wchar_t name##_temp_memory[size]; \
-ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
-
-#define ECS_STACK_CAPACITY_ADDITION_STREAM(type, name, capacity) ECS_STACK_CAPACITY_STREAM(type, _##name, capacity); AdditionStream<type> name = _##name;
+#define ECS_STACK_ADDITION_STREAM(type, name, capacity) ECS_STACK_CAPACITY_STREAM(type, name, capacity); AdditionStream<type> name##_addition = &name
 
 	template<typename T>
 	struct CapacityStream;
@@ -850,13 +844,8 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		typedef T T;
 
 		ECS_INLINE ResizableStream() : buffer(nullptr), allocator({nullptr}), capacity(0), size(0) {}
-		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : allocator(_allocator), capacity(_capacity), size(0) {
-			if (_capacity != 0) {
-				ResizeNoCopy(_capacity);
-			}
-			else {
-				buffer = nullptr;
-			}
+		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : buffer(nullptr), capacity(_capacity), size(0) {
+			Initialize(_allocator, _capacity);
 		}
 
 		ECS_INLINE ResizableStream(const ResizableStream& other) = default;
@@ -1908,21 +1897,21 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 	template<typename T>
 	struct AdditionStream {
 		ECS_INLINE AdditionStream() {}
-		ECS_INLINE AdditionStream(CapacityStream<T> capacity) {
+		ECS_INLINE AdditionStream(CapacityStream<T>* capacity) {
 			is_capacity = true;
 			capacity_stream = capacity;
 		}
-		ECS_INLINE AdditionStream(ResizableStream<T> resizable) {
+		ECS_INLINE AdditionStream(ResizableStream<T>* resizable) {
 			is_capacity = false;
-			resizable_stream = resizable
+			resizable_stream = resizable;
 		}
 
 		ECS_INLINE unsigned int Add(T element) {
 			if (is_capacity) {
-				return capacity_stream.AddAssert(element);
+				return capacity_stream->AddAssert(element);
 			}
 			else {
-				return resizable_stream.Add(element);
+				return resizable_stream->Add(element);
 			}
 		}
 
@@ -1930,54 +1919,66 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return is_capacity;
 		}
 
+		// If it is a capacity stream, asserts that the capacity
+		// can hold these additional items. For resizable stream,
+		// it will resize the stream to fit them in case it can't
+		ECS_INLINE void AssertNewItems(unsigned int count) {
+			if (is_capacity) {
+				ECS_ASSERT(capacity_stream->size + count <= capacity_stream->capacity);
+			}
+			else {
+				resizable_stream->ReserveNewElements(count);
+			}
+		}
+
 		ECS_INLINE unsigned int Size() const {
 			// Both of them have the same layout, we can return the size directly
-			return capacity_stream.size;
+			return capacity_stream->size;
 		}
 		
 		// This sets the size directly, it does not perform a resize for the resizable stream
 		ECS_INLINE void SetSize(unsigned int value) {
 			// We can alias the 2 streams since they have the same layout
-			capacity_stream.size = value;
+			capacity_stream->size = value;
 		}
 
 		ECS_INLINE void RemoveSwapBack(unsigned int index) {
 			// We can alias the 2 streams
-			capacity_stream.RemoveSwapBack(index);
+			capacity_stream->RemoveSwapBack(index);
 		}
 
 		ECS_INLINE void Remove(unsigned int index, unsigned int count = 1) {
 			// We can alias the 2 streams
-			capacity_stream.Remove(index, count);
+			capacity_stream->Remove(index, count);
 		}
 
 		ECS_INLINE Stream<T> ToStream() const {
 			if (is_capacity) {
-				return capacity_stream;
+				return capacity_stream->ToStream();
 			}
 			else {
-				return resizable_stream.ToStream();
+				return resizable_stream->ToStream();
 			}
 		}
 
 		ECS_INLINE bool IsInitialized() const {
-			return is_capacity ? capacity_stream.capacity > 0 : resizable_stream.allocator.allocator != nullptr;
+			return is_capacity ? capacity_stream->capacity > 0 : resizable_stream->allocator.allocator != nullptr;
 		}
 		
 		ECS_INLINE T& operator[](unsigned int index) {
 			// Both have the same layout, we can index into the buffer
-			return capacity_stream.buffer[index];
+			return capacity_stream->buffer[index];
 		}
 
 		ECS_INLINE const T& operator[](unsigned int index) const {
 			// Both have the same layout, we can index into the buffer
-			return capacity_stream.buffer[index];
+			return capacity_stream->buffer[index];
 		}
 
 		bool is_capacity;
 		union {
-			CapacityStream<T> capacity_stream;
-			ResizableStream<T> resizable_stream;
+			CapacityStream<T>* capacity_stream;
+			ResizableStream<T>* resizable_stream;
 		};
 	};
 

@@ -9,6 +9,10 @@ struct EditorState;
 
 // -------------------------------------------------------------------------------------------------------------
 
+void AddSandboxDebugDrawComponent(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Component component, ECSEngine::ECS_COMPONENT_TYPE component_type);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Returns true if all of the sandboxes that want to be run by the master button are running, else false
 bool AreAllDefaultSandboxesRunning(const EditorState* editor_state);
 
@@ -76,7 +80,24 @@ void DisableSandboxViewportRendering(EditorState* editor_state, unsigned int san
 
 // -------------------------------------------------------------------------------------------------------------
 
+void DisableSandboxDebugDrawAll(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Determines which components have debug drawing activated, and it will add the debug primitives to the
+// World to be rendered
+void DrawSandboxDebugDrawComponents(
+	EditorState* editor_state,
+	unsigned int sandbox_index
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void EnableSandboxDebugDrawAll(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -120,6 +141,11 @@ EditorSandboxEntitySlot FindSandboxVirtualEntitySlot(
 // Checks to see that the textures are actually created before freeing
 // If the viewport is left unspecified, it will call this function for all viewports
 void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if the given component has a debug draw function on it
+bool ExistsSandboxDebugDrawComponentFunction(const EditorState* editor_state, unsigned int sandbox_index, Component component, ECS_COMPONENT_TYPE type);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -171,6 +197,14 @@ ECS_INLINE size_t GetSandboxSelectedEntitiesCount(const EditorState* editor_stat
 
 // -------------------------------------------------------------------------------------------------------------
 
+void GetSandboxAllPossibleDebugDrawComponents(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::AdditionStream<ECSEngine::ComponentWithType> components
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // This version will filter any virtual entities (unused entity slots) that appear here
 // The filtered entities must have a capacity equal or greater than the selected entities size
 // The rejected entities will be placed at the end after the filtered ones. To iterate over them,
@@ -201,6 +235,16 @@ void GetSandboxSelectedVirtualEntitiesTransformPointers(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	ECSEngine::CapacityStream<ECSEngine::TransformGizmoPointers>* pointers,
+	ECSEngine::CapacityStream<ECSEngine::Entity>* entities = nullptr
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Can optionally give a pointer with the virtual entities that are selected with gizmo pointers
+void GetSandboxSelectedVirtualEntitiesTransformGizmos(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::CapacityStream<ECSEngine::TransformGizmo>* gizmos,
 	ECSEngine::CapacityStream<ECSEngine::Entity>* entities = nullptr
 );
 
@@ -243,6 +287,15 @@ bool IsSandboxGizmoEntity(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
 	ECSEngine::Entity entity
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxDebugDrawEnabled(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::Component component,
+	ECSEngine::ECS_COMPONENT_TYPE component_type
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -386,6 +439,15 @@ void RemoveSandboxVirtualEntitiesSlot(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	EDITOR_SANDBOX_ENTITY_SLOT slot_type
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void RemoveSandboxDebugDrawComponent(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::Component component,
+	ECSEngine::ECS_COMPONENT_TYPE component_type
 );
 
 // -------------------------------------------------------------------------------------------------------------

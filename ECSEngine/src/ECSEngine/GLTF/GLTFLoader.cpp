@@ -569,7 +569,7 @@ namespace ECSEngine {
 
 	GLTFData LoadGLTFFile(Stream<wchar_t> path, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
 	{
-		ECS_TEMP_ASCII_STRING(temp_path, 512);
+		ECS_STACK_CAPACITY_STREAM(char, temp_path, 512);
 		function::ConvertWideCharsToASCII(path, temp_path);
 		temp_path[temp_path.size] = '\0';
 		return LoadGLTFFile(temp_path, allocator, error_message);

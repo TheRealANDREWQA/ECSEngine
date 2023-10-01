@@ -209,6 +209,9 @@ struct ECS_REFLECT EditorSandbox {
 	// These flags indicate when the unused slots need to be recomputed (after a clear/reset for example)
 	bool virtual_entities_slots_recompute;
 
+	// These are all the components which have enabled debug drawing
+	ECSEngine::ResizableStream<ECSEngine::ComponentWithType> enabled_debug_draw;
+
 	ECSEngine::MemoryManager runtime_module_snapshot_allocator;
 	ECSEngine::ResizableStream<EditorSandboxModuleSnapshot> runtime_module_snapshots;
 

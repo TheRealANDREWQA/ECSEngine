@@ -37,7 +37,7 @@ namespace ECSEngine {
 
 #endif
 
-#define ECS_FORMAT_TEMP_STRING(string_name, base_characters, ...) ECS_TEMP_ASCII_STRING(string_name, 2048); \
+#define ECS_FORMAT_TEMP_STRING(string_name, base_characters, ...) ECS_STACK_CAPACITY_STREAM(char, string_name, 2048); \
 string_name.size = function::FormatString(string_name.buffer, base_characters, __VA_ARGS__); \
 string_name.AssertCapacity();
 

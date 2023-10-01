@@ -1504,6 +1504,7 @@ namespace ECSEngine {
 			bool draw_before_main_texture = false;
 		};
 
+		// The callback receives the flag in the _additional_data field
 		struct UIConfigCheckBoxCallback {
 			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_CHECK_BOX_CALLBACK;

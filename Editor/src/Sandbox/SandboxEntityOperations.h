@@ -479,6 +479,8 @@ Quaternion ECS_VECTORCALL GetSandboxEntitiesRotationMidpoint(
 );
 
 // You can optionally provide transform gizmos besides these entities
+// By default, it will add to the total count the given transform_gizmos.size
+// But you can disable that using the add_transform_gizmos_to_total_count flag
 void GetSandboxEntitiesMidpoint(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
@@ -486,6 +488,7 @@ void GetSandboxEntitiesMidpoint(
 	float3* translation_midpoint,
 	Quaternion* rotation_midpoint,
 	Stream<TransformGizmo> transform_gizmos = {},
+	bool add_transform_gizmos_to_total_count = true,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 

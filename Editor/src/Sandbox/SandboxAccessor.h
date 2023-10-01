@@ -1,7 +1,6 @@
 #pragma once
 #include "SandboxTypes.h"
-
-struct EditorState;
+#include "../Editor/EditorState.h"
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -13,11 +12,15 @@ ECSEngine::EntityManager* ActiveEntityManager(EditorState* editor_state, unsigne
 
 // -------------------------------------------------------------------------------------------------------------
 
-EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index);
+ECS_INLINE EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index) {
+	return editor_state->sandboxes.buffer + sandbox_index;
+}
 
 // -------------------------------------------------------------------------------------------------------------
 
-const EditorSandbox* GetSandbox(const EditorState* editor_state, unsigned int sandbox_index);
+ECS_INLINE const EditorSandbox* GetSandbox(const EditorState* editor_state, unsigned int sandbox_index) {
+	return editor_state->sandboxes.buffer + sandbox_index;
+}
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -50,7 +53,9 @@ const ECSEngine::EntityManager* GetSandboxEntityManager(
 
 // -------------------------------------------------------------------------------------------------------------
 
-unsigned int GetSandboxCount(const EditorState* editor_state);
+ECS_INLINE unsigned int GetSandboxCount(const EditorState* editor_state) {
+	return editor_state->sandboxes.size;
+}
 
 // -------------------------------------------------------------------------------------------------------------
 

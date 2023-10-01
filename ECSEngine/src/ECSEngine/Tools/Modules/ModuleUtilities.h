@@ -193,4 +193,27 @@ namespace ECSEngine {
 	);
 	 
 	// ------------------------------------------------------------------------------------------------------------
+
+	// Determines if the given debug draw elements match the state of the
+	// given reflection manager. Returns true if all elements match, else false
+	// Can optionally give an error string to be filled in with the description
+	// of the error
+	ECSENGINE_API bool ModuleValidateDebugDrawComponentsExist(
+		Stream<ModuleDebugDrawElement> debug_draw_elements,
+		const Reflection::ReflectionManager* reflection_manager,
+		CapacityStream<char>* error_message = nullptr
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	// There should be an entry in the output_elements for each value in components
+	// Elements that are not matched with the debug_elements are left the same
+	ECSENGINE_API void ModuleMatchDebugDrawElements(
+		Stream<ComponentWithType> components,
+		Stream<ModuleDebugDrawElement> match_elements,
+		ModuleDebugDrawElement* output_elements
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

@@ -208,4 +208,29 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	TransformGizmo TransformGizmoPointers::ToValue() const
+	{
+		TransformGizmo value;
+
+		if (position != nullptr) {
+			value.position = *position;
+		}
+		else {
+			value.position = float3::Splat(0.0f);
+		}
+
+		if (euler_rotation != nullptr) {
+			if (is_euler_rotation) {
+				value.rotation = QuaternionFromEuler(*euler_rotation).StorageLow();
+			}
+			else {
+				value.rotation = *quaternion_rotation;
+			}
+		}
+
+		return value;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

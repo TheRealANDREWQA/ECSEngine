@@ -461,7 +461,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	*editor_reflection_manager = Reflection::ReflectionManager(GetAllocatorPolymorphic(editor_allocator));
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
-	ECS_TEMP_ASCII_STRING(error_message, 256);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 	bool success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)0, editor_task_manager, &error_message);
 	// Create all the link types for the components inside the reflection manager
 	CreateLinkTypesForComponents(editor_reflection_manager, 0);
@@ -483,6 +483,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	// Register the link components for the engine components
 	editor_state->ecs_link_components = LoadModuleLinkComponentTargets(RegisterECSLinkComponents, editor_state->EditorAllocator());
 	editor_state->ecs_extra_information = LoadModuleExtraInformation(RegisterECSModuleExtraInformation, editor_state->EditorAllocator());
+	editor_state->ecs_debug_draw = LoadModuleDebugDrawElements(RegisterECSDebugDrawElements, editor_state->EditorAllocator());
+
 	// Update the editor components
 	editor_state->editor_components.UpdateComponents(editor_state, editor_reflection_manager, 0, "ECSEngine");
 	// Finalize every event

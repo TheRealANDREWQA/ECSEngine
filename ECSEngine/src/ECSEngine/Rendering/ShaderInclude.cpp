@@ -20,8 +20,8 @@ namespace ECSEngine {
 			return E_FAIL;
 		}
 
-		ECS_TEMP_STRING(current_path, 512);
-		ECS_TEMP_STRING(include_filename, 128);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, current_path, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, include_filename, 128);
 		Stream<char> include_filename_ascii = function::PathFilename(filename, ECS_OS_PATH_SEPARATOR_ASCII_REL);
 		function::ConvertASCIIToWide(include_filename, include_filename_ascii);
 

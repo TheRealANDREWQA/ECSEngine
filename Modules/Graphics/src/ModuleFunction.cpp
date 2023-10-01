@@ -48,18 +48,18 @@ void ModuleRegisterLinkComponentFunction(ECSEngine::ModuleRegisterLinkComponentF
 
 #endif
 
-#if 0
-
-void ModuleSetCurrentWorld(ECSEngine::World* world) {
-
-}
-
-#endif
-
 #if 1
 
 void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData* data) {
 	SetGraphicsModuleRenderMeshBounds(data, STRING(RenderMesh), STRING(mesh));
+}
+
+#endif
+
+#if 0
+
+void ModuleRegisterDebugDrawFunction(ECSEngine::ModuleRegisterDebugDrawFunctionData* data) {
+	
 }
 
 #endif

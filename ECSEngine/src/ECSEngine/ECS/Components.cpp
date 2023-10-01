@@ -2,6 +2,7 @@
 #include "Components.h"
 #include "../Tools/Modules/ModuleDefinition.h"
 #include "../Tools/Modules/ModuleExtraInformation.h"
+#include "../Tools/Debug Draw/DebugDraw.h"
 
 namespace ECSEngine {
 
@@ -83,6 +84,20 @@ namespace ECSEngine {
 		camera_gizmo.rotation_field = STRING(value.rotation);
 
 		SetGlobalComponentTransformGizmos(register_data, { { &camera_gizmo, 1} });
+	}
+
+	void CameraComponentDebugDraw(ModuleDebugDrawComponentFunctionData* draw_data) {
+		const CameraComponent* camera = (const CameraComponent*)draw_data->component;
+		draw_data->debug_drawer->AddAABBThread(draw_data->thread_id, camera->value.translation, float3::Splat(1.0f), ECS_COLOR_GREEN, { true, true });
+	}
+
+	void RegisterECSDebugDrawElements(ModuleRegisterDebugDrawFunctionData* register_data) {
+		ModuleDebugDrawElement element;
+		element.component = CameraComponent::ID();
+		element.component_type = ECS_COMPONENT_GLOBAL;
+		element.draw_function = CameraComponentDebugDraw;
+
+		register_data->elements->AddAssert(element);
 	}
 
 }

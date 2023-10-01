@@ -1081,7 +1081,7 @@ namespace ECSEngine {
 
 	// Loads all meshes from a gltf file
 	Stream<Mesh>* ResourceManager::LoadMeshImplementation(Stream<wchar_t> filename, float scale_factor, ResourceManagerLoadDesc load_descriptor) {
-		ECS_TEMP_STRING(_path, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, _path, 512);
 		GLTFData data = LoadGLTFFile(filename);
 		// The load failed
 		if (data.data == nullptr) {
@@ -1177,7 +1177,7 @@ namespace ECSEngine {
 
 	CoalescedMesh* ResourceManager::LoadCoalescedMeshImplementation(Stream<wchar_t> filename, float scale_factor, ResourceManagerLoadDesc load_descriptor)
 	{
-		ECS_TEMP_STRING(_path, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, _path, 512);
 		GLTFData data = LoadGLTFFile(filename);
 		// The load failed
 		if (data.data == nullptr || data.mesh_count == 0) {
@@ -1317,7 +1317,7 @@ namespace ECSEngine {
 
 	// Loads all materials from a gltf file
 	Stream<PBRMaterial>* ResourceManager::LoadMaterialsImplementation(Stream<wchar_t> filename, ResourceManagerLoadDesc load_descriptor) {
-		ECS_TEMP_STRING(_path, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, _path, 512);
 		GLTFData data = LoadGLTFFile(filename);
 		// The load failed
 		if (data.data == nullptr) {
@@ -1860,7 +1860,7 @@ namespace ECSEngine {
 
 	// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
 	PBRMesh* ResourceManager::LoadPBRMeshImplementation(Stream<wchar_t> filename, ResourceManagerLoadDesc load_descriptor) {
-		ECS_TEMP_STRING(_path, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, _path, 512);
 		GLTFData data = LoadGLTFFile(filename);
 		// The load failed
 		if (data.data == nullptr) {

@@ -163,7 +163,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 void SaveEditorFileThreadTask(unsigned int thread_index, World* world, void* data) {
 	bool success = SaveEditorFile((EditorState*)data);
 	if (!success) {
-		ECS_TEMP_ASCII_STRING(error_message, 256);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 		error_message.CopyOther(SAVE_FILE_ERROR_MESSAGE);
 		EditorSetConsoleError(error_message);
 	}
@@ -174,7 +174,7 @@ void SaveEditorFileAction(ActionData* action_data) {
 
 	bool success = SaveEditorFile((EditorState*)_data);
 	if (!success) {
-		ECS_TEMP_ASCII_STRING(error_message, 256);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 		error_message.CopyOther(SAVE_FILE_ERROR_MESSAGE);
 		EditorSetConsoleError(error_message);
 	}
@@ -185,7 +185,7 @@ void LoadEditorFileAction(ActionData* action_data) {
 
 	bool success = LoadEditorFile((EditorState*)_data);
 	if (!success) {
-		ECS_TEMP_ASCII_STRING(error_message, 256);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 		error_message.CopyOther(LOAD_FILE_ERROR_MESSAGE);
 		EditorSetConsoleError(error_message);
 	}

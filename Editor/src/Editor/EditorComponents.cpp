@@ -1416,6 +1416,17 @@ bool EditorComponents::GetLinkComponentDLLStatus(Stream<char> name) const
 
 // ----------------------------------------------------------------------------------------------
 
+ECS_COMPONENT_TYPE EditorComponents::GetComponentType(Stream<char> name) const
+{
+	ReflectionType type;
+	if (internal_manager->TryGetType(name, type)) {
+		return GetReflectionTypeComponentType(&type);
+	}
+	return ECS_COMPONENT_TYPE_COUNT;
+}
+
+// ----------------------------------------------------------------------------------------------
+
 void EditorComponents::GetTypeDependencies(Stream<char> type, CapacityStream<Stream<char>>* dependencies) const
 {
 	GetReflectionTypeDependentTypes(internal_manager, GetType(type), *dependencies);

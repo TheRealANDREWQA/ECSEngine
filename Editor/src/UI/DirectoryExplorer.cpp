@@ -139,7 +139,7 @@ void DirectoryExplorerDeleteFolder(ActionData* action_data) {
 			data->current_path->size = 0;
 		}
 		else {
-			ECS_TEMP_ASCII_STRING(error_message, 256);
+			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 			size_t parent_size = function::PathParentSize(*data->current_path);
 			CapacityStream<wchar_t> folder_name(data->current_path->buffer + parent_size + 1, data->current_path->size - parent_size - 1, data->current_path->size - parent_size - 1 );
 			error_message.size = function::FormatString(error_message.buffer, "Cannot delete {#} folder.", folder_name);

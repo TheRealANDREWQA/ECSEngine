@@ -79,7 +79,7 @@ namespace ECSEngine {
 
 	template<typename Function>
 	bool ForEachInDirectoryInternal(Stream<wchar_t> directory, Function&& function) {
-		ECS_TEMP_STRING(temp_string, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_string, 512);
 		struct _wfinddata64_t find_data = {};
 		SetSearchAllStringForEachFile(temp_string, directory);
 
@@ -129,7 +129,7 @@ namespace ECSEngine {
 		Stream<wchar_t> allocator_directory = function::StringCopy(GetAllocatorPolymorphic(&allocator), directory);
 		subdirectories.Add(allocator_directory.buffer);
 
-		ECS_TEMP_STRING(temp_string, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_string, 512);
 		struct _wfinddata64_t find_data = {};
 
 		while (subdirectories.size > 0) {
@@ -193,7 +193,7 @@ namespace ECSEngine {
 		Stream<wchar_t> allocator_directory = function::StringCopy(GetAllocatorPolymorphic(&allocator), directory);
 		subdirectories.Add(allocator_directory.buffer);
 
-		ECS_TEMP_STRING(temp_string, 512);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_string, 512);
 		struct _wfinddata64_t find_data = {};
 
 		while (subdirectories.size > 0) {
@@ -382,7 +382,7 @@ namespace ECSEngine {
 	bool GetDirectoriesOrFilesImplementation(
 		Stream<wchar_t> root, 
 		AllocatorPolymorphic allocator,
-		AdditionStream<Stream<wchar_t>>& paths,
+		AdditionStream<Stream<wchar_t>> paths,
 		GetDirectoriesOrFilesOptions options,
 		Function&& function
 	) {
@@ -390,10 +390,10 @@ namespace ECSEngine {
 		if (!options.batched_allocation || allocator.allocation_type == ECS_ALLOCATION_SINGLE) {
 			struct ForData {
 				AllocatorPolymorphic allocator;
-				AdditionStream<Stream<wchar_t>>* paths;
+				AdditionStream<Stream<wchar_t>> paths;
 				Stream<wchar_t> relative_root;
 			};
-			ForData for_data = { allocator, &paths, options.relative_root };
+			ForData for_data = { allocator, paths, options.relative_root };
 
 			bool status = function(root, &for_data, [](Stream<wchar_t> path, void* _data) {
 				ForData* data = (ForData*)_data;
@@ -403,7 +403,7 @@ namespace ECSEngine {
 				}
 
 				Stream<wchar_t> allocated_path = function::StringCopy(data->allocator, path);
-				data->paths->Add(allocated_path);
+				data->paths.Add(allocated_path);
 				return true;
 			}, options.depth_traversal);
 
@@ -465,10 +465,10 @@ namespace ECSEngine {
 
 			struct BatchedCopyStringsData {
 				Stream<wchar_t> relative_root;
-				AdditionStream<Stream<wchar_t>>* paths;
+				AdditionStream<Stream<wchar_t>> paths;
 				void** allocation;
 			};
-			BatchedCopyStringsData copy_data = { options.relative_root, &paths, &allocation };
+			BatchedCopyStringsData copy_data = { options.relative_root, paths, &allocation };
 			status = function(root, &copy_data, [](Stream<wchar_t> path, void* _data) {
 				BatchedCopyStringsData* data = (BatchedCopyStringsData*)_data;
 				void* buffer = *data->allocation;
@@ -477,7 +477,7 @@ namespace ECSEngine {
 					path = function::PathRelativeToAbsolute(path, data->relative_root);
 				}
 
-				data->paths->Add(Stream<wchar_t>(buffer, path.size));
+				data->paths.Add(Stream<wchar_t>(buffer, path.size));
 				
 				// Increase the path size with 1 to include the '\0'
 				path.size++;
@@ -502,7 +502,7 @@ namespace ECSEngine {
 	bool GetFilesWithExtensionImplementation(
 		Stream<wchar_t> root, 
 		AllocatorPolymorphic allocator, 
-		AdditionStream<Stream<wchar_t>>& paths,
+		AdditionStream<Stream<wchar_t>> paths,
 		Stream<Stream<wchar_t>> extensions,
 		GetDirectoriesOrFilesOptions options,
 		Function&& function
@@ -512,9 +512,9 @@ namespace ECSEngine {
 			struct ForData {
 				Stream<wchar_t> relative_root;
 				AllocatorPolymorphic allocator;
-				AdditionStream<Stream<wchar_t>>* paths;
+				AdditionStream<Stream<wchar_t>> paths;
 			};
-			ForData for_data = { options.relative_root, allocator, &paths };
+			ForData for_data = { options.relative_root, allocator, paths };
 
 			bool status = function(root, extensions, &for_data, [](Stream<wchar_t> path, void* _data) {
 				ForData* data = (ForData*)_data;
@@ -523,7 +523,7 @@ namespace ECSEngine {
 					path = function::PathRelativeToAbsolute(path, data->relative_root);
 				}
 
-				data->paths->Add(function::StringCopy(data->allocator, path));
+				data->paths.Add(function::StringCopy(data->allocator, path));
 				return true;
 			}, options.depth_traversal);
 
@@ -587,10 +587,10 @@ namespace ECSEngine {
 			void* initial_allocation = allocation;
 			struct BatchedCopyStringsData {
 				Stream<wchar_t> relative_root;
-				AdditionStream<Stream<wchar_t>>* paths;
+				AdditionStream<Stream<wchar_t>> paths;
 				void** allocation;
 			};
-			BatchedCopyStringsData copy_data = { options.relative_root, &paths, &allocation };
+			BatchedCopyStringsData copy_data = { options.relative_root, paths, &allocation };
 			status = function(root, extensions, &copy_data, [](Stream<wchar_t> path, void* _data) {
 				BatchedCopyStringsData* data = (BatchedCopyStringsData*)_data;
 				
@@ -599,7 +599,7 @@ namespace ECSEngine {
 				}
 
 				void* buffer = *data->allocation;
-				data->paths->Add(Stream<wchar_t>(buffer, path.size));
+				data->paths.Add(Stream<wchar_t>(buffer, path.size));
 
 				// Increase the path size with 1 to include the '\0'
 				path.size++;
@@ -622,7 +622,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool GetDirectories(Stream<wchar_t> root, AllocatorPolymorphic allocator, AdditionStream<Stream<wchar_t>>& directories_paths, GetDirectoriesOrFilesOptions options)
+	bool GetDirectories(Stream<wchar_t> root, AllocatorPolymorphic allocator, AdditionStream<Stream<wchar_t>> directories_paths, GetDirectoriesOrFilesOptions options)
 	{
 		return GetDirectoriesOrFilesImplementation(root, allocator, directories_paths, options, [](Stream<wchar_t> directory, void* data,
 			ForEachFolderFunction functor, bool depth_traversal) {
@@ -635,7 +635,7 @@ namespace ECSEngine {
 	bool GetDirectoriesRecursive(
 		Stream<wchar_t> root,
 		AllocatorPolymorphic allocator,
-		AdditionStream<Stream<wchar_t>>& directories_paths,
+		AdditionStream<Stream<wchar_t>> directories_paths,
 		GetDirectoriesOrFilesOptions options
 	)
 	{
@@ -660,7 +660,7 @@ namespace ECSEngine {
 	bool GetDirectoryFilesRecursive(
 		Stream<wchar_t> directory, 
 		AllocatorPolymorphic allocator, 
-		AdditionStream<Stream<wchar_t>>& file_paths,
+		AdditionStream<Stream<wchar_t>> file_paths,
 		GetDirectoriesOrFilesOptions options
 	)
 	{
@@ -675,7 +675,7 @@ namespace ECSEngine {
 	bool GetDirectoryFilesWithExtension(
 		Stream<wchar_t> directory, 
 		AllocatorPolymorphic allocator, 
-		AdditionStream<Stream<wchar_t>>& file_paths,
+		AdditionStream<Stream<wchar_t>> file_paths,
 		Stream<Stream<wchar_t>> extensions, 
 		GetDirectoriesOrFilesOptions options
 	)
@@ -696,7 +696,7 @@ namespace ECSEngine {
 	bool GetDirectoryFilesWithExtensionRecursive(
 		Stream<wchar_t> directory,
 		AllocatorPolymorphic allocator, 
-		AdditionStream<Stream<wchar_t>>& file_paths,
+		AdditionStream<Stream<wchar_t>> file_paths,
 		Stream<Stream<wchar_t>> extensions,
 		GetDirectoriesOrFilesOptions options
 	)

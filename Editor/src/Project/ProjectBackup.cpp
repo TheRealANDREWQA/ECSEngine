@@ -147,9 +147,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 
 	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, assets_folder_directories_storage, ECS_KB);
-	AdditionStream<Stream<wchar_t>> asset_folder_directories;
-	asset_folder_directories.is_capacity = true;
-	asset_folder_directories.capacity_stream = assets_folder_directories_storage;
+	AdditionStream<Stream<wchar_t>> asset_folder_directories = &assets_folder_directories_storage;
 
 	// Create all the folders in the assets folder such that we don't need to check manually for each asset file
 	// If its parent exist or not
@@ -395,9 +393,8 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
 
 		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
-		AdditionStream<Stream<wchar_t>> asset_files_paths;
-		asset_files_paths.is_capacity = false;
-		asset_files_paths.resizable_stream.Initialize(stack_allocator, 0);
+		ResizableStream<Stream<wchar_t>> asset_files_paths(stack_allocator, 0);
+		AdditionStream<Stream<wchar_t>> asset_files_paths_addition = &asset_files_paths;
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, backup_assets_folder, 512);
 		backup_assets_folder.CopyOther(folder);
@@ -409,11 +406,11 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 
 		GetDirectoriesOrFilesOptions get_files_options;
 		get_files_options.relative_root = backup_assets_folder;
-		GetDirectoryFilesWithExtensionRecursive(folder, stack_allocator, asset_files_paths, assets_valid_extensions, get_files_options);
+		GetDirectoryFilesWithExtensionRecursive(folder, stack_allocator, asset_files_paths_addition, assets_valid_extensions, get_files_options);
 
 		unsigned int base_project_assets_folder_size = project_assets_folder.size;
 		unsigned int base_backup_assets_folder_size = backup_assets_folder.size;
-		for (unsigned int index = 0; index < asset_files_paths.Size(); index++) {
+		for (unsigned int index = 0; index < asset_files_paths.size; index++) {
 			project_assets_folder.size = base_project_assets_folder_size;
 			project_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
 			project_assets_folder.AddStreamAssert(asset_files_paths[index]);
@@ -444,17 +441,16 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
 		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
 
-		AdditionStream<Stream<wchar_t>> scene_files;
-		scene_files.is_capacity = false;
-		scene_files.resizable_stream.Initialize(stack_allocator, 0);
+		ResizableStream<Stream<wchar_t>> scene_files(stack_allocator, 0);
+		AdditionStream<Stream<wchar_t>> scene_files_addition = &scene_files;
 		Stream<wchar_t> scene_extension = EDITOR_SCENE_EXTENSION;
 		GetDirectoriesOrFilesOptions get_options;
 		get_options.relative_root = backup_assets_folder;
-		GetDirectoryFilesWithExtensionRecursive(backup_assets_folder, stack_allocator, scene_files, { &scene_extension, 1 }, get_options);
+		GetDirectoryFilesWithExtensionRecursive(backup_assets_folder, stack_allocator, scene_files_addition, { &scene_extension, 1 }, get_options);
 
 		unsigned int backup_assets_folder_base_size = backup_assets_folder.size;
 		unsigned int project_assets_folder_base_size = project_assets_folder.size;
-		for (unsigned int index = 0; index < scene_files.Size(); index++) {
+		for (unsigned int index = 0; index < scene_files.size; index++) {
 			backup_assets_folder.size = backup_assets_folder_base_size;
 			backup_assets_folder.Add(ECS_OS_PATH_SEPARATOR);
 			backup_assets_folder.AddStreamAssert(scene_files[index]);

@@ -313,10 +313,10 @@ namespace ECSEngine {
 			}
 
 			// Now go through all lines that have semicolons remaining and see if they have fields
-			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, semicolons, 512);
-			function::FindToken(type_body, ';', semicolons);
+			ECS_STACK_ADDITION_STREAM(unsigned int, semicolons, 512);
+			function::FindToken(type_body, ';', semicolons_addition);
 
-			for (unsigned int index = 0; index < semicolons.Size(); index++) {
+			for (unsigned int index = 0; index < semicolons.size; index++) {
 				// If the line is empty, skip it
 				Stream<char> previous_range = { type_body.buffer, semicolons[index] };
 				Stream<char> next_range = { type_body.buffer + semicolons[index], type_body.size - semicolons[index] };
@@ -2187,7 +2187,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			constexpr size_t thread_memory = 5'000'000;
 			// Paths that need to be searched will not be assigned here
-			ECS_TEMP_ASCII_STRING(temp_error_message, 1024);
+			ECS_STACK_CAPACITY_STREAM(char, temp_error_message, 1024);
 			if (error_message == nullptr) {
 				error_message = &temp_error_message;
 			}
@@ -2224,15 +2224,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			};
 
 			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files_storage, ECS_KB);
-			AdditionStream<Stream<wchar_t>> files;
-			files.is_capacity = true;
-			files.capacity_stream = files_storage;
+			AdditionStream<Stream<wchar_t>> files = &files_storage;
 			bool status = GetDirectoryFilesWithExtensionRecursive(folders[index].root, allocator, files, { c_file_extensions, std::size(c_file_extensions) });
 			if (!status) {
 				return false;
 			}
 
-			return ProcessFolderHierarchyImplementation(this, index, files.capacity_stream, error_message);
+			return ProcessFolderHierarchyImplementation(this, index, *files.capacity_stream, error_message);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -2253,9 +2251,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			};
 
 			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files_storage, ECS_KB);
-			AdditionStream<Stream<wchar_t>> files;
-			files.is_capacity = true;
-			files.capacity_stream = files_storage;
+			AdditionStream<Stream<wchar_t>> files = &files_storage;
 			bool status = GetDirectoryFilesWithExtensionRecursive(folders[folder_index].root, allocator, files, { c_file_extensions, std::size(c_file_extensions) });
 			if (!status) {
 				return false;
@@ -2267,7 +2263,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			// Process these files on separate threads only if their number is greater than thread count
 			if (files_count < thread_count) {
-				return ProcessFolderHierarchyImplementation(this, folder_index, files.capacity_stream, error_message);
+				return ProcessFolderHierarchyImplementation(this, folder_index, *files.capacity_stream, error_message);
 			}
 
 			unsigned int* path_indices_buffer = (unsigned int*)Allocate(folders.allocator, sizeof(unsigned int) * files_count, alignof(unsigned int));
@@ -2302,7 +2298,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				reflect_thread_data[thread_index].reflection_manager = this;
 				reflect_thread_data[thread_index].valid_paths = &path_indices;
 				reflect_thread_data[thread_index].semaphore = &reflect_semaphore;
-				reflect_thread_data[thread_index].files = files.capacity_stream;
+				reflect_thread_data[thread_index].files = *files.capacity_stream;
 
 				// Launch the task
 				ThreadTask task = ECS_THREAD_TASK_NAME(ReflectionManagerHasReflectStructuresThreadTask, reflect_thread_data + thread_index, 0);
@@ -2317,7 +2313,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			constexpr size_t thread_memory = 10'000'000;
 			ConditionVariable condition_variable;
 
-			ECS_TEMP_ASCII_STRING(temp_error_message, 1024);
+			ECS_STACK_CAPACITY_STREAM(char, temp_error_message, 1024);
 			if (error_message == nullptr) {
 				error_message = &temp_error_message;
 			}
@@ -2598,7 +2594,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		void ReflectionManagerParseThreadTask(unsigned int thread_id, World* world, void* _data) {
 			ReflectionManagerParseStructuresThreadTaskData* data = (ReflectionManagerParseStructuresThreadTaskData*)_data;
 
-			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, words, 1024);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, words, ECS_KB);
+			AdditionStream<unsigned int> words_addition = &words;
 
 			size_t ecs_reflect_size = strlen(STRING(ECS_REFLECT));
 			const size_t MAX_FIRST_LINE_CHARACTERS = 512;
@@ -2629,7 +2626,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					const char* has_reflect = strstr(first_line_characters, STRING(ECS_REFLECT));
 					if (first_new_line != nullptr && has_reflect != nullptr && has_reflect < first_new_line) {
 						// reset words stream
-						words.capacity_stream.size = 0;
+						words.size = 0;
 
 						size_t file_size = GetFileByteSize(file);
 						if (file_size == 0) {
@@ -2669,10 +2666,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						Stream<char> file_stream = { file_contents, bytes_read };
 
 						// Get the constants first
-						ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, constant_offsets, 64);
-						function::FindToken(file_stream, STRING(ECS_CONSTANT_REFLECT), constant_offsets);
+						ECS_STACK_ADDITION_STREAM(unsigned int, constant_offsets, 64);
+						function::FindToken(file_stream, STRING(ECS_CONSTANT_REFLECT), constant_offsets_addition);
 
-						for (size_t constant_index = 0; constant_index < constant_offsets.Size(); constant_index++) {
+						for (size_t constant_index = 0; constant_index < constant_offsets.size; constant_index++) {
 							// Look to see that it is a define
 							Stream<char> search_space = { file_stream.buffer, constant_offsets[constant_index] };
 							const char* last_line = function::FindCharacterReverse(search_space, '\n').buffer;
@@ -2739,12 +2736,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 
 						// search for more ECS_REFLECTs 
-						function::FindToken(file_stream, STRING(ECS_REFLECT), words);
+						function::FindToken(file_stream, STRING(ECS_REFLECT), words_addition);
 
 						const char* tag_name = nullptr;
 
 						size_t last_position = 0;
-						for (size_t word_index = 0; word_index < words.Size(); word_index++) {
+						for (size_t word_index = 0; word_index < words.size; word_index++) {
 							tag_name = nullptr;
 
 							unsigned int word_offset = words[word_index];
@@ -2949,10 +2946,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManagerStylizeEnum(ReflectionEnum& enum_) {
-			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, underscores, 128);
-			function::FindToken(enum_.fields[0], '_', underscores);
+			ECS_STACK_ADDITION_STREAM(unsigned int, underscores, 128);
+			function::FindToken(enum_.fields[0], '_', underscores_addition);
 
-			for (int64_t index = (int64_t)underscores.Size() - 1; index >= 0; index--) {
+			for (int64_t index = (int64_t)underscores.size - 1; index >= 0; index--) {
 				size_t is_the_same_count = 0;
 				for (; is_the_same_count < enum_.fields.size; is_the_same_count++) {
 					if (memcmp(enum_.fields[is_the_same_count].buffer, enum_.fields[0].buffer, underscores[index] - 1) != 0) {
@@ -2995,12 +2992,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// Get all the _ positions that are left. If it contains a digit (like in 3D)
 				// keep the letters capitalized in that section
 				for (index = 0; index < enum_.fields.size; index++) {
-					ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, current_underscores, 32);
-					function::FindToken(enum_.fields[index], '_', current_underscores);
+					ECS_STACK_ADDITION_STREAM(unsigned int, current_underscores, 32);
+					function::FindToken(enum_.fields[index], '_', current_underscores_addition);
 
 					unsigned int last_underscore = -1;
-					ECS_STACK_CAPACITY_ADDITION_STREAM(Stream<char>, partitions, 32);
-					for (size_t subindex = 0; subindex < current_underscores.Size(); subindex++) {
+					ECS_STACK_ADDITION_STREAM(Stream<char>, partitions, 32);
+					for (size_t subindex = 0; subindex < current_underscores.size; subindex++) {
 						// Replace the under score with a space
 						enum_.fields[index][current_underscores[subindex]] = ' ';
 						last_underscore++;
@@ -3011,7 +3008,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					last_underscore++;
 					partitions.Add({ enum_.fields[index].buffer + last_underscore, enum_.fields[index].size - last_underscore });
 
-					for (size_t partition_index = 0; partition_index < partitions.Size(); partition_index++) {
+					for (size_t partition_index = 0; partition_index < partitions.size; partition_index++) {
 						bool lacks_digits = true;
 						for (size_t subindex = 0; lacks_digits && subindex < partitions[partition_index].size; subindex++) {
 							if (function::IsNumberCharacter(partitions[partition_index][subindex])) {
@@ -3042,13 +3039,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			// find next line tokens and exclude the next after the opening paranthese and replace
 			// the closing paranthese with \0 in order to stop searching there
-			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, next_line_positions, 1024);
+			ECS_STACK_ADDITION_STREAM(unsigned int, next_line_positions, 1024);
 
 			const char* dummy_space = strchr(opening_parenthese, '\n') + 1;
 
 			char* closing_paranthese_mutable = (char*)closing_parenthese;
 			*closing_paranthese_mutable = '\0';
-			function::FindToken({ dummy_space, function::PointerDifference(closing_parenthese, dummy_space) }, '\n', next_line_positions);
+			function::FindToken({ dummy_space, function::PointerDifference(closing_parenthese, dummy_space) }, '\n', next_line_positions_addition);
 
 			// assign the subname stream and assert enough memory to hold the pointers
 			uintptr_t ptr = (uintptr_t)data->thread_memory.buffer + data->thread_memory.size;
@@ -3056,7 +3053,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			ptr = function::AlignPointer(ptr, alignof(ReflectionEnum));
 			enum_definition.original_fields = Stream<Stream<char>>((void*)ptr, 0);
 
-			size_t memory_size = sizeof(Stream<char>) * next_line_positions.Size() + alignof(ReflectionEnum);
+			size_t memory_size = sizeof(Stream<char>) * next_line_positions.size + alignof(ReflectionEnum);
 			// We need to double this since we are doing stylized fields and original fields
 			memory_size *= 2;
 			data->thread_memory.size += memory_size;
@@ -3066,7 +3063,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return;
 			}
 
-			for (size_t next_line_index = 0; next_line_index < next_line_positions.Size(); next_line_index++) {
+			for (size_t next_line_index = 0; next_line_index < next_line_positions.size; next_line_index++) {
 				const char* current_character = dummy_space + next_line_positions[next_line_index];
 				while (!IsTypeCharacter(*current_character)) {
 					current_character--;
@@ -3103,10 +3100,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			// find next line tokens and exclude the next after the opening paranthese and replace
 			// the closing paranthese with \0 in order to stop searching there
-			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, next_line_positions, 1024);
+			ECS_STACK_ADDITION_STREAM(unsigned int, next_line_positions, 1024);
 
 			// semicolon positions will help in getting the field name
-			ECS_STACK_CAPACITY_ADDITION_STREAM(unsigned int, semicolon_positions, 512);
+			ECS_STACK_ADDITION_STREAM(unsigned int, semicolon_positions, 512);
 
 			opening_parenthese++;
 			char* closing_paranthese_mutable = (char*)closing_parenthese;
@@ -3173,16 +3170,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// Returns false if an error has happened, else true.
 			// The fields will be added directly into the type on the stack
 			auto get_fields_from_section = [&](const char* start) {
-				next_line_positions.SetSize(0);
-				semicolon_positions.SetSize(0);
+				next_line_positions.size = 0;
+				semicolon_positions.size = 0;
 
 				size_t start_size = strlen(start);
 
 				// Get all the new lines in between the two macros
-				function::FindToken({ start, start_size }, '\n', next_line_positions);
+				function::FindToken({ start, start_size }, '\n', next_line_positions_addition);
 
 				// Get all the semicolons
-				function::FindToken({ start, start_size }, ';', semicolon_positions);
+				function::FindToken({ start, start_size }, ';', semicolon_positions_addition);
 
 				// Process the inline function declarations such that they get rejected.
 				// Do this by removing the semicolons inside them
@@ -3267,13 +3264,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						// Now remove the semicolons and new lines in between
 						unsigned int body_start_offset = function_body_start - start;
 						unsigned int body_end_offset = closed_bracket - start;
-						for (unsigned int index = 0; index < semicolon_positions.Size(); index++) {
+						for (unsigned int index = 0; index < semicolon_positions.size; index++) {
 							if (body_start_offset < semicolon_positions[index] && semicolon_positions[index] < body_end_offset) {
 								semicolon_positions.Remove(index);
 								index--;
 							}
 						}
-						for (unsigned int index = 0; index < next_line_positions.Size(); index++) {
+						for (unsigned int index = 0; index < next_line_positions.size; index++) {
 							if (body_start_offset < next_line_positions[index] && next_line_positions[index] < body_end_offset) {
 								next_line_positions.Remove(index);
 								index--;
@@ -3316,27 +3313,27 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				uintptr_t ptr_before = ptr;
 				ptr = function::AlignPointer(ptr, alignof(ReflectionField));
 				type.fields = Stream<ReflectionField>((void*)ptr, 0);
-				data->thread_memory.size += sizeof(ReflectionField) * semicolon_positions.Size() + alignof(ReflectionField);
-				data->total_memory += sizeof(ReflectionField) * semicolon_positions.Size() + alignof(ReflectionField);
+				data->thread_memory.size += sizeof(ReflectionField) * semicolon_positions.size + alignof(ReflectionField);
+				data->total_memory += sizeof(ReflectionField) * semicolon_positions.size + alignof(ReflectionField);
 				if (data->thread_memory.size > data->thread_memory.capacity) {
 					WriteErrorMessage(data, "Assigning type field stream failed, insufficient memory.", file_index);
 					return false;
 				}
 
-				if (next_line_positions.Size() > 0 && semicolon_positions.Size() > 0) {
+				if (next_line_positions.size > 0 && semicolon_positions.size > 0) {
 					// determining each field
 					unsigned short pointer_offset = 0;
 					unsigned int last_new_line = next_line_positions[0];
 
 					unsigned int current_semicolon_index = 0;
-					for (size_t index = 0; index < next_line_positions.Size() - 1 && current_semicolon_index < semicolon_positions.Size(); index++) {
+					for (size_t index = 0; index < next_line_positions.size - 1 && current_semicolon_index < semicolon_positions.size; index++) {
 						// Check to see if a semicolon is in between the two new lines - if it is, then a definition might exist
 						// for a data member or for a member function
-						while (current_semicolon_index < semicolon_positions.Size() && semicolon_positions[current_semicolon_index] < last_new_line) {
+						while (current_semicolon_index < semicolon_positions.size && semicolon_positions[current_semicolon_index] < last_new_line) {
 							current_semicolon_index++;
 						}
 						// Exit if we have no more semicolons that fit the blocks
-						if (current_semicolon_index >= semicolon_positions.Size()) {
+						if (current_semicolon_index >= semicolon_positions.size) {
 							break;
 						}
 

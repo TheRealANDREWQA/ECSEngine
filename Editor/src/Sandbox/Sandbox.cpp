@@ -387,6 +387,14 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 
 // -------------------------------------------------------------------------------------------------------------
 
+void AddSandboxDebugDrawComponent(EditorState* editor_state, unsigned int sandbox_index, Component component, ECS_COMPONENT_TYPE component_type)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->enabled_debug_draw.Add({ component, component_type });
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
 bool AreAllDefaultSandboxesRunning(const EditorState* editor_state) {
 	return !ForEachSandbox<true>(editor_state, [](const EditorSandbox* sandbox, unsigned int index) {
 		if (sandbox->should_play && sandbox->run_state != EDITOR_SANDBOX_RUNNING) {
@@ -440,23 +448,8 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 		GetSandboxSelectedEntitiesFiltered(editor_state, sandbox_index, &filtered_selected_entities);
 		SetEditorRuntimeSelectedEntities(system_manager, filtered_selected_entities);
 
-		ECS_STACK_CAPACITY_STREAM(TransformGizmoPointers, transform_gizmo_pointers, ECS_KB);
 		ECS_STACK_CAPACITY_STREAM(TransformGizmo, transform_gizmos, ECS_KB);
-		GetSandboxSelectedVirtualEntitiesTransformPointers(editor_state, sandbox_index, &transform_gizmo_pointers);
-		for (unsigned int index = 0; index < transform_gizmo_pointers.size; index++) {
-			TransformGizmoPointers gizmo_pointer = transform_gizmo_pointers[index];
-
-			transform_gizmos[index].position = *gizmo_pointer.position;
-			if (gizmo_pointer.euler_rotation != nullptr) {
-				if (gizmo_pointer.is_euler_rotation) {
-					transform_gizmos[index].rotation = QuaternionFromEuler(*gizmo_pointer.euler_rotation).StorageLow();
-				}
-				else {
-					transform_gizmos[index].rotation = *gizmo_pointer.quaternion_rotation;
-				}
-			}
-		}
-		transform_gizmos.size = transform_gizmo_pointers.size;
+		GetSandboxSelectedVirtualEntitiesTransformGizmos(editor_state, sandbox_index, &transform_gizmos);
 		// Inject these controls into the system manager
 		SetEditorExtraTransformGizmos(system_manager, transform_gizmos);
 
@@ -468,8 +461,6 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 		transform_tool.tool = sandbox->transform_tool;
 		transform_tool.display_axes = sandbox->transform_display_axes;
 		if (transform_tool.display_axes) {
-			// Odd number of key presses means keep the same transform space as the global one
-			// Even means invert it
 			transform_tool.space = sandbox->transform_keyboard_space;
 		}
 		else {
@@ -749,12 +740,162 @@ void DisableSandboxViewportRendering(EditorState* editor_state, unsigned int san
 	GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport] = false;
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void DisableSandboxDebugDrawAll(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->enabled_debug_draw.FreeBuffer();
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void DrawSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	if (sandbox->enabled_debug_draw.size > 0) {
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+		ModuleDebugDrawElement* debug_elements = (ModuleDebugDrawElement*)stack_allocator.Allocate(sizeof(ModuleDebugDrawElement) * sandbox->enabled_debug_draw.size);
+		for (unsigned int index = 0; index < sandbox->enabled_debug_draw.size; index++) {
+			debug_elements[index].draw_function = nullptr;
+		}
+
+		// Match all the entries before that
+		for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+			GetModuleMatchedDebugDrawComponents(
+				editor_state, 
+				sandbox->modules_in_use[index].module_index, 
+				sandbox->modules_in_use[index].module_configuration, 
+				sandbox->enabled_debug_draw, 
+				debug_elements
+			);
+		}
+		// Also take into account the ecs debug draws
+		ModuleMatchDebugDrawElements(sandbox->enabled_debug_draw, editor_state->ecs_debug_draw, debug_elements);
+
+		DebugDrawer* debug_drawer = sandbox->sandbox_world.debug_drawer;
+		const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+		for (unsigned int index = 0; index < sandbox->enabled_debug_draw.size; index++) {
+			// If for some reason it couldn't be matched, skip it
+			ModuleDebugDrawComponentFunction draw_function = debug_elements[index].draw_function;
+			if (draw_function != nullptr) {
+				ECS_COMPONENT_TYPE type = debug_elements[index].component_type;
+				Stream<ComponentWithType> dependencies = debug_elements[index].Dependencies();
+
+				auto draw_with_dependencies = [&]() {
+					// Use signature based
+					Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+					Component shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+					ComponentSignature unique_signature = { unique_components, 0 };
+					ComponentSignature shared_signature = { shared_components, 0 };
+					if (type == ECS_COMPONENT_UNIQUE) {
+						unique_components[unique_signature.count++] = debug_elements[index].component;
+					}
+					else {
+						shared_components[shared_signature.count++] = debug_elements[index].component;
+					}
+					for (size_t subindex = 0; subindex < dependencies.size; index++) {
+						if (dependencies[subindex].type == ECS_COMPONENT_SHARED) {
+							shared_components[shared_signature.count++] = dependencies[subindex].component;
+						}
+						else {
+							unique_components[unique_signature.count++] = dependencies[subindex].component;
+						}
+					}
+
+					active_entity_manager->ForEachEntityWithSignature(ArchetypeQuery{ unique_signature, shared_signature },
+						[&](Entity entity, const void** unique, const void** shared) {
+							ModuleDebugDrawComponentFunctionData draw_data;
+							draw_data.thread_id = 0;
+							draw_data.debug_drawer = debug_drawer;
+
+							unsigned int unique_index = 0;
+							unsigned int shared_index = 0;
+							if (type == ECS_COMPONENT_UNIQUE) {
+								draw_data.component = unique[0];
+								unique_index++;
+							}
+							else {
+								draw_data.component = shared[0];
+								shared_index++;
+							}
+
+							ECS_STACK_CAPACITY_STREAM(void*, dependency_components, ECS_ARCHETYPE_MAX_COMPONENTS);
+							draw_data.dependency_components = (const void**)dependency_components.buffer;
+							for (size_t index = 0; index < dependencies.size; index++) {
+								draw_data.dependency_components[index] = dependencies[index].type == ECS_COMPONENT_UNIQUE ? unique[unique_index++] : shared[shared_index++];
+							}
+							draw_function(&draw_data);
+						});
+				};
+
+				if (type == ECS_COMPONENT_UNIQUE) {
+					if (dependencies.size == 0) {
+						active_entity_manager->ForEachEntityComponent(debug_elements[index].component, [debug_drawer, draw_function](Entity entity, const void* data) {
+							// At the moment just give the thread_id 0 when running in a single thread
+							ModuleDebugDrawComponentFunctionData draw_data;
+							draw_data.debug_drawer = debug_drawer;
+							draw_data.component = data;
+							draw_data.dependency_components = nullptr;
+							draw_data.thread_id = 0;
+							draw_function(&draw_data);
+						});
+					}
+					else {
+						draw_with_dependencies();
+					}
+				}
+				else if (type == ECS_COMPONENT_SHARED) {
+					if (dependencies.size == 0) {
+						active_entity_manager->ForEachSharedInstance(debug_elements[index].component, 
+							[=](SharedInstance instance) {
+							// At the moment just give the thread_id 0 when running in a single thread
+							ModuleDebugDrawComponentFunctionData draw_data;
+							draw_data.debug_drawer = debug_drawer;
+							draw_data.component = active_entity_manager->GetSharedData(debug_elements[index].component, instance);
+							draw_data.dependency_components = nullptr;
+							draw_data.thread_id = 0;
+							draw_function(&draw_data);
+						});
+					}
+					else {
+						draw_with_dependencies();
+					}
+				}
+				else if (type == ECS_COMPONENT_GLOBAL) {
+					// At the moment just give the thread_id 0 when running in a single thread
+					ModuleDebugDrawComponentFunctionData draw_data;
+					draw_data.debug_drawer = debug_drawer;
+					draw_data.component = active_entity_manager->GetGlobalComponent(debug_elements[index].component);
+					draw_data.dependency_components = nullptr;
+					draw_data.thread_id = 0;
+					draw_function(&draw_data);
+				}
+				else {
+					ECS_ASSERT(false, "Invalid component type");
+				}
+			}
+		}
+	}
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------
 
 void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
 	GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport] = true;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void EnableSandboxDebugDrawAll(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->enabled_debug_draw.FreeBuffer();
+	// Get all the debug draw components for this sandbox
+	AdditionStream<ComponentWithType> addition_stream = &sandbox->enabled_debug_draw;
+	GetSandboxAllPossibleDebugDrawComponents(editor_state, sandbox_index, addition_stream);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -909,6 +1050,33 @@ void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_i
 	runtime_graphics->GetContext()->Flush();
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool ExistsSandboxDebugDrawComponentFunction(const EditorState* editor_state, unsigned int sandbox_index, Component component, ECS_COMPONENT_TYPE type)
+{
+	// Check the ecs first
+	ComponentWithType component_with_type = { component, type };
+	size_t ecs_index = editor_state->ecs_debug_draw.Find(component_with_type, [](ModuleDebugDrawElement element) {
+		return ComponentWithType{ element.component, element.component_type };
+		});
+	if (ecs_index != -1) {
+		return true;
+	}
+
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		const EditorModuleInfo* info = GetSandboxModuleInfo(editor_state, sandbox_index, index);
+		size_t debug_index = info->ecs_module.debug_draw_elements.Find(component_with_type, [](ModuleDebugDrawElement element) {
+			return ComponentWithType{ element.component, element.component_type };
+		});
+		if (debug_index != -1) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------
 
 void GetSandboxRuntimeSettingsPath(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<wchar_t>& path)
@@ -951,6 +1119,20 @@ void GetSandboxAvailableRuntimeSettings(
 		data->paths->AddAssert(function::StringCopy(data->allocator, stem));
 		return true;
 	});
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxAllPossibleDebugDrawComponents(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	AdditionStream<ComponentWithType> components
+)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		GetModuleDebugDrawComponents(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration, components);
+	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1019,13 +1201,9 @@ void GetSandboxSelectedVirtualEntities(const EditorState* editor_state, unsigned
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxSelectedVirtualEntitiesTransformPointers(
-	EditorState* editor_state, 
-	unsigned int sandbox_index, 
-	CapacityStream<TransformGizmoPointers>* pointers,
-	CapacityStream<Entity>* entities
-)
-{
+// The functor receives (TransformGizmoPointers pointers, Entity entity) as parameters
+template<typename Functor>
+static void ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo(EditorState* editor_state, unsigned int sandbox_index, Functor&& functor) {
 	// Pre-determine these buffers before the main iteration
 	ECS_STACK_CAPACITY_STREAM(GlobalComponentTransformGizmos, transform_gizmos, ECS_KB);
 	GetSandboxComponentTransformGizmos(editor_state, sandbox_index, &transform_gizmos);
@@ -1040,10 +1218,10 @@ void GetSandboxSelectedVirtualEntitiesTransformPointers(
 
 	ECS_STACK_CAPACITY_STREAM(TransformGizmoPointers, transform_pointers, ECS_KB);
 	GetGlobalComponentTransformGizmoPointers(
-		editor_state->editor_components.internal_manager, 
-		transform_gizmos, 
-		transform_gizmos_data, 
-		&transform_pointers, 
+		editor_state->editor_components.internal_manager,
+		transform_gizmos,
+		transform_gizmos_data,
+		&transform_pointers,
 		false
 	);
 
@@ -1068,10 +1246,7 @@ void GetSandboxSelectedVirtualEntitiesTransformPointers(
 								sizeof(Entity)
 							) != -1;
 							if (is_selected) {
-								pointers->AddAssert(transform_pointers[index]);
-								if (entities != nullptr) {
-									entities->AddAssert(sandbox->virtual_entities_slots[subindex]);
-								}
+								functor(transform_pointers[index], sandbox->virtual_entities_slots[subindex]);
 							}
 							break;
 						}
@@ -1080,6 +1255,41 @@ void GetSandboxSelectedVirtualEntitiesTransformPointers(
 			}
 		}
 	}
+}
+
+void GetSandboxSelectedVirtualEntitiesTransformPointers(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	CapacityStream<TransformGizmoPointers>* pointers,
+	CapacityStream<Entity>* entities
+)
+{
+	ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo(editor_state, sandbox_index, [&](TransformGizmoPointers pointers_value, Entity virtual_entity) {
+		pointers->AddAssert(pointers_value);
+		if (entities != nullptr) {
+			entities->AddAssert(virtual_entity);
+		}
+	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxSelectedVirtualEntitiesTransformGizmos(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	CapacityStream<TransformGizmo>* gizmos, 
+	CapacityStream<Entity>* entities
+)
+{
+	// It is safe to cast the pointer to mutable inside here since the function does not mutate anything
+	// It takes the parameter as mutable reference since it returns pointers to values inside the entities,
+	// But since we don't modify them it's safe to leave it as const pointer in the signature
+	ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo((EditorState*)editor_state, sandbox_index, [&](TransformGizmoPointers pointers_value, Entity virtual_entity) {
+		gizmos->AddAssert(pointers_value.ToValue());
+		if (entities != nullptr) {
+			entities->AddAssert(virtual_entity);
+		}
+	});
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1143,6 +1353,20 @@ void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_in
 bool IsSandboxGizmoEntity(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
 	return FindSandboxVirtualEntitySlot(editor_state, sandbox_index, entity).slot_type != EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxDebugDrawEnabled(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component component, 
+	ECS_COMPONENT_TYPE component_type
+)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	ComponentWithType component_with_type = { component, component_type };
+	return sandbox->enabled_debug_draw.Find(component_with_type, [](ComponentWithType element) { return element; }) != -1;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1329,6 +1553,9 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	// Initialize the selected entities
 	sandbox->selected_entities.Initialize(sandbox_allocator, 0);
 	sandbox->selected_entities_changed_counter = 0;
+
+	// Initialize the debug draw components
+	sandbox->enabled_debug_draw.Initialize(sandbox_allocator, 0);
 
 	// Initialize the runtime module snapshots and their allocator
 	sandbox->runtime_module_snapshot_allocator = MemoryManager(ECS_KB * 8, 1024, ECS_KB * 256, sandbox_allocator);
@@ -1574,6 +1801,9 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		// Prepare and run the world once
 		PrepareWorld(&sandbox->sandbox_world);
 
+		// Draw the sandbox debug elements before the actual frame
+		DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
+
 		DoFrame(&sandbox->sandbox_world);
 
 		sandbox->sandbox_world.entity_manager = runtime_entity_manager;
@@ -1764,6 +1994,22 @@ void RemoveSandboxVirtualEntitiesSlot(EditorState* editor_state, unsigned int sa
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void RemoveSandboxDebugDrawComponent(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component component, 
+	ECS_COMPONENT_TYPE component_type
+)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	unsigned int index = sandbox->enabled_debug_draw.Find(ComponentWithType{ component, component_type }, [](ComponentWithType element) { return element; });
+	if (index != -1) {
+		sandbox->enabled_debug_draw.RemoveSwapBack(index);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool is_step)
 {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 256, ECS_MB * 8);
@@ -1807,6 +2053,9 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	if (sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME].x != 0 && sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME].y != 0) {
 		ResizeSandboxRenderTextures(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME, sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME]);
 	}
+
+	// Add the sandbox debug elements
+	DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
 
 	GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(GetAllocatorPolymorphic(&stack_allocator));

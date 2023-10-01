@@ -193,7 +193,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 	ProjectModules* project_modules = editor_state->project_modules;
 
 	if (!ExistsFileOrFolder(solution_path)) {
-		ECS_TEMP_ASCII_STRING(error_message, 256);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 		error_message.size = function::FormatString(error_message.buffer, "Project module {#} solution does not exist.", solution_path);
 		error_message.AssertCapacity();
 		EditorSetConsoleError(error_message);
@@ -202,7 +202,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 
 	unsigned int module_index = GetModuleIndex(editor_state, solution_path);
 	if (module_index != -1) {
-		ECS_TEMP_ASCII_STRING(error_message, 256);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 		error_message.size = function::FormatString(error_message.buffer, "Project module {#} already exists.", solution_path);
 		error_message.AssertCapacity();
 		EditorSetConsoleError(error_message);
@@ -282,7 +282,7 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 	}
 	// Change the extension from .build/.rebuild/.clean to txt
 	Stream<wchar_t> extension = function::PathExtension(data->path);
-	ECS_TEMP_STRING(log_path, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, log_path, 512);
 
 	log_path.CopyOther(data->path);
 	Stream<wchar_t> log_extension = function::PathExtension(log_path);
@@ -717,9 +717,9 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 
 	// Construct the system string
 #ifdef MODULE_BUILD_USING_CRT
-	ECS_TEMP_ASCII_STRING(command_string, 512);
+	ECS_STACK_CAPACITY_STREAM(char, command_string, 512);
 #else
-	ECS_TEMP_STRING(command_string, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, command_string, 512);
 #endif
 
 	wchar_t _log_path[512];
@@ -760,7 +760,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		return EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING;
 	}
 	else {
-		ECS_TEMP_STRING(flag_file, 256);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, flag_file, 256);
 		GetProjectDebugFolder(editor_state, flag_file);
 		flag_file.Add(ECS_OS_PATH_SEPARATOR);
 		GetModuleBuildFlagFile(editor_state, index, configuration, command, flag_file);
@@ -950,7 +950,7 @@ void PrintConsoleMessageForBuildCommand(
 {
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[module_index].library_name;
 	Stream<char> configuration_string = MODULE_CONFIGURATIONS[configuration];
-	ECS_TEMP_ASCII_STRING(console_message, 256);
+	ECS_STACK_CAPACITY_STREAM(char, console_message, 256);
 	switch (command_status) {
 	case EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING:
 		ECS_FORMAT_STRING(console_message, "Command for module {#} with configuration {#} launched successfully.", library_name, configuration_string);
@@ -988,7 +988,7 @@ void RebuildModules(
 
 void DeleteModuleFlagFiles(EditorState* editor_state)
 {
-	ECS_TEMP_STRING(debug_path, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, debug_path, 512);
 	GetProjectDebugFolder(editor_state, debug_path);
 
 	auto functor = [](Stream<wchar_t> path, void* _data) {
@@ -1410,7 +1410,7 @@ size_t GetModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 		return true;
 	};
 
-	ECS_TEMP_STRING(null_terminated_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 256);
 	null_terminated_path.CopyOther(solution_path);
 	null_terminated_path.AddAssert(L'\0');
 	size_t solution_last_write = 0;
@@ -1423,7 +1423,7 @@ size_t GetModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 // -------------------------------------------------------------------------------------------------------------------------
 
 size_t GetModuleLibraryLastWrite(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration) {
-	ECS_TEMP_STRING(module_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, module_path, 256);
 	GetModulePath(editor_state, library_name, configuration, module_path);
 
 	size_t last_write = 0;
@@ -1511,10 +1511,10 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 	Stream<wchar_t> library_name = modules->buffer[index].library_name;
-	ECS_TEMP_STRING(library_path, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, library_path, 512);
 	GetModulePath(editor_state, library_name, configuration, library_path);
 
-	ECS_TEMP_STRING(temporary_library, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, temporary_library, 512);
 	if (ExistsFileOrFolder(library_path)) {
 		// Copy the .dll to a temporary dll such that it will allow building the module again
 		bool copy_success = CreateEditorModuleTemporaryDLL(library_path, temporary_library);
@@ -1524,7 +1524,22 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 			if (info->ecs_module.base_module.code == ECS_GET_MODULE_OK) {
 				AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
 
-				LoadAppliedModule(&info->ecs_module, allocator);
+				ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB * 32);
+				LoadAppliedModule(&info->ecs_module, allocator, &error_message);
+				if (error_message.size > 0) {
+					// At the moment just warn
+					EditorSetConsoleWarn(error_message);
+				}
+
+				// Check the debug drawer functions in the context of the module reflection manager
+				// Since updating the internal_reflection might result in events being generated and the state
+				// Not match the reality
+				error_message.size = 0;
+				ModuleValidateDebugDrawComponentsExist(info->ecs_module.debug_draw_elements, editor_state->ModuleReflectionManager(), &error_message);
+				if (error_message.size > 0) {
+					// At the moment just warn - these are not critical
+					EditorSetConsoleWarn(error_message);
+				}
 
 				info->load_status = EDITOR_MODULE_LOAD_GOOD;
 				return true;
@@ -1552,7 +1567,7 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 
 	Reflection::ReflectionManager* module_reflection = editor_state->ModuleReflectionManager();
 
-	ECS_TEMP_STRING(source_path, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, source_path, 512);
 	bool success = GetModuleReflectSolutionPath(editor_state, index, source_path);
 	if (success) {
 		unsigned int folder_hierarchy = module_reflection->GetHierarchyIndex(source_path);
@@ -1720,9 +1735,41 @@ ModuleExtraInformation GetModuleExtraInformation(const EditorState* editor_state
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+void GetModuleDebugDrawComponents(
+	const EditorState* editor_state, 
+	unsigned int module_index, 
+	EDITOR_MODULE_CONFIGURATION configuration, 
+	AdditionStream<ComponentWithType> components
+)
+{
+	const EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, configuration);
+	Stream<ModuleDebugDrawElement> elements = info->ecs_module.debug_draw_elements;
+	components.AssertNewItems(elements.size);
+	for (size_t index = 0; index < elements.size; index++) {
+		components.Add({ elements[index].component, elements[index].component_type });
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModuleMatchedDebugDrawComponents(
+	const EditorState* editor_state, 
+	unsigned int module_index, 
+	EDITOR_MODULE_CONFIGURATION configuration, 
+	Stream<ComponentWithType> components, 
+	ModuleDebugDrawElement* debug_elements
+)
+{
+	const EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, configuration);
+	Stream<ModuleDebugDrawElement> elements = info->ecs_module.debug_draw_elements;
+	ModuleMatchDebugDrawElements(components, elements, debug_elements);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration)
 {
-	ECS_TEMP_STRING(library_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, library_path, 256);
 	GetModulePath(editor_state, library_name, configuration, library_path);
 	return FindModule(library_path);
 }
@@ -1866,7 +1913,7 @@ void ReleaseModule(EditorState* editor_state, unsigned int index) {
 void ReleaseModuleReflection(EditorState* editor_state, unsigned int index)
 {
 	// Destroy all the types for this module
-	ECS_TEMP_STRING(source_path, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, source_path, 512);
 	bool success = GetModuleReflectSolutionPath(editor_state, index, source_path);
 	if (success) {
 		// Release the UI types
@@ -1903,7 +1950,7 @@ void RemoveModule(EditorState* editor_state, Stream<wchar_t> solution_path)
 		RemoveModule(editor_state, module_index);
 		return;
 	}
-	ECS_TEMP_ASCII_STRING(error_message, 256);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 	error_message.size = function::FormatString(error_message.buffer, "Removing project module {#} failed. No such module exists.", solution_path);
 	EditorSetConsoleError(error_message);
 }
@@ -1917,7 +1964,7 @@ void RemoveModuleAssociatedFiles(EditorState* editor_state, unsigned int module_
 	// Delete the associated files
 	Stream<Stream<wchar_t>> associated_file_extensions(MODULE_ASSOCIATED_FILES, MODULE_ASSOCIATED_FILES_SIZE());
 
-	ECS_TEMP_STRING(path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
 	GetModulesFolder(editor_state, path);
 	GetModuleStem(modules->buffer[module_index].library_name, configuration, path);
 	size_t path_size = path.size;
@@ -2000,7 +2047,7 @@ void TickUpdateModulesDLLImports(EditorState* editor_state)
 
 size_t GetVisualStudioLockedFilesSize(const EditorState* editor_state)
 {
-	ECS_TEMP_STRING(module_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, module_path, 256);
 	GetModulesFolder(editor_state, module_path);
 
 	auto file_functor = [](Stream<wchar_t> path, void* data) {
@@ -2020,7 +2067,7 @@ size_t GetVisualStudioLockedFilesSize(const EditorState* editor_state)
 // -------------------------------------------------------------------------------------------------------------------------
 
 void DeleteVisualStudioLockedFiles(const EditorState* editor_state) {
-	ECS_TEMP_STRING(module_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, module_path, 256);
 	GetModulesFolder(editor_state, module_path);
 
 	auto file_functor = [](Stream<wchar_t> path, void* data) {

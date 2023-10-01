@@ -162,7 +162,7 @@ void AddModuleWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		if (data->os_data.get_file_data.path.size > 0) {
 			Stream<wchar_t> stem = function::PathStem(data->os_data.get_file_data.path);
 
-			ECS_TEMP_ASCII_STRING(ascii_stem, 256);
+			ECS_STACK_CAPACITY_STREAM(char, ascii_stem, 256);
 			function::ConvertWideCharsToASCII(stem, ascii_stem);
 			data->library_input->DeleteAllCharacters();
 			if (stem.size > 0) {
@@ -199,7 +199,7 @@ void AddModuleWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 
 		AddData* data = (AddData*)_data;
 		if (data->folder_data->is_data_valid) {
-			ECS_TEMP_STRING(library_name, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, library_name, 256);
 			function::ConvertASCIIToWide(library_name, *data->library_name);
 			data->solution_path_wide->size = wcslen(data->solution_path_wide->buffer);
 
@@ -337,7 +337,7 @@ struct ModuleExplorerRunModuleBuildCommandData {
 // --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* command_statuses) {
-	ECS_TEMP_ASCII_STRING(console_message, 8192);
+	ECS_STACK_CAPACITY_STREAM(char, console_message, 8192);
 
 	const ProjectModules* modules = editor_state->project_modules;
 	unsigned int counts_for_status_type[EDITOR_LAUNCH_BUILD_COMMAND_COUNT] = { 0 };
@@ -483,7 +483,7 @@ void ModuleExplorerOpenBuildLog(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* data = (EditorState*)_data;
-	ECS_TEMP_STRING(log_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, log_path, 256);
 	GetProjectDebugFolder(data, log_path);
 	
 	// ECSEngine Text file display
@@ -504,7 +504,7 @@ void ModuleExplorerOpenModuleFolder(ActionData* action_data) {
 	EditorState* data = (EditorState*)_data;
 	
 	const ProjectFile* project_file = (const ProjectFile*)data->project_file;
-	ECS_TEMP_STRING(path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
 	path.CopyOther(project_file->path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
 	path.AddStream(PROJECT_MODULES_RELATIVE_PATH);
@@ -573,7 +573,7 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 
 	UIDrawConfig config;
 
-	ECS_TEMP_ASCII_STRING(error_message, 256);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 
 #pragma region Header
 
@@ -624,7 +624,7 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 		set_configuration_handlers[1] = { ModuleExplorerSetAllRelease, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		set_configuration_handlers[2] = { ModuleExplorerSetAllDistribution, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 
-		ECS_TEMP_ASCII_STRING(set_module_configuration_menu_characters, 256);
+		ECS_STACK_CAPACITY_STREAM(char, set_module_configuration_menu_characters, 256);
 		for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
 			set_module_configuration_menu_characters.AddStream(MODULE_CONFIGURATIONS[index]);
 			set_module_configuration_menu_characters.AddAssert('\n');
@@ -757,7 +757,7 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 		drawer.SpriteRectangle(MODULE_SPRITE_CONFIGURATION, config, status_texture, status_color);
 		drawer.Indent();
 
-		ECS_TEMP_ASCII_STRING(ascii_module_name, 256);
+		ECS_STACK_CAPACITY_STREAM(char, ascii_module_name, 256);
 		function::ConvertWideCharsToASCII(module_name, ascii_module_name);
 		ascii_module_name[ascii_module_name.size] = '\0';
 

@@ -3438,6 +3438,7 @@ namespace ECSEngine {
 						*data->value_to_modify = new_value;
 						if (data->callback.action != nullptr) {
 							action_data->data = data->callback.data;
+							action_data->additional_data = data->value_to_modify;
 							data->callback.action(action_data);
 						}
 					}
@@ -3542,6 +3543,7 @@ namespace ECSEngine {
 								else {
 									action_data->data = function::OffsetPointer(data, sizeof(*data));
 								}
+								action_data->additional_data = data->value_to_modify;
 								data->callback(action_data);
 							};
 
@@ -9510,7 +9512,7 @@ namespace ECSEngine {
 		UIDrawerArrayData* UIDrawer::ArrayInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, size_t element_count) {
 			UIDrawerArrayData* data = nullptr;
 
-			ECS_TEMP_ASCII_STRING(data_name, 256);
+			ECS_STACK_CAPACITY_STREAM(char, data_name, 256);
 			data_name.CopyOther(name);
 			data_name.AddStream(" data");
 			data_name.AddAssert('\0');

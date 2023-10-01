@@ -54,7 +54,7 @@ void DeallocateHubProjects(EditorState* editor_state)
 void AddExistingProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	ECS_TEMP_STRING(path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
 	char temp_characters[256];
 	CapacityStream<char> error_message(temp_characters, 0, 256);
 	OS::FileExplorerGetFileData get_data;

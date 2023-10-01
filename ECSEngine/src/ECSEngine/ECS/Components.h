@@ -102,9 +102,12 @@ namespace ECSEngine {
 
 	struct ModuleRegisterLinkComponentFunctionData;
 	struct ModuleRegisterExtraInformationFunctionData;
+	struct ModuleRegisterDebugDrawFunctionData;
 
 	ECSENGINE_API void RegisterECSLinkComponents(ModuleRegisterLinkComponentFunctionData* register_data);
 
 	ECSENGINE_API void RegisterECSModuleExtraInformation(ModuleRegisterExtraInformationFunctionData* register_data);
+
+	ECSENGINE_API void RegisterECSDebugDrawElements(ModuleRegisterDebugDrawFunctionData* register_data);
 
 }

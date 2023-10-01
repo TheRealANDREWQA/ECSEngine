@@ -29,7 +29,7 @@ struct SaveCurrentProjectConfirmationData {
 // -------------------------------------------------------------------------------------------------------------------
 
 void CreateProjectMisc(ProjectOperationData* data) {
-	ECS_TEMP_STRING(new_console_dump_stream, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, new_console_dump_stream, 512);
 
 	new_console_dump_stream.AddStreamSafe(data->file_data->path);
 	new_console_dump_stream.AddStreamSafe(CONSOLE_RELATIVE_DUMP_PATH);
@@ -79,7 +79,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 				return;
 			}
 			else {
-				ECS_TEMP_ASCII_STRING(description, 256);
+				ECS_STACK_CAPACITY_STREAM(char, description, 256);
 				description.size = function::FormatString(description.buffer, "Folder {#} already exists. Do you want to keep it or clean it?", PROJECT_DIRECTORIES[index]);
 				description.AssertCapacity();
 				ChooseOptionWindowData choose_data;
@@ -118,7 +118,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 	GetProjectBackupFolder(data->editor_state, backup_folder);
 	bool success = HideFolder(backup_folder);
 
-	ECS_TEMP_STRING(default_template, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, default_template, 256);
 	default_template.CopyOther(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
 	default_template.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 	ProjectOperationData temp_data = *data;
@@ -141,7 +141,7 @@ void CreateProject(ProjectOperationData* data)
 	UISystem* ui_system = data->editor_state->ui_system;
 
 	if (ExistsProjectInFolder(data->file_data)) {
-		ECS_TEMP_ASCII_STRING(error_message, 256);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 		error_message.size = function::FormatString(error_message.buffer, "A project in {#} already exists. Do you want to overwrite it?", data->file_data->path);
 		if (data->error_message.buffer != nullptr) {
 			data->error_message.CopyOther(error_message);
@@ -156,7 +156,7 @@ void CreateProject(ProjectOperationData* data)
 			UI_UNPACK_ACTION_DATA;
 
 			DeleteData* data = (DeleteData*)_data;
-			ECS_TEMP_STRING(temp_string, 256);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, temp_string, 256);
 
 			Stream<wchar_t> extension_[1] = { PROJECT_EXTENSION };
 			Stream<Stream<wchar_t>> extension(extension_, 1);
@@ -196,7 +196,7 @@ void CreateProject(ProjectOperationData* data)
 			}
 
 			if (!success) {
-				ECS_TEMP_ASCII_STRING(error_message, 256);
+				ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 				error_message.size = function::FormatString(error_message.buffer, "Overwriting project {#} failed.", project_path);
 				error_message.AssertCapacity();
 				CreateErrorMessageWindow(system, error_message);
@@ -225,7 +225,7 @@ void CreateProject(ProjectOperationData* data)
 			CreateErrorMessageWindow(ui_system, data->error_message);
 		}
 		else {
-			ECS_TEMP_ASCII_STRING(error_message, 256);
+			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 			error_message.size = function::FormatString(error_message.buffer, "Error when creating project {#}.", data->file_data->path);
 			error_message.AssertCapacity();
 			CreateErrorMessageWindow(ui_system, error_message);
@@ -469,7 +469,7 @@ void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data)
 // -------------------------------------------------------------------------------------------------------------------
 
 bool OpenProjectFile(ProjectOperationData data, bool info_only) {
-	ECS_TEMP_STRING(project_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, project_path, 256);
 	GetProjectFilePath(data.file_data, project_path);
 
 	ProjectFile temp_project_file;
@@ -596,7 +596,7 @@ bool OpenProject(ProjectOperationData data)
 
 	DeallocateCurrentProject(data.editor_state);
 
-	ECS_TEMP_STRING(ui_template_stream, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, ui_template_stream, 256);
 	ui_template_stream.CopyOther(data.file_data->path);
 	ui_template_stream.Add(ECS_OS_PATH_SEPARATOR);
 	ui_template_stream.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);
@@ -646,7 +646,7 @@ bool OpenProject(ProjectOperationData data)
 		}
 	}
 	else {
-		ECS_TEMP_STRING(default_template_path, 256);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, default_template_path, 256);
 		default_template_path.CopyOther(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
 		default_template_path.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 
@@ -658,7 +658,7 @@ bool OpenProject(ProjectOperationData data)
 		}
 		else {
 			CreateProjectDefaultUI(data.editor_state);
-			ECS_TEMP_ASCII_STRING(error_message, 256);
+			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 			bool success = SaveProjectUITemplate(ui_system, ui_template, error_message);
 			if (!success) {
 				return false;
@@ -734,7 +734,7 @@ void OpenProjectAction(ActionData* action_data)
 
 void RepairProjectAuxiliaryDirectories(ProjectOperationData data)
 {
-	ECS_TEMP_STRING(project_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, project_path, 256);
 	project_path.CopyOther(data.file_data->path);
 	project_path.Add(ECS_OS_PATH_SEPARATOR);
 	
@@ -795,7 +795,7 @@ void SaveProjectFileAction(ActionData* action_data) {
 			CreateErrorMessageWindow(system, data->error_message);
 		}
 		else {
-			ECS_TEMP_ASCII_STRING(error_message, 256);
+			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 			wchar_t project_name_characters[256];
 			CapacityStream<wchar_t> project_name(project_name_characters, 0, 256);
 			GetProjectFilePath(data->file_data, project_name);
@@ -838,7 +838,7 @@ void SaveProjectAction(ActionData* action_data) {
 			CreateErrorMessageWindow(system, data->error_message);
 		}
 		else {
-			ECS_TEMP_ASCII_STRING(error_message, 256);
+			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 			wchar_t project_name_characters[256];
 			CapacityStream<wchar_t> project_name(project_name_characters, 0, 256);
 			GetProjectFilePath(data->file_data, project_name);
@@ -937,7 +937,7 @@ ECS_THREAD_TASK(SaveProjectThreadTask) {
 	EditorState* editor_state = (EditorState*)_data;
 	ProjectFile* project_file = editor_state->project_file;
 
-	ECS_TEMP_STRING(template_path, 256);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, template_path, 256);
 	template_path.CopyOther(project_file->path);
 	template_path.Add(ECS_OS_PATH_SEPARATOR);
 	template_path.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);

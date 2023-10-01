@@ -901,10 +901,15 @@ void FinishReloadAsset(EditorState* editor_state, Stream<UpdateAssetToComponentE
 			if (handle == -1) {
 				handle = editor_state->asset_database->FindAssetEx(update_elements[index].old_asset, update_elements[index].type);
 			}
-			const void* metadata = editor_state->asset_database->GetAssetConst(handle, update_elements[index].type);
-			GetAssetSandboxesInUse(editor_state, metadata, update_elements[index].type, &current_sandboxes);
 
-			function::StreamAddUniqueSearchBytes(update_dirty_sandboxes, current_sandboxes);
+			// It might happen that the asset is invalid before hand and it still is invalid
+			// In that case, don't do anything
+			if (handle != -1) {
+				const void* metadata = editor_state->asset_database->GetAssetConst(handle, update_elements[index].type);
+				GetAssetSandboxesInUse(editor_state, metadata, update_elements[index].type, &current_sandboxes);
+
+				function::StreamAddUniqueSearchBytes(update_dirty_sandboxes, current_sandboxes);
+			}
 		}
 
 		// Proceed with the re-rendering of the sandboxes which use these assets
@@ -990,7 +995,7 @@ EDITOR_EVENT(ReloadEvent) {
 			for (size_t index = 0; index < data->asset_handles[asset_type].size; index++) {
 				unsigned int handle = data->asset_handles[asset_type][index];
 				UpdateAssetToComponentElement update_element = ReloadAssetTaskIteration(editor_state, handle, asset_type, assets_folder);
-				if (update_element.type != ECS_ASSET_TYPE_COUNT) {
+				if (update_element.type != ECS_ASSET_TYPE_COUNT && update_element.IsAssetDifferent()) {
 					update_elements.AddAssert(update_element);
 				}
 			}

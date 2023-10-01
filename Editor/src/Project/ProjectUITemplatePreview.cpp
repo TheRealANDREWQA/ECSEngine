@@ -151,7 +151,7 @@ void SaveLayoutWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	auto save_layout = [](ActionData* action_data) {
 		UI_UNPACK_ACTION_DATA;
 
-		ECS_TEMP_ASCII_STRING(error_message, 256);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 		wchar_t path_chars[256];
 		CapacityStream<wchar_t> path(path_chars, 0, 256);
 		path.CopyOther(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);

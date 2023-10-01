@@ -1,6 +1,5 @@
 #include "editorpch.h"
 #include "SandboxAccessor.h"
-#include "../Editor/EditorState.h"
 
 using namespace ECSEngine;
 
@@ -28,20 +27,6 @@ EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandb
 	}
 	return sandbox->sandbox_world.entity_manager;
 }
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-// Make this inline such that the functions in this translation unit will have this inlined
-EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index) {
-	return editor_state->sandboxes.buffer + sandbox_index;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-const EditorSandbox* GetSandbox(const EditorState* editor_state, unsigned int sandbox_index) {
-	return editor_state->sandboxes.buffer + sandbox_index;
-}
-
 // -----------------------------------------------------------------------------------------------------------------------------
 
 EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned int sandbox_index)
@@ -101,13 +86,6 @@ const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, un
 	case EDITOR_SANDBOX_VIEWPORT_COUNT:
 		return ActiveEntityManager(editor_state, sandbox_index);
 	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-unsigned int GetSandboxCount(const EditorState* editor_state)
-{
-	return editor_state->sandboxes.size;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
