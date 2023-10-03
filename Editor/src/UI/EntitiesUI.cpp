@@ -13,7 +13,7 @@ ECS_TOOLS;
 
 struct EntitiesUIData {
 	ECS_INLINE size_t FindVirtualEntity(Entity entity) const {
-		return function::SearchBytes(
+		return SearchBytes(
 			virtual_global_components_entities.buffer,
 			virtual_global_components_entities.size,
 			entity.value,
@@ -22,7 +22,7 @@ struct EntitiesUIData {
 	}
 
 	ECS_INLINE size_t FindVirtualComponent(Component component) const {
-		return function::SearchBytes(
+		return SearchBytes(
 			virtual_global_component,
 			virtual_global_components_entities.size,
 			component.value,
@@ -395,7 +395,7 @@ static void DeleteEntityCallback(ActionData* action_data) {
 			if (global_component.Valid()) {
 				RemoveSandboxGlobalComponent(data->editor_state, data->sandbox_index, global_component);
 				// We must also remove it from our internal list of components
-				size_t component_index = function::SearchBytes(
+				size_t component_index = SearchBytes(
 					data->virtual_global_components_entities.buffer,
 					data->virtual_global_components_entities.size,
 					source_labels[index].value,
@@ -506,12 +506,12 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 
 	ECS_ASSERT(window_index < MAX_ENTITIES_UI_WINDOWS);
 
-	EntitiesUIData* data = (EntitiesUIData*)function::OffsetPointer(stack_memory, sizeof(unsigned int));
+	EntitiesUIData* data = (EntitiesUIData*)OffsetPointer(stack_memory, sizeof(unsigned int));
 	data->editor_state = editor_state;
 	data->sandbox_index = -1;
 	data->virtual_global_components_entities.InitializeFromBuffer(nullptr, 0);
 
-	CapacityStream<char> window_name(function::OffsetPointer(data, sizeof(*data)), 0, 128);
+	CapacityStream<char> window_name(OffsetPointer(data, sizeof(*data)), 0, 128);
 	GetEntitiesUIWindowName(window_index, window_name);
 
 	descriptor.window_name = window_name;
@@ -608,7 +608,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 			}
 
 			for (unsigned int index = 0; index < selected_entities_to_be_removed.size; index++) {
-				size_t found_index = function::SearchBytes(
+				size_t found_index = SearchBytes(
 					selected_entities.buffer,
 					selected_entities.size,
 					selected_entities_to_be_removed[index].value,
@@ -642,7 +642,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		size_t scene_name_configuration = UI_CONFIG_LABEL_TRANSPARENT;
 		row_layout.GetTransform(config, scene_name_configuration);
 
-		Stream<wchar_t> scene_name = function::PathStem(sandbox->scene_path);
+		Stream<wchar_t> scene_name = PathStem(sandbox->scene_path);
 		if (scene_name.size == 0) {
 			// If empty then set a message
 			scene_name = L"No scene set";
@@ -679,7 +679,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		else {
 			for (unsigned int index = 0; index < sandbox_count; index++) {
 				combo_sandbox_labels[index].buffer = sandbox_labels.buffer + sandbox_labels.size;
-				combo_sandbox_labels[index].size = function::ConvertIntToChars(sandbox_labels, index);
+				combo_sandbox_labels[index].size = ConvertIntToChars(sandbox_labels, index);
 			}
 
 			combo_labels.buffer = combo_sandbox_labels.buffer;
@@ -874,7 +874,7 @@ unsigned int CreateEntitiesUIWindow(EditorState* editor_state, unsigned int wind
 void GetEntitiesUIWindowName(unsigned int window_index, CapacityStream<char>& name)
 {
 	name.CopyOther(ENTITIES_UI_WINDOW_NAME);
-	function::ConvertIntToChars(name, window_index);
+	ConvertIntToChars(name, window_index);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -891,12 +891,12 @@ unsigned int GetEntitiesUIWindowIndex(const EditorState* editor_state, unsigned 
 
 unsigned int GetEntitiesUIIndexFromName(Stream<char> name)
 {
-	Stream<char> space = function::FindFirstCharacter(name, ' ');
+	Stream<char> space = FindFirstCharacter(name, ' ');
 	ECS_ASSERT(space.buffer != nullptr);
 	space.buffer += 1;
 	space.size -= 1;
 
-	return function::ConvertCharactersToInt(space);
+	return ConvertCharactersToInt(space);
 }
 
 // -------------------------------------------------------------------------------------------------------------

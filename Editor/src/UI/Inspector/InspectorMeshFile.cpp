@@ -116,7 +116,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 	drawer->CrossLine();
 
 	// Convert the absolute separator into relative
-	function::ReplaceCharacter(data->current_metadata.file, ECS_OS_PATH_SEPARATOR, ECS_OS_PATH_SEPARATOR_REL);
+	ReplaceCharacter(data->current_metadata.file, ECS_OS_PATH_SEPARATOR, ECS_OS_PATH_SEPARATOR_REL);
 
 	data->helper_data.metadata = &data->current_metadata;
 	data->current_metadata.name = data->helper_data.SelectedName();
@@ -176,7 +176,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 	}
 
 	// Convert back to absolute separator
-	function::ReplaceCharacter(data->current_metadata.file, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+	ReplaceCharacter(data->current_metadata.file, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 
 	auto calculate_texture_size_from_region = [=](uint2 window_size, float2 region_scale) {
 		return uint2(
@@ -258,7 +258,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 		thumbnail_transform.position += drawer->GetRegionRenderOffset();
 
 		// Clamp the position on the y axis such that it is not less than the current position
-		thumbnail_transform.position.y = function::ClampMin(thumbnail_transform.position.y, drawer->current_y);
+		thumbnail_transform.position.y = ClampMin(thumbnail_transform.position.y, drawer->current_y);
 
 		thumbnail_config.AddFlag(thumbnail_transform);
 
@@ -280,7 +280,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 			InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)_data;
 			// The delta needs to be inverted
 			data->window_thumbnail_percentage -= mouse_delta.y;
-			data->window_thumbnail_percentage = function::ClampMin(data->window_thumbnail_percentage, 0.0f);
+			data->window_thumbnail_percentage = ClampMin(data->window_thumbnail_percentage, 0.0f);
 
 			UIDefaultHoverableData default_data;
 			default_data.colors[0] = system->m_descriptors.color_theme.theme;
@@ -323,14 +323,14 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 		-1,
 		[=](void* inspector_data) {
 			InspectorDrawMeshFileData* other_data = (InspectorDrawMeshFileData*)inspector_data;
-			return function::CompareStrings(other_data->path, path);
+			return other_data->path == path;
 		}
 	);
 
 	if (inspector_indices.y != -1) {
 		// Get the data and set the path
 		InspectorDrawMeshFileData* draw_data = (InspectorDrawMeshFileData*)GetInspectorDrawFunctionData(editor_state, inspector_indices.y);
-		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
+		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.CopyOther(path);
 		draw_data->path[draw_data->path.size] = L'\0';
 	}

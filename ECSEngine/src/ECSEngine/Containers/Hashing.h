@@ -2,7 +2,7 @@
 #include "../Core.h"
 #include "Stream.h"
 #include "../Math/VCLExtensions.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 
 namespace ECSEngine {
 
@@ -74,7 +74,7 @@ namespace ECSEngine {
 			unsigned int index = _BitScanReverse(&value, capacity) == 0 ? -1 : value;
 			// This works out even when index is -1 (that is number is 0, index + 1 will be 0 so the returned value will be 1)
 			return (size_t)1 << (index + 1);
-			//return function::PowerOfTwoGreater(capacity);
+			//return PowerOfTwoGreater(capacity);
 		}
 	};
 
@@ -476,7 +476,7 @@ namespace ECSEngine {
 			// This works out even when index is -1 (that is number is 0, index + 1 will be 0 so the returned value will be 1)
 			return (size_t)1 << (index + 1);
 
-			//return function::PowerOfTwoGreater(capacity);
+			//return PowerOfTwoGreater(capacity);
 		}
 	};
 
@@ -492,10 +492,10 @@ namespace ECSEngine {
 		}
 	};
 
-	struct PointerHash {
+	struct PointerHashing {
 		template<typename T>
 		ECS_INLINE static unsigned int Hash(const T* pointer) {
-			return function::PointerHash(pointer);
+			return PointerHash(pointer);
 		}
 	};
 

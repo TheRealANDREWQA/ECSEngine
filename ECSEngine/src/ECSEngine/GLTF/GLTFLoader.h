@@ -3,6 +3,8 @@
 #include "../Core.h"
 #include "../Containers/Stream.h"
 #include "../Utilities/BasicTypes.h"
+#include "../Utilities/PointerUtilities.h"
+#include "../Utilities/StringUtilities.h"
 #include "../Rendering/RenderingStructures.h"
 #include "../Allocators/AllocatorTypes.h"
 #include "../Math/AABB.h"
@@ -285,12 +287,12 @@ namespace ECSEngine {
 					auto add_mapping = [&](Stream<char> texture_name, PBRMaterialTextureIndex mapping, Stream<void> texture_data, TextureExtension texture_extension) {
 						unsigned int old_texture_size = temp_texture_names.size;
 						// If it has an extension, remove it
-						Stream<char> dot = function::FindFirstCharacter(texture_name, '.');
+						Stream<char> dot = FindFirstCharacter(texture_name, '.');
 						if (dot.size > 0) {
 							texture_name = texture_name.StartDifference(dot);
 						}
 						
-						function::ConvertASCIIToWide(temp_texture_names, texture_name);
+						ConvertASCIIToWide(temp_texture_names, texture_name);
 						mappings[mapping_count].texture = { temp_texture_names.buffer + old_texture_size, texture_name.size };
 						mappings[mapping_count].index = mapping;
 						texture_mapping_data[mapping_count] = texture_data;
@@ -306,7 +308,7 @@ namespace ECSEngine {
 									size_t offset = texture->image->buffer_view->offset;
 									size_t size = texture->image->buffer_view->size;
 									return Stream<void>(
-										function::OffsetPointer(buffer_pointer, offset),
+										OffsetPointer(buffer_pointer, offset),
 										size
 									);
 								}
@@ -384,7 +386,7 @@ namespace ECSEngine {
 
 						bool has_metallic_roughness = false;
 						auto determine_metallic_roughness = [&](Stream<char> name, const cgltf_texture* texture) {
-							Stream<char> hyphon = function::FindFirstCharacter(name, '-');
+							Stream<char> hyphon = FindFirstCharacter(name, '-');
 							TextureExtension texture_extension = get_extension(texture);
 							Stream<void> texture_data = get_texture_mapping_data(texture);
 
@@ -398,14 +400,14 @@ namespace ECSEngine {
 								// Try the second technique - search for the roughness/Roughness strings and use the part of the metallic name
 								// without the metallic suffix
 								for (size_t index = 0; index < std::size(roughness_roots) && roughness_root.size == 0; index++) {
-									roughness_root = function::FindFirstToken(name, roughness_roots[index]);
+									roughness_root = FindFirstToken(name, roughness_roots[index]);
 									roughness_root.size = roughness_root.size > 0 ? roughness_roots[index].size : 0;
 								}
 
 								if (roughness_root.size > 0) {
 									Stream<char> metallic_name = name.StartDifference(roughness_root);
 									for (size_t index = 0; index < std::size(metallic_roots) && metallic_root.size == 0; index++) {
-										metallic_root = function::FindFirstToken(name, metallic_roots[index]);
+										metallic_root = FindFirstToken(name, metallic_roots[index]);
 										metallic_root.size = metallic_root.size > 0 ? metallic_roots[index].size : 0;
 									}
 
@@ -422,14 +424,14 @@ namespace ECSEngine {
 										// The metallic is missing, replace the roughness root with the metallic root
 										ECS_STACK_CAPACITY_STREAM(char, temp_metallic_name, 512);
 										temp_metallic_name.CopyOther(name);
-										temp_metallic_name = function::ReplaceToken(temp_metallic_name, roughness_root, metallic_roots[0]);
+										temp_metallic_name = ReplaceToken(temp_metallic_name, roughness_root, metallic_roots[0]);
 										add_mapping(temp_metallic_name, ECS_PBR_MATERIAL_METALLIC, texture_data, texture_extension);
 										add_mapping(name, ECS_PBR_MATERIAL_ROUGHNESS, texture_data, texture_extension);
 									}
 								}
 								else {
 									for (size_t index = 0; index < std::size(metallic_roots) && metallic_root.size == 0; index++) {
-										metallic_root = function::FindFirstToken(name, metallic_roots[index]);
+										metallic_root = FindFirstToken(name, metallic_roots[index]);
 										metallic_root.size = metallic_root.size > 0 ? metallic_roots[index].size : 0;
 									}
 
@@ -439,7 +441,7 @@ namespace ECSEngine {
 										// The roughness is missing, replace the metallic root with the roughness root
 										ECS_STACK_CAPACITY_STREAM(char, temp_roughness_name, 512);
 										temp_roughness_name.CopyOther(name);
-										temp_roughness_name = function::ReplaceToken(temp_roughness_name, metallic_root, roughness_roots[0]);
+										temp_roughness_name = ReplaceToken(temp_roughness_name, metallic_root, roughness_roots[0]);
 										add_mapping(temp_roughness_name, ECS_PBR_MATERIAL_ROUGHNESS, texture_data, texture_extension);
 										add_mapping(name, ECS_PBR_MATERIAL_METALLIC, texture_data, texture_extension);
 									}
@@ -504,24 +506,24 @@ namespace ECSEngine {
 								temp_name.CopyOther(name);
 								if (roughness_root_offset < metallic_root_offset) {
 									temp_name.Remove(metallic_root_offset, metallic_root.size);
-									temp_name = function::ReplaceToken(temp_name, roughness_root, "occlusion");
+									temp_name = ReplaceToken(temp_name, roughness_root, "occlusion");
 								}
 								else {
 									temp_name.Remove(roughness_root_offset, roughness_root.size);
-									temp_name = function::ReplaceToken(temp_name, metallic_root, "occlusion");
+									temp_name = ReplaceToken(temp_name, metallic_root, "occlusion");
 								}
 
 								add(temp_name);
 							}
 							else if (roughness_root.size > 0) {
 								temp_name.CopyOther(name);
-								temp_name = function::ReplaceToken(temp_name, roughness_root, "occlusion");
+								temp_name = ReplaceToken(temp_name, roughness_root, "occlusion");
 
 								add(temp_name);
 							}
 							else if (metallic_root.size > 0) {
 								temp_name.CopyOther(name);
-								temp_name = function::ReplaceToken(temp_name, metallic_root, "occlusion");
+								temp_name = ReplaceToken(temp_name, metallic_root, "occlusion");
 
 								add(temp_name);
 							}

@@ -13,7 +13,7 @@ using namespace ECSEngine::Reflection;
 size_t SearchSetting(Stream<EditorModuleReflectedSetting> settings, Stream<char> name) {
 	for (size_t index = 0; index < settings.size; index++) {
 		Stream<char> current_name = settings[index].name;
-		if (current_name.buffer == name.buffer || function::CompareStrings(name, current_name)) {
+		if (current_name.buffer == name.buffer || name == current_name) {
 			return index;
 		}
 	}
@@ -25,7 +25,7 @@ size_t SearchSetting(Stream<EditorModuleReflectedSetting> settings, Stream<char>
 																UIReflectionDrawerTag settings_tag = { MODULE_SETTINGS_REFLECT_TAG, false }; \
 																\
 																suffix_stream.AddStreamSafe(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT); \
-																function::ConvertIntToChars(suffix_stream, settings_id); \
+																ConvertIntToChars(suffix_stream, settings_id); \
 \
 																UIReflectionDrawerSearchOptions options_name; \
 																options_name.indices = &indices_name; \
@@ -71,7 +71,7 @@ void AllocateModuleSettings(
 
 			// The name needs to be allocated aswell - because the UI reflection types
 			// can be destroyed by the reflection underneath us
-			//type_name = function::StringCopy(allocator, type_name).buffer;
+			//type_name = StringCopy(allocator, type_name).buffer;
 
 			// Allocate the memory for an instance of the type
 			void* instance_memory = Allocate(allocator, type_size);
@@ -119,7 +119,7 @@ void CreateModuleSettings(
 
 			// The name needs to be allocated aswell - because the UI reflection types
 			// can be destroyed by the reflection underneath us
-			//type_name = function::StringCopy(allocator, type_name).buffer;
+			//type_name = StringCopy(allocator, type_name).buffer;
 
 			// Allocate the memory for an instance of the type
 			void* instance_memory = Allocate(allocator, type_size);
@@ -223,8 +223,8 @@ void GetModuleAvailableSettings(const EditorState* editor_state, unsigned int mo
 	FunctorData functor_data = { &paths, allocator };
 	ForEachFileInDirectory(module_folder, &functor_data, [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
-		Stream<wchar_t> stem = function::PathStem(path);
-		data->paths->AddAssert(function::StringCopy(data->allocator, stem));
+		Stream<wchar_t> stem = PathStem(path);
+		data->paths->AddAssert(StringCopy(data->allocator, stem));
 		return true;
 	});
 }

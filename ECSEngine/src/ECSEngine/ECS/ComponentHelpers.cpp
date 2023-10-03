@@ -67,7 +67,7 @@ namespace ECSEngine {
 			if (IsStream(type->fields[index].info.stream_type) && type->fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
 				current_buffer_index++;
 			}
-			else if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
+			else if (type->fields[index].definition == STRING(DataPointer)) {
 				current_buffer_index++;
 			}
 		}
@@ -82,7 +82,7 @@ namespace ECSEngine {
 
 		ComponentBuffer component_buffer;
 		// TODO: Add a reflection field tag such that it can specify the stream byte size
-		if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
+		if (type->fields[index].definition == STRING(DataPointer)) {
 			component_buffer.element_byte_size = 1;
 			component_buffer.is_data_pointer = true;
 			component_buffer.pointer_offset = type->fields[index].info.pointer_offset;
@@ -114,7 +114,7 @@ namespace ECSEngine {
 				component_buffer.size_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, size);
 				component_buffers.Add(component_buffer);
 			}
-			else if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
+			else if (type->fields[index].definition == STRING(DataPointer)) {
 				// TODO: Add a reflection field tag such that it can specify the stream byte size
 				ComponentBuffer component_buffer;
 				component_buffer.element_byte_size = 1;

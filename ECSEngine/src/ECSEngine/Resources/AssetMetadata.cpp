@@ -1,10 +1,9 @@
 #include "ecspch.h"
 #include "AssetMetadata.h"
 #include "../Utilities/File.h"
-#include "../Utilities/Function.h"
-#include "../Utilities/FunctionInterfaces.h"
 #include "../Utilities/Path.h"
 #include "../Utilities/Reflection/Reflection.h"
+#include "../Utilities/StreamUtilities.h"
 
 namespace ECSEngine {
 
@@ -195,13 +194,13 @@ namespace ECSEngine {
 		if (!do_not_copy) {
 			// Copy into it
 			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
-				function::CopyStreamAndMemset(ptr, sizeof(MaterialAssetResource) * texture_count[index], material->textures[index]);
+				CopyStreamAndMemset(ptr, sizeof(MaterialAssetResource) * texture_count[index], material->textures[index]);
 			}
 			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
-				function::CopyStreamAndMemset(ptr, sizeof(MaterialAssetResource) * sampler_count[index], material->samplers[index]);
+				CopyStreamAndMemset(ptr, sizeof(MaterialAssetResource) * sampler_count[index], material->samplers[index]);
 			}
 			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
-				function::CopyStreamAndMemset(ptr, sizeof(MaterialAssetBuffer) * buffer_count[index], material->buffers[index]);
+				CopyStreamAndMemset(ptr, sizeof(MaterialAssetBuffer) * buffer_count[index], material->buffers[index]);
 			}
 		}
 
@@ -241,7 +240,7 @@ namespace ECSEngine {
 
 	MaterialAsset::MaterialAsset(Stream<char> _name, AllocatorPolymorphic allocator)
 	{
-		name = function::StringCopy(allocator, _name);
+		name = StringCopy(allocator, _name);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -446,7 +445,7 @@ namespace ECSEngine {
 		material_pointer = asset->material_pointer;
 		
 		if (allocate_name) {
-			name = function::StringCopy(allocator, asset->name);
+			name = StringCopy(allocator, asset->name);
 		}
 		else {
 			name = asset->name;
@@ -459,7 +458,7 @@ namespace ECSEngine {
 		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
 			ECS_MATERIAL_SHADER material_shader = shader;
 			for (size_t index = 0; index < textures[material_shader].size; index++) {
-				unsigned int matching_index = function::FindString(textures[material_shader][index].name, asset->textures[material_shader], [](auto value) {
+				unsigned int matching_index = FindString(textures[material_shader][index].name, asset->textures[material_shader], [](auto value) {
 					return value.name;
 					});
 
@@ -468,7 +467,7 @@ namespace ECSEngine {
 				}
 			}
 			for (size_t index = 0; index < samplers[material_shader].size; index++) {
-				unsigned int matching_index = function::FindString(samplers[material_shader][index].name, asset->samplers[material_shader], [](auto value) {
+				unsigned int matching_index = FindString(samplers[material_shader][index].name, asset->samplers[material_shader], [](auto value) {
 					return value.name;
 					});
 
@@ -477,7 +476,7 @@ namespace ECSEngine {
 				}
 			}
 			for (size_t index = 0; index < buffers[material_shader].size; index++) {
-				unsigned int matching_index = function::FindString(buffers[material_shader][index].name, asset->buffers[material_shader], [](auto value) {
+				unsigned int matching_index = FindString(buffers[material_shader][index].name, asset->buffers[material_shader], [](auto value) {
 					return value.name;
 					});
 
@@ -519,13 +518,13 @@ namespace ECSEngine {
 
 		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
 			for (size_t index = 0; index < textures[type].size; index++) {
-				material.textures[type][index].name = function::StringCopy(allocator, textures[type][index].name);
+				material.textures[type][index].name = StringCopy(allocator, textures[type][index].name);
 			}
 			for (size_t index = 0; index < samplers[type].size; index++) {
-				material.samplers[type][index].name = function::StringCopy(allocator, samplers[type][index].name);
+				material.samplers[type][index].name = StringCopy(allocator, samplers[type][index].name);
 			}
 			for (size_t index = 0; index < buffers[type].size; index++) {
-				material.buffers[type][index].name = function::StringCopy(allocator, buffers[type][index].name);
+				material.buffers[type][index].name = StringCopy(allocator, buffers[type][index].name);
 				material.buffers[type][index].data.buffer = Allocate(allocator, buffers[type][index].data.size);
 				// At the moment consider everything blittable
 				memcpy(material.buffers[type][index].data.buffer, buffers[type][index].data.buffer, buffers[type][index].data.size);
@@ -1053,11 +1052,11 @@ namespace ECSEngine {
 		// Now allocate every string separately
 		macros.size = _macros.size;
 		for (size_t index = 0; index < _macros.size; index++) {
-			macros[index].name = function::StringCopy(allocator, _macros[index].name);
-			macros[index].definition = function::StringCopy(allocator, _macros[index].definition);
+			macros[index].name = StringCopy(allocator, _macros[index].name);
+			macros[index].definition = StringCopy(allocator, _macros[index].definition);
 		}
 
-		name = function::StringCopy(allocator, _name);
+		name = StringCopy(allocator, _name);
 		file = { nullptr, 0 };
 		shader_type = ECS_SHADER_PIXEL;
 	}
@@ -1079,8 +1078,8 @@ namespace ECSEngine {
 		memcpy(macros.buffer, temp_macros, sizeof(ShaderMacro) * macros.size);
 
 		// Allocate the name and the definition separately
-		Stream<char> new_name = function::StringCopy(allocator, name);
-		Stream<char> new_definition = function::StringCopy(allocator, definition);
+		Stream<char> new_name = StringCopy(allocator, name);
+		Stream<char> new_definition = StringCopy(allocator, definition);
 
 		macros.Add({ new_name, new_definition });
 	}
@@ -1110,7 +1109,7 @@ namespace ECSEngine {
 		ShaderMetadata metadata = ShaderMetadata(name, macros, allocator);
 
 		metadata.compile_flag = compile_flag;
-		metadata.file = function::StringCopy(allocator, file);
+		metadata.file = StringCopy(allocator, file);
 		metadata.shader_type = shader_type;
 		metadata.shader_interface = shader_interface;
 
@@ -1125,7 +1124,7 @@ namespace ECSEngine {
 			return false;
 		}
 		
-		if (!function::CompareStrings(file, other->file)) {
+		if (file != other->file) {
 			return false;
 		}
 
@@ -1134,8 +1133,7 @@ namespace ECSEngine {
 		}
 
 		for (size_t index = 0; index < macros.size; index++) {
-			if (!function::CompareStrings(macros[index].definition, other->macros[index].definition) ||
-				!function::CompareStrings(macros[index].name, other->macros[index].name)) {
+			if (macros[index].definition != other->macros[index].definition || macros[index].name != other->macros[index].name) {
 				return false;
 			}
 		}
@@ -1204,7 +1202,7 @@ namespace ECSEngine {
 	void ShaderMetadata::UpdateMacro(unsigned int index, Stream<char> new_definition, AllocatorPolymorphic allocator)
 	{
 		macros[index].definition.Deallocate(allocator);
-		macros[index].definition = function::StringCopy(allocator, new_definition);
+		macros[index].definition = StringCopy(allocator, new_definition);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1221,7 +1219,7 @@ namespace ECSEngine {
 	unsigned int ShaderMetadata::FindMacro(Stream<char> name) const
 	{
 		for (size_t index = 0; index < macros.size; index++) {
-			if (function::CompareStrings(macros[index].name, name)) {
+			if (macros[index].name == name) {
 				return index;
 			}
 		}
@@ -1242,8 +1240,8 @@ namespace ECSEngine {
 	MiscAsset MiscAsset::Copy(AllocatorPolymorphic allocator) const
 	{
 		MiscAsset asset;
-		asset.file = function::StringCopy(allocator, file);
-		asset.name = function::StringCopy(allocator, name);
+		asset.file = StringCopy(allocator, file);
+		asset.name = StringCopy(allocator, name);
 		return asset;
 	}
 
@@ -1251,7 +1249,7 @@ namespace ECSEngine {
 
 	bool MiscAsset::SameTarget(const MiscAsset* other) const
 	{
-		return function::CompareStrings(file, other->file);
+		return file == other->file;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1274,7 +1272,7 @@ namespace ECSEngine {
 	{
 		GPUSamplerMetadata metadata;
 		memcpy(&metadata, this, sizeof(metadata));
-		metadata.name = function::StringCopy(allocator, name);
+		metadata.name = StringCopy(allocator, name);
 		return metadata;
 	}
 
@@ -1301,8 +1299,8 @@ namespace ECSEngine {
 	{
 		TextureMetadata metadata;
 		memcpy(&metadata, this, sizeof(metadata));
-		metadata.name = function::StringCopy(allocator, name);
-		metadata.file = function::StringCopy(allocator, file);
+		metadata.name = StringCopy(allocator, name);
+		metadata.file = StringCopy(allocator, file);
 		return metadata;
 	}
 
@@ -1322,7 +1320,7 @@ namespace ECSEngine {
 
 	bool TextureMetadata::SameTarget(const TextureMetadata* other) const
 	{
-		return function::CompareStrings(file, other->file) && sRGB == other->sRGB && generate_mip_maps && other->generate_mip_maps
+		return file == other->file && sRGB == other->sRGB && generate_mip_maps && other->generate_mip_maps
 			&& compression_type == other->compression_type;
 	}
 
@@ -1340,8 +1338,8 @@ namespace ECSEngine {
 	{
 		MeshMetadata metadata;
 		memcpy(&metadata, this, sizeof(metadata));
-		metadata.name = function::StringCopy(allocator, name);
-		metadata.file = function::StringCopy(allocator, file);
+		metadata.name = StringCopy(allocator, name);
+		metadata.file = StringCopy(allocator, file);
 		return metadata;
 	}
 
@@ -1360,7 +1358,7 @@ namespace ECSEngine {
 
 	bool MeshMetadata::SameTarget(const MeshMetadata* other) const
 	{
-		return function::CompareStrings(file, other->file) && scale_factor == other->scale_factor && invert_z_axis == other->invert_z_axis
+		return file == other->file && scale_factor == other->scale_factor && invert_z_axis == other->invert_z_axis
 			&& optimize_level == other->optimize_level;
 	}
 
@@ -1684,7 +1682,7 @@ namespace ECSEngine {
 		else {
 			Stream<wchar_t> path_to_write = file;
 			if (!long_format) {
-				path_to_write = function::PathFilenameBoth(path_to_write);
+				path_to_write = PathFilenameBoth(path_to_write);
 			}
 
 			ECS_FORMAT_STRING(string, "{#} ({#})", path_to_write, name);
@@ -1720,7 +1718,7 @@ namespace ECSEngine {
 
 	bool DoesAssetReferenceOtherAsset(unsigned int handle, ECS_ASSET_TYPE handle_type, const void* asset, ECS_ASSET_TYPE type) 
 	{
-		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_WITH_DEPENDENCIES) && function::ExistsStaticArray(handle_type, ECS_ASSET_TYPES_REFERENCEABLE)) {
+		if (ExistsStaticArray(type, ECS_ASSET_TYPES_WITH_DEPENDENCIES) && ExistsStaticArray(handle_type, ECS_ASSET_TYPES_REFERENCEABLE)) {
 			ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
 			GetAssetDependencies(asset, type, &dependencies);
 			for (unsigned int index = 0; index < dependencies.size; index++) {

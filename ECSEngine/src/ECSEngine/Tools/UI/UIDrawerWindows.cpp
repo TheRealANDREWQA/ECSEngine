@@ -295,14 +295,14 @@ namespace ECSEngine {
 			descriptor.initial_position_x = mouse_position.x - 0.1f;
 			descriptor.initial_position_y = mouse_position.y - 0.1f;
 
-			descriptor.initial_position_x = function::ClampMin(descriptor.initial_position_x, -1.0f);
-			descriptor.initial_position_y = function::ClampMin(descriptor.initial_position_y, -1.0f);
+			descriptor.initial_position_x = ClampMin(descriptor.initial_position_x, -1.0f);
+			descriptor.initial_position_y = ClampMin(descriptor.initial_position_y, -1.0f);
 
 			descriptor.initial_size_x = ECS_TOOLS_UI_WINDOW_PARAMETER_INITIAL_SIZE_X;
 			descriptor.initial_size_y = ECS_TOOLS_UI_WINDOW_PARAMETER_INITIAL_SIZE_Y;
 
-			descriptor.initial_position_x = function::ClampMax(descriptor.initial_position_x + descriptor.initial_size_x, 1.0f) - descriptor.initial_size_x;
-			descriptor.initial_position_y = function::ClampMax(descriptor.initial_position_y + descriptor.initial_size_y, 1.0f) - descriptor.initial_size_y;
+			descriptor.initial_position_x = ClampMax(descriptor.initial_position_x + descriptor.initial_size_x, 1.0f) - descriptor.initial_size_x;
+			descriptor.initial_position_y = ClampMax(descriptor.initial_position_y + descriptor.initial_size_y, 1.0f) - descriptor.initial_size_y;
 
 			Stream<char> window_name = system->GetWindowName(window_index);
 			char* new_name = (char*)system->m_memory->Allocate(sizeof(char) * 64, alignof(char));
@@ -852,14 +852,14 @@ namespace ECSEngine {
 			descriptor.initial_position_x = mouse_position.x - 0.1f;
 			descriptor.initial_position_y = mouse_position.y - 0.1f;
 
-			descriptor.initial_position_x = function::ClampMin(descriptor.initial_position_x, -1.0f);
-			descriptor.initial_position_y = function::ClampMin(descriptor.initial_position_y, -1.0f);
+			descriptor.initial_position_x = ClampMin(descriptor.initial_position_x, -1.0f);
+			descriptor.initial_position_y = ClampMin(descriptor.initial_position_y, -1.0f);
 
 			descriptor.initial_size_x = ECS_TOOLS_UI_WINDOW_PARAMETER_INITIAL_SIZE_X;
 			descriptor.initial_size_y = ECS_TOOLS_UI_WINDOW_PARAMETER_INITIAL_SIZE_Y;
 
-			descriptor.initial_position_x = function::ClampMax(descriptor.initial_position_x + descriptor.initial_size_x, 1.0f) - descriptor.initial_size_x;
-			descriptor.initial_position_y = function::ClampMax(descriptor.initial_position_y + descriptor.initial_size_y, 1.0f) - descriptor.initial_size_y;
+			descriptor.initial_position_x = ClampMax(descriptor.initial_position_x + descriptor.initial_size_x, 1.0f) - descriptor.initial_size_x;
+			descriptor.initial_position_y = ClampMax(descriptor.initial_position_y + descriptor.initial_size_y, 1.0f) - descriptor.initial_size_y;
 
 			descriptor.window_name = "System Parameters";
 			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW);
@@ -934,13 +934,13 @@ namespace ECSEngine {
 							system->m_windows[window_index].zoom.x += scroll_amount * ECS_TOOLS_UI_DEFAULT_HANDLER_ZOOM_FACTOR;
 							system->m_windows[window_index].zoom.y += scroll_amount * ECS_TOOLS_UI_DEFAULT_HANDLER_ZOOM_FACTOR;
 
-							system->m_windows[window_index].zoom.x = function::Clamp(
+							system->m_windows[window_index].zoom.x = Clamp(
 								system->m_windows[window_index].zoom.x,
 								system->m_windows[window_index].min_zoom,
 								system->m_windows[window_index].max_zoom
 							);
 
-							system->m_windows[window_index].zoom.y = function::Clamp(
+							system->m_windows[window_index].zoom.y = Clamp(
 								system->m_windows[window_index].zoom.y,
 								system->m_windows[window_index].min_zoom,
 								system->m_windows[window_index].max_zoom
@@ -1081,7 +1081,7 @@ namespace ECSEngine {
 			data->handler.action(action_data);
 
 			// In case the window gets destroyed, e.g. an UI file is being loaded
-			if (function::CompareStrings(system->m_windows[window_index].name, ECS_TOOLS_UI_CONFIRM_WINDOW_NAME)) {
+			if (system->m_windows[window_index].name == ECS_TOOLS_UI_CONFIRM_WINDOW_NAME) {
 				// When pressing enter, the dockspace and the border index will be missing
 				// Set these here
 				if (dockspace == nullptr) {
@@ -1155,7 +1155,7 @@ namespace ECSEngine {
 			
 			void* handler_memory = nullptr;
 			if (handler.data_size > 0) {
-				handler_memory = function::Copy(system->Allocator(), handler.data, handler.data_size);
+				handler_memory = Copy(system->Allocator(), handler.data, handler.data_size);
 				data.handler.data = handler_memory;
 			}
 
@@ -1250,7 +1250,7 @@ namespace ECSEngine {
 			action_data->data = data->data->handlers[data->index].data;
 			data->data->handlers[data->index].action(action_data);
 
-			if (function::CompareStrings(system->m_windows[window_index].name, ECS_TOOLS_UI_CHOOSE_WINDOW_NAME)) {
+			if (system->m_windows[window_index].name == ECS_TOOLS_UI_CHOOSE_WINDOW_NAME) {
 				DestroyCurrentActionWindow(action_data);
 			}
 		}
@@ -1332,7 +1332,7 @@ namespace ECSEngine {
 			for (unsigned char index = 0; index < data->extra_draw_element_count; index++) {
 				extra_action_data.data = &drawer;
 				if (data->extra_draw_elements_data[index] == nullptr) {
-					extra_action_data.additional_data = function::OffsetPointer(data->extra_draw_elements_storage, data->extra_draw_elements_data_offset[index]);
+					extra_action_data.additional_data = OffsetPointer(data->extra_draw_elements_storage, data->extra_draw_elements_data_offset[index]);
 				}
 				else {
 					extra_action_data.additional_data = data->extra_draw_elements_data[index];
@@ -1754,7 +1754,7 @@ namespace ECSEngine {
 						parameters.color = CONSOLE_COLORS[(unsigned int)message.message.type];
 						char temp_characters[256];
 						Stream<char> temp_stream = Stream<char>(temp_characters, 0);
-						function::ConvertIntToChars(temp_stream, message.counter);
+						ConvertIntToChars(temp_stream, message.counter);
 						float2 label_scale = drawer.GetLabelScale(temp_stream);
 						float2 aligned_position = drawer.GetAlignedToRightOverLimit(label_scale.x);
 
@@ -1810,7 +1810,7 @@ namespace ECSEngine {
 				}
 
 				Stream<char> stream = Stream<char>(temp_characters, 0);
-				function::ConvertIntToCharsFormatted(stream, static_cast<int64_t>(counter));
+				ConvertIntToCharsFormatted(stream, static_cast<int64_t>(counter));
 				float2 label_scale = drawer.GetLabelScale(temp_characters);
 
 				float initial_x_position = transform.position.x;
@@ -1857,7 +1857,7 @@ namespace ECSEngine {
 				}
 
 				Stream<char> stream = Stream<char>(temp_characters, 0);
-				function::ConvertIntToCharsFormatted(stream, static_cast<int64_t>(counter));
+				ConvertIntToCharsFormatted(stream, static_cast<int64_t>(counter));
 				float2 label_scale = drawer.GetLabelScale(temp_characters);
 
 				float initial_x_position = transform.position.x;
@@ -2201,7 +2201,7 @@ namespace ECSEngine {
 									UIReflectionBindTextInput bind;
 									bind.field_name = data->sections[index].elements[subindex].name;
 									bind.stream = (CapacityStream<char>*)allocation;
-									bind.stream->buffer = (char*)function::OffsetPointer(allocation, sizeof(CapacityStream<char>));
+									bind.stream->buffer = (char*)OffsetPointer(allocation, sizeof(CapacityStream<char>));
 									bind.stream->size = 0;
 									bind.stream->capacity = 128;
 
@@ -2216,7 +2216,7 @@ namespace ECSEngine {
 									UIReflectionBindDirectoryInput bind;
 									bind.field_name = data->sections[index].elements[subindex].name;
 									bind.stream = (CapacityStream<wchar_t>*)allocation;
-									bind.stream->buffer = (wchar_t*)function::OffsetPointer(allocation, sizeof(CapacityStream<wchar_t>));
+									bind.stream->buffer = (wchar_t*)OffsetPointer(allocation, sizeof(CapacityStream<wchar_t>));
 									bind.stream->size = 0;
 									bind.stream->capacity = 256;
 
@@ -2313,7 +2313,7 @@ namespace ECSEngine {
 			}
 			else {
 				extra_draw_elements_data[extra_draw_element_count] = nullptr;
-				memcpy(function::OffsetPointer(extra_draw_elements_storage, extra_draw_element_storage_offset), data, data_size);
+				memcpy(OffsetPointer(extra_draw_elements_storage, extra_draw_element_storage_offset), data, data_size);
 				extra_draw_elements_data_offset[extra_draw_element_count] = extra_draw_element_storage_offset;
 				extra_draw_element_storage_offset += data_size;
 				ECS_ASSERT(extra_draw_element_storage_offset <= ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_STORAGE_CAPACITY);
@@ -2613,7 +2613,7 @@ namespace ECSEngine {
 					for (unsigned int index = 0; index < select_elements.size; index++) {
 						bool matches_filter = data->select_texture_filter.size == 0 ?
 							true :
-							function::FindFirstToken(select_elements[index].name, data->select_texture_filter).size > 0;
+							FindFirstToken(select_elements[index].name, data->select_texture_filter).size > 0;
 						if (matches_filter) {
 							if (found_selected == -1) {
 								if (select_elements[index].name == data->selected_element) {
@@ -2802,7 +2802,7 @@ namespace ECSEngine {
 										else {
 											// Call the user_handler
 											void* user_data = data->user_handler.data_size == 0 ?
-												data->user_handler.data : function::OffsetPointer(data, sizeof(*data));
+												data->user_handler.data : OffsetPointer(data, sizeof(*data));
 											action_data->data = user_data;
 											data->user_handler.action(action_data);
 										}
@@ -2819,7 +2819,7 @@ namespace ECSEngine {
 									if (additional_data.combo_callback.data_size > 0) {
 										ECS_ASSERT(additional_data.combo_callback.data_size + sizeof(*combo_wrapper_data) <= sizeof(_combo_wrapper_data));
 										memcpy(
-											function::OffsetPointer(combo_wrapper_data, sizeof(*combo_wrapper_data)),
+											OffsetPointer(combo_wrapper_data, sizeof(*combo_wrapper_data)),
 											additional_data.combo_callback.data,
 											additional_data.combo_callback.data_size
 										);
@@ -2860,7 +2860,7 @@ namespace ECSEngine {
 			VisualizeTextureDeallocateTexture(system, window_data);
 
 			if (data->action != nullptr) {
-				action_data->data = data->data_size > 0 ? function::OffsetPointer(data, sizeof(*data)) : data->data;
+				action_data->data = data->data_size > 0 ? OffsetPointer(data, sizeof(*data)) : data->data;
 				data->action(action_data);
 			}
 		}
@@ -2933,10 +2933,10 @@ namespace ECSEngine {
 			// Embed the data directly here if needed
 			size_t destroy_data_size = sizeof(UIActionHandler) + create_data->destroy_window_handler.data_size;
 
-			void* destroy_data = function::OffsetPointer(stack_memory, sizeof(*data));
+			void* destroy_data = OffsetPointer(stack_memory, sizeof(*data));
 			memcpy(destroy_data, &create_data->destroy_window_handler, sizeof(create_data->destroy_window_handler));
 			if (create_data->destroy_window_handler.data_size > 0) {
-				memcpy(function::OffsetPointer(destroy_data, sizeof(create_data->destroy_window_handler)), create_data->destroy_window_handler.data, create_data->destroy_window_handler.data_size);
+				memcpy(OffsetPointer(destroy_data, sizeof(create_data->destroy_window_handler)), create_data->destroy_window_handler.data, create_data->destroy_window_handler.data_size);
 			}
 
 			descriptor.destroy_action_data = destroy_data;
@@ -3154,7 +3154,7 @@ namespace ECSEngine {
 				UI_UNPACK_ACTION_DATA;
 
 				WrapperData* wrapper_data = (WrapperData*)_data;
-				void* callback_data = wrapper_data->handler_data.data_size == 0 ? wrapper_data->handler_data.data : function::OffsetPointer(wrapper_data, sizeof(wrapper_data));
+				void* callback_data = wrapper_data->handler_data.data_size == 0 ? wrapper_data->handler_data.data : OffsetPointer(wrapper_data, sizeof(wrapper_data));
 				action_data->data = callback_data;
 				wrapper_data->handler_data.action(action_data);
 				system->PushDestroyWindowHandler(system->GetWindowIndexFromBorder(dockspace, border_index));
@@ -3164,13 +3164,13 @@ namespace ECSEngine {
 			WrapperData* wrapper_data = (WrapperData*)wrapper_data_storage.buffer;
 			wrapper_data->handler_data = ok_handler;
 			if (ok_handler.data_size > 0) {
-				memcpy(function::OffsetPointer(wrapper_data, sizeof(*wrapper_data)), ok_handler.data, ok_handler.data_size);
+				memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), ok_handler.data, ok_handler.data_size);
 			}
 			drawer.Button(configuration, config, ok_label, UIActionHandler{wrapper, wrapper_data, (unsigned int)sizeof(*wrapper_data) + ok_handler.data_size });
 
 			wrapper_data->handler_data = cancel_handler;
 			if (cancel_handler.data_size > 0) {
-				memcpy(function::OffsetPointer(wrapper_data, sizeof(*wrapper_data)), cancel_handler.data, cancel_handler.data_size);
+				memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), cancel_handler.data, cancel_handler.data_size);
 			}
 
 			config.flag_count = 0;

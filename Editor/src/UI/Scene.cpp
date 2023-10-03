@@ -351,7 +351,7 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 							const void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, selected_entities[index], component, is_shared_component);
 							if (component_data) {
 								// Verify that the asset pointer is valid as well
-								const void** asset_pointer = (const void**)function::OffsetPointer(component_data, render_mesh_type->fields[field_index].info.pointer_offset);
+								const void** asset_pointer = (const void**)OffsetPointer(component_data, render_mesh_type->fields[field_index].info.pointer_offset);
 								if (IsAssetPointerValid(*asset_pointer)) {
 									const CoalescedMesh* coalesced_mesh = (const CoalescedMesh*)*asset_pointer;
 									current_bounds = coalesced_mesh->mesh.bounds;
@@ -676,36 +676,26 @@ static void ScenePrivateAction(ActionData* action_data) {
 	else if (mouse->IsPressed(ECS_MOUSE_MIDDLE) || mouse->IsPressed(ECS_MOUSE_RIGHT)) {
 		if (sandbox->transform_display_axes) {
 			// Restore the value to the selected entities
-			Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
 			switch (sandbox->transform_keyboard_tool) {
 			case ECS_TRANSFORM_TRANSLATION:
 			{
 				// Restore the translation
 				// Calculate the delta between the current translation and the original one
 				float3 delta = data->translation_midpoint - data->original_translation_midpoint;
-
-				for (size_t index = 0; index < selected_entities.size; index++) {
-					Translation* translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, selected_entities[index]);
-					translation->value -= delta;
-				}
+				TranslateSandboxSelectedEntities(editor_state, sandbox_index, -delta);
 			}
 			break;
 			case ECS_TRANSFORM_ROTATION:
 			{
 				// Restore the rotation by adding the inverse delta
-				for (size_t index = 0; index < selected_entities.size; index++) {
-					Rotation* rotation = GetSandboxEntityComponent<Rotation>(editor_state, sandbox_index, selected_entities[index]);
-					rotation->value = AddLocalRotation(rotation->value, QuaternionInverse(data->rotation_delta)).StorageLow();
-				}
+				Quaternion inverse_rotation = QuaternionInverse(data->rotation_delta);
+				RotateSandboxSelectedEntities(editor_state, sandbox_index, inverse_rotation);
 			}
 			break;
 			case ECS_TRANSFORM_SCALE:
 			{
 				// Restore the scale by adding the negated delta
-				for (size_t index = 0; index < selected_entities.size; index++) {
-					Scale* scale = GetSandboxEntityComponent<Scale>(editor_state, sandbox_index, selected_entities[index]);
-					scale->value -= data->scale_delta;
-				}
+				ScaleSandboxSelectedEntities(editor_state, sandbox_index, -data->scale_delta);
 			}
 			break;
 			}
@@ -727,14 +717,14 @@ static void ScenePrivateAction(ActionData* action_data) {
 void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
 	unsigned int index = *(unsigned int*)stack_memory;
 
-	SceneDrawData* data = (SceneDrawData*)function::OffsetPointer(stack_memory, sizeof(unsigned int));
+	SceneDrawData* data = (SceneDrawData*)OffsetPointer(stack_memory, sizeof(unsigned int));
 
 	memset(data, 0, sizeof(*data));
 	data->editor_state = editor_state;
 
 	descriptor.draw = SceneUIWindowDraw;
 
-	ScenePrivateActionData* private_data = (ScenePrivateActionData*)function::OffsetPointer(data, sizeof(*data));
+	ScenePrivateActionData* private_data = (ScenePrivateActionData*)OffsetPointer(data, sizeof(*data));
 	private_data->editor_state = editor_state;
 	descriptor.private_action = ScenePrivateAction;
 	descriptor.private_action_data = private_data;
@@ -743,7 +733,7 @@ void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_sta
 	descriptor.destroy_action = SceneUIDestroy;
 	descriptor.destroy_action_data = editor_state;
 
-	CapacityStream<char> window_name(function::OffsetPointer(private_data, sizeof(*private_data)), 0, 128);
+	CapacityStream<char> window_name(OffsetPointer(private_data, sizeof(*private_data)), 0, 128);
 	GetSceneUIWindowName(index, window_name);
 
 	descriptor.window_name = window_name;
@@ -1232,7 +1222,7 @@ void DestroyInvalidSceneUIWindows(EditorState* editor_state)
 
 void GetSceneUIWindowName(unsigned int index, CapacityStream<char>& name) {
 	name.CopyOther(SCENE_WINDOW_NAME);
-	function::ConvertIntToChars(name, index);
+	ConvertIntToChars(name, index);
 }
 
 unsigned int GetSceneUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index)

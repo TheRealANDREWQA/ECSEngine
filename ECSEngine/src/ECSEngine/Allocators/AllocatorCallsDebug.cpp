@@ -6,7 +6,6 @@
 #include "../Utilities/File.h"
 #include "AllocatorPolymorphic.h"
 #include "../Utilities/Serialization/SerializationHelpers.h"
-#include "../Utilities/FunctionInterfaces.h"
 
 #include "MemoryManager.h"
 
@@ -55,7 +54,7 @@ namespace ECSEngine {
 	// We are going to have a global one in order to not have
 	// functions specify which instance to 
 	struct DebugAllocatorManager {
-		HashTable<TrackedAllocator, const void*, HashFunctionPowerOfTwo, PointerHash> allocators;
+		HashTable<TrackedAllocator, const void*, HashFunctionPowerOfTwo, PointerHashing> allocators;
 		GlobalMemoryManager global_allocator;
 		ECS_FILE_HANDLE file_handle;
 		unsigned int default_ring_buffer_capacity;

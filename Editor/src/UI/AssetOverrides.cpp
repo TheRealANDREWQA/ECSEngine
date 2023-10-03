@@ -102,16 +102,16 @@ static bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 			AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(&table_allocator);
 
 			HashTableDefault<Stream<Stream<char>>> hash_table;
-			hash_table.Initialize(&table_allocator, function::PowerOfTwoGreater(paths.size / 2 + 1));
+			hash_table.Initialize(&table_allocator, PowerOfTwoGreater(paths.size / 2 + 1));
 
 			for (size_t index = 0; index < paths.size; index++) {
 				ECS_STACK_CAPACITY_STREAM(wchar_t, _target_file, 256);
 				AssetDatabase::ExtractFileFromFile(paths[index], _target_file);
-				Stream<wchar_t> target_file = function::StringCopy(allocator_polymorphic, _target_file);
+				Stream<wchar_t> target_file = StringCopy(allocator_polymorphic, _target_file);
 
 				ECS_STACK_CAPACITY_STREAM(char, temp_name, 256);
 				AssetDatabase::ExtractNameFromFile(paths[index], temp_name);
-				Stream<char> allocated_name = function::StringCopy(allocator_polymorphic, temp_name);
+				Stream<char> allocated_name = StringCopy(allocator_polymorphic, temp_name);
 
 				ResourceIdentifier identifier = target_file;
 				unsigned int table_index = hash_table.Find(identifier);
@@ -181,7 +181,7 @@ void SelectAction(ActionData* action_data) {
 	SelectActionData* data = (SelectActionData*)_data;
 	if (data->name.buffer == nullptr) {
 		// Relative name
-		data->name.buffer = (char*)function::OffsetPointer(data, sizeof(*data));
+		data->name.buffer = (char*)OffsetPointer(data, sizeof(*data));
 	}
 
 	// Only register the asset if the asset is to be loaded into the main database
@@ -414,12 +414,12 @@ static UIDrawerMenuState GetMenuForSelection(const BaseDrawData* base_data, ECS_
 	unsigned int count = base_data->asset_name_with_path[index].value.size;
 	
 	menu_state.click_handlers = (UIActionHandler*)stack_allocation;
-	stack_allocation = function::OffsetPointer(stack_allocation, sizeof(UIActionHandler) * count);
+	stack_allocation = OffsetPointer(stack_allocation, sizeof(UIActionHandler) * count);
 
 	for (unsigned int subindex = 0; subindex < count; subindex++) {
 		SelectActionData* select_data = (SelectActionData*)stack_allocation;
 		CreateSelectActionData(select_data, base_data, type);
-		stack_allocation = function::OffsetPointer(stack_allocation, sizeof(*select_data));
+		stack_allocation = OffsetPointer(stack_allocation, sizeof(*select_data));
 		select_data->file = base_data->asset_name_with_path[index].identifier;
 		select_data->name = base_data->asset_name_with_path[index].value[subindex];
 		select_data->destroy_selection = true;
@@ -507,16 +507,16 @@ static bool DrawBaseSelectionInput(UIDrawer& drawer, BaseDrawData* base_data, EC
 	CreateSelectActionData(select_data, base_data, type);
 	select_data->destroy_selection = false;
 	return_value->select_data = select_data;
-	return_value->stack_allocation = function::OffsetPointer(return_value->stack_allocation, sizeof(*select_data));
+	return_value->stack_allocation = OffsetPointer(return_value->stack_allocation, sizeof(*select_data));
 
 	return_value->converted_filename.InitializeFromBuffer(return_value->stack_allocation, 0, 256);
-	return_value->stack_allocation = function::OffsetPointer(return_value->stack_allocation, sizeof(char) * 256);
+	return_value->stack_allocation = OffsetPointer(return_value->stack_allocation, sizeof(char) * 256);
 
 	return_value->absolute_path.InitializeFromBuffer(return_value->stack_allocation, 0, 512);
 	GetProjectAssetsFolder(base_data->editor_state, return_value->absolute_path);
 	return_value->absolute_path.Add(ECS_OS_PATH_SEPARATOR);
 
-	return_value->stack_allocation = function::OffsetPointer(return_value->stack_allocation, sizeof(wchar_t) * 512);
+	return_value->stack_allocation = OffsetPointer(return_value->stack_allocation, sizeof(wchar_t) * 512);
 
 	UIConfigWindowDependentSize dependent_size;
 	dependent_size.scale_factor.x = drawer.GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, drawer.GetSquareScale() * RELATIVE_FACTOR).x;
@@ -572,11 +572,11 @@ static void DrawFileAndName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET
 		base_return.absolute_path.size = base_size;
 
 		base_return.converted_filename.size = 0;
-		Stream<wchar_t> filename = function::PathFilenameBoth(base_data->asset_name_with_path[index].identifier);
-		function::ConvertWideCharsToASCII(filename, base_return.converted_filename);
+		Stream<wchar_t> filename = PathFilenameBoth(base_data->asset_name_with_path[index].identifier);
+		ConvertWideCharsToASCII(filename, base_return.converted_filename);
 
 		if (base_data->filter.size > 0) {
-			if (function::FindFirstToken(base_return.converted_filename, base_data->filter).size == 0) {
+			if (FindFirstToken(base_return.converted_filename, base_data->filter).size == 0) {
 				continue;
 			}
 		}
@@ -674,7 +674,7 @@ static void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TY
 		AssetDatabase::ExtractNameFromFile(base_data->asset_paths[index], base_return.converted_filename);
 
 		if (base_data->filter.size > 0) {
-			if (function::FindFirstToken(base_return.converted_filename, base_data->filter).size == 0) {
+			if (FindFirstToken(base_return.converted_filename, base_data->filter).size == 0) {
 				continue;
 			}
 		}
@@ -682,7 +682,7 @@ static void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TY
 		Stream<wchar_t> texture = { nullptr, 0 };
 		get_texture(base_return.absolute_path, index, &texture);
 
-		Stream<char> stem = function::PathStemBoth(base_return.converted_filename);
+		Stream<char> stem = PathStemBoth(base_return.converted_filename);
 
 		base_return.select_data->file = { nullptr, 0 };
 		// The name will be deduced from the relative part
@@ -727,7 +727,7 @@ void MeshDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool ini
 		[data](CapacityStream<wchar_t>& absolute_path, unsigned int index, Stream<wchar_t>* texture, ResourceView* resource_view) {
 			absolute_path.AddStreamSafe(data->base_data.asset_name_with_path[index].identifier);
 			// Replace relative slashes with absolute ones
-			function::ReplaceCharacter(absolute_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+			ReplaceCharacter(absolute_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 			ResourceView thumbnail = FileExplorerGetMeshThumbnail(data->base_data.editor_state, absolute_path);
 			if (thumbnail.view == nullptr) {
 				*texture = ECS_TOOLS_UI_TEXTURE_FILE_BLANK;
@@ -755,7 +755,7 @@ void TextureDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		[data](CapacityStream<wchar_t>& absolute_path, unsigned int index, Stream<wchar_t>* texture, ResourceView* resource_view) {
 			absolute_path.AddStreamSafe(data->base_data.asset_name_with_path[index].identifier);
 			// Replace relative slashes with absolute ones
-			function::ReplaceCharacter(absolute_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+			ReplaceCharacter(absolute_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 			*texture = absolute_path;
 	});
 }
@@ -929,7 +929,7 @@ void OverrideAssetHandle(
 		Stream<wchar_t> file = base_data->database->GetAssetPath(handle_value, type);
 
 		if (file.size > 0) {
-			Stream<wchar_t> filename = function::PathFilenameBoth(file);
+			Stream<wchar_t> filename = PathFilenameBoth(file);
 			if (filename.size != file.size) {
 				configuration |= UI_CONFIG_SELECTION_INPUT_OVERRIDE_HOVERABLE;
 				ECS_FORMAT_STRING(hoverable_string, "{#} ({#})", file, name);

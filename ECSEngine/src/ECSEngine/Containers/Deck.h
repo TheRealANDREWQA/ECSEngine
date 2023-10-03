@@ -1,7 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "Stream.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/Utilities.h"
 
 namespace ECSEngine {
 
@@ -117,7 +117,7 @@ namespace ECSEngine {
 			size_t chunk_index = RangeSelector::Chunk(index, chunk_size, miscellaneous);
 			size_t in_chunk_index = RangeSelector::Buffer(index, chunk_size, miscellaneous);
 			// Search for the chunk index inside the chunks_with_elements
-			if (function::SearchBytes(chunks_with_elements.buffer, chunks_with_elements.size, chunk_index, sizeof(unsigned int)) == -1) {
+			if (SearchBytes(chunks_with_elements.buffer, chunks_with_elements.size, chunk_index, sizeof(unsigned int)) == -1) {
 				return false;
 			}
 
@@ -519,7 +519,7 @@ namespace ECSEngine {
 			deck.buffers.capacity = 1;
 			deck.buffers.size = 1;
 			deck.buffers.allocator = { nullptr };
-			temp_buffer = function::OffsetPointer(temp_buffer, sizeof(deck.buffers.buffer[0]));
+			temp_buffer = OffsetPointer(temp_buffer, sizeof(deck.buffers.buffer[0]));
 
 			deck.buffers[0] = { data.buffer, (unsigned int)data.size, (unsigned int)data.size };
 			deck.chunk_size = next_capacity.x;
@@ -564,7 +564,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE static ulong2 GetNextCapacity(size_t capacity) {
-			return function::PowerOfTwoGreaterEx(capacity);
+			return PowerOfTwoGreaterEx(capacity);
 		}
 	};
 

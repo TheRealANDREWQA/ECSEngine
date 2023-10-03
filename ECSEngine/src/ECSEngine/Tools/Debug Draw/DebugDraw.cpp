@@ -1,11 +1,11 @@
 #include "ecspch.h"
 #include "DebugDraw.h"
-#include "../../Utilities/FunctionInterfaces.h"
 #include "../../Resources/ResourceManager.h"
 #include "../../Rendering/GraphicsHelpers.h"
 #include "../../Math/Quaternion.h"
 #include "../../Math/Conversion.h"
 #include "../../Rendering/RenderingEffects.h"
+#include "../../Utilities/FilePreprocessor.h"
 
 constexpr size_t SMALL_VERTEX_BUFFER_CAPACITY = 8;
 constexpr size_t PER_THREAD_RESOURCES = 32;
@@ -654,7 +654,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::AddString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
 	{
-		Stream<char> text_copy = function::StringCopy(Allocator(), text);
+		Stream<char> text_copy = StringCopy(Allocator(), text);
 		strings.Add({ position, direction, size, text_copy, color, options });
 	}
 
@@ -662,7 +662,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::AddStringRotation(float3 position, QuaternionStorage rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
 	{
-		Stream<char> text_copy = function::StringCopy(Allocator(), text);
+		Stream<char> text_copy = StringCopy(Allocator(), text);
 		float3 direction = RotateVectorQuaternion(rotation, RightVector());
 		AddString(position, direction, size, text, color, options);
 	}
@@ -905,7 +905,7 @@ namespace ECSEngine {
 		if (thread_strings[thread_index].IsFull()) {
 			FlushString(thread_index);
 		}
-		Stream<char> string_copy = function::StringCopy(AllocatorTs(), text);
+		Stream<char> string_copy = StringCopy(AllocatorTs(), text);
 		thread_strings[thread_index].Add({ position, direction, size, string_copy, color, options });
 	}
 
@@ -918,7 +918,7 @@ namespace ECSEngine {
 		if (thread_strings[thread_index].IsFull()) {
 			FlushString(thread_index);
 		}
-		Stream<char> string_copy = function::StringCopy(AllocatorTs(), text);
+		Stream<char> string_copy = StringCopy(AllocatorTs(), text);
 		thread_strings[thread_index].Add({ position, RotateVectorQuaternion(rotation, RightVector()), size, string_copy, color, options });
 	}
 
@@ -1391,8 +1391,8 @@ namespace ECSEngine {
 			}
 			else {
 				// It doesn't matter if the current character is \n because it will reset the horizontal offset anyway
-				unsigned int previous_alphabet_index = function::GetAlphabetIndex(text[index - 1]);
-				unsigned int current_alphabet_index = function::GetAlphabetIndex(text[index]);
+				unsigned int previous_alphabet_index = GetAlphabetIndex(text[index - 1]);
+				unsigned int current_alphabet_index = GetAlphabetIndex(text[index]);
 
 				float previous_offset = string_character_bounds[previous_alphabet_index].y;
 				float current_offset = string_character_bounds[current_alphabet_index].x;
@@ -1430,7 +1430,7 @@ namespace ECSEngine {
 				// Draw the current characters
 				graphics->UnmapBuffer(instanced_data_buffer.buffer);
 
-				unsigned int alphabet_index = function::GetAlphabetIndex(text[index]);
+				unsigned int alphabet_index = GetAlphabetIndex(text[index]);
 				// Draw the current character
 				graphics->DrawIndexedInstanced(string_mesh->submeshes[alphabet_index].index_count, current_character_count, string_mesh->submeshes[alphabet_index].index_buffer_offset);
 			}
@@ -2097,8 +2097,8 @@ namespace ECSEngine {
 						}
 						else {
 							// It doesn't matter if the current character is \n because it will reset the horizontal offset anyway
-							unsigned int previous_alphabet_index = function::GetAlphabetIndex(string->text[text_index - 1]);
-							unsigned int current_alphabet_index = function::GetAlphabetIndex(string->text[text_index]);
+							unsigned int previous_alphabet_index = GetAlphabetIndex(string->text[text_index - 1]);
+							unsigned int current_alphabet_index = GetAlphabetIndex(string->text[text_index]);
 
 							float previous_offset = string_character_bounds[previous_alphabet_index].y;
 							float current_offset = string_character_bounds[current_alphabet_index].x;
@@ -2132,7 +2132,7 @@ namespace ECSEngine {
 
 							graphics->UnmapBuffer(instanced_buffer.buffer);
 
-							unsigned int alphabet_index = function::GetAlphabetIndex(string->text[text_index]);
+							unsigned int alphabet_index = GetAlphabetIndex(string->text[text_index]);
 							// Draw the current character
 							Submesh submesh = string_mesh->submeshes[alphabet_index];
 							// Here the buffer offset needs to be 0
@@ -2929,7 +2929,7 @@ namespace ECSEngine {
 			&shader_source, \
 			&byte_code \
 		); \
-		shader_source = function::PreprocessCFile(shader_source); \
+		shader_source = PreprocessCFile(shader_source); \
 		layout_shaders[type][output_type] = resource_manager->m_graphics->ReflectVertexShaderInput(shader_source, byte_code); \
 		resource_manager->Deallocate(shader_source.buffer);
 
@@ -3094,7 +3094,7 @@ namespace ECSEngine {
 			for (size_t subindex = 0; subindex < submesh_count && string_submesh_mask[index] == 0; subindex++) {
 				// If it is not the invalid character, " or backslash
 				if (string_mesh->submeshes[subindex].name.size == 1) {
-					unsigned int alphabet_index = function::GetAlphabetIndex(string_mesh->submeshes[subindex].name[0]);
+					unsigned int alphabet_index = GetAlphabetIndex(string_mesh->submeshes[subindex].name[0]);
 					string_submesh_mask[index] = (alphabet_index == index) * subindex;
 				}
 			}

@@ -588,7 +588,7 @@ namespace ECSEngine {
 
 			user_callback = handler;
 			if (handler.data_size > 0) {
-				memcpy(function::OffsetPointer(this, write_size), handler.data, handler.data_size);
+				memcpy(OffsetPointer(this, write_size), handler.data, handler.data_size);
 				write_size += handler.data_size;
 			}
 
@@ -599,7 +599,7 @@ namespace ECSEngine {
 			UIActionHandler handler = user_callback;
 
 			if (user_callback.data_size > 0) {
-				handler.data = function::OffsetPointer(this, sizeof(*this) + base_action_data_size);
+				handler.data = OffsetPointer(this, sizeof(*this) + base_action_data_size);
 			}
 			
 			return handler;
@@ -609,7 +609,7 @@ namespace ECSEngine {
 			if (base_action_data_size == 0) {
 				return base_action_data;
 			}
-			return function::OffsetPointer(this, sizeof(*this));
+			return OffsetPointer(this, sizeof(*this));
 		}
 
 		void ActionWrapperWithCallback(ActionData* action_data)

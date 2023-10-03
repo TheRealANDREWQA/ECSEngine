@@ -1,9 +1,9 @@
 #pragma once
 #include "../../Core.h"
-#include "../Function.h"
 #include "../File.h"
 #include "../../Containers/Stream.h"
 #include "../Reflection/ReflectionTypes.h"
+#include "../../Math/MathHelpers.h"
 
 namespace ECSEngine {
 
@@ -541,7 +541,7 @@ namespace ECSEngine {
 		}
 		else {
 			if (info.stream_type == Reflection::ReflectionStreamFieldType::BasicTypeArray) {
-				unsigned short elements_to_read = function::ClampMax(info.basic_type_count, basic_type_array_count);
+				unsigned short elements_to_read = ClampMax(info.basic_type_count, basic_type_array_count);
 				Read<read_data>(&stream, data, elements_to_read * GetBasicTypeArrayElementSize(info));
 
 				Ignore(&stream, (info.basic_type_count - elements_to_read) * GetBasicTypeArrayElementSize(info));
@@ -562,7 +562,7 @@ namespace ECSEngine {
 									void* allocation = Allocate(allocator, allocate_size);
 									Read<true>(&stream, allocation, byte_size);
 
-									void* null_terminator = function::OffsetPointer(allocation, byte_size);
+									void* null_terminator = OffsetPointer(allocation, byte_size);
 									memset(null_terminator, 0, element_byte_size);
 
 									void** pointer = (void**)data;
@@ -578,7 +578,7 @@ namespace ECSEngine {
 										void* allocation = AllocateEx(allocator, allocate_size);
 										Read<true>(&stream, allocation, byte_size);
 
-										void* null_terminator = function::OffsetPointer(allocation, byte_size);
+										void* null_terminator = OffsetPointer(allocation, byte_size);
 										memset(null_terminator, 0, element_byte_size);
 
 										void** pointer = (void**)data;

@@ -271,7 +271,7 @@ namespace ECSEngine {
 	}
 
 	template<typename Resource>
-	void* GetGraphicsResourceInterface(Resource resource) {
+	ECS_INLINE void* GetGraphicsResourceInterface(Resource resource) {
 		if constexpr (std::is_same_v<Resource, GraphicsContext*>) {
 			return resource;
 		}
@@ -1003,7 +1003,7 @@ namespace ECSEngine {
 		}
 
 		template<typename Resource>
-		void AddInternalResource(Resource resource, bool temporary, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		ECS_INLINE void AddInternalResource(Resource resource, bool temporary, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (!temporary) {
 				AddInternalResource(resource, debug_info);
 			}

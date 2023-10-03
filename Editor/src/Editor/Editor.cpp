@@ -1,8 +1,6 @@
 // ECS_REFLECT
 #include "editorpch.h"
 #include "ECSEngine.h"
-#include "../DrawFunction2.h"
-#include "../DrawFunction.h"
 #include "../../resource.h"
 #include "../UI/ToolbarUI.h"
 #include "../UI/Hub.h"
@@ -17,7 +15,6 @@
 #include "../UI/NotificationBar.h"
 #include "../UI/InspectorData.h"
 #include "../UI/Inspector.h"
-#include <DbgHelp.h>
 #include "ECSEngineBenchmark.h"
 #include "ECSEngineMath.h"
 #include "ECSEngineVisualizeTexture.h"
@@ -28,9 +25,6 @@
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
-
-#pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "Shcore.lib")
 
 class Editor : public ECSEngine::Application {
 public:
@@ -197,7 +191,7 @@ public:
 		size_t duration = timer.GetDurationSinceMarker_us();
 
 		ECS_STACK_CAPACITY_STREAM(char, CHARACTERS, 64);
-		function::ConvertIntToChars(CHARACTERS, duration);
+		ConvertIntToChars(CHARACTERS, duration);
 		OutputDebugStringA(CHARACTERS.buffer);*/
 
 		//auto PackFunctor = [](Stream<void> contents, void* _data) {
@@ -235,7 +229,7 @@ public:
 		//}
 		//size_t duration = timer.GetDurationSinceMarker_us();
 		//ECS_STACK_CAPACITY_STREAM(char, CHARACTERS, 64);
-		//function::ConvertIntToChars(CHARACTERS, duration);
+		//ConvertIntToChars(CHARACTERS, duration);
 		//OutputDebugStringA(CHARACTERS.buffer);
 
 		//ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
@@ -251,7 +245,7 @@ public:
 		////Stream<void> buffer = ReadWholeFileBinary(L"Resources/comp_BC7.dds");
 		//
 		//size_t duration = timer.GetDurationSinceMarker_ms();
-		//function::ConvertIntToChars(console_message, duration);
+		//ConvertIntToChars(console_message, duration);
 		//console_message.Add('\n');
 		//console_message.Add('\0');
 		//OutputDebugStringA(console_message.buffer);
@@ -460,9 +454,9 @@ public:
 		//}
 		//size_t duration = timer.GetDurationSinceMarker_us();
 		//ECS_STACK_CAPACITY_STREAM(char, output, 512);
-		//function::ConvertIntToChars(output, has_signatures);
+		//ConvertIntToChars(output, has_signatures);
 		//output.Add(' ');
-		//function::ConvertIntToChars(output, duration);
+		//ConvertIntToChars(output, duration);
 		//output.Add(' ');
 		//
 		//VectorComponentSignature vector_query(query);
@@ -490,9 +484,9 @@ public:
 
 		///*VECTOR_RESULTS[0] = vector_query.HasComponents(*vectors[348]);
 		//VECTOR_RESULTS[1] = vector_query.HasComponents(*vectors[370]);*/
-		//function::ConvertIntToChars(output, new_signature);
+		//ConvertIntToChars(output, new_signature);
 		//output.Add(' ');
-		//function::ConvertIntToChars(output, duration);
+		//ConvertIntToChars(output, duration);
 		//output.Add('\n');
 		//output[output.size] = '\0';
 		//OutputDebugStringA(output.buffer);
@@ -539,10 +533,10 @@ public:
 			database_ptr);
 		ECS_ASSERT(deserialize_code == ECS_DESERIALIZE_OK);
 
-		ECS_ASSERT(function::CompareStrings(deserialized_database.shader_metadata[0].macros[0].name, metadata.macros[0].name));
-		ECS_ASSERT(function::CompareStrings(deserialized_database.shader_metadata[0].macros[0].definition, metadata.macros[0].definition));
-		ECS_ASSERT(function::CompareStrings(deserialized_database.shader_metadata[0].macros[1].name, metadata.macros[1].name));
-		ECS_ASSERT(function::CompareStrings(deserialized_database.shader_metadata[0].macros[1].definition, metadata.macros[1].definition));
+		ECS_ASSERT(deserialized_database.shader_metadata[0].macros[0].name == metadata.macros[0].name);
+		ECS_ASSERT(deserialized_database.shader_metadata[0].macros[0].definition == metadata.macros[0].definition);
+		ECS_ASSERT(deserialized_database.shader_metadata[0].macros[1].name == metadata.macros[1].name);
+		ECS_ASSERT(deserialized_database.shader_metadata[0].macros[1].definition == metadata.macros[1].definition);
 
 		ECS_ASSERT(BelongsToAllocator(linear_allocator, deserialized_metadata.name.buffer));
 		ECS_ASSERT(BelongsToAllocator(linear_allocator, deserialized_metadata.path.buffer));
@@ -578,7 +572,7 @@ public:
 		//	Stream<void> iteration_buffer = benchmark_state.GetIterationBuffer();
 
 		//	Stream<t> ts = { iteration_buffer.buffer, iteration_buffer.size / sizeof(t) };
-		//	//function::MakeSequence(ts);
+		//	//MakeSequence(ts);
 		//	char* it = (char*)iteration_buffer.buffer;
 		//	it[iteration_buffer.size - 1] = '\0';
 		//	for (size_t index = 0; index < iteration_buffer.size - 1; index++) {
@@ -594,13 +588,13 @@ public:
 
 		//	while (benchmark_state.Run()) {
 		//		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
-		//		size_t indexu = function::SearchBytes(current_buffer.buffer, current_buffer.size / sizeof(ptr), (size_t)ptr, sizeof(ptr));
+		//		size_t indexu = SearchBytes(current_buffer.buffer, current_buffer.size / sizeof(ptr), (size_t)ptr, sizeof(ptr));
 		//		benchmark_state.DoNotOptimize(indexu);
 		//	}
 
 		//	while (benchmark_state.Run()) {
 		//		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
-		//		auto resultu = function::FindFirstToken(Stream<char>(current_buffer.buffer, current_buffer.size), { &ptr, sizeof(ptr) });
+		//		auto resultu = FindFirstToken(Stream<char>(current_buffer.buffer, current_buffer.size), { &ptr, sizeof(ptr) });
 		//		benchmark_state.DoNotOptimize(resultu.buffer == nullptr ? -1 : resultu.size);
 		//	}
 

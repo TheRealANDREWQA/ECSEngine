@@ -61,8 +61,8 @@ void InspectorIconNameAndPath(UIDrawer* drawer, Stream<wchar_t> path) {
 	UIDrawConfig config;
 
 	ECS_STACK_CAPACITY_STREAM(char, ascii_path, 256);
-	function::ConvertWideCharsToASCII(path, ascii_path);
-	Stream<char> folder_name = function::PathStem(ascii_path);
+	ConvertWideCharsToASCII(path, ascii_path);
+	Stream<char> folder_name = PathStem(ascii_path);
 	drawer->TextLabel(UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_LABEL_TRANSPARENT, config, folder_name);
 	drawer->NextRow();
 
@@ -189,7 +189,7 @@ unsigned int ChangeInspectorDrawFunction(
 		if (inspector_data->data_size > 0) {
 			Deallocate(editor_allocator, inspector_data->draw_data);
 		}
-		inspector_data->draw_data = function::CopyNonZero(editor_allocator, data, data_size);
+		inspector_data->draw_data = CopyNonZero(editor_allocator, data, data_size);
 		inspector_data->draw_function = functions.draw_function;
 		inspector_data->clean_function = functions.clean_function;
 		inspector_data->data_size = data_size;

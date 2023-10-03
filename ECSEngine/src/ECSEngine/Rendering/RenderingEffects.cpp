@@ -3,7 +3,7 @@
 #include "TextureOperations.h"
 #include "GraphicsHelpers.h"
 #include "Graphics.h"
-#include "../Utilities/FunctionInterfaces.h"
+#include "../Utilities/StreamUtilities.h"
 
 namespace ECSEngine {
 
@@ -19,7 +19,7 @@ namespace ECSEngine {
 		Functor&& functor
 	) {
 		for (size_t index = 0; index < count; index++) {
-			const RenderingEffectMesh* element = (const RenderingEffectMesh*)function::OffsetPointer(elements, byte_size * index);
+			const RenderingEffectMesh* element = (const RenderingEffectMesh*)OffsetPointer(elements, byte_size * index);
 			void* cbuffer_data = graphics->MapBuffer(vertex_cbuffer.buffer);
 			element->gpu_mvp_matrix.Store(cbuffer_data);
 			graphics->UnmapBuffer(vertex_cbuffer.buffer);
@@ -202,13 +202,13 @@ namespace ECSEngine {
 		Texture2DDescriptor render_texture_descriptor = GetTextureDescriptor(render_texture);
 
 		uint2 top_left_copy_corner = {
-			function::SaturateSub<unsigned int>(top_left.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS),
-			function::SaturateSub<unsigned int>(top_left.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS)
+			SaturateSub<unsigned int>(top_left.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS),
+			SaturateSub<unsigned int>(top_left.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS)
 		};
 
 		uint2 bottom_right_copy_corner = {
-			function::ClampMax(bottom_right.x + ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS, render_texture_descriptor.size.x),
-			function::ClampMax(bottom_right.y + ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS, render_texture_descriptor.size.y)
+			ClampMax(bottom_right.x + ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS, render_texture_descriptor.size.x),
+			ClampMax(bottom_right.y + ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS, render_texture_descriptor.size.y)
 		};
 
 		uint2 copy_size = bottom_right_copy_corner - top_left_copy_corner;
@@ -258,8 +258,8 @@ namespace ECSEngine {
 			for (unsigned int row = 0; row < copy_size.y; row++) {
 				for (unsigned int column = 0; column < copy_size.x; column++) {
 					unsigned int instance_index, pixel_thickness;
-					function::RetrieveBlendedBits(
-						function::IndexTextureEx(texture_data, row, column, mapped_texture_row_byte_size),
+					RetrieveBlendedBits(
+						IndexTextureEx(texture_data, row, column, mapped_texture_row_byte_size),
 						32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
 						ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
 						instance_index,
@@ -270,7 +270,7 @@ namespace ECSEngine {
 					uint2 current_position = uint2(row + top_left_copy_corner.x, column + top_left_copy_corner.y);
 					uint2 test_top_left = current_position - pixel_thickness2;
 					uint2 test_bottom_right = current_position + pixel_thickness2;
-					uint4 overlap = function::RectangleOverlap(test_top_left, test_bottom_right, top_left, bottom_right);
+					uint4 overlap = RectangleOverlap(test_top_left, test_bottom_right, top_left, bottom_right);
 
 					// Now iterate over the positions where instances need to be retrieved
 					unsigned int overlap_width = overlap.z - overlap.x + 1;
@@ -311,8 +311,8 @@ namespace ECSEngine {
 			for (unsigned int row = 0; row < dimensions.y; row++) {
 				for (unsigned int column = 0; column < dimensions.x; column++) {
 					unsigned int instance_index, pixel_thickness;
-					unsigned int current_value = function::IndexTextureEx(texture_data, start.y + row, start.x + column, texture_data_row_byte_size);
-					function::RetrieveBlendedBits(
+					unsigned int current_value = IndexTextureEx(texture_data, start.y + row, start.x + column, texture_data_row_byte_size);
+					RetrieveBlendedBits(
 						current_value,
 						32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
 						ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
@@ -324,16 +324,16 @@ namespace ECSEngine {
 						instance_index--;
 						CapacityStream<unsigned int> addition = { &instance_index, 1, 1 };
 						// Check to see if it exists and add it if not
-						function::StreamAddUniqueSearchBytes(*filtered_values, addition);
+						StreamAddUniqueSearchBytes(*filtered_values, addition);
 					}
 				}
 			}
 		}
 		else if (dimensions.x == 1 && dimensions.y == 1) {
-			unsigned int left_start_count = function::ClampMax<unsigned int>(start.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
-			unsigned int top_start_count = function::ClampMax<unsigned int>(start.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
-			unsigned int right_end_count = function::ClampMax<unsigned int>(texture_dimensions.x - bottom_right.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
-			unsigned int bottom_end_count = function::ClampMax<unsigned int>(texture_dimensions.y - bottom_right.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+			unsigned int left_start_count = ClampMax<unsigned int>(start.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+			unsigned int top_start_count = ClampMax<unsigned int>(start.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+			unsigned int right_end_count = ClampMax<unsigned int>(texture_dimensions.x - bottom_right.x, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
+			unsigned int bottom_end_count = ClampMax<unsigned int>(texture_dimensions.y - bottom_right.y, ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
 
 			uint2 initial_position = start;
 			start.x -= left_start_count;
@@ -346,8 +346,8 @@ namespace ECSEngine {
 			for (unsigned int row = 0; row < top_start_count + bottom_end_count + 1; row++) {
 				for (unsigned int column = 0; column < left_start_count + right_end_count + 1; column++) {
 					unsigned int instance_index, pixel_thickness;
-					unsigned int current_value = function::IndexTextureEx(texture_data, start.y + row, start.x + column, texture_data_row_byte_size);
-					function::RetrieveBlendedBits(
+					unsigned int current_value = IndexTextureEx(texture_data, start.y + row, start.x + column, texture_data_row_byte_size);
+					RetrieveBlendedBits(
 						current_value,
 						32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
 						ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
@@ -422,7 +422,7 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < texture_dimensions.y; index++) {
 			memcpy(values, mapped_values.data, sizeof(unsigned int) * texture_dimensions.x);
 			values += texture_dimensions.x;
-			mapped_values.data = function::OffsetPointer(mapped_values.data, mapped_values.row_byte_size);
+			mapped_values.data = OffsetPointer(mapped_values.data, mapped_values.row_byte_size);
 		}
 
 		graphics->UnmapTexture(staging_texture);

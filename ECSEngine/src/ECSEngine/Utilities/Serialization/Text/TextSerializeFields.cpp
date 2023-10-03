@@ -64,7 +64,7 @@ namespace ECSEngine {
 					CapacityStream<char> capacity_characters(character_stream, 0, -1);
 					size_t write_count = ConvertReflectionBasicFieldTypeToString(
 						basic_type, 
-						function::OffsetPointer(fields[index].data.buffer, byte_size * subindex), 
+						OffsetPointer(fields[index].data.buffer, byte_size * subindex), 
 						capacity_characters
 					);
 
@@ -128,7 +128,7 @@ namespace ECSEngine {
 				size_t byte_size = GetReflectionBasicFieldTypeByteSize(basic_type);
 				for (size_t subindex = 0; subindex < fields[index].data.size; subindex++) {
 					// a '\t' and a '\n' are added for each data entry
-					total_size += ConvertReflectionBasicFieldTypeToStringSize(basic_type, function::OffsetPointer(fields[index].data.buffer, byte_size * subindex)) + sizeof(char) * 2;
+					total_size += ConvertReflectionBasicFieldTypeToStringSize(basic_type, OffsetPointer(fields[index].data.buffer, byte_size * subindex)) + sizeof(char) * 2;
 				}
 
 				// A new line with a ]'\n' is added at the end
@@ -245,7 +245,7 @@ namespace ECSEngine {
 				}
 
 				// If another new line is found, check to see that the end deserialize_string is here
-				if (!function::CompareStrings(Stream<char>(second_last_new_line + 1, last_new_line - second_last_new_line), ECS_END_TEXT_SERIALIZE_STRING)) {
+				if (Stream<char>(second_last_new_line + 1, last_new_line - second_last_new_line) != ECS_END_TEXT_SERIALIZE_STRING) {
 					// If it's not, the file is corrupted
 					return ECS_TEXT_DESERIALIZE_FAILED_TO_READ_SOME_FIELDS;
 				}
@@ -358,7 +358,7 @@ namespace ECSEngine {
 
 			const char* current_character = characters;
 			// Parse until the first type identifier characters
-			while (current_character < new_line && !function::IsCodeIdentifierCharacter(*current_character)) {
+			while (current_character < new_line && !IsCodeIdentifierCharacter(*current_character)) {
 				current_character++;
 			}
 
@@ -370,7 +370,7 @@ namespace ECSEngine {
 
 			// Read the identifier
 			const char* identifier_start = current_character;
-			while (current_character < new_line && function::IsCodeIdentifierCharacter(*current_character)) {
+			while (current_character < new_line && IsCodeIdentifierCharacter(*current_character)) {
 				current_character++;
 			}
 
@@ -505,13 +505,13 @@ namespace ECSEngine {
 								array_data = allocate(total_size);
 								// Copy the values from the segmented allocations first
 								for (size_t index = 0; index < segmented_allocations.size; index++) {
-									memcpy(function::OffsetPointer(array_data, copy_offset), segmented_allocations[index].buffer, segmented_allocations[index].size);
+									memcpy(OffsetPointer(array_data, copy_offset), segmented_allocations[index].buffer, segmented_allocations[index].size);
 									copy_offset += segmented_allocations[index].size;
 									deallocate(segmented_allocations[index].buffer, 0);
 								}
 
 								// Copy the remaining stack buffer elements
-								memcpy(function::OffsetPointer(array_data, copy_offset), temporary_stack_values.buffer, temporary_stack_values.size);
+								memcpy(OffsetPointer(array_data, copy_offset), temporary_stack_values.buffer, temporary_stack_values.size);
 							}
 						}
 
@@ -618,7 +618,7 @@ namespace ECSEngine {
 	)
 	{
 		return TextDeserializeFieldsImplementation<true, false>(fields, stream, [&](size_t byte_size) {
-			void* allocation = function::OffsetPointer(memory_pool);
+			void* allocation = OffsetPointer(memory_pool);
 			memory_pool.size += byte_size;
 			ECS_ASSERT(memory_pool.size <= memory_pool.capacity);
 			return allocation;

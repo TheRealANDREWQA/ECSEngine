@@ -123,7 +123,7 @@ namespace ECSEngine {
 
 		// The component index will be used to directly index into the buffers
 		ECS_INLINE void* GetComponentByIndex(unsigned int stream_index, unsigned char component_index) {
-			return function::OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
+			return OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
 		}
 
 		ECS_INLINE const void* GetComponentByIndex(EntityInfo info, unsigned char component_index) const {
@@ -131,7 +131,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE const void* GetComponentByIndex(unsigned int stream_index, unsigned char component_index) const {
-			return function::OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
+			return OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
 		}
 
 		// It will copy the entities - consider using the other variant since it will alias the 

@@ -8,12 +8,9 @@ namespace ECSEngine {
 	// It will write the debug allocator call file
 	extern bool ECS_GLOBAL_ASSERT_WRITE_DEBUG_ALLOCATOR_CALLS;
 
-	namespace function {
+	ECSENGINE_API void Assert(bool condition, const char* filename, unsigned int line, const char* error_message = nullptr);
 
-		ECSENGINE_API void Assert(bool condition, const char* filename, unsigned int line, const char* error_message = nullptr);
-
-#define ECS_ASSERT(condition, ...) function::Assert(condition, __FILE__, __LINE__, __VA_ARGS__);
+#define ECS_ASSERT(condition, ...) Assert(condition, __FILE__, __LINE__, __VA_ARGS__);
 	
-	}
 
 }

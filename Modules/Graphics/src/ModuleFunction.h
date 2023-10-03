@@ -30,7 +30,7 @@ extern "C" {
 
 #endif
 
-#if 0
+#if 1
 
 	GRAPHICS_API void ModuleRegisterDebugDrawFunction(ECSEngine::ModuleRegisterDebugDrawFunctionData* data);
 

@@ -148,7 +148,7 @@ namespace ECSEngine {
 			Read<true>(&stream, temp_name, (sizeof(char) + 1) * name_size);
 			unsigned int section_index = -1;
 			for (size_t subindex = 0; subindex < sections.size && section_index == -1; index++) {
-				if (function::CompareStrings(Stream<char>(temp_name, name_size), Stream<char>(sections[subindex].name, name_sizes[subindex]))) {
+				if (Stream<char>(temp_name, name_size) == Stream<char>(sections[subindex].name, name_sizes[subindex])) {
 					section_index = subindex;
 				}
 			}
@@ -174,7 +174,7 @@ namespace ECSEngine {
 
 	size_t DeserializeSectionCount(uintptr_t stream, size_t header_size)
 	{
-		return *(size_t*)function::OffsetPointer((void*)stream, header_size);
+		return *(size_t*)OffsetPointer((void*)stream, header_size);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -202,7 +202,7 @@ namespace ECSEngine {
 
 			unsigned int section_index = -1;
 			for (size_t subindex = 0; subindex < serialize_data.size; subindex++) {
-				if (function::CompareStrings(Stream<char>(temp_name, name_size), Stream<char>(serialize_data[subindex].name, section_name_sizes[subindex]))) {
+				if (Stream<char>(temp_name, name_size) == Stream<char>(serialize_data[subindex].name, section_name_sizes[subindex])) {
 					section_index = subindex;
 					break;
 				}

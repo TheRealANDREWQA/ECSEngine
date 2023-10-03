@@ -62,7 +62,7 @@ void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state,
 {
 	unsigned int index = *(unsigned int*)stack_memory;
 
-	GameData* game_data = (GameData*)function::OffsetPointer(stack_memory, sizeof(unsigned int));
+	GameData* game_data = (GameData*)OffsetPointer(stack_memory, sizeof(unsigned int));
 	
 	memset(game_data, 0, sizeof(*game_data));
 	game_data->editor_state = editor_state;
@@ -72,7 +72,7 @@ void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state,
 	descriptor.destroy_action = GameWindowDestroy;
 	descriptor.destroy_action_data = editor_state;
 
-	CapacityStream<char> window_name(function::OffsetPointer(game_data, sizeof(*game_data)), 0, 128);
+	CapacityStream<char> window_name(OffsetPointer(game_data, sizeof(*game_data)), 0, 128);
 	GetGameUIWindowName(index, window_name);
 
 	descriptor.window_name = window_name;
@@ -103,7 +103,7 @@ void DestroyInvalidGameUIWindows(EditorState* editor_state)
 void GetGameUIWindowName(unsigned int index, CapacityStream<char>& name)
 {
 	name.CopyOther(GAME_WINDOW_NAME);
-	function::ConvertIntToChars(name, index);
+	ConvertIntToChars(name, index);
 }
 
 unsigned int GetGameUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index)

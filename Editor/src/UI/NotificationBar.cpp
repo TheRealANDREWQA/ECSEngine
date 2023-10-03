@@ -109,7 +109,7 @@ void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		text_alignment.horizontal = ECS_UI_ALIGN_LEFT;
 		config.AddFlag(text_alignment);
 
-		Stream<char> new_line = function::FindFirstCharacter(message->message.buffer, '\n');
+		Stream<char> new_line = FindFirstCharacter(message->message.buffer, '\n');
 		Stream<char> draw_message = message->message;
 		// Only display a single line
 		if (new_line.buffer != nullptr) {

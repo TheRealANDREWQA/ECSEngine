@@ -1,6 +1,5 @@
 #include "ecspch.h"
 #include "Hashing.h"
-#include "../Utilities/Function.h"
 
 namespace ECSEngine {
 
@@ -46,15 +45,15 @@ namespace ECSEngine {
 			size_t index = 0;
 			Vec32uc char_compare, other_char_compare;
 			while (size - index > char_compare.size()) {
-				char_compare.load(function::OffsetPointer(ptr, index));
-				other_char_compare.load(function::OffsetPointer(other.ptr, index));
+				char_compare.load(OffsetPointer(ptr, index));
+				other_char_compare.load(OffsetPointer(other.ptr, index));
 				if (horizontal_and(char_compare == other_char_compare) == false) {
 					return false;
 				}
 				index += char_compare.size();
 			}
-			char_compare.load_partial(size - index, function::OffsetPointer(ptr, index));
-			other_char_compare.load_partial(size - index, function::OffsetPointer(other.ptr, index));
+			char_compare.load_partial(size - index, OffsetPointer(ptr, index));
+			other_char_compare.load_partial(size - index, OffsetPointer(other.ptr, index));
 			return horizontal_and(char_compare == other_char_compare);
 		}
 	}

@@ -22,6 +22,8 @@ namespace ECSEngine {
 		unsigned short milliseconds;
 	};
 
+	ECSENGINE_API bool IsDateLater(Date first, Date second);
+
 #pragma region Alphabet and character type
 
 	// Helper Visualing enum
@@ -135,6 +137,16 @@ namespace ECSEngine {
 		Tab,
 		Unknown
 	};
+
+	template<typename CharacterType>
+	ECS_INLINE CharacterType Character(char character) {
+		if constexpr (std::is_same_v<CharacterType, char>) {
+			return character;
+		}
+		else if constexpr (std::is_same_v<CharacterType, wchar_t>) {
+			return (wchar_t)((int)L'\0' + (int)character);
+		}
+	}
 
 #pragma endregion
 

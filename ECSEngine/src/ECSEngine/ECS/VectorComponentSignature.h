@@ -67,9 +67,6 @@ namespace ECSEngine {
 	);
 
 	struct ECSENGINE_API ArchetypeQuery {
-		ECS_INLINE ArchetypeQuery() {}
-		ECS_INLINE ArchetypeQuery(VectorComponentSignature _unique, VectorComponentSignature _shared) : unique(_unique), shared(_shared) {}
-		
 		ECS_INLINE bool ECS_VECTORCALL operator == (ArchetypeQuery other) const {
 			return unique == other.unique && shared == other.shared;
 		}
@@ -85,14 +82,6 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API ArchetypeQueryExclude {
-		ECS_INLINE ArchetypeQueryExclude() {}
-		ECS_INLINE ArchetypeQueryExclude(
-			VectorComponentSignature _unique,
-			VectorComponentSignature _shared,
-			VectorComponentSignature _exclude_unique,
-			VectorComponentSignature _exclude_shared
-		) : unique(_unique), shared(_shared), unique_excluded(_exclude_unique), shared_excluded(_exclude_shared) {}
-
 		ECS_INLINE bool ECS_VECTORCALL operator == (ArchetypeQueryExclude other) const {
 			return unique == other.unique && shared == other.shared && unique_excluded == other.unique_excluded
 				&& shared_excluded == other.shared_excluded;
@@ -110,9 +99,100 @@ namespace ECSEngine {
 		VectorComponentSignature shared_excluded;
 	};
 
+	struct ArchetypeQueryOptional {
+		ECS_INLINE bool ECS_VECTORCALL Verifies(VectorComponentSignature unique, VectorComponentSignature shared) const {
+			return base_query.Verifies(unique, shared);
+		}
+
+		ECS_INLINE bool ECS_VECTORCALL VerifiesUnique(VectorComponentSignature unique) const {
+			return base_query.VerifiesUnique(unique);
+		}
+
+		ECS_INLINE bool ECS_VECTORCALL VerifiesShared(VectorComponentSignature shared) const {
+			return base_query.VerifiesShared(shared);
+		}
+
+		ArchetypeQuery base_query;
+		ComponentSignature unique_optional;
+		ComponentSignature shared_optional;
+	};
+
+	struct ArchetypeQueryExcludeOptional {
+		ECS_INLINE bool ECS_VECTORCALL Verifies(VectorComponentSignature unique, VectorComponentSignature shared) const {
+			return base_query.Verifies(unique, shared);
+		}
+
+		ECS_INLINE bool ECS_VECTORCALL VerifiesUnique(VectorComponentSignature unique) const {
+			return base_query.VerifiesUnique(unique);
+		}
+
+		ECS_INLINE bool ECS_VECTORCALL VerifiesShared(VectorComponentSignature shared) const {
+			return base_query.VerifiesShared(shared);
+		}
+
+		ArchetypeQueryExclude base_query;
+		ComponentSignature unique_optional;
+		ComponentSignature shared_optiona;
+	};
+
 	struct ArchetypeQueryResult {
 		Stream<unsigned int> archetypes;
 		ArchetypeQuery components;
+	};
+
+	enum ECS_ARCHETYPE_QUERY_DESCRIPTOR_TYPE : unsigned char {
+		ECS_ARCHETYPE_QUERY_SIMPLE,				// No exclude or optional components
+		ECS_ARCHETYPE_QUERY_EXCLUDE,			// Has exclude but no optional components
+		ECS_ARCHETYPE_QUERY_OPTIONAL,			// No exclude but has optional components
+		ECS_ARCHETYPE_QUERY_EXCLUDE_OPTIONAL	// Has exclude and has optional components
+	};
+
+	struct ECSENGINE_API ArchetypeQueryDescriptor {
+		// Returns true if there are only unique and shared components specified
+		// No exclude or optional components
+		bool IsSimple() const;
+
+		// Returns true if it has exclude components and no optional components
+		bool IsExclude() const;
+
+		// Returns true if it has optional components but no exclude
+		bool IsOptional() const;
+
+		// Returns true if it has optional components and exclude components
+		bool IsExcludeOptional() const;
+
+		ECS_ARCHETYPE_QUERY_DESCRIPTOR_TYPE GetType() const;
+
+		ECS_INLINE ArchetypeQuery AsSimple() const {
+			return { unique, shared };
+		}
+
+		ECS_INLINE ArchetypeQueryExclude AsExclude() const {
+			return { unique, shared, unique_exclude, shared_exclude };
+		}
+
+		// The optional reference the same component values as here (no copy is performed)
+		ECS_INLINE ArchetypeQueryOptional AsOptional() const {
+			return { AsSimple(), unique_optional, shared_optional };
+		}
+
+		// The optional reference the same component values as here (no copy is performed)
+		ECS_INLINE ArchetypeQueryExcludeOptional AsExcludeOptional() const {
+			return { AsExclude(), unique_optional, shared_optional };
+		}
+
+		// Writes the mandatory unique and then the optional uniques and returns the new signature
+		ComponentSignature AggregateUnique(Component* components) const;
+
+		// Writes the mandatory shared and then the optional shareds and returns the new signature
+		ComponentSignature AggregateShared(Component* components) const;
+
+		ComponentSignature unique;
+		ComponentSignature shared;
+		ComponentSignature unique_exclude = {};
+		ComponentSignature shared_exclude = {};
+		ComponentSignature unique_optional = {};
+		ComponentSignature shared_optional = {};
 	};
 
 }

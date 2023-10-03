@@ -26,7 +26,8 @@ namespace ECSEngine {
 		Graphics* graphics,
 		Texture2D& texture, 
 		ECS_TEXTURE_COMPRESSION compression_type, 
-		CompressTextureDescriptor descriptor = {}
+		CompressTextureDescriptor descriptor = {},
+		DebugInfo debug_info = ECS_DEBUG_INFO
 	);
 
 	// It relies on the immediate context for the staging texture
@@ -35,7 +36,8 @@ namespace ECSEngine {
 		Graphics* graphics,
 		Texture2D& texture, 
 		ECS_TEXTURE_COMPRESSION_EX explicit_compression_type,
-		CompressTextureDescriptor descriptor = {}
+		CompressTextureDescriptor descriptor = {},
+		DebugInfo debug_info = ECS_DEBUG_INFO
 	);
 
 	// Data is a stream of data for each of the textures mip levels
@@ -50,7 +52,8 @@ namespace ECSEngine {
 		size_t height,
 		ECS_TEXTURE_COMPRESSION compression_type,
 		bool temporary_texture = false,
-		CompressTextureDescriptor descriptor = {}
+		CompressTextureDescriptor descriptor = {},
+		DebugInfo debug_info = ECS_DEBUG_INFO
 	);
 
 	// Data is a stream of data for each of the textures mip levels
@@ -63,7 +66,8 @@ namespace ECSEngine {
 		size_t height,
 		ECS_TEXTURE_COMPRESSION_EX compression_type,
 		bool temporary_texture = false,
-		CompressTextureDescriptor descriptor = {}
+		CompressTextureDescriptor descriptor = {},
+		DebugInfo debug_info = ECS_DEBUG_INFO
 	);
 
 	// It doesn't relly on the immediate context - if no allocator is specified, it will use malloc to generate the temporary data

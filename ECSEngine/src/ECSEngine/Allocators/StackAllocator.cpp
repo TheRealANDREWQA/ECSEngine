@@ -1,6 +1,6 @@
 #include "ecspch.h";
 #include "StackAllocator.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 #include "AllocatorCallsDebug.h"
 
 namespace ECSEngine {
@@ -11,7 +11,7 @@ namespace ECSEngine {
 		// calculating the current pointer and aligning it
 		uintptr_t current_pointer = (uintptr_t)(m_buffer + m_top);
 
-		uintptr_t offset = function::AlignPointerStack(current_pointer, alignment);
+		uintptr_t offset = AlignPointerStack(current_pointer, alignment);
 
 		// transforming to relative offset
 		offset -= (uintptr_t)m_buffer;

@@ -434,7 +434,7 @@ namespace ECSEngine {
 
 		struct UIDrawerNumberInputCallbackData {
 			ECS_INLINE void* GetUserData() const {
-				return relative_user_data ? function::OffsetPointer(this, user_action_data_offset) : user_action_data;
+				return relative_user_data ? OffsetPointer(this, user_action_data_offset) : user_action_data;
 			}
 
 			Action user_action;

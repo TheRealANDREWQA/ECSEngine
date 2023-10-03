@@ -109,14 +109,14 @@ void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		ForEachDirectory(backup_folder, &data, [](Stream<wchar_t> path, void* _data) {
 			FunctorData* data = (FunctorData*)_data;
 
-			Stream<wchar_t> filename = function::PathFilename(path);
-			Date date = function::ConvertStringToDate(filename, ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_DAY
+			Stream<wchar_t> filename = PathFilename(path);
+			Date date = ConvertStringToDate(filename, ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_DAY
 				| ECS_LOCAL_TIME_FORMAT_MONTH | ECS_LOCAL_TIME_FORMAT_YEAR);
-			if (function::IsDateLater(data->current_date, date)) {
+			if (IsDateLater(data->current_date, date)) {
 				data->current_date = date;
 				data->folder->size = data->base_folder_size;
 				data->folder->Add(ECS_OS_PATH_SEPARATOR);
-				data->folder->AddStreamSafe(function::PathFilename(path));
+				data->folder->AddStreamSafe(PathFilename(path));
 			}
 
 			return true;
@@ -171,16 +171,16 @@ void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		}
 		
 		data->drawer->Indent(2.0f);
-		Stream<wchar_t> filename = function::PathFilename(path);
+		Stream<wchar_t> filename = PathFilename(path);
 		ECS_STACK_CAPACITY_STREAM(char, ascii_filename, 512);
-		function::ConvertWideCharsToASCII(filename, ascii_filename);
+		ConvertWideCharsToASCII(filename, ascii_filename);
 		ascii_filename[ascii_filename.size] = '\0';
 		data->drawer->Text(ascii_filename.buffer);
 
 		// Display the total size of that backup
 		size_t folder_size = GetFileByteSize(path);
 		ECS_STACK_CAPACITY_STREAM(char, byte_size_string, 64);
-		function::ConvertByteSizeToString(folder_size, byte_size_string);
+		ConvertByteSizeToString(folder_size, byte_size_string);
 		data->drawer->Text(byte_size_string.buffer);
 		data->backup_total_byte_size += folder_size;
 		
@@ -228,7 +228,7 @@ void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 	else {
 		ECS_STACK_CAPACITY_STREAM(char, total_backup_size, 128);
 		total_backup_size.CopyOther("Total backup byte size: ");
-		function::ConvertByteSizeToString(functor_data.backup_total_byte_size, total_backup_size);
+		ConvertByteSizeToString(functor_data.backup_total_byte_size, total_backup_size);
 		drawer.Text(total_backup_size.buffer);
 		drawer.NextRow();
 	}
@@ -260,7 +260,7 @@ void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 
 	Date current_date = OS::GetLocalTime();
 	backup_folder.Add(ECS_OS_PATH_SEPARATOR);
-	function::ConvertDateToString(current_date, backup_folder, ECS_LOCAL_TIME_FORMAT_ALL ^ ECS_LOCAL_TIME_FORMAT_SECONDS ^ ECS_LOCAL_TIME_FORMAT_MILLISECONDS | ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON);
+	ConvertDateToString(current_date, backup_folder, ECS_LOCAL_TIME_FORMAT_ALL ^ ECS_LOCAL_TIME_FORMAT_SECONDS ^ ECS_LOCAL_TIME_FORMAT_MILLISECONDS | ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON);
 	active_state.state = !ExistsFileOrFolder(backup_folder);
 	config.AddFlag(active_state);
 	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ACTIVE_STATE, config, "Manual backup", { manual_backup, editor_state, 0 });

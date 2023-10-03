@@ -174,7 +174,7 @@ namespace ECSEngine {
 
 		memset(header->reserved, 0, sizeof(header->reserved));
 
-		ComponentPair* component_pairs = (ComponentPair*)function::OffsetPointer(buffering, buffering_size);
+		ComponentPair* component_pairs = (ComponentPair*)OffsetPointer(buffering, buffering_size);
 
 		// Determine the component count
 		ComponentPair* current_unique_pair = component_pairs;
@@ -200,7 +200,7 @@ namespace ECSEngine {
 			}
 		}
 
-		SharedComponentPair* shared_component_pairs = (SharedComponentPair*)function::OffsetPointer(buffering, buffering_size);
+		SharedComponentPair* shared_component_pairs = (SharedComponentPair*)OffsetPointer(buffering, buffering_size);
 
 		SharedComponentPair* current_shared_pair = shared_component_pairs;
 		for (unsigned int index = 0; index < entity_manager->m_shared_components.size; index++) {
@@ -229,7 +229,7 @@ namespace ECSEngine {
 
 		ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
 
-		GlobalComponentPair* global_component_pairs = (GlobalComponentPair*)function::OffsetPointer(buffering, buffering_size);
+		GlobalComponentPair* global_component_pairs = (GlobalComponentPair*)OffsetPointer(buffering, buffering_size);
 
 		// Determine the component count
 		GlobalComponentPair* current_global_pair = global_component_pairs;
@@ -271,7 +271,7 @@ namespace ECSEngine {
 				auto component_info = component_table->GetValue(component);
 
 				if (component_info.name.size > 0) {
-					memcpy(function::OffsetPointer(buffering, buffering_size), component_info.name.buffer, component_info.name.size);
+					memcpy(OffsetPointer(buffering, buffering_size), component_info.name.buffer, component_info.name.size);
 					buffering_size += component_info.name.size;
 				}
 			}
@@ -285,7 +285,7 @@ namespace ECSEngine {
 
 		// Write the shared instances for each shared component now
 		for (unsigned int index = 0; index < header->shared_component_count; index++) {
-			CapacityStream<SharedInstance> instances = { function::OffsetPointer(buffering, buffering_size), 0, ECS_KB * 64 };
+			CapacityStream<SharedInstance> instances = { OffsetPointer(buffering, buffering_size), 0, ECS_KB * 64 };
 			entity_manager->GetSharedComponentInstanceAll(shared_component_pairs[index].component, instances);
 			buffering_size += instances.MemoryOf(instances.size);
 		}
@@ -298,7 +298,7 @@ namespace ECSEngine {
 		// It will be filled with the same fields as the unique component (at the moment all header
 		// data is the same)
 		auto write_header_component_data = [&](auto component_pairs_stream, auto component_table, auto* header_data) {
-			void* header_component_data = function::OffsetPointer(buffering, buffering_size);
+			void* header_component_data = OffsetPointer(buffering, buffering_size);
 			for (size_t index = 0; index < component_pairs_stream.size; index++) {
 				auto component_info = component_table->GetValue(component_pairs_stream[index].component);
 				if (component_info.header_function != nullptr) {
@@ -313,7 +313,7 @@ namespace ECSEngine {
 					ECS_ASSERT(write_size <= header_data->buffer_capacity);
 
 					component_pairs_stream[index].header_data_size = write_size;
-					header_component_data = function::OffsetPointer(header_component_data, write_size);
+					header_component_data = OffsetPointer(header_component_data, write_size);
 					buffering_size += write_size;
 				}
 			}
@@ -350,7 +350,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		uintptr_t shared_component_buffering_instances_ptr = (uintptr_t)function::OffsetPointer(buffering, buffering_size);
+		uintptr_t shared_component_buffering_instances_ptr = (uintptr_t)OffsetPointer(buffering, buffering_size);
 
 		// Now write the named shared instances
 		for (unsigned int index = 0; index < header->shared_component_count; index++) {
@@ -382,14 +382,14 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < header->shared_component_count; index++) {
 			Component current_component = registered_shared_components[index];
 			SerializeEntityManagerSharedComponentInfo component_info = shared_component_table->GetValue(current_component);
-			unsigned int* instance_data_sizes = (unsigned int*)function::OffsetPointer(buffering, buffering_size);
+			unsigned int* instance_data_sizes = (unsigned int*)OffsetPointer(buffering, buffering_size);
 			buffering_size += sizeof(unsigned int) * entity_manager->m_shared_components[current_component].instances.stream.size;
 
 			unsigned int write_index = 0;
 			bool write_success = true;
 			entity_manager->m_shared_components[current_component].instances.stream.ForEachIndex([&](unsigned int instance_index) {
 				SerializeEntityManagerSharedComponentData function_data;
-				function_data.buffer = function::OffsetPointer(buffering, buffering_size);
+				function_data.buffer = OffsetPointer(buffering, buffering_size);
 				function_data.buffer_capacity = ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY - buffering_size;
 				function_data.component_data = entity_manager->m_shared_components[current_component].instances[instance_index];
 				function_data.extra_data = component_info.extra_data;
@@ -417,11 +417,11 @@ namespace ECSEngine {
 		// Write before each serialization the size of the data
 		for (unsigned int index = 0; index < entity_manager->m_global_component_count; index++) {
 			SerializeEntityManagerGlobalComponentInfo component_info = global_component_table->GetValue(entity_manager->m_global_components[index]);
-			unsigned int* global_component_size = (unsigned int*)function::OffsetPointer(buffering, buffering_size);
+			unsigned int* global_component_size = (unsigned int*)OffsetPointer(buffering, buffering_size);
 			buffering_size += sizeof(unsigned int);
 
 			SerializeEntityManagerGlobalComponentData function_data;
-			function_data.buffer = function::OffsetPointer(buffering, buffering_size);
+			function_data.buffer = OffsetPointer(buffering, buffering_size);
 			function_data.buffer_capacity = ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY - buffering_size;
 			function_data.components = entity_manager->m_global_components_data[index];
 			function_data.extra_data = component_info.extra_data;
@@ -462,7 +462,7 @@ namespace ECSEngine {
 			ComponentSignature shared = archetype->GetSharedSignature();
 			unsigned int base_count = archetype->GetBaseCount();
 
-			ArchetypeHeader* archetype_header = (ArchetypeHeader*)function::OffsetPointer(buffering, buffering_size);
+			ArchetypeHeader* archetype_header = (ArchetypeHeader*)OffsetPointer(buffering, buffering_size);
 
 			archetype_header->base_count = base_count;
 			archetype_header->shared_count = shared.count;
@@ -478,7 +478,7 @@ namespace ECSEngine {
 			ComponentSignature shared = archetype->GetSharedSignature();
 			unsigned int base_count = archetype->GetBaseCount();
 
-			uintptr_t temp_ptr = (uintptr_t)function::OffsetPointer(buffering, buffering_size);
+			uintptr_t temp_ptr = (uintptr_t)OffsetPointer(buffering, buffering_size);
 
 			Write<true>(&temp_ptr, unique.indices, sizeof(Component) * unique.count);
 			Write<true>(&temp_ptr, shared.indices, sizeof(Component) * shared.count);
@@ -494,7 +494,7 @@ namespace ECSEngine {
 			ComponentSignature shared = archetype->GetSharedSignature();
 			unsigned int base_count = archetype->GetBaseCount();
 
-			uintptr_t temp_ptr = (uintptr_t)function::OffsetPointer(buffering, buffering_size);
+			uintptr_t temp_ptr = (uintptr_t)OffsetPointer(buffering, buffering_size);
 
 			// Write the shared instances for each base archetype in a single stream
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
@@ -508,7 +508,7 @@ namespace ECSEngine {
 			const Archetype* archetype = entity_manager->GetArchetype(index);
 			unsigned int base_count = archetype->GetBaseCount();
 
-			uintptr_t temp_ptr = (uintptr_t)function::OffsetPointer(buffering, buffering_size);
+			uintptr_t temp_ptr = (uintptr_t)OffsetPointer(buffering, buffering_size);
 			// Write the size of each base archetype
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
 				const ArchetypeBase* base = archetype->GetBase(base_index);
@@ -531,12 +531,12 @@ namespace ECSEngine {
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
 				ArchetypeBase* base = (ArchetypeBase*)archetype->GetBase(base_index);
 				for (size_t component_index = 0; component_index < unique.count; component_index++) {
-					unsigned int* current_write_count = (unsigned int*)function::OffsetPointer(buffering, buffering_size);;
+					unsigned int* current_write_count = (unsigned int*)OffsetPointer(buffering, buffering_size);;
 					buffering_size += sizeof(unsigned int);
 
 					SerializeEntityManagerComponentInfo component_info = component_table->GetValue(unique.indices[component_index]);
 					SerializeEntityManagerComponentData function_data;
-					function_data.buffer = function::OffsetPointer(current_write_count, sizeof(unsigned int));
+					function_data.buffer = OffsetPointer(current_write_count, sizeof(unsigned int));
 					function_data.buffer_capacity = ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY - buffering_size;
 					function_data.components = base->GetComponentByIndex(0, component_index);
 					function_data.count = base->m_size;
@@ -625,7 +625,7 @@ namespace ECSEngine {
 		unsigned char found_component_count = 0;
 
 		for (unsigned char index = 0; index < signature_count; index++) {
-			shared_pair_index[index] = function::SearchBytes(component_stream, shared_pair_count, shared_signature_basic[index].value, sizeof(Component));
+			shared_pair_index[index] = SearchBytes(component_stream, shared_pair_count, shared_signature_basic[index].value, sizeof(Component));
 			ECS_ASSERT(shared_pair_index[index] != -1);
 		}
 
@@ -635,7 +635,7 @@ namespace ECSEngine {
 			for (unsigned char component_index = 0; component_index < signature_count; component_index++) {
 				unsigned int component_offset = shared_instance_offsets[shared_pair_index[component_index]];
 				unsigned int instance_count = shared_instance_offsets[shared_pair_index[component_index] + 1] - component_offset;
-				size_t remapp_value = function::SearchBytes(shared_instances + component_offset, instance_count, base_instances[component_index].value, sizeof(SharedInstance));
+				size_t remapp_value = SearchBytes(shared_instances + component_offset, instance_count, base_instances[component_index].value, sizeof(SharedInstance));
 				ECS_ASSERT(remapp_value != -1);
 				base_instances[component_index] = { (short)remapp_value };
 			}
@@ -746,8 +746,8 @@ namespace ECSEngine {
 		if (component_pairs == nullptr) {
 			return allocate_and_read_failure();
 		}
-		SharedComponentPair* shared_component_pairs = (SharedComponentPair*)function::OffsetPointer(component_pairs, component_pair_size);
-		GlobalComponentPair* global_component_pairs = (GlobalComponentPair*)function::OffsetPointer(shared_component_pairs, shared_component_pair_size);
+		SharedComponentPair* shared_component_pairs = (SharedComponentPair*)OffsetPointer(component_pairs, component_pair_size);
+		GlobalComponentPair* global_component_pairs = (GlobalComponentPair*)OffsetPointer(shared_component_pairs, shared_component_pair_size);
 
 		unsigned int component_name_total_size = 0;
 		unsigned int header_component_total_size = 0;
@@ -790,13 +790,13 @@ namespace ECSEngine {
 			return allocate_and_read_failure();
 		}
 
-		void* shared_name_characters = function::OffsetPointer(unique_name_characters, component_name_total_size);
-		void* global_name_characters = function::OffsetPointer(shared_name_characters, shared_component_name_total_size);
-		SharedInstance* registered_shared_instances = (SharedInstance*)function::OffsetPointer(global_name_characters, global_name_total_size);
-		NamedSharedInstanceHeader* named_headers = (NamedSharedInstanceHeader*)function::OffsetPointer(registered_shared_instances, sizeof(SharedInstance) * shared_instance_total_count);
-		void* header_component_data = function::OffsetPointer(named_headers, sizeof(NamedSharedInstanceHeader) * named_shared_instances_count);
-		void* header_shared_component_data = function::OffsetPointer(header_component_data, header_component_total_size);
-		void* header_global_component_data = function::OffsetPointer(header_shared_component_data, header_shared_component_total_size);
+		void* shared_name_characters = OffsetPointer(unique_name_characters, component_name_total_size);
+		void* global_name_characters = OffsetPointer(shared_name_characters, shared_component_name_total_size);
+		SharedInstance* registered_shared_instances = (SharedInstance*)OffsetPointer(global_name_characters, global_name_total_size);
+		NamedSharedInstanceHeader* named_headers = (NamedSharedInstanceHeader*)OffsetPointer(registered_shared_instances, sizeof(SharedInstance) * shared_instance_total_count);
+		void* header_component_data = OffsetPointer(named_headers, sizeof(NamedSharedInstanceHeader) * named_shared_instances_count);
+		void* header_shared_component_data = OffsetPointer(header_component_data, header_component_total_size);
+		void* header_global_component_data = OffsetPointer(header_shared_component_data, header_shared_component_total_size);
 
 		unsigned int* component_name_offsets = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * header.component_count);
 		unsigned int* shared_component_name_offsets = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * header.shared_component_count);
@@ -870,7 +870,7 @@ namespace ECSEngine {
 				Component found_at = { -1 };
 
 				auto iterate_table = [&](unsigned int name_offset, unsigned char name_size) {
-					ResourceIdentifier name(function::OffsetPointer(name_characters, name_offset), name_size);
+					ResourceIdentifier name(OffsetPointer(name_characters, name_offset), name_size);
 					component_table->ForEachConst<true>([&](const auto& info, Component current_component) {
 						if (info.name.size > 0) {
 							ResourceIdentifier identifier(info.name.buffer, info.name.size);
@@ -894,12 +894,10 @@ namespace ECSEngine {
 							iterate_table(name_offsets[component_pair_index], pairs[component_pair_index].name_size);
 						}
 						else {
-							if (!function::CompareStrings(component_info->name,
-								Stream<char>(
-									function::OffsetPointer(name_characters, name_offsets[component_pair_index]),
+							if (component_info->name != Stream<char>(
+									OffsetPointer(name_characters, name_offsets[component_pair_index]),
 									pairs[component_pair_index].name_size
-									)
-							)) {
+								)) {
 								component_info = nullptr;
 								iterate_table(name_offsets[component_pair_index], pairs[component_pair_index].name_size);
 							}
@@ -967,7 +965,7 @@ namespace ECSEngine {
 							}
 						}
 					}
-					*header_component_data = function::OffsetPointer(*header_component_data, component_pair_stream[index].header_data_size);
+					*header_component_data = OffsetPointer(*header_component_data, component_pair_stream[index].header_data_size);
 					// If the component is not found, then the initialization is skipped
 				}
 			}
@@ -1155,7 +1153,7 @@ namespace ECSEngine {
 					DeserializeEntityManagerSharedComponentData function_data;
 					function_data.data_size = instances_sizes[shared_instance];
 					function_data.component = component_storage.buffer;
-					function_data.file_data = function::OffsetPointer(instances_data, current_instance_offset);
+					function_data.file_data = OffsetPointer(instances_data, current_instance_offset);
 					function_data.extra_data = component_info->extra_data;
 					function_data.instance = { (short)shared_instance };
 					function_data.version = shared_component_pairs[index].serialize_version;
@@ -1185,7 +1183,7 @@ namespace ECSEngine {
 			for (unsigned int instance_index = 0; instance_index < shared_component_pairs[index].named_instance_count; instance_index++) {
 				entity_manager->RegisterNamedSharedInstanceCommit(
 					shared_component_pairs[index].component,
-					{ function::OffsetPointer(named_shared_instances_identifiers, named_shared_instances_identifier_total_size), named_headers[named_shared_instances_count].identifier_size },
+					{ OffsetPointer(named_shared_instances_identifiers, named_shared_instances_identifier_total_size), named_headers[named_shared_instances_count].identifier_size },
 					named_headers[named_shared_instances_count].instance
 				);
 
@@ -1259,8 +1257,8 @@ namespace ECSEngine {
 		if (archetype_component_signatures == nullptr) {
 			return allocate_and_read_failure();
 		}
-		SharedInstance* base_archetypes_instances = (SharedInstance*)function::OffsetPointer(archetype_component_signatures, archetypes_component_signature_size);
-		unsigned int* base_archetypes_sizes = (unsigned int*)function::OffsetPointer(base_archetypes_instances, base_archetypes_instance_size);	
+		SharedInstance* base_archetypes_instances = (SharedInstance*)OffsetPointer(archetype_component_signatures, archetypes_component_signature_size);
+		unsigned int* base_archetypes_sizes = (unsigned int*)OffsetPointer(base_archetypes_instances, base_archetypes_instance_size);	
 
 		unsigned int component_signature_offset = 0;
 		unsigned int base_archetype_instances_offset = 0;
@@ -1601,7 +1599,7 @@ namespace ECSEngine {
 
 			void* AllocateAndRead(size_t size, bool* allocation_has_failed) {
 				if (buffering_size + size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY) {
-					void* pointer = function::OffsetPointer(buffering, buffering_size);
+					void* pointer = OffsetPointer(buffering, buffering_size);
 					buffering_size += size;
 					bool success = ReadInto(pointer, size);
 					return success ? pointer : nullptr;
@@ -1726,7 +1724,7 @@ namespace ECSEngine {
 					return -1;
 				}
 
-				current_component = function::OffsetPointer(current_component, type_byte_size);
+				current_component = OffsetPointer(current_component, type_byte_size);
 				total_write_size += serialize_size;
 			}
 
@@ -1739,7 +1737,7 @@ namespace ECSEngine {
 						return -1;
 					}
 
-					current_component = function::OffsetPointer(current_component, type_byte_size);
+					current_component = OffsetPointer(current_component, type_byte_size);
 				}
 			}
 
@@ -1809,7 +1807,7 @@ namespace ECSEngine {
 		if (functor_data->is_unchanged_and_blittable) {
 			memcpy(data->components, data->file_data, data->count * type_byte_size);
 			// This line is useful for linked components
-			data->file_data = function::OffsetPointer(data->file_data, data->count * type_byte_size);
+			data->file_data = OffsetPointer(data->file_data, data->count * type_byte_size);
 		}
 		else {
 			// Must use the deserialize to take care of the data that can be read
@@ -1829,7 +1827,7 @@ namespace ECSEngine {
 					return false;
 				}
 
-				current_component = function::OffsetPointer(current_component, type_byte_size);
+				current_component = OffsetPointer(current_component, type_byte_size);
 			}
 			// This line is useful for linked components
 			data->file_data = (void*)ptr;
@@ -1956,7 +1954,7 @@ namespace ECSEngine {
 		const void* initial_components = data->components;
 
 		for (unsigned int index = starting_index; index < initial_count; index++) {
-			const void* source = function::OffsetPointer(initial_components, index * target_byte_size);
+			const void* source = OffsetPointer(initial_components, index * target_byte_size);
 
 			bool success = ConvertFromTargetToLinkComponent(
 				&convert_base_data,
@@ -1974,7 +1972,7 @@ namespace ECSEngine {
 			unsigned int current_write_size = ReflectionSerializeEntityManagerComponent(data);
 			if (current_write_size <= data->buffer_capacity) {
 				data->buffer_capacity -= current_write_size;
-				data->buffer = function::OffsetPointer(data->buffer, current_write_size);
+				data->buffer = OffsetPointer(data->buffer, current_write_size);
 				functor_data->link_base_data.skipped_count_before++;
 			}
 			else {
@@ -2081,7 +2079,7 @@ namespace ECSEngine {
 			success = ConvertLinkComponentToTarget(
 				&convert_base_data,
 				link_component_storage,
-				function::OffsetPointer(initial_component, index * target_byte_size),
+				OffsetPointer(initial_component, index * target_byte_size),
 				nullptr,
 				nullptr,
 				false
@@ -2193,7 +2191,7 @@ namespace ECSEngine {
 
 		// Allocate a table of this capacity
 		total_count += (float)type_indices.size * 100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR;
-		total_count = function::PowerOfTwoGreater(total_count);
+		total_count = PowerOfTwoGreater(total_count);
 
 		if (table.GetCount() == 0) {
 			table.Initialize(allocator, total_count);
@@ -2214,7 +2212,7 @@ namespace ECSEngine {
 					if (override_components != nullptr) {
 						// Check the component
 						Component type_component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-						if (function::SearchBytes(override_components, overrides.size, type_component.value, sizeof(type_component)) == -1) {
+						if (SearchBytes(override_components, overrides.size, type_component.value, sizeof(type_component)) == -1) {
 							// There is no override
 							functor(type);
 						}
@@ -2222,7 +2220,7 @@ namespace ECSEngine {
 					else {
 						unsigned int overwrite_index = 0;
 						for (; overwrite_index < overrides.size; overwrite_index++) {
-							if (function::CompareStrings(overrides[overwrite_index].name, type->name)) {
+							if (overrides[overwrite_index].name == type->name) {
 								break;
 							}
 						}

@@ -1,11 +1,10 @@
 #include "ecspch.h"
 #include "Graphics.h"
-#include "../Utilities/FunctionInterfaces.h"
 #include "TextureOperations.h"
 #include "GraphicsHelpers.h"
-#include "../Utilities/Function.h"
 #include "../Utilities/File.h"
 #include "../Utilities/Path.h"
+#include "../Utilities/StreamUtilities.h"
 #include "ShaderInclude.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "../Utilities/Crash.h"
@@ -1386,7 +1385,7 @@ namespace ECSEngine {
 		HRESULT result;
 		D3D11_BUFFER_DESC constant_buffer_descriptor = {};
 		// Byte Width must be a multiple of 16, so padd the byte_size
-		constant_buffer_descriptor.ByteWidth = function::AlignPointer(byte_size, 16);
+		constant_buffer_descriptor.ByteWidth = AlignPointer(byte_size, 16);
 		constant_buffer_descriptor.Usage = GetGraphicsNativeUsage(usage);
 		constant_buffer_descriptor.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 		constant_buffer_descriptor.CPUAccessFlags = GetGraphicsNativeCPUAccess(cpu_access);
@@ -1417,7 +1416,7 @@ namespace ECSEngine {
 		HRESULT result;
 		D3D11_BUFFER_DESC constant_buffer_descriptor = {};
 		// Byte Width must be a multiple of 16, so padd the byte_size
-		constant_buffer_descriptor.ByteWidth = function::AlignPointer(byte_size, 16);
+		constant_buffer_descriptor.ByteWidth = AlignPointer(byte_size, 16);
 		constant_buffer_descriptor.Usage = GetGraphicsNativeUsage(usage);
 		constant_buffer_descriptor.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 		constant_buffer_descriptor.CPUAccessFlags = GetGraphicsNativeCPUAccess(cpu_access);
@@ -3561,8 +3560,8 @@ namespace ECSEngine {
 		Material new_material = *material;
 
 		auto copy_buffers = [&](size_t offset, unsigned char copy_count) {
-			ConstantBuffer* old_buffers = (ConstantBuffer*)function::OffsetPointer(material, offset);
-			ConstantBuffer* new_buffers = (ConstantBuffer*)function::OffsetPointer(&new_material, offset);
+			ConstantBuffer* old_buffers = (ConstantBuffer*)OffsetPointer(material, offset);
+			ConstantBuffer* new_buffers = (ConstantBuffer*)OffsetPointer(&new_material, offset);
 			
 			for (unsigned char index = 0; index < copy_count; index++) {
 				new_buffers[index] = TransferGPUResource(old_buffers[index], GetDevice());
@@ -3571,8 +3570,8 @@ namespace ECSEngine {
 		};
 		
 		auto copy_textures = [&](size_t offset, unsigned char copy_count) {
-			ResourceView* old_views = (ResourceView*)function::OffsetPointer(material, offset);
-			ResourceView* new_views = (ResourceView*)function::OffsetPointer(&new_material, offset);
+			ResourceView* old_views = (ResourceView*)OffsetPointer(material, offset);
+			ResourceView* new_views = (ResourceView*)OffsetPointer(&new_material, offset);
 
 			for (unsigned char index = 0; index < copy_count; index++) {
 				new_views[index] = TransferGPUView(old_views[index], GetDevice());
@@ -3676,14 +3675,14 @@ namespace ECSEngine {
 				// DirectX can return the same pointer when resources are created with the same parameters.
 				// So keep looking for places that were also not yet checked
 				void* interface_pointer = m_internal_resources[index].interface_pointer;
-				size_t snapshot_index = function::SearchBytes(
+				size_t snapshot_index = SearchBytes(
 					snapshot.interface_pointers.buffer,
 					snapshot.interface_pointers.size,
 					(size_t)interface_pointer,
 					sizeof(interface_pointer)
 				);
 				while (snapshot_index != -1 && (snapshot_index < snapshot.interface_pointers.size - 1) && was_found[snapshot_index]) {
-					size_t current_offset = function::SearchBytes(
+					size_t current_offset = SearchBytes(
 						snapshot.interface_pointers.buffer + snapshot_index + 1,
 						snapshot.interface_pointers.size - snapshot_index - 1,
 						(size_t)interface_pointer,
@@ -3705,7 +3704,7 @@ namespace ECSEngine {
 					if (mismatch_string != nullptr) {
 						Stream<char> resource_type = GraphicsResourceTypeString(m_internal_resources[index].type);
 						ECS_STACK_CAPACITY_STREAM(char, location_string, 512);
-						function::DebugLocationString(m_internal_resources[index].debug_info, &location_string);
+						DebugLocationString(m_internal_resources[index].debug_info, &location_string);
 						ECS_FORMAT_STRING(*mismatch_string, "Graphics resource with type {#} was added in between snapshots. {#}\n", resource_type, location_string);
 					}
 
@@ -3722,20 +3721,20 @@ namespace ECSEngine {
 		if (mismatch_string == nullptr) {
 			// Now check for all the old resources to see if they have been accidentally removed
 			// If there is a false value then it means that an old resources was removed
-			size_t first_missing = function::SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool));
+			size_t first_missing = SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool));
 			return first_missing == -1 && size_success;
 		}
 		else {
 			bool is_missing = false;
-			size_t missing = function::SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool));
+			size_t missing = SearchBytes(was_found.buffer, snapshot.interface_pointers.size, (size_t)false, sizeof(bool));
 			while (missing < snapshot.interface_pointers.size) {
 				is_missing = true;
 				Stream<char> resource_type = GraphicsResourceTypeString(snapshot.types[missing]);
 				ECS_STACK_CAPACITY_STREAM(char, location_string, 512);
-				function::DebugLocationString(snapshot.debug_infos[missing], &location_string);
+				DebugLocationString(snapshot.debug_infos[missing], &location_string);
 				ECS_FORMAT_STRING(*mismatch_string, "Graphics resource with type {#} was removed in between snapshots. {#}\n", resource_type, location_string);
 
-				missing += function::SearchBytes(was_found.buffer + missing, snapshot.interface_pointers.size - missing, (size_t)false, sizeof(bool));
+				missing += SearchBytes(was_found.buffer + missing, snapshot.interface_pointers.size - missing, (size_t)false, sizeof(bool));
 			}
 
 			return !is_missing && size_success;
@@ -4554,8 +4553,8 @@ namespace ECSEngine {
 		D3D11_TEXTURE2D_DESC descriptor;
 		destination.tex->GetDesc(&descriptor);
 		// Clamp the width and height to 1
-		descriptor.Width = function::ClampMin<unsigned int>(descriptor.Width >> mip_level, 1);
-		descriptor.Height = function::ClampMin<unsigned int>(descriptor.Height >> mip_level, 1);
+		descriptor.Width = ClampMin<unsigned int>(descriptor.Width >> mip_level, 1);
+		descriptor.Height = ClampMin<unsigned int>(descriptor.Height >> mip_level, 1);
 		CopyTextureSubresource(Texture2D(destination.tex), { 0,0 }, mip_level + descriptor.MipLevels * face, source, { 0, 0 }, { descriptor.Width, descriptor.Height }, mip_level, context);
 	}
 
@@ -4676,8 +4675,8 @@ namespace ECSEngine {
 		D3D11_TEXTURE2D_DESC descriptor;
 		texture.tex->GetDesc(&descriptor);
 
-		unsigned int x_count = function::DivideCount(descriptor.Width, compute_thread_sizes.x);
-		unsigned int y_count = function::DivideCount(descriptor.Height, compute_thread_sizes.y);
+		unsigned int x_count = DivideCount(descriptor.Width, compute_thread_sizes.x);
+		unsigned int y_count = DivideCount(descriptor.Height, compute_thread_sizes.y);
 
 		Dispatch({ x_count, y_count, 1 }, context);
 	}
@@ -5402,7 +5401,7 @@ namespace ECSEngine {
 	{
 		unsigned int* mask = (unsigned int*)ECS_STACK_ALLOC(meshes.size * sizeof(unsigned int));
 		Stream<unsigned int> sequence(mask, meshes.size);
-		function::MakeSequence(Stream<unsigned int>(mask, meshes.size));
+		MakeSequence(Stream<unsigned int>(mask, meshes.size));
 
 		Mesh mesh = MeshesToSubmeshes(graphics, meshes, submeshes, sequence, misc_flags);
 		return mesh;

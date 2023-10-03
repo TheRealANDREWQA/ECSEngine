@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "OSFunctions.h"
-#include "Function.h"
+#include "StringUtilities.h"
 #include "../Tools/UI/UIDrawerWindows.h"
 #include "File.h"
 #include "Path.h"
@@ -48,17 +48,17 @@ namespace ECSEngine {
 
 		void ConvertSystemTimeToDate(const SYSTEMTIME* system_time, char* characters) {
 			Stream<char> stream(characters, 0);
-			function::ConvertIntToChars(stream, system_time->wDay);
+			ConvertIntToChars(stream, system_time->wDay);
 			stream.Add('/');
-			function::ConvertIntToChars(stream, system_time->wMonth);
+			ConvertIntToChars(stream, system_time->wMonth);
 			stream.Add('/');
-			function::ConvertIntToChars(stream, system_time->wYear);
+			ConvertIntToChars(stream, system_time->wYear);
 			stream.Add(' ');
-			function::ConvertIntToChars(stream, system_time->wHour);
+			ConvertIntToChars(stream, system_time->wHour);
 			stream.Add(':');
-			function::ConvertIntToChars(stream, system_time->wMinute);
+			ConvertIntToChars(stream, system_time->wMinute);
 			stream.Add(':');
-			function::ConvertIntToChars(stream, system_time->wSecond);
+			ConvertIntToChars(stream, system_time->wSecond);
 			stream[stream.size] = '\0';
 		}
 
@@ -117,13 +117,13 @@ namespace ECSEngine {
 			bool success = GetFileTimesInternal(file_handle, ptr1, ptr2, ptr3);
 			if (success) {
 				if (ptr1 != nullptr) {
-					function::ConvertASCIIToWide(creation_time, ptr1, 256);
+					ConvertASCIIToWide(creation_time, ptr1, 256);
 				}
 				if (ptr2 != nullptr) {
-					function::ConvertASCIIToWide(access_time, ptr2, 256);
+					ConvertASCIIToWide(access_time, ptr2, 256);
 				}
 				if (ptr3 != nullptr) {
-					function::ConvertASCIIToWide(last_write_time, ptr3, 256);
+					ConvertASCIIToWide(last_write_time, ptr3, 256);
 				}
 				return true;
 			}
@@ -193,13 +193,13 @@ namespace ECSEngine {
 			bool success = GetRelativeFileTimesInternal(file_handle, ptr1, ptr2, ptr3);
 			if (success) {
 				if (ptr1 != nullptr) {
-					function::ConvertDurationToChars(creation_time_int, creation_time);
+					ConvertDurationToChars(creation_time_int, creation_time);
 				}
 				if (ptr2 != nullptr) {
-					function::ConvertDurationToChars(access_time_int, access_time);
+					ConvertDurationToChars(access_time_int, access_time);
 				}
 				if (ptr3 != nullptr) {
-					function::ConvertDurationToChars(last_write_time_int, last_write_time);
+					ConvertDurationToChars(last_write_time_int, last_write_time);
 				}
 				return true;
 			}
@@ -221,13 +221,13 @@ namespace ECSEngine {
 
 			if (success) {
 				if (ptr1 != nullptr) {
-					function::ConvertASCIIToWide(creation_time, temp_characters1, 256);
+					ConvertASCIIToWide(creation_time, temp_characters1, 256);
 				}
 				if (ptr2 != nullptr) {
-					function::ConvertASCIIToWide(access_time, temp_characters2, 256);
+					ConvertASCIIToWide(access_time, temp_characters2, 256);
 				}
 				if (ptr3 != nullptr) {
-					function::ConvertASCIIToWide(last_write_time, temp_characters3, 256);
+					ConvertASCIIToWide(last_write_time, temp_characters3, 256);
 				}
 				return true;
 			}
@@ -304,7 +304,7 @@ namespace ECSEngine {
 
 			// Open the handle to the file/directory with delete, read and write sharing options enabled such that it doesn't interfere
 			// with other read/write operations
-			if (function::PathExtensionSize(path) == 0) {
+			if (PathExtensionSize(path) == 0) {
 				// Open a handle to a directory
 				handle = CreateFile(path.buffer, GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
 			}
@@ -381,13 +381,13 @@ namespace ECSEngine {
 			bool success = GetFileTimes(path, ptr1, ptr2, ptr3);
 			if (success) {
 				if (ptr1 != nullptr) {
-					function::ConvertASCIIToWide(creation_time, ptr1, 256);
+					ConvertASCIIToWide(creation_time, ptr1, 256);
 				}
 				if (ptr2 != nullptr) {
-					function::ConvertASCIIToWide(access_time, ptr2, 256);
+					ConvertASCIIToWide(access_time, ptr2, 256);
 				}
 				if (ptr3 != nullptr) {
-					function::ConvertASCIIToWide(last_write_time, ptr3, 256);
+					ConvertASCIIToWide(last_write_time, ptr3, 256);
 				}
 				return true;
 			}
@@ -520,13 +520,13 @@ namespace ECSEngine {
 			bool success = GetRelativeFileTimes(path, ptr1, ptr2, ptr3);
 			if (success) {
 				if (ptr1 != nullptr) {
-					function::ConvertDurationToChars(creation_time_int, creation_time);
+					ConvertDurationToChars(creation_time_int, creation_time);
 				}
 				if (ptr2 != nullptr) {
-					function::ConvertDurationToChars(access_time_int, access_time);
+					ConvertDurationToChars(access_time_int, access_time);
 				}
 				if (ptr3 != nullptr) {
-					function::ConvertDurationToChars(last_write_time_int, last_write_time);
+					ConvertDurationToChars(last_write_time_int, last_write_time);
 				}
 				return true;
 			}
@@ -553,13 +553,13 @@ namespace ECSEngine {
 
 			if (success) {
 				if (ptr1 != nullptr) {
-					function::ConvertASCIIToWide(creation_time, temp_characters1, 256);
+					ConvertASCIIToWide(creation_time, temp_characters1, 256);
 				}
 				if (ptr2 != nullptr) {
-					function::ConvertASCIIToWide(access_time, temp_characters2, 256);
+					ConvertASCIIToWide(access_time, temp_characters2, 256);
 				}
 				if (ptr3 != nullptr) {
-					function::ConvertASCIIToWide(last_write_time, temp_characters3, 256);
+					ConvertASCIIToWide(last_write_time, temp_characters3, 256);
 				}
 				return true;
 			}
@@ -739,7 +739,7 @@ namespace ECSEngine {
 			bool success = function(path);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, error_string, path);
+				size_t written_characters = FormatString(temp_characters, error_string, path);
 				ECS_ASSERT(written_characters < 512);
 				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
 			}
@@ -749,7 +749,7 @@ namespace ECSEngine {
 			bool success = function(path);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, error_string, path);
+				size_t written_characters = FormatString(temp_characters, error_string, path);
 				ECS_ASSERT(written_characters < 512);
 				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
@@ -875,7 +875,7 @@ namespace ECSEngine {
 			bool success = GetFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
+				size_t written_characters = FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
 				ECS_ASSERT(written_characters < 512);
 				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
 			}
@@ -898,7 +898,7 @@ namespace ECSEngine {
 			bool success = GetRelativeFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
+				size_t written_characters = FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
 				ECS_ASSERT(written_characters < 512);
 				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
 			}
@@ -930,7 +930,7 @@ namespace ECSEngine {
 			bool success = GetFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
+				size_t written_characters = FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
 				ECS_ASSERT(written_characters < 512);
 				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
@@ -958,7 +958,7 @@ namespace ECSEngine {
 			bool success = GetRelativeFileTimes(temp_wide_characters, creation_time, access_time, last_write_time);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
+				size_t written_characters = FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
 				ECS_ASSERT(written_characters < 512);
 				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
@@ -993,7 +993,7 @@ namespace ECSEngine {
 			bool success = FileCopy(from, to);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, FILE_COPY_ERROR_STRING, from, to);
+				size_t written_characters = FormatString(temp_characters, FILE_COPY_ERROR_STRING, from, to);
 				ECS_ASSERT(written_characters < 512);
 				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
 			}
@@ -1003,7 +1003,7 @@ namespace ECSEngine {
 			bool success = FileCopy(from, to);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, FILE_COPY_ERROR_STRING, from, to);
+				size_t written_characters = FormatString(temp_characters, FILE_COPY_ERROR_STRING, from, to);
 				ECS_ASSERT(written_characters < 512);
 				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
@@ -1019,7 +1019,7 @@ namespace ECSEngine {
 			bool success = FolderCopy(from, to);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, FOLDER_COPY_ERROR_STRING, from, to);
+				size_t written_characters = FormatString(temp_characters, FOLDER_COPY_ERROR_STRING, from, to);
 				ECS_ASSERT(written_characters < 512);
 				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
 			}
@@ -1029,7 +1029,7 @@ namespace ECSEngine {
 			bool success = FolderCopy(from, to);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, FOLDER_COPY_ERROR_STRING, from, to);
+				size_t written_characters = FormatString(temp_characters, FOLDER_COPY_ERROR_STRING, from, to);
 				ECS_ASSERT(written_characters < 512);
 				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
@@ -1089,7 +1089,7 @@ namespace ECSEngine {
 			bool success = RenameFolderOrFile(path, new_name);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
+				size_t written_characters = FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
 				ECS_ASSERT(written_characters < 512);
 				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
 			}
@@ -1099,7 +1099,7 @@ namespace ECSEngine {
 			bool success = RenameFolderOrFile(path, new_name);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
+				size_t written_characters = FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
 				ECS_ASSERT(written_characters < 512);
 				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
@@ -1115,7 +1115,7 @@ namespace ECSEngine {
 			bool success = ResizeFile(path, new_size);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, RESIZE_FILE_ERROR_STRING, path, new_size);
+				size_t written_characters = FormatString(temp_characters, RESIZE_FILE_ERROR_STRING, path, new_size);
 				ECS_ASSERT(written_characters < 512);
 				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
 			}
@@ -1125,7 +1125,7 @@ namespace ECSEngine {
 			bool success = ResizeFile(path, new_size);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, RESIZE_FILE_ERROR_STRING, path, new_size);
+				size_t written_characters = FormatString(temp_characters, RESIZE_FILE_ERROR_STRING, path, new_size);
 				ECS_ASSERT(written_characters < 512);
 				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
@@ -1141,7 +1141,7 @@ namespace ECSEngine {
 			bool success = ChangeFileExtension(path, new_extension);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, CHANGE_FILE_EXTENSION_ERROR_STRING, path, new_extension);
+				size_t written_characters = FormatString(temp_characters, CHANGE_FILE_EXTENSION_ERROR_STRING, path, new_extension);
 				ECS_ASSERT(written_characters < 512);
 				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
 			}
@@ -1151,7 +1151,7 @@ namespace ECSEngine {
 			bool success = ChangeFileExtension(path, new_extension);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, CHANGE_FILE_EXTENSION_ERROR_STRING, path, new_extension);
+				size_t written_characters = FormatString(temp_characters, CHANGE_FILE_EXTENSION_ERROR_STRING, path, new_extension);
 				ECS_ASSERT(written_characters < 512);
 				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}

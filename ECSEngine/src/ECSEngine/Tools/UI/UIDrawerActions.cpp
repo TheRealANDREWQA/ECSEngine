@@ -4,7 +4,7 @@
 #include "UIResourcePaths.h"
 #include "../../Input/Mouse.h"
 #include "../../Input/Keyboard.h"
-#include "../../Utilities/FunctionInterfaces.h"
+#include "../../Utilities/StreamUtilities.h"
 #include "UIOSActions.h"
 #include "UIDrawerWindows.h"
 
@@ -688,7 +688,7 @@ namespace ECSEngine {
 
 			UIDrawerComboBoxLabelClickable* data = (UIDrawerComboBoxLabelClickable*)_data;
 			if (data->box->mappings != nullptr) {
-				memcpy(data->box->active_label, function::OffsetPointer(data->box->mappings, data->box->mapping_byte_size * data->index), data->box->mapping_byte_size);
+				memcpy(data->box->active_label, OffsetPointer(data->box->mappings, data->box->mapping_byte_size * data->index), data->box->mapping_byte_size);
 			}
 			else {
 				*data->box->active_label = data->index;
@@ -892,27 +892,27 @@ namespace ECSEngine {
 
 			char tool_tip_characters[tool_tip_character_count];
 			Stream<char> tool_tip_stream = Stream<char>(tool_tip_characters, 0);
-			function::ConvertIntToCharsFormatted(tool_tip_stream, data->sample_index);
+			ConvertIntToCharsFormatted(tool_tip_stream, data->sample_index);
 			tool_tip_stream.Add(':');
 			tool_tip_stream.Add(' ');
 			tool_tip_stream.Add('x');
 			tool_tip_stream.Add(' ');
-			function::ConvertFloatToChars(tool_tip_stream, data->first_sample_values.x);
+			ConvertFloatToChars(tool_tip_stream, data->first_sample_values.x);
 			tool_tip_stream.Add(' ');
 			tool_tip_stream.Add('y');
 			tool_tip_stream.Add(' ');
-			function::ConvertFloatToChars(tool_tip_stream, data->first_sample_values.y);
+			ConvertFloatToChars(tool_tip_stream, data->first_sample_values.y);
 			tool_tip_stream.Add('\n');
-			function::ConvertIntToCharsFormatted(tool_tip_stream, data->sample_index + 1);
+			ConvertIntToCharsFormatted(tool_tip_stream, data->sample_index + 1);
 			tool_tip_stream.Add(':');
 			tool_tip_stream.Add(' ');
 			tool_tip_stream.Add('x');
 			tool_tip_stream.Add(' ');
-			function::ConvertFloatToChars(tool_tip_stream, data->second_sample_values.x);
+			ConvertFloatToChars(tool_tip_stream, data->second_sample_values.x);
 			tool_tip_stream.Add(' ');
 			tool_tip_stream.Add('y');
 			tool_tip_stream.Add(' ');
-			function::ConvertFloatToChars(tool_tip_stream, data->second_sample_values.y);
+			ConvertFloatToChars(tool_tip_stream, data->second_sample_values.y);
 			data->tool_tip_data.characters = tool_tip_characters;
 			data->tool_tip_data.base.offset_scale = { false, false };
 			data->tool_tip_data.base.offset = { mouse_position.x - position.x + system->m_descriptors.misc.graph_hover_offset.x, mouse_position.y - position.y + system->m_descriptors.misc.graph_hover_offset.y };
@@ -930,13 +930,13 @@ namespace ECSEngine {
 			UIDrawerHistogramHoverableData* data = (UIDrawerHistogramHoverableData*)_data;
 			char stack_memory[temp_character_count];
 			Stream<char> stack_stream = Stream<char>(stack_memory, 0);
-			function::ConvertIntToCharsFormatted(stack_stream, data->sample_index);
+			ConvertIntToCharsFormatted(stack_stream, data->sample_index);
 			stack_stream.Add(':');
 			stack_stream.Add(' ');
 			stack_stream.Add(' ');
 			stack_stream.Add(' ');
 			stack_stream.Add(' ');
-			function::ConvertFloatToChars(stack_stream, data->sample_value);
+			ConvertFloatToChars(stack_stream, data->sample_value);
 
 			data->tool_tip_data.characters = stack_memory;
 			data->tool_tip_data.base.offset_scale = { false, false };
@@ -965,7 +965,7 @@ namespace ECSEngine {
 				FloatingPoint amount = (FloatingPoint)mouse_delta.x * (FloatingPoint)INPUT_DRAG_FACTOR * shift_value * ctrl_value;
 
 				*data->callback_data.number += amount;
-				*data->callback_data.number = function::Clamp(*data->callback_data.number, data->callback_data.min, data->callback_data.max);
+				*data->callback_data.number = Clamp(*data->callback_data.number, data->callback_data.min, data->callback_data.max);
 
 				if (data->callback_data.number_data.input->HasCallback()) {
 					bool on_release = data->callback_on_release && mouse->IsReleased(ECS_MOUSE_LEFT);
@@ -973,7 +973,7 @@ namespace ECSEngine {
 						// The text input must also be updated before it
 						char number_characters[64];
 						Stream<char> number_characters_stream(number_characters, 0);
-						function::ConvertFloatingPointToChars<FloatingPoint>(number_characters_stream, *data->callback_data.number, 3);
+						ConvertFloatingPointToChars<FloatingPoint>(number_characters_stream, *data->callback_data.number, 3);
 						data->callback_data.number_data.input->DeleteAllCharacters();
 						data->callback_data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
 
@@ -1034,14 +1034,14 @@ namespace ECSEngine {
 							*data->data.number = value_before;
 						}
 					}
-					*data->data.number = function::Clamp(*data->data.number, data->data.min, data->data.max);
+					*data->data.number = Clamp(*data->data.number, data->data.min, data->data.max);
 					data->last_position = mouse_position.x;
 
 					if (data->data.number_data.input->HasCallback()) {
 						// The text input must also be updated before it
 						char number_characters[64];
 						Stream<char> number_characters_stream(number_characters, 0);
-						function::ConvertIntToChars(number_characters_stream, *data->data.number);
+						ConvertIntToChars(number_characters_stream, *data->data.number);
 						data->data.number_data.input->DeleteAllCharacters();
 						data->data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
 
@@ -1168,16 +1168,16 @@ namespace ECSEngine {
 				if (!data->number_data.external_value_change) {
 					float number = 0;
 					if (data->number_data.input->text->size > 0) {
-						number = function::ConvertCharactersToFloat(*data->number_data.input->text);
+						number = ConvertCharactersToFloat(*data->number_data.input->text);
 					}
 
 					double previous_number = number;
-					number = function::Clamp<float>(number, data->min, data->max);
+					number = Clamp<float>(number, data->min, data->max);
 					if (previous_number != number || data->number_data.input->text->size == 0) {
 						// Need to update the text input
 						data->number_data.input->DeleteAllCharacters();
 						ECS_STACK_CAPACITY_STREAM(char, new_characters, 128);
-						function::ConvertFloatToChars(new_characters, number, 3);
+						ConvertFloatToChars(new_characters, number, 3);
 						data->number_data.input->InsertCharacters(new_characters.buffer, new_characters.size, 0, system);
 					}
 
@@ -1205,16 +1205,16 @@ namespace ECSEngine {
 				if (!data->number_data.external_value_change) {
 					double number = 0;
 					if (data->number_data.input->text->size > 0) {
-						number = function::ConvertCharactersToDouble(*data->number_data.input->text);
+						number = ConvertCharactersToDouble(*data->number_data.input->text);
 					}
 
 					double previous_number = number;
-					number = function::Clamp<double>(number, data->min, data->max);
+					number = Clamp<double>(number, data->min, data->max);
 					if (previous_number != number || data->number_data.input->text->size == 0) {
 						// Need to update the text input
 						data->number_data.input->DeleteAllCharacters();
 						ECS_STACK_CAPACITY_STREAM(char, new_characters, 128);
-						function::ConvertDoubleToChars(new_characters, number, 3);
+						ConvertDoubleToChars(new_characters, number, 3);
 						data->number_data.input->InsertCharacters(new_characters.buffer, new_characters.size, 0, system);
 					}
 
@@ -1243,16 +1243,16 @@ namespace ECSEngine {
 				if (!data->number_data.external_value_change) {
 					Integer number = 0;
 					if (data->number_data.input->text->size > 0) {
-						number = function::ConvertCharactersToIntImpl<Integer, char>(*data->number_data.input->text);
+						number = ConvertCharactersToIntImpl<Integer, char>(*data->number_data.input->text);
 					}
 
 					Integer previous_number = number;
-					number = function::Clamp<Integer>(number, data->min, data->max);
+					number = Clamp<Integer>(number, data->min, data->max);
 					if (previous_number != number || data->number_data.input->text->size == 0) {
 						// Need to update the text input
 						data->number_data.input->DeleteAllCharacters();
 						ECS_STACK_CAPACITY_STREAM(char, new_characters, 128);
-						function::ConvertIntToChars(new_characters, (int64_t)number);
+						ConvertIntToChars(new_characters, (int64_t)number);
 						data->number_data.input->InsertCharacters(new_characters.buffer, new_characters.size, 0, system);
 					}
 
@@ -1292,7 +1292,7 @@ namespace ECSEngine {
 				data->data->number_data.input->DeleteAllCharacters();
 				char temp_chars[128];
 				Stream<char> temp_stream = Stream<char>(temp_chars, 0);
-				function::ConvertFloatToChars(temp_stream, *data->data->number, 3);
+				ConvertFloatToChars(temp_stream, *data->data->number, 3);
 				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
 
 				// Call the input callback if any
@@ -1330,7 +1330,7 @@ namespace ECSEngine {
 				data->data->number_data.input->DeleteAllCharacters();
 				char temp_chars[128];
 				Stream<char> temp_stream = Stream<char>(temp_chars, 0);
-				function::ConvertDoubleToChars(temp_stream, *data->data->number, 3);
+				ConvertDoubleToChars(temp_stream, *data->data->number, 3);
 				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
 
 				// Call the input callback if any
@@ -1369,7 +1369,7 @@ namespace ECSEngine {
 				data->data->number_data.input->DeleteAllCharacters();
 				char temp_chars[128];
 				Stream<char> temp_stream = Stream<char>(temp_chars, 0);
-				function::ConvertIntToChars(temp_stream, static_cast<int64_t>(*data->data->number));
+				ConvertIntToChars(temp_stream, static_cast<int64_t>(*data->data->number));
 				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
 
 				// Call the input callback if any
@@ -1497,11 +1497,11 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIChangeAtomicStateData* data = (UIChangeAtomicStateData*)_data;
-			if (function::HasFlagAtomic(*data->state, data->flag)) {
-				function::ClearFlagAtomic(*data->state, data->flag);
+			if (HasFlagAtomic(*data->state, data->flag)) {
+				ClearFlagAtomic(*data->state, data->flag);
 			}
 			else {
-				function::SetFlagAtomic(*data->state, data->flag);
+				SetFlagAtomic(*data->state, data->flag);
 			}
 		}
 
@@ -2107,11 +2107,11 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			ColorInputHSVGradientInfo* data = (ColorInputHSVGradientInfo*)_data;
-			float x_factor = function::InverseLerp(position.x, position.x + scale.x, mouse_position.x);
-			x_factor = function::Clamp(x_factor, 0.0f, 1.0f);
+			float x_factor = InverseLerp(position.x, position.x + scale.x, mouse_position.x);
+			x_factor = Clamp(x_factor, 0.0f, 1.0f);
 
-			float y_factor = function::InverseLerp(position.y, position.y + scale.y, mouse_position.y);
-			y_factor = function::Clamp(y_factor, 0.0f, 1.0f);
+			float y_factor = InverseLerp(position.y, position.y + scale.y, mouse_position.y);
+			y_factor = Clamp(y_factor, 0.0f, 1.0f);
 
 			data->input->hsv.saturation = x_factor * Color::GetRange();
 			data->input->hsv.value = (1.0f - y_factor) * Color::GetRange();
@@ -2127,8 +2127,8 @@ namespace ECSEngine {
 
 			ColorInputHSVGradientInfo* info = (ColorInputHSVGradientInfo*)_data;
 
-			float factor = function::InverseLerp(info->gradient_position.y, info->gradient_position.y + info->gradient_scale.y, mouse_position.y);
-			factor = function::Clamp(factor, 0.0f, 1.0f);
+			float factor = InverseLerp(info->gradient_position.y, info->gradient_position.y + info->gradient_scale.y, mouse_position.y);
+			factor = Clamp(factor, 0.0f, 1.0f);
 
 			info->input->hsv.hue = factor * Color::GetRange();
 			*info->input->rgb = HSVToRGB(info->input->hsv);
@@ -2143,8 +2143,8 @@ namespace ECSEngine {
 
 			ColorInputHSVGradientInfo* info = (ColorInputHSVGradientInfo*)_data;
 
-			float factor = function::InverseLerp(info->gradient_position.y, info->gradient_position.y + info->gradient_scale.y, mouse_position.y);
-			factor = function::Clamp(factor, 0.0f, 1.0f);
+			float factor = InverseLerp(info->gradient_position.y, info->gradient_position.y + info->gradient_scale.y, mouse_position.y);
+			factor = Clamp(factor, 0.0f, 1.0f);
 
 			info->input->rgb->alpha = (1.0f - factor) * Color::GetRange();
 			info->input->hsv.alpha = info->input->rgb->alpha;
@@ -2169,7 +2169,7 @@ namespace ECSEngine {
 			auto triangle_lambda = [&](float2 position, float2 scale, float2 triangle_size, float percentage, UIConfigClickableAction action) {
 				UIDrawConfig triangle1_config;
 				UIConfigAbsoluteTransform triangle1_transform;
-				triangle1_transform.position = { position.x - triangle_size.x * 0.5f, function::Lerp<true>(position.y, scale.y, percentage) - triangle_size.y * 0.5f };
+				triangle1_transform.position = { position.x - triangle_size.x * 0.5f, Lerp<true>(position.y, scale.y, percentage) - triangle_size.y * 0.5f };
 				triangle1_transform.scale = triangle_size;
 
 				triangle1_config.AddFlags(action, triangle1_transform);
@@ -2289,8 +2289,8 @@ namespace ECSEngine {
 
 			UIConfigAbsoluteTransform circle_transform;
 			circle_transform.position = {
-				function::Lerp<true>(sv_position.x, sv_scale.x, static_cast<float>(hsv_color.saturation) / Color::GetRange()),
-				function::Lerp<true>(sv_position.y, sv_scale.y, 1.0f - static_cast<float>(hsv_color.value) / Color::GetRange())
+				Lerp<true>(sv_position.x, sv_scale.x, static_cast<float>(hsv_color.saturation) / Color::GetRange()),
+				Lerp<true>(sv_position.y, sv_scale.y, 1.0f - static_cast<float>(hsv_color.value) / Color::GetRange())
 			};
 
 			circle_transform.position = CenterRectangle(circle_size, circle_transform.position);
@@ -2537,8 +2537,8 @@ namespace ECSEngine {
 				drawer.SetRowPadding(0.0f);
 				drawer.SetNextRowYOffset(0.0f);
 
-				size_t new_configuration = function::ClearFlag(function::ClearFlag(data->configuration, UI_CONFIG_LATE_DRAW), UI_CONFIG_SYSTEM_DRAW);
-				new_configuration = function::ClearFlag(new_configuration, UI_CONFIG_ALIGN_TO_ROW_Y);
+				size_t new_configuration = ClearFlag(ClearFlag(data->configuration, UI_CONFIG_LATE_DRAW), UI_CONFIG_SYSTEM_DRAW);
+				new_configuration = ClearFlag(new_configuration, UI_CONFIG_ALIGN_TO_ROW_Y);
 				drawer.ComboBoxDropDownDrawer(new_configuration, data->config, data->box);
 			}
 		}
@@ -2678,7 +2678,7 @@ namespace ECSEngine {
 
 					if (IsClickableTrigger(action_data)) {
 						if (data->data_size > 0) {
-							action_data->data = function::OffsetPointer(data, sizeof(*data));
+							action_data->data = OffsetPointer(data, sizeof(*data));
 						}
 						else {
 							action_data->data = data->data;
@@ -2722,14 +2722,14 @@ namespace ECSEngine {
 							wrapper_data->menu = data->menu;
 							wrapper_data->data_size = state->click_handlers[index].data_size;
 							if (state->click_handlers[index].data_size > 0) {
-								memcpy(function::OffsetPointer(wrapper_data, sizeof(*wrapper_data)), state->click_handlers[index].data, state->click_handlers[index].data_size);
+								memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), state->click_handlers[index].data, state->click_handlers[index].data_size);
 							}
 							clickable.handler = { clickable_wrapper, wrapper_data, (unsigned int)(sizeof(*wrapper_data) + wrapper_data->data_size), state->click_handlers[index].phase };
 						}
 
 						config.AddFlag(clickable);
 
-						LABEL_CONFIGURATION = function::ClearFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);
+						LABEL_CONFIGURATION = ClearFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);
 						draw_label(index, state->left_row_substreams, state->left_characters);
 
 						config.AddFlag(hoverable);
@@ -2737,7 +2737,7 @@ namespace ECSEngine {
 						config.flag_count -= 2;
 					}
 					else {
-						LABEL_CONFIGURATION = function::SetFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);
+						LABEL_CONFIGURATION = SetFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);
 						draw_label(index, state->left_row_substreams, state->left_characters);
 
 						drawer.Rectangle(RECTANGLE_CONFIGURATION, config);
@@ -2795,11 +2795,11 @@ namespace ECSEngine {
 
 						auto system = drawer.GetSystem();
 						if (state->unavailables == nullptr || (state->unavailables != nullptr && !state->unavailables[index])) {
-							LABEL_CONFIGURATION = function::ClearFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);
+							LABEL_CONFIGURATION = ClearFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);
 							draw_label(index, state->right_row_substreams, state->right_characters);
 						}
 						else {
-							LABEL_CONFIGURATION = function::SetFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);
+							LABEL_CONFIGURATION = SetFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);
 							draw_label(index, state->right_row_substreams, state->right_characters);
 						}
 						drawer.current_row_y_scale = drawer.layout.default_element_y;
@@ -2899,7 +2899,7 @@ namespace ECSEngine {
 						tagged_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 						tagged_name.AddStream("menu_windows");
 
-						tagged_name = function::StringCopy(GetAllocatorPolymorphic(system->m_memory), tagged_name);
+						tagged_name = StringCopy(GetAllocatorPolymorphic(system->m_memory), tagged_name);
 						submenu_descriptor.window_name = tagged_name;
 
 						system->CreateWindowAndDockspace(submenu_descriptor,
@@ -3287,7 +3287,7 @@ namespace ECSEngine {
 
 			size_t window_data_bytes[256];
 			UIDrawerPathInputFolderWindowData* window_data = (UIDrawerPathInputFolderWindowData*)window_data_bytes;
-			char* child_window_name = (char*)function::OffsetPointer(window_data, sizeof(UIDrawerPathInputFolderWindowData));
+			char* child_window_name = (char*)OffsetPointer(window_data, sizeof(UIDrawerPathInputFolderWindowData));
 			*window_data = { data->input, data->path, data->custom_handler, child_window_name };
 
 			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
@@ -3363,7 +3363,7 @@ namespace ECSEngine {
 					// Update the input
 					data->input->DeleteAllCharacters();
 					ECS_STACK_CAPACITY_STREAM(char, temp_conversion_characters, FOLDER_PATH_MAX_SIZE);
-					function::ConvertWideCharsToASCII(get_data.path, temp_conversion_characters);
+					ConvertWideCharsToASCII(get_data.path, temp_conversion_characters);
 					data->input->InsertCharacters(temp_conversion_characters.buffer, temp_conversion_characters.size, 0, system);
 					data->path->size = get_data.path.size;
 					if (data->path->size < data->path->capacity) {
@@ -3416,7 +3416,7 @@ namespace ECSEngine {
 					// Update the input and copy the characters
 					data->input->DeleteAllCharacters();
 					ECS_STACK_CAPACITY_STREAM(char, temp_conversion_characters, FOLDER_PATH_MAX_SIZE);
-					function::ConvertWideCharsToASCII(get_data.path, temp_conversion_characters);
+					ConvertWideCharsToASCII(get_data.path, temp_conversion_characters);
 					data->input->InsertCharacters(temp_conversion_characters.buffer, temp_conversion_characters.size, 0, system);
 					data->path->size = get_data.path.size;
 					if (data->path->size < data->path->capacity && data->path->buffer != nullptr) {
@@ -3450,15 +3450,15 @@ namespace ECSEngine {
 				void* allocation = drawer.GetMainAllocatorBufferAndStoreAsResource(FILTER_STRING_NAME, total_size);
 				
 				filter_string = (CapacityStream<char>*)allocation;
-				filter_string->buffer = (char*)function::OffsetPointer(allocation, sizeof(CapacityStream<char>) + sizeof(unsigned int));
+				filter_string->buffer = (char*)OffsetPointer(allocation, sizeof(CapacityStream<char>) + sizeof(unsigned int));
 				filter_string->size = 0;
 				filter_string->capacity = FILTER_STRING_CAPACITY;
 
-				active_index = (unsigned int*)function::OffsetPointer(allocation, sizeof(CapacityStream<char>));
+				active_index = (unsigned int*)OffsetPointer(allocation, sizeof(CapacityStream<char>));
 			}
 			else {
 				filter_string = (CapacityStream<char>*)drawer.GetResource(FILTER_STRING_NAME);
-				active_index = (unsigned int*)function::OffsetPointer(filter_string, sizeof(CapacityStream<char>));
+				active_index = (unsigned int*)OffsetPointer(filter_string, sizeof(CapacityStream<char>));
 			}
 
 			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, filtered_files, data->files.size);
@@ -3466,7 +3466,7 @@ namespace ECSEngine {
 			if (filter_string->size > 0) {
 				ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 512);
 				ECS_STACK_CAPACITY_STREAM(wchar_t, wide_filter_string, FILTER_STRING_CAPACITY);
-				function::ConvertASCIIToWide(wide_filter_string, *filter_string);
+				ConvertASCIIToWide(wide_filter_string, *filter_string);
 				wide_filter_string.Add(L'\0');
 
 				for (unsigned int index = 0; index < data->files.size; index++) {
@@ -3486,7 +3486,7 @@ namespace ECSEngine {
 			else {
 				// Fill in the filtered_files with the whole indices
 				filtered_files.size = data->files.size;
-				function::MakeSequence(filtered_files);
+				MakeSequence(filtered_files);
 			}
 
 			// Display the filter bar
@@ -3517,7 +3517,7 @@ namespace ECSEngine {
 				configuration |= is_active ? 0 : UI_CONFIG_LABEL_TRANSPARENT;
 
 				converted_path.size = 0;
-				function::ConvertWideCharsToASCII(data->files[filtered_files[index]], converted_path);
+				ConvertWideCharsToASCII(data->files[filtered_files[index]], converted_path);
 				converted_path.AddAssert('\0');
 
 				SelectLabelActionData action_data;
@@ -3540,7 +3540,7 @@ namespace ECSEngine {
 					data->draw_data->input->DeleteAllCharacters();
 
 					ECS_STACK_CAPACITY_STREAM(char, converted_stream, 512);
-					function::ConvertWideCharsToASCII(data->draw_data->files[*data->active_index], converted_stream);
+					ConvertWideCharsToASCII(data->draw_data->files[*data->active_index], converted_stream);
 					data->draw_data->input->InsertCharacters(converted_stream.buffer, converted_stream.size, 0, system);
 					data->draw_data->path->CopyOther(data->draw_data->files[*data->active_index]);
 					if (data->draw_data->path->size < data->draw_data->path->capacity) {
@@ -3638,7 +3638,7 @@ namespace ECSEngine {
 			void* persistent_buffer = system->m_memory->Allocate(memory_usage);
 			Stream<wchar_t>* paths = (Stream<wchar_t>*)persistent_buffer;
 
-			uintptr_t ptr = (uintptr_t)function::OffsetPointer(persistent_buffer, sizeof(Stream<wchar_t>) * path_stream.size);
+			uintptr_t ptr = (uintptr_t)OffsetPointer(persistent_buffer, sizeof(Stream<wchar_t>) * path_stream.size);
 			for (size_t index = 0; index < path_stream.size; index++) {
 				paths[index].InitializeAndCopy(ptr, path_stream[index]);
 			}

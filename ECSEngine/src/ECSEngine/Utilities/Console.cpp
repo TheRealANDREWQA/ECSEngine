@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "Console.h"
-#include "Function.h"
+#include "StringUtilities.h"
+#include "Utilities.h"
 #include "OSFunctions.h"
 #include "../ECS/World.h"
 
@@ -63,19 +64,19 @@ namespace ECSEngine {
 
 		char time_characters[256];
 		Stream<char> time_stream = Stream<char>(time_characters, 0);
-		function::ConvertIntToChars(time_stream, current_date.hour);
+		ConvertIntToChars(time_stream, current_date.hour);
 		time_stream.Add(':');
-		function::ConvertIntToChars(time_stream, current_date.minute);
+		ConvertIntToChars(time_stream, current_date.minute);
 		time_stream.Add(':');
-		function::ConvertIntToChars(time_stream, current_date.seconds);
+		ConvertIntToChars(time_stream, current_date.seconds);
 		time_stream.Add(':');
-		function::ConvertIntToChars(time_stream, current_date.milliseconds);
+		ConvertIntToChars(time_stream, current_date.milliseconds);
 		time_stream.Add(' ');
-		function::ConvertIntToChars(time_stream, current_date.day);
+		ConvertIntToChars(time_stream, current_date.day);
 		time_stream.Add('-');
-		function::ConvertIntToChars(time_stream, current_date.month);
+		ConvertIntToChars(time_stream, current_date.month);
 		time_stream.Add('-');
-		function::ConvertIntToChars(time_stream, current_date.year);
+		ConvertIntToChars(time_stream, current_date.year);
 		time_stream.Add(' ');
 		const char description[] = "Console output\n";
 		time_stream.AddStream(Stream<char>(description, std::size(description) - 1));
@@ -215,7 +216,7 @@ namespace ECSEngine {
 
 	void Console::AddSystemFilterString(Stream<char> string) {
 		allocator->Lock();
-		char* new_string = (char*)function::Copy(GetAllocatorPolymorphic(allocator), string.buffer, (string.size + 1) * sizeof(char), alignof(char));
+		char* new_string = (char*)Copy(GetAllocatorPolymorphic(allocator), string.buffer, (string.size + 1) * sizeof(char), alignof(char));
 		new_string[string.size] = '\0';
 		system_filter_strings.Add(new_string);
 		allocator->Unlock();
@@ -226,13 +227,13 @@ namespace ECSEngine {
 	size_t Console::GetFormatCharacterCount() const
 	{
 		size_t count = 0;
-		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MILLISECONDS) ? 4 : 0;
-		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_SECONDS) ? 3 : 0;
-		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MINUTES) ? 3 : 0;
-		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_HOUR) ? 2 : 0;
-		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_DAY) ? 3 : 0;
-		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MONTH) ? 3 : 0;
-		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_YEAR) ? 5 : 0;
+		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_MILLISECONDS) ? 4 : 0;
+		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_SECONDS) ? 3 : 0;
+		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_MINUTES) ? 3 : 0;
+		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_HOUR) ? 2 : 0;
+		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_DAY) ? 3 : 0;
+		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_MONTH) ? 3 : 0;
+		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_YEAR) ? 5 : 0;
 
 		count += 3;
 		return count;
@@ -272,7 +273,7 @@ namespace ECSEngine {
 		}
 
 		dump_path.Deallocate(GetAllocatorPolymorphic(allocator));
-		dump_path = function::StringCopy(GetAllocatorPolymorphic(allocator), new_path);
+		dump_path = StringCopy(GetAllocatorPolymorphic(allocator), new_path);
 
 		// Open the file
 		ECS_ASSERT(FileCreate(new_path, &dump_file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE) == ECS_FILE_STATUS_OK);
@@ -308,7 +309,7 @@ namespace ECSEngine {
 
 		// Get the system string index if the message is different from nullptr.
 		if (system.size > 0) {
-			unsigned int system_index = function::FindString(system, Stream<Stream<char>>(system_filter_strings.buffer, system_filter_strings.size));
+			unsigned int system_index = FindString(system, Stream<Stream<char>>(system_filter_strings.buffer, system_filter_strings.size));
 			if (system_index != -1) {
 				console_message.system_filter = (size_t)1 << (size_t)system_index;
 			}
@@ -404,7 +405,7 @@ namespace ECSEngine {
 	{
 		Date current_date = OS::GetLocalTime();
 		characters.Add('[');
-		function::ConvertDateToString(current_date, characters, format);
+		ConvertDateToString(current_date, characters, format);
 		characters.Add(']');
 		characters.Add(' ');
 		characters[characters.size] = '\0';

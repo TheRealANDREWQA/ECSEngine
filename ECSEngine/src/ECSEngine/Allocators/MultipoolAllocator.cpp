@@ -1,12 +1,12 @@
 #include "ecspch.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 #include "MultipoolAllocator.h"
 #include "AllocatorCallsDebug.h"
 
 namespace ECSEngine {
 	
 	MultipoolAllocator::MultipoolAllocator(void* buffer, size_t size, size_t pool_count)
-		: m_buffer((unsigned char*)buffer), m_spin_lock(), m_size(size), m_range((unsigned int*)function::OffsetPointer(buffer, size), pool_count, size),
+		: m_buffer((unsigned char*)buffer), m_spin_lock(), m_size(size), m_range((unsigned int*)OffsetPointer(buffer, size), pool_count, size),
 		m_debug_mode(false) {}
 
 	MultipoolAllocator::MultipoolAllocator(void* buffer, void* block_range_buffer, size_t size, size_t pool_count)
@@ -22,7 +22,7 @@ namespace ECSEngine {
 		if (index == 0xFFFFFFFF)
 			return nullptr;
 
-		uintptr_t allocation = function::AlignPointerStack((uintptr_t)m_buffer + index, alignment);
+		uintptr_t allocation = AlignPointerStack((uintptr_t)m_buffer + index, alignment);
 		size_t offset = allocation - (uintptr_t)m_buffer;
 		ECS_ASSERT(offset - index - 1 < alignment);
 		m_buffer[offset - 1] = offset - index - 1;
@@ -72,7 +72,7 @@ namespace ECSEngine {
 		unsigned int previous_start = (unsigned int)(byte_offset_position - m_buffer[byte_offset_position]);
 		unsigned int new_start = m_range.ReallocateBlock(previous_start, new_size + alignment);
 		if (new_start != -1) {
-			uintptr_t allocation = function::AlignPointerStack((uintptr_t)m_buffer + new_start, alignment);
+			uintptr_t allocation = AlignPointerStack((uintptr_t)m_buffer + new_start, alignment);
 			if (new_start != previous_start) {
 				unsigned int offset = allocation - (uintptr_t)m_buffer;
 				ECS_ASSERT(offset - new_start - 1 < alignment);

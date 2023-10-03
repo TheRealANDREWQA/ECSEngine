@@ -112,9 +112,9 @@ unsigned int VerifyIndexedWindowIndexOnly(
 		for (unsigned int index = 0; index < max_search; index++) {
 			window_name.size = 0;
 			window_name.CopyOther(base_name_stream);
-			function::ConvertIntToChars(window_name, index);
+			ConvertIntToChars(window_name, index);
 
-			if (function::CompareStrings(window_name, file_window_name)) {
+			if (window_name == file_window_name) {
 				return index;
 			}
 		}
@@ -155,9 +155,9 @@ unsigned int VerifyIndexedWindow(
 		for (unsigned int index = 0; index < max_search; index++) {
 			window_name.size = 0;
 			window_name.CopyOther(base_name_stream);
-			function::ConvertIntToChars(window_name, index);
+			ConvertIntToChars(window_name, index);
 
-			if (function::CompareStrings(window_name, file_window_name)) {
+			if (window_name == file_window_name) {
 				CreateIndexedWindow(index, window_name, descriptor, editor_state, stack_memory, set_descriptor);
 				return index;
 			}
@@ -176,7 +176,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 	bool success = ui_system->LoadUIFile(_template.ui_file, file_window_names);
 	if (!success) {
 		if (error_message.buffer != nullptr) {
-			error_message.size = function::FormatString(error_message.buffer, "Error when loading Project UI template: {#} does not exist or it is corrupted!", _template.ui_file);
+			error_message.size = FormatString(error_message.buffer, "Error when loading Project UI template: {#} does not exist or it is corrupted!", _template.ui_file);
 			error_message.AssertCapacity();
 		}
 		return false;
@@ -219,7 +219,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 
 		for (size_t index = 0; index < file_window_names.size; index++) {
 			UIWindowDescriptor descriptor;
-			unsigned int in_index = function::FindString(file_window_names[index], window_names);
+			unsigned int in_index = FindString(file_window_names[index], window_names);
 
 			size_t stack_memory[128];
 			if (in_index != (unsigned int)-1) {
@@ -266,7 +266,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 
 				// The test for visualize texture needs to be done separately
 				if (file_window_names[index].StartsWith(VISUALIZE_TEXTURE_WINDOW_NAME)) {
-					unsigned int visualize_index = function::ConvertCharactersToInt(file_window_names[index]);
+					unsigned int visualize_index = ConvertCharactersToInt(file_window_names[index]);
 					CreateIndexedWindow(visualize_index, file_window_names[index], descriptor, editor_state, stack_memory, VisualizeTextureUISetDecriptor);
 					unsigned int ui_index = editor_state->ui_system->GetWindowFromName(file_window_names[index]);
 					TransitionVisualizeTextureWindowSelection(editor_state->ui_system, ui_index);
@@ -314,7 +314,7 @@ void LoadProjectUITemplateAction(ActionData* action_data)
 	system->AddFrameHandler({ LoadProjectUITemplateSystemHandler, stack_memory, (unsigned int)(sizeof(LoadProjectUITemplateData) + sizeof(wchar_t) * data->ui_template.ui_file.size) });
 	LoadProjectUITemplateData* handler_data = (LoadProjectUITemplateData*)system->GetFrameHandlerData(system->GetFrameHandlerCount() - 1);
 	handler_data->editor_state = data->editor_state;
-	handler_data->ui_template.ui_file.InitializeFromBuffer(function::OffsetPointer(handler_data, sizeof(LoadProjectUITemplateData)), data->ui_template.ui_file.size, data->ui_template.ui_file.size);
+	handler_data->ui_template.ui_file.InitializeFromBuffer(OffsetPointer(handler_data, sizeof(LoadProjectUITemplateData)), data->ui_template.ui_file.size, data->ui_template.ui_file.size);
 	memcpy(handler_data->ui_template.ui_file.buffer, data->ui_template.ui_file.buffer, sizeof(wchar_t) * data->ui_template.ui_file.size);
 }
 

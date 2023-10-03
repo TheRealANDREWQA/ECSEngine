@@ -1,9 +1,7 @@
 #include "ecspch.h"
 #include "SystemManager.h"
-#include "../Utilities/FunctionInterfaces.h"
 #include "../Utilities/Crash.h"
 #include "../Allocators/MemoryManager.h"
-#include "../Utilities/Function.h"
 
 #define MEMORY_MANAGER_SIZE 10'000
 #define MEMORY_MANAGER_CHUNK_COUNT 512
@@ -63,7 +61,7 @@ namespace ECSEngine {
 			identifier.buffer = (char*)allocation;
 
 			if (data_size > 0) {
-				allocation_ptr = function::AlignPointer(allocation_ptr, alignof(void*));
+				allocation_ptr = AlignPointer(allocation_ptr, alignof(void*));
 				memcpy((void*)allocation_ptr, data, data_size);
 				final_pointer = (void*)allocation_ptr;
 			}
@@ -183,7 +181,7 @@ namespace ECSEngine {
 
 			// Firstly the data
 			if (settings[index].byte_size > 0) {
-				ptr = function::AlignPointer(ptr, alignof(void*));
+				ptr = AlignPointer(ptr, alignof(void*));
 				void* buffer = (void*)ptr;
 				ptr += settings[index].byte_size;
 				memcpy(buffer, settings[index].data, settings[index].byte_size);
@@ -274,7 +272,7 @@ namespace ECSEngine {
 		Stream<SystemManagerSetting> settings;
 		if (system_settings.TryGetValue(system_name, settings)) {
 			for (size_t index = 0; index < settings.size; index++) {
-				if (function::CompareStrings(settings[index].name, setting_name)) {
+				if (settings[index].name == setting_name) {
 					return settings[index].data;
 				}
 			}
@@ -317,7 +315,7 @@ namespace ECSEngine {
 		Stream<SystemManagerSetting> settings = { nullptr, 0 };
 		if (system_settings.TryGetValue(system_name, settings)) {
 			for (size_t index = 0; index < settings.size; index++) {
-				if (function::CompareStrings(settings[index].name, settings_name)) {
+				if (settings[index].name == settings_name) {
 					data = settings[index].data;
 					break;
 				}

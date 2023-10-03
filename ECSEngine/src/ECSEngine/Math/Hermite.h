@@ -1,7 +1,6 @@
 #pragma once
 #include "Vector.h"
 #include "../Utilities/Assert.h"
-#include "../Utilities/Function.h"
 
 namespace ECSEngine {
 
@@ -153,7 +152,7 @@ namespace ECSEngine {
 		// use 2 SIMD vectors: one for point1 and slope1 and the other one for point2 and slope2
 		float3 result;
 		Vector8 curve_low(&curve);
-		Vector8 curve_high(function::OffsetPointer(&curve, sizeof(float) * 6));
+		Vector8 curve_high(OffsetPointer(&curve, sizeof(float) * 6));
 
 		Vector8 percentages(percentage);
 		Vector8 one = VectorGlobals::ONE;
@@ -191,7 +190,7 @@ namespace ECSEngine {
 		// point2 ((3 - 2 * percentage)percentage ^ 2) + slope2 * (percentage ^ 2 (percentage - 1))
 		float4 result;
 		Vector8 curve_low(&curve);
-		Vector8 curve_high(function::OffsetPointer(&curve, sizeof(float) * 8));
+		Vector8 curve_high(OffsetPointer(&curve, sizeof(float) * 8));
 
 		Vector8 percentages(percentage);
 		Vector8 one = VectorGlobals::ONE;

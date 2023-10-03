@@ -1,9 +1,7 @@
 #include "ecspch.h"
 #include "Module.h"
-#include "../../Utilities/Function.h"
 #include "../../ECS/World.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
-#include "../../Utilities/FunctionInterfaces.h"
 #include "../../Utilities/Path.h"
 #include "../UI/UIStructures.h"
 
@@ -36,22 +34,22 @@ namespace ECSEngine {
 			Stream<char> token = ECS_MODULE_EXTENSION_ASCII;
 
 			Stream<char> last_dll = text;
-			Stream<char> dll = function::FindFirstToken(text, token);
+			Stream<char> dll = FindFirstToken(text, token);
 			while (dll.size > 0) {
-				Stream<char> dll_name = function::SkipUntilCharacterReverse(dll.buffer + token.size - 1, last_dll.buffer, '\0');
-				if (function::FindString(dll_name, dependencies) == -1) {
+				Stream<char> dll_name = SkipUntilCharacterReverse(dll.buffer + token.size - 1, last_dll.buffer, '\0');
+				if (FindString(dll_name, dependencies) == -1) {
 					dependencies.AddAssert(dll_name);
 				}
 
 				dll.Advance(token.size);
 				last_dll = dll;
-				dll = function::FindFirstToken(dll, token);
+				dll = FindFirstToken(dll, token);
 			}
 
-			Stream<wchar_t> filename = function::PathFilename(path);
+			Stream<wchar_t> filename = PathFilename(path);
 			ECS_STACK_CAPACITY_STREAM(char, char_filename, 512);
-			function::ConvertWideCharsToASCII(filename, char_filename);
-			unsigned int self_reference = function::FindString(char_filename, dependencies);
+			ConvertWideCharsToASCII(filename, char_filename);
+			unsigned int self_reference = FindString(char_filename, dependencies);
 			if (self_reference != -1) {
 				dependencies.RemoveSwapBack(self_reference);
 			}
@@ -64,7 +62,7 @@ namespace ECSEngine {
 
 			if (omit_system_dlls) {
 				for (unsigned int index = 0; index < std::size(system_dlls); index++) {
-					unsigned int dependency_index = function::FindString(system_dlls[index], dependencies);
+					unsigned int dependency_index = FindString(system_dlls[index], dependencies);
 					if (dependency_index != -1) {
 						dependencies.RemoveSwapBack(dependency_index);
 					}
@@ -95,23 +93,23 @@ namespace ECSEngine {
 			Stream<char> token = "<AdditionalDependencies>";
 			Stream<char> end_token = "</AdditionalDependencies>";
 
-			Stream<char> text_token = function::FindFirstToken(text, token);
+			Stream<char> text_token = FindFirstToken(text, token);
 			if (text_token.size > 0) {
 				text_token.Advance(token.size);
-				Stream<char> text_end_token = function::FindFirstToken(text_token, end_token);
+				Stream<char> text_end_token = FindFirstToken(text_token, end_token);
 				if (text_end_token.size > 0) {
 					char semicolon = ';';
 					Stream<char> parse_range;
 					parse_range.buffer = text_token.buffer;
 					parse_range.size = text_end_token.buffer - text_token.buffer;
-					Stream<char> current_lib_end = function::FindFirstCharacter(parse_range, semicolon);
+					Stream<char> current_lib_end = FindFirstCharacter(parse_range, semicolon);
 					while (current_lib_end.size > 0) {
-						Stream<char> current_range = { parse_range.buffer, function::PointerDifference(current_lib_end.buffer, parse_range.buffer) / sizeof(char) };
+						Stream<char> current_range = { parse_range.buffer, PointerDifference(current_lib_end.buffer, parse_range.buffer) / sizeof(char) };
 						dependencies.Add(current_range);
 						size_t advance_count = current_lib_end.buffer - parse_range.buffer + 1;
 						parse_range.buffer = current_lib_end.buffer + 1;
 						parse_range.size -= advance_count;
-						current_lib_end = function::FindFirstCharacter(parse_range, semicolon);
+						current_lib_end = FindFirstCharacter(parse_range, semicolon);
 					}
 
 					static Stream<char> system_dlls[] = {
@@ -131,7 +129,7 @@ namespace ECSEngine {
 
 					if (omit_system_dlls) {
 						for (unsigned int index = 0; index < std::size(system_dlls); index++) {
-							unsigned int dependency_index = function::FindString(system_dlls[index], dependencies);
+							unsigned int dependency_index = FindString(system_dlls[index], dependencies);
 							if (dependency_index != -1) {
 								dependencies.RemoveSwapBack(dependency_index);
 							}
@@ -143,8 +141,8 @@ namespace ECSEngine {
 			free(file.buffer);
 			if (dependencies.size > 0) {
 				for (unsigned int index = 0; index < dependencies.size; index++) {
-					dependencies[index] = function::PathFilenameBoth(dependencies[index]);
-					Stream<char> extension = function::FindFirstCharacter(dependencies[index], '.');
+					dependencies[index] = PathFilenameBoth(dependencies[index]);
+					Stream<char> extension = FindFirstCharacter(dependencies[index], '.');
 					// Some variable dlls might not have an extension (e.g. $(ECSEngineLibDebug))
 					if (extension.size > 0) {
 						// Change the extension to .dll
@@ -284,7 +282,7 @@ namespace ECSEngine {
 		total_memory += stack_allocator.m_top;
 
 		Tools::UIWindowDescriptor* descriptors = (Tools::UIWindowDescriptor*)AllocateEx(allocator, total_memory);
-		void* buffer = function::OffsetPointer(descriptors, sizeof(Tools::UIWindowDescriptor) * window_descriptors.size);
+		void* buffer = OffsetPointer(descriptors, sizeof(Tools::UIWindowDescriptor) * window_descriptors.size);
 		// Copy all the data allocated from the allocator
 		memcpy(buffer, stack_allocation, stack_allocator.m_top);
 
@@ -292,21 +290,21 @@ namespace ECSEngine {
 		window_descriptors.CopyTo(descriptors);
 		for (size_t index = 0; index < window_descriptors.size; index++) {
 			// Change the name
-			descriptors[index].window_name.buffer = (char*)function::RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].window_name.buffer);
+			descriptors[index].window_name.buffer = (char*)RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].window_name.buffer);
 
 			// Change the window data, if any
 			if (window_descriptors[index].window_data_size > 0) {
-				descriptors[index].window_data = function::RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].window_data);
+				descriptors[index].window_data = RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].window_data);
 			}
 
 			// Change the private window data, if any
 			if (window_descriptors[index].private_action_data_size > 0) {
-				descriptors[index].private_action_data = function::RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].private_action_data);
+				descriptors[index].private_action_data = RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].private_action_data);
 			}
 
 			// Change the destroy window data, if any
 			if (window_descriptors[index].destroy_action_data_size > 0) {
-				descriptors[index].destroy_action_data = function::RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].destroy_action_data);
+				descriptors[index].destroy_action_data = RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].destroy_action_data);
 			}
 		}
 
@@ -341,18 +339,18 @@ namespace ECSEngine {
 
 		ModuleBuildAssetType* types = (ModuleBuildAssetType*)AllocateEx(allocator, total_memory);
 		asset_type_stream.CopyTo(types);
-		void* buffer = function::OffsetPointer(types, sizeof(ModuleBuildAssetType) * asset_type_stream.size);
+		void* buffer = OffsetPointer(types, sizeof(ModuleBuildAssetType) * asset_type_stream.size);
 		// Memcpy all the data from the allocator
 		memcpy(buffer, _extra_memory, extra_memory.m_top);
 
 		// Remapp all the pointers into this space
 		for (size_t index = 0; index < asset_type_stream.size; index++) {
 			// The extension
-			types[index].extension.buffer = (wchar_t*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].extension.buffer);
+			types[index].extension.buffer = (wchar_t*)RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].extension.buffer);
 
 			// The dependencies
 			if (types[index].dependencies.size > 0) {
-				types[index].dependencies.buffer = (ECS_MODULE_BUILD_DEPENDENCY*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].dependencies.buffer);
+				types[index].dependencies.buffer = (ECS_MODULE_BUILD_DEPENDENCY*)RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].dependencies.buffer);
 			}
 			else {
 				types[index].dependencies = { nullptr, 0 };
@@ -360,12 +358,12 @@ namespace ECSEngine {
 
 			// The editor name
 			if (types[index].asset_editor_name.size > 0) {
-				types[index].asset_editor_name.buffer = (char*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_editor_name.buffer);
+				types[index].asset_editor_name.buffer = (char*)RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_editor_name.buffer);
 			}
 
 			// The metadata name
 			if (types[index].asset_metadata_name.size > 0) {
-				types[index].asset_metadata_name.buffer = (char*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_metadata_name.buffer);
+				types[index].asset_metadata_name.buffer = (char*)RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_metadata_name.buffer);
 			}
 		}
 
@@ -463,11 +461,11 @@ namespace ECSEngine {
 		size_t total_memory = sizeof(ModuleLinkComponentTarget) * valid_links.size + temp_allocator.m_top;
 		ModuleLinkComponentTarget* targets = (ModuleLinkComponentTarget*)AllocateEx(allocator, total_memory);
 		valid_links.CopyTo(targets);
-		void* buffer = function::OffsetPointer(targets, sizeof(ModuleLinkComponentTarget) * valid_links.size);
+		void* buffer = OffsetPointer(targets, sizeof(ModuleLinkComponentTarget) * valid_links.size);
 		memcpy(buffer, temp_allocator.m_buffer, temp_allocator.m_top);
 
 		for (size_t index = 0; index < valid_links.size; index++) {
-			targets[index].component_name.buffer = (char*)function::RemapPointerIfInRange(temp_allocator.m_buffer, MAX_COMPONENT_NAME_SIZE, buffer, targets[index].component_name.buffer);
+			targets[index].component_name.buffer = (char*)RemapPointerIfInRange(temp_allocator.m_buffer, MAX_COMPONENT_NAME_SIZE, buffer, targets[index].component_name.buffer);
 		}
 		return { targets, valid_links.size };
 	}

@@ -1,7 +1,8 @@
 #include "ecspch.h"
 #include "File.h"
-#include "Function.h"
-#include "FunctionInterfaces.h"
+#include "StringUtilities.h"
+#include "PointerUtilities.h"
+#include "Utilities.h"
 #include "Path.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "ForEachFiles.h"
@@ -60,7 +61,7 @@ namespace ECSEngine {
 		int_create_flags ^= pmode_flags;
 
 		if (pmode_flags == 0) {
-			function::SetErrorMessage(error_message, "No file permission specified");
+			SetErrorMessage(error_message, "No file permission specified");
 			return ECS_FILE_STATUS_INVALID_ARGUMENTS;
 		}
 
@@ -142,7 +143,7 @@ namespace ECSEngine {
 	unsigned int WriteToFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering)
 	{
 		if (buffering.size + data.size < buffering.capacity) {
-			memcpy(function::OffsetPointer(buffering), data.buffer, data.size);
+			memcpy(OffsetPointer(buffering), data.buffer, data.size);
 			buffering.size += data.size;
 			return data.size;
 		}
@@ -161,7 +162,7 @@ namespace ECSEngine {
 	bool WriteFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering)
 	{
 		if (buffering.size + data.size < buffering.capacity) {
-			memcpy(function::OffsetPointer(buffering), data.buffer, data.size);
+			memcpy(OffsetPointer(buffering), data.buffer, data.size);
 			buffering.size += data.size;
 			return true;
 		}
@@ -197,21 +198,21 @@ namespace ECSEngine {
 	unsigned int ReadFromFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering)
 	{
 		if (buffering.size >= data.size) {
-			memcpy(data.buffer, function::OffsetPointer(buffering.buffer, buffering.capacity - buffering.size), data.size);
+			memcpy(data.buffer, OffsetPointer(buffering.buffer, buffering.capacity - buffering.size), data.size);
 			buffering.size -= data.size;
 			return data.size;
 		}
 		else {
 			// Read any bytes left from the buffer
 			unsigned int bytes_to_copy = buffering.size;
-			memcpy(data.buffer, function::OffsetPointer(buffering.buffer, buffering.capacity - buffering.size), bytes_to_copy);
-			unsigned int primary_byte_count = ReadFromFile(handle, { function::OffsetPointer(data.buffer, bytes_to_copy), data.size - bytes_to_copy });
+			memcpy(data.buffer, OffsetPointer(buffering.buffer, buffering.capacity - buffering.size), bytes_to_copy);
+			unsigned int primary_byte_count = ReadFromFile(handle, { OffsetPointer(data.buffer, bytes_to_copy), data.size - bytes_to_copy });
 			unsigned int buffering_bytes_read = ReadFromFile(handle, { buffering.buffer, buffering.capacity });
 			if (buffering_bytes_read == -1) {
 				buffering.size = 0;
 			}
 			else if (buffering_bytes_read < buffering.capacity) {
-				memmove(function::OffsetPointer(buffering.buffer, buffering.capacity - buffering_bytes_read), buffering.buffer, buffering_bytes_read);
+				memmove(OffsetPointer(buffering.buffer, buffering.capacity - buffering_bytes_read), buffering.buffer, buffering_bytes_read);
 				buffering.size = buffering.capacity - buffering_bytes_read;
 			}
 			else {
@@ -226,20 +227,20 @@ namespace ECSEngine {
 	bool ReadFile(ECS_FILE_HANDLE handle, Stream<void> data, CapacityStream<void>& buffering)
 	{
 		if (buffering.size + data.size <= buffering.capacity) {
-			memcpy(data.buffer, function::OffsetPointer(buffering), data.size);
+			memcpy(data.buffer, OffsetPointer(buffering), data.size);
 			buffering.size += data.size;
 			return true;
 		}
 		else {
 			unsigned int bytes_to_copy = buffering.size;
-			memcpy(data.buffer, function::OffsetPointer(buffering), bytes_to_copy);
-			unsigned int primary_byte_count = ReadFromFile(handle, { function::OffsetPointer(data.buffer, bytes_to_copy), data.size - bytes_to_copy });
+			memcpy(data.buffer, OffsetPointer(buffering), bytes_to_copy);
+			unsigned int primary_byte_count = ReadFromFile(handle, { OffsetPointer(data.buffer, bytes_to_copy), data.size - bytes_to_copy });
 			unsigned int buffering_bytes_read = ReadFromFile(handle, { buffering.buffer, buffering.capacity });
 			if (buffering_bytes_read == -1) {
 				buffering.size = buffering.capacity;
 			}
 			else if (buffering_bytes_read < buffering.capacity) {
-				memmove(function::OffsetPointer(buffering.buffer, buffering.capacity - buffering_bytes_read), buffering.buffer, buffering_bytes_read);
+				memmove(OffsetPointer(buffering.buffer, buffering.capacity - buffering_bytes_read), buffering.buffer, buffering_bytes_read);
 				buffering.size = buffering.capacity - buffering_bytes_read;
 			}
 			else {
@@ -439,9 +440,9 @@ namespace ECSEngine {
 		//// Append the filename (the stem and the extension) to the to path
 		//ECS_STACK_CAPACITY_STREAM(wchar_t, complete_to_path, 512);
 		//complete_to_path.Copy(to);
-		//bool is_absolute = function::PathIsAbsolute(complete_to_path);
+		//bool is_absolute = PathIsAbsolute(complete_to_path);
 		//complete_to_path.Add(is_absolute ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
-		//Stream<wchar_t> from_filename = function::PathFilenameBoth(from);
+		//Stream<wchar_t> from_filename = PathFilenameBoth(from);
 		//complete_to_path.AddStream(from_filename);
 		//complete_to_path.Add(L'\0');
 		//
@@ -476,9 +477,9 @@ namespace ECSEngine {
 		const wchar_t* to_path = to.buffer;
 		if (use_filename_from) {
 			complete_to_path.CopyOther(to);
-			bool is_absolute = function::PathIsAbsolute(complete_to_path);
+			bool is_absolute = PathIsAbsolute(complete_to_path);
 			complete_to_path.Add(is_absolute ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
-			Stream<wchar_t> from_filename = function::PathFilenameBoth(from);
+			Stream<wchar_t> from_filename = PathFilenameBoth(from);
 			complete_to_path.AddStream(from_filename);
 			complete_to_path.Add(L'\0');
 
@@ -545,7 +546,7 @@ namespace ECSEngine {
 		NULL_TERMINATE_WIDE(path);
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, new_name_stream, 512);
-		Stream<wchar_t> folder_parent = function::PathParentBoth(path);
+		Stream<wchar_t> folder_parent = PathParentBoth(path);
 		new_name_stream.CopyOther(folder_parent);
 		new_name_stream.Add(ECS_OS_PATH_SEPARATOR);
 		new_name_stream.AddStream(new_name);
@@ -561,7 +562,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_path, 512);
 		// If the path and the new absolute path alias each other, then we need to copy
 		// one into a temp buffer
-		bool do_alias = function::AreAliasing(path, new_absolute_path);
+		bool do_alias = AreAliasing(path, new_absolute_path);
 		if (do_alias) {
 			temp_path.CopyOther(path);
 			path = temp_path;
@@ -592,7 +593,7 @@ namespace ECSEngine {
 
 	bool ChangeFileExtension(Stream<wchar_t> file, Stream<wchar_t> extension) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, new_name, 512);
-		Stream<wchar_t> original_extension = function::PathExtensionBoth(file);
+		Stream<wchar_t> original_extension = PathExtensionBoth(file);
 		new_name.CopyOther(Stream<wchar_t>(file.buffer, original_extension.buffer - file.buffer));
 		new_name.AddStream(extension);
 		new_name.AddAssert(L'\0');
@@ -654,7 +655,7 @@ namespace ECSEngine {
 		struct _stat64 statistics = {};
 		int status = _wstat64(path.buffer, &statistics);
 		if (status == 0) {
-			return function::HasFlag(statistics.st_mode, S_IFREG);
+			return HasFlag(statistics.st_mode, S_IFREG);
 		}
 		return false;
 	}
@@ -668,7 +669,7 @@ namespace ECSEngine {
 		struct _stat64 statistics = {};
 		int status = _wstat64(path.buffer, &statistics);
 		if (status == 0) {
-			return function::HasFlag(statistics.st_mode, S_IFDIR);
+			return HasFlag(statistics.st_mode, S_IFDIR);
 		}
 		return false;
 	}

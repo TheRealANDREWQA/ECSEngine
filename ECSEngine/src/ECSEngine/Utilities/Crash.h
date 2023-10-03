@@ -1,6 +1,6 @@
 #pragma once
 #include "../Core.h"
-#include "FunctionInterfaces.h"
+#include "StringUtilities.h"
 
 namespace ECSEngine {
 

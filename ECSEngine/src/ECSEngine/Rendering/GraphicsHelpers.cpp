@@ -1,7 +1,6 @@
 #include "ecspch.h"
 #include "GraphicsHelpers.h"
 #include "Graphics.h"
-#include "../Utilities/Function.h"
 #include "../Utilities/Crash.h"
 
 namespace ECSEngine {
@@ -119,7 +118,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		buffer_descriptor.Usage = D3D11_USAGE_STAGING;
 		buffer_descriptor.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
 		buffer_descriptor.BindFlags = 0;
-		buffer_descriptor.MiscFlags = function::ClearFlag(buffer_descriptor.MiscFlags, ECS_GRAPHICS_MISC_SHARED);
+		buffer_descriptor.MiscFlags = ClearFlag(buffer_descriptor.MiscFlags, ECS_GRAPHICS_MISC_SHARED);
 
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, nullptr, &_new_buffer);

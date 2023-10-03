@@ -1,11 +1,10 @@
 #include "ecspch.h"
 #include "TextureCompression.h"
 #include "../../../../Dependencies/DirectXTex/DirectXTex/DirectXTex.h"
-#include "../../Utilities/Function.h"
-#include "../../Utilities/FunctionInterfaces.h"
 #include "../GraphicsHelpers.h"
 #include "../TextureOperations.h"
 #include "../../Utilities/Path.h"
+#include "../../Utilities/Utilities.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
 #include "../Graphics.h"
 
@@ -75,7 +74,7 @@ namespace ECSEngine {
 		return (DXGI_FORMAT)(format - 1);
 	}
 
-	static void SetErrorMessage(CapacityStream<char>* error_message, Stream<char> error) {
+	static void SetErrorMessageInternal(CapacityStream<char>* error_message, Stream<char> error) {
 		if (error_message != nullptr) {
 			error_message->CopyOther(error);
 			error_message->AssertCapacity();
@@ -88,8 +87,8 @@ namespace ECSEngine {
 
 	static DirectX::TEX_COMPRESS_FLAGS GetCompressionFlag(size_t flags) {
 		DirectX::TEX_COMPRESS_FLAGS compress_flag = DirectX::TEX_COMPRESS_DEFAULT;
-		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_UNIFORM, function::HasFlag(flags, ECS_TEXTURE_COMPRESS_DISABLE_PERCEPTUAL_WEIGHTING));
-		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_PARALLEL, !function::HasFlag(flags, ECS_TEXTURE_COMPRESS_DISABLE_MULTICORE));
+		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_UNIFORM, HasFlag(flags, ECS_TEXTURE_COMPRESS_DISABLE_PERCEPTUAL_WEIGHTING));
+		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_PARALLEL, !HasFlag(flags, ECS_TEXTURE_COMPRESS_DISABLE_MULTICORE));
 		return compress_flag;
 	}
 
@@ -97,20 +96,21 @@ namespace ECSEngine {
 		Graphics* graphics,
 		Texture2D& texture, 
 		ECS_TEXTURE_COMPRESSION compression_type,
-		CompressTextureDescriptor descriptor
+		CompressTextureDescriptor descriptor,
+		DebugInfo debug_info
 	) {
 		// Get the texture descriptor and fill the DirectX image
 		Texture2DDescriptor texture_descriptor = GetTextureDescriptor(texture);
 
 		// Check if the compression type conforms to the range
 		if ((unsigned int)compression_type > (unsigned int)ECS_TEXTURE_COMPRESSION_BC7) {
-			SetErrorMessage(descriptor.error_message, "Incorrect compression type - out of range.");
+			SetErrorMessageInternal(descriptor.error_message, "Incorrect compression type - out of range.");
 			return false;
 		}
 
 		// Check to see that the dimensions are multiple of 4
 		if ((texture_descriptor.size.x & 3) != 0 || (texture_descriptor.size.y & 3) != 0) {
-			SetErrorMessage(descriptor.error_message, "Cannot compress textures that do not have dimensions multiple of 4.");
+			SetErrorMessageInternal(descriptor.error_message, "Cannot compress textures that do not have dimensions multiple of 4.");
 			return false;
 		}
 
@@ -125,7 +125,7 @@ namespace ECSEngine {
 			texture_descriptor.mip_levels
 		);
 		ECS_GRAPHICS_FORMAT compressed_format;
-		if (function::HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB)) {
+		if (HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB)) {
 			compressed_format = COMPRESSED_FORMATS_SRGB[(unsigned int)compression_type];
 		}
 		else {
@@ -148,7 +148,7 @@ namespace ECSEngine {
 
 		Texture2D staging_texture = TextureToStaging(graphics, texture);
 		if (staging_texture.tex == nullptr) {
-			SetErrorMessage(descriptor.error_message, "Failed compressing a texture. Could not create staging texture.");
+			SetErrorMessageInternal(descriptor.error_message, "Failed compressing a texture. Could not create staging texture.");
 			if (descriptor.spin_lock != nullptr) {
 				descriptor.spin_lock->unlock();
 			}
@@ -158,7 +158,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < texture_descriptor.mip_levels; index++) {
 			HRESULT result = context->Map(staging_texture.tex, index, D3D11_MAP_READ, 0, &mapping);
 			if (FAILED(result)) {
-				SetErrorMessage(descriptor.error_message, "Failed compressing a texture. Mapping a mip level failed.");
+				SetErrorMessageInternal(descriptor.error_message, "Failed compressing a texture. Mapping a mip level failed.");
 				if (descriptor.spin_lock != nullptr) {
 					descriptor.spin_lock->unlock();
 				}
@@ -172,7 +172,7 @@ namespace ECSEngine {
 				size_t offset = 0;
 				size_t mapping_offset = 0;
 				for (size_t subindex = 0; subindex < image->height; subindex++) {
-					memcpy(function::OffsetPointer(image->pixels, offset), function::OffsetPointer(mapping.pData, mapping_offset), image->rowPitch);
+					memcpy(OffsetPointer(image->pixels, offset), OffsetPointer(mapping.pData, mapping_offset), image->rowPitch);
 					offset += image->rowPitch;
 					mapping_offset += mapping.RowPitch;
 				}
@@ -214,12 +214,12 @@ namespace ECSEngine {
 			}
 		}
 		else {
-			SetErrorMessage(descriptor.error_message, "Invalid compression codec for texture compression.");
+			SetErrorMessageInternal(descriptor.error_message, "Invalid compression codec for texture compression.");
 			return false;
 		}
 
 		if (FAILED(result)) {
-			SetErrorMessage(descriptor.error_message, "Texture compression failed during codec.");
+			SetErrorMessageInternal(descriptor.error_message, "Texture compression failed during codec.");
 			return false;
 		}
 
@@ -233,21 +233,20 @@ namespace ECSEngine {
 		ID3D11Texture2D* old_texture = texture.tex;
 		texture_descriptor.format = compressed_format;
 		texture_descriptor.mip_data = { mip_data.buffer, texture_descriptor.mip_levels };
-		if (!function::HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_BIND_RENDER_TARGET)) {
-			texture_descriptor.bind_flag = (ECS_GRAPHICS_BIND_TYPE)function::ClearFlag(texture_descriptor.bind_flag, ECS_GRAPHICS_BIND_RENDER_TARGET);
+		if (!HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_BIND_RENDER_TARGET)) {
+			texture_descriptor.bind_flag = (ECS_GRAPHICS_BIND_TYPE)ClearFlag(texture_descriptor.bind_flag, ECS_GRAPHICS_BIND_RENDER_TARGET);
 		}
-		texture_descriptor.misc_flag = (ECS_GRAPHICS_MISC_FLAGS)function::ClearFlag(texture_descriptor.misc_flag, D3D11_RESOURCE_MISC_GENERATE_MIPS);
+		texture_descriptor.misc_flag = (ECS_GRAPHICS_MISC_FLAGS)ClearFlag(texture_descriptor.misc_flag, D3D11_RESOURCE_MISC_GENERATE_MIPS);
 		if (FAILED(result)) {
-			SetErrorMessage(descriptor.error_message, "Creating final texture after compression failed.");
+			SetErrorMessageInternal(descriptor.error_message, "Creating final texture after compression failed.");
 			return false;
 		}
-		texture = graphics->CreateTexture(&texture_descriptor);
+		texture = graphics->CreateTexture(&texture_descriptor, false, debug_info);
 
 		// Release the staging texture
 		staging_texture.Release();
 		old_texture->Release();
 		graphics->RemovePossibleResourceFromTracking(old_texture);
-		graphics->AddInternalResource(texture, ECS_DEBUG_INFO);
 
 		return true;
 	}
@@ -258,7 +257,8 @@ namespace ECSEngine {
 		Graphics* graphics,
 		Texture2D& texture, 
 		ECS_TEXTURE_COMPRESSION_EX explicit_compression_type, 
-		CompressTextureDescriptor descriptor
+		CompressTextureDescriptor descriptor,
+		DebugInfo debug_info
 	) {
 		descriptor.flags |= EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type];
 		
@@ -266,7 +266,8 @@ namespace ECSEngine {
 			graphics,
 			texture, 
 			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)explicit_compression_type], 
-			descriptor
+			descriptor,
+			debug_info
 		);
 	}
 
@@ -279,12 +280,13 @@ namespace ECSEngine {
 		size_t height, 
 		ECS_TEXTURE_COMPRESSION compression_type,
 		bool temporary_texture,
-		CompressTextureDescriptor descriptor
+		CompressTextureDescriptor descriptor,
+		DebugInfo debug_info
 	)
 	{
 		Texture2D texture_result = (ID3D11Texture2D*)nullptr;
 
-		ECS_GRAPHICS_FORMAT compressed_format = function::HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB) ? COMPRESSED_FORMATS_SRGB[compression_type] 
+		ECS_GRAPHICS_FORMAT compressed_format = HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB) ? COMPRESSED_FORMATS_SRGB[compression_type] 
 			: COMPRESSED_FORMATS[compression_type];
 
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<void>, new_data, data.size);
@@ -302,7 +304,7 @@ namespace ECSEngine {
 			texture_descriptor.mip_levels = data.size;
 			texture_descriptor.mip_data = { new_data.buffer, data.size };
 
-			texture_result = graphics->CreateTexture(&texture_descriptor, temporary_texture);
+			texture_result = graphics->CreateTexture(&texture_descriptor, temporary_texture, debug_info);
 
 			// Release the memory for the compressed texture
 			DeallocateEx(descriptor.allocator, new_data[0].buffer);
@@ -318,7 +320,7 @@ namespace ECSEngine {
 			DirectX::TEX_COMPRESS_FLAGS compress_flag = GetCompressionFlag(descriptor.flags);
 
 			ECS_GRAPHICS_FORMAT non_compressed_format = compression_type == ECS_TEXTURE_COMPRESSION_BC7 ? ECS_GRAPHICS_FORMAT_RGBA8_UNORM : ECS_GRAPHICS_FORMAT_RGBA32_FLOAT;
-			if (function::HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB) && compression_type == ECS_TEXTURE_COMPRESSION_BC7) {
+			if (HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB) && compression_type == ECS_TEXTURE_COMPRESSION_BC7) {
 				non_compressed_format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB;
 			}
 			DirectX::ScratchImage initial_image;
@@ -329,7 +331,7 @@ namespace ECSEngine {
 			if (initial_image.GetImage(0, 0, 0)->slicePitch > data[0].size) {
 				Stream<char> compression_string = compression_type == ECS_TEXTURE_COMPRESSION_BC7 ? "BC7" : "BC6";
 				ECS_FORMAT_TEMP_STRING(message, "Texture compression {#} not adequate for the given texture. There is not enough data to be read", compression_string);
-				SetErrorMessage(descriptor.error_message, message);
+				SetErrorMessageInternal(descriptor.error_message, message);
 				return texture_result;
 			}
 
@@ -356,11 +358,11 @@ namespace ECSEngine {
 
 			if (!temporary_texture) {
 				// Add the resource to the graphics internal tracked resources
-				graphics->AddInternalResource(Texture2D(final_texture));
+				graphics->AddInternalResource(Texture2D(final_texture), debug_info);
 			}
 
 			if (FAILED(result)) {
-				SetErrorMessage(descriptor.error_message, "Texture compression failed during codec.");
+				SetErrorMessageInternal(descriptor.error_message, "Texture compression failed during codec.");
 				return texture_result;
 			}
 
@@ -368,7 +370,7 @@ namespace ECSEngine {
 		}
 
 		if (texture_result.tex == nullptr) {
-			SetErrorMessage(descriptor.error_message, "Creating final texture after compression failed.");
+			SetErrorMessageInternal(descriptor.error_message, "Creating final texture after compression failed.");
 			return texture_result;
 		}
 
@@ -384,7 +386,8 @@ namespace ECSEngine {
 		size_t height, 
 		ECS_TEXTURE_COMPRESSION_EX compression_type,
 		bool temporary_texture,
-		CompressTextureDescriptor descriptor
+		CompressTextureDescriptor descriptor,
+		DebugInfo debug_info
 	)
 	{
 		descriptor.flags |= EXPLICIT_COMPRESSION_FLAGS[(unsigned int)compression_type];
@@ -396,7 +399,8 @@ namespace ECSEngine {
 			height,
 			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)compression_type],
 			temporary_texture,
-			descriptor
+			descriptor,
+			debug_info
 		);
 	}
 
@@ -422,13 +426,13 @@ namespace ECSEngine {
 
 		// Check if the compression type conforms to the range
 		if ((unsigned int)compression_type > (unsigned int)ECS_TEXTURE_COMPRESSION_BC5) {
-			SetErrorMessage(descriptor.error_message, "Incorrect compression type - out of range.");
+			SetErrorMessageInternal(descriptor.error_message, "Incorrect compression type - out of range.");
 			return false;
 		}
 
 		// Check to see that the dimensions are multiple of 4
 		if ((width & 3) != 0 || (height & 3) != 0) {
-			SetErrorMessage(descriptor.error_message, "Cannot compress textures that do not have dimensions multiple of 4.");
+			SetErrorMessageInternal(descriptor.error_message, "Cannot compress textures that do not have dimensions multiple of 4.");
 			return false;
 		}
 
@@ -452,7 +456,7 @@ namespace ECSEngine {
 				size_t offset = 0;
 				size_t mapping_offset = 0;
 				for (size_t subindex = 0; subindex < image->height; subindex++) {
-					memcpy(function::OffsetPointer(image->pixels, offset), function::OffsetPointer(data[index].buffer, mapping_offset), image->rowPitch);
+					memcpy(OffsetPointer(image->pixels, offset), OffsetPointer(data[index].buffer, mapping_offset), image->rowPitch);
 					offset += image->rowPitch;
 					mapping_offset += row_pitch;
 				}
@@ -470,7 +474,7 @@ namespace ECSEngine {
 		);
 
 		if (FAILED(result)) {
-			SetErrorMessage(descriptor.error_message, "Texture compression failed during codec.");
+			SetErrorMessageInternal(descriptor.error_message, "Texture compression failed during codec.");
 			return false;
 		}
 
@@ -520,7 +524,7 @@ namespace ECSEngine {
 	ECS_TEXTURE_COMPRESSION_EX GetTextureCompressionType(const wchar_t* texture)
 	{
 		Stream<wchar_t> path = texture;
-		Path extension = function::PathExtensionBoth(path);
+		Path extension = PathExtensionBoth(path);
 
 		// Fail
 		if (extension.size == 0) {
@@ -529,8 +533,8 @@ namespace ECSEngine {
 
 		bool is_hdr = false;
 		bool is_tga = false;
-		is_hdr = function::CompareStrings(extension, L".hdr");
-		is_tga = function::CompareStrings(extension, L".tga");
+		is_hdr = extension == L".hdr";
+		is_tga = extension == L".tga";
 
 		if (is_hdr) {
 			return ECS_TEXTURE_COMPRESSION_EX_HDR;

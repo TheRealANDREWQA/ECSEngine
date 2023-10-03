@@ -21,7 +21,7 @@ namespace ECSEngine {
 			serialize_fields[write_index].character_stream = is_stream_type && type.fields[index].info.basic_type == ReflectionBasicFieldType::Int8;
 			if (is_stream_type) {
 				serialize_fields[write_index].is_stream = type.fields[index].info.basic_type != ReflectionBasicFieldType::Wchar_t && !serialize_fields[write_index].character_stream;
-				serialize_fields[write_index].data.buffer = *(void**)function::OffsetPointer(data, type.fields[index].info.pointer_offset);
+				serialize_fields[write_index].data.buffer = *(void**)OffsetPointer(data, type.fields[index].info.pointer_offset);
 
 				// Only level 1 pointers should be accepted
 				if (type.fields[index].info.stream_type == ReflectionStreamFieldType::Pointer) {
@@ -44,7 +44,7 @@ namespace ECSEngine {
 					}
 				}
 				else if (type.fields[index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
-					serialize_fields[write_index].data.buffer = function::OffsetPointer(data, type.fields[index].info.pointer_offset);
+					serialize_fields[write_index].data.buffer = OffsetPointer(data, type.fields[index].info.pointer_offset);
 					serialize_fields[write_index].data.size = type.fields[index].info.basic_type_count;
 				}
 				else {
@@ -56,7 +56,7 @@ namespace ECSEngine {
 			}
 			else {
 				serialize_fields[write_index].is_stream = false;
-				serialize_fields[write_index].data.buffer = function::OffsetPointer(data, type.fields[index].info.pointer_offset);
+				serialize_fields[write_index].data.buffer = OffsetPointer(data, type.fields[index].info.pointer_offset);
 				serialize_fields[write_index].data.size = 1;
 			}
 
@@ -77,7 +77,7 @@ namespace ECSEngine {
 		bool some_fields_missed = false;
 		for (size_t index = 0; index < deserialize_fields.size; index++) {
 			// Check to see if the field exists in the type
-			unsigned int in_type_name_index = function::FindString(deserialize_fields[index].name, Stream<Stream<char>>(field_names, type.fields.size));
+			unsigned int in_type_name_index = FindString(deserialize_fields[index].name, Stream<Stream<char>>(field_names, type.fields.size));
 			if (in_type_name_index != -1) {
 				// If the types mismatch, don't assign to it
 				// Change the enum type to Int8
@@ -93,11 +93,11 @@ namespace ECSEngine {
 							if (GetReflectionFieldPointerIndirection(info) == 1) {
 								// If it is a pointer only, do the copy only if the basic type is an ASCII string or wide string
 								if (deserialize_fields[index].basic_type == ReflectionBasicFieldType::Int8) {
-									char** data_pointer = (char**)function::OffsetPointer(data, info.pointer_offset);
+									char** data_pointer = (char**)OffsetPointer(data, info.pointer_offset);
 									*data_pointer = deserialize_fields[index].ascii_characters.buffer;
 								}
 								else if (deserialize_fields[index].basic_type == ReflectionBasicFieldType::Wchar_t) {
-									wchar_t** data_pointer = (wchar_t**)function::OffsetPointer(data, info.pointer_offset);
+									wchar_t** data_pointer = (wchar_t**)OffsetPointer(data, info.pointer_offset);
 									*data_pointer = deserialize_fields[index].wide_characters.buffer;
 								}
 								else {
@@ -125,7 +125,7 @@ namespace ECSEngine {
 							if (info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 								if (info.basic_type_count >= deserialize_fields[index].pointer_data.size) {
 									memcpy(
-										function::OffsetPointer(data, info.pointer_offset),
+										OffsetPointer(data, info.pointer_offset),
 										stream_data,
 										stream_size * GetReflectionBasicFieldTypeByteSize(deserialize_fields[index].basic_type)
 									);
@@ -135,7 +135,7 @@ namespace ECSEngine {
 								}
 							}
 							else {
-								void* stream_offset = function::OffsetPointer(data, info.pointer_offset);
+								void* stream_offset = OffsetPointer(data, info.pointer_offset);
 								if (info.stream_type == ReflectionStreamFieldType::Stream) {
 									Stream<void>* stream = (Stream<void>*)stream_offset;
 									stream->buffer = stream_data;
@@ -176,7 +176,7 @@ namespace ECSEngine {
 								data_to_blit_size = deserialize_fields[index].wide_characters.size;
 							}
 						}
-						void* data_offset = function::OffsetPointer(data, info.pointer_offset);
+						void* data_offset = OffsetPointer(data, info.pointer_offset);
 						memcpy(data_offset, data_to_blit, data_to_blit_size);
 					}
 				}

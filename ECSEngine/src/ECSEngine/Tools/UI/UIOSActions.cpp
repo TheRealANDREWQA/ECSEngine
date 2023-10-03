@@ -128,7 +128,7 @@ namespace ECSEngine {
 			const wchar_t* path = (const wchar_t*)_data;
 
 			ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
-			function::ConvertASCIIToWide(wide_name, *new_name);
+			ConvertASCIIToWide(wide_name, *new_name);
 
 			RenameFolderActionData rename_data;
 			rename_data.new_name = wide_name;
@@ -182,7 +182,7 @@ namespace ECSEngine {
 			const wchar_t* path = (const wchar_t*)_data;
 
 			ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
-			function::ConvertASCIIToWide(wide_name, *new_name);
+			ConvertASCIIToWide(wide_name, *new_name);
 
 			RenameFileActionData rename_data;
 			rename_data.new_name = wide_name;
@@ -236,7 +236,7 @@ namespace ECSEngine {
 			const wchar_t* path = (const wchar_t*)_data;
 
 			ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
-			function::ConvertASCIIToWide(wide_name, *new_extension);
+			ConvertASCIIToWide(wide_name, *new_extension);
 
 			ChangeFileExtensionActionData change_data;
 			change_data.new_extension = wide_name;
@@ -296,7 +296,7 @@ namespace ECSEngine {
 			const wchar_t* data = (const wchar_t*)_data;
 
 			ECS_STACK_CAPACITY_STREAM(char, ascii_string, 512);
-			function::ConvertWideCharsToASCII(Stream<wchar_t>(data), ascii_string);
+			ConvertWideCharsToASCII(Stream<wchar_t>(data), ascii_string);
 			ascii_string[ascii_string.size] = '\0';
 			system->m_application->WriteTextToClipboard(ascii_string.buffer);
 		}
@@ -308,7 +308,7 @@ namespace ECSEngine {
 			Stream<wchar_t>* data = (Stream<wchar_t>*)_data;
 
 			ECS_STACK_CAPACITY_STREAM(char, temp_characters, 512);
-			function::ConvertWideCharsToASCII(*data, temp_characters);
+			ConvertWideCharsToASCII(*data, temp_characters);
 			temp_characters[temp_characters.size] = '\0';
 
 			system->m_application->WriteTextToClipboard(temp_characters.buffer);
@@ -344,7 +344,7 @@ namespace ECSEngine {
 					char temp_chars[256];
 					size_t written_chars;
 					if (data->get_file_data.path.size > 0) {
-						function::ConvertWideCharsToASCII(data->get_file_data.path.buffer, temp_chars, data->get_file_data.path.size, 256, 256, written_chars);
+						ConvertWideCharsToASCII(data->get_file_data.path.buffer, temp_chars, data->get_file_data.path.size, 256, 256, written_chars);
 						data->input->DeleteAllCharacters();
 						data->input->InsertCharacters(temp_chars, written_chars, 0, system);
 						if (data->update_stream) {
@@ -375,7 +375,7 @@ namespace ECSEngine {
 					char temp_chars[256];
 					size_t written_chars;
 					if (data->get_directory_data.path.size > 0) {
-						function::ConvertWideCharsToASCII(data->get_directory_data.path.buffer, temp_chars, data->get_directory_data.path.size, 256, 256, written_chars);
+						ConvertWideCharsToASCII(data->get_directory_data.path.buffer, temp_chars, data->get_directory_data.path.size, 256, 256, written_chars);
 						data->input->DeleteAllCharacters();
 						data->input->InsertCharacters(temp_chars, written_chars, 0, system);
 						if (data->update_stream != nullptr) {

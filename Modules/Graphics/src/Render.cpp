@@ -16,129 +16,6 @@ ECS_INLINE unsigned int GizmoRenderIndex(unsigned int instance_index, bool extra
 	return GenerateRenderInstanceValue(instance_index, extra_thick ? ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS : GIZMO_THICKNESS);
 }
 
-struct BasicDrawForEachData {
-	float3 camera_translation;
-	Matrix camera_matrix;
-};
-
-template<bool has_translation, bool has_rotation, bool has_scale>
-void BasicDrawForEach(ForEachEntityFunctorData* for_each_data) {
-	BasicDrawForEachData* data = (BasicDrawForEachData*)for_each_data->data;
-
-	World* world = for_each_data->world;
-	Graphics* graphics = world->graphics;
-
-	const RenderMesh* mesh = (const RenderMesh*)for_each_data->shared_components[0];
-	if (mesh->Validate()) {
-
-		float3 translation_value = { 0.0f, 0.0f, 0.0f };
-		float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
-		float3 scale_value = { 1.0f, 1.0f, 1.0f };
-		Matrix matrix_translation;
-		Matrix matrix_rotation;
-		Matrix matrix_scale;
-
-		enum ORDER {
-			TRANSLATION,
-			ROTATION,
-			SCALE,
-			COUNT
-		};
-
-		unsigned char component_indices[COUNT] = { 0 };
-		if constexpr (has_translation) {
-			for (size_t index = TRANSLATION + 1; index < COUNT; index++) {
-				component_indices[index]++;
-			}
-		}
-		if constexpr (has_rotation) {
-			for (size_t index = ROTATION + 1; index < COUNT; index++) {
-				component_indices[index]++;
-			}
-		}
-
-		if constexpr (has_translation) {
-			Translation* translation = (Translation*)for_each_data->unique_components[component_indices[TRANSLATION]];
-			ECS_EDITOR_RUNTIME_TYPE runtime_type_count = GetEditorRuntimeType(world->system_manager);
-			if (runtime_type_count == ECS_EDITOR_RUNTIME_GAME) {
-				//translation->value.x += 0.01f;
-			}
-			translation_value = translation->value;
-			matrix_translation = MatrixTranslation(translation_value);
-		}
-		if constexpr (has_rotation) {
-			const Rotation* rotation = (const Rotation*)for_each_data->unique_components[component_indices[ROTATION]];
-			rotation_value = rotation->value;
-			matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
-		}
-		else {
-			matrix_rotation = MatrixIdentity();
-		}
-		if constexpr (has_scale) {
-			const Scale* scale = (const Scale*)for_each_data->unique_components[component_indices[SCALE]];
-			scale_value = scale->value;
-			matrix_scale = MatrixScale(scale_value);
-		}
-
-		Matrix object_matrix;
-
-		if constexpr (has_translation) {
-			if constexpr (has_rotation) {
-				if constexpr (has_scale) {
-					object_matrix = MatrixTRS(matrix_translation, matrix_rotation, matrix_scale);
-				}
-				else {
-					object_matrix = MatrixTR(matrix_translation, matrix_rotation);
-				}
-			}
-			else if constexpr (has_scale) {
-				object_matrix = MatrixTS(matrix_translation, matrix_scale);
-			}
-			else {
-				object_matrix = matrix_translation;
-			}
-		}
-		else if constexpr (has_rotation) {
-			if constexpr (has_scale) {
-				object_matrix = MatrixRS(matrix_rotation, matrix_scale);
-			}
-			else {
-				object_matrix = matrix_rotation;
-			}
-		}
-		else if constexpr (has_scale) {
-			object_matrix = matrix_scale;
-		}
-		else {
-			object_matrix = MatrixIdentity();
-		}
-
-		Matrix mvp_matrix = object_matrix * data->camera_matrix;
-
-		object_matrix = MatrixGPU(object_matrix);
-		mvp_matrix = MatrixGPU(mvp_matrix);
-
-		float3 camera_position = data->camera_translation;
-		const void* injected_values[ECS_CB_INJECT_TAG_COUNT];
-		injected_values[ECS_CB_INJECT_CAMERA_POSITION] = &camera_position;
-		injected_values[ECS_CB_INJECT_MVP_MATRIX] = &mvp_matrix;
-		injected_values[ECS_CB_INJECT_OBJECT_MATRIX] = &object_matrix;
-
-		BindConstantBufferInjectedCB(graphics, mesh->material, injected_values);
-
-		graphics->BindMesh(mesh->mesh->mesh);
-		graphics->BindMaterial(*mesh->material);
-
-		graphics->DrawCoalescedMeshCommand(*mesh->mesh);
-		 
-		/*AABB mesh_bounds = mesh->mesh->mesh.bounds;
-		mesh_bounds = TransformAABB(mesh_bounds, translation_value, matrix_rotation, scale_value);
-		float3 bounds_center = AABBCenter(mesh_bounds).AsFloat3Low();
-		float3 bounds_half_extents = AABBHalfExtents(mesh_bounds).AsFloat3Low();
-		world->debug_drawer->AddAABB(bounds_center, bounds_half_extents, Color(20, 170, 20));*/
-	}
-}
-
 template<bool schedule_element>
 ECS_THREAD_TASK(RenderTask) {
 	if constexpr (!schedule_element) {
@@ -147,52 +24,76 @@ ECS_THREAD_TASK(RenderTask) {
 
 		CameraCached camera;
 		if (GetWorldCamera(world, camera)) {
-			Graphics* graphics = world->graphics;
-			DebugDrawer* drawer = world->debug_drawer;
-
 			Matrix camera_matrix = camera.GetViewProjectionMatrix();
-			drawer->UpdateCameraMatrix(camera_matrix);
+			float3 camera_translation = camera.translation;
+			world->debug_drawer->UpdateCameraMatrix(camera_matrix);
 
-			Component unique_components[3];
-			Component exclude_unique_components[3];
-			Component shared_components[1];
-			shared_components[0] = RenderMesh::ID();
-			ComponentSignature shared_signature(shared_components, std::size(shared_components));
+			ForEachEntityCommit<
+				QueryRead<RenderMesh>,
+				QueryOptional<QueryRead<Translation>>,
+				QueryOptional<QueryRead<Rotation>>,
+				QueryOptional<QueryRead<Scale>>
+			>::Function(world, [&](
+				ForEachEntityData* for_each_data, 
+				const RenderMesh* render_mesh, 
+				const Translation* translation, 
+				const Rotation* rotation,
+				const Scale* scale
+			) {
+				Graphics* graphics = for_each_data->world->graphics;
 
-			BasicDrawForEachData for_each_data;
-			for_each_data.camera_matrix = camera_matrix;
-			for_each_data.camera_translation = camera.translation;
+				if (render_mesh->Validate()) {
+					float3 translation_value = { 0.0f, 0.0f, 0.0f };
+					float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
+					float3 scale_value = { 1.0f, 1.0f, 1.0f };
+					Matrix matrix_translation;
+					Matrix matrix_rotation;
+					Matrix matrix_scale;
 
-			unique_components[0] = Translation::ID();
-			exclude_unique_components[0] = Rotation::ID();
-			exclude_unique_components[1] = Scale::ID();
-			ForEachEntityCommitFunctor(world, BasicDrawForEach<true, false, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+					if (translation != nullptr) {
+						translation_value = translation->value;
+						matrix_translation = MatrixTranslation(translation_value);
+					}
+					else {
+						matrix_translation = MatrixIdentity();
+					}
+					
+					if (rotation != nullptr) {
+						rotation_value = rotation->value;
+						matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
+					}
+					else {
+						matrix_rotation = MatrixIdentity();
+					}
 
-			unique_components[0] = Rotation::ID();
-			exclude_unique_components[0] = Translation::ID();
-			ForEachEntityCommitFunctor(world, BasicDrawForEach<false, true, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+					if (scale != nullptr) {
+						scale_value = scale->value;
+						matrix_scale = MatrixScale(scale_value);
+					}
+					else {
+						matrix_scale = MatrixIdentity();
+					}
 
-			unique_components[0] = Scale::ID();
-			exclude_unique_components[1] = Rotation::ID();
-			ForEachEntityCommitFunctor(world, BasicDrawForEach<false, false, true>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+					Matrix object_matrix = MatrixTRS(matrix_translation, matrix_rotation, matrix_scale);
+					Matrix mvp_matrix = object_matrix * camera_matrix;
 
-			unique_components[0] = Translation::ID();
-			unique_components[1] = Rotation::ID();
-			exclude_unique_components[0] = Scale::ID();
-			ForEachEntityCommitFunctor(world, BasicDrawForEach<true, true, false>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
+					object_matrix = MatrixGPU(object_matrix);
+					mvp_matrix = MatrixGPU(mvp_matrix);
 
-			unique_components[1] = Scale::ID();
-			exclude_unique_components[0] = Rotation::ID();
-			ForEachEntityCommitFunctor(world, BasicDrawForEach<true, false, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
+					float3 camera_position = camera_translation;
+					const void* injected_values[ECS_CB_INJECT_TAG_COUNT];
+					injected_values[ECS_CB_INJECT_CAMERA_POSITION] = &camera_position;
+					injected_values[ECS_CB_INJECT_MVP_MATRIX] = &mvp_matrix;
+					injected_values[ECS_CB_INJECT_OBJECT_MATRIX] = &object_matrix;
 
-			unique_components[0] = Rotation::ID();
-			exclude_unique_components[0] = Translation::ID();
-			ForEachEntityCommitFunctor(world, BasicDrawForEach<false, true, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
+					BindConstantBufferInjectedCB(graphics, render_mesh->material, injected_values);
 
-			unique_components[0] = Translation::ID();
-			unique_components[1] = Rotation::ID();
-			unique_components[2] = Scale::ID();
-			ForEachEntityCommitFunctor(world, BasicDrawForEach<true, true, true>, &for_each_data, { unique_components, 3 }, shared_signature);
+					graphics->BindMesh(render_mesh->mesh->mesh);
+					graphics->BindMaterial(*render_mesh->material);
+
+					graphics->DrawCoalescedMeshCommand(*render_mesh->mesh);
+				}
+			});
 		}
 	}
 	else {
@@ -223,6 +124,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 
 				if (selected_entities.size + transform_gizmos.size > 0) {
 					Matrix camera_matrix = camera.GetViewProjectionMatrix();
+					world->debug_drawer->UpdateCameraMatrix(camera_matrix);
 					// Highlight the entities - if they have meshes
 					size_t valid_entities = 0;
 					for (size_t index = 0; index < selected_entities.size; index++) {
@@ -481,108 +383,6 @@ ECS_THREAD_TASK(RenderFlush) {
 
 ECS_THREAD_TASK_TEMPLATE_BOOL(RenderFlush);
 
-struct InstancedFramebufferForEachData {
-	Matrix camera_matrix;
-	ResizableStream<GenerateInstanceFramebufferElement>* elements;
-};
-
-template<bool has_translation, bool has_rotation, bool has_scale>
-void InstancedFramebufferForEach(ForEachEntityFunctorData* for_each_data) {
-	InstancedFramebufferForEachData* data = (InstancedFramebufferForEachData*)for_each_data->data;
-
-	World* world = for_each_data->world;
-	Graphics* graphics = world->graphics;
-
-	const RenderMesh* mesh = (const RenderMesh*)for_each_data->shared_components[0];
-	if (mesh->Validate()) {
-		float3 translation_value = { 0.0f, 0.0f, 0.0f };
-		//float3 rotation_value = { 0.0f, 0.0f, 0.0f };
-		float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
-		float3 scale_value = { 1.0f, 1.0f, 1.0f };
-		Matrix matrix_translation;
-		Matrix matrix_rotation;
-		Matrix matrix_scale;
-
-		enum ORDER {
-			TRANSLATION,
-			ROTATION,
-			SCALE,
-			COUNT
-		};
-
-		unsigned char component_indices[COUNT] = { 0 };
-		if constexpr (has_translation) {
-			for (size_t index = TRANSLATION + 1; index < COUNT; index++) {
-				component_indices[index]++;
-			}
-		}
-		if constexpr (has_rotation) {
-			for (size_t index = ROTATION + 1; index < COUNT; index++) {
-				component_indices[index]++;
-			}
-		}
-
-		if constexpr (has_translation) {
-			const Translation* translation = (const Translation*)for_each_data->unique_components[component_indices[TRANSLATION]];
-			translation_value = translation->value;
-			matrix_translation = MatrixTranslation(translation_value);
-		}
-		if constexpr (has_rotation) {
-			const Rotation* rotation = (const Rotation*)for_each_data->unique_components[component_indices[ROTATION]];
-			rotation_value = rotation->value;
-			matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
-		}
-		if constexpr (has_scale) {
-			const Scale* scale = (const Scale*)for_each_data->unique_components[component_indices[SCALE]];
-			scale_value = scale->value;
-			matrix_scale = MatrixScale(scale_value);
-		}
-
-		Matrix object_matrix;
-
-		if constexpr (has_translation) {
-			if constexpr (has_rotation) {
-				if constexpr (has_scale) {
-					object_matrix = MatrixTRS(matrix_translation, matrix_rotation, matrix_scale);
-				}
-				else {
-					object_matrix = MatrixTR(matrix_translation, matrix_rotation);
-				}
-			}
-			else if constexpr (has_scale) {
-				object_matrix = MatrixTS(matrix_translation, matrix_scale);
-			}
-			else {
-				object_matrix = matrix_translation;
-			}
-		}
-		else if constexpr (has_rotation) {
-			if constexpr (has_scale) {
-				object_matrix = MatrixRS(matrix_rotation, matrix_scale);
-			}
-			else {
-				object_matrix = matrix_rotation;
-			}
-		}
-		else if constexpr (has_scale) {
-			object_matrix = matrix_scale;
-		}
-		else {
-			object_matrix = MatrixIdentity();
-		}
-
-		Matrix mvp_matrix = object_matrix * data->camera_matrix;
-		mvp_matrix = MatrixGPU(mvp_matrix);
-
-		GenerateInstanceFramebufferElement element;
-		element.base.is_submesh = false;
-		element.base.mesh = &mesh->mesh->mesh;
-		element.base.gpu_mvp_matrix = mvp_matrix;
-		element.instance_index = for_each_data->entity.index;
-		data->elements->Add(element);
-	}
-}
-
 template<bool schedule_element>
 ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 	if constexpr (!schedule_element) {
@@ -596,47 +396,62 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 					// Render the elements
 					ResizableStream<GenerateInstanceFramebufferElement> elements;
 					elements.Initialize(GetAllocatorPolymorphic(world->memory), 0);
+					Matrix camera_matrix = camera.GetViewProjectionMatrix();
 
-					Component unique_components[3];
-					Component exclude_unique_components[3];
-					Component shared_components[1];
-					shared_components[0] = RenderMesh::ID();
-					ComponentSignature shared_signature(shared_components, std::size(shared_components));
+					ForEachEntityCommit<QueryRead<RenderMesh>, QueryOptional<QueryRead<Translation>>, QueryOptional<QueryRead<Rotation>>, QueryOptional<QueryRead<Scale>>>
+						::Function(world, [&](
+							const ForEachEntityData* for_each_data, 
+							const RenderMesh* render_mesh, 
+							const Translation* translation,
+							const Rotation* rotation,
+							const Scale* scale
+						) {
+							World* world = for_each_data->world;
+							Graphics* graphics = world->graphics;
 
-					InstancedFramebufferForEachData for_each_data;
-					for_each_data.camera_matrix = camera.GetViewProjectionMatrix();
-					for_each_data.elements = &elements;
+							if (render_mesh->Validate()) {
+								float3 translation_value = { 0.0f, 0.0f, 0.0f };
+								//float3 rotation_value = { 0.0f, 0.0f, 0.0f };
+								float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
+								float3 scale_value = { 1.0f, 1.0f, 1.0f };
+								Matrix matrix_translation;
+								Matrix matrix_rotation;
+								Matrix matrix_scale;
 
-					unique_components[0] = Translation::ID();
-					exclude_unique_components[0] = Rotation::ID();
-					exclude_unique_components[1] = Scale::ID();
-					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<true, false, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+								if (translation != nullptr) {
+									translation_value = translation->value;
+									matrix_translation = MatrixTranslation(translation_value);
+								}
+								else {
+									matrix_translation = MatrixIdentity();
+								}
 
-					unique_components[0] = Rotation::ID();
-					exclude_unique_components[0] = Translation::ID();
-					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<false, true, false>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+								if (rotation != nullptr) {
+									rotation_value = rotation->value;
+									matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
+								}
+								else {
+									matrix_rotation = MatrixIdentity();
+								}
 
-					unique_components[0] = Scale::ID();
-					exclude_unique_components[1] = Rotation::ID();
-					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<false, false, true>, &for_each_data, { unique_components, 1 }, shared_signature, { exclude_unique_components, 2 });
+								if (scale != nullptr) {
+									scale_value = scale->value;
+									matrix_scale = MatrixScale(scale_value);
+								}
+								else {
+									matrix_scale = MatrixIdentity();
+								}
 
-					unique_components[0] = Translation::ID();
-					unique_components[1] = Rotation::ID();
-					exclude_unique_components[0] = Scale::ID();
-					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<true, true, false>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
+								Matrix gpu_mvp_matrix = MatrixMVPToGPU(matrix_translation, matrix_rotation, matrix_scale, camera_matrix);
 
-					unique_components[1] = Scale::ID();
-					exclude_unique_components[0] = Rotation::ID();
-					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<true, false, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
-
-					unique_components[0] = Rotation::ID();
-					exclude_unique_components[0] = Translation::ID();
-					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<false, true, true>, &for_each_data, { unique_components, 2 }, shared_signature, { exclude_unique_components, 1 });
-
-					unique_components[0] = Translation::ID();
-					unique_components[1] = Rotation::ID();
-					unique_components[2] = Scale::ID();
-					ForEachEntityCommitFunctor(world, InstancedFramebufferForEach<true, true, true>, &for_each_data, { unique_components, 3 }, shared_signature);
+								GenerateInstanceFramebufferElement element;
+								element.base.is_submesh = false;
+								element.base.mesh = &render_mesh->mesh->mesh;
+								element.base.gpu_mvp_matrix = gpu_mvp_matrix;
+								element.instance_index = for_each_data->entity.index;
+								elements.Add(element);
+							}
+						});
 
 					// Get the pipeline state before rendering the instances
 					GraphicsPipelineState pipeline_state = world->graphics->GetPipelineState();

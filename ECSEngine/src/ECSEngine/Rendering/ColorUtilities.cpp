@@ -357,7 +357,7 @@ namespace ECSEngine {
 	Color HDRColorToSDR(ColorFloat color, float* intensity) {
 		Color sdr_color;
 
-		color.alpha = function::Clamp(color.alpha, 0.0f, 1.0f);
+		color.alpha = Clamp(color.alpha, 0.0f, 1.0f);
 		unsigned char alpha = color.alpha * 255.0f;
 		if (color.red <= 1.0f && color.green <= 1.0f && color.blue <= 1.0f) {
 			// Let the intensity be 1.0f and the values the quantized 8bit values
@@ -407,9 +407,9 @@ namespace ECSEngine {
 
 		float normalized_alpha = (float)second.alpha / Color::GetRange();
 
-		result.red = function::Lerp(first.red, second.red, normalized_alpha);
-		result.green = function::Lerp(first.green, second.green, normalized_alpha);
-		result.blue = function::Lerp(first.blue, second.blue, normalized_alpha);
+		result.red = Lerp(first.red, second.red, normalized_alpha);
+		result.green = Lerp(first.green, second.green, normalized_alpha);
+		result.blue = Lerp(first.blue, second.blue, normalized_alpha);
 
 		return result;
 	}

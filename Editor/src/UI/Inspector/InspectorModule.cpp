@@ -118,7 +118,7 @@ void CreateModuleSettingsCallback(ActionData* action_data) {
 	CreateInspectorSettingsHelper(data->editor_state, data->module_index, data->inspector_index);
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, converted_name, 128);
-	function::ConvertASCIIToWide(converted_name, *characters);
+	ConvertASCIIToWide(converted_name, *characters);
 
 	draw_data->settings_name.InitializeAndCopy(GetAllocatorPolymorphic(data->editor_state->editor_allocator), converted_name);
 
@@ -209,7 +209,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 	InspectorIcon(drawer, display_icon, drawer->color_theme.theme);
 
 	ECS_STACK_CAPACITY_STREAM(char, ascii_name, 256);
-	function::ConvertWideCharsToASCII(data->module_name, ascii_name);
+	ConvertWideCharsToASCII(data->module_name, ascii_name);
 	unsigned int base_ascii_name_size = ascii_name.size;
 	if (editor_state->project_modules->buffer[module_index].is_graphics_module) {
 		ascii_name.AddStream(" (Graphics Type)");
@@ -247,10 +247,10 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 			// The component might be lacking an ID
 			double id_evaluation = type->GetEvaluation(evaluation_name);
 			if (id_evaluation == DBL_MAX) {
-				labels[index].size = function::FormatString(labels[index].buffer, "{#} (ID is missing, {#} byte size)", type->name, byte_size);
+				labels[index].size = FormatString(labels[index].buffer, "{#} (ID is missing, {#} byte size)", type->name, byte_size);
 			}
 			else {
-				labels[index].size = function::FormatString(labels[index].buffer, "{#} ({#} ID, {#} byte size)", type->name, (unsigned short)id_evaluation, byte_size);
+				labels[index].size = FormatString(labels[index].buffer, "{#} ({#} ID, {#} byte size)", type->name, (unsigned short)id_evaluation, byte_size);
 			}
 			label_list_characters.size += labels[index].size;
 		}
@@ -281,10 +281,10 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 			// The component might be lacking an ID
 			double id_evaluation = type->GetEvaluation(evaluation_name);
 			if (id_evaluation == DBL_MAX) {
-				labels[index].size = function::FormatString(labels[index].buffer, "{#} (ID is missing, {#} byte size)", type->name, byte_size);
+				labels[index].size = FormatString(labels[index].buffer, "{#} (ID is missing, {#} byte size)", type->name, byte_size);
 			}
 			else {
-				labels[index].size = function::FormatString(labels[index].buffer, "{#} ({#} ID, {#} byte size)", type->name, (unsigned short)id_evaluation, byte_size);
+				labels[index].size = FormatString(labels[index].buffer, "{#} ({#} ID, {#} byte size)", type->name, (unsigned short)id_evaluation, byte_size);
 			}
 			label_list_characters.size += labels[index].size;
 		}
@@ -351,7 +351,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 
 		// Display the configuration's name
 		ECS_STACK_CAPACITY_STREAM(char, ascii_setting_name, 256);
-		function::ConvertWideCharsToASCII(data->settings_name, ascii_setting_name);
+		ConvertWideCharsToASCII(data->settings_name, ascii_setting_name);
 
 		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, ascii_setting_name);
 	}
@@ -396,9 +396,9 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 			[](Stream<wchar_t> path, void* _data) {
 				FunctorData* data = (FunctorData*)_data;
 
-				Stream<wchar_t> stem = function::PathStem(path);
+				Stream<wchar_t> stem = PathStem(path);
 
-				bool is_active = data->active_settings != nullptr ? function::CompareStrings(stem, *data->active_settings) : false;
+				bool is_active = data->active_settings != nullptr ? stem == *data->active_settings : false;
 				UIDrawConfig config;
 
 				struct SetNewSettingData {
@@ -439,7 +439,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 				float label_scale = total_scale - square_scale.x - data->drawer->layout.element_indentation;
 				size_t label_configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_TRANSPARENT;
 				if (is_active) {
-					label_configuration = function::ClearFlag(label_configuration, UI_CONFIG_LABEL_TRANSPARENT);
+					label_configuration = ClearFlag(label_configuration, UI_CONFIG_LABEL_TRANSPARENT);
 				}
 				dependent_size.scale_factor.x = data->drawer->GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, { label_scale, 0.0f }).x;
 				config.AddFlag(dependent_size);
@@ -469,7 +469,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 					}
 					else {
 						// Check to see if that is the current setting
-						if (data->active_settings->size > 0 && function::CompareStrings(data->filename, *data->active_settings)) {
+						if (data->active_settings->size > 0 && data->filename == *data->active_settings) {
 							DeallocateInspectorSettingsHelper(data->editor_state, data->module_index, data->inspector_index);
 							data->editor_state->editor_allocator->Deallocate(data->active_settings->buffer);
 							*data->active_settings = { nullptr, 0, 0 };
@@ -518,7 +518,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 			UIDrawerArrayAddRemoveData* data = (UIDrawerArrayAddRemoveData*)_additional_data;
 			// memset the elements to 0
 			unsigned int new_elements = data->capacity_data->size - data->new_size;
-			memset(function::OffsetPointer(data->capacity_data->buffer, data->element_byte_size * data->new_size), 0, data->element_byte_size * new_elements);
+			memset(OffsetPointer(data->capacity_data->buffer, data->element_byte_size * data->new_size), 0, data->element_byte_size * new_elements);
 
 			SaveFileAfterChangeData* save_data = (SaveFileAfterChangeData*)_data;
 			bool success = SaveInspectorSettingsHelper(save_data->editor_state, save_data->module_index, save_data->inspector_index);
@@ -554,7 +554,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 				// Display them as collapsing headers
 				UIReflectionInstance* instance = editor_state->module_reflection->GetInstance(instance_indices[index]);
 
-				Stream<char> separator = function::FindFirstCharacter(instance->name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR);
+				Stream<char> separator = FindFirstCharacter(instance->name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR);
 				Stream<char> name = { instance->name.buffer, instance->name.size - separator.size };
 
 				drawer->CollapsingHeader(name, collapsing_headers_state + index, [&]() {
@@ -623,7 +623,7 @@ void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int mod
 void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsigned int inspector_index) {
 	ECS_ASSERT(index < editor_state->project_modules->size);
 
-	Stream<wchar_t> module_name = function::StringCopy(editor_state->EditorAllocator(), editor_state->project_modules->buffer[index].library_name);
+	Stream<wchar_t> module_name = StringCopy(editor_state->EditorAllocator(), editor_state->project_modules->buffer[index].library_name);
 	DrawModuleData draw_data;
 	draw_data.linear_allocator = nullptr;
 	draw_data.module_name = module_name;

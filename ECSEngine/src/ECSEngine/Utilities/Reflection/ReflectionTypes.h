@@ -2,7 +2,8 @@
 #include "../../Core.h"
 #include "../../Containers/Stream.h"
 #include "../BasicTypes.h"
-#include "../Function.h"
+#include "../StringUtilities.h"
+#include "../PointerUtilities.h"
 
 namespace ECSEngine {
 
@@ -144,18 +145,18 @@ namespace ECSEngine {
 			// It returns true if the string appears in the tag, else returns false in both cases
 			ECS_INLINE bool Has(Stream<char> string) const {
 				if (tag.size > 0) {
-					return function::FindFirstToken(tag, string).buffer != nullptr;
+					return FindFirstToken(tag, string).buffer != nullptr;
 				}
 				return false;
 			}
 
 			ECS_INLINE bool Is(Stream<char> string) const {
-				return function::CompareStrings(tag, string);
+				return tag == string;
 			}
 
 			// Returns the tag isolated from others
 			ECS_INLINE Stream<char> GetTag(Stream<char> string) const {
-				return function::IsolateString(tag, string, ECS_REFLECTION_TYPE_TAG_DELIMITER_STRING);
+				return IsolateString(tag, string, ECS_REFLECTION_TYPE_TAG_DELIMITER_STRING);
 			}
 
 			// Each buffer will be allocated separately. To deallocate call DeallocateSeparate
@@ -172,7 +173,7 @@ namespace ECSEngine {
 
 			// Returns true if they have the same representation
 			ECS_INLINE bool Compare(const ReflectionField& field) const {
-				return function::CompareStrings(field.definition, definition);
+				return field.definition == definition;
 			}
 
 			Stream<char> name;
@@ -205,23 +206,23 @@ namespace ECSEngine {
 				if (tag.size == 0) {
 					return false;
 				}
-				return function::FindFirstToken(tag, string).buffer != nullptr;
+				return FindFirstToken(tag, string).buffer != nullptr;
 			}
 
 			// Does a CompareStrings, not a FindFirstToken
 			ECS_INLINE bool IsTag(Stream<char> string) const {
-				return function::CompareStrings(string, tag);
+				return string == tag;
 			}
 
 			// In case the tag has multiple separated elements it will return the value separated
 			ECS_INLINE Stream<char> GetTag(Stream<char> string, Stream<char> separator) const {
-				return function::IsolateString(tag, string, separator);
+				return IsolateString(tag, string, separator);
 			}
 
 			unsigned int FindField(Stream<char> name) const;
 
 			ECS_INLINE void* GetField(const void* data, unsigned int field_index) const {
-				return function::OffsetPointer(data, fields[field_index].info.pointer_offset);
+				return OffsetPointer(data, fields[field_index].info.pointer_offset);
 			}
 
 			// Returns DBL_MAX if it doesn't exist

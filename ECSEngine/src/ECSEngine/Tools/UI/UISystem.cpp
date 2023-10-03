@@ -9,6 +9,8 @@
 #include "../../Resources/ResourceManager.h"
 #include "../../ECS/InternalStructures.h"
 #include "../../Utilities/File.h"
+#include "../../Utilities/StreamUtilities.h"
+#include "../../Utilities/Algorithms.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
 
 namespace ECSEngine {
@@ -177,26 +179,26 @@ namespace ECSEngine {
 			uintptr_t buffer = (uintptr_t)allocation;
 			m_thread_tasks.InitializeFromBuffer(buffer, m_descriptors.misc.window_count);
 
-			buffer = function::AlignPointer(buffer, alignof(UIWindow));
+			buffer = AlignPointer(buffer, alignof(UIWindow));
 			m_windows.InitializeFromBuffer(buffer, 0, m_descriptors.misc.window_count);
 
-			buffer = function::AlignPointer(buffer, alignof(UIDockspaceLayer));
+			buffer = AlignPointer(buffer, alignof(UIDockspaceLayer));
 			m_dockspace_layers.InitializeFromBuffer(buffer, 0, m_descriptors.dockspaces.count * 4);
 			m_fixed_dockspaces.InitializeFromBuffer(buffer, 0, m_descriptors.dockspaces.count * 2);
 			m_pop_up_windows.InitializeFromBuffer(buffer, 0, m_descriptors.dockspaces.count * 2);
 			m_background_dockspaces.InitializeFromBuffer(buffer, 0, m_descriptors.dockspaces.count * 2);
 
-			buffer = function::AlignPointer(buffer, alignof(UIDockspace));
+			buffer = AlignPointer(buffer, alignof(UIDockspace));
 			m_horizontal_dockspaces.InitializeFromBuffer(buffer, 0, m_descriptors.dockspaces.count);	
 			m_vertical_dockspaces.InitializeFromBuffer(buffer, 0, m_descriptors.dockspaces.count);	
 			m_floating_horizontal_dockspaces.InitializeFromBuffer(buffer, 0, m_descriptors.dockspaces.count);
 			m_floating_vertical_dockspaces.InitializeFromBuffer(buffer, 0, m_descriptors.dockspaces.count);
 
-			buffer = function::AlignPointer(buffer, alignof(float2));
+			buffer = AlignPointer(buffer, alignof(float2));
 			m_font_character_uvs = (float2*)buffer;
 			buffer += sizeof(float2) * m_descriptors.font.symbol_count * 2;
 
-			buffer = function::AlignPointer(buffer, alignof(UIRenderThreadResources));
+			buffer = AlignPointer(buffer, alignof(UIRenderThreadResources));
 			m_resources.thread_resources.buffer = (UIRenderThreadResources*)buffer;
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
 			m_resources.thread_resources.size = m_task_manager->GetThreadCount();
@@ -215,20 +217,20 @@ namespace ECSEngine {
 				buffer += m_descriptors.misc.thread_temp_memory;
 			}
 
-			buffer = function::AlignPointer(buffer, alignof(VertexShader));
+			buffer = AlignPointer(buffer, alignof(VertexShader));
 			m_resources.vertex_shaders.InitializeFromBuffer(buffer, 0, m_descriptors.materials.count);
 
-			buffer = function::AlignPointer(buffer, alignof(PixelShader));
+			buffer = AlignPointer(buffer, alignof(PixelShader));
 			m_resources.pixel_shaders.InitializeFromBuffer(buffer, 0, m_descriptors.materials.count);
 
-			buffer = function::AlignPointer(buffer, alignof(InputLayout));
+			buffer = AlignPointer(buffer, alignof(InputLayout));
 			m_resources.input_layouts.InitializeFromBuffer(buffer, 0, m_descriptors.materials.count);
 
-			buffer = function::AlignPointer(buffer, alignof(SamplerState));
+			buffer = AlignPointer(buffer, alignof(SamplerState));
 			m_resources.texture_samplers.InitializeFromBuffer(buffer, 0, m_descriptors.materials.sampler_count);
 
 
-			buffer = function::AlignPointer(buffer, alignof(VertexBuffer));
+			buffer = AlignPointer(buffer, alignof(VertexBuffer));
 			m_resources.system_draw.buffers = CapacityStream<VertexBuffer>((void*)buffer, m_descriptors.materials.count, m_descriptors.materials.count);
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
 				if (index == ECS_TOOLS_UI_SOLID_COLOR || index == ECS_TOOLS_UI_LINE) {
@@ -362,8 +364,8 @@ namespace ECSEngine {
 
 		void* UISystem::AddGlobalResource(Stream<void> resource, Stream<char> name)
 		{
-			resource.buffer = function::CopyNonZero(m_memory, resource.buffer, resource.size);
-			name = function::StringCopy(GetAllocatorPolymorphic(m_memory), name);
+			resource.buffer = CopyNonZero(m_memory, resource.buffer, resource.size);
+			name = StringCopy(GetAllocatorPolymorphic(m_memory), name);
 			InsertIntoDynamicTable(m_global_resources, GetAllocatorPolymorphic(m_memory), resource, name);
 			return resource.buffer;
 		}
@@ -1321,7 +1323,7 @@ namespace ECSEngine {
 
 		void UISystem::AddFrameHandler(UIActionHandler handler)
 		{
-			handler.data = function::CopyNonZero(GetAllocatorPolymorphic(m_memory), handler.data, handler.data_size);
+			handler.data = CopyNonZero(GetAllocatorPolymorphic(m_memory), handler.data, handler.data_size);
 			m_frame_handlers.AddAssert(handler);
 		}
 
@@ -1423,13 +1425,13 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, full_name, 256);
 
 			full_name.CopyOther(base_name);
-			function::ConvertIntToChars(full_name, current_index);
+			ConvertIntToChars(full_name, current_index);
 
 			unsigned int window_index = GetWindowFromName(full_name);
 			ECS_ASSERT(window_index != -1);
 
 			full_name.size = base_name.size;
-			function::ConvertIntToChars(full_name, new_index);
+			ConvertIntToChars(full_name, new_index);
 			SetWindowName(window_index, full_name);
 		}
 
@@ -1441,7 +1443,7 @@ namespace ECSEngine {
 			DeallocateHoverableHandler();
 			m_focused_window_data.always_hoverable = false;
 
-			handler.data = function::CopyNonZero(m_memory, handler.data, handler.data_size);
+			handler.data = CopyNonZero(m_memory, handler.data, handler.data_size);
 			m_focused_window_data.clean_up_call_hoverable = false;
 			m_focused_window_data.hoverable_handler = handler;
 		}
@@ -1454,7 +1456,7 @@ namespace ECSEngine {
 			DeallocateGeneralHandler();
 			m_focused_window_data.clean_up_call_general = false;
 
-			handler.data = function::CopyNonZero(m_memory, handler.data, handler.data_size);
+			handler.data = CopyNonZero(m_memory, handler.data, handler.data_size);
 			m_focused_window_data.general_handler = handler;
 		}
 
@@ -1749,7 +1751,7 @@ namespace ECSEngine {
 			char temp_chars[64];
 			Stream<char> temp_stream(temp_chars, 0);
 
-			function::ConvertFloatToChars(temp_stream, value, precision);
+			ConvertFloatToChars(temp_stream, value, precision);
 
 			ConvertCharactersToTextSprites(
 				temp_stream,
@@ -1783,7 +1785,7 @@ namespace ECSEngine {
 			char temp_chars[64];
 			Stream<char> temp_stream(temp_chars, 0);
 
-			function::ConvertDoubleToChars(temp_stream, value, precision);
+			ConvertDoubleToChars(temp_stream, value, precision);
 
 			ConvertCharactersToTextSprites(
 				temp_stream,
@@ -2027,7 +2029,7 @@ namespace ECSEngine {
 			
 			// flags
 			dockspace_stream[dockspace_index].allow_docking = (flags & UI_DOCKSPACE_NO_DOCKING) == 0;
-			if (function::HasFlag(flags, UI_DOCKSPACE_BACKGROUND)) {
+			if (HasFlag(flags, UI_DOCKSPACE_BACKGROUND)) {
 				m_background_dockspaces.AddAssert({ static_cast<unsigned int>(dockspace_index), type });
 			}
 
@@ -2294,7 +2296,7 @@ namespace ECSEngine {
 				m_resources.texture_semaphore.Enter();
 
 				ProcessTextureData data;
-				data.filename = function::StringCopy(GetAllocatorPolymorphic(&m_resources.thread_resources[0].temp_allocator), filename).buffer;
+				data.filename = StringCopy(GetAllocatorPolymorphic(&m_resources.thread_resources[0].temp_allocator), filename).buffer;
 				data.system = this;
 				data.texture = sprite_texture;
 				
@@ -2345,13 +2347,13 @@ namespace ECSEngine {
 			m_windows[window_index].min_zoom = ECS_TOOLS_UI_WINDOW_MIN_ZOOM;
 
 			m_windows[window_index].private_handler.action = descriptor.private_action;
-			m_windows[window_index].private_handler.data = function::CopyNonZero(Allocator(), descriptor.private_action_data, descriptor.private_action_data_size);
+			m_windows[window_index].private_handler.data = CopyNonZero(Allocator(), descriptor.private_action_data, descriptor.private_action_data_size);
 			m_windows[window_index].private_handler.data_size = descriptor.private_action_data_size;
 
 			m_windows[window_index].destroy_handler = { descriptor.destroy_action, descriptor.destroy_action_data, (unsigned int)descriptor.destroy_action_data_size };
-			m_windows[window_index].destroy_handler.data = function::CopyNonZero(Allocator(), descriptor.destroy_action_data, descriptor.destroy_action_data_size);
+			m_windows[window_index].destroy_handler.data = CopyNonZero(Allocator(), descriptor.destroy_action_data, descriptor.destroy_action_data_size);
 
-			m_windows[window_index].window_data = function::CopyNonZero(Allocator(), descriptor.window_data, descriptor.window_data_size);
+			m_windows[window_index].window_data = CopyNonZero(Allocator(), descriptor.window_data, descriptor.window_data_size);
 			m_windows[window_index].window_data_size = descriptor.window_data_size;
 
 			// resource table
@@ -2398,7 +2400,7 @@ namespace ECSEngine {
 		{
 			UIWindowDescriptor temp_descriptor;
 			const UIWindowDescriptor* descriptor_to_use = &descriptor;
-			if (function::HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT)) {
+			if (HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT)) {
 				memcpy(&temp_descriptor, &descriptor, sizeof(temp_descriptor));
 				descriptor_to_use = &temp_descriptor;
 
@@ -2407,8 +2409,8 @@ namespace ECSEngine {
 
 				// If the position is out of whack, reposition the window in the center of the viewport
 				// If this is a pop up with CENTER, it should be fine if it has random values since they will get clamped
-				temp_descriptor.initial_position_x = function::Clamp(temp_descriptor.initial_position_x, -2.5f, 2.5f);
-				temp_descriptor.initial_position_y = function::Clamp(temp_descriptor.initial_position_y, -2.5f, 2.5f);
+				temp_descriptor.initial_position_x = Clamp(temp_descriptor.initial_position_x, -2.5f, 2.5f);
+				temp_descriptor.initial_position_y = Clamp(temp_descriptor.initial_position_y, -2.5f, 2.5f);
 			}
 
 			// create window normally
@@ -2422,7 +2424,7 @@ namespace ECSEngine {
 
 			// create the dockspace according to fixed flag
 			unsigned int dockspace_index;
-			if (!function::HasFlag(additional_flags, UI_DOCKSPACE_FIXED)) {
+			if (!HasFlag(additional_flags, UI_DOCKSPACE_FIXED)) {
 				dockspace_index = CreateDockspace(
 					{ { descriptor_to_use->initial_position_x, descriptor_to_use->initial_position_y }, { descriptor_to_use->initial_size_x, descriptor_to_use->initial_size_y} },
 					type,
@@ -2443,13 +2445,13 @@ namespace ECSEngine {
 			UIDockspace* dockspace = GetDockspace(dockspace_index, type);
 
 			// pop up window
-			if (function::HasFlag(additional_flags, UI_DOCKSPACE_POP_UP_WINDOW)) {
+			if (HasFlag(additional_flags, UI_DOCKSPACE_POP_UP_WINDOW)) {
 				// the layer will be bumped back
 				m_pop_up_windows.Add((unsigned int)0);
 			}
 
 			// locked window
-			if (function::HasFlag(additional_flags, UI_DOCKSPACE_LOCK_WINDOW)) {
+			if (HasFlag(additional_flags, UI_DOCKSPACE_LOCK_WINDOW)) {
 				m_focused_window_data.locked_window++;
 
 				// Clear hoverable, clickable and general handlers
@@ -2474,7 +2476,7 @@ namespace ECSEngine {
 			}
 
 			// Implement fit to content window
-			if ((function::HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT) || function::HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE)) != 0) {
+			if ((HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT) || HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE)) != 0) {
 				// create dummy buffers for the drawer
 				void* buffers[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES];
 				void* system_buffers[ECS_TOOLS_UI_MATERIALS];
@@ -2504,10 +2506,10 @@ namespace ECSEngine {
 
 				descriptor.draw(m_windows[window_index].window_data, &drawer_descriptor, false);
 				dockspace->transform.scale = new_scale;
-				dockspace->transform.scale.x += function::HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE) * m_descriptors.misc.render_slider_vertical_size;
-				dockspace->transform.scale.y += function::HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE) * m_descriptors.misc.render_slider_horizontal_size;
+				dockspace->transform.scale.x += HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE) * m_descriptors.misc.render_slider_vertical_size;
+				dockspace->transform.scale.y += HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE) * m_descriptors.misc.render_slider_horizontal_size;
 				
-				if (function::HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER)) {
+				if (HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER)) {
 					dockspace->transform.position.x = AlignMiddle(-1.0f, 2.0f, dockspace->transform.scale.x);
 					dockspace->transform.position.y = AlignMiddle(-1.0f, 2.0f, dockspace->transform.scale.y);
 				}
@@ -2531,7 +2533,7 @@ namespace ECSEngine {
 				}
 			}
 
-			if (function::HasFlag(additional_flags, UI_DOCKSPACE_FIT_TO_VIEW)) {
+			if (HasFlag(additional_flags, UI_DOCKSPACE_FIT_TO_VIEW)) {
 				const float OFFSET = 0.96f;
 
 				if (dockspace->transform.position.x + dockspace->transform.scale.x > OFFSET) {
@@ -2763,7 +2765,7 @@ namespace ECSEngine {
 			dockspace->borders[border_index].hoverable_handler.scale_y = (float*)buffer;
 			buffer += sizeof(float) * m_descriptors.dockspaces.border_default_hoverable_handler_count;
 
-			buffer = function::AlignPointer(buffer, alignof(UIActionHandler));
+			buffer = AlignPointer(buffer, alignof(UIActionHandler));
 
 			dockspace->borders[border_index].hoverable_handler.action = (UIActionHandler*)buffer;
 			buffer += sizeof(UIActionHandler) * m_descriptors.dockspaces.border_default_hoverable_handler_count;
@@ -2779,7 +2781,7 @@ namespace ECSEngine {
 					dockspace->borders[border_index].clickable_handler[button_type].scale_y = (float*)buffer;
 					buffer += sizeof(float) * count;
 
-					buffer = function::AlignPointer(buffer, alignof(UIActionHandler));
+					buffer = AlignPointer(buffer, alignof(UIActionHandler));
 
 					dockspace->borders[border_index].clickable_handler[button_type].action = (UIActionHandler*)buffer;
 					buffer += sizeof(UIActionHandler) * count;
@@ -2803,7 +2805,7 @@ namespace ECSEngine {
 			dockspace->borders[border_index].general_handler.scale_y = (float*)buffer;
 			buffer += sizeof(float) * m_descriptors.dockspaces.border_default_general_handler_count;
 
-			buffer = function::AlignPointer(buffer, alignof(UIActionHandler));
+			buffer = AlignPointer(buffer, alignof(UIActionHandler));
 			dockspace->borders[border_index].general_handler.action = (UIActionHandler*)buffer;
 
 			dockspace->borders[border_index].draw_resources.region_viewport_info = m_graphics->CreateConstantBuffer(sizeof(float) * ECS_TOOLS_UI_CONSTANT_BUFFER_FLOAT_SIZE);
@@ -4571,8 +4573,8 @@ namespace ECSEngine {
 			float space_x_scale = GetSpaceXSpan(data->font_size.x);
 			float text_y_span = GetTextSpriteYScale(data->font_size.y);
 
-			position.x = function::ClampMin(position.x, -0.99f);
-			position.y = function::ClampMin(position.y, -0.99f);
+			position.x = ClampMin(position.x, -0.99f);
+			position.y = ClampMin(position.y, -0.99f);
 			float2 initial_position = position;
 
 			position.x += m_descriptors.misc.tool_tip_padding.x;
@@ -4688,8 +4690,8 @@ namespace ECSEngine {
 			AdditionStream<unsigned int> left_new_lines_add = &left_new_lines;
 			AdditionStream<unsigned int> right_new_lines_add = &right_new_lines;
 
-			function::FindToken(aligned_to_left_text, '\n', left_new_lines_add);
-			function::FindToken(aligned_to_right_text, '\n', right_new_lines_add);
+			FindToken(aligned_to_left_text, '\n', left_new_lines_add);
+			FindToken(aligned_to_right_text, '\n', right_new_lines_add);
 
 			left_new_lines.Add(aligned_to_left_text.size);
 			right_new_lines.Add(aligned_to_right_text.size);
@@ -4951,8 +4953,8 @@ namespace ECSEngine {
 			AdditionStream<unsigned int> left_new_lines_add = &left_new_lines;
 			AdditionStream<unsigned int> right_new_lines_add = &right_new_lines;
 
-			function::FindToken(aligned_to_left_text, '\n', left_new_lines_add);
-			function::FindToken(aligned_to_right_text, '\n', right_new_lines_add);
+			FindToken(aligned_to_left_text, '\n', left_new_lines_add);
+			FindToken(aligned_to_right_text, '\n', right_new_lines_add);
 
 			left_new_lines.Add(aligned_to_left_text.size);
 			right_new_lines.Add(aligned_to_right_text.size);
@@ -5127,7 +5129,7 @@ namespace ECSEngine {
 
 		bool UISystem::ExistsWindowMemoryResource(unsigned int window_index, const void* pointer) const
 		{
-			return function::SearchBytes(
+			return SearchBytes(
 				m_windows[window_index].memory_resources.buffer,
 				m_windows[window_index].memory_resources.size,
 				(size_t)pointer,
@@ -5157,7 +5159,7 @@ namespace ECSEngine {
 		{
 			// Don't remove it right away because other windows won't have a chance to register the acquirement
 			// Use a frame handler
-			void* allocation = function::CoallesceStreamWithData(GetAllocatorPolymorphic(m_memory), name, sizeof(char));
+			void* allocation = CoalesceStreamWithData(GetAllocatorPolymorphic(m_memory), name, sizeof(char));
 			PushFrameHandler({ EndDragDropFrameHandler, allocation, 0 });
 		}
 
@@ -5178,8 +5180,8 @@ namespace ECSEngine {
 				m_windows[index].draw = data[index].draw;
 				m_windows[index].private_handler.action = data[index].private_action;
 
-				m_windows[index].private_handler.data = function::CopyNonZero(GetAllocatorPolymorphic(m_memory), data[index].private_action_data, data[index].private_action_data_size);
-				m_windows[index].window_data = function::CopyNonZero(GetAllocatorPolymorphic(m_memory), data[index].window_data, data[index].window_data_size);
+				m_windows[index].private_handler.data = CopyNonZero(GetAllocatorPolymorphic(m_memory), data[index].private_action_data, data[index].private_action_data_size);
+				m_windows[index].window_data = CopyNonZero(GetAllocatorPolymorphic(m_memory), data[index].window_data, data[index].window_data_size);
 
 				if (data[index].resource_count != 0) {
 					m_memory->Deallocate(m_windows[index].table.GetAllocatedBuffer());
@@ -5255,13 +5257,13 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::FindCharacterType(char character) const {
-			return function::GetAlphabetIndex(character);
+			return GetAlphabetIndex(character);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::FindCharacterType(char character, CharacterType& character_type) const {
-			return function::GetAlphabetIndex(character, character_type);
+			return GetAlphabetIndex(character, character_type);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7084,7 +7086,7 @@ namespace ECSEngine {
 		{
 			for (size_t index = 0; index < m_windows.size; index++) {
 				Stream<char> window_name = GetWindowName(index);
-				if (function::CompareStrings(name, window_name)) {
+				if (name == window_name) {
 					return index;
 				}
 			}
@@ -8641,7 +8643,7 @@ namespace ECSEngine {
 			data.is_fixed = is_fixed;
 			data.is_initialized = is_initialized;
 
-			data.name = function::StringCopy(GetAllocatorPolymorphic(m_memory), name);
+			data.name = StringCopy(GetAllocatorPolymorphic(m_memory), name);
 			data.reset_when_window_is_destroyed = true;
 
 			UIActionHandler handler;
@@ -8688,7 +8690,7 @@ namespace ECSEngine {
 
 		void UISystem::PushFrameHandler(UIActionHandler handler)
 		{
-			handler.data = function::CopyNonZero(Allocator(), handler.data, handler.data_size);
+			handler.data = CopyNonZero(Allocator(), handler.data, handler.data_size);
 			m_frame_handlers.DisplaceElements(0, m_frame_handlers.size);
 			m_frame_handlers[0] = handler;
 			m_frame_handlers.size++;
@@ -8714,7 +8716,7 @@ namespace ECSEngine {
 			PushFrameHandler({ DestroyWindowCallbackSystemHandler, &data, (unsigned int)sizeof(data) + handler.data_size + 8 });
 			if (handler.data_size > 0) {
 				DestroyWindowCallbackSystemHandlerData* system_handler_data = (DestroyWindowCallbackSystemHandlerData*)m_frame_handlers[0].data;
-				void* handler_data = (void*)function::AlignPointer((uintptr_t)function::OffsetPointer(system_handler_data, sizeof(DestroyWindowCallbackSystemHandlerData)), 8);
+				void* handler_data = (void*)AlignPointer((uintptr_t)OffsetPointer(system_handler_data, sizeof(DestroyWindowCallbackSystemHandlerData)), 8);
 				system_handler_data->callback.data = handler_data;
 				memcpy(handler_data, handler.data, handler.data_size);
 			}
@@ -8770,7 +8772,7 @@ namespace ECSEngine {
 			size_t size = 2000;
 			Stream<char> uv_buffer = m_resource_manager->LoadTextFileImplementation(filename);
 			unsigned int uvs[1024];
-			size_t numbers = function::ParseNumbersFromCharString(uv_buffer, uvs);
+			size_t numbers = ParseNumbersFromCharString(uv_buffer, uvs);
 
 			// first two numbers represents the texture width and height
 			// these parameters will be used to normalize the coordinates
@@ -9195,9 +9197,9 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowActions(unsigned int index, const UIWindowDescriptor& descriptor) {
-			void* window_data = function::CopyNonZero(Allocator(), descriptor.window_data, descriptor.window_data_size);
-			void* private_handler_data = function::CopyNonZero(Allocator(), descriptor.private_action_data, descriptor.private_action_data_size);
-			void* destroy_data = function::CopyNonZero(Allocator(), descriptor.destroy_action_data, descriptor.destroy_action_data_size);
+			void* window_data = CopyNonZero(Allocator(), descriptor.window_data, descriptor.window_data_size);
+			void* private_handler_data = CopyNonZero(Allocator(), descriptor.private_action_data, descriptor.private_action_data_size);
+			void* destroy_data = CopyNonZero(Allocator(), descriptor.destroy_action_data, descriptor.destroy_action_data_size);
 
 			m_windows[index].window_data = window_data;
 			m_windows[index].draw = descriptor.draw;
@@ -9219,7 +9221,7 @@ namespace ECSEngine {
 
 		void UISystem::SetWindowDestroyAction(unsigned int index, UIActionHandler handler)
 		{
-			handler.data = function::CopyNonZero(Allocator(), handler.data, handler.data_size);
+			handler.data = CopyNonZero(Allocator(), handler.data, handler.data_size);
 
 			m_windows[index].destroy_handler.data_size = handler.data_size;
 			m_windows[index].destroy_handler.data = handler.data;
@@ -9238,7 +9240,7 @@ namespace ECSEngine {
 
 		void UISystem::SetWindowPrivateAction(unsigned int index, UIActionHandler handler)
 		{
-			handler.data = function::CopyNonZero(Allocator(), handler.data, handler.data_size);
+			handler.data = CopyNonZero(Allocator(), handler.data, handler.data_size);
 
 			m_windows[index].private_handler.action = handler.action;
 			m_windows[index].private_handler.data = handler.data;
@@ -9267,7 +9269,7 @@ namespace ECSEngine {
 			}
 			else {
 				// Check for the separation character
-				Stream<char> separation_character = function::FindFirstToken(name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				Stream<char> separation_character = FindFirstToken(name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 				Stream<char> visible_name = name;
 				if (separation_character.size > 0) {
 					visible_name = { name.buffer, name.size - separation_character.size };
@@ -9485,7 +9487,7 @@ namespace ECSEngine {
 
 		void UISystem::RemoveWindowMemoryResource(unsigned int window_index, const void* buffer)
 		{
-			size_t index = function::SearchBytes(m_windows[window_index].memory_resources.buffer, m_windows[window_index].memory_resources.size, (size_t)buffer, sizeof(buffer));
+			size_t index = SearchBytes(m_windows[window_index].memory_resources.buffer, m_windows[window_index].memory_resources.size, (size_t)buffer, sizeof(buffer));
 			ECS_ASSERT(index != -1);
 			RemoveWindowMemoryResource(window_index, index);
 		}
@@ -9553,10 +9555,10 @@ namespace ECSEngine {
 		{
 			UIWindowDynamicResource* resource = GetWindowDynamicElement(window_index, index);
 
-			size_t buffer_index = function::SearchBytes(resource->element_allocations.buffer, resource->element_allocations.size, (size_t)buffer, sizeof(buffer));
+			size_t buffer_index = SearchBytes(resource->element_allocations.buffer, resource->element_allocations.size, (size_t)buffer, sizeof(buffer));
 			if (buffer_index == -1) {
 				// Might be in the added allocations
-				buffer_index = function::SearchBytes(resource->added_allocations.buffer, resource->added_allocations.size, (size_t)buffer, sizeof(buffer));
+				buffer_index = SearchBytes(resource->added_allocations.buffer, resource->added_allocations.size, (size_t)buffer, sizeof(buffer));
 				
 				if (buffer_index != -1) {
 					resource->added_allocations.RemoveSwapBack(buffer_index);
@@ -9610,7 +9612,7 @@ namespace ECSEngine {
 
 		void UISystem::ReplaceWindowMemoryResource(unsigned int window_index, const void* old_buffer, const void* new_buffer)
 		{
-			size_t index = function::SearchBytes(m_windows[window_index].memory_resources.buffer, m_windows[window_index].memory_resources.size, (size_t)old_buffer, sizeof(old_buffer));
+			size_t index = SearchBytes(m_windows[window_index].memory_resources.buffer, m_windows[window_index].memory_resources.size, (size_t)old_buffer, sizeof(old_buffer));
 			ECS_ASSERT(index != -1);
 			m_windows[window_index].memory_resources[index] = (void*)new_buffer;
 		}
@@ -9626,10 +9628,10 @@ namespace ECSEngine {
 					return;
 				}
 			}
-			size_t resource_index = function::SearchBytes(resource->element_allocations.buffer, resource->element_allocations.size, (size_t)old_buffer, sizeof(old_buffer));
+			size_t resource_index = SearchBytes(resource->element_allocations.buffer, resource->element_allocations.size, (size_t)old_buffer, sizeof(old_buffer));
 			if (resource_index == -1) {
 				// Might be an added allocation
-				resource_index = function::SearchBytes(resource->added_allocations.buffer, resource->added_allocations.size, (size_t)old_buffer, sizeof(old_buffer));
+				resource_index = SearchBytes(resource->added_allocations.buffer, resource->added_allocations.size, (size_t)old_buffer, sizeof(old_buffer));
 				ECS_ASSERT(resource_index != -1);
 				resource->added_allocations[resource_index] = new_buffer;
 			}
@@ -11020,7 +11022,7 @@ namespace ECSEngine {
 			unsigned int border_index;
 			UIDockspace* dockspace = GetDockspaceFromWindow(index, border_index, type);
 
-			unsigned int in_stream_index = function::SearchBytes(
+			unsigned int in_stream_index = SearchBytes(
 				dockspace->borders[border_index].window_indices.buffer, 
 				dockspace->borders[border_index].window_indices.size, 
 				index, 
@@ -11386,11 +11388,11 @@ namespace ECSEngine {
 
 				Stream<unsigned short>* valids[] = { &valid_horizontals, &valid_verticals, &valid_floating_horizontals, &valid_floating_verticals };
 
-				function::MakeSequence(valid_layers);
-				function::MakeSequence(valid_horizontals);
-				function::MakeSequence(valid_verticals);
-				function::MakeSequence(valid_floating_horizontals);
-				function::MakeSequence(valid_floating_verticals);
+				MakeSequence(valid_layers);
+				MakeSequence(valid_horizontals);
+				MakeSequence(valid_verticals);
+				MakeSequence(valid_floating_horizontals);
+				MakeSequence(valid_floating_verticals);
 				valid_fixed.CopyOther(m_fixed_dockspaces);
 				original_fixed.CopyOther(m_fixed_dockspaces);
 				valid_background.CopyOther(m_background_dockspaces);
@@ -11440,7 +11442,7 @@ namespace ECSEngine {
 					}
 				}
 
-				function::insertion_sort(pop_up_windows.buffer, pop_up_windows.size);
+				insertion_sort(pop_up_windows.buffer, pop_up_windows.size);
 				/*std::sort(pop_up_windows.buffer, pop_up_windows.buffer + pop_up_windows.size, [](unsigned short a, unsigned short b) {
 					return a < b;
 				});*/
@@ -11520,7 +11522,7 @@ namespace ECSEngine {
 
 				unsigned int valid_windows[128];
 				Stream<unsigned int> valid_stream(valid_windows, m_windows.size);
-				function::MakeSequence(valid_stream);
+				MakeSequence(valid_stream);
 
 				for (size_t index = 0; index < pop_up_stream.size; index++) {
 					for (size_t subindex = 0; subindex < valid_stream.size; subindex++) {
@@ -11546,7 +11548,9 @@ namespace ECSEngine {
 
 				unsigned short dockspace_layers_count = valid_layers.size;
 				success &= WriteFile(file, { &dockspace_layers_count, sizeof(dockspace_layers_count) });
-				function::CopyStreamWithMask(file, Stream<void>(stack_dockspace_layers.buffer, sizeof(UIDockspaceLayer)), valid_layers);
+				for (size_t index = 0; index < valid_layers.size && success; index++) {
+					success &= WriteFile(file, { stack_dockspace_layers.buffer + valid_layers[index], sizeof(UIDockspaceLayer) });
+				}
 
 #pragma endregion
 
@@ -11574,7 +11578,7 @@ namespace ECSEngine {
 						error_message.AddStreamSafe(first_error);
 
 						ECS_STACK_CAPACITY_STREAM(char, temp_characters, 512);
-						function::ConvertWideCharsToASCII(filename, temp_characters);
+						ConvertWideCharsToASCII(filename, temp_characters);
 						error_message.AddStreamSafe(temp_characters);
 						error_message.AddStreamSafe(second_error);
 						error_message[error_message.size] = '\0';
@@ -11599,7 +11603,7 @@ namespace ECSEngine {
 					error_message.AddStreamSafe(first_error);
 
 					ECS_STACK_CAPACITY_STREAM(char, temp_characters, 512);
-					function::ConvertWideCharsToASCII(filename, temp_characters);
+					ConvertWideCharsToASCII(filename, temp_characters);
 					error_message.AddStreamSafe(temp_characters);
 					error_message.AddStreamSafe(second_error);
 					error_message[error_message.size] = '\0';
@@ -11641,16 +11645,10 @@ namespace ECSEngine {
 			Texture2D new_texture = ResizeTextureWithStaging(data->system->m_graphics, old_texture, 256, 256, ECS_RESIZE_TEXTURE_FILTER_BOX, true);
 			data->system->m_resources.texture_spinlock.unlock();
 			if (new_texture.tex != nullptr) {
-				uint2 texture_dimensions = GetTextureDimensions(old_texture);
-
-				bool success = true;
-				// Only compress the texture if it is multiple of 4 size in both dimensions
-				if ((texture_dimensions.x & 3) == 0 && (texture_dimensions.y & 3) == 0) {
-					// Compress the texture
-					CompressTextureDescriptor compress_descriptor;
-					compress_descriptor.spin_lock = &data->system->m_resources.texture_spinlock;
-					success = CompressTexture(data->system->m_graphics, new_texture, ECS_TEXTURE_COMPRESSION_EX_COLOR, compress_descriptor);
-				}
+				// Compress the texture
+				CompressTextureDescriptor compress_descriptor;
+				compress_descriptor.spin_lock = &data->system->m_resources.texture_spinlock;
+				bool success = CompressTexture(data->system->m_graphics, new_texture, ECS_TEXTURE_COMPRESSION_EX_COLOR, compress_descriptor);
 
 				if (success) {
 					// Create a shader resource view
@@ -11964,7 +11962,7 @@ namespace ECSEngine {
 			ECS_BUTTON_STATE button_state = mouse->Get(data->button_type);
 			if (button_state == ECS_BUTTON_PRESSED || button_state == ECS_BUTTON_HELD) {
 				// The data must be inferred
-				void* handler_data = data->hoverable_handler.data_size == 0 ? data->hoverable_handler.data : function::OffsetPointer(data, sizeof(*data));
+				void* handler_data = data->hoverable_handler.data_size == 0 ? data->hoverable_handler.data : OffsetPointer(data, sizeof(*data));
 
 				action_data->data = handler_data;
 				data->hoverable_handler.action(action_data);
@@ -11977,7 +11975,7 @@ namespace ECSEngine {
 				)) {
 					// The handler data must be inferred
 					void* handler_data = data->click_handler.data_size == 0 ? data->click_handler.data :
-						function::OffsetPointer(data, sizeof(*data) + data->hoverable_handler.data_size);
+						OffsetPointer(data, sizeof(*data) + data->hoverable_handler.data_size);
 
 					// If the clickable handler is system phase but the hoverable is in another phase, 
 					// This will be placed for the hoverable's phase. Change the focused clickable handler phase
@@ -11989,7 +11987,7 @@ namespace ECSEngine {
 							ECS_MOUSE_BUTTON button_type;
 						};
 						UIActionHandler recall_handler = data->click_handler;
-						recall_handler.data = function::CopyNonZero(system->m_memory, handler_data, recall_handler.data_size);
+						recall_handler.data = CopyNonZero(system->m_memory, handler_data, recall_handler.data_size);
 
 						if (system->m_focused_window_data.general_handler.action == nullptr) {
 							auto recall_general = [](ActionData* action_data) {
@@ -12100,7 +12098,7 @@ namespace ECSEngine {
 						if (duration < data->max_duration_between_clicks) {
 							// The data must be inferred
 							void* double_click_data = data->double_click_handler.data_size == 0 ? data->double_click_handler.data :
-								function::OffsetPointer(data, sizeof(*data) + data->first_click_handler.data_size);
+								OffsetPointer(data, sizeof(*data) + data->first_click_handler.data_size);
 
 							action_data->data = double_click_data;
 							data->double_click_handler.action(action_data);
@@ -12111,7 +12109,7 @@ namespace ECSEngine {
 
 					// The data must be inferred
 					if (data->first_click_handler.action != nullptr) {
-						void* first_click_data = data->first_click_handler.data_size == 0 ? data->first_click_handler.data : function::OffsetPointer(data, sizeof(*data));
+						void* first_click_data = data->first_click_handler.data_size == 0 ? data->first_click_handler.data : OffsetPointer(data, sizeof(*data));
 						action_data->data = first_click_data;
 						data->first_click_handler.action(action_data);
 					}
@@ -12639,7 +12637,7 @@ namespace ECSEngine {
 
 			UIConvertASCIIToWideData* data = (UIConvertASCIIToWideData*)_data;
 			size_t size = strlen(data->ascii);
-			function::ConvertASCIIToWide(data->wide, data->ascii, size);
+			ConvertASCIIToWide(data->wide, data->ascii, size);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -12651,7 +12649,7 @@ namespace ECSEngine {
 			size_t size = strlen(data->ascii);
 			ECS_ASSERT(data->wide->capacity >= size);
 
-			function::ConvertASCIIToWide(data->wide->buffer, data->ascii, size);
+			ConvertASCIIToWide(data->wide->buffer, data->ascii, size);
 			data->wide->size = size;
 		}
 

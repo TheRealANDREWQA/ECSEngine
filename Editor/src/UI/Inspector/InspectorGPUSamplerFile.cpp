@@ -119,20 +119,20 @@ void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> 
 		-1,
 		[=](void* inspector_data) {
 			InspectorDrawGPUSamplerFileData* other_data = (InspectorDrawGPUSamplerFileData*)inspector_data;
-			return function::CompareStrings(other_data->path, path);
+			return other_data->path == path;
 		}
 	);
 
 	if (inspector_index != -1) {
 		// Get the data and set the path
 		InspectorDrawGPUSamplerFileData* draw_data = (InspectorDrawGPUSamplerFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
-		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
+		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.CopyOther(path);
 
 		// Retrieve the name
 		ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
 		GetAssetNameFromThunkOrForwardingFile(editor_state, draw_data->path, asset_name);
-		draw_data->sampler_metadata.name = function::StringCopy(editor_state->EditorAllocator(), asset_name);
+		draw_data->sampler_metadata.name = StringCopy(editor_state->EditorAllocator(), asset_name);
 
 		CapacityStream<char> anisotropic_chars(draw_data->anisotropic_label_storage, 0, ANISOTROPIC_CHAR_STORAGE);
 
@@ -143,7 +143,7 @@ void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> 
 			anisotropic_start *= 2;
 
 			unsigned int anisotropic_offset = anisotropic_chars.size;
-			size_t write_size = function::ConvertIntToChars(anisotropic_chars, draw_data->anisotropic_mapping[index]);
+			size_t write_size = ConvertIntToChars(anisotropic_chars, draw_data->anisotropic_mapping[index]);
 			draw_data->anisotropic_labels[index] = { anisotropic_chars.buffer + anisotropic_offset, write_size };
 		}
 

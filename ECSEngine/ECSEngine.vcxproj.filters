@@ -161,8 +161,8 @@
     <ClInclude Include="src\ECSEngine\Utilities\File.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FilePackaging.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ForEachFiles.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Function.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\FunctionInterfaces.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\StreamUtilities.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\ParsingUtilities.h" />
     <ClInclude Include="src\ECSEngine\Input\Keyboard.h" />
     <ClInclude Include="src\ECSEngine\Input\Mouse.h" />
     <ClInclude Include="src\ECSEngine\Utilities\OSFunctions.h" />
@@ -232,6 +232,13 @@
     <ClInclude Include="src\ECSEngine\GLTF\GLTFExportTextures.h" />
     <ClInclude Include="src\ECSEngine\Resources\WriteTexture.h" />
     <ClInclude Include="src\ECSEngine\Rendering\TextureOperations.h" />
+    <ClInclude Include="src\ECSEngine\Math\MathHelpers.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\PointerUtilities.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Utilities.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\FilePreprocessor.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\StringUtilities.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\EvaluateExpression.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Algorithms.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -323,8 +330,8 @@
     <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\FilePackaging.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ForEachFiles.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Function.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\FunctionInterfaces.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\StreamUtilities.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\ParsingUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Keyboard.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Mouse.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\OSFunctions.cpp" />
@@ -360,6 +367,13 @@
     <ClCompile Include="src\ECSEngine\GLTF\GLTFExportTextures.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\WriteTexture.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\TextureOperations.cpp" />
+    <ClCompile Include="src\ECSEngine\Math\MathHelpers.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\PointerUtilities.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Utilities.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\BasicTypes.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\FilePreprocessor.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\StringUtilities.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\EvaluateExpression.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

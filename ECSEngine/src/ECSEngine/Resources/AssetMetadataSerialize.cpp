@@ -14,7 +14,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------
 
 	ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(MaterialAsset) {
-		return function::CompareStrings(data->definition, STRING(MaterialAsset));
+		return data->definition == STRING(MaterialAsset);
 	}
 
 	// --------------------------------------------------------------------------------------------

@@ -151,7 +151,7 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 		}
 
 		for (unsigned int index = 0; index < needed_but_missing_modules.size; index++) {
-			bool is_compiled = function::SearchBytes(modules_being_compiled.buffer, modules_being_compiled.size, needed_but_missing_modules[index], sizeof(unsigned int)) != -1;
+			bool is_compiled = SearchBytes(modules_being_compiled.buffer, modules_being_compiled.size, needed_but_missing_modules[index], sizeof(unsigned int)) != -1;
 			if (!is_compiled) {
 				return false;
 			}
@@ -218,7 +218,7 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 								}
 								else {
 									for (size_t subindex = 0; subindex < snapshot_settings.size && !snapshot_has_changed; subindex++) {
-										size_t existing_setting = function::FindString(snapshot_settings[subindex].name, module_settings, [](EditorModuleReflectedSetting setting) {
+										size_t existing_setting = FindString(snapshot_settings[subindex].name, module_settings, [](EditorModuleReflectedSetting setting) {
 											return setting.name;
 										});
 										if (existing_setting == -1) {
@@ -295,7 +295,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 			for (size_t subindex = 0; subindex < asset_reference_counts[index].size; subindex++) {
 				// Search for the handle in the stored snapshot
 				unsigned int current_handle = database->GetAssetHandleFromIndex(subindex, current_type);
-				size_t found_index = function::SearchBytes(
+				size_t found_index = SearchBytes(
 					sandbox->runtime_asset_handle_snapshot.handles + handle_start_offset,
 					handle_snapshot_count,
 					current_handle,
@@ -331,7 +331,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 		// Now check for asset handles that were previously in the snapshot but they are no longer
 		size_t was_found_size = snapshot_size;
 		size_t was_found_offset = 0;
-		size_t missing_index = function::SearchBytes(was_found + was_found_offset, was_found_size, false, sizeof(bool));
+		size_t missing_index = SearchBytes(was_found + was_found_offset, was_found_size, false, sizeof(bool));
 		while (missing_index != -1) {
 			size_t final_index = missing_index + was_found_offset;
 			// Decrement all the reference counts from this sandbox
@@ -348,7 +348,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 			was_found_offset += missing_index;
 			was_found_size -= missing_index + 1;
 
-			missing_index = function::SearchBytes(was_found + was_found_offset, was_found_size, false, sizeof(bool));
+			missing_index = SearchBytes(was_found + was_found_offset, was_found_size, false, sizeof(bool));
 		}
 	}
 
@@ -552,6 +552,23 @@ bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 	}
 
 	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void ChangeSandboxDebugDrawComponent(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Component old_component, 
+	Component new_component, 
+	ECS_COMPONENT_TYPE type
+)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	size_t index = sandbox->enabled_debug_draw.Find(ComponentWithType{ old_component, type }, [](ComponentWithType element) { return element; });
+	if (index != -1) {
+		sandbox->enabled_debug_draw[index].component = new_component;
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -784,49 +801,53 @@ void DrawSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sand
 
 				auto draw_with_dependencies = [&]() {
 					// Use signature based
-					Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-					Component shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-					ComponentSignature unique_signature = { unique_components, 0 };
-					ComponentSignature shared_signature = { shared_components, 0 };
+					Component unique_optional_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+					Component shared_optional_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+					ArchetypeQueryDescriptor query_descriptor;
 					if (type == ECS_COMPONENT_UNIQUE) {
-						unique_components[unique_signature.count++] = debug_elements[index].component;
+						query_descriptor.unique = ComponentSignature{ &debug_elements[index].component, 1 };
+						query_descriptor.shared = ComponentSignature();
 					}
 					else {
-						shared_components[shared_signature.count++] = debug_elements[index].component;
+						query_descriptor.shared = ComponentSignature{ &debug_elements[index].component, 1 };
+						query_descriptor.unique = ComponentSignature();
 					}
-					for (size_t subindex = 0; subindex < dependencies.size; index++) {
+
+					query_descriptor.unique_optional = { unique_optional_components, 0 };
+					query_descriptor.shared_optional = { shared_optional_components, 0 };
+					for (size_t subindex = 0; subindex < dependencies.size; subindex++) {
 						if (dependencies[subindex].type == ECS_COMPONENT_SHARED) {
-							shared_components[shared_signature.count++] = dependencies[subindex].component;
+							query_descriptor.shared_optional[query_descriptor.shared_optional.count++] = dependencies[subindex].component;
 						}
 						else {
-							unique_components[unique_signature.count++] = dependencies[subindex].component;
+							query_descriptor.unique_optional[query_descriptor.unique_optional.count++] = dependencies[subindex].component;
 						}
 					}
 
-					active_entity_manager->ForEachEntityWithSignature(ArchetypeQuery{ unique_signature, shared_signature },
-						[&](Entity entity, const void** unique, const void** shared) {
-							ModuleDebugDrawComponentFunctionData draw_data;
-							draw_data.thread_id = 0;
-							draw_data.debug_drawer = debug_drawer;
+					ForEachEntityCommitFunctor(&sandbox->sandbox_world, query_descriptor, [&](ForEachEntityFunctorData* for_each_data) {
+						ModuleDebugDrawComponentFunctionData draw_data;
+						draw_data.thread_id = 0;
+						draw_data.debug_drawer = debug_drawer;
 
-							unsigned int unique_index = 0;
-							unsigned int shared_index = 0;
-							if (type == ECS_COMPONENT_UNIQUE) {
-								draw_data.component = unique[0];
-								unique_index++;
-							}
-							else {
-								draw_data.component = shared[0];
-								shared_index++;
-							}
+						unsigned int unique_index = 0;
+						unsigned int shared_index = 0;
+						if (type == ECS_COMPONENT_UNIQUE) {
+							draw_data.component = for_each_data->unique_components[0];
+							unique_index++;
+						}
+						else {
+							draw_data.component = for_each_data->shared_components[0];
+							shared_index++;
+						}
 
-							ECS_STACK_CAPACITY_STREAM(void*, dependency_components, ECS_ARCHETYPE_MAX_COMPONENTS);
-							draw_data.dependency_components = (const void**)dependency_components.buffer;
-							for (size_t index = 0; index < dependencies.size; index++) {
-								draw_data.dependency_components[index] = dependencies[index].type == ECS_COMPONENT_UNIQUE ? unique[unique_index++] : shared[shared_index++];
-							}
-							draw_function(&draw_data);
-						});
+						ECS_STACK_CAPACITY_STREAM(void*, dependency_components, ECS_ARCHETYPE_MAX_COMPONENTS);
+						draw_data.dependency_components = (const void**)dependency_components.buffer;
+						for (size_t index = 0; index < dependencies.size; index++) {
+							draw_data.dependency_components[index] = dependencies[index].type == ECS_COMPONENT_UNIQUE ?
+								for_each_data->unique_components[unique_index++] : for_each_data->shared_components[shared_index++];
+						}
+						draw_function(&draw_data);
+					});
 				};
 
 				if (type == ECS_COMPONENT_UNIQUE) {
@@ -941,7 +962,7 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	ClearWorld(&sandbox->sandbox_world);
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	// Clear the waiting compilation flag
-	sandbox->flags = function::ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 
 	if (EnableSceneUIRendering(editor_state, sandbox_index)) {
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
@@ -968,7 +989,7 @@ void EndSandboxWorldSimulations(EditorState* editor_state)
 unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return function::SearchBytes(sandbox->selected_entities.buffer, sandbox->selected_entities.size, entity.value, sizeof(entity));
+	return SearchBytes(sandbox->selected_entities.buffer, sandbox->selected_entities.size, entity.value, sizeof(entity));
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -995,7 +1016,7 @@ EditorSandboxEntitySlot FindSandboxVirtualEntitySlot(
 )
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	size_t slot_index = function::SearchBytes(sandbox->virtual_entities_slots.buffer, sandbox->virtual_entities_slots.size, entity.value, sizeof(entity));
+	size_t slot_index = SearchBytes(sandbox->virtual_entities_slots.buffer, sandbox->virtual_entities_slots.size, entity.value, sizeof(entity));
 	if (slot_index != -1) {
 		ECS_ASSERT(sandbox->virtual_entity_slot_type[slot_index].slot_type != EDITOR_SANDBOX_ENTITY_SLOT_COUNT);
 		return sandbox->virtual_entity_slot_type[slot_index];
@@ -1115,8 +1136,8 @@ void GetSandboxAvailableRuntimeSettings(
 	FunctorData functor_data = { &paths, allocator };
 	ForEachFileInDirectory(runtime_settings_folder, &functor_data, [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
-		Stream<wchar_t> stem = function::PathStem(path);
-		data->paths->AddAssert(function::StringCopy(data->allocator, stem));
+		Stream<wchar_t> stem = PathStem(path);
+		data->paths->AddAssert(StringCopy(data->allocator, stem));
 		return true;
 	});
 }
@@ -1149,7 +1170,7 @@ void GetSandboxSelectedEntitiesFiltered(
 
 	filtered_entities->CopyOther(selected_entities);
 	for (size_t index = 0; index < virtual_entities.size && selected_entities.size > 0; index++) {
-		size_t found_index = function::SearchBytes(filtered_entities->buffer, filtered_entities->size, virtual_entities[index].value, sizeof(virtual_entities[index]));
+		size_t found_index = SearchBytes(filtered_entities->buffer, filtered_entities->size, virtual_entities[index].value, sizeof(virtual_entities[index]));
 		if (found_index != -1) {
 			filtered_entities->RemoveSwapBack(found_index);
 			filtered_entities->buffer[filtered_entities->size] = virtual_entities[index];
@@ -1187,7 +1208,7 @@ static void ForEachSandboxSelectedVirtualEntity(const EditorState* editor_state,
 	Stream<Entity> virtual_entities = GetSandboxVirtualEntitySlots(editor_state, sandbox_index);
 
 	for (size_t index = 0; index < virtual_entities.size && selected_entities.size > 0; index++) {
-		size_t found_index = function::SearchBytes(selected_entities.buffer, selected_entities.size, virtual_entities[index].value, sizeof(virtual_entities[index]));
+		size_t found_index = SearchBytes(selected_entities.buffer, selected_entities.size, virtual_entities[index].value, sizeof(virtual_entities[index]));
 		if (found_index != -1) {
 			functor(virtual_entities[index]);
 		}
@@ -1239,7 +1260,7 @@ static void ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo(EditorState*
 					if (sandbox->virtual_entity_slot_type[subindex].slot_type == EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS) {
 						if (component == sandbox->virtual_entity_slot_type[subindex].Data<Component>()) {
 							// Check to see if it is selected
-							bool is_selected = function::SearchBytes(
+							bool is_selected = SearchBytes(
 								selected_entities.buffer,
 								selected_entities.size,
 								sandbox->virtual_entities_slots[subindex],
@@ -1466,7 +1487,7 @@ void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_
 	}
 
 	// Clear the sandbox waiting compilation flag - since it might be still on
-	sandbox->flags = function::ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 	sandbox->run_state = EDITOR_SANDBOX_PAUSED;
 
 	// Bring back the viewport rendering since it was disabled
@@ -1535,7 +1556,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->runtime_descriptor.task_manager->CreateThreads();
 
 	TaskScheduler* task_scheduler = (TaskScheduler*)allocator->Allocate(sizeof(TaskScheduler) + sizeof(MemoryManager));
-	MemoryManager* task_scheduler_allocator = (MemoryManager*)function::OffsetPointer(task_scheduler, sizeof(TaskScheduler));
+	MemoryManager* task_scheduler_allocator = (MemoryManager*)OffsetPointer(task_scheduler, sizeof(TaskScheduler));
 	*task_scheduler_allocator = TaskScheduler::DefaultAllocator(allocator);
 
 	new (task_scheduler) TaskScheduler(task_scheduler_allocator);
@@ -2024,7 +2045,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 
 	// Clear the sandbox waiting compilation flag - it will be reset if it is still valid
-	sandbox->flags = function::ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 
 	// Before running the simulation, we need to check to see if the modules are still valid - they might have been changed
 	// That's why check the snapshot
@@ -2036,7 +2057,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		return false;
 	}
 	else if (solve_module_snapshot_result == SOLVE_SANDBOX_MODULE_SNAPSHOT_WAIT) {
-		sandbox->flags = function::SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+		sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 		return true;
 	}
 	// If it returned OK, then we can proceed as normal
@@ -2380,7 +2401,7 @@ void TickSandboxesSelectedEntities(EditorState* editor_state) {
 		if (sandbox->selected_entities_changed_counter > 0) {
 			RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
 		}
-		sandbox->selected_entities_changed_counter = function::SaturateSub(sandbox->selected_entities_changed_counter, (unsigned char)1);
+		sandbox->selected_entities_changed_counter = SaturateSub(sandbox->selected_entities_changed_counter, (unsigned char)1);
 	});
 }
 

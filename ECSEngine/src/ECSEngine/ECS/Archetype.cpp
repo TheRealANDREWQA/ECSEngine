@@ -114,7 +114,7 @@ namespace ECSEngine {
 		MemoryArena* arena = component_info->allocator;
 
 		for (unsigned int buffer_index = 0; buffer_index < component_info->component_buffers_count; buffer_index++) {
-			const void* current_buffer = function::OffsetPointer(component, component_info->component_buffers[buffer_index].pointer_offset);
+			const void* current_buffer = OffsetPointer(component, component_info->component_buffers[buffer_index].pointer_offset);
 			ComponentBufferCopy(component_info->component_buffers[buffer_index], arena, current_buffer, target_memory);
 		}
 	}
@@ -149,7 +149,7 @@ namespace ECSEngine {
 
 	void DeallocateEntityBuffersImpl(const ComponentInfo* current_info, MemoryArena* arena, const void* current_component, unsigned int buffer_count) {
 		for (unsigned int buffer_index = 0; buffer_index < buffer_count; buffer_index++) {
-			const void* current_buffer = function::OffsetPointer(current_component, current_info->component_buffers[buffer_index].pointer_offset);
+			const void* current_buffer = OffsetPointer(current_component, current_info->component_buffers[buffer_index].pointer_offset);
 			ComponentBufferDeallocate(current_info->component_buffers[buffer_index], arena, current_buffer);
 		}
 	}

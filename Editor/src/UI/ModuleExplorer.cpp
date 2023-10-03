@@ -92,17 +92,17 @@ void AddModuleWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 	AddData* add_data = nullptr;
 
 	if (initialize) {
-		solution_path = (CapacityStream<char>*)function::CoallesceCapacityStreamWithData(
+		solution_path = (CapacityStream<char>*)CoalesceCapacityStreamWithData(
 			drawer.GetMainAllocatorBufferAndStoreAsResource(SOLUTION_PATH_BUFFER_NAME, sizeof(CapacityStream<char>) + sizeof(char) * 256),
 			0, 
 			256
 		);
-		library_name = (CapacityStream<char>*)function::CoallesceCapacityStreamWithData(
+		library_name = (CapacityStream<char>*)CoalesceCapacityStreamWithData(
 			drawer.GetMainAllocatorBufferAndStoreAsResource((LIBRARY_BUFFER_NAME), sizeof(CapacityStream<char>) + sizeof(char) * 64),
 			0, 
 			64
 		);
-		solution_path_wide = (CapacityStream<wchar_t>*)function::CoallesceCapacityStreamWithData(
+		solution_path_wide = (CapacityStream<wchar_t>*)CoalesceCapacityStreamWithData(
 			drawer.GetMainAllocatorBufferAndStoreAsResource(SOLUTION_PATH_WIDE_NAME, sizeof(CapacityStream<wchar_t>) + sizeof(wchar_t) * 256),
 			0,
 			256
@@ -160,10 +160,10 @@ void AddModuleWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		
 		FileExplorerGetFileAction(action_data);
 		if (data->os_data.get_file_data.path.size > 0) {
-			Stream<wchar_t> stem = function::PathStem(data->os_data.get_file_data.path);
+			Stream<wchar_t> stem = PathStem(data->os_data.get_file_data.path);
 
 			ECS_STACK_CAPACITY_STREAM(char, ascii_stem, 256);
-			function::ConvertWideCharsToASCII(stem, ascii_stem);
+			ConvertWideCharsToASCII(stem, ascii_stem);
 			data->library_input->DeleteAllCharacters();
 			if (stem.size > 0) {
 				data->library_input->InsertCharacters(ascii_stem.buffer, ascii_stem.size, 0, system);
@@ -200,7 +200,7 @@ void AddModuleWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		AddData* data = (AddData*)_data;
 		if (data->folder_data->is_data_valid) {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, library_name, 256);
-			function::ConvertASCIIToWide(library_name, *data->library_name);
+			ConvertASCIIToWide(library_name, *data->library_name);
 			data->solution_path_wide->size = wcslen(data->solution_path_wide->buffer);
 
 			bool success = AddModule(data->editor_state, *data->solution_path_wide, library_name, data->graphics_module);
@@ -298,7 +298,7 @@ void ModuleExplorerRemoveModule(ActionData* action_data) {
 				ECS_STACK_CAPACITY_STREAM(char, description, 1024);
 				description.CopyOther("Are you sure you want to remove the selected module? It is being used by the following sandboxes: ");
 				for (unsigned int index = 0; index < dependent_modules.size; index++) {
-					function::ConvertIntToChars(description, dependent_modules[index]);
+					ConvertIntToChars(description, dependent_modules[index]);
 					if (index < dependent_modules.size - 1) {
 						description.AddStream(", ");
 					}
@@ -316,7 +316,7 @@ void ModuleExplorerRemoveModule(ActionData* action_data) {
 				"the others before hand. The dependent modules: ");
 			for (unsigned int index = 0; index < dependent_modules.size; index++) {
 				Stream<wchar_t> library_name = data->editor_state->project_modules->buffer[dependent_modules[index]].library_name;
-				function::ConvertWideCharsToASCII(library_name, description);
+				ConvertWideCharsToASCII(library_name, description);
 				if (index < dependent_modules.size - 1) {
 					description.AddStream(", ");
 				}
@@ -348,7 +348,7 @@ void ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(EditorState* editor_s
 	auto add_same_type_module_status_to_listing = [&console_message, modules, command_statuses, counts_for_status_type](EDITOR_LAUNCH_BUILD_COMMAND_STATUS status_type) {
 		for (unsigned int index = 0; index < modules->size; index++) {
 			if (command_statuses[index]) {
-				function::ConvertWideCharsToASCII(modules->buffer[index].library_name, console_message);
+				ConvertWideCharsToASCII(modules->buffer[index].library_name, console_message);
 				console_message.Add(',');
 				console_message.Add(' ');
 			}
@@ -758,7 +758,7 @@ void ModuleExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 		drawer.Indent();
 
 		ECS_STACK_CAPACITY_STREAM(char, ascii_module_name, 256);
-		function::ConvertWideCharsToASCII(module_name, ascii_module_name);
+		ConvertWideCharsToASCII(module_name, ascii_module_name);
 		ascii_module_name[ascii_module_name.size] = '\0';
 
 		struct SelectModuleData {

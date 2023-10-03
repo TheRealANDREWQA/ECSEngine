@@ -5,56 +5,75 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	void TaskComponentQuery::AddComponent(Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory)
-	{
-		if (component_count < ECS_TASK_COMPONENT_QUERY_COUNT) {
-			components[component_count] = component;
-			component_access[component_count++] = access_type;
+	// The last flag indicates whether or not to check that the optional count is zero
+	static void AddComponentImpl(TaskComponentQuery* query, Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory, bool check_optional) {
+		if (check_optional) {
+			ECS_ASSERT(query->optional_component_count == 0, "Trying to add TaskComponentQuery unique component after optional one");
+		}
+
+		if (query->component_count < ECS_TASK_COMPONENT_QUERY_COUNT) {
+			query->components[query->component_count] = component;
+			query->component_access[query->component_count++] = access_type;
 		}
 		else {
 			// Allocate memory
-			void* allocation = Allocate(temp_memory, (sizeof(Component) + sizeof(ECS_ACCESS_TYPE)) * (component_count + 1), alignof(Component));
+			void* allocation = Allocate(temp_memory, (sizeof(Component) + sizeof(ECS_ACCESS_TYPE)) * (query->component_count + 1), alignof(Component));
 			Component* new_components = (Component*)allocation;
-			ECS_ACCESS_TYPE* new_access_ptr = (ECS_ACCESS_TYPE*)function::OffsetPointer(allocation, sizeof(Component) * (component_count + 1));
+			ECS_ACCESS_TYPE* new_access_ptr = (ECS_ACCESS_TYPE*)OffsetPointer(allocation, sizeof(Component) * (query->component_count + 1));
 
-			const Component* current_components = Components();
-			const ECS_ACCESS_TYPE* current_access = ComponentAccess();
-			memcpy(new_components, current_components, sizeof(Component) * component_count);
-			memcpy(new_access_ptr, current_access, sizeof(ECS_ACCESS_TYPE) * component_count);
+			const Component* current_components = query->Components();
+			const ECS_ACCESS_TYPE* current_access = query->ComponentAccess();
+			memcpy(new_components, current_components, sizeof(Component) * query->component_count);
+			memcpy(new_access_ptr, current_access, sizeof(ECS_ACCESS_TYPE) * query->component_count);
 
-			new_components[component_count] = component;
-			new_access_ptr[component_count++] = access_type;
+			new_components[query->component_count] = component;
+			new_access_ptr[query->component_count++] = access_type;
 
-			components_ptr = new_components;
-			component_access_ptr = new_access_ptr;
+			query->components_ptr = new_components;
+			query->component_access_ptr = new_access_ptr;
 		}
+	}
+
+	static void AddSharedComponentImpl(TaskComponentQuery* query, Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory, bool check_optional) {
+		if (check_optional) {
+			ECS_ASSERT(query->optional_component_count == 0, "Trying to add TaskComponentQuery shared component after optional one");
+		}
+		
+		if (query->shared_component_count < ECS_TASK_COMPONENT_QUERY_COUNT) {
+			query->shared_components[query->shared_component_count] = component;
+			query->shared_component_access[query->shared_component_count++] = access_type;
+		}
+		else {
+			// Allocate memory
+			void* allocation = Allocate(temp_memory, (sizeof(Component) + sizeof(ECS_ACCESS_TYPE)) * (query->shared_component_count + 1), alignof(Component));
+			Component* new_components = (Component*)allocation;
+			ECS_ACCESS_TYPE* new_access_ptr = (ECS_ACCESS_TYPE*)OffsetPointer(allocation, sizeof(Component) * (query->shared_component_count + 1));
+
+			const Component* current_components = query->SharedComponents();
+			const ECS_ACCESS_TYPE* current_access = query->SharedComponentAccess();
+			memcpy(new_components, current_components, sizeof(Component) * query->shared_component_count);
+			memcpy(new_access_ptr, current_access, sizeof(ECS_ACCESS_TYPE) * query->shared_component_count);
+
+			new_components[query->shared_component_count] = component;
+			new_access_ptr[query->shared_component_count++] = access_type;
+
+			query->shared_components_ptr = new_components;
+			query->shared_component_access_ptr = new_access_ptr;
+		}
+	}
+	
+	// --------------------------------------------------------------------------------------
+
+	void TaskComponentQuery::AddComponent(Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory)
+	{
+		AddComponentImpl(this, component, access_type, temp_memory, true);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	void TaskComponentQuery::AddSharedComponent(Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory)
 	{
-		if (shared_component_count < ECS_TASK_COMPONENT_QUERY_COUNT) {
-			shared_components[shared_component_count] = component;
-			shared_component_access[shared_component_count++] = access_type;
-		}
-		else {
-			// Allocate memory
-			void* allocation = Allocate(temp_memory, (sizeof(Component) + sizeof(ECS_ACCESS_TYPE)) * (shared_component_count + 1), alignof(Component));
-			Component* new_components = (Component*)allocation;
-			ECS_ACCESS_TYPE* new_access_ptr = (ECS_ACCESS_TYPE*)function::OffsetPointer(allocation, sizeof(Component) * (shared_component_count + 1));
-
-			const Component* current_components = SharedComponents();
-			const ECS_ACCESS_TYPE* current_access = SharedComponentAccess();
-			memcpy(new_components, current_components, sizeof(Component) * shared_component_count);
-			memcpy(new_access_ptr, current_access, sizeof(ECS_ACCESS_TYPE) * shared_component_count);
-
-			new_components[shared_component_count] = component;
-			new_access_ptr[shared_component_count++] = access_type;
-
-			shared_components_ptr = new_components;
-			shared_component_access_ptr = new_access_ptr;
-		}
+		AddSharedComponentImpl(this, component, access_type, temp_memory, true);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -93,6 +112,22 @@ namespace ECSEngine {
 			new_components[exclude_shared_component_count++] = component;
 			exclude_shared_components_ptr = new_components;
 		}
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void TaskComponentQuery::AddOptionalComponent(Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory)
+	{
+		AddComponentImpl(this, component, access_type, temp_memory, false);
+		optional_component_count++;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void TaskComponentQuery::AddOptionalSharedComponent(Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory)
+	{
+		AddSharedComponentImpl(this, component, access_type, temp_memory, false);
+		optional_shared_component_count++;
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -352,7 +387,7 @@ namespace ECSEngine {
 	{
 		Stream<char> current_name = task_name;
 		for (size_t index = 0; index < other->task_dependencies.size; index++) {
-			if (function::CompareStrings(current_name, other->task_dependencies[index].name)) {
+			if (current_name == other->task_dependencies[index].name) {
 				return true;
 			}
 		}

@@ -85,7 +85,7 @@ void DrawSandboxSelectionWindow(void* window_data, UIDrawerDescriptor* drawer_de
 				background_color.color = ECS_COLOR_GREEN;
 				config.AddFlag(background_color);
 
-				configuration = function::ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
+				configuration = ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
 				configuration |= UI_CONFIG_COLOR;
 				break;
 			}
@@ -106,7 +106,7 @@ void DrawSandboxSelectionWindow(void* window_data, UIDrawerDescriptor* drawer_de
 		};
 
 		if (index == data->selection) {
-			configuration = function::ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
+			configuration = ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
 		}
 
 		SelectData select_data = { data, index };
@@ -183,7 +183,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 
 	auto get_name = [](unsigned int index, CapacityStream<char>& name) {
 		name.CopyOther("Sandbox ");
-		function::ConvertIntToChars(name, index);
+		ConvertIntToChars(name, index);
 	};
 
 
@@ -291,7 +291,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 
 		ECS_STACK_CAPACITY_STREAM(char, in_use_stream, 256);
 		in_use_stream.CopyOther("In use: ");
-		function::ConvertIntToChars(in_use_stream, sandbox->modules_in_use.size);
+		ConvertIntToChars(in_use_stream, sandbox->modules_in_use.size);
 		drawer->Text(in_use_stream);
 		drawer->NextRow();
 
@@ -357,7 +357,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 
 		ECS_STACK_CAPACITY_STREAM(unsigned int, module_display_order, 64);
 		module_display_order.size = sandbox->modules_in_use.size;
-		function::MakeSequence(module_display_order);
+		MakeSequence(module_display_order);
 
 		for (unsigned int index = 0; index < graphics_module_indices.size; index++) {
 			for (unsigned int subindex = 0; subindex < module_display_order.size; subindex++) {
@@ -499,8 +499,8 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 				SelectData select_data = { data, sandbox_index, available_settings[index] };
 
 				size_t configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_TRANSPARENT;
-				if (function::CompareStrings(available_settings[index], sandbox->runtime_settings)) {
-					configuration = function::ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
+				if (available_settings[index] == sandbox->runtime_settings) {
+					configuration = ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
 				}
 
 				drawer->ButtonWide(configuration, config, available_settings[index], { select_action, &select_data, sizeof(select_data) });

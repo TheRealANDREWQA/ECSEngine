@@ -58,7 +58,7 @@ unsigned short EditorComponents::GetComponentByteSize(Stream<char> name) const
 Stream<char> EditorComponents::GetComponentFromLink(Stream<char> name) const
 {
 	for (size_t index = 0; index < link_components.size; index++) {
-		if (function::CompareStrings(link_components[index].name, name)) {
+		if (link_components[index].name == name) {
 			return link_components[index].target;
 		}
 	}
@@ -234,10 +234,10 @@ unsigned int EditorComponents::ModuleComponentCount(unsigned int module_index, E
 unsigned int EditorComponents::ModuleIndexFromReflection(const EditorState* editor_state, unsigned int module_index) const
 {
 	ECS_STACK_CAPACITY_STREAM(char, library_name_storage, 512);
-	function::ConvertWideCharsToASCII(editor_state->project_modules->buffer[module_index].library_name, library_name_storage);
+	ConvertWideCharsToASCII(editor_state->project_modules->buffer[module_index].library_name, library_name_storage);
 
 	Stream<char> library_name = library_name_storage;
-	return function::FindString(library_name, loaded_modules.ToStream(), [](const LoadedModule& loaded_module) {
+	return FindString(library_name, loaded_modules.ToStream(), [](const LoadedModule& loaded_module) {
 		return loaded_module.name;
 	});
 }
@@ -247,7 +247,7 @@ unsigned int EditorComponents::ModuleIndexFromReflection(const EditorState* edit
 unsigned int EditorComponents::ReflectionModuleIndex(const EditorState* editor_state, unsigned int loaded_module_index) const
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, library_name, 512);
-	function::ConvertASCIIToWide(library_name, loaded_modules[loaded_module_index].name);
+	ConvertASCIIToWide(library_name, loaded_modules[loaded_module_index].name);
 	return GetModuleIndexFromName(editor_state, library_name);
 }
 
@@ -266,7 +266,7 @@ void EditorComponents::GetModuleComponentIndices(unsigned int module_index, Capa
 					// It has a link
 					size_t subindex = 0;
 					for (; subindex < loaded_modules[module_index].types.size; subindex++) {
-						if (function::CompareStrings(link_name, loaded_modules[module_index].types[subindex])) {
+						if (link_name == loaded_modules[module_index].types[subindex]) {
 							add_index = subindex;
 							break;
 						}
@@ -294,7 +294,7 @@ void EditorComponents::GetModuleSharedComponentIndices(unsigned int module_index
 					// It has a link
 					size_t subindex = 0;
 					for (; subindex < loaded_modules[module_index].types.size; subindex++) {
-						if (function::CompareStrings(link_name, loaded_modules[module_index].types[subindex])) {
+						if (link_name == loaded_modules[module_index].types[subindex]) {
 							add_index = subindex;
 							break;
 						}
@@ -443,7 +443,7 @@ void EditorComponents::RecoverData(
 
 					const void* component_buffer = base->GetComponentByIndex(0, component_index);
 					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
-						const void* entity_data = function::OffsetPointer(component_buffer, entity_index * old_size);
+						const void* entity_data = OffsetPointer(component_buffer, entity_index * old_size);
 						Serialize(internal_manager, old_type, entity_data, ptr, &serialize_options);
 					}
 				}
@@ -507,7 +507,7 @@ void EditorComponents::RecoverData(
 							ECS_DESERIALIZE_CODE code = Deserialize(
 								reflection_manager,
 								current_type,
-								function::OffsetPointer(component_buffer, entity_index * old_size),
+								OffsetPointer(component_buffer, entity_index * old_size),
 								ptr,
 								&deserialize_options
 							);
@@ -559,7 +559,7 @@ void EditorComponents::RecoverData(
 						const void* component_buffer = base->GetComponentByIndex(0, component_index);
 						for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
 							ptr = (uintptr_t)temporary_allocation;
-							void* entity_data = function::OffsetPointer(component_buffer, entity_index * old_size);
+							void* entity_data = OffsetPointer(component_buffer, entity_index * old_size);
 							// Copy to temporary memory and then deserialize back
 							Serialize(internal_manager, old_type, entity_data, ptr, &serialize_options);
 							ptr = (uintptr_t)temporary_allocation;
@@ -655,8 +655,8 @@ void EditorComponents::RecoverData(
 								// Need to deserialize
 								for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
 									same_component_handler(
-										function::OffsetPointer(new_buffers[component_index], entity_index * new_size),
-										function::OffsetPointer(previous_buffers[component_index], entity_index * old_size)
+										OffsetPointer(new_buffers[component_index], entity_index * new_size),
+										OffsetPointer(previous_buffers[component_index], entity_index * old_size)
 									);
 								}
 							}
@@ -969,7 +969,7 @@ void EditorComponents::AddType(const ReflectionType* type, unsigned int module_i
 	ReflectionType copied_type = type->CopyTo(ptr);
 
 	// The name of the copied type is stable
-	Stream<char> allocated_name = function::StringCopy(allocator, copied_type.name);
+	Stream<char> allocated_name = StringCopy(allocator, copied_type.name);
 	InsertIntoDynamicTable(internal_manager->type_definitions, allocator, copied_type, allocated_name);
 
 	bool is_link_component = IsReflectionTypeLinkComponent(type);
@@ -981,7 +981,7 @@ void EditorComponents::AddType(const ReflectionType* type, unsigned int module_i
 		loaded_modules[module_index].link_components.Add(allocated_name);
 
 		// Add it to the link stream. This will be revisited later on in order to check that the target exists
-		link_target = function::StringCopy(allocator, link_target);
+		link_target = StringCopy(allocator, link_target);
 		link_components.Add({ allocated_name, link_target });
 	}
 }
@@ -1082,6 +1082,7 @@ struct FinalizeEventSingleThreadedData {
 	// Extra information used by some events
 	// At the moment only the IS_REMOVED is using this
 	EditorComponents::FinalizeEventOptions finalize_options;
+	Component old_component_id; // Used by changed ID events
 };
 
 // When the finalize event needs to do something on the main thread
@@ -1125,9 +1126,36 @@ EDITOR_EVENT(FinalizeEventSingleThreaded) {
 			ui_reflection->DestroyType(data->event_.name);
 		}
 
+		// Here we must also remove the component from debug draws
+		// We must do this before removing the type from the editor components
+		Component component = editor_state->editor_components.GetComponentID(data->event_.name);
+		ECS_COMPONENT_TYPE component_type = data->event_.component_type;
+		if (component.Valid() && component_type != ECS_COMPONENT_TYPE_COUNT) {
+			unsigned int sandbox_count = GetSandboxCount(editor_state);
+			for (unsigned int index = 0; index < sandbox_count; index++) {
+				EditorSandbox* sandbox = GetSandbox(editor_state, index);
+				// This performs the removal only if the component exists
+				RemoveSandboxDebugDrawComponent(editor_state, index, component, component_type);
+			}
+		}
+
 		if (data->finalize_options.should_remove_type) {
 			// We can now remove the type
 			editor_state->editor_components.RemoveType(data->event_.name);
+		}
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID:
+	case EDITOR_COMPONENT_EVENT_DIFFERENT_COMPONENT_DIFFERENT_ID:
+	{
+		// Perform the change of the component ID for the debug draw
+		ECS_COMPONENT_TYPE component_type = editor_state->editor_components.GetComponentType(data->event_.name);
+		if (component_type != ECS_COMPONENT_TYPE_COUNT) {
+			unsigned int sandbox_count = GetSandboxCount(editor_state);
+			for (unsigned int index = 0; index < sandbox_count; index++) {
+				EditorSandbox* sandbox = GetSandbox(editor_state, index);
+				ChangeSandboxDebugDrawComponent(editor_state, index, data->old_component_id, data->event_.new_id, component_type);
+			}
 		}
 	}
 	break;
@@ -1199,6 +1227,14 @@ void EditorComponents::FinalizeEvent(
 	break;
 	case EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID:
 	{
+		// We also need to add an event to handle the change of component id for the debug draw
+		FinalizeEventSingleThreadedData single_threaded_data;
+		single_threaded_data.event_ = event;
+		single_threaded_data.reflection_manager = reflection_manager;
+		single_threaded_data.finalize_options = options;
+		single_threaded_data.old_component_id = editor_state->editor_components.GetComponentID(event.name);
+		EditorAddEvent(editor_state, FinalizeEventSingleThreaded, &single_threaded_data, sizeof(single_threaded_data));
+
 		UpdateComponent(reflection_manager, event.name);
 	}
 	break;
@@ -1210,7 +1246,7 @@ void EditorComponents::FinalizeEvent(
 unsigned int EditorComponents::FindModule(Stream<char> name) const
 {
 	for (unsigned int index = 0; index < loaded_modules.size; index++) {
-		if (function::CompareStrings(loaded_modules[index].name, name)) {
+		if (loaded_modules[index].name == name) {
 			return index;
 		}
 	}
@@ -1222,7 +1258,7 @@ unsigned int EditorComponents::FindModule(Stream<char> name) const
 unsigned int EditorComponents::FindComponentModule(Stream<char> name) const
 {
 	for (unsigned int index = 0; index < loaded_modules.size; index++) {
-		unsigned int subindex = function::FindString(name, loaded_modules[index].types);
+		unsigned int subindex = FindString(name, loaded_modules[index].types);
 		if (subindex != -1) {
 			return index;
 		}
@@ -1396,7 +1432,7 @@ bool EditorComponents::HasComponentAssets(Component component, ECS_COMPONENT_TYP
 Stream<char> EditorComponents::GetLinkComponentForTarget(Stream<char> name) const
 {
 	for (size_t index = 0; index < link_components.size; index++) {
-		if (function::CompareStrings(link_components[index].target, name)) {
+		if (link_components[index].target == name) {
 			return link_components[index].name;
 		}
 	}
@@ -1451,14 +1487,14 @@ void EditorComponents::GetModuleTypesDependencies(unsigned int loaded_module_ind
 				if (module_index != 0) {
 					unsigned int reflection_index = ReflectionModuleIndex(editor_state, module_index);
 					ECS_ASSERT(reflection_index != -1);
-					bool exists = function::SearchBytes(module_indices->buffer, module_indices->size, reflection_index, sizeof(reflection_index)) != -1;
+					bool exists = SearchBytes(module_indices->buffer, module_indices->size, reflection_index, sizeof(reflection_index)) != -1;
 					if (!exists) {
 						module_indices->AddAssert(reflection_index);
 					}
 				}
 			}
 			else {
-				bool exists = function::SearchBytes(module_indices->buffer, module_indices->size, module_index, sizeof(module_index)) != -1;
+				bool exists = SearchBytes(module_indices->buffer, module_indices->size, module_index, sizeof(module_index)) != -1;
 				if (!exists) {
 					module_indices->AddAssert(module_index);
 				}
@@ -1477,7 +1513,7 @@ void EditorComponents::GetModulesTypesDependentUpon(unsigned int loaded_module_i
 		if (index != loaded_module_index) {
 			dependent_indices.size = 0;
 			GetModuleTypesDependencies(index, &dependent_indices);
-			bool exists = function::SearchBytes(dependent_indices.buffer, dependent_indices.size, loaded_module_index, sizeof(loaded_module_index)) != -1;
+			bool exists = SearchBytes(dependent_indices.buffer, dependent_indices.size, loaded_module_index, sizeof(loaded_module_index)) != -1;
 			if (exists) {
 				unsigned int index_to_add = index;
 				if (editor_state != nullptr) {
@@ -1518,7 +1554,7 @@ void EditorComponents::RemoveType(Stream<char> name)
 	bool is_link_component = IsLinkComponent(name);
 	if (is_link_component) {
 		// Remove it from the link streams (module and global)
-		unsigned int global_index = function::FindString(name, link_components.ToStream(), [](LinkComponent link) {
+		unsigned int global_index = FindString(name, link_components.ToStream(), [](LinkComponent link) {
 			return link.name;
 		});
 		ECS_ASSERT(global_index != -1);
@@ -1529,7 +1565,7 @@ void EditorComponents::RemoveType(Stream<char> name)
 
 		unsigned int module_index = 0;
 		for (; module_index < loaded_modules.size; module_index++) {
-			unsigned int idx = function::FindString(name, loaded_modules[module_index].link_components);
+			unsigned int idx = FindString(name, loaded_modules[module_index].link_components);
 			if (idx != -1) {
 				// This just referenced the value inside the link_components[global_index]
 				loaded_modules[module_index].link_components.RemoveSwapBack(idx);
@@ -1542,7 +1578,7 @@ void EditorComponents::RemoveType(Stream<char> name)
 	// Eliminate it from the loaded_modules reference first
 	unsigned int index = 0;
 	for (; index < loaded_modules.size; index++) {
-		unsigned int subindex = function::FindString(name, loaded_modules[index].types);
+		unsigned int subindex = FindString(name, loaded_modules[index].types);
 		if (subindex != -1) {
 			// Deallocate the string stored here
 			loaded_modules[index].types[subindex].Deallocate(allocator);
@@ -1728,7 +1764,7 @@ void EditorComponents::ResetComponents(ComponentSignature component_signature, v
 		// Determine the byte size
 		unsigned short byte_size = GetComponentByteSize(component_name);
 		component_buffers[index] = stack_memory;
-		stack_memory = function::OffsetPointer(stack_memory, byte_size);
+		stack_memory = OffsetPointer(stack_memory, byte_size);
 		ResetComponent(component_name, component_buffers[index]);
 	}
 }
@@ -1799,12 +1835,12 @@ void EditorComponents::RemoveModule(EditorState* editor_state, unsigned int load
 		internal_manager->type_definitions.EraseFromIndex(reflection_index);
 
 		// Locate the name in link components
-		unsigned int link_index = function::FindString(current_type, loaded_module->link_components);
+		unsigned int link_index = FindString(current_type, loaded_module->link_components);
 		if (link_index != -1) {
 			// Don't need to deallocate - it's the same string as the one in the types stream
 			loaded_module->link_components.RemoveSwapBack(link_index);
 
-			link_index = function::FindString(current_type, link_components.ToStream(), [](LinkComponent link) {
+			link_index = FindString(current_type, link_components.ToStream(), [](LinkComponent link) {
 				return link.name;
 			});
 			ECS_ASSERT(link_index != -1);
@@ -2021,7 +2057,7 @@ void EditorComponents::UpdateComponent(const ReflectionManager* reflection_manag
 	unsigned int module_index = 0;
 	unsigned int type_list_index = 0;
 	for (; module_index < loaded_modules.size; module_index++) {
-		type_list_index = function::FindString(component_name, loaded_modules[module_index].types);
+		type_list_index = FindString(component_name, loaded_modules[module_index].types);
 		if (type_list_index != -1) {
 			break;
 		}
@@ -2044,7 +2080,7 @@ void EditorComponents::Initialize(void* buffer)
 	MemoryArena* arena = (MemoryArena*)buffer;
 	CreateBaseAllocatorInfo info;
 	info.allocator_type = ECS_ALLOCATOR_ARENA;
-	*arena = MemoryArena(function::OffsetPointer(arena, sizeof(*arena)), ARENA_COUNT, ARENA_CAPACITY, ARENA_BLOCK_COUNT);
+	*arena = MemoryArena(OffsetPointer(arena, sizeof(*arena)), ARENA_COUNT, ARENA_CAPACITY, ARENA_BLOCK_COUNT);
 	Initialize(GetAllocatorPolymorphic(arena));
 }
 
@@ -2235,7 +2271,7 @@ void EditorComponents::UpdateComponents(
 			else {
 				ReflectionType* old_type = internal_manager->type_definitions.GetValuePtrFromIndex(old_type_index);
 				// Remove it from the temporary list of module types
-				unsigned int temporary_list_index = function::FindString(type->name, temporary_module_types);
+				unsigned int temporary_list_index = FindString(type->name, temporary_module_types);
 				ECS_ASSERT(temporary_list_index != -1);
 				temporary_module_types.RemoveSwapBack(temporary_list_index);
 
@@ -2364,7 +2400,7 @@ void EditorComponents::UpdateComponents(
 		}
 	}
 	else {
-		module_index = loaded_modules.Add({ function::StringCopy(allocator, module_name) });
+		module_index = loaded_modules.Add({ StringCopy(allocator, module_name) });
 		loaded_modules[module_index].link_components.Initialize(allocator, 0);
 		register_types(component_indices, std::true_type{});
 		register_types(hierarchy_types, std::false_type{});
@@ -2550,7 +2586,7 @@ void UserEventsWindowDestroy(ActionData* action_data) {
 	for (unsigned int index = 0; index < data->editor_state->project_modules->size; index++) {
 		const EditorModule* module = data->editor_state->project_modules->buffer + index;
 		ECS_STACK_CAPACITY_STREAM(char, library_name, 512);
-		function::ConvertWideCharsToASCII(module->library_name, library_name);
+		ConvertWideCharsToASCII(module->library_name, library_name);
 
 		unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(data->editor_state, index);
 		data->editor_state->editor_components.UpdateComponents(

@@ -1,6 +1,5 @@
 #include "ecspch.h"
 #include "ArchetypeBase.h"
-#include "../Utilities/Function.h"
 #include "../Allocators/MemoryManager.h"
 #include "../Utilities/Crash.h"
 
@@ -84,7 +83,7 @@ namespace ECSEngine {
 
 					auto entity_loop = [=](auto is_data_pointer) {
 						for (unsigned int entity_index = 0; entity_index < m_size; entity_index++) {
-							void* current_component = function::OffsetPointer(current_buffer, component_byte_size * entity_index);
+							void* current_component = OffsetPointer(current_buffer, component_byte_size * entity_index);
 							if constexpr (is_data_pointer) {
 								ComponentBufferCopyDataPointer(component_buffers[buffer_index], component_allocator, current_component, current_component);
 							}
@@ -115,7 +114,7 @@ namespace ECSEngine {
 
 			unsigned short component_size = archetype->m_infos[components.indices[index].value].size;
 
-			void* component_data = function::OffsetPointer(
+			void* component_data = OffsetPointer(
 				archetype->m_buffers[component_index],
 				copy_position * component_size
 			);
@@ -130,7 +129,7 @@ namespace ECSEngine {
 		CopyEntitiesInternal(this, components, copy_position.x, [=](size_t component_index, void* component_data, unsigned short component_size) {
 			for (unsigned int index = 0; index < copy_position.y; index++) {
 				memcpy(component_data, data[component_index], component_size);
-				component_data = function::OffsetPointer(component_data, component_size);
+				component_data = OffsetPointer(component_data, component_size);
 			}
 		});
 	}
@@ -150,12 +149,12 @@ namespace ECSEngine {
 			for (unsigned char index = 0; index < m_components.count; index++) {
 				unsigned short component_size = m_infos[m_components.indices[index].value].size;
 
-				void* destination_data = function::OffsetPointer(
+				void* destination_data = OffsetPointer(
 					m_buffers[index],
 					component_size * (copy_position.x + entity_index)
 				);
 
-				const void* source_data = function::OffsetPointer(
+				const void* source_data = OffsetPointer(
 					source_archetype->m_buffers[index],
 					entity_info.stream_index * component_size
 				);
@@ -210,19 +209,19 @@ namespace ECSEngine {
 				components_to_copy.indices[index]
 			);
 
-			void* component_data = function::OffsetPointer(
+			void* component_data = OffsetPointer(
 				m_buffers[component_index],
 				component_size * copy_position.x
 			);
 
 			for (unsigned int entity_index = 0; entity_index < copy_position.y; entity_index++) {
-				const void* data_to_copy = function::OffsetPointer(
+				const void* data_to_copy = OffsetPointer(
 					source_archetype->m_buffers[archetype_to_copy_component_index], 
 					component_size * cached_stream_indices[entity_index]
 				);
 				memcpy(component_data, data_to_copy, component_size);
 
-				component_data = function::OffsetPointer(component_data, component_size);
+				component_data = OffsetPointer(component_data, component_size);
 			}
 		}
 	}
@@ -237,7 +236,7 @@ namespace ECSEngine {
 			// detect this pattern and prefetch it for us)
 			for (size_t entity_index = 0; entity_index < copy_position.y; entity_index++) {
 				memcpy(component_data, data[entity_index * components.count + component_index], component_size);
-				component_data = function::OffsetPointer(component_data, component_size);
+				component_data = OffsetPointer(component_data, component_size);
 			}
 		});
 	}
@@ -258,8 +257,8 @@ namespace ECSEngine {
 			}
 
 			for (size_t entity_index = 0; entity_index, copy_position.y; entity_index++) {
-				memcpy(component_data, function::OffsetPointer(data[entity_index], current_component_offset), component_size);
-				component_data = function::OffsetPointer(component_data, component_size);
+				memcpy(component_data, OffsetPointer(data[entity_index], current_component_offset), component_size);
+				component_data = OffsetPointer(component_data, component_size);
 			}
 		});
 	}
@@ -275,7 +274,7 @@ namespace ECSEngine {
 			unsigned int component_offset = component_index * copy_position.y;
 			for (size_t entity_index = 0; entity_index < copy_position.y; entity_index++) {
 				memcpy(component_data, data[entity_index + component_offset], component_size);
-				component_data = function::OffsetPointer(component_data, component_size);
+				component_data = OffsetPointer(component_data, component_size);
 			}
 		});
 	}
@@ -394,10 +393,10 @@ namespace ECSEngine {
 		m_entities = (Entity*)ptr;
 
 		ptr += sizeof(Entity) * count;
-		ptr = function::AlignPointer(ptr, ECS_CACHE_LINE_SIZE);
+		ptr = AlignPointer(ptr, ECS_CACHE_LINE_SIZE);
 
 		if (m_size > 0) {
-			memcpy(m_entities, function::OffsetPointer(old_buffers, sizeof(void*) * m_components.count), sizeof(Entity) * m_size);
+			memcpy(m_entities, OffsetPointer(old_buffers, sizeof(void*) * m_components.count), sizeof(Entity) * m_size);
 		}
 
 		// Now copy the components
@@ -408,7 +407,7 @@ namespace ECSEngine {
 				memcpy(m_buffers[component_index], old_buffers[component_index], component_size * m_size);
 			}
 
-			ptr = function::AlignPointer(ptr + component_size * count, ECS_CACHE_LINE_SIZE);
+			ptr = AlignPointer(ptr + component_size * count, ECS_CACHE_LINE_SIZE);
 		}
 
 		// Now set the new capacity

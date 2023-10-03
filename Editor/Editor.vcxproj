@@ -182,8 +182,6 @@
     <ClInclude Include="src\Assets\AssetManagement.h" />
     <ClInclude Include="src\Assets\AssetTick.h" />
     <ClInclude Include="src\Assets\EditorSandboxAssets.h" />
-    <ClInclude Include="src\DrawFunction.h" />
-    <ClInclude Include="src\DrawFunction2.h" />
     <ClInclude Include="src\Editor\EditorEvent.h" />
     <ClInclude Include="src\Editor\EditorEventDef.h" />
     <ClInclude Include="src\Editor\EditorFile.h" />

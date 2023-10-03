@@ -1,7 +1,6 @@
 #include "ecspch.h"
 #include "TransformTool.h"
 #include "../Math/Intersection.h"
-#include "Function.h"
 #include "../Rendering/Camera.h"
 
 namespace ECSEngine {

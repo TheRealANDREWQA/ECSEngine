@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "SerializeMultisection.h"
-#include "../../Function.h"
+#include "../../Utilities.h"
 #include "../SerializationHelpers.h"
 #include "../../../Containers/HashTable.h"
 
@@ -12,7 +12,7 @@ namespace ECSEngine {
 
 	// Add 32 to the multisection size so as to avoid breaking the load factor of the hash table for values like 29 -> 32
 #define CREATE_ACCELERATION_TABLE(multisections) ECS_ASSERT(multisections.size < MAX_ACCELERATION_TABLE_MULTISECTIONS); \
-									size_t table_capacity = function::PowerOfTwoGreater(multisections.size + 32); \
+									size_t table_capacity = PowerOfTwoGreater(multisections.size + 32); \
 									size_t table_size = AccelerationTable::MemoryOf(table_capacity); \
 									void* table_allocation = ECS_STACK_ALLOC(table_size); \
 									AccelerationTable table(table_allocation, table_capacity); \
@@ -167,7 +167,7 @@ namespace ECSEngine {
 				continue;
 			}
 			
-			Stream<void>* allocated_stream = (Stream<void>*)function::OffsetPointer(memory_pool);
+			Stream<void>* allocated_stream = (Stream<void>*)OffsetPointer(memory_pool);
 			memory_pool.size += sizeof(Stream<void>) * data_stream_count;
 			ECS_ASSERT(memory_pool.size <= memory_pool.capacity);
 
@@ -236,7 +236,7 @@ namespace ECSEngine {
 				continue;
 			}
 
-			Stream<void>* allocated_stream = (Stream<void>*)function::OffsetPointer(memory_pool);
+			Stream<void>* allocated_stream = (Stream<void>*)OffsetPointer(memory_pool);
 			memory_pool.size += sizeof(Stream<void>) * data_stream_count;
 
 			for (size_t stream_index = 0; stream_index < data_stream_count; stream_index++) {
@@ -274,7 +274,7 @@ namespace ECSEngine {
 
 	size_t DeserializeMultisectionCount(uintptr_t stream, size_t header_size)
 	{
-		return *(size_t*)function::OffsetPointer((void*)stream, header_size + sizeof(header_size));
+		return *(size_t*)OffsetPointer((void*)stream, header_size + sizeof(header_size));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------

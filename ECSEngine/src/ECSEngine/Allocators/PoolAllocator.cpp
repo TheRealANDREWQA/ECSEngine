@@ -1,5 +1,4 @@
 #include "ecspch.h"
-#include "../Utilities/Function.h"
 #include "PoolAllocator.h"
 
 namespace ECSEngine {

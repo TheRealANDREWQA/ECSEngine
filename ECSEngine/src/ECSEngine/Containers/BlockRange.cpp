@@ -1,7 +1,8 @@
 #include "ecspch.h"
 #include "BlockRange.h"
-#include "../Utilities/Function.h"
 #include "../Math/VCLExtensions.h"
+#include "../Utilities/PointerUtilities.h"
+#include "../Utilities/Utilities.h"
 
 namespace ECSEngine {
 
@@ -62,7 +63,7 @@ namespace ECSEngine {
 
 	template<bool assert_if_not_found>
 	bool BlockRange::Free(unsigned int start) {
-		size_t index = function::SearchBytes(m_buffer + m_free_block_count, m_used_block_count, start, sizeof(start));
+		size_t index = SearchBytes(m_buffer + m_free_block_count, m_used_block_count, start, sizeof(start));
 
 		if constexpr (assert_if_not_found) {
 			// checking if the start value is valid
@@ -91,10 +92,10 @@ namespace ECSEngine {
 		m_used_block_count--;
 
 		// Next block index for coalescing
-		size_t next_block_index = function::SearchBytes(m_buffer, m_free_block_count, end, sizeof(end));
+		size_t next_block_index = SearchBytes(m_buffer, m_free_block_count, end, sizeof(end));
 
 		// Previous block index for coalescing
-		size_t previous_block_index = function::SearchBytes(m_buffer + m_capacity, m_free_block_count, start, sizeof(start));
+		size_t previous_block_index = SearchBytes(m_buffer + m_capacity, m_free_block_count, start, sizeof(start));
 
 		// if no forward or previous block was found, swap the current first used block and make this one be free
 		if (next_block_index == -1 && previous_block_index == -1) {
@@ -199,7 +200,7 @@ namespace ECSEngine {
 
 	unsigned int BlockRange::ReallocateBlock(unsigned int start, unsigned int new_size)
 	{
-		size_t index = function::SearchBytes(m_buffer + m_free_block_count, m_used_block_count, start, sizeof(start));
+		size_t index = SearchBytes(m_buffer + m_free_block_count, m_used_block_count, start, sizeof(start));
 		// The block should exist
 		ECS_ASSERT(index != -1);
 
@@ -207,7 +208,7 @@ namespace ECSEngine {
 
 		unsigned int end = GetEnd(index);
 		unsigned int block_size = end - start;
-		size_t next_block_index = function::SearchBytes(m_buffer, m_free_block_count, end, sizeof(unsigned int));
+		size_t next_block_index = SearchBytes(m_buffer, m_free_block_count, end, sizeof(unsigned int));
 		
 		unsigned int request = -1;
 		if (block_size > new_size) {
@@ -267,7 +268,7 @@ namespace ECSEngine {
 	unsigned int BlockRange::ReallocateBlockAndCopy(unsigned int start, unsigned int new_size, void* storage_buffer, unsigned int copy_size)
 	{
 		if (copy_size == 0) {
-			size_t index = function::SearchBytes(m_buffer + m_free_block_count, m_used_block_count, start, sizeof(start));
+			size_t index = SearchBytes(m_buffer + m_free_block_count, m_used_block_count, start, sizeof(start));
 			// The block should exist
 			ECS_ASSERT(index != -1);
 
@@ -280,7 +281,7 @@ namespace ECSEngine {
 
 		unsigned int new_position = ReallocateBlock(start, new_size);
 		if (new_position != start && new_position != -1) {
-			memcpy(function::OffsetPointer(storage_buffer, new_position), function::OffsetPointer(storage_buffer, start), copy_size);
+			memcpy(OffsetPointer(storage_buffer, new_position), OffsetPointer(storage_buffer, start), copy_size);
 		}
 		return new_position;
 	}

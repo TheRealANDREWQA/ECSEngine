@@ -23,32 +23,32 @@ namespace ECSEngine {
 
 	bool GetReflectionTypeLinkComponentNeedsDLL(const Reflection::ReflectionType* type)
 	{
-		return function::FindFirstToken(type->tag, TAG_GENERATED_SUFFIX).size == 0;
+		return FindFirstToken(type->tag, TAG_GENERATED_SUFFIX).size == 0;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------
 
 	Stream<char> GetReflectionTypeLinkComponentTarget(const Reflection::ReflectionType* type)
 	{
-		Stream<char> opened_parenthese = function::FindFirstCharacter(type->tag, '(');
+		Stream<char> opened_parenthese = FindFirstCharacter(type->tag, '(');
 		if (opened_parenthese.size == 0) {
 			return { nullptr, 0 };
 		}
 
 		opened_parenthese.buffer += 1;
 		opened_parenthese.size -= 1;
-		opened_parenthese = function::SkipWhitespace(opened_parenthese);
+		opened_parenthese = SkipWhitespace(opened_parenthese);
 
-		Stream<char> generated_suffix = function::FindFirstToken(opened_parenthese, TAG_GENERATED_SUFFIX);
+		Stream<char> generated_suffix = FindFirstToken(opened_parenthese, TAG_GENERATED_SUFFIX);
 		if (generated_suffix.size > 0) {
 			opened_parenthese.size = generated_suffix.buffer - opened_parenthese.buffer;
-			opened_parenthese = function::SkipWhitespace(opened_parenthese, -1);
+			opened_parenthese = SkipWhitespace(opened_parenthese, -1);
 		}
 		else {
 			if (opened_parenthese[opened_parenthese.size - 1] == ')') {
 				opened_parenthese.size--;
 			}
-			opened_parenthese = function::SkipWhitespace(opened_parenthese, -1);
+			opened_parenthese = SkipWhitespace(opened_parenthese, -1);
 		}
 		return opened_parenthese;
 	}
@@ -58,7 +58,7 @@ namespace ECSEngine {
 	Stream<char> GetReflectionTypeLinkNameBase(Stream<char> name)
 	{
 		if (name.size > 0) {
-			Stream<char> found_token = function::FindFirstToken(name, LINK_COMPONENT_SUFFIX);
+			Stream<char> found_token = FindFirstToken(name, LINK_COMPONENT_SUFFIX);
 			if (found_token.size > 0) {
 				return { name.buffer, name.size - found_token.size };
 			}
@@ -125,7 +125,7 @@ namespace ECSEngine {
 			}
 
 			if (subindex < asset_fields.size) {
-				current_pointer_offset = function::AlignPointer(current_pointer_offset, alignof(unsigned int));
+				current_pointer_offset = AlignPointer(current_pointer_offset, alignof(unsigned int));
 
 				result.fields[index].definition = "unsigned int";
 				result.fields[index].info.basic_type = Reflection::ReflectionBasicFieldType::UInt32;
@@ -136,11 +136,11 @@ namespace ECSEngine {
 				result.fields[index].info.stream_type = Reflection::ReflectionStreamFieldType::Basic;
 				result.fields[index].info.pointer_offset = current_pointer_offset;
 				result.fields[index].info.byte_size = sizeof(unsigned int);
-				result.fields[index].name = coalesced_allocation ? type->fields[index].name : function::StringCopy(allocator, type->fields[index].name);
+				result.fields[index].name = coalesced_allocation ? type->fields[index].name : StringCopy(allocator, type->fields[index].name);
 
 				current_pointer_offset += sizeof(unsigned int);
 
-#define TAG(handle_name) result.fields[index].tag = coalesced_allocation ? Stream<char>(STRING(handle_name)) : function::StringCopy(allocator, Stream<char>(STRING(handle_name)));
+#define TAG(handle_name) result.fields[index].tag = coalesced_allocation ? Stream<char>(STRING(handle_name)) : StringCopy(allocator, Stream<char>(STRING(handle_name)));
 
 				// It is an asset field
 				switch (asset_fields[subindex].type.type) {
@@ -182,7 +182,7 @@ namespace ECSEngine {
 			else {
 				// Normal field, just copy it
 				size_t alignment = GetFieldTypeAlignmentEx(reflection_manager, type->fields[index]);
-				current_pointer_offset = function::AlignPointer(current_pointer_offset, alignment);
+				current_pointer_offset = AlignPointer(current_pointer_offset, alignment);
 
 				if (coalesced_allocation) {
 					result.fields[index] = type->fields[index];
@@ -306,7 +306,7 @@ namespace ECSEngine {
 		auto register_names = [&](Stream<unsigned int> indices) {
 			for (unsigned int index = 0; index < indices.size; index++) {
 				target_names[target_name_count] = reflection_manager->GetType(indices[index])->name;
-				if (exceptions.size == 0 || function::FindString(target_names[target_name_count], exceptions) == -1) {
+				if (exceptions.size == 0 || FindString(target_names[target_name_count], exceptions) == -1) {
 					target_name_count++;
 				}
 			}
@@ -525,7 +525,7 @@ namespace ECSEngine {
 		
 		size_t mapping_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
 		for (size_t index = 0; index < mapping_count; index++) {
-			if (function::CompareStrings(definition, ECS_ASSET_TARGET_FIELD_NAMES[index].name)) {
+			if (definition == ECS_ASSET_TARGET_FIELD_NAMES[index].name) {
 				result.type = ECS_ASSET_TARGET_FIELD_NAMES[index].type;
 				if (data != nullptr) {
 					result.asset = GetAssetTargetFieldFromReflection(type, field, data, result.type.type);
@@ -553,10 +553,10 @@ namespace ECSEngine {
 					// Fail
 					return false;
 				}
-				*pointer = *(void**)function::OffsetPointer(data, info->pointer_offset);
+				*pointer = *(void**)OffsetPointer(data, info->pointer_offset);
 			}
 			else if (info->stream_type == Reflection::ReflectionStreamFieldType::Basic) {
-				*pointer = (void*)function::OffsetPointer(data, info->pointer_offset);
+				*pointer = (void*)OffsetPointer(data, info->pointer_offset);
 			}
 			else {
 				// Fail
@@ -577,7 +577,7 @@ namespace ECSEngine {
 			}
 			else if (asset_type == ECS_ASSET_MISC) {
 				// Extract the size and the pointer is deeper
-				pointer_size = *(size_t*)function::OffsetPointer(pointer, sizeof(void*));
+				pointer_size = *(size_t*)OffsetPointer(pointer, sizeof(void*));
 				pointer = *(void**)pointer;
 			}
 
@@ -625,7 +625,7 @@ namespace ECSEngine {
 			return ECS_SET_ASSET_TARGET_FIELD_NONE;
 		}
 
-		void* ptr_to_write = function::OffsetPointer(data, type->fields[field].info.pointer_offset);
+		void* ptr_to_write = OffsetPointer(data, type->fields[field].info.pointer_offset);
 
 		auto copy_value = [&](const void* ptr_to_copy, size_t copy_size) {
 			if (!comparator(ptr_to_write)) {
@@ -779,7 +779,7 @@ namespace ECSEngine {
 	) {
 		for (size_t index = 0; index < count; index++) {
 			unsigned int field = functor(index);
-			handles.AddAssert((unsigned int*)function::OffsetPointer(link_components, type->fields[field].info.pointer_offset));
+			handles.AddAssert((unsigned int*)OffsetPointer(link_components, type->fields[field].info.pointer_offset));
 		}
 	}
 
@@ -821,7 +821,7 @@ namespace ECSEngine {
 	) {
 		for (size_t index = 0; index < count; index++) {
 			unsigned int field_index = functor(index);
-			pointers.AddAssert((unsigned int*)function::OffsetPointer(link_component, type->fields[field_index].info.pointer_offset));
+			pointers.AddAssert((unsigned int*)OffsetPointer(link_component, type->fields[field_index].info.pointer_offset));
 		}
 	}
 
@@ -866,7 +866,7 @@ namespace ECSEngine {
 		ECS_ASSERT(field_data->capacity - field_data->size >= asset_fields.size);
 
 		for (size_t index = 0; index < asset_fields.size; index++) {
-			unsigned int handle = *(unsigned int*)function::OffsetPointer(link_component, type->fields[asset_fields[index].field_index].info.pointer_offset);
+			unsigned int handle = *(unsigned int*)OffsetPointer(link_component, type->fields[asset_fields[index].field_index].info.pointer_offset);
 			const void* metadata = nullptr;
 			if (handle == -1) {
 				metadata = empty_metadata;
@@ -1002,7 +1002,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < type->fields.size; index++) {
 			if (FindAssetMetadataMacro(type->fields[index].tag).type != ECS_ASSET_TYPE_COUNT) {
 				// It is a handle
-				unsigned int* handle = (unsigned int*)function::OffsetPointer(link_component, type->fields[index].info.pointer_offset);
+				unsigned int* handle = (unsigned int*)OffsetPointer(link_component, type->fields[index].info.pointer_offset);
 				*handle = -1;
 			}
 		}
@@ -1219,8 +1219,8 @@ namespace ECSEngine {
 					return false;
 				}
 
-				const void* source = function::OffsetPointer(target_data, base_data->target_type->fields[index].info.pointer_offset);
-				void* destination = function::OffsetPointer(link_data, base_data->link_type->fields[index].info.pointer_offset);
+				const void* source = OffsetPointer(target_data, base_data->target_type->fields[index].info.pointer_offset);
+				void* destination = OffsetPointer(link_data, base_data->link_type->fields[index].info.pointer_offset);
 				if (base_data->allocator.allocator != nullptr) {
 					CopyReflectionType(
 						base_data->reflection_manager,
@@ -1402,8 +1402,8 @@ namespace ECSEngine {
 				return false;
 			}
 
-			const void* source = function::OffsetPointer(link_data, base_data->link_type->fields[index].info.pointer_offset);
-			void* destination = function::OffsetPointer(target_data, base_data->target_type->fields[index].info.pointer_offset);
+			const void* source = OffsetPointer(link_data, base_data->link_type->fields[index].info.pointer_offset);
+			void* destination = OffsetPointer(target_data, base_data->target_type->fields[index].info.pointer_offset);
 
 			if (base_data->allocator.allocator != nullptr) {
 				CopyReflectionType(
@@ -1615,7 +1615,7 @@ namespace ECSEngine {
 		if (options.add_reference_counts_to_dependencies) {
 			// After we retrieved the reference counts for all assets from the scene, we need to increase reference counts
 			// for assets that are being referenced by other assets
-			function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
+			ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
 				ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, asset_dependencies, 512);
 				for (size_t index = 0; index < asset_fields_reference_count[asset_type].size; index++) {
 					asset_dependencies.size = 0;
@@ -1671,8 +1671,8 @@ namespace ECSEngine {
 		for (size_t index = 0; index < link_type->fields.size; index++) {
 			if (link_type->fields[index].Has(STRING(ECS_LINK_MODIFIER_FIELD))) {
 				memcpy(
-					function::OffsetPointer(destination, link_type->fields[index].info.pointer_offset),
-					function::OffsetPointer(source, link_type->fields[index].info.pointer_offset),
+					OffsetPointer(destination, link_type->fields[index].info.pointer_offset),
+					OffsetPointer(source, link_type->fields[index].info.pointer_offset),
 					link_type->fields[index].info.byte_size
 				);
 			}
@@ -1685,7 +1685,7 @@ namespace ECSEngine {
 	{
 		for (size_t index = 0; index < link_type->fields.size; index++) {
 			if (link_type->fields[index].Has(STRING(ECS_LINK_MODIFIER_FIELD))) {
-				void* value = function::OffsetPointer(link_component, link_type->fields[index].info.pointer_offset);
+				void* value = OffsetPointer(link_component, link_type->fields[index].info.pointer_offset);
 				if (link_type->fields[index].info.has_default_value) {
 					memcpy(value, &link_type->fields[index].info.default_bool, link_type->fields[index].info.byte_size);
 				}

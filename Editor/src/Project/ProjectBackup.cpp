@@ -56,7 +56,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	GetProjectBackupFolder(editor_state, path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
 	Date date = OS::GetLocalTime();
-	function::ConvertDateToString(date, path, ECS_LOCAL_TIME_FORMAT_ALL_FROM_MINUTES | ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON);
+	ConvertDateToString(date, path, ECS_LOCAL_TIME_FORMAT_ALL_FROM_MINUTES | ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON);
 
 	auto error_lambda = [&](Stream<char> reason) {
 		ECS_STACK_CAPACITY_STREAM(char, message, 1024);
@@ -67,7 +67,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 		bool success = RemoveFolder(path);
 		if (!success) {
 			ECS_FORMAT_TEMP_STRING(error_message, "An error occured when trying to remove the backup folder which failed. Consider doing this manually. "
-				"File name is {#}.", function::PathFilename(path));
+				"File name is {#}.", PathFilename(path));
 			EditorSetConsoleError(error_message);
 		}
 	};
@@ -164,7 +164,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 		backup_assets_path.size = backup_asset_folder_base_size;
 		backup_assets_path.Add(ECS_OS_PATH_SEPARATOR);
 		backup_assets_path.AddStreamAssert(asset_folder_directories[index]);
-		function::ReplaceCharacter(backup_assets_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+		ReplaceCharacter(backup_assets_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 
 		success = CreateFolder(backup_assets_path);
 		if (!success) {
@@ -205,7 +205,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 		GetSandboxScenePath(editor_state, index, sandbox_scene_path);
 		if (sandbox_scene_path.size > 0) {
 			// Copy the scene
-			Stream<wchar_t> relative_path = function::PathRelativeToAbsolute(sandbox_scene_path, assets_folder);
+			Stream<wchar_t> relative_path = PathRelativeToAbsolute(sandbox_scene_path, assets_folder);
 			backup_assets_path.size = backup_asset_folder_base_size;
 			backup_assets_path.Add(ECS_OS_PATH_SEPARATOR);
 			backup_assets_path.AddStreamAssert(relative_path);
@@ -260,13 +260,13 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		Stream<wchar_t> temp_name = temporary_name;
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_temp_path, 512);
 
-		Stream<wchar_t> parent_path = function::PathParent(to_path);
+		Stream<wchar_t> parent_path = PathParent(to_path);
 		absolute_temp_path.CopyOther(parent_path);
 		absolute_temp_path.Add(ECS_OS_PATH_SEPARATOR);
 		absolute_temp_path.AddStreamSafe(temp_name);
 		absolute_temp_path[absolute_temp_path.size] = L'\0';
 
-		Stream<wchar_t> path_filename = function::PathFilename(to_path);
+		Stream<wchar_t> path_filename = PathFilename(to_path);
 		bool rename_success = RenameFolderOrFile(absolute_temp_path, path_filename);
 		if (!rename_success) {
 			ECS_FORMAT_TEMP_STRING(error_message, "An error has occured when trying to rename a temporary file/folder to it's initial name. "
@@ -279,13 +279,13 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		Stream<wchar_t> temp_name = temporary_name;
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_temp_path, 512);
 
-		Stream<wchar_t> parent_path = function::PathParent(to_path);
+		Stream<wchar_t> parent_path = PathParent(to_path);
 		absolute_temp_path.CopyOther(parent_path);
 		absolute_temp_path.Add(ECS_OS_PATH_SEPARATOR);
 		absolute_temp_path.AddStreamSafe(temp_name);
 		absolute_temp_path[absolute_temp_path.size] = L'\0';
 
-		size_t extension_size = function::PathExtensionSize(absolute_temp_path);
+		size_t extension_size = PathExtensionSize(absolute_temp_path);
 		bool delete_success;
 		if (extension_size == 0) {
 			delete_success = RemoveFolder(absolute_temp_path);
@@ -358,7 +358,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		if (valid_files[index]) {
 			get_paths[index](editor_state, to_path);
 			if (rename_file_or_folder_temporary(to_path, temporary_names[index])) {
-				Stream<wchar_t> parent_path = function::PathParent(to_path);
+				Stream<wchar_t> parent_path = PathParent(to_path);
 				Stream<wchar_t> filename = { parent_path.buffer + parent_path.size + 1, to_path.size - parent_path.size - 1 };
 				backup_file_or_folder_copy.size = backup_file_or_folder_copy_size;
 				backup_file_or_folder_copy.Add(ECS_OS_PATH_SEPARATOR);

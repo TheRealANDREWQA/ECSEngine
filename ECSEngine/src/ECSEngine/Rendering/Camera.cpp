@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "Camera.h"
-#include "../Utilities/FunctionInterfaces.h"
+#include "../Utilities/Algorithms.h"
 
 namespace ECSEngine {
 
@@ -332,7 +332,7 @@ namespace ECSEngine {
 		};
 
 		float resulting_distance = 0.0f;
-		if (function::BinaryIntoLinearSearch(min_distance, max_distance, 0.001f, 2.0f, LINEAR_SEARCH_STEP_SIZE, &resulting_distance,
+		if (BinaryIntoLinearSearch(min_distance, max_distance, 0.001f, 2.0f, LINEAR_SEARCH_STEP_SIZE, &resulting_distance,
 			[&](float current_distance) {
 				return aabb_compare(current_distance, BINARY_SEARCH_EPSILON);
 			},

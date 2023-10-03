@@ -8,7 +8,7 @@ ECS_TOOLS;
 #define WAIT_FOR_QUEUE_SPACE_SLEEP_TICK 5
 
 void AllocateMemory(EditorState* editor_state, EditorEvent& editor_event, void* data, size_t data_size) {
-	editor_event.data = function::CopyNonZero(editor_state->MultithreadedEditorAllocator(), data, data_size);
+	editor_event.data = CopyNonZero(editor_state->MultithreadedEditorAllocator(), data, data_size);
 	editor_event.data_size = data_size;
 }
 

@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "RingBuffer.h"
 #include "ConcurrentPrimitives.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 
 namespace ECSEngine {
 
@@ -47,7 +47,7 @@ namespace ECSEngine {
 			size = 0;
 		}
 
-		void* allocation = function::OffsetPointer(buffer, size);
+		void* allocation = OffsetPointer(buffer, size);
 		size += allocation_size;
 		lock.unlock();
 
@@ -59,14 +59,14 @@ namespace ECSEngine {
 	void* RingBuffer::Allocate(size_t allocation_size, size_t alignment)
 	{
 		void* allocation = Allocate(allocation_size + alignment - 1);
-		return (void*)function::AlignPointer((uintptr_t)allocation, alignment);
+		return (void*)AlignPointer((uintptr_t)allocation, alignment);
 	}
 
 	// ------------------------------------------------------------------------------------
 
 	void RingBuffer::Finish(const void* allocation_buffer, size_t allocation_size)
 	{
-		size_t offset = function::PointerDifference(allocation_buffer, buffer);
+		size_t offset = PointerDifference(allocation_buffer, buffer);
 		ECS_ASSERT(offset < capacity);
 
 		last_in_use.store(offset + allocation_size, ECS_RELAXED);

@@ -1,15 +1,15 @@
 #include "ecspch.h"
-#include "../Utilities/Function.h"
 #include "InternalStructures.h"
 #include "VectorComponentSignature.h"
 #include "../Utilities/Crash.h"
 #include "../Utilities/Serialization/SerializationHelpers.h"
+#include "../Math/MathHelpers.h"
 
 namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ComponentSignature ComponentSignature::Copy(uintptr_t& ptr)
+	ComponentSignature ComponentSignature::Copy(uintptr_t& ptr) const
 	{
 		ComponentSignature new_signature;
 
@@ -26,13 +26,13 @@ namespace ECSEngine {
 	void EntityToString(Entity entity, CapacityStream<char>& string, bool extended_string)
 	{
 		string.AddStream("Entity ");
-		function::ConvertIntToChars(string, entity.value);
+		ConvertIntToChars(string, entity.value);
 
 		if (extended_string) {
 			string.AddStream(" (Index - ");
-			function::ConvertIntToChars(string, entity.index);
+			ConvertIntToChars(string, entity.index);
 			string.AddStream(", generation - ");
-			function::ConvertIntToChars(string, entity.generation_count);
+			ConvertIntToChars(string, entity.generation_count);
 			string.Add(')');
 		}
 
@@ -43,14 +43,14 @@ namespace ECSEngine {
 
 	Entity StringToEntity(Stream<char> string)
 	{
-		Stream<char> parenthese = function::FindFirstCharacter(string, '(');
+		Stream<char> parenthese = FindFirstCharacter(string, '(');
 
 		Stream<char> string_to_parse = string;
 		if (parenthese.buffer != nullptr) {
-			string_to_parse = { string.buffer, function::PointerDifference(string_to_parse.buffer, string.buffer) };
+			string_to_parse = { string.buffer, PointerDifference(string_to_parse.buffer, string.buffer) };
 		}
 
-		return Entity((unsigned int)function::ConvertCharactersToInt(string_to_parse));
+		return Entity((unsigned int)ConvertCharactersToInt(string_to_parse));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -522,7 +522,7 @@ namespace ECSEngine {
 
 	bool EntityPool::GetVirtualEntities(Stream<Entity> entities, unsigned int bit_count) const
 	{
-		const size_t total_iterations = function::ClampMin<size_t>(entities.size * 2, 1000);
+		const size_t total_iterations = ClampMin<size_t>(entities.size * 2, 1000);
 		size_t current_count = 0;
 		const unsigned int max_value = GetMaxUnusedEntityValue(bit_count);
 		// Iterate from the high values until a value is found to be empty. Stop after an iteration count
@@ -549,7 +549,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < ITERATION_STOP_COUNT; index++) {
 			unsigned int entity_index = max_value - uint_exclude_size - index;
 			// Check to see if this entity exists in the excluded_entities
-			if (function::SearchBytes(excluded_entities.buffer, excluded_entities.size, entity_index, sizeof(entity_index)) == -1) {
+			if (SearchBytes(excluded_entities.buffer, excluded_entities.size, entity_index, sizeof(entity_index)) == -1) {
 				if (!IsValid(entity_index)) {
 					return entity_index;
 				}
@@ -563,14 +563,14 @@ namespace ECSEngine {
 
 	bool EntityPool::GetVirtualEntities(Stream<Entity> entities, Stream<Entity> excluded_entities, unsigned int bit_count) const
 	{
-		const size_t ITERATION_STOP_COUNT = function::ClampMin<size_t>(entities.size * 2 + excluded_entities.size, 1'000);
+		const size_t ITERATION_STOP_COUNT = ClampMin<size_t>(entities.size * 2 + excluded_entities.size, 1'000);
 		unsigned int uint_exclude_size = (unsigned int)excluded_entities.size;
 		size_t current_count = 0;
 		const unsigned int max_value = GetMaxUnusedEntityValue(bit_count);
 		for (size_t index = 0; index < ITERATION_STOP_COUNT; index++) {
 			unsigned int entity_index = max_value - uint_exclude_size - index;
 			// Check to see if this entity exists in the excluded entities
-			if (function::SearchBytes(excluded_entities.buffer, excluded_entities.size, entity_index, sizeof(entity_index)) == -1) {
+			if (SearchBytes(excluded_entities.buffer, excluded_entities.size, entity_index, sizeof(entity_index)) == -1) {
 				if (!IsValid(entity_index)) {
 					entities[current_count++] = entity_index;
 					if (entities.size == current_count) {
@@ -889,9 +889,9 @@ namespace ECSEngine {
 			memcpy(allocation, data.buffer, copy_size);
 		}
 
-		void** destination_pointer = (void**)function::OffsetPointer(destination, component_buffer.pointer_offset);
+		void** destination_pointer = (void**)OffsetPointer(destination, component_buffer.pointer_offset);
 		*destination_pointer = allocation;
-		unsigned int* destination_size = (unsigned int*)function::OffsetPointer(destination, component_buffer.size_offset);
+		unsigned int* destination_size = (unsigned int*)OffsetPointer(destination, component_buffer.size_offset);
 		*destination_size = data.size;
 	}
 
@@ -907,7 +907,7 @@ namespace ECSEngine {
 			memcpy(allocation, data.buffer, copy_size);
 		}
 
-		DataPointer* destination_pointer = (DataPointer*)function::OffsetPointer(destination, component_buffer.pointer_offset);
+		DataPointer* destination_pointer = (DataPointer*)OffsetPointer(destination, component_buffer.pointer_offset);
 		destination_pointer->SetPointer(allocation);
 		destination_pointer->SetData(data.size);
 	}
@@ -940,7 +940,7 @@ namespace ECSEngine {
 
 	void ComponentBufferDeallocateDataPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source)
 	{
-		const DataPointer* data_pointer = (const DataPointer*)function::OffsetPointer(source, component_buffer.pointer_offset);
+		const DataPointer* data_pointer = (const DataPointer*)OffsetPointer(source, component_buffer.pointer_offset);
 		const void* buffer = data_pointer->GetPointer();
 		if (buffer != nullptr) {
 			allocator->Deallocate(buffer);
@@ -951,7 +951,7 @@ namespace ECSEngine {
 
 	void ComponentBufferDeallocateNormalPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source)
 	{
-		const void* buffer = *(void**)function::OffsetPointer(source, component_buffer.pointer_offset);
+		const void* buffer = *(void**)OffsetPointer(source, component_buffer.pointer_offset);
 		if (buffer != nullptr) {
 			allocator->Deallocate(buffer);
 		}
@@ -972,15 +972,15 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	Stream<void> ComponentBufferGetStreamNormalPointer(ComponentBuffer component_buffer, const void* source) {
-		const void** ptr = (const void**)function::OffsetPointer(source, component_buffer.pointer_offset);
-		unsigned int* size = (unsigned int*)function::OffsetPointer(source, component_buffer.size_offset);
+		const void** ptr = (const void**)OffsetPointer(source, component_buffer.pointer_offset);
+		unsigned int* size = (unsigned int*)OffsetPointer(source, component_buffer.size_offset);
 		return { *ptr, *size };
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
 	Stream<void> ComponentBufferGetStreamDataPointer(ComponentBuffer component_buffer, const void* source) {
-		const DataPointer* data_pointer = (const DataPointer*)function::OffsetPointer(source, component_buffer.pointer_offset);
+		const DataPointer* data_pointer = (const DataPointer*)OffsetPointer(source, component_buffer.pointer_offset);
 		return { data_pointer->GetPointer(), data_pointer->GetData() };
 	}
 

@@ -250,7 +250,11 @@ namespace ECSEngine {
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentSignature);
 
-		ComponentSignature Copy(uintptr_t& ptr);
+		ECS_INLINE bool operator == (ComponentSignature other) const {
+			return count == other.count && memcmp(indices, other.indices, sizeof(Component) * count) == 0;
+		}
+
+		ComponentSignature Copy(uintptr_t& ptr) const;
 
 		// Returns UCHAR_MAX when the component is not found
 		ECS_INLINE unsigned char Find(Component component) const {
@@ -260,6 +264,16 @@ namespace ECSEngine {
 				}
 			}
 			return UCHAR_MAX;
+		}
+
+		ECS_INLINE void WriteTo(Component* components) const {
+			memcpy(components, indices, sizeof(Component) * count);
+		}
+
+		// Writes into the components of the given parameter signature
+		ECS_INLINE ComponentSignature CombineInto(ComponentSignature write_to) const {
+			WriteTo(write_to.indices + write_to.count);
+			return { write_to.indices, (unsigned char)(write_to.count + count) };
 		}
 
 		ECS_INLINE Component& operator[](size_t index) {

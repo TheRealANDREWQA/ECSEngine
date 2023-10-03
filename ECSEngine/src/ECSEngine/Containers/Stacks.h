@@ -1,7 +1,6 @@
 #pragma once
 #include "../Core.h"
 #include "Stream.h"
-#include "../Utilities/FunctionInterfaces.h"
 
 #define ECS_CIRCULAR_STACK_RESIZE_FACTOR (1.5f)
 

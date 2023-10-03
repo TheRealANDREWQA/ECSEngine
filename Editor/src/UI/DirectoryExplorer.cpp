@@ -44,7 +44,7 @@ bool IsProtectedFolderSelected(DirectoryExplorerData* data) {
 		folder.size = folder_base_size;
 		folder.AddStreamSafe(PROTECTED_FOLDERS[index]);
 
-		bool is_the_same = function::CompareStrings(folder, *data->current_path);
+		bool is_the_same = folder == *data->current_path;
 		if (is_the_same) {
 			return true;
 		}
@@ -65,7 +65,7 @@ void DirectoryExplorerHierarchySelectableCallback(ActionData* action_data) {
 	data->current_path->Add(ECS_OS_PATH_SEPARATOR);
 
 	wchar_t temp_characters[256];
-	function::ConvertASCIIToWide(temp_characters, label, 256);
+	ConvertASCIIToWide(temp_characters, label, 256);
 	data->current_path->AddStreamSafe(Stream<wchar_t>(temp_characters, label_stream.size));
 	data->current_path->buffer[data->current_path->size] = L'\0';
 }
@@ -100,11 +100,11 @@ void DirectoryExplorerCreateFolderCallback(ActionData* action_data) {
 	DirectoryExplorerData* data = (DirectoryExplorerData*)_data;
 
 	data->current_path->Add(ECS_OS_PATH_SEPARATOR);
-	function::ConvertASCIIToWide(*data->current_path, *choose_data->ascii);
+	ConvertASCIIToWide(*data->current_path, *choose_data->ascii);
 
 	char ascii_path[512];
 	CapacityStream<char> ascii(ascii_path, 0, 512);
-	function::ConvertWideCharsToASCII(*data->current_path, ascii);
+	ConvertWideCharsToASCII(*data->current_path, ascii);
 	OS::CreateFolderWithError(*data->current_path, system);
 
 	EditorState* editor_state = (EditorState*)data->editor_state;
@@ -140,9 +140,9 @@ void DirectoryExplorerDeleteFolder(ActionData* action_data) {
 		}
 		else {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-			size_t parent_size = function::PathParentSize(*data->current_path);
+			size_t parent_size = PathParentSize(*data->current_path);
 			CapacityStream<wchar_t> folder_name(data->current_path->buffer + parent_size + 1, data->current_path->size - parent_size - 1, data->current_path->size - parent_size - 1 );
-			error_message.size = function::FormatString(error_message.buffer, "Cannot delete {#} folder.", folder_name);
+			error_message.size = FormatString(error_message.buffer, "Cannot delete {#} folder.", folder_name);
 			CreateErrorMessageWindow(system, error_message);
 		}
 	}
@@ -167,7 +167,7 @@ void DirectoryExplorerRenameFolderCallback(ActionData* action_data) {
 
 	char ascii_path[512];
 	CapacityStream<char> ascii(ascii_path, 0, 512);
-	function::ConvertWideCharsToASCII(*data->current_path, ascii);
+	ConvertWideCharsToASCII(*data->current_path, ascii);
 
 	EditorState* editor_state = (EditorState*)data->editor_state;
 	ProjectFile* project_file = editor_state->project_file;
@@ -401,7 +401,7 @@ void TickDirectoryExplorer(EditorState* editor_state)
 				folder_path_wide_stream[folder_path_wide_stream.size] = L'\0';
 
 				Stream<char> folder_path_stream(data->allocator.Allocate(256 * sizeof(char), alignof(char)), folder_path_wide_stream.size);
-				function::ConvertWideCharsToASCII(folder_path_wide_stream.buffer, folder_path_stream.buffer, folder_path_wide_stream.size + 1, 256);
+				ConvertWideCharsToASCII(folder_path_wide_stream.buffer, folder_path_stream.buffer, folder_path_wide_stream.size + 1, 256);
 
 				data->directories_ptrs.AddAssert(folder_path_stream.buffer + project_file->path.size + 1);
 
@@ -419,7 +419,7 @@ void TickDirectoryExplorer(EditorState* editor_state)
 
 					size_t current_path_size = path.size + 1;
 					char* ascii_current_path = (char*)for_each_data->data->allocator.Allocate(sizeof(char) * current_path_size, alignof(char));
-					function::ConvertWideCharsToASCII(path.buffer, ascii_current_path, current_path_size, current_path_size);
+					ConvertWideCharsToASCII(path.buffer, ascii_current_path, current_path_size, current_path_size);
 					for_each_data->data->directories_ptrs.AddAssert(ascii_current_path + for_each_data->project_file->path.size + 1);
 
 					return true;
@@ -436,11 +436,11 @@ void TickDirectoryExplorer(EditorState* editor_state)
 			Path starting_path = *data->current_path;
 			starting_path.buffer += project_file->path.size + 1;
 			starting_path.size -= project_file->path.size + 1;
-			function::ConvertWideCharsToASCII(starting_path, ascii_stream);
+			ConvertWideCharsToASCII(starting_path, ascii_stream);
 
 			data->drawer_hierarchy->active_label.CopyOther(ascii_stream);
 
-			ASCIIPath parent_path = function::PathParent(ascii_stream);
+			ASCIIPath parent_path = PathParent(ascii_stream);
 			ResourceIdentifier identifier(parent_path.buffer, parent_path.size);
 
 			UIDrawerFilesystemHierarchyLabelData* label_data;

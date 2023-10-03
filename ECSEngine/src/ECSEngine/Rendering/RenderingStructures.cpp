@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "RenderingStructures.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "../Utilities/File.h"
 #include "../Utilities/ForEachFiles.h"
@@ -666,7 +666,7 @@ namespace ECSEngine {
 		material.name = (const char*)ptr;
 		ptr += sizeof(char) * (name.size + 1);
 
-		ptr = function::AlignPointer(ptr, alignof(wchar_t));
+		ptr = AlignPointer(ptr, alignof(wchar_t));
 
 		for (size_t index = 0; index < mappings.size; index++) {
 			SetPBRMaterialTexture(&material, ptr, mappings[index].texture, mappings[index].index);
@@ -695,7 +695,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, wide_base_name, 512);
 		ECS_ASSERT(texture_base_name.size < 512);
-		function::ConvertASCIIToWide(wide_base_name, texture_base_name);
+		ConvertASCIIToWide(wide_base_name, texture_base_name);
 
 		return CreatePBRMaterialFromName(material_name, wide_base_name, search_directory, allocator, texture_mask);
 	}
@@ -807,7 +807,7 @@ namespace ECSEngine {
 		material.name = mutable_char;
 		buffer += (material_name.size + 1) * sizeof(char);
 
-		buffer = function::AlignPointer(buffer, alignof(wchar_t));
+		buffer = AlignPointer(buffer, alignof(wchar_t));
 		for (size_t index = 0; index < valid_textures.size; index++) {
 			SetPBRMaterialTexture(&material, buffer, valid_textures[index].texture, valid_textures[index].index);
 		}
@@ -891,7 +891,7 @@ namespace ECSEngine {
 	template<size_t count, typename BasicType>
 	double4 ExtractBasicType(const void*& pixel) {
 		BasicType* value = (BasicType*)pixel;
-		pixel = function::OffsetPointer(pixel, sizeof(BasicType) * count);
+		pixel = OffsetPointer(pixel, sizeof(BasicType) * count);
 		if constexpr (count == 1) {
 			return double4(value[0], 0.0, 0.0, 0.0);
 		}

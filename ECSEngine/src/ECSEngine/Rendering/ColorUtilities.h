@@ -1,5 +1,5 @@
 #pragma once
-#include "../Utilities/Function.h"
+#include "../Math/MathHelpers.h"
 
 #define ECS_COLOR_RED ECSEngine::Color(255, 0, 0)
 #define ECS_COLOR_GREEN ECSEngine::Color(0, 128, 0)
@@ -149,9 +149,9 @@ namespace ECSEngine {
 		float new_green = static_cast<float>(color.green) * percentage;
 		float new_blue = static_cast<float>(color.blue) * percentage;
 		return Color(
-			function::ClampMax(new_red, Color::GetRange()),
-			function::ClampMax(new_green, Color::GetRange()),
-			function::ClampMax(new_blue, Color::GetRange())
+			ClampMax(new_red, Color::GetRange()),
+			ClampMax(new_green, Color::GetRange()),
+			ClampMax(new_blue, Color::GetRange())
 		);
 	}
 

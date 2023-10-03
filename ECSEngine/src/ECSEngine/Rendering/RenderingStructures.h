@@ -6,6 +6,7 @@
 #include "../Math/AABB.h"
 #include "../Allocators/AllocatorTypes.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
+#include "../Utilities/StringUtilities.h"
 #include "ColorUtilities.h"
 
 #define ECS_GRAPHICS_BUFFERS(function) /* Useful for macro expansion */ function(VertexBuffer); \
@@ -379,11 +380,11 @@ namespace ECSEngine {
 
 	struct ECS_REFLECT ShaderMacro {
 		ECS_INLINE bool Compare(ShaderMacro other) const {
-			return function::CompareStrings(name, other.name) && function::CompareStrings(definition, other.definition);
+			return name == other.name && definition == other.definition;
 		}
 
 		ECS_INLINE ShaderMacro Copy(AllocatorPolymorphic allocator) const {
-			return { function::StringCopy(allocator, name), function::StringCopy(allocator, definition) };
+			return { StringCopy(allocator, name), StringCopy(allocator, definition) };
 		}
 
 		Stream<char> name;

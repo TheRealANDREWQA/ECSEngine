@@ -53,7 +53,7 @@ void AssetExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 
 				ECS_STACK_CAPACITY_STREAM(char, reference_count_characters, 16);
 				unsigned int current_asset_reference_count = stream[index].reference_count;
-				function::ConvertIntToChars(reference_count_characters, current_asset_reference_count);
+				ConvertIntToChars(reference_count_characters, current_asset_reference_count);
 
 				UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
 				row_layout.IndentRow(drawer.layout.node_indentation);
@@ -140,10 +140,10 @@ void AssetExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 
 			ResourceManager* resource_manager = editor_state->RuntimeResourceManager();
 			resource_manager->ForEachResourceIdentifierNoSuffix(resource_type, [&](ResourceIdentifier identifier, unsigned short suffix_size) {
-				Stream<void> suffix = { function::OffsetPointer(identifier.ptr, identifier.size), suffix_size };
+				Stream<void> suffix = { OffsetPointer(identifier.ptr, identifier.size), suffix_size };
 				unsigned short reference_count = resource_manager->GetEntry(identifier, resource_type, suffix).reference_count;
 				ECS_STACK_CAPACITY_STREAM(char, reference_count_chars, 16);
-				function::ConvertIntToChars(reference_count_chars, reference_count);
+				ConvertIntToChars(reference_count_chars, reference_count);
 
 				UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
 				row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
@@ -176,7 +176,7 @@ void AssetExplorerSetDecriptor(UIWindowDescriptor& descriptor, EditorState* edit
 {
 	unsigned int index = *(unsigned int*)stack_memory;
 
-	AssetExplorerData* data = (AssetExplorerData*)function::OffsetPointer(stack_memory, sizeof(unsigned int));
+	AssetExplorerData* data = (AssetExplorerData*)OffsetPointer(stack_memory, sizeof(unsigned int));
 	data->editor_state = editor_state;
 	memset(data->asset_opened_headers, 0, sizeof(data->asset_opened_headers));
 	memset(data->resource_manager_opened_headers, 0, sizeof(data->resource_manager_opened_headers));

@@ -71,7 +71,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 		if (!success) {
 			if (!ExistsFileOrFolder(new_directory_path)) {
 				if (data->error_message.buffer != nullptr) {
-					data->error_message.size = function::FormatString(data->error_message.buffer, "Creating project auxilary directory {#} failed!", new_directory_path);
+					data->error_message.size = FormatString(data->error_message.buffer, "Creating project auxilary directory {#} failed!", new_directory_path);
 					data->error_message.AssertCapacity();
 				}
 
@@ -80,7 +80,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 			}
 			else {
 				ECS_STACK_CAPACITY_STREAM(char, description, 256);
-				description.size = function::FormatString(description.buffer, "Folder {#} already exists. Do you want to keep it or clean it?", PROJECT_DIRECTORIES[index]);
+				description.size = FormatString(description.buffer, "Folder {#} already exists. Do you want to keep it or clean it?", PROJECT_DIRECTORIES[index]);
 				description.AssertCapacity();
 				ChooseOptionWindowData choose_data;
 
@@ -142,7 +142,7 @@ void CreateProject(ProjectOperationData* data)
 
 	if (ExistsProjectInFolder(data->file_data)) {
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-		error_message.size = function::FormatString(error_message.buffer, "A project in {#} already exists. Do you want to overwrite it?", data->file_data->path);
+		error_message.size = FormatString(error_message.buffer, "A project in {#} already exists. Do you want to overwrite it?", data->file_data->path);
 		if (data->error_message.buffer != nullptr) {
 			data->error_message.CopyOther(error_message);
 		}
@@ -197,7 +197,7 @@ void CreateProject(ProjectOperationData* data)
 
 			if (!success) {
 				ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-				error_message.size = function::FormatString(error_message.buffer, "Overwriting project {#} failed.", project_path);
+				error_message.size = FormatString(error_message.buffer, "Overwriting project {#} failed.", project_path);
 				error_message.AssertCapacity();
 				CreateErrorMessageWindow(system, error_message);
 			}
@@ -226,7 +226,7 @@ void CreateProject(ProjectOperationData* data)
 		}
 		else {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-			error_message.size = function::FormatString(error_message.buffer, "Error when creating project {#}.", data->file_data->path);
+			error_message.size = FormatString(error_message.buffer, "Error when creating project {#}.", data->file_data->path);
 			error_message.AssertCapacity();
 			CreateErrorMessageWindow(ui_system, error_message);
 		}
@@ -262,7 +262,7 @@ bool CheckProjectDirectoryIntegrity(const ProjectFile* project) {
 
 	auto functor = [](Stream<wchar_t> path, void* data) {
 		Stream<Stream<wchar_t>>* required_folders = (Stream<Stream<wchar_t>>*)data;
-		unsigned int index = function::FindString(path, *required_folders);
+		unsigned int index = FindString(path, *required_folders);
 		if (index != -1) {
 			required_folders->RemoveSwapBack(index);
 		}
@@ -297,7 +297,7 @@ void DestroyProjectTemporaryFiles(const ProjectFile* project_file)
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, project_folder_parent, 512);
 	GetProjectFilePath(project_file, project_folder_parent);
-	project_folder_parent = function::PathParent(project_folder_parent);
+	project_folder_parent = PathParent(project_folder_parent);
 
 	auto functor = [](Stream<wchar_t> file, void* _data) {
 		RemoveFile(file);
@@ -548,7 +548,7 @@ bool OpenProjectFile(ProjectOperationData data, bool info_only) {
 		}
 	}
 
-	if (!function::HasFlag(file_data->platform, ECS_PLATFORM_WIN64_DX11)) {
+	if (!HasFlag(file_data->platform, ECS_PLATFORM_WIN64_DX11)) {
 		if (data.error_message.buffer != nullptr) {
 			ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed, compatible platform {#}, actual platform {#}", project_path, ECS_PLATFORM_WIN64_DX11, file_data->platform);
 		}
@@ -800,7 +800,7 @@ void SaveProjectFileAction(ActionData* action_data) {
 			CapacityStream<wchar_t> project_name(project_name_characters, 0, 256);
 			GetProjectFilePath(data->file_data, project_name);
 
-			error_message.size = function::FormatString(error_message.buffer, "Saving project file {#} failed.", project_name);
+			error_message.size = FormatString(error_message.buffer, "Saving project file {#} failed.", project_name);
 			error_message.AssertCapacity();
 
 			CreateErrorMessageWindow(system, error_message);
@@ -843,7 +843,7 @@ void SaveProjectAction(ActionData* action_data) {
 			CapacityStream<wchar_t> project_name(project_name_characters, 0, 256);
 			GetProjectFilePath(data->file_data, project_name);
 			
-			error_message.size = function::FormatString(error_message.buffer, "Saving project {#} failed.", project_name);
+			error_message.size = FormatString(error_message.buffer, "Saving project {#} failed.", project_name);
 			error_message.AssertCapacity();
 			CreateErrorMessageWindow(system, error_message);
 		}

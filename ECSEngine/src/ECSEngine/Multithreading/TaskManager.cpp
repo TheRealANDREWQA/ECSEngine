@@ -135,31 +135,31 @@ namespace ECSEngine {
 		// constructing thread queues and setting them in stream
 		for (size_t index = 0; index < thread_count; index++) {
 			// Align the thread queue buffer on a new cache line boundary
-			buffer_start = function::AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
+			buffer_start = AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
 			ThreadQueue temp_queue;
 			temp_queue.InitializeFromBuffer(buffer_start, max_dynamic_tasks);
 
 			// Align the thread queue such that is on a separate cache line
-			buffer_start = function::AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
+			buffer_start = AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
 			ThreadQueue* buffer_reinterpretation = (ThreadQueue*)buffer_start;
 			*buffer_reinterpretation = temp_queue;
 			m_thread_queue[index] = buffer_reinterpretation;
 			buffer_start += sizeof(ThreadQueue);
 		}
 
-		buffer_start = function::AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
+		buffer_start = AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
 		m_thread_task_index = (std::atomic<unsigned int>*)buffer_start;
 		buffer_start += sizeof(std::atomic<unsigned int>);
-		buffer_start = function::AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
+		buffer_start = AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
 		m_last_thread_index = (std::atomic<unsigned int>*)buffer_start;
 		buffer_start += sizeof(std::atomic<unsigned int>);
-		buffer_start = function::AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
+		buffer_start = AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
 
 		m_thread_task_index->store(0, ECS_RELAXED);
 		m_last_thread_index->store(0, ECS_RELAXED);
 
 		// sleep variables
-		buffer_start = function::AlignPointer(buffer_start, alignof(ConditionVariable));
+		buffer_start = AlignPointer(buffer_start, alignof(ConditionVariable));
 		m_sleep_wait = (ConditionVariable*)buffer_start;
 		for (size_t index = 0; index < thread_count; index++) {
 			new (m_sleep_wait + index) ConditionVariable();
@@ -168,7 +168,7 @@ namespace ECSEngine {
 		buffer_start += sizeof(ConditionVariable) * thread_count;
 
 		// thread handles
-		buffer_start = function::AlignPointer(buffer_start, alignof(void*));
+		buffer_start = AlignPointer(buffer_start, alignof(void*));
 		m_thread_handles = (void**)buffer_start;
 		buffer_start += sizeof(void*) * thread_count;
 
@@ -176,7 +176,7 @@ namespace ECSEngine {
 		buffer_start += sizeof(RingBuffer*) * thread_count;
 
 		for (size_t index = 0; index < thread_count; index++) {
-			buffer_start = function::AlignPointer(buffer_start, alignof(RingBuffer));
+			buffer_start = AlignPointer(buffer_start, alignof(RingBuffer));
 			m_dynamic_task_allocators[index] = (RingBuffer*)buffer_start;
 			buffer_start += sizeof(RingBuffer);
 
@@ -208,7 +208,7 @@ namespace ECSEngine {
 			thread_local_ptr += (linear_allocator_cache_lines + 1) * ECS_CACHE_LINE_SIZE;
 			*m_thread_linear_allocators[index] = LinearAllocator(linear_allocation, thread_linear_allocator_size);
 
-			linear_allocation = function::OffsetPointer(linear_allocation, thread_linear_allocator_size);
+			linear_allocation = OffsetPointer(linear_allocation, thread_linear_allocator_size);
 		}
 
 		SetWaitType(ECS_TASK_MANAGER_WAIT_SLEEP);
@@ -219,14 +219,14 @@ namespace ECSEngine {
 	void TaskManager::AddTask(StaticThreadTask task) {
 		ECS_ASSERT(task.task.name.size > 0);
 
-		task.task.data = function::CopyNonZero(StaticTaskAllocator(this), task.task.data, task.task.data_size);
+		task.task.data = CopyNonZero(StaticTaskAllocator(this), task.task.data, task.task.data_size);
 
 #if 0
 		if (task.name != nullptr) {
-			task.name = function::StringCopy(TaskAllocator(this), task.name).buffer;
+			task.name = StringCopy(TaskAllocator(this), task.name).buffer;
 		}
 #else
-		task.task.name = function::StringCopy(StaticTaskAllocator(this), task.task.name).buffer;
+		task.task.name = StringCopy(StaticTaskAllocator(this), task.task.name).buffer;
 #endif
 		unsigned int index = m_tasks.ReserveNewElement();
 		m_tasks[index].task = task.task;
@@ -491,7 +491,7 @@ namespace ECSEngine {
 		}
 
 		unsigned int thread_count = GetThreadCount();
-		if (function::HasFlag(m_wait_type, ECS_TASK_MANAGER_WAIT_SLEEP)) {
+		if (HasFlag(m_wait_type, ECS_TASK_MANAGER_WAIT_SLEEP)) {
 			// Wake the threads
 			WakeThreads(true);
 		}
@@ -940,7 +940,7 @@ namespace ECSEngine {
 
 				// We failed to get a thread task from our queue.
 				// If the stealing is enabled, try to do it
-				if (function::HasFlag(task_manager->m_wait_type, ECS_TASK_MANAGER_WAIT_STEAL)) {
+				if (HasFlag(task_manager->m_wait_type, ECS_TASK_MANAGER_WAIT_STEAL)) {
 					unsigned int stolen_thread_id = thread_id;
 					thread_task.task = task_manager->StealTask(stolen_thread_id);
 					// We managed to get a task

@@ -90,6 +90,12 @@ namespace ECSEngine {
 
 		void AddSharedComponentExclude(Component component, AllocatorPolymorphic temp_memory);
 
+		// The optional components must be added after all unique ones have been added
+		void AddOptionalComponent(Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory);
+
+		// The optional components must be added after all shared ones have been added
+		void AddOptionalSharedComponent(Component component, ECS_ACCESS_TYPE access_type, AllocatorPolymorphic temp_memory);
+
 		ECS_INLINE const Component* Components() const {
 			return component_count > ECS_TASK_COMPONENT_QUERY_COUNT ? components_ptr : components;
 		}
@@ -130,9 +136,42 @@ namespace ECSEngine {
 			return component_count > 0 || shared_component_count > 0;
 		}
 
+		ECS_INLINE ComponentSignature AggregateUnique() const {
+			return ComponentSignature((Component*)Components(), component_count);
+		}
+
+		ECS_INLINE ComponentSignature AggregateShared() const {
+			return ComponentSignature((Component*)SharedComponents(), shared_component_count);
+		}
+
+		ECS_INLINE ComponentSignature MandatoryUnique() const {
+			return ComponentSignature((Component*)Components(), component_count - optional_component_count);
+		}
+
+		ECS_INLINE ComponentSignature MandatoryShared() const {
+			return ComponentSignature((Component*)SharedComponents(), shared_component_count - optional_shared_component_count);
+		}
+
+		ECS_INLINE ComponentSignature OptionalUnique() const {
+			return ComponentSignature((Component*)Components() + component_count - optional_component_count, optional_component_count);
+		}
+
+		ECS_INLINE ComponentSignature OptionalShared() const {
+			return ComponentSignature((Component*)SharedComponents() + shared_component_count - optional_shared_component_count, optional_shared_component_count);
+		}
+
+		ECS_INLINE ComponentSignature ExcludeSignature() const {
+			return ComponentSignature((Component*)ExcludeComponents(), exclude_component_count);
+		}
+
+		ECS_INLINE ComponentSignature ExcludeSharedSignature() const {
+			return ComponentSignature((Component*)ExcludeSharedComponents(), exclude_shared_component_count);
+		}
+
 		// In case everything is embedded
 		TaskComponentQuery BitwiseCopy() const;
 
+		// Useful with CopyTo to determine which was the initial allocation
 		void* GetAllocatedBuffer() const;
 
 		// Determines whether or not there is a read-write conflict on the same component
@@ -163,6 +202,8 @@ namespace ECSEngine {
 		unsigned char exclude_component_count = 0;
 		unsigned char shared_component_count = 0;
 		unsigned char exclude_shared_component_count = 0;
+		unsigned char optional_component_count = 0;
+		unsigned char optional_shared_component_count = 0;
 		ECS_THREAD_TASK_READ_VISIBILITY_TYPE read_type = ECS_THREAD_TASK_READ_LAZY;
 		ECS_THREAD_TASK_WRITE_VISIBILITY_TYPE write_type = ECS_THREAD_TASK_WRITE_LAZY;
 		unsigned short batch_size = 0;

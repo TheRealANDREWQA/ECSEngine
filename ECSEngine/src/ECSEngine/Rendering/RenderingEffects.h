@@ -3,6 +3,7 @@
 #include "ColorUtilities.h"
 #include "../Math/Matrix.h"
 #include "RenderingStructures.h"
+#include "../Utilities/Utilities.h"
 
 namespace ECSEngine {
 
@@ -54,7 +55,7 @@ namespace ECSEngine {
 	ECS_INLINE unsigned int GenerateRenderInstanceValue(unsigned int index, unsigned char pixel_thickness) {
 		// Increase this value such that values of 0 are invalid
 		ECS_ASSERT(pixel_thickness <= ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS);
-		return function::BlendBits<unsigned int>(
+		return BlendBits<unsigned int>(
 			index,
 			pixel_thickness,
 			32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
@@ -65,7 +66,7 @@ namespace ECSEngine {
 	ECS_INLINE unsigned int FromRenderInstanceValueToID(unsigned int blended_value) {
 		// Remember to decrement
 		unsigned int instance_index, pixel_thickness;
-		function::RetrieveBlendedBits(
+		RetrieveBlendedBits(
 			blended_value,
 			32 - ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,
 			ECS_GENERATE_INSTANCE_FRAMEBUFFER_PIXEL_THICKNESS_BITS,

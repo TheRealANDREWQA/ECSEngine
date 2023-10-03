@@ -16,7 +16,7 @@ namespace ECSEngine {
 
 		Texture1DDescriptor descriptor = GetTextureDescriptor(texture);
 		ECS_ASSERT(mip_level < descriptor.mip_levels);
-		result = function::ClampMin<unsigned int>(descriptor.width << mip_level, 1);
+		result = ClampMin<unsigned int>(descriptor.width << mip_level, 1);
 
 		return result;
 	}
@@ -28,8 +28,8 @@ namespace ECSEngine {
 
 		Texture2DDescriptor descriptor = GetTextureDescriptor(texture);
 		ECS_ASSERT(mip_level < descriptor.mip_levels);
-		result.x = function::ClampMin<unsigned int>(descriptor.size.x << mip_level, 1);
-		result.y = function::ClampMin<unsigned int>(descriptor.size.y << mip_level, 1);
+		result.x = ClampMin<unsigned int>(descriptor.size.x << mip_level, 1);
+		result.y = ClampMin<unsigned int>(descriptor.size.y << mip_level, 1);
 
 		return result;
 	}
@@ -42,9 +42,9 @@ namespace ECSEngine {
 
 		Texture3DDescriptor descriptor = GetTextureDescriptor(texture);
 		ECS_ASSERT(mip_level < descriptor.mip_levels);
-		result.x = function::ClampMin<unsigned int>(descriptor.size.x << mip_level, 1);
-		result.y = function::ClampMin<unsigned int>(descriptor.size.y << mip_level, 1);
-		result.z = function::ClampMin<unsigned int>(descriptor.size.z << mip_level, 1);
+		result.x = ClampMin<unsigned int>(descriptor.size.x << mip_level, 1);
+		result.y = ClampMin<unsigned int>(descriptor.size.y << mip_level, 1);
+		result.z = ClampMin<unsigned int>(descriptor.size.z << mip_level, 1);
 
 		return result;
 	}
@@ -118,7 +118,7 @@ namespace ECSEngine {
 		}
 
 		DirectX::TEX_FILTER_FLAGS filter_flag = DirectX::TEX_FILTER_LINEAR;
-		size_t filter_flags = function::ClearFlag(resize_flag, ECS_RESIZE_TEXTURE_MIP_MAPS);
+		size_t filter_flags = ClearFlag(resize_flag, ECS_RESIZE_TEXTURE_MIP_MAPS);
 		switch (filter_flags) {
 		case ECS_RESIZE_TEXTURE_FILTER_BOX:
 			filter_flag = DirectX::TEX_FILTER_BOX;
@@ -158,7 +158,7 @@ namespace ECSEngine {
 		if (FAILED(result)) {
 			return new_texture;
 		}
-		if (function::HasFlag(resize_flag, ECS_RESIZE_TEXTURE_MIP_MAPS)) {
+		if (HasFlag(resize_flag, ECS_RESIZE_TEXTURE_MIP_MAPS)) {
 			ID3D11Texture2D* first_mip = _new_texture;
 			texture_descriptor.MipLevels = 0;
 			texture_descriptor.BindFlags |= D3D11_BIND_RENDER_TARGET;
@@ -245,7 +245,7 @@ namespace ECSEngine {
 		HRESULT result;
 		DirectX::TexMetadata metadata;
 		if (extension == ECS_TEXTURE_EXTENSION_HDR) {
-			bool apply_tonemapping = function::HasFlag(flags, ECS_DECODE_TEXTURE_HDR_TONEMAP);
+			bool apply_tonemapping = HasFlag(flags, ECS_DECODE_TEXTURE_HDR_TONEMAP);
 			result = DirectX::LoadFromHDRMemory(data.buffer, data.size, &metadata, image, apply_tonemapping);
 		}
 		else if (extension == ECS_TEXTURE_EXTENSION_TGA) {
@@ -266,11 +266,11 @@ namespace ECSEngine {
 		new_data.width = metadata.width;
 		image.DetachPixels();
 
-		if (function::HasFlag(flags, ECS_DECODE_TEXTURE_NO_SRGB)) {
+		if (HasFlag(flags, ECS_DECODE_TEXTURE_NO_SRGB)) {
 			new_data.format = GetGraphicsFormatNoSRGB(new_data.format);
 		}
 
-		if (function::HasFlag(flags, ECS_DECODE_TEXTURE_FORCE_SRGB)) {
+		if (HasFlag(flags, ECS_DECODE_TEXTURE_FORCE_SRGB)) {
 			new_data.format = GetGraphicsFormatWithSRGB(new_data.format);
 		}
 
@@ -281,12 +281,12 @@ namespace ECSEngine {
 
 	DecodedTexture DecodeTexture(Stream<void> data, Stream<wchar_t> filename, AllocatorPolymorphic allocator, size_t flags)
 	{
-		Path extension = function::PathExtensionBoth(filename);
+		Path extension = PathExtensionBoth(filename);
 
-		if (function::CompareStrings(extension, L".hdr")) {
+		if (extension == L".hdr") {
 			return DecodeTexture(data, ECS_TEXTURE_EXTENSION_HDR, allocator, flags);
 		}
-		if (function::CompareStrings(extension, L".tga")) {
+		if (extension == L".tga") {
 			return DecodeTexture(data, ECS_TEXTURE_EXTENSION_TGA, allocator, flags);
 		}
 
@@ -370,7 +370,7 @@ namespace ECSEngine {
 			if (remainder == 0) {
 				for (size_t step = 0; step < steps; step++) {
 					// Load the data into the register
-					samples.load(function::OffsetPointer(mip_data[index].buffer, samples.size() * step));
+					samples.load(OffsetPointer(mip_data[index].buffer, samples.size() * step));
 
 					// Splat the values 8 at a time - but set the alpha to 255
 					Vec32uc splat0 = ConvertSingleChannelTextureToGrayscaleSplat<0>(samples);
@@ -384,12 +384,12 @@ namespace ECSEngine {
 					Vec32uc values2 = ConvertSingleChannelTextureToGrayscaleBlend(splat2, alpha);
 					Vec32uc values3 = ConvertSingleChannelTextureToGrayscaleBlend(splat3, alpha);
 
-					void* base_pointer = function::OffsetPointer(streams[index].buffer, samples.size() * step * 4);
+					void* base_pointer = OffsetPointer(streams[index].buffer, samples.size() * step * 4);
 					// Write the values
 					values0.store(base_pointer);
-					values1.store(function::OffsetPointer(base_pointer, samples.size()));
-					values2.store(function::OffsetPointer(base_pointer, samples.size() * 2));
-					values3.store(function::OffsetPointer(base_pointer, samples.size() * 3));
+					values1.store(OffsetPointer(base_pointer, samples.size()));
+					values2.store(OffsetPointer(base_pointer, samples.size() * 2));
+					values3.store(OffsetPointer(base_pointer, samples.size() * 3));
 				}
 			}
 			else {
@@ -504,7 +504,7 @@ namespace ECSEngine {
 			size_t output_value_index = 0;
 
 			const size_t step_size = 24;
-			size_t simd_count = function::GetSimdCount(mip_data[index].size, step_size);
+			size_t simd_count = GetSimdCount(mip_data[index].size, step_size);
 			ECS_ASSERT((mip_data[index].size - simd_count) % 3 == 0)
 
 				for (size_t simd_index = 0; simd_index < simd_count; simd_index += step_size) {
@@ -680,7 +680,7 @@ namespace ECSEngine {
 
 		uint2 dimensions = { 0,0 };
 
-		Path extension = function::PathExtensionBoth(filename);
+		Path extension = PathExtensionBoth(filename);
 
 		if (extension.size == 0) {
 			return dimensions;
@@ -689,8 +689,8 @@ namespace ECSEngine {
 		bool is_tga = false;
 		bool is_hdr = false;
 
-		is_tga = function::CompareStrings(extension, L".tga");
-		is_hdr = function::CompareStrings(extension, L".hdr");
+		is_tga = extension == L".tga";
+		is_hdr = extension == L".hdr";
 
 		DirectX::TexMetadata metadata;
 		HRESULT result;
@@ -882,7 +882,7 @@ namespace ECSEngine {
 	unsigned int ClampToTextureBounds(Texture1D texture, unsigned int position, unsigned int mip_level)
 	{
 		unsigned int texture_bound = GetTextureDimensions(texture, mip_level);
-		return function::ClampMax(position, texture_bound);
+		return ClampMax(position, texture_bound);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
