@@ -3,7 +3,7 @@
 #include "Encryption.h"
 
 #include "Serialization/SerializationHelpers.h"
-#include "FunctionInterfaces.h"
+#include "Utilities.h"
 
 #define TEMPORARY_BUFFER_SIZE ECS_MB * 50
 
@@ -24,7 +24,7 @@ namespace ECSEngine {
 		ECS_ASSERT(input.size == input_is_text_file.size);
 
 		PackFilesLookupTable lookup_table;
-		size_t table_capacity = function::PowerOfTwoGreater((size_t)((float)input.size * (100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR)));
+		size_t table_capacity = PowerOfTwoGreater((size_t)((float)input.size * (100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR)));
 		size_t table_size = lookup_table.MemoryOf(table_capacity);
 
 		// Open a file handle to the output file
@@ -207,7 +207,7 @@ namespace ECSEngine {
 			return table;
 		}
 
-		if (!function::IsPowerOfTwo(header.table_capacity)) {
+		if (!IsPowerOfTwo(header.table_capacity)) {
 			return table;
 		}
 
@@ -226,7 +226,7 @@ namespace ECSEngine {
 		}
 
 		// Create now the table 
-		table.SetBuffers(function::OffsetPointer(allocation, header.string_total_size), header.table_capacity);
+		table.SetBuffers(OffsetPointer(allocation, header.string_total_size), header.table_capacity);
 		// The identifiers must be patched to form an absolute value from the relative ones
 		// and then be decrypted
 
@@ -239,7 +239,7 @@ namespace ECSEngine {
 				// Fail
 				return true;
 			}
-			identifier.ptr = function::OffsetPointer(allocation, (uintptr_t)identifier.ptr);
+			identifier.ptr = OffsetPointer(allocation, (uintptr_t)identifier.ptr);
 			// Decrypt the buffer now
 			unsigned int decrypt_key = identifier.size;
 			DecryptBufferByte({ identifier.ptr, identifier.size }, decrypt_key);
@@ -305,7 +305,7 @@ namespace ECSEngine {
 		}
 
 		packed_file.packed_files.Initialize(allocator, header.element_count);
-		size_t table_capacity = function::PowerOfTwoGreater(HashTableCapacityForElements(header.input_file_count));
+		size_t table_capacity = PowerOfTwoGreater(HashTableCapacityForElements(header.input_file_count));
 		packed_file.lookup_table.Initialize(allocator, table_capacity);
 
 		for (size_t index = 0; index < header.element_count; index++) {
@@ -329,7 +329,7 @@ namespace ECSEngine {
 
 			Read<true>(file, current_name.buffer, name_size * sizeof(wchar_t));
 			current_name.size = name_size;
-			Stream<wchar_t> allocated_name = function::StringCopy(allocator, current_name);
+			Stream<wchar_t> allocated_name = StringCopy(allocator, current_name);
 			packed_file.packed_files[index] = allocated_name;
 
 			for (unsigned int input_index = 0; input_index < current_count; input_index++) {
@@ -342,7 +342,7 @@ namespace ECSEngine {
 
 				Read<true>(file, current_name.buffer, name_size * sizeof(wchar_t));
 				current_name.size = name_size;
-				allocated_name = function::StringCopy(allocator, current_name);
+				allocated_name = StringCopy(allocator, current_name);
 				ECS_ASSERT(!packed_file.lookup_table.Insert(index, allocated_name));
 			}
 		}
@@ -483,7 +483,7 @@ namespace ECSEngine {
 		// allocation and the deallocate does not. (in the main case it is segragated)
 		result.packed_files.Initialize(allocator, packed_files.size);
 		for (size_t index = 0; index < packed_files.size; index++) {
-			result.packed_files[index] = function::StringCopy(allocator, packed_files[index]);
+			result.packed_files[index] = StringCopy(allocator, packed_files[index]);
 		}
 		
 		return result;

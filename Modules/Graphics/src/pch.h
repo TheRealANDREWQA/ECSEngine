@@ -8,3 +8,5 @@
 #include "ECSEngineUtilities.h"
 #include "ECSEngineForEach.h"
 #include "ECSEngineRendering.h"
+#include "ECSEngineDebugDrawer.h"
+#include "ECSEngineComponents.h"

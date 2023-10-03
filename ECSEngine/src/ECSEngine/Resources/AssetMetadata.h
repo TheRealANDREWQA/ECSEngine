@@ -3,7 +3,7 @@
 #include "../Core.h"
 #include "../Containers/Stream.h"
 #include "../Rendering/RenderingStructures.h"
-#include "../Utilities/FunctionInterfaces.h"
+#include "../Utilities/PointerUtilities.h"
 #include "../Rendering/ShaderReflection.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Rendering/Compression/TextureCompressionTypes.h"

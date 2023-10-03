@@ -235,7 +235,7 @@ namespace ECSEngine {
 
 		// Update the state
 		data->thumbnail->info.camera_radius += data->radius_delta * data->thumbnail->info.initial_camera_radius;
-		data->thumbnail->info.camera_radius = function::ClampMin(data->thumbnail->info.camera_radius, 0.0005f);
+		data->thumbnail->info.camera_radius = ClampMin(data->thumbnail->info.camera_radius, 0.0005f);
 
 		data->thumbnail->info.object_translation += data->translation_delta;
 		data->thumbnail->info.object_rotation += data->rotation_delta;

@@ -10,6 +10,9 @@
 #include "../../Containers/SparseSet.h"
 #include "../../Resources/AssetMetadataSerialize.h"
 #include "../../Math/MathTypeSizes.h"
+#include "../FilePreprocessor.h"
+#include "../StreamUtilities.h"
+#include "../EvaluateExpression.h"
 
 namespace ECSEngine {
 
@@ -131,7 +134,7 @@ namespace ECSEngine {
 				if (data.definition == ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE[index].string) {
 					data.string_to_add->CopyOther(STRING(ECS_GIVE_SIZE_REFLECTION));
 					data.string_to_add->Add('(');
-					function::ConvertIntToChars(*data.string_to_add, ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE[index].byte_size);
+					ConvertIntToChars(*data.string_to_add, ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE[index].byte_size);
 					data.string_to_add->Add(')');
 					break;
 				}
@@ -158,55 +161,55 @@ namespace ECSEngine {
 
 			char FUNCTION_REPLACE_SEMICOLON_CHAR = '`';
 
-			Stream<char> parenthese = function::FindFirstCharacter(type_body, '(');
+			Stream<char> parenthese = FindFirstCharacter(type_body, '(');
 			while (parenthese.size > 0) {
-				Stream<char> previous_line_range = { last_copied_value, function::PointerDifference(parenthese.buffer, last_copied_value) };
-				Stream<char> previous_new_line = function::FindCharacterReverse(previous_line_range, '\n');
-				Stream<char> next_new_line = function::FindFirstCharacter(parenthese, '\n');
+				Stream<char> previous_line_range = { last_copied_value, PointerDifference(parenthese.buffer, last_copied_value) };
+				Stream<char> previous_new_line = FindCharacterReverse(previous_line_range, '\n');
+				Stream<char> next_new_line = FindFirstCharacter(parenthese, '\n');
 
 				if (previous_new_line.buffer != nullptr && next_new_line.buffer != nullptr) {
-					Stream<char> semicolon_range = { previous_new_line.buffer, function::PointerDifference(next_new_line.buffer, previous_new_line.buffer) };
-					Stream<char> semicolon = function::FindFirstCharacter(semicolon_range, ';');
+					Stream<char> semicolon_range = { previous_new_line.buffer, PointerDifference(next_new_line.buffer, previous_new_line.buffer) };
+					Stream<char> semicolon = FindFirstCharacter(semicolon_range, ';');
 					if (semicolon.buffer == nullptr) {
 						// This is a function definition
 						// Get the name
-						const char* name_end = function::SkipWhitespace(parenthese.buffer - 1, -1);
+						const char* name_end = SkipWhitespace(parenthese.buffer - 1, -1);
 						if (name_end <= previous_new_line.buffer) {
 							// An error, this is thought to be a function but the name is malformed
 							return {};
 						}
 
-						const char* name_start = function::SkipCodeIdentifier(name_end, -1) + 1;
+						const char* name_start = SkipCodeIdentifier(name_end, -1) + 1;
 						if (name_start > name_end) {
 							// An error, this is thought to be a function but the name is malformed
 							return {};
 						}
 
 						// Get the body of the function
-						Stream<char> function_body_start = function::FindFirstCharacter(parenthese, '{');
+						Stream<char> function_body_start = FindFirstCharacter(parenthese, '{');
 						if (function_body_start.size == 0) {
 							// An error, malformed function or something else
 							return {};
 						}
 
-						const char* function_body_end = function::FindMatchingParenthesis(function_body_start.buffer + 1, function_body_start.buffer + function_body_start.size, '{', '}');
+						const char* function_body_end = FindMatchingParenthesis(function_body_start.buffer + 1, function_body_start.buffer + function_body_start.size, '{', '}');
 						if (function_body_end == nullptr) {
 							// An error, malformed function or something else
 							return {};
 						}
 
-						Stream<char> closing_parenthese = function::FindFirstCharacter(parenthese, ')');
+						Stream<char> closing_parenthese = FindFirstCharacter(parenthese, ')');
 						if (closing_parenthese.size == 0 || closing_parenthese.buffer > function_body_start.buffer) {
 							// An error, malformed function or something else
 							return {};
 						}
 
 						// Go and remove all semicolons inside the function body such that it won't interfere with the field determination
-						Stream<char> current_function_body = { function_body_start.buffer, function::PointerDifference(function_body_end, function_body_start.buffer) + 1 };
-						function::ReplaceCharacter(current_function_body, ';', FUNCTION_REPLACE_SEMICOLON_CHAR);
+						Stream<char> current_function_body = { function_body_start.buffer, PointerDifference(function_body_end, function_body_start.buffer) + 1 };
+						ReplaceCharacter(current_function_body, ';', FUNCTION_REPLACE_SEMICOLON_CHAR);
 
 						ECS_STACK_CAPACITY_STREAM(char, string_to_add, ECS_KB);
-						Stream<char> function_name = { name_start, function::PointerDifference(name_end, name_start) + 1 };
+						Stream<char> function_name = { name_start, PointerDifference(name_end, name_start) + 1 };
 						ReflectionTypeTagHandlerForFunctionData type_tag_function;
 						type_tag_function.function_name = function_name;
 						type_tag_function.string_to_add = &string_to_add;
@@ -215,16 +218,16 @@ namespace ECSEngine {
 						char* copy_start = parse_data->thread_memory.buffer + parse_data->thread_memory.size;
 
 						// Copy everything until the start of the previous line of the function
-						Stream<char> before_function_copy = { last_copied_value, function::PointerDifference(previous_new_line.buffer, last_copied_value) };
+						Stream<char> before_function_copy = { last_copied_value, PointerDifference(previous_new_line.buffer, last_copied_value) };
 						before_function_copy.CopyTo(copy_start);
 						copy_start += before_function_copy.size;
 						parse_data->thread_memory.size += before_function_copy.size;
 
 						if (string_to_add.size > 0) {
-							const char* prename_region_end = function::SkipWhitespace(previous_new_line.buffer + 1);
-							Stream<char> prename_region = { last_copied_value, function::PointerDifference(prename_region_end, last_copied_value) };
+							const char* prename_region_end = SkipWhitespace(previous_new_line.buffer + 1);
+							Stream<char> prename_region = { last_copied_value, PointerDifference(prename_region_end, last_copied_value) };
 
-							Stream<char> name_and_qualifiers = { prename_region_end, function::PointerDifference(closing_parenthese.buffer, prename_region_end) + 1 };
+							Stream<char> name_and_qualifiers = { prename_region_end, PointerDifference(closing_parenthese.buffer, prename_region_end) + 1 };
 
 							auto copy_string = [&]() {
 								*copy_start = ' ';
@@ -300,7 +303,7 @@ namespace ECSEngine {
 							parse_data->thread_memory.size += prename_region.size + name_and_qualifiers.size + current_function_body.size + string_to_add.size + 2;
 						}
 						else {
-							Stream<char> copy_range = { previous_new_line.buffer + 1, function::PointerDifference(function_body_end, previous_new_line.buffer + 1) + 1 };
+							Stream<char> copy_range = { previous_new_line.buffer + 1, PointerDifference(function_body_end, previous_new_line.buffer + 1) + 1 };
 							copy_range.CopyTo(copy_start);
 							parse_data->thread_memory.size += copy_range.size;
 							last_copied_value = function_body_end + 1;
@@ -308,21 +311,21 @@ namespace ECSEngine {
 					}
 				}
 
-				Stream<char> search_next_function = { last_copied_value, function::PointerDifference(type_body.buffer + type_body.size, last_copied_value) };
-				parenthese = function::FindFirstCharacter(search_next_function, '(');
+				Stream<char> search_next_function = { last_copied_value, PointerDifference(type_body.buffer + type_body.size, last_copied_value) };
+				parenthese = FindFirstCharacter(search_next_function, '(');
 			}
 
 			// Now go through all lines that have semicolons remaining and see if they have fields
 			ECS_STACK_ADDITION_STREAM(unsigned int, semicolons, 512);
-			function::FindToken(type_body, ';', semicolons_addition);
+			FindToken(type_body, ';', semicolons_addition);
 
 			for (unsigned int index = 0; index < semicolons.size; index++) {
 				// If the line is empty, skip it
 				Stream<char> previous_range = { type_body.buffer, semicolons[index] };
 				Stream<char> next_range = { type_body.buffer + semicolons[index], type_body.size - semicolons[index] };
 
-				const char* previous_line = function::FindCharacterReverse(previous_range, '\n').buffer;
-				const char* next_line = function::FindFirstCharacter(next_range, '\n').buffer;
+				const char* previous_line = FindCharacterReverse(previous_range, '\n').buffer;
+				const char* next_line = FindFirstCharacter(next_range, '\n').buffer;
 
 				if (previous_line == nullptr || next_line == nullptr) {
 					// Fail
@@ -330,28 +333,28 @@ namespace ECSEngine {
 				}
 
 				// Find the definition and the name
-				const char* definition_start = function::SkipWhitespace(previous_line + 1);
+				const char* definition_start = SkipWhitespace(previous_line + 1);
 				const char* initial_definition_start = definition_start;
 				// If there are double colons for namespace separation, account for them
-				Stream<char> definition_range = { definition_start, function::PointerDifference(next_line, definition_start) };
-				Stream<char> double_colon = function::FindFirstToken(definition_range, "::");
+				Stream<char> definition_range = { definition_start, PointerDifference(next_line, definition_start) };
+				Stream<char> double_colon = FindFirstToken(definition_range, "::");
 				while (double_colon.size > 0) {
 					double_colon.Advance(2);
-					definition_start = function::SkipWhitespace(double_colon.buffer);
-					double_colon = function::FindFirstToken(double_colon, "::");
+					definition_start = SkipWhitespace(double_colon.buffer);
+					double_colon = FindFirstToken(double_colon, "::");
 				}
 
-				const char* definition_end = function::SkipCodeIdentifier(definition_start);
-				Stream<char> definition = { definition_start, function::PointerDifference(definition_end, definition_start) };
+				const char* definition_end = SkipCodeIdentifier(definition_start);
+				Stream<char> definition = { definition_start, PointerDifference(definition_end, definition_start) };
 
 				// Skip pointer asterisks on both ends
-				const char* name_start = function::SkipWhitespace(definition_end);
-				name_start = function::SkipCharacter(name_start, '*');
-				name_start = function::SkipWhitespace(name_start);
-				name_start = function::SkipCharacter(name_start, '*');
+				const char* name_start = SkipWhitespace(definition_end);
+				name_start = SkipCharacter(name_start, '*');
+				name_start = SkipWhitespace(name_start);
+				name_start = SkipCharacter(name_start, '*');
 
-				const char* name_end = function::SkipCodeIdentifier(name_start);
-				Stream<char> name = { name_start, function::PointerDifference(name_end, name_start) };
+				const char* name_end = SkipCodeIdentifier(name_start);
+				Stream<char> name = { name_start, PointerDifference(name_end, name_start) };
 
 				ECS_STACK_CAPACITY_STREAM(char, string_to_add, 512);
 				ReflectionTypeTagHandlerForFieldData type_tag_field;
@@ -361,10 +364,10 @@ namespace ECSEngine {
 				auto position_to_add = ECS_REFLECTION_TYPE_TAG_HANDLER[handler_index].field_functor(type_tag_field);
 
 				// Include the new lines
-				Stream<char> before_type_range = { previous_line, function::PointerDifference(initial_definition_start, previous_line) };
-				Stream<char> after_type_range = { initial_definition_start, function::PointerDifference(definition_end, initial_definition_start) };
-				Stream<char> before_name_range = { definition_end, function::PointerDifference(name_start, definition_end) };
-				Stream<char> after_name_range = { name_start, function::PointerDifference(next_line, name_start) + 1 };
+				Stream<char> before_type_range = { previous_line, PointerDifference(initial_definition_start, previous_line) };
+				Stream<char> after_type_range = { initial_definition_start, PointerDifference(definition_end, initial_definition_start) };
+				Stream<char> before_name_range = { definition_end, PointerDifference(name_start, definition_end) };
+				Stream<char> after_name_range = { name_start, PointerDifference(next_line, name_start) + 1 };
 
 				char* copy_pointer = parse_data->thread_memory.buffer + parse_data->thread_memory.size;
 
@@ -428,7 +431,7 @@ namespace ECSEngine {
 					parse_data->thread_memory.size += before_type_range.size + after_type_range.size + before_name_range.size + after_name_range.size + string_to_add.size + 2;
 				}
 				else {
-					Stream<char> copy_range = { previous_line, function::PointerDifference(next_line, previous_line) + 1 };
+					Stream<char> copy_range = { previous_line, PointerDifference(next_line, previous_line) + 1 };
 					copy_range.CopyTo(copy_pointer);
 					parse_data->thread_memory.size += copy_range.size;
 				}
@@ -439,9 +442,9 @@ namespace ECSEngine {
 			parse_data->thread_memory.size++;
 			parse_data->thread_memory.AssertCapacity();
 
-			Stream<char> return_value = { region_start, function::PointerDifference(parse_data->thread_memory.buffer + parse_data->thread_memory.size, region_start) };
+			Stream<char> return_value = { region_start, PointerDifference(parse_data->thread_memory.buffer + parse_data->thread_memory.size, region_start) };
 			// Replace any semicolons that were previously inside functions with their original semicolon
-			function::ReplaceCharacter(return_value, FUNCTION_REPLACE_SEMICOLON_CHAR, ';');
+			ReplaceCharacter(return_value, FUNCTION_REPLACE_SEMICOLON_CHAR, ';');
 			return return_value;
 		}
 
@@ -453,13 +456,13 @@ namespace ECSEngine {
 
 		void ReflectionCustomTypeDependentTypes_SingleTemplate(ReflectionCustomTypeDependentTypesData* data)
 		{
-			Stream<char> opened_bracket = function::FindFirstCharacter(data->definition, '<');
+			Stream<char> opened_bracket = FindFirstCharacter(data->definition, '<');
 			ECS_ASSERT(opened_bracket.buffer != nullptr);
 
-			Stream<char> closed_bracket = function::FindCharacterReverse(opened_bracket, '>');
+			Stream<char> closed_bracket = FindCharacterReverse(opened_bracket, '>');
 			ECS_ASSERT(closed_bracket.buffer != nullptr);
 
-			data->dependent_types.AddAssert({ opened_bracket.buffer + 1, function::PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 });
+			data->dependent_types.AddAssert({ opened_bracket.buffer + 1, PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 });
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -486,11 +489,11 @@ namespace ECSEngine {
 
 		Stream<char> ReflectionCustomTypeGetTemplateArgument(Stream<char> definition)
 		{
-			Stream<char> opened_bracket = function::FindFirstCharacter(definition, '<');
-			Stream<char> closed_bracket = function::FindCharacterReverse(definition, '>');
+			Stream<char> opened_bracket = FindFirstCharacter(definition, '<');
+			Stream<char> closed_bracket = FindCharacterReverse(definition, '>');
 			ECS_ASSERT(opened_bracket.buffer != nullptr && closed_bracket.buffer != nullptr);
 
-			Stream<char> type = { opened_bracket.buffer + 1, function::PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 };
+			Stream<char> type = { opened_bracket.buffer + 1, PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 };
 			return type;
 		}
 
@@ -581,8 +584,8 @@ namespace ECSEngine {
 						CopyReflectionType(
 							data->reflection_manager,
 							&nested_type,
-							function::OffsetPointer(source->buffer, index * element_size),
-							function::OffsetPointer(allocation, element_size * index),
+							OffsetPointer(source->buffer, index * element_size),
+							OffsetPointer(allocation, element_size * index),
 							data->allocator
 						);
 					}
@@ -593,8 +596,8 @@ namespace ECSEngine {
 					data->definition = template_type;
 
 					for (size_t index = 0; index < count; index++) {
-						data->source = function::OffsetPointer(source->buffer, index * element_size);
-						data->destination = function::OffsetPointer(allocation, element_size * index);
+						data->source = OffsetPointer(source->buffer, index * element_size);
+						data->destination = OffsetPointer(allocation, element_size * index);
 						ECS_REFLECTION_CUSTOM_TYPES[custom_type_index].copy(data);
 					}
 				}
@@ -749,7 +752,7 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(DataPointer) {
-			return function::CompareStrings(STRING(DataPointer), data->definition);
+			return STRING(DataPointer) == data->definition;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -846,7 +849,7 @@ namespace ECSEngine {
 			data->error_message_lock.lock();
 			data->error_message->AddStream(message);
 			if (path_index != -1) {
-				function::ConvertWideCharsToASCII((data->paths[path_index]), *data->error_message);
+				ConvertWideCharsToASCII((data->paths[path_index]), *data->error_message);
 			}
 			data->error_message->Add('\n');
 			data->error_message->AssertCapacity();
@@ -1012,7 +1015,7 @@ namespace ECSEngine {
 
 					unsigned short int_constant = (unsigned short)constant;
 
-					unsigned int type_index = function::FindString(embedded_size.reflection_type, data[data_index].types.ToStream(), [](const ReflectionType& type) {
+					unsigned int type_index = FindString(embedded_size.reflection_type, data[data_index].types.ToStream(), [](const ReflectionType& type) {
 						return type.name;
 					});
 					
@@ -1068,7 +1071,7 @@ namespace ECSEngine {
 			}
 
 			SkippedFieldsTable skipped_fields_table;
-			skipped_fields_table.Initialize(&stack_allocator, function::PowerOfTwoGreater(total_type_count));
+			skipped_fields_table.Initialize(&stack_allocator, PowerOfTwoGreater(total_type_count));
 
 			ECS_STACK_CAPACITY_STREAM(SkippedField, current_skipped_fields, 32);
 
@@ -1216,14 +1219,14 @@ namespace ECSEngine {
 						// For the first field we need to check separately if it has any previous fields
 						for (size_t skipped_index = 0; skipped_index < skipped_fields.size; skipped_index++) {
 							if (skipped_fields[skipped_index].field_after == search_index) {
-								field_offset = function::AlignPointer(field_offset, skipped_fields[skipped_index].alignment);
+								field_offset = AlignPointer(field_offset, skipped_fields[skipped_index].alignment);
 								field_offset += skipped_fields[skipped_index].byte_size;
 							}
 						}
 
 						// Align the field
 						size_t current_field_alignment = GetFieldTypeAlignmentEx(this, type->fields[field_index]);
-						type->fields[field_index].info.pointer_offset = function::AlignPointer(field_offset, current_field_alignment);
+						type->fields[field_index].info.pointer_offset = AlignPointer(field_offset, current_field_alignment);
 					}
 				}
 			};
@@ -1241,8 +1244,8 @@ namespace ECSEngine {
 						max_alignment = std::max(max_alignment, (size_t)skipped_fields[skipped_index].alignment);
 						if (skipped_fields[skipped_index].field_after == type->fields.size - 1) {
 							// Update the byte size total
-							size_t aligned_offset = function::AlignPointer(final_field_offset, skipped_fields[skipped_index].alignment);
-							type->byte_size = function::AlignPointer(
+							size_t aligned_offset = AlignPointer(final_field_offset, skipped_fields[skipped_index].alignment);
+							type->byte_size = AlignPointer(
 								aligned_offset + skipped_fields[skipped_index].byte_size, 
 								std::max(max_alignment, (size_t)type->alignment)
 							);
@@ -1284,12 +1287,12 @@ namespace ECSEngine {
 							size_t current_offset = 0;
 							size_t max_alignment = 0;
 							for (size_t field_index = 0; field_index < skipped_fields.size; field_index++) {
-								current_offset = function::AlignPointer(current_offset, skipped_fields[field_index].alignment);
+								current_offset = AlignPointer(current_offset, skipped_fields[field_index].alignment);
 								current_offset += skipped_fields[field_index].byte_size;
 								max_alignment = std::max(max_alignment, (size_t)skipped_fields[field_index].alignment);
 							}
 
-							type->byte_size = function::AlignPointer(current_offset, max_alignment);
+							type->byte_size = AlignPointer(current_offset, max_alignment);
 							type->alignment = max_alignment;
 
 							// Assume the type is blittable since we don't know its composition
@@ -1348,8 +1351,8 @@ namespace ECSEngine {
 												if (stream_type != ReflectionStreamFieldType::Basic) {
 													// Extract the new definition
 													if (IsStream(stream_type)) {
-														Stream<char> template_start = function::FindFirstCharacter(field_definition, '<');
-														Stream<char> template_end = function::FindCharacterReverse(field_definition, '>');
+														Stream<char> template_start = FindFirstCharacter(field_definition, '<');
+														Stream<char> template_end = FindCharacterReverse(field_definition, '>');
 														ECS_ASSERT(template_start.buffer != nullptr);
 														ECS_ASSERT(template_end.buffer != nullptr);
 
@@ -1359,8 +1362,8 @@ namespace ECSEngine {
 														}
 														else {
 															// This will get determined when using the container custom Stream
-															/*char* new_definition = (char*)function::SkipWhitespace(template_start.buffer + 1);
-															field->definition.size = function::PointerDifference(function::SkipWhitespace(template_end.buffer - 1, -1), new_definition) + 1;
+															/*char* new_definition = (char*)SkipWhitespace(template_start.buffer + 1);
+															field->definition.size = PointerDifference(SkipWhitespace(template_end.buffer - 1, -1), new_definition) + 1;
 															field->definition.buffer = new_definition;*/
 														}
 													}
@@ -1457,7 +1460,7 @@ namespace ECSEngine {
 				}
 			}
 
-			size_t difference = function::PointerDifference((void*)ptr, allocation);
+			size_t difference = PointerDifference((void*)ptr, allocation);
 			ECS_ASSERT(difference <= total_memory);
 
 			return evaluate_success;
@@ -1524,7 +1527,7 @@ namespace ECSEngine {
 
 		unsigned int ReflectionManager::CreateFolderHierarchy(Stream<wchar_t> root) {
 			unsigned int index = folders.ReserveNewElement();
-			folders[index] = { function::StringCopy(folders.allocator, root), nullptr };
+			folders[index] = { StringCopy(folders.allocator, root), nullptr };
 			folders[index].added_types.Initialize(Allocator(), 0);
 			folders.size++;
 			return index;
@@ -1564,15 +1567,15 @@ namespace ECSEngine {
 				// Null terminate the parenthese
 				*closed_parenthese = '\0';
 
-				opened_parenthese = function::SkipWhitespace(opened_parenthese + 1);
-				closed_parenthese = (char*)function::SkipWhitespace(closed_parenthese - 1, -1);
+				opened_parenthese = SkipWhitespace(opened_parenthese + 1);
+				closed_parenthese = (char*)SkipWhitespace(closed_parenthese - 1, -1);
 
-				return Stream<char>(opened_parenthese, function::PointerDifference(closed_parenthese, opened_parenthese) + 1);
+				return Stream<char>(opened_parenthese, PointerDifference(closed_parenthese, opened_parenthese) + 1);
 			};
 
 			auto replace_sizeof_alignof_with_value = [&expression](unsigned int offset, double value) {
 				ECS_STACK_CAPACITY_STREAM(char, string_value, 64);
-				function::ConvertDoubleToChars(string_value, value, 6);
+				ConvertDoubleToChars(string_value, value, 6);
 				
 				// If the value is negative, put it in parantheses
 				int64_t initial_size = strlen(expression.buffer + offset) + 1;
@@ -1654,48 +1657,48 @@ namespace ECSEngine {
 			};
 			
 			// The sizeof first
-			Stream<char> token = function::FindFirstToken(expression, "sizeof");
+			Stream<char> token = FindFirstToken(expression, "sizeof");
 			while (token.buffer != nullptr) {
 				unsigned int offset = token.buffer - expression.buffer;
 				if (handle_sizeof_alignof(offset, true) == DBL_MAX) {
 					return DBL_MAX;
 				}
 
-				token = function::FindFirstToken(expression, "sizeof");
+				token = FindFirstToken(expression, "sizeof");
 			}
 
 			// The alignof next
-			token = function::FindFirstToken(expression, "alignof");
+			token = FindFirstToken(expression, "alignof");
 			while (token.buffer != nullptr) {
 				unsigned int offset = token.buffer - expression.buffer;
 				if (handle_sizeof_alignof(offset, false) == DBL_MAX) {
 					return DBL_MAX;
 				}
 
-				token = function::FindFirstToken(expression, "alignof");
+				token = FindFirstToken(expression, "alignof");
 			}
 			
 			// Now the constants
 			for (size_t constant_index = 0; constant_index < constants.size; constant_index++) {
-				token = function::FindFirstToken(expression, constants[constant_index].name);
+				token = FindFirstToken(expression, constants[constant_index].name);
 				while (token.buffer != nullptr) {
 					unsigned int offset = token.buffer - expression.buffer;
 					token[constants[constant_index].name.size] = '\0';
 					replace_sizeof_alignof_with_value(offset, constants[constant_index].value);
 
-					token = function::FindFirstToken(expression, constants[constant_index].name);
+					token = FindFirstToken(expression, constants[constant_index].name);
 				}
 			}
 
 			// Return the evaluation
-			return function::EvaluateExpression(expression);
+			return ECSEngine::EvaluateExpression(expression);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ulong2 ReflectionManager::FindBlittableException(Stream<char> name) const
 		{
-			unsigned int index = function::FindString(name, blittable_types.ToStream(), [](BlittableType type) {
+			unsigned int index = FindString(name, blittable_types.ToStream(), [](BlittableType type) {
 				return type.name;
 			});
 			return index != -1 ? ulong2(blittable_types[index].byte_size, blittable_types[index].alignment) : ulong2(-1, -1);
@@ -1819,7 +1822,7 @@ namespace ECSEngine {
 
 		double ReflectionManager::GetConstant(Stream<char> name) const
 		{
-			unsigned int index = function::FindString(name, constants.ToStream(), [](ReflectionConstant constant) {
+			unsigned int index = FindString(name, constants.ToStream(), [](ReflectionConstant constant) {
 				return constant.name;
 			});
 
@@ -1834,7 +1837,7 @@ namespace ECSEngine {
 		unsigned int ReflectionManager::GetHierarchyIndex(Stream<wchar_t> hierarchy) const
 		{
 			for (unsigned int index = 0; index < folders.size; index++) {
-				if (function::CompareStrings(folders[index].root, hierarchy)) {
+				if (folders[index].root == hierarchy) {
 					return index;
 				}
 			}
@@ -2402,7 +2405,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void ReflectionManager::RemoveBlittableException(Stream<char> name)
 		{
-			unsigned int index = function::FindString(name, blittable_types.ToStream(), [](BlittableType type) {
+			unsigned int index = FindString(name, blittable_types.ToStream(), [](BlittableType type) {
 				return type.name;
 			});
 			if (index != -1) {
@@ -2483,7 +2486,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				size_t next_offset = type->fields[field_index + 1].info.pointer_offset;
 				size_t difference = next_offset - current_offset - current_size;
 				if (difference > 0) {
-					memset(function::OffsetPointer(data, current_offset + current_size), 0, difference);
+					memset(OffsetPointer(data, current_offset + current_size), 0, difference);
 				}
 			}
 		}
@@ -2492,7 +2495,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void ReflectionManager::SetInstanceFieldDefaultData(const ReflectionField* field, void* data) const
 		{
-			void* current_field = function::OffsetPointer(data, field->info.pointer_offset);
+			void* current_field = OffsetPointer(data, field->info.pointer_offset);
 
 			if (field->info.has_default_value) {
 				memcpy(
@@ -2540,7 +2543,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void SetInstanceFieldDefaultData(const ReflectionField* field, void* data)
 		{
-			void* current_field = function::OffsetPointer(data, field->info.pointer_offset);
+			void* current_field = OffsetPointer(data, field->info.pointer_offset);
 
 			if (field->info.has_default_value) {
 				memcpy(
@@ -2641,8 +2644,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						Stream<char> content = { file_contents, bytes_read };
 
 						// Eliminate all comments
-						content = function::RemoveSingleLineComment(content, ECS_C_FILE_SINGLE_LINE_COMMENT_TOKEN);
-						content = function::RemoveMultiLineComments(content, ECS_C_FILE_MULTI_LINE_COMMENT_OPENED_TOKEN, ECS_C_FILE_MULTI_LINE_COMMENT_CLOSED_TOKEN);
+						content = RemoveSingleLineComment(content, ECS_C_FILE_SINGLE_LINE_COMMENT_TOKEN);
+						content = RemoveMultiLineComments(content, ECS_C_FILE_MULTI_LINE_COMMENT_OPENED_TOKEN, ECS_C_FILE_MULTI_LINE_COMMENT_CLOSED_TOKEN);
 
 						bytes_read = content.size;
 						file_contents[bytes_read] = '\0';
@@ -2667,32 +2670,32 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 						// Get the constants first
 						ECS_STACK_ADDITION_STREAM(unsigned int, constant_offsets, 64);
-						function::FindToken(file_stream, STRING(ECS_CONSTANT_REFLECT), constant_offsets_addition);
+						FindToken(file_stream, STRING(ECS_CONSTANT_REFLECT), constant_offsets_addition);
 
 						for (size_t constant_index = 0; constant_index < constant_offsets.size; constant_index++) {
 							// Look to see that it is a define
 							Stream<char> search_space = { file_stream.buffer, constant_offsets[constant_index] };
-							const char* last_line = function::FindCharacterReverse(search_space, '\n').buffer;
+							const char* last_line = FindCharacterReverse(search_space, '\n').buffer;
 							if (last_line == nullptr) {
 								// Fail if no new line before it
 								WriteErrorMessage(data, "Could not find new line before ECS_CONSTANT_REFLECT. Faulty path: ", index);
 								return;
 							}
 
-							last_line = function::SkipWhitespace(last_line + 1);
+							last_line = SkipWhitespace(last_line + 1);
 							// Only if this is a define continue
 							if (memcmp(last_line, "#define", sizeof("#define") - 1) == 0) {
 								// Get the macro name of the constant
 								last_line += sizeof("#define");
-								last_line = function::SkipWhitespace(last_line);
+								last_line = SkipWhitespace(last_line);
 
 								const char* constant_name_start = last_line;
-								const char* constant_name_end = function::SkipCodeIdentifier(constant_name_start);
+								const char* constant_name_end = SkipCodeIdentifier(constant_name_start);
 								ReflectionConstant constant;
-								constant.name = { constant_name_start, function::PointerDifference(constant_name_end, constant_name_start) };
+								constant.name = { constant_name_start, PointerDifference(constant_name_end, constant_name_start) };
 								
 								// Get the value now
-								const char* ecs_constant_macro_start = function::SkipWhitespace(constant_name_end);
+								const char* ecs_constant_macro_start = SkipWhitespace(constant_name_end);
 								if (ecs_constant_macro_start != file_stream.buffer + constant_offsets[constant_index]) {
 									// Fail if the macro definition does not contain the constant reflect
 									WriteErrorMessage(data, "ECS_CONSTANT_REFLECT definition fail. The macro could not be found after the macro name. Faulty path: ", index);
@@ -2710,15 +2713,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									return;
 								}
 
-								opened_parenthese = function::SkipWhitespace(opened_parenthese + 1);
-								closed_parenthese = function::SkipWhitespace(closed_parenthese - 1, -1);
+								opened_parenthese = SkipWhitespace(opened_parenthese + 1);
+								closed_parenthese = SkipWhitespace(closed_parenthese - 1, -1);
 
-								Stream<char> value_characters(opened_parenthese, function::PointerDifference(closed_parenthese, opened_parenthese) + 1);
+								Stream<char> value_characters(opened_parenthese, PointerDifference(closed_parenthese, opened_parenthese) + 1);
 								// Parse the value now - as a double or a boolean
-								char is_boolean = function::ConvertCharactersToBool(value_characters);
+								char is_boolean = ConvertCharactersToBool(value_characters);
 								if (is_boolean == -1) {
 									// Not a boolean, parse as double
-									constant.value = function::ConvertCharactersToDouble(value_characters);
+									constant.value = ConvertCharactersToDouble(value_characters);
 								}
 								else {
 									constant.value = is_boolean;
@@ -2736,7 +2739,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 
 						// search for more ECS_REFLECTs 
-						function::FindToken(file_stream, STRING(ECS_REFLECT), words_addition);
+						FindToken(file_stream, STRING(ECS_REFLECT), words_addition);
 
 						const char* tag_name = nullptr;
 
@@ -2749,8 +2752,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 #pragma region Has macro definitions
 							// Skip macro definitions - that define tags
 							const char* verify_define_char = file_contents + word_offset - 1;
-							verify_define_char = function::SkipWhitespace(verify_define_char, -1);
-							verify_define_char = function::SkipCodeIdentifier(verify_define_char, -1);
+							verify_define_char = SkipWhitespace(verify_define_char, -1);
+							verify_define_char = SkipCodeIdentifier(verify_define_char, -1);
 							// If it is a pound, it must be a definition - skip it
 							if (*verify_define_char == '#') {
 								continue;
@@ -2760,15 +2763,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 #pragma region Has Comments
 							// Skip comments that contain ECS_REFLECT
 							//const char* verify_comment_char = file_contents + word_offset - 1;
-							//verify_comment_char = function::SkipWhitespace(verify_comment_char, -1);
+							//verify_comment_char = SkipWhitespace(verify_comment_char, -1);
 
-							//Stream<char> comment_space = { file_contents, function::PointerDifference(verify_comment_char, file_contents) + 1 };
-							//const char* verify_comment_last_new_line = function::FindCharacterReverse(comment_space, '\n').buffer;
+							//Stream<char> comment_space = { file_contents, PointerDifference(verify_comment_char, file_contents) + 1 };
+							//const char* verify_comment_last_new_line = FindCharacterReverse(comment_space, '\n').buffer;
 							//if (verify_comment_last_new_line == nullptr) {
 							//	WriteErrorMessage(data, "Last new line could not be found when checking ECS_REFLECT for comment", index);
 							//	return;
 							//}
-							//const char* comment_char = function::FindCharacterReverse(comment_space, '/').buffer;
+							//const char* comment_char = FindCharacterReverse(comment_space, '/').buffer;
 							//if (comment_char != nullptr && comment_char > verify_comment_last_new_line) {
 							//	// It might be a comment
 							//	if (comment_char[-1] == '/') {
@@ -2843,7 +2846,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								}
 							}
 							else {
-								closing_parenthese = function::FindMatchingParenthesis(opening_parenthese + 1, file_contents + bytes_read, '{', '}');
+								closing_parenthese = FindMatchingParenthesis(opening_parenthese + 1, file_contents + bytes_read, '{', '}');
 								if (closing_parenthese == nullptr) {
 									WriteErrorMessage(data, "Finding struct or class closing brace failed. Faulty path: ", index);
 									return;
@@ -2868,13 +2871,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								const char* type_name = space;
 
 								if (tag_name != nullptr) {
-									const char* end_tag_name = function::SkipCodeIdentifier(tag_name);
-									Stream<char> current_tag = { tag_name, function::PointerDifference(end_tag_name, tag_name) };
+									const char* end_tag_name = SkipCodeIdentifier(tag_name);
+									Stream<char> current_tag = { tag_name, PointerDifference(end_tag_name, tag_name) };
 									for (size_t handler_index = 0; handler_index < std::size(ECS_REFLECTION_TYPE_TAG_HANDLER); handler_index++) {
 										if (ECS_REFLECTION_TYPE_TAG_HANDLER[handler_index].tag == current_tag) {
 											Stream<char> new_range = ProcessTypeTagHandler(data, handler_index, Stream<char>(
 												opening_parenthese,
-												function::PointerDifference(closing_parenthese, opening_parenthese))
+												PointerDifference(closing_parenthese, opening_parenthese))
 											);
 											if (new_range.size == 0) {
 												ECS_FORMAT_TEMP_STRING(message, "Failed to preparse the type {#} with the known tag {#}", type_name, current_tag);
@@ -2893,11 +2896,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									return;
 								}
 								else if (tag_name != nullptr) {
-									const char* end_tag_name = function::SkipCodeIdentifier(tag_name);
+									const char* end_tag_name = SkipCodeIdentifier(tag_name);
 
 									if (*end_tag_name == '(') {
 										// variable type macro
-										end_tag_name = function::SkipCodeIdentifier(end_tag_name + 1);
+										end_tag_name = SkipCodeIdentifier(end_tag_name + 1);
 										if (*end_tag_name == ')') {
 											end_tag_name++;
 										}
@@ -2947,7 +2950,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void ReflectionManagerStylizeEnum(ReflectionEnum& enum_) {
 			ECS_STACK_ADDITION_STREAM(unsigned int, underscores, 128);
-			function::FindToken(enum_.fields[0], '_', underscores_addition);
+			FindToken(enum_.fields[0], '_', underscores_addition);
 
 			for (int64_t index = (int64_t)underscores.size - 1; index >= 0; index--) {
 				size_t is_the_same_count = 0;
@@ -2968,7 +2971,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			// If the last value is contains COUNT discard it
-			if (function::FindFirstToken(enum_.fields[enum_.fields.size - 1], "COUNT").size > 0) {
+			if (FindFirstToken(enum_.fields[enum_.fields.size - 1], "COUNT").size > 0) {
 				enum_.fields.size--;
 			}
 
@@ -2993,7 +2996,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// keep the letters capitalized in that section
 				for (index = 0; index < enum_.fields.size; index++) {
 					ECS_STACK_ADDITION_STREAM(unsigned int, current_underscores, 32);
-					function::FindToken(enum_.fields[index], '_', current_underscores_addition);
+					FindToken(enum_.fields[index], '_', current_underscores_addition);
 
 					unsigned int last_underscore = -1;
 					ECS_STACK_ADDITION_STREAM(Stream<char>, partitions, 32);
@@ -3011,14 +3014,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					for (size_t partition_index = 0; partition_index < partitions.size; partition_index++) {
 						bool lacks_digits = true;
 						for (size_t subindex = 0; lacks_digits && subindex < partitions[partition_index].size; subindex++) {
-							if (function::IsNumberCharacter(partitions[partition_index][subindex])) {
+							if (IsNumberCharacter(partitions[partition_index][subindex])) {
 								lacks_digits = false;
 							}
 						}
 
 						if (lacks_digits) {
 							for (size_t subindex = 1; subindex < partitions[partition_index].size; subindex++) {
-								function::Uncapitalize(partitions[partition_index].buffer + subindex);
+								Uncapitalize(partitions[partition_index].buffer + subindex);
 							}
 						}
 					}
@@ -3045,12 +3048,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			char* closing_paranthese_mutable = (char*)closing_parenthese;
 			*closing_paranthese_mutable = '\0';
-			function::FindToken({ dummy_space, function::PointerDifference(closing_parenthese, dummy_space) }, '\n', next_line_positions_addition);
+			FindToken({ dummy_space, PointerDifference(closing_parenthese, dummy_space) }, '\n', next_line_positions_addition);
 
 			// assign the subname stream and assert enough memory to hold the pointers
 			uintptr_t ptr = (uintptr_t)data->thread_memory.buffer + data->thread_memory.size;
 			uintptr_t before_ptr = ptr;
-			ptr = function::AlignPointer(ptr, alignof(ReflectionEnum));
+			ptr = AlignPointer(ptr, alignof(ReflectionEnum));
 			enum_definition.original_fields = Stream<Stream<char>>((void*)ptr, 0);
 
 			size_t memory_size = sizeof(Stream<char>) * next_line_positions.size + alignof(ReflectionEnum);
@@ -3110,20 +3113,20 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			*closing_paranthese_mutable = '\0';
 
 			// Check all expression evaluations
-			Stream<char> type_body = { opening_parenthese, function::PointerDifference(closing_parenthese, opening_parenthese) };
-			Stream<char> evaluate_expression_token = function::FindFirstToken(type_body, STRING(ECS_EVALUATE_FUNCTION_REFLECT));
+			Stream<char> type_body = { opening_parenthese, PointerDifference(closing_parenthese, opening_parenthese) };
+			Stream<char> evaluate_expression_token = FindFirstToken(type_body, STRING(ECS_EVALUATE_FUNCTION_REFLECT));
 			while (evaluate_expression_token.buffer != nullptr) {
 				// Go down the line to get the name
 				// Its right before the parenthesis
-				const char* function_parenthese = function::FindFirstCharacter(evaluate_expression_token, '(').buffer;
-				const char* end_function_name = function::SkipWhitespace(function_parenthese - 1, -1);
-				const char* start_function_name = function::SkipCodeIdentifier(end_function_name, -1) + 1;
+				const char* function_parenthese = FindFirstCharacter(evaluate_expression_token, '(').buffer;
+				const char* end_function_name = SkipWhitespace(function_parenthese - 1, -1);
+				const char* start_function_name = SkipCodeIdentifier(end_function_name, -1) + 1;
 
 				ReflectionExpression expression;
-				expression.name = { start_function_name, function::PointerDifference(end_function_name, start_function_name) + 1 };
+				expression.name = { start_function_name, PointerDifference(end_function_name, start_function_name) + 1 };
 
 				// Get the body now - look for the return
-				const char* return_string = function::FindFirstToken(evaluate_expression_token, "return").buffer;
+				const char* return_string = FindFirstToken(evaluate_expression_token, "return").buffer;
 				ECS_ASSERT(return_string != nullptr);
 				return_string += sizeof("return") - 1;
 
@@ -3132,11 +3135,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				ECS_ASSERT(semicolon != nullptr);
 
 				// The removal of '\n' will be done when binding the data, for now just reference this part of the code
-				expression.body = { return_string, function::PointerDifference(semicolon, return_string) };
+				expression.body = { return_string, PointerDifference(semicolon, return_string) };
 				unsigned int type_table_index = data->expressions.Find(type.name);
 				if (type_table_index == -1) {
 					// Insert it
-					ReflectionExpression* stable_expression = (ReflectionExpression*)function::OffsetPointer(data->thread_memory.buffer, data->thread_memory.size);
+					ReflectionExpression* stable_expression = (ReflectionExpression*)OffsetPointer(data->thread_memory.buffer, data->thread_memory.size);
 					*stable_expression = expression;
 					data->thread_memory.size += sizeof(ReflectionExpression);
 
@@ -3144,7 +3147,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 				else {
 					// Allocate a new buffer and update the expressions
-					ReflectionExpression* expressions = (ReflectionExpression*)function::OffsetPointer(data->thread_memory.buffer, data->thread_memory.size);
+					ReflectionExpression* expressions = (ReflectionExpression*)OffsetPointer(data->thread_memory.buffer, data->thread_memory.size);
 					Stream<ReflectionExpression>* previous_expressions = data->expressions.GetValuePtrFromIndex(type_table_index);
 					previous_expressions->CopyTo(expressions);
 
@@ -3156,8 +3159,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 
 				// Get the next expression
-				Stream<char> remaining_part = { semicolon, function::PointerDifference(closing_parenthese, semicolon) };
-				evaluate_expression_token = function::FindFirstToken(remaining_part, STRING(ECS_EVALUATE_FUNCTION_REFLECT));
+				Stream<char> remaining_part = { semicolon, PointerDifference(closing_parenthese, semicolon) };
+				evaluate_expression_token = FindFirstToken(remaining_part, STRING(ECS_EVALUATE_FUNCTION_REFLECT));
 
 				// Don't forget to update the total memory needed for the folder hierarchy
 				// The slot in the stream + the string for the name (the body doesn't need to be copied since 
@@ -3176,10 +3179,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				size_t start_size = strlen(start);
 
 				// Get all the new lines in between the two macros
-				function::FindToken({ start, start_size }, '\n', next_line_positions_addition);
+				FindToken({ start, start_size }, '\n', next_line_positions_addition);
 
 				// Get all the semicolons
-				function::FindToken({ start, start_size }, ';', semicolon_positions_addition);
+				FindToken({ start, start_size }, ';', semicolon_positions_addition);
 
 				// Process the inline function declarations such that they get rejected.
 				// Do this by removing the semicolons inside them
@@ -3201,14 +3204,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 					// Check for const placed before { and after ()
 					if (*first_character_before == 't') {
-						while (first_character_before >= start && function::IsCodeIdentifierCharacter(*first_character_before)) {
+						while (first_character_before >= start && IsCodeIdentifierCharacter(*first_character_before)) {
 							first_character_before--;
 						}
 						first_character_before++;
 
 						if (memcmp(first_character_before, STRING(const), sizeof(STRING(const)) - 1) == 0) {
 							// We have a const modifier. Exclude it
-							first_character_before = function::SkipWhitespace(first_character_before - 1, -1);
+							first_character_before = SkipWhitespace(first_character_before - 1, -1);
 							if (first_character_before < start) {
 								// An error has happened, fail
 								WriteErrorMessage(data, "Possible inline function declaration with const contains unexpected {} tokens. Faulty path: ", file_index);
@@ -3230,16 +3233,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 
 						auto get_opened_bracket_count = [&opened_bracket_count](Stream<char> search_space) {
-							Stream<char> new_opened_bracket = function::FindFirstCharacter(search_space, '{');
+							Stream<char> new_opened_bracket = FindFirstCharacter(search_space, '{');
 							while (new_opened_bracket.buffer != nullptr) {
 								opened_bracket_count++;
 								new_opened_bracket.buffer += 1;
 								new_opened_bracket.size -= 1;
-								new_opened_bracket = function::FindFirstCharacter(new_opened_bracket, '{');
+								new_opened_bracket = FindFirstCharacter(new_opened_bracket, '{');
 							}
 						};
 
-						Stream<char> search_space = { opened_bracket + 1, function::PointerDifference(closed_bracket, opened_bracket) - 1 };
+						Stream<char> search_space = { opened_bracket + 1, PointerDifference(closed_bracket, opened_bracket) - 1 };
 						get_opened_bracket_count(search_space);
 
 						// Now search for more '}'
@@ -3256,7 +3259,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							}
 							
 							if (old_closed_bracket < opened_bracket && opened_bracket < closed_bracket) {
-								search_space = { opened_bracket + 1, function::PointerDifference(closed_bracket, opened_bracket) - 1 };
+								search_space = { opened_bracket + 1, PointerDifference(closed_bracket, opened_bracket) - 1 };
 								get_opened_bracket_count(search_space);
 							}
 						}
@@ -3311,7 +3314,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// assigning the field stream
 				uintptr_t ptr = (uintptr_t)data->thread_memory.buffer + data->thread_memory.size;
 				uintptr_t ptr_before = ptr;
-				ptr = function::AlignPointer(ptr, alignof(ReflectionField));
+				ptr = AlignPointer(ptr, alignof(ReflectionField));
 				type.fields = Stream<ReflectionField>((void*)ptr, 0);
 				data->thread_memory.size += sizeof(ReflectionField) * semicolon_positions.size + alignof(ReflectionField);
 				data->total_memory += sizeof(ReflectionField) * semicolon_positions.size + alignof(ReflectionField);
@@ -3368,12 +3371,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			};
 
 			// Look for field_start and field_end macros
-			const char* field_start_macro = function::FindFirstToken(type_body, STRING(ECS_FIELDS_START_REFLECT)).buffer;
+			const char* field_start_macro = FindFirstToken(type_body, STRING(ECS_FIELDS_START_REFLECT)).buffer;
 			if (field_start_macro != nullptr) {
 				while (field_start_macro != nullptr) {
 					// Get the fields end macro if there is one
-					char* field_end_macro = (char*)function::FindFirstToken(
-						Stream<char>(field_start_macro, function::PointerDifference(closing_parenthese, field_start_macro)), 
+					char* field_end_macro = (char*)FindFirstToken(
+						Stream<char>(field_start_macro, PointerDifference(closing_parenthese, field_start_macro)), 
 						STRING(ECS_FIELDS_END_REFLECT)
 					).buffer;
 					if (field_end_macro != nullptr) {
@@ -3388,8 +3391,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 					// Advance to the next
 					if (field_end_macro != nullptr) {
-						field_start_macro = function::FindFirstToken(
-							Stream<char>(field_end_macro, function::PointerDifference(closing_parenthese, field_end_macro)), 
+						field_start_macro = FindFirstToken(
+							Stream<char>(field_end_macro, PointerDifference(closing_parenthese, field_end_macro)), 
 							STRING(ECS_FIELDS_START_REFLECT)
 						).buffer;
 					}
@@ -3435,7 +3438,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			if (next_line_character == nullptr) {
 				return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 			}
-			const char* parsed_tag_character = function::SkipWhitespace(tag_character);
+			const char* parsed_tag_character = SkipWhitespace(tag_character);
 			// Some field determination functions write the field without knowing the tag. When the function exits, set the tag accordingly to 
 			// what was determined here
 			const char* final_field_tag = nullptr;
@@ -3449,40 +3452,40 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					// A special case to handle is the ECS_SKIP_REFLECTION
 					if (memcmp(parsed_tag_character, STRING(ECS_SKIP_REFLECTION), sizeof(STRING(ECS_SKIP_REFLECTION)) - 1) == 0) {
 						// If it doesn't have an argument, then try to deduce the byte size
-						Stream<char> argument_range = { parsed_tag_character, function::PointerDifference(next_line_character, parsed_tag_character) / sizeof(char) + 1 };
-						Stream<char> parenthese = function::FindFirstCharacter(argument_range, '(');
+						Stream<char> argument_range = { parsed_tag_character, PointerDifference(next_line_character, parsed_tag_character) / sizeof(char) + 1 };
+						Stream<char> parenthese = FindFirstCharacter(argument_range, '(');
 						if (parenthese.size == 0) {
 							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 						}
 
-						Stream<char> end_parenthese = function::FindMatchingParenthesis(parenthese.AdvanceReturn(), '(', ')');
+						Stream<char> end_parenthese = FindMatchingParenthesis(parenthese.AdvanceReturn(), '(', ')');
 						if (end_parenthese.size == 0) {
 							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 						}
 
 						// We will forward the deduction at the end.
 						size_t field_index = type.fields.size;
-						type.fields[field_index].tag = { parsed_tag_character, function::PointerDifference(end_parenthese.buffer, parsed_tag_character) / sizeof(char) + 1 };
-						const char* definition_start = function::SkipWhitespaceEx(last_line_character);
+						type.fields[field_index].tag = { parsed_tag_character, PointerDifference(end_parenthese.buffer, parsed_tag_character) / sizeof(char) + 1 };
+						const char* definition_start = SkipWhitespaceEx(last_line_character);
 						// Skip the namespace qualification
 						const char* colons = strstr(definition_start, "::");
 						while (colons != nullptr && colons < semicolon_character) {
-							definition_start = function::SkipWhitespace(colons + 2);
+							definition_start = SkipWhitespace(colons + 2);
 							colons = strstr(definition_start, "::");
 						}
 
-						const char* definition_end = function::SkipCodeIdentifier(definition_start);
+						const char* definition_end = SkipCodeIdentifier(definition_start);
 						// Include the pointer asterisk
 						while (*definition_end == '*') {
 							definition_end++;
 						}
-						type.fields[field_index].definition = { definition_start, function::PointerDifference(definition_end, definition_start) };
+						type.fields[field_index].definition = { definition_start, PointerDifference(definition_end, definition_start) };
 						type.fields.size++;
 						return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
 					}
 
-					char* ending_tag_character = (char*)function::SkipCodeIdentifier(parsed_tag_character);
-					char* skipped_ending_tag_character = (char*)function::SkipWhitespace(ending_tag_character);
+					char* ending_tag_character = (char*)SkipCodeIdentifier(parsed_tag_character);
+					char* skipped_ending_tag_character = (char*)SkipWhitespace(ending_tag_character);
 
 					// If there are more tags separated by spaces, then transform the spaces or the tabs into
 					// ~ when writing the tag
@@ -3511,7 +3514,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								last_closed = closed;
 							}
 							skipped_ending_tag_character = (char*)last_closed + 1;
-							ending_tag_character = (char*)function::SkipWhitespace(skipped_ending_tag_character);
+							ending_tag_character = (char*)SkipWhitespace(skipped_ending_tag_character);
 						}
 
 						while (ending_tag_character < skipped_ending_tag_character) {
@@ -3520,9 +3523,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 
 						if (*skipped_ending_tag_character != '\n') {
-							ending_tag_character = (char*)function::SkipCodeIdentifier(skipped_ending_tag_character);
+							ending_tag_character = (char*)SkipCodeIdentifier(skipped_ending_tag_character);
 						}
-						skipped_ending_tag_character = (char*)function::SkipWhitespace(ending_tag_character);
+						skipped_ending_tag_character = (char*)SkipWhitespace(ending_tag_character);
 					}
 
 					*ending_tag_character = '\0';
@@ -3559,11 +3562,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 
 				Stream<char> parse_characters = Stream<char>((void*)(current_character + 1), PtrDifference(current_character + 1, closing_bracket));
-				parse_characters = function::SkipWhitespace(parse_characters);
-				parse_characters = function::SkipWhitespace(parse_characters, -1);
+				parse_characters = SkipWhitespace(parse_characters);
+				parse_characters = SkipWhitespace(parse_characters, -1);
 				// Check to see if this is a constant or the number is specified as is
-				if (function::IsIntegerNumber(parse_characters, true)) {
-					embedded_array_size = function::ConvertCharactersToInt(parse_characters);
+				if (IsIntegerNumber(parse_characters, true)) {
+					embedded_array_size = ConvertCharactersToInt(parse_characters);
 				}
 				else {
 					embedded_array_size_body = parse_characters;
@@ -3600,7 +3603,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					// it was decremented before to place a '\0'
 					equal_character += 2;
 
-					const char* default_value_parse = function::SkipWhitespace(equal_character);
+					const char* default_value_parse = SkipWhitespace(equal_character);
 
 					auto parse_default_value = [&](const char* default_value_parse, char value_to_stop) {
 						// Continue until the closing brace
@@ -3630,10 +3633,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
 						}
 					}
-					else if (function::IsCodeIdentifierCharacter(*default_value_parse)) {
+					else if (IsCodeIdentifierCharacter(*default_value_parse)) {
 						// Check to see that it is the constructor type - else it is the actual value
 						const char* start_parse_value = default_value_parse;
-						while (function::IsCodeIdentifierCharacter(*default_value_parse)) {
+						while (IsCodeIdentifierCharacter(*default_value_parse)) {
 							default_value_parse++;
 						}
 
@@ -3674,7 +3677,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					// Don't forget to remove this from the total memory pool
 					data->total_memory -= namespace_string.size;
 				}
-				Stream<char> ecsengine_namespace = function::FindFirstToken(field.definition, namespace_string);
+				Stream<char> ecsengine_namespace = FindFirstToken(field.definition, namespace_string);
 				while (ecsengine_namespace.buffer != nullptr) {
 					// Move back all the characters over the current characters
 					char* after_characters = ecsengine_namespace.buffer + namespace_string.size;
@@ -3682,7 +3685,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					memcpy(ecsengine_namespace.buffer, after_characters, after_character_count * sizeof(char));
 					ecsengine_namespace[after_character_count] = '\0';
 
-					ecsengine_namespace = function::FindFirstToken(ecsengine_namespace, namespace_string);
+					ecsengine_namespace = FindFirstToken(ecsengine_namespace, namespace_string);
 					// Don't forget to remove this from the total memory pool
 					data->total_memory -= namespace_string.size;
 				}
@@ -3769,7 +3772,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				DeduceFieldTypeExtended(
 					data,
 					pointer_offset,
-					function::SkipWhitespace(first_star - 1, -1),
+					SkipWhitespace(first_star - 1, -1),
 					field
 				);
 
@@ -3778,7 +3781,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				field.info.stream_byte_size = field.info.byte_size;
 				field.info.byte_size = sizeof(void*);
 				
-				pointer_offset = function::AlignPointer(before_pointer_offset, alignof(void*));
+				pointer_offset = AlignPointer(before_pointer_offset, alignof(void*));
 				field.info.pointer_offset = pointer_offset;
 				pointer_offset += sizeof(void*);
 
@@ -3849,12 +3852,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				right_bracket[1] = '\0';
 
 				// All streams have aligned 8, the highest
-				pointer_offset = function::AlignPointer(before_pointer_offset, alignof(Stream<void>));
+				pointer_offset = AlignPointer(before_pointer_offset, alignof(Stream<void>));
 				field.info.pointer_offset = pointer_offset;
 				field.info.stream_type = stream_type;
 				field.info.stream_byte_size = field.info.byte_size;
 				field.info.byte_size = byte_size;
-				field.definition = function::SkipWhitespace(new_line_character + 1);
+				field.definition = SkipWhitespace(new_line_character + 1);
 
 				pointer_offset += byte_size;
 
@@ -4182,7 +4185,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		)
 		{
 			// Check pointers
-			if (function::FindFirstCharacter(definition, '*').size > 0) {
+			if (FindFirstCharacter(definition, '*').size > 0) {
 				return { sizeof(void*), alignof(void*) };
 			}
 
@@ -4467,8 +4470,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		)
 		{
 			for (size_t index = 0; index < type->fields.size; index++) {
-				const void* source_field = function::OffsetPointer(source, type->fields[index].info.pointer_offset);
-				void* destination_field = function::OffsetPointer(destination, type->fields[index].info.pointer_offset);
+				const void* source_field = OffsetPointer(source, type->fields[index].info.pointer_offset);
+				void* destination_field = OffsetPointer(destination, type->fields[index].info.pointer_offset);
 
 				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 					// If the byte size is given, then do a blit copy
@@ -4674,7 +4677,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void* GetReflectionFieldStreamBuffer(const ReflectionFieldInfo& info, const void* data, bool offset_into_data)
 		{
-			const void* stream_field = offset_into_data ? function::OffsetPointer(data, info.pointer_offset) : data;
+			const void* stream_field = offset_into_data ? OffsetPointer(data, info.pointer_offset) : data;
 			if (info.stream_type == ReflectionStreamFieldType::Stream) {
 				Stream<void>* stream = (Stream<void>*)stream_field;
 				return stream->buffer;
@@ -4694,7 +4697,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		size_t GetReflectionFieldStreamSize(const ReflectionFieldInfo& info, const void* data, bool offset_into_data)
 		{
-			const void* stream_field = offset_into_data ? function::OffsetPointer(data, info.pointer_offset) : data;
+			const void* stream_field = offset_into_data ? OffsetPointer(data, info.pointer_offset) : data;
 
 			if (info.stream_type == ReflectionStreamFieldType::Stream) {
 				Stream<void>* stream = (Stream<void>*)stream_field;
@@ -4717,7 +4720,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		ResizableStream<void> GetReflectionFieldResizableStreamVoidImpl(const ReflectionFieldInfo& info, const void* data, bool offset_into_data) {
 			ResizableStream<void> return_value;
 
-			const void* stream_field = offset_into_data ? function::OffsetPointer(data, info.pointer_offset) : data;
+			const void* stream_field = offset_into_data ? OffsetPointer(data, info.pointer_offset) : data;
 			if (info.stream_type == ReflectionStreamFieldType::Stream) {
 				Stream<void>* stream = (Stream<void>*)stream_field;
 				return_value.buffer = stream->buffer;
@@ -4823,7 +4826,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		template<bool basic_array>
 		void SetReflectionFieldResizableStreamVoidImpl(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data, bool offset_into_data) {
-			void* stream_field = offset_into_data ? function::OffsetPointer(data, info.pointer_offset) : data;
+			void* stream_field = offset_into_data ? OffsetPointer(data, info.pointer_offset) : data;
 			if (info.stream_type == ReflectionStreamFieldType::Stream) {
 				Stream<void>* stream = (Stream<void>*)stream_field;
 				*stream = { stream_data.buffer, stream_data.size };
@@ -4843,7 +4846,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					size_t copy_size = elements_to_copy * element_byte_size;
 					memcpy(stream_field, stream_data.buffer, copy_size);
 					if (elements_to_copy < (size_t)info.basic_type_count) {
-						memset(function::OffsetPointer(stream_field, copy_size), 0, info.byte_size - copy_size);
+						memset(OffsetPointer(stream_field, copy_size), 0, info.byte_size - copy_size);
 					}
 				}
 			}
@@ -4892,13 +4895,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 
 				// Now compare the definitions. If they changed, the types have changed
-				if (!function::CompareStrings(first->fields[index].definition, second->fields[index].definition)) {
+				if (first->fields[index].definition != second->fields[index].definition) {
 					return false;
 				}
 
 				// Now check the name - if they have different names and the name can be found on other spot,
 				// Consider them to be different. Else, allow it to be the same to basically support renaming
-				if (!function::CompareStrings(first->fields[index].name, second->fields[index].name)) {
+				if (first->fields[index].name != second->fields[index].name) {
 					unsigned int second_field_index = second->FindField(first->fields[index].name);
 					if (second_field_index != -1) {
 						return false;
@@ -4971,8 +4974,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			if (info->basic_type != ReflectionBasicFieldType::UserDefined) {
 				if (info->stream_type == ReflectionStreamFieldType::Basic || info->stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 					if (offset_into_data) {
-						first = function::OffsetPointer(first, info->pointer_offset);
-						second = function::OffsetPointer(second, info->pointer_offset);
+						first = OffsetPointer(first, info->pointer_offset);
+						second = OffsetPointer(second, info->pointer_offset);
 					}
 					return memcmp(first, second, info->byte_size) == 0;
 				}
@@ -4985,8 +4988,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					}
 					else if (info->stream_type == ReflectionStreamFieldType::Pointer) {
 						if (offset_into_data) {
-							first = function::OffsetPointer(first, info->pointer_offset);
-							second = function::OffsetPointer(second, info->pointer_offset);
+							first = OffsetPointer(first, info->pointer_offset);
+							second = OffsetPointer(second, info->pointer_offset);
 						}
 
 						unsigned char pointer_indirection = GetReflectionFieldPointerIndirection(*info);
@@ -5024,13 +5027,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		)
 		{
 			if (offset_into_data) {
-				first = function::OffsetPointer(first, field->info.pointer_offset);
-				second = function::OffsetPointer(second, field->info.pointer_offset);
+				first = OffsetPointer(first, field->info.pointer_offset);
+				second = OffsetPointer(second, field->info.pointer_offset);
 			}
 
 			// Check to see if this is a blittable field according to the options
 			if (options->blittable_types.size > 0) {
-				unsigned int index = function::FindString(field->definition, options->blittable_types, [](CompareReflectionTypeInstanceBlittableType blittable_type) {
+				unsigned int index = FindString(field->definition, options->blittable_types, [](CompareReflectionTypeInstanceBlittableType blittable_type) {
 					return blittable_type.field_definition;
 				});
 				if (index != -1) {
@@ -5151,8 +5154,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						if (!CompareReflectionTypeInstances(reflection_manager, &nested_type, current_first, current_second, options)) {
 							return false;
 						}
-						current_first = function::OffsetPointer(current_first, nested_byte_size);
-						current_second = function::OffsetPointer(current_second, nested_byte_size);
+						current_first = OffsetPointer(current_first, nested_byte_size);
+						current_second = OffsetPointer(current_second, nested_byte_size);
 					}
 					return true;
 				}
@@ -5183,8 +5186,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							if (!ECS_REFLECTION_CUSTOM_TYPES[custom_index].compare(&compare_data)) {
 								return false;
 							}
-							compare_data.first = function::OffsetPointer(compare_data.first, byte_size.x);
-							compare_data.second = function::OffsetPointer(compare_data.second, byte_size.x);
+							compare_data.first = OffsetPointer(compare_data.first, byte_size.x);
+							compare_data.second = OffsetPointer(compare_data.second, byte_size.x);
 						}
 						return true;
 					}
@@ -5230,7 +5233,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				Stream<char> mapping_tag = new_type->fields[new_index].GetTag(STRING(ECS_MAP_FIELD_REFLECTION));
 				Stream<char> name_to_search = new_type->fields[new_index].name;
 				if (mapping_tag.size > 0) {
-					name_to_search = function::FindDelimitedString(mapping_tag, '(', ')', true);
+					name_to_search = FindDelimitedString(mapping_tag, '(', ')', true);
 				}
 				
 				unsigned int field_index = old_type->FindField(new_type->fields[new_index].name);
@@ -5319,8 +5322,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 				SWITCH;
 
-				first_data = function::OffsetPointer(first_data, first_byte_size);
-				second_data = function::OffsetPointer(second_data, second_byte_size);
+				first_data = OffsetPointer(first_data, first_byte_size);
+				second_data = OffsetPointer(second_data, second_byte_size);
 			}
 
 #undef CASE
@@ -5362,8 +5365,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 						else {
 							memcpy(
-								function::OffsetPointer(second_data, second_info->info.pointer_offset),
-								function::OffsetPointer(first_data, first_info->info.pointer_offset),
+								OffsetPointer(second_data, second_info->info.pointer_offset),
+								OffsetPointer(first_data, first_info->info.pointer_offset),
 								second_info->info.byte_size
 							);
 						}
@@ -5371,12 +5374,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					else {
 						unsigned short copy_size = std::min(first_info->info.byte_size, second_info->info.byte_size);
 						memcpy(
-							function::OffsetPointer(second_data, second_info->info.pointer_offset),
-							function::OffsetPointer(first_data, first_info->info.pointer_offset),
+							OffsetPointer(second_data, second_info->info.pointer_offset),
+							OffsetPointer(first_data, first_info->info.pointer_offset),
 							copy_size
 						);
 						if (copy_size != second_info->info.byte_size) {
-							memset(function::OffsetPointer(second_data, copy_size), 0, second_info->info.byte_size - copy_size);
+							memset(OffsetPointer(second_data, copy_size), 0, second_info->info.byte_size - copy_size);
 						}
 					}
 				}
@@ -5390,8 +5393,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						if (first_blittable.x == second_blittable.x) {
 							// Same definition and both are respectively blittable - blit
 							memcpy(
-								function::OffsetPointer(second_data, second_info->info.pointer_offset),
-								function::OffsetPointer(first_data, first_info->info.pointer_offset),
+								OffsetPointer(second_data, second_info->info.pointer_offset),
+								OffsetPointer(first_data, first_info->info.pointer_offset),
 								first_blittable.x
 							);
 						}
@@ -5406,8 +5409,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						ReflectionType old_nested_type;
 						if (first_reflection_manager->TryGetType(first_info->definition, old_nested_type)) {
 							if (second_reflection_manager->TryGetType(second_info->definition, new_nested_type)) {
-								const void* old_data_field = function::OffsetPointer(first_data, first_info->info.pointer_offset);
-								void* new_data_field = function::OffsetPointer(second_data, second_info->info.pointer_offset);
+								const void* old_data_field = OffsetPointer(first_data, first_info->info.pointer_offset);
+								void* new_data_field = OffsetPointer(second_data, second_info->info.pointer_offset);
 								if (first_info->info.stream_type == ReflectionStreamFieldType::Basic) {
 									CopyReflectionTypeToNewVersion(
 										first_reflection_manager,
@@ -5454,15 +5457,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 											if (second_info->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 												unsigned int copy_count = std::min(old_data.size, (unsigned int)second_info->info.basic_type_count);
-												void* current_data = function::OffsetPointer(second_data, second_info->info.pointer_offset);
+												void* current_data = OffsetPointer(second_data, second_info->info.pointer_offset);
 												for (unsigned int index = 0; index < copy_count; index++) {
 													CopyReflectionTypeToNewVersion(
 														first_reflection_manager,
 														second_reflection_manager,
 														&old_nested_type,
 														&new_nested_type,
-														function::OffsetPointer(old_data.buffer, old_type_byte_size * index),
-														function::OffsetPointer(current_data, new_type_byte_size * index),
+														OffsetPointer(old_data.buffer, old_type_byte_size * index),
+														OffsetPointer(current_data, new_type_byte_size * index),
 														allocator,
 														always_allocate_for_buffers
 													);
@@ -5477,8 +5480,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 														second_reflection_manager,
 														&old_nested_type,
 														&new_nested_type,
-														function::OffsetPointer(old_data.buffer, old_type_byte_size * index),
-														function::OffsetPointer(allocation, new_type_byte_size * index),
+														OffsetPointer(old_data.buffer, old_type_byte_size * index),
+														OffsetPointer(allocation, new_type_byte_size * index),
 														allocator,
 														always_allocate_for_buffers
 													);
@@ -5541,8 +5544,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								else {
 									// Nothing has changed. Can copy it
 									memcpy(
-										function::OffsetPointer(second_data, second_info->info.pointer_offset),
-										function::OffsetPointer(first_data, first_info->info.pointer_offset),
+										OffsetPointer(second_data, second_info->info.pointer_offset),
+										OffsetPointer(first_data, first_info->info.pointer_offset),
 										second_info->info.byte_size
 									);
 								}
@@ -5584,15 +5587,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									ConvertReflectionBasicField(
 										first_info->info.basic_type,
 										second_info->info.basic_type,
-										function::OffsetPointer(first_data, first_info->info.pointer_offset),
-										function::OffsetPointer(second_data, second_info->info.pointer_offset),
+										OffsetPointer(first_data, first_info->info.pointer_offset),
+										OffsetPointer(second_data, second_info->info.pointer_offset),
 										copy_count
 									);
 
 									if (copy_count < second_info->info.basic_type_count) {
 										unsigned int element_byte_size = (unsigned int)second_info->info.byte_size / (unsigned int)second_info->info.basic_type_count;
 										unsigned int copy_byte_size = element_byte_size * copy_count;
-										memset(function::OffsetPointer(second_data, second_info->info.pointer_offset + copy_byte_size), 0, second_info->info.byte_size - copy_byte_size);
+										memset(OffsetPointer(second_data, second_info->info.pointer_offset + copy_byte_size), 0, second_info->info.byte_size - copy_byte_size);
 									}
 								}
 							}
@@ -5640,7 +5643,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								// Need to convert
 								if (second_info->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 									// No need to allocate, just to convert
-									void* write_buffer = function::OffsetPointer(second_data, second_info->info.pointer_offset);
+									void* write_buffer = OffsetPointer(second_data, second_info->info.pointer_offset);
 									unsigned int write_count = std::min(field.size, (unsigned int)second_info->info.basic_type_count);
 									ConvertReflectionBasicField(
 										first_info->info.basic_type,
@@ -5654,7 +5657,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 										// Set the 0 the other fields
 										unsigned int write_byte_size = write_count * (unsigned int)second_info->info.byte_size / (unsigned int)second_info->info.basic_type_count;
 										memset(
-											function::OffsetPointer(
+											OffsetPointer(
 												write_buffer,
 												write_byte_size
 											),
@@ -5696,8 +5699,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							ConvertReflectionBasicField(
 								first_info->info.basic_type, 
 								second_info->info.basic_type,
-								function::OffsetPointer(first_data, first_info->info.pointer_offset), 
-								function::OffsetPointer(second_data, second_info->info.pointer_offset)
+								OffsetPointer(first_data, first_info->info.pointer_offset), 
+								OffsetPointer(second_data, second_info->info.pointer_offset)
 							);
 						}
 						else {
@@ -5759,7 +5762,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		{
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, subfields, 32);
 			// Split the field by dots
-			function::SplitString(field, ".", subfields);
+			SplitString(field, ".", subfields);
 
 			ReflectionTypeFieldDeep deep_field;
 			deep_field.type = nullptr;
@@ -5797,7 +5800,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		{
 			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, valid_mask, types.size);
 			valid_mask.size = types.size;
-			function::MakeSequence(valid_mask);
+			MakeSequence(valid_mask);
 
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, current_dependencies, 32);
 
@@ -5815,7 +5818,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						unsigned int dependency_index = 0;
 						for (; dependency_index < current_dependencies.size; dependency_index++) {
 							// Check to see if this dependency is already met
-							if (function::FindString(current_dependencies[dependency_index], ordered_types.ToStream()) == -1) {
+							if (FindString(current_dependencies[dependency_index], ordered_types.ToStream()) == -1) {
 								break;
 							}
 						}
@@ -5844,7 +5847,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
 					if (field->info.stream_type == ReflectionStreamFieldType::Basic ||
 						field->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
-						if (function::CompareStrings(field->definition, subtype)) {
+						if (field->definition == subtype) {
 							return true;
 						}
 
@@ -5877,7 +5880,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									ECS_REFLECTION_CUSTOM_TYPES[custom_serializer_index].dependent_types(&dependent_data);
 
 									for (unsigned int subindex = 0; subindex < dependent_data.dependent_types.size; subindex++) {
-										if (function::CompareStrings(subtype, dependent_data.dependent_types[subindex])) {
+										if (subtype == dependent_data.dependent_types[subindex]) {
 											return true;
 										}
 									}
@@ -5888,7 +5891,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					else {
 						// Pointer or stream
 						// Must contain in the definition the subtype
-						if (function::FindFirstToken(type->fields[index].definition, subtype).size > 0) {
+						if (FindFirstToken(type->fields[index].definition, subtype).size > 0) {
 							return true;
 						}
 					}
@@ -5907,20 +5910,20 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return { (size_t)-1, (size_t)-1 };
 			}
 
-			Stream<char> comma = function::FindFirstCharacter(tag, ',');
+			Stream<char> comma = FindFirstCharacter(tag, ',');
 
 			ulong2 result;
 			result.y = 8; // assume alignment 8
 			if (comma.size > 0) {
 				// Parse the alignment
-				result.y = function::ConvertCharactersToInt(comma);
+				result.y = ConvertCharactersToInt(comma);
 				ECS_ASSERT(result.y == 1 || result.y == 2 || result.y == 4 || result.y == 8);
 				tag = { tag.buffer, tag.size - comma.size };
 			}
 			
-			result.x = function::ConvertCharactersToInt(tag);
+			result.x = ConvertCharactersToInt(tag);
 			if (result.x < 8) {
-				result.y = function::PowerOfTwoGreater(result.x) / 2;
+				result.y = PowerOfTwoGreater(result.x) / 2;
 			}
 			return result;
 		}
@@ -5930,27 +5933,27 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		ulong2 GetReflectionFieldSkipMacroByteSize(const ReflectionField* field)
 		{
 			Stream<char> tag = field->GetTag(STRING(ECS_SKIP_REFLECTION));
-			Stream<char> opened_paranthese = function::FindFirstCharacter(tag, '(');
-			Stream<char> closed_paranthese = function::FindMatchingParenthesis(opened_paranthese.buffer + 1, tag.buffer + tag.size, '(', ')');
+			Stream<char> opened_paranthese = FindFirstCharacter(tag, '(');
+			Stream<char> closed_paranthese = FindMatchingParenthesis(opened_paranthese.buffer + 1, tag.buffer + tag.size, '(', ')');
 
 			opened_paranthese.Advance();
-			Stream<char> removed_whitespace = function::SkipWhitespace(opened_paranthese);
+			Stream<char> removed_whitespace = SkipWhitespace(opened_paranthese);
 			if (removed_whitespace.buffer == closed_paranthese.buffer) {
 				return { (size_t)-1, (size_t)-1 };
 			}
 
-			Stream<char> comma = function::FindFirstCharacter(opened_paranthese, ',');
+			Stream<char> comma = FindFirstCharacter(opened_paranthese, ',');
 			size_t byte_size = -1;
 			size_t alignment = -1;
 
 			if (comma.size == 0) {
 				// No alignment specified
-				byte_size = function::ConvertCharactersToInt(opened_paranthese);
+				byte_size = ConvertCharactersToInt(opened_paranthese);
 			}
 			else {
 				// Has alignment specified
-				byte_size = function::ConvertCharactersToInt(Stream<char>(opened_paranthese.buffer, comma.buffer - opened_paranthese.buffer));
-				alignment = function::ConvertCharactersToInt(comma);
+				byte_size = ConvertCharactersToInt(Stream<char>(opened_paranthese.buffer, comma.buffer - opened_paranthese.buffer));
+				alignment = ConvertCharactersToInt(comma);
 			}
 			return { byte_size, alignment };
 		}
@@ -5993,7 +5996,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		size_t GetReflectionDataPointerElementByteSize(const ReflectionManager* manager, Stream<char> tag)
 		{
-			tag = function::FindFirstCharacter(tag, '(');
+			tag = FindFirstCharacter(tag, '(');
 			if (tag.size == 0) {
 				return -1;
 			}
@@ -6007,7 +6010,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			// Explicit number given
-			return function::ConvertCharactersToInt(tag);
+			return ConvertCharactersToInt(tag);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

@@ -1,6 +1,5 @@
 #include "ecspch.h"
 #include "TaskScheduler.h"
-#include "../Utilities/Function.h"
 #include "TaskManager.h"
 #include "../ECS/World.h"
 #include "TaskStealing.h"
@@ -61,18 +60,18 @@ namespace ECSEngine {
 				size_t exclude_count = current_query.exclude_component_count;
 				size_t exclude_shared_count = current_query.exclude_shared_component_count;
 
-				ComponentSignature unique((Component*)current_query.Components(), current_query.component_count);
-				ComponentSignature shared((Component*)current_query.SharedComponents(), current_query.shared_component_count);
+				ComponentSignature unique = current_query.MandatoryUnique();
+				ComponentSignature shared = current_query.MandatoryShared();
 
 				if (exclude_count > 0 || exclude_shared_count > 0) {
-					ComponentSignature unique_exclude((Component*)current_query.ExcludeComponents(), current_query.exclude_component_count);
-					ComponentSignature shared_exclude((Component*)current_query.ExcludeSharedComponents(), current_query.exclude_shared_component_count);
+					ComponentSignature unique_exclude = current_query.ExcludeSignature();
+					ComponentSignature shared_exclude = current_query.ExcludeSharedSignature();
 
-					ArchetypeQueryExclude query(unique, shared, unique_exclude, shared_exclude);
+					ArchetypeQueryExclude query{ unique, shared, unique_exclude, shared_exclude };
 					query_infos[current_query_index++].query_handle = world->entity_manager->RegisterQuery(query);
 				}
 				else {
-					ArchetypeQuery query(unique, shared);
+					ArchetypeQuery query{ unique, shared };
 					query_infos[current_query_index++].query_handle = world->entity_manager->RegisterQuery(query);
 				}
 			}
@@ -103,7 +102,7 @@ namespace ECSEngine {
 
 	void TaskScheduler::Remove(Stream<char> task_name) {
 		for (size_t index = 0; index < elements.size; index++) {
-			if (function::CompareStrings(elements[index].task_name, task_name)) {
+			if (elements[index].task_name == task_name) {
 				// The task has a single coalesced block
 				DeallocateIfBelongs(elements.allocator, elements[index].GetAllocatedBuffer());
 				elements.Remove(index);
@@ -225,13 +224,7 @@ namespace ECSEngine {
 				for (unsigned int index = group_start; index < group_limits[group_index]; index++) {
 					for (unsigned int dependency_index = 0; dependency_index < elements->buffer[index].task_dependencies.size; dependency_index++) {
 						for (unsigned int previous_index = 0; previous_index < group_start; previous_index++) {
-							if (
-								function::CompareStrings(
-									elements->buffer[index].task_dependencies[dependency_index].name, 
-									elements->buffer[previous_index].task_name
-								)
-							)
-							{
+							if (elements->buffer[index].task_dependencies[dependency_index].name == elements->buffer[previous_index].task_name) {
 								elements->buffer[index].task_dependencies.RemoveSwapBack(dependency_index);
 								break;
 							} 
@@ -261,7 +254,7 @@ namespace ECSEngine {
 						// Reduce the dependencies onto this task
 						for (unsigned int subindex = group_start + finished_tasks; subindex < group_limits[group_index]; subindex++) {
 							for (unsigned int dependency_index = 0; dependency_index < elements->buffer[subindex].task_dependencies.size; dependency_index++) {
-								if (function::CompareStrings(task_name, elements->buffer[subindex].task_dependencies[dependency_index].name)) {
+								if (task_name == elements->buffer[subindex].task_dependencies[dependency_index].name) {
 									elements->buffer[subindex].task_dependencies.RemoveSwapBack(dependency_index);
 									break;
 								}
@@ -281,12 +274,12 @@ namespace ECSEngine {
 							for (unsigned int subindex = index + 1; subindex < group_limits[group_index]; subindex++) {
 								Stream<TaskDependency> subindex_dependencies = elements->buffer[subindex].task_dependencies;
 								for (unsigned int dependency_index = 0; dependency_index < subindex_dependencies.size; dependency_index++) {
-									if (function::CompareStrings(task_name, subindex_dependencies[dependency_index].name)) {
+									if (task_name == subindex_dependencies[dependency_index].name) {
 										// Check to see if the subindex also has as dependency the index
 										Stream<char> subindex_name = elements->buffer[subindex].task_name;
 										Stream<TaskDependency> index_dependencies = elements->buffer[index].task_dependencies;
 										for (unsigned int second_dependency_index = 0; second_dependency_index < index_dependencies.size; second_dependency_index++) {
-											if (function::CompareStrings(index_dependencies[second_dependency_index].name, subindex_name)) {
+											if (index_dependencies[second_dependency_index].name == subindex_name) {
 												// They are both dependencies, add to the dependency list
 												error_message->Add('(');
 												error_message->AddStream(task_name);

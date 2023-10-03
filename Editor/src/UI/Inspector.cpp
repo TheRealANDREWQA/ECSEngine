@@ -49,7 +49,7 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 	descriptor.destroy_action_data = stack_memory;
 	descriptor.destroy_action_data_size = sizeof(inspector_index);
 
-	CapacityStream<char> inspector_name(function::OffsetPointer(stack_memory, sizeof(unsigned int)), 0, 128);
+	CapacityStream<char> inspector_name(OffsetPointer(stack_memory, sizeof(unsigned int)), 0, 128);
 	GetInspectorName(inspector_index, inspector_name);
 	descriptor.window_name = inspector_name.buffer;
 }
@@ -121,7 +121,7 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		ECS_STACK_CAPACITY_STREAM(char, converted_labels, 128);
 		for (unsigned int index = 0; index < sandbox_count; index++) {
 			combo_labels[index].buffer = converted_labels.buffer + converted_labels.size;
-			combo_labels[index].size = function::ConvertIntToChars(converted_labels, index);
+			combo_labels[index].size = ConvertIntToChars(converted_labels, index);
 			// The last character was a '\0' but it is not included in the size
 			converted_labels.size++;
 		}
@@ -286,7 +286,7 @@ void ChangeInspectorToNothing(EditorState* editor_state, unsigned int inspector_
 void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index)
 {
 	InspectorFunctions functions;
-	Stream<wchar_t> extension = function::PathExtension(path);
+	Stream<wchar_t> extension = PathExtension(path);
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 256);
 	null_terminated_path.CopyOther(path);
@@ -410,7 +410,7 @@ unsigned int GetInspectorIndex(Stream<char> window_name) {
 
 	if (window_name.StartsWith(INSPECTOR_WINDOW_NAME)) {
 		unsigned int number = 0;
-		while (function::IsNumberCharacter(window_name[current_index])) {
+		while (IsNumberCharacter(window_name[current_index])) {
 			number *= 10;
 			number += window_name[current_index] - '0';
 			current_index--;
@@ -428,7 +428,7 @@ unsigned int GetInspectorIndex(Stream<char> window_name) {
 void GetInspectorName(unsigned int inspector_index, CapacityStream<char>& inspector_name)
 {
 	inspector_name.AddStreamSafe(INSPECTOR_WINDOW_NAME);
-	function::ConvertIntToChars(inspector_name, inspector_index);
+	ConvertIntToChars(inspector_name, inspector_index);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -446,7 +446,7 @@ void InitializeInspectorManager(EditorState* editor_state)
 void LockInspector(EditorState* editor_state, unsigned int inspector_index)
 {
 	InspectorData* data = editor_state->inspector_manager.data.buffer + inspector_index;
-	data->flags = function::SetFlag(data->flags, INSPECTOR_FLAG_LOCKED);
+	data->flags = SetFlag(data->flags, INSPECTOR_FLAG_LOCKED);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -454,7 +454,7 @@ void LockInspector(EditorState* editor_state, unsigned int inspector_index)
 void UnlockInspector(EditorState* editor_state, unsigned int inspector_index) 
 {
 	InspectorData* data = editor_state->inspector_manager.data.buffer + inspector_index;
-	data->flags = function::ClearFlag(data->flags, INSPECTOR_FLAG_LOCKED);
+	data->flags = ClearFlag(data->flags, INSPECTOR_FLAG_LOCKED);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -558,7 +558,7 @@ void RegisterInspectorSandboxChange(EditorState* editor_state) {
 
 bool IsInspectorLocked(const EditorState* editor_state, unsigned int inspector_index)
 {
-	return function::HasFlag(editor_state->inspector_manager.data[inspector_index].flags, INSPECTOR_FLAG_LOCKED);
+	return HasFlag(editor_state->inspector_manager.data[inspector_index].flags, INSPECTOR_FLAG_LOCKED);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

@@ -86,7 +86,7 @@ namespace ECSEngine {
 		}
 		//else {
 		//	// Verify pointers 
-		//	Stream<char> asterisk = function::FindFirstCharacter(template_type, '*');
+		//	Stream<char> asterisk = FindFirstCharacter(template_type, '*');
 		//	if (asterisk.buffer != nullptr) {
 		//		stream_type = ReflectionStreamFieldType::Pointer;
 		//	}
@@ -150,14 +150,14 @@ namespace ECSEngine {
 				// Hoist the indices check outside the for
 				if (data->indices.buffer == nullptr) {
 					for (size_t index = 0; index < element_count; index++) {
-						void* element = function::OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
+						void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
 						// Use the serialize function now
 						Serialize(data->write_data->reflection_manager, data->reflection_type, element, *data->write_data->stream, &options);
 					}
 				}
 				else {
 					for (size_t index = 0; index < element_count; index++) {
-						void* element = function::OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
+						void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
 						Serialize(data->write_data->reflection_manager, data->reflection_type, element, *data->write_data->stream, &options);
 					}
 				}
@@ -166,13 +166,13 @@ namespace ECSEngine {
 				// Hoist the indices check outside the for
 				if (data->indices.buffer == nullptr) {
 					for (size_t index = 0; index < element_count; index++) {
-						void* element = function::OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
+						void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
 						serialize_size += SerializeSize(data->write_data->reflection_manager, data->reflection_type, element, &options);
 					}
 				}
 				else {
 					for (size_t index = 0; index < element_count; index++) {
-						void* element = function::OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
+						void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
 						serialize_size += SerializeSize(data->write_data->reflection_manager, data->reflection_type, element, &options);
 					}
 				}
@@ -183,14 +183,14 @@ namespace ECSEngine {
 			// Hoist the indices check outside the for
 			if (data->indices.buffer == nullptr) {
 				for (size_t index = 0; index < element_count; index++) {
-					void* element = function::OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
+					void* element = OffsetPointer(data->data_to_write.buffer, index * data->element_byte_size);
 					data->write_data->data = element;
 					serialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].write(data->write_data);
 				}
 			}
 			else {
 				for (size_t index = 0; index < element_count; index++) {
-					void* element = function::OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
+					void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
 					data->write_data->data = element;
 					serialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].write(data->write_data);
 				}
@@ -210,7 +210,7 @@ namespace ECSEngine {
 					// Hoist the indices check outside the for
 					if (data->indices.buffer == nullptr) {
 						for (size_t index = 0; index < element_count; index++) {
-							void* element = function::OffsetPointer(
+							void* element = OffsetPointer(
 								data->data_to_write.buffer,
 								index * stream_offset
 							);
@@ -219,7 +219,7 @@ namespace ECSEngine {
 					}
 					else {
 						for (size_t index = 0; index < element_count; index++) {
-							void* element = function::OffsetPointer(
+							void* element = OffsetPointer(
 								data->data_to_write.buffer,
 								data->indices[index] * stream_offset
 							);
@@ -231,7 +231,7 @@ namespace ECSEngine {
 					// Hoist the indices check outside the for
 					if (data->indices.buffer == nullptr) {
 						for (size_t index = 0; index < element_count; index++) {
-							void* element = function::OffsetPointer(
+							void* element = OffsetPointer(
 								data->data_to_write.buffer,
 								index * stream_offset
 							);
@@ -240,7 +240,7 @@ namespace ECSEngine {
 					}
 					else {
 						for (size_t index = 0; index < element_count; index++) {
-							void* element = function::OffsetPointer(
+							void* element = OffsetPointer(
 								data->data_to_write.buffer,
 								data->indices[index] * stream_offset
 							);
@@ -256,7 +256,7 @@ namespace ECSEngine {
 					}
 					else {
 						for (size_t index = 0; index < element_count; index++) {
-							void* element = function::OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
+							void* element = OffsetPointer(data->data_to_write.buffer, data->indices[index] * data->element_byte_size);
 							Write<true>(data->write_data->stream, element, data->element_byte_size);
 						}
 					}
@@ -364,7 +364,7 @@ namespace ECSEngine {
 							if constexpr (use_indices) {
 								offset = data->indices[index];
 							}
-							void* element = function::OffsetPointer(buffer, data->element_byte_size * offset);
+							void* element = OffsetPointer(buffer, data->element_byte_size * offset);
 							ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->reflection_type, element, *data->read_data->stream, &options);
 							if (code != ECS_DESERIALIZE_OK) {
 								deallocate_buffer();
@@ -426,7 +426,7 @@ namespace ECSEngine {
 							offset = data->indices[index];
 						}
 
-						void* element = function::OffsetPointer(*data->allocated_buffer, data->element_byte_size * offset);
+						void* element = OffsetPointer(*data->allocated_buffer, data->element_byte_size * offset);
 						data->read_data->data = element;
 						size_t byte_size_or_success = ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].read(data->read_data);
 						if (byte_size_or_success == -1) {
@@ -487,7 +487,7 @@ namespace ECSEngine {
 									offset = data->indices[index];
 								}
 
-								void* element = function::OffsetPointer(*data->allocated_buffer, index * stream_size);
+								void* element = OffsetPointer(*data->allocated_buffer, index * stream_size);
 								if (data->stream_type == ReflectionStreamFieldType::ResizableStream) {
 									if (has_options && data->read_data->options->use_resizable_stream_allocator) {
 										allocator = ((ResizableStream<void>*)element)->allocator;
@@ -510,7 +510,7 @@ namespace ECSEngine {
 				else {
 					size_t iterate_count = single_instance ? 1 : data->element_count;
 					for (size_t index = 0; index < iterate_count; index++) {
-						void* element = function::OffsetPointer(*data->allocated_buffer, index * stream_size);
+						void* element = OffsetPointer(*data->allocated_buffer, index * stream_size);
 
 						// The zero is for basic type arrays. Should not really happen
 						deserialize_size += ReadOrReferenceFundamentalType<false>(field_info, element, *data->read_data->stream, 0, allocator);
@@ -528,7 +528,7 @@ namespace ECSEngine {
 						}
 						else {
 							for (size_t index = 0; index < data->element_count; index++) {
-								Read<true>(data->read_data->stream, function::OffsetPointer(*data->allocated_buffer, data->indices[index] * data->element_byte_size), data->element_byte_size);
+								Read<true>(data->read_data->stream, OffsetPointer(*data->allocated_buffer, data->indices[index] * data->element_byte_size), data->element_byte_size);
 							}
 						}
 					}
@@ -610,15 +610,15 @@ namespace ECSEngine {
 
 		if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
 			string_offset = sizeof("Stream<") - 1;
-			buffer_count = *(size_t*)function::OffsetPointer(data->data, sizeof(void*));
+			buffer_count = *(size_t*)OffsetPointer(data->data, sizeof(void*));
 		}
 		else if (memcmp(data->definition.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
 			string_offset = sizeof("CapacityStream<") - 1;
-			buffer_count = *(unsigned int*)function::OffsetPointer(data->data, sizeof(void*));
+			buffer_count = *(unsigned int*)OffsetPointer(data->data, sizeof(void*));
 		}
 		else if (memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
 			string_offset = sizeof("ResizableStream<") - 1;
-			buffer_count = *(unsigned int*)function::OffsetPointer(data->data, sizeof(void*));
+			buffer_count = *(unsigned int*)OffsetPointer(data->data, sizeof(void*));
 		}
 		else {
 			ECS_ASSERT(false);
@@ -661,17 +661,17 @@ namespace ECSEngine {
 
 		if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
 			string_offset = sizeof("Stream<") - 1;
-			size_t* stream_size = (size_t*)function::OffsetPointer(data->data, sizeof(void*));
+			size_t* stream_size = (size_t*)OffsetPointer(data->data, sizeof(void*));
 			*stream_size = buffer_count;
 		}
 		else if (memcmp(data->definition.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
 			string_offset = sizeof("CapacityStream<") - 1;
-			unsigned int* stream_size = (unsigned int*)function::OffsetPointer(data->data, sizeof(void*));
+			unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
 			*stream_size = buffer_count;
 		}
 		else if (memcmp(data->definition.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
 			string_offset = sizeof("ResizableStream<") - 1;
-			unsigned int* stream_size = (unsigned int*)function::OffsetPointer(data->data, sizeof(void*));
+			unsigned int* stream_size = (unsigned int*)OffsetPointer(data->data, sizeof(void*));
 			*stream_size = buffer_count;
 		}
 		else {

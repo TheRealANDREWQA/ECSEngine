@@ -100,7 +100,7 @@ namespace ECSEngine {
 	ModuleLinkComponentTarget GetModuleLinkComponentTarget(const AppliedModule* applied_module, Stream<char> name)
 	{
 		for (size_t index = 0; index < applied_module->link_components.size; index++) {
-			if (function::CompareStrings(applied_module->link_components[index].component_name, name)) {
+			if (applied_module->link_components[index].component_name == name) {
 				return applied_module->link_components[index];
 			}
 		}
@@ -425,19 +425,19 @@ namespace ECSEngine {
 
 		// Go through each type now and check to see if it has a type
 		if (error_message == nullptr) {
-			return function::SearchBytes(has_type.buffer, has_type.size, false, sizeof(bool)) != -1;
+			return SearchBytes(has_type.buffer, has_type.size, false, sizeof(bool)) != -1;
 		}
 		else {
 			bool success = true;
 
 			size_t offset = 0;
-			size_t found_index = function::SearchBytes(has_type.buffer + offset, has_type.size - offset, false, sizeof(bool));
+			size_t found_index = SearchBytes(has_type.buffer + offset, has_type.size - offset, false, sizeof(bool));
 			while (found_index != -1) {
 				success = false;
 				ECS_FORMAT_STRING(*error_message, "You have assigned a draw function for component {#}, type {#} which doesn't exist\n", 
 					debug_draw_elements[found_index + offset].component.value, ComponentTypeToString(debug_draw_elements[found_index + offset].component_type));
 				offset += found_index;
-				found_index = function::SearchBytes(has_type.buffer + offset, has_type.size - offset, false, sizeof(bool));
+				found_index = SearchBytes(has_type.buffer + offset, has_type.size - offset, false, sizeof(bool));
 			}
 
 			return success;

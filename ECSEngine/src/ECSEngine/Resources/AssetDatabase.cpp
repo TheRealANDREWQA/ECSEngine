@@ -1,12 +1,12 @@
 #include "ecspch.h"
 #include "AssetDatabase.h"
 #include "../Utilities/File.h"
-#include "../Utilities/FunctionInterfaces.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Utilities/Path.h"
 #include "../Allocators/ResizableLinearAllocator.h"
 #include "../Utilities/ForEachFiles.h"
+#include "../Utilities/StreamUtilities.h"
 
 #include "AssetMetadataSerialize.h"
 
@@ -22,7 +22,7 @@ namespace ECSEngine {
 	void AssetDatabaseFileDirectory(Stream<wchar_t> file_location, CapacityStream<wchar_t>& path, ECS_ASSET_TYPE type)
 	{
 		path.CopyOther(file_location);
-		function::ConvertASCIIToWide(path, Stream<char>(ConvertAssetTypeString(type)));
+		ConvertASCIIToWide(path, Stream<char>(ConvertAssetTypeString(type)));
 		path.Add(ECS_OS_PATH_SEPARATOR);
 	}
 
@@ -47,9 +47,9 @@ namespace ECSEngine {
 				*loaded_now = true;
 			}
 
-			name = function::StringCopy(database->Allocator(), name);
+			name = StringCopy(database->Allocator(), name);
 			if (file.size > 0) {
-				file = function::StringCopy(database->Allocator(), file);
+				file = StringCopy(database->Allocator(), file);
 			}
 			metadata.Default(name, file);
 
@@ -441,7 +441,7 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::FindMesh(Stream<char> name, Stream<wchar_t> file) const
 	{
 		return mesh_metadata.FindFunctor([&](const ReferenceCounted<MeshMetadata>& compare) {
-			return function::CompareStrings(compare.value.name, name) && function::CompareStrings(compare.value.file, file);
+			return compare.value.name == name && compare.value.file == file;
 		});
 	}
 
@@ -450,7 +450,7 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::FindTexture(Stream<char> name, Stream<wchar_t> file) const
 	{
 		return texture_metadata.FindFunctor([&](const ReferenceCounted<TextureMetadata>& compare) {
-			return function::CompareStrings(compare.value.name, name) && function::CompareStrings(compare.value.file, file);
+			return compare.value.name == name && compare.value.file == file;
 		});
 	}
 
@@ -459,7 +459,7 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::FindGPUSampler(Stream<char> name) const
 	{
 		return gpu_sampler_metadata.FindFunctor([&](const ReferenceCounted<GPUSamplerMetadata>& compare) {
-			return function::CompareStrings(compare.value.name, name);
+			return compare.value.name == name;
 		});
 	}
 
@@ -468,7 +468,7 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::FindShader(Stream<char> name, Stream<wchar_t> file) const
 	{
 		return shader_metadata.FindFunctor([&](const ReferenceCounted<ShaderMetadata>& compare) {
-			return function::CompareStrings(compare.value.name, name) && function::CompareStrings(compare.value.file, file);
+			return compare.value.name == name && compare.value.file == file;
 		});
 	}
 
@@ -477,7 +477,7 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::FindMaterial(Stream<char> name) const
 	{
 		return material_asset.FindFunctor([&](const ReferenceCounted<MaterialAsset>& compare) {
-			return function::CompareStrings(compare.value.name, name);
+			return compare.value.name == name;
 		});
 	}
 
@@ -486,7 +486,7 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::FindMisc(Stream<char> name, Stream<wchar_t> file) const
 	{
 		return misc_asset.FindFunctor([&](const ReferenceCounted<MiscAsset>& compare) {
-			return function::CompareStrings(compare.value.name, name) && function::CompareStrings(compare.value.file, file);
+			return compare.value.name == name && compare.value.file == file;
 		});
 	}
 
@@ -655,7 +655,7 @@ namespace ECSEngine {
 			// such that the OS doesn't think we try to use the current path of the given drive
 			// so for C:\... replace it with a pair of separators C~`~ and the colon replaced since
 			// it can make the OS fail
-			if (function::PathIsAbsolute(file)) {
+			if (PathIsAbsolute(file)) {
 				temp_file.Add(file[0]);
 				temp_file.Add(SEPARATOR_CHAR);
 				temp_file.Add(COLON_CHAR_REPLACEMENT);
@@ -669,18 +669,18 @@ namespace ECSEngine {
 			// Place the file first separated from the name by 3 _
 			// Also replace the '/' and '\\' from the file with '~'
 
-			function::ReplaceCharacter(temp_file, ECS_OS_PATH_SEPARATOR_ASCII, SEPARATOR_CHAR);
-			function::ReplaceCharacter(temp_file, ECS_OS_PATH_SEPARATOR_ASCII_REL, SEPARATOR_CHAR);
+			ReplaceCharacter(temp_file, ECS_OS_PATH_SEPARATOR_ASCII, SEPARATOR_CHAR);
+			ReplaceCharacter(temp_file, ECS_OS_PATH_SEPARATOR_ASCII_REL, SEPARATOR_CHAR);
 			path.AddStream(temp_file);
 			path.AddStream(PATH_SEPARATOR);
 		}
 
 		// If the name contains relative path separators then replace these with the separator char
 		unsigned int path_size = path.size;
-		function::ConvertASCIIToWide(path, name);
+		ConvertASCIIToWide(path, name);
 		Stream<wchar_t> converted_name = { path.buffer + path_size, name.size };
-		function::ReplaceCharacter(converted_name, ECS_OS_PATH_SEPARATOR_REL, SEPARATOR_CHAR);
-		function::ReplaceCharacter(converted_name, ECS_OS_PATH_SEPARATOR, SEPARATOR_CHAR);
+		ReplaceCharacter(converted_name, ECS_OS_PATH_SEPARATOR_REL, SEPARATOR_CHAR);
+		ReplaceCharacter(converted_name, ECS_OS_PATH_SEPARATOR, SEPARATOR_CHAR);
 		path.AddStreamSafe(ECS_ASSET_DATABASE_FILE_EXTENSION);
 	}
 
@@ -729,7 +729,7 @@ namespace ECSEngine {
 		auto iterate = [&paths](auto sparse_set) {
 			auto stream = sparse_set.ToStream();
 			for (size_t index = 0; index < stream.size; index++) {
-				Stream<wchar_t>* current_path = (Stream<wchar_t>*)function::OffsetPointer(&stream[index].value, sizeof(Stream<char>));
+				Stream<wchar_t>* current_path = (Stream<wchar_t>*)OffsetPointer(&stream[index].value, sizeof(Stream<char>));
 				paths.Add(*current_path);
 			}
 		};
@@ -888,7 +888,7 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < count; index++) {
 			unsigned int handle = sparse_sets[type].GetHandleFromIndex(index);
 			Stream<wchar_t> current_file = GetAssetPath(handle, type);
-			if (function::CompareStrings(file, current_file)) {
+			if (file == current_file) {
 				handles.AddAssert(handle);
 			}
 		}
@@ -914,10 +914,10 @@ namespace ECSEngine {
 
 			ECS_STACK_CAPACITY_STREAM(wchar_t, asset_file, 512);
 			AssetDatabase::ExtractFileFromFile(file, asset_file);
-			if (function::CompareStrings(data->file, asset_file)) {
+			if (data->file == asset_file) {
 				ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
 				AssetDatabase::ExtractNameFromFile(file, asset_name);
-				data->stream->Add(function::StringCopy(data->stream->allocator, asset_name));
+				data->stream->Add(StringCopy(data->stream->allocator, asset_name));
 			}
 
 			return true;
@@ -945,8 +945,8 @@ namespace ECSEngine {
 		auto functor = [](Stream<wchar_t> file, void* _data) {
 			FunctorData* data = (FunctorData*)_data;
 
-			Stream<wchar_t> filename = function::PathFilename(file);
-			data->stream->Add(function::StringCopy(data->stream->allocator, filename));
+			Stream<wchar_t> filename = PathFilename(file);
+			data->stream->Add(StringCopy(data->stream->allocator, filename));
 			return true;
 		};
 
@@ -1050,12 +1050,12 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::GetReferenceCountStandalone(unsigned int handle, ECS_ASSET_TYPE type) const
 	{
 		unsigned int reference_count = GetReferenceCount(handle, type);
-		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
+		if (ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
 			return reference_count;
 		}
 
 		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 128);
-		function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE current_type) {
+		ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE current_type) {
 			// Potential references from other asset types
 			unsigned int count = GetAssetCount(current_type);
 			for (unsigned int index = 0; index < count; index++) {
@@ -1084,13 +1084,13 @@ namespace ECSEngine {
 			counts->AddAssert({ current_handle, GetReferenceCount(current_handle, type) });
 		}
 
-		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
+		if (ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
 			return;
 		}
 
 		// Possibly referenced by others
 		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 128);
-		function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
+		ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
 			unsigned int count = GetAssetCount(asset_type);
 			for (unsigned int index = 0; index < count; index++) {
 				dependencies.size = 0;
@@ -1133,12 +1133,12 @@ namespace ECSEngine {
 			}
 		}
 
-		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
+		if (ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
 			return handles;
 		}
 
 		// Verify that it is a referenceable type
-		ECS_ASSERT(function::ExistsStaticArray(type, ECS_ASSET_TYPES_REFERENCEABLE), "Invalid asset type");
+		ECS_ASSERT(ExistsStaticArray(type, ECS_ASSET_TYPES_REFERENCEABLE), "Invalid asset type");
 
 		unsigned int current_handle = database->FindAssetEx(GetAssetFromMetadata(metadata, type), type);
 
@@ -1220,12 +1220,12 @@ namespace ECSEngine {
 
 	bool AssetDatabase::IsAssetReferencedByOtherAsset(unsigned int handle, ECS_ASSET_TYPE type) const
 	{
-		if (function::ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
+		if (ExistsStaticArray(type, ECS_ASSET_TYPES_NOT_REFERENCEABLE)) {
 			return false;
 		}
 
 		ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
-		return function::ForEach<true>(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
+		return ForEach<true>(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
 			unsigned int count = GetAssetCount(asset_type);
 			for (unsigned int index = 0; index < count; index++) {
 				dependencies.size = 0;
@@ -1255,7 +1255,7 @@ namespace ECSEngine {
 		}
 
 		randomized_values->size = maximum_count;
-		function::MakeSequence(*randomized_values, 1);
+		MakeSequence(*randomized_values, 1);
 
 		unsigned int count = GetAssetCount(type);
 		for (unsigned int index = 0; index < count; index++) {
@@ -1266,7 +1266,7 @@ namespace ECSEngine {
 			if (asset_value.buffer != nullptr && !IsAssetPointerFromMetadataValid(asset_value)) {
 				// It is a randomized asset
 				unsigned int randomized_value = ExtractRandomizedAssetValue(asset_value.buffer, type);
-				size_t valid_index = function::SearchBytes(
+				size_t valid_index = SearchBytes(
 					randomized_values->buffer,
 					randomized_values->size,
 					randomized_value,
@@ -1343,7 +1343,7 @@ namespace ECSEngine {
 
 	void AssetDatabase::RemapAssetDependencies(const AssetDatabase* other)
 	{
-		function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [this, other](ECS_ASSET_TYPE type) {
+		ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [this, other](ECS_ASSET_TYPE type) {
 			unsigned int asset_count = GetAssetCount(type);
 			for (unsigned int index = 0; index < asset_count; index++) {
 				ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
@@ -1402,7 +1402,7 @@ namespace ECSEngine {
 
 				for (unsigned int index = starting_dependency_size; index < dependencies.size; index++) {
 					if (has_storage_dependencies) {
-						remove_info->storage = function::OffsetPointer(remove_info->storage_dependencies_allocation);
+						remove_info->storage = OffsetPointer(remove_info->storage_dependencies_allocation);
 						remove_info->storage_dependencies_allocation.size += AssetMetadataByteSize(dependencies[index].type);
 						remove_info->storage_dependencies_allocation.AssertCapacity();
 					}
@@ -1733,7 +1733,7 @@ namespace ECSEngine {
 			metadata_file_location.buffer = (wchar_t*)allocation;
 			metadata_file_location.size = _file_location.size;
 
-			if (function::PathIsAbsolute(_file_location)) {
+			if (PathIsAbsolute(_file_location)) {
 				if (metadata_file_location[metadata_file_location.size - 1] != ECS_OS_PATH_SEPARATOR) {
 					metadata_file_location.Add(ECS_OS_PATH_SEPARATOR);
 				}
@@ -1843,7 +1843,7 @@ namespace ECSEngine {
 				const void* subindex_metadata = database->GetAssetConst(subindex_handle, type);
 				Stream<char> subindex_name = GetAssetName(subindex_metadata, type);
 				Stream<wchar_t> subindex_file = GetAssetFile(subindex_metadata, type);
-				if (function::CompareStrings(subindex_name, new_name) && function::CompareStrings(subindex_file, new_file)) {
+				if (subindex_name == new_name && subindex_file == new_file) {
 					// An identical asset already exists
 					return false;
 				}
@@ -1964,8 +1964,8 @@ namespace ECSEngine {
 
 		ECS_STACK_CAPACITY_STREAM(char, temporary_name, 512);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, temporary_file, 512);
-		temporary_name = function::StringCopy(stack_allocator_polymorphic, asset_name);
-		temporary_file = function::StringCopy(stack_allocator_polymorphic, asset_file);
+		temporary_name = StringCopy(stack_allocator_polymorphic, asset_name);
+		temporary_file = StringCopy(stack_allocator_polymorphic, asset_file);
 
 		CreateDefaultAsset(temporary_asset, temporary_name, temporary_file, type);
 		bool success = ReadAssetFile(asset_name, asset_file, temporary_asset, type, stack_allocator_polymorphic);
@@ -1988,7 +1988,7 @@ namespace ECSEngine {
 	{
 		bool success = true;
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-		function::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
+		ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE asset_type) {
 			ForEachAsset(asset_type, [&](unsigned int handle) {
 				void* current_metadata = GetAsset(handle, asset_type);
 
@@ -2042,7 +2042,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, current_asset_same, data.size);
 
 		indices_to_check.size = data.size;
-		function::MakeSequence(indices_to_check);
+		MakeSequence(indices_to_check);
 
 		// The indices_to_check will contain only indices that are actually valid
 		while (indices_to_check.size > 0) {
@@ -2241,15 +2241,15 @@ namespace ECSEngine {
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 512);
 		ExtractNameFromFileWide(path, wide_name);
-		function::ConvertWideCharsToASCII(wide_name, name);
+		ConvertWideCharsToASCII(wide_name, name);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	void AssetDatabase::ExtractNameFromFileWide(Stream<wchar_t> path, CapacityStream<wchar_t>& name)
 	{
-		Stream<wchar_t> filename = function::PathFilename(path);
-		Stream<wchar_t> separator = function::FindFirstToken(filename, PATH_SEPARATOR);
+		Stream<wchar_t> filename = PathFilename(path);
+		Stream<wchar_t> separator = FindFirstToken(filename, PATH_SEPARATOR);
 		if (separator.size == 0) {
 			// No separator, copy the entire filename
 			name.CopyOther(filename);
@@ -2260,20 +2260,20 @@ namespace ECSEngine {
 			separator.buffer += size;
 			separator.size -= size;
 
-			Stream<wchar_t> wide_name = function::PathStem(separator);
+			Stream<wchar_t> wide_name = PathStem(separator);
 			name.CopyOther(wide_name);
 		}
 
 		// If it contains relative path separators, put them back
-		function::ReplaceCharacter(name, TEXT(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR_REL);
+		ReplaceCharacter(name, TEXT(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR_REL);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	void AssetDatabase::ExtractFileFromFile(Stream<wchar_t> path, CapacityStream<wchar_t>& file)
 	{
-		Stream<wchar_t> filename = function::PathFilename(path);
-		Stream<wchar_t> separator = function::FindFirstToken(filename, PATH_SEPARATOR);
+		Stream<wchar_t> filename = PathFilename(path);
+		Stream<wchar_t> separator = FindFirstToken(filename, PATH_SEPARATOR);
 		if (separator.size == 0) {
 			// No file
 			return;
@@ -2286,18 +2286,18 @@ namespace ECSEngine {
 				file.Add(file_slice[0]);
 				file.Add(L':');
 				file.AddStreamSafe({ file_slice.buffer + 4, file_slice.size - 4 });
-				function::ReplaceCharacter(file, function::Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR);
+				ReplaceCharacter(file, Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR);
 			}
 			else {
 				file.AddStreamSafe(file_slice);
 				// Relative path, replace with '\'
-				function::ReplaceCharacter(file, function::Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR_REL);
+				ReplaceCharacter(file, Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR_REL);
 			}
 		}
 		else {
 			// Can only be a relative path
 			file.AddStreamSafe(file_slice);
-			function::ReplaceCharacter(file, function::Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR_ASCII_REL);
+			ReplaceCharacter(file, Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR_ASCII_REL);
 		}
 	}
 
@@ -2307,7 +2307,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, file, 512);
 		ExtractFileFromFile(path, file);
-		return function::MountPath(file, base_path, target_path);
+		return MountPath(file, base_path, target_path);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -2397,7 +2397,7 @@ namespace ECSEngine {
 				ECS_ASSET_MISC
 			};
 
-			function::ForEach(basic_functor_types, [&](ECS_ASSET_TYPE type) {
+			ForEach(basic_functor_types, [&](ECS_ASSET_TYPE type) {
 				current_type = type;
 				database->ForEachAsset(current_type, basic_functor);
 			});

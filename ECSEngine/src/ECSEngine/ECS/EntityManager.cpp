@@ -1,7 +1,5 @@
 #include "ecspch.h"
 #include "EntityManager.h"
-#include "../Utilities/Function.h"
-#include "../Utilities/FunctionInterfaces.h"
 #include "../Utilities/Crash.h"
 #include "ArchetypeQueryCache.h"
 
@@ -362,7 +360,7 @@ namespace ECSEngine {
 			void* allocation = entity_manager->m_memory_manager->Allocate(total_allocation_size);
 			info.allocator = (MemoryArena*)allocation;
 			*info.allocator = MemoryArena(
-				function::OffsetPointer(allocation, sizeof(MemoryArena)),
+				OffsetPointer(allocation, sizeof(MemoryArena)),
 				COMPONENT_ALLOCATOR_ARENA_COUNT,
 				create_info
 			);
@@ -395,7 +393,7 @@ namespace ECSEngine {
 
 				uintptr_t buffer_after_pointers = buffer;
 				for (size_t component_index = 0; component_index < components.count; component_index) {
-					buffer = function::AlignPointer(buffer, 8);
+					buffer = AlignPointer(buffer, 8);
 					data[component_index] = (void*)buffer;
 					buffer += component_sizes[component_index] * entity_count;
 				}
@@ -404,7 +402,7 @@ namespace ECSEngine {
 				if (type == by_entities_type) {
 					// Pack the data into a contiguous stream for each component type
 					for (size_t component_index = 0; component_index < components.count; component_index++) {
-						buffer = function::AlignPointer(buffer, 8);
+						buffer = AlignPointer(buffer, 8);
 						for (size_t entity_index = 0; entity_index < entity_count; entity_index++) {
 							memcpy((void*)buffer, component_data[entity_index * components.count + component_index], component_sizes[component_index]);
 							buffer += component_sizes[component_index];
@@ -422,8 +420,8 @@ namespace ECSEngine {
 					for (size_t entity_index = 0; entity_index < entity_count; entity_index++) {
 						for (size_t component_index = 0; component_index < components.count; component_index++) {
 							memcpy(
-								function::OffsetPointer(data[component_index], entity_index * component_sizes[component_index]),
-								function::OffsetPointer(component_data[entity_index], size_until_component[component_index]),
+								OffsetPointer(data[component_index], entity_index * component_sizes[component_index]),
+								OffsetPointer(component_data[entity_index], size_until_component[component_index]),
 								component_sizes[component_index]
 							);
 						}
@@ -437,7 +435,7 @@ namespace ECSEngine {
 				else if (type == scattered_type) {
 					// Pack the data into a contiguous stream for each component type
 					for (size_t component_index = 0; component_index < components.count; component_index++) {
-						buffer = function::AlignPointer(buffer, 8);
+						buffer = AlignPointer(buffer, 8);
 						for (size_t entity_index = 0; entity_index < entity_count; entity_index++) {
 							memcpy((void*)buffer, component_data[component_index * entity_count + entity_index], component_sizes[component_index]);
 							buffer += component_sizes[component_index];
@@ -447,7 +445,7 @@ namespace ECSEngine {
 				// COMPONENTS_SPLATTED
 				else {
 					for (size_t component_index = 0; component_index < components.count; component_index++) {
-						buffer = function::AlignPointer(buffer, 8);
+						buffer = AlignPointer(buffer, 8);
 						memcpy((void*)buffer, component_data[component_index], component_sizes[component_index]);
 						buffer += component_sizes[component_index];
 					}
@@ -509,8 +507,8 @@ namespace ECSEngine {
 		ComponentInfo* old_infos = entity_manager->m_global_components_info;
 
 		entity_manager->m_global_components_data = (void**)new_allocation;
-		entity_manager->m_global_components = (Component*)function::OffsetPointer(entity_manager->m_global_components_data, sizeof(void*) * new_capacity);
-		entity_manager->m_global_components_info = (ComponentInfo*)function::OffsetPointer(entity_manager->m_global_components, sizeof(Component) * new_capacity);
+		entity_manager->m_global_components = (Component*)OffsetPointer(entity_manager->m_global_components_data, sizeof(void*) * new_capacity);
+		entity_manager->m_global_components_info = (ComponentInfo*)OffsetPointer(entity_manager->m_global_components, sizeof(Component) * new_capacity);
 
 		if (copy_old_data) {
 			unsigned int copy_count = entity_manager->m_global_component_count < new_capacity ? entity_manager->m_global_component_count : new_capacity;
@@ -537,7 +535,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < data->entities.size; index++) {
 			for (unsigned char component_index = 0; component_index < data->write_signature.count; component_index++) {
 				void* component = manager->GetComponent(data->entities[index], data->write_signature.indices[component_index]);
-				memcpy(component, function::OffsetPointer(data->buffers[component_index], component_sizes[component_index] * index), component_sizes[component_index]);
+				memcpy(component, OffsetPointer(data->buffers[component_index], component_sizes[component_index] * index), component_sizes[component_index]);
 			}
 		}
 	}
@@ -1462,7 +1460,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 16);
 		Stream<char> component_name = data->name;
 		if (data->name.size == 0) {
-			function::ConvertIntToChars(component_name_storage, data->component.value);
+			ConvertIntToChars(component_name_storage, data->component.value);
 			component_name = component_name_storage;
 		}
 
@@ -1500,7 +1498,7 @@ namespace ECSEngine {
 			component_name, data->component.value);
 		manager->m_unique_components[data->component.value].size = data->size;
 		manager->m_unique_components[data->component.value].component_buffers_count = data->component_buffers_count;
-		manager->m_unique_components[data->component.value].name = function::StringCopy(manager->SmallAllocator(), component_name);
+		manager->m_unique_components[data->component.value].name = StringCopy(manager->SmallAllocator(), component_name);
 		memcpy(manager->m_unique_components[data->component.value].component_buffers, data->component_buffers, sizeof(ComponentBuffer) * data->component_buffers_count);
 		CreateAllocatorForComponent(manager, manager->m_unique_components[data->component.value], data->allocator_size);
 	}
@@ -1537,7 +1535,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 64);
 		Stream<char> component_name = data->name;
 		if (data->name.size == 0) {
-			function::ConvertIntToChars(component_name_storage, data->component.value);
+			ConvertIntToChars(component_name_storage, data->component.value);
 			component_name = component_name_storage;
 		}
 
@@ -1566,7 +1564,7 @@ namespace ECSEngine {
 		memcpy(manager->m_shared_components[data->component.value].info.component_buffers, data->component_buffers, sizeof(ComponentBuffer) * data->component_buffers_count);
 		manager->m_shared_components[data->component.value].instances.Initialize(manager->SmallAllocator(), 0);
 		manager->m_shared_components[data->component.value].named_instances.Initialize(manager->SmallAllocator(), 0);
-		manager->m_shared_components[data->component.value].info.name = function::StringCopy(manager->SmallAllocator(), component_name);
+		manager->m_shared_components[data->component.value].info.name = StringCopy(manager->SmallAllocator(), component_name);
 		
 		CreateAllocatorForComponent(manager, manager->m_shared_components[data->component.value].info, data->allocator_size);
 		// The named instances table should start with size 0 and only create it when actually needing the tags
@@ -1801,7 +1799,7 @@ namespace ECSEngine {
 				unsigned int base_count = archetype->GetBaseCount();
 				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
 					const SharedInstance* current_instances = archetype->GetBaseInstances(base_index);
-					size_t stream_index = function::SearchBytes(component_instances.buffer, component_instances.size, current_instances[component_in_archetype_index].value, sizeof(SharedInstance));
+					size_t stream_index = SearchBytes(component_instances.buffer, component_instances.size, current_instances[component_in_archetype_index].value, sizeof(SharedInstance));
 					if (stream_index != -1) {
 						component_instances.RemoveSwapBack(component_instances.size);
 					}
@@ -1837,7 +1835,7 @@ namespace ECSEngine {
 		}
 		else {
 			data = (DeferredClearEntityTag*)manager->AllocateTemporaryBuffer(sizeof(Entity) * entities.size + sizeof(DeferredClearEntityTag));
-			void* entity_buffer = function::OffsetPointer(data, sizeof(DeferredClearEntityTag));
+			void* entity_buffer = OffsetPointer(data, sizeof(DeferredClearEntityTag));
 			entities.CopyTo(entity_buffer);
 			data->entities = { entity_buffer, entities.size };
 		}
@@ -2363,7 +2361,7 @@ namespace ECSEngine {
 		}
 		else {
 			data = (DeferredAddEntitiesToHierarchyPairs*)AllocateTemporaryBuffer(sizeof(DeferredAddEntitiesToHierarchyPairs) + sizeof(EntityPair) * pairs.size);
-			data->pairs.buffer = (EntityPair*)function::OffsetPointer(data, sizeof(DeferredAddEntitiesToHierarchyPairs));
+			data->pairs.buffer = (EntityPair*)OffsetPointer(data, sizeof(DeferredAddEntitiesToHierarchyPairs));
 			pairs.CopyTo(data->pairs.buffer);
 			data->pairs.size = pairs.size;
 		}
@@ -2392,9 +2390,9 @@ namespace ECSEngine {
 		}
 		else {
 			data = (DeferredAddEntitiesToHierarchyContiguous*)AllocateTemporaryBuffer(sizeof(DeferredAddEntitiesToHierarchyContiguous) + sizeof(Entity) * count * 2);
-			data->parents = (Entity*)function::OffsetPointer(data, sizeof(DeferredAddEntitiesToHierarchyContiguous));
+			data->parents = (Entity*)OffsetPointer(data, sizeof(DeferredAddEntitiesToHierarchyContiguous));
 			memcpy((Entity*)data->parents, parents, sizeof(Entity) * count);
-			data->children = (Entity*)function::OffsetPointer(data->parents, sizeof(Entity) * count);
+			data->children = (Entity*)OffsetPointer(data->parents, sizeof(Entity) * count);
 			memcpy((Entity*)data->children, children, sizeof(Entity) * count);
 		}
 
@@ -2421,7 +2419,7 @@ namespace ECSEngine {
 		}
 		else {
 			data = (DeferredAddEntitiesToParentHierarchy*)AllocateTemporaryBuffer(sizeof(DeferredAddEntitiesToParentHierarchy) + sizeof(EntityPair) * entities.size);
-			data->entities.buffer = (Entity*)function::OffsetPointer(data, sizeof(DeferredAddEntitiesToParentHierarchy));
+			data->entities.buffer = (Entity*)OffsetPointer(data, sizeof(DeferredAddEntitiesToParentHierarchy));
 			data->entities.CopyOther(entities);
 		}
 
@@ -2459,7 +2457,7 @@ namespace ECSEngine {
 		memcpy(data->components.instances, components.instances, sizeof(SharedInstance) * data->components.count);
 		buffer += sizeof(SharedInstance) * data->components.count;
 
-		buffer = function::AlignPointer(buffer, alignof(Entity));
+		buffer = AlignPointer(buffer, alignof(Entity));
 		data->entities = GetEntitiesFromActionParameters(entities, parameters, buffer);
 
 		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_ENTITY_ADD_SHARED_COMPONENT), debug_info });
@@ -2668,7 +2666,7 @@ namespace ECSEngine {
 		}
 		else {
 			data = (DeferredChangeEntityParentHierarchy*)AllocateTemporaryBuffer(sizeof(DeferredChangeEntityParentHierarchy) + sizeof(EntityPair) * pairs.size);
-			data->pairs.buffer = (EntityPair*)function::OffsetPointer(data, sizeof(DeferredChangeEntityParentHierarchy));
+			data->pairs.buffer = (EntityPair*)OffsetPointer(data, sizeof(DeferredChangeEntityParentHierarchy));
 			pairs.CopyTo(data->pairs.buffer);
 			data->pairs.size = pairs.size;
 		}
@@ -2694,7 +2692,7 @@ namespace ECSEngine {
 		}
 		else {
 			data = (DeferredChangeOrSetEntityParentHierarchy*)AllocateTemporaryBuffer(sizeof(DeferredChangeOrSetEntityParentHierarchy) + sizeof(EntityPair) * pairs.size);
-			data->pairs.buffer = (EntityPair*)function::OffsetPointer(data, sizeof(DeferredChangeOrSetEntityParentHierarchy));
+			data->pairs.buffer = (EntityPair*)OffsetPointer(data, sizeof(DeferredChangeOrSetEntityParentHierarchy));
 			pairs.CopyTo(data->pairs.buffer);
 			data->pairs.size = pairs.size;
 		}
@@ -2804,7 +2802,7 @@ namespace ECSEngine {
 					
 					// For every value allocate the data
 					m_shared_components[index].instances.stream.ForEachIndex([&](unsigned int subindex) {
-						void* new_data = function::Copy(SmallAllocator(), entity_manager->m_shared_components[index].instances[subindex], component_size);
+						void* new_data = Copy(SmallAllocator(), entity_manager->m_shared_components[index].instances[subindex], component_size);
 						m_shared_components[index].instances[subindex] = new_data;
 					});
 				}
@@ -2822,7 +2820,7 @@ namespace ECSEngine {
 					// Iterate through the named instances and allocate the identifiers and copy the value
 					entity_manager->m_shared_components[index].named_instances.ForEachIndexConst([&](unsigned int subindex) {
 						ResourceIdentifier current_identifier = entity_manager->m_shared_components[index].named_instances.GetIdentifierFromIndex(subindex);
-						Stream<void> identifier = function::Copy(
+						Stream<void> identifier = Copy(
 							GetAllocatorPolymorphic(&m_small_memory_manager),
 							{ current_identifier.ptr, current_identifier.size }
 						);
@@ -3310,7 +3308,7 @@ namespace ECSEngine {
 
 	unsigned int EntityManager::GlobalComponentSize(Component component) const
 	{
-		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
 		ECS_CRASH_RETURN_VALUE(index != -1, -1, "EntityManager: Trying to retrieve invalid global component byte size for {#}", component.value);
 		return m_global_components_info[component.value].size;
 	}
@@ -3458,7 +3456,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < remapping.size; index++) {
 			DestroyArchetypeCommit(remapping[index]);
 			unsigned int swapped_archetype = m_archetypes.size;
-			size_t remapping_index = function::SearchBytes(remapping.buffer + index, indices.size, swapped_archetype, sizeof(swapped_archetype));
+			size_t remapping_index = SearchBytes(remapping.buffer + index, indices.size, swapped_archetype, sizeof(swapped_archetype));
 			if (remapping_index != -1) {
 				remapping[remapping_index] = remapping[index];
 			}
@@ -3848,7 +3846,7 @@ namespace ECSEngine {
 		}
 	}
 
-	template<typename Query>
+	/*template<typename Query>
 	void ECS_VECTORCALL GetArchetypePtrsImplementation(const EntityManager* manager, Query query, CapacityStream<Archetype*>& archetypes) {
 		for (size_t index = 0; index < manager->m_archetypes.size; index++) {
 			if (query.VerifiesUnique(manager->m_archetypes[index].GetUniqueSignature())) {
@@ -3858,18 +3856,11 @@ namespace ECSEngine {
 				}
 			}
 		}
-	}
+	}*/
 
 	void EntityManager::GetArchetypes(ArchetypeQuery query, CapacityStream<unsigned int>& archetypes) const
 	{
 		GetArchetypeImplementation(this, query, archetypes);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void EntityManager::GetArchetypesPtrs(ArchetypeQuery query, CapacityStream<Archetype*>& archetypes) const
-	{
-		GetArchetypePtrsImplementation(this, query, archetypes);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3881,9 +3872,47 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetArchetypesPtrs(ArchetypeQueryExclude query, CapacityStream<Archetype*>& archetypes) const
+	void EntityManager::GetArchetypes(ArchetypeQueryOptional query, CapacityStream<unsigned int>& archetypes) const
 	{
-		GetArchetypePtrsImplementation(this, query, archetypes);
+		GetArchetypeImplementation(this, query, archetypes);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::GetArchetypes(ArchetypeQueryExcludeOptional query, CapacityStream<unsigned int>& archetypes) const
+	{
+		GetArchetypeImplementation(this, query, archetypes);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::GetArchetypes(const ArchetypeQueryDescriptor& query_descriptor, CapacityStream<unsigned int>& archetypes) const
+	{
+		ECS_ARCHETYPE_QUERY_DESCRIPTOR_TYPE query_type = query_descriptor.GetType();
+		switch (query_type) {
+		case ECS_ARCHETYPE_QUERY_SIMPLE:
+		{
+			GetArchetypes(query_descriptor.AsSimple(), archetypes);
+		}
+		break;
+		case ECS_ARCHETYPE_QUERY_EXCLUDE:
+		{
+			GetArchetypes(query_descriptor.AsExclude(), archetypes);
+		}
+		break;
+		case ECS_ARCHETYPE_QUERY_OPTIONAL:
+		{
+			GetArchetypes(query_descriptor.AsOptional(), archetypes);
+		}
+		break;
+		case ECS_ARCHETYPE_QUERY_EXCLUDE_OPTIONAL:
+		{
+			GetArchetypes(query_descriptor.AsExcludeOptional(), archetypes);
+		}
+		break;
+		default:
+			ECS_ASSERT(false, "Invalid query type");
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3964,7 +3993,7 @@ namespace ECSEngine {
 	{
 		ECS_CRASH_RETURN_VALUE(ExistsGlobalComponent(component), nullptr, "The global component {#} doesn't exist when trying to retrieve the value.",
 			GetGlobalComponentName(component));
-		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
 		ECS_CRASH_RETURN_VALUE(index != -1, nullptr, "Missing global component {#} in SoA stream", GetGlobalComponentName(component));
 		return m_global_components_data[index];
 	}
@@ -4003,7 +4032,7 @@ namespace ECSEngine {
 
 	MemoryArena* EntityManager::GetGlobalComponentAllocator(Component component)
 	{
-		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
 		ECS_CRASH_RETURN_VALUE(index != -1, nullptr, "The global component {#} doesn't exist when retrieving its allocator.", component.value);
 		return m_global_components_info[index].allocator;
 	}
@@ -4118,7 +4147,7 @@ namespace ECSEngine {
 
 	Stream<char> EntityManager::GetGlobalComponentName(Component component) const
 	{
-		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
 		return index == -1 ? "Invalid component" : m_global_components_info[index].name;
 	}
 
@@ -4560,7 +4589,7 @@ namespace ECSEngine {
 		}
 		else {
 			data = (DeferredRemoveEntitiesFromHierarchy*)AllocateTemporaryBuffer(sizeof(DeferredRemoveEntitiesFromHierarchy) + sizeof(Entity) * entities.size);
-			data->entities.buffer = (Entity*)function::OffsetPointer(data, sizeof(DeferredRemoveEntitiesFromHierarchy));
+			data->entities.buffer = (Entity*)OffsetPointer(data, sizeof(DeferredRemoveEntitiesFromHierarchy));
 			entities.CopyTo(data->entities.buffer);
 			data->entities.size = entities.size;
 		}
@@ -4638,7 +4667,7 @@ namespace ECSEngine {
 		memcpy(data->components.indices, components.indices, sizeof(Component) * data->components.count);
 		buffer += sizeof(Component) * data->components.count;
 
-		buffer = function::AlignPointer(buffer, alignof(Entity));
+		buffer = AlignPointer(buffer, alignof(Entity));
 		data->entities = GetEntitiesFromActionParameters(entities, parameters, buffer);
 
 		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_ENTITY_REMOVE_SHARED_COMPONENT), debug_info });
@@ -4754,11 +4783,11 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(char, component_name_storage, 64);
 		Stream<char> component_name = name;
 		if (name.size == 0) {
-			function::ConvertIntToChars(component_name_storage, component.value);
+			ConvertIntToChars(component_name_storage, component.value);
 			component_name = component_name_storage;
 		}
 
-		size_t existing_index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t existing_index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
 		ECS_CRASH_RETURN_VALUE(existing_index == -1, "EntityManager: Trying to create global component {#} when it already exists", component_name);
 
 		// Allocate a new slot in the SoA stream
@@ -4770,7 +4799,7 @@ namespace ECSEngine {
 		ComponentInfo* component_info = m_global_components_info + m_global_component_count;
 		component_info->size = size;
 		component_info->component_buffers_count = 0;
-		component_info->name = function::StringCopy(SmallAllocator(), component_name);
+		component_info->name = StringCopy(SmallAllocator(), component_name);
 
 		CreateAllocatorForComponent(this, *component_info, allocator_size);
 
@@ -4811,7 +4840,7 @@ namespace ECSEngine {
 		void* allocation = AllocateTemporaryBuffer(allocation_size);
 		DeferredCreateSharedInstance* data = (DeferredCreateSharedInstance*)allocation;
 		data->component = component;
-		data->data = function::OffsetPointer(allocation, sizeof(DeferredCreateSharedInstance));
+		data->data = OffsetPointer(allocation, sizeof(DeferredCreateSharedInstance));
 		memcpy((void*)data->data, instance_data, m_shared_components[component.value].info.size);
 
 		DeferredActionParameters parameters = { command_stream };
@@ -5073,7 +5102,7 @@ namespace ECSEngine {
 		}
 		else {
 			data = (DeferredSetEntityTag*)AllocateTemporaryBuffer(sizeof(DeferredSetEntityTag) + sizeof(Entity) * entities.size);
-			void* entity_buffer = function::OffsetPointer(data, sizeof(DeferredSetEntityTag));
+			void* entity_buffer = OffsetPointer(data, sizeof(DeferredSetEntityTag));
 			entities.CopyTo(entity_buffer);
 			data->entities = { entity_buffer, entities.size };
 		}
@@ -5125,7 +5154,7 @@ namespace ECSEngine {
 
 	const void* EntityManager::TryGetGlobalComponent(Component component) const
 	{
-		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
 		if (index == -1) {
 			return nullptr;
 		}
@@ -5159,7 +5188,7 @@ namespace ECSEngine {
 		}
 		else {
 			data = (DeferredTryRemoveEntitiesFromHierarchy*)AllocateTemporaryBuffer(sizeof(DeferredTryRemoveEntitiesFromHierarchy) + sizeof(Entity) * entities.size);
-			data->entities.buffer = (Entity*)function::OffsetPointer(data, sizeof(DeferredTryRemoveEntitiesFromHierarchy));
+			data->entities.buffer = (Entity*)OffsetPointer(data, sizeof(DeferredTryRemoveEntitiesFromHierarchy));
 			entities.CopyTo(data->entities.buffer);
 			data->entities.size = entities.size;
 		}
@@ -5214,7 +5243,7 @@ namespace ECSEngine {
 
 	void EntityManager::UnregisterGlobalComponentCommit(Component component)
 	{
-		size_t index = function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
+		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
 		ECS_CRASH_RETURN(index != -1, "Missing global component {#} when trying to unregister it", component.value);
 
 		DeallocateGlobalComponent(this, index);
@@ -5422,7 +5451,7 @@ namespace ECSEngine {
 		MemoryManager* entity_manager_allocator = (MemoryManager*)allocation;
 		*entity_manager_allocator = MemoryManager(allocator_size, allocator_pool_count, allocator_new_size, GetAllocatorPolymorphic(global_memory_manager));
 
-		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
+		allocation = OffsetPointer(allocation, sizeof(MemoryManager));
 		EntityPool* entity_pool = (EntityPool*)allocation;
 		*entity_pool = EntityPool(entity_manager_allocator, entity_pool_power_of_two);
 

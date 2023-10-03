@@ -2,7 +2,6 @@
 #include "ResourceManager.h"
 #include "../Rendering/GraphicsHelpers.h"
 #include "../Rendering/Compression/TextureCompression.h"
-#include "../Utilities/FunctionInterfaces.h"
 #include "../../Dependencies/DirectXTex/DirectXTex/DirectXTex.h"
 #include "../GLTF/GLTFLoader.h"
 #include "../Utilities/Path.h"
@@ -39,7 +38,7 @@ namespace ECSEngine {
 
 		auto register_resource = [=](void* data, unsigned short reference_count) {
 			// Account for the L'\0'
-			void* allocation = function::Copy(resource_manager->Allocator(), identifier.ptr, identifier.size + 2);
+			void* allocation = Copy(resource_manager->Allocator(), identifier.ptr, identifier.size + 2);
 
 			ResourceManagerEntry entry;
 			entry.data = data;
@@ -113,7 +112,7 @@ namespace ECSEngine {
 			ECS_ASSERT(allocation != nullptr, "Allocating memory for a resource failed");
 			memcpy(allocation, identifier.ptr, identifier.size + sizeof(wchar_t));
 
-			void* handler_allocation = (void*)function::AlignPointer((uintptr_t)allocation + identifier.size + sizeof(wchar_t), 8);
+			void* handler_allocation = (void*)AlignPointer((uintptr_t)allocation + identifier.size + sizeof(wchar_t), 8);
 
 			memset(handler_allocation, 0, allocation_size);
 			void* data = handler(handler_allocation);
@@ -191,7 +190,7 @@ namespace ECSEngine {
 		}
 		else {
 			unsigned short increment_count = flags & ECS_RESOURCE_MANAGER_MASK_INCREMENT_COUNT;
-			entry->reference_count = function::SaturateSub(entry->reference_count, increment_count);
+			entry->reference_count = SaturateSub(entry->reference_count, increment_count);
 			if (entry->reference_count == 0) {
 				delete_resource();
 			}
@@ -445,7 +444,7 @@ namespace ECSEngine {
 
 	void ResourceManager::AddShaderDirectory(Stream<wchar_t> directory)
 	{
-		m_shader_directory.Add(function::StringCopy(Allocator(), directory));
+		m_shader_directory.Add(StringCopy(Allocator(), directory));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -512,7 +511,7 @@ namespace ECSEngine {
 			unsigned short reference_count = entry->reference_count;
 
 			if (reference_count != USHORT_MAX) {
-				entry->reference_count = function::SaturateSub(entry->reference_count, amount);
+				entry->reference_count = SaturateSub(entry->reference_count, amount);
 				if constexpr (delete_if_zero) {
 					if (entry->reference_count == 0) {
 						DELETE_FUNCTIONS[type_int](this, index, 1);
@@ -531,7 +530,7 @@ namespace ECSEngine {
 	bool ResourceManager::DecrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned short amount)
 	{
 		ResourceManagerEntry* entry = m_resource_types[(unsigned int)type].GetValuePtrFromIndex(resource_index);
-		entry->reference_count = function::SaturateSub(entry->reference_count, amount);
+		entry->reference_count = SaturateSub(entry->reference_count, amount);
 		return entry->reference_count == 0;
 	}
 
@@ -744,7 +743,7 @@ namespace ECSEngine {
 		void* allocation = ECSEngine::Allocate(snapshot_allocator, total_size_to_allocate);
 		uintptr_t ptr = (uintptr_t)allocation;
 		for (unsigned int index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
-			ptr = function::AlignPointer(ptr, alignof(ResourceManagerSnapshot::Resource));
+			ptr = AlignPointer(ptr, alignof(ResourceManagerSnapshot::Resource));
 			snapshot.resources[index].InitializeFromBuffer(ptr, m_resource_types[index].GetCount());
 			snapshot.resources[index].size = 0;
 			m_resource_types[index].ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
@@ -773,7 +772,7 @@ namespace ECSEngine {
 	void ResourceManager::IncrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned short amount)
 	{
 		ResourceManagerEntry* entry = m_resource_types[(unsigned int)type].GetValuePtrFromIndex(resource_index);
-		entry->reference_count = function::SaturateAdd(entry->reference_count, amount);
+		entry->reference_count = SaturateAdd(entry->reference_count, amount);
 		if (entry->reference_count == USHORT_MAX) {
 			entry->reference_count = USHORT_MAX - 1;
 		}
@@ -785,7 +784,7 @@ namespace ECSEngine {
 	{
 		unsigned int type_int = (unsigned int)type;
 		m_resource_types[type_int].ForEach([&](ResourceManagerEntry& entry, ResourceIdentifier identifier) {
-			entry.reference_count = function::SaturateAdd(entry.reference_count, amount);
+			entry.reference_count = SaturateAdd(entry.reference_count, amount);
 			if (entry.reference_count == USHORT_MAX) {
 				entry.reference_count = USHORT_MAX - 1;
 			}
@@ -930,11 +929,11 @@ namespace ECSEngine {
 
 		// Determine the texture extension - HDR textures must take a different path
 		Stream<wchar_t> texture_path = filename;
-		Path extension = function::PathExtensionBoth(texture_path);
+		Path extension = PathExtensionBoth(texture_path);
 		ECS_ASSERT(extension.size > 0, "No extension could be identified");
 
-		bool is_hdr_texture = function::CompareStrings(extension, L".hdr");
-		bool is_tga_texture = function::CompareStrings(extension, L".tga");
+		bool is_hdr_texture = extension == L".hdr";
+		bool is_tga_texture = extension == L".tga";
 
 		HRESULT result;
 		
@@ -946,7 +945,7 @@ namespace ECSEngine {
 		DirectX::ScratchImage image;
 		SetInternalImageAllocator(&image, descriptor->allocator);
 		if (is_hdr_texture) {
-			bool apply_tonemapping = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEXTURE_HDR_TONEMAP);
+			bool apply_tonemapping = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEXTURE_HDR_TONEMAP);
 			result = DirectX::LoadFromHDRFile(filename.buffer, nullptr, image, apply_tonemapping);
 		}
 		else if (is_tga_texture) {
@@ -985,7 +984,7 @@ namespace ECSEngine {
 		texture_view.view = nullptr;
 
 		bool is_compression = descriptor->compression != ECS_TEXTURE_COMPRESSION_EX_NONE;
-		bool temporary = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY);
+		bool temporary = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY);
 
 		if (is_compression) {
 			DirectX::ScratchImage image;
@@ -997,7 +996,7 @@ namespace ECSEngine {
 			new_image.format = GetGraphicsNativeFormat(decoded_texture.format);
 			ECS_ASSERT(!FAILED(DirectX::ComputePitch(new_image.format, new_image.width, new_image.height, new_image.rowPitch, new_image.slicePitch)));
 
-			if (function::HasFlag(descriptor->misc_flags, ECS_GRAPHICS_MISC_GENERATE_MIPS) || descriptor->context != nullptr) {
+			if (HasFlag(descriptor->misc_flags, ECS_GRAPHICS_MISC_GENERATE_MIPS) || descriptor->context != nullptr) {
 				void* new_allocation = malloc(new_image.slicePitch);
 				memcpy(new_allocation, new_image.pixels, new_image.slicePitch);
 				new_image.pixels = (uint8_t*)new_allocation;
@@ -1107,7 +1106,7 @@ namespace ECSEngine {
 		memset(gltf_meshes, 0, sizeof(GLTFMesh) * data->mesh_count);
 		AllocatorPolymorphic allocator = Allocator();
 
-		bool has_invert = !function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
+		bool has_invert = !HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
 		bool success = LoadMeshesFromGLTF(*data, gltf_meshes, allocator, has_invert);
 		// The load failed
 		if (!success) {
@@ -1144,7 +1143,7 @@ namespace ECSEngine {
 		// Convert the gltf meshes into multiple meshes
 		GLTFMeshesToMeshes(m_graphics, gltf_meshes.buffer, meshes->buffer, meshes->size, misc_flags);
 
-		if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK)) {
+		if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
 			ScaleGLTFMeshes(gltf_meshes, 1.0f / scale_factor);
 		}
@@ -1197,7 +1196,7 @@ namespace ECSEngine {
 		ResourceManagerExDesc* ex_desc
 	)
 	{
-		bool has_invert = !function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
+		bool has_invert = !HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
 
 		// Calculate the allocation size
 		size_t allocation_size = sizeof(CoalescedMesh) + sizeof(Submesh) * data->mesh_count;
@@ -1247,7 +1246,7 @@ namespace ECSEngine {
 
 		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, load_descriptor, ex_desc);
 
-		if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
+		if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
 			ScaleGLTFMeshes(gltf_meshes, 1.0f / scale_factor);
 		}
@@ -1283,7 +1282,7 @@ namespace ECSEngine {
 
 		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, load_descriptor, ex_desc);
 
-		if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
+		if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
 			ScaleGLTFMeshes({ gltf_mesh, 1 }, 1.0f / scale_factor);
 		}
@@ -1327,7 +1326,7 @@ namespace ECSEngine {
 
 		PBRMaterial* _materials = (PBRMaterial*)ECS_STACK_ALLOC((sizeof(PBRMaterial) + sizeof(unsigned int)) * data.mesh_count);
 		Stream<PBRMaterial> materials(_materials, 0);
-		Stream<unsigned int> material_mask(function::OffsetPointer(_materials, sizeof(PBRMaterial) * data.mesh_count), 0);
+		Stream<unsigned int> material_mask(OffsetPointer(_materials, sizeof(PBRMaterial) * data.mesh_count), 0);
 
 		AllocatorPolymorphic allocator = Allocator();
 		bool success = LoadDisjointMaterialsFromGLTF(data, materials, material_mask, allocator);
@@ -1346,7 +1345,7 @@ namespace ECSEngine {
 
 		void* allocation = Allocate(allocation_size);
 		Stream<PBRMaterial>* pbr_materials = (Stream<PBRMaterial>*)allocation;
-		pbr_materials->InitializeFromBuffer(function::OffsetPointer(allocation, sizeof(Stream<PBRMaterial>)), materials.size);
+		pbr_materials->InitializeFromBuffer(OffsetPointer(allocation, sizeof(Stream<PBRMaterial>)), materials.size);
 		memcpy(pbr_materials->buffer, materials.buffer, sizeof(PBRMaterial) * materials.size);
 
 		// Free the gltf data
@@ -1393,11 +1392,11 @@ namespace ECSEngine {
 		ECS_SHADER_TYPE shader_type,
 		ResourceManagerLoadDesc load_descriptor
 	) {
-		bool check_resource_before_unload = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
+		bool check_resource_before_unload = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
 
 		// It can happen that the material does not have a shader assigned (for varying reasons)
 		if (shader_path.size > 0) {
-			bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
+			bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 
 			// Deallocate the vertex shader
 			if (dont_load) {
@@ -1487,8 +1486,8 @@ namespace ECSEngine {
 		Material* material,
 		ResourceManagerLoadDesc load_descriptor
 	) {
-		bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
-		bool check_resource_before_unload = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
+		bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
+		bool check_resource_before_unload = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE);
 
 		// Use temporaries as to not modify the material
 		ECS_STACK_CAPACITY_STREAM(ResourceView, temporary_p_textures, 16);
@@ -1590,7 +1589,7 @@ namespace ECSEngine {
 		Material* converted_material, 
 		ResourceManagerLoadDesc load_descriptor
 	) {
-		bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
+		bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 
 		Stream<char> source_code = { nullptr, 0 };
 		Stream<void> byte_code;
@@ -1662,7 +1661,7 @@ namespace ECSEngine {
 		Material* converted_material, 
 		ResourceManagerLoadDesc load_descriptor
 	) {
-		bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
+		bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 
 		if (dont_load) {
 			converted_material->pixel_shader = resource_manager->LoadShaderImplementation(
@@ -1703,7 +1702,7 @@ namespace ECSEngine {
 		ResourceManagerLoadDesc load_descriptor
 	) {
 		converted_material->ResetTextures();
-		bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
+		bool dont_load = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 
 		for (size_t index = 0; index < user_material->textures.size; index++) {
 			ResourceView resource_view = { nullptr };
@@ -1870,13 +1869,13 @@ namespace ECSEngine {
 
 		void* initial_allocation = Allocate((sizeof(GLTFMesh) + sizeof(PBRMaterial) + sizeof(unsigned int)) * data.mesh_count);
 		GLTFMesh* gltf_meshes = (GLTFMesh*)initial_allocation;
-		Stream<PBRMaterial> pbr_materials(function::OffsetPointer(gltf_meshes, sizeof(GLTFMesh) * data.mesh_count), 0);
-		unsigned int* material_masks = (unsigned int*)function::OffsetPointer(pbr_materials.buffer, sizeof(PBRMaterial) * data.mesh_count);
+		Stream<PBRMaterial> pbr_materials(OffsetPointer(gltf_meshes, sizeof(GLTFMesh) * data.mesh_count), 0);
+		unsigned int* material_masks = (unsigned int*)OffsetPointer(pbr_materials.buffer, sizeof(PBRMaterial) * data.mesh_count);
 		AllocatorPolymorphic allocator = Allocator();
 		// Make every stream 0 for the gltf meshes
 		memset(gltf_meshes, 0, sizeof(GLTFMesh) * data.mesh_count);
 
-		bool has_invert = !function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
+		bool has_invert = !HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
 		bool success = LoadMeshesAndDisjointMaterialsFromGLTF(data, gltf_meshes, pbr_materials, material_masks, allocator, has_invert);
 		// The load failed
 		if (!success) {
@@ -1920,8 +1919,8 @@ namespace ECSEngine {
 
 	ShaderInterface LoadShaderInternalImplementation(ResourceManager* manager, Stream<wchar_t> filename, ShaderCompileOptions options, ResourceManagerLoadDesc load_descriptor,
 		Stream<char>* shader_source_code, Stream<void>* byte_code, ECS_SHADER_TYPE type) {
-		Path path_extension = function::PathExtensionBoth(filename);
-		bool is_byte_code = function::CompareStrings(path_extension, L".cso");
+		Path path_extension = PathExtensionBoth(filename);
+		bool is_byte_code = path_extension == L".cso";
 
 		void* shader = nullptr;
 		Stream<void> contents = { nullptr, 0 };
@@ -1930,7 +1929,7 @@ namespace ECSEngine {
 		if (is_byte_code) {
 			ECS_ASSERT(shader_source_code == nullptr, "Cannot retrieve shader source code from binary shader.");
 			contents = ReadWholeFileBinary(filename.buffer, allocator_polymorphic);
-			shader = manager->m_graphics->CreateShader(filename, type, function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
+			shader = manager->m_graphics->CreateShader(filename, type, HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
 		}
 		else {
 			Stream<char> source_code = ReadWholeFileText(filename.buffer, allocator_polymorphic);
@@ -1941,7 +1940,7 @@ namespace ECSEngine {
 				&include,
 				options, 
 				byte_code,
-				function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY)
+				HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY)
 			);
 			contents = source_code;
 		}
@@ -1978,7 +1977,7 @@ namespace ECSEngine {
 			&include,
 			options,
 			byte_code,
-			function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY)
+			HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY)
 		);
 
 		if (shader != nullptr) {
@@ -2392,7 +2391,7 @@ namespace ECSEngine {
 		UnloadUserMaterialTextures(this, user_material, material, load_desc);
 		UnloadUserMaterialBuffers(this, user_material, material, load_desc);
 
-		bool free_samplers = !function::HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS);
+		bool free_samplers = !HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS);
 		if (free_samplers) {
 			UnloadUserMaterialSamplers(this, user_material);
 		}
@@ -2593,7 +2592,7 @@ namespace ECSEngine {
 		if (pbr.color_texture.buffer != nullptr && pbr.color_texture.size > 0) {
 			shader_macros.Add({ "COLOR_TEXTURE", "" });
 
-			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.color_texture);
+			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.color_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_COLOR, ECS_TEXTURE_COMPRESSION_EX_COLOR });
 			macro_texture_count++;
 		}
@@ -2601,7 +2600,7 @@ namespace ECSEngine {
 		if (pbr.emissive_texture.buffer != nullptr && pbr.emissive_texture.size > 0) {
 			shader_macros.Add({ "EMISSIVE_TEXTURE", "" });
 			
-			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.emissive_texture);
+			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.emissive_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_EMISSIVE, ECS_TEXTURE_COMPRESSION_EX_COLOR });
 			macro_texture_count++;
 		}
@@ -2609,7 +2608,7 @@ namespace ECSEngine {
 		if (pbr.metallic_texture.buffer != nullptr && pbr.metallic_texture.size > 0) {
 			shader_macros.Add({ "METALLIC_TEXTURE", "" });
 
-			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.metallic_texture);
+			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.metallic_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_METALLIC, ECS_TEXTURE_COMPRESSION_EX_GRAYSCALE });
 			macro_texture_count++;
 		}
@@ -2617,7 +2616,7 @@ namespace ECSEngine {
 		if (pbr.normal_texture.buffer != nullptr && pbr.normal_texture.size > 0) {
 			shader_macros.Add({ "NORMAL_TEXTURE", "" });
 
-			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.normal_texture);
+			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.normal_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_NORMAL, ECS_TEXTURE_COMPRESSION_EX_TANGENT_SPACE_NORMAL });
 			macro_texture_count++;
 		}
@@ -2625,7 +2624,7 @@ namespace ECSEngine {
 		if (pbr.occlusion_texture.buffer != nullptr && pbr.occlusion_texture.size > 0) {
 			shader_macros.Add({ "OCCLUSION_TEXTURE", "" });
 
-			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.occlusion_texture);
+			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.occlusion_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_OCCLUSION, ECS_TEXTURE_COMPRESSION_EX_GRAYSCALE });
 			macro_texture_count++;
 		}
@@ -2633,7 +2632,7 @@ namespace ECSEngine {
 		if (pbr.roughness_texture.buffer != nullptr && pbr.roughness_texture.size > 0) {
 			shader_macros.Add({ "ROUGHNESS_TEXTURE", "" });
 
-			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.roughness_texture);
+			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.roughness_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_ROUGHNESS, ECS_TEXTURE_COMPRESSION_EX_GRAYSCALE });
 			macro_texture_count++;
 		}
@@ -2647,11 +2646,11 @@ namespace ECSEngine {
 		auto search_functor = [](Stream<wchar_t> path, void* _data) {
 			FunctorData* data = (FunctorData*)_data;
 
-			Stream<wchar_t> filename = function::PathStem(path);
+			Stream<wchar_t> filename = PathStem(path);
 
 			for (size_t index = 0; index < data->mappings->size; index++) {
-				if (function::CompareStrings(filename, data->mappings->buffer[index].texture)) {
-					Stream<wchar_t> new_texture = function::StringCopy(data->allocator, path);
+				if (filename == data->mappings->buffer[index].texture) {
+					Stream<wchar_t> new_texture = StringCopy(data->allocator, path);
 					data->mappings->buffer[index].texture = new_texture;
 					data->mappings->Swap(index, data->mappings->size - 1);
 					data->mappings->size--;
@@ -2789,7 +2788,7 @@ namespace ECSEngine {
 		}
 
 		if (options.reload_samplers) {
-			if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS)) {
+			if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS)) {
 				// Here we can unload and then load since these are not affected by reference counts
 				UnloadUserMaterialSamplers(resource_manager, old_user_material);
 			}

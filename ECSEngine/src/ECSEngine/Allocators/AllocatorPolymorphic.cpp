@@ -9,7 +9,7 @@
 #include "PoolAllocator.h"
 #include "StackAllocator.h"
 #include "ResizableLinearAllocator.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 
 namespace ECSEngine {
 
@@ -403,7 +403,7 @@ namespace ECSEngine {
 			LinearAllocator* allocators = (LinearAllocator*)pointers_to_be_constructed;
 			for (size_t index = 0; index < count; index++) {
 				allocators[index] = LinearAllocator(buffer, info.linear_capacity);
-				buffer = function::OffsetPointer(buffer, info.linear_capacity);
+				buffer = OffsetPointer(buffer, info.linear_capacity);
 			}
 		}
 		break;
@@ -412,7 +412,7 @@ namespace ECSEngine {
 			StackAllocator* allocators = (StackAllocator*)pointers_to_be_constructed;
 			for (size_t index = 0; index < count; index++) {
 				allocators[index] = StackAllocator(buffer, info.stack_capacity);
-				buffer = function::OffsetPointer(buffer, info.stack_capacity);
+				buffer = OffsetPointer(buffer, info.stack_capacity);
 			}
 		}
 		break;
@@ -422,7 +422,7 @@ namespace ECSEngine {
 			MultipoolAllocator* allocators = (MultipoolAllocator*)pointers_to_be_constructed;
 			for (size_t index = 0; index < count; index++) {
 				allocators[index] = MultipoolAllocator(buffer, info.multipool_capacity, info.multipool_block_count);
-				buffer = function::OffsetPointer(buffer, allocator_size);
+				buffer = OffsetPointer(buffer, allocator_size);
 			}
 		}
 		break;
@@ -432,7 +432,7 @@ namespace ECSEngine {
 			MemoryArena* allocators = (MemoryArena*)pointers_to_be_constructed;
 			for (size_t index = 0; index < count; index++) {
 				allocators[index] = MemoryArena(buffer, info.arena_allocator_count, info);
-				buffer = function::OffsetPointer(buffer, allocator_size);
+				buffer = OffsetPointer(buffer, allocator_size);
 			}
 		}
 		break;

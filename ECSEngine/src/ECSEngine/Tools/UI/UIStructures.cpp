@@ -1,8 +1,6 @@
 #include "ecspch.h"
 #include "UIStructures.h"
 #include "../../Rendering/ColorUtilities.h"
-#include "../../Utilities/Function.h"
-#include "../../Utilities/FunctionInterfaces.h"
 #include "../../Rendering/Graphics.h"
 
 #include "UIHelpers.h"
@@ -238,7 +236,7 @@ namespace ECSEngine {
 			scale_y = (float*)ptr;
 			ptr += sizeof(float) * count;
 
-			ptr = function::AlignPointer(ptr, alignof(UIActionHandler));
+			ptr = AlignPointer(ptr, alignof(UIActionHandler));
 			action = (UIActionHandler*)ptr;
 		}
 
@@ -870,7 +868,7 @@ namespace ECSEngine {
 
 		void UIReservedHandler::Write(float2 position, float2 scale, UIActionHandler action_handler)
 		{
-			action_handler.data = function::CopyNonZero(allocator, action_handler.data, action_handler.data_size);
+			action_handler.data = CopyNonZero(allocator, action_handler.data, action_handler.data_size);
 			handler->action[index] = action_handler;
 			handler->position_x[index] = position.x;
 			handler->position_y[index] = position.y;

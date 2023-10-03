@@ -127,7 +127,7 @@ namespace ECSEngine {
 
 		// Rename the file to a temporary name such that if we fail to serialize we don't lose the previous data
 		ECS_STACK_CAPACITY_STREAM(wchar_t, renamed_file, 512);
-		renamed_file.CopyOther(function::PathFilename(save_data->file));
+		renamed_file.CopyOther(PathFilename(save_data->file));
 		renamed_file.AddStream(L".temp");
 		if (!RenameFolderOrFile(save_data->file, renamed_file)) {
 			// If we fail, then return now.
@@ -139,7 +139,7 @@ namespace ECSEngine {
 				renamed_file.CopyOther(original_file);
 				renamed_file.AddStream(L".temp");
 
-				Stream<wchar_t> original_file_filename = function::PathFilename(original_file);
+				Stream<wchar_t> original_file_filename = PathFilename(original_file);
 
 				if (file_handle != -1) {
 					CloseFile(file_handle);

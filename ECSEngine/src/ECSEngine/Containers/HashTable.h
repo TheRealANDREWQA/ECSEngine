@@ -504,7 +504,7 @@ namespace ECSEngine {
 			}
 			else {
 				const Pair* pairs = GetPairs();
-				return function::PointerDifference(ptr, pairs) / sizeof(Pair);
+				return PointerDifference(ptr, pairs) / sizeof(Pair);
 			}
 		}
 
@@ -514,7 +514,7 @@ namespace ECSEngine {
 			}
 			else {
 				const Pair* pairs = GetPairs();
-				return function::PointerDifference(function::OffsetPointer(identifier, -sizeof(T)), pairs) / sizeof(Pair);
+				return PointerDifference(OffsetPointer(identifier, -sizeof(T)), pairs) / sizeof(Pair);
 			}
 		}
 
@@ -950,7 +950,7 @@ namespace ECSEngine {
 			void* allocation = Allocate(allocator, total_size, alignof(void*), debug_info);
 			memcpy(allocation, source.GetAllocatedBuffer(), table_copy_size);
 			destination.SetBuffers(allocation, source.GetCapacity());
-			allocation = function::OffsetPointer(allocation, table_copy_size);
+			allocation = OffsetPointer(allocation, table_copy_size);
 			uintptr_t ptr = (uintptr_t)allocation;
 			source.ForEachIndexConst([&](unsigned int index) {
 				const auto* value = source.GetValuePtrFromIndex(index);

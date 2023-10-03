@@ -67,8 +67,8 @@ void VisualizeTextureUIAdditionalDraw(void* window_data, UIDrawerDescriptor* dra
 		ECS_ASSERT(additional_data->combo_labels->capacity >= select_elements.size);
 
 		// Sort again the entries
-		function::insertion_sort(select_elements.buffer, select_elements.size, 1, [](const VisualizeTextureSelectElement& left, const VisualizeTextureSelectElement& right) {
-			return function::StringLexicographicCompare(left.name, right.name);
+		insertion_sort(select_elements.buffer, select_elements.size, 1, [](const VisualizeTextureSelectElement& left, const VisualizeTextureSelectElement& right) {
+			return StringLexicographicCompare(left.name, right.name);
 		});
 
 		// Now put the entries into a temp buffer from the drawer and fill in the temp memory
@@ -92,8 +92,8 @@ void VisualizeTextureUISetDecriptor(UIWindowDescriptor& descriptor, EditorState*
 {
 	unsigned int index = *(unsigned int*)stack_memory;
 
-	CapacityStream<char>* window_name = (CapacityStream<char>*)function::OffsetPointer(stack_memory, sizeof(index));
-	window_name->InitializeFromBuffer(function::OffsetPointer(window_name, sizeof(*window_name)), 0, 128);
+	CapacityStream<char>* window_name = (CapacityStream<char>*)OffsetPointer(stack_memory, sizeof(index));
+	window_name->InitializeFromBuffer(OffsetPointer(window_name, sizeof(*window_name)), 0, 128);
 	GetVisualizeTextureUIWindowName(index, *window_name);
 
 	VisualizeTextureCreateData create_data;
@@ -101,7 +101,7 @@ void VisualizeTextureUISetDecriptor(UIWindowDescriptor& descriptor, EditorState*
 	create_data.window_name = *window_name;
 	create_data.additional_draw = VisualizeTextureUIAdditionalDraw;
 	create_data.additional_draw_data = editor_state;
-	descriptor = VisualizeTextureWindowDescriptor(editor_state->ui_system, &create_data, function::OffsetPointer(window_name, sizeof(*window_name) + window_name->capacity));
+	descriptor = VisualizeTextureWindowDescriptor(editor_state->ui_system, &create_data, OffsetPointer(window_name, sizeof(*window_name) + window_name->capacity));
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -145,7 +145,7 @@ void GetVisualizeTextureUIWindowName(unsigned int index, CapacityStream<char>& n
 {
 	name.CopyOther(VISUALIZE_TEXTURE_WINDOW_NAME);
 	name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-	function::ConvertIntToChars(name, index);
+	ConvertIntToChars(name, index);
 }
 
 // ------------------------------------------------------------------------------------------------------------

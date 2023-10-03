@@ -275,7 +275,7 @@ void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTa
 		editor_state->task_manager->AddDynamicTaskAndWake(task);
 	}
 	else {
-		task.data = task.data_size > 0 ? function::Copy(editor_state->MultithreadedEditorAllocator(), task.data, task.data_size) : task.data;
+		task.data = task.data_size > 0 ? Copy(editor_state->MultithreadedEditorAllocator(), task.data, task.data_size) : task.data;
 		editor_state->pending_background_tasks.Push(task);
 	}
 }
@@ -284,7 +284,7 @@ void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTa
 
 void EditorStateAddGPUTask(EditorState* editor_state, ThreadTask task)
 {
-	task.data = task.data_size > 0 ? function::Copy(editor_state->MultithreadedEditorAllocator(), task.data, task.data_size) : task.data;
+	task.data = task.data_size > 0 ? Copy(editor_state->MultithreadedEditorAllocator(), task.data, task.data_size) : task.data;
 	editor_state->gpu_tasks.Push(task);
 }
 
@@ -301,14 +301,14 @@ void PreinitializeRuntime(EditorState* editor_state) {
 	*runtime_resource_manager_allocator = DefaultResourceManagerAllocator(editor_state->GlobalMemoryManager());
 
 	// Create the resource manager - it already has the shader directory set for the ECSEngine Shaders
-	editor_state->runtime_resource_manager = (ResourceManager*)function::OffsetPointer(runtime_resource_manager_allocator, sizeof(*runtime_resource_manager_allocator));
+	editor_state->runtime_resource_manager = (ResourceManager*)OffsetPointer(runtime_resource_manager_allocator, sizeof(*runtime_resource_manager_allocator));
 	*editor_state->runtime_resource_manager = ResourceManager(runtime_resource_manager_allocator, editor_state->RuntimeGraphics());
 
 	// And the asset database
-	ResizableMemoryArena* database_arena = (ResizableMemoryArena*)function::OffsetPointer(editor_state->runtime_resource_manager, sizeof(*editor_state->runtime_resource_manager));
+	ResizableMemoryArena* database_arena = (ResizableMemoryArena*)OffsetPointer(editor_state->runtime_resource_manager, sizeof(*editor_state->runtime_resource_manager));
 	*database_arena = CreateResizableMemoryArena(ECS_MB, 4, ECS_KB * 4, GetAllocatorPolymorphic(editor_state->GlobalMemoryManager()), ECS_MB * 5, 4, ECS_KB * 4);
 
-	AssetDatabase* database = (AssetDatabase*)function::OffsetPointer(database_arena, sizeof(*database_arena));
+	AssetDatabase* database = (AssetDatabase*)OffsetPointer(database_arena, sizeof(*database_arena));
 	*database = AssetDatabase(GetAllocatorPolymorphic(database_arena), editor_state->ui_reflection->reflection);
 	editor_state->asset_database = database;
 }
@@ -323,7 +323,7 @@ ECS_THREAD_TASK(InitializeRuntimeGraphicsTask) {
 	size_t allocation_size = sizeof(MemoryManager) + sizeof(Graphics);
 	void* allocation = editor_state->multithreaded_editor_allocator->Allocate_ts(allocation_size);
 	MemoryManager* runtime_graphics_allocator = (MemoryManager*)allocation;
-	editor_state->runtime_graphics = (Graphics*)function::OffsetPointer(runtime_graphics_allocator, sizeof(*runtime_graphics_allocator));
+	editor_state->runtime_graphics = (Graphics*)OffsetPointer(runtime_graphics_allocator, sizeof(*runtime_graphics_allocator));
 
 	*runtime_graphics_allocator = MemoryManager(
 		GRAPHICS_ALLOCATOR_CAPACITY, 
@@ -663,7 +663,7 @@ void EditorStateApplicationQuit(EditorState* editor_state, EDITOR_APPLICATION_QU
 
 	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, sandbox_indices, editor_state->sandboxes.size);
 	sandbox_indices.size = editor_state->sandboxes.size;
-	function::MakeSequence(sandbox_indices);
+	MakeSequence(sandbox_indices);
 	CreateSaveScenePopUp(editor_state, sandbox_indices, { ApplicationQuitHandler, &quit_data, sizeof(quit_data) });
 }
 

@@ -2,10 +2,10 @@
 #include "ForEachFiles.h"
 #include "File.h"
 #include "Path.h"
-#include "FunctionInterfaces.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "../Allocators/MultipoolAllocator.h"
-#include "Function.h"
+#include "StringUtilities.h"
+#include "PointerUtilities.h"
 
 namespace ECSEngine {
 
@@ -59,7 +59,7 @@ namespace ECSEngine {
 
 	void SetSearchAllStringForEachFile(CapacityStream<wchar_t>& string, Stream<wchar_t> directory) {
 		string.CopyOther(directory);
-		wchar_t separator = function::PathIsRelative(string) ? ECS_OS_PATH_SEPARATOR_REL : ECS_OS_PATH_SEPARATOR;
+		wchar_t separator = PathIsRelative(string) ? ECS_OS_PATH_SEPARATOR_REL : ECS_OS_PATH_SEPARATOR;
 		string.Add(separator);
 		string.Add(L'*');
 		string.Add(L'\0');
@@ -126,7 +126,7 @@ namespace ECSEngine {
 		void* allocation = ECS_STACK_ALLOC(MultipoolAllocator::MemoryOf(MAX_SIMULTANEOUS_DIRECTORIES, STACK_ALLOCATION));
 		MultipoolAllocator allocator((unsigned char*)allocation, STACK_ALLOCATION, MAX_SIMULTANEOUS_DIRECTORIES);
 
-		Stream<wchar_t> allocator_directory = function::StringCopy(GetAllocatorPolymorphic(&allocator), directory);
+		Stream<wchar_t> allocator_directory = StringCopy(GetAllocatorPolymorphic(&allocator), directory);
 		subdirectories.Add(allocator_directory.buffer);
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_string, 512);
@@ -160,7 +160,7 @@ namespace ECSEngine {
 					}
 
 					if (find_data.attrib & _A_SUBDIR) {
-						Stream<wchar_t> copied_string = function::StringCopy(GetAllocatorPolymorphic(&allocator), temp_string);
+						Stream<wchar_t> copied_string = StringCopy(GetAllocatorPolymorphic(&allocator), temp_string);
 						subdirectories.AddAssert(copied_string.buffer);
 					}
 				}
@@ -190,7 +190,7 @@ namespace ECSEngine {
 		void* allocation = ECS_STACK_ALLOC(MultipoolAllocator::MemoryOf(MAX_SIMULTANEOUS_DIRECTORIES, STACK_ALLOCATION));
 		MultipoolAllocator allocator((unsigned char*)allocation, STACK_ALLOCATION, MAX_SIMULTANEOUS_DIRECTORIES);
 
-		Stream<wchar_t> allocator_directory = function::StringCopy(GetAllocatorPolymorphic(&allocator), directory);
+		Stream<wchar_t> allocator_directory = StringCopy(GetAllocatorPolymorphic(&allocator), directory);
 		subdirectories.Add(allocator_directory.buffer);
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_string, 512);
@@ -239,7 +239,7 @@ namespace ECSEngine {
 				}
 
 				if (find_data.attrib & _A_SUBDIR) {
-					Stream<wchar_t> copied_string = function::StringCopy(GetAllocatorPolymorphic(&allocator), temp_string);
+					Stream<wchar_t> copied_string = StringCopy(GetAllocatorPolymorphic(&allocator), temp_string);
 					subdirectories.AddAssert(copied_string.buffer);
 				}
 			}
@@ -276,8 +276,8 @@ namespace ECSEngine {
 	{
 		return ForEachInDirectoryInternal(directory, [=](Stream<wchar_t> path, unsigned int attribute) {
 			if (attribute & _A_ARCH) {
-				Stream<wchar_t> extension = function::PathExtension(path);
-				if (function::FindString(extension, extensions) != -1) {
+				Stream<wchar_t> extension = PathExtension(path);
+				if (FindString(extension, extensions) != -1) {
 					return functor(path, data);
 				}
 			}
@@ -303,8 +303,8 @@ namespace ECSEngine {
 	{
 		return ForEachInDirectoryRecursiveInternal(directory, [=](Stream<wchar_t> path, unsigned int attribute) {
 			if (attribute & _A_ARCH) {
-				Stream<wchar_t> extension = function::PathExtension(path);
-				if (function::FindString(extension, extensions) != -1) {
+				Stream<wchar_t> extension = PathExtension(path);
+				if (FindString(extension, extensions) != -1) {
 					return functor(path, data);
 				}
 			}
@@ -399,10 +399,10 @@ namespace ECSEngine {
 				ForData* data = (ForData*)_data;
 
 				if (data->relative_root.size > 0) {
-					path = function::PathRelativeToAbsolute(path, data->relative_root);
+					path = PathRelativeToAbsolute(path, data->relative_root);
 				}
 
-				Stream<wchar_t> allocated_path = function::StringCopy(data->allocator, path);
+				Stream<wchar_t> allocated_path = StringCopy(data->allocator, path);
 				data->paths.Add(allocated_path);
 				return true;
 			}, options.depth_traversal);
@@ -449,7 +449,7 @@ namespace ECSEngine {
 
 				size_t path_size = path.size + 1;
 				if (data->relative_root.size > 0) {
-					path_size = function::PathRelativeToAbsolute(path, data->relative_root).size + 1;
+					path_size = PathRelativeToAbsolute(path, data->relative_root).size + 1;
 				}
 
 				data->total_size += path_size;
@@ -474,7 +474,7 @@ namespace ECSEngine {
 				void* buffer = *data->allocation;
 
 				if (data->relative_root.size > 0) {
-					path = function::PathRelativeToAbsolute(path, data->relative_root);
+					path = PathRelativeToAbsolute(path, data->relative_root);
 				}
 
 				data->paths.Add(Stream<wchar_t>(buffer, path.size));
@@ -482,7 +482,7 @@ namespace ECSEngine {
 				// Increase the path size with 1 to include the '\0'
 				path.size++;
 				path.CopyTo(buffer);
-				*data->allocation = function::OffsetPointer(buffer, sizeof(wchar_t) * path.size);
+				*data->allocation = OffsetPointer(buffer, sizeof(wchar_t) * path.size);
 
 				return true;
 			}, options.depth_traversal);
@@ -493,7 +493,7 @@ namespace ECSEngine {
 				return false;
 			}
 
-			ECS_ASSERT(function::OffsetPointer(initial_allocation, determine_size.total_size) >= allocation);
+			ECS_ASSERT(OffsetPointer(initial_allocation, determine_size.total_size) >= allocation);
 			return true;
 		}
 	}
@@ -520,10 +520,10 @@ namespace ECSEngine {
 				ForData* data = (ForData*)_data;
 
 				if (data->relative_root.size > 0) {
-					path = function::PathRelativeToAbsolute(path, data->relative_root);
+					path = PathRelativeToAbsolute(path, data->relative_root);
 				}
 
-				data->paths.Add(function::StringCopy(data->allocator, path));
+				data->paths.Add(StringCopy(data->allocator, path));
 				return true;
 			}, options.depth_traversal);
 
@@ -571,7 +571,7 @@ namespace ECSEngine {
 				DetermineSizeData* data = (DetermineSizeData*)_data;
 
 				if (data->relative_root.size > 0) {
-					path = function::PathRelativeToAbsolute(path, data->relative_root);
+					path = PathRelativeToAbsolute(path, data->relative_root);
 				}
 
 				size_t path_size = path.size + 1;
@@ -595,7 +595,7 @@ namespace ECSEngine {
 				BatchedCopyStringsData* data = (BatchedCopyStringsData*)_data;
 				
 				if (data->relative_root.size > 0) {
-					path = function::PathRelativeToAbsolute(path, data->relative_root);
+					path = PathRelativeToAbsolute(path, data->relative_root);
 				}
 
 				void* buffer = *data->allocation;
@@ -604,7 +604,7 @@ namespace ECSEngine {
 				// Increase the path size with 1 to include the '\0'
 				path.size++;
 				path.CopyTo(buffer);
-				*data->allocation = function::OffsetPointer(buffer, sizeof(wchar_t) * path.size);
+				*data->allocation = OffsetPointer(buffer, sizeof(wchar_t) * path.size);
 
 				return true;
 			}, options.depth_traversal);
@@ -615,7 +615,7 @@ namespace ECSEngine {
 				return false;
 			}
 
-			ECS_ASSERT(function::OffsetPointer(initial_allocation, determine_size.total_size) >= allocation);
+			ECS_ASSERT(OffsetPointer(initial_allocation, determine_size.total_size) >= allocation);
 			return true;
 		}
 	}

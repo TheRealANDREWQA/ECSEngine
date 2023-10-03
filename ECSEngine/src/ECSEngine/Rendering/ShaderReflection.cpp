@@ -1,6 +1,8 @@
 #include "ecspch.h"
 #include "ShaderReflection.h"
-#include "../Utilities/FunctionInterfaces.h"
+#include "../Utilities/StringUtilities.h"
+#include "../Utilities/ParsingUtilities.h"
+#include "../Utilities/FilePreprocessor.h"
 #include "Shaders/Macros.hlsli"
 #include "../Utilities/File.h"
 #include "../Utilities/Reflection/Reflection.h"
@@ -199,7 +201,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	unsigned short ParseBasicTypeArrayCount(const char* starting_character, const char* new_line_character) {
 		unsigned short result = 0;
 
-		starting_character = function::SkipWhitespace(starting_character);
+		starting_character = SkipWhitespace(starting_character);
 		if (starting_character < new_line_character) {
 			if (*starting_character == '[') {
 				// We have a basic type array
@@ -210,8 +212,8 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 				if (starting_character < new_line_character) {
 					// The bracket is closed
-					Stream<char> parse_string = { starting_int_val, function::PointerDifference(starting_character, starting_int_val) };
-					result = function::ConvertCharactersToInt(parse_string);
+					Stream<char> parse_string = { starting_int_val, PointerDifference(starting_character, starting_int_val) };
+					result = ConvertCharactersToInt(parse_string);
 				}
 			}
 		}
@@ -225,20 +227,20 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	unsigned short ParsePackoffset(const char* starting_character, const char* new_line_character) {
 		unsigned short offset = USHORT_MAX;
 
-		starting_character = function::SkipWhitespace(starting_character);
+		starting_character = SkipWhitespace(starting_character);
 		if (starting_character < new_line_character) {
 			const char* semicolon = strchr(starting_character, ':');
 			if (semicolon != nullptr && semicolon < new_line_character) {
 				// We have a packoffset specification
-				const char* packoffset_start = function::SkipWhitespace(semicolon + 1);
-				const char* paranthese_start = function::SkipCodeIdentifier(packoffset_start);
-				paranthese_start = function::SkipWhitespace(paranthese_start);
+				const char* packoffset_start = SkipWhitespace(semicolon + 1);
+				const char* paranthese_start = SkipCodeIdentifier(packoffset_start);
+				paranthese_start = SkipWhitespace(paranthese_start);
 				if (*paranthese_start == '(') {
 					const char* paranthese_end = strchr(paranthese_start, ')');
 					if (paranthese_end != nullptr && paranthese_end < new_line_character) {
 						// Determine if there is a dot in between
 						const char* dot = strchr(paranthese_start, '.');
-						Stream<char> int_parse = { paranthese_start, function::PointerDifference(paranthese_end, paranthese_start) };
+						Stream<char> int_parse = { paranthese_start, PointerDifference(paranthese_end, paranthese_start) };
 						offset = 0;
 						if (dot != nullptr) {
 							if (dot < new_line_character) {
@@ -256,7 +258,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 						}
 
 						// The values are in strides of 16 bytes - 4 floats
-						offset += (unsigned short)function::ConvertCharactersToInt(int_parse) * 16;
+						offset += (unsigned short)ConvertCharactersToInt(int_parse) * 16;
 					}
 				}
 			}
@@ -291,12 +293,12 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	) {
 		Stream<char> ignore_tag = "_";
 
-		Stream<char> parse_range = { semicolon + 1, function::PointerDifference(new_line, semicolon + 1) / sizeof(char) };
-		parse_range = function::SkipWhitespace(parse_range);
+		Stream<char> parse_range = { semicolon + 1, PointerDifference(new_line, semicolon + 1) / sizeof(char) };
+		parse_range = SkipWhitespace(parse_range);
 
 		while (parse_range.size > 0) {
 			Stream<char> current_tag = parse_range;
-			Stream<char> current_tag_end = function::SkipTag(current_tag);
+			Stream<char> current_tag_end = SkipTag(current_tag);
 			current_tag.size -= current_tag_end.size;
 			parse_range = current_tag_end;
 
@@ -310,7 +312,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					current_tag.size--;
 
 					ECS_STACK_CAPACITY_STREAM(double4, parsed_values, 2);
-					function::ParseDouble4s(current_tag, parsed_values, ',', ',', ignore_tag);
+					ParseDouble4s(current_tag, parsed_values, ',', ',', ignore_tag);
 					field->min_value = parsed_values[0];
 					field->max_value = parsed_values[1];
 				}
@@ -323,7 +325,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 					CapacityStream<double4> default_values;
 					default_values.InitializeFromBuffer(field->default_value, 0, 4);
-					function::ParseDouble4s(current_tag, default_values, ',', ',', ignore_tag);
+					ParseDouble4s(current_tag, default_values, ',', ',', ignore_tag);
 					ECS_ASSERT(default_values.size == field->basic_component_count);
 				}
 				else {
@@ -335,7 +337,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 							current_token.size--;
 
 							ECS_STACK_CAPACITY_STREAM(double4, all_values, 3);
-							function::ParseDouble4s(current_token, all_values, ',', ',', ignore_tag);
+							ParseDouble4s(current_token, all_values, ',', ',', ignore_tag);
 							field->default_value[0] = all_values[0];
 							field->min_value = all_values[1];
 							field->max_value = all_values[2];
@@ -410,8 +412,8 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		const char* new_line,
 		unsigned short* current_pointer_offset
 	) {
-		const char* type_end = function::SkipCodeIdentifier(type_start);
-		Stream<char> type_identifier = { type_start, function::PointerDifference(type_end, type_start) / sizeof(char) };
+		const char* type_end = SkipCodeIdentifier(type_start);
+		Stream<char> type_identifier = { type_start, PointerDifference(type_end, type_start) / sizeof(char) };
 		
 		ShaderConstantBufferReflectionTypeMapping mapping;
 		if (shader_reflection->cb_mapping_table.TryGetValue(type_identifier, mapping)) {
@@ -423,7 +425,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			if (packoffset == USHORT_MAX) {
 				// We need to align this field if it crosses the 16 byte alignment boundary
 				field->pointer_offset = *current_pointer_offset;
-				unsigned short upper_boundary = function::AlignPointerStack(field->pointer_offset, 16);
+				unsigned short upper_boundary = AlignPointerStack(field->pointer_offset, 16);
 				if (field->pointer_offset + basic_type_byte_size > upper_boundary) {
 					// Align it to the next boundary
 					field->pointer_offset = upper_boundary;			
@@ -434,9 +436,9 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			}
 			field->definition = Reflection::GetBasicFieldDefinition(mapping.basic_type);
 
-			const char* name_start = function::SkipWhitespace(type_end);
-			const char* name_end = function::SkipCodeIdentifier(name_start);
-			field->name = { name_start, function::PointerDifference(name_end, name_start) / sizeof(char) };
+			const char* name_start = SkipWhitespace(type_end);
+			const char* name_end = SkipCodeIdentifier(name_start);
+			field->name = { name_start, PointerDifference(name_end, name_start) / sizeof(char) };
 
 			// Set DBL_MAX the value of the defaults, min and max
 			field->max_value.x = DBL_MAX;
@@ -477,9 +479,9 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			matrix_field_name_storage->size += shader_field->name.size;
 			matrix_field_name_storage->AssertCapacity();
 		}
-		reflection_fields[0].name = function::StringCopy(allocator, shader_field->name);
+		reflection_fields[0].name = StringCopy(allocator, shader_field->name);
 
-		reflection_fields[0].definition = function::StringCopy(allocator, shader_field->definition);
+		reflection_fields[0].definition = StringCopy(allocator, shader_field->definition);
 		reflection_fields[0].info.basic_type = shader_field->basic_type;
 		reflection_fields[0].info.pointer_offset = shader_field->pointer_offset;
 		reflection_fields[0].info.stream_type = shader_field->basic_array_count == 0 ? Reflection::ReflectionStreamFieldType::Basic : 
@@ -500,10 +502,10 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		}
 		reflection_fields[0].info.stream_byte_size = 0;
 		if (shader_field->basic_type == Reflection::ReflectionBasicFieldType::UserDefined) {
-			if (function::CompareStrings(shader_field->definition, "Color")) {
+			if (shader_field->definition == "Color") {
 				reflection_fields[0].info.byte_size = sizeof(Color);
 			}
-			else if (function::CompareStrings(shader_field->definition, "ColorFloat")) {
+			else if (shader_field->definition == "ColorFloat") {
 				reflection_fields[0].info.byte_size = sizeof(ColorFloat);
 			}
 			else {
@@ -528,8 +530,8 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			shader_field->name.CopyTo(reflection_fields[0].name.buffer);
 			reflection_fields[0].name.size = shader_field->name.size;
 			reflection_fields[0].name.Add(' ');
-			reflection_fields[0].tag = function::StringCopy(allocator, shader_field->tag);
-			function::ConvertIntToChars(reflection_fields[0].name, 0);
+			reflection_fields[0].tag = StringCopy(allocator, shader_field->tag);
+			ConvertIntToChars(reflection_fields[0].name, 0);
 
 			// Copy the first field to all the other
 			for (unsigned char index = 1; index < shader_field->basic_component_count; index++) {
@@ -538,10 +540,10 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				shader_field->name.CopyTo(reflection_fields[index].name.buffer);
 				reflection_fields[index].name.size = shader_field->name.size;
 				reflection_fields[index].name.Add(' ');
-				function::ConvertIntToChars(reflection_fields[index].name, index);
+				ConvertIntToChars(reflection_fields[index].name, index);
 				// Copy the definition and the tag such that on deallocation everything is homogeneous
-				reflection_fields[index].definition = function::StringCopy(allocator, shader_field->definition);
-				reflection_fields[index].tag = function::StringCopy(allocator, shader_field->tag);
+				reflection_fields[index].definition = StringCopy(allocator, shader_field->definition);
+				reflection_fields[index].tag = StringCopy(allocator, shader_field->tag);
 
 				// Check to see if it has a default value
 				if (shader_field->default_value[0].x != DBL_MAX) {
@@ -558,14 +560,14 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					range_tag.Add('{');
 					double* double_values = (double*)&shader_field->min_value;
 					for (unsigned char index = 0; index < basic_type_count - 1; index++) {
-						function::ConvertDoubleToChars(range_tag, double_values[index], 5);
+						ConvertDoubleToChars(range_tag, double_values[index], 5);
 						range_tag.Add(',');
 					}
-					function::ConvertDoubleToChars(range_tag, double_values[basic_type_count - 1], 5);
+					ConvertDoubleToChars(range_tag, double_values[basic_type_count - 1], 5);
 					range_tag.AddAssert('}');
 				}
 				else {
-					function::ConvertDoubleToChars(range_tag, shader_field->min_value.x, 5);
+					ConvertDoubleToChars(range_tag, shader_field->min_value.x, 5);
 				}
 			};
 
@@ -606,7 +608,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				range_tag.AddStreamAssert(shader_field->tag);
 			}
 
-			reflection_fields[0].tag = function::StringCopy(allocator, range_tag);
+			reflection_fields[0].tag = StringCopy(allocator, range_tag);
 		}
 
 		return shader_field->basic_component_count;
@@ -615,7 +617,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	Stream<char> SetName(const char* name, size_t size, AllocatorPolymorphic allocator) {
-		return function::StringCopy(allocator, Stream<char>(name, size));
+		return StringCopy(allocator, Stream<char>(name, size));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -637,7 +639,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		if (number_end == nullptr) {
 			return USHORT_MAX;
 		}
-		return function::ConvertCharactersToInt(Stream<char>(number_start, number_end - number_start));
+		return ConvertCharactersToInt(Stream<char>(number_start, number_end - number_start));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -653,7 +655,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			current_character++;
 		}
 		const char* name_start = current_character;
-		while (function::IsCodeIdentifierCharacter(*current_character)) {
+		while (IsCodeIdentifierCharacter(*current_character)) {
 			current_character++;
 		}
 		output_name = SetName(name_start, current_character, allocator);
@@ -672,7 +674,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	size_t GetBasicTypeSemanticCount(const char* type_start, const char* type_end) {
 		// Get the number of components 
 		const char* current_character = type_start;
-		while (!function::IsNumberCharacter(*current_character) && current_character < type_end) {
+		while (!IsNumberCharacter(*current_character) && current_character < type_end) {
 			current_character++;
 		}
 
@@ -683,7 +685,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 		// A number character has been found
 		size_t component_count = 0;
-		while (function::IsNumberCharacter(*current_character) && current_character < type_end) {
+		while (IsNumberCharacter(*current_character) && current_character < type_end) {
 			component_count *= 10;
 			component_count += *current_character - '0';
 			current_character++;
@@ -698,7 +700,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		if (*current_character == 'x') {
 			size_t row_count = 0;
 			current_character++;
-			while (function::IsNumberCharacter(*current_character) && current_character < type_end) {
+			while (IsNumberCharacter(*current_character) && current_character < type_end) {
 				row_count *= 10;
 				row_count += *current_character - '0';
 				current_character++;
@@ -751,9 +753,9 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	Stream<char> ShaderReflectedBuffer::GetTag(Stream<char> tag) const
 	{
 		if (tags.size > 0) {
-			Stream<char> found_tag = function::FindFirstToken(tags, tag);
+			Stream<char> found_tag = FindFirstToken(tags, tag);
 			if (found_tag.size > 0) {
-				Stream<char> separator = function::FindFirstToken(found_tag, ECS_SHADER_REFLECTION_CONSTANT_BUFFER_TAG_DELIMITER);
+				Stream<char> separator = FindFirstToken(found_tag, ECS_SHADER_REFLECTION_CONSTANT_BUFFER_TAG_DELIMITER);
 				if (separator.size > 0) {
 					return { found_tag.buffer, found_tag.size - separator.size };
 				}
@@ -881,7 +883,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		if (file_contents.buffer != nullptr) {
 			// Make \0 the last character
 			file_contents[file_contents.size - 1] = '\0';
-			file_contents = function::PreprocessCFile(file_contents, external_macros);
+			file_contents = PreprocessCFile(file_contents, external_macros);
 			bool status = functor(file_contents);
 			free(file_contents.buffer);
 			return status;
@@ -924,13 +926,13 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			while (*last_character != '}') {
 				size_t current_index = elements.size;
 
-				const char* type_start = function::SkipWhitespace(last_character);
+				const char* type_start = SkipWhitespace(last_character);
 				if (*type_start == '\n') {
 					// Empty line skip it
 					last_character = (char*)type_start + 1;
 					continue;
 				}
-				const char* type_end = function::SkipCodeIdentifier(type_start);
+				const char* type_end = SkipCodeIdentifier(type_start);
 
 				// make the end line character \0 for C functions
 				char* end_line = strchr(last_character, '\n');
@@ -956,7 +958,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					current_character++;
 				}
 				char* semantic_name = current_character;
-				while (function::IsCodeIdentifierCharacter(*current_character)) {
+				while (IsCodeIdentifierCharacter(*current_character)) {
 					current_character++;
 				}
 				size_t semantic_name_size = current_character - semantic_name;
@@ -1069,10 +1071,10 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					if (input_slot != nullptr) {
 						input_slot += strlen(STRING(ECS_REFLECT_INPUT_SLOT)) + 1;
 						char* starting_input_slot = input_slot;
-						while (function::IsNumberCharacter(*input_slot)) {
+						while (IsNumberCharacter(*input_slot)) {
 							input_slot++;
 						}
-						elements[current_index].InputSlot = function::ConvertCharactersToInt(Stream<char>(starting_input_slot, input_slot - starting_input_slot));
+						elements[current_index].InputSlot = ConvertCharactersToInt(Stream<char>(starting_input_slot, input_slot - starting_input_slot));
 					}
 					else {
 						elements[current_index].InputSlot = 0;
@@ -1092,10 +1094,10 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					elements[current_index].InputSlotClass = D3D11_INPUT_PER_INSTANCE_DATA;
 					instance += strlen(STRING(ECS_REFLECT_INSTANCE)) + 1;
 					char* instance_step_rate_start = instance;
-					while (function::IsNumberCharacter(*instance)) {
+					while (IsNumberCharacter(*instance)) {
 						instance++;
 					}
-					elements[current_index].InstanceDataStepRate = function::ConvertCharactersToInt(Stream<char>(instance_step_rate_start, instance - instance_step_rate_start));
+					elements[current_index].InstanceDataStepRate = ConvertCharactersToInt(Stream<char>(instance_step_rate_start, instance - instance_step_rate_start));
 				}
 
 				// Semantic count
@@ -1112,10 +1114,10 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				else {
 					semantic_count += strlen(STRING(ECS_REFLECT_SEMANTIC_COUNT)) + 2;
 					char* semantic_count_start = semantic_count;
-					while (function::IsNumberCharacter(*semantic_count)) {
+					while (IsNumberCharacter(*semantic_count)) {
 						semantic_count++;
 					}
-					integer_semantic_count = function::ConvertCharactersToInt(Stream<char>(semantic_count_start, semantic_count - semantic_count_start));
+					integer_semantic_count = ConvertCharactersToInt(Stream<char>(semantic_count_start, semantic_count - semantic_count_start));
 				}
 
 				elements[current_index].SemanticIndex = 0;
@@ -1178,15 +1180,15 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		const char* cbuffer_ptr = strstr(source_code.buffer, BUFFER_KEYWORDS[ECS_SHADER_BUFFER_CONSTANT]);
 		while (cbuffer_ptr != nullptr) {
 			// Check for omit macro
-			Stream<char> before_end_line = function::SkipUntilCharacterReverse(cbuffer_ptr, current_parse_range.buffer, '\n');
-			before_end_line = function::SkipWhitespace(before_end_line);
+			Stream<char> before_end_line = SkipUntilCharacterReverse(cbuffer_ptr, current_parse_range.buffer, '\n');
+			before_end_line = SkipWhitespace(before_end_line);
 
-			const char* end_bracket = function::FindMatchingParenthesis(cbuffer_ptr, source_code.buffer + source_code.size, '{', '}', 0);
+			const char* end_bracket = FindMatchingParenthesis(cbuffer_ptr, source_code.buffer + source_code.size, '{', '}', 0);
 			if (end_bracket == nullptr) {
 				clean();
 				return false;
 			}
-			Stream<char> parse_buffer_code = { cbuffer_ptr, function::PointerDifference(end_bracket, cbuffer_ptr) + 1 };
+			Stream<char> parse_buffer_code = { cbuffer_ptr, PointerDifference(end_bracket, cbuffer_ptr) + 1 };
 
 			if (memcmp(before_end_line.buffer, omit_string, omit_string_size) != 0) {
 				Reflection::ReflectionType* reflection_type = nullptr;
@@ -1218,7 +1220,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			}
 
 			current_parse_range.buffer = parse_buffer_code.buffer + parse_buffer_code.size;
-			current_parse_range.size = function::PointerDifference(source_code.buffer + source_code.size, current_parse_range.buffer);
+			current_parse_range.size = PointerDifference(source_code.buffer + source_code.size, current_parse_range.buffer);
 			cbuffer_ptr = strstr(current_parse_range.buffer, BUFFER_KEYWORDS[ECS_SHADER_BUFFER_CONSTANT]);
 		}
 
@@ -1234,8 +1236,8 @@ ECS_ASSERT(!table.Insert(format, identifier));
 						return false;
 					}
 
-					Stream<char> before_end_line = function::SkipUntilCharacterReverse(cbuffer_ptr, current_parse_range.buffer, '\n');
-					before_end_line = function::SkipWhitespace(before_end_line);
+					Stream<char> before_end_line = SkipUntilCharacterReverse(cbuffer_ptr, current_parse_range.buffer, '\n');
+					before_end_line = SkipWhitespace(before_end_line);
 					if (memcmp(before_end_line.buffer, omit_string, omit_string_size) != 0) {
 						size_t current_index = buffers.size;
 						// Byte size is zero - ignore for buffer types different from the constant buffer
@@ -1252,7 +1254,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 						buffers.size++;
 					}
 
-					current_parse_range = { semicolon, function::PointerDifference(source_code.buffer + source_code.size, semicolon) };
+					current_parse_range = { semicolon, PointerDifference(source_code.buffer + source_code.size, semicolon) };
 					current_buffer = strstr(current_parse_range.buffer, BUFFER_KEYWORDS[index]);
 				}
 			}
@@ -1280,13 +1282,13 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		size_t omit_string_size = strlen(omit_string);
 		for (size_t index = 0; index < keywords.size; index++) {
 			Stream<char> current_parse_range = source_code;
-			Stream<char> keyword = function::FindFirstToken(current_parse_range, keywords[index]);
+			Stream<char> keyword = FindFirstToken(current_parse_range, keywords[index]);
 			while (keyword.size > 0) {
 				// Check for omit macro
-				Stream<char> before_end_line = function::SkipUntilCharacterReverse(keyword.buffer, current_parse_range.buffer, '\n');
-				before_end_line = function::SkipWhitespace(before_end_line);
+				Stream<char> before_end_line = SkipUntilCharacterReverse(keyword.buffer, current_parse_range.buffer, '\n');
+				before_end_line = SkipWhitespace(before_end_line);
 				// Get the semicolon. If it is missing then error
-				Stream<char> semicolon = function::FindFirstCharacter(keyword, ';');
+				Stream<char> semicolon = FindFirstCharacter(keyword, ';');
 				if (semicolon.size == 0) {
 					// An error
 					return false;
@@ -1305,7 +1307,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				}
 
 				current_parse_range = semicolon;
-				keyword = function::FindFirstToken(current_parse_range, keywords[index]);
+				keyword = FindFirstToken(current_parse_range, keywords[index]);
 			}
 		}
 
@@ -1369,12 +1371,12 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		AllocatorPolymorphic allocator
 	) const
 	{
-		function::SourceCodeMacros macros;
-		function::GetSourceCodeMacrosCTokens(&macros);
+		SourceCodeMacros macros;
+		GetSourceCodeMacrosCTokens(&macros);
 		macros.allocator = allocator;
 		macros.defined_macros = defined_macros;
 		macros.conditional_macros = conditional_macros;
-		function::GetSourceCodeMacros(source_code, &macros);
+		GetSourceCodeMacros(source_code, &macros);
 
 		return true;
 	}
@@ -1562,26 +1564,26 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	{
 		size_t token_size = strlen("numthreads");
 		Stream<char> search_space = source_code;
-		Stream<char> tag = function::FindFirstToken(search_space, "numthreads");
+		Stream<char> tag = FindFirstToken(search_space, "numthreads");
 		while (tag.size > 0) {
-			Stream<char> previous_space = { search_space.buffer, function::PointerDifference(tag.buffer, search_space.buffer) / sizeof(char) };
-			Stream<char> previous_new_line = function::FindCharacterReverse(previous_space, '\n');
-			Stream<char> next_new_line = function::FindFirstCharacter(tag, '\n');
+			Stream<char> previous_space = { search_space.buffer, PointerDifference(tag.buffer, search_space.buffer) / sizeof(char) };
+			Stream<char> previous_new_line = FindCharacterReverse(previous_space, '\n');
+			Stream<char> next_new_line = FindFirstCharacter(tag, '\n');
 
 			// Check to see that it is not a simple variable
-			previous_space = function::SkipWhitespace(previous_space, -1);
+			previous_space = SkipWhitespace(previous_space, -1);
 
 			if (previous_space[previous_space.size - 1] == '[') {
 				// Now check forwards
-				Stream<char> remaining_space = { tag.buffer + token_size, function::PointerDifference(next_new_line.buffer, tag.buffer + token_size) / sizeof(char) };
-				Stream<char> closing_bracket = function::FindFirstCharacter(remaining_space, ']');
+				Stream<char> remaining_space = { tag.buffer + token_size, PointerDifference(next_new_line.buffer, tag.buffer + token_size) / sizeof(char) };
+				Stream<char> closing_bracket = FindFirstCharacter(remaining_space, ']');
 				if (closing_bracket.size > 0) {
-					Stream<char> opened_parenthese = function::FindFirstCharacter(remaining_space, '(');
-					Stream<char> closed_paranthese = function::FindFirstCharacter(remaining_space, ')');
+					Stream<char> opened_parenthese = FindFirstCharacter(remaining_space, '(');
+					Stream<char> closed_paranthese = FindFirstCharacter(remaining_space, ')');
 					if (opened_parenthese.size > 0 && closed_paranthese.size > 0) {
-						Stream<char> argument_range = { opened_parenthese.buffer, function::PointerDifference(closed_paranthese.buffer, opened_parenthese.buffer) / sizeof(char) };
+						Stream<char> argument_range = { opened_parenthese.buffer, PointerDifference(closed_paranthese.buffer, opened_parenthese.buffer) / sizeof(char) };
 						ECS_STACK_CAPACITY_STREAM(unsigned int, dispatch_sizes, 64);
-						function::ParseIntegers<unsigned int>(argument_range, ',', dispatch_sizes);
+						ParseIntegers<unsigned int>(argument_range, ',', dispatch_sizes);
 						if (dispatch_sizes.size == 3) {
 							*dispatch_size = { dispatch_sizes[0], dispatch_sizes[1], dispatch_sizes[2] };
 							return true;
@@ -1591,7 +1593,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			}
 
 			search_space = tag.AdvanceReturn(token_size);
-			tag = function::FindFirstToken(search_space, "numthreads");
+			tag = FindFirstToken(search_space, "numthreads");
 		}
 		return false;
 	}
@@ -1653,7 +1655,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		// found in the vertex shader
 		for (int64_t index = ECS_SHADER_TYPE_COUNT - 1; index >= 0; index--) {
 			for (size_t subindex = 0; subindex < SHADER_TYPE_KEYWORDS[index].size; subindex++) {
-				if (function::FindFirstToken(SHADER_TYPE_KEYWORDS[index][subindex], source_code).size > 0) {
+				if (FindFirstToken(SHADER_TYPE_KEYWORDS[index][subindex], source_code).size > 0) {
 					return (ECS_SHADER_TYPE)index;
 				}
 			}
@@ -1773,11 +1775,11 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			}
 		}
 
-		while (!function::IsAlphabetCharacter(*starting_pointer)) {
+		while (!IsAlphabetCharacter(*starting_pointer)) {
 			starting_pointer++;
 		}
 		const char* name_start = starting_pointer;
-		while (function::IsCodeIdentifierCharacter(*starting_pointer)) {
+		while (IsCodeIdentifierCharacter(*starting_pointer)) {
 			starting_pointer++;
 		}
 
@@ -1785,7 +1787,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		reflected_buffer.name = SetName(name_start, starting_pointer, allocator);
 
 		// Register index
-		char* end_bracket = (char*)function::FindMatchingParenthesis(starting_pointer, source.buffer + source.size, '{', '}', 0);
+		char* end_bracket = (char*)FindMatchingParenthesis(starting_pointer, source.buffer + source.size, '{', '}', 0);
 		*end_bracket = '\0';
 
 		const char* register_ptr = strstr(starting_pointer, REGISTER_STRING);
@@ -1807,20 +1809,20 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		// Get the tags, if it has any
 		if (register_ptr != nullptr) {
 			// Skip the register_ptr 
-			starting_pointer = function::FindFirstCharacter({ register_ptr, function::PointerDifference(end_line, register_ptr) / sizeof(char) }, ')').buffer;
+			starting_pointer = FindFirstCharacter({ register_ptr, PointerDifference(end_line, register_ptr) / sizeof(char) }, ')').buffer;
 			starting_pointer++;
 		}
-		Stream<char> tag_search_space = { starting_pointer, function::PointerDifference(end_line, starting_pointer) / sizeof(char) };
-		Stream<char> current_tag = function::SkipWhitespace(tag_search_space);
+		Stream<char> tag_search_space = { starting_pointer, PointerDifference(end_line, starting_pointer) / sizeof(char) };
+		Stream<char> current_tag = SkipWhitespace(tag_search_space);
 		while (current_tag.size > 0) {
-			Stream<char> current_tag_end = function::SkipCodeIdentifier(current_tag);
-			Stream<char> tag_paranthesis = function::FindFirstCharacter(current_tag_end, '(');
+			Stream<char> current_tag_end = SkipCodeIdentifier(current_tag);
+			Stream<char> tag_paranthesis = FindFirstCharacter(current_tag_end, '(');
 			if (tag_paranthesis.size > 0) {
 				// Check to see if it is immediately after this current tag
-				Stream<char> skipped_whitespace = function::SkipWhitespace(current_tag_end);
+				Stream<char> skipped_whitespace = SkipWhitespace(current_tag_end);
 				if (skipped_whitespace.buffer == tag_paranthesis.buffer) {
 					// They match - get the end of the tag
-					Stream<char> closed_tag_paranthesis = function::FindFirstCharacter(tag_paranthesis, ')');
+					Stream<char> closed_tag_paranthesis = FindFirstCharacter(tag_paranthesis, ')');
 					if (closed_tag_paranthesis.size == 0) {
 						// Fail
 						reflected_buffer.byte_size = -1;
@@ -1834,11 +1836,11 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			if (current_type_tag.size > 0) {
 				current_type_tag.AddStreamAssert(ECS_SHADER_REFLECTION_CONSTANT_BUFFER_TAG_DELIMITER);
 			}
-			current_type_tag.AddStreamAssert({ current_tag.buffer, function::PointerDifference(current_tag_end.buffer, current_tag.buffer) / sizeof(char) });
-			current_tag = function::SkipWhitespace(current_tag_end);
+			current_type_tag.AddStreamAssert({ current_tag.buffer, PointerDifference(current_tag_end.buffer, current_tag.buffer) / sizeof(char) });
+			current_tag = SkipWhitespace(current_tag_end);
 		}
 
-		reflected_buffer.tags = current_type_tag.size > 0 ? function::StringCopy(allocator, current_type_tag) : Stream<char>(nullptr, 0);
+		reflected_buffer.tags = current_type_tag.size > 0 ? StringCopy(allocator, current_type_tag) : Stream<char>(nullptr, 0);
 
 		const char* current_character = end_line + 1;
 		current_character += *current_character == '{';
@@ -1851,11 +1853,11 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		const char* next_new_line = strchr(current_character + 1, '\n');
 		while (current_character != nullptr && next_new_line != nullptr) {
 			current_character += *current_character == '\n';
-			current_character = function::SkipWhitespace(current_character);
+			current_character = SkipWhitespace(current_character);
 
 			const char* start_type_ptr = current_character;
-			current_character = function::SkipCodeIdentifier(current_character);
-			Stream<char> identifier = { start_type_ptr, function::PointerDifference(current_character, start_type_ptr) };
+			current_character = SkipCodeIdentifier(current_character);
+			Stream<char> identifier = { start_type_ptr, PointerDifference(current_character, start_type_ptr) };
 
 			ShaderConstantBufferReflectionTypeMapping mapping;
 			if (shader_reflection->cb_mapping_table.TryGetValue(identifier, mapping)) {
@@ -1904,7 +1906,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		if (reflection_type != nullptr) {
 			reflection_type->fields.InitializeAndCopy(allocator, reflected_fields);
 			reflection_type->name.InitializeAndCopy(allocator, reflected_buffer.name);
-			reflection_type->tag = reflected_buffer.tags.size > 0 ? function::StringCopy(allocator, reflected_buffer.tags) : Stream<char>();
+			reflection_type->tag = reflected_buffer.tags.size > 0 ? StringCopy(allocator, reflected_buffer.tags) : Stream<char>();
 			reflection_type->evaluations = { nullptr, 0 };
 			reflection_type->alignment = 8;
 			reflection_type->byte_size = reflected_buffer.byte_size;

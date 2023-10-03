@@ -47,7 +47,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		inline size_t DynamicConfiguration(size_t configuration) {
-			return function::SetFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_DYNAMIC_RESOURCE;
+			return SetFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_DYNAMIC_RESOURCE;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -771,7 +771,7 @@ namespace ECSEngine {
 					base_data->external_value_change = false;
 					
 					if (user_callback->handler.data_size > 0) {
-						void* user_data = function::OffsetPointer(base_data, callback_data_size);
+						void* user_data = OffsetPointer(base_data, callback_data_size);
 						memcpy(user_data, user_callback->handler.data, user_callback->handler.data_size);
 						// Indicate that the user data is relative
 						base_data->user_action_data_offset = callback_data_size;
@@ -816,7 +816,7 @@ namespace ECSEngine {
 				UIDrawerNumberInputCallbackData* callback_input_ptr = (UIDrawerNumberInputCallbackData*)input->callback_data;
 				callback_input_ptr->input = input;
 				callback_input_ptr->return_to_default = true;
-				callback_input_ptr->display_range = function::HasFlag(configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
+				callback_input_ptr->display_range = HasFlag(configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
 				if (~configuration & UI_CONFIG_NUMBER_INPUT_DEFAULT) {
 					callback_input_ptr->return_to_default = false;
 				}
@@ -867,7 +867,7 @@ namespace ECSEngine {
 						//		UIDrawerNumberInputCallbackData data;
 						//		float*/double*/Integer* number;
 						// }
-						void** callback_pointer = (void**)function::OffsetPointer(input->callback_data, sizeof(UIDrawerNumberInputCallbackData));
+						void** callback_pointer = (void**)OffsetPointer(input->callback_data, sizeof(UIDrawerNumberInputCallbackData));
 						*callback_pointer = number;
 					}
 
@@ -883,7 +883,7 @@ namespace ECSEngine {
 
 					size_t text_count_before = *HandleTextSpriteCount(configuration);
 					// The callback will still be triggered. In this way we avoid having the text input recopying the data
-					TextInputDrawer(function::ClearFlag(configuration, UI_CONFIG_TEXT_INPUT_CALLBACK), config, input, position, scale, UIDrawerTextInputFilterNumbers);
+					TextInputDrawer(ClearFlag(configuration, UI_CONFIG_TEXT_INPUT_CALLBACK), config, input, position, scale, UIDrawerTextInputFilterNumbers);
 
 					Stream<char> tool_tip_stream;
 					Stream<char> identifier = HandleResourceIdentifier(name);
@@ -908,7 +908,7 @@ namespace ECSEngine {
 						float2 text_span = { 0.0f, 0.0f };
 						float2 text_position = { 0.0f, 0.0f };
 						if (IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
-							name_length = function::ClampMax(name_length, *text_count);
+							name_length = ClampMax(name_length, *text_count);
 							stream = Stream<UISpriteVertex>(text_buffer + *text_count - name_length, name_length);
 							text_span = GetTextSpan(stream);
 							text_position = { stream[0].position.x, -stream[0].position.y };
@@ -2016,7 +2016,7 @@ namespace ECSEngine {
 				get_header_transform.scale = &header_scale;
 				header_config.AddFlag(get_header_transform);
 
-				size_t NEW_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | function::ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM,
+				size_t NEW_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM,
 					UI_CONFIG_WINDOW_DEPENDENT_SIZE, UI_CONFIG_MAKE_SQUARE, UI_CONFIG_DO_CACHE);
 
 				// Draw the collapsing header - nullified configurations - relative transform, window dependent size, make square
@@ -2083,8 +2083,8 @@ namespace ECSEngine {
 					}
 
 					const char* draw_element_name = temp_name.buffer;
-					bool has_drag = !function::HasFlag(configuration, UI_CONFIG_ARRAY_DISABLE_DRAG);
-					bool multi_line_element = function::HasFlag(configuration, UI_CONFIG_ARRAY_MULTI_LINE);
+					bool has_drag = !HasFlag(configuration, UI_CONFIG_ARRAY_DISABLE_DRAG);
+					bool multi_line_element = HasFlag(configuration, UI_CONFIG_ARRAY_MULTI_LINE);
 
 					auto draw_drag_arrow = [&](unsigned int index, float row_y_scale, auto has_action) {
 						arrow_transform.position.y = AlignMiddle(current_y, row_y_scale, ARROW_SIZE.y);
@@ -2118,7 +2118,7 @@ namespace ECSEngine {
 						}
 
 						PushIdentifierStackRandom(index);
-						function::ConvertIntToChars(temp_name, index);
+						ConvertIntToChars(temp_name, index);
 
 						float previous_current_y = current_y;
 
@@ -2129,7 +2129,7 @@ namespace ECSEngine {
 							CrossLine();
 						}
 
-						bool has_name_action = function::HasFlag(element_configuration, UI_CONFIG_ELEMENT_NAME_ACTION);
+						bool has_name_action = HasFlag(element_configuration, UI_CONFIG_ELEMENT_NAME_ACTION);
 						if (has_name_action) {
 							// Check the selected item
 							if (index == data->remove_anywhere_index) {
@@ -2144,7 +2144,7 @@ namespace ECSEngine {
 						function_data.additional_data = additional_data;
 						function_data.current_index = index;
 						// MemoryOf(1) gives us the byte size of an element
-						function_data.element_data = function::OffsetPointer(elements->buffer, index * elements->MemoryOf(1));
+						function_data.element_data = OffsetPointer(elements->buffer, index * elements->MemoryOf(1));
 						function_data.configuration = element_configuration;
 						function_data.config = &internal_element_config;
 
@@ -2153,9 +2153,9 @@ namespace ECSEngine {
 						draw_function(*this, draw_element_name, function_data);
 
 						if (has_name_action) {
-							if (function::HasFlag(element_configuration, UI_CONFIG_ELEMENT_NAME_BACKGROUND)) {
+							if (HasFlag(element_configuration, UI_CONFIG_ELEMENT_NAME_BACKGROUND)) {
 								internal_element_config.flag_count--;
-								element_configuration = function::ClearFlag(element_configuration, UI_CONFIG_ELEMENT_NAME_BACKGROUND);
+								element_configuration = ClearFlag(element_configuration, UI_CONFIG_ELEMENT_NAME_BACKGROUND);
 							}
 						}
 
@@ -2183,7 +2183,7 @@ namespace ECSEngine {
 						if (skip_length > 0.0f) {
 							skip_count = (unsigned int)(skip_length / (data->row_y_scale + layout.next_row_y_offset));
 							if (skip_count > 0) {
-								skip_count = function::ClampMax(skip_count, elements->size);
+								skip_count = ClampMax(skip_count, elements->size);
 								float2 update_position = GetCurrentPosition();
 								float2 update_scale = { 0.0f, skip_count * (data->row_y_scale + layout.next_row_y_offset) - layout.next_row_y_offset };
 								UpdateRenderBoundsRectangle(update_position, update_scale);
@@ -2275,7 +2275,7 @@ namespace ECSEngine {
 
 								void* temp_allocation = GetTempBuffer(element_byte_size * elements->size);
 								for (size_t index = 0; index < elements->size; index++) {
-									memcpy(function::OffsetPointer(temp_allocation, index * element_byte_size), &elements->buffer[order_allocation[index]], element_byte_size);
+									memcpy(OffsetPointer(temp_allocation, index * element_byte_size), &elements->buffer[order_allocation[index]], element_byte_size);
 									//temp_allocation[index] = elements->buffer[order_allocation[index]];
 								}
 

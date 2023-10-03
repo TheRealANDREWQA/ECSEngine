@@ -127,8 +127,8 @@ EDITOR_EVENT(RegisterEvent) {
 			data->file_size
 		};
 
-		Stream<char> name = function::GetCoalescedStreamFromType(data, 0, data_sizes).AsIs<char>();
-		Stream<wchar_t> file = function::GetCoalescedStreamFromType(data, 1, data_sizes).AsIs<wchar_t>();
+		Stream<char> name = GetCoalescedStreamFromType(data, 0, data_sizes).AsIs<char>();
+		Stream<wchar_t> file = GetCoalescedStreamFromType(data, 1, data_sizes).AsIs<wchar_t>();
 		bool loaded_now = false;
 
 		unsigned int handle = -1;
@@ -402,7 +402,7 @@ Stream<wchar_t> AssetTargetFileTimeStampPath(const EditorState* editor_state, co
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 		GetProjectAssetsFolder(editor_state, assets_folder);
-		path = function::MountPathOnlyRel(GetAssetFile(metadata, type), assets_folder, storage);
+		path = MountPathOnlyRel(GetAssetFile(metadata, type), assets_folder, storage);
 	}
 	break;
 	case ECS_ASSET_GPU_SAMPLER:
@@ -435,7 +435,7 @@ Stream<wchar_t> AssetTargetFileTimeStampPath(
 	case ECS_ASSET_SHADER:
 	case ECS_ASSET_MISC:
 	{
-		path = function::MountPathOnlyRel(GetAssetFile(metadata, type), assets_folder, storage);
+		path = MountPathOnlyRel(GetAssetFile(metadata, type), assets_folder, storage);
 	}
 	break;
 	case ECS_ASSET_GPU_SAMPLER:
@@ -466,7 +466,7 @@ void AddUnregisterAssetEvent(
 		return;
 	}
 
-	callback.data = function::CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
+	callback.data = CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
 	UnregisterEventData event_data = { { sandbox_index, sandbox_assets, callback } };
 	event_data.elements.InitializeAndCopy(editor_state->EditorAllocator(), elements);
 	EditorAddEvent(editor_state, UnregisterAssetEvent, &event_data, sizeof(event_data));
@@ -530,7 +530,7 @@ bool AddRegisterAssetEvent(
 			name,
 			file
 		};
-		RegisterEventData* data = function::CreateCoalescedStreamsIntoType<RegisterEventData>(storage, { streams, std::size(streams) }, &write_size);
+		RegisterEventData* data = CreateCoalescedStreamsIntoType<RegisterEventData>(storage, { streams, std::size(streams) }, &write_size);
 		data->handle = handle;
 		data->sandbox_index = sandbox_index;
 		data->type = type;
@@ -538,7 +538,7 @@ bool AddRegisterAssetEvent(
 		data->file_size = file.size;
 		data->unregister_if_exists = unload_if_existing;
 		data->callback = callback;
-		data->callback.data = function::CopyNonZero(editor_state->editor_allocator, data->callback.data, data->callback.data_size);
+		data->callback.data = CopyNonZero(editor_state->editor_allocator, data->callback.data, data->callback.data_size);
 
 		EditorAddEvent(editor_state, RegisterEvent, data, write_size);
 		if (sandbox_index != -1) {
@@ -640,8 +640,8 @@ bool CreateAssetSetting(const EditorState* editor_state, Stream<char> name, Stre
 	else {
 		// Convert the file to a name - since it will be ignored
 		ECS_STACK_CAPACITY_STREAM(char, converted_file, 512);
-		//file = function::PathStem(file);
-		function::ConvertWideCharsToASCII(file, converted_file);
+		//file = PathStem(file);
+		ConvertWideCharsToASCII(file, converted_file);
 		CreateDefaultAsset(storage, converted_file, file, type);
 	}
 
@@ -692,7 +692,7 @@ bool CreateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 
 void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback)
 {
-	callback.data = function::CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
+	callback.data = CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
 		
 	CreateAssetAsyncEventData event_data;
 	event_data.handle = handle;
@@ -794,20 +794,20 @@ void ForEachAssetMetadata(const EditorState* editor_state, Stream<ECS_ASSET_TYPE
 				ECS_STACK_CAPACITY_STREAM(char, current_name, 512);
 				AssetDatabase::ExtractNameFromFile(path, current_name);
 				if (current_name.size > 0) {
-					function::ConvertASCIIToWide(current_file, current_name);
+					ConvertASCIIToWide(current_file, current_name);
 				}
 			}
 
 			if (current_file.size > 0) {
-				unsigned int index = function::FindString(current_file, data->files->ToStream());
+				unsigned int index = FindString(current_file, data->files->ToStream());
 				if (index == -1) {
 					if (IsThunkOrForwardingFile(data->asset_type))
 					{
-						current_file = function::PathNoExtensionBoth(current_file);
+						current_file = PathNoExtensionBoth(current_file);
 					}
-					Stream<wchar_t> copy = function::StringCopy(data->files->allocator, current_file);
+					Stream<wchar_t> copy = StringCopy(data->files->allocator, current_file);
 					// Change the relative path separator into an absolute path separator
-					function::ReplaceCharacter(copy, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+					ReplaceCharacter(copy, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 					data->files->Add(copy);
 				}
 			}
@@ -865,17 +865,17 @@ void CreateAssetDefaultSetting(const EditorState* editor_state)
 		auto functor = [](Stream<wchar_t> path, void* _data) {
 			FunctorData* data = (FunctorData*)_data;
 
-			Stream<wchar_t> extension = function::PathExtension(path);
+			Stream<wchar_t> extension = PathExtension(path);
 			for (size_t index = 0; index < _countof(mapping); index++) {
-				unsigned int extension_index = function::FindString(extension, data->extensions[index]);
+				unsigned int extension_index = FindString(extension, data->extensions[index]);
 				if (extension_index != -1) {
-					Stream<wchar_t> relative_path = function::PathRelativeToAbsolute(path, data->base_path);
+					Stream<wchar_t> relative_path = PathRelativeToAbsolute(path, data->base_path);
 					ECS_ASSET_TYPE asset_type = data->mapping[index];
 					unsigned int existing_index = -1;
 					if (IsThunkOrForwardingFile(asset_type)) {
-						relative_path = function::PathNoExtensionBoth(relative_path);
+						relative_path = PathNoExtensionBoth(relative_path);
 					}
-					existing_index = function::FindString(relative_path, data->existing_files[index]);
+					existing_index = FindString(relative_path, data->existing_files[index]);
 					if (existing_index == -1) {
 						// Create a default setting for it
 						// Don't check for failure - this is not a critical operation
@@ -1033,8 +1033,8 @@ EDITOR_EVENT(DeleteAssetSettingEvent) {
 			data->file_size * sizeof(wchar_t)
 		};
 
-		Stream<char> name = function::GetCoalescedStreamFromType(data, 0, sizes).As<char>();
-		Stream<wchar_t> file = function::GetCoalescedStreamFromType(data, 1, sizes).As<wchar_t>();
+		Stream<char> name = GetCoalescedStreamFromType(data, 0, sizes).As<char>();
+		Stream<wchar_t> file = GetCoalescedStreamFromType(data, 1, sizes).As<wchar_t>();
 
 		unsigned int handle = editor_state->asset_database->FindAsset(name, file, data->type);
 		if (handle != -1) {
@@ -1083,7 +1083,7 @@ void DeleteAssetSetting(EditorState* editor_state, Stream<char> name, Stream<wch
 		file
 	};
 
-	DeleteAssetSettingEventData* data = function::CreateCoalescedStreamsIntoType<DeleteAssetSettingEventData>(storage, { buffers, std::size(buffers) }, &write_size);
+	DeleteAssetSettingEventData* data = CreateCoalescedStreamsIntoType<DeleteAssetSettingEventData>(storage, { buffers, std::size(buffers) }, &write_size);
 	data->name_size = name.size;
 	data->file_size = file.size;
 	data->type = type;
@@ -1124,12 +1124,12 @@ void DeleteMissingAssetSettings(const EditorState* editor_state)
 
 		if (current_file.size > 0) {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path_storage, 512);
-			Stream<wchar_t> absolute_path = function::MountPathOnlyRel(current_file, *data->assets_folder, absolute_path_storage);
+			Stream<wchar_t> absolute_path = MountPathOnlyRel(current_file, *data->assets_folder, absolute_path_storage);
 			bool exists = ExistsFileOrFolder(absolute_path);
 			if (!exists) {
 				// Now try by replacing the extension
 				for (size_t index = 0; index < data->extensions.size && !exists; index++) {
-					absolute_path = function::PathNoExtension(absolute_path);
+					absolute_path = PathNoExtension(absolute_path);
 					absolute_path.AddStream(data->extensions[index]);
 					exists = ExistsFileOrFolder(absolute_path);
 				}
@@ -1253,9 +1253,9 @@ unsigned int FindOrAddAsset(EditorState* editor_state, Stream<char> name, Stream
 
 void FromAssetNameToThunkOrForwardingFile(Stream<char> name, Stream<wchar_t> extension, CapacityStream<wchar_t>& relative_path)
 {
-	function::ConvertASCIIToWide(relative_path, name);
+	ConvertASCIIToWide(relative_path, name);
 	// Replace relative slashes with absolute ones
-	function::ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+	ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 	relative_path.AddStreamSafe(extension);
 }
 
@@ -1299,12 +1299,12 @@ void GetAssetNameFromThunkOrForwardingFile(const EditorState* editor_state, Stre
 void GetAssetNameFromThunkOrForwardingFileRelative(const EditorState* editor_state, Stream<wchar_t> relative_path, CapacityStream<char>& name)
 {
 	// Eliminate the extension
-	Stream<wchar_t> extension = function::PathExtension(relative_path);
+	Stream<wchar_t> extension = PathExtension(relative_path);
 	relative_path.size -= extension.size;
 
-	function::ConvertWideCharsToASCII(relative_path, name);
+	ConvertWideCharsToASCII(relative_path, name);
 	// Replace absolute separators with relative ones
-	function::ReplaceCharacter(name, ECS_OS_PATH_SEPARATOR_ASCII, ECS_OS_PATH_SEPARATOR_ASCII_REL);
+	ReplaceCharacter(name, ECS_OS_PATH_SEPARATOR_ASCII, ECS_OS_PATH_SEPARATOR_ASCII_REL);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1361,7 +1361,7 @@ bool GetAssetFileFromAssetMetadata(const EditorState* editor_state, const void* 
 	case ECS_ASSET_MESH:
 	case ECS_ASSET_TEXTURE:
 		path.AddStreamSafe(target_file);
-		function::ReplaceCharacter(path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+		ReplaceCharacter(path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 
 		break;
 		// All the other assets have thunk or forwarding file
@@ -1370,8 +1370,8 @@ bool GetAssetFileFromAssetMetadata(const EditorState* editor_state, const void* 
 	case ECS_ASSET_SHADER:
 	case ECS_ASSET_MISC:
 	{
-		function::ConvertASCIIToWide(path, name);
-		function::ReplaceCharacter(path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+		ConvertASCIIToWide(path, name);
+		ReplaceCharacter(path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 
 		if (type != ECS_ASSET_SHADER) {
 			path.AddStream(ASSET_EXTENSIONS[type][0]);
@@ -1473,7 +1473,7 @@ Stream<Stream<unsigned int>> GetOutOfDateAssetsImpl(EditorState* editor_state, A
 		for (size_t index = 0; index < std::size(ECS_ASSET_TYPES_WITH_DEPENDENCIES); index++) {
 			ECS_ASSET_TYPE current_type = ECS_ASSET_TYPES_WITH_DEPENDENCIES[index];
 			editor_state->asset_database->ForEachAsset(current_type, [&](unsigned int handle) {
-				unsigned int existing_index = function::SearchBytes(
+				unsigned int existing_index = SearchBytes(
 					current_handles[current_type].buffer,
 					current_handles[current_type].size,
 					handle,
@@ -1484,7 +1484,7 @@ Stream<Stream<unsigned int>> GetOutOfDateAssetsImpl(EditorState* editor_state, A
 					const void* current_asset = editor_state->asset_database->GetAssetConst(handle, current_type);
 					GetAssetDependencies(current_asset, current_type, &dependencies);
 					for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
-						bool is_out_of_date = function::SearchBytes(
+						bool is_out_of_date = SearchBytes(
 							current_handles[dependencies[subindex].type].buffer,
 							current_handles[dependencies[subindex].type].size,
 							dependencies[subindex].handle,

@@ -69,10 +69,10 @@ namespace ECSEngine {
 		{
 			ReflectionField field;
 
-			field.name = function::StringCopy(allocator, name);
-			field.definition = function::StringCopy(allocator, definition);
+			field.name = StringCopy(allocator, name);
+			field.definition = StringCopy(allocator, definition);
 			if (field.tag.size > 0) {
-				field.tag = function::StringCopy(allocator, tag);
+				field.tag = StringCopy(allocator, tag);
 			}
 			else {
 				field.tag = { nullptr, 0 };
@@ -479,7 +479,7 @@ namespace ECSEngine {
 		unsigned int ReflectionType::FindField(Stream<char> name) const
 		{
 			for (size_t index = 0; index < fields.size; index++) {
-				if (function::CompareStrings(name, fields[index].name)) {
+				if (name == fields[index].name) {
 					return index;
 				}
 			}
@@ -491,7 +491,7 @@ namespace ECSEngine {
 		double ReflectionType::GetEvaluation(Stream<char> name) const
 		{
 			for (size_t index = 0; index < evaluations.size; index++) {
-				if (function::CompareStrings(evaluations[index].name, name)) {
+				if (evaluations[index].name == name) {
 					return evaluations[index].value;
 				}
 			}

@@ -44,8 +44,8 @@ namespace ECSEngine {
 		ECS_ASSERT(descriptor.mip_levels > mip_level);
 
 		uint2 texture_size = uint2(descriptor.size.x >> mip_level, descriptor.size.y >> mip_level);
-		texture_size.x = function::ClampMin(texture_size.x, (unsigned int)1);
-		texture_size.y = function::ClampMin(texture_size.y, (unsigned int)1);
+		texture_size.x = ClampMin(texture_size.x, (unsigned int)1);
+		texture_size.y = ClampMin(texture_size.y, (unsigned int)1);
 
 		ECS_ASSERT(top_left.x < texture_size.x && top_left.y < texture_size.y);
 		ECS_ASSERT(bottom_right.x <= texture_size.x && bottom_right.y <= texture_size.y);

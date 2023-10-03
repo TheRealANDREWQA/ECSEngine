@@ -6,7 +6,6 @@
 #include "../Containers/HashTable.h"
 #include "../Containers/Stacks.h"
 #include "../ECS/InternalStructures.h"
-#include "../Utilities/Function.h"
 #include "../Containers/DataPointer.h"
 #include "../Rendering/Graphics.h"
 #include "../Rendering/TextureOperations.h"

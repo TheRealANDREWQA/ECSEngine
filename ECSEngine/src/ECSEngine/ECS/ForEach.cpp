@@ -8,18 +8,27 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------------------------------
 
 	struct ForEachEntityBatchImplementationTaskData {
-		ushort2 archetype_indices;
+		uint2 archetype_indices;
 		unsigned char component_map[ECS_ARCHETYPE_MAX_COMPONENTS];
 		unsigned char shared_component_map[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
 		unsigned char component_map_count;
 		unsigned char shared_component_map_count;
-		EntityManagerCommandStream* command_stream;
+		unsigned char optional_component_map_count;
+		unsigned char optional_shared_component_map_count;
+
+		unsigned short component_sizes[ECS_ARCHETYPE_MAX_COMPONENTS];
+		unsigned short shared_component_sizes[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+
+		void* unique_data[ECS_ARCHETYPE_MAX_COMPONENTS];
+		void* shared_data[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+		const Entity* entities;
 
 		unsigned int entity_offset;
 		unsigned int count;
 
 		void* functor_data;
 		void* thread_function;
+		EntityManagerCommandStream* command_stream;
 	};
 
 	// For non-commit usage
@@ -30,6 +39,8 @@ namespace ECSEngine {
 		const char* functor_name,
 		void* data,
 		size_t data_size,
+		ComponentSignature optional_signature,
+		ComponentSignature optional_shared_signature,
 		unsigned int deferred_calls_capacity,
 		ThreadFunction task_function
 	) {
@@ -48,6 +59,30 @@ namespace ECSEngine {
 			task_data.thread_function = thread_function;
 			task_data.functor_data = data;
 
+			Component aggregate_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+			Component aggregate_shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+
+			ComponentSignature aggregate_signature = query_result.components.unique.ToNormalSignature(aggregate_components);
+			ComponentSignature aggregate_shared_signature = query_result.components.shared.ToNormalSignature(aggregate_shared_components);
+
+			task_data.component_map_count = aggregate_signature.count;
+			task_data.shared_component_map_count = aggregate_shared_signature.count;
+			task_data.optional_component_map_count = optional_signature.count;
+			task_data.optional_shared_component_map_count = optional_shared_signature.count;
+
+			aggregate_signature = optional_signature.CombineInto(aggregate_signature);
+			aggregate_shared_signature = optional_shared_signature.CombineInto(aggregate_shared_signature);
+
+			VectorComponentSignature aggregate_vector_signature = aggregate_signature;
+			VectorComponentSignature aggregate_vector_shared_signature = aggregate_shared_signature;
+
+			for (unsigned char component_index = 0; component_index < aggregate_signature.count; component_index++) {
+				task_data.component_sizes[component_index] = world->entity_manager->ComponentSize(aggregate_signature[component_index]);
+			}
+			for (unsigned char shared_index = 0; shared_index < aggregate_shared_signature.count; shared_index++) {
+				task_data.shared_component_sizes[shared_index] = world->entity_manager->SharedComponentSize(aggregate_signature[shared_index]);
+			}
+
 			size_t deferred_call_allocation_size = sizeof(DeferredAction) * deferred_calls_capacity + sizeof(EntityManagerCommandStream);
 
 			for (size_t index = 0; index < query_result.archetypes.size; index++) {
@@ -55,11 +90,9 @@ namespace ECSEngine {
 				unsigned int base_count = archetype->GetBaseCount();
 
 				// Get the component and shared component map
-				world->entity_manager->FindArchetypeUniqueComponentVector(query_result.archetypes[index], query_result.components.unique, task_data.component_map);
-				world->entity_manager->FindArchetypeSharedComponentVector(query_result.archetypes[index], query_result.components.shared, task_data.shared_component_map);
+				world->entity_manager->FindArchetypeUniqueComponentVector(query_result.archetypes[index], aggregate_vector_signature, task_data.component_map);
+				world->entity_manager->FindArchetypeSharedComponentVector(query_result.archetypes[index], aggregate_vector_shared_signature, task_data.shared_component_map);
 				task_data.archetype_indices.x = query_result.archetypes[index];
-				task_data.component_map_count = query_result.components.unique.Count();
-				task_data.shared_component_map_count = query_result.components.shared.Count();
 
 				// Check that there is no component index with -1
 				// If it happens, then there is a memory corruption
@@ -84,9 +117,44 @@ namespace ECSEngine {
 					unsigned int entity_count = base->EntityCount();
 					task_data.archetype_indices.y = base_index;
 
+					for (unsigned char component_index = 0; component_index < task_data.component_map_count; component_index++) {
+						task_data.unique_data[component_index] = base->GetComponentByIndex(0, task_data.component_map[component_index]);
+					}
+					unsigned char offset = task_data.component_map_count;
+					for (unsigned char component_index = 0; component_index < task_data.optional_component_map_count; component_index++) {
+						unsigned char current_index = component_index + offset;
+						if (task_data.component_map[current_index] != UCHAR_MAX) {
+							task_data.unique_data[current_index] = base->GetComponentByIndex(0, task_data.component_map[current_index]);
+						}
+						else {
+							task_data.unique_data[current_index] = nullptr;
+						}
+					}
+
+					const SharedInstance* shared_instances = archetype->GetBaseInstances(base_index);
+					for (unsigned char shared_index = 0; shared_index < task_data.shared_component_map_count; shared_index++) {
+						task_data.shared_data[shared_index] = world->entity_manager->GetSharedData(
+							aggregate_shared_signature[shared_index],
+							shared_instances[task_data.shared_component_map[shared_index]]
+						);
+					}
+					offset = task_data.shared_component_map_count;
+					for (unsigned char shared_index = 0; shared_index < task_data.optional_shared_component_map_count; shared_index++) {
+						unsigned char current_index = shared_index + offset;
+						if (task_data.shared_component_map[current_index] != UCHAR_MAX) {
+							task_data.shared_data[current_index] = world->entity_manager->GetSharedData(
+								aggregate_shared_signature[current_index],
+								shared_instances[task_data.shared_component_map[current_index]]
+							);
+						}
+						else {
+							task_data.shared_data[current_index] = nullptr;
+						}
+					}
+
 					EntityManagerCommandStream* command_stream = nullptr;
 
-					// Coallesce the remainder and the last batch into a single batch
+					// Coalesce the remainder and the last batch into a single batch
 					unsigned int batch_count = entity_count / batch_size;
 					if (batch_count > 1) {
 						task_data.count = batch_size;
@@ -95,7 +163,7 @@ namespace ECSEngine {
 							for (unsigned int batch_index = 0; batch_index < batch_count - 1; batch_index++) {
 								command_stream = (EntityManagerCommandStream*)world->task_manager->AllocateTempBuffer(thread_id, deferred_call_allocation_size);
 
-								command_stream->InitializeFromBuffer(function::OffsetPointer(command_stream, sizeof(EntityManagerCommandStream)), 0, deferred_calls_capacity);
+								command_stream->InitializeFromBuffer(OffsetPointer(command_stream, sizeof(EntityManagerCommandStream)), 0, deferred_calls_capacity);
 								task_data.command_stream = command_stream;
 
 								task_data.entity_offset = batch_index * batch_size;
@@ -110,7 +178,7 @@ namespace ECSEngine {
 							}
 						}
 
-						// For the last one do the coallescing if necessary
+						// For the last one do the coalescing if necessary
 						unsigned int last_batch_start = (batch_count - 1) * batch_size;
 						unsigned int remainder = entity_count - last_batch_start;
 						task_data.entity_offset = last_batch_start;
@@ -118,7 +186,7 @@ namespace ECSEngine {
 						if (deferred_calls_capacity > 0) {
 							command_stream = (EntityManagerCommandStream*)world->task_manager->AllocateTempBuffer(thread_id, deferred_call_allocation_size);
 
-							command_stream->InitializeFromBuffer(function::OffsetPointer(command_stream, sizeof(EntityManagerCommandStream)), 0, deferred_calls_capacity);
+							command_stream->InitializeFromBuffer(OffsetPointer(command_stream, sizeof(EntityManagerCommandStream)), 0, deferred_calls_capacity);
 							task_data.command_stream = command_stream;
 						}
 						else {
@@ -134,7 +202,7 @@ namespace ECSEngine {
 						if (deferred_calls_capacity > 0) {
 							command_stream = (EntityManagerCommandStream*)world->task_manager->AllocateTempBuffer(thread_id, deferred_call_allocation_size);
 
-							command_stream->InitializeFromBuffer(function::OffsetPointer(command_stream, sizeof(EntityManagerCommandStream)), 0, deferred_calls_capacity);
+							command_stream->InitializeFromBuffer(OffsetPointer(command_stream, sizeof(EntityManagerCommandStream)), 0, deferred_calls_capacity);
 							task_data.command_stream = command_stream;
 						}
 						else {
@@ -152,34 +220,88 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	// Extracts the pointers for the unique and shared buffers alongside the entity buffer
-	Entity* ForEachEntityThreadTaskHelper(
-		ForEachEntityBatchImplementationTaskData* data,
+	// Use a stack allocator to make allocation for stuff that we need
+	// Such that this function can be called from multiple places
+	static ArchetypeQuery InitializeForEachData(
+		ForEachEntityBatchImplementationTaskData* task_data,
 		World* world,
-		void** functor_uniques,
-		void** functor_shareds,
-		unsigned short* component_sizes
+		void* functor,
+		void* functor_data,
+		const ArchetypeQueryDescriptor& query_descriptor,
+		LinearAllocator* temporary_allocator,
+		CapacityStream<unsigned int>* archetype_indices
+	) {
+		const EntityManager* entity_manager = world->entity_manager;
+		entity_manager->GetArchetypes(query_descriptor, *archetype_indices);
+
+		task_data->functor_data = functor_data;
+		task_data->thread_function = functor;
+		task_data->component_map_count = query_descriptor.unique.count;
+		task_data->shared_component_map_count = query_descriptor.shared.count;
+		task_data->optional_component_map_count = query_descriptor.unique_optional.count;
+		task_data->optional_shared_component_map_count = query_descriptor.shared_optional.count;
+
+		// Aggregate the normal components with the optional ones
+		unsigned char* component_indices = (unsigned char*)temporary_allocator->Allocate(sizeof(unsigned char) * ECS_ARCHETYPE_MAX_COMPONENTS);
+		unsigned char* shared_indices = (unsigned char*)temporary_allocator->Allocate(sizeof(unsigned char) * ECS_ARCHETYPE_MAX_SHARED_COMPONENTS);
+		Component* aggregated_unique_components = (Component*)temporary_allocator->Allocate(sizeof(Component) * ECS_ARCHETYPE_MAX_COMPONENTS);
+		Component* aggregated_shared_components = (Component*)temporary_allocator->Allocate(sizeof(Component) * ECS_ARCHETYPE_MAX_SHARED_COMPONENTS);
+
+		ComponentSignature aggregate_unique = query_descriptor.AggregateUnique(aggregated_unique_components);
+		ComponentSignature aggregate_shared = query_descriptor.AggregateShared(aggregated_shared_components);
+
+		for (unsigned int index = 0; index < aggregate_unique.count; index++) {
+			task_data->component_sizes[index] = entity_manager->ComponentSize(aggregate_unique[index]);
+		}
+		for (unsigned int index = 0; index < aggregate_shared.count; index++) {
+			task_data->shared_component_sizes[index] = entity_manager->SharedComponentSize(aggregate_shared[index]);
+		}
+
+		return { aggregate_unique, aggregate_shared };
+	}
+
+	// Initializes data related to unique_data and shared_data for an archetype base
+	// The component map must have been called before hand
+	static void InitializeForEachDataForArchetypeBase(
+		ForEachEntityBatchImplementationTaskData* data,
+		World* world
 	) {
 		const Archetype* archetype = world->entity_manager->GetArchetype(data->archetype_indices.x);
 		ArchetypeBase* base = world->entity_manager->GetBase(data->archetype_indices.x, data->archetype_indices.y);
-		Entity* entities = base->m_entities;
+		data->entities = base->m_entities;
 
 		ComponentSignature archetype_signature = archetype->GetUniqueSignature();
 		for (unsigned char component_index = 0; component_index < data->component_map_count; component_index++) {
-			functor_uniques[component_index] = base->GetComponentByIndex(data->entity_offset, data->component_map[component_index]);
-			component_sizes[component_index] = world->entity_manager->ComponentSize(archetype_signature.indices[data->component_map[component_index]]);
+			data->unique_data[component_index] = base->GetComponentByIndex(data->entity_offset, data->component_map[component_index]);
+		}
+		unsigned char offset = data->component_map_count;
+		for (unsigned char component_index = 0; component_index < data->optional_component_map_count; component_index++) {
+			unsigned char current_index = offset + component_index;
+			data->unique_data[current_index] = data->component_map[current_index] != UCHAR_MAX ?
+				base->GetComponentByIndex(data->entity_offset, data->component_map[current_index]) : nullptr;
 		}
 
 		const Component* shared_components = archetype->GetSharedSignature().indices;
 		const SharedInstance* shared_instances = archetype->GetBaseInstances(data->archetype_indices.y);
 		for (unsigned char shared_component_index = 0; shared_component_index < data->shared_component_map_count; shared_component_index++) {
-			functor_shareds[shared_component_index] = world->entity_manager->GetSharedData(
+			data->shared_data[shared_component_index] = world->entity_manager->GetSharedData(
 				shared_components[data->shared_component_map[shared_component_index]],
 				shared_instances[data->shared_component_map[shared_component_index]]
 			);
 		}
-
-		return entities;
+		offset = data->shared_component_map_count;
+		for (unsigned char shared_index = 0; shared_index < data->optional_shared_component_map_count; shared_index++) {
+			unsigned char current_index = offset + shared_index;
+			if (data->shared_component_map[current_index] != UCHAR_MAX) {
+				data->shared_data[current_index] = world->entity_manager->GetSharedData(
+					shared_components[data->shared_component_map[current_index]],
+					shared_instances[data->shared_component_map[current_index]]
+				);
+			}
+			else {
+				data->shared_data[current_index] = nullptr;
+			}
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -187,27 +309,28 @@ namespace ECSEngine {
 	ECS_THREAD_TASK(ForEachEntityThreadTask) {
 		ForEachEntityBatchImplementationTaskData* data = (ForEachEntityBatchImplementationTaskData*)_data;
 
-		void* functor_uniques[ECS_ARCHETYPE_MAX_COMPONENTS];
-		void* functor_shareds[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-		unsigned short component_sizes[ECS_ARCHETYPE_MAX_COMPONENTS];
-		const Entity* entities = ForEachEntityThreadTaskHelper(data, world, functor_uniques, functor_shareds, component_sizes);
-
 		ForEachEntityFunctorData functor_data;
 		functor_data.thread_id = thread_id;
 		functor_data.world = world;
-		functor_data.unique_components = functor_uniques;
-		functor_data.shared_components = functor_shareds;
+		functor_data.unique_components = data->unique_data;
+		functor_data.shared_components = data->shared_data;
 		functor_data.data = data->functor_data;
 		functor_data.command_stream = data->command_stream;
 
 		ForEachEntityFunctor functor = (ForEachEntityFunctor)data->thread_function;
 		for (unsigned short index = 0; index < data->count; index++) {
-			functor_data.entity = entities[data->entity_offset + index];
+			functor_data.entity = data->entities[data->entity_offset + index];
 			functor(&functor_data);
 
 			// Offset the functor uniques now
 			for (unsigned char component_index = 0; component_index < data->component_map_count; component_index++) {
-				functor_uniques[component_index] = function::OffsetPointer(functor_uniques[component_index], component_sizes[component_index]);
+				data->unique_data[component_index] = OffsetPointer(data->unique_data[component_index], data->component_sizes[component_index]);
+			}
+			unsigned char offset = data->component_map_count;
+			for (unsigned char component_index = 0; component_index < data->optional_component_map_count; component_index++) {
+				if (data->unique_data[offset + component_index] != nullptr) {
+					data->unique_data[offset + component_index] = OffsetPointer(data->unique_data[offset + component_index], data->component_sizes[component_index]);
+				}
 			}
 		}
 	}
@@ -217,19 +340,14 @@ namespace ECSEngine {
 	ECS_THREAD_TASK(ForEachBatchThreadTask) {
 		ForEachEntityBatchImplementationTaskData* data = (ForEachEntityBatchImplementationTaskData*)_data;
 
-		void* functor_uniques[ECS_ARCHETYPE_MAX_COMPONENTS];
-		void* functor_shareds[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-		unsigned short component_sizes[ECS_ARCHETYPE_MAX_COMPONENTS];
-		Entity* entities = ForEachEntityThreadTaskHelper(data, world, functor_uniques, functor_shareds, component_sizes);
-
 		ForEachBatchFunctorData functor_data;
 		functor_data.thread_id = thread_id;
 		functor_data.world = world;
-		functor_data.entities = entities;
+		functor_data.entities = data->entities;
 		functor_data.count = data->count;
 		functor_data.command_stream = data->command_stream;
-		functor_data.unique_components = functor_uniques;
-		functor_data.shared_components = functor_shareds;
+		functor_data.unique_components = data->unique_data;
+		functor_data.shared_components = data->shared_data;
 		functor_data.data = data->functor_data;
 
 		ForEachBatchFunctor functor = (ForEachBatchFunctor)data->thread_function;
@@ -238,39 +356,19 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void ForEachEntityCommitFunctor(
+	template<bool is_batch>
+	void ForEachEntityOrBatchCommitFunctor(
 		World* world,
-		ForEachEntityFunctor functor,
+		void* functor,
 		void* data,
-		ComponentSignature unique_signature,
-		ComponentSignature shared_signature,
-		ComponentSignature unique_exclude_signature,
-		ComponentSignature shared_exclude_signature
+		const ArchetypeQueryDescriptor& query_descriptor
 	)
 	{
 		ECS_STACK_CAPACITY_STREAM(unsigned int, archetype_indices, ECS_MAIN_ARCHETYPE_MAX_COUNT);
-
+		ECS_STACK_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 8);
 		EntityManager* entity_manager = world->entity_manager;
-		if (unique_exclude_signature.count == 0 && shared_exclude_signature.count == 0) {
-			ArchetypeQuery query(unique_signature, shared_signature);
-			entity_manager->GetArchetypes(query, archetype_indices);
-		}
-		else {
-			ArchetypeQueryExclude query(unique_signature, shared_signature, unique_exclude_signature, shared_exclude_signature);
-			entity_manager->GetArchetypes(query, archetype_indices);
-		}
-
-		unsigned char component_indices[ECS_ARCHETYPE_MAX_COMPONENTS];
-		unsigned char shared_indices[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-
 		ForEachEntityBatchImplementationTaskData task_data;
-		task_data.functor_data = data;
-		task_data.thread_function = functor;
-		task_data.component_map_count = unique_signature.count;
-		task_data.shared_component_map_count = shared_signature.count;
-
-		VectorComponentSignature vector_unique(unique_signature);
-		VectorComponentSignature vector_shared(shared_signature);
+		ArchetypeQuery query = InitializeForEachData(&task_data, world, functor, data, query_descriptor, &stack_allocator, &archetype_indices);
 
 		for (unsigned int index = 0; index < archetype_indices.size; index++) {
 			Archetype* archetype = entity_manager->GetArchetype(archetype_indices[index]);
@@ -278,8 +376,8 @@ namespace ECSEngine {
 
 			task_data.archetype_indices.x = archetype_indices[index];
 
-			entity_manager->FindArchetypeUniqueComponentVector(archetype_indices[index], vector_unique, task_data.component_map);
-			entity_manager->FindArchetypeSharedComponentVector(archetype_indices[index], vector_shared, task_data.shared_component_map);
+			entity_manager->FindArchetypeUniqueComponentVector(task_data.archetype_indices.x, query.unique, task_data.component_map);
+			entity_manager->FindArchetypeSharedComponentVector(task_data.archetype_indices.x, query.shared, task_data.shared_component_map);
 
 			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
 				ArchetypeBase* base = archetype->GetBase(base_index);
@@ -288,9 +386,26 @@ namespace ECSEngine {
 				task_data.count = base->EntityCount();
 				task_data.entity_offset = 0;
 
-				ForEachEntityThreadTask(0, world, &task_data);
+				InitializeForEachDataForArchetypeBase(&task_data, world);
+				if constexpr (is_batch) {
+					ForEachBatchThreadTask(0, world, &task_data);
+				}
+				else {
+					ForEachEntityThreadTask(0, world, &task_data);
+				}
 			}
 		}
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	void ForEachEntityCommitFunctor(
+		World* world,
+		ForEachEntityFunctor functor,
+		void* data,
+		const ArchetypeQueryDescriptor& query_descriptor
+	) {
+		ForEachEntityOrBatchCommitFunctor<false>(world, functor, data, query_descriptor);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -300,48 +415,15 @@ namespace ECSEngine {
 		ForEachBatchFunctor functor,
 		void* data,
 		unsigned short batch_size,
-		ComponentSignature unique_signature,
-		ComponentSignature shared_signature,
-		ComponentSignature unique_exclude_signature,
-		ComponentSignature shared_exclude_signature
+		const ArchetypeQueryDescriptor& query_descriptor
 	)
 	{
-		ECS_STACK_CAPACITY_STREAM(unsigned int, archetype_indices, ECS_MAIN_ARCHETYPE_MAX_COUNT);
-
-		EntityManager* entity_manager = world->entity_manager;
-		if (unique_exclude_signature.count == 0 && shared_exclude_signature.count == 0) {
-			ArchetypeQuery query(unique_signature, shared_signature);
-			entity_manager->GetArchetypes(query, archetype_indices);
-		}
-		else {
-			ArchetypeQueryExclude query(unique_signature, shared_signature, unique_exclude_signature, shared_exclude_signature);
-			entity_manager->GetArchetypes(query, archetype_indices);
-		}
-
-		unsigned char component_indices[ECS_ARCHETYPE_MAX_COMPONENTS];
-		unsigned char shared_indices[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-
-		ForEachEntityBatchImplementationTaskData task_data;
-		task_data.functor_data = data;
-		task_data.thread_function = functor;
-		task_data.count = batch_size == 0 ? 8 : batch_size;
-
-		for (unsigned int index = 0; index < archetype_indices.size; index++) {
-			Archetype* archetype = entity_manager->GetArchetype(archetype_indices[index]);
-			unsigned int base_count = archetype->GetBaseCount();
-
-			task_data.archetype_indices.x = archetype_indices[index];
-			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-				ArchetypeBase* base = archetype->GetBase(base_index);
-				task_data.command_stream = nullptr;
-				task_data.archetype_indices.y = base_index;
-				task_data.count = base->EntityCount();
-				task_data.entity_offset = 0;
-
-				ForEachBatchThreadTask(0, world, &task_data);
-			}
-		}
+		// Ignore the batch size at the moment - the commit version will be called
+		// With the entire count of the entities for a base archetype
+		ForEachEntityOrBatchCommitFunctor<true>(world, functor, data, query_descriptor);
 	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
 
 	namespace Internal {
 
@@ -352,9 +434,22 @@ namespace ECSEngine {
 			const char* functor_name,
 			void* data,
 			size_t data_size,
+			ComponentSignature optional_signature,
+			ComponentSignature optional_shared_signature,
 			unsigned int deferred_calls_capacity
 		) {
-			ForEachEntityBatchImplementation(thread_id, world, functor, functor_name, data, data_size, deferred_calls_capacity, ForEachEntityThreadTask);
+			ForEachEntityBatchImplementation(
+				thread_id, 
+				world, 
+				functor, 
+				functor_name, 
+				data, 
+				data_size, 
+				optional_signature, 
+				optional_shared_signature, 
+				deferred_calls_capacity, 
+				ForEachEntityThreadTask
+			);
 		}
 
 		// -------------------------------------------------------------------------------------------------------------------------------
@@ -366,10 +461,23 @@ namespace ECSEngine {
 			const char* functor_name,
 			void* data,
 			size_t data_size,
+			ComponentSignature optional_signature,
+			ComponentSignature optional_shared_signature,
 			unsigned int deferred_calls_capacity
 		)
 		{
-			ForEachEntityBatchImplementation(thread_id, world, functor, functor_name, data, data_size, deferred_calls_capacity, ForEachBatchThreadTask);
+			ForEachEntityBatchImplementation(
+				thread_id, 
+				world, 
+				functor, 
+				functor_name, 
+				data, 
+				data_size,
+				optional_signature,
+				optional_shared_signature,
+				deferred_calls_capacity,
+				ForEachBatchThreadTask
+			);
 		}
 
 	}

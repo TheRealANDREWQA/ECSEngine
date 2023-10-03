@@ -269,7 +269,7 @@ namespace ECSEngine {
 		void* allocation = Allocate(allocator, allocation_size);
 
 		query_results.results = (Stream<unsigned int>*)allocation;
-		allocation = function::OffsetPointer(allocation, sizeof(Stream<unsigned int>) * new_capacity);
+		allocation = OffsetPointer(allocation, sizeof(Stream<unsigned int>) * new_capacity);
 
 		query_results.components = (ArchetypeQuery*)allocation;
 
@@ -294,7 +294,7 @@ namespace ECSEngine {
 		void* allocation = Allocate(allocator, allocation_size);
 
 		exclude_query_results.results = (Stream<unsigned int>*)allocation;
-		allocation = function::OffsetPointer(allocation, sizeof(Stream<unsigned int>) * new_capacity);
+		allocation = OffsetPointer(allocation, sizeof(Stream<unsigned int>) * new_capacity);
 
 		exclude_query_results.components = (ArchetypeQueryExclude*)allocation;
 
@@ -313,7 +313,7 @@ namespace ECSEngine {
 	void ArchetypeQueryCache::UpdateAdd(unsigned int new_archetype_index)
 	{
 		// Get the query
-		ArchetypeQuery query(entity_manager->GetArchetypeUniqueComponents(new_archetype_index), entity_manager->GetArchetypeSharedComponents(new_archetype_index));
+		ArchetypeQuery query{ entity_manager->GetArchetypeUniqueComponents(new_archetype_index), entity_manager->GetArchetypeSharedComponents(new_archetype_index) };
 
 		const size_t STACK_CAPACITY = ECS_KB * 8;
 		ECS_STACK_CAPACITY_STREAM(unsigned int, temporary_values, STACK_CAPACITY);
@@ -354,7 +354,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(unsigned int, temporary_values, STACK_CAPACITY);
 
 		auto loop_iteration = [&](Stream<unsigned int>& values) {
-			size_t result_index = function::SearchBytes(values.buffer, values.size, archetype_index, sizeof(unsigned int));
+			size_t result_index = SearchBytes(values.buffer, values.size, archetype_index, sizeof(unsigned int));
 			if (result_index != -1) {
 				values.RemoveSwapBack(result_index);
 
@@ -393,7 +393,7 @@ namespace ECSEngine {
 				// First do the removal of old archetypes. This should be done one by one because otherwise
 				// the indices become invalidated when RemoveSwapBack happens
 				for (size_t removal_index = 0; removal_index < remove_archetypes.size; removal_index++) {
-					size_t result_index = function::SearchBytes(
+					size_t result_index = SearchBytes(
 						query_results.results[index].buffer,
 						query_results.results[index].size,
 						remove_archetypes[removal_index],
@@ -409,10 +409,10 @@ namespace ECSEngine {
 
 				// Determine which new_archetypes match and which old need to be removed
 				for (size_t new_archetype_index = 0; new_archetype_index < new_archetypes.size; new_archetype_index++) {
-					ArchetypeQuery query(
+					ArchetypeQuery query{
 						entity_manager->GetArchetypeUniqueComponents(new_archetypes[new_archetype_index]),
 						entity_manager->GetArchetypeSharedComponents(new_archetypes[new_archetype_index])
-					);
+					};
 
 					if (query_results.components[index].Verifies(query.unique, query.shared)) {
 						new_additions_for_query.Add(new_archetypes[new_archetype_index]);

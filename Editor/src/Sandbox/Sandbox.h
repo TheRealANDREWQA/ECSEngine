@@ -39,6 +39,18 @@ bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 
 // -------------------------------------------------------------------------------------------------------------
 
+// It changes the value of a stored component to be another one of the same type
+// It performs the change only if the old component actually exists
+void ChangeSandboxDebugDrawComponent(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::Component old_component,
+	ECSEngine::Component new_component,
+	ECSEngine::ECS_COMPONENT_TYPE type
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void ClearSandboxTaskScheduler(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
@@ -443,6 +455,7 @@ void RemoveSandboxVirtualEntitiesSlot(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Performs the removal only if the component exists
 void RemoveSandboxDebugDrawComponent(
 	EditorState* editor_state,
 	unsigned int sandbox_index,

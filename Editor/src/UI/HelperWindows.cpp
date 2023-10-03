@@ -39,7 +39,7 @@ void CreateDockspaceFromWindowWithIndex(const char* window_name, EditorState* ed
 	// Construct the name as well
 	ECS_STACK_CAPACITY_STREAM(char, constructed_name, 128);
 	constructed_name.CopyOther(window_name);
-	function::ConvertIntToChars(constructed_name, index);
+	ConvertIntToChars(constructed_name, index);
 
 	unsigned int window_index = ui_system->GetWindowFromName(constructed_name);
 	if (window_index == -1) {
@@ -96,12 +96,12 @@ unsigned int UpdateUIWindowIndex(EditorState* editor_state, const char* base_nam
 	ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
 	window_name.CopyOther(base_name);
 	unsigned int base_name_size = window_name.size;
-	function::ConvertIntToChars(window_name, old_index);
+	ConvertIntToChars(window_name, old_index);
 
 	unsigned int window_index = editor_state->ui_system->GetWindowFromName(window_name);
 	if (window_index != -1) {
 		window_name.size = base_name_size;
-		function::ConvertIntToChars(window_name, new_index);
+		ConvertIntToChars(window_name, new_index);
 		editor_state->ui_system->SetWindowName(window_index, window_name);
 	}
 	return window_index;
@@ -109,7 +109,7 @@ unsigned int UpdateUIWindowIndex(EditorState* editor_state, const char* base_nam
 
 unsigned int GetWindowNameIndex(Stream<char> name)
 {
-	return function::ConvertCharactersToInt(name);
+	return ConvertCharactersToInt(name);
 }
 
 unsigned int GetWindowNameIndex(const UIDrawer& drawer)
@@ -140,7 +140,7 @@ void ChooseDirectoryOrFileName(void* window_data, UIDrawerDescriptor* drawer_des
 				void* allocation = drawer.GetMainAllocatorBuffer(sizeof(char) * data->wide->capacity, alignof(char));
 				data->ascii->InitializeFromBuffer(allocation, data->wide->size, data->wide->capacity);
 				if (data->wide->size > 0) {
-					function::ConvertWideCharsToASCII(data->wide->buffer, data->ascii->buffer, data->wide->size, data->ascii->capacity);
+					ConvertWideCharsToASCII(data->wide->buffer, data->ascii->buffer, data->wide->size, data->ascii->capacity);
 				}
 			}
 			else {
@@ -228,7 +228,7 @@ void RenameFileWizardCallback(ActionData* action_data) {
 	CapacityStream<char>* new_name = (CapacityStream<char>*)_additional_data;
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
-	function::ConvertASCIIToWide(wide_name, *new_name);
+	ConvertASCIIToWide(wide_name, *new_name);
 
 	RenameFileActionData rename_data;
 	rename_data.new_name = wide_name;
@@ -267,7 +267,7 @@ void RenameFolderWizardCallback(ActionData* action_data) {
 	CapacityStream<char>* new_name = (CapacityStream<char>*)_additional_data;
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
-	function::ConvertASCIIToWide(wide_name, *new_name);
+	ConvertASCIIToWide(wide_name, *new_name);
 
 	RenameFolderActionData rename_data;
 	rename_data.new_name = wide_name;

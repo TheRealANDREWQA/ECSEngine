@@ -8,6 +8,8 @@
 #include "../Utilities/Path.h"
 #include "../Multithreading/TaskManager.h"
 #include "../Containers/AtomicStream.h"
+#include "../Utilities/StringUtilities.h"
+#include "../Utilities/File.h"
 
 #define DEFAULT_COMPRESSION_QUALITY 0.9f
 
@@ -19,7 +21,7 @@ namespace ECSEngine {
 		final_path.AddStreamAssert(texture_filename);
 		// It doesn't have an extension, add it now
 		bool add_extension = true;
-		Stream<wchar_t> extension = function::PathExtension(final_path);
+		Stream<wchar_t> extension = PathExtension(final_path);
 		if (extension.size > 0) {
 			if (extension == ECS_TEXTURE_EXTENSIONS[ECS_TEXTURE_EXTENSION_JPG]) {
 				add_extension = false;
@@ -129,7 +131,7 @@ namespace ECSEngine {
 					};
 
 					if (unique_material_entries) {
-						bool is_tracked = function::FindString(material_name, tracked_materials.ToStream()) != -1;
+						bool is_tracked = FindString(material_name, tracked_materials.ToStream()) != -1;
 						if (!is_tracked) {
 							tracked_materials.Add(material_name.Copy(GetAllocatorPolymorphic(&stack_allocator)));
 							add_entries();
@@ -165,7 +167,7 @@ namespace ECSEngine {
 					};
 
 					if (unique_material_entries) {
-						bool is_tracked = function::FindString(material_name, tracked_materials.ToStream()) != -1;
+						bool is_tracked = FindString(material_name, tracked_materials.ToStream()) != -1;
 						if (!is_tracked) {
 							tracked_materials.Add(material_name.Copy(GetAllocatorPolymorphic(&stack_allocator)));
 							add_entries();
@@ -408,7 +410,7 @@ namespace ECSEngine {
 						}
 					};
 
-					bool is_tracked = function::FindString(material_name, tracked_materials.ToStream()) != -1;
+					bool is_tracked = FindString(material_name, tracked_materials.ToStream()) != -1;
 					if (!is_tracked) {
 						tracked_materials.Add(material_name.Copy(GetAllocatorPolymorphic(&stack_allocator)));
 						add_entries();
@@ -451,7 +453,7 @@ namespace ECSEngine {
 				}
 				write_path.size = initial_size;
 			}
-			write_path.size = function::PathParentBoth(write_path).size;
+			write_path.size = PathParentBoth(write_path).size;
 		}
 
 		write_path.CopyOther(current_directory);

@@ -27,7 +27,7 @@ void InspectorDrawMiscFile(EditorState* editor_state, unsigned int inspector_ind
 	ECS_STACK_CAPACITY_STREAM(wchar_t, path_storage, 512);
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 
-	Stream<wchar_t> path = function::MountPathOnlyRel(data->asset.file, assets_folder, path_storage);
+	Stream<wchar_t> path = MountPathOnlyRel(data->asset.file, assets_folder, path_storage);
 	// Check to see if the file still exists - else revert to draw nothing
 	if (!ExistsFileOrFolder(path)) {
 		ChangeInspectorToNothing(editor_state, inspector_index);
@@ -67,7 +67,7 @@ void ChangeInspectorToMiscFile(EditorState* editor_state, Stream<wchar_t> path, 
 	if (inspector_index != -1) {
 		// Get the data and set the path
 		InspectorDrawMiscFileData* draw_data = (InspectorDrawMiscFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
-		draw_data->asset.file = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
+		draw_data->asset.file = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->asset.file.CopyOther(path);
 
 		// Retrieve the name
@@ -76,7 +76,7 @@ void ChangeInspectorToMiscFile(EditorState* editor_state, Stream<wchar_t> path, 
 
 		// Retrieve the data from the file, if any
 		bool success = editor_state->asset_database->ReadMiscFile(asset_name, draw_data->asset.file, &draw_data->asset);
-		asset_name = function::StringCopy(editor_state->EditorAllocator(), asset_name);
+		asset_name = StringCopy(editor_state->EditorAllocator(), asset_name);
 		draw_data->asset.name = asset_name;
 		if (!success) {
 			// Set the default for the metadata

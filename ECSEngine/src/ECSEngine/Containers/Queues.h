@@ -3,7 +3,6 @@
 #include "ecspch.h"
 #include "Stream.h"
 #include "../Multithreading/ConcurrentPrimitives.h"
-#include "../Utilities/FunctionInterfaces.h"
 
 #define ECS_CIRCULAR_QUEUE_RESIZE_FACTOR 1.5f
 
@@ -149,7 +148,7 @@ namespace ECSEngine {
 					m_first_item += overwritten_elements;
 					m_first_item = m_first_item >= m_queue.capacity ? m_first_item - m_queue.capacity : m_first_item;
 				}
-				m_queue.size = function::ClampMax<unsigned int>(elements.size + m_queue.size, m_queue.capacity);
+				m_queue.size = ClampMax<unsigned int>(elements.size + m_queue.size, m_queue.capacity);
 			}
 			else {
 				// Since there are more elements than in the entire capacity,

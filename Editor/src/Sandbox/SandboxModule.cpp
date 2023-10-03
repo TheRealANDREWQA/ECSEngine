@@ -103,7 +103,7 @@ void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sa
 		Stream<EditorModuleReflectedSetting> reflected_settings = sandbox->modules_in_use[index].reflected_settings;
 		if (reflected_settings.size > 0) {
 			ECS_STACK_CAPACITY_STREAM(char, ascii_name, 512);
-			function::ConvertWideCharsToASCII(editor_state->project_modules->buffer[sandbox->modules_in_use[index].module_index].library_name, ascii_name);
+			ConvertWideCharsToASCII(editor_state->project_modules->buffer[sandbox->modules_in_use[index].module_index].library_name, ascii_name);
 
 			ECS_STACK_CAPACITY_STREAM(SystemManagerSetting, system_settings, 512);
 			ECS_ASSERT(system_settings.capacity >= reflected_settings.size);
@@ -137,7 +137,7 @@ void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 
 	// Change the path
 	if (settings_name.size > 0) {
-		sandbox_module->settings_name = function::StringCopy(sandbox_module->Allocator(), settings_name);
+		sandbox_module->settings_name = StringCopy(sandbox_module->Allocator(), settings_name);
 	}
 	else {
 		sandbox_module->settings_name = { nullptr, 0 };
@@ -178,7 +178,7 @@ void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_
 
 		// Make the streams nullptr for easier debugging
 		if (settings_name.size > 0) {
-			sandbox_module->settings_name = function::StringCopy(sandbox_module->Allocator(), settings_name);
+			sandbox_module->settings_name = StringCopy(sandbox_module->Allocator(), settings_name);
 		}
 		else {
 			sandbox_module->settings_name = { nullptr, 0 };
@@ -493,7 +493,7 @@ bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_i
 			settings_path.CopyOther(sandbox_module->settings_name);
 
 			sandbox_module->settings_allocator.Clear();
-			sandbox_module->settings_name = function::StringCopy(sandbox_module->Allocator(), settings_path);
+			sandbox_module->settings_name = StringCopy(sandbox_module->Allocator(), settings_path);
 			return false;
 		}
 	}

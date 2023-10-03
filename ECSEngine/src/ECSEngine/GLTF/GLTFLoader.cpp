@@ -3,7 +3,6 @@
 #include "ecspch.h"
 #include "GLTFLoader.h"
 #include "../Rendering/RenderingStructures.h"
-#include "../Utilities/FunctionInterfaces.h"
 #include "../Rendering/Graphics.h"
 #include "../Rendering/GraphicsHelpers.h"
 #include "../Allocators/AllocatorPolymorphic.h"
@@ -127,7 +126,7 @@ namespace ECSEngine {
 
 			Matrix ecs_matrix(world_matrix);
 			if (ecs_matrix != MatrixIdentity()) {
-				function::ApplySIMD(mesh_positions, mesh_positions, Vector8::Lanes(), Vector8::Lanes(), [ecs_matrix](const float3* input, float3* output, size_t count) {
+				ApplySIMD(mesh_positions, mesh_positions, Vector8::Lanes(), Vector8::Lanes(), [ecs_matrix](const float3* input, float3* output, size_t count) {
 					Vector8 transformed_positions = TransformPoint(Vector8(input), ecs_matrix);
 					transformed_positions.StoreFloat3(output);
 					return count;
@@ -148,7 +147,7 @@ namespace ECSEngine {
 
 			// Takes a lambda that transforms the normal if needed
 			auto loop = [&](Vector8 (ECS_VECTORCALL *perform_world_transformation)(Vector8 normal, Matrix transform_matrix)) {
-				function::ApplySIMD(mesh_normals, mesh_normals, tolerance.Lanes(), tolerance.Lanes(), [&](const float3* input, float3* output, size_t count) {
+				ApplySIMD(mesh_normals, mesh_normals, tolerance.Lanes(), tolerance.Lanes(), [&](const float3* input, float3* output, size_t count) {
 					Vector8 normal(input);
 					//normal = PerLanePermute<0, 2, 1, V_DC>(normal);
 					Vector8 less_than_tolerance_mask = SquareLength(normal) < tolerance;
@@ -220,10 +219,10 @@ namespace ECSEngine {
 					return false;
 				}
 
-				joints.x = function::ClampMax(0u, joints.x);
-				joints.y = function::ClampMax(0u, joints.y);
-				joints.z = function::ClampMax(0u, joints.z);
-				joints.w = function::ClampMax(0u, joints.w);
+				joints.x = ClampMax(0u, joints.x);
+				joints.y = ClampMax(0u, joints.y);
+				joints.z = ClampMax(0u, joints.z);
+				joints.w = ClampMax(0u, joints.w);
 
 				influences[index] = joints;
 			}
@@ -570,7 +569,7 @@ namespace ECSEngine {
 	GLTFData LoadGLTFFile(Stream<wchar_t> path, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
 	{
 		ECS_STACK_CAPACITY_STREAM(char, temp_path, 512);
-		function::ConvertWideCharsToASCII(path, temp_path);
+		ConvertWideCharsToASCII(path, temp_path);
 		temp_path[temp_path.size] = '\0';
 		return LoadGLTFFile(temp_path, allocator, error_message);
 	}
@@ -1024,7 +1023,7 @@ namespace ECSEngine {
 		// If it already exists - do no reload it
 		bool exists = false;
 		for (size_t subindex = 0; subindex < materials.size && !exists; subindex++) {
-			if (function::CompareStrings(material_name, materials[subindex].name)) {
+			if (material_name == materials[subindex].name) {
 				submesh_material_index.Add(subindex);
 				exists = true;
 			}
@@ -1171,7 +1170,7 @@ namespace ECSEngine {
 		Mesh mesh;
 
 		if (gltf_mesh.name.buffer != nullptr) {
-			mesh.name = function::StringCopy(graphics->Allocator(), gltf_mesh.name);
+			mesh.name = StringCopy(graphics->Allocator(), gltf_mesh.name);
 		}
 		else {
 			mesh.name = { nullptr, 0 };
@@ -1305,8 +1304,8 @@ namespace ECSEngine {
 			size_t vertex_buffer_offset = 0;
 
 			for (size_t index = 0; index < gltf_meshes.size; index++) {
-				void** stream_buffer = (void**)function::OffsetPointer(&gltf_meshes[sorted_indices[index]], stream_byte_offset);
-				size_t* stream_size = (size_t*)function::OffsetPointer(&gltf_meshes[sorted_indices[index]], stream_byte_offset + sizeof(void*));
+				void** stream_buffer = (void**)OffsetPointer(&gltf_meshes[sorted_indices[index]], stream_byte_offset);
+				size_t* stream_size = (size_t*)OffsetPointer(&gltf_meshes[sorted_indices[index]], stream_byte_offset + sizeof(void*));
 
 				// Create a staging buffer that can be copied to the main buffer
 				size_t buffer_size = *stream_size;
@@ -1424,11 +1423,11 @@ namespace ECSEngine {
 			void* mapped_data = graphics->MapBuffer(vertex_buffer.buffer);
 
 			for (size_t index = 0; index < gltf_meshes.size; index++) {
-				void** stream_buffer = (void**)function::OffsetPointer(&gltf_meshes[index], stream_byte_offset);
-				size_t* stream_size = (size_t*)function::OffsetPointer(&gltf_meshes[index], stream_byte_offset + sizeof(void*));
+				void** stream_buffer = (void**)OffsetPointer(&gltf_meshes[index], stream_byte_offset);
+				size_t* stream_size = (size_t*)OffsetPointer(&gltf_meshes[index], stream_byte_offset + sizeof(void*));
 
 				memcpy(mapped_data, *stream_buffer, *stream_size * sizeof_type);
-				mapped_data = function::OffsetPointer(mapped_data, *stream_size * sizeof_type);
+				mapped_data = OffsetPointer(mapped_data, *stream_size * sizeof_type);
 			}
 			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
 			graphics->UnmapBuffer(vertex_buffer.buffer);
@@ -1474,7 +1473,7 @@ namespace ECSEngine {
 
 			for (size_t index = 0; index < gltf_meshes.size; index++) {
 				gltf_meshes[index].indices.CopyTo(mapped_data);
-				mapped_data = function::OffsetPointer(mapped_data, gltf_meshes[index].indices.MemoryOf(gltf_meshes[index].indices.size));
+				mapped_data = OffsetPointer(mapped_data, gltf_meshes[index].indices.MemoryOf(gltf_meshes[index].indices.size));
 			}
 
 			graphics->UnmapBuffer(mesh.index_buffer.buffer);
@@ -1646,7 +1645,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < meshes.size; index++) {
 				size_t vertex_count = meshes[index].positions.size;
 				Stream<float> float_positions = { meshes[index].positions.buffer, vertex_count * 3 };
-				function::ApplySIMD(float_positions, float_positions, 8, 8, [=](const float* input, float* output, size_t count) {
+				ApplySIMD(float_positions, float_positions, 8, 8, [=](const float* input, float* output, size_t count) {
 					Vector8 positions(input);
 					positions *= splatted_factor;
 					positions.Store(output);

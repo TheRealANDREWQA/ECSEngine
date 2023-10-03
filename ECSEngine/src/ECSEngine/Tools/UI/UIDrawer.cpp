@@ -1,10 +1,11 @@
 #include "ecspch.h"
+#include "UIDrawer.h"
 #include "UISystem.h"
 #include "UIDrawConfigs.h"
 #include "UIDrawerStructures.h"
 #include "UIResourcePaths.h"
 #include "../../Utilities/Path.h"
-#include "UIDrawer.h"
+#include "../../Utilities/StreamUtilities.h"
 
 #define ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config) float2 position; float2 scale; HandleTransformFlags(configuration, config, position, scale)
 
@@ -51,7 +52,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		ECS_INLINE bool IsLateOrSystemConfiguration(size_t configuration) {
-			return function::HasFlag(configuration, UI_CONFIG_LATE_DRAW) || function::HasFlag(configuration, UI_CONFIG_SYSTEM_DRAW);
+			return HasFlag(configuration, UI_CONFIG_LATE_DRAW) || HasFlag(configuration, UI_CONFIG_SYSTEM_DRAW);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -115,7 +116,7 @@ namespace ECSEngine {
 					upper_bound = DBL_MAX;
 				}
 				else {
-					function::IntegerRange(lower_bound, upper_bound);
+					IntegerRange(lower_bound, upper_bound);
 				}
 
 				if (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS) {
@@ -137,7 +138,7 @@ namespace ECSEngine {
 
 				size_t initializer_configuration = configuration | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
 				initializer_configuration |= (~configuration & UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES) ? UI_CONFIG_ELEMENT_NAME_FIRST : UI_CONFIG_TEXT_INPUT_NO_NAME;
-				initializer_configuration = function::ClearFlag(initializer_configuration, UI_CONFIG_NAME_PADDING);
+				initializer_configuration = ClearFlag(initializer_configuration, UI_CONFIG_NAME_PADDING);
 
 #define PARAMETERS initializer_configuration, \
 					config, \
@@ -224,12 +225,12 @@ namespace ECSEngine {
 					upper_bound = DBL_MAX;
 				}
 				else {
-					function::IntegerRange(lower_bound, upper_bound);
+					IntegerRange(lower_bound, upper_bound);
 				}
 
 				size_t drawer_configuration = configuration | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW
-					| (function::HasFlag(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES) ? UI_CONFIG_TEXT_INPUT_NO_NAME : UI_CONFIG_ELEMENT_NAME_FIRST);
-				drawer_configuration = function::ClearFlag(drawer_configuration, UI_CONFIG_NAME_PADDING);
+					| (HasFlag(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES) ? UI_CONFIG_TEXT_INPUT_NO_NAME : UI_CONFIG_ELEMENT_NAME_FIRST);
+				drawer_configuration = ClearFlag(drawer_configuration, UI_CONFIG_NAME_PADDING);
 
 				if (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS) {
 					lower_bound = lower_bounds[0];
@@ -247,7 +248,7 @@ namespace ECSEngine {
 					}
 
 					if (lower_bounds == nullptr || upper_bounds == nullptr) {
-						drawer_configuration = function::ClearFlag(drawer_configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
+						drawer_configuration = ClearFlag(drawer_configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
 					}
 				}
 				
@@ -916,9 +917,9 @@ namespace ECSEngine {
 		{
 			return HandleResourceIdentifierImpl(this, input, permanent_buffer, [=]() {
 				Stream<char> string_to_copy = current_identifier;
-				Stream<char> string_pattern = function::FindFirstToken(current_identifier, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				Stream<char> string_pattern = FindFirstToken(current_identifier, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 				if (string_pattern.buffer != nullptr) {
-					if (function::FindFirstToken(input, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT).buffer != nullptr) {
+					if (FindFirstToken(input, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT).buffer != nullptr) {
 						string_to_copy = { string_pattern.buffer + ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT, string_pattern.size - ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT };
 					}
 				}
@@ -1407,7 +1408,7 @@ namespace ECSEngine {
 			if (~configuration & UI_CONFIG_SLIDER_MOUSE_DRAGGABLE) {
 				UIDrawerSliderBringToMouse bring_info;
 				bring_info.slider = info;
-				bring_info.slider_length = function::HasFlag(configuration, UI_CONFIG_VERTICAL) ? slider_scale.y : slider_scale.x;
+				bring_info.slider_length = HasFlag(configuration, UI_CONFIG_VERTICAL) ? slider_scale.y : slider_scale.x;
 
 				if (info->text_input_counter == 0) {
 					SolidColorRectangle(configuration, slider_position, slider_scale, slider_color);
@@ -1495,14 +1496,14 @@ namespace ECSEngine {
 				length = *(const float*)config.GetParameter(UI_CONFIG_SLIDER_LENGTH);
 			}
 			else {
-				length = function::HasFlag(configuration, UI_CONFIG_VERTICAL) ? element_descriptor.slider_length.y : element_descriptor.slider_length.x;
+				length = HasFlag(configuration, UI_CONFIG_VERTICAL) ? element_descriptor.slider_length.y : element_descriptor.slider_length.x;
 			}
 
 			if (configuration & UI_CONFIG_SLIDER_PADDING) {
 				padding = *(const float*)config.GetParameter(UI_CONFIG_SLIDER_PADDING);
 			}
 			else {
-				padding = function::HasFlag(configuration, UI_CONFIG_VERTICAL) ? element_descriptor.label_padd.y : element_descriptor.label_padd.x;
+				padding = HasFlag(configuration, UI_CONFIG_VERTICAL) ? element_descriptor.label_padd.y : element_descriptor.label_padd.x;
 			}
 
 			if (configuration & UI_CONFIG_SLIDER_SHRINK) {
@@ -2005,8 +2006,8 @@ namespace ECSEngine {
 					}
 
 					if (((configuration & UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X) != 0) && ((configuration & UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y) != 0)) {
-						scale.x = function::ClampMin(scale.x, element->scale.x);
-						scale.y = function::ClampMin(scale.y, element->scale.y);
+						scale.x = ClampMin(scale.x, element->scale.x);
+						scale.y = ClampMin(scale.y, element->scale.y);
 					}
 					HandleTextLabelAlignment(configuration, config, element->scale, scale, position, x_position, y_position, horizontal_alignment, vertical_alignment);
 					TranslateText(x_position, y_position, element->text_vertices);
@@ -2204,12 +2205,12 @@ namespace ECSEngine {
 
 			if (configuration & UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER) {
 				if (!input->is_currently_selected) {
-					int64_t integer = function::ConvertCharactersToInt(*input->text);
+					int64_t integer = ConvertCharactersToInt(*input->text);
 
 					char temp_characters[256];
 					CapacityStream<char> temp_stream(temp_characters, 0, 256);
-					function::ConvertIntToCharsFormatted(temp_stream, integer);
-					if (!function::CompareStrings(temp_stream, *input->text)) {
+					ConvertIntToCharsFormatted(temp_stream, integer);
+					if (temp_stream != *input->text) {
 						input->DeleteAllCharacters();
 						input->InsertCharacters(temp_characters, temp_stream.size, 0, system);
 					}
@@ -2243,7 +2244,7 @@ namespace ECSEngine {
 			// Determine if the text was changed from outside the UI - do this after the callback to give it
 			// a chance to use the previous data
 			if (!input->is_currently_selected) {
-				if (!function::CompareStrings(*input->text, input->previous_text)) {
+				if (*input->text != input->previous_text) {
 					// It has changed from the outside
 					input->sprite_render_offset = 0;
 					input->current_sprite_position = 0;
@@ -2283,7 +2284,7 @@ namespace ECSEngine {
 				Stream<char> characters_to_draw = { nullptr, 0 };
 
 				size_t label_configuration = configuration | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_WINDOW_DEPENDENT_SIZE;
-				label_configuration = function::ClearFlag(label_configuration, UI_CONFIG_ALIGN_TO_ROW_Y, UI_CONFIG_DO_CACHE);
+				label_configuration = ClearFlag(label_configuration, UI_CONFIG_ALIGN_TO_ROW_Y, UI_CONFIG_DO_CACHE);
 
 				UIDrawConfig label_config;
 				memcpy(&label_config, &config, sizeof(label_config));
@@ -2732,7 +2733,7 @@ namespace ECSEngine {
 			if (ValidatePosition(configuration, position)) {
 				if (slider->interpolate_value) {
 					if (!mouse_draggable_fixed_offset) {
-						slider->slider_position = function::Clamp(slider->slider_position, 0.0f, 1.0f);
+						slider->slider_position = Clamp(slider->slider_position, 0.0f, 1.0f);
 						functions.interpolate(lower_bound, upper_bound, value_to_modify, slider->slider_position);
 					}
 					else {
@@ -2779,10 +2780,10 @@ namespace ECSEngine {
 				float2 copy_position = position;
 
 				if (configuration & UI_CONFIG_VERTICAL) {
-					scale.y = function::ClampMin(scale.y, slider_length + 2.0f * slider_padding + 0.005f);
+					scale.y = ClampMin(scale.y, slider_length + 2.0f * slider_padding + 0.005f);
 				}
 				else {
-					scale.x = function::ClampMin(scale.x, slider_length + 2.0f * slider_padding + 0.005f);
+					scale.x = ClampMin(scale.x, slider_length + 2.0f * slider_padding + 0.005f);
 				}
 				if (~configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 					if (configuration & UI_CONFIG_VERTICAL) {
@@ -2827,7 +2828,7 @@ namespace ECSEngine {
 						functions.to_string(slider->characters, value_to_modify, functions.extra_data);
 						slider->characters[slider->characters.size] = '\0';
 						FixedScaleTextLabel(
-							function::ClearFlag(configuration, UI_CONFIG_DO_CACHE),
+							ClearFlag(configuration, UI_CONFIG_DO_CACHE),
 							config,
 							slider->characters.buffer,
 							position,
@@ -3009,7 +3010,7 @@ namespace ECSEngine {
 			layout.element_indentation *= 0.25f;
 			element_descriptor.label_padd.x *= 0.5f;
 
-			size_t slider_configuration = function::ClearFlag(configuration, UI_CONFIG_NAME_PADDING) | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW;
+			size_t slider_configuration = ClearFlag(configuration, UI_CONFIG_NAME_PADDING) | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW;
 			for (size_t index = 0; index < count; index++) {
 				UIDrawerSlider* slider = (UIDrawerSlider*)GetResource(names[index]);
 				
@@ -3020,8 +3021,8 @@ namespace ECSEngine {
 					upper_bound = upper_bounds;
 				}
 				else {
-					lower_bound = function::OffsetPointer(lower_bounds, index * slider->value_byte_size);
-					upper_bound = function::OffsetPointer(upper_bounds, index * slider->value_byte_size);
+					lower_bound = OffsetPointer(lower_bounds, index * slider->value_byte_size);
+					upper_bound = OffsetPointer(upper_bounds, index * slider->value_byte_size);
 				}
 
 				if (~configuration & UI_CONFIG_SLIDER_GROUP_NO_SUBNAMES) {
@@ -3108,7 +3109,7 @@ namespace ECSEngine {
 			bool has_pushed_stack = PushIdentifierStackStringPattern();
 			PushIdentifierStack(group_name);
 
-			size_t slider_configuration = function::ClearFlag(configuration, UI_CONFIG_NAME_PADDING);
+			size_t slider_configuration = ClearFlag(configuration, UI_CONFIG_NAME_PADDING);
 			for (size_t index = 0; index < count; index++) {
 				const void* lower_bound = nullptr;
 				const void* upper_bound = nullptr;
@@ -3121,10 +3122,10 @@ namespace ECSEngine {
 					default_value = default_values;
 				}
 				else {
-					lower_bound = function::OffsetPointer(lower_bounds, byte_offset);
-					upper_bound = function::OffsetPointer(upper_bounds, byte_offset);
+					lower_bound = OffsetPointer(lower_bounds, byte_offset);
+					upper_bound = OffsetPointer(upper_bounds, byte_offset);
 					if (default_values != nullptr) {
-						default_value = function::OffsetPointer(default_values, byte_offset);
+						default_value = OffsetPointer(default_values, byte_offset);
 					}
 				}
 
@@ -3541,7 +3542,7 @@ namespace ECSEngine {
 									action_data->data = data->callback_data;
 								}
 								else {
-									action_data->data = function::OffsetPointer(data, sizeof(*data));
+									action_data->data = OffsetPointer(data, sizeof(*data));
 								}
 								action_data->additional_data = data->value_to_modify;
 								data->callback(action_data);
@@ -3554,7 +3555,7 @@ namespace ECSEngine {
 							unsigned int wrapper_size = sizeof(*wrapper_data);
 							// The data needs to be copied, embedd it after the wrapper
 							if (callback->handler.data_size > 0) {
-								void* callback_data = function::OffsetPointer(wrapper_data, sizeof(WrapperData));
+								void* callback_data = OffsetPointer(wrapper_data, sizeof(WrapperData));
 								memcpy(callback_data, callback->handler.data, callback->handler.data_size);
 								// Signal that the data is relative to the wrapper
 								wrapper_data->callback_data = nullptr;
@@ -3694,7 +3695,7 @@ namespace ECSEngine {
 				if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
 					if (data->combo_box->mapping_byte_size > 0) {
 						// Find the index of the mapping
-						size_t mapping_index = function::SearchBytesEx(
+						size_t mapping_index = SearchBytesEx(
 							data->combo_box->mappings, 
 							data->combo_box->mapping_capacity, 
 							data->default_value.mapping_value, 
@@ -3782,14 +3783,14 @@ namespace ECSEngine {
 
 			float prefix_scale = 0.0f;
 			if (ValidatePosition(configuration, position, scale)) {
-				size_t new_configuration = function::ClearFlag(
+				size_t new_configuration = ClearFlag(
 					configuration,
 					UI_CONFIG_BORDER, 
 					UI_CONFIG_GET_TRANSFORM,
 					UI_CONFIG_ALIGN_TO_ROW_Y, 
 					UI_CONFIG_DO_CACHE
 				) | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_TEXT_ALIGNMENT;
-				new_configuration = function::ClearFlag(new_configuration, UI_CONFIG_ALIGN_ELEMENT);
+				new_configuration = ClearFlag(new_configuration, UI_CONFIG_ALIGN_ELEMENT);
 
 				new_configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
 
@@ -3813,7 +3814,7 @@ namespace ECSEngine {
 					unsigned char label_to_be_drawn = 0;
 					if (configuration & UI_CONFIG_COMBO_BOX_MAPPING) {
 						for (unsigned short index = 0; index < data->mapping_capacity; index++) {
-							if (memcmp(function::OffsetPointer(data->mappings, index * data->mapping_byte_size), data->active_label, data->mapping_byte_size) == 0) {
+							if (memcmp(OffsetPointer(data->mappings, index * data->mapping_byte_size), data->active_label, data->mapping_byte_size) == 0) {
 								// Found the label
 								label_to_be_drawn = index;
 								break;
@@ -3840,7 +3841,7 @@ namespace ECSEngine {
 				Color color = HandleColor(configuration, config);
 				colors[0] = color;
 
-				size_t no_get_transform_configuration = function::ClearFlag(configuration, UI_CONFIG_GET_TRANSFORM);
+				size_t no_get_transform_configuration = ClearFlag(configuration, UI_CONFIG_GET_TRANSFORM);
 
 				// Draw the overall solid color here, not the lightened one
 				SolidColorRectangle(no_get_transform_configuration, border_position, border_scale, color);
@@ -4686,9 +4687,9 @@ namespace ECSEngine {
 					else {
 						name_scale = drawer->GetLabelScale({ name.buffer, ParseStringIdentifier(name) }).x;
 					}
-					label_scale = function::ClampMin(label_scale, name_scale);
+					label_scale = ClampMin(label_scale, name_scale);
 
-					size_t LABEL_CONFIGURATION = function::ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_DO_NOT_FIT_SPACE 
+					size_t LABEL_CONFIGURATION = ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_DO_NOT_FIT_SPACE 
 						| UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_ADVANCE;
 					LABEL_CONFIGURATION |= is_selected ? UI_CONFIG_COLOR : UI_CONFIG_LABEL_TRANSPARENT;
 
@@ -4884,13 +4885,13 @@ namespace ECSEngine {
 				position,
 				scale,
 				[number](CapacityStream<char>* stream) {
-					function::ConvertFloatToChars(*stream, *number, 3);
+					ConvertFloatToChars(*stream, *number, 3);
 				},
 				[min, max](Stream<char>& tool_tip_stream) {
-					function::ConvertFloatToChars(tool_tip_stream, min, 3);
+					ConvertFloatToChars(tool_tip_stream, min, 3);
 					tool_tip_stream.Add(',');
 					tool_tip_stream.Add(' ');
-					function::ConvertFloatToChars(tool_tip_stream, max, 3);
+					ConvertFloatToChars(tool_tip_stream, max, 3);
 				}
 			);
 		}
@@ -4935,13 +4936,13 @@ namespace ECSEngine {
 				position,
 				scale,
 				[number](CapacityStream<char>* stream) {
-					function::ConvertDoubleToChars(*stream, *number, 3);
+					ConvertDoubleToChars(*stream, *number, 3);
 				},
 				[min, max](Stream<char>& tool_tip_stream) {
-					function::ConvertDoubleToChars(tool_tip_stream, min, 3);
+					ConvertDoubleToChars(tool_tip_stream, min, 3);
 					tool_tip_stream.Add(',');
 					tool_tip_stream.Add(' ');
-					function::ConvertDoubleToChars(tool_tip_stream, max, 3);
+					ConvertDoubleToChars(tool_tip_stream, max, 3);
 				}
 			);
 		}
@@ -4966,7 +4967,7 @@ namespace ECSEngine {
 				callback_data.min = min;
 			}
 			else {
-				function::IntegerRange(callback_data.min, callback_data.max);
+				IntegerRange(callback_data.min, callback_data.max);
 			}
 			callback_data.number = number;
 			if (~configuration & UI_CONFIG_NUMBER_INPUT_DEFAULT) {
@@ -4986,13 +4987,13 @@ namespace ECSEngine {
 				position,
 				scale,
 				[number](CapacityStream<char>* stream) {
-					function::ConvertIntToChars(*stream, static_cast<int64_t>(*number));
+					ConvertIntToChars(*stream, static_cast<int64_t>(*number));
 				},
 				[min, max](Stream<char>& tool_tip_stream) {
-					function::ConvertIntToChars(tool_tip_stream, static_cast<int64_t>(min));
+					ConvertIntToChars(tool_tip_stream, static_cast<int64_t>(min));
 					tool_tip_stream.Add(',');
 					tool_tip_stream.Add(' ');
-					function::ConvertIntToChars(tool_tip_stream, static_cast<int64_t>(max));
+					ConvertIntToChars(tool_tip_stream, static_cast<int64_t>(max));
 				}
 			);
 		}
@@ -5030,21 +5031,21 @@ namespace ECSEngine {
 					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
 					UIDrawerFloatInputCallbackData* data = (UIDrawerFloatInputCallbackData*)input->callback_data;
 
-					if (!function::IsFloatingPointNumber(*input->text) && !input->is_currently_selected) {
+					if (!IsFloatingPointNumber(*input->text) && !input->is_currently_selected) {
 						input->DeleteAllCharacters();
-						function::ConvertFloatToChars(temp_stream, function::Clamp(0.0f, data->min, data->max));
+						ConvertFloatToChars(temp_stream, Clamp(0.0f, data->min, data->max));
 						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 						temp_stream.size = 0;
 					}
 
 					unsigned int digit_count = 0;
-					Stream<char> dot = function::FindFirstCharacter(*input->text, '.');
+					Stream<char> dot = FindFirstCharacter(*input->text, '.');
 					if (dot.size > 0) {
 						digit_count = dot.size - 1;
 					}
 
 					// If the value changed, update the input stream
-					float current_value = function::ConvertCharactersToFloat(*input->text);
+					float current_value = ConvertCharactersToFloat(*input->text);
 					
 					for (unsigned int digit_index = 0; digit_index < digit_count; digit_index++) {
 						EPSILON *= 0.1f;
@@ -5055,7 +5056,7 @@ namespace ECSEngine {
 
 						auto has_changed_action = [&]() {
 							input->DeleteAllCharacters();
-							function::ConvertFloatToChars(temp_stream, *number, 3);
+							ConvertFloatToChars(temp_stream, *number, 3);
 							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 							data->number_data.external_value_change = true;
 
@@ -5088,10 +5089,10 @@ namespace ECSEngine {
 						if (is_different) {
 							tool_tip_characters.size = 0;
 							tool_tip_characters.Add('[');
-							function::ConvertFloatToChars(tool_tip_characters, min, 3);
+							ConvertFloatToChars(tool_tip_characters, min, 3);
 							tool_tip_characters.Add(',');
 							tool_tip_characters.Add(' ');
-							function::ConvertFloatToChars(tool_tip_characters, max, 3);
+							ConvertFloatToChars(tool_tip_characters, max, 3);
 							tool_tip_characters.Add(']');
 							tool_tip_characters[tool_tip_characters.size] = '\0';
 						}
@@ -5127,9 +5128,9 @@ namespace ECSEngine {
 					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
 					UIDrawerDoubleInputCallbackData* data = (UIDrawerDoubleInputCallbackData*)input->callback_data;
 
-					if (!function::IsFloatingPointNumber(*input->text) && !input->is_currently_selected) {
+					if (!IsFloatingPointNumber(*input->text) && !input->is_currently_selected) {
 						input->DeleteAllCharacters();
-						function::ConvertDoubleToChars(temp_stream, function::Clamp(0.0, data->min, data->max), 3);
+						ConvertDoubleToChars(temp_stream, Clamp(0.0, data->min, data->max), 3);
 						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 						temp_stream.size = 0;
 					}
@@ -5145,13 +5146,13 @@ namespace ECSEngine {
 					}
 
 					// If the value changed, update the input stream
-					double current_value = function::ConvertCharactersToDouble(*input->text);
+					double current_value = ConvertCharactersToDouble(*input->text);
 					if (!input->is_currently_selected) {
 						double difference = abs(current_value - *number);
 
 						auto has_changed_action = [&]() {
 							input->DeleteAllCharacters();
-							function::ConvertDoubleToChars(temp_stream, *number, 3);
+							ConvertDoubleToChars(temp_stream, *number, 3);
 							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 							data->number_data.external_value_change = true;
 
@@ -5184,10 +5185,10 @@ namespace ECSEngine {
 						if (is_different) {
 							tool_tip_characters.size = 0;
 							tool_tip_characters.Add('[');
-							function::ConvertDoubleToChars(tool_tip_characters, min, 3);
+							ConvertDoubleToChars(tool_tip_characters, min, 3);
 							tool_tip_characters.Add(',');
 							tool_tip_characters.Add(' ');
-							function::ConvertDoubleToChars(tool_tip_characters, max, 3);
+							ConvertDoubleToChars(tool_tip_characters, max, 3);
 							tool_tip_characters.Add(']');
 							tool_tip_characters[tool_tip_characters.size] = '\0';
 						}
@@ -5211,7 +5212,7 @@ namespace ECSEngine {
 				drag_data.data.max = max;
 			}
 			else {
-				function::IntegerRange(drag_data.data.min, drag_data.data.max);
+				IntegerRange(drag_data.data.min, drag_data.data.max);
 			}
 
 			NumberInputDrawer(configuration, config, name, number, IntInputHoverable<Integer>, IntInputNoNameHoverable<Integer>, IntegerInputDragValue<Integer>,
@@ -5220,9 +5221,9 @@ namespace ECSEngine {
 					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
 					UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)input->callback_data;
 
-					if (!function::IsIntegerNumber(*input->text) && !input->is_currently_selected) {
+					if (!IsIntegerNumber(*input->text) && !input->is_currently_selected) {
 						input->DeleteAllCharacters();
-						function::ConvertIntToChars(temp_stream, function::Clamp((Integer)0, data->min, data->max));
+						ConvertIntToChars(temp_stream, Clamp((Integer)0, data->min, data->max));
 						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 						temp_stream.size = 0;
 
@@ -5232,11 +5233,11 @@ namespace ECSEngine {
 					}
 
 					// If the value changed, update the input stream
-					Integer current_value = function::ConvertCharactersToIntImpl<Integer, char>(*input->text);
+					Integer current_value = ConvertCharactersToIntImpl<Integer, char>(*input->text);
 					if (!input->is_currently_selected) {
 						if (current_value != *number) {
 							input->DeleteAllCharacters();
-							function::ConvertIntToChars(temp_stream, (int64_t)*number);
+							ConvertIntToChars(temp_stream, (int64_t)*number);
 							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 
 							if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
@@ -5253,10 +5254,10 @@ namespace ECSEngine {
 						if (is_different) {
 							tool_tip_characters.size = 0;
 							tool_tip_characters.Add('[');
-							function::ConvertIntToChars(tool_tip_characters, static_cast<int64_t>(min));
+							ConvertIntToChars(tool_tip_characters, static_cast<int64_t>(min));
 							tool_tip_characters.Add(',');
 							tool_tip_characters.Add(' ');
-							function::ConvertIntToChars(tool_tip_characters, static_cast<int64_t>(max));
+							ConvertIntToChars(tool_tip_characters, static_cast<int64_t>(max));
 							tool_tip_characters.Add(']');
 							tool_tip_characters[tool_tip_characters.size] = '\0';
 						}
@@ -5550,7 +5551,7 @@ namespace ECSEngine {
 					}
 
 					float element_scale = data->nodes[index].name_element.scale.x + 2 * element_descriptor.label_padd.x + sprite_scale.x;
-					label_scale = function::ClampMin(label_scale, element_scale);
+					label_scale = ClampMin(label_scale, element_scale);
 
 					UIDrawerBoolClickableWithPinData click_data;
 					click_data.pointer = &data->nodes[index].state;
@@ -5585,7 +5586,7 @@ namespace ECSEngine {
 					else {
 						AddDefaultClickableHoverable(configuration, position, hoverable_scale, { BoolClickableWithPin, &click_data, sizeof(click_data) }, hover_color);
 					}
-					max_label_scale = function::ClampMin(max_label_scale, label_scale);
+					max_label_scale = ClampMin(max_label_scale, label_scale);
 					position = { GetNextRowXPosition() - region_render_offset.x, current_y - region_render_offset.y };
 				}
 				// list implementation is here
@@ -5615,7 +5616,7 @@ namespace ECSEngine {
 			const size_t STACK_CHARACTER_COUNT = 128;
 
 			float histogram_min_scale = samples.size * element_descriptor.histogram_bar_min_scale + (samples.size - 1) * element_descriptor.histogram_bar_spacing + 2.0f * element_descriptor.histogram_padding.x;
-			function::ClampMin(scale.x, histogram_min_scale);
+			ClampMin(scale.x, histogram_min_scale);
 
 			if (configuration & UI_CONFIG_GET_TRANSFORM) {
 				UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);
@@ -5662,7 +5663,7 @@ namespace ECSEngine {
 
 				float min_value = 100000.0f;
 				float max_value = -100000.0f;
-				function::GetExtremesFromStream(samples, min_value, max_value, [](float value) {
+				GetExtremesFromStream(samples, min_value, max_value, [](float value) {
 					return value;
 					});
 				float difference = max_value - min_value * (min_value < 0.0f);
@@ -5693,7 +5694,7 @@ namespace ECSEngine {
 				
 				for (int64_t index = starting_index; index < end_index; index++) {
 					stack_stream.size = 0;
-					function::ConvertFloatToChars(stack_stream, samples[index], precision);
+					ConvertFloatToChars(stack_stream, samples[index], precision);
 					float2 sample_scale = { bar_scale, samples[index] * difference_inverse * histogram_scale.y };
 					float2 sample_position = { histogram_position.x, zero_y_position - sample_scale.y };
 					if (sample_scale.y < 0.0f) {
@@ -5809,7 +5810,7 @@ namespace ECSEngine {
 			}
 
 			size_t label_configuration = configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_VALIDATE_POSITION;
-			label_configuration = function::ClearFlag(label_configuration, UI_CONFIG_ALIGN_ELEMENT);
+			label_configuration = ClearFlag(label_configuration, UI_CONFIG_ALIGN_ELEMENT);
 			label_configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
 			
 			if (~configuration & UI_CONFIG_MENU_SPRITE) {
@@ -5967,7 +5968,7 @@ namespace ECSEngine {
 				state->right_characters.buffer = new_buffer;
 			}
 
-			buffer = function::AlignPointer(buffer, alignof(unsigned short));
+			buffer = AlignPointer(buffer, alignof(unsigned short));
 			state->left_row_substreams = (unsigned short*)buffer;
 			buffer += sizeof(unsigned short) * state->row_count;
 
@@ -6000,7 +6001,7 @@ namespace ECSEngine {
 					state->row_has_submenu = (bool*)buffer;
 					buffer += sizeof(bool) * state->row_count;
 
-					buffer = function::AlignPointer(buffer, alignof(UIDrawerMenuState));
+					buffer = AlignPointer(buffer, alignof(UIDrawerMenuState));
 					memcpy((void*)buffer, state->submenues, sizeof(UIDrawerMenuState) * state->row_count);
 					state->submenues = (UIDrawerMenuState*)buffer;
 					buffer += sizeof(UIDrawerMenuState) * state->row_count;
@@ -6012,7 +6013,7 @@ namespace ECSEngine {
 					buffer += sizeof(bool) * state->row_count;
 				}
 
-				buffer = function::AlignPointer(buffer, alignof(UIActionHandler));
+				buffer = AlignPointer(buffer, alignof(UIActionHandler));
 				memcpy((void*)buffer, state->click_handlers, sizeof(UIActionHandler) * state->row_count);
 				state->click_handlers = (UIActionHandler*)buffer;
 				buffer += sizeof(UIActionHandler) * state->row_count;
@@ -6116,7 +6117,7 @@ namespace ECSEngine {
 				void* window_allocation = GetMainAllocatorBuffer(window_allocation_size);
 				data->windows = CapacityStream<UIDrawerMenuWindow>(window_allocation, 0, ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT);
 
-				InitializeMenuState(this, data, menu_state, function::HasFlag(configuration, UI_CONFIG_MENU_COPY_STATES));
+				InitializeMenuState(this, data, menu_state, HasFlag(configuration, UI_CONFIG_MENU_COPY_STATES));
 
 				return data;
 			});
@@ -6226,7 +6227,7 @@ namespace ECSEngine {
 
 					char stack_memory[64];
 					Stream<char> temp_stream = Stream<char>(stack_memory, 0);
-					function::ConvertFloatToChars(temp_stream, get_sample(0, 0), x_axis_precision);
+					ConvertFloatToChars(temp_stream, get_sample(0, 0), x_axis_precision);
 
 					float2 first_sample_span = TextSpan(temp_stream, font_size, character_spacing);
 					axis_bump.x -= first_sample_span.x * 0.5f;
@@ -6411,7 +6412,7 @@ namespace ECSEngine {
 				size_t sentence_length = ParseStringIdentifier(text);
 					
 				char parse_token = SentenceToken(configuration, config);
-				size_t whitespace_characters = function::ParseWordsFromSentence(text, parse_token);
+				size_t whitespace_characters = ParseWordsFromSentence(text, parse_token);
 
 				data->base.whitespace_characters.buffer = (UIDrawerWhitespaceCharacter*)GetMainAllocatorBuffer(sizeof(UISpriteVertex) * sentence_length * 6
 					+ sizeof(UIDrawerWhitespaceCharacter) * (whitespace_characters + 1));
@@ -6459,15 +6460,15 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		size_t UIDrawer::SentenceWhitespaceCharactersCount(Stream<char> identifier, CapacityStream<unsigned int> stack_buffer, char separator_token) {
-			return function::FindWhitespaceCharactersCount(identifier, separator_token, &stack_buffer);
+			return FindWhitespaceCharactersCount(identifier, separator_token, &stack_buffer);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::SentenceNonCachedInitializerKernel(Stream<char> identifier, UIDrawerSentenceNotCached* data, char separator_token) {
-			size_t space_count = function::ParseWordsFromSentence(identifier, separator_token);
+			size_t space_count = ParseWordsFromSentence(identifier, separator_token);
 
-			function::FindWhitespaceCharacters(data->whitespace_characters, identifier, separator_token);
+			FindWhitespaceCharacters(data->whitespace_characters, identifier, separator_token);
 			data->whitespace_characters.Add(identifier.size);
 		}
 
@@ -6627,7 +6628,7 @@ namespace ECSEngine {
 					float token_x_scale = TextSpan({ &separator_token, 1 }, font_size, character_spacing).x * !keep_token;
 
 					size_t text_configuration = configuration;
-					text_configuration |= function::HasFlag(configuration, UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) ? UI_CONFIG_ALIGN_TO_ROW_Y : 0;
+					text_configuration |= HasFlag(configuration, UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) ? UI_CONFIG_ALIGN_TO_ROW_Y : 0;
 					for (size_t index = 0; index < whitespace_characters.size; index++) {
 						if (whitespace_characters[index] != 0) {
 							word_end_index = whitespace_characters[index] - 1;
@@ -6758,7 +6759,7 @@ namespace ECSEngine {
 					if (configuration & UI_CONFIG_TEXT_TABLE_DYNAMIC_SCALE) {
 						float2 text_span = GetTextSpan(data->labels[index]);
 						unsigned int column_index = index % columns;
-						data->column_scales[column_index] = function::ClampMin(data->column_scales[column_index], text_span.x + ECS_TOOLS_UI_TEXT_TABLE_ENLARGE_CELL_FACTOR * element_descriptor.label_padd.x);
+						data->column_scales[column_index] = ClampMin(data->column_scales[column_index], text_span.x + ECS_TOOLS_UI_TEXT_TABLE_ENLARGE_CELL_FACTOR * element_descriptor.label_padd.x);
 						data->row_scale = text_span.y + element_descriptor.label_padd.y * ECS_TOOLS_UI_TEXT_TABLE_ENLARGE_CELL_FACTOR;
 					}
 				}
@@ -6955,7 +6956,7 @@ namespace ECSEngine {
 						);
 						float2 text_span = GetTextSpan(cells[index]);
 						float current_x_scale = text_span.x + ECS_TOOLS_UI_TEXT_TABLE_ENLARGE_CELL_FACTOR * element_descriptor.label_padd.x;
-						column_biggest_scale[column] = function::ClampMin(column_biggest_scale[column], current_x_scale);
+						column_biggest_scale[column] = ClampMin(column_biggest_scale[column], current_x_scale);
 						cell_scales[index] = text_span.x;
 						y_text_span = text_span.y;
 						scale.y = text_span.y + ECS_TOOLS_UI_TEXT_TABLE_ENLARGE_CELL_FACTOR * element_descriptor.label_padd.y;
@@ -7040,7 +7041,7 @@ namespace ECSEngine {
 			// upper corner value
 			char temp_memory[128];
 			Stream<char> temp_float_stream = Stream<char>(temp_memory, 0);
-			function::ConvertFloatToChars(temp_float_stream, max_y, y_axis_precision);
+			ConvertFloatToChars(temp_float_stream, max_y, y_axis_precision);
 
 			size_t* text_count = HandleTextSpriteCount(configuration);
 			auto text_buffer = HandleTextSpriteBuffer(configuration);
@@ -7059,12 +7060,12 @@ namespace ECSEngine {
 
 			auto top_vertices_stream = GetTextStream(configuration, temp_float_stream.size * 6);
 			float2 text_span = GetTextSpan(top_vertices_stream);
-			max_x_scale = function::ClampMin(max_x_scale, text_span.x);
+			max_x_scale = ClampMin(max_x_scale, text_span.x);
 			*text_count += 6 * temp_float_stream.size;
 
 			float2 bottom_text_position = { top_text_position.x, position.y + scale.y - y_sprite_scale - element_descriptor.graph_padding.y };
 			temp_float_stream.size = 0;
-			function::ConvertFloatToChars(temp_float_stream, min_y, y_axis_precision);
+			ConvertFloatToChars(temp_float_stream, min_y, y_axis_precision);
 			system->ConvertCharactersToTextSprites(
 				temp_float_stream,
 				bottom_text_position,
@@ -7113,9 +7114,9 @@ namespace ECSEngine {
 			float2 sprite_position = { top_text_position.x, top_text_position.y + y_sprite_scale + alignment_offset };
 			float step = 1.0f / (sprite_count + 1);
 			for (int64_t index = 0; index < sprite_count; index++) {
-				float value = function::Lerp(min_y, max_y, 1.0f - (index + 1) * step);
+				float value = Lerp(min_y, max_y, 1.0f - (index + 1) * step);
 				temp_float_stream.size = 0;
-				function::ConvertFloatToChars(temp_float_stream, value, y_axis_precision);
+				ConvertFloatToChars(temp_float_stream, value, y_axis_precision);
 
 				auto temp_vertices = GetTextStream(configuration, temp_float_stream.size * 6);
 				system->ConvertCharactersToTextSprites(
@@ -7180,7 +7181,7 @@ namespace ECSEngine {
 			// upper corner value
 			char temp_memory[128];
 			Stream<char> temp_float_stream = Stream<char>(temp_memory, 0);
-			function::ConvertFloatToChars(temp_float_stream, min_x, x_axis_precision);
+			ConvertFloatToChars(temp_float_stream, min_x, x_axis_precision);
 
 			size_t* text_count = HandleTextSpriteCount(configuration);
 			auto text_buffer = HandleTextSpriteBuffer(configuration);
@@ -7213,7 +7214,7 @@ namespace ECSEngine {
 			}
 
 			temp_float_stream.size = 0;
-			function::ConvertFloatToChars(temp_float_stream, max_x, x_axis_precision);
+			ConvertFloatToChars(temp_float_stream, max_x, x_axis_precision);
 
 			float2 right_span = TextSpan(temp_float_stream, font_size, character_spacing);
 			float2 right_text_position = { position.x + scale.x - element_descriptor.graph_padding.x - right_span.x, text_y };
@@ -7252,9 +7253,9 @@ namespace ECSEngine {
 
 				float step = 1.0f / (index + 1);
 				for (size_t subindex = 0; subindex < index; subindex++) {
-					float value = function::Lerp(min_x, max_x, 1.0f - (subindex + 1) * step);
+					float value = Lerp(min_x, max_x, 1.0f - (subindex + 1) * step);
 					temp_float_stream.size = 0;
-					function::ConvertFloatToChars(temp_float_stream, value, x_axis_precision);
+					ConvertFloatToChars(temp_float_stream, value, x_axis_precision);
 					float2 current_span = TextSpan(temp_float_stream, font_size, character_spacing);
 					total_sprite_length += current_span.x;
 				}
@@ -7270,9 +7271,9 @@ namespace ECSEngine {
 				float2 sprite_position = { position.x + left_span.x + x_space, text_y };
 				float step = 1.0f / (index + 1);
 				for (int64_t subindex = 0; subindex < index; subindex++) {
-					float value = function::Lerp(min_x, max_x, (subindex + 1) * step);
+					float value = Lerp(min_x, max_x, (subindex + 1) * step);
 					temp_float_stream.size = 0;
-					function::ConvertFloatToChars(temp_float_stream, value, x_axis_precision);
+					ConvertFloatToChars(temp_float_stream, value, x_axis_precision);
 					system->ConvertCharactersToTextSprites(
 						temp_float_stream,
 						sprite_position,
@@ -7360,7 +7361,7 @@ namespace ECSEngine {
 				float ratio = difference.y / difference.x;
 				scale.y = scale.x * ratio;
 				scale.y = system->NormalizeVerticalToWindowDimensions(scale.y);
-				scale.y = function::Clamp(scale.y, data->min_y_scale, data->max_y_scale);
+				scale.y = Clamp(scale.y, data->min_y_scale, data->max_y_scale);
 			}
 			else if (configuration & UI_CONFIG_GRAPH_KEEP_RESOLUTION_Y) {
 				const UIConfigGraphKeepResolutionY* data = (const UIConfigGraphKeepResolutionY*)config.GetParameter(UI_CONFIG_GRAPH_KEEP_RESOLUTION_Y);
@@ -7396,7 +7397,7 @@ namespace ECSEngine {
 				float ratio = difference.x / difference.y;
 				scale.x = scale.y * ratio;
 				scale.x = system->NormalizeHorizontalToWindowDimensions(scale.x);
-				scale.x = function::Clamp(scale.x, data->min_x_scale, data->max_x_scale);
+				scale.x = Clamp(scale.x, data->min_x_scale, data->max_x_scale);
 			}
 
 			size_t label_configuration = UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
@@ -7490,7 +7491,7 @@ namespace ECSEngine {
 
 					char stack_memory[64];
 					Stream<char> temp_stream = Stream<char>(stack_memory, 0);
-					function::ConvertFloatToChars(temp_stream, samples[0].x, x_axis_precision);
+					ConvertFloatToChars(temp_stream, samples[0].x, x_axis_precision);
 
 					float2 first_sample_span = TextSpan(temp_stream, font_size, character_spacing);
 					axis_bump.x -= first_sample_span.x * 0.5f;
@@ -8633,7 +8634,7 @@ namespace ECSEngine {
 			}
 
 			bool omit_text = false;
-			bool has_name_padding = function::HasFlag(configuration, UI_CONFIG_NAME_PADDING);
+			bool has_name_padding = HasFlag(configuration, UI_CONFIG_NAME_PADDING);
 			if (has_name_padding) {
 				const UIConfigNamePadding* name_padding = (const UIConfigNamePadding*)config.GetParameter(UI_CONFIG_NAME_PADDING);
 				alignment.horizontal = name_padding->alignment;
@@ -8687,7 +8688,7 @@ namespace ECSEngine {
 				else {
 					if (!drawer->initializer) {
 						if (!omit_text) {
-							drawer->TextLabelWithCull(function::ClearFlag(label_configuration, UI_CONFIG_DO_CACHE), label_config, text, position, scale);
+							drawer->TextLabelWithCull(ClearFlag(label_configuration, UI_CONFIG_DO_CACHE), label_config, text, position, scale);
 						}
 						position.x += scale.x;
 						draw_scale.x = scale.x;
@@ -8899,8 +8900,8 @@ namespace ECSEngine {
 				float2 render_zone = GetRenderZone();
 
 				float2 difference = render_span - render_zone;
-				difference.x = function::ClampMin(difference.x, 0.0f);
-				difference.y = function::ClampMin(difference.y, 0.0f);
+				difference.x = ClampMin(difference.x, 0.0f);
+				difference.y = ClampMin(difference.y, 0.0f);
 				system->SetWindowDrawerDifferenceSpan(window_index, difference);
 
 				if (export_scale != nullptr) {
@@ -9785,7 +9786,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, ascii_label, 512);
 			ECS_ASSERT(label.size < 512);
 
-			function::ConvertWideCharsToASCII(label, ascii_label);
+			ConvertWideCharsToASCII(label, ascii_label);
 			Button(ascii_label, handler);
 		}
 
@@ -9795,7 +9796,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, ascii_label, 512);
 			ECS_ASSERT(label.size < 512);
 
-			function::ConvertWideCharsToASCII(label, ascii_label);
+			ConvertWideCharsToASCII(label, ascii_label);
 			Button(configuration, config, ascii_label, handler);
 		}
 
@@ -9817,7 +9818,7 @@ namespace ECSEngine {
 				}
 
 				if (is_active) {
-					TextLabel(function::ClearFlag(configuration, UI_CONFIG_DO_CACHE), config, name, position, scale);
+					TextLabel(ClearFlag(configuration, UI_CONFIG_DO_CACHE), config, name, position, scale);
 					Color color = HandleColor(configuration, config);
 					if (*state) {
 						color = LightenColorClamp(color, 1.4f);
@@ -9827,7 +9828,7 @@ namespace ECSEngine {
 					AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 }, color);
 				}
 				else {
-					TextLabel(function::ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_UNAVAILABLE_TEXT, config, name, position, scale);
+					TextLabel(ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_UNAVAILABLE_TEXT, config, name, position, scale);
 				}
 			}
 		}
@@ -9909,7 +9910,7 @@ namespace ECSEngine {
 
 				if (~configuration & UI_CONFIG_MENU_BUTTON_SPRITE) {
 					configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
-					TextLabel(function::ClearFlag(configuration, UI_CONFIG_DO_CACHE), config, name, position, scale);
+					TextLabel(ClearFlag(configuration, UI_CONFIG_DO_CACHE), config, name, position, scale);
 				}
 				else {
 					const UIConfigMenuButtonSprite* sprite_definition = (const UIConfigMenuButtonSprite*)config.GetParameter(UI_CONFIG_MENU_BUTTON_SPRITE);
@@ -10059,7 +10060,7 @@ namespace ECSEngine {
 					}
 					else {
 						for (size_t index = 0; index < labels.size; index++) {
-							if (!function::CompareStrings(labels[index], data->labels[index])) {
+							if (labels[index] != data->labels[index]) {
 								has_changed = true;
 								break;
 							}
@@ -10299,7 +10300,7 @@ namespace ECSEngine {
 
 		void UIDrawer::ColorFloatInputDrawer(size_t configuration, UIDrawConfig& config, Stream<char> name, ColorFloat* color, float2 position, float2 scale) {
 			float min_x_scale = GetSquareScale(scale.y).x + layout.element_indentation + 0.002f;
-			scale.x = function::ClampMin(scale.x, min_x_scale);
+			scale.x = ClampMin(scale.x, min_x_scale);
 
 			Stream<char> identifier = HandleResourceIdentifier(name);
 
@@ -10336,7 +10337,7 @@ namespace ECSEngine {
 
 			size_t FLOAT_INPUT_CONFIGURATION = configuration | UI_CONFIG_TEXT_INPUT_CALLBACK;
 			FLOAT_INPUT_CONFIGURATION |= configuration & UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE ? UI_CONFIG_NUMBER_INPUT_DEFAULT : 0;
-			FLOAT_INPUT_CONFIGURATION = function::ClearFlag(FLOAT_INPUT_CONFIGURATION, UI_CONFIG_NAME_PADDING);
+			FLOAT_INPUT_CONFIGURATION = ClearFlag(FLOAT_INPUT_CONFIGURATION, UI_CONFIG_NAME_PADDING);
 
 			// Add the callback
 			UIConfigTextInputCallback callback;
@@ -10383,9 +10384,9 @@ namespace ECSEngine {
 			float default_sdr_intensity;
 			Color default_sdr_color = HDRColorToSDR(default_color, &default_sdr_intensity);
 
-			bool has_callback = function::HasFlag(configuration, UI_CONFIG_COLOR_FLOAT_CALLBACK);
-			bool has_color_callback = function::HasFlag(configuration, UI_CONFIG_COLOR_INPUT_CALLBACK);
-			configuration = function::ClearFlag(configuration, UI_CONFIG_COLOR_FLOAT_CALLBACK);
+			bool has_callback = HasFlag(configuration, UI_CONFIG_COLOR_FLOAT_CALLBACK);
+			bool has_color_callback = HasFlag(configuration, UI_CONFIG_COLOR_INPUT_CALLBACK);
+			configuration = ClearFlag(configuration, UI_CONFIG_COLOR_FLOAT_CALLBACK);
 
 			// The intensity will be controlled by number input - the reference must be made through the name
 			char intensity_input_name[256];
@@ -10434,7 +10435,7 @@ namespace ECSEngine {
 				);
 				callback_data->input = input;
 				if (current_callback.data_size > 0) {
-					void* callback_data_user = function::OffsetPointer(callback_data, sizeof(UIDrawerColorFloatInputCallbackData));
+					void* callback_data_user = OffsetPointer(callback_data, sizeof(UIDrawerColorFloatInputCallbackData));
 					memcpy(callback_data_user, current_callback.data, current_callback.data_size);
 					callback_data->callback_data = callback_data_user;
 				}
@@ -10465,7 +10466,7 @@ namespace ECSEngine {
 						callback_data = (UIDrawerColorFloatInputCallbackData*)GetMainAllocatorBuffer(
 							sizeof(UIDrawerColorFloatInputCallbackData) + float_callback->callback.data_size
 						);
-						float_color_callback_data = function::OffsetPointer(callback_data, sizeof(*callback_data));
+						float_color_callback_data = OffsetPointer(callback_data, sizeof(*callback_data));
 						memcpy(float_color_callback_data, float_callback->callback.data, float_callback->callback.data_size);
 					}
 				}
@@ -10620,11 +10621,11 @@ namespace ECSEngine {
 
 			UIDrawerPathTextCallbackData* data = (UIDrawerPathTextCallbackData*)_data;
 			data->target->size = 0;
-			function::ConvertASCIIToWide(*data->target, *data->input->text);
+			ConvertASCIIToWide(*data->target, *data->input->text);
 
 			if (data->user_callback != nullptr) {
 				if (data->user_callback_data == nullptr) {
-					action_data->data = function::OffsetPointer(data, sizeof(UIDrawerPathTextCallbackData));
+					action_data->data = OffsetPointer(data, sizeof(UIDrawerPathTextCallbackData));
 				}
 				else {
 					action_data->data = data->user_callback_data;
@@ -10632,7 +10633,7 @@ namespace ECSEngine {
 
 				// Also convert the previous text such that the callback has access to it
 				ECS_STACK_CAPACITY_STREAM(wchar_t, previous_path, 512);
-				function::ConvertASCIIToWide(previous_path, data->input->previous_text);
+				ConvertASCIIToWide(previous_path, data->input->previous_text);
 				action_data->additional_data = &previous_path;
 				data->user_callback(action_data);
 			}
@@ -10653,7 +10654,7 @@ namespace ECSEngine {
 			}
 
 			size_t callback_size = sizeof(UIDrawerPathTextCallbackData);
-			bool has_callback = function::HasFlag(configuration, UI_CONFIG_PATH_INPUT_CALLBACK);
+			bool has_callback = HasFlag(configuration, UI_CONFIG_PATH_INPUT_CALLBACK);
 			if (has_callback) {
 				const UIConfigPathInputCallback* callback = (const UIConfigPathInputCallback*)config.GetParameter(UI_CONFIG_PATH_INPUT_CALLBACK);
 				callback_size += callback->callback.data_size;
@@ -10662,19 +10663,19 @@ namespace ECSEngine {
 			size_t data_size = sizeof(char) * (characters->capacity + 1) + sizeof(CapacityStream<char>) + callback_size;
 			void* allocation = drawer->GetMainAllocatorBuffer(data_size);
 			CapacityStream<char>* ascii_stream = (CapacityStream<char>*)allocation;
-			ascii_stream->InitializeFromBuffer(function::OffsetPointer(allocation, sizeof(CapacityStream<char>)), 0, characters->capacity);
+			ascii_stream->InitializeFromBuffer(OffsetPointer(allocation, sizeof(CapacityStream<char>)), 0, characters->capacity);
 			if (characters->size > 0) {
-				function::ConvertWideCharsToASCII(*characters, *ascii_stream);
+				ConvertWideCharsToASCII(*characters, *ascii_stream);
 			}
 
-			UIDrawerPathTextCallbackData* callback_data = (UIDrawerPathTextCallbackData*)function::OffsetPointer(ascii_stream->buffer, (characters->capacity + 1) * sizeof(char));
+			UIDrawerPathTextCallbackData* callback_data = (UIDrawerPathTextCallbackData*)OffsetPointer(ascii_stream->buffer, (characters->capacity + 1) * sizeof(char));
 			callback_data->target = characters;
 			bool callback_copy_on_initialization = false;
 			bool callback_trigger_on_release = true;
 			if (has_callback) {
 				const UIConfigPathInputCallback* callback = (const UIConfigPathInputCallback*)config.GetParameter(UI_CONFIG_PATH_INPUT_CALLBACK);
 				if (callback->callback.data_size > 0) {
-					void* user_callback_data = function::OffsetPointer(callback_data, sizeof(*callback_data));
+					void* user_callback_data = OffsetPointer(callback_data, sizeof(*callback_data));
 					memcpy(user_callback_data, callback->callback.data, callback->callback.data_size);
 					// Signal that the data is relative
 					callback_data->user_callback_data = nullptr;
@@ -10730,7 +10731,7 @@ namespace ECSEngine {
 		) {
 			float2 folder_icon_size = drawer->GetSquareScale(scale.y);
 
-			scale.x = function::ClampMin(scale.x, folder_icon_size.x + drawer->layout.element_indentation + 0.005f);
+			scale.x = ClampMin(scale.x, folder_icon_size.x + drawer->layout.element_indentation + 0.005f);
 			drawer->HandleFitSpaceRectangle(configuration, position, scale);
 
 			if (configuration & UI_CONFIG_GET_TRANSFORM) {
@@ -10754,7 +10755,7 @@ namespace ECSEngine {
 				const UIConfigPathInputCallback* callback = (const UIConfigPathInputCallback*)config.GetParameter(UI_CONFIG_PATH_INPUT_CALLBACK);
 				if (callback->callback.data_size > 0 && !callback->copy_on_initialization) {
 					// The actual user callback is stored after the base callback
-					memcpy(function::OffsetPointer(callback_data, sizeof(*callback_data)), callback->callback.data, callback->callback.data_size);
+					memcpy(OffsetPointer(callback_data, sizeof(*callback_data)), callback->callback.data, callback->callback.data_size);
 				}
 				trigger_on_release = callback->trigger_on_release;
 			}
@@ -10772,8 +10773,8 @@ namespace ECSEngine {
 			// This must be done after the text input because the callback will be called
 			// from inside the text input
 			ECS_STACK_CAPACITY_STREAM(char, path_converted, 512);
-			function::ConvertWideCharsToASCII(*path, path_converted);
-			if (!function::CompareStrings(*text_input->text, path_converted)) {
+			ConvertWideCharsToASCII(*path, path_converted);
+			if (*text_input->text != path_converted) {
 				if (!trigger_on_release || !text_input->is_currently_selected) {
 					text_input->DeleteAllCharacters();
 					if (path_converted.size > 0) {
@@ -10816,7 +10817,7 @@ namespace ECSEngine {
 
 				size_t copy_size = sizeof(*with_input_handler_data);
 				if (give_files->is_callback && give_files->callback_handler.data_size > 0) {
-					memcpy(function::OffsetPointer(temporary_memory, copy_size), give_files->callback_handler.data, give_files->callback_handler.data_size);
+					memcpy(OffsetPointer(temporary_memory, copy_size), give_files->callback_handler.data, give_files->callback_handler.data_size);
 					copy_size += give_files->callback_handler.data_size;
 				}
 
@@ -10840,7 +10841,7 @@ namespace ECSEngine {
 					const UIConfigPathInputCustomFilesystem* filesystem = (const UIConfigPathInputCustomFilesystem*)config.GetParameter(UI_CONFIG_PATH_INPUT_CUSTOM_FILESYSTEM);
 					handler_data->custom_handler = filesystem->callback;
 					if (filesystem->callback.data_size > 0 && !filesystem->copy_on_initialization) {
-						handler_data->custom_handler.data = function::OffsetPointer(temporary_memory, copy_size);
+						handler_data->custom_handler.data = OffsetPointer(temporary_memory, copy_size);
 						memcpy(handler_data->custom_handler.data, filesystem->callback.data, filesystem->callback.data_size);
 						copy_size += filesystem->callback.data_size;
 					}
@@ -11037,7 +11038,7 @@ namespace ECSEngine {
 				return true;
 			}
 			for (size_t index = 0; index < old_labels.size; index++) {
-				if (!function::CompareStrings(old_labels[index], new_labels[index])) {
+				if (old_labels[index] != new_labels[index]) {
 					return true;
 				}
 			}
@@ -11392,10 +11393,10 @@ namespace ECSEngine {
 
 					for (size_t row = 0; row < vertical_count; row++) {
 						ColorFloat current_colors[4];
-						current_colors[0] = function::PlanarLerp(top_left, top_right, bottom_left, bottom_right, 0.0f, row * inverse_vertical_count_float);
-						current_colors[1] = function::PlanarLerp(top_left, top_right, bottom_left, bottom_right, inverse_horizontal_count_float, row * inverse_vertical_count_float);
-						current_colors[2] = function::PlanarLerp(top_left, top_right, bottom_left, bottom_right, 0.0f, (row + 1) * inverse_vertical_count_float);
-						current_colors[3] = function::PlanarLerp(top_left, top_right, bottom_left, bottom_right, inverse_horizontal_count_float, (row + 1) * inverse_vertical_count_float);
+						current_colors[0] = PlanarLerp(top_left, top_right, bottom_left, bottom_right, 0.0f, row * inverse_vertical_count_float);
+						current_colors[1] = PlanarLerp(top_left, top_right, bottom_left, bottom_right, inverse_horizontal_count_float, row * inverse_vertical_count_float);
+						current_colors[2] = PlanarLerp(top_left, top_right, bottom_left, bottom_right, 0.0f, (row + 1) * inverse_vertical_count_float);
+						current_colors[3] = PlanarLerp(top_left, top_right, bottom_left, bottom_right, inverse_horizontal_count_float, (row + 1) * inverse_vertical_count_float);
 
 						if (configuration & UI_CONFIG_SPRITE_GRADIENT) {
 							current_top_left_uv = { top_left_uv.x, top_left_uv.y + uv_delta.y * row };
@@ -11412,8 +11413,8 @@ namespace ECSEngine {
 						for (size_t column = 1; column < horizontal_count; column++) {
 							current_colors[0] = current_colors[1];
 							current_colors[2] = current_colors[3];
-							current_colors[1] = function::PlanarLerp(top_left, top_right, bottom_left, bottom_right, (column + 1) * inverse_horizontal_count_float, row * inverse_vertical_count_float);
-							current_colors[3] = function::PlanarLerp(top_left, top_right, bottom_left, bottom_right, (column + 1) * inverse_horizontal_count_float, (row + 1) * inverse_vertical_count_float);
+							current_colors[1] = PlanarLerp(top_left, top_right, bottom_left, bottom_right, (column + 1) * inverse_horizontal_count_float, row * inverse_vertical_count_float);
+							current_colors[3] = PlanarLerp(top_left, top_right, bottom_left, bottom_right, (column + 1) * inverse_horizontal_count_float, (row + 1) * inverse_vertical_count_float);
 
 							if (configuration & UI_CONFIG_SPRITE_GRADIENT) {
 								VertexColorSpriteClusterRectangle(
@@ -11944,14 +11945,14 @@ namespace ECSEngine {
 			// Move the position by a small offset so as to not have floating point calculation errors that would result
 			// In an increased render span even tho it supposed to not contribute to it
 			target_position -= EPSILON;
-			return { function::ClampMin(target_position - x_scale, current_x), current_y };
+			return { ClampMin(target_position - x_scale, current_x), current_y };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UIDrawer::GetAlignedToRightOverLimit(float x_scale) const {
 			float vertical_slider_offset = system->m_windows[window_index].is_vertical_render_slider * system->m_descriptors.misc.render_slider_vertical_size;
-			return { function::ClampMin(region_position.x + region_scale.x - x_scale - vertical_slider_offset, current_x), current_y };
+			return { ClampMin(region_position.x + region_scale.x - x_scale - vertical_slider_offset, current_x), current_y };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -11965,7 +11966,7 @@ namespace ECSEngine {
 			// Move the position by a small offset so as to not have floating point calculation errors that would result
 			// In an increased render span even tho it supposed to not contribute to it
 			target_position -= EPSILON;
-			return { current_x, function::ClampMin(target_position - y_scale, current_y) };
+			return { current_x, ClampMin(target_position - y_scale, current_y) };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -11973,7 +11974,7 @@ namespace ECSEngine {
 		float2 UIDrawer::GetAlignedToBottomOverLimit(float y_scale) const
 		{
 			float horizontal_slider_offset = system->m_windows[window_index].is_horizontal_render_slider * system->m_descriptors.misc.render_slider_horizontal_size;
-			return { current_x, function::ClampMin(region_position.y + region_scale.y - y_scale - horizontal_slider_offset, current_y) };
+			return { current_x, ClampMin(region_position.y + region_scale.y - y_scale - horizontal_slider_offset, current_y) };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -12037,7 +12038,7 @@ namespace ECSEngine {
 
 		void* UIDrawer::GetMainAllocatorBufferAndStoreAsResource(Stream<char> name, size_t size, size_t alignment) {
 			void* resource = GetMainAllocatorBuffer(size + name.size * sizeof(char), alignment);
-			void* name_ptr = function::OffsetPointer(resource, size);
+			void* name_ptr = OffsetPointer(resource, size);
 			name.CopyTo(name_ptr);
 			ResourceIdentifier identifier(name_ptr, name.size);
 			AddWindowResourceToTable(resource, identifier);
@@ -12176,7 +12177,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::Indent(float count) {
-			min_render_bounds.x = function::ClampMax(min_render_bounds.x, current_x - region_render_offset.x);
+			min_render_bounds.x = ClampMax(min_render_bounds.x, current_x - region_render_offset.x);
 			current_x += count * layout.element_indentation + current_column_x_scale;
 			current_column_x_scale = 0.0f;
 		}
@@ -12185,7 +12186,7 @@ namespace ECSEngine {
 
 		void UIDrawer::IndentWindowSize(float percentage)
 		{
-			min_render_bounds.x = function::ClampMax(min_render_bounds.x, current_x - region_render_offset.x);
+			min_render_bounds.x = ClampMax(min_render_bounds.x, current_x - region_render_offset.x);
 			current_x += (region_limit.x - region_fit_space_horizontal_offset) * percentage + current_column_x_scale;
 			current_column_x_scale = 0.0f;
 		}
@@ -12398,7 +12399,7 @@ namespace ECSEngine {
 			config.AddFlag(text_alignment);
 
 			HashTableDefault<unsigned int> parent_hash_table;
-			size_t table_count = function::PowerOfTwoGreater(labels.size) * 2;
+			size_t table_count = PowerOfTwoGreater(labels.size) * 2;
 			parent_hash_table.InitializeFromBuffer(GetTempBuffer(parent_hash_table.MemoryOf(table_count)), table_count);
 
 			size_t label_configuration = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_DO_NOT_FIT_SPACE |
@@ -12406,7 +12407,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < labels.size; index++) {
 				unsigned int current_parent_index = 0;
 				Stream<char> label_stream = labels[index];
-				size_t parent_path_size = function::PathParentSize(label_stream);
+				size_t parent_path_size = PathParentSize(label_stream);
 
 				if (parent_path_size != 0) {
 					ResourceIdentifier identifier(label_stream.buffer, parent_path_size);
@@ -12486,7 +12487,7 @@ namespace ECSEngine {
 					if (index < labels.size - 1) {
 						unsigned int next_parent_index = 0;
 						Stream<char> next_label_stream = labels[index + 1];
-						size_t next_parent_path_size = function::PathParentSize(next_label_stream);
+						size_t next_parent_path_size = PathParentSize(next_label_stream);
 
 						if (next_parent_path_size != 0) {
 							ResourceIdentifier next_identifier(next_label_stream.buffer, next_parent_path_size);
@@ -12507,7 +12508,7 @@ namespace ECSEngine {
 						float active_label_scale = 0.0f;
 						Stream<char> current_label;
 						current_label.buffer = label_stream.buffer + parent_path_size + (parent_path_size != 0);
-						current_label.size = function::PointerDifference(label_stream.buffer + label_stream.size, current_label.buffer);
+						current_label.size = PointerDifference(label_stream.buffer + label_stream.size, current_label.buffer);
 
 						if (label_stream.size == data->active_label.size) {
 							if (memcmp(label_stream.buffer, data->active_label.buffer, label_stream.size) == 0) {
@@ -12517,7 +12518,7 @@ namespace ECSEngine {
 							}
 						}
 						TextLabel(
-							function::ClearFlag(configuration, UI_CONFIG_DO_CACHE) | label_configuration | UI_CONFIG_LABEL_TRANSPARENT,
+							ClearFlag(configuration, UI_CONFIG_DO_CACHE) | label_configuration | UI_CONFIG_LABEL_TRANSPARENT,
 							config,
 							current_label,
 							label_position,
@@ -12595,7 +12596,7 @@ namespace ECSEngine {
 
 						if (is_active) {
 							float horizontal_scale = horizontal_bound - initial_label_position.x;
-							horizontal_scale = function::ClampMin(horizontal_scale, active_label_scale + square_scale.x * 2.0f);
+							horizontal_scale = ClampMin(horizontal_scale, active_label_scale + square_scale.x * 2.0f);
 							SolidColorRectangle(configuration, initial_label_position, { horizontal_scale, scale.y }, current_color);
 						}
 
@@ -12903,8 +12904,8 @@ namespace ECSEngine {
 
 				/*size_t opened_index = 0;
 				for (; opened_index < data->opened_labels.size; opened_index++) {
-					Stream<char> last_name = function::PathFilename(data->opened_labels[index]);
-					if (function::CompareStrings(last_name, current_label)) {
+					Stream<char> last_name = PathFilename(data->opened_labels[index]);
+					if (last_name == current_label) {
 						break;
 					}
 				}*/
@@ -12920,7 +12921,7 @@ namespace ECSEngine {
 				}
 
 				// Verify if it passes the filter
-				if (filter.size == 0 || function::FindFirstToken(current_label, filter).buffer != nullptr) {
+				if (filter.size == 0 || FindFirstToken(current_label, filter).buffer != nullptr) {
 					float current_gain = depth * layout.node_indentation;
 					float2 current_position = { position.x + current_gain, position.y };
 					float2 current_scale = { horizontal_bound - current_position.x, scale.y };
@@ -12987,7 +12988,7 @@ namespace ECSEngine {
 								}
 							}
 
-							size_t input_configuration = function::ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_ABSOLUTE_TRANSFORM |
+							size_t input_configuration = ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_ABSOLUTE_TRANSFORM |
 								UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_ALIGNMENT;
 							UIConfigBorder border;
 							UIDrawerTextInput* text_input = TextInput(
@@ -13018,7 +13019,7 @@ namespace ECSEngine {
 							}
 						}
 						else {
-							size_t current_label_configuration = function::ClearFlag(configuration, UI_CONFIG_DO_CACHE) | label_configuration | UI_CONFIG_LABEL_TRANSPARENT;
+							size_t current_label_configuration = ClearFlag(configuration, UI_CONFIG_DO_CACHE) | label_configuration | UI_CONFIG_LABEL_TRANSPARENT;
 							current_label_configuration |= is_cut ? UI_CONFIG_UNAVAILABLE_TEXT : 0;
 							TextLabel(
 								current_label_configuration,
@@ -13102,7 +13103,7 @@ namespace ECSEngine {
 							}
 
 							if (is_active) {
-								current_scale.x = function::ClampMin(current_scale.x, active_label_scale + square_scale.x * 2.0f);
+								current_scale.x = ClampMin(current_scale.x, active_label_scale + square_scale.x * 2.0f);
 								SolidColorRectangle(configuration, current_position, current_scale, current_color);
 							}
 						}
@@ -13238,7 +13239,7 @@ namespace ECSEngine {
 					if (storage_type_size == 0) {
 						Stream<char>* char_label = (Stream<char>*)allocation;
 						data->rename_label = char_label;
-						char_label->InitializeFromBuffer(function::OffsetPointer(allocation, sizeof(Stream<char>)), 0);
+						char_label->InitializeFromBuffer(OffsetPointer(allocation, sizeof(Stream<char>)), 0);
 					}
 					else { 
 						data->rename_label = allocation;
@@ -13394,7 +13395,7 @@ namespace ECSEngine {
 				drawer->UpdateCurrentColumnScale(square_scale.x);
 				drawer->Indent();
 				drawer->TextLabel(
-					function::ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_LABEL_TRANSPARENT,
+					ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_LABEL_TRANSPARENT,
 					config,
 					labels.buffer[index]
 				);
@@ -14006,7 +14007,7 @@ namespace ECSEngine {
 					float percent_value = percentage * 100.0f;
 					char temp_values[16];
 					Stream<char> temp_stream = Stream<char>(temp_values, 0);
-					function::ConvertFloatToChars(temp_stream, percent_value, 0);
+					ConvertFloatToChars(temp_stream, percent_value, 0);
 					temp_stream.Add('%');
 					temp_stream[temp_stream.size] = '\0';
 					auto text_stream = GetTextStream(configuration, temp_stream.size * 6);
@@ -14039,7 +14040,7 @@ namespace ECSEngine {
 						ECS_UI_ALIGN_LEFT,
 						ECS_UI_ALIGN_MIDDLE
 					);
-					x_position = function::ClampMax(x_position, position.x + scale.x - element_descriptor.label_padd.x - text_span.x);
+					x_position = ClampMax(x_position, position.x + scale.x - element_descriptor.label_padd.x - text_span.x);
 					TranslateText(x_position, y_position, text_stream, 0, 0);
 
 					HandleRectangleActions(configuration, config, position, scale);
@@ -14058,7 +14059,7 @@ namespace ECSEngine {
 
 				FinalizeRectangle(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, position, scale);
 				position.x += scale.x + layout.element_indentation * 0.5f;
-				TextLabel(function::ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_TRANSPARENT, config, name, position, scale);
+				TextLabel(ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_TRANSPARENT, config, name, position, scale);
 
 				if (configuration & UI_CONFIG_TEXT_ALIGNMENT) {
 					config.SetExistingFlag(previous_alignment, alignment);
@@ -14096,7 +14097,7 @@ namespace ECSEngine {
 		void UIDrawer::PushIdentifierStackEx(Stream<char> identifier)
 		{
 			ECS_STACK_CAPACITY_STREAM_DYNAMIC(char, identifier_final, identifier.size);
-			Stream<char> pattern = function::FindFirstToken(identifier, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+			Stream<char> pattern = FindFirstToken(identifier, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 			if (pattern.size > 0) {
 				identifier_final.CopyOther(Stream<char>(identifier.buffer, pattern.buffer - identifier.buffer));
 				pattern.buffer += ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT;
@@ -14115,7 +14116,7 @@ namespace ECSEngine {
 		void UIDrawer::PushIdentifierStack(size_t index) {
 			char temp_chars[64];
 			Stream<char> stream_char = Stream<char>(temp_chars, 0);
-			function::ConvertIntToChars(stream_char, (int64_t)index);
+			ConvertIntToChars(stream_char, (int64_t)index);
 			PushIdentifierStack(temp_chars);
 		}
 
@@ -14336,14 +14337,14 @@ namespace ECSEngine {
 				UI_UNPACK_ACTION_DATA;
 
 				SelectData* data = (SelectData*)_data;
-				Stream<char> label = function::GetCoalescedStreamFromType(data).As<char>();
+				Stream<char> label = GetCoalescedStreamFromType(data).As<char>();
 				data->selected_label->CopyOther(label);
 			};
 
 			for (size_t index = 0; index < labels.size; index++) {
 				size_t storage[512];
 				unsigned int write_size;
-				SelectData* select_data = function::CreateCoalescedStreamIntoType<SelectData>(storage, labels[index], &write_size);
+				SelectData* select_data = CreateCoalescedStreamIntoType<SelectData>(storage, labels[index], &write_size);
 				select_data->selected_label = selected_label;
 
 				Button(configuration, config, labels[index], { select_action, select_data, write_size });
@@ -14942,16 +14943,16 @@ namespace ECSEngine {
 			ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
 			// There is no need for an initializer
-			configuration = function::ClearFlag(configuration, UI_CONFIG_DO_CACHE);
+			configuration = ClearFlag(configuration, UI_CONFIG_DO_CACHE);
 
-			bool window_dependent = function::HasFlag(configuration, UI_CONFIG_WINDOW_DEPENDENT_SIZE);
+			bool window_dependent = HasFlag(configuration, UI_CONFIG_WINDOW_DEPENDENT_SIZE);
 
 			bool has_name = name.size > 0;
 			float name_size = has_name ? ElementNameSize(configuration, config, name, scale) : 0.0f;
 
 			// Draw the name, if any
 			float2 icon_size = GetSquareScale(scale.y);
-			scale.x = function::ClampMin(scale.x, icon_size.x + layout.element_indentation + 0.005f);
+			scale.x = ClampMin(scale.x, icon_size.x + layout.element_indentation + 0.005f);
 
 			float2 total_scale = window_dependent ? scale : float2(name_size + scale.x, scale.y);
 
@@ -14971,7 +14972,7 @@ namespace ECSEngine {
 				is_active = state->state;
 			}
 
-			bool name_first = function::HasFlag(configuration, UI_CONFIG_ELEMENT_NAME_FIRST);
+			bool name_first = HasFlag(configuration, UI_CONFIG_ELEMENT_NAME_FIRST);
 			if (name.size > 0) {
 				if (name_first) {
 					ElementName(configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y, config, name, position, scale);
@@ -14980,14 +14981,14 @@ namespace ECSEngine {
 			}
 
 			float _label_scale = total_scale.x - icon_size.x - layout.element_indentation;
-			_label_scale = function::ClampMin(_label_scale, 0.0f);
+			_label_scale = ClampMin(_label_scale, 0.0f);
 
 			float2 label_scale = { _label_scale, scale.y };
 			// The fixed scale label doesn't finalize the rectangle
 			FixedScaleTextLabel(configuration, config, *selection, position, label_scale);
 
 			// Check the clickable handler
-			if (function::HasFlag(configuration, UI_CONFIG_SELECTION_INPUT_LABEL_CLICKABLE)) {
+			if (HasFlag(configuration, UI_CONFIG_SELECTION_INPUT_LABEL_CLICKABLE)) {
 				const UIConfigSelectionInputLabelClickable* clickable = (const UIConfigSelectionInputLabelClickable*)config.GetParameter(UI_CONFIG_SELECTION_INPUT_LABEL_CLICKABLE);
 				if (clickable->double_click_action) {
 					AddDoubleClickAction(
@@ -15044,11 +15045,11 @@ namespace ECSEngine {
 			// if the selection has changed to trigger the calllback
 			struct DestroyWindowCallbackData {
 				void* GetSelectionData() const {
-					return function::OffsetPointer(this, sizeof(*this));
+					return OffsetPointer(this, sizeof(*this));
 				}
 
 				void* GetDestroyData() const {
-					return function::OffsetPointer(this, sizeof(*this) + handler_data.data_size);
+					return OffsetPointer(this, sizeof(*this) + handler_data.data_size);
 				}
 
 				CapacityStream<char>* selection;
@@ -15081,13 +15082,13 @@ namespace ECSEngine {
 
 			// Now copy the callback data first and then the initial selection
 			if (selection_callback.data_size > 0) {
-				void* selection_callback_data = function::OffsetPointer(callback_data, write_size);
+				void* selection_callback_data = OffsetPointer(callback_data, write_size);
 				memcpy(selection_callback_data, selection_callback.data, selection_callback.data_size);
 				write_size += selection_callback.data_size;
 			}
 
 			if (final_descriptor.destroy_action_data_size > 0) {
-				void* destroy_buffer = function::OffsetPointer(callback_data, write_size);
+				void* destroy_buffer = OffsetPointer(callback_data, write_size);
 				memcpy(destroy_buffer, final_descriptor.destroy_action_data, final_descriptor.destroy_action_data_size);
 				write_size += final_descriptor.destroy_action_data_size;
 			}
@@ -15975,7 +15976,7 @@ namespace ECSEngine {
 					}
 
 
-					Stream<wchar_t> texture = function::HasFlag(*flags, flag_to_set) ? texture_true : texture_false;
+					Stream<wchar_t> texture = HasFlag(*flags, flag_to_set) ? texture_true : texture_false;
 					if (is_active) {
 						SpriteRectangle(configuration, position, scale, texture, color, top_left_uv, bottom_right_uv);
 
@@ -16137,7 +16138,7 @@ namespace ECSEngine {
 		{
 			ECS_ASSERT(characters.size < ECS_KB * 8);
 			ECS_STACK_CAPACITY_STREAM(char, ascii, ECS_KB * 8);
-			function::ConvertWideCharsToASCII(characters, ascii);
+			ConvertWideCharsToASCII(characters, ascii);
 			TextLabel(configuration, config, ascii);
 		}
 
@@ -16378,7 +16379,7 @@ namespace ECSEngine {
 			ECS_ASSERT(characters.size < MAX_CHARACTERS);
 
 			ECS_STACK_CAPACITY_STREAM(char, ascii, MAX_CHARACTERS);
-			function::ConvertWideCharsToASCII(characters, ascii);
+			ConvertWideCharsToASCII(characters, ascii);
 			Text(configuration, config, ascii);
 		}
 
@@ -16779,7 +16780,7 @@ namespace ECSEngine {
 			// But the callbacks should still be called
 			else {
 				// Verify that the new value is in bounds
-				data->new_size = function::ClampMax(data->capacity_data->size, data->capacity_data->capacity);
+				data->new_size = ClampMax(data->capacity_data->size, data->capacity_data->capacity);
 
 				// Elements were removed
 				if (data->new_size > data->capacity_data->size) {
@@ -17090,7 +17091,7 @@ namespace ECSEngine {
 		void UIDrawerArrayFloatFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
 			drawer.FloatInput(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE), 
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE), 
 				draw_data.config == nullptr ? temp_config : *draw_data.config, 
 				element_name, 
 				(float*)draw_data.element_data
@@ -17102,7 +17103,7 @@ namespace ECSEngine {
 		void UIDrawerArrayDoubleFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
 			drawer.DoubleInput(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE), 
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE), 
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				element_name, 
 				(double*)draw_data.element_data
@@ -17115,7 +17116,7 @@ namespace ECSEngine {
 		void UIDrawerArrayIntegerFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
 			drawer.IntInput<Integer>(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE), 
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE), 
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				element_name,
 				(Integer*)draw_data.element_data
@@ -17137,7 +17138,7 @@ namespace ECSEngine {
 			values[1] = values[0] + 1;
 
 			drawer.FloatInputGroup(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				2,
 				element_name,
@@ -17155,7 +17156,7 @@ namespace ECSEngine {
 			values[1] = values[0] + 1;
 
 			drawer.DoubleInputGroup(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				2,
 				element_name,
@@ -17174,7 +17175,7 @@ namespace ECSEngine {
 			values[1] = values[0] + 1;
 
 			drawer.IntInputGroup(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				2,
 				element_name,
@@ -17199,7 +17200,7 @@ namespace ECSEngine {
 			values[2] = values[0] + 2;
 
 			drawer.FloatInputGroup(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				3,
 				element_name,
@@ -17218,7 +17219,7 @@ namespace ECSEngine {
 			values[2] = values[0] + 2;
 
 			drawer.DoubleInputGroup(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				3,
 				element_name,
@@ -17238,7 +17239,7 @@ namespace ECSEngine {
 			values[2] = values[0] + 2;
 
 			drawer.IntInputGroup(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				3,
 				element_name,
@@ -17264,7 +17265,7 @@ namespace ECSEngine {
 			values[3] = values[0] + 3;
 
 			drawer.FloatInputGroup(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				4,
 				element_name,
@@ -17284,7 +17285,7 @@ namespace ECSEngine {
 			values[3] = values[0] + 3;
 
 			drawer.DoubleInputGroup(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				4,
 				element_name,
@@ -17305,7 +17306,7 @@ namespace ECSEngine {
 			values[3] = values[0] + 3;
 
 			drawer.IntInputGroup(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				4,
 				element_name,
@@ -17325,7 +17326,7 @@ namespace ECSEngine {
 		void UIDrawerArrayColorFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
 			drawer.ColorInput(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				element_name, 
 				(Color*)draw_data.element_data
@@ -17363,7 +17364,7 @@ namespace ECSEngine {
 			UIDrawerTextInput** inputs = (UIDrawerTextInput**)draw_data.additional_data;
 
 			inputs[draw_data.current_index] = drawer.TextInput(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE), 
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE), 
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				element_name,
 				(CapacityStream<char>*)draw_data.element_data
@@ -17377,7 +17378,7 @@ namespace ECSEngine {
 			CapacityStream<Stream<Stream<char>>>* flag_labels = (CapacityStream<Stream<Stream<char>>>*)draw_data.additional_data;
 
 			drawer.ComboBox(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				element_name,
 				flag_labels->buffer[draw_data.current_index],
@@ -17392,7 +17393,7 @@ namespace ECSEngine {
 		{
 			UIDrawConfig temp_config;
 			drawer.DirectoryInput(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				element_name,
 				(CapacityStream<wchar_t>*)draw_data.element_data
@@ -17406,7 +17407,7 @@ namespace ECSEngine {
 			UIDrawConfig temp_config;
 
 			drawer.FileInput(
-				function::ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
+				ClearFlag(draw_data.configuration, UI_CONFIG_DO_CACHE),
 				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				element_name,
 				(CapacityStream<wchar_t>*)draw_data.element_data,
@@ -17521,7 +17522,7 @@ namespace ECSEngine {
 			unsigned int first_element = current_index - count;
 			element_sizes[first_element].x = total_scale;
 			element_sizes[first_element].y = max_y_scale;
-			element_transform_types[first_element] = function::ClearFlag(
+			element_transform_types[first_element] = ClearFlag(
 				element_transform_types[first_element],
 				UI_CONFIG_RELATIVE_TRANSFORM, 
 				UI_CONFIG_WINDOW_DEPENDENT_SIZE, 
@@ -17570,7 +17571,7 @@ namespace ECSEngine {
 			}
 
 			ECS_ASSERT(current_index < element_count);
-			if (function::HasFlag(element_transform_types[current_index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[current_index], UI_CONFIG_MAKE_SQUARE)) {
+			if (HasFlag(element_transform_types[current_index], UI_CONFIG_ABSOLUTE_TRANSFORM) || HasFlag(element_transform_types[current_index], UI_CONFIG_MAKE_SQUARE)) {
 				UIConfigAbsoluteTransform transform;
 				transform.position = drawer->GetCurrentPositionNonOffset();
 				transform.scale = element_sizes[current_index];
@@ -17626,7 +17627,7 @@ namespace ECSEngine {
 		float2 UIDrawerRowLayout::GetScaleForElement(unsigned int index) const
 		{
 			float2 border_size = has_border[index] ? border_thickness : float2(0.0f, 0.0f);
-			if (function::HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
+			if (HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
 				return element_sizes[index] + border_size;
 			}
 			else if (element_transform_types[index] & UI_CONFIG_RELATIVE_TRANSFORM) {
@@ -17728,7 +17729,7 @@ namespace ECSEngine {
 				if (element_transform_types[index] & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 					// Calculate the after size
 					for (unsigned int subindex = index + 1; subindex < element_count; subindex++) {
-						if (function::HasFlag(element_transform_types[subindex], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[subindex], UI_CONFIG_MAKE_SQUARE)) {
+						if (HasFlag(element_transform_types[subindex], UI_CONFIG_ABSOLUTE_TRANSFORM) || HasFlag(element_transform_types[subindex], UI_CONFIG_MAKE_SQUARE)) {
 							horizontal_scale_after += element_sizes[subindex].x;
 						}
 						else {
@@ -17745,7 +17746,7 @@ namespace ECSEngine {
 					break;
 				}
 				else {
-					if (function::HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
+					if (HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
 						horizontal_scale_before += element_sizes[index].x;
 					}
 					else {
@@ -17770,10 +17771,10 @@ namespace ECSEngine {
 				// Calculate the total element size
 				float total_size = 0.0f;
 				for (unsigned int index = 0; index < element_count; index++) {
-					if (function::HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
+					if (HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
 						total_size += element_sizes[index].x;
 					}
-					else if (function::HasFlag(element_transform_types[index], UI_CONFIG_RELATIVE_TRANSFORM)) {
+					else if (HasFlag(element_transform_types[index], UI_CONFIG_RELATIVE_TRANSFORM)) {
 						total_size += drawer->GetRelativeElementSize(element_sizes[index]).x;
 					}
 					else {

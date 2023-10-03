@@ -133,7 +133,7 @@ Stream<wchar_t> GetProjectAssetRelativePath(const EditorState* editor_state, Str
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 	GetProjectAssetsFolder(editor_state, assets_folder);
-	return function::PathRelativeToAbsolute(path, assets_folder);
+	return PathRelativeToAbsolute(path, assets_folder);
 }
 
 // -------------------------------------------------------------------------------------------------------------

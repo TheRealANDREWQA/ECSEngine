@@ -234,25 +234,25 @@ namespace ECSEngine {
 			UIDrawerSliderFunctions result;
 
 			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
-				Integer character_value = function::ConvertCharactersToIntImpl<Integer, char>(characters);
+				Integer character_value = ConvertCharactersToIntImpl<Integer, char>(characters);
 				Integer* value = (Integer*)_value;
 				*value = character_value;
 			};
 
 			auto to_string = [](CapacityStream<char>& characters, const void* _value, void* extra_data) {
 				characters.size = 0;
-				function::ConvertIntToChars(characters, *(const Integer*)_value);
+				ConvertIntToChars(characters, *(const Integer*)_value);
 			};
 
 			auto from_float = [](void* value, float float_percentage) {
 				Integer* integer_value = (Integer*)value;
 				Integer min, max;
-				function::IntegerRange<Integer>(min, max);
+				IntegerRange<Integer>(min, max);
 				int64_t min_64 = min;
 				int64_t max_64 = max;
 
 				int64_t percentage_64 = (int64_t)float_percentage;
-				*integer_value = function::Clamp(percentage_64, min_64, max_64);
+				*integer_value = Clamp(percentage_64, min_64, max_64);
 			};
 
 			auto to_float = [](const void* value) {
@@ -1782,12 +1782,12 @@ namespace ECSEngine {
 		template<typename UIDrawerLabelHierarchyActionData>
 		void UIDrawerLabelHierarchyGetEmbeddedLabel(const UIDrawerLabelHierarchyActionData* data, void* storage) {
 			if (data->hierarchy->label_size == 0) {
-				Stream<char> string_label = { function::OffsetPointer(data, sizeof(*data)), data->label_size };
+				Stream<char> string_label = { OffsetPointer(data, sizeof(*data)), data->label_size };
 				Stream<char>* storage_string = (Stream<char>*)storage;
 				*storage_string = string_label;
 			}
 			else {
-				memcpy(storage, function::OffsetPointer(data, sizeof(*data)), data->hierarchy->label_size);
+				memcpy(storage, OffsetPointer(data, sizeof(*data)), data->hierarchy->label_size);
 			}
 		}
 
@@ -1798,13 +1798,13 @@ namespace ECSEngine {
 
 			if (data->hierarchy->label_size == 0) {
 				Stream<char> label = *(Stream<char>*)untyped_label;
-				memcpy(function::OffsetPointer(data, sizeof(*data)), label.buffer, label.size);
+				memcpy(OffsetPointer(data, sizeof(*data)), label.buffer, label.size);
 				data->label_size = label.size;
 
 				total_size += label.size;
 			}
 			else {
-				memcpy(function::OffsetPointer(data, sizeof(*data)), untyped_label, data->hierarchy->label_size);
+				memcpy(OffsetPointer(data, sizeof(*data)), untyped_label, data->hierarchy->label_size);
 				data->label_size = 0;
 				total_size += data->hierarchy->label_size;
 			}

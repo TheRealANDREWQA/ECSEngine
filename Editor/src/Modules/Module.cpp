@@ -61,18 +61,18 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, boo
 	Stream<char> contents = ReadWholeFileText(log_path, editor_allocator);
 
 	if (contents.buffer != nullptr) {
-		Stream<char> build_FAILED = function::FindFirstToken(contents, "Build FAILED.");
+		Stream<char> build_FAILED = FindFirstToken(contents, "Build FAILED.");
 
 		Deallocate(editor_allocator, contents.buffer);
 		if (build_FAILED.size > 0) {
 			// Extract the module name from the log path
-			Stream<wchar_t> debug_ptr = function::FindFirstToken(log_path, CMD_BUILD_SYSTEM_LOG_FILE_PATH);
+			Stream<wchar_t> debug_ptr = FindFirstToken(log_path, CMD_BUILD_SYSTEM_LOG_FILE_PATH);
 			if (debug_ptr.size > 0) {
 				debug_ptr.Advance(wcslen(CMD_BUILD_SYSTEM_LOG_FILE_PATH));
-				Stream<wchar_t> underscore_after_library_name = function::FindFirstCharacter(debug_ptr, L'_');
+				Stream<wchar_t> underscore_after_library_name = FindFirstCharacter(debug_ptr, L'_');
 				if (underscore_after_library_name.size > 0) {
 					Stream<wchar_t> configuration_start = underscore_after_library_name.AdvanceReturn();
-					Stream<wchar_t> underscore_after_configuration = function::FindFirstCharacter(configuration_start, L'_');
+					Stream<wchar_t> underscore_after_configuration = FindFirstCharacter(configuration_start, L'_');
 					if (underscore_after_configuration.size > 0) {
 						if (!disable_logging) {
 							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} with configuration {#} has failed to build. Check the {#} log.",
@@ -159,7 +159,7 @@ void SetCrashHandlerPDBPaths(const EditorState* editor_state) {
 
 // Only the implementation part, no locking
 void AddProjectModuleToLaunchedCompilationNoLock(EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration) {
-	editor_state->launched_module_compilation[configuration].Add(function::StringCopy(editor_state->MultithreadedEditorAllocator(), library_name));
+	editor_state->launched_module_compilation[configuration].Add(StringCopy(editor_state->MultithreadedEditorAllocator(), library_name));
 }
 
 void AddProjectModuleToLaunchedCompilation(EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration) {
@@ -175,7 +175,7 @@ bool RemoveProjectModuleFromLaunchedCompilation(EditorState* editor_state, Strea
 	editor_state->launched_module_compilation_lock.lock();
 
 	AllocatorPolymorphic multithreaded_allocator = editor_state->MultithreadedEditorAllocator();
-	unsigned int string_index = function::FindString(library_name, editor_state->launched_module_compilation[configuration]);
+	unsigned int string_index = FindString(library_name, editor_state->launched_module_compilation[configuration]);
 	if (string_index != -1) {
 		Deallocate(multithreaded_allocator, editor_state->launched_module_compilation[configuration][string_index].buffer);
 		editor_state->launched_module_compilation[configuration].RemoveSwapBack(string_index);
@@ -194,7 +194,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 
 	if (!ExistsFileOrFolder(solution_path)) {
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-		error_message.size = function::FormatString(error_message.buffer, "Project module {#} solution does not exist.", solution_path);
+		error_message.size = FormatString(error_message.buffer, "Project module {#} solution does not exist.", solution_path);
 		error_message.AssertCapacity();
 		EditorSetConsoleError(error_message);
 		return false;
@@ -203,7 +203,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 	unsigned int module_index = GetModuleIndex(editor_state, solution_path);
 	if (module_index != -1) {
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-		error_message.size = function::FormatString(error_message.buffer, "Project module {#} already exists.", solution_path);
+		error_message.size = FormatString(error_message.buffer, "Project module {#} already exists.", solution_path);
 		error_message.AssertCapacity();
 		EditorSetConsoleError(error_message);
 		return false;
@@ -241,7 +241,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 	// Update the console such that it contains as filter string the module
 	Console* console = GetConsole();
 	ECS_STACK_CAPACITY_STREAM(char, ascii_name, 256);
-	function::ConvertWideCharsToASCII(module->library_name, ascii_name);
+	ConvertWideCharsToASCII(module->library_name, ascii_name);
 	console->AddSystemFilterString(ascii_name);
 
 	SetCrashHandlerPDBPaths(editor_state);
@@ -281,31 +281,31 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(CHECK_FILE_STATUS_THREAD_SLEEP_TICK));
 	}
 	// Change the extension from .build/.rebuild/.clean to txt
-	Stream<wchar_t> extension = function::PathExtension(data->path);
+	Stream<wchar_t> extension = PathExtension(data->path);
 	ECS_STACK_CAPACITY_STREAM(wchar_t, log_path, 512);
 
 	log_path.CopyOther(data->path);
-	Stream<wchar_t> log_extension = function::PathExtension(log_path);
+	Stream<wchar_t> log_extension = PathExtension(log_path);
 	// Make the dot into an underscore
 	log_extension[0] = L'_';
 	log_path.AddStream(CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION);
 
 	bool succeded = PrintCommandStatus(data->editor_state, log_path, data->disable_logging);
 	// Extract the library name and the configuration
-	Stream<wchar_t> filename = function::PathFilename(data->path);
+	Stream<wchar_t> filename = PathFilename(data->path);
 	const wchar_t* underscore = wcschr(filename.buffer, '_');
 
 	Stream<wchar_t> library_name(filename.buffer, underscore - filename.buffer);
 	Stream<wchar_t> configuration(underscore + 1, extension.buffer - underscore - 1);
 	EDITOR_MODULE_CONFIGURATION int_configuration = EDITOR_MODULE_CONFIGURATION_COUNT;
 
-	if (function::CompareStrings(configuration, L"Debug")) {
+	if (configuration == L"Debug") {
 		int_configuration = EDITOR_MODULE_CONFIGURATION_DEBUG;
 	}
-	else if (function::CompareStrings(configuration, L"Release")) {
+	else if (configuration == L"Release") {
 		int_configuration = EDITOR_MODULE_CONFIGURATION_RELEASE;
 	}
-	else if (function::CompareStrings(configuration, L"Distribution")) {
+	else if (configuration == L"Distribution") {
 		int_configuration = EDITOR_MODULE_CONFIGURATION_DISTRIBUTION;
 	}
 	else {
@@ -338,7 +338,7 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 				ECS_FORMAT_TEMP_STRING(console_string, "Command {#} for module {#} with configuration {#} completed successfully.", command, library_name, configuration);
 				EditorSetConsoleInfo(console_string);
 			}
-			if (function::CompareStrings(command, L"build") || function::CompareStrings(command, L"rebuild")) {
+			if (command ==  L"build" || command == L"rebuild") {
 				bool success = LoadEditorModule(data->editor_state, module_index, int_configuration);
 				if (!success) {
 					if (!data->disable_logging) {
@@ -425,7 +425,7 @@ void CommandLineString(CapacityStream<char>& string, Stream<wchar_t> solution_pa
 	string.AddStream(" && ");
 	string.AddStream(CMD_BUILD_SYSTEM);
 	string.Add(' ');
-	function::ConvertWideCharsToASCII(solution_path, string);
+	ConvertWideCharsToASCII(solution_path, string);
 	string.Add(' ');
 	string.AddStream(command);
 	string.Add(' ');
@@ -433,7 +433,7 @@ void CommandLineString(CapacityStream<char>& string, Stream<wchar_t> solution_pa
 	string.Add(' ');
 	string.AddStream(CMD_BUILD_SYSTEM_LOG_FILE_COMMAND);
 	string.Add(' ');
-	function::ConvertWideCharsToASCII(log_file, string);
+	ConvertWideCharsToASCII(log_file, string);
 	string[string.size] = '\0';
 }
 
@@ -568,7 +568,7 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 	for (size_t index = 0; index < data->dependencies.size; index++) {
 		if (!data->dependencies[index].verified_once) {
 			Stream<wchar_t> library_name = editor_state->project_modules->buffer[data->dependencies[index].module_index].library_name;
-			unsigned int launched_index = function::FindString(library_name, editor_state->launched_module_compilation[data->configuration]);
+			unsigned int launched_index = FindString(library_name, editor_state->launched_module_compilation[data->configuration]);
 			if (launched_index == -1) {
 				const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index].module_index, data->configuration);
 				if (data->command == BUILD_PROJECT_STRING_WIDE) {
@@ -648,7 +648,7 @@ EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 
 	for (size_t index = 0; index < data->dependencies.size; index++) {
 		// Check if it has an already pending action on it and wait for it then
-		unsigned int already_launched_index = function::FindString(
+		unsigned int already_launched_index = FindString(
 			editor_state->project_modules->buffer[data->dependencies[index]].library_name, 
 			editor_state->launched_module_compilation[data->configuration]
 		);
@@ -679,7 +679,7 @@ EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 		}
 		RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->report_status, data->disable_logging);
 
-		if (!function::CompareStrings(data->command, CLEAN_PROJECT_STRING_WIDE)) {
+		if (data->command != CLEAN_PROJECT_STRING_WIDE) {
 			if (data->unloaded_dependencies.size > 0) {
 				ReloadModuleEventData reload_data;
 				reload_data.configuration = data->configuration;
@@ -796,7 +796,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	// The lock must be acquired so a thread that wants to remove an element 
 	// does not interfere with this reading.
 	editor_state->launched_module_compilation_lock.lock();
-	unsigned int already_launched_index = function::FindString(library_name, editor_state->launched_module_compilation[configuration]);
+	unsigned int already_launched_index = FindString(library_name, editor_state->launched_module_compilation[configuration]);
 	if (already_launched_index != -1) {
 		editor_state->launched_module_compilation_lock.unlock();
 		return EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING;
@@ -1038,7 +1038,7 @@ bool IsAnyModuleBeingCompiled(EditorState* editor_state, Stream<unsigned int> mo
 	editor_state->launched_module_compilation_lock.lock();
 	for (size_t index = 0; index < module_indices.size; index++) {
 		const EditorModule* module = editor_state->project_modules->buffer + module_indices[index];
-		is_compiled[index] = function::FindString(module->library_name, editor_state->launched_module_compilation[configurations[index]].ToStream()) != -1;
+		is_compiled[index] = FindString(module->library_name, editor_state->launched_module_compilation[configurations[index]].ToStream()) != -1;
 	}
 	editor_state->launched_module_compilation_lock.unlock();
 
@@ -1102,7 +1102,7 @@ void GetCompilingModules(EditorState* editor_state, CapacityStream<unsigned int>
 
 	for (unsigned int index = 0; index < module_indices.size; index++) {
 		const EditorModule* module = editor_state->project_modules->buffer + module_indices[index];
-		bool is_compiled = function::FindString(module->library_name, editor_state->launched_module_compilation[configurations[index]].ToStream()) != -1;
+		bool is_compiled = FindString(module->library_name, editor_state->launched_module_compilation[configurations[index]].ToStream()) != -1;
 		if (!is_compiled) {
 			// Check the events now
 			unsigned int subindex = 0;
@@ -1162,7 +1162,7 @@ unsigned int GetModuleIndex(const EditorState* editor_state, Stream<wchar_t> sol
 {
 	ProjectModules* modules = editor_state->project_modules;
 	for (size_t index = 0; index < modules->size; index++) {
-		if (function::CompareStrings(modules->buffer[index].solution_path, solution_path)) {
+		if (modules->buffer[index].solution_path == solution_path) {
 			return index;
 		}
 	}
@@ -1174,7 +1174,7 @@ unsigned int GetModuleIndex(const EditorState* editor_state, Stream<wchar_t> sol
 unsigned int GetModuleIndexFromName(const EditorState* editor_state, Stream<wchar_t> library_name) {
 	ProjectModules* modules = editor_state->project_modules;
 	for (size_t index = 0; index < modules->size; index++) {
-		if (function::CompareStrings(modules->buffer[index].library_name, library_name)) {
+		if (modules->buffer[index].library_name == library_name) {
 			return index;
 		}
 	}
@@ -1314,9 +1314,9 @@ void GetModuleDLLImports(EditorState* editor_state, unsigned int index)
 	Stream<Stream<char>> dll_imports = editor_state->project_modules->buffer[index].dll_imports;
 
 	for (size_t index = 0; index < dll_imports.size; index++) {
-		Stream<char> token = function::FindFirstToken(dll_imports[index], search_token);
+		Stream<char> token = FindFirstToken(dll_imports[index], search_token);
 		if (token.size > 0) {
-			dll_imports[index] = function::ReplaceToken(dll_imports[index], search_token, "", stack_allocator);
+			dll_imports[index] = ReplaceToken(dll_imports[index], search_token, "", stack_allocator);
 		}
 		else {
 			dll_imports[index] = dll_imports[index];
@@ -1341,7 +1341,7 @@ void GetModuleDLLImports(const EditorState* editor_state, unsigned int index, Ca
 		wide_imports[import_index].Initialize(&_stack_allocator, dll_dependencies[import_index].size);
 		CapacityStream<wchar_t> temp_wide = wide_imports[import_index];
 		temp_wide.size = 0;
-		function::ConvertASCIIToWide(temp_wide, dll_dependencies[import_index]);
+		ConvertASCIIToWide(temp_wide, dll_dependencies[import_index]);
 	}
 	wide_imports.size = dll_dependencies.size;
 
@@ -1349,7 +1349,7 @@ void GetModuleDLLImports(const EditorState* editor_state, unsigned int index, Ca
 		if (subindex != index) {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, dll_library_name, 512);
 			GetModuleFilenameNoConfig(editor_state->project_modules->buffer[subindex].library_name, dll_library_name);
-			if (function::FindString(dll_library_name, wide_imports) != -1) {
+			if (FindString(dll_library_name, wide_imports) != -1) {
 				dll_imports.AddAssert(subindex);
 			}
 		}
@@ -1367,11 +1367,11 @@ void GetModuleDLLExternalReferences(
 	ECS_STACK_CAPACITY_STREAM(wchar_t, library_name, 512);
 	ECS_STACK_CAPACITY_STREAM(char, ascii_library_name, 512);
 	GetModuleFilenameNoConfig(editor_state->project_modules->buffer[index].library_name, library_name);
-	function::ConvertWideCharsToASCII(library_name, ascii_library_name);
+	ConvertWideCharsToASCII(library_name, ascii_library_name);
 
 	for (unsigned int subindex = 0; subindex < editor_state->project_modules->size; subindex++) {
 		if (subindex != index) {
-			if (function::FindString(ascii_library_name, editor_state->project_modules->buffer[subindex].dll_imports) != -1) {
+			if (FindString(ascii_library_name, editor_state->project_modules->buffer[subindex].dll_imports) != -1) {
 				external_references.AddAssert(subindex);
 			}
 		}
@@ -1382,7 +1382,7 @@ void GetModuleDLLExternalReferences(
 
 size_t GetModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 {
-	Stream<wchar_t> parent_folder = function::PathParent(solution_path);
+	Stream<wchar_t> parent_folder = PathParent(solution_path);
 
 	struct FolderData {
 		Stream<Stream<wchar_t>> source_names;
@@ -1400,9 +1400,9 @@ size_t GetModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 	auto folder_functor = [](Stream<wchar_t> path, void* _data) {
 		FolderData* data = (FolderData*)_data;
 
-		Stream<wchar_t> filename = function::PathFilename(path);
+		Stream<wchar_t> filename = PathFilename(path);
 
-		if (function::FindString(filename, data->source_names) != -1) {
+		if (FindString(filename, data->source_names) != -1) {
 			bool success = OS::GetFileTimes(path, nullptr, nullptr, &data->last_write);
 			return false;
 		}
@@ -1449,7 +1449,7 @@ size_t GetModuleLibraryLastWrite(const EditorState* editor_state, unsigned int i
 bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int index, CapacityStream<wchar_t>& path)
 {
 	Stream<wchar_t> solution_path = editor_state->project_modules->buffer[index].solution_path;
-	Stream<wchar_t> solution_parent = function::PathParent(solution_path);
+	Stream<wchar_t> solution_parent = PathParent(solution_path);
 	path.CopyOther(solution_parent);
 	path.Add(ECS_OS_PATH_SEPARATOR);
 
@@ -1585,7 +1585,7 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 
 		// We'll need the name for the editor components module
 		ECS_STACK_CAPACITY_STREAM(char, ascii_name, 512);
-		function::ConvertWideCharsToASCII(module->library_name, ascii_name);
+		ConvertWideCharsToASCII(module->library_name, ascii_name);
 
 		if (!success) {
 			ECS_FORMAT_TEMP_STRING(
@@ -1951,7 +1951,7 @@ void RemoveModule(EditorState* editor_state, Stream<wchar_t> solution_path)
 		return;
 	}
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-	error_message.size = function::FormatString(error_message.buffer, "Removing project module {#} failed. No such module exists.", solution_path);
+	error_message.size = FormatString(error_message.buffer, "Removing project module {#} failed. No such module exists.", solution_path);
 	EditorSetConsoleError(error_message);
 }
 
@@ -2051,8 +2051,8 @@ size_t GetVisualStudioLockedFilesSize(const EditorState* editor_state)
 	GetModulesFolder(editor_state, module_path);
 
 	auto file_functor = [](Stream<wchar_t> path, void* data) {
-		Stream<wchar_t> filename = function::PathFilename(path);
-		if (function::FindFirstToken(filename, VISUAL_STUDIO_LOCKED_FILE_IDENTIFIER).buffer != nullptr) {
+		Stream<wchar_t> filename = PathFilename(path);
+		if (FindFirstToken(filename, VISUAL_STUDIO_LOCKED_FILE_IDENTIFIER).buffer != nullptr) {
 			size_t* count = (size_t*)data;
 			*count += GetFileByteSize(path);
 		}
@@ -2071,8 +2071,8 @@ void DeleteVisualStudioLockedFiles(const EditorState* editor_state) {
 	GetModulesFolder(editor_state, module_path);
 
 	auto file_functor = [](Stream<wchar_t> path, void* data) {
-		Stream<wchar_t> filename = function::PathFilename(path);
-		if (function::FindFirstToken(filename, VISUAL_STUDIO_LOCKED_FILE_IDENTIFIER).buffer != nullptr) {
+		Stream<wchar_t> filename = PathFilename(path);
+		if (FindFirstToken(filename, VISUAL_STUDIO_LOCKED_FILE_IDENTIFIER).buffer != nullptr) {
 			RemoveFile(path);
 		}
 		return true;

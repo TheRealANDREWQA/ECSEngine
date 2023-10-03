@@ -71,7 +71,7 @@ void DefaultUITemplate(ActionData* action_data) {
 	}
 	else {
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
-		error_message.size = function::FormatString(error_message.buffer, "Could not find default template {#}. It has been deleted.", template_path);
+		error_message.size = FormatString(error_message.buffer, "Could not find default template {#}. It has been deleted.", template_path);
 		error_message.AssertCapacity();
 		CreateErrorMessageWindow(system, error_message);
 	}
@@ -146,7 +146,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		void* allocation = drawer.GetMainAllocatorBuffer(layout_handler_data_size);
 
 		LoadProjectUITemplateData* layout_load_data = (LoadProjectUITemplateData*)allocation;
-		SaveProjectUITemplateData* layout_save_data = (SaveProjectUITemplateData*)function::OffsetPointer(
+		SaveProjectUITemplateData* layout_save_data = (SaveProjectUITemplateData*)OffsetPointer(
 			allocation, sizeof(LoadProjectUITemplateData) * (TOOLBAR_DATA_LAYOUT_ROW_COUNT - 1)
 		);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, system_string, 256);
@@ -266,14 +266,14 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		void* allocation = drawer.GetMainAllocatorBuffer((sizeof(UIActionHandler) * 2 + sizeof(CreateGameUIActionData) + sizeof(CreateSceneUIWindowActionData)) 
 			* editor_state->sandboxes.size);
 		data->game_ui_handlers.buffer = (UIActionHandler*)allocation;
-		allocation = function::OffsetPointer(allocation, sizeof(UIActionHandler) * editor_state->sandboxes.size);
+		allocation = OffsetPointer(allocation, sizeof(UIActionHandler) * editor_state->sandboxes.size);
 
 		data->scene_ui_handlers.buffer = (UIActionHandler*)allocation;
-		allocation = function::OffsetPointer(allocation, sizeof(UIActionHandler) * editor_state->sandboxes.size);
+		allocation = OffsetPointer(allocation, sizeof(UIActionHandler) * editor_state->sandboxes.size);
 
 		// Now initialize the action data
 		CreateGameUIActionData* game_action_data = (CreateGameUIActionData*)allocation;
-		allocation = function::OffsetPointer(allocation, sizeof(CreateGameUIActionData) * editor_state->sandboxes.size);
+		allocation = OffsetPointer(allocation, sizeof(CreateGameUIActionData) * editor_state->sandboxes.size);
 		CreateSceneUIWindowActionData* scene_action_data = (CreateSceneUIWindowActionData*)allocation;
 
 		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
@@ -437,7 +437,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 	UIConfigAbsoluteTransform project_transform;
 	const ProjectFile* project_file = (const ProjectFile*)data->editor_state->project_file;
 	ECS_STACK_CAPACITY_STREAM(char, project_name, 256);
-	function::ConvertWideCharsToASCII(project_file->project_name, project_name);
+	ConvertWideCharsToASCII(project_file->project_name, project_name);
 	project_transform.scale = drawer.GetLabelScale(project_name);
 	project_transform.position.x = drawer.GetAlignedToRightOverLimit(project_transform.scale.x).x;
 	project_transform.position.y = drawer.current_y;

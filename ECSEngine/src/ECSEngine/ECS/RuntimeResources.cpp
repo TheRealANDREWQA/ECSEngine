@@ -1,12 +1,13 @@
 #include "ecspch.h"
 #include "RuntimeResources.h"
+#include "World.h"
 #include "SystemManager.h"
 #include "../Rendering/RenderingStructures.h"
 #include "../Rendering/Camera.h"
 #include "../ECS/InternalStructures.h"
-#include "World.h"
 #include "Components.h"
 #include "../Tools/Modules/ModuleExtraInformation.h"
+#include "../Utilities/StreamUtilities.h"
 
 #define CAMERA_IDENTIFIER "__RuntimeCamera"
 #define EDITOR_RUNTIME_TYPE_IDENTIFIER "__EditorRuntimeType"
@@ -103,7 +104,7 @@ namespace ECSEngine {
 	}
 
 	void SetEditorRuntimeSelectedEntities(SystemManager* system_manager, Stream<Entity> entities) {
-		void* allocated_data = function::CoallesceStreamWithData(system_manager->Allocator(), entities, sizeof(entities[0]));
+		void* allocated_data = CoalesceStreamWithData(system_manager->Allocator(), entities, sizeof(entities[0]));
 		system_manager->BindData(SELECTED_ENTITIES_IDENTIFIER, allocated_data);
 	}
 
@@ -224,7 +225,7 @@ namespace ECSEngine {
 
 	void SetEditorExtraTransformGizmos(SystemManager* system_manager, Stream<TransformGizmo> extra_gizmos)
 	{
-		void* allocated_data = function::CoallesceStreamWithData(system_manager->Allocator(), extra_gizmos, sizeof(extra_gizmos[0]));
+		void* allocated_data = CoalesceStreamWithData(system_manager->Allocator(), extra_gizmos, sizeof(extra_gizmos[0]));
 		system_manager->BindData(TRANSFORM_GIZMOS, allocated_data, 0);
 	}
 

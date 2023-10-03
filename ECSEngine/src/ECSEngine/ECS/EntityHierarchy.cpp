@@ -185,7 +185,7 @@ namespace ECSEngine {
         }
         else {
             // It is a root. Need to remove it from the buffer
-            unsigned int root_index = function::SearchBytes(hierarchy->roots.buffer, hierarchy->roots.size, child.value, sizeof(child));
+            unsigned int root_index = SearchBytes(hierarchy->roots.buffer, hierarchy->roots.size, child.value, sizeof(child));
             ECS_CRASH_RETURN(root_index != -1, "EntityHierarchy: Fatal internal error. Parent table says {#} is a root but the root buffer doesn't contain it.", child.value);
             hierarchy->roots.RemoveSwapBack(root_index);
         }
@@ -247,7 +247,7 @@ namespace ECSEngine {
         Entity parent = parent_table.GetValueFromIndex(parent_index);
         if (parent.value == -1) {
             // It is a root, it must be eliminated from the
-            unsigned int root_parent_index = function::SearchBytes(roots.buffer, roots.size, entity.value, sizeof(entity));
+            unsigned int root_parent_index = SearchBytes(roots.buffer, roots.size, entity.value, sizeof(entity));
             ECS_CRASH_RETURN(root_parent_index != -1, "EntityHierarchy: The entity {#} doesn't exist in the root buffer but the parent table says it's a root.", entity.value);
             roots.RemoveSwapBack(root_parent_index);
             parent_table.EraseFromIndex(parent_index);
@@ -419,7 +419,7 @@ namespace ECSEngine {
 
             Write<true>(&temp_ptr, &parent, sizeof(Entity));
             // The 32 bits with the count, root index and is_root
-            Write<true>(&temp_ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+            Write<true>(&temp_ptr, OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
             Write<true>(&temp_ptr, children.Entities(), sizeof(Entity) * children.count);
 
             success = WriteFile(file, { temp_buffer, temp_ptr - (uintptr_t)temp_buffer });
@@ -457,7 +457,7 @@ namespace ECSEngine {
         unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
         hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
             Write<true>(&ptr, &parent, sizeof(Entity));
-            Write<true>(&ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+            Write<true>(&ptr, OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
             Write<true>(&ptr, children.Entities(), sizeof(Entity) * children.count);
         });
         // The parent table can be deduced from the children table
@@ -504,8 +504,8 @@ namespace ECSEngine {
         }
 
         if (header->children_count > 0 || header->parent_count > 0) {
-            unsigned int power_of_two_children_table_size = function::PowerOfTwoGreater(HashTableCapacityForElements(header->children_count));
-            unsigned int power_of_two_parent_table_size = function::PowerOfTwoGreater(HashTableCapacityForElements(header->parent_count));
+            unsigned int power_of_two_children_table_size = PowerOfTwoGreater(HashTableCapacityForElements(header->children_count));
+            unsigned int power_of_two_parent_table_size = PowerOfTwoGreater(HashTableCapacityForElements(header->parent_count));
             size_t children_table_allocation_size = hierarchy->children_table.MemoryOf(power_of_two_children_table_size);
             size_t parent_table_allocation_size = hierarchy->parent_table.MemoryOf(power_of_two_parent_table_size);
 

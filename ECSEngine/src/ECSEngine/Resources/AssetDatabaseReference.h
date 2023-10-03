@@ -101,10 +101,10 @@ namespace ECSEngine {
 				}
 
 				// Now we need to eliminate all identical handles as this one
-				size_t next_value_index = function::SearchBytes(temporary_values.buffer + index + 1, temporary_values.size - index - 1, handle, sizeof(handle));
+				size_t next_value_index = SearchBytes(temporary_values.buffer + index + 1, temporary_values.size - index - 1, handle, sizeof(handle));
 				while (next_value_index != -1) {
 					temporary_values.RemoveSwapBack(index + 1);
-					next_value_index = function::SearchBytes(temporary_values.buffer + index + 1, temporary_values.size - index - 1, handle, sizeof(handle));
+					next_value_index = SearchBytes(temporary_values.buffer + index + 1, temporary_values.size - index - 1, handle, sizeof(handle));
 				}
 			}
 			return false;
@@ -166,7 +166,7 @@ namespace ECSEngine {
 		// It returns -1 if it doesn't find it
 		ECS_INLINE unsigned int GetIndex(unsigned int handle, ECS_ASSET_TYPE type) const {
 			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
-			return function::SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(handle));
+			return SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(handle));
 		}
 
 		ECS_INLINE unsigned int GetReferenceCountIndex(unsigned int index, ECS_ASSET_TYPE type) const {

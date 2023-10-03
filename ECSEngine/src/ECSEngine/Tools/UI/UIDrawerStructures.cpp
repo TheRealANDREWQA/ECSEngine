@@ -1,6 +1,5 @@
 #include "ecspch.h"
 #include "UIDrawerStructures.h"
-#include "../../Utilities/FunctionInterfaces.h"
 #include "UIHelpers.h"
 #include "UIDrawConfig.h"
 #include "../../Allocators/ResizableLinearAllocator.h"
@@ -242,7 +241,7 @@ namespace ECSEngine {
 		{
 			unsigned int temp_chars[256];
 			Stream<unsigned int> temp_stream = { temp_chars, 0 };
-			function::FindWhitespaceCharacters(temp_stream, characters, parse_token);
+			FindWhitespaceCharacters(temp_stream, characters, parse_token);
 
 			for (size_t index = 0; index < temp_stream.size; index++) {
 				whitespace_characters[index].position = temp_stream[index];
@@ -257,14 +256,14 @@ namespace ECSEngine {
 			UIDrawerSliderFunctions result;
 
 			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
-				float character_value = function::ConvertCharactersToFloat(characters);
+				float character_value = ConvertCharactersToFloat(characters);
 				float* value = (float*)_value;
 				*value = character_value;
 			};
 
 			auto to_string = [](CapacityStream<char>& characters, const void* _value, void* extra_data) {
 				characters.size = 0;
-				function::ConvertFloatToChars(characters, *(const float*)_value, *(unsigned int*)extra_data);
+				ConvertFloatToChars(characters, *(const float*)_value, *(unsigned int*)extra_data);
 			};
 
 			auto from_float = [](void* value, float float_percentage) {
@@ -293,14 +292,14 @@ namespace ECSEngine {
 			UIDrawerSliderFunctions result;
 
 			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
-				double character_value = function::ConvertCharactersToDouble(characters);
+				double character_value = ConvertCharactersToDouble(characters);
 				double* value = (double*)_value;
 				*value = character_value;
 			};
 
 			auto to_string = [](CapacityStream<char>& characters, const void* _value, void* extra_data) {
 				characters.size = 0;
-				function::ConvertDoubleToChars(characters, *(const double*)_value, *(unsigned int*)extra_data);
+				ConvertDoubleToChars(characters, *(const double*)_value, *(unsigned int*)extra_data);
 			};
 
 			auto from_float = [](void* value, float float_percentage) {
@@ -334,7 +333,7 @@ namespace ECSEngine {
 		) {
 			if (label_size == 0) {
 				copy_label = *(Stream<char>*)label;
-				copy_label = function::StringCopy(GetAllocatorPolymorphic(system->m_memory), copy_label);
+				copy_label = StringCopy(GetAllocatorPolymorphic(system->m_memory), copy_label);
 				system->AddWindowMemoryResource(copy_label.buffer, window_index);
 				if (dynamic_index != -1) {
 					system->AddWindowDynamicElementAllocation(window_index, dynamic_index, copy_label.buffer);
@@ -482,7 +481,7 @@ namespace ECSEngine {
 					Stream<Stream<char>> char_labels = labels.AsIs<Stream<char>>();
 					Stream<Stream<char>> char_selected_labels = selected_labels.AsIs<Stream<char>>();
 					for (size_t index = 0; index < char_labels.size; index++) {
-						char_selected_labels[index] = function::StringCopy(GetAllocatorPolymorphic(system->m_memory), char_labels[index]);
+						char_selected_labels[index] = StringCopy(GetAllocatorPolymorphic(system->m_memory), char_labels[index]);
 						system->AddWindowMemoryResource(char_selected_labels[index].buffer, window_index);
 						if (dynamic_index != -1) {
 							system->AddWindowDynamicElementAllocation(window_index, dynamic_index, char_selected_labels[index].buffer);
@@ -515,12 +514,12 @@ namespace ECSEngine {
 
 			unsigned int index = 0;
 			if (label_size == 0) {
-				index = function::FindString(*(Stream<char>*)label, selected_labels.AsIs<Stream<char>>());
+				index = FindString(*(Stream<char>*)label, selected_labels.AsIs<Stream<char>>());
 				ECS_ASSERT(index != -1);
 				system->RemoveWindowBufferFromAll(window_index, selected_labels.AsIs<Stream<char>>()[index].buffer, dynamic_index);
 			}
 			else {
-				index = function::SearchBytesEx(selected_labels.buffer, selected_labels.size, label, copy_size);
+				index = SearchBytesEx(selected_labels.buffer, selected_labels.size, label, copy_size);
 				ECS_ASSERT(index != -1);
 			}
 
@@ -545,13 +544,13 @@ namespace ECSEngine {
 			unsigned int opened_index = 0;
 			if (label_size == 0) {
 				Stream<Stream<char>> char_opened_labels = opened_labels.AsIs<Stream<char>>();
-				opened_index = function::FindString(*(Stream<char>*)label, char_opened_labels);
+				opened_index = FindString(*(Stream<char>*)label, char_opened_labels);
 				ECS_ASSERT(opened_index != -1);
 				// Deallocate the string
 				system->RemoveWindowBufferFromAll(window_index, char_opened_labels[opened_index].buffer, dynamic_index);
 			}
 			else {
-				opened_index = function::SearchBytesEx(opened_labels.buffer, opened_labels.size, label, copy_size);
+				opened_index = SearchBytesEx(opened_labels.buffer, opened_labels.size, label, copy_size);
 				ECS_ASSERT(opened_index != -1);
 			}
 
@@ -608,7 +607,7 @@ namespace ECSEngine {
 		bool UIDrawerLabelHierarchyData::CompareFirstLabel(const void* label) const
 		{
 			if (label_size == 0) {
-				return function::CompareStrings(*(Stream<char>*)label, first_selected_label.AsIs<char>());
+				return *(Stream<char>*)label == first_selected_label.AsIs<char>();
 			}
 			else {
 				return memcmp(label, first_selected_label.buffer, label_size) == 0;
@@ -618,7 +617,7 @@ namespace ECSEngine {
 		bool UIDrawerLabelHierarchyData::CompareLastLabel(const void* label) const
 		{
 			if (label_size == 0) {
-				return function::CompareStrings(*(Stream<char>*)label, last_selected_label.AsIs<char>());
+				return *(Stream<char>*)label == last_selected_label.AsIs<char>();
 			}
 			else {
 				return memcmp(label, last_selected_label.buffer, label_size) == 0;
@@ -628,7 +627,7 @@ namespace ECSEngine {
 		bool UIDrawerLabelHierarchyData::CompareLabels(const void* first, const void* second) const
 		{
 			if (label_size == 0) {
-				return function::CompareStrings(*(Stream<char>*)first, *(Stream<char>*)second);
+				return *(Stream<char>*)first == *(Stream<char>*)second;
 			}
 			else {
 				return memcmp(first, second, label_size) == 0;
@@ -646,10 +645,10 @@ namespace ECSEngine {
 
 		unsigned int FindLabel(Stream<void> labels, const void* label, unsigned int label_size) {
 			if (label_size == 0) {
-				return function::FindString(*(Stream<char>*)label, labels.AsIs<Stream<char>>());
+				return FindString(*(Stream<char>*)label, labels.AsIs<Stream<char>>());
 			}
 			else {
-				return function::SearchBytesEx(labels.buffer, labels.size, label, label_size);
+				return SearchBytesEx(labels.buffer, labels.size, label, label_size);
 			}
 		}
 
@@ -769,10 +768,10 @@ namespace ECSEngine {
 				if (action_copy_data.destination_label != nullptr) {
 					unsigned int destination_index = 0;
 					if (label_size == 0) {
-						destination_index = function::FindString(*(Stream<char>*)action_copy_data.destination_label, copied_labels.AsIs<Stream<char>>());
+						destination_index = FindString(*(Stream<char>*)action_copy_data.destination_label, copied_labels.AsIs<Stream<char>>());
 					}
 					else {
-						destination_index = function::SearchBytesEx(copied_labels.buffer, copied_labels.size, action_copy_data.destination_label, CopySize());
+						destination_index = SearchBytesEx(copied_labels.buffer, copied_labels.size, action_copy_data.destination_label, CopySize());
 					}
 
 					if (destination_index != -1) {
@@ -797,10 +796,10 @@ namespace ECSEngine {
 				if (action_cut_data.destination_label != nullptr) {
 					unsigned int destination_index = 0;
 					if (label_size == 0) {
-						destination_index = function::FindString(*(Stream<char>*)action_cut_data.destination_label, copied_labels.AsIs<Stream<char>>());
+						destination_index = FindString(*(Stream<char>*)action_cut_data.destination_label, copied_labels.AsIs<Stream<char>>());
 					}
 					else {
-						destination_index = function::SearchBytesEx(copied_labels.buffer, copied_labels.size, action_cut_data.destination_label, CopySize());
+						destination_index = SearchBytesEx(copied_labels.buffer, copied_labels.size, action_cut_data.destination_label, CopySize());
 					}
 
 					if (destination_index != -1) {
@@ -961,22 +960,22 @@ namespace ECSEngine {
 			unsigned int write_size = sizeof(*this);
 
 			if (descriptor.window_name.size > 0) {
-				memcpy(function::OffsetPointer(this, write_size), descriptor.window_name.buffer, descriptor.window_name.size);
+				memcpy(OffsetPointer(this, write_size), descriptor.window_name.buffer, descriptor.window_name.size);
 				write_size += descriptor.window_name.size;
 			}
 
 			if (descriptor.window_data_size > 0) {
-				memcpy(function::OffsetPointer(this, write_size), descriptor.window_data, descriptor.window_data_size);
+				memcpy(OffsetPointer(this, write_size), descriptor.window_data, descriptor.window_data_size);
 				write_size += descriptor.window_data_size;
 			}
 
 			if (descriptor.private_action_data_size > 0) {
-				memcpy(function::OffsetPointer(this, write_size), descriptor.private_action_data, descriptor.private_action_data_size);
+				memcpy(OffsetPointer(this, write_size), descriptor.private_action_data, descriptor.private_action_data_size);
 				write_size += descriptor.private_action_data_size;
 			}
 
 			if (descriptor.destroy_action_data_size > 0) {
-				memcpy(function::OffsetPointer(this, write_size), descriptor.destroy_action_data, descriptor.destroy_action_data_size);
+				memcpy(OffsetPointer(this, write_size), descriptor.destroy_action_data, descriptor.destroy_action_data_size);
 				write_size += descriptor.destroy_action_data_size;
 			}
 
@@ -988,22 +987,22 @@ namespace ECSEngine {
 			unsigned int write_size = sizeof(*this);
 
 			if (descriptor.window_name.size > 0) {
-				descriptor.window_name.buffer = (char*)function::OffsetPointer(this, write_size);
+				descriptor.window_name.buffer = (char*)OffsetPointer(this, write_size);
 				write_size += descriptor.window_name.size;
 			}
 
 			if (descriptor.window_data_size > 0) {
-				descriptor.window_data = function::OffsetPointer(this, write_size);
+				descriptor.window_data = OffsetPointer(this, write_size);
 				write_size += descriptor.window_data_size;
 			}
 
 			if (descriptor.private_action_data_size > 0) {
-				descriptor.private_action_data = function::OffsetPointer(this, write_size);
+				descriptor.private_action_data = OffsetPointer(this, write_size);
 				write_size += descriptor.private_action_data_size;
 			}
 
 			if (descriptor.destroy_action_data_size > 0) {
-				descriptor.destroy_action_data = function::OffsetPointer(this, write_size);
+				descriptor.destroy_action_data = OffsetPointer(this, write_size);
 				write_size += descriptor.destroy_action_data_size;
 			}
 		}

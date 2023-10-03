@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "SparseSet.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 
 namespace ECSEngine {
 
@@ -17,7 +17,7 @@ namespace ECSEngine {
 
 		SparseSet<char>* destination_set = (SparseSet<char>*)destination;
 		destination_set->buffer = (char*)allocation;
-		destination_set->indirection_buffer = (uint2*)function::OffsetPointer(allocation, element_byte_size * source_set->capacity);
+		destination_set->indirection_buffer = (uint2*)OffsetPointer(allocation, element_byte_size * source_set->capacity);
 		destination_set->size = source_set->size;
 		destination_set->capacity = source_set->capacity;
 		destination_set->first_empty_slot = source_set->first_empty_slot;
@@ -41,7 +41,7 @@ namespace ECSEngine {
 		unsigned int size = source_set->size;
 		unsigned int int_byte_size = (unsigned int)element_byte_size;
 		for (unsigned int index = 0; index < size; index++) {
-			copy_function(function::OffsetPointer(source_set->buffer, index * int_byte_size), function::OffsetPointer(destination_set->buffer, index * int_byte_size), allocator, extra_data);
+			copy_function(OffsetPointer(source_set->buffer, index * int_byte_size), OffsetPointer(destination_set->buffer, index * int_byte_size), allocator, extra_data);
 		}
 	}
 
@@ -51,7 +51,7 @@ namespace ECSEngine {
 	{
 		SparseSet<char>* sparse_set = (SparseSet<char>*)destination;
 		sparse_set->buffer = (char*)_buffer;
-		sparse_set->indirection_buffer = (uint2*)function::OffsetPointer(_buffer, capacity * element_byte_size);
+		sparse_set->indirection_buffer = (uint2*)OffsetPointer(_buffer, capacity * element_byte_size);
 		sparse_set->first_empty_slot = 0;
 		sparse_set->size = 0;
 		sparse_set->capacity = capacity;

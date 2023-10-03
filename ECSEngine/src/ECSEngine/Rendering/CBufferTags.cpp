@@ -1,8 +1,6 @@
 #include "ecspch.h"
 #include "CBufferTags.h"
 #include "../Utilities/Reflection/ReflectionTypes.h"
-#include "../Utilities/Function.h"
-#include "../Utilities/FunctionInterfaces.h"
 #include "../Rendering/RenderingStructures.h"
 #include "../Rendering/Graphics.h"
 
@@ -25,7 +23,7 @@ namespace ECSEngine {
 	void GetConstantBufferInjectTagFieldsFromType(const Reflection::ReflectionType* type, CapacityStream<unsigned int>* fields, bool reduce_expanded_fields)
 	{
 		for (size_t index = 0; index < type->fields.size; index++) {
-			function::ForEach<true>(INJECT_TAGS, [&](const char* inject_tag) {
+			ForEach<true>(INJECT_TAGS, [&](const char* inject_tag) {
 				if (type->fields[index].Has(inject_tag)) {
 					fields->AddAssert(index);
 					return true;
@@ -151,7 +149,7 @@ namespace ECSEngine {
 	void BindConstantBufferInjectedTag(Stream<MaterialInjectedCB> injected_cbs, void* data, const void* data_to_write, size_t data_size, ECS_CB_INJECT_TAG tag) {
 		size_t existing_index = FindConstantBufferInjectedTag(injected_cbs, tag);
 		if (existing_index != -1) {
-			void* tag_data = function::OffsetPointer(data, injected_cbs[existing_index].byte_offset);
+			void* tag_data = OffsetPointer(data, injected_cbs[existing_index].byte_offset);
 			memcpy(tag_data, data_to_write, data_size);
 		}
 	}

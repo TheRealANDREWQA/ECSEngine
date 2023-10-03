@@ -22,11 +22,11 @@ static void InspectorComponentUIIInstanceName(Stream<char> component_name, Strea
 	instance_name.CopyOther(component_name);
 	instance_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 	instance_name.AddStream(base_entity_name);
-	function::ConvertIntToChars(instance_name, sandbox_index);
+	ConvertIntToChars(instance_name, sandbox_index);
 }
 
 static Stream<char> InspectorComponentNameFromUIInstanceName(Stream<char> instance_name) {
-	Stream<char> pattern = function::FindFirstToken(instance_name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+	Stream<char> pattern = FindFirstToken(instance_name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 	ECS_ASSERT(pattern.size > 0);
 
 	return { instance_name.buffer, instance_name.size - pattern.size };
@@ -80,7 +80,7 @@ struct InspectorDrawEntityData {
 	}
 
 	unsigned int AddCreatedInstance(EditorState* editor_state, Stream<char> name, void* pointer_bound) {
-		name = function::StringCopy(Allocator(), name);
+		name = StringCopy(Allocator(), name);
 		void* old_buffer = created_instances.buffer;
 		size_t previous_size = created_instances.size;
 
@@ -275,7 +275,7 @@ struct InspectorDrawEntityData {
 	}
 
 	Stream<char> CreatedInstanceComponentName(unsigned int index) const {
-		Stream<char> separator = function::FindFirstToken(created_instances[index].name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+		Stream<char> separator = FindFirstToken(created_instances[index].name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 		ECS_ASSERT(separator.size > 0);
 		return { created_instances[index].name.buffer, created_instances[index].name.size - separator.size };
 	}
@@ -297,15 +297,15 @@ struct InspectorDrawEntityData {
 	}
 
 	ECS_INLINE unsigned int FindMatchingInput(Stream<char> component_name) const {
-		return function::FindString(component_name, matching_inputs, [](MatchingInputs input) { return input.component_name; });
+		return FindString(component_name, matching_inputs, [](MatchingInputs input) { return input.component_name; });
 	}
 
 	ECS_INLINE unsigned int FindCreatedInstance(Stream<char> name) const {
-		return function::FindString(name, created_instances, [](CreatedInstance instance) { return instance.name; });
+		return FindString(name, created_instances, [](CreatedInstance instance) { return instance.name; });
 	}
 
 	ECS_INLINE unsigned int FindLinkComponent(Stream<char> name) const {
-		return function::FindString(name, link_components, [](LinkComponent component) { return component.name; });
+		return FindString(name, link_components, [](LinkComponent component) { return component.name; });
 	}
 
 	bool IsCreatedInstanceValid(EditorState* editor_state, unsigned int index) const {
@@ -942,7 +942,7 @@ static void InspectorEntityHeaderConstructButtons(
 		enable_data->component_name = component_name;
 		enable_data->sandbox_index = sandbox_index;
 
-		stack_memory = function::OffsetPointer(stack_memory, sizeof(*enable_data));
+		stack_memory = OffsetPointer(stack_memory, sizeof(*enable_data));
 	}
 
 	ResetComponentCallbackData* reset_data = (ResetComponentCallbackData*)stack_memory;
@@ -951,7 +951,7 @@ static void InspectorEntityHeaderConstructButtons(
 	reset_data->editor_state = editor_state;
 	reset_data->draw_data = draw_data;
 
-	stack_memory = function::OffsetPointer(stack_memory, sizeof(*reset_data));
+	stack_memory = OffsetPointer(stack_memory, sizeof(*reset_data));
 	RemoveComponentCallbackData* remove_data = (RemoveComponentCallbackData*)stack_memory;
 	remove_data->component_name = component_name;
 	remove_data->draw_data = draw_data;
@@ -998,7 +998,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 	if (!is_initialized) {
 		// The name input is embedded in the structure
-		data->name_input.buffer = (char*)function::OffsetPointer(data, sizeof(*data));
+		data->name_input.buffer = (char*)OffsetPointer(data, sizeof(*data));
 	}
 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
@@ -1048,7 +1048,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 	Color icon_color = drawer->color_theme.theme;
 	icon_color = RGBToHSV(icon_color);
-	icon_color.value = function::ClampMin(icon_color.value, (unsigned char)200);
+	icon_color.value = ClampMin(icon_color.value, (unsigned char)200);
 	icon_color = HSVToRGB(icon_color);
 	InspectorIcon(drawer, ECS_TOOLS_UI_TEXTURE_FILE_MESH, icon_color);
 
@@ -1095,7 +1095,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				&data->name_input
 			);
 			if (!text_input->is_currently_selected) {
-				if (!function::CompareStrings(name->name, *text_input->text)) {
+				if (name->name != *text_input->text) {
 					text_input->text->CopyOther(name->name);
 				}
 			}

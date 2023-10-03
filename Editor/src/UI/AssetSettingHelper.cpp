@@ -169,7 +169,7 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 			NewSettingInputCallbackData* data = (NewSettingInputCallbackData*)_data;
 			if (keyboard->IsDown(ECS_KEY_ENTER)) {
 				// Check to see if it already exists
-				bool exists = function::FindString(data->data->new_name, data->names) != -1;
+				bool exists = FindString(data->data->new_name, data->names) != -1;
 				if (!exists && data->data->new_name.size > 0) {
 					bool success = CreateAssetSetting(data->editor_state, data->data->new_name, data->file, data->type);
 					if (!success) {
@@ -180,7 +180,7 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 						// Determine the index of the newly metadata
 						size_t index = 0;
 						for (; index < data->names.size; index++) {
-							if (function::StringIsLess(data->data->new_name, data->names[index])) {
+							if (StringIsLess(data->data->new_name, data->names[index])) {
 								break;
 							}
 						}
@@ -201,7 +201,7 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 		config.AddFlag(align_element);
 
 		//  Check to see if the name already exists. If it does make the text red
-		bool name_exists = function::FindString(helper_data->new_name, helper_data->current_names) != -1;
+		bool name_exists = FindString(helper_data->new_name, helper_data->current_names) != -1;
 		if (name_exists) {
 			UIConfigTextParameters text_parameters = drawer->TextParameters();
 			text_parameters.color = EDITOR_RED_COLOR;
@@ -284,7 +284,7 @@ void AssetSettingsHelperChangedWithFileAction(ActionData* action_data)
 	Stream<wchar_t> current_file = GetAssetFile(data->asset, data->asset_type);
 	Stream<char> current_name = GetAssetName(data->asset, data->asset_type);
 
-	bool same_file_and_name = function::CompareStrings(current_name, previous_name) && function::CompareStrings(current_file, previous_file);
+	bool same_file_and_name = current_name == previous_name && current_file == previous_file;
 	// If the file is empty, then the target is not yet asigned, so can't do anything
 	if (current_file.size > 0) {
 		bool success = true;

@@ -23,7 +23,7 @@ void SetVisualizeTexture(EditorState* editor_state, ECSEngine::Tools::VisualizeT
 	}
 	else {
 		// We must insert it
-		select_element.name = function::StringCopy(editor_state->EditorAllocator(), select_element.name);
+		select_element.name = StringCopy(editor_state->EditorAllocator(), select_element.name);
 		InsertIntoDynamicTable(editor_state->visualize_texture.mapping, editor_state->EditorAllocator(), select_element, ResourceIdentifier(select_element.name));
 	}
 }
@@ -39,8 +39,8 @@ void GetVisualizeTextureNames(const EditorState* editor_state, ECSEngine::Capaci
 		names->Add(element.name);
 		});
 
-	function::insertion_sort(names->buffer, names->size, 1, [](Stream<char> left, Stream<char> right) {
-		return function::StringLexicographicCompare(left, right);
+	insertion_sort(names->buffer, names->size, 1, [](Stream<char> left, Stream<char> right) {
+		return StringLexicographicCompare(left, right);
 	});
 }
 
@@ -51,7 +51,7 @@ void GetVisualizeTextureElements(const EditorState* editor_state, ECSEngine::Cap
 		select_elements->Add(element);
 	});
 
-	function::insertion_sort(select_elements->buffer, select_elements->size, 1, [](const VisualizeTextureSelectElement& left, const VisualizeTextureSelectElement& right) {
-		return function::StringLexicographicCompare(left.name, right.name);
+	insertion_sort(select_elements->buffer, select_elements->size, 1, [](const VisualizeTextureSelectElement& left, const VisualizeTextureSelectElement& right) {
+		return StringLexicographicCompare(left.name, right.name);
 	});
 }

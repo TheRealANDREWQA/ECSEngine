@@ -179,7 +179,7 @@ void DrawShaderMacro(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayD
 	ShaderMacroUI* macro_ui = (ShaderMacroUI*)data.element_data;
 	DrawShaderMacroData* draw_data = (DrawShaderMacroData*)data.additional_data;
 
-	size_t configuration = function::ClearFlag(data.configuration, UI_CONFIG_DO_CACHE);
+	size_t configuration = ClearFlag(data.configuration, UI_CONFIG_DO_CACHE);
 	UIDrawConfig* config = data.config == nullptr ? &temp_config : data.config;
 
 	MacroInputCallbackData input_callback_data;
@@ -230,7 +230,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 		// Determine the name
 		ECS_STACK_CAPACITY_STREAM(char, name, 512);
 		GetAssetNameFromThunkOrForwardingFile(editor_state, data->path, name);
-		data->shader_metadata.name = function::StringCopy(editor_state->EditorAllocator(), name);
+		data->shader_metadata.name = StringCopy(editor_state->EditorAllocator(), name);
 
 		data->target_file.Initialize(editor_state->editor_allocator, 0, 512);
 		data->shader_macros.Initialize(editor_state->EditorAllocator(), 0);
@@ -239,7 +239,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 		bool success = GetAssetFileFromForwardingFile(data->path, data->target_file);
 		if (success) {
 			// Copy the target path
-			data->shader_metadata.file = function::StringCopy(editor_state->EditorAllocator(), data->target_file);
+			data->shader_metadata.file = StringCopy(editor_state->EditorAllocator(), data->target_file);
 
 			// Read the file, if there is one
 			success = editor_state->asset_database->ReadShaderFile(name, data->target_file, &data->shader_metadata);
@@ -262,7 +262,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 		}
 
 		// Determine the shader type
-		ECS_SHADER_TYPE shader_type = AssetExtensionTypeShader(function::PathExtension(data->path));
+		ECS_SHADER_TYPE shader_type = AssetExtensionTypeShader(PathExtension(data->path));
 		if (shader_type != ECS_SHADER_TYPE_COUNT) {
 			if (shader_type != data->shader_metadata.shader_type) {
 				data->shader_metadata.shader_type = shader_type;
@@ -291,7 +291,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 	}
 	else {
 		// Verify the extension
-		target_file_is_valid = function::CompareStrings(function::PathExtension(data->target_file), ECS_SHADER_EXTENSION);
+		target_file_is_valid = PathExtension(data->target_file) == ECS_SHADER_EXTENSION;
 	}
 
 	if (!target_file_is_valid) {
@@ -337,7 +337,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 		FileInputTargetCallbackData* data = (FileInputTargetCallbackData*)_data;
 		CapacityStream<wchar_t>* previous_path = (CapacityStream<wchar_t>*)_additional_data;
 
-		if (!function::CompareStrings(*previous_path, data->draw_data->target_file)) {
+		if (*previous_path != data->draw_data->target_file) {
 			data->draw_data->shader_metadata.file = data->draw_data->target_file;
 
 			AssetSettingsHelperChangedWithFileActionData changed_data;
@@ -550,7 +550,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 			UI_UNPACK_ACTION_DATA;
 
 			RemoveConditionalMacroData* data = (RemoveConditionalMacroData*)_data;
-			unsigned int remove_index = function::FindString<ShaderMacroUI>(data->data->conditional_macros[data->conditional_index], data->data->shader_macros, [](ShaderMacroUI macro_ui) {
+			unsigned int remove_index = FindString<ShaderMacroUI>(data->data->conditional_macros[data->conditional_index], data->data->shader_macros, [](ShaderMacroUI macro_ui) {
 				return macro_ui.name_stream;
 			});
 			ECS_ASSERT(remove_index != -1);
@@ -590,7 +590,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 				config.flag_count = 0;
 				row_layout.GetTransform(config, configuration);
 
-				unsigned int subindex = function::FindString<ShaderMacroUI>(data->data->conditional_macros[index], data->data->shader_macros, [](ShaderMacroUI ui_macro) {
+				unsigned int subindex = FindString<ShaderMacroUI>(data->data->conditional_macros[index], data->data->shader_macros, [](ShaderMacroUI ui_macro) {
 					return ui_macro.name_stream;
 				});
 
@@ -675,14 +675,14 @@ void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path
 		-1,
 		[=](void* inspector_data) {
 			InspectorDrawShaderFileData* other_data = (InspectorDrawShaderFileData*)inspector_data;
-			return function::CompareStrings(other_data->path, path);
+			return other_data->path == path;
 		}
 	);
 
 	if (inspector_indices.x == -1 && inspector_indices.y != -1) {
 		// Get the data and set the path
 		InspectorDrawShaderFileData* draw_data = (InspectorDrawShaderFileData*)GetInspectorDrawFunctionData(editor_state, inspector_indices.y);
-		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
+		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.CopyOther(path);
 	}
 }

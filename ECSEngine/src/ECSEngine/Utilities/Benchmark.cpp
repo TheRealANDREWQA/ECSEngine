@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "Benchmark.h"
-#include "Function.h"
-#include "FunctionInterfaces.h"
+#include "StreamUtilities.h"
+#include "StringUtilities.h"
 #include "ECSEngineReflectionMacros.h"
 
 namespace ECSEngine {
@@ -87,7 +87,7 @@ namespace ECSEngine {
                 if (options.timed_run == 0) {
                     // Iterations. We need to eliminate the big spikes by repeatedly removing the values outside the tolerancy threshold
                     iteration_values.size = options.iteration_count;
-                    function::MakeSequence(iteration_values);
+                    MakeSequence(iteration_values);
 
                     unsigned int valid_count = 0;
                     size_t median = 0;
@@ -193,7 +193,7 @@ namespace ECSEngine {
                         for (size_t iteration = 0; iteration < options.iteration_count; iteration++) {
                             const char* time_unit;
                             size_t value = format_value(get_value(step_index, iteration), time_unit);
-                            function::ConvertIntToChars(report, value);
+                            ConvertIntToChars(report, value);
                             bool is_valid = false;
                             for (unsigned int valid_index = 0; valid_index < iteration_values.size; valid_index++) {
                                 if (iteration_values[valid_index] == iteration) {

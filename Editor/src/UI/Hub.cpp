@@ -20,10 +20,10 @@ void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
 
 	unsigned int index = hub->projects.size;
 	hub->projects[index].error_message = { nullptr, 0 };
-	hub->projects[index].data.path = function::StringCopy(hub->allocator, path);
+	hub->projects[index].data.path = StringCopy(hub->allocator, path);
 
 	// The project name will only reference the filename of the path
-	Stream<wchar_t> project_name = function::PathFilename(hub->projects[hub->projects.size].data.path);
+	Stream<wchar_t> project_name = PathFilename(hub->projects[hub->projects.size].data.path);
 	hub->projects[index].data.project_name = project_name;
 	hub->projects.size++;
 
@@ -71,7 +71,7 @@ void AddExistingProjectAction(ActionData* action_data) {
 	}
 	else {
 		if (get_data.path.size > 0) {
-			AddHubProject((EditorState*)_data, function::PathParent(get_data.path));
+			AddHubProject((EditorState*)_data, PathParent(get_data.path));
 		}
 	}
 }
@@ -129,7 +129,7 @@ void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
 	
 	HubData* hub_data = editor_state->hub_data;
 	for (size_t index = 0; index < hub_data->projects.size; index++) {
-		if (function::CompareStrings(path, hub_data->projects[index].data.path)) {
+		if (path == hub_data->projects[index].data.path) {
 			DeallocateHubProject(editor_state, index);
 			hub_data->projects.Remove(index);
 			task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(SaveEditorFileThreadTask, editor_state, 0));
@@ -219,7 +219,7 @@ void SortHubProjects(EditorState* editor_state)
 		OS::GetRelativeFileTimes(data->projects[index].data.path, nullptr, nullptr, &sort_elements[index].file_time);
 	}
 
-	function::insertion_sort(sort_elements, data->projects.size);
+	insertion_sort(sort_elements, data->projects.size);
 	for (size_t index = 0; index < data->projects.size; index++) {
 		data->projects[index] = sort_elements[index].project;
 	}
@@ -380,7 +380,7 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 
 		auto row_project_name = [&](UIDrawConfig& config, UIConfigAbsoluteTransform& transform, size_t index) {
 			ECS_STACK_CAPACITY_STREAM(char, temp_characters, 256);
-			function::ConvertWideCharsToASCII(data->projects[index].data.path, temp_characters);
+			ConvertWideCharsToASCII(data->projects[index].data.path, temp_characters);
 
 			transform.position = row_start_position;
 			transform.scale = { FIRST_COLUMN_SCALE, COLUMN_Y_SCALE };
@@ -392,8 +392,8 @@ void HubDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool init
 			config.AddFlag(alignment);
 
 			char ascii_name[256];
-			Stream<wchar_t> path_stem = function::PathStem(data->projects[index].data.path);
-			function::ConvertWideCharsToASCII(path_stem.buffer, ascii_name, path_stem.size, 256);
+			Stream<wchar_t> path_stem = PathStem(data->projects[index].data.path);
+			ConvertWideCharsToASCII(path_stem.buffer, ascii_name, path_stem.size, 256);
 			drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, ascii_name);
 
 			alignment.vertical = ECS_UI_ALIGN_BOTTOM;

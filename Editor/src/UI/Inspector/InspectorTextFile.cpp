@@ -80,7 +80,7 @@ void InspectorDrawHlslTextFile(EditorState* editor_state, unsigned int inspector
 
 void ChangeInspectorToTextFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
 	InspectorFunctions functions;
-	Stream<wchar_t> extension = function::PathExtension(path);
+	Stream<wchar_t> extension = PathExtension(path);
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 256);
 	null_terminated_path.CopyOther(path);

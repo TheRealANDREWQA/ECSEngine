@@ -943,7 +943,7 @@ namespace ECSEngine {
 						}
 
 						for (unsigned char component_index = 0; component_index < unique_count; component_index++) {
-							entity_components[component_index] = function::OffsetPointer(entity_components[component_index], component_sizes[component_index]);
+							entity_components[component_index] = OffsetPointer(entity_components[component_index], component_sizes[component_index]);
 						}
 					}
 				}
@@ -992,7 +992,7 @@ namespace ECSEngine {
 						}
 
 						for (unsigned char component_index = 0; component_index < unique_count; component_index++) {
-							entity_components[component_index] = function::OffsetPointer(entity_components[component_index], component_sizes[component_index]);
+							entity_components[component_index] = OffsetPointer(entity_components[component_index], component_sizes[component_index]);
 						}
 					}
 				}
@@ -1076,6 +1076,9 @@ namespace ECSEngine {
 		// Return true to exit early, if desired.
 		// The functor receives as parameters (Entity entity, const void** unique_components, const void** shared_components)
 		// This iterates over all entities that satisfy the given query
+		// This variant uses a query to determine the archetypes to apply the functor on
+		// The variant in ForEach.h uses template arguments to deduce the Query and can early exit
+		// Compared to the untyped functor variant
 		template<bool early_exit = false, typename Functor>
 		bool ForEachEntityWithSignature(ArchetypeQuery query, Functor&& functor) const {
 			return ForEachArchetype<early_exit>(query, [&](const Archetype* archetype) {
@@ -1122,7 +1125,7 @@ namespace ECSEngine {
 							functor(base->GetEntityAtIndex(entity_index), unique_components, shared_components);
 						}
 						for (unsigned int unique_index = 0; unique_index < unique_signature.count; unique_index++) {
-							unique_components[unique_index] = function::OffsetPointer(unique_components[unique_index], unique_components_byte_size[unique_index]);
+							unique_components[unique_index] = OffsetPointer(unique_components[unique_index], unique_components_byte_size[unique_index]);
 						}
 					}
 				}
@@ -1156,7 +1159,7 @@ namespace ECSEngine {
 
 		// Verifies if a shared component was already allocated at that slot
 		ECS_INLINE bool ExistsGlobalComponent(Component component) const {
-			return function::SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component)) != -1;
+			return SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component)) != -1;
 		}
 
 		// Verifies if a shared instance is a valid instance - checks to see if the component also exists
@@ -1201,16 +1204,20 @@ namespace ECSEngine {
 		);
 
 		// It will fill in the indices of the archetypes that verify the query
-		void ECS_VECTORCALL GetArchetypes(ArchetypeQuery query, CapacityStream<unsigned int>& archetypes) const;
-
-		// It will fill in the pointers of the archetypes that verify the query
-		void ECS_VECTORCALL GetArchetypesPtrs(ArchetypeQuery query, CapacityStream<Archetype*>& archetypes) const;
+		void GetArchetypes(ArchetypeQuery query, CapacityStream<unsigned int>& archetypes) const;
 
 		// It will fill in the indices of the archetypes that verify the query
-		void ECS_VECTORCALL GetArchetypes(ArchetypeQueryExclude query, CapacityStream<unsigned int>& archetypes) const;
+		void GetArchetypes(ArchetypeQueryExclude query, CapacityStream<unsigned int>& archetypes) const;
 
-		// It will fill in the pointers of the archetypes that verify the query
-		void ECS_VECTORCALL GetArchetypesPtrs(ArchetypeQueryExclude query, CapacityStream<Archetype*>& archetypes) const;
+		// It will fill in the indices of the archetypes that verify the query
+		void GetArchetypes(ArchetypeQueryOptional query, CapacityStream<unsigned int>& archetypes) const;
+
+		// It will fill in the indices of the archetypes that verify the query
+		void GetArchetypes(ArchetypeQueryExcludeOptional query, CapacityStream<unsigned int>& archetypes) const;
+
+		// It will fill in the indices of the archetypes that verify the query (this will check and use
+		// the appropriate query - it will perform the SIMD conversion as well)
+		void GetArchetypes(const ArchetypeQueryDescriptor& query_descriptor, CapacityStream<unsigned int>& archetypes) const;
 
 		void* GetComponent(Entity entity, Component component);
 
@@ -1627,10 +1634,14 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// Returns a handle to be used to access the query results.
+		// Returns a handle to be used to access the query results
+		// For queries that contain optional components, you must add the query for the mandatory part
+		// You must then handle the optional part
 		unsigned int RegisterQuery(ArchetypeQuery query);
 
 		// Returns a handle to be used to access the query results.
+		// For queries that contain optional components, you must add the query for the mandatory part
+		// You must then handle the optional part
 		unsigned int RegisterQuery(ArchetypeQueryExclude query);
 
 		// Backtracks the query cache to another state

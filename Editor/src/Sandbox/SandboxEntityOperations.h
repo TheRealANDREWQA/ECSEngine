@@ -622,10 +622,7 @@ void SandboxForEachEntity(
 	unsigned int sandbox_index,
 	ForEachEntityFunctor functor,
 	void* functor_data,
-	ComponentSignature unique_signature,
-	ComponentSignature shared_signature,
-	ComponentSignature unique_exclude_signature = {},
-	ComponentSignature shared_exclude_signature = {},
+	const ArchetypeQueryDescriptor& query_descriptor,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 

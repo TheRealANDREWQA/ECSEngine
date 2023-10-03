@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "AABB.h"
 #include "Vector.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/Utilities.h"
 
 namespace ECSEngine {
 
@@ -20,7 +20,7 @@ namespace ECSEngine {
 	AABBStorage GetAABBFromPoints(Stream<float3> points)
 	{
 		Vector8 vector_min(FLT_MAX), vector_max(-FLT_MAX);
-		size_t simd_count = function::GetSimdCount(points.size, vector_min.Lanes());
+		size_t simd_count = GetSimdCount(points.size, vector_min.Lanes());
 		for (size_t index = 0; index < simd_count; index += vector_min.Lanes()) {
 			Vector8 current_positions(points.buffer + index);
 			vector_min = min(vector_min, current_positions);

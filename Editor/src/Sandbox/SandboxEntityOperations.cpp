@@ -121,7 +121,7 @@ void AttachEntityName(
 		Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
 		AllocatorPolymorphic allocator = entity_manager->GetComponentAllocatorPolymorphic(name_component);
 
-		Name name_data = { function::StringCopy(allocator, name) };
+		Name name_data = { StringCopy(allocator, name) };
 		entity_manager->AddComponentCommit(entity, name_component, &name_data);
 		SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	}
@@ -146,7 +146,7 @@ void ChangeEntityName(
 			if (name_data->name.size > 0) {
 				Deallocate(allocator, name_data->name.buffer);
 			}
-			name_data->name = function::StringCopy(allocator, new_name);
+			name_data->name = StringCopy(allocator, new_name);
 			SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 		}
 	}
@@ -1422,7 +1422,7 @@ void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandb
 		}
 		else {
 			// Check the virtual entities
-			size_t gizmo_index = function::SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
+			size_t gizmo_index = SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
 			if (gizmo_index != -1) {
 				if (transform_gizmo_pointers[gizmo_index].euler_rotation != nullptr) {
 					if (transform_gizmo_pointers[gizmo_index].is_euler_rotation) {
@@ -1446,10 +1446,7 @@ void SandboxForEachEntity(
 	unsigned int sandbox_index, 
 	ForEachEntityFunctor functor, 
 	void* functor_data, 
-	ComponentSignature unique_signature, 
-	ComponentSignature shared_signature, 
-	ComponentSignature unique_exclude_signature, 
-	ComponentSignature shared_exclude_signature,
+	const ArchetypeQueryDescriptor& query_descriptor,
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
@@ -1457,7 +1454,7 @@ void SandboxForEachEntity(
 	memcpy(&temp_world, &GetSandbox(editor_state, sandbox_index)->sandbox_world, sizeof(temp_world));
 
 	temp_world.entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
-	ForEachEntityCommitFunctor(&temp_world, functor, functor_data, unique_signature, shared_signature, unique_exclude_signature, shared_exclude_signature);
+	ForEachEntityCommitFunctor(&temp_world, functor, functor_data, query_descriptor);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1797,7 +1794,7 @@ void ScaleSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbo
 		}
 		else {
 			// Check the virtual entity gizmos
-			size_t gizmo_index = function::SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
+			size_t gizmo_index = SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
 			if (gizmo_index != -1) {
 				if (transform_gizmo_pointers[gizmo_index].scale != nullptr) {
 					*transform_gizmo_pointers[gizmo_index].scale += scale_delta;
@@ -1824,7 +1821,7 @@ void TranslateSandboxSelectedEntities(EditorState* editor_state, unsigned int sa
 		}
 		else {
 			// Check the virtual entity gizmos
-			size_t gizmo_index = function::SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
+			size_t gizmo_index = SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
 			if (gizmo_index != -1) {
 				if (transform_gizmo_pointers[gizmo_index].position != nullptr) {
 					*transform_gizmo_pointers[gizmo_index].position += delta;

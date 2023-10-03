@@ -1,7 +1,6 @@
 #include "ecspch.h"
 #include "ReflectionStringFunctions.h"
-#include "../FunctionInterfaces.h"
-#include "../Function.h"
+#include "../PointerUtilities.h"
 
 namespace ECSEngine {
 
@@ -155,15 +154,15 @@ namespace ECSEngine {
 
 		template<typename Integer>
 		size_t ConvertInteger(const void* address, CapacityStream<char>& characters) {
-			return function::ConvertIntToChars(characters, *(Integer*)address);
+			return ConvertIntToChars(characters, *(Integer*)address);
 		}
 
 		size_t ConvertFloat(const void* address, CapacityStream<char>& characters) {
-			return function::ConvertFloatToChars(characters, *(float*)address, 4);
+			return ConvertFloatToChars(characters, *(float*)address, 4);
 		}
 
 		size_t ConvertDouble(const void* address, CapacityStream<char>& characters) {
-			return function::ConvertDoubleToChars(characters, *(double*)address, 4);
+			return ConvertDoubleToChars(characters, *(double*)address, 4);
 		}
 
 #define COMMA_SEPARATE characters.Add(','); characters.AddAssert(' ');
@@ -172,7 +171,7 @@ namespace ECSEngine {
 		size_t ConvertBasic2(const void* address, CapacityStream<char>& characters) {
 			size_t first_size = basic_convert(address, characters);
 			COMMA_SEPARATE;
-			size_t second_size = basic_convert(function::OffsetPointer(address, byte_size), characters);
+			size_t second_size = basic_convert(OffsetPointer(address, byte_size), characters);
 
 			return first_size + second_size + 2;
 		}
@@ -183,9 +182,9 @@ namespace ECSEngine {
 
 			// Add a comma to separate the values
 			COMMA_SEPARATE;
-			size_t second_size = basic_convert(function::OffsetPointer(address, byte_size), characters);
+			size_t second_size = basic_convert(OffsetPointer(address, byte_size), characters);
 			COMMA_SEPARATE;
-			size_t third_size = basic_convert(function::OffsetPointer(address, 2 * byte_size), characters);
+			size_t third_size = basic_convert(OffsetPointer(address, 2 * byte_size), characters);
 
 			return first_size + second_size + third_size + 4;
 		}
@@ -195,11 +194,11 @@ namespace ECSEngine {
 			size_t first_size = basic_convert(address, characters);
 
 			COMMA_SEPARATE;
-			size_t second_size = basic_convert(function::OffsetPointer(address, byte_size), characters);
+			size_t second_size = basic_convert(OffsetPointer(address, byte_size), characters);
 			COMMA_SEPARATE;
-			size_t third_size = basic_convert(function::OffsetPointer(address, 2 * byte_size), characters);
+			size_t third_size = basic_convert(OffsetPointer(address, 2 * byte_size), characters);
 			COMMA_SEPARATE;
-			size_t fourth_size = basic_convert(function::OffsetPointer(address, 3 * byte_size), characters);
+			size_t fourth_size = basic_convert(OffsetPointer(address, 3 * byte_size), characters);
 
 			return first_size + second_size + third_size + fourth_size + 6;
 		}
@@ -314,9 +313,9 @@ namespace ECSEngine {
 			Integer* ptr = (Integer*)data;
 
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
-			bool is_integer = function::IsIntegerNumber(trimmed_characters);
+			bool is_integer = IsIntegerNumber(trimmed_characters);
 			if (is_integer) {
-				Integer integer = function::ConvertCharactersToIntImpl<Integer, char>(trimmed_characters);
+				Integer integer = ConvertCharactersToIntImpl<Integer, char>(trimmed_characters);
 				*ptr = integer;
 				return true;
 			}
@@ -328,9 +327,9 @@ namespace ECSEngine {
 		bool ParseFloat(void* data, Stream<char> characters) {
 			float* ptr = (float*)data;
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
-			bool is_floating_point = function::IsFloatingPointNumber(trimmed_characters);
+			bool is_floating_point = IsFloatingPointNumber(trimmed_characters);
 			if (is_floating_point) {
-				float value = function::ConvertCharactersToFloat(trimmed_characters);
+				float value = ConvertCharactersToFloat(trimmed_characters);
 				*ptr = value;
 				return true;
 			}
@@ -342,9 +341,9 @@ namespace ECSEngine {
 		bool ParseDouble(void* data, Stream<char> characters) {
 			double* ptr = (double*)data;
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
-			bool is_floating_point = function::IsFloatingPointNumber(trimmed_characters);
+			bool is_floating_point = IsFloatingPointNumber(trimmed_characters);
 			if (is_floating_point) {
-				double value = function::ConvertCharactersToDouble(trimmed_characters);
+				double value = ConvertCharactersToDouble(trimmed_characters);
 				*ptr = value;
 				return true;
 			}
@@ -390,7 +389,7 @@ namespace ECSEngine {
 
 			bool first_success = basic_parse(data, Stream<char>(trimmed_characters.buffer, comma - trimmed_characters.buffer));
 			if (first_success) {
-				return basic_parse(function::OffsetPointer(data, byte_size), Stream<char>(comma + 1, trimmed_characters.buffer + trimmed_characters.size - comma - 1));
+				return basic_parse(OffsetPointer(data, byte_size), Stream<char>(comma + 1, trimmed_characters.buffer + trimmed_characters.size - comma - 1));
 			}
 			return false;
 		}
@@ -416,9 +415,9 @@ namespace ECSEngine {
 
 			bool first_success = basic_parse(data, Stream<char>(trimmed_characters.buffer, first_comma - trimmed_characters.buffer));
 			if (first_success) {
-				bool second_success = basic_parse(function::OffsetPointer(data, byte_size), Stream<char>(first_comma + 1, second_comma - first_comma - 1));
+				bool second_success = basic_parse(OffsetPointer(data, byte_size), Stream<char>(first_comma + 1, second_comma - first_comma - 1));
 				if (second_success) {
-					return basic_parse(function::OffsetPointer(data, 2 * byte_size), Stream<char>(second_comma + 1, trimmed_characters.buffer + trimmed_characters.size - second_comma - 1));
+					return basic_parse(OffsetPointer(data, 2 * byte_size), Stream<char>(second_comma + 1, trimmed_characters.buffer + trimmed_characters.size - second_comma - 1));
 				}
 				return false;
 			}
@@ -450,11 +449,11 @@ namespace ECSEngine {
 
 			bool first_success = basic_parse(data, Stream<char>(trimmed_characters.buffer, first_comma - trimmed_characters.buffer));
 			if (first_success) {
-				bool second_success = basic_parse(function::OffsetPointer(data, byte_size), Stream<char>(first_comma + 1, second_comma - first_comma - 1));
+				bool second_success = basic_parse(OffsetPointer(data, byte_size), Stream<char>(first_comma + 1, second_comma - first_comma - 1));
 				if (second_success) {
-					bool third_success = basic_parse(function::OffsetPointer(data, 2 * byte_size), Stream<char>(second_comma + 1, third_comma - second_comma - 1));
+					bool third_success = basic_parse(OffsetPointer(data, 2 * byte_size), Stream<char>(second_comma + 1, third_comma - second_comma - 1));
 					if (third_success) {
-						return basic_parse(function::OffsetPointer(data, 3 * byte_size), Stream<char>(third_comma + 1, trimmed_characters.buffer + trimmed_characters.size - third_comma - 1));
+						return basic_parse(OffsetPointer(data, 3 * byte_size), Stream<char>(third_comma + 1, trimmed_characters.buffer + trimmed_characters.size - third_comma - 1));
 					}
 					return false;
 				}
@@ -561,7 +560,7 @@ namespace ECSEngine {
 		ReflectionBasicFieldType ConvertStringToBasicFieldType(Stream<char> string)
 		{
 			for (size_t index = 0; index < std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS); index++) {
-				if (function::CompareStrings(string, ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[index].string)) {
+				if (string == ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[index].string) {
 					return ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[index].type;
 				}
 			}
@@ -576,16 +575,16 @@ namespace ECSEngine {
 			basic_type = ReflectionBasicFieldType::UserDefined;
 			stream_type = ReflectionStreamFieldType::Basic;
 
-			Stream<char> opened_bracket = function::FindFirstCharacter(string, '<');
-			Stream<char> closed_bracket = function::FindFirstCharacter(string, '>');
+			Stream<char> opened_bracket = FindFirstCharacter(string, '<');
+			Stream<char> closed_bracket = FindFirstCharacter(string, '>');
 
 			if (opened_bracket.buffer != nullptr) {
-				opened_bracket.buffer = (char*)function::SkipWhitespace(opened_bracket.buffer + 1);
-				closed_bracket.buffer = (char*)function::SkipWhitespace(closed_bracket.buffer - 1, -1);
+				opened_bracket.buffer = (char*)SkipWhitespace(opened_bracket.buffer + 1);
+				closed_bracket.buffer = (char*)SkipWhitespace(closed_bracket.buffer - 1, -1);
 
-				basic_type = ConvertStringToBasicFieldType({ opened_bracket.buffer, function::PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 });
+				basic_type = ConvertStringToBasicFieldType({ opened_bracket.buffer, PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 });
 
-				Stream<char> asterisk = function::FindFirstCharacter(opened_bracket, '*');
+				Stream<char> asterisk = FindFirstCharacter(opened_bracket, '*');
 				if (asterisk.buffer == nullptr) {
 					if (memcmp(string.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
 						stream_type = ReflectionStreamFieldType::Stream;
@@ -602,15 +601,15 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				Stream<char> asterisk = function::FindFirstCharacter(string.buffer, '*');
+				Stream<char> asterisk = FindFirstCharacter(string.buffer, '*');
 				if (asterisk.buffer == nullptr) {
 					basic_type = ConvertStringToBasicFieldType(string);
 				}
 				else {
 					stream_type = ReflectionStreamFieldType::Pointer;
 
-					asterisk.buffer = (char*)function::SkipWhitespace(asterisk.buffer - 1, -1);
-					basic_type = ConvertStringToBasicFieldType({ string.buffer, function::PointerDifference(asterisk.buffer, string.buffer) });
+					asterisk.buffer = (char*)SkipWhitespace(asterisk.buffer - 1, -1);
+					basic_type = ConvertStringToBasicFieldType({ string.buffer, PointerDifference(asterisk.buffer, string.buffer) });
 				}
 			}
 		}
@@ -618,7 +617,7 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ReflectionBasicFieldType ConvertStringAliasToBasicFieldType(Stream<char> string) {
-			unsigned int index = function::FindString(string, Stream<Stream<char>>(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS, std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS)));
+			unsigned int index = FindString(string, Stream<Stream<char>>(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS, std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS)));
 			if (index != -1) {
 				return (ReflectionBasicFieldType)index;
 			}
@@ -847,11 +846,11 @@ namespace ECSEngine {
 				break;
 			case ReflectionStreamFieldType::Pointer:
 			{
-				Stream<char> asterisk = function::FindFirstCharacter(definition, '*');
+				Stream<char> asterisk = FindFirstCharacter(definition, '*');
 				Stream<char> result;
 				if (asterisk.size > 0) {
-					asterisk.buffer = (char*)function::SkipWhitespace(asterisk.buffer, -1);
-					result = { definition.buffer, function::PointerDifference(asterisk.buffer, definition.buffer) + 1 };
+					asterisk.buffer = (char*)SkipWhitespace(asterisk.buffer, -1);
+					result = { definition.buffer, PointerDifference(asterisk.buffer, definition.buffer) + 1 };
 				}
 				else {
 					result = definition;
@@ -868,12 +867,12 @@ namespace ECSEngine {
 			case ReflectionStreamFieldType::CapacityStream:
 			case ReflectionStreamFieldType::ResizableStream:
 			{
-				const char* opened_bracket = function::FindFirstCharacter(definition, '<').buffer;
-				const char* closed_bracket = function::FindCharacterReverse(definition, '>').buffer;
-				opened_bracket = function::SkipWhitespace(opened_bracket);
-				closed_bracket = function::SkipWhitespace(closed_bracket, -1);
+				const char* opened_bracket = FindFirstCharacter(definition, '<').buffer;
+				const char* closed_bracket = FindCharacterReverse(definition, '>').buffer;
+				opened_bracket = SkipWhitespace(opened_bracket);
+				closed_bracket = SkipWhitespace(closed_bracket, -1);
 
-				return { opened_bracket, function::PointerDifference(closed_bracket, opened_bracket) + 1 };
+				return { opened_bracket, PointerDifference(closed_bracket, opened_bracket) + 1 };
 			}
 				break;
 			default:

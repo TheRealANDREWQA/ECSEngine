@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "ShaderInclude.h"
 #include "../Utilities/File.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/StringUtilities.h"
 #include "../Utilities/Path.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "../Utilities/ForEachFiles.h"
@@ -22,8 +22,8 @@ namespace ECSEngine {
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, current_path, 512);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, include_filename, 128);
-		Stream<char> include_filename_ascii = function::PathFilename(filename, ECS_OS_PATH_SEPARATOR_ASCII_REL);
-		function::ConvertASCIIToWide(include_filename, include_filename_ascii);
+		Stream<char> include_filename_ascii = PathFilename(filename, ECS_OS_PATH_SEPARATOR_ASCII_REL);
+		ConvertASCIIToWide(include_filename, include_filename_ascii);
 
 		struct SearchData {
 			LPCVOID* data_pointer;
@@ -38,9 +38,9 @@ namespace ECSEngine {
 		auto search_file = [](Stream<wchar_t> path, void* _data) {
 			SearchData* data = (SearchData*)_data;
 
-			Stream<wchar_t> current_filename = function::PathFilename(path);
+			Stream<wchar_t> current_filename = PathFilename(path);
 
-			if (function::CompareStrings(current_filename, data->include_filename)) {
+			if (current_filename == data->include_filename) {
 				Stream<char> file_data = ReadWholeFileText(path, GetAllocatorPolymorphic(data->manager, ECS_ALLOCATION_MULTI));
 				if (file_data.buffer != nullptr) {
 					*data->byte_pointer = file_data.size;

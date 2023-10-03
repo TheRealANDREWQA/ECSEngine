@@ -1,7 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "../Containers/AtomicStream.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 
 namespace ECSEngine {
 
@@ -15,7 +15,7 @@ namespace ECSEngine {
 		}
 
 		AtomicStream<T>* GetStream(unsigned int thread_index) const {
-			return (AtomicStream<T>*)function::OffsetPointer(streams, thread_index * ECS_CACHE_LINE_SIZE);
+			return (AtomicStream<T>*)OffsetPointer(streams, thread_index * ECS_CACHE_LINE_SIZE);
 		}
 		
 		// It will distribute the tasks uniformly along the streams

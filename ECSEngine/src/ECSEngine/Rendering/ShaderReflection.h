@@ -75,7 +75,7 @@ namespace ECSEngine {
 
 		ECS_INLINE bool HasTag(Stream<char> tag) const {
 			if (tag.size > 0) {
-				return function::FindFirstToken(tags, tag).size > 0;
+				return FindFirstToken(tags, tag).size > 0;
 			}
 			return false;
 		}

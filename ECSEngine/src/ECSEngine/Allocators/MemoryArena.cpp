@@ -3,7 +3,7 @@
 #include "../Utilities/Assert.h"
 #include "AllocatorCallsDebug.h"
 #include "AllocatorPolymorphic.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 #include "MultipoolAllocator.h"
 
 namespace ECSEngine {
@@ -16,7 +16,7 @@ namespace ECSEngine {
 		size_t total_allocation_size = base_info.allocator_type == ECS_ALLOCATOR_ARENA ? 
 			arena->MemoryOf(allocator_count, base_info.arena_capacity, base_info.arena_nested_type) : 
 			arena->MemoryOf(allocator_count, base_info);
-		arena->m_data_buffer = function::OffsetPointer(buffer, allocator_size);
+		arena->m_data_buffer = OffsetPointer(buffer, allocator_size);
 
 		CreateBaseAllocatorInfo nested_info;
 		if (base_info.allocator_type == ECS_ALLOCATOR_ARENA) {
@@ -205,7 +205,7 @@ namespace ECSEngine {
 
 	AllocatorPolymorphic MemoryArena::GetAllocator(size_t index) const
 	{
-		return { function::OffsetPointer(m_allocators, index * m_base_allocator_byte_size), m_base_allocator_type, ECS_ALLOCATION_SINGLE };
+		return { OffsetPointer(m_allocators, index * m_base_allocator_byte_size), m_base_allocator_type, ECS_ALLOCATION_SINGLE };
 	}
 
 	size_t GetAllocatorIndex(const MemoryArena* arena, const void* block) {

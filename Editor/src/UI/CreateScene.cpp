@@ -43,7 +43,7 @@ void SaveSceneAction(ActionData* action_data) {
 	results.cancel_call = false;
 	action_data->additional_data = &results;
 
-	action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : function::OffsetPointer(data, sizeof(*data));
+	action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : OffsetPointer(data, sizeof(*data));
 	data->continue_handler.action(action_data);
 
 	DestroyCurrentActionWindow(action_data);
@@ -65,7 +65,7 @@ void DoNotSaveSceneAction(ActionData* action_data) {
 	results.cancel_call = false;
 	action_data->additional_data = &results;
 	
-	action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : function::OffsetPointer(data, sizeof(*data));
+	action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : OffsetPointer(data, sizeof(*data));
 	data->continue_handler.action(action_data);
 
 	DestroyCurrentActionWindow(action_data);
@@ -80,7 +80,7 @@ void CancelSceneAction(ActionData* action_data) {
 	results.cancel_call = true;
 	action_data->additional_data = &results;
 
-	action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : function::OffsetPointer(data, sizeof(*data));
+	action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : OffsetPointer(data, sizeof(*data));
 	data->continue_handler.action(action_data);
 
 	DestroyCurrentActionWindow(action_data);
@@ -131,7 +131,7 @@ void SaveScenePopUpDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 			row_layout.GetTransform(config, label_configuration);
 			
 			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_indices[index]);
-			Stream<wchar_t> path_stem = function::PathStem(sandbox->scene_path);
+			Stream<wchar_t> path_stem = PathStem(sandbox->scene_path);
 			drawer.TextLabelWide(label_configuration, config, path_stem);
 
 			drawer.NextRow();
@@ -203,7 +203,7 @@ void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbo
 		descriptor.initial_position_y = 0.0f;
 
 		if (continue_handler.data_size > 0) {
-			memcpy(function::OffsetPointer(draw_data, sizeof(*draw_data)), continue_handler.data, continue_handler.data_size);
+			memcpy(OffsetPointer(draw_data, sizeof(*draw_data)), continue_handler.data, continue_handler.data_size);
 			descriptor.window_data_size += continue_handler.data_size;
 		}
 
@@ -239,10 +239,10 @@ void CreateEmptySceneActualCallback(ActionData* action_data) {
 	GetProjectAssetsFolder(editor_state, assets_folder);
 
 	Stream<wchar_t> current_folder = editor_state->file_explorer_data->current_directory;
-	current_folder = function::PathRelativeToAbsolute(current_folder, assets_folder);
+	current_folder = PathRelativeToAbsolute(current_folder, assets_folder);
 	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 512);
 	wide_name.CopyOther(current_folder);
-	function::ConvertASCIIToWide(wide_name, *name);
+	ConvertASCIIToWide(wide_name, *name);
 	wide_name.AddStreamSafe(EDITOR_SCENE_EXTENSION);
 
 	if (ExistScene(editor_state, wide_name)) {
@@ -321,7 +321,7 @@ void ChangeSandboxSceneAction(ActionData* action_data) {
 			GetProjectAssetsFolder(data->editor_state, assets_directory);
 
 			// Can change the path now
-			Stream<wchar_t> relative_path = function::PathRelativeToAbsolute(get_file_data.path, assets_directory);
+			Stream<wchar_t> relative_path = PathRelativeToAbsolute(get_file_data.path, assets_directory);
 			if (relative_path.size == 0) {
 				// The scene is located in another folder root - inform the user
 				ECS_FORMAT_TEMP_STRING(console_message, "Failed to change path to {#} for sandbox {#} because the given file is "

@@ -7,6 +7,7 @@
 #include "../Allocators/ResizableLinearAllocator.h"
 #include "../Utilities/Path.h"
 #include "../Utilities/OSFunctions.h"
+#include "../Utilities/FilePreprocessor.h"
 
 namespace ECSEngine {
 
@@ -50,7 +51,7 @@ namespace ECSEngine {
 		}
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, mount_point, absolute_path);
+		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, mount_point, absolute_path);
 
 		ResourceManagerLoadDesc load_descriptor;
 		load_descriptor.load_flags = metadata->invert_z_axis ? 0 : ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT;
@@ -119,7 +120,7 @@ namespace ECSEngine {
 		}
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, mount_point, absolute_path);
+		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, mount_point, absolute_path);
 
 		ResourceManagerTextureDesc texture_descriptor;
 		texture_descriptor.misc_flags = metadata->generate_mip_maps ? ECS_GRAPHICS_MISC_GENERATE_MIPS : ECS_GRAPHICS_MISC_NONE;
@@ -194,7 +195,7 @@ namespace ECSEngine {
 		}
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, mount_point, absolute_path);
+		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, mount_point, absolute_path);
 
 		ShaderCompileOptions compile_options;
 		compile_options.macros = metadata->macros;
@@ -356,7 +357,7 @@ namespace ECSEngine {
 				user_material->textures[texture_total_count].slot = material->textures[index][subindex].slot;
 				if (material->textures[index][subindex].metadata_handle != -1) {
 					const TextureMetadata* texture_metadata = database->GetTextureConst(material->textures[index][subindex].metadata_handle);
-					Stream<wchar_t> final_texture_path = function::MountPath(texture_metadata->file, mount_point, allocator);
+					Stream<wchar_t> final_texture_path = MountPath(texture_metadata->file, mount_point, allocator);
 
 					user_material->textures[texture_total_count].filename = final_texture_path;
 					user_material->textures[texture_total_count].srgb = texture_metadata->sRGB;
@@ -417,7 +418,7 @@ namespace ECSEngine {
 			const ShaderMetadata* pixel_shader_metadata = database->GetShaderConst(material->pixel_shader_handle);
 
 			// Mount the shaders only if they are not in absolute paths already
-			Stream<wchar_t> pixel_shader_path = function::MountPathOnlyRel(pixel_shader_metadata->file, mount_point, allocator);
+			Stream<wchar_t> pixel_shader_path = MountPathOnlyRel(pixel_shader_metadata->file, mount_point, allocator);
 			user_material->pixel_shader = pixel_shader_path;
 			user_material->pixel_compile_options.compile_flags = pixel_shader_metadata->compile_flag;
 			user_material->pixel_compile_options.macros = pixel_shader_metadata->macros;
@@ -431,7 +432,7 @@ namespace ECSEngine {
 		if (material->vertex_shader_handle != -1) {
 			const ShaderMetadata* vertex_shader_metadata = database->GetShaderConst(material->vertex_shader_handle);
 
-			Stream<wchar_t> vertex_shader_path = function::MountPathOnlyRel(vertex_shader_metadata->file, mount_point, allocator);
+			Stream<wchar_t> vertex_shader_path = MountPathOnlyRel(vertex_shader_metadata->file, mount_point, allocator);
 			user_material->vertex_shader = vertex_shader_path;
 			user_material->vertex_compile_options.compile_flags = vertex_shader_metadata->compile_flag;
 			user_material->vertex_compile_options.macros = vertex_shader_metadata->macros;
@@ -455,7 +456,7 @@ namespace ECSEngine {
 		}
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
-		Stream<wchar_t> final_path = function::MountPathOnlyRel(misc_asset->file, mount, storage);
+		Stream<wchar_t> final_path = MountPathOnlyRel(misc_asset->file, mount, storage);
 		ResizableStream<void> data = *resource_manager->LoadMisc<true>(final_path);
 		if (data.size > 0 && data.buffer != nullptr) {
 			misc_asset->data = { data.buffer, data.size };
@@ -556,7 +557,7 @@ namespace ECSEngine {
 
 			CapacityStream<wchar_t> wide_identifier;
 			wide_identifier.InitializeFromBuffer(path_identifier.buffer, 0, path_identifier.capacity);
-			file = function::MountPathOnlyRel(file, mount_point, wide_identifier);
+			file = MountPathOnlyRel(file, mount_point, wide_identifier);
 			identifier.CopyTo(file.buffer + file.size);
 			path_identifier.size = file.size + identifier.size;
 		}
@@ -587,7 +588,7 @@ namespace ECSEngine {
 			ECS_STACK_VOID_STREAM(suffix, 512);
 			AssetMetadataIdentifier(metadata, type, suffix);
 			ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-			Stream<wchar_t> file_path = function::MountPathOnlyRel(GetAssetFile(metadata, type), mount_point, absolute_path);
+			Stream<wchar_t> file_path = MountPathOnlyRel(GetAssetFile(metadata, type), mount_point, absolute_path);
 
 			const void* resource = resource_manager->GetResource(file_path, AssetTypeToResourceType(type), suffix);
 			if (type == ECS_ASSET_MISC) {
@@ -914,7 +915,7 @@ namespace ECSEngine {
 				unsigned int handle = database->GetHandle(index, type);
 				const void* current_asset = main_database->GetAssetConst(handle, type);
 				// Check to see if the handle was already added
-				unsigned int existing_index = function::SearchBytes(missing_handles[type].buffer, missing_handles[type].size, handle, sizeof(handle));
+				unsigned int existing_index = SearchBytes(missing_handles[type].buffer, missing_handles[type].size, handle, sizeof(handle));
 				if (existing_index == -1 && !IsAssetFromMetadataLoaded(resource_manager, current_asset, type, mount_point, randomized_assets)) {
 					missing_handles[type].AddAssert(handle);
 					// Add its dependencies as well if they don't exist already
@@ -922,7 +923,7 @@ namespace ECSEngine {
 					GetAssetDependencies(current_asset, type, &dependencies);
 					for (unsigned int subindex = 0; subindex < dependencies.size; subindex++) {
 						CapacityStream<unsigned int>* current_handles = missing_handles + dependencies[subindex].type;
-						existing_index = function::SearchBytes(
+						existing_index = SearchBytes(
 							current_handles->buffer,
 							current_handles->size,
 							dependencies[subindex].handle,
@@ -959,7 +960,7 @@ namespace ECSEngine {
 	bool DeallocateMeshFromMetadata(ResourceManager* resource_manager, const MeshMetadata* metadata, Stream<wchar_t> mount_point)
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, mount_point, absolute_path);
+		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, mount_point, absolute_path);
 
 		ECS_STACK_VOID_STREAM(suffix, 512);
 		MeshMetadataIdentifier(metadata, suffix);
@@ -974,7 +975,7 @@ namespace ECSEngine {
 	bool DeallocateTextureFromMetadata(ResourceManager* resource_manager, const TextureMetadata* metadata, Stream<wchar_t> mount_point)
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, mount_point, absolute_path);
+		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, mount_point, absolute_path);
 
 		ECS_STACK_VOID_STREAM(suffix, 512);
 		TextureMetadataIdentifier(metadata, suffix);
@@ -995,7 +996,7 @@ namespace ECSEngine {
 	bool DeallocateShaderFromMetadata(ResourceManager* resource_manager, const ShaderMetadata* metadata, Stream<wchar_t> mount_point)
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, mount_point, absolute_path);
+		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, mount_point, absolute_path);
 
 		ECS_STACK_VOID_STREAM(suffix, 512);
 		ShaderMetadataIdentifier(metadata, suffix);
@@ -1032,7 +1033,7 @@ namespace ECSEngine {
 	bool DeallocateMiscAssetFromMetadata(ResourceManager* resource_manager, const MiscAsset* misc, Stream<wchar_t> mount_point)
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
-		Stream<wchar_t> final_path = function::MountPathOnlyRel(misc->file, mount_point, storage);
+		Stream<wchar_t> final_path = MountPathOnlyRel(misc->file, mount_point, storage);
 		return resource_manager->TryUnloadResource(final_path, ResourceType::Misc);
 	}
 
@@ -1399,7 +1400,7 @@ namespace ECSEngine {
 		output_material->material_pointer = material->material_pointer;
 		output_material->name = material->name;
 		if (!options.handles_only) {
-			output_material->name = function::StringCopy(allocator, material->name);
+			output_material->name = StringCopy(allocator, material->name);
 		}
 
 		unsigned int vertex_handle = material->vertex_shader_handle;
@@ -1445,7 +1446,7 @@ namespace ECSEngine {
 
 					Stream<char> name = material->textures[index][subindex].name;
 					if constexpr (!is_handles_only) {
-						name = function::StringCopy(allocator, name);
+						name = StringCopy(allocator, name);
 					}
 					output_material->textures[index][subindex].name = name;
 				}
@@ -1466,7 +1467,7 @@ namespace ECSEngine {
 
 					Stream<char> name = material->samplers[index][subindex].name;
 					if constexpr (!is_handles_only) {
-						name = function::StringCopy(allocator, name);
+						name = StringCopy(allocator, name);
 					}
 					output_material->samplers[index][subindex].name = name;
 				}
@@ -1474,8 +1475,8 @@ namespace ECSEngine {
 				memcpy(output_material->buffers[index].buffer, material->buffers[index].buffer, sizeof(*material->buffers[index].buffer) * material->buffers[index].size);
 				if constexpr (!is_handles_only) {
 					for (unsigned int subindex = 0; subindex < counts[index + ECS_MATERIAL_SHADER_COUNT * 2]; subindex++) {
-						output_material->buffers[index][subindex].name = function::StringCopy(allocator, material->buffers[index][subindex].name);
-						output_material->buffers[index][subindex].data = function::Copy(allocator, material->buffers[index][subindex].data);
+						output_material->buffers[index][subindex].name = StringCopy(allocator, material->buffers[index][subindex].name);
+						output_material->buffers[index][subindex].data = Copy(allocator, material->buffers[index][subindex].data);
 					}
 				}
 			}
@@ -1602,7 +1603,7 @@ namespace ECSEngine {
 				material->buffers[shader][index].data.size = type_byte_size;
 				material->buffers[shader][index].slot = reflected_shader->buffers->buffer[index].register_index;
 				material->buffers[shader][index].dynamic = true;
-				material->buffers[shader][index].name = function::StringCopy(allocator, current_name);
+				material->buffers[shader][index].name = StringCopy(allocator, current_name);
 				// Allocate the pointer again
 				material->buffers[shader][index].reflection_type = (Reflection::ReflectionType*)Allocate(allocator, sizeof(Reflection::ReflectionType));
 				*material->buffers[shader][index].reflection_type = cbuffers[index].Copy(allocator);
@@ -1670,7 +1671,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < textures.size; index++) {
 				material->textures[shader][index].metadata_handle = -1;
 				material->textures[shader][index].slot = textures[index].register_index;
-				material->textures[shader][index].name = function::StringCopy(allocator, textures[index].name);
+				material->textures[shader][index].name = StringCopy(allocator, textures[index].name);
 
 				size_t existing_index = temporary_material.FindTexture(textures[index].name, shader);
 				if (existing_index != -1) {
@@ -1738,7 +1739,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < samplers.size; index++) {
 				material->samplers[shader][index].metadata_handle = -1;
 				material->samplers[shader][index].slot = samplers[index].register_index;
-				material->samplers[shader][index].name = function::StringCopy(allocator, samplers[index].name);
+				material->samplers[shader][index].name = StringCopy(allocator, samplers[index].name);
 
 				size_t existing_index = temporary_material.FindSampler(samplers[index].name, shader);
 				if (existing_index != -1) {
@@ -1797,7 +1798,7 @@ namespace ECSEngine {
 	)
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path_storage, 512);
-		Stream<wchar_t> absolute_path = function::MountPathOnlyRel(shader_metadata->file, mount_point, absolute_path_storage);
+		Stream<wchar_t> absolute_path = MountPathOnlyRel(shader_metadata->file, mount_point, absolute_path_storage);
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 
@@ -1812,7 +1813,7 @@ namespace ECSEngine {
 				macro_names[index] = shader_metadata->macros[index].name;
 			}
 			macro_names.size = shader_metadata->macros.size;
-			source_code = function::PreprocessCFile(source_code, macro_names);
+			source_code = PreprocessCFile(source_code, macro_names);
 
 			ECS_STACK_CAPACITY_STREAM(ShaderReflectedBuffer, reflected_buffers, ECS_SHADER_MAX_CONSTANT_BUFFER_SLOT);
 			ECS_STACK_CAPACITY_STREAM(ShaderReflectedSampler, reflected_samplers, ECS_SHADER_MAX_SAMPLER_SLOT);
@@ -1961,7 +1962,7 @@ namespace ECSEngine {
 		}
 		options->material_change_dependencies.database = database_ptr;
 
-		function::ForEach(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY, [&](AssetTypePair type_pair)
+		ForEach(ECS_ASSET_TYPES_METADATA_WITH_DEPENDENCY, [&](AssetTypePair type_pair)
 			{
 				ECS_ASSET_TYPE asset_type = type_pair.main_type;
 				database->ForEachAsset(asset_type, [&](unsigned int handle) {

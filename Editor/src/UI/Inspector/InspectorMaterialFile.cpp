@@ -108,8 +108,8 @@ void GetUITypeNameForCBuffer(
 	// Concatenate the type name with the shader name and the inspector index
 	name.AddStream(type->name);
 	Stream<wchar_t> shader_path = data->temporary_database.GetAssetPath(shader_handle, ECS_ASSET_SHADER);
-	function::ConvertWideCharsToASCII(shader_path, name);
-	function::ConvertIntToChars(name, inspector_index);
+	ConvertWideCharsToASCII(shader_path, name);
+	ConvertIntToChars(name, inspector_index);
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -228,7 +228,7 @@ void RegisterNewCBuffers(
 		new_buffers[index].data.size = type_byte_size;
 		new_buffers[index].slot = new_reflected_buffers[index].register_index;
 		new_buffers[index].dynamic = true;
-		new_buffers[index].name = function::StringCopy(current_allocator, new_cbuffers[index].name);
+		new_buffers[index].name = StringCopy(current_allocator, new_cbuffers[index].name);
 
 		// Set the default values for that type
 		draw_data->material_asset.reflection_manager->SetInstanceDefaultData(new_cbuffers.buffer + index, new_buffers[index].data.buffer);
@@ -240,7 +240,7 @@ void RegisterNewCBuffers(
 		// Check to see if it still exists
 		size_t subindex = 0;
 		for (; subindex < new_cbuffers.size; subindex++) {
-			if (function::CompareStrings(new_cbuffers[subindex].name, old_cbuffers[index].name)) {
+			if (new_cbuffers[subindex].name == old_cbuffers[index].name) {
 				break;
 			}
 		}
@@ -307,7 +307,7 @@ void RegisterNewCBuffers(
 		UIReflectionType* ui_type = draw_data->editor_state->ui_reflection->CreateType(draw_data->cbuffers[order].buffer + index, &create_options);
 		// Add matrix types if any - if they are not skipped by the inject fields
 		for (size_t subindex = 0; subindex < matrix_types[index].size; subindex++) {
-			bool is_injected = function::SearchBytes(
+			bool is_injected = SearchBytes(
 				ignore_type_fields.buffer, 
 				ignore_type_fields.size, 
 				matrix_types[index][subindex].position.x, 
@@ -353,7 +353,7 @@ void RegisterNewTextures(
 	for (size_t index = 0; index < new_textures.size; index++) {
 		textures[index].metadata_handle = -1;
 		textures[index].slot = new_textures[index].register_index;
-		textures[index].name = function::StringCopy(current_allocator, new_textures[index].name);
+		textures[index].name = StringCopy(current_allocator, new_textures[index].name);
 		override_data[index] = nullptr;
 	}
 	textures.size = new_textures.size;
@@ -367,7 +367,7 @@ void RegisterNewTextures(
 	for (size_t index = 0; index < new_textures.size; index++) {
 		size_t subindex = 0;
 		for (; subindex < old_textures.size; subindex++) {
-			if (function::CompareStrings(old_textures[subindex].name, new_textures[index].name)) {
+			if (old_textures[subindex].name == new_textures[index].name) {
 				break;
 			}
 		}
@@ -424,7 +424,7 @@ void RegisterNewSamplers(
 	for (size_t index = 0; index < new_samplers.size; index++) {
 		samplers[index].metadata_handle = -1;
 		samplers[index].slot = new_samplers[index].register_index;
-		samplers[index].name = function::StringCopy(current_allocator, new_samplers[index].name);
+		samplers[index].name = StringCopy(current_allocator, new_samplers[index].name);
 		new_override_data[index] = nullptr;
 	}
 	samplers.size = new_samplers.size;
@@ -438,7 +438,7 @@ void RegisterNewSamplers(
 	for (size_t index = 0; index < new_samplers.size; index++) {
 		size_t subindex = 0;
 		for (; subindex < old_samplers.size; subindex++) {
-			if (function::CompareStrings(old_samplers[subindex].name, new_samplers[index].name)) {
+			if (old_samplers[subindex].name == new_samplers[index].name) {
 				break;
 			}
 		}
@@ -531,7 +531,7 @@ void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_i
 				shader_macros[index] = metadata->macros[index].name;
 			}
 			shader_macros.size = metadata->macros.size;
-			source_code = function::PreprocessCFile(source_code, shader_macros);
+			source_code = PreprocessCFile(source_code, shader_macros);
 
 			ECS_STACK_CAPACITY_STREAM(ShaderReflectedBuffer, shader_buffers, MAX_BUFFER_SLOT_COUNT);
 			ECS_STACK_CAPACITY_STREAM(Reflection::ReflectionType, shader_cbuffer_types, MAX_BUFFER_SLOT_COUNT);
@@ -601,7 +601,7 @@ void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_i
 				Stream<wchar_t> shader_file = data->temporary_database.GetAssetPath(current_handle, ECS_ASSET_SHADER);
 
 				ECS_STACK_CAPACITY_STREAM(wchar_t, shader_path_storage, 512);
-				Stream<wchar_t> shader_path = function::MountPathOnlyRel(shader_file, assets_folder, shader_path_storage);
+				Stream<wchar_t> shader_path = MountPathOnlyRel(shader_file, assets_folder, shader_path_storage);
 				size_t new_shader_stamp = OS::GetFileLastWrite(shader_path);
 
 				if (data->shader_stamp[index] == 0 || data->shader_stamp[index] == -1 || new_shader_stamp > data->shader_stamp[index]) {
@@ -991,7 +991,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 		-1,
 		[=](void* inspector_data) {
 			InspectorDrawMaterialFileData* other_data = (InspectorDrawMaterialFileData*)inspector_data;
-			return function::CompareStrings(other_data->path, path);
+			return other_data->path == path;
 		}
 	);
 
@@ -1002,7 +1002,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 		
 		InspectorDrawMaterialFileData* draw_data = (InspectorDrawMaterialFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 		memset(draw_data->success, 0, sizeof(draw_data->success));
-		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
+		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.CopyOther(path);
 		draw_data->shader_override_data[VERTEX_ORDER] = editor_state->module_reflection->InitializeFieldOverride(VERTEX_TAG, "Vertex Shader");
 		draw_data->shader_override_data[PIXEL_ORDER] = editor_state->module_reflection->InitializeFieldOverride(PIXEL_TAG, "Pixel Shader");
@@ -1076,7 +1076,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 			// Try to match the serialized data with the current buffers
 			draw_data->material_asset.CopyMatchingNames(&staging_asset);
 		}
-		draw_data->material_asset.name = function::StringCopy(editor_state->EditorAllocator(), asset_name);
+		draw_data->material_asset.name = StringCopy(editor_state->EditorAllocator(), asset_name);
 	}
 }
 

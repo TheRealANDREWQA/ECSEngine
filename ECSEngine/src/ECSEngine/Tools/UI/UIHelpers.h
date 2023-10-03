@@ -463,7 +463,7 @@ namespace ECSEngine {
 			float total_spacing_count = spacing * (line_count - 1);
 			if constexpr (horizontal) {
 				float line_total_length = end_point - starting_point.x - total_spacing_count;
-				line_total_length = function::ClampMin(line_total_length, 0.0f);
+				line_total_length = ClampMin(line_total_length, 0.0f);
 				float2 scale = { line_total_length / line_count, width };
 				float position_offset = 0.0f;
 				for (size_t index = 0; index < line_count; index++) {
@@ -484,7 +484,7 @@ namespace ECSEngine {
 			}
 			else {
 				float line_total_length = end_point - starting_point.y - total_spacing_count;
-				line_total_length = function::ClampMin(line_total_length, 0.0f);
+				line_total_length = ClampMin(line_total_length, 0.0f);
 				float2 scale = { width, line_total_length / line_count };
 				float position_offset = 0.0f;
 				for (size_t index = 0; index < line_count; index++) {

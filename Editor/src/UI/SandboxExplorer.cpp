@@ -103,7 +103,7 @@ void CreateNewRuntimeSettingCallback(ActionData* action_data) {
 	CapacityStream<char>* input_name = (CapacityStream<char>*)_additional_data;
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 512);
-	function::ConvertASCIIToWide(wide_name, *input_name);
+	ConvertASCIIToWide(wide_name, *input_name);
 
 	WorldDescriptor default_descriptor = GetDefaultWorldDescriptor();
 	// Try to save the default descriptor. If it succcededs, then we can swap to this new file
@@ -194,7 +194,7 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		unsigned int base_display_size = display_labels.size;
 		for (unsigned int index = 0; index < sandboxes->size; index++) {
 			display_labels.size = base_display_size;
-			function::ConvertIntToChars(display_labels, index);
+			ConvertIntToChars(display_labels, index);
 
 			label_configuration |= data->active_sandbox == index ? 0 : UI_CONFIG_LABEL_TRANSPARENT;
 			
@@ -324,7 +324,7 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 			UI_UNPACK_ACTION_DATA;
 
 			DeleteData* data = (DeleteData*)_data;
-			if (function::CompareStrings(data->data->selected_runtime_setting, data->path)) {
+			if (data->data->selected_runtime_setting == data->path) {
 				// Reset the path
 				data->data->selected_runtime_setting.size = 0;
 			}
@@ -337,8 +337,8 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		for (unsigned int index = 0; index < runtime_settings.size; index++) {
 			size_t configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_TRANSPARENT 
 				| UI_CONFIG_TEXT_ALIGNMENT;
-			if (function::CompareStrings(data->selected_runtime_setting, runtime_settings[index])) {
-				configuration = function::ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
+			if (data->selected_runtime_setting == runtime_settings[index]) {
+				configuration = ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
 			}
 			SelectData select_data;
 			select_data.data = data;

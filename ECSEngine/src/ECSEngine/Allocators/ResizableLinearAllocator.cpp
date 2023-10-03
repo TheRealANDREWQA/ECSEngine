@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "ResizableLinearAllocator.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 #include "AllocatorCallsDebug.h"
 
 namespace ECSEngine {
@@ -22,7 +22,7 @@ namespace ECSEngine {
 		m_allocated_buffer_capacity = MAX_BACKUPS;
 		m_allocated_buffer_size = 0;
 
-		m_initial_buffer = function::OffsetPointer(buffer, sizeof(void*) * MAX_BACKUPS);
+		m_initial_buffer = OffsetPointer(buffer, sizeof(void*) * MAX_BACKUPS);
 		m_initial_capacity = capacity - sizeof(void*) * MAX_BACKUPS;
 	}
 
@@ -30,9 +30,9 @@ namespace ECSEngine {
 	{
 		if (m_top < m_initial_capacity) {
 			uintptr_t ptr = (uintptr_t)m_initial_buffer + m_top;
-			ptr = function::AlignPointer(ptr, alignment);
+			ptr = AlignPointer(ptr, alignment);
 
-			size_t difference = function::PointerDifference((void*)(ptr + size), m_initial_buffer);
+			size_t difference = PointerDifference((void*)(ptr + size), m_initial_buffer);
 			if (difference <= m_initial_capacity) {
 				m_top = difference;
 				return (void*)ptr;
@@ -45,9 +45,9 @@ namespace ECSEngine {
 			m_allocated_buffer_size++;
 
 			ptr = (uintptr_t)m_allocated_buffers[0];
-			ptr = function::AlignPointer(ptr, alignment);
+			ptr = AlignPointer(ptr, alignment);
 
-			m_top = m_initial_capacity + function::PointerDifference((void*)ptr, m_allocated_buffers[0]) + size;
+			m_top = m_initial_capacity + PointerDifference((void*)ptr, m_allocated_buffers[0]) + size;
 			if (m_debug_mode) {
 				TrackedAllocation tracked;
 				tracked.allocated_pointer = (void*)ptr;
@@ -69,10 +69,10 @@ namespace ECSEngine {
 			}
 
 			uintptr_t ptr = (uintptr_t)m_allocated_buffers[m_allocated_buffer_size - 1];
-			ptr = function::AlignPointer(ptr + current_buffer_allocated_size, alignment);
+			ptr = AlignPointer(ptr + current_buffer_allocated_size, alignment);
 
 			m_top = m_initial_capacity + (m_allocated_buffer_size - 1) * m_backup_size +
-				function::PointerDifference((void*)ptr, m_allocated_buffers[m_allocated_buffer_size - 1]) + size;
+				PointerDifference((void*)ptr, m_allocated_buffers[m_allocated_buffer_size - 1]) + size;
 			if (m_debug_mode) {
 				TrackedAllocation tracked;
 				tracked.allocated_pointer = (void*)ptr;
@@ -201,12 +201,12 @@ namespace ECSEngine {
 
 	bool ResizableLinearAllocator::Belongs(const void* buffer) const
 	{
-		if (function::IsPointerRange(m_initial_buffer, m_initial_capacity, buffer)) {
+		if (IsPointerRange(m_initial_buffer, m_initial_capacity, buffer)) {
 			return true;
 		}
 		else {
 			for (size_t index = 0; index < m_allocated_buffer_size; index++) {
-				if (function::IsPointerRange(m_allocated_buffers[index], m_backup_size, buffer)) {
+				if (IsPointerRange(m_allocated_buffers[index], m_backup_size, buffer)) {
 					return true;
 				}
 			}

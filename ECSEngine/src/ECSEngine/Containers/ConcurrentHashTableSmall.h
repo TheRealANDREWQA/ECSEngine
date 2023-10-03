@@ -51,7 +51,7 @@ namespace ECSEngine {
 
 			ECS_INLINE void* GetPointer() const {
 				// The pointer bits must be moved 6 bits to the left
-				return function::SignExtendPointer((void*)(pointer_bits << 6));
+				return SignExtendPointer((void*)(pointer_bits << 6));
 			}
 
 			ECS_INLINE void SetPointer(void* pointer) {
@@ -115,7 +115,7 @@ namespace ECSEngine {
 		void DeallocateChunk(void* chunk) {
 			if constexpr (fixed) {
 				// Determine the index
-				unsigned int index = function::PointerDifference(chunk, chunks) / ECS_CACHE_LINE_SIZE;
+				unsigned int index = PointerDifference(chunk, chunks) / ECS_CACHE_LINE_SIZE;
 				bool before = allocated_chunks[index].exchange(false, ECS_RELEASE);
 				ECS_ASSERT(!before);
 			}
@@ -333,7 +333,7 @@ namespace ECSEngine {
 						new_chunk_header->SetCount(1);
 
 						if constexpr (fixed) {
-							unsigned int chunk_index = function::PointerDifference(chunk, chunks) / ECS_CACHE_LINE_SIZE;
+							unsigned int chunk_index = PointerDifference(chunk, chunks) / ECS_CACHE_LINE_SIZE;
 							new_chunk_header->SetNextIndex(chunk_index);
 						}
 						else {
@@ -577,15 +577,15 @@ namespace ECSEngine {
 
 		// Offsets into the chunks based on the index
 		void* GetChunkRawIndex(unsigned int index) const {
-			return function::OffsetPointer(chunks, index * ECS_CACHE_LINE_SIZE);
+			return OffsetPointer(chunks, index * ECS_CACHE_LINE_SIZE);
 		}
 
 		T* GetChunkElement(void* chunk, unsigned int index) const {
-			return (T*)function::OffsetPointer(chunk, sizeof(Header)) + index;
+			return (T*)OffsetPointer(chunk, sizeof(Header)) + index;
 		}
 
 		Identifier* GetChunkIdentifier(void* chunk, unsigned int index) const {
-			return (Identifier*)function::OffsetPointer(chunk, sizeof(Header) + sizeof(T) * ElementCount()) + index;
+			return (Identifier*)OffsetPointer(chunk, sizeof(Header) + sizeof(T) * ElementCount()) + index;
 		}
 
 		Header* GetChunkHeader(void* chunk) const {
@@ -606,14 +606,14 @@ namespace ECSEngine {
 
 		// The chunk count is needed for indirection tables. If not indirection table, ignore it (use any value)
 		void InitializeFromBuffer(void* buffer, unsigned int _capacity, unsigned int chunk_count, size_t additional_info = 0) {
-			chunks = function::AlignPointer((uintptr_t)buffer, ECS_CACHE_LINE_SIZE);
+			chunks = AlignPointer((uintptr_t)buffer, ECS_CACHE_LINE_SIZE);
 			capacity = _capacity;
 			hash_function = TableHashFunction(additional_info);
 
 			if constexpr (fixed) {
 				allocated_chunk_count = chunk_count;
-				chunk_indirection_index = (std::atomic<unsigned int>*)function::OffsetPointer(chunks, ECS_CACHE_LINE_SIZE * chunk_count);
-				allocated_chunks = (std::atomic<bool>*)function::OffsetPointer(chunk_indirection_index, sizeof(unsigned int) * capacity);
+				chunk_indirection_index = (std::atomic<unsigned int>*)OffsetPointer(chunks, ECS_CACHE_LINE_SIZE * chunk_count);
+				allocated_chunks = (std::atomic<bool>*)OffsetPointer(chunk_indirection_index, sizeof(unsigned int) * capacity);
 
 				// The initial state should be 0 for the allocated chunks
 				memset(allocated_chunks, 0, sizeof(bool) * chunk_count);

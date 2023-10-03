@@ -19,7 +19,7 @@ struct InspectorDrawTextureData {
 	}
 
 	inline Stream<wchar_t> Path() {
-		return function::GetCoalescedStreamFromType(this).As<wchar_t>();
+		return GetCoalescedStreamFromType(this).As<wchar_t>();
 	}
 
 	unsigned int path_size;
@@ -53,7 +53,7 @@ void InspectorDrawTextureFile(EditorState* editor_state, unsigned int inspector_
 	ECS_ASSERT(relative_path.size > 0);
 
 	// Change the relative path separator from absolute into relative
-	function::ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR, ECS_OS_PATH_SEPARATOR_REL);
+	ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR, ECS_OS_PATH_SEPARATOR_REL);
 	
 	data->current_metadata.file = relative_path;
 	data->helper_data.metadata = &data->current_metadata;
@@ -97,7 +97,7 @@ void InspectorDrawTextureFile(EditorState* editor_state, unsigned int inspector_
 	}
 
 	// Convert back the relative path separator into absolute
-	function::ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+	ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -114,7 +114,7 @@ void ChangeInspectorToTextureFile(EditorState* editor_state, Stream<wchar_t> pat
 {
 	size_t _draw_data_storage[128];
 	unsigned int write_size = 0;
-	InspectorDrawTextureData* draw_data = function::CreateCoalescedStreamIntoType<InspectorDrawTextureData>(_draw_data_storage, path, &write_size);
+	InspectorDrawTextureData* draw_data = CreateCoalescedStreamIntoType<InspectorDrawTextureData>(_draw_data_storage, path, &write_size);
 	memset(&draw_data->helper_data, 0, sizeof(draw_data->helper_data));
 
 	uint3 indices = ChangeInspectorDrawFunctionWithSearchEx(
@@ -126,7 +126,7 @@ void ChangeInspectorToTextureFile(EditorState* editor_state, Stream<wchar_t> pat
 		-1,
 		[=](void* inspector_data) {
 			InspectorDrawTextureData* other_data = (InspectorDrawTextureData*)inspector_data;
-			return function::CompareStrings(other_data->Path(), path);
+			return other_data->Path() == path;
 		}
 	);
 	

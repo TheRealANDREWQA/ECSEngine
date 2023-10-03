@@ -1,7 +1,6 @@
 #pragma once
 #include "Vector.h"
 #include "../Utilities/Assert.h"
-#include "../Utilities/Function.h"
 
 namespace ECSEngine {
 
@@ -133,7 +132,7 @@ namespace ECSEngine {
 		// Only the first 6 values will be used, the other two will be hoisted into
 		// the other SIMD register
 		Vector8 curve_vector1(&curve);
-		Vector8 curve_vector2(function::OffsetPointer(&curve, sizeof(float) * 6));
+		Vector8 curve_vector2(OffsetPointer(&curve, sizeof(float) * 6));
 
 		bool is_in_range = IsInRangeMask<true, true>(percentages, ZeroVector(), VectorGlobals::ONE).MaskResultWhole<4>();
 		ECS_ASSERT(is_in_range);
@@ -170,7 +169,7 @@ namespace ECSEngine {
 
 	ECS_INLINE float4 ECS_VECTORCALL InterpolateBezier(const BezierFloat4& curve, Vector8 percentages) {
 		Vector8 curve_low(&curve);
-		Vector8 curve_high(function::OffsetPointer(&curve, sizeof(float) * 8));
+		Vector8 curve_high(OffsetPointer(&curve, sizeof(float) * 8));
 
 		bool is_in_range = IsInRangeMask<true, true>(percentages, ZeroVector(), VectorGlobals::ONE).MaskResultWhole<4>();
 		ECS_ASSERT(is_in_range);

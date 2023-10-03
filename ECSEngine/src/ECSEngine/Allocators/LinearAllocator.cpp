@@ -1,6 +1,6 @@
 #include "ecspch.h";
 #include "LinearAllocator.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 #include "AllocatorCallsDebug.h"
 
 namespace ECSEngine {
@@ -12,7 +12,7 @@ namespace ECSEngine {
 		// calculating the current pointer and aligning it
 		uintptr_t current_pointer = (uintptr_t)m_buffer + m_top;
 
-		uintptr_t offset = function::AlignPointer(current_pointer, alignment);
+		uintptr_t offset = AlignPointer(current_pointer, alignment);
 
 		// transforming to relative aligned offset
 		offset -= (uintptr_t)m_buffer;
@@ -77,7 +77,7 @@ namespace ECSEngine {
 
 	bool LinearAllocator::Belongs(const void* buffer) const
 	{
-		return function::IsPointerRange(m_buffer, m_top, buffer);
+		return IsPointerRange(m_buffer, m_top, buffer);
 	}
 
 	void LinearAllocator::ExitDebugMode()

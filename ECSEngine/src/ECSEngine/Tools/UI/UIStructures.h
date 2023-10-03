@@ -784,14 +784,14 @@ namespace ECSEngine {
 		// If the characters pointer is nullptr, it means that the data is relative
 		struct UITextTooltipHoverableData {
 			unsigned int Write(Stream<char> copy_characters) {
-				memcpy(function::OffsetPointer(this, sizeof(*this)), copy_characters.buffer, copy_characters.size * sizeof(char));
+				memcpy(OffsetPointer(this, sizeof(*this)), copy_characters.buffer, copy_characters.size * sizeof(char));
 				characters = { nullptr, copy_characters.size };
 				return sizeof(*this) + copy_characters.size * sizeof(char);
 			}
 
 			Stream<char> GetCharacters() const {
 				if (characters.buffer == nullptr) {
-					return { function::OffsetPointer(this, sizeof(*this)), characters.size };
+					return { OffsetPointer(this, sizeof(*this)), characters.size };
 				}
 				return characters;
 			}

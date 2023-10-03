@@ -12,7 +12,7 @@ struct AssetSettingsHelperData {
 	}
 
 	inline unsigned char FindName(Stream<char> name) const {
-		unsigned int value = function::FindString(name, current_names);
+		unsigned int value = FindString(name, current_names);
 		return value == -1 ? UCHAR_MAX : value;
 	}
 

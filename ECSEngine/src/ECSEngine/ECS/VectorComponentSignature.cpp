@@ -842,18 +842,6 @@ namespace ECSEngine {
 
 		LOOP_UNROLL(16, LOOP_ITERATION);
 
-		splatted_component = Broadcast16<0>(components.value); 
-		/* Test to see if the current element is zero */ 
-		is_zero = splatted_component == zero_vector;
-		/* If we get to an element which is 0, that means all components have been matched */
-		if (horizontal_and(is_zero)) {
-				return;
-		}
-		match = splatted_component == value;
-		values[0] = horizontal_find_first(match);
-
-
-
 #undef LOOP_ITERATION
 	}
 
@@ -864,9 +852,8 @@ namespace ECSEngine {
 		// Match with zero
 		Vec16us zero_vector = ZeroVectorInteger();
 		Vec16sb zeroes = value == zero_vector;
-		// +1 must be added to give the count
 		int first_index = horizontal_find_first(zeroes);
-		return first_index == -1 ? 16 : first_index + 1;
+		return first_index == -1 ? 16 : first_index;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -980,6 +967,72 @@ namespace ECSEngine {
 	bool ECS_VECTORCALL ArchetypeQueryExclude::VerifiesShared(VectorComponentSignature shared_to_compare) const
 	{
 		return shared_to_compare.HasComponents(shared) && shared_to_compare.ExcludesComponents(shared_excluded);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE bool NoExclude(const ArchetypeQueryDescriptor& descriptor) {
+		return descriptor.unique_exclude.count == 0 && descriptor.shared_exclude.count == 0;
+	}
+
+	ECS_INLINE bool NoOptional(const ArchetypeQueryDescriptor& descriptor) {
+		return descriptor.unique_optional.count == 0 && descriptor.shared_optional.count == 0;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ArchetypeQueryDescriptor::IsSimple() const
+	{
+		return NoExclude(*this) && NoOptional(*this);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ArchetypeQueryDescriptor::IsExclude() const
+	{
+		return !NoExclude(*this) && NoOptional(*this);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ArchetypeQueryDescriptor::IsOptional() const
+	{
+		return NoExclude(*this) && !NoOptional(*this);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ArchetypeQueryDescriptor::IsExcludeOptional() const
+	{
+		return !NoExclude(*this) && !NoOptional(*this);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ECS_ARCHETYPE_QUERY_DESCRIPTOR_TYPE ArchetypeQueryDescriptor::GetType() const
+	{
+		// The values can be mapped like this has_exclude + 2 * has_optional (basically these are bitmasks)
+		bool has_exclude = !NoExclude(*this);
+		bool has_optional = !NoOptional(*this);
+		return (ECS_ARCHETYPE_QUERY_DESCRIPTOR_TYPE)(has_exclude + 2 * (int)has_optional);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ComponentSignature ArchetypeQueryDescriptor::AggregateUnique(Component* components) const
+	{
+		unique.WriteTo(components);
+		unique_optional.WriteTo(components + unique.count);
+		return { components, (unsigned char)(unique.count + unique_optional.count) };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ComponentSignature ArchetypeQueryDescriptor::AggregateShared(Component* components) const
+	{
+		shared.WriteTo(components);
+		shared_optional.WriteTo(components + shared.count);
+		return { components, (unsigned char)(shared.count + shared_optional.count) };
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

@@ -51,8 +51,8 @@ namespace ECSEngine {
 		size_t byte_size = Reflection::SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
 		ECS_ASSERT(byte_size != -1);
 
-		unsigned int* source_value = (unsigned int*)function::OffsetPointer(data->source, byte_size);
-		unsigned int* destination_value = (unsigned int*)function::OffsetPointer(data->destination, byte_size);
+		unsigned int* source_value = (unsigned int*)OffsetPointer(data->source, byte_size);
+		unsigned int* destination_value = (unsigned int*)OffsetPointer(data->destination, byte_size);
 		*destination_value = *source_value;
 	}
 
@@ -67,8 +67,8 @@ namespace ECSEngine {
 		size_t byte_size = Reflection::SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
 		ECS_ASSERT(byte_size != -1);
 		// Now compare the reference count
-		unsigned int* first_reference_count = (unsigned int*)function::OffsetPointer(data->first, byte_size);
-		unsigned int* second_reference_count = (unsigned int*)function::OffsetPointer(data->second, byte_size);
+		unsigned int* first_reference_count = (unsigned int*)OffsetPointer(data->first, byte_size);
+		unsigned int* second_reference_count = (unsigned int*)OffsetPointer(data->second, byte_size);
 		return *first_reference_count == *second_reference_count;
 	}
 
@@ -90,7 +90,7 @@ namespace ECSEngine {
 		helper_data.template_type = &template_type;
 
 		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&helper_data);
-		unsigned int* reference_count = (unsigned int*)function::OffsetPointer(data->data, result.byte_size);
+		unsigned int* reference_count = (unsigned int*)OffsetPointer(data->data, result.byte_size);
 		return written_size + Write(data->stream, reference_count, sizeof(unsigned int), data->write_data);
 	}
 
@@ -118,7 +118,7 @@ namespace ECSEngine {
 		helper_data.template_type = &template_type;
 
 		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&helper_data);
-		Read(data->stream, function::OffsetPointer(data->data, result.byte_size), sizeof(unsigned int), data->read_data);
+		Read(data->stream, OffsetPointer(data->data, result.byte_size), sizeof(unsigned int), data->read_data);
 
 		return buffer_size;
 	}

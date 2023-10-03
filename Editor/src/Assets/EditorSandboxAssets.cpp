@@ -158,7 +158,7 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 				Stream<wchar_t> target_file = GetAssetFile(metadata, current_type);
 				alignas(alignof(size_t)) char file_metadata[AssetMetadataMaxByteSize()];
 				// Temporarly copy the name and the file
-				CreateDefaultAsset(file_metadata, function::StringCopy(file_asset_allocator, asset_name), function::StringCopy(file_asset_allocator, target_file), current_type);
+				CreateDefaultAsset(file_metadata, StringCopy(file_asset_allocator, asset_name), StringCopy(file_asset_allocator, target_file), current_type);
 				bool success = editor_state->asset_database->ReadAssetFile(
 					asset_name, 
 					target_file, 
@@ -908,7 +908,7 @@ void FinishReloadAsset(EditorState* editor_state, Stream<UpdateAssetToComponentE
 				const void* metadata = editor_state->asset_database->GetAssetConst(handle, update_elements[index].type);
 				GetAssetSandboxesInUse(editor_state, metadata, update_elements[index].type, &current_sandboxes);
 
-				function::StreamAddUniqueSearchBytes(update_dirty_sandboxes, current_sandboxes);
+				StreamAddUniqueSearchBytes(update_dirty_sandboxes, current_sandboxes);
 			}
 		}
 
@@ -1092,7 +1092,7 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 					// Add the referenced sandboxes to the re-render list
 					ECS_STACK_CAPACITY_STREAM(unsigned int, current_asset_sandboxes, 512);
 					GetAssetSandboxesInUse(editor_state, metadata, asset_type, &current_asset_sandboxes);
-					function::StreamAddUniqueSearchBytes(dirty_sandboxes, current_asset_sandboxes);
+					StreamAddUniqueSearchBytes(dirty_sandboxes, current_asset_sandboxes);
 
 					if constexpr (!initial_reload) {
 						UpdateAssetToComponentElement update_element = ReloadAssetTaskIteration(editor_state, handle, asset_type, assets_folder);

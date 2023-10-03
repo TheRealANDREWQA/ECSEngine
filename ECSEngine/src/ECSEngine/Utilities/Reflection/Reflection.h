@@ -1,7 +1,4 @@
 #pragma once
-#include "ecspch.h"
-#include "../Function.h"
-#include "../FunctionInterfaces.h"
 #include "../../Allocators/MemoryManager.h"
 #include "../../Multithreading/TaskManager.h"
 #include "../../ECS/InternalStructures.h"
@@ -654,7 +651,7 @@ namespace ECSEngine {
 			}
 
 			ECS_INLINE void* GetFieldData(const void* data) const {
-				return type->GetField(function::OffsetPointer(data, type_offset_from_original), field_index);
+				return type->GetField(OffsetPointer(data, type_offset_from_original), field_index);
 			}
 
 			const ReflectionType* type;

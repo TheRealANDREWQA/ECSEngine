@@ -96,7 +96,7 @@ namespace ECSEngine {
 		template<typename StreamType>
 		unsigned int FindIndex(StreamType stream, unsigned int handle) const {
 			for (size_t index = 0; index < stream.size; index++) {
-				size_t subindex = function::SearchBytes(stream[index].different_handles.buffer, stream[index].different_handles.size, handle, sizeof(handle));
+				size_t subindex = SearchBytes(stream[index].different_handles.buffer, stream[index].different_handles.size, handle, sizeof(handle));
 				if (subindex != -1) {
 					return stream[index].IsValid() ? index : -1;
 				}
@@ -357,7 +357,7 @@ namespace ECSEngine {
 		unsigned int mesh_handle = mesh_block_pointer->different_handles[0];
 		MeshMetadata* metadata = data->control_block->database->GetMesh(mesh_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
+		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
 
 		AllocatorPolymorphic allocator = data->control_block->GetThreadAllocator(thread_index);
 		GLTFData gltf_data = functor(file_path, allocator, data->control_block);
@@ -421,7 +421,7 @@ namespace ECSEngine {
 		unsigned int texture_handle = texture_block_pointer->different_handles[0];
 		TextureMetadata* metadata = data->control_block->database->GetTexture(texture_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
+		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
 
 		AllocatorPolymorphic allocator = data->control_block->GetThreadAllocator(thread_index);
 		Stream<void> file_data = functor(file_path, allocator, data->control_block);
@@ -479,7 +479,7 @@ namespace ECSEngine {
 		unsigned int shader_handle = shader_block_pointer->different_handles[0];
 		ShaderMetadata* metadata = data->control_block->database->GetShader(shader_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
+		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
 
 		AllocatorPolymorphic allocator = data->control_block->GetThreadAllocator(thread_index);
 		Stream<char> file_data = functor(file_path, allocator, data->control_block);
@@ -521,7 +521,7 @@ namespace ECSEngine {
 		unsigned int misc_handle = misc_block_pointer->different_handles[0];
 		MiscAsset* metadata = data->control_block->database->GetMisc(misc_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
+		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
 
 		// Use malloc as allocator since these can get quite big
 		Stream<void> file_data = functor(file_path, data->control_block);
@@ -884,7 +884,7 @@ namespace ECSEngine {
 		AssetLoadingControlBlock* control_block = (AssetLoadingControlBlock*)Allocate(persistent_allocator, sizeof(AssetLoadingControlBlock));
 		Stream<wchar_t> mount_point = load_info->mount_point;
 		if (mount_point.size > 0) {
-			mount_point = function::StringCopy(persistent_allocator, mount_point);
+			mount_point = StringCopy(persistent_allocator, mount_point);
 		}
 
 		memcpy(&control_block->load_info, load_info, sizeof(*load_info));
@@ -893,14 +893,14 @@ namespace ECSEngine {
 		// Copy the thread task data, if necessary
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			if (load_info->preload_on_success[index].function != nullptr) {
-				control_block->load_info.preload_on_success[index].data = function::CopyNonZero(
+				control_block->load_info.preload_on_success[index].data = CopyNonZero(
 					persistent_allocator, 
 					load_info->preload_on_success[index].data, 
 					load_info->preload_on_success[index].data_size
 				);
 			}
 			if (load_info->process_on_success[index].function != nullptr) {
-				control_block->load_info.process_on_success[index].data = function::CopyNonZero(
+				control_block->load_info.process_on_success[index].data = CopyNonZero(
 					persistent_allocator,
 					load_info->process_on_success[index].data,
 					load_info->process_on_success[index].data_size

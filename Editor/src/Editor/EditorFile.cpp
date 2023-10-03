@@ -138,7 +138,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 			if (!ValidateProjectPath(current_path)) {
 				void* allocation = Allocate(editor_state->EditorAllocator(), sizeof(char) * (current_path.size + 1), alignof(char));
 				CapacityStream<char> allocated_path(allocation, 0, current_path.size + 1);
-				function::ConvertWideCharsToASCII(current_path, allocated_path);
+				ConvertWideCharsToASCII(current_path, allocated_path);
 				invalid_file_paths.Add(allocated_path.buffer);
 			}
 			else {

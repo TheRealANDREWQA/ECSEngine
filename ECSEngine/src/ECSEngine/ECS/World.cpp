@@ -34,7 +34,7 @@ namespace ECSEngine {
 			memcpy(&new_descriptor, descriptor.graphics_descriptor, sizeof(new_descriptor));
 			new_descriptor.allocator = graphics_allocator;
 
-			graphics = (Graphics*)function::OffsetPointer(graphics_allocator, sizeof(MemoryManager));
+			graphics = (Graphics*)OffsetPointer(graphics_allocator, sizeof(MemoryManager));
 			*graphics = Graphics(&new_descriptor);
 		}
 		else {
@@ -79,22 +79,22 @@ namespace ECSEngine {
 			descriptor.entity_manager_memory_new_allocation_size,
 			GetAllocatorPolymorphic(memory)
 		);
-		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
+		allocation = OffsetPointer(allocation, sizeof(MemoryManager));
 		
 		if (descriptor.resource_manager == nullptr) {
 			MemoryManager* resource_manager_allocator = (MemoryManager*)allocation;
 			*resource_manager_allocator = DefaultResourceManagerAllocator(memory);
-			allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
+			allocation = OffsetPointer(allocation, sizeof(MemoryManager));
 
 			// resource manager
 			resource_manager = (ResourceManager*)allocation;
 			new (resource_manager) ResourceManager(resource_manager_allocator, graphics);
-			allocation = function::OffsetPointer(allocation, sizeof(ResourceManager));
+			allocation = OffsetPointer(allocation, sizeof(ResourceManager));
 		}
 
 		EntityPool* entity_pool = (EntityPool*)allocation;
 		new (entity_pool) EntityPool(entity_manager_memory, descriptor.entity_pool_power_of_two);
-		allocation = function::OffsetPointer(allocation, sizeof(EntityPool));
+		allocation = OffsetPointer(allocation, sizeof(EntityPool));
 
 		EntityManagerDescriptor entity_descriptor;
 		entity_descriptor.memory_manager = entity_manager_memory;
@@ -102,11 +102,11 @@ namespace ECSEngine {
 		// entity manager
 		entity_manager = (EntityManager*)allocation;
 		new (entity_manager) EntityManager(entity_descriptor);
-		allocation = function::OffsetPointer(allocation, sizeof(EntityManager));
+		allocation = OffsetPointer(allocation, sizeof(EntityManager));
 
 		system_manager = (SystemManager*)allocation;
 		*system_manager = SystemManager(memory);
-		allocation = function::OffsetPointer(allocation, sizeof(SystemManager));
+		allocation = OffsetPointer(allocation, sizeof(SystemManager));
 
 		// task manager - if needed
 		if (descriptor.task_manager == nullptr) {
@@ -115,7 +115,7 @@ namespace ECSEngine {
 			task_manager = (TaskManager*)allocation;
 			new (task_manager) TaskManager(thread_count, memory, descriptor.per_thread_temporary_memory_size);
 			task_manager->SetWorld(this);
-			allocation = function::OffsetPointer(allocation, sizeof(TaskManager));
+			allocation = OffsetPointer(allocation, sizeof(TaskManager));
 		}
 
 		// Debug drawer - if needed
@@ -123,11 +123,11 @@ namespace ECSEngine {
 			size_t thread_count = std::thread::hardware_concurrency();
 
 			MemoryManager* debug_drawer_allocator = (MemoryManager*)allocation;
-			allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
+			allocation = OffsetPointer(allocation, sizeof(MemoryManager));
 			*debug_drawer_allocator = DebugDrawer::DefaultAllocator(memory);
 
 			debug_drawer = (DebugDrawer*)allocation;
-			allocation = function::OffsetPointer(allocation, sizeof(DebugDrawer));
+			allocation = OffsetPointer(allocation, sizeof(DebugDrawer));
 
 			*debug_drawer = DebugDrawer(debug_drawer_allocator, resource_manager, thread_count);		
 		}

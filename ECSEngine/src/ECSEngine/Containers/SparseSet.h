@@ -410,7 +410,7 @@ namespace ECSEngine {
 		// Copies the elements before that
 		void Resize(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			void* new_buffer = AllocateEx(allocator, set.MemoryOf(new_capacity), debug_info);
-			uint2* new_indirection_buffer = (uint2*)function::OffsetPointer(new_buffer, sizeof(T) * new_capacity);
+			uint2* new_indirection_buffer = (uint2*)OffsetPointer(new_buffer, sizeof(T) * new_capacity);
 
 			if (new_capacity < set.capacity) {
 				// Get only the first new_capacity elements

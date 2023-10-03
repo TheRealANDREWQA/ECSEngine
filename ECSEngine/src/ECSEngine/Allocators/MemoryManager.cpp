@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "MemoryManager.h"
 #include "../Utilities/Assert.h"
-#include "../Utilities/Function.h"
+#include "../Utilities/PointerUtilities.h"
 #include "AllocatorCallsDebug.h"
 #include "AllocatorPolymorphic.h"
 
@@ -328,7 +328,7 @@ namespace ECSEngine {
 
 	AllocatorPolymorphic MemoryManager::GetAllocator(size_t index) const
 	{
-		return { function::OffsetPointer(m_allocators, m_base_allocator_byte_size * index), m_backup_info.allocator_type, ECS_ALLOCATION_SINGLE };
+		return { OffsetPointer(m_allocators, m_base_allocator_byte_size * index), m_backup_info.allocator_type, ECS_ALLOCATION_SINGLE };
 	}
 
 	// ---------------------- Thread safe variants -----------------------------

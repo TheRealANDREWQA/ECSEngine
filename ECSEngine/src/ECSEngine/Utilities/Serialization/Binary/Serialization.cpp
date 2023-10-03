@@ -5,6 +5,7 @@
 #include "../SerializationHelpers.h"
 #include "../../../Containers/Stacks.h"
 #include "../../../Allocators/ResizableLinearAllocator.h"
+#include "../../../Math/MathHelpers.h"
 
 #define DESERIALIZE_FIELD_TABLE_MAX_TYPES (32)
 
@@ -19,7 +20,7 @@ namespace ECSEngine {
 	bool SerializeShouldOmitField(Stream<char> type, Stream<char> name, Stream<SerializeOmitField> omit_fields)
 	{
 		for (size_t index = 0; index < omit_fields.size; index++) {
-			if (function::CompareStrings(omit_fields[index].type, type) && function::CompareStrings(omit_fields[index].name, name)) {
+			if (omit_fields[index].type == type && omit_fields[index].name == name) {
 				return true;
 			}
 		}
@@ -36,7 +37,7 @@ namespace ECSEngine {
 			if (reflection_manager->TryGetType(omit_fields[index].type, type)) {
 				size_t subindex = 0;
 				for (; subindex < type.fields.size; subindex++) {
-					if (function::CompareStrings(type.fields[subindex].name, omit_fields[index].name)) {
+					if (type.fields[subindex].name == omit_fields[index].name) {
 						break;
 					}
 				}
@@ -64,7 +65,7 @@ namespace ECSEngine {
 	{
 		const ReflectionType* type = reflection_manager->GetType(type_name);
 		for (size_t index = 0; index < type->fields.size; index++) {
-			unsigned int subindex = function::FindString(type->fields[index].name, fields_to_keep);
+			unsigned int subindex = FindString(type->fields[index].name, fields_to_keep);
 			if (subindex == -1) {
 				omit_fields.Add({ type->name, type->fields[index].name });
 			}
@@ -210,7 +211,7 @@ namespace ECSEngine {
 
 					if (blittable_size.x == -1) {
 						// Check that the type has not been already written
-						bool is_missing = function::FindString(field->definition, deserialized_type_names) == -1;
+						bool is_missing = FindString(field->definition, deserialized_type_names) == -1;
 						if (is_missing) {
 							ReflectionType nested_type;
 							// Can be a custom serializer type
@@ -242,7 +243,7 @@ namespace ECSEngine {
 		while (custom_dependent_types.Pop(current_dependent_type)) {
 			ReflectionType nested_type;
 			if (reflection_manager->TryGetType(current_dependent_type, nested_type)) {
-				bool is_missing = function::FindString(current_dependent_type, deserialized_type_names) == -1;
+				bool is_missing = FindString(current_dependent_type, deserialized_type_names) == -1;
 				if (is_missing) {
 					write_total += WriteTypeTable<write_data>(reflection_manager, &nested_type, stream, deserialized_type_names, omit_fields, write_tags);
 				}
@@ -533,7 +534,7 @@ namespace ECSEngine {
 
 			if (!skip_serializable) {
 				// If a basic type, copy the data directly
-				const void* field_data = function::OffsetPointer(data, field->info.pointer_offset);
+				const void* field_data = OffsetPointer(data, field->info.pointer_offset);
 				ReflectionStreamFieldType stream_type = field->info.stream_type;
 				ReflectionBasicFieldType basic_type = field->info.basic_type;
 
@@ -619,7 +620,7 @@ namespace ECSEngine {
 
 								for (size_t index = 0; index < basic_count; index++) {
 									// No need to test the return code since if it gets to here it cannot fail
-									SerializeImplementation<write_data>(reflection_manager, &nested_type, function::OffsetPointer(field_data, index * element_byte_size), stream, nested_options, total_size);
+									SerializeImplementation<write_data>(reflection_manager, &nested_type, OffsetPointer(field_data, index * element_byte_size), stream, nested_options, total_size);
 								}
 							}
 							else {
@@ -638,7 +639,7 @@ namespace ECSEngine {
 								// Write the size first and then the user defined
 								*total_size += Write<write_data>(&stream, &field_stream.size, sizeof(field_stream.size));
 								for (size_t index = 0; index < field_stream.size; index++) {
-									SerializeImplementation<write_data>(reflection_manager, &nested_type, function::OffsetPointer(field_data, index * type_byte_size), stream, nested_options, total_size);
+									SerializeImplementation<write_data>(reflection_manager, &nested_type, OffsetPointer(field_data, index * type_byte_size), stream, nested_options, total_size);
 								}
 							}
 							else {
@@ -964,11 +965,11 @@ namespace ECSEngine {
 
 			double file_data[4];
 
-			unsigned int iteration_count = function::ClampMin(file_basic_component_count, type_basic_component_count);
+			unsigned int iteration_count = ClampMin(file_basic_component_count, type_basic_component_count);
 			unsigned int pointer_increment = type_info.byte_size / type_basic_component_count;
 			unsigned int per_component_byte_size = file_info.byte_size / file_basic_component_count;
 			for (unsigned int index = 0; index < iteration_count; index++) {
-				void* type_data = function::OffsetPointer(field_data, pointer_increment * index);
+				void* type_data = OffsetPointer(field_data, pointer_increment * index);
 				Read<true>(&data, &file_data, per_component_byte_size);
 
 				ConvertReflectionBasicField(file_info.basic_type, type_info.basic_type, file_data, field_data);
@@ -1013,7 +1014,7 @@ namespace ECSEngine {
 				// Search the field inside the type
 				size_t subindex = 0;
 				for (; subindex < type->fields.size; subindex++) {
-					if (function::CompareStrings(type->fields[subindex].name, deserialize_table.types[type_index].fields[index].name)) {
+					if (type->fields[subindex].name == deserialize_table.types[type_index].fields[index].name) {
 						break;
 					}
 				}
@@ -1035,7 +1036,7 @@ namespace ECSEngine {
 					continue;
 				}
 
-				void* field_data = function::OffsetPointer(address, type->fields[subindex].info.pointer_offset);
+				void* field_data = OffsetPointer(address, type->fields[subindex].info.pointer_offset);
 
 				if (file_field_info.user_defined_as_blittable) {
 					// See if the field has given size and it matches the byte size
@@ -1065,7 +1066,7 @@ namespace ECSEngine {
 				if (file_field_info.basic_type == type_field_info.basic_type && file_field_info.stream_type == type_field_info.stream_type) {
 					if (file_field_info.basic_type == ReflectionBasicFieldType::UserDefined && file_field_info.custom_serializer_index == -1) {
 						// Check for the type to be the same
-						if (!function::CompareStrings(file_field_info.definition, field_definition)) {
+						if (file_field_info.definition != field_definition) {
 							if (fail_if_mismatch) {
 								if (has_options) {
 									ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Deserialization for type {#} failed."
@@ -1124,7 +1125,7 @@ namespace ECSEngine {
 							case ReflectionStreamFieldType::BasicTypeArray:
 							{
 								// Choose the minimum between the two values
-								unsigned short elements_to_read = function::ClampMax(type_field_info.basic_type_count, file_field_info.basic_type_count);
+								unsigned short elements_to_read = ClampMax(type_field_info.basic_type_count, file_field_info.basic_type_count);
 								unsigned short elements_to_ignore = file_field_info.basic_type_count - elements_to_read;
 
 								size_t element_byte_size = GetBasicTypeArrayElementSize(type_field_info);
@@ -1132,7 +1133,7 @@ namespace ECSEngine {
 									ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(
 										reflection_manager,
 										nested_type,
-										function::OffsetPointer(field_data, element_byte_size * element_index),
+										OffsetPointer(field_data, element_byte_size * element_index),
 										stream,
 										nested_options,
 										buffer_size
@@ -1200,7 +1201,7 @@ namespace ECSEngine {
 									ECS_DESERIALIZE_CODE code = DeserializeImplementation<read_data>(
 										reflection_manager,
 										nested_type,
-										function::OffsetPointer(allocation, element_index * nested_type_byte_size),
+										OffsetPointer(allocation, element_index * nested_type_byte_size),
 										stream,
 										nested_options,
 										buffer_size
@@ -1269,7 +1270,7 @@ namespace ECSEngine {
 								
 								size_t element_count = pointer_data_byte_size / file_field_info.stream_byte_size;
 								if (type_field_info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
-									size_t elements_to_read = function::ClampMin(element_count, (size_t)type_field_info.basic_type_count);
+									size_t elements_to_read = ClampMin(element_count, (size_t)type_field_info.basic_type_count);
 									if (type_field_info.basic_type != file_field_info.basic_type) {
 										if constexpr (read_data) {
 											for (size_t index = 0; index < elements_to_read; index++) {
@@ -1314,7 +1315,7 @@ namespace ECSEngine {
 											}
 
 											for (size_t index = 0; index < element_count; index++) {
-												deserialize_incompatible_basic(stream, function::OffsetPointer(allocation, index), file_field_info, type_field_info);
+												deserialize_incompatible_basic(stream, OffsetPointer(allocation, index), file_field_info, type_field_info);
 											}
 										}
 										else {
@@ -1649,7 +1650,7 @@ namespace ECSEngine {
 			Read<read_data>(&data, &version, sizeof(version));
 
 			if constexpr (read_data) {
-				unsigned int serializer_index = function::FindString(
+				unsigned int serializer_index = FindString(
 					serializer_name.ToStream(),
 					Stream<SerializeCustomType>(ECS_SERIALIZE_CUSTOM_TYPES, serializer_count),
 					[](const SerializeCustomType& custom_type) {
@@ -1743,7 +1744,7 @@ namespace ECSEngine {
 			// and can't rule those out when walking down the fields cuz the types have not yet been read
 			size_t index = 0;
 			for (; index < field_table.types.size; index++) {
-				if (function::CompareStrings(field_table.types[index].name, to_be_read_type_definition)) {
+				if (field_table.types[index].name == to_be_read_type_definition) {
 					break;
 				}
 			}
@@ -1965,7 +1966,7 @@ namespace ECSEngine {
 	unsigned int DeserializeFieldTable::TypeIndex(Stream<char> type_name) const
 	{
 		for (unsigned int index = 0; index < types.size; index++) {
-			if (function::CompareStrings(types[index].name, type_name)) {
+			if (types[index].name == type_name) {
 				return index;
 			}
 		}
@@ -1978,7 +1979,7 @@ namespace ECSEngine {
 	unsigned int DeserializeFieldTable::FieldIndex(unsigned int type_index, Stream<char> field_name) const
 	{
 		for (unsigned int index = 0; index < types[type_index].fields.size; index++) {
-			if (function::CompareStrings(types[type_index].fields[index].name, field_name)) {
+			if (types[type_index].fields[index].name == field_name) {
 				return index;
 			}
 		}
@@ -2028,7 +2029,7 @@ namespace ECSEngine {
 			if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
 				Stream<char> field_definition = field->definition;
 				// If the user defined definition changed, then they are not equal
-				if (!function::CompareStrings(deserialized_field->definition, field_definition)) {
+				if (deserialized_field->definition != field_definition) {
 					return false;
 				}
 
@@ -2088,7 +2089,7 @@ namespace ECSEngine {
 			ReflectionType type;
 			type.name = types[index].name;
 			if (allocate_all) {
-				type.name = function::StringCopy(allocator, type.name);
+				type.name = StringCopy(allocator, type.name);
 			}
 			type.fields.Initialize(allocator, types[index].fields.size);
 			type.tag = { nullptr, 0 };
@@ -2105,9 +2106,9 @@ namespace ECSEngine {
 				type.fields[field_index].tag = types[index].fields[field_index].tag;
 
 				if (allocate_all) {
-					type.fields[field_index].name = function::StringCopy(allocator, type.fields[field_index].name);
-					type.fields[field_index].definition = function::StringCopy(allocator, type.fields[field_index].definition);
-					type.fields[field_index].tag = function::StringCopy(allocator, type.fields[field_index].tag);
+					type.fields[field_index].name = StringCopy(allocator, type.fields[field_index].name);
+					type.fields[field_index].definition = StringCopy(allocator, type.fields[field_index].definition);
+					type.fields[field_index].tag = StringCopy(allocator, type.fields[field_index].tag);
 				}
 			}
 

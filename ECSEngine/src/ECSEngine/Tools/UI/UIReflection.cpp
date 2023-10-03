@@ -3,6 +3,7 @@
 #include "../../Input/Mouse.h"
 #include "../../Input/Keyboard.h"
 #include "../../Utilities/Reflection/ReflectionStringFunctions.h"
+#include "../../Utilities/ParsingUtilities.h"
 
 #define UI_IGNORE_RANGE_OR_PARAMETERS_TAG "_"
 
@@ -281,7 +282,7 @@ namespace ECSEngine {
 		// The data needed by the override will be placed immediately after this
 		struct OverrideAllocationData {
 			ECS_INLINE void* GetData() {
-				return function::OffsetPointer(this, sizeof(*this));
+				return OffsetPointer(this, sizeof(*this));
 			}
 
 			void* field_data;
@@ -409,16 +410,16 @@ namespace ECSEngine {
 				*target_memory = capacity->buffer;
 
 				if (target_size_t_size) {
-					size_t* size_ptr = (size_t*)function::OffsetPointer(target_memory, sizeof(void*));
+					size_t* size_ptr = (size_t*)OffsetPointer(target_memory, sizeof(void*));
 					*size_ptr = capacity->size;
 				}
 				else if (target_uint_size) {
-					unsigned int* size_ptr = (unsigned int*)function::OffsetPointer(target_memory, sizeof(void*));
+					unsigned int* size_ptr = (unsigned int*)OffsetPointer(target_memory, sizeof(void*));
 					*size_ptr = capacity->size;
 				}
 
 				if (target_capacity) {
-					unsigned int* capacity_ptr = (unsigned int*)function::OffsetPointer(target_memory, sizeof(void*) + sizeof(unsigned int));
+					unsigned int* capacity_ptr = (unsigned int*)OffsetPointer(target_memory, sizeof(void*) + sizeof(unsigned int));
 					*capacity_ptr = capacity->capacity;
 				}
 
@@ -431,20 +432,20 @@ namespace ECSEngine {
 				if (!is_resizable) {
 					if (previous_size == capacity->size) {
 						if (target_size_t_size) {
-							capacity->size = *(size_t*)function::OffsetPointer(target_memory, sizeof(void*));
+							capacity->size = *(size_t*)OffsetPointer(target_memory, sizeof(void*));
 						}
 						else if (target_uint_size) {
-							capacity->size = *(unsigned int*)function::OffsetPointer(target_memory, sizeof(void*));
+							capacity->size = *(unsigned int*)OffsetPointer(target_memory, sizeof(void*));
 						}
 
 						if (target_capacity) {
-							capacity->capacity = *(unsigned int*)function::OffsetPointer(target_memory, sizeof(void*) + sizeof(unsigned int));
+							capacity->capacity = *(unsigned int*)OffsetPointer(target_memory, sizeof(void*) + sizeof(unsigned int));
 						}
 					}
 				}
 				else {
 					if (target_capacity) {
-						unsigned int current_capacity = *(unsigned int*)function::OffsetPointer(target_memory, sizeof(void*) + sizeof(unsigned int));
+						unsigned int current_capacity = *(unsigned int*)OffsetPointer(target_memory, sizeof(void*) + sizeof(unsigned int));
 						if (current_capacity != resizable->capacity) {
 							resizable->ResizeNoCopy(current_capacity, element_byte_size);
 							memcpy(resizable->buffer, *target_memory, current_capacity * element_byte_size);
@@ -454,10 +455,10 @@ namespace ECSEngine {
 					unsigned int size = resizable->size;
 					if (previous_size == capacity->size) {
 						if (target_size_t_size) {
-							size = *(size_t*)function::OffsetPointer(target_memory, sizeof(void*));
+							size = *(size_t*)OffsetPointer(target_memory, sizeof(void*));
 						}
 						else if (target_uint_size) {
-							size = *(unsigned int*)function::OffsetPointer(target_memory, sizeof(void*));
+							size = *(unsigned int*)OffsetPointer(target_memory, sizeof(void*));
 						}
 
 						if (size > resizable->capacity) {
@@ -473,10 +474,10 @@ namespace ECSEngine {
 			void CopyTargetStandalone() {
 				unsigned int target_size = 0;
 				if (target_size_t_size) {
-					target_size = *(size_t*)function::OffsetPointer(target_memory, sizeof(void*));
+					target_size = *(size_t*)OffsetPointer(target_memory, sizeof(void*));
 				}
 				else if (target_uint_size) {
-					target_size = *(unsigned int*)function::OffsetPointer(target_memory, sizeof(void*));
+					target_size = *(unsigned int*)OffsetPointer(target_memory, sizeof(void*));
 				}
 
 				if (previous_size == capacity->size) {
@@ -785,7 +786,7 @@ namespace ECSEngine {
 		// Extracts the name from example WorldDescriptor::entity_pool_size to entity_pool_size such that it can be compared
 		// against the field name stored
 		static Stream<char> ExtractTypedFieldName(Stream<char> field_name) {
-			Stream<char> colon = function::FindFirstCharacter(field_name, ':');
+			Stream<char> colon = FindFirstCharacter(field_name, ':');
 			if (colon.buffer != nullptr) {
 				colon.buffer += 2;
 				colon.size -= 2;
@@ -826,7 +827,7 @@ namespace ECSEngine {
 				size_t count_type = -1;
 				for (size_t config_index = 0; config_index < ui_config.size; config_index++) {
 					if (ui_config[config_index].index_count > 0) {
-						if (function::SearchBytes(indices.buffer, indices.size, (size_t)ui_config[config_index].index[0], sizeof(indices[0])) != -1) {
+						if (SearchBytes(indices.buffer, indices.size, (size_t)ui_config[config_index].index[0], sizeof(indices[0])) != -1) {
 							count_type = config_index;
 							break;
 						}
@@ -843,7 +844,7 @@ namespace ECSEngine {
 				return count_type;
 			};
 
-			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_ADD)) {
+			if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_ADD)) {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::Count
 				};
@@ -853,19 +854,19 @@ namespace ECSEngine {
 
 				UIConfigArrayAddCallback* add_callback = (UIConfigArrayAddCallback*)stack_memory;
 				add_callback->handler = handler;
-				stack_memory = function::OffsetPointer(stack_memory, sizeof(*add_callback));
+				stack_memory = OffsetPointer(stack_memory, sizeof(*add_callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, add_callback);
 
-				if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE)) {
+				if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE)) {
 					UIConfigArrayRemoveCallback remove_callback;
 					remove_callback.handler = handler;
 					UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, &remove_callback);
-					splat_type = (ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT)function::ClearFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE);
+					splat_type = (ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT)ClearFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE);
 				}
 			}
 
-			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE)) {
+			if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE)) {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::Count
 				};
@@ -875,12 +876,12 @@ namespace ECSEngine {
 
 				UIConfigArrayRemoveCallback* remove_callback = (UIConfigArrayRemoveCallback*)stack_memory;
 				remove_callback->handler = handler;
-				stack_memory = function::OffsetPointer(stack_memory, sizeof(*remove_callback));
+				stack_memory = OffsetPointer(stack_memory, sizeof(*remove_callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, remove_callback);
 			}
 
-			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_CHECK_BOX)) {
+			if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_CHECK_BOX)) {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::CheckBox
 				};
@@ -890,12 +891,12 @@ namespace ECSEngine {
 				
 				UIConfigCheckBoxCallback* callback = (UIConfigCheckBoxCallback*)stack_memory;
 				callback->handler = handler;
-				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
 			}
 
-			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COLOR_FLOAT)) {
+			if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COLOR_FLOAT)) {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::ColorFloat
 				};
@@ -906,12 +907,12 @@ namespace ECSEngine {
 
 				UIConfigColorFloatCallback* callback = (UIConfigColorFloatCallback*)stack_memory;
 				callback->callback = handler;
-				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
 			}
 
-			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COLOR_INPUT)) {
+			if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COLOR_INPUT)) {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::Color
 				};
@@ -923,12 +924,12 @@ namespace ECSEngine {
 				UIConfigColorInputCallback* callback = (UIConfigColorInputCallback*)stack_memory;
 				callback->callback = handler;
 				callback->final_callback.action = nullptr;
-				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
 			}
 
-			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COMBO_BOX)) {
+			if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COMBO_BOX)) {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::ComboBox
 				};
@@ -939,12 +940,12 @@ namespace ECSEngine {
 
 				UIConfigComboBoxCallback* callback = (UIConfigComboBoxCallback*)stack_memory;
 				callback->handler = handler;
-				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
 			}
 
-			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_NUMBER_INPUTS)) {
+			if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_NUMBER_INPUTS)) {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::IntegerInput,
 					UIReflectionElement::FloatInput,
@@ -961,12 +962,12 @@ namespace ECSEngine {
 				UIConfigTextInputCallback* callback = (UIConfigTextInputCallback*)stack_memory;
 				callback->handler = handler;
 				callback->trigger_only_on_release = trigger_only_on_release;
-				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
 			}
 
-			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_SLIDERS)) {
+			if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_SLIDERS)) {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::IntegerSlider,
 					UIReflectionElement::FloatSlider,
@@ -982,12 +983,12 @@ namespace ECSEngine {
 
 				UIConfigSliderChangedValueCallback* callback = (UIConfigSliderChangedValueCallback*)stack_memory;
 				callback->handler = handler;
-				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
 			}
 
-			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_PATH_INPUT)) {
+			if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_PATH_INPUT)) {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::DirectoryInput,
 					UIReflectionElement::FileInput
@@ -1000,12 +1001,12 @@ namespace ECSEngine {
 				UIConfigPathInputCallback* callback = (UIConfigPathInputCallback*)stack_memory;
 				callback->callback = handler;
 				callback->trigger_on_release = trigger_only_on_release;
-				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
 			}
 
-			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_TEXT_INPUT)) {
+			if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_TEXT_INPUT)) {
 				UIReflectionElement indices[] = {
 					UIReflectionElement::TextInput,
 				};
@@ -1017,7 +1018,7 @@ namespace ECSEngine {
 				UIConfigTextInputCallback* callback = (UIConfigTextInputCallback*)stack_memory;
 				callback->handler = handler;
 				callback->trigger_only_on_release = trigger_only_on_release;
-				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
 			}
@@ -1189,8 +1190,8 @@ namespace ECSEngine {
 			UIReflectionTextInputData* data = (UIReflectionTextInputData*)draw_data->data;
 			FORWARD_FIELD_DRAW_DATA;
 
-			bool disable_write = function::HasFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
-			configuration = function::ClearFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+			bool disable_write = HasFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+			configuration = ClearFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
 
 			if (!disable_write) {
 				data->stream.CopyTarget();
@@ -1243,8 +1244,8 @@ namespace ECSEngine {
 			UIReflectionDirectoryInputData* data = (UIReflectionDirectoryInputData*)draw_data->data;
 			FORWARD_FIELD_DRAW_DATA;
 
-			bool disable_write = function::HasFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
-			configuration = function::ClearFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+			bool disable_write = HasFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+			configuration = ClearFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
 
 			if (!disable_write) {
 				data->stream.CopyTarget();
@@ -1265,8 +1266,8 @@ namespace ECSEngine {
 			UIReflectionFileInputData* data = (UIReflectionFileInputData*)draw_data->data;
 			FORWARD_FIELD_DRAW_DATA;
 
-			bool disable_write = function::HasFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
-			configuration = function::ClearFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+			bool disable_write = HasFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+			configuration = ClearFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
 
 			if (!disable_write) {
 				data->stream.CopyTarget();
@@ -1338,7 +1339,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------
 
 		static const void* InputGroupGetBoundOrDefaultPointer(const void* pointer) {
-			bool* has = (bool*)function::OffsetPointer(pointer, -1);
+			bool* has = (bool*)OffsetPointer(pointer, -1);
 			return *has ? pointer : nullptr;
 		}
 
@@ -1417,10 +1418,10 @@ namespace ECSEngine {
 			UIReflectionInstance* instance = data->instance;
 
 			// The name is stored with a suffix in order to avoid hash table collisions.
-			Stream<char> string_pattern = function::FindFirstToken(instance->name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+			Stream<char> string_pattern = FindFirstToken(instance->name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 
 			Stream<char> original_instance_name = instance->name;
-			instance->name = { instance->name.buffer, function::PointerDifference(string_pattern.buffer, instance->name.buffer) };
+			instance->name = { instance->name.buffer, PointerDifference(string_pattern.buffer, instance->name.buffer) };
 			UIReflectionDrawInstanceOptions options;
 			if (draw_data->draw_options) {
 				options = *draw_data->draw_options;
@@ -1450,17 +1451,17 @@ namespace ECSEngine {
 		// ------------------------------------------------------------- Stream ----------------------------------------------------------
 
 		static void GetArrayCallback(UIDrawConfig& array_config, size_t& array_configuration, UIDrawConfig& element_config, size_t& element_configuration) {
-			if (function::HasFlag(element_configuration, UI_CONFIG_ARRAY_ADD_CALLBACK)) {
+			if (HasFlag(element_configuration, UI_CONFIG_ARRAY_ADD_CALLBACK)) {
 				array_configuration |= UI_CONFIG_ARRAY_ADD_CALLBACK;
-				element_configuration = function::ClearFlag(element_configuration, UI_CONFIG_ARRAY_ADD_CALLBACK);
+				element_configuration = ClearFlag(element_configuration, UI_CONFIG_ARRAY_ADD_CALLBACK);
 
 				const UIConfigArrayAddCallback* callback = (const UIConfigArrayAddCallback*)element_config.GetParameter(UI_CONFIG_ARRAY_ADD_CALLBACK);
 				array_config.AddFlag(*callback);
 			}
 
-			if (function::HasFlag(element_configuration, UI_CONFIG_ARRAY_REMOVE_CALLBACK)) {
+			if (HasFlag(element_configuration, UI_CONFIG_ARRAY_REMOVE_CALLBACK)) {
 				array_configuration |= UI_CONFIG_ARRAY_REMOVE_CALLBACK;
-				element_configuration = function::ClearFlag(element_configuration, UI_CONFIG_ARRAY_REMOVE_CALLBACK);
+				element_configuration = ClearFlag(element_configuration, UI_CONFIG_ARRAY_REMOVE_CALLBACK);
 
 				const UIConfigArrayRemoveCallback* callback = (const UIConfigArrayRemoveCallback*)element_config.GetParameter(UI_CONFIG_ARRAY_REMOVE_CALLBACK);
 				array_config.AddFlag(*callback);
@@ -1808,7 +1809,7 @@ namespace ECSEngine {
 			auto field_ptr = (UIReflectionGroupData<void>*)field->data;
 			memcpy((void*)field_ptr->lower_bound, data, field_ptr->byte_size * field_ptr->count);
 
-			bool* has_lower_bound = (bool*)function::OffsetPointer(field_ptr->lower_bound, -1);
+			bool* has_lower_bound = (bool*)OffsetPointer(field_ptr->lower_bound, -1);
 			*has_lower_bound = true;
 		}
 
@@ -1855,7 +1856,7 @@ namespace ECSEngine {
 			auto field_ptr = (UIReflectionGroupData<void>*)field->data;
 			memcpy((void*)field_ptr->upper_bound, data, field_ptr->byte_size * field_ptr->count);
 
-			bool* has_upper_bound = (bool*)function::OffsetPointer(field_ptr->upper_bound, -1);
+			bool* has_upper_bound = (bool*)OffsetPointer(field_ptr->upper_bound, -1);
 			*has_upper_bound = true;
 		}
 
@@ -1896,7 +1897,7 @@ namespace ECSEngine {
 			auto field_ptr = (UIReflectionGroupData<void>*)field->data;
 			memcpy((void*)field_ptr->default_values, data, field_ptr->byte_size * field_ptr->count);
 
-			bool* has_default = (bool*)function::OffsetPointer(field_ptr->default_values, -1);
+			bool* has_default = (bool*)OffsetPointer(field_ptr->default_values, -1);
 			*has_default = true;
 		}
 
@@ -1983,8 +1984,8 @@ namespace ECSEngine {
 			size_t type_table_count,
 			size_t instance_table_count
 		) : reflection(_reflection), allocator(_allocator) {
-			ECS_ASSERT(function::IsPowerOfTwo(type_table_count));
-			ECS_ASSERT(function::IsPowerOfTwo(instance_table_count));
+			ECS_ASSERT(IsPowerOfTwo(type_table_count));
+			ECS_ASSERT(IsPowerOfTwo(instance_table_count));
 			type_definition.Initialize(allocator, type_table_count);
 			instances.Initialize(allocator, instance_table_count);
 			overrides.Initialize(GetAllocatorPolymorphic(allocator), 0);
@@ -2053,9 +2054,9 @@ namespace ECSEngine {
 		{
 			// At the moment there is a limit to how many groupings an instance can have
 			ECS_ASSERT(type->groupings.size < UI_REFLECTION_MAX_GROUPINGS_PER_TYPE);
-			grouping.name = function::StringCopy(GetAllocatorPolymorphic(allocator), grouping.name);
+			grouping.name = StringCopy(GetAllocatorPolymorphic(allocator), grouping.name);
 			if (grouping.per_element_name.size > 0) {
-				grouping.per_element_name = function::StringCopy(GetAllocatorPolymorphic(allocator), grouping.per_element_name);
+				grouping.per_element_name = StringCopy(GetAllocatorPolymorphic(allocator), grouping.per_element_name);
 			}
 
 			type->groupings.AddResize(grouping, GetAllocatorPolymorphic(allocator));
@@ -2270,7 +2271,7 @@ namespace ECSEngine {
 				if (type->fields[index].stream_type == UIReflectionStreamType::None) {
 					UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)type->fields[index].element_index](
 						type->fields.buffer + index,
-						function::OffsetPointer(data, type->fields[index].pointer_offset)
+						OffsetPointer(data, type->fields[index].pointer_offset)
 					);
 				}
 			}
@@ -2503,7 +2504,7 @@ namespace ECSEngine {
 								ptr, 
 								reflect->fields[reflected_type_index].info.basic_type_count,
 								field_value->element_byte_size,
-								function::HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
+								HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
 							);
 						}
 						break;
@@ -2537,7 +2538,7 @@ namespace ECSEngine {
 
 							// In order to determine the type name, just look for the separator from the type
 							// and whatever its after it will be the type
-							Stream<char> type_name = function::FindFirstToken(data->type_and_field_name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+							Stream<char> type_name = FindFirstToken(data->type_and_field_name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 							type_name.buffer += ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT;
 							type_name.size -= ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT;
 
@@ -2573,7 +2574,7 @@ namespace ECSEngine {
 							ptr, 
 							reflect->fields[reflected_type_index].info.basic_type_count,
 							field_value->element_byte_size,
-							function::HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
+							HasFlag(type->fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
 						);
 					}
 					else {
@@ -3053,7 +3054,7 @@ namespace ECSEngine {
 
 				type->fields[field_index].element_index = UIReflectionElement::DoubleSlider;
 				// Remove the number range flag if present for the configuration
-				type->fields[field_index].configuration = function::ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
+				type->fields[field_index].configuration = ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
 			}
 			break;
 			case UIReflectionElement::FloatInput:
@@ -3069,15 +3070,15 @@ namespace ECSEngine {
 
 				type->fields[field_index].element_index = UIReflectionElement::FloatSlider;
 				// Remove the number range flag if present for the configuration
-				type->fields[field_index].configuration = function::ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
+				type->fields[field_index].configuration = ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
 			}
 			break;// Remove the number range flag if present for the configuration
-			type->fields[field_index].configuration = function::ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
+			type->fields[field_index].configuration = ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
 			// integer_convert input needs no correction, except element_index
 			case UIReflectionElement::IntegerInput:
 				type->fields[field_index].element_index = UIReflectionElement::IntegerSlider;
 				// Remove the number range flag if present for the configuration
-				type->fields[field_index].configuration = function::ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
+				type->fields[field_index].configuration = ClearFlag(type->fields[field_index].configuration, UI_CONFIG_NUMBER_INPUT_RANGE);
 				break;
 				// groups needs no correction, except element_index
 			case UIReflectionElement::DoubleInputGroup:
@@ -3258,7 +3259,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < type->fields.size; index++) {
 				unsigned int int_index = (unsigned int)type->fields[index].element_index;
 				if (int_index < std::size(UI_REFLECTION_SET_LOWER_BOUND) && type->fields[index].stream_type == UIReflectionStreamType::None) {
-					UI_REFLECTION_SET_LOWER_BOUND[int_index](type->fields.buffer + index, function::OffsetPointer(data, type->fields[index].pointer_offset));
+					UI_REFLECTION_SET_LOWER_BOUND[int_index](type->fields.buffer + index, OffsetPointer(data, type->fields[index].pointer_offset));
 				}
 			}
 		}
@@ -3287,7 +3288,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < type->fields.size; index++) {
 				unsigned int int_index = (unsigned int)type->fields[index].element_index;
 				if (int_index < std::size(UI_REFLECTION_SET_UPPER_BOUND) && type->fields[index].stream_type == UIReflectionStreamType::None) {
-					UI_REFLECTION_SET_UPPER_BOUND[int_index](type->fields.buffer + index, function::OffsetPointer(data, type->fields[index].pointer_offset));
+					UI_REFLECTION_SET_UPPER_BOUND[int_index](type->fields.buffer + index, OffsetPointer(data, type->fields[index].pointer_offset));
 				}
 			}
 		}
@@ -3709,7 +3710,7 @@ namespace ECSEngine {
 				data->base_data.stream.element_byte_size = reflection_field.info.stream_byte_size;
 
 				Stream<char> user_defined_type = GetUserDefinedTypeFromStreamUserDefined(reflection_field.definition, reflection_field.info.stream_type);
-				Stream<char> allocated_type = function::StringCopy(GetAllocatorPolymorphic(allocator), user_defined_type);
+				Stream<char> allocated_type = StringCopy(GetAllocatorPolymorphic(allocator), user_defined_type);
 				data->type_name = allocated_type.buffer;
 
 				field.configuration = 0;
@@ -3737,11 +3738,11 @@ namespace ECSEngine {
 				if (value_written) {
 					return;
 				}
-				if (function::CompareStrings(field->definition, "Color")) {
+				if (field->definition == "Color") {
 					color_convert(*field, type.fields[type.fields.size]);
 					value_written = true;
 				}
-				else if (function::CompareStrings(field->definition, "ColorFloat")) {
+				else if (field->definition == "ColorFloat") {
 					color_float_convert(*field, type.fields[type.fields.size]);
 					value_written = true;
 				}
@@ -3794,24 +3795,24 @@ namespace ECSEngine {
 				const ReflectionField* field = &reflected_type->fields[index];
 
 				Stream<char> definition_stream = field->definition;
-				if (function::CompareStrings(definition_stream, "Color")) {
+				if (definition_stream == "Color") {
 					color_stream_convert(*field, type.fields[type.fields.size]);
 					value_written = true;
 				}
-				else if (function::CompareStrings(definition_stream, "ColorFloat")) {
+				else if (definition_stream == "ColorFloat") {
 					color_float_stream_convert(*field, type.fields[type.fields.size]);
 					value_written = true;
 				}
-				else if (function::CompareStrings(definition_stream, "Stream<CapacityStream<char>>") 
-					|| function::CompareStrings(definition_stream, "CapacityStream<CapacityStream<char>>")
-					|| function::CompareStrings(definition_stream, "ResizableStream<CapacityStream<char>>")
+				else if (definition_stream == "Stream<CapacityStream<char>>" 
+					|| definition_stream == "CapacityStream<CapacityStream<char>>"
+					|| definition_stream == "ResizableStream<CapacityStream<char>>"
 				) {
 					text_input_stream_convert(*field, type.fields[type.fields.size]);
 					value_written = true;
 				}
-				else if (function::CompareStrings(definition_stream, "Stream<CapacityStream<wchar_t>>")
-					|| function::CompareStrings(definition_stream, "CapacityStream<CapacityStream<wchar_t>>")
-					|| function::CompareStrings(definition_stream, "ResizableStream<CapacityStream<wchar_t>")
+				else if (definition_stream == "Stream<CapacityStream<wchar_t>>"
+					|| definition_stream == "CapacityStream<CapacityStream<wchar_t>>"
+					|| definition_stream == "ResizableStream<CapacityStream<wchar_t>"
 				) {
 					directory_input_stream_convert(*field, type.fields[type.fields.size]);
 					value_written = true;
@@ -3868,7 +3869,7 @@ namespace ECSEngine {
 			};
 
 			auto is_field_omitted = [&](unsigned int index) {
-				return function::SearchBytes(ignore_fields.buffer, ignore_fields.size, (size_t)index, sizeof(index)) != -1;
+				return SearchBytes(ignore_fields.buffer, ignore_fields.size, (size_t)index, sizeof(index)) != -1;
 			};
 
 			for (size_t index = 0; index < reflected_type->fields.size; index++) {
@@ -3909,7 +3910,7 @@ namespace ECSEngine {
 
 						auto parse_default = [&](Stream<char>* parse_tag) {
 							ECS_STACK_VOID_STREAM(conversion_storage, sizeof(double4));
-							double4 default_value = function::ParseDouble4(parse_tag, ',', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
+							double4 default_value = ParseDouble4(parse_tag, ',', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
 
 							if (default_value.x != DBL_MAX) {
 								if (ui_reflection_index == UIReflectionElement::Color) {
@@ -3939,8 +3940,8 @@ namespace ECSEngine {
 
 						auto parse_lower_upper_bound = [&](Stream<char>* range_tag) {
 							ECS_STACK_VOID_STREAM(conversion_storage, sizeof(double4));
-							double4 lower_bound = function::ParseDouble4(range_tag, ',', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
-							double4 upper_bound = function::ParseDouble4(range_tag, ')', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
+							double4 lower_bound = ParseDouble4(range_tag, ',', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
+							double4 upper_bound = ParseDouble4(range_tag, ')', ',', Stream<char>(UI_IGNORE_RANGE_OR_PARAMETERS_TAG));
 
 							if (lower_bound.x != DBL_MAX) {
 								ConvertFromDouble4ToBasic(basic_type, lower_bound, conversion_storage.buffer);
@@ -3961,7 +3962,7 @@ namespace ECSEngine {
 
 						if (range_tag.size > 0) {
 							if (element_index < std::size(UI_REFLECTION_SET_LOWER_BOUND)) {
-								range_tag = function::FindFirstCharacter(range_tag, '(');
+								range_tag = FindFirstCharacter(range_tag, '(');
 								range_tag.Advance();
 								parse_lower_upper_bound(&range_tag);
 							}
@@ -3970,7 +3971,7 @@ namespace ECSEngine {
 							Stream<char> parameters_tag = reflected_type->fields[index].GetTag(STRING(ECS_UI_PARAMETERS_REFLECT));
 							if (parameters_tag.size > 0) {
 								// Get the default, lower bound and upper bound values
-								parameters_tag = function::FindFirstCharacter(parameters_tag, '(');
+								parameters_tag = FindFirstCharacter(parameters_tag, '(');
 								parameters_tag.Advance();
 
 								parse_default(&parameters_tag);
@@ -3982,7 +3983,7 @@ namespace ECSEngine {
 								// Try the default tag now
 								Stream<char> default_tag = reflected_type->fields[index].GetTag(STRING(ECS_UI_DEFAULT_REFLECT));
 								if (default_tag.size > 0) {
-									default_tag = function::FindFirstCharacter(default_tag, '(');
+									default_tag = FindFirstCharacter(default_tag, '(');
 									default_tag.Advance();
 									parse_default(&default_tag);
 								}
@@ -4004,7 +4005,7 @@ namespace ECSEngine {
 			unsigned int inserted_position = 0;
 			ResourceIdentifier identifier(type.name);
 			if (identifier_name.size > 0) {
-				identifier_name = function::StringCopy(GetAllocatorPolymorphic(allocator), identifier_name);
+				identifier_name = StringCopy(GetAllocatorPolymorphic(allocator), identifier_name);
 				type.has_overriden_identifier = true;
 				identifier = identifier_name;
 			}
@@ -4442,7 +4443,7 @@ namespace ECSEngine {
 
 				// Check for both cases, when an instance references the name of its type
 				// or when it the type has an overriden identifier
-				if (function::CompareStrings(type.name, instance.type_name) || type_definition.Find(instance.type_name) == type_index) {
+				if (type.name == instance.type_name || type_definition.Find(instance.type_name) == type_index) {
 					DestroyInstance(instance.name);
 					return true;
 				}
@@ -4471,7 +4472,7 @@ namespace ECSEngine {
 					{
 						UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)type.fields[index].data;
 						// The boolean is prefixing this
-						allocator->Deallocate(function::OffsetPointer(data->default_values, -sizeof(bool)));
+						allocator->Deallocate(OffsetPointer(data->default_values, -sizeof(bool)));
 					}
 					break;
 					case UIReflectionElement::UserDefined: 
@@ -4630,7 +4631,7 @@ namespace ECSEngine {
 									matches = type->fields[index].tags == options->field_tag_options[subindex].tag;
 								}
 								else {
-									matches = function::FindFirstToken(type->fields[index].tags, options->field_tag_options[subindex].tag).size > 0;
+									matches = FindFirstToken(type->fields[index].tags, options->field_tag_options[subindex].tag).size > 0;
 								}
 
 								auto matched = [&]() {
@@ -4679,7 +4680,7 @@ namespace ECSEngine {
 							OverrideAllocationData* override_data = (OverrideAllocationData*)instance->data[index];
 							Stream<char> override_tag = overrides[override_data->override_index].tag;
 							for (size_t subindex = 0; subindex < options->override_additional_configs.size; subindex++) {
-								unsigned int tag_index = function::FindString(
+								unsigned int tag_index = FindString(
 									override_tag,
 									Stream<Stream<char>>(options->override_additional_configs[subindex].override_tag, options->override_additional_configs[subindex].override_tag_count)
 								);
@@ -4772,7 +4773,7 @@ namespace ECSEngine {
 					for (size_t subindex = 0; subindex < type_mask.size; subindex++) {
 						UIReflectionType ui_type = type_definition.GetValueFromIndex(type_mask[subindex]);
 
-						if (function::CompareStrings(ui_type.name, type.name)) {
+						if (ui_type.name == type.name) {
 							types_to_be_deleted.Add(type.name);
 							break;
 						}
@@ -4784,7 +4785,7 @@ namespace ECSEngine {
 			instances.ForEachIndex([&](unsigned int index) {
 				UIReflectionInstance instance = instances.GetValueFromIndex(index);
 				for (size_t subindex = 0; subindex < types_to_be_deleted.size; subindex++) {
-					if (function::CompareStrings(instance.type_name, types_to_be_deleted[subindex])) {
+					if (instance.type_name == types_to_be_deleted[subindex]) {
 						// Decrement the index afterwards - the values will be shuffled after robin hood rebalancing
 						DestroyInstance(index);
 						return true;
@@ -4835,7 +4836,7 @@ namespace ECSEngine {
 					Stream<char> instance_name = instance->type_name;
 					instance_name = CreateForHierarchyGetSuffixName(full_name, instance_name, options);
 
-					if (function::CompareStrings(full_name, instance->name)) {
+					if (full_name == instance->name) {
 						if (CreateForHierarchyVerifyIncludeExclude(reflection->GetType(instance->type_name), options)) {
 							DestroyInstance(index);
 							return true;
@@ -4864,7 +4865,7 @@ namespace ECSEngine {
 		unsigned int UIReflectionDrawer::FindFieldOverride(Stream<char> tag) const
 		{
 			for (unsigned int index = 0; index < overrides.size; index++) {
-				if (function::CompareStrings(overrides[index].tag, tag)) {
+				if (overrides[index].tag == tag) {
 					return index;
 				}
 			}
@@ -4931,7 +4932,7 @@ namespace ECSEngine {
 						Stream<char> instance_name = instance.type_name;
 						instance_name = CreateForHierarchyGetSuffixName(full_name, instance_name, options);
 
-						if (function::CompareStrings(full_name, instance.name)) {
+						if (full_name == instance.name) {
 							options.indices->AddAssert(index);
 						}
 					}
@@ -5139,11 +5140,11 @@ namespace ECSEngine {
 
 		void UIReflectionDrawer::SetFieldOverride(const UIReflectionFieldOverride* override)
 		{
-			Stream<char> tag = function::StringCopy(GetAllocatorPolymorphic(allocator), override->tag);
+			Stream<char> tag = StringCopy(GetAllocatorPolymorphic(allocator), override->tag);
 			UIReflectionFieldOverride new_override;
 			memcpy(&new_override, override, sizeof(new_override));
 			new_override.tag = tag;
-			new_override.global_data = function::CopyNonZero(GetAllocatorPolymorphic(allocator), new_override.global_data, new_override.global_data_size);
+			new_override.global_data = CopyNonZero(GetAllocatorPolymorphic(allocator), new_override.global_data, new_override.global_data_size);
 
 			overrides.Add(&new_override);
 		}
