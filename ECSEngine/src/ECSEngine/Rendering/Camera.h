@@ -103,6 +103,26 @@ namespace ECSEngine {
 			return RotateVector(ForwardVector(), GetRotationAsIs());
 		}
 
+		ECS_INLINE float VerticalFOV() const {
+			return fov;
+		}
+
+		ECS_INLINE float HorizontalFOV() const {
+			return HorizontalFOVFromVertical(fov, aspect_ratio);
+		}
+
+		ECS_INLINE float NearZ() const {
+			return near_z;
+		}
+
+		ECS_INLINE float FarZ() const {
+			return far_z;
+		}
+
+		ECS_INLINE float AspectRatio() const {
+			return aspect_ratio;
+		}
+
 		CameraParameters AsParameters() const;
 
 		CameraParametersFOV AsParametersFOV() const;
@@ -185,6 +205,26 @@ namespace ECSEngine {
 		// The vector is already normalized
 		ECS_INLINE Vector8 ECS_VECTORCALL GetForwardVector() const {
 			return RotateVector(ForwardVector(), rotation_as_is_matrix);
+		}
+
+		ECS_INLINE float VerticalFOV() const {
+			return fov;
+		}
+
+		ECS_INLINE float HorizontalFOV() const {
+			return horizontal_fov;
+		}
+
+		ECS_INLINE float NearZ() const {
+			return near_z;
+		}
+
+		ECS_INLINE float FarZ() const {
+			return far_z;
+		}
+
+		ECS_INLINE float AspectRatio() const {
+			return aspect_ratio;
 		}
 
 		// Recalculates all the stored matrices
@@ -296,6 +336,31 @@ namespace ECSEngine {
 		return camera->GetForwardVector();
 	}
 
+	template<typename CameraType>
+	ECS_INLINE float GetCameraHorizontalFOV(const CameraType* camera) {
+		return camera->HorizontalFOV();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE float GetCameraVerticalFOV(const CameraType* camera) {
+		return camera->VerticalFOV();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE float GetCameraNearZ(const CameraType* camera) {
+		return camera->NearZ();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE float GetCameraFarZ(const CameraType* camera) {
+		return camera->FarZ();
+	}
+
+	template<typename CameraType>
+	ECS_INLINE float GetCameraAspectRatio(const CameraType* camera) {
+		return camera->AspectRatio();
+	}
+
 	// Converts the mouse position into [-1, 1] range if inside, else accordingly
 	ECSENGINE_API float2 MouseToNDC(uint2 window_size, int2 mouse_texel_position);
 
@@ -332,5 +397,29 @@ namespace ECSEngine {
 		AABBStorage object_bounds,
 		float2 view_space_proportion
 	);
+
+	ECSENGINE_API float2 GetCameraFrustumPlaneDimensions(float vertical_fov, float aspect_ratio, float z_depth);
+
+	// Calculates the dimensions at multiple depths. The dimensions pointer must have z_depth.size entries
+	ECSENGINE_API void GetCameraFrustumPlaneDimensions(float vertical_fov, float aspect_ratio, Stream<float> z_depth, float2* dimensions);
+
+	template<typename CameraType>
+	ECSENGINE_API float2 GetCameraFrustumNearPlaneDimensions(const CameraType* camera);
+
+	template<typename CameraType>
+	ECSENGINE_API float2 GetCameraFrustumFarPlaneDimensions(const CameraType* camera);
+
+	// The first 2 components are for the near plane, the other 2 for the far plane
+	template<typename CameraType>
+	ECSENGINE_API float4 GetCameraFrustumNearAndFarPlaneDimensions(const CameraType* camera);
+
+	struct FrustumPoints {
+		Rectangle3D near_plane;
+		Rectangle3D far_plane;
+	};
+
+	// Calculates the camera frustum points
+	template<typename CameraType>
+	ECSENGINE_API FrustumPoints GetCameraFrustumPoints(const CameraType* camera);
 
 }

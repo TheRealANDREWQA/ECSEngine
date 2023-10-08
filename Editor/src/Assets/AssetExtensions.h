@@ -20,7 +20,6 @@ inline ECSEngine::Stream<wchar_t> ASSET_GPU_SAMPLER_EXTENSIONS[] = {
 };
 
 inline ECSEngine::Stream<wchar_t> ASSET_SHADER_EXTENSIONS[] = {
-	L".shader",
 	L".vshader",
 	L".pshader",
 	L".dshader",
@@ -37,17 +36,17 @@ namespace ECSEngine {
 inline ECSEngine::ECS_SHADER_TYPE AssetExtensionTypeShader(ECSEngine::Stream<wchar_t> string) {
 	for (size_t index = 1; index < std::size(ASSET_SHADER_EXTENSIONS); index++) {
 		if (string == ASSET_SHADER_EXTENSIONS[index]) {
-			return (ECSEngine::ECS_SHADER_TYPE)(index - 1);
+			return (ECSEngine::ECS_SHADER_TYPE)(index);
 		}
 	}
-	return (ECSEngine::ECS_SHADER_TYPE)(std::size(ASSET_SHADER_EXTENSIONS) - 1);
+	return ECSEngine::ECS_SHADER_TYPE_COUNT;
 }
 
 inline ECSEngine::Stream<wchar_t> AssetExtensionFromType(ECSEngine::ECS_SHADER_TYPE type) {
-	if ((unsigned int)type == std::size(ASSET_SHADER_EXTENSIONS) - 1) {
-		return ASSET_SHADER_EXTENSIONS[0];
+	if (ECSEngine::ECS_SHADER_TYPE_COUNT == type) {
+		return {};
 	}
-	return ASSET_SHADER_EXTENSIONS[(unsigned int)type + 1];
+	return ASSET_SHADER_EXTENSIONS[(unsigned int)type];
 }
 
 inline ECSEngine::Stream<wchar_t> ASSET_MATERIAL_EXTENSIONS[] = {

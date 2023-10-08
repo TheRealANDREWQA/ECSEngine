@@ -13,6 +13,8 @@ namespace ECSEngine {
 	// that allow fast removal. Constant time addition and removal by keeping an intrusive linked list inside the indirection buffer
 	template<typename T>
 	struct SparseSet {
+		typedef T T;
+
 		SparseSet() : buffer(nullptr), indirection_buffer(nullptr), size(0), capacity(0), first_empty_slot(0) {}
 		SparseSet(void* _buffer, unsigned int _capacity) { InitializeFromBuffer(_buffer, _capacity); }
 
@@ -124,11 +126,11 @@ namespace ECSEngine {
 			return indirection_buffer[handle].x < capacity;
 		}
 
-		unsigned int GetIndexFromHandle(unsigned int handle) const {
+		ECS_INLINE unsigned int GetIndexFromHandle(unsigned int handle) const {
 			return indirection_buffer[handle].x;
 		}
 
-		unsigned int GetHandleFromIndex(unsigned int index) const {
+		ECS_INLINE unsigned int GetHandleFromIndex(unsigned int index) const {
 			return indirection_buffer[index].y;
 		}
 
@@ -245,11 +247,11 @@ namespace ECSEngine {
 			InitializeFromBuffer(buffer, _capacity);
 		}
 
-		Stream<T> ToStream() const {
+		ECS_INLINE Stream<T> ToStream() const {
 			return  { buffer, size };
 		}
 
-		static size_t MemoryOf(unsigned int capacity) {
+		ECS_INLINE static size_t MemoryOf(unsigned int capacity) {
 			return (sizeof(T) + sizeof(uint2)) * capacity;
 		}
 
@@ -293,7 +295,9 @@ namespace ECSEngine {
 
 	template<typename T>
 	struct ResizableSparseSet {
-		ResizableSparseSet() {}
+		typedef T T;
+
+		ECS_INLINE ResizableSparseSet() {}
 		ResizableSparseSet(AllocatorPolymorphic _allocator, unsigned int initial_capacity = 0, DebugInfo debug_info = ECS_DEBUG_INFO) : allocator(_allocator) {
 			if (initial_capacity > 0) {
 				set = SparseSet<T>(AllocateEx(allocator, set.MemoryOf(initial_capacity), debug_info), initial_capacity);
@@ -306,7 +310,7 @@ namespace ECSEngine {
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ResizableSparseSet);
 
 		// Returns the handle to the element that was added
-		unsigned int Add(T element) {
+		ECS_INLINE unsigned int Add(T element) {
 			if (set.size == set.capacity) {
 				Resize(ECS_SPARSE_SET_RESIZE_FACTOR * set.capacity + 2);
 			}
@@ -315,7 +319,7 @@ namespace ECSEngine {
 		}
 
 		// Returns the handle to the element that was added
-		unsigned int Add(const T* element) {
+		ECS_INLINE unsigned int Add(const T* element) {
 			if (set.size == set.capacity) {
 				Resize(ECS_SPARSE_SET_RESIZE_FACTOR * set.capacity + 2);
 			}
@@ -324,12 +328,12 @@ namespace ECSEngine {
 		}
 
 		// Resets the set to contain only 0 elements
-		void Clear() {
+		ECS_INLINE void Clear() {
 			set.Clear();
 		}
 
 		// Deallocates the buffer and clears the set
-		void FreeBuffer(DebugInfo debug_info = ECS_DEBUG_INFO) {
+		ECS_INLINE void FreeBuffer(DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (set.buffer != nullptr) {
 				DeallocateEx(allocator, set.buffer, debug_info);
 			}
@@ -345,62 +349,62 @@ namespace ECSEngine {
 		}
 
 		// Returns the handle for the element or -1 if the element doesn't exist
-		unsigned int Find(T element) const {
+		ECS_INLINE unsigned int Find(T element) const {
 			return set.Find(element);
 		}
 
 		// Returns the index inside the contiguous stream or -1 if the element doesn't exist
-		unsigned int FindIndex(T element) const {
+		ECS_INLINE unsigned int FindIndex(T element) const {
 			return set.Find(element);
 		}
 
 		template<typename Functor>
-		unsigned int FindFunctor(Functor&& functor) const {
+		ECS_INLINE unsigned int FindFunctor(Functor&& functor) const {
 			return set.FindFunctor(functor);
 		}
 
 		template<typename Functor>
-		unsigned int FindIndexFunctor(Functor&& functor) const {
+		ECS_INLINE unsigned int FindIndexFunctor(Functor&& functor) const {
 			return set.FindIndexFunctor(functor);
 		}
 
-		unsigned int GetIndexFromHandle(unsigned int handle) const {
+		ECS_INLINE unsigned int GetIndexFromHandle(unsigned int handle) const {
 			return set.GetIndexFromHandle(handle);
 		}
 
-		unsigned int GetHandleFromIndex(unsigned int index) const {
+		ECS_INLINE unsigned int GetHandleFromIndex(unsigned int index) const {
 			return set.GetHandleFromIndex(index);
 		}
 
-		void GetOccupiedHandles(Stream<unsigned int>& handles) const {
+		ECS_INLINE void GetOccupiedHandles(Stream<unsigned int>& handles) const {
 			set.GetOccupiedHandles(handles);
 		}
 
-		void GetOccupiedIndices(Stream<unsigned int>& indices) const {
+		ECS_INLINE void GetOccupiedIndices(Stream<unsigned int>& indices) const {
 			set.GetOccupiedIndices(indices);
 		}
 
 		// All the positions must be updated - potentially expensive
-		void Remove(unsigned int handle) {
+		ECS_INLINE void Remove(unsigned int handle) {
 			set.Remove(handle);
 		}
 
 		// Remove using the index inside the contiguous array
-		void RemoveIndex(unsigned int array_index) {
+		ECS_INLINE void RemoveIndex(unsigned int array_index) {
 			set.RemoveIndex(array_index);
 		}
 
-		void RemoveSwapBack(unsigned int handle) {
+		ECS_INLINE void RemoveSwapBack(unsigned int handle) {
 			set.RemoveSwapBack(handle);
 		}
 
 		// Remove using the index of the element inside the contiguous array
-		void RemoveSwapBackIndex(unsigned int array_index) {
+		ECS_INLINE void RemoveSwapBackIndex(unsigned int array_index) {
 			set.RemoveSwapBackIndex(array_index);
 		}
 
 		// Does not copy the elements
-		void ResizeNoCopy(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		ECS_INLINE void ResizeNoCopy(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (set.buffer != nullptr) {
 				DeallocateEx(allocator, set.buffer, debug_info);
 			}
@@ -477,11 +481,11 @@ namespace ECSEngine {
 			}
 		}
 
-		Stream<T> ToStream() const {
+		ECS_INLINE Stream<T> ToStream() const {
 			return set.ToStream();
 		}
 
-		static size_t MemoryOf(unsigned int capacity) {
+		ECS_INLINE static size_t MemoryOf(unsigned int capacity) {
 			return SparseSet<T>::MemoryOf(capacity);
 		}
 

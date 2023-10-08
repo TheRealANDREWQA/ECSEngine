@@ -13,12 +13,7 @@ ECS_TOOLS;
 
 struct EntitiesUIData {
 	ECS_INLINE size_t FindVirtualEntity(Entity entity) const {
-		return SearchBytes(
-			virtual_global_components_entities.buffer,
-			virtual_global_components_entities.size,
-			entity.value,
-			sizeof(entity)
-		);
+		return SearchBytes(virtual_global_components_entities, entity);
 	}
 
 	ECS_INLINE size_t FindVirtualComponent(Component component) const {
@@ -395,12 +390,7 @@ static void DeleteEntityCallback(ActionData* action_data) {
 			if (global_component.Valid()) {
 				RemoveSandboxGlobalComponent(data->editor_state, data->sandbox_index, global_component);
 				// We must also remove it from our internal list of components
-				size_t component_index = SearchBytes(
-					data->virtual_global_components_entities.buffer,
-					data->virtual_global_components_entities.size,
-					source_labels[index].value,
-					sizeof(source_labels[index])
-				);
+				size_t component_index = SearchBytes(data->virtual_global_components_entities, source_labels[index]);
 				data->virtual_global_components_entities.RemoveSwapBack(component_index);
 			}
 			else {
@@ -608,12 +598,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 			}
 
 			for (unsigned int index = 0; index < selected_entities_to_be_removed.size; index++) {
-				size_t found_index = SearchBytes(
-					selected_entities.buffer,
-					selected_entities.size,
-					selected_entities_to_be_removed[index].value,
-					sizeof(selected_entities_to_be_removed[index])
-				);
+				size_t found_index = SearchBytes(selected_entities, selected_entities_to_be_removed[index]);
 				ECS_ASSERT(found_index != -1);
 				selected_entities.RemoveSwapBack(found_index);
 			}

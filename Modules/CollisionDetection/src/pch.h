@@ -6,3 +6,5 @@
 #include "ECSEngineConsole.h"
 #include "ECSEngineReflection.h"
 #include "ECSEngineUtilities.h"
+#include "ECSEngineForEach.h"
+#include "ECSEngineComponents.h"

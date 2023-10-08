@@ -84,7 +84,7 @@ namespace ECSEngine {
 
 			size_t flag_count;
 			unsigned int parameter_start[16];
-			char parameters[320];
+			char parameters[400];
 			size_t associated_bits[16];
 		};
 

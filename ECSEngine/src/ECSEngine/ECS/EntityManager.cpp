@@ -1391,6 +1391,9 @@ namespace ECSEngine {
 				manager->m_archetype_vector_signatures = (VectorComponentSignature*)new_buffer;
 			}
 		}
+
+		// We also need to update the query cache
+		manager->m_query_cache->UpdateRemove(archetype_index);
 	}
 
 #pragma endregion
@@ -1799,7 +1802,12 @@ namespace ECSEngine {
 				unsigned int base_count = archetype->GetBaseCount();
 				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
 					const SharedInstance* current_instances = archetype->GetBaseInstances(base_index);
-					size_t stream_index = SearchBytes(component_instances.buffer, component_instances.size, current_instances[component_in_archetype_index].value, sizeof(SharedInstance));
+					size_t stream_index = SearchBytes(
+						component_instances.buffer, 
+						component_instances.size, 
+						current_instances[component_in_archetype_index].value, 
+						sizeof(component_instances.MemoryOf(1))
+					);
 					if (stream_index != -1) {
 						component_instances.RemoveSwapBack(component_instances.size);
 					}
@@ -4923,22 +4931,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	template<typename Query>
-	unsigned int RegisterQueryImplementation(EntityManager* entity_manager, Query query) {
-		// The AddQuery already retrieves all matching initial archetypes
-		return entity_manager->m_query_cache->AddQuery(query);
-	}
-
 	unsigned int EntityManager::RegisterQuery(ArchetypeQuery query)
 	{
-		return RegisterQueryImplementation(this, query);
+		return m_query_cache->AddQuery(query);
 	}
-
-	// --------------------------------------------------------------------------------------------------------------------
 
 	unsigned int EntityManager::RegisterQuery(ArchetypeQueryExclude query)
 	{
-		return RegisterQueryImplementation(this, query);
+		return m_query_cache->AddQuery(query);
 	}
 
 	void EntityManager::RestoreQueryCache(const ArchetypeQueryCache* query_cache)

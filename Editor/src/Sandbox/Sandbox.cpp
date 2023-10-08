@@ -151,7 +151,7 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 		}
 
 		for (unsigned int index = 0; index < needed_but_missing_modules.size; index++) {
-			bool is_compiled = SearchBytes(modules_being_compiled.buffer, modules_being_compiled.size, needed_but_missing_modules[index], sizeof(unsigned int)) != -1;
+			bool is_compiled = SearchBytes(modules_being_compiled.ToStream(), needed_but_missing_modules[index]) != -1;
 			if (!is_compiled) {
 				return false;
 			}
@@ -204,30 +204,36 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 							snapshot_has_changed = true;
 						}
 						else {
-							// Check to see if the settings library timestamp has changed
-							if (module->infos[snapshot_configuration].library_last_write_time > sandbox->runtime_module_snapshots[index].library_timestamp) {
+							// Check to see if the load status was changed
+							if (sandbox->runtime_module_snapshots[index].load_status != module->infos[snapshot_configuration].load_status) {
 								snapshot_has_changed = true;
 							}
 							else {
-								// Check to see if the module settings have changed
-								const EditorSandboxModule* sandbox_module = &sandbox->modules_in_use[in_stream_module_index];
-								Stream<EditorModuleReflectedSetting> snapshot_settings = sandbox->runtime_module_snapshots[index].reflected_settings;
-								Stream<EditorModuleReflectedSetting> module_settings = sandbox_module->reflected_settings;
-								if (snapshot_settings.size != module_settings.size) {
+								// Check to see if the settings library timestamp has changed
+								if (module->infos[snapshot_configuration].library_last_write_time > sandbox->runtime_module_snapshots[index].library_timestamp) {
 									snapshot_has_changed = true;
 								}
 								else {
-									for (size_t subindex = 0; subindex < snapshot_settings.size && !snapshot_has_changed; subindex++) {
-										size_t existing_setting = FindString(snapshot_settings[subindex].name, module_settings, [](EditorModuleReflectedSetting setting) {
-											return setting.name;
-										});
-										if (existing_setting == -1) {
-											snapshot_has_changed = true;
-										}
-										else {
-											// Check to see if the pointer has changed
-											if (snapshot_settings[subindex].data != module_settings[existing_setting].data) {
+									// Check to see if the module settings have changed
+									const EditorSandboxModule* sandbox_module = &sandbox->modules_in_use[in_stream_module_index];
+									Stream<EditorModuleReflectedSetting> snapshot_settings = sandbox->runtime_module_snapshots[index].reflected_settings;
+									Stream<EditorModuleReflectedSetting> module_settings = sandbox_module->reflected_settings;
+									if (snapshot_settings.size != module_settings.size) {
+										snapshot_has_changed = true;
+									}
+									else {
+										for (size_t subindex = 0; subindex < snapshot_settings.size && !snapshot_has_changed; subindex++) {
+											size_t existing_setting = FindString(snapshot_settings[subindex].name, module_settings, [](EditorModuleReflectedSetting setting) {
+												return setting.name;
+												});
+											if (existing_setting == -1) {
 												snapshot_has_changed = true;
+											}
+											else {
+												// Check to see if the pointer has changed
+												if (snapshot_settings[subindex].data != module_settings[existing_setting].data) {
+													snapshot_has_changed = true;
+												}
 											}
 										}
 									}
@@ -475,7 +481,7 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 				sandbox_index, 
 				(EDITOR_SANDBOX_ENTITY_SLOT)(EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X + index)
 			);
-			if (!transform_tool.entity_ids[index].Valid()) {
+			if (!transform_tool.entity_ids[index].IsValid()) {
 				entity_ids_are_valid = false;
 			}
 		}
@@ -974,11 +980,21 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void EndSandboxWorldSimulations(EditorState* editor_state)
+void EndSandboxWorldSimulations(EditorState* editor_state, bool paused_only, bool running_only)
 {
 	ForEachSandbox(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
-		bool paused_or_running = sandbox->run_state == EDITOR_SANDBOX_RUNNING || sandbox->run_state == EDITOR_SANDBOX_PAUSED;
-		if (sandbox->should_play && paused_or_running) {
+		bool should_stop = false;
+		if (paused_only) {
+			should_stop = sandbox->run_state == EDITOR_SANDBOX_PAUSED;
+		}
+		else if (running_only) {
+			should_stop = sandbox->run_state == EDITOR_SANDBOX_RUNNING;
+		}
+		else {
+			should_stop = sandbox->run_state == EDITOR_SANDBOX_RUNNING || sandbox->run_state == EDITOR_SANDBOX_PAUSED;
+		}
+
+		if (sandbox->should_play && should_stop) {
 			EndSandboxWorldSimulation(editor_state, sandbox_index);
 		}
 	});
@@ -989,7 +1005,7 @@ void EndSandboxWorldSimulations(EditorState* editor_state)
 unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return SearchBytes(sandbox->selected_entities.buffer, sandbox->selected_entities.size, entity.value, sizeof(entity));
+	return (unsigned int)SearchBytes(sandbox->selected_entities.ToStream(), entity);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1016,7 +1032,7 @@ EditorSandboxEntitySlot FindSandboxVirtualEntitySlot(
 )
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	size_t slot_index = SearchBytes(sandbox->virtual_entities_slots.buffer, sandbox->virtual_entities_slots.size, entity.value, sizeof(entity));
+	size_t slot_index = SearchBytes(sandbox->virtual_entities_slots.ToStream(), entity);
 	if (slot_index != -1) {
 		ECS_ASSERT(sandbox->virtual_entity_slot_type[slot_index].slot_type != EDITOR_SANDBOX_ENTITY_SLOT_COUNT);
 		return sandbox->virtual_entity_slot_type[slot_index];
@@ -1170,7 +1186,7 @@ void GetSandboxSelectedEntitiesFiltered(
 
 	filtered_entities->CopyOther(selected_entities);
 	for (size_t index = 0; index < virtual_entities.size && selected_entities.size > 0; index++) {
-		size_t found_index = SearchBytes(filtered_entities->buffer, filtered_entities->size, virtual_entities[index].value, sizeof(virtual_entities[index]));
+		size_t found_index = SearchBytes(filtered_entities->ToStream(), virtual_entities[index]);
 		if (found_index != -1) {
 			filtered_entities->RemoveSwapBack(found_index);
 			filtered_entities->buffer[filtered_entities->size] = virtual_entities[index];
@@ -1208,7 +1224,7 @@ static void ForEachSandboxSelectedVirtualEntity(const EditorState* editor_state,
 	Stream<Entity> virtual_entities = GetSandboxVirtualEntitySlots(editor_state, sandbox_index);
 
 	for (size_t index = 0; index < virtual_entities.size && selected_entities.size > 0; index++) {
-		size_t found_index = SearchBytes(selected_entities.buffer, selected_entities.size, virtual_entities[index].value, sizeof(virtual_entities[index]));
+		size_t found_index = SearchBytes(selected_entities, virtual_entities[index]);
 		if (found_index != -1) {
 			functor(virtual_entities[index]);
 		}
@@ -1260,12 +1276,7 @@ static void ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo(EditorState*
 					if (sandbox->virtual_entity_slot_type[subindex].slot_type == EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS) {
 						if (component == sandbox->virtual_entity_slot_type[subindex].Data<Component>()) {
 							// Check to see if it is selected
-							bool is_selected = SearchBytes(
-								selected_entities.buffer,
-								selected_entities.size,
-								sandbox->virtual_entities_slots[subindex],
-								sizeof(Entity)
-							) != -1;
+							bool is_selected = SearchBytes(selected_entities, sandbox->virtual_entities_slots[subindex]) != -1;
 							if (is_selected) {
 								functor(transform_pointers[index], sandbox->virtual_entities_slots[subindex]);
 							}
@@ -1789,6 +1800,9 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		MemoryManager runtime_query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(GetAllocatorPolymorphic(editor_state->GlobalMemoryManager()));
 		ArchetypeQueryCache runtime_query_cache;
 
+		// We need to record the query cache to restore it later
+		sandbox->sandbox_world.entity_manager->CopyQueryCache(&runtime_query_cache, GetAllocatorPolymorphic(&runtime_query_cache_allocator));
+
 		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
 		if (active_viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			viewport_entity_manager = &sandbox->scene_entities;
@@ -1796,9 +1810,6 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			// Bind to the sandbox the scene entity manager
 			sandbox->sandbox_world.entity_manager = viewport_entity_manager;
 		}
-
-		// We need to record the query cache to restore it later
-		sandbox->sandbox_world.entity_manager->CopyQueryCache(&runtime_query_cache, GetAllocatorPolymorphic(&runtime_query_cache_allocator));
 
 		auto deallocate_temp_resources_and_restore = [&]() {
 			AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
@@ -1830,6 +1841,8 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		sandbox->sandbox_world.entity_manager = runtime_entity_manager;
 		sandbox->sandbox_world.task_manager = runtime_task_manager;
 		sandbox->sandbox_world.task_scheduler = runtime_task_scheduler;
+
+		sandbox->sandbox_world.entity_manager->RestoreQueryCache(&runtime_query_cache);
 
 		// Deallocate the task scheduler and the entity manager query cache
 		// Reset the task manager static tasks
@@ -2045,6 +2058,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 
 	// Clear the sandbox waiting compilation flag - it will be reset if it is still valid
+	bool was_waiting = HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 
 	// Before running the simulation, we need to check to see if the modules are still valid - they might have been changed
@@ -2060,6 +2074,11 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 		return true;
 	}
+
+	if (was_waiting) {
+		// We need to reconstruct the 
+	}
+
 	// If it returned OK, then we can proceed as normal
 
 	// Before actually running, we also need to check the asset reference snapshot
@@ -2486,7 +2505,7 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 	else {
 		bool is_any_running = IsAnyDefaultSandboxRunning(editor_state);
 		if (is_any_running) {
-			EndSandboxWorldSimulations(editor_state);
+			EndSandboxWorldSimulations(editor_state, false, true);
 		}
 	}
 
@@ -2510,10 +2529,7 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 	else {
 		bool is_any_paused = IsAnyDefaultSandboxPaused(editor_state);
 		if (is_any_paused) {
-			RunSandboxWorlds(editor_state);
-			if (!EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
-				EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
-			}
+			EndSandboxWorldSimulations(editor_state, true);
 		}
 	}
 }

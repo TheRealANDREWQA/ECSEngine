@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "Camera.h"
 #include "../Utilities/Algorithms.h"
+#include "../Math/MathHelpers.h"
 
 namespace ECSEngine {
 
@@ -346,5 +347,78 @@ namespace ECSEngine {
 	}
 
 	ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, FocusCameraOnObjectViewSpace, const Camera*, const CameraCached*, float3, Quaternion, float3, AABBStorage, float2);
+
+	float2 GetCameraFrustumPlaneDimensions(float vertical_fov, float aspect_ratio, float z_depth)
+	{
+		float tan_half_fov = tan(0.5f * DegToRad(vertical_fov));
+		float plane_height = 2.0f * z_depth * tan_half_fov;
+		float plane_width = plane_height * aspect_ratio;
+		return { plane_width, plane_height };
+	}
+
+	void GetCameraFrustumPlaneDimensions(float vertical_fov, float aspect_ratio, Stream<float> z_depth, float2* dimensions)
+	{
+		float tan_half_fov = tan(0.5f * DegToRad(vertical_fov));
+		float factor = 2.0f * tan_half_fov;
+		for (size_t index = 0; index < z_depth.size; index++) {
+			dimensions[index].x = factor * z_depth[index];
+			dimensions[index].y = dimensions[index].x * aspect_ratio;
+		}
+	}
+
+	template<typename CameraType>
+	float2 GetCameraFrustumNearPlaneDimensions(const CameraType* camera) {
+		return GetCameraFrustumPlaneDimensions(GetCameraVerticalFOV(camera), GetCameraAspectRatio(camera), GetCameraNearZ(camera));
+	}
+
+	ECS_TEMPLATE_FUNCTION_2_BEFORE(float2, GetCameraFrustumNearPlaneDimensions, const Camera*, const CameraCached*);
+
+	template<typename CameraType>
+	float2 GetCameraFrustumFarPlaneDimensions(const CameraType* camera) {
+		return GetCameraFrustumPlaneDimensions(GetCameraVerticalFOV(camera), GetCameraAspectRatio(camera), GetCameraFarZ(camera));
+	}
+
+	ECS_TEMPLATE_FUNCTION_2_BEFORE(float2, GetCameraFrustumFarPlaneDimensions, const Camera*, const CameraCached*);
+
+	template<typename CameraType>
+	float4 GetCameraFrustumNearAndFarPlaneDimensions(const CameraType* camera) {
+		float2 dimensions[2];
+		float z_depths[2];
+		z_depths[0] = GetCameraNearZ(camera);
+		z_depths[1] = GetCameraFarZ(camera);
+		GetCameraFrustumPlaneDimensions(GetCameraVerticalFOV(camera), GetCameraAspectRatio(camera), { z_depths, 2 }, dimensions);
+
+		return { dimensions[0], dimensions[1] };
+	}
+
+	ECS_TEMPLATE_FUNCTION_2_BEFORE(float4, GetCameraFrustumNearAndFarPlaneDimensions, const Camera*, const CameraCached*);
+		
+	template<typename CameraType>
+	FrustumPoints GetCameraFrustumPoints(const CameraType* camera) {
+		FrustumPoints points;
+
+		float4 plane_dimensions = GetCameraFrustumNearAndFarPlaneDimensions(camera);
+		float3 camera_direction = GetCameraForwardVector(camera).AsFloat3Low();
+		float3 camera_right = GetCameraRightVector(camera).AsFloat3Low();
+		float3 camera_up = GetCameraUpVector(camera).AsFloat3Low();
+
+		float3 near_plane_center = camera->translation + camera_direction * GetCameraNearZ(camera);
+		float3 far_plane_center = camera->translation + camera_direction * GetCameraFarZ(camera);
+
+		float2 half_near_plane_dimensions = plane_dimensions.xy() * float2::Splat(0.5f);
+		float2 half_far_plane_dimensions = plane_dimensions.zw() * float2::Splat(0.5f);
+
+		float3 near_width_offset = float3::Splat(half_near_plane_dimensions.x) * camera_right;
+		float3 near_height_offset = float3::Splat(half_near_plane_dimensions.y) * camera_up;
+		points.near_plane = GetRectangle3D(near_plane_center, near_width_offset, near_height_offset);
+
+		float3 far_width_offset = float3::Splat(half_far_plane_dimensions.x) * camera_right;
+		float3 far_height_offset = float3::Splat(half_far_plane_dimensions.y) * camera_up;
+		points.far_plane = GetRectangle3D(far_plane_center, far_width_offset, far_height_offset);
+		
+		return points;
+	}
+
+	ECS_TEMPLATE_FUNCTION_2_BEFORE(FrustumPoints, GetCameraFrustumPoints, const Camera*, const CameraCached*);
 
 }

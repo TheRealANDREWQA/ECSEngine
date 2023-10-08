@@ -11,6 +11,7 @@
 #include "../AssetSettingHelper.h"
 #include "../../Assets/AssetManagement.h"
 #include "../../Assets/AssetExtensions.h"
+#include "../../Assets/AssetBuiltins.h"
 #include "../AssetOverrides.h"
 #include "../AssetIcons.h"
 #include "../../Project/ProjectFolders.h"
@@ -52,12 +53,12 @@ enum ORDER : unsigned char {
 	ORDER_COUNT
 };
 
-inline ECS_MATERIAL_SHADER GetMaterialShader(ORDER order) {
+ECS_INLINE ECS_MATERIAL_SHADER GetMaterialShader(ORDER order) {
 	return order == VERTEX_ORDER ? ECS_MATERIAL_SHADER_VERTEX : ECS_MATERIAL_SHADER_PIXEL;
 }
 
 struct InspectorDrawMaterialFileData {
-	inline AllocatorPolymorphic MaterialAssetAlllocator() const {
+	ECS_INLINE AllocatorPolymorphic MaterialAssetAlllocator() const {
 		return editor_state->EditorAllocator();
 	}
 
@@ -88,17 +89,19 @@ struct InspectorDrawMaterialFileData {
 	// deallocate the previous manager
 	ResizableLinearAllocator shader_cbuffer_allocator[ORDER_COUNT][2];
 	MemoryManager database_allocator;
+
+	EDITOR_MATERIAL_BUILTIN builtin;
 };
 
 // ------------------------------------------------------------------------------------------------------------
 
-inline unsigned int GetShaderHandle(const InspectorDrawMaterialFileData* data, ORDER order) {
+ECS_INLINE unsigned int GetShaderHandle(const InspectorDrawMaterialFileData* data, ORDER order) {
 	return order == VERTEX_ORDER ? data->material_asset.vertex_shader_handle : data->material_asset.pixel_shader_handle;
 }
 
 // ------------------------------------------------------------------------------------------------------------
 
-void GetUITypeNameForCBuffer(
+static void GetUITypeNameForCBuffer(
 	const InspectorDrawMaterialFileData* data, 
 	unsigned int inspector_index, 
 	unsigned int shader_handle,
@@ -115,7 +118,7 @@ void GetUITypeNameForCBuffer(
 // ------------------------------------------------------------------------------------------------------------
 
 // It will also increment the current index
-void DeallocateCurrentShaderAllocator(InspectorDrawMaterialFileData* draw_data, ORDER order) {
+static void DeallocateCurrentShaderAllocator(InspectorDrawMaterialFileData* draw_data, ORDER order) {
 	unsigned char current_index = draw_data->shader_cbuffer_allocator_index[order];
 	draw_data->shader_cbuffer_allocator[order][current_index].Clear();
 	if (current_index == 0) {
@@ -128,13 +131,13 @@ void DeallocateCurrentShaderAllocator(InspectorDrawMaterialFileData* draw_data, 
 
 // ------------------------------------------------------------------------------------------------------------
 
-AllocatorPolymorphic GetCurrentShaderAllocator(InspectorDrawMaterialFileData* draw_data, ORDER order) {
+ECS_INLINE static AllocatorPolymorphic GetCurrentShaderAllocator(InspectorDrawMaterialFileData* draw_data, ORDER order) {
 	return GetAllocatorPolymorphic(draw_data->shader_cbuffer_allocator[order] + draw_data->shader_cbuffer_allocator_index[order]);
 }
 
 // ------------------------------------------------------------------------------------------------------------
 
-void DeallocateCBuffers(
+static void DeallocateCBuffers(
 	InspectorDrawMaterialFileData* draw_data, 
 	unsigned int inspector_index, 
 	ORDER order
@@ -157,7 +160,7 @@ void DeallocateCBuffers(
 
 // ------------------------------------------------------------------------------------------------------------
 
-void DeallocateTextures(InspectorDrawMaterialFileData* draw_data, ORDER order) {
+static void DeallocateTextures(InspectorDrawMaterialFileData* draw_data, ORDER order) {
 	if (draw_data->textures[order].size > 0) {
 		for (size_t index = 0; index < draw_data->textures[order].size; index++) {
 			draw_data->editor_state->module_reflection->DeallocateFieldOverride(TEXTURE_TAG, draw_data->texture_override_data[order][index]);
@@ -170,7 +173,7 @@ void DeallocateTextures(InspectorDrawMaterialFileData* draw_data, ORDER order) {
 
 // ------------------------------------------------------------------------------------------------------------
 
-void DeallocateSamplers(InspectorDrawMaterialFileData* draw_data, ORDER order) {
+static void DeallocateSamplers(InspectorDrawMaterialFileData* draw_data, ORDER order) {
 	if (draw_data->samplers[order].size > 0) {
 		for (size_t index = 0; index < draw_data->samplers[order].size; index++) {
 			draw_data->editor_state->module_reflection->DeallocateFieldOverride(SAMPLER_TAG, draw_data->sampler_override_data[order][index]);
@@ -183,7 +186,7 @@ void DeallocateSamplers(InspectorDrawMaterialFileData* draw_data, ORDER order) {
 
 // ------------------------------------------------------------------------------------------------------------
 
-void BaseModifyCallback(ActionData* action_data) {
+static void BaseModifyCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	InspectorDrawMaterialFileData* data = (InspectorDrawMaterialFileData*)_data;
@@ -204,7 +207,7 @@ void BaseModifyCallback(ActionData* action_data) {
 // The new_reflected_buffers is needed for the slot index. The new_cbuffers are going to be copied individually
 // and a new buffer allocated for the stream. Also the UI types and instances will be created
 // It will also deallocate the old cbuffers
-void RegisterNewCBuffers(
+static void RegisterNewCBuffers(
 	InspectorDrawMaterialFileData* draw_data,
 	unsigned int inspector_index,
 	ORDER order,
@@ -307,12 +310,7 @@ void RegisterNewCBuffers(
 		UIReflectionType* ui_type = draw_data->editor_state->ui_reflection->CreateType(draw_data->cbuffers[order].buffer + index, &create_options);
 		// Add matrix types if any - if they are not skipped by the inject fields
 		for (size_t subindex = 0; subindex < matrix_types[index].size; subindex++) {
-			bool is_injected = SearchBytes(
-				ignore_type_fields.buffer, 
-				ignore_type_fields.size, 
-				matrix_types[index][subindex].position.x, 
-				sizeof(matrix_types[index][subindex].position.x)
-			) != -1;
+			bool is_injected = SearchBytes(ignore_type_fields.ToStream(), matrix_types[index][subindex].position.x) != -1;
 			if (!is_injected) {
 				UIReflectionTypeFieldGrouping grouping;
 				grouping.field_index = matrix_types[index][subindex].position.x;
@@ -331,7 +329,7 @@ void RegisterNewCBuffers(
 
 // ------------------------------------------------------------------------------------------------------------
 
-void RegisterNewTextures(
+static void RegisterNewTextures(
 	InspectorDrawMaterialFileData* draw_data,
 	ORDER order,
 	Stream<ShaderReflectedTexture> new_textures
@@ -402,7 +400,7 @@ void RegisterNewTextures(
 
 // ------------------------------------------------------------------------------------------------------------
 
-void RegisterNewSamplers(
+static void RegisterNewSamplers(
 	InspectorDrawMaterialFileData* draw_data,
 	ORDER order,
 	Stream<ShaderReflectedSampler> new_samplers
@@ -474,11 +472,11 @@ void RegisterNewSamplers(
 
 // ------------------------------------------------------------------------------------------------------------
 
-void InitializeReflectionManager(InspectorDrawMaterialFileData* data) {
+static void InitializeReflectionManager(InspectorDrawMaterialFileData* data) {
 	data->reflection_manager = Reflection::ReflectionManager(data->editor_state->EditorAllocator(), 64, 0);
 }
 
-void RecreateReflectionManagerForShaders(InspectorDrawMaterialFileData* data) {
+static void RecreateReflectionManagerForShaders(InspectorDrawMaterialFileData* data) {
 	data->reflection_manager.ClearFromAllocator(true, false);
 	InitializeReflectionManager(data);
 
@@ -511,7 +509,7 @@ void RecreateReflectionManagerForShaders(InspectorDrawMaterialFileData* data) {
 
 // ------------------------------------------------------------------------------------------------------------
 
-void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_index) {
+static void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_index) {
 	// Returns true if it managed to open the file, else false
 	EditorState* editor_state = data->editor_state;
 	auto reload_shader = [data, editor_state, inspector_index](Stream<wchar_t> shader_path, ORDER order) {
@@ -617,7 +615,8 @@ void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_i
 					// Verify the metadata file now
 					ECS_STACK_CAPACITY_STREAM(wchar_t, metadata_file, 512);
 					Stream<char> asset_name = data->temporary_database.GetAssetName(current_handle, ECS_ASSET_SHADER);
-					data->temporary_database.FileLocationShader(asset_name, shader_file, metadata_file);
+					Stream<wchar_t> asset_file = data->temporary_database.GetAssetPath(current_handle, ECS_ASSET_SHADER);
+					data->temporary_database.FileLocationAsset(asset_name, asset_file, metadata_file, ECS_ASSET_SHADER);
 					size_t new_metadata_time_stamp = OS::GetFileLastWrite(metadata_file);
 					if (data->metadata_shader_stamp[index] == 0 || data->metadata_shader_stamp[index] == -1 || new_metadata_time_stamp > data->metadata_shader_stamp[index]) {
 						// Reload the shader
@@ -651,7 +650,7 @@ struct ShaderModifyCallbackData {
 	ORDER order;
 };
 
-void ShaderModifyCallback(ActionData* action_data) {
+static void ShaderModifyCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ShaderModifyCallbackData* data = (ShaderModifyCallbackData*)_data;
@@ -696,7 +695,7 @@ void ShaderModifyCallback(ActionData* action_data) {
 
 // ------------------------------------------------------------------------------------------------------------
 
-void InspectorCleanMaterial(EditorState* editor_state, unsigned int inspector_index, void* _data) {
+static void InspectorCleanMaterial(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawMaterialFileData* data = (InspectorDrawMaterialFileData*)_data;
 
 	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
@@ -719,6 +718,18 @@ void InspectorCleanMaterial(EditorState* editor_state, unsigned int inspector_in
 	}
 
 	Deallocate(editor_allocator, data->material_asset.name.buffer);
+}
+
+// ------------------------------------------------------------------------------------------------------------
+
+struct SetMaterialBuiltinCallbackData {
+	InspectorDrawMaterialFileData* data;
+};
+
+static void SetMaterialBuiltinCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	SetMaterialBuiltinCallbackData* data = (SetMaterialBuiltinCallbackData*)_data;
 }
 
 // ------------------------------------------------------------------------------------------------------------

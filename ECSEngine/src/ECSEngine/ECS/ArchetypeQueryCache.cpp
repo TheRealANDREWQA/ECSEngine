@@ -55,7 +55,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(unsigned int, results, ECS_KB * 8);
 		entity_manager->GetArchetypes(query, results);
 		// Allocate a new chunk
-		query_results.results->InitializeAndCopy(allocator, results);
+		query_results.results[index].InitializeAndCopy(allocator, results);
 		query_results.count++;
 
 		query_results.lock.unlock();
@@ -89,7 +89,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(unsigned int, results, ECS_KB * 8);
 		entity_manager->GetArchetypes(query, results);
 		// Allocate a new chunk
-		exclude_query_results.results->InitializeAndCopy(allocator, results);
+		exclude_query_results.results[index].InitializeAndCopy(allocator, results);
 		exclude_query_results.count++;
 
 		exclude_query_results.lock.unlock();
@@ -199,7 +199,7 @@ namespace ECSEngine {
 			// Check the exclude results
 			handle -= EXCLUDE_HANDLE_OFFSET;
 			ECS_CRASH_RETURN_VALUE(
-				handle > exclude_query_results.count,
+				handle < exclude_query_results.count,
 				result,
 				"ArchetypeQueryCache: Invalid handle for exclude query. Requested index {#} when count is {#}.",
 				handle,
@@ -211,7 +211,7 @@ namespace ECSEngine {
 		}
 		else {
 			ECS_CRASH_RETURN_VALUE(
-				handle > query_results.count,
+				handle < query_results.count,
 				result,
 				"ArchetypeQueryCache: Invalid handle for normal query. Requested index {#} when count is {#}.",
 				handle,
@@ -353,8 +353,11 @@ namespace ECSEngine {
 		const size_t STACK_CAPACITY = ECS_KB * 8;
 		ECS_STACK_CAPACITY_STREAM(unsigned int, temporary_values, STACK_CAPACITY);
 
+		// The last archetype has also changed position and we must update its reference
+		unsigned int last_archetype_index = entity_manager->m_archetypes.size;
+
 		auto loop_iteration = [&](Stream<unsigned int>& values) {
-			size_t result_index = SearchBytes(values.buffer, values.size, archetype_index, sizeof(unsigned int));
+			size_t result_index = SearchBytes(values, archetype_index);
 			if (result_index != -1) {
 				values.RemoveSwapBack(result_index);
 
@@ -364,6 +367,12 @@ namespace ECSEngine {
 
 				values.Initialize(allocator, values.size);
 				values.CopyOther(temporary_values);
+			}
+
+			// Check for the last archetype index to update the reference
+			size_t last_archetype_index_value_index = SearchBytes(values, last_archetype_index);
+			if (last_archetype_index_value_index != -1) {
+				values[last_archetype_index_value_index] = archetype_index;
 			}
 		};
 
@@ -393,12 +402,7 @@ namespace ECSEngine {
 				// First do the removal of old archetypes. This should be done one by one because otherwise
 				// the indices become invalidated when RemoveSwapBack happens
 				for (size_t removal_index = 0; removal_index < remove_archetypes.size; removal_index++) {
-					size_t result_index = SearchBytes(
-						query_results.results[index].buffer,
-						query_results.results[index].size,
-						remove_archetypes[removal_index],
-						sizeof(unsigned int)
-					);
+					size_t result_index = SearchBytes(query_results.results[index], remove_archetypes[removal_index]);
 					if (result_index != -1) {
 						query_results.results[index].RemoveSwapBack(result_index);
 					}

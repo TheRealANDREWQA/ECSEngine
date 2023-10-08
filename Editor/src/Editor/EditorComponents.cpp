@@ -1487,14 +1487,14 @@ void EditorComponents::GetModuleTypesDependencies(unsigned int loaded_module_ind
 				if (module_index != 0) {
 					unsigned int reflection_index = ReflectionModuleIndex(editor_state, module_index);
 					ECS_ASSERT(reflection_index != -1);
-					bool exists = SearchBytes(module_indices->buffer, module_indices->size, reflection_index, sizeof(reflection_index)) != -1;
+					bool exists = SearchBytes(module_indices->ToStream(), reflection_index) != -1;
 					if (!exists) {
 						module_indices->AddAssert(reflection_index);
 					}
 				}
 			}
 			else {
-				bool exists = SearchBytes(module_indices->buffer, module_indices->size, module_index, sizeof(module_index)) != -1;
+				bool exists = SearchBytes(module_indices->ToStream(), module_index) != -1;
 				if (!exists) {
 					module_indices->AddAssert(module_index);
 				}
@@ -1513,7 +1513,7 @@ void EditorComponents::GetModulesTypesDependentUpon(unsigned int loaded_module_i
 		if (index != loaded_module_index) {
 			dependent_indices.size = 0;
 			GetModuleTypesDependencies(index, &dependent_indices);
-			bool exists = SearchBytes(dependent_indices.buffer, dependent_indices.size, loaded_module_index, sizeof(loaded_module_index)) != -1;
+			bool exists = SearchBytes(dependent_indices.ToStream(), loaded_module_index) != -1;
 			if (exists) {
 				unsigned int index_to_add = index;
 				if (editor_state != nullptr) {

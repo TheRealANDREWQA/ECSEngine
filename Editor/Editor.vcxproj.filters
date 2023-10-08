@@ -70,6 +70,7 @@
     <ClInclude Include="src\Sandbox\SandboxFile.h" />
     <ClInclude Include="src\Sandbox\SandboxAccessor.h" />
     <ClInclude Include="src\Sandbox\SandboxModule.h" />
+    <ClInclude Include="src\Assets\AssetBuiltins.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -132,6 +133,7 @@
     <ClCompile Include="src\Sandbox\SandboxAccessor.cpp" />
     <ClCompile Include="src\Sandbox\SandboxModule.cpp" />
     <ClCompile Include="src\Assets\AssetExtensions.cpp" />
+    <ClCompile Include="src\Assets\AssetBuiltins.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

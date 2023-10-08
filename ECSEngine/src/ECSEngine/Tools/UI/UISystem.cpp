@@ -5129,12 +5129,8 @@ namespace ECSEngine {
 
 		bool UISystem::ExistsWindowMemoryResource(unsigned int window_index, const void* pointer) const
 		{
-			return SearchBytes(
-				m_windows[window_index].memory_resources.buffer,
-				m_windows[window_index].memory_resources.size,
-				(size_t)pointer,
-				sizeof(pointer)
-			) != -1;
+			// The cast is used to match the types to that of the stream
+			return SearchBytes(m_windows[window_index].memory_resources.ToStream(), (void*)pointer) != -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9487,7 +9483,8 @@ namespace ECSEngine {
 
 		void UISystem::RemoveWindowMemoryResource(unsigned int window_index, const void* buffer)
 		{
-			size_t index = SearchBytes(m_windows[window_index].memory_resources.buffer, m_windows[window_index].memory_resources.size, (size_t)buffer, sizeof(buffer));
+			// The type stored is void*, the cast is just to make the compiler happy let us continue
+			size_t index = SearchBytes(m_windows[window_index].memory_resources.ToStream(), (void*)buffer);
 			ECS_ASSERT(index != -1);
 			RemoveWindowMemoryResource(window_index, index);
 		}
@@ -9555,10 +9552,11 @@ namespace ECSEngine {
 		{
 			UIWindowDynamicResource* resource = GetWindowDynamicElement(window_index, index);
 
-			size_t buffer_index = SearchBytes(resource->element_allocations.buffer, resource->element_allocations.size, (size_t)buffer, sizeof(buffer));
+			// The cast is used to make the type match that of the stream
+			size_t buffer_index = SearchBytes(resource->element_allocations, (void*)buffer);
 			if (buffer_index == -1) {
 				// Might be in the added allocations
-				buffer_index = SearchBytes(resource->added_allocations.buffer, resource->added_allocations.size, (size_t)buffer, sizeof(buffer));
+				buffer_index = SearchBytes(resource->added_allocations, (void*)buffer);
 				
 				if (buffer_index != -1) {
 					resource->added_allocations.RemoveSwapBack(buffer_index);
@@ -9612,7 +9610,8 @@ namespace ECSEngine {
 
 		void UISystem::ReplaceWindowMemoryResource(unsigned int window_index, const void* old_buffer, const void* new_buffer)
 		{
-			size_t index = SearchBytes(m_windows[window_index].memory_resources.buffer, m_windows[window_index].memory_resources.size, (size_t)old_buffer, sizeof(old_buffer));
+			// The cast is used to make the type match that of the stream
+			size_t index = SearchBytes(m_windows[window_index].memory_resources.ToStream(), (void*)old_buffer);
 			ECS_ASSERT(index != -1);
 			m_windows[window_index].memory_resources[index] = (void*)new_buffer;
 		}
@@ -9628,10 +9627,11 @@ namespace ECSEngine {
 					return;
 				}
 			}
-			size_t resource_index = SearchBytes(resource->element_allocations.buffer, resource->element_allocations.size, (size_t)old_buffer, sizeof(old_buffer));
+			// The cast is to used to match the type to that one of the stream
+			size_t resource_index = SearchBytes(resource->element_allocations, (void*)old_buffer);
 			if (resource_index == -1) {
 				// Might be an added allocation
-				resource_index = SearchBytes(resource->added_allocations.buffer, resource->added_allocations.size, (size_t)old_buffer, sizeof(old_buffer));
+				resource_index = SearchBytes(resource->added_allocations, (void*)old_buffer);
 				ECS_ASSERT(resource_index != -1);
 				resource->added_allocations[resource_index] = new_buffer;
 			}
@@ -11022,12 +11022,7 @@ namespace ECSEngine {
 			unsigned int border_index;
 			UIDockspace* dockspace = GetDockspaceFromWindow(index, border_index, type);
 
-			unsigned int in_stream_index = SearchBytes(
-				dockspace->borders[border_index].window_indices.buffer, 
-				dockspace->borders[border_index].window_indices.size, 
-				index, 
-				sizeof(unsigned short)
-			);
+			unsigned int in_stream_index = SearchBytes(dockspace->borders[border_index].window_indices.ToStream(), (unsigned short)index);
 			ECS_ASSERT(in_stream_index != -1);
 			dockspace->borders[border_index].active_window = in_stream_index;
 		}

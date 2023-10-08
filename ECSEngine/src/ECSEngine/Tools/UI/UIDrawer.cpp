@@ -10608,6 +10608,23 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		struct UIDrawerPathTextCallbackData {
+			void CallCallback(ActionData* action_data) {
+				if (user_callback != nullptr) {
+					if (user_callback_data == nullptr) {
+						action_data->data = OffsetPointer(this, sizeof(UIDrawerPathTextCallbackData));
+					}
+					else {
+						action_data->data = user_callback_data;
+					}
+
+					// Also convert the previous text such that the callback has access to it
+					ECS_STACK_CAPACITY_STREAM(wchar_t, previous_path, 512);
+					ConvertASCIIToWide(previous_path, input->previous_text);
+					action_data->additional_data = &previous_path;
+					user_callback(action_data);
+				}
+			}
+
 			UIDrawerTextInput* input;
 			CapacityStream<wchar_t>* target;
 			Action user_callback;
@@ -10623,20 +10640,7 @@ namespace ECSEngine {
 			data->target->size = 0;
 			ConvertASCIIToWide(*data->target, *data->input->text);
 
-			if (data->user_callback != nullptr) {
-				if (data->user_callback_data == nullptr) {
-					action_data->data = OffsetPointer(data, sizeof(UIDrawerPathTextCallbackData));
-				}
-				else {
-					action_data->data = data->user_callback_data;
-				}
-
-				// Also convert the previous text such that the callback has access to it
-				ECS_STACK_CAPACITY_STREAM(wchar_t, previous_path, 512);
-				ConvertASCIIToWide(previous_path, data->input->previous_text);
-				action_data->additional_data = &previous_path;
-				data->user_callback(action_data);
-			}
+			data->CallCallback(action_data);
 		}
 
 		UIDrawerTextInput* UIDrawerPathInputInitializer(
@@ -10780,6 +10784,14 @@ namespace ECSEngine {
 					if (path_converted.size > 0) {
 						text_input->InsertCharacters(path_converted.buffer, path_converted.size, 0, drawer->system);
 					}
+
+					// Call the user callback, if any
+					if (callback_data->user_callback != nullptr) {
+						ActionData action_data = drawer->GetDummyActionData();
+						action_data.data = callback_data;
+						callback_data->CallCallback(&action_data);
+					}
+
 					// Disable the callback
 					text_input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 				}
@@ -13017,6 +13029,9 @@ namespace ECSEngine {
 								frame_handler_data->label_position = label_position;
 								frame_handler_data->label_scale = label_scale;
 							}
+
+							// 2 additions were made here
+							internal_config.flag_count -= 2;
 						}
 						else {
 							size_t current_label_configuration = ClearFlag(configuration, UI_CONFIG_DO_CACHE) | label_configuration | UI_CONFIG_LABEL_TRANSPARENT;

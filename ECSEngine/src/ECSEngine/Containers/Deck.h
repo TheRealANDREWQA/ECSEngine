@@ -117,7 +117,7 @@ namespace ECSEngine {
 			size_t chunk_index = RangeSelector::Chunk(index, chunk_size, miscellaneous);
 			size_t in_chunk_index = RangeSelector::Buffer(index, chunk_size, miscellaneous);
 			// Search for the chunk index inside the chunks_with_elements
-			if (SearchBytes(chunks_with_elements.buffer, chunks_with_elements.size, chunk_index, sizeof(unsigned int)) == -1) {
+			if (SearchBytes(chunks_with_elements, (unsigned int)chunk_index) == -1) {
 				return false;
 			}
 

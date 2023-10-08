@@ -346,13 +346,13 @@ namespace ECSEngine {
 		}
 
 		VectorType first_character;
-		size_t last_character_to_check = characters.size - token.size + 1;
+		size_t last_character_to_check = characters.size - token.size;
 		size_t simd_count = GetSimdCount(last_character_to_check, first_character.size());
 
 		// The scalar loop must be done before the 
 		if constexpr (reverse) {
 			// Use a scalar loop
-			for (size_t index = simd_count; index < last_character_to_check; index++) {
+			for (size_t index = simd_count; index <= last_character_to_check; index++) {
 				const CharacterType* character = characters.buffer + last_character_to_check - index + simd_count;
 				if (*character == token[0]) {
 					if (memcmp(character, token.buffer, token.size * sizeof(CharacterType)) == 0) {
@@ -421,7 +421,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	Stream<char> FindFirstCharacter(Stream<char> characters, char token) {
-		size_t index = SearchBytes(characters.buffer, characters.size, token, sizeof(token));
+		size_t index = SearchBytes(characters, token);
 		if (index == -1) {
 			return { nullptr, 0 };
 		}
@@ -431,7 +431,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	Stream<wchar_t> FindFirstCharacter(Stream<wchar_t> characters, wchar_t token) {
-		size_t index = SearchBytes(characters.buffer, characters.size, (size_t)token, sizeof(token));
+		size_t index = SearchBytes(characters, token);
 		if (index == -1) {
 			return { nullptr, 0 };
 		}

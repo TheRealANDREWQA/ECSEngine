@@ -3675,12 +3675,7 @@ namespace ECSEngine {
 				// DirectX can return the same pointer when resources are created with the same parameters.
 				// So keep looking for places that were also not yet checked
 				void* interface_pointer = m_internal_resources[index].interface_pointer;
-				size_t snapshot_index = SearchBytes(
-					snapshot.interface_pointers.buffer,
-					snapshot.interface_pointers.size,
-					(size_t)interface_pointer,
-					sizeof(interface_pointer)
-				);
+				size_t snapshot_index = SearchBytes(snapshot.interface_pointers, interface_pointer);
 				while (snapshot_index != -1 && (snapshot_index < snapshot.interface_pointers.size - 1) && was_found[snapshot_index]) {
 					size_t current_offset = SearchBytes(
 						snapshot.interface_pointers.buffer + snapshot_index + 1,

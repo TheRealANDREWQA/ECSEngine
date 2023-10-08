@@ -827,7 +827,7 @@ namespace ECSEngine {
 				size_t count_type = -1;
 				for (size_t config_index = 0; config_index < ui_config.size; config_index++) {
 					if (ui_config[config_index].index_count > 0) {
-						if (SearchBytes(indices.buffer, indices.size, (size_t)ui_config[config_index].index[0], sizeof(indices[0])) != -1) {
+						if (SearchBytes(indices, ui_config[config_index].index[0]) != -1) {
 							count_type = config_index;
 							break;
 						}
@@ -3869,7 +3869,7 @@ namespace ECSEngine {
 			};
 
 			auto is_field_omitted = [&](unsigned int index) {
-				return SearchBytes(ignore_fields.buffer, ignore_fields.size, (size_t)index, sizeof(index)) != -1;
+				return SearchBytes(ignore_fields, index) != -1;
 			};
 
 			for (size_t index = 0; index < reflected_type->fields.size; index++) {

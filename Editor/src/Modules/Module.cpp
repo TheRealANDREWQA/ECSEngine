@@ -54,7 +54,13 @@ constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 200;
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, bool disable_logging) {
+ECS_INLINE static void OpenModuleLogFile(Stream<wchar_t> log_path) {
+	OS::LaunchFileExplorerWithError(log_path);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, bool disable_logging) {
 	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	editor_allocator.allocation_type = ECS_ALLOCATION_MULTI;
 
@@ -81,6 +87,7 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, boo
 								CMD_BUILD_SYSTEM
 							);
 							EditorSetConsoleError(error_message);
+							OpenModuleLogFile(log_path);
 						}
 					}
 					else {
@@ -88,6 +95,7 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, boo
 							ECS_FORMAT_TEMP_STRING(error_message, "Module {#} has failed to build. Check the {#} log.",
 								Stream<wchar_t>(debug_ptr.buffer, underscore_after_library_name.buffer - debug_ptr.buffer), CMD_BUILD_SYSTEM);
 							EditorSetConsoleError(error_message);
+							OpenModuleLogFile(log_path);
 						}
 					}
 					return false;
@@ -105,6 +113,7 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, boo
 				if (!disable_logging) {
 					ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name. Check the {#} log.", CMD_BUILD_SYSTEM);
 					EditorSetConsoleError(error_message);
+					OpenModuleLogFile(log_path);
 				}
 				return false;
 			}
@@ -114,6 +123,7 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, boo
 		if (!disable_logging) {
 			ECS_FORMAT_TEMP_STRING(error_message, "Could not open {#} to read the log. Open the file externally to check the command status.", log_path);
 			EditorSetConsoleWarn(error_message);
+			OpenModuleLogFile(log_path);
 		}
 		return false;
 	}

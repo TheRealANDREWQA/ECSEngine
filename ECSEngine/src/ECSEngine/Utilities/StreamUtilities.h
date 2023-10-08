@@ -49,6 +49,8 @@ namespace ECSEngine {
 	template<typename IndexStream>
 	ECSENGINE_API void CopyStreamWithMask(void* buffer, Stream<void> data, IndexStream indices);
 
+	// -----------------------------------------------------------------------------------------------------------------------
+
 	template<typename Stream, typename Value, typename Function>
 	void GetMinFromStream(const Stream& input, Value& value, Function&& function) {
 		for (size_t index = 0; index < input.size; index++) {

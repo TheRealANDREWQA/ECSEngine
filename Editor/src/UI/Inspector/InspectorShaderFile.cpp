@@ -6,6 +6,7 @@
 
 #include "../../Assets/AssetManagement.h"
 #include "../../Assets/AssetExtensions.h"
+#include "../../Assets/AssetBuiltins.h"
 #include "../AssetIcons.h"
 #include "../AssetSettingHelper.h"
 #include "../../Modules/Module.h"
@@ -35,6 +36,8 @@ struct InspectorDrawShaderFileData {
 	Stream<char> shader_source_code;
 	Stream<Stream<char>> conditional_macros;
 	Timer timer;
+	EDITOR_SHADER_BUILTIN builtin;
+	size_t metadata_timestamp;
 };
 
 void DeallocateShaderStructures(EditorState* editor_state, InspectorDrawShaderFileData* data) {
@@ -46,6 +49,24 @@ void DeallocateShaderStructures(EditorState* editor_state, InspectorDrawShaderFi
 		if (data->conditional_macros.size > 0) {
 			editor_state->editor_allocator->Deallocate(data->conditional_macros.buffer);
 		}
+	}
+}
+
+template<bool deallocate_shader_structures>
+void InspectorCleanShader(EditorState* editor_state, unsigned int inspector_index, void* _data) {
+	InspectorDrawShaderFileData* data = (InspectorDrawShaderFileData*)_data;
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+
+	data->target_file.Deallocate(editor_allocator);
+	for (unsigned int index = 0; index < data->shader_macros.size; index++) {
+		editor_state->editor_allocator->Deallocate(data->shader_macros[index].definition_stream.buffer);
+		editor_state->editor_allocator->Deallocate(data->shader_macros[index].name_stream.buffer);
+	}
+	data->shader_macros.FreeBuffer();
+	data->shader_metadata.DeallocateMemory(editor_allocator);
+	// The set to builtin case shouldn't deallocate the shader structures
+	if constexpr (deallocate_shader_structures) {
+		DeallocateShaderStructures(editor_state, data);
 	}
 }
 
@@ -168,6 +189,63 @@ void MacroInputCallback(ActionData* action_data) {
 	AssetSettingsHelperChangedWithFileAction(action_data);
 }
 
+struct BuiltinCallbackData {
+	EditorState* editor_state;
+	InspectorDrawShaderFileData* data;
+};
+
+void BuiltinCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	BuiltinCallbackData* data = (BuiltinCallbackData*)_data;
+	if (data->data->builtin != EDITOR_SHADER_BUILTIN_COUNT) {
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+
+		ShaderMetadata builtin_metadata;
+		SetShaderBuiltin(data->editor_state, data->data->builtin, &data->data->shader_metadata, &builtin_metadata, GetAllocatorPolymorphic(&stack_allocator));
+		Stream<wchar_t> current_path = data->data->path.Copy(GetAllocatorPolymorphic(&stack_allocator));
+		//// Clean everything that the inspector currently holds, except for the shader structures
+		//// Since the reload will want to deallocate them
+		//InspectorCleanShader<false>(data->editor_state, 0, data->data);
+
+		unsigned int inspector_index = GetInspectorIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
+		ChangeInspectorToNothing(data->editor_state, inspector_index);
+		ChangeInspectorToShaderFile(data->editor_state, current_path, inspector_index);
+
+		//// Delay the timer such that it will get triggered the next iteration
+		//data->data->timer.DelayStart(-LAZY_EVALUATION_MILLISECONDS, ECS_TIMER_DURATION_MS);
+		//AllocatorPolymorphic editor_allocator = data->editor_state->EditorAllocator();
+		//data->data->shader_metadata.name = builtin_metadata.name.Copy(editor_allocator);
+		//data->data->target_file = builtin_metadata.file.Copy(editor_allocator);
+		//data->data->shader_macros.ResizeNoCopy(builtin_metadata.macros.size);
+		//// We also need to set the size such that it gets picked up in the AddMacroCallback
+		//data->data->shader_macros.size = builtin_metadata.macros.size;
+
+		//AddMacroData add_data;
+		//add_data.draw_data = data->data;
+		//add_data.editor_state = data->editor_state;
+
+		//UIDrawerArrayAddRemoveData add_remove_data;
+		//// This is actually the old value
+		//add_remove_data.new_size = 0;
+		//add_remove_data.resizable_data = (ResizableStream<void>*)&data->data->shader_macros;
+		//add_remove_data.is_resizable_data = true;
+		//add_remove_data.element_byte_size = sizeof(data->data->shader_macros.MemoryOf(1));
+		//add_remove_data.array_data = nullptr;
+
+		//// This will allocate the streams for all entries
+		//action_data->data = &add_data;
+		//action_data->additional_data = &add_remove_data;
+		//AddMacroCallback(action_data);
+		//
+		//// Now copy the actual macros
+		//for (size_t index = 0; index < builtin_metadata.macros.size; index++) {
+		//	data->data->shader_macros[index].name_stream.CopyOther(builtin_metadata.macros[index].name);
+		//	data->data->shader_macros[index].definition_stream.CopyOther(builtin_metadata.macros[index].definition);
+		//}
+	}
+};
+
 struct DrawShaderMacroData {
 	EditorState* editor_state;
 	InspectorDrawShaderFileData* data;
@@ -203,20 +281,6 @@ void DrawShaderMacro(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayD
 	config->flag_count--;
 }
 
-void InspectorCleanShader(EditorState* editor_state, unsigned int inspector_index, void* _data) {
-	InspectorDrawShaderFileData* data = (InspectorDrawShaderFileData*)_data;
-	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
-
-	data->shader_metadata.name.Deallocate(editor_allocator);
-	data->target_file.Deallocate(editor_allocator);
-	for (unsigned int index = 0; index < data->shader_macros.size; index++) {
-		editor_state->editor_allocator->Deallocate(data->shader_macros[index].definition_stream.buffer);
-		editor_state->editor_allocator->Deallocate(data->shader_macros[index].name_stream.buffer);
-	}
-	data->shader_macros.FreeBuffer();
-	DeallocateShaderStructures(editor_state, data);
-}
-
 void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
 	InspectorDrawShaderFileData* data = (InspectorDrawShaderFileData*)_data;
 
@@ -227,6 +291,8 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 	}
 
 	if (data->shader_metadata.name.size == 0) {
+		data->builtin = EDITOR_SHADER_BUILTIN_COUNT;
+
 		// Determine the name
 		ECS_STACK_CAPACITY_STREAM(char, name, 512);
 		GetAssetNameFromThunkOrForwardingFile(editor_state, data->path, name);
@@ -315,7 +381,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 		drawer->Text(configuration | UI_CONFIG_ALIGN_TO_ROW_Y, config, message);
 		drawer->NextRow();
 	}
-	
+
 	// Draw the settings
 	UIConfigNamePadding name_padding;
 	name_padding.total_length = ASSET_NAME_PADDING;
@@ -325,6 +391,44 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 	config.AddFlag(dependent_size);
 
 	const size_t BASE_CONFIGURATION = UI_CONFIG_NAME_PADDING | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ELEMENT_NAME_FIRST;
+
+	BuiltinCallbackData builtin_callback_data = { editor_state, data };
+	UIConfigComboBoxCallback builtin_combo_callback;
+	builtin_combo_callback.handler = { BuiltinCallback, &builtin_callback_data, sizeof(builtin_callback_data) };
+	config.AddFlag(builtin_combo_callback);
+
+	bool builtin_unavailable_values[std::size(EDITOR_SHADER_BUILTIN_NAME)];
+	// Determine which shaders are allowed for this type
+	for (size_t index = 0; index < std::size(EDITOR_SHADER_BUILTIN_NAME); index++) {
+		ECS_SHADER_TYPE shader_type = EDITOR_SHADER_BUILTIN_TYPE[index];
+		if (shader_type == data->shader_metadata.shader_type || shader_type == ECS_SHADER_TYPE_COUNT) {
+			builtin_unavailable_values[index] = false;
+		}
+		else {
+			builtin_unavailable_values[index] = true;
+		}
+	}
+
+	UIConfigComboBoxUnavailable builtin_unavailables;
+	builtin_unavailables.unavailables = builtin_unavailable_values;
+	config.AddFlag(builtin_unavailables);
+
+	// Determine if the builtin has changed - if it did, update the flag
+	data->builtin = FindShaderBuiltinIndex(&data->shader_metadata);
+
+	// Draw the combo box indicating builtins
+	drawer->ComboBox(
+		BASE_CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK | UI_CONFIG_COMBO_BOX_UNAVAILABLE,
+		config,
+		"Builtin", 
+		{ EDITOR_SHADER_BUILTIN_NAME, std::size(EDITOR_SHADER_BUILTIN_NAME) }, 
+		std::size(EDITOR_SHADER_BUILTIN_NAME), 
+		(unsigned char*)&data->builtin
+	);
+	drawer->NextRow();
+
+	// Combo callback and unavailables
+	config.flag_count -= 2;
 
 	struct FileInputTargetCallbackData {
 		InspectorDrawShaderFileData* draw_data;
@@ -669,7 +773,7 @@ void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path
 	uint3 inspector_indices = ChangeInspectorDrawFunctionWithSearchEx(
 		editor_state,
 		inspector_index,
-		{ InspectorDrawShaderFile, InspectorCleanShader },
+		{ InspectorDrawShaderFile, InspectorCleanShader<true> },
 		&data,
 		sizeof(data) + sizeof(wchar_t) * path.size,
 		-1,
@@ -689,6 +793,6 @@ void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path
 
 void InspectorShaderFileAddFunctors(InspectorTable* table) {
 	for (size_t index = 0; index < std::size(ASSET_SHADER_EXTENSIONS); index++) {
-		AddInspectorTableFunction(table, { InspectorDrawShaderFile, InspectorCleanShader }, ASSET_SHADER_EXTENSIONS[index]);
+		AddInspectorTableFunction(table, { InspectorDrawShaderFile, InspectorCleanShader<true> }, ASSET_SHADER_EXTENSIONS[index]);
 	}
 }

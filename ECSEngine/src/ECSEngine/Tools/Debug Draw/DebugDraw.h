@@ -816,4 +816,15 @@ namespace ECSEngine {
 	// Testing method that adds some primitives of each kind to see if they are displayed correctly
 	ECSENGINE_API void DebugDrawerAddToDrawShapes(DebugDrawer* drawer);
 
+	struct FrustumPoints;
+	
+	// Draws immediately
+	ECSENGINE_API void DrawDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawCallOptions options = {});
+
+	// Adds it to the main deck
+	ECSENGINE_API void AddDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawCallOptions options = {});
+
+	// Adds to the per thread draws
+	ECSENGINE_API void AddDebugFrustumThread(const FrustumPoints& frustum, DebugDrawer* drawer, unsigned int thread_id, Color color, DebugDrawCallOptions options = {});
+
 }

@@ -1936,9 +1936,9 @@ namespace ECSEngine {
 			ShaderIncludeFiles include(manager->m_memory, manager->m_shader_directory);
 			shader = manager->m_graphics->CreateShaderFromSource(
 				source_code,
-				type, 
+				type,
 				&include,
-				options, 
+				options,
 				byte_code,
 				HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY)
 			);
@@ -1946,14 +1946,18 @@ namespace ECSEngine {
 		}
 
 		if (shader_source_code == nullptr) {
-			manager->m_memory->Deallocate_ts(contents.buffer);
+			if (contents.size > 0) {
+				manager->m_memory->Deallocate_ts(contents.buffer);
+			}
 		}
 		else {
 			if (shader != nullptr) {
 				*shader_source_code = Stream<char>(contents.buffer, contents.size);
 			}
 			else {
-				manager->m_memory->Deallocate_ts(contents.buffer);
+				if (contents.size > 0) {
+					manager->m_memory->Deallocate_ts(contents.buffer);
+				}
 			}
 		}
 

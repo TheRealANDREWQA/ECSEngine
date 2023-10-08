@@ -66,36 +66,8 @@ namespace ECSEngine {
 		return value > max ? max : value;
 	}
 
-	// Returns the overlapping line as a pair of start, end (end is not included)
-	// If the lines don't overlap, it will return { -1, -1 }
-	ECSENGINE_API uint2 LineOverlap(
-		unsigned int first_start,
-		unsigned int first_end,
-		unsigned int second_start,
-		unsigned int second_end
-	);
-
-	// Returns the rectangle stored as xy - top left, zw - bottom right (the end is not included)
-	// that is overlapping between these 2 rectangles. If zero_if_not_valid
-	// is set to true then if one of the dimensions is 0, it will make the other
-	// one 0 as well (useful for iteration for example, since it will result in
-	// less iterations). If the rectangles don't overlap, it will return
-	// { -1, -1, -1, -1 }
-	ECSENGINE_API uint4 RectangleOverlap(
-		uint2 first_top_left,
-		uint2 first_bottom_right,
-		uint2 second_top_left,
-		uint2 second_bottom_right,
-		bool zero_if_not_valid = true
-	);
-
-	// Positions will be filled with the 4 corners of the rectangle
-	ECSENGINE_API void ObliqueRectangle(float2* positions, float2 a, float2 b, float thickness);
-
-	// -----------------------------------------------------------------------------------------------------------------------
-
-		// Returns a + b
-		// If it overflows, it will set it to the maximum value for that integer
+	// Returns a + b
+// If it overflows, it will set it to the maximum value for that integer
 	template<typename Integer>
 	ECS_INLINE Integer SaturateAdd(Integer a, Integer b) {
 		Integer new_value = a + b;
@@ -131,5 +103,33 @@ namespace ECSEngine {
 		*a = SaturateSub(*a, b);
 		return old_value;
 	}
+
+	// Returns the overlapping line as a pair of start, end (end is not included)
+	// If the lines don't overlap, it will return { -1, -1 }
+	ECSENGINE_API uint2 LineOverlap(
+		unsigned int first_start,
+		unsigned int first_end,
+		unsigned int second_start,
+		unsigned int second_end
+	);
+
+	// Returns the rectangle stored as xy - top left, zw - bottom right (the end is not included)
+	// that is overlapping between these 2 rectangles. If zero_if_not_valid
+	// is set to true then if one of the dimensions is 0, it will make the other
+	// one 0 as well (useful for iteration for example, since it will result in
+	// less iterations). If the rectangles don't overlap, it will return
+	// { -1, -1, -1, -1 }
+	ECSENGINE_API uint4 RectangleOverlap(
+		uint2 first_top_left,
+		uint2 first_bottom_right,
+		uint2 second_top_left,
+		uint2 second_bottom_right,
+		bool zero_if_not_valid = true
+	);
+
+	// Positions will be filled with the 4 corners of the rectangle
+	ECSENGINE_API void ObliqueRectangle(float2* positions, float2 a, float2 b, float thickness);
+
+	ECSENGINE_API Rectangle3D GetRectangle3D(float3 center, float3 half_width, float3 half_height);
 
 }

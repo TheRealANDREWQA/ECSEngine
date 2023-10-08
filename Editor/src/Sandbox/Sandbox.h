@@ -118,7 +118,8 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 
 // -------------------------------------------------------------------------------------------------------------
 
-void EndSandboxWorldSimulations(EditorState* editor_state);
+// Can choose to end simulations only for sandboxes that are only paused, only running, or either paused or running
+void EndSandboxWorldSimulations(EditorState* editor_state, bool paused_only = false, bool running_only = false);
 
 // -------------------------------------------------------------------------------------------------------------
 
