@@ -143,22 +143,6 @@ namespace ECSEngine {
 		// if the asset is referenced or not
 		bool DependsUpon(const void* main_asset, ECS_ASSET_TYPE type, const void* referenced_asset, ECS_ASSET_TYPE referenced_type) const;
 
-		/*ECS_INLINE void EnterReadLock() {
-			read_write_lock.EnterRead();
-		}
-
-		ECS_INLINE void EnterWriteLock() {
-			read_write_lock.EnterWrite();
-		}
-
-		ECS_INLINE void ExitReadLock() {
-			read_write_lock.ExitRead();
-		}
-
-		ECS_INLINE void ExitWriteLock() {
-			read_write_lock.ExitWrite();
-		}*/
-
 		// Returns true if there is an asset associated to that slot
 		bool Exists(unsigned int handle, ECS_ASSET_TYPE type) const;
 
@@ -702,7 +686,6 @@ namespace ECSEngine {
 		// In that directory the metadata folders will be created
 		Stream<wchar_t> metadata_file_location;
 		const Reflection::ReflectionManager* reflection_manager;
-		//ReadWriteLock read_write_lock;
 	};
 
 	// ------------------------------------------------------------------------------------------------------------

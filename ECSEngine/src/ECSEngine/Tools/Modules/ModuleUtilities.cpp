@@ -425,7 +425,7 @@ namespace ECSEngine {
 
 		// Go through each type now and check to see if it has a type
 		if (error_message == nullptr) {
-			return SearchBytes(has_type.buffer, has_type.size, false, sizeof(bool)) != -1;
+			return SearchBytes(has_type.ToStream(), false) != -1;
 		}
 		else {
 			bool success = true;

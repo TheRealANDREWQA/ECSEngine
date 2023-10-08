@@ -185,7 +185,7 @@ namespace ECSEngine {
         }
         else {
             // It is a root. Need to remove it from the buffer
-            unsigned int root_index = SearchBytes(hierarchy->roots.buffer, hierarchy->roots.size, child.value, sizeof(child));
+            unsigned int root_index = SearchBytes(hierarchy->roots.ToStream(), child);
             ECS_CRASH_RETURN(root_index != -1, "EntityHierarchy: Fatal internal error. Parent table says {#} is a root but the root buffer doesn't contain it.", child.value);
             hierarchy->roots.RemoveSwapBack(root_index);
         }
@@ -247,7 +247,7 @@ namespace ECSEngine {
         Entity parent = parent_table.GetValueFromIndex(parent_index);
         if (parent.value == -1) {
             // It is a root, it must be eliminated from the
-            unsigned int root_parent_index = SearchBytes(roots.buffer, roots.size, entity.value, sizeof(entity));
+            unsigned int root_parent_index = SearchBytes(roots.ToStream(), entity);
             ECS_CRASH_RETURN(root_parent_index != -1, "EntityHierarchy: The entity {#} doesn't exist in the root buffer but the parent table says it's a root.", entity.value);
             roots.RemoveSwapBack(root_parent_index);
             parent_table.EraseFromIndex(parent_index);

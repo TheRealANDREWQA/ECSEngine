@@ -88,7 +88,8 @@ namespace ECSEngine {
 
 	void CameraComponentDebugDraw(ModuleDebugDrawComponentFunctionData* draw_data) {
 		const CameraComponent* camera = (const CameraComponent*)draw_data->component;
-		draw_data->debug_drawer->AddAABBThread(draw_data->thread_id, camera->value.translation, float3::Splat(1.0f), ECS_COLOR_GREEN, { true, true });
+		FrustumPoints camera_frustum = GetCameraFrustumPoints(&camera->value);
+		AddDebugFrustumThread(camera_frustum, draw_data->debug_drawer, draw_data->thread_id, ECS_COLOR_LIME);
 	}
 
 	void RegisterECSDebugDrawElements(ModuleRegisterDebugDrawFunctionData* register_data) {

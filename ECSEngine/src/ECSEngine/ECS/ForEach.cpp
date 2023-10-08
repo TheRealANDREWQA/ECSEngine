@@ -80,7 +80,7 @@ namespace ECSEngine {
 				task_data.component_sizes[component_index] = world->entity_manager->ComponentSize(aggregate_signature[component_index]);
 			}
 			for (unsigned char shared_index = 0; shared_index < aggregate_shared_signature.count; shared_index++) {
-				task_data.shared_component_sizes[shared_index] = world->entity_manager->SharedComponentSize(aggregate_signature[shared_index]);
+				task_data.shared_component_sizes[shared_index] = world->entity_manager->SharedComponentSize(aggregate_shared_signature[shared_index]);
 			}
 
 			size_t deferred_call_allocation_size = sizeof(DeferredAction) * deferred_calls_capacity + sizeof(EntityManagerCommandStream);
@@ -116,6 +116,7 @@ namespace ECSEngine {
 					ArchetypeBase* base = archetype->GetBase(base_index);
 					unsigned int entity_count = base->EntityCount();
 					task_data.archetype_indices.y = base_index;
+					task_data.entities = base->m_entities;
 
 					for (unsigned char component_index = 0; component_index < task_data.component_map_count; component_index++) {
 						task_data.unique_data[component_index] = base->GetComponentByIndex(0, task_data.component_map[component_index]);
@@ -215,7 +216,7 @@ namespace ECSEngine {
 			}
 		}
 		// After launching all tasks, if any, increment the query index for the scheduler
-		world->task_scheduler->IncrementQueryIndex();
+		//world->task_scheduler->IncrementQueryIndex();
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -452,8 +453,6 @@ namespace ECSEngine {
 			);
 		}
 
-		// -------------------------------------------------------------------------------------------------------------------------------
-
 		void ForEachBatch(
 			unsigned int thread_id,
 			World* world,
@@ -478,6 +477,13 @@ namespace ECSEngine {
 				deferred_calls_capacity,
 				ForEachBatchThreadTask
 			);
+		}
+
+		void IncrementWorldQueryIndex(World* world)
+		{
+			if (world->task_scheduler != nullptr) {
+				world->task_scheduler->IncrementQueryIndex();
+			}
 		}
 
 	}

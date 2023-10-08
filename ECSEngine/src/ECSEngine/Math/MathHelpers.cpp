@@ -90,4 +90,18 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	Rectangle3D GetRectangle3D(float3 center, float3 half_width, float3 half_height)
+	{
+		Rectangle3D rectangle;
+
+		rectangle.top_left = center - half_width + half_height;
+		rectangle.top_right = center + half_width + half_height;
+		rectangle.bottom_left = center - half_width - half_height;
+		rectangle.bottom_right = center + half_width - half_height;
+
+		return rectangle;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 }

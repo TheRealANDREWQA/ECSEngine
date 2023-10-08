@@ -1,4 +1,5 @@
 .vs
+.idea
 *.cso
 
 bin
@@ -11,3 +12,4 @@ Modules/*/bin-int
 Modules/*/bin
 RunGPUThunk.bat
 KillGPUThunk.bat
+ECSEngine.iml

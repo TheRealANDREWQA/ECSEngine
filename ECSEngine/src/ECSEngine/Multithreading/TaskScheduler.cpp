@@ -3,6 +3,7 @@
 #include "TaskManager.h"
 #include "../ECS/World.h"
 #include "TaskStealing.h"
+#include "../Utilities/Crash.h"
 
 namespace ECSEngine {
 
@@ -52,8 +53,7 @@ namespace ECSEngine {
 
 	void TaskScheduler::InitializeSchedulerInfo(World* world)
 	{
-		size_t current_query_index = 0;
-
+		query_infos.size = 0;
 		for (size_t index = 0; index < elements.size; index++) {
 			if (elements[index].component_query.IsValid()) {
 				const TaskComponentQuery& current_query = elements[index].component_query;
@@ -68,11 +68,13 @@ namespace ECSEngine {
 					ComponentSignature shared_exclude = current_query.ExcludeSharedSignature();
 
 					ArchetypeQueryExclude query{ unique, shared, unique_exclude, shared_exclude };
-					query_infos[current_query_index++].query_handle = world->entity_manager->RegisterQuery(query);
+					query_infos[query_infos.size++].query_handle = world->entity_manager->RegisterQuery(query);
 				}
 				else {
-					ArchetypeQuery query{ unique, shared };
-					query_infos[current_query_index++].query_handle = world->entity_manager->RegisterQuery(query);
+					if (current_query.component_count > 0 || current_query.shared_component_count > 0) {
+						ArchetypeQuery query{ unique, shared };
+						query_infos[query_infos.size++].query_handle = world->entity_manager->RegisterQuery(query);
+					}
 				}
 			}
 		}
@@ -124,7 +126,9 @@ namespace ECSEngine {
 
 	const TaskSchedulerInfo* TaskScheduler::GetCurrentQueryInfo() const
 	{
-		return &query_infos[GetCurrentQueryIndex()];
+		unsigned int current_query_index = GetCurrentQueryIndex();
+		ECS_CRASH_RETURN_VALUE(current_query_index < query_infos.size, nullptr, "TaskScheduler: Trying to retrieve query index over the bound");
+		return &query_infos[current_query_index];
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

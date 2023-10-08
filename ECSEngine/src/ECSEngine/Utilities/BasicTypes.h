@@ -551,6 +551,18 @@ namespace ECSEngine {
 	typedef Base4<float> float4;
 	typedef Base4<double> double4;
 
+	union Rectangle3D {
+		ECS_INLINE Rectangle3D() {}
+
+		float3 values[4];
+		struct {
+			float3 top_left;
+			float3 top_right;
+			float3 bottom_right;
+			float3 bottom_left;
+		};
+	};
+
 	// Allow these functions to receive a specified return type
 	// such that we can do something like applying functors on floats
 	// and generate booleans

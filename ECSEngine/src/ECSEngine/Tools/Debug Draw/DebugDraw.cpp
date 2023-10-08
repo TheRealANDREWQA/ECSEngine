@@ -6,6 +6,7 @@
 #include "../../Math/Conversion.h"
 #include "../../Rendering/RenderingEffects.h"
 #include "../../Utilities/FilePreprocessor.h"
+#include "../../Rendering/Camera.h"
 
 constexpr size_t SMALL_VERTEX_BUFFER_CAPACITY = 8;
 constexpr size_t PER_THREAD_RESOURCES = 32;
@@ -3056,9 +3057,9 @@ namespace ECSEngine {
 		buffer += sizeof(SpinLock*) * ECS_DEBUG_PRIMITIVE_COUNT;
 		
 		// Padd the locks to different cache lines
-		for (size_t index = 0; index < thread_count; index++) {
+		for (size_t index = 0; index < ECS_DEBUG_PRIMITIVE_COUNT; index++) {
 			thread_locks[index] = (SpinLock*)buffer;
-			thread_locks[index]->value.store(0, ECS_RELAXED);
+			thread_locks[index]->clear();
 			buffer += ECS_CACHE_LINE_SIZE;
 		}
 		string_character_bounds = (float2*)buffer;
@@ -3324,6 +3325,51 @@ namespace ECSEngine {
 		drawer->AddTriangle({ 2.0f, 0.0f, 0.0f }, { 5.0f, 0.0f, 0.0f }, { 0.0f, 5.0f, 0.0f }, Color(10, 50, 200), debug_options);
 
 		drawer->AddString({ 0.0f, 10.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 1.0f, "Hey there fellas!\nNice to see this working!\nPogU", Color(255, 255, 255), debug_options);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	// The functor is called for each line that should be drawn/added
+	template<typename Functor>
+	static void DrawDebugFrustumImpl(const FrustumPoints& frustum, Functor&& functor) {
+		// The near plane
+		functor(frustum.near_plane.top_left, frustum.near_plane.top_right);
+		functor(frustum.near_plane.top_right, frustum.near_plane.bottom_right);
+		functor(frustum.near_plane.bottom_right, frustum.near_plane.bottom_left);
+		functor(frustum.near_plane.bottom_left, frustum.near_plane.top_left);
+	
+		// The far plane
+		functor(frustum.far_plane.top_left, frustum.far_plane.top_right);
+		functor(frustum.far_plane.top_right, frustum.far_plane.bottom_right);
+		functor(frustum.far_plane.bottom_right, frustum.far_plane.bottom_left);
+		functor(frustum.far_plane.bottom_left, frustum.far_plane.top_left);
+
+		// The lateral lines
+		functor(frustum.near_plane.top_left, frustum.far_plane.top_left);
+		functor(frustum.near_plane.top_right, frustum.far_plane.top_right);
+		functor(frustum.near_plane.bottom_left, frustum.far_plane.bottom_left);
+		functor(frustum.near_plane.bottom_right, frustum.far_plane.bottom_right);
+	}
+
+	void DrawDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawCallOptions options)
+	{
+		DrawDebugFrustumImpl(frustum, [&](float3 start, float3 end) {
+			drawer->DrawLine(start, end, color, options);
+		});
+	}
+
+	void AddDebugFrustum(const FrustumPoints& frustum, DebugDrawer* drawer, Color color, DebugDrawCallOptions options)
+	{
+		DrawDebugFrustumImpl(frustum, [&](float3 start, float3 end) {
+			drawer->AddLine(start, end, color, options);
+		});
+	}
+
+	void AddDebugFrustumThread(const FrustumPoints& frustum, DebugDrawer* drawer, unsigned int thread_id, Color color, DebugDrawCallOptions options)
+	{
+		DrawDebugFrustumImpl(frustum, [&](float3 start, float3 end) {
+			drawer->AddLineThread(thread_id, start, end, color, options);
+		});
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

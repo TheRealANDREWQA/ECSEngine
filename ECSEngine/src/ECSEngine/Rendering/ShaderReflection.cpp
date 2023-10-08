@@ -305,7 +305,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			// Get the default value and mins first.
 			// If it is a color afterwards we need to modify the default value
 			Stream<char> current_token = STRING(ECS_REFLECT_RANGE);
-			if (current_tag == current_token) {
+			if (current_tag.StartsWith(current_token)) {
 				// Consider this for integers and floats only that are vectors of at max 4 components
 				if (field->basic_type != Reflection::ReflectionBasicFieldType::UserDefined && field->basic_component_count == 1) {
 					current_tag.Advance(current_token.size + 1);
@@ -319,7 +319,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			}
 			else {
 				current_token = STRING(ECS_REFLECT_DEFAULT);
-				if (current_tag == current_token) {
+				if (current_tag.StartsWith(current_token)) {
 					current_tag.Advance(current_token.size + 1);
 					current_tag.size--;
 
@@ -330,7 +330,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				}
 				else {
 					current_token = STRING(ECS_REFLECT_PARAMETERS);
-					if (current_tag == current_token) {
+					if (current_tag.StartsWith(current_token)) {
 						// Consider this only for integers and floats that are vectors of at max 4 components
 						if (field->basic_type != Reflection::ReflectionBasicFieldType::UserDefined && field->basic_component_count == 1) {
 							current_token.Advance(current_token.size + 1);
@@ -345,7 +345,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					}
 					else {
 						current_token = STRING(ECS_REFLECT_AS_COLOR);
-						if (current_tag == current_token) {
+						if (current_tag.StartsWith(current_token)) {
 							// Consider this only if a float3 or float4
 							if ((field->basic_type == Reflection::ReflectionBasicFieldType::Float3 || field->basic_type == Reflection::ReflectionBasicFieldType::Float4)
 								&& field->basic_component_count == 1) {
@@ -377,7 +377,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 						}
 						else {
 							current_token = STRING(ECS_REFLECT_AS_FLOAT_COLOR);
-							if (current_tag == current_token) {
+							if (current_tag.StartsWith(current_token)) {
 								if ((field->basic_type == Reflection::ReflectionBasicFieldType::Float3 || field->basic_type == Reflection::ReflectionBasicFieldType::Float4)
 									&& field->basic_component_count == 1) {
 									if (field->basic_type == Reflection::ReflectionBasicFieldType::Float3) {
@@ -599,6 +599,9 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				write_values(basic_type_count, shader_field->max_value);
 
 				range_tag.AddAssert(')');
+			}
+			else if (shader_field->default_value[0].x != DBL_MAX) {
+				Reflection::ConvertFromDouble4ToBasic(reflection_fields[0].info.basic_type, shader_field->default_value[0], &reflection_fields[0].info.default_bool);
 			}
 
 			if (shader_field->tag.size > 0) {

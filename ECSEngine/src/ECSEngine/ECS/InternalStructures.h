@@ -34,8 +34,12 @@ namespace ECSEngine {
 
 		// This just returns true if the value is different from -1,
 		// And not if the entity is valid in the context of an entity manager
-		ECS_INLINE bool Valid() const {
+		ECS_INLINE bool IsValid() const {
 			return value != -1;
+		}
+
+		ECS_INLINE static Entity Invalid() {
+			return { (unsigned int)-1 };
 		}
 
 		ECS_INLINE operator unsigned int() const {
@@ -167,7 +171,7 @@ namespace ECSEngine {
 	struct SharedInstance {
 		// This just returns true if the value is different from -1,
 		// And not if the entity is valid in the context of an entity manager
-		ECS_INLINE bool Valid() const {
+		ECS_INLINE bool IsValid() const {
 			return value != -1;
 		}
 
@@ -407,7 +411,7 @@ namespace ECSEngine {
 		// Returns an Entity identifier that is not in use at this moment
 		// The bit count limits the amount of bits that the entity can have
 		// Returns -1 if there is no empty entity
-		Entity GetUnusedEntity(unsigned int bit_count = 32) const;
+		Entity GetVirtualEntity(unsigned int bit_count = 32) const;
 
 		// Fills in entity identifiers that are not in use at this moment
 		// The bit count limits the amount of bits that the entity can have
@@ -418,7 +422,7 @@ namespace ECSEngine {
 		// The bit count limits the amount of bits that the entity can have
 		// Additionally, this version takes in a stream of already used slots from previous calls
 		// to omit them. Returns -1 if there is no empty entity
-		Entity GetUnusedEntity(Stream<Entity> excluded_entities, unsigned int bit_count = 32) const;
+		Entity GetVirtualEntity(Stream<Entity> excluded_entities, unsigned int bit_count = 32) const;
 
 		// Fills in entity identifiers that are not in use at this moment.
 		// The bit count limits the amount of bits that the entity can have

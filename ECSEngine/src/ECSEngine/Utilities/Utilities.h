@@ -271,6 +271,12 @@ namespace ECSEngine {
 	// but for all the others is going to fall back on memcmp. Returns -1 if it doesn't find the value
 	ECSENGINE_API size_t SearchBytesExReversed(const void* data, size_t element_count, const void* value_to_search, size_t byte_size);
 
+	template<typename StreamValue>
+	ECS_INLINE size_t SearchBytes(Stream<StreamValue> stream, StreamValue value_to_search) {
+		static_assert(sizeof(StreamValue) == 1 || sizeof(StreamValue) == 2 || sizeof(StreamValue) == 4 || sizeof(StreamValue) == 8);
+		return SearchBytes(stream.buffer, stream.size, (size_t)value_to_search, sizeof(value_to_search));
+	}
+
 	template<typename Allocator>
 	ECS_INLINE void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		void* allocation = allocator->Allocate(data_size, alignment, debug_info);

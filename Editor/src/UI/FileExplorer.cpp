@@ -1966,7 +1966,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 				ECS_SHADER_TYPE* shader_type = nullptr;
 				if (drawer->initializer) {
 					shader_type = drawer->GetMainAllocatorBufferAndStoreAsResource<ECS_SHADER_TYPE>(SHADER_INPUT_RESOURCE_NAME);
-					*shader_type = ECS_SHADER_TYPE_COUNT;
+					*shader_type = ECS_SHADER_VERTEX;
 				}
 				else {
 					shader_type = (ECS_SHADER_TYPE*)drawer->GetResource(SHADER_INPUT_RESOURCE_NAME);
@@ -1976,11 +1976,8 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 				UIDrawConfig config;
 				config.AddFlag(window_dependent_size);
 
-				ECS_STACK_CAPACITY_STREAM(Stream<char>, labels, ECS_ASSET_TYPE_COUNT + 1);
 				Stream<Stream<char>> shader_type_labels = editor_state->ReflectionManager()->GetEnum(STRING(ECS_SHADER_TYPE))->fields;
-				labels.CopyOther(shader_type_labels);
-				labels.Add("Unspecified");
-				drawer->ComboBox(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Shader Type", labels, labels.size, (unsigned char*)shader_type);
+				drawer->ComboBox(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Shader Type", shader_type_labels, shader_type_labels.size, (unsigned char*)shader_type);
 			};
 
 			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER].AddExtraElement(shader_file_input, editor_state, 0);

@@ -334,6 +334,11 @@ namespace ECSEngine {
 
 			return -1;
 		}
+		
+		// Returns the stream starting at the given offset until the end
+		ECS_INLINE Stream<T> SliceAt(size_t offset) const {
+			return { buffer + offset, size - offset };
+		}
 
 		ECS_INLINE bool StartsWith(Stream<T> other) const {
 			if (other.size <= size) {
@@ -747,6 +752,11 @@ namespace ECSEngine {
 			}
 
 			return -1;
+		}
+
+		// Returns the capacity stream at the given offset
+		ECS_INLINE CapacityStream<T> SliceAt(unsigned int offset) const {
+			return { buffer + offset, size - offset, capacity - offset };
 		}
 
 		ECS_INLINE bool StartsWith(Stream<T> other) const {
@@ -1751,39 +1761,41 @@ namespace ECSEngine {
 	Stream StreamCoalescedDeepCopy(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		Stream new_stream;
 		
-		ECS_STACK_CAPACITY_STREAM(size_t, copy_sizes, 1024);
-		size_t total_size = input.MemoryOf(input.size);
+		if (input.size > 0) {
+			ECS_STACK_CAPACITY_STREAM(size_t, copy_sizes, 1024);
+			size_t total_size = input.MemoryOf(input.size);
 
-		if (input.size < 1024) {
-			for (size_t index = 0; index < (size_t)input.size; index++) {
-				size_t copy_size = input[index].CopySize();
-				total_size += copy_size;
+			if (input.size < 1024) {
+				for (size_t index = 0; index < (size_t)input.size; index++) {
+					size_t copy_size = input[index].CopySize();
+					total_size += copy_size;
 
-				copy_sizes[index] = copy_size;
-			}
-		}
-		else {
-			for (size_t index = 0; index < (size_t)input.size; index++) {
-				total_size += input[index].CopySize();
-			}
-		}
-
-		void* allocation = AllocateEx(allocator, total_size, debug_info);
-		uintptr_t ptr = (uintptr_t)allocation;
-		new_stream.InitializeAndCopy(ptr, input);
-
-		if (input.size < 1024) {
-			for (size_t index = 0; index < (size_t)input.size; index++) {
-				if (copy_sizes[index] > 0) {
-					new_stream[index] = input[index].CopyTo(ptr);
+					copy_sizes[index] = copy_size;
 				}
 			}
-		}
-		else {
-			for (size_t index = 0; index < (size_t)input.size; index++) {
-				size_t copy_size = input[index].CopySize();
-				if (copy_size > 0) {
-					new_stream[index] = input[index].CopyTo(ptr);
+			else {
+				for (size_t index = 0; index < (size_t)input.size; index++) {
+					total_size += input[index].CopySize();
+				}
+			}
+
+			void* allocation = AllocateEx(allocator, total_size, debug_info);
+			uintptr_t ptr = (uintptr_t)allocation;
+			new_stream.InitializeAndCopy(ptr, input);
+
+			if (input.size < 1024) {
+				for (size_t index = 0; index < (size_t)input.size; index++) {
+					if (copy_sizes[index] > 0) {
+						new_stream[index] = input[index].CopyTo(ptr);
+					}
+				}
+			}
+			else {
+				for (size_t index = 0; index < (size_t)input.size; index++) {
+					size_t copy_size = input[index].CopySize();
+					if (copy_size > 0) {
+						new_stream[index] = input[index].CopyTo(ptr);
+					}
 				}
 			}
 		}

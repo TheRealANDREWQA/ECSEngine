@@ -18,6 +18,14 @@ ECS_INLINE unsigned int GizmoRenderIndex(unsigned int instance_index, bool extra
 
 template<bool schedule_element>
 ECS_THREAD_TASK(RenderTask) {
+	auto kernel = ForEachEntityCommit<
+		schedule_element,
+		QueryRead<RenderMesh>,
+		QueryOptional<QueryRead<Translation>>,
+		QueryOptional<QueryRead<Rotation>>,
+		QueryOptional<QueryRead<Scale>>
+	>(thread_id, world);
+
 	if constexpr (!schedule_element) {
 		world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.5f, 0.6f, 1.0f, 1.0f));
 		world->graphics->ClearDepth(world->graphics->GetBoundDepthStencil());
@@ -28,76 +36,68 @@ ECS_THREAD_TASK(RenderTask) {
 			float3 camera_translation = camera.translation;
 			world->debug_drawer->UpdateCameraMatrix(camera_matrix);
 
-			ForEachEntityCommit<
-				QueryRead<RenderMesh>,
-				QueryOptional<QueryRead<Translation>>,
-				QueryOptional<QueryRead<Rotation>>,
-				QueryOptional<QueryRead<Scale>>
-			>::Function(world, [&](
-				ForEachEntityData* for_each_data, 
-				const RenderMesh* render_mesh, 
-				const Translation* translation, 
+			kernel.Function([&](
+				ForEachEntityData* for_each_data,
+				const RenderMesh* render_mesh,
+				const Translation* translation,
 				const Rotation* rotation,
 				const Scale* scale
-			) {
-				Graphics* graphics = for_each_data->world->graphics;
+				) {
+					Graphics* graphics = for_each_data->world->graphics;
 
-				if (render_mesh->Validate()) {
-					float3 translation_value = { 0.0f, 0.0f, 0.0f };
-					float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
-					float3 scale_value = { 1.0f, 1.0f, 1.0f };
-					Matrix matrix_translation;
-					Matrix matrix_rotation;
-					Matrix matrix_scale;
+					if (render_mesh->Validate()) {
+						float3 translation_value = { 0.0f, 0.0f, 0.0f };
+						float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
+						float3 scale_value = { 1.0f, 1.0f, 1.0f };
+						Matrix matrix_translation;
+						Matrix matrix_rotation;
+						Matrix matrix_scale;
 
-					if (translation != nullptr) {
-						translation_value = translation->value;
-						matrix_translation = MatrixTranslation(translation_value);
+						if (translation != nullptr) {
+							translation_value = translation->value;
+							matrix_translation = MatrixTranslation(translation_value);
+						}
+						else {
+							matrix_translation = MatrixIdentity();
+						}
+
+						if (rotation != nullptr) {
+							rotation_value = rotation->value;
+							matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
+						}
+						else {
+							matrix_rotation = MatrixIdentity();
+						}
+
+						if (scale != nullptr) {
+							scale_value = scale->value;
+							matrix_scale = MatrixScale(scale_value);
+						}
+						else {
+							matrix_scale = MatrixIdentity();
+						}
+
+						Matrix object_matrix = MatrixTRS(matrix_translation, matrix_rotation, matrix_scale);
+						Matrix mvp_matrix = object_matrix * camera_matrix;
+
+						object_matrix = MatrixGPU(object_matrix);
+						mvp_matrix = MatrixGPU(mvp_matrix);
+
+						float3 camera_position = camera_translation;
+						const void* injected_values[ECS_CB_INJECT_TAG_COUNT];
+						injected_values[ECS_CB_INJECT_CAMERA_POSITION] = &camera_position;
+						injected_values[ECS_CB_INJECT_MVP_MATRIX] = &mvp_matrix;
+						injected_values[ECS_CB_INJECT_OBJECT_MATRIX] = &object_matrix;
+
+						BindConstantBufferInjectedCB(graphics, render_mesh->material, injected_values);
+
+						graphics->BindMesh(render_mesh->mesh->mesh);
+						graphics->BindMaterial(*render_mesh->material);
+
+						graphics->DrawCoalescedMeshCommand(*render_mesh->mesh);
 					}
-					else {
-						matrix_translation = MatrixIdentity();
-					}
-					
-					if (rotation != nullptr) {
-						rotation_value = rotation->value;
-						matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
-					}
-					else {
-						matrix_rotation = MatrixIdentity();
-					}
-
-					if (scale != nullptr) {
-						scale_value = scale->value;
-						matrix_scale = MatrixScale(scale_value);
-					}
-					else {
-						matrix_scale = MatrixIdentity();
-					}
-
-					Matrix object_matrix = MatrixTRS(matrix_translation, matrix_rotation, matrix_scale);
-					Matrix mvp_matrix = object_matrix * camera_matrix;
-
-					object_matrix = MatrixGPU(object_matrix);
-					mvp_matrix = MatrixGPU(mvp_matrix);
-
-					float3 camera_position = camera_translation;
-					const void* injected_values[ECS_CB_INJECT_TAG_COUNT];
-					injected_values[ECS_CB_INJECT_CAMERA_POSITION] = &camera_position;
-					injected_values[ECS_CB_INJECT_MVP_MATRIX] = &mvp_matrix;
-					injected_values[ECS_CB_INJECT_OBJECT_MATRIX] = &object_matrix;
-
-					BindConstantBufferInjectedCB(graphics, render_mesh->material, injected_values);
-
-					graphics->BindMesh(render_mesh->mesh->mesh);
-					graphics->BindMaterial(*render_mesh->material);
-
-					graphics->DrawCoalescedMeshCommand(*render_mesh->mesh);
-				}
 			});
 		}
-	}
-	else {
-		ECS_REGISTER_FOR_EACH_COMPONENTS(QueryRead<RenderMesh>, QueryRead<Translation>, QueryRead<Rotation>, QueryRead<Scale>);
 	}
 }
 
@@ -385,6 +385,14 @@ ECS_THREAD_TASK_TEMPLATE_BOOL(RenderFlush);
 
 template<bool schedule_element>
 ECS_THREAD_TASK(RenderInstancedFramebuffer) {
+	auto kernel = ForEachEntityCommit<
+		schedule_element,
+		QueryRead<RenderMesh>,
+		QueryOptional<QueryRead<Translation>>,
+		QueryOptional<QueryRead<Rotation>>,
+		QueryOptional<QueryRead<Scale>>
+	>(thread_id, world);
+
 	if constexpr (!schedule_element) {
 		SystemManager* system_manager = world->system_manager;
 		ECS_EDITOR_RUNTIME_TYPE runtime_type = GetEditorRuntimeType(system_manager);
@@ -398,13 +406,12 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 					elements.Initialize(GetAllocatorPolymorphic(world->memory), 0);
 					Matrix camera_matrix = camera.GetViewProjectionMatrix();
 
-					ForEachEntityCommit<QueryRead<RenderMesh>, QueryOptional<QueryRead<Translation>>, QueryOptional<QueryRead<Rotation>>, QueryOptional<QueryRead<Scale>>>
-						::Function(world, [&](
-							const ForEachEntityData* for_each_data, 
-							const RenderMesh* render_mesh, 
-							const Translation* translation,
-							const Rotation* rotation,
-							const Scale* scale
+					kernel.Function([&](
+						const ForEachEntityData* for_each_data,
+						const RenderMesh* render_mesh,
+						const Translation* translation,
+						const Rotation* rotation,
+						const Scale* scale
 						) {
 							World* world = for_each_data->world;
 							Graphics* graphics = world->graphics;
@@ -451,7 +458,7 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 								element.instance_index = for_each_data->entity.index;
 								elements.Add(element);
 							}
-						});
+					});
 
 					// Get the pipeline state before rendering the instances
 					GraphicsPipelineState pipeline_state = world->graphics->GetPipelineState();
@@ -466,9 +473,6 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 				}
 			}
 		}
-	}
-	else {
-		ECS_REGISTER_FOR_EACH_COMPONENTS(QueryRead<RenderMesh>, QueryRead<Translation>, QueryRead<Rotation>, QueryRead<Scale>);
 	}
 }
 

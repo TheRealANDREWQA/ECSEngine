@@ -1,11 +1,11 @@
 #pragma once
 #include "InternalStructures.h"
+#include "VectorComponentSignature.h"
 #include "../Tools/Modules/ModuleDefinition.h"
 
 namespace ECSEngine {
 
 	struct World;
-	struct ArchetypeQueryDescriptor;
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
@@ -265,7 +265,7 @@ namespace ECSEngine {
 							info->query->AddSharedComponentExclude(component[index], info->module_data->allocator);
 						}
 						else {
-							if (is_optional) {
+							if (is_optional[index]) {
 								info->query->AddOptionalSharedComponent(component[index], access_type[index], info->module_data->allocator);
 							}
 							else {
@@ -322,6 +322,9 @@ namespace ECSEngine {
 			constexpr bool is_shared[component_count] = {
 				T::IsShared()...
 			};
+			constexpr bool is_exclude[component_count] = {
+				T::IsExclude()...
+			};
 
 			void** components[2] = {
 				data->unique_components,
@@ -333,13 +336,15 @@ namespace ECSEngine {
 			size_t component_index[2] = { 0 };
 
 			for (size_t index = 0; index < component_count; index++) {
-				void** component_ptrs = components[is_shared[index]];
-				size_t ptr_index = component_index[is_shared[index]]++;
-				current_components[total_index++] = component_ptrs[ptr_index];
+				if (!is_exclude[index]) {
+					void** component_ptrs = components[is_shared[index]];
+					size_t ptr_index = component_index[is_shared[index]]++;
+					current_components[total_index++] = component_ptrs[ptr_index];
+				}
 			}
 
-			// The parameters need to be indexed backwards
-			total_index = component_count - 1;
+			// We need to decrement index to reflect the correct final index
+			total_index--;
 			
 			if constexpr (is_batch) {
 				ForEachBatchData for_each_data = FromFunctorToBatchData(data);
@@ -354,7 +359,9 @@ namespace ECSEngine {
 		template<typename... Components>
 		void GetComponentSignatureFromTemplatePack(
 			ComponentSignature& unique_components, 
-			ComponentSignature& shared_components, 
+			ComponentSignature& shared_components,
+			ComponentSignature& unique_exclude,
+			ComponentSignature& shared_exclude,
 			ComponentSignature& optional_unique_components,
 			ComponentSignature& optional_shared_components
 		) {
@@ -362,6 +369,8 @@ namespace ECSEngine {
 			
 			unique_components.count = 0;
 			shared_components.count = 0;
+			unique_exclude.count = 0;
+			shared_exclude.count = 0;
 			optional_unique_components.count = 0;
 			optional_shared_components.count = 0;
 			if constexpr (count > 0) {
@@ -374,179 +383,224 @@ namespace ECSEngine {
 				constexpr bool is_optional[count] = {
 					Components::IsOptional()...
 				};
+				constexpr bool is_exclude[count] = {
+					Components::IsExclude()...
+				};
 
 				for (size_t index = 0; index < count; index++) {
-					if (is_shared[index]) {
-						if (is_optional[index]) {
-							optional_shared_components[optional_shared_components.count++] = { component_ids[index] };
+					if (is_exclude[index]) {
+						if (is_shared[index]) {
+							shared_exclude[shared_exclude.count++] = { component_ids[index] };
 						}
 						else {
-							shared_components[shared_components.count++] = { component_ids[index] };
+							unique_exclude[unique_exclude.count++] = { component_ids[index] };
 						}
 					}
 					else {
-						if (is_optional[index]) {
-							optional_unique_components[optional_unique_components.count++] = { component_ids[index] };
+						if (is_shared[index]) {
+							if (is_optional[index]) {
+								optional_shared_components[optional_shared_components.count++] = { component_ids[index] };
+							}
+							else {
+								shared_components[shared_components.count++] = { component_ids[index] };
+							}
 						}
 						else {
-							unique_components[unique_components.count++] = { component_ids[index] };
+							if (is_optional[index]) {
+								optional_unique_components[optional_unique_components.count++] = { component_ids[index] };
+							}
+							else {
+								unique_components[unique_components.count++] = { component_ids[index] };
+							}
 						}
 					}
 				}
 			}
 		}
 
-		template<bool is_batch, typename... Components>
-		struct ForEachEntityBatchCommit {
-			template<typename... ExcludeComponents, typename Functor>
-			static void Function(World* world, unsigned short batch_size, Functor& functor) {
-				Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-				Component shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-				Component unique_exclude_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-				Component shared_exclude_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-				Component optional_components[ECS_ARCHETYPE_MAX_COMPONENTS];
-				Component optional_shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-
-				ArchetypeQueryDescriptor query_descriptor;
-				query_descriptor.unique = { unique_components, 0 };
-				query_descriptor.shared = { shared_components, 0 };
-				query_descriptor.unique_exclude = { unique_exclude_components, 0 };
-				query_descriptor.shared_exclude = { shared_exclude_components, 0 };
-				query_descriptor.unique_optional = { optional_components, 0 };
-				query_descriptor.shared_optional = { optional_shared_components, 0 };
-				// Used for the exclude - there shouldn't be any optional components in it
-				ComponentSignature null_optional_signature = { nullptr, 0 };
-
-				Internal::GetComponentSignatureFromTemplatePack<Components...>(
-					query_descriptor.unique, 
-					query_descriptor.shared, 
-					query_descriptor.unique_optional, 
-					query_descriptor.shared_optional
-				);
-				Internal::GetComponentSignatureFromTemplatePack<ExcludeComponents...>(
-					query_descriptor.unique_exclude, 
-					query_descriptor.shared_exclude, 
-					null_optional_signature, 
-					null_optional_signature
-				);
-
-				if constexpr (is_batch) {
-					ForEachBatchCommitFunctor(
-						world,
-						Internal::ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
-						&functor,
-						batch_size,
-						query_descriptor
-					);
-				}
-				else {
-					ForEachEntityCommitFunctor(
-						world,
-						Internal::ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
-						&functor,
-						query_descriptor
-					);
-				}
-			}
+		enum FOR_EACH_OPTIONS : unsigned char {
+			FOR_EACH_NONE = 0,
+			FOR_EACH_IS_BATCH = 1 << 0,
+			FOR_EACH_IS_COMMIT = 1 << 1
 		};
 
-		template<bool is_batch, bool get_query, typename... Components>
+		ECSENGINE_API void IncrementWorldQueryIndex(World* world);
+
+		template<bool get_query, FOR_EACH_OPTIONS options, typename... Components>
 		struct ForEachEntityOrBatch {
-			template<typename... ExcludeComponents, typename Functor>
-			static void Function(unsigned int thread_id, World* world, Functor& functor, const char* function_name) {
+			ForEachEntityOrBatch(unsigned int _thread_id, World* _world, const char* _function_name = ECS_FUNCTION) : thread_id(_thread_id), world(_world), function_name(_function_name) {
 				if constexpr (get_query) {
 					Internal::RegisterForEachInfo* info = (Internal::RegisterForEachInfo*)world;
 					Internal::AddQueryComponents<Components...>(info);
-					Internal::AddQueryComponents<ExcludeComponents...>(info);
 				}
 				else {
+					//if constexpr (options & FOR_EACH_IS_COMMIT) {
+						IncrementWorldQueryIndex(world);
+					//}
+				}
+			}
+
+			template<typename Functor>
+			void Function(Functor& functor) {
+				if constexpr (!get_query) {
 					// Retrieve the optional components since they are not stored in the query cache
 					Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
 					Component shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+					Component unique_exclude_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+					Component shared_exclude_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
 					Component optional_components[ECS_ARCHETYPE_MAX_COMPONENTS];
 					Component optional_shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
-					ComponentSignature unique_signature = { unique_components, 0 };
-					ComponentSignature shared_signature = { shared_components, 0 };
-					ComponentSignature optional_signature = { optional_components, 0 };
-					ComponentSignature optional_shared_signature = { optional_shared_components, 0 };
+
+					ArchetypeQueryDescriptor query_descriptor;
+					query_descriptor.unique = { unique_components, 0 };
+					query_descriptor.shared = { shared_components, 0 };
+					query_descriptor.unique_exclude = { unique_exclude_components, 0 };
+					query_descriptor.shared_exclude = { shared_exclude_components, 0 };
+					query_descriptor.unique_optional = { optional_components, 0 };
+					query_descriptor.shared_optional = { optional_shared_components, 0 };
+
 					Internal::GetComponentSignatureFromTemplatePack<Components...>(
-						unique_signature,
-						shared_signature,
-						optional_signature,
-						optional_shared_signature
+						query_descriptor.unique,
+						query_descriptor.shared,
+						query_descriptor.unique_exclude,
+						query_descriptor.shared_exclude,
+						query_descriptor.unique_optional,
+						query_descriptor.shared_optional
 					);
 
-					if constexpr (is_batch) {
-						Internal::ForEachBatch(
-							thread_id,
-							world,
-							Internal::ForEachEntityBatchTypeSafeWrapper<is_batch, Functor, Components...>,
-							function_name,
-							&functor,
-							sizeof(functor),
-							optional_signature,
-							optional_shared_signature
-						);
+					if constexpr (options & FOR_EACH_IS_COMMIT) {
+						if constexpr (options & FOR_EACH_IS_BATCH) {
+							ForEachBatchCommitFunctor(
+								world,
+								Internal::ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
+								&functor,
+								batch_size,
+								query_descriptor
+							);
+						}
+						else {
+							ForEachEntityCommitFunctor(
+								world,
+								Internal::ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
+								&functor,
+								query_descriptor
+							);
+						}
 					}
 					else {
-						Internal::ForEachEntity(
-							thread_id,
-							world,
-							Internal::ForEachEntityBatchTypeSafeWrapper<is_batch, Functor, Components...>,
-							function_name,
-							&functor,
-							sizeof(functor),
-							optional_signature,
-							optional_shared_signature
-						);
+						if constexpr (options & FOR_EACH_IS_BATCH) {
+							Internal::ForEachBatch(
+								thread_id,
+								world,
+								Internal::ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
+								function_name,
+								&functor,
+								sizeof(functor),
+								query_descriptor.unique_optional,
+								query_descriptor.shared_optional
+							);
+						}
+						else {
+							Internal::ForEachEntity(
+								thread_id,
+								world,
+								Internal::ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
+								function_name,
+								&functor,
+								sizeof(functor),
+								query_descriptor.unique_optional,
+								query_descriptor.shared_optional
+							);
+						}
 					}
 				}
 			}
+
+			unsigned int thread_id;
+			World* world;
+			const char* function_name;
 		};
 
 	}
 
 	// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
-	// Runs on multiple threads
+	// Runs on multiple threads. The lambda cannot capture by reference!! (This will cause the thread tasks to reference
+	// stack memory from a stack frame that is invalid - if you want a piece of code to be cached across tasks, create a temporary
+	// pointer to it from the thread allocator and then reference the pointer by value)
 	template<bool get_query, typename... Components>
-	struct ForEachEntity {
-		// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
-		template<typename... ExcludeComponents, typename Functor>
-		static void Function(unsigned int thread_id, World* world, Functor& functor, const char* function_name = __builtin_FUNCTION()) {
-			Internal::ForEachEntityOrBatch<false, get_query, Components...>::Function<ExcludeComponents...>(thread_id, world, functor, function_name);
-		}
-	};
+	using ForEachEntity = Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_NONE, Components...>;
 
-	// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
-	template<typename... Components>
-	struct ForEachEntityCommit {
-		// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
-		template<typename... ExcludeComponents, typename Functor>
-		static void Function(World* world, Functor& functor) {
-			Internal::ForEachEntityBatchCommit<false, Components...>::Function<ExcludeComponents...>(world, 0, functor);
-		}
-	};
-
-	// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
-	// Runs on multiple threads
 	template<bool get_query, typename... Components>
-	struct ForEachEntityBatch {
-		// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
-		template<typename... ExcludeComponents, typename Functor>
-		static void Function(unsigned int thread_id, World* world, Functor& functor, const char* function_name = __builtin_FUNCTION()) {
-			Internal::ForEachEntityOrBatch<true, get_query, Components...>::Function<ExcludeComponents...>(thread_id, world, functor, function_name);
-		}
-	};
+	using ForEachEntityCommit = Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_IS_COMMIT, Components...>;
 
-	// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
-	template<typename... Components>
-	struct ForEachBatchCommit {
-		// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
-		template<typename... ExcludeComponents, typename Functor>
-		static void Function(World* world, unsigned short batch_size, Functor& functor) {
-			Internal::ForEachEntityBatchCommit<true, Components...>::Function<ExcludeComponents...>(world, batch_size, functor);
-		}
-	};
+	template<bool get_query, typename... Components>
+	using ForEachBatch = Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_IS_BATCH, Components...>;
+
+	template<bool get_query, typename... Components>
+	using ForEachBatchCommit = Internal::ForEachEntityOrBatch<get_query, (Internal::FOR_EACH_OPTIONS)(Internal::FOR_EACH_IS_BATCH | Internal::FOR_EACH_IS_COMMIT), Components...>;
+
+
+	//// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
+	//// Runs on multiple threads. The lambda cannot capture by reference!! (This will cause the thread tasks to reference
+	//// stack memory from a stack frame that is invalid - if you want a piece of code to be cached across tasks, create a temporary
+	//// pointer to it from the thread allocator and then reference the pointer by value)
+	//template<bool get_query, typename... Components>
+	//struct ForEachEntity {
+	//	ECS_INLINE ForEachEntity(unsigned int thread_id, World* world, const char* function_name = ECS_FUNCTION) : internal_(thread_id, world, function_name) {}
+
+	//	// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
+	//	template< typename Functor>
+	//	ECS_INLINE void Function(Functor& functor) {
+	//		internal_.Function(functor);
+	//	}
+
+	//	Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_NONE, Components...> internal_;
+	//};
+
+	//// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
+	//template<bool get_query, typename... Components>
+	//struct ForEachEntityCommit {
+	//	ECS_INLINE ForEachEntityCommit(unsigned int thread_id, World* world, const char* function_name = ECS_FUNCTION) : internal_(thread_id, world, function_name) {}
+
+	//	// The functor must take as first parameter a [const] ForEachEntityData* and the type correct component pointers
+	//	template<typename Functor>
+	//	ECS_INLINE void Function(Functor& functor) {
+	//		internal_.Function(functor);
+	//	}
+
+	//	Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_IS_COMMIT, Components...> internal_;
+	//};
+
+	//// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
+	//// Runs on multiple threads. The lambda cannot capture by reference!! (This will cause the thread tasks to reference
+	//// stack memory from a stack frame that is invalid - if you want a piece of code to be cached across tasks, create a temporary
+	//// pointer to it from the thread allocator and then reference the pointer by value)
+	//template<bool get_query, typename... Components>
+	//struct ForEachBatch {
+	//	ECS_INLINE ForEachBatch(unsigned int thread_id, World* world, const char* function_name = ECS_FUNCTION) : internal_(thread_id, world, function_name) {}
+
+	//	// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
+	//	template<typename Functor>
+	//	ECS_INLINE void Function(Functor& functor) {
+	//		internal_.Function(functor);
+	//	}
+
+	//	Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_IS_BATCH, Components...> internal_;
+	//};
+
+	//// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
+	//template<bool get_query, typename... Components>
+	//struct ForEachBatchCommit {
+	//	ECS_INLINE ForEachBatchCommit(unsigned int thread_id, World* world, const char* function_name = ECS_FUNCTION) : internal_(thread_id, world, function_name) {}
+
+	//	// The functor must take as first parameter a [const] ForEachBatchData* and the type correct component pointers
+	//	template<typename... ExcludeComponents, typename Functor>
+	//	ECS_INLINE void Function(Functor& functor) {
+	//		internal_.Function(functor);
+	//	}
+
+	//	Internal::ForEachEntityOrBatch<get_query, Internal::FOR_EACH_IS_BATCH | Internal::FOR_EACH_IS_COMMIT, Components...> internal_;
+	//};
 
 #define ECS_REGISTER_FOR_EACH_TASK(schedule_element, thread_task_function, module_function_data)	\
 	ECSEngine::Internal::RegisterForEachInfo __register_info##thread_task_function; \

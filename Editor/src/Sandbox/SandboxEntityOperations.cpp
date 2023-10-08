@@ -1422,7 +1422,7 @@ void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandb
 		}
 		else {
 			// Check the virtual entities
-			size_t gizmo_index = SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
+			size_t gizmo_index = SearchBytes(transform_gizmo_entities.ToStream(), selected_entities[index]);
 			if (gizmo_index != -1) {
 				if (transform_gizmo_pointers[gizmo_index].euler_rotation != nullptr) {
 					if (transform_gizmo_pointers[gizmo_index].is_euler_rotation) {
@@ -1794,7 +1794,7 @@ void ScaleSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbo
 		}
 		else {
 			// Check the virtual entity gizmos
-			size_t gizmo_index = SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
+			size_t gizmo_index = SearchBytes(transform_gizmo_entities.ToStream(), selected_entities[index]);
 			if (gizmo_index != -1) {
 				if (transform_gizmo_pointers[gizmo_index].scale != nullptr) {
 					*transform_gizmo_pointers[gizmo_index].scale += scale_delta;
@@ -1821,7 +1821,7 @@ void TranslateSandboxSelectedEntities(EditorState* editor_state, unsigned int sa
 		}
 		else {
 			// Check the virtual entity gizmos
-			size_t gizmo_index = SearchBytes(transform_gizmo_entities.buffer, transform_gizmo_entities.size, selected_entities[index], sizeof(Entity));
+			size_t gizmo_index = SearchBytes(transform_gizmo_entities.ToStream(), selected_entities[index]);
 			if (gizmo_index != -1) {
 				if (transform_gizmo_pointers[gizmo_index].position != nullptr) {
 					*transform_gizmo_pointers[gizmo_index].position += delta;

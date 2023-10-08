@@ -119,19 +119,30 @@ namespace ECSEngine {
 		size_t allocator_count = memory_manager->m_allocator_count;
 		for (size_t index = 0; index < allocator_count; index++) {
 			AllocatorPolymorphic current_allocator = memory_manager->GetAllocator(index);
-			if (ECSEngine::BelongsToAllocator(current_allocator, block)) {
-				void* reallocation;
-				if constexpr (thread_safe) {
-					current_allocator.allocation_type = ECS_ALLOCATION_MULTI;
-				}
-				reallocation = ECSEngine::Reallocate(current_allocator, block, new_size, alignment);
+			void* reallocation = nullptr;
+			if (block == nullptr) {
+				reallocation = Allocate(current_allocator, new_size, alignment, debug_info);
+			}
+			else {
+				if (ECSEngine::BelongsToAllocator(current_allocator, block)) {
+					if constexpr (thread_safe) {
+						current_allocator.allocation_type = ECS_ALLOCATION_MULTI;
+					}
+					reallocation = ECSEngine::Reallocate(current_allocator, block, new_size, alignment);
 
-				if (reallocation == nullptr) {
-					// Allocate using the general function and deallocate the block from the current allocator
-					reallocation = AllocateImpl<thread_safe, true>(memory_manager, new_size, alignment, debug_info);
-					ECSEngine::Deallocate(current_allocator, block);
+					if (reallocation == nullptr) {
+						// Allocate using the general function and deallocate the block from the current allocator
+						reallocation = AllocateImpl<thread_safe, true>(memory_manager, new_size, alignment, debug_info);
+						ECSEngine::Deallocate(current_allocator, block);
+						if (reallocation == nullptr) {
+							// Special case, we tried general allocation but it failed, return the failure back
+							return nullptr;
+						}
+					}
 				}
+			}
 
+			if (reallocation != nullptr) {
 				if (memory_manager->m_debug_mode) {
 					TrackedAllocation tracked;
 					tracked.allocated_pointer = block;
