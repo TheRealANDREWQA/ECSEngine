@@ -18,3 +18,5 @@ ECS_THREAD_TASK(RenderFlush);
 // Used by the editor
 template<bool schedule_element>
 ECS_THREAD_TASK(RenderInstancedFramebuffer);
+
+ECS_THREAD_TASK(RenderCameraRecalculate);

@@ -6,7 +6,6 @@
 #include "AssetMetadata.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Utilities/Reflection/Reflection.h"
-//#include "../Multithreading/ConcurrentPrimitives.h"
 
 namespace ECSEngine {
 
@@ -369,7 +368,7 @@ namespace ECSEngine {
 
 		// It does not set the name or the file. Can optionally provide an allocator for the buffers that are used
 		// otherwise the allocator from this database will be used.
-		bool ReadShaderFile(Stream<char> name, Stream<wchar_t> file, ShaderMetadata* metadata, AllocatorPolymorphic allocator = { nullptr }) const;
+		bool ReadShaderFile(Stream<char> name, ShaderMetadata* metadata, AllocatorPolymorphic allocator = { nullptr }) const;
 
 		// It does not set the name or the file. Can optionally provide an allocator for the buffers that are used
 		// otherwise the allocator from this database will be used.
@@ -671,6 +670,9 @@ namespace ECSEngine {
 		static void ExtractFileFromFile(Stream<wchar_t> path, CapacityStream<wchar_t>& file);
 
 		static Stream<wchar_t> ExtractAssetTargetFromFile(Stream<wchar_t> path, Stream<wchar_t> base_path, CapacityStream<wchar_t>& target_path);
+
+		// This will leave relative paths as is
+		static Stream<wchar_t> ExtractAssetTargetFromFile(Stream<wchar_t> path, CapacityStream<wchar_t>& target_path);
 
 		ECS_FIELDS_START_REFLECT;
 

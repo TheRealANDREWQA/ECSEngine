@@ -306,7 +306,7 @@ namespace ECSEngine {
 
 	// Each macro definition and name is separately allocated
 	struct ECSENGINE_API ECS_REFLECT ShaderMetadata {
-		ShaderMetadata();
+		ECS_INLINE ShaderMetadata() : name(nullptr, 0), macros(nullptr, 0) {}
 		ShaderMetadata(Stream<char> name, Stream<ShaderMacro> macros, AllocatorPolymorphic allocator);
 
 		void AddMacro(Stream<char> name, Stream<char> definition, AllocatorPolymorphic allocator);

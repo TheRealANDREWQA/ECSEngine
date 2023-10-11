@@ -1,5 +1,6 @@
 #pragma once
 #include "ECSEngineAssets.h"
+#include "ECSEngineUI.h"
 
 using namespace ECSEngine;
 
@@ -83,11 +84,10 @@ bool CreateMaterialFile(const EditorState* editor_state, Stream<wchar_t> relativ
 bool CreateSamplerFile(const EditorState* editor_state, Stream<wchar_t> relative_path);
 
 // The path does not need to have the extension. It will be appended automatically
-// This is a forwarding file (it contains the path to the target)
-bool CreateShaderFile(const EditorState* editor_state, Stream<wchar_t> relative_path, ECS_SHADER_TYPE shader_type = ECS_SHADER_TYPE_COUNT);
+// If you set the shader_type to ECS_SHADER_TYPE_COUNT, it will not append any extension
+bool CreateShaderFile(const EditorState* editor_state, Stream<wchar_t> relative_path, ECS_SHADER_TYPE shader_type);
 
 // The path does not need to have the extension. It will be appended automatically
-// This is a forwarding file (it contains the path to the target)
 bool CreateMiscFile(const EditorState* editor_state, Stream<wchar_t> relative_path);
 
 // This only creates the disk file for the new setting. It does not add it to the database
@@ -212,9 +212,6 @@ void GetAssetNameFromThunkOrForwardingFile(const EditorState* editor_state, Stre
 // Thunk files are those for materials and gpu samplers and forwarding files are shaders and misc
 void GetAssetNameFromThunkOrForwardingFileRelative(const EditorState* editor_state, Stream<wchar_t> relative_path, CapacityStream<char>& name);
 
-// Returns true if it managed to read the file. A target path of size 0 but with a return of true it means that the target is not yet assigned
-bool GetAssetFileFromForwardingFile(Stream<wchar_t> absolute_path, CapacityStream<wchar_t>& target_path);
-
 // Returns true if it finds a file that targets the given metadata. If the absolute_path is set to true, then it will give the absolute path
 // to the file (e.g. C:\ProjectPath\Assets\Texture.jpg), else it will only write the relative path to the assets folder
 bool GetAssetFileFromAssetMetadata(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, CapacityStream<wchar_t>& path, bool absolute_path = true);
@@ -321,9 +318,6 @@ bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 
 // Removes the dependencies and also the time stamps
 void RemoveAssetDependencies(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
-
-// Returns true if it managed to write
-bool WriteForwardingFile(Stream<wchar_t> absolute_path, Stream<wchar_t> target_path);
 
 // This unregister is for assets that are not tied down to a sandbox.
 // Useful for example for inspectors. It will wait until the flag EDITOR_STATE_PREVENT_RESOURCE_LOADING is cleared

@@ -787,7 +787,7 @@ namespace ECSEngine {
 			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_COLOR_INPUT_CALLBACK;
 			}
-
+			
 			UIActionHandler callback;
 			UIActionHandler final_callback = { nullptr };
 		};

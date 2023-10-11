@@ -475,11 +475,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	std::atomic<size_t> THREAD_COUNTS_TEST[16] = { 0 };
-
-	ECS_THREAD_TASK(EmptyTask) {
-		THREAD_COUNTS_TEST[thread_id].fetch_add(1);
-	}
+	ECS_THREAD_TASK(EmptyTask) {}
 
 	void TaskManager::DoFrame(bool wait_frame)
 	{
@@ -568,8 +564,13 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ECS_THREAD_TASK(FinishFrameTaskDynamic) {
-		world->task_manager->m_is_frame_done.Notify();
-		THREAD_COUNTS_TEST[thread_id].fetch_add(1);
+		int signal_count = world->task_manager->m_is_frame_done.Notify();
+		if (signal_count == -1) {
+			// We are the last ones to finish the frame - set the new frame delta time
+			// Use the microsecond variant and divide by with the float factor to have a floating point
+			// Value since GetDuration returns an integer value
+			world->delta_time = (float)world->timer.GetDuration(ECS_TIMER_DURATION_US) / 1'000'000.0f;
+		}
 	}
 
 	ECS_THREAD_TASK(FinishFrameTask) {
@@ -885,16 +886,30 @@ namespace ECSEngine {
 	{
 		unsigned int thread_count = GetThreadCount();
 
-		Semaphore* semaphore = (Semaphore*)m_dynamic_task_allocators[0]->Allocate(sizeof(Semaphore));
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(void*, thread_data, thread_count);
-		
-		for (unsigned int index = 0; index < thread_count; index++) {
-			thread_data[index] = semaphore;
-		}
-		thread_data.size = thread_count;
+		const size_t STACK_CAPACITY = ECS_KB;
 
-		AddDynamicTaskGroup(WITH_NAME(WaitThreadsTask), thread_data, 0, false);
-		semaphore->SpinWait(thread_count);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, awaken_threads, STACK_CAPACITY);
+		bool all_are_sleeping = true;
+		// Record the awake threads - such that we do not push a task to a sleeping thread and wake it up
+		// Since this is unnecessary
+		for (unsigned int index = 0; index < thread_count; index++) {
+			if (m_sleep_wait[index].WaitingThreadCount() == 0) {
+				awaken_threads.AddAssert(index);
+			}
+		}
+		if (awaken_threads.size == 0) {
+			// All of them are sleeping - can return
+			return;
+		}
+
+		Semaphore semaphore;
+		semaphore.ClearCount();
+		for (unsigned int index = 0; index < awaken_threads.size; index++) {
+			// We must use add task and wake since the thread could have gone sleeping since
+			// We last checked up until now
+			AddDynamicTaskAndWakeWithAffinity(ECS_THREAD_TASK_NAME(WaitThreadsTask, &semaphore, 0), awaken_threads[index], false);
+		}
+		semaphore.SpinWait(awaken_threads.size);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

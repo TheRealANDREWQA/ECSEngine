@@ -76,6 +76,12 @@ namespace ECSEngine {
 		Mouse* mouse;
 		Keyboard* keyboard;
 		DebugDrawer* debug_drawer;
+
+		// The timer is used to keep track of frame duration
+		// It can be queried to find out the frame duration at that point
+		Timer timer;
+		// The delta time is expressed in seconds
+		float delta_time;
 	};
 
 	// Destroys the graphics object if it was created internally, deallocates the global memory manager
@@ -105,6 +111,8 @@ namespace ECSEngine {
 	// before calling PrepareWorld
 	ECSENGINE_API void PrepareWorld(World* world, Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 });
 
+	// This will clear the system manager out of everything and the entity manager will also lose everything
+	// The debug drawer will also be cleared, if one is specified
 	ECSENGINE_API void ClearWorld(World* world);
 
 	// Can choose whether or not to wait for the frame to finish

@@ -40,7 +40,7 @@ struct InspectorDrawShaderFileData {
 	size_t metadata_timestamp;
 };
 
-void DeallocateShaderStructures(EditorState* editor_state, InspectorDrawShaderFileData* data) {
+static void DeallocateShaderStructures(EditorState* editor_state, InspectorDrawShaderFileData* data) {
 	if (data->shader_source_code.size > 0) {
 		editor_state->editor_allocator->Deallocate(data->shader_source_code.buffer);
 		for (size_t index = 0; index < data->conditional_macros.size; index++) {
@@ -52,25 +52,7 @@ void DeallocateShaderStructures(EditorState* editor_state, InspectorDrawShaderFi
 	}
 }
 
-template<bool deallocate_shader_structures>
-void InspectorCleanShader(EditorState* editor_state, unsigned int inspector_index, void* _data) {
-	InspectorDrawShaderFileData* data = (InspectorDrawShaderFileData*)_data;
-	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
-
-	data->target_file.Deallocate(editor_allocator);
-	for (unsigned int index = 0; index < data->shader_macros.size; index++) {
-		editor_state->editor_allocator->Deallocate(data->shader_macros[index].definition_stream.buffer);
-		editor_state->editor_allocator->Deallocate(data->shader_macros[index].name_stream.buffer);
-	}
-	data->shader_macros.FreeBuffer();
-	data->shader_metadata.DeallocateMemory(editor_allocator);
-	// The set to builtin case shouldn't deallocate the shader structures
-	if constexpr (deallocate_shader_structures) {
-		DeallocateShaderStructures(editor_state, data);
-	}
-}
-
-void RetrieveSourceCode(EditorState* editor_state, InspectorDrawShaderFileData* data) {
+static void RetrieveSourceCode(EditorState* editor_state, InspectorDrawShaderFileData* data) {
 	if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) >= LAZY_EVALUATION_MILLISECONDS) {
 		DeallocateShaderStructures(editor_state, data);
 		AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
@@ -98,7 +80,7 @@ struct AddMacroData {
 	EditorState* editor_state;
 };
 
-void AddMacroCallback(ActionData* action_data) {
+static void AddMacroCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	AddMacroData* data = (AddMacroData*)_data;
@@ -116,7 +98,7 @@ struct RemoveAnywhereMacroData {
 	EditorState* editor_state;
 };
 
-void RemoveAnywhereCallback(ActionData* action_data) {
+static void RemoveAnywhereCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	RemoveAnywhereMacroData* data = (RemoveAnywhereMacroData*)_data;
@@ -150,7 +132,7 @@ struct MacroInputCallbackData {
 	bool is_name;
 };
 
-void MacroInputCallback(ActionData* action_data) {
+static void MacroInputCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	MacroInputCallbackData* data = (MacroInputCallbackData*)_data;
@@ -194,56 +176,20 @@ struct BuiltinCallbackData {
 	InspectorDrawShaderFileData* data;
 };
 
-void BuiltinCallback(ActionData* action_data) {
+static void BuiltinCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	BuiltinCallbackData* data = (BuiltinCallbackData*)_data;
-	if (data->data->builtin != EDITOR_SHADER_BUILTIN_COUNT) {
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 
-		ShaderMetadata builtin_metadata;
-		SetShaderBuiltin(data->editor_state, data->data->builtin, &data->data->shader_metadata, &builtin_metadata, GetAllocatorPolymorphic(&stack_allocator));
-		Stream<wchar_t> current_path = data->data->path.Copy(GetAllocatorPolymorphic(&stack_allocator));
-		//// Clean everything that the inspector currently holds, except for the shader structures
-		//// Since the reload will want to deallocate them
-		//InspectorCleanShader<false>(data->editor_state, 0, data->data);
+	SetAssetBuiltinActionData set_data;
+	set_data.asset = &data->data->shader_metadata;
+	set_data.asset_type = ECS_ASSET_SHADER;
+	set_data.builtin_index = data->data->builtin;
+	set_data.current_path = data->data->path;
+	set_data.editor_state = data->editor_state;
 
-		unsigned int inspector_index = GetInspectorIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
-		ChangeInspectorToNothing(data->editor_state, inspector_index);
-		ChangeInspectorToShaderFile(data->editor_state, current_path, inspector_index);
-
-		//// Delay the timer such that it will get triggered the next iteration
-		//data->data->timer.DelayStart(-LAZY_EVALUATION_MILLISECONDS, ECS_TIMER_DURATION_MS);
-		//AllocatorPolymorphic editor_allocator = data->editor_state->EditorAllocator();
-		//data->data->shader_metadata.name = builtin_metadata.name.Copy(editor_allocator);
-		//data->data->target_file = builtin_metadata.file.Copy(editor_allocator);
-		//data->data->shader_macros.ResizeNoCopy(builtin_metadata.macros.size);
-		//// We also need to set the size such that it gets picked up in the AddMacroCallback
-		//data->data->shader_macros.size = builtin_metadata.macros.size;
-
-		//AddMacroData add_data;
-		//add_data.draw_data = data->data;
-		//add_data.editor_state = data->editor_state;
-
-		//UIDrawerArrayAddRemoveData add_remove_data;
-		//// This is actually the old value
-		//add_remove_data.new_size = 0;
-		//add_remove_data.resizable_data = (ResizableStream<void>*)&data->data->shader_macros;
-		//add_remove_data.is_resizable_data = true;
-		//add_remove_data.element_byte_size = sizeof(data->data->shader_macros.MemoryOf(1));
-		//add_remove_data.array_data = nullptr;
-
-		//// This will allocate the streams for all entries
-		//action_data->data = &add_data;
-		//action_data->additional_data = &add_remove_data;
-		//AddMacroCallback(action_data);
-		//
-		//// Now copy the actual macros
-		//for (size_t index = 0; index < builtin_metadata.macros.size; index++) {
-		//	data->data->shader_macros[index].name_stream.CopyOther(builtin_metadata.macros[index].name);
-		//	data->data->shader_macros[index].definition_stream.CopyOther(builtin_metadata.macros[index].definition);
-		//}
-	}
+	action_data->data = &set_data;
+	SetAssetBuiltinAction(action_data);
 };
 
 struct DrawShaderMacroData {
@@ -251,7 +197,7 @@ struct DrawShaderMacroData {
 	InspectorDrawShaderFileData* data;
 };
 
-void DrawShaderMacro(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData data) {
+static void DrawShaderMacro(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData data) {
 	UIDrawConfig temp_config;
 
 	ShaderMacroUI* macro_ui = (ShaderMacroUI*)data.element_data;
@@ -281,6 +227,20 @@ void DrawShaderMacro(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayD
 	config->flag_count--;
 }
 
+static void InspectorCleanShader(EditorState* editor_state, unsigned int inspector_index, void* _data) {
+	InspectorDrawShaderFileData* data = (InspectorDrawShaderFileData*)_data;
+	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
+
+	data->target_file.Deallocate(editor_allocator);
+	for (unsigned int index = 0; index < data->shader_macros.size; index++) {
+		editor_state->editor_allocator->Deallocate(data->shader_macros[index].definition_stream.buffer);
+		editor_state->editor_allocator->Deallocate(data->shader_macros[index].name_stream.buffer);
+	}
+	data->shader_macros.FreeBuffer();
+	data->shader_metadata.DeallocateMemory(editor_allocator);
+	DeallocateShaderStructures(editor_state, data);
+}
+
 void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
 	InspectorDrawShaderFileData* data = (InspectorDrawShaderFileData*)_data;
 
@@ -301,31 +261,26 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 		data->target_file.Initialize(editor_state->editor_allocator, 0, 512);
 		data->shader_macros.Initialize(editor_state->EditorAllocator(), 0);
 
-		// Determine the target
-		bool success = GetAssetFileFromForwardingFile(data->path, data->target_file);
-		if (success) {
-			// Copy the target path
-			data->shader_metadata.file = StringCopy(editor_state->EditorAllocator(), data->target_file);
-
-			// Read the file, if there is one
-			success = editor_state->asset_database->ReadShaderFile(name, data->target_file, &data->shader_metadata);
-			if (!success) {
-				// Set the default
-				data->shader_metadata.Default(data->shader_metadata.name, data->shader_metadata.file);
-			}
-			else {
-				// Copy all the macros
-				data->shader_macros.ResizeNoCopy(data->shader_metadata.macros.size);
-				for (size_t index = 0; index < data->shader_metadata.macros.size; index++) {
-					data->shader_macros[index].name_stream.Initialize(editor_state->editor_allocator, 0, MACRO_INPUT_CAPACITY);
-					data->shader_macros[index].definition_stream.Initialize(editor_state->editor_allocator, 0, MACRO_INPUT_CAPACITY);
-
-					data->shader_macros[index].name_stream.CopyOther(data->shader_metadata.macros[index].name);
-					data->shader_macros[index].definition_stream.CopyOther(data->shader_metadata.macros[index].definition);
-				}
-				data->shader_macros.size = data->shader_metadata.macros.size;
-			}		
+		// Read the file, if there is one
+		bool success = editor_state->asset_database->ReadShaderFile(name, &data->shader_metadata);
+		if (!success) {
+			// Set the default
+			data->shader_metadata.Default(data->shader_metadata.name, {});
 		}
+		else {
+			// Copy all the macros
+			data->target_file.CopyOther(data->shader_metadata.file);
+
+			data->shader_macros.ResizeNoCopy(data->shader_metadata.macros.size);
+			for (size_t index = 0; index < data->shader_metadata.macros.size; index++) {
+				data->shader_macros[index].name_stream.Initialize(editor_state->editor_allocator, 0, MACRO_INPUT_CAPACITY);
+				data->shader_macros[index].definition_stream.Initialize(editor_state->editor_allocator, 0, MACRO_INPUT_CAPACITY);
+
+				data->shader_macros[index].name_stream.CopyOther(data->shader_metadata.macros[index].name);
+				data->shader_macros[index].definition_stream.CopyOther(data->shader_metadata.macros[index].definition);
+			}
+			data->shader_macros.size = data->shader_metadata.macros.size;
+		}		
 
 		// Determine the shader type
 		ECS_SHADER_TYPE shader_type = AssetExtensionTypeShader(PathExtension(data->path));
@@ -457,7 +412,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 			AssetSettingsHelperChangedWithFileAction(action_data);
 
 			// Check to see if the new target path exists
-			if (!ExistsFileOrFolder(data->draw_data->target_file)) {
+			if (data->draw_data->target_file.size > 0 && !ExistsFileOrFolder(data->draw_data->target_file)) {
 				// Print a message
 				ECS_FORMAT_TEMP_STRING(console_message, "Shader {#} has invalid target {#}.", data->draw_data->shader_metadata.name, data->draw_data->target_file);
 				EditorSetConsoleError(console_message);
@@ -773,7 +728,7 @@ void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path
 	uint3 inspector_indices = ChangeInspectorDrawFunctionWithSearchEx(
 		editor_state,
 		inspector_index,
-		{ InspectorDrawShaderFile, InspectorCleanShader<true> },
+		{ InspectorDrawShaderFile, InspectorCleanShader },
 		&data,
 		sizeof(data) + sizeof(wchar_t) * path.size,
 		-1,
@@ -793,6 +748,6 @@ void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path
 
 void InspectorShaderFileAddFunctors(InspectorTable* table) {
 	for (size_t index = 0; index < std::size(ASSET_SHADER_EXTENSIONS); index++) {
-		AddInspectorTableFunction(table, { InspectorDrawShaderFile, InspectorCleanShader<true> }, ASSET_SHADER_EXTENSIONS[index]);
+		AddInspectorTableFunction(table, { InspectorDrawShaderFile, InspectorCleanShader }, ASSET_SHADER_EXTENSIONS[index]);
 	}
 }

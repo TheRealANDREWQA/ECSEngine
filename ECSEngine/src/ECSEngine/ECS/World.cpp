@@ -281,6 +281,7 @@ namespace ECSEngine {
 	{
 		world->entity_manager->ClearCache();
 		world->entity_manager->ClearFrame();
+		world->delta_time = 0.0f;
 
 		PrepareWorldConcurrency(world, scheduler_elements);
 
@@ -304,6 +305,8 @@ namespace ECSEngine {
 		if (world->debug_drawer != nullptr) {
 			world->debug_drawer->Clear();
 		}
+		world->timer.SetUninitialized();
+		world->delta_time = 0.0f;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------

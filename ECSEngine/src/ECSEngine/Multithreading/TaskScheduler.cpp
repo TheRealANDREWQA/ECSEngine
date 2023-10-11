@@ -119,7 +119,7 @@ namespace ECSEngine {
 
 	unsigned int TaskScheduler::GetCurrentQueryIndex() const
 	{
-		return query_index;
+		return query_index > 0 ? query_index - 1 : 0;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -156,7 +156,7 @@ namespace ECSEngine {
 		
 		int task_index = world->task_manager->GetThreadTaskIndex();
 		if (task_index < scheduler->task_barriers.size && scheduler->task_barriers[task_index] == ECS_TASK_SCHEDULER_BARRIER_PRESENT) {
-			world->task_manager->WaitThreads();
+			//world->task_manager->WaitThreads();
 		}
 
 		// Can now call the thread function
@@ -205,7 +205,7 @@ namespace ECSEngine {
 		TaskScheduler* scheduler, 
 		unsigned int* group_sizes,
 		unsigned int* group_limits, 
-		Stream<ECS_TASK_SCHEDULER_BARRIER_TYPE> waiting_barriers,
+		CapacityStream<ECS_TASK_SCHEDULER_BARRIER_TYPE>* waiting_barriers,
 		CapacityStream<char>* error_message
 	) {
 		ResizableStream<TaskSchedulerElement>* elements = &scheduler->elements;
@@ -244,7 +244,7 @@ namespace ECSEngine {
 			// Then there is a cycle or wrong dependencies.
 			for (; iteration < group_sizes[group_index]; iteration++) {
 				before_iteration_finished_tasks = finished_tasks;
-				for (unsigned int index = group_start; index < group_limits[group_index]; index++) {
+				for (unsigned int index = group_start + finished_tasks; index < group_limits[group_index]; index++) {
 					// All of its dependencies are fulfilled
 					if (elements->buffer[index].task_dependencies.size == 0) {
 						Stream<char> task_name = elements->buffer[index].task_name;
@@ -316,19 +316,18 @@ namespace ECSEngine {
 			// Bring the dependency counts back to their original size - because these are not necessarly
 			// copied and instead referenced
 			for (unsigned int index = group_start; index < group_limits[group_index]; index++) {
-				elements->buffer[index].task_dependencies.size = dependency_counts[index];
+				elements->buffer[index].task_dependencies.size = dependency_counts[index - group_start];
 			}
 		}
 
 		// Now fill in the waiting barriers indices
 		for (unsigned int index = 1; index < elements->size; index++) {
 			const TaskSchedulerElement* element = elements->buffer + index;
+			ECS_TASK_SCHEDULER_BARRIER_TYPE barrier_type = ECS_TASK_SCHEDULER_BARRIER_NONE;
 			if (elements->buffer[index - 1].IsTaskDependency(element)) {
-				waiting_barriers[index] = ECS_TASK_SCHEDULER_BARRIER_PRESENT;
+				barrier_type = ECS_TASK_SCHEDULER_BARRIER_PRESENT;
 			}
-			else {
-				waiting_barriers[index] = ECS_TASK_SCHEDULER_BARRIER_NONE;
-			}
+			waiting_barriers->AddAssert(barrier_type);
 		}
 
 		return true;
@@ -363,7 +362,7 @@ namespace ECSEngine {
 		// Resize the scheduling data
 		infos->Initialize(elements->allocator, elements->size);
 		// Memset the infos to 0 - no barrier and fine locking wrapper
-		memset(infos->buffer, 0,  elements->MemoryOf(elements->size));
+		memset(infos->buffer, 0, infos->MemoryOf(infos->size));
 
 		scheduler->task_barriers.Initialize(elements->allocator, elements->size);
 		// Copy the barriers
@@ -417,7 +416,7 @@ namespace ECSEngine {
 		SolveGroupParsing(this, group_sizes, group_limits);
 
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(ECS_TASK_SCHEDULER_BARRIER_TYPE, waiting_barriers, elements.size);
-		bool success = SolveTaskDependencies(this, group_sizes, group_limits, waiting_barriers, error_message);
+		bool success = SolveTaskDependencies(this, group_sizes, group_limits, &waiting_barriers, error_message);
 		waiting_barriers.AssertCapacity();
 
 		if (!success) {

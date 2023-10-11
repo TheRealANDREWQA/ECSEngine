@@ -695,6 +695,28 @@ static void ShaderModifyCallback(ActionData* action_data) {
 
 // ------------------------------------------------------------------------------------------------------------
 
+struct BuiltinCallbackData {
+	InspectorDrawMaterialFileData* data;
+};
+
+static void BuiltinCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	BuiltinCallbackData* data = (BuiltinCallbackData*)_data;
+
+	SetAssetBuiltinActionData set_data;
+	set_data.asset = &data->data->material_asset;
+	set_data.asset_type = ECS_ASSET_MATERIAL;
+	set_data.builtin_index = data->data->builtin;
+	set_data.current_path = data->data->path;
+	set_data.editor_state = data->data->editor_state;
+
+	action_data->data = &set_data;
+	SetAssetBuiltinAction(action_data);
+}
+
+// ------------------------------------------------------------------------------------------------------------
+
 static void InspectorCleanMaterial(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawMaterialFileData* data = (InspectorDrawMaterialFileData*)_data;
 
@@ -718,18 +740,6 @@ static void InspectorCleanMaterial(EditorState* editor_state, unsigned int inspe
 	}
 
 	Deallocate(editor_allocator, data->material_asset.name.buffer);
-}
-
-// ------------------------------------------------------------------------------------------------------------
-
-struct SetMaterialBuiltinCallbackData {
-	InspectorDrawMaterialFileData* data;
-};
-
-static void SetMaterialBuiltinCallback(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	SetMaterialBuiltinCallbackData* data = (SetMaterialBuiltinCallbackData*)_data;
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -842,6 +852,27 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 	config.AddFlag(dependent_size);
 
 	const size_t BASE_CONFIGURATION = UI_CONFIG_NAME_PADDING | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ELEMENT_NAME_FIRST;
+
+	BuiltinCallbackData builtin_callback_data = { data };
+	UIConfigComboBoxCallback builtin_combo_callback;
+	builtin_combo_callback.handler = { BuiltinCallback, &builtin_callback_data, sizeof(builtin_callback_data) };
+	config.AddFlag(builtin_combo_callback);
+
+	// Determine if the builtin has changed - if it did, update the flag
+	data->builtin = FindMaterialBuiltinIndex(&data->temporary_database, &data->material_asset);
+
+	// Draw the combo box indicating builtins
+	drawer->ComboBox(
+		BASE_CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK,
+		config,
+		"Builtin",
+		{ EDITOR_MATERIAL_BUILTIN_NAME, std::size(EDITOR_MATERIAL_BUILTIN_NAME) },
+		std::size(EDITOR_MATERIAL_BUILTIN_NAME),
+		(unsigned char*)&data->builtin
+	);
+	drawer->NextRow();
+
+	config.flag_count--;
 
 	editor_state->module_reflection->DrawFieldOverride(
 		STRING(ECS_VERTEX_SHADER_HANDLE),

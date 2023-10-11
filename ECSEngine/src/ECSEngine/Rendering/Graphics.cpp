@@ -3857,14 +3857,14 @@ namespace ECSEngine {
 
 	MemoryManager DefaultGraphicsAllocator(GlobalMemoryManager* manager)
 	{
-		return MemoryManager(100'000, 1024, 100'000, GetAllocatorPolymorphic(manager));
+		return MemoryManager(DefaultGraphicsAllocatorSize(), ECS_KB * 4, DefaultGraphicsAllocatorSize(), GetAllocatorPolymorphic(manager));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	size_t DefaultGraphicsAllocatorSize()
 	{
-		return 100'000;
+		return 150'000;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

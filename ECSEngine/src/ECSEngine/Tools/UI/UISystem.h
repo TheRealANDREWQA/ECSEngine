@@ -687,6 +687,9 @@ namespace ECSEngine {
 
 			void DeallocateEventData();
 
+			// Removes all dynamic window resources - irrespective of their reference count
+			void DeallocateWindowDynamicResources(unsigned int window_index);
+
 			void DecrementWindowDynamicResource(unsigned int window_index);
 
 			// this is the safe way of destroying dockspaces since if in the same frame have been destroyed
@@ -746,7 +749,9 @@ namespace ECSEngine {
 				unsigned int offset
 			);
 
-			unsigned int DoFrame();
+			// Can optionally give a stream of windows to be drawn this frame
+			// All other windows are ignored. Returns a frame pacing 
+			ECS_UI_FRAME_PACING DoFrame();
 
 			void Draw(float2 mouse_position, void** system_buffers, size_t* system_counts);
 
@@ -1850,7 +1855,6 @@ namespace ECSEngine {
 			CapacityStream<UIDockspaceLayer> m_background_dockspaces;
 			// these will index into m_dockspace layers
 			CapacityStream<unsigned int> m_pop_up_windows;
-			ThreadSafeQueue<ThreadTask> m_thread_tasks;
 			UIRenderResources m_resources;
 			// The intended purpose of the global resources is to ease inter-window communication
 			// For example draggables across windows
@@ -1866,7 +1870,7 @@ namespace ECSEngine {
 			Timer m_frame_timer;
 			float m_frame_delta_time;
 			void* m_event_data;
-			unsigned short m_frame_pacing;
+			ECS_UI_FRAME_PACING m_frame_pacing;
 			unsigned short m_texture_evict_count;
 			unsigned short m_texture_evict_target;
 			bool m_execute_events;

@@ -113,6 +113,10 @@ namespace ECSEngine {
 						characters->Advance();
 						return double4(DBL_MAX, DBL_MAX, DBL_MAX, DBL_MAX);
 					}
+					else {
+						// Advance the whole characters - unknown sequence
+						characters->Advance(characters->size);
+					}
 				}
 			}
 			else {

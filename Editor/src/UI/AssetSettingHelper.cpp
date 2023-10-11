@@ -3,8 +3,10 @@
 #include "../Editor/EditorState.h"
 #include "../Assets/EditorSandboxAssets.h"
 #include "../Assets/AssetManagement.h"
+#include "../Assets/AssetBuiltins.h"
 #include "../Editor/EditorPalette.h"
 #include "../Project/ProjectFolders.h"
+#include "../UI/Inspector.h"
 
 #define MAX_SETTINGS 8
 
@@ -278,65 +280,50 @@ void AssetSettingsHelperChangedWithFileAction(ActionData* action_data)
 	UI_UNPACK_ACTION_DATA;
 
 	AssetSettingsHelperChangedWithFileActionData* data = (AssetSettingsHelperChangedWithFileActionData*)_data;
-	Stream<wchar_t> previous_file = data->previous_target_file;
-	Stream<char> previous_name = data->previous_name;
 
-	Stream<wchar_t> current_file = GetAssetFile(data->asset, data->asset_type);
-	Stream<char> current_name = GetAssetName(data->asset, data->asset_type);
+	//Stream<wchar_t> previous_file = data->previous_target_file;
+	//Stream<char> previous_name = data->previous_name;
 
-	bool same_file_and_name = current_name == previous_name && current_file == previous_file;
-	// If the file is empty, then the target is not yet asigned, so can't do anything
-	if (current_file.size > 0) {
-		bool success = true;
-		
-		//unsigned int handle = data->target_database->FindAsset(previous_name, previous_file, data->asset_type);
-		//if (handle != -1) {
-		//	// Unload the asset
-		//	// Add an event to deallocate the asset based on its old values
-		//	const void* old_asset = data->editor_state->asset_database->GetAssetConst(handle, data->asset_type);
-		//	DeallocateAssetWithRemapping(data->editor_state, handle, data->asset_type, old_asset);
-		//	success = data->target_database->UpdateAsset(handle, data->asset, data->asset_type);
-		//	if (!success) {
-		//		ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
-		//		EditorSetConsoleWarn(error_message);
-		//	}
-		//}
-		//else {
-			success = data->target_database->WriteAssetFile(data->asset, data->asset_type);
-			// Let the asset trigger do the deallocation of the asset if it exists and its reconstruction
-			EditorStateLazyEvaluationTrigger(data->editor_state, EDITOR_LAZY_EVALUATION_METADATA_FOR_ASSETS);
-			if (!success) {
-				ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
-				EditorSetConsoleWarn(error_message);
+	//Stream<wchar_t> current_file = GetAssetFile(data->asset, data->asset_type);
+	//Stream<char> current_name = GetAssetName(data->asset, data->asset_type);
 
-				// If we failed to write the asset file don't remove the previous one
-			}
-			else {
-				// Only remove it if the target file or the name has changed				
-				if (!same_file_and_name) {
-					// Remove the previous asset file
-					if (previous_file.size > 0) {
-						ECS_STACK_CAPACITY_STREAM(wchar_t, previous_metadata_file, 512);
-						data->target_database->FileLocationShader(previous_name, previous_file, previous_metadata_file);
-						if (!RemoveFile(previous_metadata_file)) {
-							ECS_FORMAT_TEMP_STRING(console_message, "Failed to remove metadata file {#}.", previous_metadata_file);
-							EditorSetConsoleWarn(console_message);
-						}
-					}
-				}
-			}
-		//}
+	//// If the file is empty, then the target is not yet asigned, so can't do anything
+	//if (current_file.size > 0) {
+	//	bool success = true;
+	//	
+	//	//unsigned int handle = data->target_database->FindAsset(previous_name, previous_file, data->asset_type);
+	//	//if (handle != -1) {
+	//	//	// Unload the asset
+	//	//	// Add an event to deallocate the asset based on its old values
+	//	//	const void* old_asset = data->editor_state->asset_database->GetAssetConst(handle, data->asset_type);
+	//	//	DeallocateAssetWithRemapping(data->editor_state, handle, data->asset_type, old_asset);
+	//	//	success = data->target_database->UpdateAsset(handle, data->asset, data->asset_type);
+	//	//	if (!success) {
+	//	//		ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
+	//	//		EditorSetConsoleWarn(error_message);
+	//	//	}
+	//	//}
+	//	//else {
+	//		success = data->target_database->WriteAssetFile(data->asset, data->asset_type);
+	//		// Let the asset trigger do the deallocation of the asset if it exists and its reconstruction
+	//		EditorStateLazyEvaluationTrigger(data->editor_state, EDITOR_LAZY_EVALUATION_METADATA_FOR_ASSETS);
+	//		if (!success) {
+	//			ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
+	//			EditorSetConsoleWarn(error_message);
 
-		// Check the thunk file - only if the write succeeded
-		if (data->thunk_file_path.size > 0 && success && !same_file_and_name) {
-			// Write the thunk/forwarding file
-			success = WriteForwardingFile(data->thunk_file_path, current_file);
-			if (!success) {
-				ECS_FORMAT_TEMP_STRING(console_message, "Failed to write forwarding file for asset {#} with target {#}.", current_name, current_file);
-				EditorSetConsoleWarn(console_message);
-			}
-		}
-	}
+	//			// If we failed to write the asset file don't remove the previous one
+	//		}
+	//	//}
+	//}
+
+	// At the moment, it seems that the no file version is the same as this one
+	AssetSettingsHelperChangedNoFileActionData no_file_data;
+	no_file_data.asset = data->asset;
+	no_file_data.asset_type = data->asset_type;
+	no_file_data.editor_state = data->editor_state;
+	no_file_data.target_database = data->target_database;
+	action_data->data = &no_file_data;
+	AssetSettingsHelperChangedNoFileAction(action_data);
 }
 
 void AssetSettingsHelperChangedNoFileAction(ActionData* action_data) {
@@ -410,4 +397,24 @@ void AssetSettingsIsReferencedUIStatus(Tools::UIDrawer* drawer, const EditorStat
 		drawer->Text(TEXT_CONFIGURATION | UI_CONFIG_UNAVAILABLE_TEXT, config, "The asset is not being used.");
 	}
 	drawer->NextRow();
+}
+
+void SetAssetBuiltinAction(ActionData* action_data)
+{
+	UI_UNPACK_ACTION_DATA;
+
+	SetAssetBuiltinActionData* data = (SetAssetBuiltinActionData*)_data;
+	ECS_ASSERT(data->asset_type == ECS_ASSET_SHADER || data->asset_type == ECS_ASSET_MATERIAL);
+	unsigned char max_builtin_index = data->asset_type == ECS_ASSET_SHADER ? EDITOR_SHADER_BUILTIN_COUNT : EDITOR_MATERIAL_BUILTIN_COUNT;
+	if (max_builtin_index != data->builtin_index) {
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+
+		size_t asset_storage[AssetMetadataMaxSizetSize()];
+		SetAssetBuiltin(data->editor_state, data->builtin_index, data->asset, data->asset_type, asset_storage, GetAllocatorPolymorphic(&stack_allocator));
+		Stream<wchar_t> current_path = data->current_path.Copy(GetAllocatorPolymorphic(&stack_allocator));
+
+		unsigned int inspector_index = GetInspectorIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
+		ChangeInspectorToNothing(data->editor_state, inspector_index);
+		ChangeInspectorToAsset(data->editor_state, data->asset, data->asset_type, inspector_index);
+	}
 }

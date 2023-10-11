@@ -55,6 +55,12 @@ void ClearSandboxTaskScheduler(EditorState* editor_state, unsigned int sandbox_i
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Resets the task manager and the task scheduler, and also clears the entity manager query cache and 
+// the system manager system settings 
+void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Can delay the initialization of the runtime for later on. It must be done manually to a call with InitializeSandboxRuntime
 void CreateSandbox(EditorState* editor_state, bool initialize_runtime = true);
 
@@ -368,6 +374,13 @@ void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_
 
 // Pauses all sandboxes that want to be paused using the general button
 void PauseSandboxWorlds(EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// It will construct the scheduling order, prepare the world concurrency, bind module settings
+// And the graphics scene info.
+// It returns true if it succeeded, else false (if the scheduling order could not be solved)
+bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

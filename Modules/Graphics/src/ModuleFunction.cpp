@@ -6,7 +6,7 @@
 using namespace ECSEngine;
 
 void ModuleTaskFunction(ModuleTaskFunctionData* data) {
-	TaskSchedulerElement elements[4];
+	TaskSchedulerElement elements[5];
 	
 	for (size_t index = 0; index < std::size(elements); index++) {
 		elements[index].task_group = ECS_THREAD_TASK_FINALIZE_LATE;
@@ -22,6 +22,14 @@ void ModuleTaskFunction(ModuleTaskFunctionData* data) {
 	ECS_REGISTER_FOR_EACH_TASK(elements[2], RenderInstancedFramebuffer, data);
 
 	ECS_REGISTER_FOR_EACH_TASK(elements[3], RenderFlush, data);
+
+	elements[4].task_group = ECS_THREAD_TASK_FINALIZE_EARLY;
+	elements[4].task_function = RenderCameraRecalculate;
+	elements[4].task_name = STRING(RenderCameraRecalculate);
+	data->tasks->AddAssert(elements[4]);
+
+	// Maintain the order since this is important
+	data->maintain_order_in_group = true;
 }
 
 #if 0

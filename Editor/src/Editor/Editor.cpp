@@ -2,26 +2,23 @@
 #include "editorpch.h"
 #include "ECSEngine.h"
 #include "../../resource.h"
-#include "../UI/ToolbarUI.h"
 #include "../UI/Hub.h"
+#include "../UI/Game.h"
+#include "../UI/Scene.h"
 #include "EditorParameters.h"
-#include "../Project/ProjectOperations.h"
 #include "EditorState.h"
-#include "../UI/FileExplorerData.h"
 #include "EditorEvent.h"
-#include "../Modules/Module.h"
 #include "EditorPalette.h"
 #include "EntryPoint.h"
-#include "../UI/NotificationBar.h"
-#include "../UI/InspectorData.h"
-#include "../UI/Inspector.h"
-#include "ECSEngineBenchmark.h"
 #include "ECSEngineMath.h"
-#include "ECSEngineVisualizeTexture.h"
 #include "../Sandbox/Sandbox.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
+
+// After this amount of milliseconds has passed, the ui system will make a full draw
+// Instead of redraws
+#define IS_PLAYING_DO_FRAME_MILLISECONDS 16
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
@@ -754,150 +751,12 @@ public:
 
 					unsigned int frame_pacing = 0;
 
-					static bool CAMERA_CHANGED = true;
-
 					if (!IsIconic(hWnd)) {
-						unsigned int VALUE = 0;
-
-						graphics->ClearBackBuffer(0.0f, 0.0f, 0.0f);
-
-						timer.SetMarker();
-
-						//if (CAMERA_CHANGED) {
-							//graphics->m_context->ClearDepthStencilView(editor_state.viewport_texture_depth.view, D3D11_CLEAR_DEPTH, 1.0f, 0);
-							//graphics.m_context->ClearRenderTargetView(editor_state.viewport_render_target, colors);
-
-						//	Matrix cube_matrix = MatrixGPU(camera.GetProjectionViewMatrix());
-
-						//	graphics->DisableDepth();
-						//	graphics->DisableCulling();
-						//	graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_TEXTURE_CUBE);
-						//	graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-						//	graphics->BindVertexBuffer(cube_v_buffer);
-						//	graphics->BindIndexBuffer(cube_v_index);
-						//	if (diffuse_cube) {
-						//		graphics->BindPixelResourceView(diffuse_view);
-						//	}
-						//	else if (specular_cube) {
-						//		graphics->BindPixelResourceView(specular_view);
-						//	}
-						//	else {
-						//		graphics->BindPixelResourceView(converted_cube_view);
-						//	}
-						//	Shaders::SetPBRSkyboxVertexConstant(skybox_vertex_constant, graphics, camera.rotation, camera.projection);
-						//	graphics->BindVertexConstantBuffer(skybox_vertex_constant);
-						//	graphics->DrawIndexed(cube_v_index.count);
-						//	graphics->EnableDepth();
-						//	graphics->EnableCulling();
-
-						//	graphics->BindVertexShader(PBR_vertex_shader);
-						//	graphics->BindPixelShader(PBR_pixel_shader);
-						//	graphics->BindInputLayout(PBR_layout);
-
-						//	graphics->BindSamplerState(graphics->m_shader_helpers[0].pixel_sampler, 1);
-
-						//	graphics->BindPixelResourceView(plank_texture);
-						//	graphics->BindPixelResourceView(plank_normal_texture, 1);
-						//	//graphics.BindPixelResourceView(plank_metallic, 2);
-						//	graphics->BindPixelResourceView(plank_roughness, 3);
-						//	graphics->BindPixelResourceView(plank_ao, 4);
-						//	graphics->BindPixelResourceView(diffuse_view, 5);
-						//	graphics->BindPixelResourceView(specular_view, 6);
-						//	graphics->BindPixelResourceView(brdf_lut_view, 7);
-
-						//	Shaders::SetCameraPosition(camera_position_buffer, graphics, camera.translation);
-
-						//	ConstantBuffer vertex_constant_buffers[1];
-						//	vertex_constant_buffers[0] = pbr_vertex_values;
-						//	graphics->BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
-
-						//	Shaders::SetDirectionalLight(directional_light, graphics, LIGHT_DIRECTION, LIGHT_INTENSITY);
-
-						//	Shaders::SetPointLight(point_light, graphics, float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f), 2.5f, 1.5f, ColorFloat(1.0f, 1.0f, 1.0f));
-						//	ColorFloat spot_light_color = ColorFloat(3.0f, 3.0f, 3.0f)/* * cos(timer.GetDurationSinceMarker_ms() * 0.000001f)*/;
-						//	Shaders::SetSpotLight(spot_light, graphics, float3(0.0f, 8.0f, 20.0f), float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 0.5f, -1.0f, 0.0f), 15.0f, 22.0f, 15.0f, 2.0f, 2.0f, spot_light_color);
-
-						//	float* normal_strength_data = (float*)graphics->MapBuffer(normal_strength_buffer.buffer);
-						//	*normal_strength_data = normal_strength;
-						//	graphics->UnmapBuffer(normal_strength_buffer.buffer);
-
-						//	float2* _pbr_values = (float2*)graphics->MapBuffer(pbr_pixel_values.buffer);
-						//	*_pbr_values = { metallic, roughness };
-						//	graphics->UnmapBuffer(pbr_pixel_values.buffer);
-
-						//	float4* _pbr_lights = (float4*)graphics->MapBuffer(pbr_lights.buffer);
-						//	for (size_t index = 0; index < 4; index++) {
-						//		_pbr_lights[0] = { pbr_light_pos[index].x, pbr_light_pos[index].y, pbr_light_pos[index].z, 0.0f };
-						//		_pbr_lights++;
-						//	}
-						//	for (size_t index = 0; index < 4; index++) {
-						//		_pbr_lights[0] = { pbr_light_color[index].red, pbr_light_color[index].green, pbr_light_color[index].blue, pbr_light_color[index].alpha };
-						//		_pbr_lights++;
-						//	}
-						//	for (size_t index = 0; index < 4; index++) {
-						//		_pbr_lights[0].x = pbr_light_range[index];
-						//		_pbr_lights++;
-						//	}
-						//	graphics->UnmapBuffer(pbr_lights.buffer);
-
-						//	Shaders::PBRPixelConstants pixel_constants;
-						//	pixel_constants.tint = tint;
-						//	pixel_constants.normal_strength = normal_strength;
-						//	pixel_constants.metallic_factor = metallic;
-						//	pixel_constants.roughness_factor = roughness;
-						//	Shaders::SetPBRPixelConstants(pbr_pixel_values, graphics, pixel_constants);
-
-						//	ConstantBuffer pixel_constant_buffer[5];
-						//	pixel_constant_buffer[0] = camera_position_buffer;
-						//	pixel_constant_buffer[1] = environment_constants;
-						//	pixel_constant_buffer[2] = pbr_pixel_values;
-						//	pixel_constant_buffer[3] = pbr_lights;
-						//	pixel_constant_buffer[4] = directional_light;
-
-						//	graphics->BindPixelConstantBuffers({ pixel_constant_buffer, std::size(pixel_constant_buffer) });
-
-						//	camera.SetPerspectiveProjectionFOV(60.0f, aspect_ratio, 0.05f, 1000.0f);
-
-						//	Matrix camera_matrix = camera.GetProjectionViewMatrix();
-
-						//	Matrix world_matrices[1];
-						//	for (size_t subindex = 0; subindex < 1; subindex++) {
-						//		void* obj_ptr = graphics->MapBuffer(obj_buffer.buffer);
-						//		float* reinter = (float*)obj_ptr;
-						//		DirectX::XMMATRIX* reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
-
-						//		Matrix matrix = /*MatrixRotationZ(sin(timer.GetDurationSinceMarker_ms() * 0.0005f) * 0.0f) **/ MatrixRotationY(0.0f) * MatrixRotationX(0.0f)
-						//			* MatrixTranslation(0.0f, 0.0f, 20.0f + subindex * 10.0f);
-						//		Matrix world_matrix = matrix;
-						//		world_matrices[subindex] = world_matrix;
-						//		Matrix transpose = MatrixGPU(matrix);
-						//		transpose.Store(reinter);
-
-						//		Matrix MVP_matrix = matrix * camera_matrix;
-						//		matrix = MatrixGPU(MVP_matrix);
-						//		matrix.Store(reinter + 16);
-
-						//		graphics->UnmapBuffer(obj_buffer.buffer);
-						//		graphics->BindSamplerState(sampler);
-
-						//		ECS_MESH_INDEX mapping[3];
-						//		mapping[0] = ECS_MESH_POSITION;
-						//		mapping[1] = ECS_MESH_NORMAL;
-						//		mapping[2] = ECS_MESH_UV;
-
-						//		Shaders::SetPBRVertexConstants(pbr_vertex_values, graphics, MatrixGPU(world_matrices[subindex]), MatrixGPU(MVP_matrix), uv_tiling, uv_offsets);
-
-						//		graphics->BindMesh(normal_merged_mesh, Stream<ECS_MESH_INDEX>(mapping, std::size(mapping)));
-						//		graphics->DrawIndexed(normal_merged_mesh.index_buffer.count);
-						//	}
-						//}
-
 						graphics->BindRenderTargetViewFromInitialViews();
 
 						editor_state.Tick();
 
 						frame_pacing = editor_state.ui_system->DoFrame();
-						frame_pacing = std::max(frame_pacing, VALUE);
 
 						// Refresh the graphics object since it might be changed
 						graphics = editor_state.UIGraphics();
@@ -908,7 +767,7 @@ public:
 						}
 
 						mouse.Update();
-						keyboard.Update();
+						keyboard.Update();						
 					}
 
 					std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_AMOUNT[frame_pacing]));
@@ -1000,6 +859,7 @@ LPCWSTR Editor::EditorClass::GetName() noexcept {
 
 Editor::Editor(int _width, int _height, LPCWSTR name)
 {
+	timer.SetUninitialized();
 	timer.SetNewStart();
 	application_quit = EDITOR_APPLICATION_QUIT_APPROVED;
 

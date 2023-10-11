@@ -215,10 +215,12 @@ namespace ECSEngine {
 		void ResetAndNotify();
 
 		// Increments the signal_count by the given count and wakes up all the threads waiting
-		void NotifyAll(int count = 1);
+		// Returns the signal count value before the addition
+		int NotifyAll(int count = 1);
 
 		// Increments the signal_count by the given count and wakes up a single thread that is waiting
-		void Notify(int count = 1);
+		// Returns the signal count value before the addition
+		int Notify(int count = 1);
 
 		// Returns the number of threads waiting on this variable
 		unsigned int WaitingThreadCount();

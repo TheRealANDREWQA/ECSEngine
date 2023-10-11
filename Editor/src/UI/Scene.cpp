@@ -297,7 +297,7 @@ static void HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 	);
 
 	// Change the frame pacing to one a little faster
-	editor_state->ui_system->m_frame_pacing = std::max(editor_state->ui_system->m_frame_pacing, (unsigned short)ECS_UI_FRAME_PACING_HIGH);
+	editor_state->ui_system->m_frame_pacing = std::max(editor_state->ui_system->m_frame_pacing, ECS_UI_FRAME_PACING_HIGH);
 	if (delta != float3::Splat(0.0f)) {
 		TranslateSandboxCamera(editor_state, sandbox_index, delta, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		// Re-render the sandbox as well and increase the frame pacing

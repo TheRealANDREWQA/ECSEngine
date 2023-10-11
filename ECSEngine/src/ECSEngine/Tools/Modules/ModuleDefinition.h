@@ -21,6 +21,10 @@ namespace ECSEngine {
 	struct ModuleTaskFunctionData {
 		CapacityStream<TaskSchedulerElement>* tasks;
 		AllocatorPolymorphic allocator;
+
+		// If this flag is set to true, then it will add dependencies
+		// To the given tasks such that the order is maintained in the same group
+		bool maintain_order_in_group = false;
 	};
 
 	// The mandatory function of the module. These tasks are used so that the runtime knows what the module

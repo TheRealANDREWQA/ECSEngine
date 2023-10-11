@@ -15,8 +15,6 @@
 
 namespace ECSEngine {
 
-	//using namespace HID;
-
 	namespace Tools {
 
 		struct ProcessTextureData {
@@ -175,11 +173,8 @@ namespace ECSEngine {
 			}
 			// for some reason the memory must be 0'ed out before using it
 			memset(allocation, 0, total_memory);
-
 			uintptr_t buffer = (uintptr_t)allocation;
-			m_thread_tasks.InitializeFromBuffer(buffer, m_descriptors.misc.window_count);
 
-			buffer = AlignPointer(buffer, alignof(UIWindow));
 			m_windows.InitializeFromBuffer(buffer, 0, m_descriptors.misc.window_count);
 
 			buffer = AlignPointer(buffer, alignof(UIDockspaceLayer));
@@ -2836,6 +2831,18 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::DeallocateWindowDynamicResources(unsigned int window_index)
+		{
+			m_windows[window_index].dynamic_resources.ForEachIndex([&](unsigned int index) {
+				RemoveWindowDynamicResource(window_index, index);
+				return true;
+			});
+			m_windows[window_index].dynamic_resources.Deallocate(Allocator());
+			m_windows[window_index].dynamic_resources.InitializeFromBuffer(nullptr, 0);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DecrementWindowDynamicResource(unsigned int window_index)
 		{
 			m_windows[window_index].dynamic_resources.ForEachIndex([&](unsigned int index) {
@@ -3018,13 +3025,7 @@ namespace ECSEngine {
 				m_memory->Deallocate(m_windows[window_index].destroy_handler.data);
 			}
 
-			size_t max_dynamic_resource_count = m_windows[window_index].dynamic_resources.GetExtendedCapacity();
-			for (size_t index = 0; index < max_dynamic_resource_count; index++) {
-				if (m_windows[window_index].dynamic_resources.IsItemAt(index)) {
-					RemoveWindowDynamicResource(window_index, index);
-				}
-			}
-			m_memory->Deallocate(m_windows[window_index].dynamic_resources.GetAllocatedBuffer());
+			DeallocateWindowDynamicResources(window_index);
 
 			for (size_t index = 0; index < m_windows[window_index].memory_resources.size; index++) {
 				m_memory->Deallocate(m_windows[window_index].memory_resources[index]);
@@ -3482,23 +3483,8 @@ namespace ECSEngine {
 		{
 			PushBackgroundDockspace();
 
-			m_thread_tasks.Reset();
 			ECS_STACK_CAPACITY_STREAM(UIVisibleDockspaceRegion, visible_regions, 256);
 			GetVisibleDockspaceRegions(visible_regions, true);
-
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-			// if there are more regions to draw than command lists, expand the stream and nullptr every entry
-			if (regions.size > m_resources.window_draw_list.capacity) {
-				void* region_allocation = m_memory->Allocate(sizeof(ComPtr<ID3D11CommandList>) * regions.size, alignof(ComPtr<ID3D11CommandList>));
-				m_memory->Deallocate(m_resources.window_draw_list.buffer);
-				m_resources.window_draw_list.buffer = (ComPtr<ID3D11CommandList>*)region_allocation;
-				m_resources.window_draw_list.capacity = regions.size;
-				m_resources.window_draw_list.size = regions.size;
-				for (size_t index = 0; index < regions.size; index++) {
-					m_resources.window_draw_list[index] = nullptr;
-				}
-			}
-#endif
 
 			UIDrawDockspaceRegionData* data_allocation = (UIDrawDockspaceRegionData*)ECS_STACK_ALLOC(sizeof(UIDrawDockspaceRegionData) * visible_regions.size);
 			UIDockspace* mouse_dockspace = nullptr;
@@ -3539,61 +3525,12 @@ namespace ECSEngine {
 
 				return task;
 			};
-			// if there are more windows to draw, add them to the queue
-			for (int64_t index = m_task_manager->GetThreadCount(); index < (int64_t)visible_regions.size; index++) {
-				ThreadTask task = initialize_thread_task(data_allocation + index, this, visible_regions, index);
-				m_thread_tasks.PushNonAtomic(task);
-			}
 
 			// initializing threads with tasks
-			for (int64_t index = 0; index < m_task_manager->GetThreadCount() && index < (int64_t)visible_regions.size; index++) {
+			for (unsigned int index = 0; index < visible_regions.size; index++) {
 				ThreadTask task = initialize_thread_task(data_allocation + index, this, visible_regions, index);
-
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-				m_task_manager->AddDynamicTask(task, index, true);
-#else
-#ifdef ECS_TOOLS_UI_SINGLE_THREADED
-				task.function(0, m_task_manager->m_world, task.data);
-#endif
-#endif
-			}
-
-#ifdef ECS_TOOLS_UI_SINGLE_THREADED
-			// initializing threads with tasks
-			size_t thread_task_count = m_thread_tasks.GetSize();
-			for (int64_t index = 0; index < thread_task_count; index++) {
-				ThreadTask task;
-				m_thread_tasks.PopNonAtomic(task);
 				task.function(0, m_task_manager->m_world, task.data);
 			}
-#endif
-
-			// busy wait until drawing the window on that layer is finished
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-			int64_t draw_count = 0;
-			while (draw_count < (int64_t)regions.size
-#ifdef ECS_TOOLS_UI_ACTIVE_WINDOW
-				- 1
-#endif
-				) {
-				if (m_resources.window_draw_list[draw_count].Get() != nullptr) {
-					m_graphics->GetContext()->ExecuteCommandList(m_resources.window_draw_list[draw_count].Get(), FALSE);
-					//unsigned int value = m_resources.window_draw_list[draw_count]->Release();
-					m_resources.window_draw_list[draw_count].Reset();
-					ID3D11CommandList* yay = m_resources.window_draw_list[draw_count].Get();
-					/*if (m_resources.window_draw_list[draw_count].Get() != nullptr) {
-						draw_count--;
-					}*/
-					//ECS_ASSERT(m_resources.window_draw_list[draw_count].Get() == nullptr);
-						//draw_count--;
-					draw_count++;
-				}
-				else {
-					_mm_pause();
-				}
-			}
-
-#endif
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3618,7 +3555,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::DoFrame() {
+		ECS_UI_FRAME_PACING UISystem::DoFrame() {
 			if (m_frame_timer.IsUninitialized()) {
 				m_frame_delta_time = 0.0f;
 			}
@@ -3637,9 +3574,8 @@ namespace ECSEngine {
 
 			UpdateDockspaceHierarchy();
 
-#ifdef ECS_TOOLS_UI_SINGLE_THREADED
 			m_graphics->DisableDepth();
-#endif
+
 			// 2 times for hoverable and clickable/general system phase
 			void* buffers[ECS_TOOLS_UI_MATERIALS * 2];
 			size_t counts[ECS_TOOLS_UI_MATERIALS * 2] = { 0 };
@@ -3652,17 +3588,9 @@ namespace ECSEngine {
 
 			m_execute_events = DetectEvents(mouse_position);
 
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-			m_task_manager->ResetDynamicQueues();
-#endif
-
 			m_resources.thread_resources[0].system_temp_allocator.Clear();
 
-#if defined(ECS_TOOLS_UI_SINGLE_THREADED) || defined(ECS_TOOLS_UI_MULTI_THREADED)
 			Draw(mouse_position, buffers, counts);
-#else
-			DrawFrame(mouse_position, resize_factor);
-#endif
 
 			m_focused_window_data.buffers = buffers;
 			m_focused_window_data.counts = counts;
@@ -3738,9 +3666,7 @@ namespace ECSEngine {
 				m_graphics->GetContext()
 			);
 
-#ifdef ECS_TOOLS_UI_SINGLE_THREADED
 			m_graphics->EnableDepth();
-#endif
 
 			for (size_t index = 0; index < m_windows.size; index++) {
 				DecrementWindowDynamicResource(index);
@@ -3750,9 +3676,7 @@ namespace ECSEngine {
 			HandleFrameHandlers();
 			UpdateFocusedWindowCleanupLocation();
 
-			//m_previous_mouse_position = GetNormalizeMousePosition();
 			m_frame_index++;
-
 			return m_frame_pacing;
 		}
 
@@ -3968,7 +3892,7 @@ namespace ECSEngine {
 
 			if (!data->is_fixed_default_when_border_zero) {
 				data->dockspace->borders[data->border_index].Reset();
-
+				
 				DrawDockspaceRegionBackground(
 					data->thread_id,
 					data->dockspace,
@@ -4034,7 +3958,7 @@ namespace ECSEngine {
 				bool active_click_handler = false;
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button) {
 					active_click_handler |= m_focused_window_data.clickable_handler[button].action == nullptr || m_mouse->Get(button) != ECS_BUTTON_HELD;
-				});
+					});
 				if ((active_click_handler || m_focused_window_data.always_hoverable)
 					&& data->dockspace->borders[data->border_index].hoverable_handler.position_x.buffer != nullptr) {
 					is_hoverable = DetectHoverables(
@@ -4091,7 +4015,7 @@ namespace ECSEngine {
 						active_region |= is_clickable | is_general;
 						m_frame_pacing = ((is_clickable || is_general) && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 					}
-				});
+					});
 			}
 
 			if (active_region) {
@@ -4174,12 +4098,6 @@ namespace ECSEngine {
 			}
 
 			data->dockspace->borders[data->border_index].draw_resources.UnmapLate(m_graphics->GetContext());
-
-			SetViewport(
-				m_graphics->GetContext(),
-				region_position,
-				region_half_scale
-			);
 
 			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_LATE;
 			DrawPass<ECS_UI_DRAW_LATE>(
@@ -11619,14 +11537,6 @@ namespace ECSEngine {
 
 			system->m_resources.thread_resources[thread_id].temp_allocator.Clear();
 			system->DrawDockspaceRegion(reinterpretation, reinterpretation->active_region_index == reinterpretation->draw_index);
-
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-			ThreadTask new_task;
-			bool succeded = system->m_thread_tasks.Pop(new_task);
-			if (succeded) {
-				DrawDockspaceRegionThreadTask(thread_id, new_task.data);
-			}
-#endif
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

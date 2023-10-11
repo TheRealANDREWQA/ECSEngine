@@ -105,13 +105,21 @@ static bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 			hash_table.Initialize(&table_allocator, PowerOfTwoGreater(paths.size / 2 + 1));
 
 			for (size_t index = 0; index < paths.size; index++) {
-				ECS_STACK_CAPACITY_STREAM(wchar_t, _target_file, 256);
-				AssetDatabase::ExtractFileFromFile(paths[index], _target_file);
-				Stream<wchar_t> target_file = StringCopy(allocator_polymorphic, _target_file);
-
 				ECS_STACK_CAPACITY_STREAM(char, temp_name, 256);
 				AssetDatabase::ExtractNameFromFile(paths[index], temp_name);
 				Stream<char> allocated_name = StringCopy(allocator_polymorphic, temp_name);
+
+				ECS_STACK_CAPACITY_STREAM(wchar_t, _target_file, 256);
+				AssetDatabase::ExtractFileFromFile(paths[index], _target_file);
+				if (_target_file.size == 0 && IsThunkOrForwardingFile(type) && AssetHasFile(type)) {
+					size_t metadata_storage[AssetMetadataMaxSizetSize()];
+					ECS_STACK_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 8);
+					bool success = base_data->editor_state->asset_database->ReadAssetFile(allocated_name, {}, metadata_storage, type, GetAllocatorPolymorphic(&temporary_allocator));
+					if (success) {
+						_target_file.CopyOther(GetAssetFile(metadata_storage, type));
+					}
+				}
+				Stream<wchar_t> target_file = StringCopy(allocator_polymorphic, _target_file);
 
 				ResourceIdentifier identifier = target_file;
 				unsigned int table_index = hash_table.Find(identifier);
@@ -682,11 +690,9 @@ static void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TY
 		Stream<wchar_t> texture = { nullptr, 0 };
 		get_texture(base_return.absolute_path, index, &texture);
 
-		Stream<char> stem = PathStemBoth(base_return.converted_filename);
-
 		base_return.select_data->file = { nullptr, 0 };
 		// The name will be deduced from the relative part
-		base_return.select_data->name = { nullptr, stem.size };
+		base_return.select_data->name = { nullptr, base_return.converted_filename.size };
 
 		const size_t BASE_CONFIGURATION = UI_CONFIG_MAKE_SQUARE | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_SPRITE_BUTTON_MULTI_TEXTURE;
 
@@ -701,7 +707,7 @@ static void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TY
 		drawer.SpriteButton(
 			BASE_CONFIGURATION,
 			base_return.config,
-			{ SelectAction, base_return.select_data, sizeof(*base_return.select_data) + (unsigned int)stem.size },
+			{ SelectAction, base_return.select_data, sizeof(*base_return.select_data) + (unsigned int)base_return.converted_filename.size },
 			ECS_TOOLS_UI_TEXTURE_FILE_BLANK,
 			drawer.color_theme.text
 		);
@@ -803,8 +809,7 @@ void ShaderDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool i
 			data->shader_metadata = (ShaderMetadata*)data->base_data.resizable_allocator.Allocate(sizeof(ShaderMetadata) * path_count);
 			for (size_t index = 0; index < path_count; index++) {
 				Stream<char> current_name = data->base_data.asset_name_with_path[index].value[0];
-				Stream<wchar_t> current_file = data->base_data.asset_name_with_path[index].identifier;
-				bool success = data->base_data.editor_state->asset_database->ReadShaderFile(current_name, current_file, data->shader_metadata + index);
+				bool success = data->base_data.editor_state->asset_database->ReadShaderFile(current_name, data->shader_metadata + index);
 				if (!success) {
 					// Signal that the file was not found
 					data->shader_metadata[index].shader_type = ECS_SHADER_TYPE_COUNT;

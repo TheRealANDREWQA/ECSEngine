@@ -42,7 +42,7 @@ inline ECSEngine::ECS_SHADER_TYPE AssetExtensionTypeShader(ECSEngine::Stream<wch
 	return ECSEngine::ECS_SHADER_TYPE_COUNT;
 }
 
-inline ECSEngine::Stream<wchar_t> AssetExtensionFromType(ECSEngine::ECS_SHADER_TYPE type) {
+inline ECSEngine::Stream<wchar_t> AssetExtensionFromShaderType(ECSEngine::ECS_SHADER_TYPE type) {
 	if (ECSEngine::ECS_SHADER_TYPE_COUNT == type) {
 		return {};
 	}

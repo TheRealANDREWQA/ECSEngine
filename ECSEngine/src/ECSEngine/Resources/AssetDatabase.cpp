@@ -649,7 +649,10 @@ namespace ECSEngine {
 	void AssetDatabase::FileLocationAsset(Stream<char> name, Stream<wchar_t> file, CapacityStream<wchar_t>& path, ECS_ASSET_TYPE type) const
 	{
 		AssetDatabaseFileDirectory(metadata_file_location, path, type);
-		if (file.size > 0) {
+		// Shaders are a special case - they have front facing thunk files in the editor side
+		// That makes having the file to be specified very hard to work with - that's why use
+		// The relative path of the thunk itself to deduce the location
+		if (file.size > 0 && type != ECS_ASSET_SHADER) {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, temp_file, 512);
 			// If the file is an absolute file, then we must replace the drive qualification
 			// such that the OS doesn't think we try to use the current path of the given drive
@@ -681,7 +684,7 @@ namespace ECSEngine {
 		Stream<wchar_t> converted_name = { path.buffer + path_size, name.size };
 		ReplaceCharacter(converted_name, ECS_OS_PATH_SEPARATOR_REL, SEPARATOR_CHAR);
 		ReplaceCharacter(converted_name, ECS_OS_PATH_SEPARATOR, SEPARATOR_CHAR);
-		path.AddStreamSafe(ECS_ASSET_DATABASE_FILE_EXTENSION);
+		path.AddStreamAssert(ECS_ASSET_DATABASE_FILE_EXTENSION);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -1498,8 +1501,8 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::ReadShaderFile(Stream<char> name, Stream<wchar_t> file, ShaderMetadata* metadata, AllocatorPolymorphic allocator) const {
-		return ReadAssetFileImpl(this, name, file, metadata, STRING(ShaderMetadata), ECS_ASSET_SHADER, allocator);
+	bool AssetDatabase::ReadShaderFile(Stream<char> name, ShaderMetadata* metadata, AllocatorPolymorphic allocator) const {
+		return ReadAssetFileImpl(this, name, {}, metadata, STRING(ShaderMetadata), ECS_ASSET_SHADER, allocator);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -1533,7 +1536,7 @@ namespace ECSEngine {
 		}
 		case ECS_ASSET_SHADER:
 		{
-			return ReadShaderFile(name, file, (ShaderMetadata*)metadata, allocator);
+			return ReadShaderFile(name, (ShaderMetadata*)metadata, allocator);
 		}
 		case ECS_ASSET_MATERIAL:
 		{
@@ -2035,7 +2038,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------
 
 	template<typename MetadataSparse>
-	Stream<AssetDatabaseSameTargetAsset> GetSameTargetAssets(AllocatorPolymorphic allocator, MetadataSparse sparse) {
+	static Stream<AssetDatabaseSameTargetAsset> GetSameTargetAssets(AllocatorPolymorphic allocator, MetadataSparse sparse) {
 		auto data = sparse.ToStream();
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(AssetDatabaseSameTargetAsset, temp_assets, data.size);
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices_to_check, data.size);
@@ -2106,9 +2109,12 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(SerializeOmitField, omit_fields, 2);
 			omit_fields[0].type = asset_string;
 			omit_fields[0].name = STRING(name);
-			omit_fields[1].type = asset_string;
-			omit_fields[1].name = STRING(file);
-			omit_fields.size = 2;
+			omit_fields.size = 1;
+			if (asset_type != ECS_ASSET_SHADER) {
+				omit_fields[1].type = asset_string;
+				omit_fields[1].name = STRING(file);
+				omit_fields.size++;
+			}
 
 			SetSerializeCustomMaterialAssetDatabase(database);
 
@@ -2179,20 +2185,27 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	typedef bool (AssetDatabase::* WriteAssetFileFunction)(const void* metadata) const;
-
-	WriteAssetFileFunction WRITE_ASSET_FILE[] = {
-		(WriteAssetFileFunction)&AssetDatabase::WriteMeshFile,
-		(WriteAssetFileFunction)&AssetDatabase::WriteTextureFile,
-		(WriteAssetFileFunction)&AssetDatabase::WriteGPUSamplerFile,
-		(WriteAssetFileFunction)&AssetDatabase::WriteShaderFile,
-		(WriteAssetFileFunction)&AssetDatabase::WriteMaterialFile,
-		(WriteAssetFileFunction)&AssetDatabase::WriteMiscFile
-	};
-
 	bool AssetDatabase::WriteAssetFile(const void* asset, ECS_ASSET_TYPE type) const
 	{
-		return (this->*WRITE_ASSET_FILE[type])(asset);
+		switch (type) {
+		case ECS_ASSET_MESH:
+			return WriteMeshFile((const MeshMetadata*)asset);
+		case ECS_ASSET_TEXTURE:
+			return WriteTextureFile((const TextureMetadata*)asset);
+		case ECS_ASSET_GPU_SAMPLER:
+			return WriteGPUSamplerFile((const GPUSamplerMetadata*)asset);
+		case ECS_ASSET_SHADER:
+			return WriteShaderFile((const ShaderMetadata*)asset);
+		case ECS_ASSET_MATERIAL:
+			return WriteMaterialFile((const MaterialAsset*)asset);
+		case ECS_ASSET_MISC:
+			return WriteMiscFile((const MiscAsset*)asset);
+		default:
+			ECS_ASSERT(false, "Invalid asset type");
+		}
+
+		// Shouldn't be reached
+		return false;
 	}
 
 	Stream<AssetDatabaseSameTargetAsset> AssetDatabase::SameTargetMeshes(AllocatorPolymorphic allocator) const
@@ -2252,7 +2265,7 @@ namespace ECSEngine {
 		Stream<wchar_t> separator = FindFirstToken(filename, PATH_SEPARATOR);
 		if (separator.size == 0) {
 			// No separator, copy the entire filename
-			name.CopyOther(filename);
+			name.CopyOther(PathStem(filename));
 		}
 		else {
 			// Copy everything after the separator except the extension
@@ -2307,7 +2320,22 @@ namespace ECSEngine {
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, file, 512);
 		ExtractFileFromFile(path, file);
-		return MountPath(file, base_path, target_path);
+		if (file.size == 0) {
+			ExtractNameFromFileWide(path, file);
+			ReplaceCharacter(file, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+		}
+		return MountPathOnlyRel(file, base_path, target_path);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	Stream<wchar_t> AssetDatabase::ExtractAssetTargetFromFile(Stream<wchar_t> path, CapacityStream<wchar_t>& target_path) {
+		unsigned int previous_size = target_path.size;
+		ExtractFileFromFile(path, target_path);
+		if (previous_size == target_path.size) {
+			ExtractNameFromFileWide(path, target_path);
+		}
+		return target_path;
 	}
 
 	// --------------------------------------------------------------------------------------
