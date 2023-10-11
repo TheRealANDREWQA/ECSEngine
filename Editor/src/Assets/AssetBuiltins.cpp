@@ -1,5 +1,8 @@
 #include "editorpch.h"
 #include "AssetBuiltins.h"
+#include "AssetExtensions.h"
+#include "AssetManagement.h"
+#include "../Project/ProjectFolders.h"
 #include "../Editor/EditorState.h"
 
 #define ECS_VERTEX_PBR_SOURCE ECS_VERTEX_SHADER_SOURCE(PBR)
@@ -65,7 +68,7 @@ void FillShaderBuiltin(EDITOR_SHADER_BUILTIN builtin_index, const ShaderMetadata
 }
 
 void SetShaderBuiltin(
-	EditorState* editor_state, 
+	const EditorState* editor_state, 
 	EDITOR_SHADER_BUILTIN builtin_index, 
 	const ShaderMetadata* shader_metadata,
 	ShaderMetadata* builtin_metadata,
@@ -124,13 +127,52 @@ AssetDatabase* FillMaterialBuiltin(
 		ShaderMetadata vertex_shader;
 		ShaderMetadata pixel_shader;
 
+		// Create new shader files in the corresponding path
+		ECS_STACK_CAPACITY_STREAM(char, vertex_name, 512);
+		vertex_name.CopyOther(current_material->name);
+		ConvertWideCharsToASCII(AssetExtensionFromShaderType(ECS_SHADER_VERTEX), vertex_name);
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, wide_vertex_name, 512);
+		ConvertASCIIToWide(wide_vertex_name, vertex_name);
+		bool success = CreateShaderFile(editor_state, wide_vertex_name, ECS_SHADER_TYPE_COUNT);
+		if (!success) {
+			ECS_FORMAT_TEMP_STRING(error_message, "Failed to create the vertex shader file {#} for the PBR material preset", vertex_name);
+			EditorSetConsoleError(error_message);
+		}
+
+		ECS_STACK_CAPACITY_STREAM(char, pixel_name, 512);
+		pixel_name.CopyOther(current_material->name);
+		ConvertWideCharsToASCII(AssetExtensionFromShaderType(ECS_SHADER_PIXEL), pixel_name);
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, wide_pixel_name, 512);
+		ConvertASCIIToWide(wide_pixel_name, pixel_name);
+		success = CreateShaderFile(editor_state, wide_pixel_name, ECS_SHADER_TYPE_COUNT);
+		if (!success) {
+			ECS_FORMAT_TEMP_STRING(error_message, "Failed to create the pixel shader file {#} for the PBR material preset", pixel_name);
+			EditorSetConsoleError(error_message);
+		}
+
+		// These shaders will reference these temporary names, but when they will be added internally,
+		// they will use the allocator to make a copy
 		ShaderMetadata temp_metadata;
-		temp_metadata.name = current_material->name;
+		temp_metadata.name = vertex_name;
 		FillShaderBuiltin(EDITOR_SHADER_BUILTIN_VERTEX_PBR, &temp_metadata, &vertex_shader, temporary_allocator);
+
+		temp_metadata.name = pixel_name;
 		FillShaderBuiltin(EDITOR_SHADER_BUILTIN_PIXEL_PBR, &temp_metadata, &pixel_shader, temporary_allocator);
 
 		output_material->vertex_shader_handle = database->AddAssetInternal(&vertex_shader, ECS_ASSET_SHADER);
 		output_material->pixel_shader_handle = database->AddAssetInternal(&pixel_shader, ECS_ASSET_SHADER);
+
+		success = database->WriteShaderFile(&vertex_shader);
+		if (!success) {
+			ECS_FORMAT_TEMP_STRING(error_message, "Failed to write metadata file for vertex shader {#} for the PBR material preset", vertex_name);
+			EditorSetConsoleError(error_message);
+		}
+		success = database->WriteShaderFile(&pixel_shader);
+		if (!success) {
+			ECS_FORMAT_TEMP_STRING(error_message, "Failed to write metadata file for pixel shader {#} for the PBR material preset", pixel_name);
+		}
 	}
 	break;
 	}
@@ -151,5 +193,30 @@ void SetMaterialBuiltin(
 	bool success = temporary_database->WriteMaterialFile(builtin_asset);
 	if (!success) {
 		EditorSetConsoleError("Failed to change the material to builtin");
+	}
+}
+
+void SetAssetBuiltin(
+	const EditorState* editor_state, 
+	unsigned char builtin_index, 
+	const void* asset, 
+	ECS_ASSET_TYPE type, 
+	void* builtin_asset_storage, 
+	AllocatorPolymorphic temporary_allocator
+)
+{
+	ECS_ASSERT(type == ECS_ASSET_SHADER || type == ECS_ASSET_MATERIAL);
+	
+	switch (type) {
+	case ECS_ASSET_SHADER:
+	{
+		SetShaderBuiltin(editor_state, (EDITOR_SHADER_BUILTIN)builtin_index, (const ShaderMetadata*)asset, (ShaderMetadata*)builtin_asset_storage, temporary_allocator);
+	}
+	break;
+	case ECS_ASSET_MATERIAL:
+	{
+		SetMaterialBuiltin(editor_state, (EDITOR_MATERIAL_BUILTIN)builtin_index, (const MaterialAsset*)asset, (MaterialAsset*)builtin_asset_storage, temporary_allocator);
+	}
+	break;
 	}
 }

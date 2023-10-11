@@ -35,7 +35,7 @@ void FillShaderBuiltin(
 
 // This will modify the metadata file and give you back the shader metadata to make any changes you see fit
 void SetShaderBuiltin(
-	EditorState* editor_state,
+	const EditorState* editor_state,
 	EDITOR_SHADER_BUILTIN builtin_index,
 	const ShaderMetadata* shader_metadata,
 	ShaderMetadata* builtin_metadata,
@@ -62,5 +62,14 @@ void SetMaterialBuiltin(
 	EDITOR_MATERIAL_BUILTIN builtin_index,
 	const MaterialAsset* material_asset,
 	MaterialAsset* builtin_asset,
+	AllocatorPolymorphic temporary_allocator
+);
+
+void SetAssetBuiltin(
+	const EditorState* editor_state,
+	unsigned char builtin_index,
+	const void* asset,
+	ECS_ASSET_TYPE type,
+	void* builtin_asset_storage,
 	AllocatorPolymorphic temporary_allocator
 );

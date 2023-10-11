@@ -129,14 +129,6 @@ enum SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT : unsigned char {
 static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(EditorState* editor_state, unsigned int sandbox_index) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-	auto reset_concurrency_and_module_settings = [&]() {
-		sandbox->sandbox_world.task_scheduler->Reset();
-		sandbox->sandbox_world.task_manager->Reset();
-		// We also need to reset the entity manager query cache
-		sandbox->sandbox_world.entity_manager->ClearCache();
-		sandbox->sandbox_world.system_manager->ClearSystemSettings();
-	};
-
 	// Returns true if all out of date or failed modules are being compiled, else false
 	// Can be used to issue a wait instead of failure call
 	auto are_out_of_date_or_failed_modules_being_compiled = [&]() {
@@ -159,8 +151,12 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 		return true;
 	};
 
-	bool are_modules_loaded = AreSandboxModulesLoaded(editor_state, sandbox_index, false);
+	// Consider modules to be loaded only if they are not out of date
+	bool are_modules_loaded = AreSandboxModulesLoaded(editor_state, sandbox_index, true);
 	if (!are_modules_loaded) {
+		// Compile all the out of date modules now
+		CompileSandboxModules(editor_state, sandbox_index);
+
 		// Check if the there are modules being compiled and wait for them if that is the case
 		bool should_wait = are_out_of_date_or_failed_modules_being_compiled();
 		if (should_wait) {
@@ -168,7 +164,7 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 		}
 
 		// We need to halt the continuation - also re-register the snapshot
-		reset_concurrency_and_module_settings();
+		ClearSandboxRuntimeWorldInfo(editor_state, sandbox_index);
 		RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
 		return SOLVE_SANDBOX_MODULE_SNAPSHOT_FAILURE;
 	}
@@ -248,22 +244,12 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 
 	if (snapshot_has_changed) {
 		// The snapshot has changed, we need to restore the module settings and rebind the task scheduler and task manager
-		reset_concurrency_and_module_settings();
+		ClearSandboxRuntimeWorldInfo(editor_state, sandbox_index);
 		// We need to discard the current snapshot and recreate it
 		RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
 		
-		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index);
-		if (success) {
-			// We also need to prepare the world concurrency
-			PrepareWorldConcurrency(&sandbox->sandbox_world);
-			
-			// Bind again the module settings
-			BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
-
-			// We also need to bind the scene info
-			BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
-		}
-		else {
+		bool prepare_success = PrepareSandboxRuntimeWorldInfo(editor_state, sandbox_index);
+		if (!prepare_success) {
 			return SOLVE_SANDBOX_MODULE_SNAPSHOT_FAILURE;
 		}
 	}
@@ -291,7 +277,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 		// Determine the difference between the 2 snapshots
 		// Allocate for each handle in the stored snapshot a boolean such that we mark those that were already found
 		size_t snapshot_size = sandbox->runtime_asset_handle_snapshot.total_size;
-		bool* was_found = (bool*)editor_state->editor_allocator->Allocate(sizeof(bool) * snapshot_size);
+		bool* was_found = (bool*)_stack_allocator.Allocate(sizeof(bool) * snapshot_size);
 		memset(was_found, 0, sizeof(bool) * snapshot_size);
 
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
@@ -582,6 +568,18 @@ void ChangeSandboxDebugDrawComponent(
 void ClearSandboxTaskScheduler(EditorState* editor_state, unsigned int sandbox_index)
 {
 	GetSandbox(editor_state, sandbox_index)->sandbox_world.task_scheduler->Reset();
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->sandbox_world.task_scheduler->Reset();
+	sandbox->sandbox_world.task_manager->Reset();
+	// We also need to reset the entity manager query cache
+	sandbox->sandbox_world.entity_manager->ClearCache();
+	sandbox->sandbox_world.system_manager->ClearSystemSettings();
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1520,6 +1518,26 @@ void PauseSandboxWorlds(EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_index)
+{
+	bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index);
+	if (success) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		// We also need to prepare the world concurrency
+		PrepareWorldConcurrency(&sandbox->sandbox_world);
+
+		// Bind again the module settings
+		BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
+
+		// We also need to bind the scene info
+		BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		return true;
+	}
+	return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -1793,6 +1811,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		// Use the editor state task_manage in order to run the commands - at the end reset the static tasks
 		TaskScheduler* runtime_task_scheduler = sandbox->sandbox_world.task_scheduler;
 		TaskManager* runtime_task_manager = sandbox->sandbox_world.task_manager;
+		float previous_sandbox_delta_time = sandbox->sandbox_world.delta_time;
 
 		sandbox->sandbox_world.task_manager = editor_state->render_task_manager;
 		sandbox->sandbox_world.task_scheduler = &viewport_task_scheduler;
@@ -1850,6 +1869,8 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		runtime_query_cache_allocator.Free();
 		editor_state->render_task_manager->ClearTemporaryAllocators();
 		editor_state->render_task_manager->ResetStaticTasks();
+
+		sandbox->sandbox_world.delta_time = previous_sandbox_delta_time;
 
 		// Restore the resource manager first
 		editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot);
@@ -1983,6 +2004,9 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 		visualize_element.texture = sandbox->scene_viewport_depth_stencil_framebuffer.GetResource();
 		SetVisualizeTexture(editor_state, visualize_element);
 	}
+	else {
+		SetSandboxCameraAspectRatio(editor_state, sandbox_index, viewport);
+	}
 
 	// Disable the pending resize
 	sandbox->viewport_pending_resize[viewport] = { 0, 0 };
@@ -2076,7 +2100,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 
 	if (was_waiting) {
-		// We need to reconstruct the 
+		// We need to reconstruct the scheduling order
 	}
 
 	// If it returned OK, then we can proceed as normal
@@ -2097,9 +2121,13 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	// Add the sandbox debug elements
 	DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
 
+	if (sandbox->sandbox_world.delta_time == 0.0f) {
+		sandbox->sandbox_world.timer.SetNewStart();
+	}
 	GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(GetAllocatorPolymorphic(&stack_allocator));
 	DoFrame(&sandbox->sandbox_world);
+	sandbox->sandbox_world.timer.SetNewStart();
 
 	bool graphics_snapshot_success = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(graphics_snapshot, &snapshot_message);
 	if (snapshot_message.size > 0) {

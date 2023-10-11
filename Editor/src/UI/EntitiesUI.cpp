@@ -498,7 +498,7 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 
 	EntitiesUIData* data = (EntitiesUIData*)OffsetPointer(stack_memory, sizeof(unsigned int));
 	data->editor_state = editor_state;
-	data->sandbox_index = -1;
+	data->sandbox_index = 0;
 	data->virtual_global_components_entities.InitializeFromBuffer(nullptr, 0);
 
 	CapacityStream<char> window_name(OffsetPointer(data, sizeof(*data)), 0, 128);
@@ -531,7 +531,6 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		const size_t FILTER_STRING_CAPACITY = 128;
 
 		data->filter_string.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * FILTER_STRING_CAPACITY), 0, FILTER_STRING_CAPACITY);
-		data->sandbox_index = 0;
 	}
 	else {
 		

@@ -4,7 +4,10 @@
 
 namespace ECSEngine {
 
-#define GLOBAL_SPIN_COUNT 1'000
+	// This value seems to be the sweet spot for best balance
+	// Between CPU usage (through spinning) and latency (waking up a thread
+	// has its latency which can be critical to us)
+#define GLOBAL_SPIN_COUNT 2000
 
 	ECS_INLINE bool IsBitUnlocked(unsigned char byte, unsigned char bit_index) {
 		return (byte & ECS_BIT(bit_index)) == 0;
@@ -35,11 +38,9 @@ namespace ECSEngine {
 
 	void SpinLock::wait_locked() 
 	{
-		const size_t SPIN_COUNT_UNTIL_WAIT = GLOBAL_SPIN_COUNT;
-
 		// Wait for lock to be released without generating cache misses
 		while (is_locked()) {
-			for (size_t index = 0; index < SPIN_COUNT_UNTIL_WAIT; index++) {
+			for (size_t index = 0; index < GLOBAL_SPIN_COUNT; index++) {
 				if (!is_locked()) {
 					return;
 				}
@@ -57,10 +58,8 @@ namespace ECSEngine {
 
 	void SpinLock::wait_signaled()
 	{
-		const size_t SPIN_COUNT_UNTIL_WAIT = GLOBAL_SPIN_COUNT;
-
 		while (!is_locked()) {
-			for (size_t index = 0; index < SPIN_COUNT_UNTIL_WAIT; index++) {
+			for (size_t index = 0; index < GLOBAL_SPIN_COUNT; index++) {
 				if (is_locked()) {
 					return;
 				}
@@ -312,14 +311,16 @@ namespace ECSEngine {
 		}
 	}
 
-	void ConditionVariable::Notify(int count) {
-		signal_count.fetch_add(count, ECS_ACQ_REL);
+	int ConditionVariable::Notify(int count) {
+		int previous_count = signal_count.fetch_add(count, ECS_ACQ_REL);
 		WakeByAddressSingle(&signal_count);
+		return previous_count;
 	}
 
-	void ConditionVariable::NotifyAll(int count) {
-		signal_count.fetch_add(count, ECS_ACQ_REL);
+	int ConditionVariable::NotifyAll(int count) {
+		int previous_count = signal_count.fetch_add(count, ECS_ACQ_REL);
 		WakeByAddressAll(&signal_count);
+		return previous_count;
 	}
 
 	void ConditionVariable::Reset() {

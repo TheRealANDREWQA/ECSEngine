@@ -56,7 +56,7 @@ void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_
 
 // It just launches the compile command. Returns true if all modules are already compiled, else false
 // At the moment, you cannot wait for all the modules to be compiled and then continue (although that it is not
-// a good idea since compiling can take a long amount of time)
+// a good idea on the main thread since compiling can take a long amount of time)
 bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------

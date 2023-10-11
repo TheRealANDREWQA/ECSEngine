@@ -247,12 +247,31 @@ namespace ECSEngine {
 		ModuleTaskFunctionData task_data;
 		task_data.tasks = &schedule_tasks;
 		task_data.allocator = poly_allocator;
+		task_data.maintain_order_in_group = false;
 
 		module->task_function(&task_data);
 		schedule_tasks.AssertCapacity();
 
 		Stream<TaskSchedulerElement> tasks = schedule_tasks;
 		ValidateModuleTasks(tasks, error_message);
+
+		if (task_data.maintain_order_in_group) {
+			// Add dependencies to the same group elements
+			ECS_STACK_CAPACITY_STREAM(unsigned int, same_group_elements, 128);
+			for (size_t group_index = 0; group_index < ECS_THREAD_TASK_GROUP_COUNT; group_index++) {
+				same_group_elements.size = 0;
+				for (unsigned int index = 0; index < schedule_tasks.size; index++) {
+					if (schedule_tasks[index].task_group == group_index) {
+						same_group_elements.AddAssert(index);
+					}
+				}
+
+				for (unsigned int index = 1; index < same_group_elements.size; index++) {
+					TaskDependency dependency = { schedule_tasks[same_group_elements[index - 1]].task_name };
+					schedule_tasks[same_group_elements[index]].task_dependencies.AddResize(dependency, poly_allocator);
+				}
+			}
+		}
 
 		return StreamCoalescedDeepCopy(tasks, allocator);	
 	}

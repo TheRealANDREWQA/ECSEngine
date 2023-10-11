@@ -355,6 +355,16 @@ T* GetSandboxEntityComponent(
 	return (T*)GetSandboxEntityComponent<T>((const EditorState*)editor_state, sandbox_index, entity, viewport);
 }
 
+template<typename T>
+const T* GetSandboxGlobalComponent(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT) {
+	return (const T*)GetSandboxGlobalComponent(editor_state, sandbox_index, T::ID(), viewport);
+}
+
+template<typename T>
+T* GetSandboxGlobalComponent(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT) {
+	return (T*)GetSandboxGlobalComponent(editor_state, sandbox_index, T::ID(), viewport);
+}
+
 // Returns { 0.0f, 0.0f, 0.0f } if it doesn't have the translation component
 float3 GetSandboxEntityTranslation(
 	const EditorState* editor_state,

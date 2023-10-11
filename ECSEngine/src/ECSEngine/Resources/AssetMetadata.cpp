@@ -1041,10 +1041,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	ShaderMetadata::ShaderMetadata() : name(nullptr, 0), macros(nullptr, 0) {}
-
-	// ------------------------------------------------------------------------------------------------------
-
 	ShaderMetadata::ShaderMetadata(Stream<char> _name, Stream<ShaderMacro> _macros, AllocatorPolymorphic allocator)
 	{
 		macros.buffer = (ShaderMacro*)AllocateEx(allocator, _macros.size * sizeof(ShaderMacro));

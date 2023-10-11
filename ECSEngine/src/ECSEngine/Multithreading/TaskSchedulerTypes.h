@@ -237,7 +237,7 @@ namespace ECSEngine {
 		Stream<char> task_name;
 		ThreadFunction initialize_task_function = nullptr;
 		TaskComponentQuery component_query;
-		Stream<TaskDependency> task_dependencies;
+		Stream<TaskDependency> task_dependencies = {};
 
 		ECS_THREAD_TASK_GROUP task_group;
 		bool barrier_task = false;

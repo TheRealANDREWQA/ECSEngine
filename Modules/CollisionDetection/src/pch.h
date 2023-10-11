@@ -8,3 +8,4 @@
 #include "ECSEngineUtilities.h"
 #include "ECSEngineForEach.h"
 #include "ECSEngineComponents.h"
+#include "ECSEngineWorld.h"

@@ -9,7 +9,7 @@ cbuffer Matrices : register(b0)
 
 cbuffer UVTiling : register(b1)
 {
-    float2 uv_tiling : packoffset(c0.x);
+    float2 uv_tiling : packoffset(c0.x); ECS_REFLECT_DEFAULT({1.0, 1.0})
     float2 uv_offset : packoffset(c0.z);
 }
 

@@ -616,7 +616,11 @@ bool CreateSamplerFile(const EditorState* editor_state, Stream<wchar_t> relative
 
 bool CreateShaderFile(const EditorState* editor_state, Stream<wchar_t> relative_path, ECS_SHADER_TYPE shader_type)
 {
-	return CreateAssetFileImpl(editor_state, relative_path, AssetExtensionFromType(shader_type));
+	Stream<wchar_t> extension = {};
+	if (shader_type != ECS_SHADER_TYPE_COUNT) {
+		extension = AssetExtensionFromShaderType(shader_type);
+	}
+	return CreateAssetFileImpl(editor_state, relative_path, extension);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -788,23 +792,11 @@ void ForEachAssetMetadata(const EditorState* editor_state, Stream<ECS_ASSET_TYPE
 			FunctorData* data = (FunctorData*)_data;
 
 			ECS_STACK_CAPACITY_STREAM(wchar_t, current_file, 512);
-			AssetDatabase::ExtractFileFromFile(path, current_file);
+			Stream<wchar_t> target_file_relative = AssetDatabase::ExtractAssetTargetFromFile(path, current_file);
 
-			if (current_file.size == 0) {
-				ECS_STACK_CAPACITY_STREAM(char, current_name, 512);
-				AssetDatabase::ExtractNameFromFile(path, current_name);
-				if (current_name.size > 0) {
-					ConvertASCIIToWide(current_file, current_name);
-				}
-			}
-
-			if (current_file.size > 0) {
-				unsigned int index = FindString(current_file, data->files->ToStream());
+			if (target_file_relative.size > 0) {
+				unsigned int index = FindString(target_file_relative, data->files->ToStream());
 				if (index == -1) {
-					if (IsThunkOrForwardingFile(data->asset_type))
-					{
-						current_file = PathNoExtensionBoth(current_file);
-					}
 					Stream<wchar_t> copy = StringCopy(data->files->allocator, current_file);
 					// Change the relative path separator into an absolute path separator
 					ReplaceCharacter(copy, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
@@ -871,11 +863,7 @@ void CreateAssetDefaultSetting(const EditorState* editor_state)
 				if (extension_index != -1) {
 					Stream<wchar_t> relative_path = PathRelativeToAbsolute(path, data->base_path);
 					ECS_ASSET_TYPE asset_type = data->mapping[index];
-					unsigned int existing_index = -1;
-					if (IsThunkOrForwardingFile(asset_type)) {
-						relative_path = PathNoExtensionBoth(relative_path);
-					}
-					existing_index = FindString(relative_path, data->existing_files[index]);
+					unsigned int existing_index = FindString(relative_path, data->existing_files[index]);
 					if (existing_index == -1) {
 						// Create a default setting for it
 						// Don't check for failure - this is not a critical operation
@@ -1116,25 +1104,10 @@ void DeleteMissingAssetSettings(const EditorState* editor_state)
 		FunctorData* data = (FunctorData*)_data;
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, current_file, 512);
-		AssetDatabase::ExtractFileFromFile(path, current_file);
+		Stream<wchar_t> target_file = AssetDatabase::ExtractAssetTargetFromFile(path, *data->assets_folder, current_file);
 
-		if (current_file.size == 0) {
-			AssetDatabase::ExtractNameFromFileWide(path, current_file);
-		}
-
-		if (current_file.size > 0) {
-			ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path_storage, 512);
-			Stream<wchar_t> absolute_path = MountPathOnlyRel(current_file, *data->assets_folder, absolute_path_storage);
-			bool exists = ExistsFileOrFolder(absolute_path);
-			if (!exists) {
-				// Now try by replacing the extension
-				for (size_t index = 0; index < data->extensions.size && !exists; index++) {
-					absolute_path = PathNoExtension(absolute_path);
-					absolute_path.AddStream(data->extensions[index]);
-					exists = ExistsFileOrFolder(absolute_path);
-				}
-			}
-
+		if (target_file.size > 0) {
+			bool exists = ExistsFileOrFolder(target_file);
 			if (!exists) {
 				// Destroy the current setting
 				RemoveFile(path);
@@ -1298,10 +1271,6 @@ void GetAssetNameFromThunkOrForwardingFile(const EditorState* editor_state, Stre
 
 void GetAssetNameFromThunkOrForwardingFileRelative(const EditorState* editor_state, Stream<wchar_t> relative_path, CapacityStream<char>& name)
 {
-	// Eliminate the extension
-	Stream<wchar_t> extension = PathExtension(relative_path);
-	relative_path.size -= extension.size;
-
 	ConvertWideCharsToASCII(relative_path, name);
 	// Replace absolute separators with relative ones
 	ReplaceCharacter(name, ECS_OS_PATH_SEPARATOR_ASCII, ECS_OS_PATH_SEPARATOR_ASCII_REL);
@@ -1372,15 +1341,6 @@ bool GetAssetFileFromAssetMetadata(const EditorState* editor_state, const void* 
 	{
 		ConvertASCIIToWide(path, name);
 		ReplaceCharacter(path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
-
-		if (type != ECS_ASSET_SHADER) {
-			path.AddStream(ASSET_EXTENSIONS[type][0]);
-		}
-		else {
-			// Check the type of the shader and add the corresponding extension
-			const ShaderMetadata* shader_metadata = (const ShaderMetadata*)metadata;
-			path.AddStream(AssetExtensionFromType(shader_metadata->shader_type));
-		}
 	}
 		break;
 	default:

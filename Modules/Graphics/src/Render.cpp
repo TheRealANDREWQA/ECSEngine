@@ -477,3 +477,10 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 }
 
 ECS_THREAD_TASK_TEMPLATE_BOOL(RenderInstancedFramebuffer);
+
+ECS_THREAD_TASK(RenderCameraRecalculate) {
+	CameraComponent* camera_component = world->entity_manager->TryGetGlobalComponent<CameraComponent>();
+	if (camera_component != nullptr) {
+		camera_component->value.Recalculate();
+	}
+}

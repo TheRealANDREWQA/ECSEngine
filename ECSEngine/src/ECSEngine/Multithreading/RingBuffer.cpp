@@ -24,6 +24,8 @@ namespace ECSEngine {
 
 	void* RingBuffer::Allocate(size_t allocation_size)
 	{
+		// TODO: Investigate if there is a way of removing these locks here since
+		// They have a bit of overhead
 		lock.lock();
 
 		if (size + allocation_size > capacity) {
@@ -70,7 +72,7 @@ namespace ECSEngine {
 		ECS_ASSERT(offset < capacity);
 
 		last_in_use.store(offset + allocation_size, ECS_RELAXED);
-		WakeByAddressSingle(&last_in_use);
+		WakeByAddressAll(&last_in_use);
 	}
 
 	// ------------------------------------------------------------------------------------

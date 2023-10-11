@@ -46,6 +46,7 @@ void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_index, uns
 
 	sandbox_module->settings_name.buffer = nullptr;
 	sandbox_module->settings_name.size = 0;
+	sandbox_module->reflected_settings = {};
 
 	// Create the allocator
 	sandbox_module->settings_allocator = MemoryManager(

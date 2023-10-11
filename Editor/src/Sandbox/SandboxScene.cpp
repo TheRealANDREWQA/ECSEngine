@@ -1,6 +1,7 @@
 #include "editorpch.h"
 #include "SandboxScene.h"
 #include "Sandbox.h"
+#include "SandboxEntityOperations.h"
 #include "SandboxFile.h"
 #include "../Assets/EditorSandboxAssets.h"
 #include "../Project/ProjectFolders.h"
@@ -200,8 +201,22 @@ bool SaveSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
 
 void SetSandboxCameraAspectRatio(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
+	float aspect_ratio = GetSandboxViewportAspectRatio(editor_state, sandbox_index, viewport);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->camera_parameters[viewport].aspect_ratio = GetSandboxViewportAspectRatio(editor_state, sandbox_index, viewport);
+	sandbox->camera_parameters[viewport].aspect_ratio = aspect_ratio;
+	
+	if (viewport == EDITOR_SANDBOX_VIEWPORT_RUNTIME) {
+		// Update both camera components - if they are present
+		CameraComponent* scene_component = GetSandboxGlobalComponent<CameraComponent>(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		if (scene_component != nullptr) {
+			scene_component->value.aspect_ratio = aspect_ratio;
+		}
+
+		CameraComponent* runtime_component = GetSandboxGlobalComponent<CameraComponent>(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		if (runtime_component != nullptr) {
+			runtime_component->value.aspect_ratio = aspect_ratio;
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

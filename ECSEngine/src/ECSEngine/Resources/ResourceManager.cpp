@@ -515,6 +515,7 @@ namespace ECSEngine {
 				if constexpr (delete_if_zero) {
 					if (entry->reference_count == 0) {
 						DELETE_FUNCTIONS[type_int](this, index, 1);
+						return true;
 					}
 				}
 			}

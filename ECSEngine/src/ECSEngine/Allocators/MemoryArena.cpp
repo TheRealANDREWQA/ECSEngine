@@ -122,17 +122,36 @@ namespace ECSEngine {
 
 	template<bool thread_safe>
 	void* ReallocateImpl(MemoryArena* arena, const void* block, size_t new_size, size_t alignment, DebugInfo debug_info) {
-		size_t arena_index = GetAllocatorIndex(arena, block);
-		AllocatorPolymorphic current_allocator = arena->GetAllocator(arena_index);
-		if constexpr (thread_safe) {
-			current_allocator.allocation_type = ECS_ALLOCATION_MULTI;
+		size_t index = 0;
+		void* reallocation = nullptr;
+		for (; index < arena->m_allocator_count; index++) {
+			AllocatorPolymorphic current_allocator = arena->GetAllocator(index);
+			if constexpr (thread_safe) {
+				LockAllocator(current_allocator);
+			}
+			if (BelongsToAllocator(current_allocator, block)) {
+				reallocation = ECSEngine::Reallocate(current_allocator, block, new_size, alignment);
+				if constexpr (thread_safe) {
+					UnlockAllocator(current_allocator);
+				}
+				if (reallocation == nullptr) {
+					// Deallocate this block and try to reallocate
+					// We need to release the lock on this arena, then allocate, and then deallocate
+					// multithreaded (if thread safe is specified
+					reallocation = AllocateImpl<thread_safe, true>(arena, new_size, alignment, debug_info);
+					if constexpr (thread_safe) {
+						current_allocator.allocation_type = ECS_ALLOCATION_MULTI;
+					}
+					ECSEngine::Deallocate(current_allocator, block);
+				}
+				break;
+			}
+			if constexpr (thread_safe) {
+				UnlockAllocator(current_allocator);
+			}
 		}
-		void* reallocation = ECSEngine::Reallocate(current_allocator, block, new_size, alignment);
-		if (reallocation == nullptr) {
-			// Deallocate this block and try to reallocate
-			reallocation = AllocateImpl<thread_safe, true>(arena, new_size, alignment, debug_info);
-			ECSEngine::Deallocate(current_allocator, block);
-		}
+
+		ECS_ASSERT(index < arena->m_allocator_count, "Invalid reallocation for memory arena");
 
 		if (arena->m_debug_mode) {
 			TrackedAllocation tracked;

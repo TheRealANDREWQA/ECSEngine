@@ -3366,6 +3366,7 @@ namespace ECSEngine {
 				else {
 					data->mappings = nullptr;
 					data->mapping_byte_size = 0;
+					data->mapping_capacity = 0;
 				}
 
 				if (configuration & UI_CONFIG_COMBO_BOX_UNAVAILABLE) {
@@ -3617,6 +3618,7 @@ namespace ECSEngine {
 				if (callback->handler.data_size > 0 && !callback->copy_on_initialization) {
 					memcpy(data->callback_data, callback->handler.data, callback->handler.data_size);
 				}
+				data->callback = callback->handler.action;
 			}
 
 			// Copy the mappings if needed
@@ -3625,12 +3627,22 @@ namespace ECSEngine {
 				if (!mappings->stable) {
 					size_t copy_size = data->labels.size * mappings->byte_size;
 					if (data->labels.size != data->mapping_capacity) {
-						// Allocate a new buffer
-						RemoveAllocation(data->mappings);
+						if (data->mapping_capacity > 0) {
+							// Allocate a new buffer
+							RemoveAllocation(data->mappings);
+						}
 						data->mappings = GetMainAllocatorBuffer(copy_size);
 					}
 					memcpy(data->mappings, mappings->mappings, copy_size);
 					data->mapping_byte_size = mappings->byte_size;
+				}
+			}
+			else {
+				if (data->mapping_capacity > 0) {
+					RemoveAllocation(data->mappings);
+					data->mappings = nullptr;
+					data->mapping_byte_size = 0;
+					data->mapping_capacity = 0;
 				}
 			}
 
@@ -3640,10 +3652,19 @@ namespace ECSEngine {
 				if (!unavailables->stable) {
 					size_t copy_size = data->labels.size * sizeof(bool);
 					if (data->labels.size != data->unavailables_capacity) {
-						RemoveAllocation(data->unavailables);
+						if (data->unavailables != nullptr && data->unavailables_capacity > 0) {
+							RemoveAllocation(data->unavailables);
+						}
 						data->unavailables = (bool*)GetMainAllocatorBuffer(copy_size);
 					}
 					memcpy(data->unavailables, unavailables->unavailables, copy_size);
+				}
+			}
+			else {
+				if (data->unavailables_capacity > 0) {
+					RemoveAllocation(data->unavailables);
+					data->unavailables = nullptr;
+					data->unavailables_capacity = 0;
 				}
 			}
 

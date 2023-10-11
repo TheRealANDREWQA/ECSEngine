@@ -186,6 +186,13 @@ unsigned int ChangeInspectorDrawFunction(
 		InspectorData* inspector_data = editor_state->inspector_manager.data.buffer + inspector_index;
 		inspector_data->clean_function(editor_state, inspector_index, inspector_data->draw_data);
 
+		// Also make this window the focused one
+		ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
+		GetInspectorName(inspector_index, window_name);
+		unsigned int inspector_window_index = editor_state->ui_system->GetWindowFromName(window_name);
+
+		editor_state->ui_system->DeallocateWindowDynamicResources(inspector_window_index);
+
 		if (inspector_data->data_size > 0) {
 			Deallocate(editor_allocator, inspector_data->draw_data);
 		}
@@ -193,11 +200,6 @@ unsigned int ChangeInspectorDrawFunction(
 		inspector_data->draw_function = functions.draw_function;
 		inspector_data->clean_function = functions.clean_function;
 		inspector_data->data_size = data_size;
-
-		// Also make this window the focused one
-		ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
-		GetInspectorName(inspector_index, window_name);
-		unsigned int inspector_window_index = GetInspectorIndex(window_name);
 
 		DockspaceType type = DockspaceType::Horizontal;
 		unsigned int border_index = 0;

@@ -241,6 +241,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		}
 
 		TickModuleStatus(editor_state);
+
 		TickSandboxes(editor_state);
 		TickSandboxUpdateMasterButtons(editor_state);
 
@@ -252,7 +253,6 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickPendingTasks(editor_state);
 		TickEditorComponents(editor_state);
 		TickAsset(editor_state);
-
 		TickEvents(editor_state);
 
 		// At the end we need to tick the sandboxes that are running
@@ -316,21 +316,13 @@ void PreinitializeRuntime(EditorState* editor_state) {
 ECS_THREAD_TASK(InitializeRuntimeGraphicsTask) {
 	EditorState* editor_state = (EditorState*)_data;
 
-	const size_t GRAPHICS_ALLOCATOR_CAPACITY = ECS_KB * 75;
-	const size_t GRAPHICS_ALLOCATOR_BLOCK_COUNT = 1024;
-
 	// Coallesce the allocations
 	size_t allocation_size = sizeof(MemoryManager) + sizeof(Graphics);
 	void* allocation = editor_state->multithreaded_editor_allocator->Allocate_ts(allocation_size);
 	MemoryManager* runtime_graphics_allocator = (MemoryManager*)allocation;
 	editor_state->runtime_graphics = (Graphics*)OffsetPointer(runtime_graphics_allocator, sizeof(*runtime_graphics_allocator));
 
-	*runtime_graphics_allocator = MemoryManager(
-		GRAPHICS_ALLOCATOR_CAPACITY, 
-		GRAPHICS_ALLOCATOR_BLOCK_COUNT, 
-		GRAPHICS_ALLOCATOR_CAPACITY, 
-		GetAllocatorPolymorphic(editor_state->GlobalMemoryManager())
-	);
+	*runtime_graphics_allocator = DefaultGraphicsAllocator(editor_state->GlobalMemoryManager());
 
 	GraphicsDescriptor graphics_descriptor;
 	graphics_descriptor.allocator = runtime_graphics_allocator;

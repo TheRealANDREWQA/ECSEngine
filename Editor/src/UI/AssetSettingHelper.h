@@ -7,17 +7,17 @@ using namespace ECSEngine;
 #define ASSET_NAME_PADDING 0.2f
 
 struct AssetSettingsHelperData {
-	inline Stream<char> SelectedName() const {
+	ECS_INLINE Stream<char> SelectedName() const {
 		return current_names.size > 0 ? current_names[selected_setting] : Stream<char>(nullptr, 0);
 	}
 
-	inline unsigned char FindName(Stream<char> name) const {
+	ECS_INLINE unsigned char FindName(Stream<char> name) const {
 		unsigned int value = FindString(name, current_names);
 		return value == -1 ? UCHAR_MAX : value;
 	}
 
 	// If it doesn't exist, it will not assign it
-	inline void SetNewSetting(Stream<char> name) {
+	ECS_INLINE void SetNewSetting(Stream<char> name) {
 		unsigned char index = FindName(name);
 		if (index != UCHAR_MAX) {
 			selected_setting = index;
@@ -79,4 +79,15 @@ void AssetSettingsHelperBaseConfig(UIDrawConfig* draw_config);
 // Sets the pointer of the metadata to the one found in the asset database, if the asset is loaded
 void AssetSettingsExtractPointerFromMainDatabase(const EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type);
 
-void AssetSettingsIsReferencedUIStatus(Tools::UIDrawer* drawer, const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
+void AssetSettingsIsReferencedUIStatus(UIDrawer* drawer, const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
+
+struct SetAssetBuiltinActionData {
+	unsigned char builtin_index;
+	EditorState* editor_state;
+	const void* asset;
+	ECS_ASSET_TYPE asset_type;
+	// This is the path to the .vshader or .mat file
+	Stream<wchar_t> current_path;
+};
+
+void SetAssetBuiltinAction(ActionData* action_data);
