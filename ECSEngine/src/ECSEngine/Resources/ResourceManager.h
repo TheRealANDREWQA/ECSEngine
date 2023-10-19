@@ -197,6 +197,8 @@ namespace ECSEngine {
 		// Returns true if the resource has reached a reference count of 0.
 		bool DecrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned short amount);
 
+		unsigned int FindResourceFromPointer(void* resource, ResourceType type) const;
+
 		// Checks to see if the resource exists
 		bool Exists(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
 
@@ -264,6 +266,18 @@ namespace ECSEngine {
 			});
 		}
 
+		template<bool early_exit = false, typename Functor>
+		bool ForEachResourceIndex(ResourceType resource_type, Functor&& functor) const {
+			return m_resource_types[(unsigned int)resource_type].ForEachIndexConst<early_exit>([&](unsigned int resource_index) {
+				if constexpr (early_exit) {
+					return functor(resource_index);
+				}
+				else {
+					functor(resource_index);
+				}
+			});
+		}
+
 		// It returns -1 if the resource doesn't exist
 		unsigned int GetResourceIndex(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
 
@@ -274,6 +288,8 @@ namespace ECSEngine {
 		const void* GetResource(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
 
 		void* GetResourceFromIndex(unsigned int index, ResourceType type) const;
+
+		ResourceIdentifier GetResourceIdentifierFromIndex(unsigned int index, ResourceType type) const;
 
 		// Returns -1 if the identifier doesn't exist
 		size_t GetTimeStamp(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
@@ -286,6 +302,8 @@ namespace ECSEngine {
 
 		// Returns the current state of the resources inside - including identifiers and suffix sizes
 		ResourceManagerSnapshot GetSnapshot(AllocatorPolymorphic allocator) const;
+		
+		unsigned int GetReferenceCount(ResourceType type, unsigned int resource_index) const;
 
 		// Returns true whether or not the given stamp is greater than the stamp currently registered. If the entry doesn't exist,
 		// it returns false. The suffix is optional (can either bake it into the identifier or give it to the function to do it)

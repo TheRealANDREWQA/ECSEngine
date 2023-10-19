@@ -147,7 +147,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 							stack_allocated = true;
 						}
 						else {
-							highlight_elements = (HighlightObjectElement*)world->task_manager->AllocateTempBuffer(thread_id, allocate_size);
+							highlight_elements = (HighlightObjectElement*)world->memory->Allocate(allocate_size);
 						}
 
 						if (valid_entities > 0) {
@@ -217,7 +217,7 @@ ECS_THREAD_TASK(RenderSelectables) {
 						}
 
 						if (!stack_allocated) {
-							world->task_manager->ClearThreadAllocator(thread_id);
+							world->memory->Deallocate(highlight_elements);
 						}
 
 						translation_midpoint /= float3::Splat((float)total_valid_count);

@@ -756,7 +756,24 @@ public:
 
 						editor_state.Tick();
 
+						static float average = 0.0f;
+						static int average_count = 0;
+
+						timer.SetNewStart();
+
+						ECS_STACK_CAPACITY_STREAM(Stream<char>, windows, 2);
+						windows[0] = "Game 0";
+						windows[1] = "Scene 0";
+						windows.size = 2;
+
 						frame_pacing = editor_state.ui_system->DoFrame();
+
+						float duration = timer.GetDuration(ECS_TIMER_DURATION_US);
+						if (duration < 5000) {
+							average = average * average_count + duration;
+							average_count++;
+							average /= average_count;
+						}
 
 						// Refresh the graphics object since it might be changed
 						graphics = editor_state.UIGraphics();

@@ -5,14 +5,12 @@
 
 namespace ECSEngine {
 
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool IsFileWithExtension(
 		Stream<wchar_t> path,
 		Stream<wchar_t> extension,
 		CapacityStream<wchar_t> filename = { nullptr, 0, 0 }
 	);
 
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool IsFileWithExtensionRecursive(
 		Stream<wchar_t> path,
 		Stream<wchar_t> extension,
@@ -24,13 +22,22 @@ namespace ECSEngine {
 
 	// Must take as arguments Stream<wchar_t> and void* and return a bool
 	// True to continue the iteration or false to stop
-	// It will be forwarded to const wchar_t* variant
 	// Returns false when an error occured during traversal
 	ECSENGINE_API bool ForEachFileInDirectory(Stream<wchar_t> directory, void* data, ForEachFolderFunction functor);
 
+	// Must take as parameter a Stream<wchar_t> representing the current absolute path
+	// Must return a bool true to continue the iteration or false to stop
+	template<typename Functor>
+	ECS_INLINE bool ForEachFileInDirectory(Stream<wchar_t> directory, Functor functor) {
+		auto wrapper = [](Stream<wchar_t> path, void* _data) {
+			Functor* functor = (Functor*)_data;
+			return (*functor)(path);
+		};
+		return ForEachFileInDirectory(directory, &functor, wrapper);
+	}
+
 	// Must take as arguments Stream<wchar_t> and void* and return a bool
 	// True to continue the iteration or false to stop
-	// It will be forwarded to const wchar_t* variant
 	// Returns false when an error occured during traversal
 	ECSENGINE_API bool ForEachFileInDirectoryWithExtension(
 		Stream<wchar_t> directory,
@@ -39,15 +46,35 @@ namespace ECSEngine {
 		ForEachFolderFunction functor
 	);
 
-	// Must take as arguments Stream<wchar_t> and void* and return a bool
-	// True to continue the iteration or false to stop
-	// It will be forwarded to const wchar_t* variant
-	// Returns false when an error occured during traversal
-	ECSENGINE_API bool ForEachFileInDirectoryRecursive(Stream<wchar_t> directory, void* data, ForEachFolderFunction functor, bool depth_traversal = false);
+	// Must take as parameter a Stream<wchar_t> representing the current absolute path
+	// Must return a bool true to continue the iteration or false to stop
+	template<typename Functor>
+	ECS_INLINE bool ForEachFileInDirectoryWithExtension(Stream<wchar_t> directory, Stream<Stream<wchar_t>> extensions, Functor functor) {
+		auto wrapper = [](Stream<wchar_t> path, void* _data) {
+			Functor* functor = (Functor*)_data;
+			return (*functor)(path);
+		};
+		return ForEachFileInDirectoryWithExtension(directory, extensions, &functor, wrapper);
+	}
 
 	// Must take as arguments Stream<wchar_t> and void* and return a bool
 	// True to continue the iteration or false to stop
-	// It will be forwarded to const wchar_t* variant
+	// Returns false when an error occured during traversal
+	ECSENGINE_API bool ForEachFileInDirectoryRecursive(Stream<wchar_t> directory, void* data, ForEachFolderFunction functor, bool depth_traversal = false);
+
+	// Must take as parameter a Stream<wchar_t> representing the current absolute path
+	// Must return a bool true to continue the iteration or false to stop
+	template<typename Functor>
+	ECS_INLINE bool ForEachFileInDirectoryRecursive(Stream<wchar_t> directory, Functor functor, bool depth_traversal = false) {
+		auto wrapper = [](Stream<wchar_t> path, void* _data) {
+			Functor* functor = (Functor*)_data;
+			return (*functor)(path);
+		};
+		return ForEachFileInDirectoryRecursive(directory, &functor, wrapper, depth_traversal);
+	}
+
+	// Must take as arguments Stream<wchar_t> and void* and return a bool
+	// True to continue the iteration or false to stop
 	// Returns false when an error occured during traversal
 	ECSENGINE_API bool ForEachFileInDirectoryRecursiveWithExtension(
 		Stream<wchar_t> directory,
@@ -57,21 +84,53 @@ namespace ECSEngine {
 		bool depth_traversal = false
 	);
 
+	// Must take as parameter a Stream<wchar_t> representing the current absolute path
+	// Must return a bool true to continue the iteration or false to stop
+	template<typename Functor>
+	ECS_INLINE bool ForEachFileInDirectoryRecursiveWithExtension(Stream<wchar_t> directory, Stream<Stream<wchar_t>> extension, Functor functor, bool depth_traversal = false) {
+		auto wrapper = [](Stream<wchar_t> path, void* _data) {
+			Functor* functor = (Functor*)_data;
+			return (*functor)(path);
+		};
+		return ForEachFileInDirectoryRecursiveWithExtension(directory, extension, &functor, wrapper, depth_traversal);
+	}
+
+
 	// Must take as arguments Stream<wchar_t> and void* and return a bool
 	// True to continue the iteration or false to stop
-	// It will be forwarded to const wchar_t* variant
 	// Returns false when an error occured during traversal
 	ECSENGINE_API bool ForEachDirectory(Stream<wchar_t> directory, void* data, ForEachFolderFunction functor);
+	
+	// Must take as parameter a Stream<wchar_t> representing the current absolute path
+	// Must return a bool true to continue the iteration or false to stop
+	template<typename Functor>
+	ECS_INLINE bool ForEachDirectory(Stream<wchar_t> directory, Functor functor) {
+		auto wrapper = [](Stream<wchar_t> path, void* _data) {
+			Functor* functor = (Functor*)_data;
+			return (*functor)(path);
+		};
+		return ForEachDirectory(directory, &functor, wrapper);
+	}
 
-	// Must take as arguments Stream<wchar_t>and void* and return a bool
+	// Must take as arguments Stream<wchar_t> and void* and return a bool
 	// True to continue the iteration or false to stop
-	// It will be forwarded to const wchar_t* variant
 	// Returns false when an error occured during traversal
 	ECSENGINE_API bool ForEachDirectoryRecursive(Stream<wchar_t> directory, void* data, ForEachFolderFunction functor, bool depth_traversal = false);
 
+	// Must take as parameter a Stream<wchar_t> representing the current absolute path
+	// Must return a bool true to continue the iteration or false to stop
+	template<typename Functor>
+	ECS_INLINE bool ForEachDirectoryRecursive(Stream<wchar_t> directory, Functor functor, bool depth_traversal = false) {
+		auto wrapper = [](Stream<wchar_t> path, void* _data) {
+			Functor* functor = (Functor*)_data;
+			return (*functor)(path);
+		};
+
+		return ForEachDirectoryRecursive(directory, &functor, wrapper, depth_traversal);
+	}
+
 	// Must take as arguments Stream<wchar_t> and void* and return a bool
 	// True to continue the iteration or false to stop
-	// It will be forwarded to const wchar_t* variant
 	// Returns false when an error occured during traversal
 	ECSENGINE_API bool ForEachInDirectory(
 		Stream<wchar_t> directory,
@@ -82,7 +141,6 @@ namespace ECSEngine {
 
 	// Must take as arguments Stream<wchar_t> and void* and return a bool
 	// True to continue the iteration or false to stop; files and folders
-	// It will be forwarded to const wchar_t* variant
 	// Returns false when an error occured during traversal
 	ECSENGINE_API bool ForEachInDirectoryRecursive(
 		Stream<wchar_t> directory,
@@ -101,7 +159,7 @@ namespace ECSEngine {
 		bool depth_traversal = false;
 	};
 
-	// Walks down the root and allocates the necessary memory in order to have each directory saved separetely
+	// Returns false if it encountered an error, else true
 	ECSENGINE_API bool GetDirectories(
 		Stream<wchar_t> root, 
 		AllocatorPolymorphic allocator, 
@@ -109,7 +167,7 @@ namespace ECSEngine {
 		GetDirectoriesOrFilesOptions options = {}
 	);
 
-	// Walks down the root and allocates the necessary memory in order to have each directory saved separetely
+	// Returns false if it encountered an error, else true
 	ECSENGINE_API bool GetDirectoriesRecursive(
 		Stream<wchar_t> root, 
 		AllocatorPolymorphic allocator, 
@@ -117,7 +175,7 @@ namespace ECSEngine {
 		GetDirectoriesOrFilesOptions options = {}
 	);
 
-	// Walks down the root and allocates the necessary memory in order to have each file saved separetely
+	// Returns false if it encountered an error, else true
 	ECSENGINE_API bool GetDirectoryFiles(
 		Stream<wchar_t> directory, 
 		AllocatorPolymorphic allocator, 
@@ -125,7 +183,7 @@ namespace ECSEngine {
 		GetDirectoriesOrFilesOptions options = {}
 	);
 
-	// Walks down the root and allocates the necessary memory in order to have each file saved separetely
+	// Returns false if it encountered an error, else true
 	ECSENGINE_API bool GetDirectoryFilesRecursive(
 		Stream<wchar_t> directory,
 		AllocatorPolymorphic allocator, 
@@ -133,6 +191,7 @@ namespace ECSEngine {
 		GetDirectoriesOrFilesOptions options = {}
 	);
 
+	// Returns false if it encountered an error, else true
 	ECSENGINE_API bool GetDirectoryFilesWithExtension(
 		Stream<wchar_t> directory,
 		AllocatorPolymorphic allocator,
@@ -141,11 +200,28 @@ namespace ECSEngine {
 		GetDirectoriesOrFilesOptions options = {}
 	);
 
+	// Returns false if it encountered an error, else true
 	ECSENGINE_API bool GetDirectoryFilesWithExtensionRecursive(
 		Stream<wchar_t> directory,
 		AllocatorPolymorphic allocator,
 		AdditionStream<Stream<wchar_t>> file_paths,
 		Stream<Stream<wchar_t>> extensions,
+		GetDirectoriesOrFilesOptions options = {}
+	);
+
+	// Returns false if it encountered an error, else true
+	ECSENGINE_API bool GetDirectoryOrFiles(
+		Stream<wchar_t> directory,
+		AllocatorPolymorphic allocator,
+		AdditionStream<Stream<wchar_t>> file_paths,
+		GetDirectoriesOrFilesOptions options = {}
+	);
+	
+	// Returns false if it encountered an error, else true
+	ECSENGINE_API bool GetDirectoryOrFilesRecursive(
+		Stream<wchar_t> directory,
+		AllocatorPolymorphic allocator,
+		AdditionStream<Stream<wchar_t>> file_paths,
 		GetDirectoriesOrFilesOptions options = {}
 	);
 

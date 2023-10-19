@@ -47,7 +47,7 @@ namespace ECSEngine {
 				number = number * 10 + characters[index] - '0';
 				index++;
 			}
-			number_buffer[count++] = number - ((number << 1) & is_negative);
+			number_buffer[count++] = is_negative ? -(int)number : (int)number;
 		}
 		return count;
 	}

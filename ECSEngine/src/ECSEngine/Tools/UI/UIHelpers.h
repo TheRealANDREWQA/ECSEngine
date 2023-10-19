@@ -95,7 +95,7 @@ namespace ECSEngine {
 			Color color,
 			void** buffers,
 			size_t* counts,
-			unsigned int material_offset
+			unsigned int material_offset = 0
 		);
 
 		ECSENGINE_API void SetVertexColorRectangle(
@@ -118,7 +118,7 @@ namespace ECSEngine {
 			Color bottom_right,
 			void** buffers,
 			size_t* counts,
-			unsigned int material_offset
+			unsigned int material_offset = 0
 		);
 
 		ECSENGINE_API void SetVertexColorRectangle(
@@ -135,7 +135,7 @@ namespace ECSEngine {
 			const Color* colors,
 			void** buffers,
 			size_t* counts,
-			unsigned int material_offset
+			unsigned int material_offset = 0
 		);
 
 		ECSENGINE_API void SetSpriteRectangle(
@@ -157,7 +157,7 @@ namespace ECSEngine {
 			void** buffers,
 			size_t* counts,
 			unsigned int material_index,
-			unsigned int material_offset
+			unsigned int material_offset = 0
 		);
 
 		ECSENGINE_API void SetVertexColorSpriteRectangle(

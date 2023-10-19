@@ -78,6 +78,7 @@ constexpr size_t FILE_EXPLORER_FILTER_CAPACITY = 256;
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_INITIAL_COUNT = 16;
 constexpr size_t FILE_EXPLORER_STAGING_PRELOAD_TEXTURE_COUNT = 512;
 constexpr size_t FILE_EXPLORER_MESH_THUMBNAILS_INITIAL_SIZE = 128;
+constexpr size_t FILE_EXPLORER_RETAINED_MODE_ALLOCATOR_CAPACITY = ECS_KB * 64;
 
 constexpr uint2 FILE_EXPLORER_MESH_THUMBNAIL_TEXTURE_SIZE = { 256, 256 };
 
@@ -97,6 +98,7 @@ constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE = ECS_MB * 400;
 
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_LAZY_EVALUATION = 1'500;
 constexpr size_t FILE_EXPLORER_MESH_THUMBNAIL_LAZY_EVALUATION = 500;
+constexpr size_t FILE_EXPLORER_RETAINED_MODE_CHECK_LAZY_EVALUATION = 50;
 
 #define MAX_MESH_THUMBNAILS_PER_FRAME 2
 
@@ -582,7 +584,6 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 
 	size_t extension_size = PathExtensionSize(current_path) * (!is_folder);
 	Path path_filename = PathFilename(current_path);
-	//path_filename.size -= extension_size;
 
 	char* allocation = (char*)data->temporary_allocator.Allocate((path_filename.size + 1) * sizeof(char), alignof(char));
 	CapacityStream<char> ascii_stream(allocation, 0, 512);
@@ -646,16 +647,10 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 	ascii_stream.size = path_filename.size + extension_size;
 
 	float2 font_size = drawer->GetFontSize();
-	//float2 text_span = drawer->TextSpan(ascii_stream, font_size, drawer->font.character_spacing);
-	//text_span.x += 2.0f * drawer->system->m_descriptors.misc.tool_tip_padding.x;
-
-	//float position_x = AlignMiddle(current_position.x, label_horizontal_scale, text_span.x);
-
 	UITextTooltipHoverableData tooltip_data;
 	tooltip_data.characters = ascii_stream.buffer;
 	tooltip_data.base.offset_scale.y = true;
 	tooltip_data.base.offset.y = TOOLTIP_OFFSET;
-	//tooltip_data.base.offset.x = position_x - current_position.x;
 	tooltip_data.base.center_horizontal_x = true;
 	tooltip_data.base.font_size = font_size;
 	
@@ -943,7 +938,6 @@ void MeshExportSelectionDrawWindow(void* window_data, UIDrawerDescriptor* drawer
 
 		data->is_selected = (bool*)drawer.GetMainAllocatorBuffer(sizeof(bool) * data->export_textures.size);
 		memset(data->is_selected, true, sizeof(bool) * data->export_textures.size);
-
 
 		size_t ascii_allocation_size = sizeof(Stream<char>) * data->export_textures.size;
 		for (unsigned int index = 0; index < data->export_textures.size; index++) {
@@ -1887,7 +1881,10 @@ struct CreateAssetFileStruct {
 
 // window_data is EditorState*
 void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
-	Timer stack_timer;
+	static float average_values = 0.0f;
+	static int average_count = 0;
+	Timer my_timer;
+	my_timer.SetNewStart();
 
 	UI_PREPARE_DRAWER(initialize);
 
@@ -2213,7 +2210,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 			Color rectangle_color = drawer.color_theme.background;
 			float2 rectangle_position = absolute_transform.position - drawer.region_render_offset;
-			if (drawer.IsMouseInRectangle(rectangle_position, absolute_transform.scale) && (mouse_state == ECS_BUTTON_PRESSED || mouse_state == ECS_BUTTON_HELD)) {
+			if (IsPointInRectangle(drawer.mouse_position, rectangle_position, absolute_transform.scale) && (mouse_state == ECS_BUTTON_PRESSED || mouse_state == ECS_BUTTON_HELD)) {
 				rectangle_color = drawer.color_theme.theme;
 			}
 			drawer.SolidColorRectangle(UI_CONFIG_LATE_DRAW, rectangle_position, absolute_transform.scale, rectangle_color);
@@ -2257,7 +2254,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		Color rectangle_color = drawer.color_theme.background;
 		float2 rectangle_position = absolute_transform.position - drawer.region_render_offset;
 		float2 rectangle_scale = { label_scale, drawer.layout.default_element_y };
-		if (drawer.IsMouseInRectangle(rectangle_position, rectangle_scale) && (mouse_state == ECS_BUTTON_PRESSED || mouse_state == ECS_BUTTON_HELD)) {
+		if (IsPointInRectangle(drawer.mouse_position, rectangle_position, rectangle_scale) && (mouse_state == ECS_BUTTON_PRESSED || mouse_state == ECS_BUTTON_HELD)) {
 			rectangle_color = drawer.color_theme.theme;
 		}
 		drawer.SolidColorRectangle(UI_CONFIG_LATE_DRAW, rectangle_position, rectangle_scale, rectangle_color);
@@ -2391,7 +2388,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 				}
 
 				// Update the mouse index if it hovers this directory - only directories must make this check
-				if (drawer->IsMouseInRectangle(rectangle_position, rectangle_scale)) {
+				if (IsPointInRectangle(drawer->mouse_position, rectangle_position, rectangle_scale)) {
 					_data->mouse_element_path->CopyOther(stream_path);
 				}
 
@@ -2532,7 +2529,12 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					}
 				};
 				
-				hoverable_action.handler = drawer->PrepareRightClickHandler(right_click_menu_name, &main_state, { OnRightClickAction, &action_data, sizeof(action_data) });
+				hoverable_action.handler = drawer->PrepareRightClickHandler(
+					right_click_menu_name, 
+					&main_state, 
+					{ OnRightClickAction, &action_data, sizeof(action_data) },
+					drawer->SnapshotRunnableAllocator()
+				);
 				config->AddFlag(hoverable_action);
 
 				float2 rectangle_position;
@@ -2663,6 +2665,10 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 	}
 
+	float microseconds = my_timer.GetDuration(ECS_TIMER_DURATION_US);
+	average_values = average_values * average_count + microseconds;
+	average_count++;
+	average_values /= average_count;
 }
 
 void InitializeFileExplorer(EditorState* editor_state)
@@ -2691,6 +2697,18 @@ void InitializeFileExplorer(EditorState* editor_state)
 	// Hold texture display for some frames when loading in order to make a smoother transition - noticeably faster
 	data->flags = 0;
 	data->preload_flags = 0;
+
+	// Initialize the retained mode block now
+	data->retained_mode_allocator = MemoryManager(
+		FILE_EXPLORER_RETAINED_MODE_ALLOCATOR_CAPACITY, 
+		ECS_KB * 4, 
+		FILE_EXPLORER_RETAINED_MODE_ALLOCATOR_CAPACITY, 
+		editor_state->EditorAllocator()
+	);
+	AllocatorPolymorphic retained_allocator = GetAllocatorPolymorphic(&data->retained_mode_allocator);
+	data->preload_texture_check.Initialize(retained_allocator, 0);
+	data->mesh_thumbnail_check.Initialize(retained_allocator, 0);
+	data->elements.Initialize(retained_allocator, 0);
 }
 
 void FileExplorerPrivateAction(ActionData* action_data) {
@@ -2719,6 +2737,146 @@ void FileExplorerPrivateAction(ActionData* action_data) {
 	}
 }
 
+static bool FileExplorerRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+	EditorState* editor_state = (EditorState*)window_data;
+	FileExplorerData* file_explorer_data = editor_state->file_explorer_data;
+
+	bool keep_retained_mode = true;
+
+	// Use a lazy evaluation to prevent a lot of system calls to traverse the project file structure
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_RETAINED_MODE_CHECK, FILE_EXPLORER_RETAINED_MODE_CHECK_LAZY_EVALUATION)) {
+		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+		GetProjectAssetsFolder(editor_state, assets_folder);
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+		GetDirectoriesOrFilesOptions options;
+		options.relative_root = assets_folder;
+
+		ResizableStream<Stream<wchar_t>> paths(GetAllocatorPolymorphic(&stack_allocator), 64);
+		GetDirectoryOrFilesRecursive(assets_folder, GetAllocatorPolymorphic(&stack_allocator), &paths, options);
+
+		AllocatorPolymorphic retained_allocator = GetAllocatorPolymorphic(&file_explorer_data->retained_mode_allocator);
+
+		// Compare with the existing elements
+		ResizableStream<Stream<wchar_t>>& elements = file_explorer_data->elements;
+		if (paths.size != elements.size) {
+			keep_retained_mode = false;
+			// We need to update the elements stream as well
+			StreamDeallocateElements(elements.ToStream(), retained_allocator);
+			elements.ResizeNoCopy(paths.size);
+			StreamInPlaceDeepCopy(elements, paths, retained_allocator);
+			elements.size = paths.size;
+		}
+		else {
+			// Check the individual elements now
+			for (unsigned int index = 0; index < elements.size; index++) {
+				if (elements[index] != paths[index]) {
+					keep_retained_mode = false;
+					// We need to keep going to update all entries
+					elements[index].Deallocate(retained_allocator);
+					elements[index] = paths[index].Copy(retained_allocator);
+				}
+			}
+		}
+
+		// Now verify the preloaded textures to see if they have modified
+		// We don't need to acquire any lock for the preloaded textures since these are update on the main thread
+		ResizableStream<FileExplorerPreloadTexture>& preload_texture_check = file_explorer_data->preload_texture_check;
+		auto restore_preload_textures = [&]() {
+			for (unsigned int index = 0; index < preload_texture_check.size; index++) {
+				preload_texture_check[index].path.Deallocate(retained_allocator);
+			}
+			preload_texture_check.ResizeNoCopy(file_explorer_data->preloaded_textures.size);
+			preload_texture_check.size = 0;
+			for (unsigned int index = 0; index < file_explorer_data->preloaded_textures.size; index++) {
+				preload_texture_check.Add(file_explorer_data->preloaded_textures[index]);
+				preload_texture_check[index].path = preload_texture_check[index].path.Copy(retained_allocator);
+			}
+		};
+
+		if (file_explorer_data->preloaded_textures.size != preload_texture_check.size) {
+			keep_retained_mode = false;
+			restore_preload_textures();
+		}
+		else {
+			// Check to see if any of the textures has changed
+			bool different_textures = false;
+			for (unsigned int index = 0; index < preload_texture_check.size && !different_textures; index++) {
+				unsigned int found_index = FindString(preload_texture_check[index].path, file_explorer_data->preloaded_textures.ToStream(), [](FileExplorerPreloadTexture texture) {
+					return texture.path;
+				});
+				if (found_index == -1) {
+					different_textures = false;
+				}
+			}
+
+			if (different_textures) {
+				keep_retained_mode = false;
+				restore_preload_textures();
+			}
+			else {
+				for (unsigned int index = 0; index < preload_texture_check.size; index++) {
+					unsigned int found_index = FindString(preload_texture_check[index].path, file_explorer_data->preloaded_textures.ToStream(),
+						[](FileExplorerPreloadTexture texture) {
+							return texture.path;
+						}
+					);
+					if (preload_texture_check[index].last_write_time != file_explorer_data->preloaded_textures[found_index].last_write_time
+						|| preload_texture_check[index].texture.Interface() != file_explorer_data->preloaded_textures[found_index].texture.Interface()) {
+						keep_retained_mode = false;
+						preload_texture_check[index].last_write_time = file_explorer_data->preloaded_textures[found_index].last_write_time;
+						preload_texture_check[index].texture = file_explorer_data->preloaded_textures[found_index].texture;
+					}
+				}
+			}
+		}
+		
+		// At last verify the mesh previews
+		ResizableStream<FileExplorerMeshThumbnailWithPath>& mesh_thumbnail_check = file_explorer_data->mesh_thumbnail_check;
+		auto restore_mesh_thumbnails = [&]() {
+			for (unsigned int index = 0; index < mesh_thumbnail_check.size; index++) {
+				mesh_thumbnail_check[index].path.Deallocate(retained_allocator);
+			}
+			mesh_thumbnail_check.ResizeNoCopy(file_explorer_data->mesh_thumbnails.GetCount());
+			mesh_thumbnail_check.size = 0;
+			file_explorer_data->mesh_thumbnails.ForEachConst([&](FileExplorerMeshThumbnail thumbnail, ResourceIdentifier identifier) {
+				mesh_thumbnail_check.Add({ identifier.AsWide().Copy(retained_allocator), thumbnail });
+			});
+		};
+		if (mesh_thumbnail_check.size != file_explorer_data->mesh_thumbnails.GetCount()) {
+			keep_retained_mode = false;
+			restore_mesh_thumbnails();
+		}
+		else {
+			// Check each entry
+			bool different_thumbnails = false;
+			for (unsigned int index = 0; index < mesh_thumbnail_check.size && !different_thumbnails; index++) {
+				if (file_explorer_data->mesh_thumbnails.Find(mesh_thumbnail_check[index].path) == -1) {
+					different_thumbnails = true;
+				}
+			}
+
+			if (different_thumbnails) {
+				keep_retained_mode = false;
+				restore_mesh_thumbnails();
+			}
+			else {
+				for (unsigned int index = 0; index < mesh_thumbnail_check.size; index++) {
+					FileExplorerMeshThumbnail thumbnail = file_explorer_data->mesh_thumbnails.GetValue(mesh_thumbnail_check[index].path);
+					if (thumbnail.last_write_time != mesh_thumbnail_check[index].thumbnail.last_write_time ||
+						thumbnail.could_be_read != mesh_thumbnail_check[index].thumbnail.could_be_read ||
+						thumbnail.texture.Interface() != mesh_thumbnail_check[index].thumbnail.texture.Interface()) {
+						keep_retained_mode = false;
+						mesh_thumbnail_check[index].thumbnail = thumbnail;
+					}
+				}
+			}
+		}
+	}
+
+	return keep_retained_mode;
+}
+
 void FileExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
 {
 	descriptor.window_name = FILE_EXPLORER_WINDOW_NAME;
@@ -2726,8 +2884,8 @@ void FileExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* edit
 	descriptor.window_data_size = 0;
 
 	descriptor.draw = FileExplorerDraw;
-
 	descriptor.private_action = FileExplorerPrivateAction;
+	descriptor.retained_mode = FileExplorerRetainedMode;
 }
 
 void CreateFileExplorer(EditorState* editor_state) {

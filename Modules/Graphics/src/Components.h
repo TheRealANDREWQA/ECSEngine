@@ -43,6 +43,18 @@ struct ECS_REFLECT_COMPONENT RenderEverything {
 //
 //	ECSEngine::Stream<char> name;
 //};
+//
+//struct ECS_REFLECT_COMPONENT CheckBOXU {
+//	constexpr static ECS_INLINE short ID() {
+//		return 2313;
+//	}
+//
+//	constexpr static ECS_INLINE bool IsShared() {
+//		return false;
+//	}
+//
+//	bool my_flag;
+//};
 
 struct ECS_REFLECT_COMPONENT GTranslation {
 	constexpr static ECS_INLINE short ID() {

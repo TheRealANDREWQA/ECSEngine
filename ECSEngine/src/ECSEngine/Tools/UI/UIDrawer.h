@@ -1655,7 +1655,7 @@ namespace ECSEngine {
 			
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void AddHoverable(size_t configuration, float2 position, float2 scale, UIActionHandler handler);
+			void AddHoverable(size_t configuration, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function = nullptr);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1675,7 +1675,8 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale,
 				UIActionHandler handler,
-				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
+				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1684,7 +1685,8 @@ namespace ECSEngine {
 				size_t configuration,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1760,9 +1762,21 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerMenuRightClickData PrepareRightClickActionData(Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler = { nullptr });
+			// If the override allocator is specified, it will use that allocator for the memory
+			UIDrawerMenuRightClickData PrepareRightClickActionData(
+				Stream<char> name, 
+				UIDrawerMenuState* menu_state, 
+				UIActionHandler custom_handler = { nullptr },
+				AllocatorPolymorphic override_allocator = { nullptr }
+			);
 
-			UIActionHandler PrepareRightClickHandler(Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler = { nullptr });
+			// If the override allocator is specified, it will use that allocator for the memory
+			UIActionHandler PrepareRightClickHandler(
+				Stream<char> name, 
+				UIDrawerMenuState* menu_state, 
+				UIActionHandler custom_handler = { nullptr },
+				AllocatorPolymorphic override_allocator = { nullptr }
+			);
 
 			// This will always have the system phase
 			void AddRightClickAction(
@@ -1860,7 +1874,19 @@ namespace ECSEngine {
 				UIActionHandler handler,
 				ECS_MOUSE_BUTTON button_type
 			);
-			
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			ECS_INLINE void AddSnapshotRunnable(UIDockspaceBorderDrawSnapshotRunnable runnable) {
+				if (record_snapshot_runnables) {
+					system->AddWindowSnapshotRunnable(thread_id, dockspace, border_index, runnable);
+				}
+			}
+
+			ECS_INLINE AllocatorPolymorphic SnapshotRunnableAllocator() const {
+				return system->AllocatorSnapshotRunnables(dockspace, border_index);
+			}
+
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddWindowDependentSizeToConfigFromPoint(float2 initial_point, UIDrawConfig& config) const;
@@ -3836,8 +3862,6 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-
-
 			// TODO: Deprecate this (eliminate)
 			UIDrawerHierarchy* Hierarchy(Stream<char> name);
 
@@ -3874,18 +3898,6 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			bool HasClicked(float2 position, float2 scale);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			bool IsClicked(float2 position, float2 scale);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			bool IsMouseInRectangle(float2 position, float2 scale);
-			
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
 			bool IsActiveWindow() const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3903,12 +3915,15 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// TODO: Deprecated (eliminate completely)
 			UIDrawerList* List(Stream<char> name);
 
+			// TODO: Deprecated (eliminate completely)
 			UIDrawerList* List(size_t configuration, UIDrawConfig& config, Stream<char> name);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// TODO: Deprecated (eliminate completely)
 			void ListFinalizeNode(UIDrawerList* list);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -4616,22 +4631,30 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// places a hoverable on the whole window
-			void SetWindowHoverable(const UIActionHandler* handler);
+			void SetWindowHoverable(const UIActionHandler* handler, UIHandlerCopyBuffers copy_function = nullptr);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// places a clickable on the whole window
-			void SetWindowClickable(const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT);
+			void SetWindowClickable(const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT, UIHandlerCopyBuffers copy_function = nullptr);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// places a general on the whole window
-			void SetWindowGeneral(const UIActionHandler* handler);
+			void SetWindowGeneral(const UIActionHandler* handler, UIHandlerCopyBuffers copy_function = nullptr);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// configuration is needed for phase deduction
 			void SetSpriteClusterTexture(size_t configuration, Stream<wchar_t> texture, unsigned int count);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void SnapshotRunnable(UIDockspaceBorderDrawSnapshotRunnable runnable);
+
+			ECS_INLINE void SnapshotRunnable(void* data, unsigned int data_size, ECS_UI_DRAW_PHASE phase, UIDockspaceBorderDrawSnapshotRunnableFunction function) {
+				SnapshotRunnable({ function, data, data_size, phase });
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4659,8 +4682,6 @@ namespace ECSEngine {
 
 			// States should be a stack pointer to bool* to the members that should be changed
 			void StateTable(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> labels, bool** states);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// States should be a stack pointer to a bool array
 			void StateTable(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> labels, bool* states);
@@ -5024,6 +5045,8 @@ namespace ECSEngine {
 			bool no_padding_render_region;
 			bool deallocate_constructor_allocations;
 			bool initializer;
+			bool record_actions;
+			bool record_snapshot_runnables;
 			unsigned short draw_mode_count;
 			unsigned short draw_mode_target;
 			float4 draw_mode_extra_float;
@@ -5060,6 +5083,7 @@ namespace ECSEngine {
 			CapacityStream<unsigned int> late_hoverables;
 			CapacityStream<unsigned int> late_clickables[ECS_MOUSE_BUTTON_COUNT];
 			CapacityStream<unsigned int> late_generals;
+			ActionData cached_filled_action_data;
 		};
 
 		typedef void (*UIDrawerInitializeFunction)(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);

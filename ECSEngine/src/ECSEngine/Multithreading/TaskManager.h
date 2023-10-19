@@ -133,6 +133,77 @@ namespace ECSEngine {
 		// Wakes the threads after pushing the tasks
 		void AddDynamicTaskGroupAndWake(ThreadFunction function, const char* function_name, void* data, unsigned int task_count, size_t data_size, bool can_be_stolen = true);
 
+		// Distributes the tasks equally among the threads
+		// The can be stolen flag will affect all thread tasks
+		// The functor will be called for each iteration such that you can modify
+		// The data pointer. The functor receives the index as parameter (size_t)
+		template<typename Functor>
+		void AddDynamicTaskGroup(
+			ThreadFunction function, 
+			const char* function_name, 
+			size_t task_count, 
+			void* data,
+			size_t data_size, 
+			bool can_be_stolen, 
+			Functor&& functor
+		) {
+			size_t thread_count = GetThreadCount();
+			// Division and modulo are one instruction on x86
+			size_t per_thread_count = task_count / thread_count;
+			size_t remainder = task_count % thread_count;
+
+			size_t last_thread_index = (size_t)m_last_thread_index->fetch_add(remainder, ECS_RELAXED);
+			last_thread_index = last_thread_index % thread_count;
+			size_t total_index = 0;
+
+			ThreadTask thread_task = { function, data, data_size, function_name };
+			for (size_t index = 0; index < per_thread_count; index++) {
+				for (size_t thread_id = 0; thread_id < thread_count; thread_id++) {
+					functor(total_index);
+					total_index++;
+					AddDynamicTaskWithAffinity(thread_task, thread_id, can_be_stolen);
+				}
+			}
+
+			for (size_t index = 0; index < remainder; index++) {
+				functor(total_index);
+				total_index++;
+				AddDynamicTaskWithAffinity(thread_task, last_thread_index, can_be_stolen);
+
+				last_thread_index = last_thread_index == thread_count - 1 ? 0 : last_thread_index + 1;
+			}
+		}
+
+		// Distributes the tasks equally among the threads
+		// The can be stolen flag will affect all thread tasks
+		// The functor will be called for each iteration such that you can modify
+		// The data pointer. The functor receives the index as parameter and the count
+		// Of entries to be processed (both are size_t)
+		template<typename Functor>
+		void AddDynamicTaskParallelFor(
+			ThreadFunction function,
+			const char* function_name,
+			size_t entry_count,
+			size_t batch_count,
+			void* data,
+			size_t data_size,
+			bool can_be_stolen,
+			Functor&& functor
+		) {
+			size_t task_count = entry_count / batch_count;
+			size_t task_remainder = entry_count % batch_count;
+			bool has_remainder = task_remainder != 0;
+
+			AddDynamicTaskGroup(function, function_name, task_count + has_remainder, data, data_size, can_be_stolen, [&](size_t index) {
+				if (index == task_count) {
+					functor(index, task_remainder);
+				}
+				else {
+					functor(index, batch_count);
+				}
+			});
+		}
+
 		void* AllocateTempBuffer(unsigned int thread_id, size_t size, size_t alignment = 8);
 
 		void ChangeStaticWrapperMode(ThreadFunctionWrapperData wrapper_data);

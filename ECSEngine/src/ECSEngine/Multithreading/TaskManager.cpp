@@ -9,7 +9,7 @@
 
 // The allocator size for the data + task.name for dynamic tasks
 // This is per thread
-#define DYNAMIC_TASK_ALLOCATOR_SIZE (2'500)
+#define DYNAMIC_TASK_ALLOCATOR_SIZE (25'000)
 
 #define STATIC_TASK_ALLOCATOR_SIZE (10'000)
 
@@ -933,7 +933,7 @@ namespace ECSEngine {
 			}
 			else {
 				auto go_to_sleep = [=]() {
-					if (task_manager->m_wait_type == ECS_TASK_MANAGER_WAIT_SLEEP) {
+					if (HasFlag(task_manager->m_wait_type, ECS_TASK_MANAGER_WAIT_SLEEP)) {
 						task_manager->SleepThread(thread_id);
 					}
 					else {

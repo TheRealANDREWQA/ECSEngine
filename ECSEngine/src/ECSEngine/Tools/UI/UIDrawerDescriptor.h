@@ -25,6 +25,8 @@ namespace ECSEngine {
 			DockspaceType dockspace_type;
 			bool do_not_initialize_viewport_sliders;
 			bool do_not_allocate_buffers;
+			bool record_handlers;
+			bool record_snapshot_runnables;
 			float2 mouse_position;
 			void** buffers;
 			size_t* counts;

@@ -14,14 +14,32 @@ namespace ECSEngine {
 	struct AssetDatabase;
 	struct DeserializeFieldTable;
 
+	struct SerializeEntityManagerOptions {
+		// All of them are mandatory
+		const SerializeEntityManagerComponentTable* component_table;
+		const SerializeEntityManagerSharedComponentTable* shared_component_table;
+		const SerializeEntityManagerGlobalComponentTable* global_component_table;
+	};
+
+	struct DeserializeEntityManagerOptions {
+		// ----------------------- Mandatory --------------------------------------
+		const DeserializeEntityManagerComponentTable* component_table;
+		const DeserializeEntityManagerSharedComponentTable* shared_component_table;
+		const DeserializeEntityManagerGlobalComponentTable* global_component_table;
+		// ----------------------- Mandatory --------------------------------------
+
+		// ------------------------ Optional --------------------------------------
+
+		CapacityStream<char>* detailed_error_string = nullptr;
+		// ------------------------ Optional --------------------------------------
+	};
+
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API bool SerializeEntityManager(
 		const EntityManager* entity_manager,
 		Stream<wchar_t> filename,
-		const SerializeEntityManagerComponentTable* component_table,
-		const SerializeEntityManagerSharedComponentTable* shared_component_table,
-		const SerializeEntityManagerGlobalComponentTable* global_component_table
+		SerializeEntityManagerOptions* options
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
@@ -30,9 +48,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool SerializeEntityManager(
 		const EntityManager* entity_manager,
 		ECS_FILE_HANDLE file_handle,
-		const SerializeEntityManagerComponentTable* component_table,
-		const SerializeEntityManagerSharedComponentTable* shared_component_table,
-		const SerializeEntityManagerGlobalComponentTable* global_component_table
+		SerializeEntityManagerOptions* options
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
@@ -40,9 +56,7 @@ namespace ECSEngine {
 	ECSENGINE_API ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
 		EntityManager* entity_manager,
 		Stream<wchar_t> filename,
-		const DeserializeEntityManagerComponentTable* component_table,
-		const DeserializeEntityManagerSharedComponentTable* shared_component_table,
-		const DeserializeEntityManagerGlobalComponentTable* global_component_table
+		DeserializeEntityManagerOptions* options
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
@@ -51,9 +65,7 @@ namespace ECSEngine {
 	ECSENGINE_API ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
 		EntityManager* entity_manager,
 		ECS_FILE_HANDLE file_handle,
-		const DeserializeEntityManagerComponentTable* component_table,
-		const DeserializeEntityManagerSharedComponentTable* shared_component_table,
-		const DeserializeEntityManagerGlobalComponentTable* global_component_table
+		DeserializeEntityManagerOptions* options
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
@@ -61,9 +73,7 @@ namespace ECSEngine {
 	ECSENGINE_API ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
 		EntityManager* entity_manager,
 		uintptr_t& ptr,
-		const DeserializeEntityManagerComponentTable* component_table,
-		const DeserializeEntityManagerSharedComponentTable* shared_component_table,
-		const DeserializeEntityManagerGlobalComponentTable* global_component_table
+		DeserializeEntityManagerOptions* options
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------

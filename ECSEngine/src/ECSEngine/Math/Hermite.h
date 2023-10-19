@@ -126,7 +126,7 @@ namespace ECSEngine {
 		Vector8 two_percentages = two * percentages;
 
 		Vector8 shuffle_1 = BlendLowAndHigh(one_minus, percentages);
-		Vector8 shuffle_2 = shuffle_2;
+		Vector8 shuffle_2 = shuffle_1;
 		Vector8 point2_value = three - two_percentages;
 		Vector8 point1_value = one + two_percentages;
 		Vector8 shuffle_3_point1_slope1 = blend8<8, 9, 2, 3, V_DC, V_DC, V_DC, V_DC>(percentages, point1_value);

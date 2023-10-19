@@ -169,6 +169,12 @@ namespace ECSEngine {
 			}
 		}
 
+		ECS_INLINE void DeallocateEx(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
+			if (size > 0 && buffer != nullptr) {
+				ECSEngine::DeallocateEx(allocator, buffer, debug_info);
+			}
+		}
+
 		// Does not change the size or the pointer
 		// It only deallocates if the size is greater than 0
 		template<typename Allocator>
@@ -413,6 +419,18 @@ namespace ECSEngine {
 			size = _size;
 		}
 
+		void InitializeEx(AllocatorPolymorphic allocator, size_t _size, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			size_t memory_size = MemoryOf(_size);
+			if (memory_size > 0) {
+				void* allocation = AllocateEx(allocator, memory_size, debug_info);
+				buffer = (T*)allocation;
+			}
+			else {
+				buffer = nullptr;
+			}
+			size = _size;
+		}
+
 		T* buffer;
 		size_t size;
 	};
@@ -583,10 +601,18 @@ namespace ECSEngine {
 		}
 
 		// Does not change the size or the pointer
-		// It only deallocates if the size is greater than 0
+		// It only deallocates if the size is greater than 0 and the pointer is not nullptr
 		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
 			if (size > 0 && buffer != nullptr) {
 				ECSEngine::Deallocate(allocator, buffer, debug_info);
+			}
+		}
+
+		// Does not change the size or the pointer
+		// It only deallocates if the size is greater than 0 and the pointer is not nullptr
+		ECS_INLINE void DeallocateEx(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) const {
+			if (size > 0 && buffer != nullptr) {
+				ECSEngine::DeallocateEx(allocator, buffer, debug_info);
 			}
 		}
 
@@ -835,6 +861,19 @@ namespace ECSEngine {
 			size_t memory_size = MemoryOf(_capacity);
 			if (memory_size > 0) {
 				void* allocation = Allocate(allocator, memory_size, alignof(T), debug_info);
+				InitializeFromBuffer(allocation, _size, _capacity);
+			}
+			else {
+				buffer = nullptr;
+				size = _size;
+				capacity = _capacity;
+			}
+		}
+
+		void InitializeEx(AllocatorPolymorphic allocator, unsigned int _size, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			size_t memory_size = MemoryOf(_capacity);
+			if (memory_size > 0) {
+				void* allocation = AllocateEx(allocator, memory_size, debug_info);
 				InitializeFromBuffer(allocation, _size, _capacity);
 			}
 			else {
@@ -1743,12 +1782,22 @@ namespace ECSEngine {
 	// Type CopyTo(uintptr_t& ptr) const;
 	// size_t CopySize() const;
 	template<typename Stream>
-	Stream StreamInPlaceDeepCopyTo(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info) {
+	void StreamInPlaceDeepCopyTo(Stream input, AllocatorPolymorphic allocator, DebugInfo debug_info) {
 		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
 			void* allocation = AllocateEx(allocator, copy_size, debug_info);
 			uintptr_t ptr = (uintptr_t)allocation;
 			input[index] = input[index].CopyTo(ptr);
+		}
+	}
+
+	// The write stream must have enough space for the read elements
+	// The template parameter of the streams must have as functions
+	// Type Copy(AllocatorPolymorphic allocator) const;
+	template<typename WriteStream, typename ReadStream>
+	void StreamInPlaceDeepCopy(WriteStream write_stream, ReadStream read_stream, AllocatorPolymorphic allocator) {
+		for (size_t index = 0; index < (size_t)read_stream.size; index++) {
+			write_stream[index] = read_stream[index].Copy(allocator);
 		}
 	}
 
@@ -1877,6 +1926,14 @@ namespace ECSEngine {
 		void* allocation = AllocateEx(allocator, allocation_size, debug_info);
 		uintptr_t ptr = (uintptr_t)allocation;
 		return StreamCoalescedInplaceDeepCopy(input, ptr);
+	}
+
+	// The elements must have a void Deallocate(AllocatorPolymorphic allocator) function
+	template<typename Stream>
+	void StreamDeallocateElements(Stream input, AllocatorPolymorphic allocator) {
+		for (size_t index = 0; index < input.size; index++) {
+			input[index].Deallocate(allocator);
+		}
 	}
 
 	ECS_INLINE bool operator == (Stream<char> left, Stream<char> right) {

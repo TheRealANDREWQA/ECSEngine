@@ -947,6 +947,11 @@ namespace ECSEngine {
 							);
 
 							system->m_windows[window_index].descriptors->UpdateZoom(before_zoom, system->m_windows[window_index].zoom);
+							// Deallocate the snapshot of the window, if there is one
+							unsigned int border_index;
+							DockspaceType dockspace_type;
+							UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, dockspace_type);
+							dockspace->borders[border_index].DeallocateSnapshot({ nullptr }, false);
 						}
 					}
 					else {
@@ -954,6 +959,12 @@ namespace ECSEngine {
 						system->m_windows[window_index].zoom.x = 1.0f;
 						system->m_windows[window_index].zoom.y = 1.0f;
 						system->m_windows[window_index].descriptors->UpdateZoom(before_zoom, system->m_windows[window_index].zoom);
+
+						// Deallocate the snapshot of the window, if there is one
+						unsigned int border_index;
+						DockspaceType dockspace_type;
+						UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, dockspace_type);
+						dockspace->borders[border_index].DeallocateSnapshot({ nullptr }, false);
 					}
 				}
 			}
@@ -971,12 +982,22 @@ namespace ECSEngine {
 						else {
 							total_scroll = data->scroll_factor * ECS_TOOLS_UI_DEFAULT_HANDLER_SCROLL_FACTOR * scroll_amount * dimming_value;
 						}
+
 						UIDrawerSlider* vertical_slider = (UIDrawerSlider*)data->vertical_slider;
+						float previous_slider_position = vertical_slider->slider_position;
 						vertical_slider->interpolate_value = true;
 						vertical_slider->slider_position -= total_scroll;
 
 						vertical_slider->slider_position = vertical_slider->slider_position > 1.0f ? 1.0f : vertical_slider->slider_position;
 						vertical_slider->slider_position = vertical_slider->slider_position < 0.0f ? 0.0f : vertical_slider->slider_position;
+
+						if (previous_slider_position != vertical_slider->slider_position) {
+							// Deallocate the snapshot of the window, if there is one
+							unsigned int border_index;
+							DockspaceType dockspace_type;
+							UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, dockspace_type);
+							dockspace->borders[border_index].DeallocateSnapshot({ nullptr }, false);
+						}
 					}
 				}
 			}

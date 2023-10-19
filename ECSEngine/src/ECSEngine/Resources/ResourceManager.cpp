@@ -182,7 +182,8 @@ namespace ECSEngine {
 		auto delete_resource = [=]() {
 			void* data = entry->data;
 			handler(data, resource_manager);
-			resource_manager->Deallocate(resource_manager->m_resource_types[type_int].GetIdentifierFromIndex(index).ptr);
+			ResourceIdentifier identifier = resource_manager->m_resource_types[type_int].GetIdentifierFromIndex(index);
+			resource_manager->Deallocate(identifier.ptr);
 			resource_manager->m_resource_types[type_int].EraseFromIndex(index);
 		};
 		if constexpr (!reference_counted) {
@@ -537,6 +538,22 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
+	unsigned int ResourceManager::FindResourceFromPointer(void* resource, ResourceType type) const
+	{
+		unsigned int final_resource_index = -1;
+		ForEachResourceIndex<true>(type, [&](unsigned int resource_index) {
+			if (resource == GetResourceFromIndex(resource_index, type)) {
+				final_resource_index = resource_index;
+				return true;
+			}
+			return false;
+		});
+
+		return final_resource_index;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	bool ResourceManager::Exists(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix) const
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
@@ -692,6 +709,13 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
+	ResourceIdentifier ResourceManager::GetResourceIdentifierFromIndex(unsigned int index, ResourceType type) const
+	{
+		return m_resource_types[(unsigned int)type].GetIdentifierFromIndex(index);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	size_t ResourceManager::GetTimeStamp(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix) const
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
@@ -754,6 +778,14 @@ namespace ECSEngine {
 		}
 
 		return snapshot;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	unsigned int ResourceManager::GetReferenceCount(ResourceType type, unsigned int resource_index) const
+	{
+		const ResourceManagerEntry* entry = m_resource_types[(unsigned int)type].GetValuePtrFromIndex(resource_index);
+		return entry->reference_count;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------

@@ -191,7 +191,10 @@ unsigned int ChangeInspectorDrawFunction(
 		GetInspectorName(inspector_index, window_name);
 		unsigned int inspector_window_index = editor_state->ui_system->GetWindowFromName(window_name);
 
-		editor_state->ui_system->DeallocateWindowDynamicResources(inspector_window_index);
+		// When this is firstly created, the window index will be -1 since there is no window at this point
+		if (inspector_window_index != -1) {
+			editor_state->ui_system->DeallocateWindowDynamicResources(inspector_window_index);
+		}
 
 		if (inspector_data->data_size > 0) {
 			Deallocate(editor_allocator, inspector_data->draw_data);
@@ -201,10 +204,13 @@ unsigned int ChangeInspectorDrawFunction(
 		inspector_data->clean_function = functions.clean_function;
 		inspector_data->data_size = data_size;
 
-		DockspaceType type = DockspaceType::Horizontal;
-		unsigned int border_index = 0;
-		UIDockspace* dockspace = editor_state->ui_system->GetDockspaceFromWindow(inspector_window_index, border_index, type);
-		editor_state->ui_system->SetActiveWindowForDockspaceBorder(dockspace, border_index, inspector_window_index);
+		// Same as the comment above, the window is firstly created
+		if (inspector_window_index != -1) {
+			DockspaceType type = DockspaceType::Horizontal;
+			unsigned int border_index = 0;
+			UIDockspace* dockspace = editor_state->ui_system->GetDockspaceFromWindow(inspector_window_index, border_index, type);
+			editor_state->ui_system->SetActiveWindowForDockspaceBorder(dockspace, border_index, inspector_window_index);
+		}
 	}
 
 	return inspector_index;

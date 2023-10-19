@@ -151,11 +151,15 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 		return true;
 	};
 
+	bool is_waiting_compilation = HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+
 	// Consider modules to be loaded only if they are not out of date
 	bool are_modules_loaded = AreSandboxModulesLoaded(editor_state, sandbox_index, true);
 	if (!are_modules_loaded) {
-		// Compile all the out of date modules now
-		CompileSandboxModules(editor_state, sandbox_index);
+		if (!is_waiting_compilation) {
+			// Compile all the out of date modules now
+			CompileSandboxModules(editor_state, sandbox_index);
+		}
 
 		// Check if the there are modules being compiled and wait for them if that is the case
 		bool should_wait = are_out_of_date_or_failed_modules_being_compiled();
@@ -2083,8 +2087,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	// Clear the sandbox waiting compilation flag - it will be reset if it is still valid
 	bool was_waiting = HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
-	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
-
+	
 	// Before running the simulation, we need to check to see if the modules are still valid - they might have been changed
 	// That's why check the snapshot
 	SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT solve_module_snapshot_result = SolveSandboxModuleSnapshotsChanges(editor_state, sandbox_index);
@@ -2095,11 +2098,14 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		return false;
 	}
 	else if (solve_module_snapshot_result == SOLVE_SANDBOX_MODULE_SNAPSHOT_WAIT) {
-		sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 		return true;
 	}
+	else {
+		// Clear the waiting flag - since we are no longer waiting
+		sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+	}
 
-	if (was_waiting) {
+	if (was_waiting && !HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION)) {
 		// We need to reconstruct the scheduling order
 	}
 

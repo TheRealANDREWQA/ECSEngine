@@ -317,7 +317,7 @@ namespace ECSEngine {
 				return false;
 			}
 			else {
-				// if getting the handle was succesful, get file times
+				// if getting the handle was successful, get file times
 				BOOL success = GetFileTime(handle, filetime_creation, filetime_last_access, filetime_last_write);
 
 				CloseHandle(handle);
