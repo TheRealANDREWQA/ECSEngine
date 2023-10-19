@@ -74,7 +74,7 @@ void DirectoryExplorerRightClick(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	if (mouse->IsReleased(ECS_MOUSE_RIGHT)) {
-		UIDrawerFilesystemHierarchyRightClickData* right_click_data = (UIDrawerFilesystemHierarchyRightClickData*)_data;
+		UIDrawerFilesystemHierarchyUserRightClickData* right_click_data = (UIDrawerFilesystemHierarchyUserRightClickData*)_data;
 		DirectoryExplorerData* data = (DirectoryExplorerData*)right_click_data->data;
 
 		UIDrawerMenuRightClickData menu_call_data;

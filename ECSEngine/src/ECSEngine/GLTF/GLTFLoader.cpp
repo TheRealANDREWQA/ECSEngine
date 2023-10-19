@@ -28,7 +28,7 @@ namespace ECSEngine {
 
 			values.size = accessor->count * component_count;
 			for (size_t index = 0; index < accessor->count && *success; index++) {
-				*success &= cgltf_accessor_read_float(accessor, index, values.buffer + index * component_count, component_count);
+				*success &= (bool)cgltf_accessor_read_float(accessor, index, values.buffer + index * component_count, component_count);
 			}
 
 			return values;
@@ -41,7 +41,7 @@ namespace ECSEngine {
 			values->size = accessor->count * component_count;
 			bool success = true;
 			for (size_t index = 0; index < accessor->count && success; index++) {
-				success &= cgltf_accessor_read_float(accessor, index, values->buffer + index * component_count, component_count);
+				success &= (bool)cgltf_accessor_read_float(accessor, index, values->buffer + index * component_count, component_count);
 			}
 			return success;
 		}

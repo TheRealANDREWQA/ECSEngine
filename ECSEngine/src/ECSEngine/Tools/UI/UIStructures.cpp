@@ -2,6 +2,7 @@
 #include "UIStructures.h"
 #include "../../Rendering/ColorUtilities.h"
 #include "../../Rendering/Graphics.h"
+#include "../../Containers/SoA.h"
 
 #include "UIHelpers.h"
 
@@ -112,7 +113,7 @@ namespace ECSEngine {
 			);
 		}
 
-		bool UIHandler::Add(float _position_x, float _position_y, float _scale_x, float _scale_y, UIActionHandler handler)
+		bool UIHandler::Add(float _position_x, float _position_y, float _scale_x, float _scale_y, UIActionHandler handler, UIHandlerCopyBuffers _copy_function)
 		{
 			if (position_x.size == position_x.capacity) {
 				return false;
@@ -123,21 +124,108 @@ namespace ECSEngine {
 			scale_x[size] = _scale_x;
 			scale_y[size] = _scale_y;
 			action[size] = handler;
+			copy_function[size] = _copy_function;
 			position_x.size++;
 			return true;
 		}
 
-		bool UIHandler::Add(float2 position, float2 scale, UIActionHandler handler) {
-			return Add(position.x, position.y, scale.x, scale.y, handler);
+		bool UIHandler::Add(float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function) {
+			return Add(position.x, position.y, scale.x, scale.y, handler, copy_function);
 		}
 
-		unsigned int UIHandler::AddResizable(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler) {
+		unsigned int UIHandler::AddResizable(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function) {
 			unsigned int current_size = position_x.size;
-			if (!Add(position, scale, handler)) {
+			if (!Add(position, scale, handler, copy_function)) {
 				Resize(allocator, position_x.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2);
-				Add(position, scale, handler);
+				Add(position, scale, handler, copy_function);
 			}
 			return current_size;
+		}
+
+		UIHandler UIHandler::Copy(AllocatorPolymorphic allocator, void** coalesced_action_data) const
+		{
+			UIHandler copy = *this;
+			SoACopy(allocator, position_x.size, position_x.size, &copy.position_x.buffer, &copy.position_y, &copy.scale_x, &copy.scale_y, &copy.action, &copy.copy_function);
+			copy.position_x.capacity = position_x.size;
+
+			if (coalesced_action_data != nullptr) {
+				size_t total_data_size = 0;
+				for (unsigned int index = 0; index < copy.position_x.size; index++) {
+					total_data_size += copy.action[index].data_size;
+				}
+
+				void* allocation = AllocateEx(allocator, total_data_size);
+				uintptr_t ptr = (uintptr_t)allocation;
+				for (unsigned int index = 0; index < copy.position_x.size; index++) {
+					if (copy.action[index].data_size > 0) {
+						void* previous_data = copy.action[index].data;
+						copy.action[index].data = (void*)ptr;
+						memcpy(copy.action[index].data, previous_data, copy.action[index].data_size);
+						ptr += copy.action[index].data_size;
+					}
+				}
+				*coalesced_action_data = allocation;
+			}
+			else {
+				for (unsigned int index = 0; index < copy.position_x.size; index++) {
+					copy.action[index].data = CopyNonZeroEx(allocator, copy.action[index].data, copy.action[index].data_size);
+				}
+			}
+
+			return copy;
+		}
+
+		void UIHandler::CopyData(
+			const UIHandler* other,
+			AllocatorPolymorphic buffers_allocator,
+			AllocatorPolymorphic handler_data_allocator,
+			AllocatorPolymorphic handler_system_data_allocator
+		)
+		{
+			Reset();
+			if (position_x.capacity < other->position_x.size) {
+				Resize(buffers_allocator, other->position_x.size);
+			}
+
+			SoACopyDataOnly(
+				other->position_x.size,
+				position_x.buffer,
+				other->position_x.buffer,
+				position_y,
+				other->position_y,
+				scale_x,
+				other->scale_x,
+				scale_y,
+				other->scale_y,
+				action,
+				other->action,
+				copy_function,
+				other->copy_function
+			);
+
+			position_x.size = other->position_x.size;
+
+			for (unsigned int index = 0; index < position_x.size; index++) {
+				AllocatorPolymorphic allocator = handler_data_allocator;
+				if (action[index].phase == ECS_UI_DRAW_SYSTEM) {
+					if (handler_system_data_allocator.allocator != nullptr) {
+						allocator = handler_system_data_allocator;
+					}
+				}
+				action[index].data = CopyNonZero(allocator, action[index].data, action[index].data_size);
+			}
+		}
+
+		void UIHandler::Deallocate(AllocatorPolymorphic allocator) const
+		{
+			if (allocator.allocator == nullptr) {
+				if (position_x.capacity > 0) {
+					free(position_x.buffer);
+				}
+			}
+			else {
+				DeallocateIfBelongs(allocator, position_x.buffer);
+			}
 		}
 
 		void UIHandler::Execute(unsigned int action_index, ActionData* action_data) const {
@@ -147,74 +235,33 @@ namespace ECSEngine {
 			action[action_index].action(action_data);
 		}
 
-		UIActionHandler* UIHandler::GetLastHandler() const
-		{
-			unsigned int index = position_x.size - 1;
-			return action + index;
-		}
-
-		float2 UIHandler::GetPositionFromIndex(unsigned int index) const
-		{
-			return { position_x[index], position_y[index] };
-		}
-
-		float2 UIHandler::GetScaleFromIndex(unsigned int index) const
-		{
-			return { scale_x[index], scale_y[index] };
-		}
-
-		UIActionHandler UIHandler::GetActionFromIndex(unsigned int index) const
-		{
-			return action[index];
-		}
-
-		unsigned int UIHandler::GetLastHandlerIndex() const
-		{
-			return position_x.size - 1;
-		}
-
-		void UIHandler::Insert(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, unsigned int insert_index)
+		void UIHandler::Insert(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers _copy_function, unsigned int insert_index)
 		{
 			unsigned int current_size = position_x.size;
 			if (current_size == position_x.capacity) {
 				Resize(allocator, position_x.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2);
 			}
 
-			for (unsigned int index = current_size; index > insert_index; index--) {
-				unsigned int bellow_index = index - 1;
-				position_x[index] = position_x[bellow_index];
-				position_y[index] = position_y[bellow_index];
-				scale_x[index] = scale_x[bellow_index];
-				scale_y[index] = scale_y[bellow_index];
-				action[index] = action[bellow_index];
-			}
+			SoADisplaceElements(current_size, insert_index, 1, position_x.buffer, position_y, scale_x, scale_y, action, copy_function);
 			position_x[insert_index] = position.x;
 			position_y[insert_index] = position.y;
 			scale_x[insert_index] = scale.x;
 			scale_y[insert_index] = scale.y;
 			action[insert_index] = handler;
+			copy_function[insert_index] = _copy_function;
 			position_x.size++;
 		}
 
 		void UIHandler::Resize(AllocatorPolymorphic allocator, size_t new_count)
 		{
-			void* allocation = Allocate(allocator, MemoryOf(new_count));
-			UIHandler old_handler = *this;
-			SetBuffer(allocation, new_count);
-			memcpy(position_x.buffer, old_handler.position_x.buffer, sizeof(float) * position_x.size);
-			memcpy(position_y, old_handler.position_y, sizeof(float) * position_x.size);
-			memcpy(scale_x, old_handler.scale_x, sizeof(float) * position_x.size);
-			memcpy(scale_y, old_handler.scale_y, sizeof(float) * position_x.size);
-			memcpy(action, old_handler.action, sizeof(UIActionHandler) * position_x.size);
+			SoAResize(allocator, position_x.size, new_count, &position_x.buffer, &position_y, &scale_x, &scale_y, &action, &copy_function);
 			position_x.capacity = new_count;
-
-			DeallocateIfBelongs(allocator, old_handler.position_x.buffer);
 		}
 
 		unsigned int UIHandler::ReserveOne(AllocatorPolymorphic allocator)
 		{
 			if (position_x.size == position_x.capacity) {
-				Resize(allocator, position_x.size * 1.5f);
+				Resize(allocator, position_x.size * ECS_RESIZABLE_STREAM_FACTOR + 2);
 			}
 			unsigned int index = position_x.size;
 			position_x.size++;
@@ -227,17 +274,7 @@ namespace ECSEngine {
 
 		void UIHandler::SetBuffer(void* buffer, size_t count) {
 			uintptr_t ptr = (uintptr_t)buffer;
-			position_x.buffer = (float*)buffer;
-			ptr += sizeof(float) * count;
-			position_y = (float*)ptr;
-			ptr += sizeof(float) * count;
-			scale_x = (float*)ptr;
-			ptr += sizeof(float) * count;
-			scale_y = (float*)ptr;
-			ptr += sizeof(float) * count;
-
-			ptr = AlignPointer(ptr, alignof(UIActionHandler));
-			action = (UIActionHandler*)ptr;
+			SoAInitializeFromBuffer(count, ptr, &position_x.buffer, &position_y, &scale_x, &scale_y);
 		}
 
 		size_t UIHandler::MemoryOf(size_t count) {
@@ -295,8 +332,9 @@ namespace ECSEngine {
 			hoverable_handler.data = nullptr;
 			hoverable_handler.data_size = 0;
 			hoverable_handler.phase = ECS_UI_DRAW_NORMAL;
+			hoverable_handler_allocator.Clear();
 			clean_up_call_hoverable = false;
-			always_hoverable = false;
+			//always_hoverable = false;
 		}
 
 		void UIFocusedWindowData::ResetClickableHandler(ECS_MOUSE_BUTTON button_type)
@@ -305,6 +343,7 @@ namespace ECSEngine {
 			clickable_handler[button_type].data = nullptr;
 			clickable_handler[button_type].data_size = 0;
 			clickable_handler[button_type].phase = ECS_UI_DRAW_NORMAL;
+			clickable_handler_allocator[button_type].Clear();
 		}
 
 		void UIFocusedWindowData::ResetGeneralHandler()
@@ -313,159 +352,91 @@ namespace ECSEngine {
 			general_handler.data = nullptr;
 			general_handler.data_size = 0;
 			general_handler.phase = ECS_UI_DRAW_NORMAL;
+			general_handler_allocator.Clear();
 			clean_up_call_general = false;
 		}
 
-		void UIFocusedWindowData::ChangeClickable(float2 position, float2 scale, const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type)
+		void* UIFocusedWindowData::ChangeClickable(float2 position, float2 scale, const UIActionHandler* handler, UIHandlerCopyBuffers copy_function, ECS_MOUSE_BUTTON button_type)
 		{
-			ChangeClickable(position, scale, handler->action, handler->data, handler->data_size, handler->phase, button_type);
+			clickable_handler_allocator[button_type].Clear();
+
+			mouse_click_transform[button_type] = { position, scale };
+			clickable_handler[button_type] = *handler;
+			clickable_handler[button_type].data = CopyNonZero(&clickable_handler_allocator[button_type], handler->data, handler->data_size);
+			if (copy_function) {
+				copy_function(clickable_handler[button_type].data, GetAllocatorPolymorphic(&clickable_handler_allocator[button_type]));
+			}
+
+			return clickable_handler[button_type].data;
 		}
 
-		void UIFocusedWindowData::ChangeGeneralHandler(float2 position, float2 scale, const UIActionHandler* handler)
+		void* UIFocusedWindowData::ChangeGeneralHandler(float2 position, float2 scale, const UIActionHandler* handler, UIHandlerCopyBuffers copy_function)
 		{
+			general_handler_allocator.Clear();
+
 			general_transform.position = position;
 			general_transform.scale = scale;
 			general_handler = *handler;
+			general_handler.data = CopyNonZero(&general_handler_allocator, handler->data, handler->data_size);
+			if (copy_function) {
+				copy_function(general_handler.data, GetAllocatorPolymorphic(&general_handler_allocator));
+			}
 			clean_up_call_general = false;
+
+			return general_handler.data;
 		}
 
-		void UIFocusedWindowData::ChangeHoverableHandler(float2 position, float2 scale, const UIActionHandler* handler)
+		void* UIFocusedWindowData::ChangeHoverableHandler(float2 position, float2 scale, const UIActionHandler* handler, UIHandlerCopyBuffers copy_function)
 		{
+			hoverable_handler_allocator.Clear();
+
 			hoverable_transform.position = position;
 			hoverable_transform.scale = scale;
 			hoverable_handler = *handler;
+			hoverable_handler.data = CopyNonZero(&hoverable_handler_allocator, handler->data, handler->data_size);
+			if (copy_function) {
+				copy_function(hoverable_handler.data, GetAllocatorPolymorphic(&hoverable_handler_allocator));
+			}
 			clean_up_call_hoverable = false;
+
+			return hoverable_handler.data;
 		}
 
-		void UIFocusedWindowData::ChangeClickable(
-			float2 position,
-			float2 scale,
-			Action action,
-			void* data,
-			size_t data_size,
-			ECS_UI_DRAW_PHASE phase,
-			ECS_MOUSE_BUTTON button_type
-		)
+		void* UIFocusedWindowData::ChangeHoverableHandler(const UIHandler* handler, unsigned int index)
 		{
-			ChangeClickable({ position, scale }, action, data, data_size, phase, button_type);
-		}
-
-		void UIFocusedWindowData::ChangeHoverableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase)
-		{
-			hoverable_handler.action = action;
-			hoverable_handler.data = data;
-			hoverable_handler.phase = phase;
-			hoverable_handler.data_size = data_size;
-			hoverable_transform = transform;
-		}
-
-		void UIFocusedWindowData::ChangeHoverableHandler(
-			float2 position, 
-			float2 scale, 
-			Action action, 
-			void* data, 
-			size_t data_size,
-			ECS_UI_DRAW_PHASE phase
-		) {
-			ChangeHoverableHandler({ position, scale }, action, data, data_size, phase);
-		}
-
-		void UIFocusedWindowData::ChangeHoverableHandler(
-			const UIHandler* handler,
-			unsigned int index,
-			void* data
-		) {
-			ChangeHoverableHandler(
-				{ handler->position_x[index], handler->position_y[index] }, 
-				{ handler->scale_x[index], handler->scale_y[index] },
-				handler->action[index].action,
-				data,
-				handler->action[index].data_size,
-				handler->action[index].phase
+			return ChangeHoverableHandler(
+				handler->GetPositionFromIndex(index),
+				handler->GetScaleFromIndex(index),
+				&handler->GetActionFromIndex(index),
+				handler->GetCopyFunctionFromIndex(index)
 			);
 		}
 
-		void UIFocusedWindowData::ChangeClickable(
-			UIElementTransform transform,
-			Action action,
-			void* data,
-			size_t data_size,
-			ECS_UI_DRAW_PHASE phase,
-			ECS_MOUSE_BUTTON button_type
-		)
-		{
-			clickable_handler[button_type].action = action;
-			clickable_handler[button_type].data = data;
-			clickable_handler[button_type].phase = phase;
-			clickable_handler[button_type].data_size = data_size;
-			mouse_click_transform[button_type] = transform;
-		}
-
-		void UIFocusedWindowData::ChangeClickable(
+		void* UIFocusedWindowData::ChangeClickable(
 			const UIHandler* handler,
 			unsigned int index,
-			void* data,
 			ECS_MOUSE_BUTTON button_type
 		)
 		{
-			ChangeClickable(
-				{ handler->position_x[index], handler->position_y[index] },
-				{ handler->scale_x[index], handler->scale_y[index] },
-				handler->action[index].action,
-				data,
-				handler->action[index].data_size,
-				handler->action[index].phase,
+			return ChangeClickable(
+				handler->GetPositionFromIndex(index),
+				handler->GetScaleFromIndex(index),
+				&handler->GetActionFromIndex(index),
+				handler->GetCopyFunctionFromIndex(index),
 				button_type
 			);
 		}
 
-		void UIFocusedWindowData::ChangeGeneralHandler(
-			float2 position,
-			float2 scale,
-			Action action,
-			void* data,
-			size_t data_size,
-			ECS_UI_DRAW_PHASE phase
-		)
-		{
-			general_handler.action = action;
-			general_handler.data = data;
-			general_handler.phase = phase;
-			general_handler.data_size = data_size;
-			general_transform = {
-				position,
-				scale
-			};
-		}
-
-		void UIFocusedWindowData::ChangeGeneralHandler(
-			UIElementTransform transform,
-			Action action,
-			void* data,
-			size_t data_size,
-			ECS_UI_DRAW_PHASE phase
-		)
-		{
-			general_handler.action = action;
-			general_handler.data = data;
-			general_handler.phase = phase;
-			general_handler.data_size = data_size;
-			general_transform = transform;
-		}
-
-		void UIFocusedWindowData::ChangeGeneralHandler(
+		void* UIFocusedWindowData::ChangeGeneralHandler(
 			const UIHandler* handler,
-			unsigned int index,
-			void* data
+			unsigned int index
 		)
 		{
-			ChangeGeneralHandler(
-				{ handler->position_x[index], handler->position_y[index] },
-				{ handler->scale_x[index], handler->scale_y[index] },
-				handler->action[index].action,
-				data, 
-				handler->action[index].data_size,
-				handler->action[index].phase
+			return ChangeGeneralHandler(
+				handler->GetPositionFromIndex(index),
+				handler->GetScaleFromIndex(index),
+				&handler->GetActionFromIndex(index),
+				handler->GetCopyFunctionFromIndex(index)
 			);
 		}
 
@@ -563,6 +534,18 @@ namespace ECSEngine {
 			commit_cursor = cursor;
 		}
 
+		void UIDockspaceBorder::DeallocateSnapshot(AllocatorPolymorphic snapshot_allocator, bool free_runnable_allocator)
+		{
+			if (snapshot.IsValid()) {
+				snapshot.Deallocate(snapshot_allocator, {}, false);
+				// Clear the runnable data allocator as well
+				snapshot_runnable_data_allocator.Clear();
+			}
+			if (free_runnable_allocator) {
+				snapshot_runnable_data_allocator.Free();
+			}
+		}
+
 		void UIDockspaceBorder::Reset()
 		{
 			hoverable_handler.Reset();
@@ -575,6 +558,9 @@ namespace ECSEngine {
 				draw_resources.sprite_textures[index].Reset();
 			}
 			draw_resources.sprite_cluster_subtreams.Reset();
+			// We don't need to deallocate the data pointers since they were allocated
+			// Using the temporary allocator
+			snapshot_runnables.FreeBuffer();
 		}
 
 		size_t UIDockspaceBorder::Serialize(void* buffer) const
@@ -633,7 +619,7 @@ namespace ECSEngine {
 			//ECS_ASSERT(window_indices.size > 0, "No windows to serialize");
 			memcpy(window_indices.buffer, (const void*)ptr, sizeof(unsigned short) * window_indices.size);
 			ptr += sizeof(unsigned short) * window_indices.size;
-		
+
 			return ptr - (uintptr_t)buffer;
 		}
 
@@ -664,7 +650,7 @@ namespace ECSEngine {
 
 			font.size *= factor.x;
 			font.character_spacing *= factor.x;
-			
+
 			layout.default_element_x *= factor.x;
 			layout.default_element_y *= factor.y;
 			layout.element_indentation *= factor.x;
@@ -687,14 +673,14 @@ namespace ECSEngine {
 
 		size_t UIWindow::Serialize(void* buffer) const
 		{
-			/*	
+			/*
 			UIWindowDrawerDescriptor descriptors;
 			unsigned short name_length;
 			*/
 
 			uintptr_t ptr = (uintptr_t)buffer;
 			memcpy((void*)ptr, descriptors, sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
-		
+
 			// configured descriptors
 			ptr += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
 
@@ -765,7 +751,7 @@ namespace ECSEngine {
 
 			// descriptor configurations
 			memcpy(descriptors->configured, (const void*)ptr, sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
-			
+
 			void* descriptor_ptrs[] = {
 				&descriptors->color_theme,
 				&descriptors->layout,
@@ -896,6 +882,270 @@ namespace ECSEngine {
 				}
 			}
 			return false;
+		}
+
+		bool UIDockspaceBorderDrawOutputSnapshot::IsValid() const
+		{
+			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS * (ECS_TOOLS_UI_PASSES + 1); index++) {
+				if (counts[index] != 0) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		bool UIDockspaceBorderDrawOutputSnapshot::Restore(UIDockspaceBorderDrawOutputSnapshotRestoreInfo* restore_info)
+		{
+			// Start with the buffers
+			size_t vertex_byte_sizes[ECS_TOOLS_UI_MATERIALS] = {
+				sizeof(UIVertexColor),
+				sizeof(UISpriteVertex),
+				sizeof(UISpriteVertex),
+				sizeof(UISpriteVertex),
+				sizeof(UIVertexColor)
+			};
+
+			for (size_t pass_index = 0; pass_index < ECS_TOOLS_UI_PASSES; pass_index++) {
+				size_t offset = pass_index * ECS_TOOLS_UI_MATERIALS;
+				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
+					if (counts[offset + index] > 0) {
+						memcpy(restore_info->buffers[offset + index], buffers[offset + index], vertex_byte_sizes[index] * counts[offset + index]);
+					}
+					restore_info->counts[offset + index] = counts[offset + index];
+				}
+			}
+
+			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
+				size_t offset = ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES;
+				if (counts[offset + index] > 0) {
+					size_t previous_count = restore_info->system_counts[index];
+					memcpy(
+						OffsetPointer(restore_info->system_buffers[index], previous_count * vertex_byte_sizes[index]),
+						buffers[offset + index],
+						vertex_byte_sizes[index] * counts[offset + index]
+					);
+				}
+				restore_info->system_counts[index] += counts[offset + index];
+			}
+
+			restore_info->border_cluster_sprite_count->AddStream(cluster_sprite_counts[ECS_UI_DRAW_NORMAL]);
+			restore_info->border_cluster_sprite_count->AddStream(cluster_sprite_counts[ECS_UI_DRAW_LATE]);
+
+			for (size_t pass_index = 0; pass_index < ECS_TOOLS_UI_PASSES; pass_index++) {
+				for (size_t index = 0; index < ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS; index++) {
+					size_t current_index = pass_index * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + index;
+					restore_info->border_sprite_textures[current_index].AddStream(sprites[current_index]);
+				}
+			}
+
+			for (size_t index = 0; index < ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS; index++) {
+				size_t offset = ECS_TOOLS_UI_PASSES * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS;
+				restore_info->system_sprite_textures[index].AddStream(sprites[offset + index]);
+			}
+
+			restore_info->hoverable_handler->CopyData(
+				&hoverables,
+				restore_info->handler_buffer_allocator,
+				restore_info->handler_data_allocator,
+				restore_info->handler_system_data_allocator
+			);
+			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
+				restore_info->clickable_handlers[button_type].CopyData(
+					clickables + button_type,
+					restore_info->handler_buffer_allocator,
+					restore_info->handler_data_allocator,
+					restore_info->handler_system_data_allocator
+				);
+				});
+			restore_info->general_handler->CopyData(
+				&generals,
+				restore_info->handler_buffer_allocator,
+				restore_info->handler_data_allocator,
+				restore_info->handler_system_data_allocator
+			);
+
+			bool should_redraw = false;
+			// Run the runnables now
+			for (size_t index = 0; index < runnables.size; index++) {
+				if (runnables[index].draw_phase == ECS_UI_DRAW_SYSTEM) {
+					restore_info->runnable_data.buffers = restore_info->system_buffers;
+					restore_info->runnable_data.counts = restore_info->system_counts;
+				}
+				else {
+					restore_info->runnable_data.buffers = restore_info->buffers;
+					restore_info->runnable_data.counts = restore_info->counts;
+				}
+				should_redraw |= runnables[index].function(runnables[index].data, &restore_info->runnable_data);
+			}
+
+			return should_redraw;
+		}
+
+		void UIDockspaceBorderDrawOutputSnapshot::ConstructFrom(const UIDockspaceBorderDrawOutputSnapshotCreateInfo* info)
+		{
+			AllocatorPolymorphic allocator = info->allocator;
+
+			// Start with the buffers
+			size_t vertex_byte_sizes[ECS_TOOLS_UI_MATERIALS] = {
+				sizeof(UIVertexColor),
+				sizeof(UISpriteVertex),
+				sizeof(UISpriteVertex),
+				sizeof(UISpriteVertex),
+				sizeof(UIVertexColor)
+			};
+
+			for (size_t pass_index = 0; pass_index < ECS_TOOLS_UI_PASSES; pass_index++) {
+				size_t offset = pass_index * ECS_TOOLS_UI_MATERIALS;
+				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
+					size_t allocation_size = vertex_byte_sizes[index] * info->counts[offset + index];
+					if (allocation_size > 0) {
+						buffers[offset + index] = AllocateEx(allocator, allocation_size);
+						memcpy(buffers[offset + index], info->buffers[offset + index], allocation_size);
+					}
+					else {
+						buffers[offset + index] = nullptr;
+					}
+					counts[offset + index] = info->counts[offset + index];
+				}
+			}
+
+			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
+				size_t offset = ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES;
+				size_t count = info->system_counts[index] - info->previous_system_counts[index];
+				size_t allocation_size = vertex_byte_sizes[index] * count;
+				if (allocation_size > 0) {
+					buffers[offset + index] = AllocateEx(allocator, allocation_size);
+					size_t buffer_offset = vertex_byte_sizes[index] * info->previous_system_counts[index];
+					memcpy(buffers[offset + index], OffsetPointer(info->system_buffers[index], buffer_offset), allocation_size);
+				}
+				else {
+					buffers[offset + index] = nullptr;
+				}
+				counts[offset + index] = count;
+			}
+
+			auto copy_sprite_textures = [&](size_t sprite_count, size_t sprite_offset, size_t pass_index, size_t texture_index_offset) {
+				Stream<UISpriteTexture>* current_sprites = &sprites[pass_index * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + texture_index_offset];
+				if (sprite_count > 0) {
+					size_t allocation_size = sizeof(UISpriteTexture) * sprite_count;
+					current_sprites->buffer = (UISpriteTexture*)AllocateEx(allocator, allocation_size);
+					Stream<UISpriteTexture> textures = {};
+					if (pass_index == ECS_TOOLS_UI_PASSES) {
+						textures = info->system_sprite_textures[texture_index_offset];
+					}
+					else {
+						textures = info->border_sprite_textures[pass_index * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + texture_index_offset];
+					}
+
+					memcpy(current_sprites->buffer, textures.buffer + sprite_offset, allocation_size);
+					current_sprites->size = sprite_count;
+				}
+				else {
+					*current_sprites = {};
+				}
+			};
+
+			for (size_t pass_index = 0; pass_index < ECS_TOOLS_UI_PASSES; pass_index++) {
+				size_t sprite_count = info->counts[pass_index * ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE] / 6;
+				copy_sprite_textures(sprite_count, 0, pass_index, ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFER_INDEX);
+
+				cluster_sprite_counts[pass_index] = {};
+				// For the cluster sprites, also copy the cluster count
+				size_t cluster_count = info->counts[pass_index * ECS_TOOLS_UI_MATERIALS + ECS_TOOLS_UI_SPRITE_CLUSTER] / 6;
+				if (cluster_count > 0) {
+					if (pass_index == 0) {
+						size_t allocation_size = sizeof(unsigned int) * cluster_count;
+						void* allocation = AllocateEx(allocator, sizeof(unsigned int) * cluster_count);
+						cluster_sprite_counts[pass_index].InitializeFromBuffer(allocation, cluster_count);
+						memcpy(
+							cluster_sprite_counts[pass_index].buffer,
+							info->border_cluster_sprite_count.buffer,
+							allocation_size
+						);
+					}
+					else {
+						// At the moment, the late draws cannot be distinguished
+						ECS_ASSERT(false);
+					}
+				}
+
+				copy_sprite_textures(cluster_count, 0, pass_index, ECS_TOOLS_UI_SPRITE_CLUSTER_TEXTURE_BUFFER_INDEX);
+			}
+
+			// For the system draw, just copy the sprite textures
+			size_t system_sprite_count = (info->system_counts[ECS_TOOLS_UI_SPRITE] - info->previous_system_counts[ECS_TOOLS_UI_SPRITE]) / 6;
+			copy_sprite_textures(
+				system_sprite_count, 
+				info->previous_system_counts[ECS_TOOLS_UI_SPRITE] / 6, 
+				ECS_TOOLS_UI_PASSES, 
+				ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFER_INDEX
+			);
+
+			// The cluster sprites for the system draw cannot be deduced at the moment
+			ECS_ASSERT(info->system_counts[ECS_TOOLS_UI_SPRITE_CLUSTER] == 0);
+			cluster_sprite_counts[ECS_TOOLS_UI_PASSES] = {};
+			sprites[ECS_TOOLS_UI_PASSES * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + ECS_TOOLS_UI_SPRITE_CLUSTER_TEXTURE_BUFFER_INDEX] = {};
+
+			// Copy the handlers now
+			hoverables = info->hoverable_handler->Copy(allocator, &hoverables_action_allocated_data);
+			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
+				clickables[button_type] = info->clickable_handlers[button_type].Copy(allocator, &clickables_action_allocated_data[button_type]);
+			});
+			generals = info->general_handler->Copy(allocator, &generals_action_allocated_data);
+
+			// At last the runnables
+			runnables.InitializeEx(allocator, info->runnables.size);
+			for (size_t index = 0; index < runnables.size; index++) {
+				runnables[index] = info->runnables[index];
+				runnables[index].data = CopyNonZeroEx(info->runnable_allocator, runnables[index].data, runnables[index].data_size);
+			}
+		}
+
+		void UIDockspaceBorderDrawOutputSnapshot::Deallocate(AllocatorPolymorphic allocator, AllocatorPolymorphic runnable_allocator, bool deallocate_runnable_data)
+		{
+			for (size_t index = 0; index < std::size(counts); index++) {
+				if (counts[index] != 0 && buffers[index] != nullptr) {
+					DeallocateEx(allocator, buffers[index]);
+				}
+			}
+
+			for (size_t index = 0; index < std::size(sprites); index++) {
+				if (sprites[index].size > 0 && sprites[index].buffer != nullptr) {
+					DeallocateEx(allocator, sprites[index].buffer);
+				}
+			}
+
+			for (size_t index = 0; index < std::size(cluster_sprite_counts); index++) {
+				if (cluster_sprite_counts[index].size > 0 && cluster_sprite_counts[index].buffer != nullptr) {
+					DeallocateEx(allocator, cluster_sprite_counts[index].buffer);
+				}
+			}
+
+			hoverables.Deallocate(allocator);
+			if (hoverables_action_allocated_data != nullptr) {
+				DeallocateEx(allocator, hoverables_action_allocated_data);
+			}
+			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
+				clickables[button_type].Deallocate(allocator);
+				if (clickables_action_allocated_data[button_type] != nullptr) {
+					DeallocateEx(allocator, clickables_action_allocated_data[button_type]);
+				}
+				});
+			generals.Deallocate(allocator);
+			if (generals_action_allocated_data != nullptr) {
+				DeallocateEx(allocator, generals_action_allocated_data);
+			}
+
+			if (deallocate_runnable_data) {
+				for (size_t index = 0; index < runnables.size; index++) {
+					if (runnables[index].data_size > 0) {
+						DeallocateEx(runnable_allocator, runnables[index].data);
+					}
+				}
+			}
+			runnables.DeallocateEx(allocator);
+		
+			InitializeEmpty();
 		}
 
 	}

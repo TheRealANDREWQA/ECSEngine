@@ -1,7 +1,7 @@
 #pragma once
 #include "ECSEngineUI.h"
 
-using FileExplorerFunctorTable = ECSEngine::HashTableDefault<ECSEngine::Tools::Action>;
+typedef ECSEngine::HashTableDefault<ECSEngine::Tools::Action> FileExplorerFunctorTable;
 
 struct EditorState;
 
@@ -17,7 +17,22 @@ struct FileExplorerMeshThumbnail {
 	bool could_be_read;
 };
 
+struct FileExplorerMeshThumbnailWithPath {
+	ECSEngine::Stream<wchar_t> path;
+	FileExplorerMeshThumbnail thumbnail;
+};
+
 struct FileExplorerData {
+	// This is a structure needed to use the retained mode - in order to detect
+	// Changes to the content. Everything that is used for these streams
+	// Is allocated from the allocator inside here
+	struct {
+		ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> elements;
+		ECSEngine::ResizableStream<FileExplorerPreloadTexture> preload_texture_check;
+		ECSEngine::ResizableStream<FileExplorerMeshThumbnailWithPath> mesh_thumbnail_check;
+		ECSEngine::MemoryManager retained_mode_allocator;
+	};
+
 	ECSEngine::CapacityStream<wchar_t> current_directory;
 	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> selected_files;
 	ECSEngine::Stream<ECSEngine::Stream<wchar_t>> copied_files;

@@ -26,7 +26,7 @@ namespace ECSEngine {
 		auto end = std::chrono::high_resolution_clock::now();
 		size_t duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - time_point).count();
 		bool overflow = duration > end.time_since_epoch().count();
-		duration = overflow ? -duration : duration;
+		duration = overflow ? (size_t)(-(int64_t)duration) : duration;
 		return duration / GetFactor(type);
 	}
 

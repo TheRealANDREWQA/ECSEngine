@@ -49,10 +49,12 @@ namespace ECSEngine {
 	void* CoalesceStreamWithData(AllocatorPolymorphic allocator, Stream<void> data, size_t element_size)
 	{
 		size_t allocation_size = sizeof(Stream<void>) + data.size;
-		void* allocation = Allocate(allocator, allocation_size);
-		Stream<void>* stream = (Stream<void>*)allocation;
-		stream->InitializeFromBuffer(OffsetPointer(stream, sizeof(*stream)), data.size / element_size);
-		memcpy(stream->buffer, data.buffer, data.size);
+		void* allocation = AllocateEx(allocator, allocation_size);
+		if (allocation != nullptr) {
+			Stream<void>* stream = (Stream<void>*)allocation;
+			stream->InitializeFromBuffer(OffsetPointer(stream, sizeof(*stream)), data.size / element_size);
+			memcpy(stream->buffer, data.buffer, data.size);
+		}
 		return allocation;
 	}
 

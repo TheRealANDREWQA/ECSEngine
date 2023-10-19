@@ -188,7 +188,7 @@ namespace ECSEngine {
 		memset(&table, 0, sizeof(table));
 
 		// Read the last 4 bytes - the size of the table
-		size_t status = SetFileCursor(file_handle, -sizeof(TableHeader), ECS_FILE_SEEK_END);
+		size_t status = SetFileCursor(file_handle, -(int64_t)sizeof(TableHeader), ECS_FILE_SEEK_END);
 
 		// Failed to seek
 		if (status == -1) {
@@ -213,7 +213,7 @@ namespace ECSEngine {
 
 		// Now read the whole data into a buffer - the string and the actual table
 		void* allocation = AllocateEx(allocator, header.table_size + header.string_total_size);
-		status = SetFileCursor(file_handle, -sizeof(header) - header.table_size - header.string_total_size, ECS_FILE_SEEK_END);
+		status = SetFileCursor(file_handle, -(int64_t)sizeof(header) - header.table_size - header.string_total_size, ECS_FILE_SEEK_END);
 		if (status == -1) {
 			DeallocateEx(allocator, allocation);
 			return table;

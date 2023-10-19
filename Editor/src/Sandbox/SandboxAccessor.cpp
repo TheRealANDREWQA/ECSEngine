@@ -71,6 +71,9 @@ EntityManager* GetSandboxEntityManager(EditorState* editor_state, unsigned int s
 	case EDITOR_SANDBOX_VIEWPORT_COUNT:
 		return ActiveEntityManager(editor_state, sandbox_index);
 	}
+
+	ECS_ASSERT(false, "Invalid viewport value!");
+	return nullptr;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -86,6 +89,9 @@ const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, un
 	case EDITOR_SANDBOX_VIEWPORT_COUNT:
 		return ActiveEntityManager(editor_state, sandbox_index);
 	}
+
+	ECS_ASSERT(false, "Invalid viewport value!");
+	return nullptr;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

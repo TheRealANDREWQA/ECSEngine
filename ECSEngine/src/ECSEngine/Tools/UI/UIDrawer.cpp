@@ -71,11 +71,15 @@ namespace ECSEngine {
 				}
 			}
 		}
+		
+		ECS_INLINE static AllocatorPolymorphic TemporaryAllocator(const UIDrawer* drawer, ECS_UI_DRAW_PHASE phase) {
+			return GetAllocatorPolymorphic(drawer->system->TemporaryAllocator(drawer->thread_id, phase));
+		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		template<typename BasicType>
-		void InputGroupInitializerImplementation(
+		static void InputGroupInitializerImplementation(
 			UIDrawer* drawer,
 			size_t configuration,
 			UIDrawConfig& config,
@@ -170,7 +174,7 @@ namespace ECSEngine {
 		}
 
 		template<typename BasicType>
-		void InputGroupDrawerImplementation(
+		static void InputGroupDrawerImplementation(
 			UIDrawer* drawer,
 			size_t configuration,
 			UIDrawConfig& config,
@@ -631,7 +635,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::HandleLateAndSystemDrawActionNullify(size_t configuration, float2 position, float2 scale) {
-			if ((configuration & UI_CONFIG_LATE_DRAW) || (configuration & UI_CONFIG_SYSTEM_DRAW)) {
+			if (record_actions && (configuration & UI_CONFIG_LATE_DRAW) || (configuration & UI_CONFIG_SYSTEM_DRAW)) {
 				AddHoverable(0, position, scale, { SkipAction, nullptr, 0 });
 				AddClickable(0, position, scale, { SkipAction, nullptr, 0 });
 				AddGeneral(0, position, scale, { SkipAction, nullptr, 0 });
@@ -1125,7 +1129,7 @@ namespace ECSEngine {
 
 			text_span = *info->TextScale();
 			if (cull_mode == 0) {
-				if (horizontal_alignment == ECS_UI_ALIGN::ECS_UI_ALIGN_RIGHT) {
+				if (horizontal_alignment == ECS_UI_ALIGN_RIGHT) {
 					if (!memcpy_all) {
 						CullTextSprites<1, 1>(text_stream, current_stream, text_stream[1].position.x - scale.x + 2 * element_descriptor.label_padd.x);
 						text_span = GetTextSpan(current_stream, true, true);
@@ -1175,7 +1179,7 @@ namespace ECSEngine {
 				}
 			}
 			else if (cull_mode == 1) {
-				if (vertical_alignment == ECS_UI_ALIGN::ECS_UI_ALIGN_BOTTOM) {
+				if (vertical_alignment == ECS_UI_ALIGN_BOTTOM) {
 					if (!memcpy_all) {
 						CullTextSprites<3, 1>(text_stream, current_stream, text_stream[text_stream.size - 3].position.y - scale.y + 2 * element_descriptor.label_padd.y);
 						text_span = GetTextSpan(current_stream, false, true);
@@ -1232,7 +1236,7 @@ namespace ECSEngine {
 					text_span = { 0.0f, 0.0f };
 				}
 				else {
-					if (horizontal_alignment == ECS_UI_ALIGN::ECS_UI_ALIGN_RIGHT) {
+					if (horizontal_alignment == ECS_UI_ALIGN_RIGHT) {
 						if (!memcpy_all) {
 							CullTextSprites<1, 1>(text_stream, current_stream, text_stream[1].position.x - scale.x + 2 * element_descriptor.label_padd.x);
 							text_span = GetTextSpan(current_stream, true, true);
@@ -1288,7 +1292,7 @@ namespace ECSEngine {
 					text_span = { 0.0f, 0.0f };
 				}
 				else {
-					if (vertical_alignment == ECS_UI_ALIGN::ECS_UI_ALIGN_BOTTOM) {
+					if (vertical_alignment == ECS_UI_ALIGN_BOTTOM) {
 						if (!memcpy_all) {
 							CullTextSprites<3, 1>(text_stream, current_stream, text_stream[text_stream.size - 3].position.y - scale.y + 2 * element_descriptor.label_padd.y);
 							text_span = GetTextSpan(current_stream, false, true);
@@ -1315,7 +1319,7 @@ namespace ECSEngine {
 					}
 					else {
 						if (!memcpy_all) {
-							if (vertical_alignment == ECS_UI_ALIGN::ECS_UI_ALIGN_MIDDLE) {
+							if (vertical_alignment == ECS_UI_ALIGN_MIDDLE) {
 								CullTextSprites<2, 1>(text_stream, current_stream, text_stream[0].position.y - scale.y + element_descriptor.label_padd.y);
 							}
 							else {
@@ -1731,18 +1735,33 @@ namespace ECSEngine {
 				}
 
 				if (configuration & UI_CONFIG_RECTANGLE_TOOL_TIP) {
-					if (IsPointInRectangle(mouse_position, position, scale)) {
-						const UIConfigToolTip* tool_tip = (const UIConfigToolTip*)config.GetParameter(UI_CONFIG_RECTANGLE_TOOL_TIP);
+					const UIConfigToolTip* tool_tip = (const UIConfigToolTip*)config.GetParameter(UI_CONFIG_RECTANGLE_TOOL_TIP);
 
+					struct RunnableData {
 						UITextTooltipHoverableData hover_data;
-						hover_data.characters = tool_tip->characters;
-						hover_data.base.offset.y = 0.005f;
-						hover_data.base.offset_scale.y = true;
+						float2 position;
+						float2 scale;
+					};
 
-						ActionData action_data = system->GetFilledActionData(window_index);
-						action_data.data = &hover_data;
-						TextTooltipHoverable(&action_data);
+					RunnableData runnable_data;
+					runnable_data.hover_data.characters = tool_tip->characters;
+					runnable_data.hover_data.base.offset.y = 0.005f;
+					runnable_data.hover_data.base.offset_scale.y = true;
+					if (record_snapshot_runnables) {
+						runnable_data.hover_data.characters = tool_tip->is_stable ? tool_tip->characters : tool_tip->characters.Copy(SnapshotRunnableAllocator());
 					}
+
+					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_SYSTEM, [](void* _data, ActionData* action_data) {
+						RunnableData* data = (RunnableData*)_data;
+						if (IsPointInRectangle(action_data->mouse_position, data->position, data->scale)) {
+							action_data->data = &data->hover_data;
+							action_data->position = data->position;
+							action_data->scale = data->scale;
+							TextTooltipHoverable(action_data);
+						}
+
+						return false;
+					});
 				}
 
 				HandleRectangleActions(configuration, config, position, scale);
@@ -2205,15 +2224,20 @@ namespace ECSEngine {
 
 			if (configuration & UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER) {
 				if (!input->is_currently_selected) {
-					int64_t integer = ConvertCharactersToInt(*input->text);
+					SnapshotRunnable(input, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+						UIDrawerTextInput* input = (UIDrawerTextInput*)_data;
+						int64_t integer = ConvertCharactersToInt(*input->text);
 
-					char temp_characters[256];
-					CapacityStream<char> temp_stream(temp_characters, 0, 256);
-					ConvertIntToCharsFormatted(temp_stream, integer);
-					if (temp_stream != *input->text) {
-						input->DeleteAllCharacters();
-						input->InsertCharacters(temp_characters, temp_stream.size, 0, system);
-					}
+						char temp_characters[256];
+						CapacityStream<char> temp_stream(temp_characters, 0, 256);
+						ConvertIntToCharsFormatted(temp_stream, integer);
+						if (temp_stream != *input->text) {
+							input->DeleteAllCharacters();
+							input->InsertCharacters(temp_characters, temp_stream.size, 0, action_data->system);
+						}
+
+						return true;
+					});
 				}
 			}
 
@@ -2233,25 +2257,36 @@ namespace ECSEngine {
 					}
 				}
 
-				if ((input->trigger_callback == UIDrawerTextInput::TRIGGER_CALLBACK_MODIFY && !input->trigger_callback_on_release) || 
+				if ((input->trigger_callback == UIDrawerTextInput::TRIGGER_CALLBACK_MODIFY && !input->trigger_callback_on_release) ||
 					input->trigger_callback == UIDrawerTextInput::TRIGGER_CALLBACK_EXIT) {
-					ActionData action_data = GetDummyActionData();
-					input->Callback(&action_data);
-					input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+					SnapshotRunnable(input, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+						UIDrawerTextInput* input = (UIDrawerTextInput*)_data;
+						input->Callback(action_data);
+						input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+
+						return false;
+					});
 				}
 			}
 
 			// Determine if the text was changed from outside the UI - do this after the callback to give it
 			// a chance to use the previous data
-			if (!input->is_currently_selected) {
-				if (*input->text != input->previous_text) {
-					// It has changed from the outside
-					input->sprite_render_offset = 0;
-					input->current_sprite_position = 0;
-					input->current_selection = 0;
-					input->previous_text.CopyOther(*input->text);
+			SnapshotRunnable(input, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+				UIDrawerTextInput* input = (UIDrawerTextInput*)_data;
+
+				if (!input->is_currently_selected) {
+					if (*input->text != input->previous_text) {
+						// It has changed from the outside
+						input->sprite_render_offset = 0;
+						input->current_sprite_position = 0;
+						input->current_selection = 0;
+						input->previous_text.CopyOther(*input->text);
+						return true;
+					}
 				}
-			}
+
+				return false;
+			});
 
 			if (ValidatePosition(configuration, position, scale)) {
 				if (configuration & UI_CONFIG_TEXT_INPUT_MISC) {
@@ -5686,7 +5721,7 @@ namespace ECSEngine {
 				float max_value = -100000.0f;
 				GetExtremesFromStream(samples, min_value, max_value, [](float value) {
 					return value;
-					});
+				});
 				float difference = max_value - min_value * (min_value < 0.0f);
 				float difference_inverse = 1.0f / difference;
 
@@ -5725,12 +5760,8 @@ namespace ECSEngine {
 
 					float text_offset = 0.0f;
 
-					if (IsPointInRectangle(mouse_position, { sample_position.x, histogram_position.y }, { sample_scale.x, histogram_scale.y })) {
-						histogram_color = color_theme.histogram_hovered_color;
-					}
-					else {
-						histogram_color = initial_color;
-					}
+					float2 current_bar_position = { sample_position.x, histogram_scale.y };
+					float2 current_bar_scale = { sample_scale.x, histogram_scale.y };
 
 					if (sample_scale.y < y_sprite_scale) {
 						float offset = (y_sprite_scale - sample_scale.y) * 0.5f;
@@ -5760,7 +5791,12 @@ namespace ECSEngine {
 					UIDrawerHistogramHoverableData hoverable_data;
 					hoverable_data.sample_index = index;
 					hoverable_data.sample_value = samples[index];
-					AddHoverable(configuration, { sample_position.x, histogram_position.y }, { sample_scale.x, histogram_scale.y }, { HistogramHoverable, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+					hoverable_data.bar_color = color_theme.histogram_hovered_color;
+					AddHoverable(
+						configuration, 
+						current_bar_position, current_bar_scale, 
+						{ HistogramHoverable, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM }
+					);
 					histogram_position.x += sample_scale.x + element_descriptor.histogram_bar_spacing;
 				}
 			}
@@ -7609,20 +7645,17 @@ namespace ECSEngine {
 
 					float2 hoverable_position = { previous_point_position.x, graph_position.y };
 					float2 hoverable_scale = { next_point.x - previous_point_position.x, graph_scale.y };
-					if (IsPointInRectangle(mouse_position, hoverable_position, hoverable_scale)) {
-						line_color = color_theme.graph_hover_line;
-					}
-					else {
-						line_color = initial_color;
-					}
 					Line(configuration, previous_point_position, next_point, line_color);
 
 					UIDrawerGraphHoverableData hoverable_data;
 					hoverable_data.first_sample_values = samples[index];
 					hoverable_data.second_sample_values = samples[index + 1];
 					hoverable_data.sample_index = index;
+					hoverable_data.line_color = color_theme.graph_hover_line;
+					hoverable_data.line_start = previous_point_position;
+					hoverable_data.line_end = next_point;
 
-					AddHoverable(configuration, hoverable_position, hoverable_scale, { GraphHoverable, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+					AddHoverable(configuration, hoverable_position, hoverable_scale, { GraphHoverable, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
 					if (configuration & UI_CONFIG_GRAPH_DROP_COLOR) {
 						line_color.alpha = ECS_TOOLS_UI_GRAPH_DROP_COLOR_ALPHA;
 						size_t base_index = (index - starting_index) * 6;
@@ -7638,7 +7671,15 @@ namespace ECSEngine {
 					if (configuration & UI_CONFIG_GRAPH_SAMPLE_CIRCLES) {
 						float2 sprite_scale = GetSquareScale(element_descriptor.graph_sample_circle_size);
 						size_t temp_index = (index - starting_index) * 6;
-						SetSpriteRectangle({ previous_point_position.x - sprite_scale.x * 0.5f, previous_point_position.y - sprite_scale.y * 0.5f }, sprite_scale, color_theme.graph_sample_circle, { 0.0f, 0.0f }, { 1.0f, 1.0f }, sample_circle_stream.buffer, temp_index);
+						SetSpriteRectangle(
+							{ previous_point_position.x - sprite_scale.x * 0.5f, previous_point_position.y - sprite_scale.y * 0.5f }, 
+							sprite_scale, 
+							color_theme.graph_sample_circle, 
+							{ 0.0f, 0.0f }, 
+							{ 1.0f, 1.0f }, 
+							sample_circle_stream.buffer, 
+							temp_index
+						);
 					}
 
 					previous_point_position = next_point;
@@ -7648,7 +7689,15 @@ namespace ECSEngine {
 					if (end_index > starting_index + 1) {
 						float2 sprite_scale = GetSquareScale(element_descriptor.graph_sample_circle_size);
 						size_t temp_index = (end_index - 1 - starting_index) * 6;
-						SetSpriteRectangle({ previous_point_position.x - sprite_scale.x * 0.5f, previous_point_position.y - sprite_scale.y * 0.5f }, sprite_scale, color_theme.graph_sample_circle, { 0.0f, 0.0f }, { 1.0f, 1.0f }, sample_circle_stream.buffer, temp_index);
+						SetSpriteRectangle(
+							{ previous_point_position.x - sprite_scale.x * 0.5f, previous_point_position.y - sprite_scale.y * 0.5f }, 
+							sprite_scale, 
+							color_theme.graph_sample_circle, 
+							{ 0.0f, 0.0f }, 
+							{ 1.0f, 1.0f }, 
+							sample_circle_stream.buffer, 
+							temp_index
+						);
 					}
 				}
 
@@ -8848,8 +8897,14 @@ namespace ECSEngine {
 			counts(descriptor.counts), system_buffers(descriptor.system_buffers), system_counts(descriptor.system_counts),
 			window_data(_window_data), mouse_position(descriptor.mouse_position), color_theme(descriptor.color_theme),
 			font(descriptor.font), layout(descriptor.layout), element_descriptor(descriptor.element_descriptor),
-			export_scale(descriptor.export_scale), initializer(_initializer)
+			export_scale(descriptor.export_scale), initializer(_initializer), record_actions(descriptor.record_handlers),
+			record_snapshot_runnables(descriptor.record_snapshot_runnables)
 		{
+			if (record_snapshot_runnables) {
+				// In order to have an accurate snapshot, we need to record actions as well
+				record_actions = true;
+			}
+
 			system = (UISystem*)descriptor.system;
 
 			zoom_ptr = &system->m_windows[window_index].zoom;
@@ -8909,6 +8964,7 @@ namespace ECSEngine {
 				}
 			}
 
+			cached_filled_action_data = system->GetFilledActionData(window_index);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -8971,15 +9027,16 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::AddHoverable(size_t configuration, float2 position, float2 scale, UIActionHandler handler) {
-			if (!initializer) {
+		void UIDrawer::AddHoverable(size_t configuration, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function) {
+			if (!initializer && record_actions) {
 				system->AddHoverableToDockspaceRegion(
 					thread_id,
 					dockspace,
 					border_index,
 					position,
 					scale,
-					handler
+					handler,
+					copy_function
 				);
 				AddLateOrSystemAction(this, configuration, true, false, ECS_MOUSE_BUTTON_COUNT);
 			}
@@ -8988,7 +9045,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::AddTextTooltipHoverable(size_t configuration, float2 position, float2 scale, UITextTooltipHoverableData* data, bool stable, ECS_UI_DRAW_PHASE phase) {
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				size_t total_storage[256];
 				unsigned int write_size = sizeof(*data);
 				if (!stable) {
@@ -9009,9 +9066,10 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale,
 			UIActionHandler handler,
-			ECS_MOUSE_BUTTON button_type
+			ECS_MOUSE_BUTTON button_type,
+			UIHandlerCopyBuffers copy_function
 		) {
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				system->AddClickableToDockspaceRegion(
 					thread_id,
 					dockspace,
@@ -9019,7 +9077,8 @@ namespace ECSEngine {
 					position,
 					scale,
 					handler,
-					button_type
+					button_type,
+					copy_function
 				);
 				AddLateOrSystemAction(this, configuration, false, false, button_type);
 			}
@@ -9031,16 +9090,18 @@ namespace ECSEngine {
 			size_t configuration,
 			float2 position,
 			float2 scale,
-			UIActionHandler handler
+			UIActionHandler handler,
+			UIHandlerCopyBuffers copy_function
 		) {
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				system->AddGeneralActionToDockspaceRegion(
 					thread_id,
 					dockspace,
 					border_index,
 					position,
 					scale,
-					handler
+					handler,
+					copy_function
 				);
 				AddLateOrSystemAction(this, configuration, false, true, ECS_MOUSE_BUTTON_COUNT);
 			}
@@ -9056,7 +9117,7 @@ namespace ECSEngine {
 			float percentage,
 			ECS_UI_DRAW_PHASE phase
 		) {
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				UISystemDefaultHoverableData data;
 				data.border_index = border_index;
 				data.data.colors[0] = color;
@@ -9085,7 +9146,7 @@ namespace ECSEngine {
 			unsigned int count,
 			ECS_UI_DRAW_PHASE phase
 		) {
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				ECS_ASSERT(count <= ECS_TOOLS_UI_DEFAULT_HOVERABLE_DATA_COUNT);
 
 				UISystemDefaultHoverableData data;
@@ -9119,7 +9180,7 @@ namespace ECSEngine {
 			UIActionHandler clickable_handler,
 			ECS_MOUSE_BUTTON button_type
 		) {
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				UISystemDefaultClickableData data;
 				data.border_index = border_index;
 				data.clickable_handler = clickable_handler;
@@ -9147,7 +9208,7 @@ namespace ECSEngine {
 			ECS_MOUSE_BUTTON button_type
 		)
 		{
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				UISystemDefaultClickableData data;
 				data.border_index = border_index;
 				data.clickable_handler = clickable_handler;
@@ -9172,7 +9233,7 @@ namespace ECSEngine {
 			UIActionHandler second_click_handler,
 			unsigned int identifier
 		) {
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				UISystemDoubleClickData register_data;
 				register_data.border_index = border_index;
 				register_data.dockspace = dockspace;
@@ -9202,7 +9263,7 @@ namespace ECSEngine {
 			UIActionHandler second_click_handler,
 			Stream<char> identifier
 		) {
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				UISystemDoubleClickData register_data;
 				register_data.border_index = border_index;
 				register_data.dockspace = dockspace;
@@ -9225,7 +9286,12 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIDrawerMenuRightClickData UIDrawer::PrepareRightClickActionData(Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler)
+		UIDrawerMenuRightClickData UIDrawer::PrepareRightClickActionData(
+			Stream<char> name, 
+			UIDrawerMenuState* menu_state, 
+			UIActionHandler custom_handler,
+			AllocatorPolymorphic override_allocator
+		)
 		{
 			UIDrawerMenuRightClickData right_click;
 
@@ -9234,8 +9300,15 @@ namespace ECSEngine {
 			size_t total_size = menu_data_size + name.size + sizeof(UIDrawerMenuWindow) * ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT + sizeof(CapacityStream<UIDrawerMenuWindow>);
 			ECS_ASSERT(custom_handler.data_size <= sizeof(right_click.action_data), "The handler data is too large");
 
-			void* temp_buffer = GetTempBuffer(total_size, ECS_UI_DRAW_SYSTEM);
-			uintptr_t ptr = (uintptr_t)temp_buffer;
+			void* allocated_buffer = nullptr;
+			if (override_allocator.allocator == nullptr) {
+				allocated_buffer = GetTempBuffer(total_size, ECS_UI_DRAW_SYSTEM);
+			}
+			else {
+				allocated_buffer = Allocate(override_allocator, total_size);
+			}
+
+			uintptr_t ptr = (uintptr_t)allocated_buffer;
 			name.InitializeAndCopy(ptr, name);
 
 			UIDrawerMenuWindow* menu_windows = (UIDrawerMenuWindow*)ptr;
@@ -9265,10 +9338,22 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIActionHandler UIDrawer::PrepareRightClickHandler(Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler)
+		UIActionHandler UIDrawer::PrepareRightClickHandler(
+			Stream<char> name, 
+			UIDrawerMenuState* menu_state, 
+			UIActionHandler custom_handler,
+			AllocatorPolymorphic override_allocator
+		)
 		{
-			UIDrawerMenuRightClickData* right_click = (UIDrawerMenuRightClickData*)GetTempBuffer(sizeof(UIDrawerMenuRightClickData));
-			*right_click = PrepareRightClickActionData(name, menu_state, custom_handler);
+			UIDrawerMenuRightClickData* right_click = nullptr;
+			if (override_allocator.allocator == nullptr) {
+				right_click = (UIDrawerMenuRightClickData*)GetTempBuffer(sizeof(UIDrawerMenuRightClickData));
+			}
+			else {
+				right_click = (UIDrawerMenuRightClickData*)Allocate(override_allocator, sizeof(UIDrawerMenuRightClickData));
+			}
+
+			*right_click = PrepareRightClickActionData(name, menu_state, custom_handler, override_allocator);
 			return { RightClickMenu, right_click, sizeof(*right_click), ECS_UI_DRAW_SYSTEM };
 		}
 
@@ -9283,7 +9368,9 @@ namespace ECSEngine {
 			UIActionHandler custom_handler
 		)
 		{
-			AddClickable(configuration, position, scale, PrepareRightClickHandler(name, menu_state, custom_handler), ECS_MOUSE_RIGHT);
+			if (record_actions) {
+				AddClickable(configuration, position, scale, PrepareRightClickHandler(name, menu_state, custom_handler), ECS_MOUSE_RIGHT);
+			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9301,21 +9388,23 @@ namespace ECSEngine {
 			float percentage,
 			ECS_MOUSE_BUTTON button_type
 		) {
-			UIDefaultTextHoverableData hoverable_data;
-			hoverable_data.color = color;
-			hoverable_data.percentage = percentage;
-			hoverable_data.character_spacing = font.character_spacing;
-			hoverable_data.font_size = GetFontSize();
-			hoverable_data.text = text;
-			if (font_color == ECS_COLOR_WHITE) {
-				hoverable_data.text_color = color_theme.text;
-			}
-			else {
-				hoverable_data.text_color = font_color;
-			}
-			hoverable_data.text_offset = text_offset;
+			if (record_actions) {
+				UIDefaultTextHoverableData hoverable_data;
+				hoverable_data.color = color;
+				hoverable_data.percentage = percentage;
+				hoverable_data.character_spacing = font.character_spacing;
+				hoverable_data.font_size = GetFontSize();
+				hoverable_data.text = text;
+				if (font_color == ECS_COLOR_WHITE) {
+					hoverable_data.text_color = color_theme.text;
+				}
+				else {
+					hoverable_data.text_color = font_color;
+				}
+				hoverable_data.text_offset = text_offset;
 
-			AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler, button_type);
+				AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler, button_type);
+			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9331,15 +9420,17 @@ namespace ECSEngine {
 			ECS_UI_DRAW_PHASE phase,
 			ECS_MOUSE_BUTTON button_type
 		) {
-			hoverable_data->character_spacing = font.character_spacing;
-			hoverable_data->font_size = GetFontSize();
-			if (text_color == ECS_COLOR_WHITE) {
-				hoverable_data->text_color = color_theme.text;
+			if (record_actions) {
+				hoverable_data->character_spacing = font.character_spacing;
+				hoverable_data->font_size = GetFontSize();
+				if (text_color == ECS_COLOR_WHITE) {
+					hoverable_data->text_color = color_theme.text;
+				}
+				else {
+					hoverable_data->text_color = text_color;
+				}
+				AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, hoverable_data, sizeof(*hoverable_data), phase }, handler, button_type);
 			}
-			else {
-				hoverable_data->text_color = text_color;
-			}
-			AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, hoverable_data, sizeof(*hoverable_data), phase }, handler, button_type);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9354,7 +9445,7 @@ namespace ECSEngine {
 			ECS_UI_DRAW_PHASE hoverable_phase,
 			ECS_MOUSE_BUTTON button_type
 		) {
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				UISystemDefaultHoverableClickableData data;
 				data.border_index = border_index;
 				data.clickable_handler = handler;
@@ -9392,7 +9483,7 @@ namespace ECSEngine {
 			ECS_MOUSE_BUTTON button_type
 		)
 		{
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				UISystemDefaultHoverableClickableData data;
 				data.border_index = border_index;
 				data.clickable_handler = handler;
@@ -9428,7 +9519,7 @@ namespace ECSEngine {
 			UIActionHandler handler,
 			ECS_MOUSE_BUTTON button_type
 		) {
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				ECS_ASSERT(count <= ECS_TOOLS_UI_DEFAULT_HOVERABLE_DATA_COUNT);
 
 				UISystemDefaultHoverableClickableData data;
@@ -9470,7 +9561,7 @@ namespace ECSEngine {
 			ECS_MOUSE_BUTTON button_type
 		)
 		{
-			if (!initializer) {
+			if (!initializer && record_actions) {
 				ECS_ASSERT(count <= ECS_TOOLS_UI_DEFAULT_HOVERABLE_DATA_COUNT);
 
 				UISystemDefaultHoverableClickableData data;
@@ -9492,6 +9583,23 @@ namespace ECSEngine {
 				data.button_type = button_type;
 				system->WriteReservedDefaultHoverableClickable(reserved_hoverable, reserved_clickable, data);
 			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::SnapshotRunnable(UIDockspaceBorderDrawSnapshotRunnable runnable)
+		{
+			ActionData action_data = GetDummyActionData();
+			if (runnable.draw_phase == ECS_UI_DRAW_SYSTEM) {
+				action_data.buffers = system_buffers;
+				action_data.counts = system_counts;
+			}
+			else {
+				action_data.buffers = buffers;
+				action_data.counts = counts;
+			}
+			runnable.function(runnable.data, &action_data);
+			AddSnapshotRunnable(runnable);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9733,39 +9841,41 @@ namespace ECSEngine {
 							size_t* count = HandleTextSpriteCount(configuration);
 
 							if (*count > previous_text_sprite_count) {
-								size_t text_vertex_count = *count - previous_text_sprite_count;
+								if (record_actions) {
+									size_t text_vertex_count = *count - previous_text_sprite_count;
 
-								UIDefaultTextHoverableData hoverable_data;
-								hoverable_data.color = label_color;
+									UIDefaultTextHoverableData hoverable_data;
+									hoverable_data.color = label_color;
 
-								float2 text_position = sprite_vertex[*count - text_vertex_count].position;
-								text_position.y = -text_position.y;
-								float2 offset = text_position - position;
-								hoverable_data.text_offset = offset;
-								
-								Color text_color;
-								float2 text_size;
-								float text_character_spacing;
-								HandleText(configuration, config, text_color, text_size, text_character_spacing);
+									float2 text_position = sprite_vertex[*count - text_vertex_count].position;
+									text_position.y = -text_position.y;
+									float2 offset = text_position - position;
+									hoverable_data.text_offset = offset;
 
-								hoverable_data.character_spacing = text_character_spacing;
-								hoverable_data.font_size = text_size;
-								hoverable_data.text_color = text_color;
+									Color text_color;
+									float2 text_size;
+									float text_character_spacing;
+									HandleText(configuration, config, text_color, text_size, text_character_spacing);
 
-								ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL;
-								if (configuration & UI_CONFIG_LATE_DRAW) {
-									hoverable_phase = ECS_UI_DRAW_LATE;
+									hoverable_data.character_spacing = text_character_spacing;
+									hoverable_data.font_size = text_size;
+									hoverable_data.text_color = text_color;
+
+									ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL;
+									if (configuration & UI_CONFIG_LATE_DRAW) {
+										hoverable_phase = ECS_UI_DRAW_LATE;
+									}
+									else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
+										hoverable_phase = ECS_UI_DRAW_SYSTEM;
+									}
+
+									AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), hoverable_phase }, handler);
+
+									UIDefaultTextHoverableData* handler_hoverable_data = (UIDefaultTextHoverableData*)system->GetLastHoverableData(dockspace, border_index);
+									Stream<char> identifier = HandleResourceIdentifier(text);
+									handler_hoverable_data->text.buffer = (char*)GetHandlerBuffer(identifier.size, hoverable_phase);
+									handler_hoverable_data->text.CopyOther(identifier);
 								}
-								else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-									hoverable_phase = ECS_UI_DRAW_SYSTEM;
-								}
-
-								AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), hoverable_phase }, handler);
-							
-								UIDefaultTextHoverableData* handler_hoverable_data = (UIDefaultTextHoverableData*)system->GetLastHoverableData(dockspace, border_index);
-								Stream<char> identifier = HandleResourceIdentifier(text);
-								handler_hoverable_data->text.buffer = (char*)GetHandlerBuffer(identifier.size, hoverable_phase);
-								handler_hoverable_data->text.CopyOther(identifier);
 							}
 						}
 					}
@@ -9777,23 +9887,33 @@ namespace ECSEngine {
 				}
 
 				if (configuration & UI_CONFIG_RECTANGLE_TOOL_TIP) {
-					if (IsMouseInRectangle(position, scale)) {
-						const UIConfigToolTip* tool_tip = (const UIConfigToolTip*)config.GetParameter(UI_CONFIG_RECTANGLE_TOOL_TIP);
+					const UIConfigToolTip* tool_tip = (const UIConfigToolTip*)config.GetParameter(UI_CONFIG_RECTANGLE_TOOL_TIP);
 
+					struct RunnableData {
 						UITextTooltipHoverableData hover_data;
-						hover_data.characters = tool_tip->characters;
-						hover_data.base.offset.y = 0.01f;
-						hover_data.base.offset_scale.y = true;
-						hover_data.base.center_horizontal_x = true;
+						float2 position;
+						float2 scale;
+					};
 
-						ActionData action_data = system->GetFilledActionData(window_index);
-						action_data.data = &hover_data;
-						action_data.buffers = system_buffers;
-						action_data.counts = system_counts;
-						action_data.position = position;
-						action_data.scale = scale;
-						TextTooltipHoverable(&action_data);
+					RunnableData runnable_data;
+					runnable_data.hover_data.characters = tool_tip->characters;
+					runnable_data.hover_data.base.offset.y = 0.01f;
+					runnable_data.hover_data.base.offset_scale.y = true;
+					runnable_data.hover_data.base.center_horizontal_x = true;
+					runnable_data.position = position;
+					runnable_data.scale = scale;
+					if (record_snapshot_runnables) {
+						runnable_data.hover_data.characters = tool_tip->is_stable ? tool_tip->characters : tool_tip->characters.Copy(SnapshotRunnableAllocator());
 					}
+						
+					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_SYSTEM, [](void* _data, ActionData* action_data) {
+						RunnableData* data = (RunnableData*)_data;
+						if (IsPointInRectangle(action_data->mouse_position, data->position, data->scale)) {
+							action_data->data = &data->hover_data;
+							TextTooltipHoverable(action_data);
+						}
+						return false;
+					});
 				}
 			}
 			else {
@@ -12047,7 +12167,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		ActionData UIDrawer::GetDummyActionData() {
-			return system->GetFilledActionData(window_index);
+			return cached_filled_action_data;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -12174,34 +12294,6 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		bool UIDrawer::HasClicked(float2 position, float2 scale) {
-			return IsMouseInRectangle(position, scale) && system->m_mouse->IsPressed(ECS_MOUSE_LEFT);
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		bool UIDrawer::IsClicked(float2 position, float2 scale)
-		{
-			return IsMouseInRectangle(position, scale) && system->m_mouse->IsDown(ECS_MOUSE_LEFT);
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		bool UIDrawer::IsMouseInRectangle(float2 position, float2 scale) {
-			if (IsPointInRectangle(mouse_position, position, scale)) {
-				// Search to see if it is the top most window
-				UIDockspace* top_most_dockspace;
-				DockspaceType top_most_dockspace_type;
-				unsigned int top_most_border_index = system->GetDockspaceRegionFromMouse(mouse_position, &top_most_dockspace, top_most_dockspace_type);
-				if (border_index == top_most_border_index && top_most_dockspace == dockspace && top_most_dockspace_type == dockspace_type) {
-					return true;
-				}
-			}
-			return false;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
 		bool UIDrawer::IsActiveWindow() const
 		{
 			return window_index == system->GetActiveWindow();
@@ -12293,14 +12385,11 @@ namespace ECSEngine {
 					hash_table_capacity = capacity->capacity;
 				}
 
-				size_t total_size = data->active_label.MemoryOf(max_characters) + data->selected_label_temporary.MemoryOf(max_characters) +
-					data->right_click_label_temporary.MemoryOf(max_characters) + data->label_states.MemoryOf(hash_table_capacity);
+				size_t total_size = data->active_label.MemoryOf(max_characters) + data->label_states.MemoryOf(hash_table_capacity);
 				void* allocation = GetMainAllocatorBuffer(total_size);
 				uintptr_t allocation_ptr = (uintptr_t)allocation;
 				data->label_states.InitializeFromBuffer(allocation_ptr, hash_table_capacity);
-				data->active_label.InitializeFromBuffer(allocation_ptr, max_characters);
-				data->selected_label_temporary.InitializeFromBuffer(allocation_ptr, max_characters);
-				data->right_click_label_temporary.InitializeFromBuffer(allocation_ptr, max_characters);
+				data->active_label.InitializeFromBuffer(allocation_ptr, 0, max_characters);
 
 				if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_SELECTABLE_CALLBACK) {
 					const UIConfigFilesystemHierarchySelectableCallback* callback = (const UIConfigFilesystemHierarchySelectableCallback*)config.GetParameter(UI_CONFIG_FILESYSTEM_HIERARCHY_SELECTABLE_CALLBACK);
@@ -12559,11 +12648,27 @@ namespace ECSEngine {
 						);
 
 						float2 action_scale = { horizontal_bound - initial_label_position.x, scale.y };
-						if (IsMouseInRectangle(initial_label_position, action_scale) && system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
-							data->selected_label_temporary.CopyOther(label_stream);
-						}
 
-						AddClickable(configuration, initial_label_position, action_scale, { FilesystemHierarchySelectable, data, 0, selectable_callback_phase });
+						auto copy_clickable_function = [](void* _data, AllocatorPolymorphic allocator) {
+							UIDrawerFilesystemHierarchySelectableData* data = (UIDrawerFilesystemHierarchySelectableData*)_data;
+							data->label = data->label.Copy(allocator);
+						};
+
+						UIDrawerFilesystemHierarchySelectableData clickable_data = { data };
+						clickable_data.label = label_stream.Copy(TemporaryAllocator(this, selectable_callback_phase));
+						AddClickable(
+							configuration, 
+							initial_label_position, 
+							action_scale, 
+							{ 
+								FilesystemHierarchySelectable, 
+								&clickable_data, 
+								sizeof(clickable_data), 
+								selectable_callback_phase 
+							}, 
+							ECS_MOUSE_LEFT, 
+							copy_clickable_function
+						);
 						//AddDefaultHoverable(configuration, initial_label_position, action_scale, current_color);
 
 						UIDrawerFilesystemHierarchyChangeStateData change_state_data;
@@ -12592,38 +12697,53 @@ namespace ECSEngine {
 						}
 
 						if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_RIGHT_CLICK) {
-							bool trigger = IsMouseInRectangle(initial_label_position, action_scale) && system->m_mouse->IsReleased(ECS_MOUSE_RIGHT);
-							if (trigger) {
-								data->right_click_label_temporary.CopyOther(label_stream);
-								data->selected_label_temporary.CopyOther(label_stream);
-							}
+							if (record_actions) {
+								struct RightClickWrapperData {
+									UIDrawerFilesystemHierarchy* data;
+									Stream<char> label;
+								};
 
-							UIDrawerFilesystemHierarchyRightClickData right_click;
-							right_click.data = data->right_click_callback_data;
-							right_click.label = data->right_click_label_temporary;
-							AddClickable(
-								configuration, 
-								initial_label_position, 
-								action_scale, 
-								{ data->right_click_callback, &right_click, sizeof(right_click), right_click_phase },
-								ECS_MOUSE_RIGHT
-							);
+								auto right_click_wrapper = [](ActionData* action_data) {
+									UI_UNPACK_ACTION_DATA;
 
-							if (trigger) {
-								data->active_label.CopyOther(data->selected_label_temporary);
-								data->active_label[data->active_label.size] = '\0';
+									RightClickWrapperData* data = (RightClickWrapperData*)_data;
 
-								if (data->selectable_callback != nullptr) {
-									ActionData action_data = GetDummyActionData();
-									action_data.buffers = buffers;
-									action_data.counts = counts;
-									action_data.mouse_position = mouse_position;
-									action_data.position = initial_label_position;
-									action_data.scale = action_scale;
-									action_data.additional_data = data->active_label.buffer;
-									action_data.data = data->selectable_callback_data;
-									data->selectable_callback(&action_data);
-								}
+									if (IsPointInRectangle(mouse_position, position, scale) && mouse->IsReleased(ECS_MOUSE_RIGHT)) {
+										data->data->active_label.CopyOther(data->label);
+										ECS_ASSERT(data->data->active_label.size < data->data->active_label.capacity);
+										data->data->active_label[data->data->active_label.size] = '\0';
+
+										// Call the right click callback first, then the selectable one
+										UIDrawerFilesystemHierarchyUserRightClickData right_click_data;
+										right_click_data.data = data->data->right_click_callback_data;
+										right_click_data.label = data->label;
+										action_data->data = &right_click_data;
+										data->data->right_click_callback(action_data);
+
+										if (data->data->selectable_callback != nullptr) {
+											action_data->additional_data = data->data->active_label.buffer;
+											action_data->data = data->data->selectable_callback_data;
+											data->data->selectable_callback(action_data);
+										}
+									}
+								};
+
+								auto right_click_copy_function = [](void* _data, AllocatorPolymorphic allocator) {
+									RightClickWrapperData* data = (RightClickWrapperData*)_data;
+									data->label = data->label.Copy(allocator);
+								};
+
+								RightClickWrapperData right_click;
+								right_click.data = data;
+								right_click.label = label_stream.Copy(TemporaryAllocator(this, right_click_phase));
+								AddClickable(
+									configuration,
+									initial_label_position,
+									action_scale,
+									{ right_click_wrapper, &right_click, sizeof(right_click), right_click_phase },
+									ECS_MOUSE_RIGHT,
+									right_click_copy_function
+								);
 							}
 						}
 
@@ -12649,7 +12769,7 @@ namespace ECSEngine {
 					ResourceIdentifier identifier = data->label_states.GetIdentifierFromIndex(index);
 
 					system->RemoveWindowMemoryResource(window_index, identifier.ptr);
-					system->m_memory->Deallocate(identifier.ptr);
+					Deallocate(system->Allocator(), identifier.ptr);
 					data->label_states.EraseFromIndex(index);
 					return true;
 				}
@@ -12864,9 +12984,15 @@ namespace ECSEngine {
 				monitor_selection = (UIConfigLabelHierarchyMonitorSelection*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_MONITOR_SELECTION);
 				data->monitor_selection = *monitor_selection;
 				data->has_monitor_selection = true;
-				if (monitor_selection->ShouldUpdate()) {
-					data->ChangeSelection(monitor_selection->Selection(), &action_data);
-				}
+
+				SnapshotRunnable(data, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+					UIDrawerLabelHierarchyData* data = (UIDrawerLabelHierarchyData*)_data;
+					if (data->monitor_selection.ShouldUpdate()) {
+						data->ChangeSelection(data->monitor_selection.Selection(), action_data);
+						return true;
+					}
+					return false;
+				});
 			}
 
 			// The aggregate phase - the "latest" phase of them all. Can't satisfy different phases
@@ -13069,11 +13195,65 @@ namespace ECSEngine {
 						bool is_dragging = data->is_dragging;
 						if (is_dragging) {
 							// Record the hovered label
-							if (IsMouseInRectangle(current_position, current_scale)) {
-								data->SetHoveredLabel(untyped_label);
-								// Display a hovered highlight
-								SpriteRectangle(configuration, current_position, current_scale, ECS_TOOLS_UI_TEXTURE_MASK, drag_highlight_color);
+							struct RunnableData {
+								ECS_INLINE RunnableData() {}
+
+								float2 position;
+								float2 scale;
+								union {
+									Stream<char> char_label;
+									size_t untyped_label[32];
+								};
+								UIDrawerLabelHierarchyData* data;
+								Color drag_highlight_color;
+							};
+
+							ECS_ASSERT(data->label_size <= sizeof(RunnableData::untyped_label));
+
+							RunnableData runnable_data;
+							runnable_data.data = data;
+							runnable_data.position = current_position;
+							runnable_data.scale = current_scale;
+							runnable_data.drag_highlight_color = drag_highlight_color;
+							if (data->label_size != 0) {
+								memcpy(runnable_data.untyped_label, untyped_label, data->label_size);
 							}
+							else {
+								if (record_snapshot_runnables) {
+									runnable_data.char_label = current_label.Copy(SnapshotRunnableAllocator());
+								}
+								else {
+									runnable_data.char_label = current_label;
+								}
+							}
+
+							SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+								RunnableData* runnable_data = (RunnableData*)_data;
+								UIDrawerLabelHierarchyData* data = runnable_data->data;
+
+								float2 position = runnable_data->position;
+								float2 scale = runnable_data->scale;
+								if (IsPointInRectangle(action_data->mouse_position, position, scale)) {
+									// We could have referenced the untyped label directly since it is type punned in
+									// The union with the untyped label but this is more explicit
+									const void* untyped_label = data->label_size > 0 ? runnable_data->untyped_label : (const void*)&runnable_data->char_label;
+									data->SetHoveredLabel(untyped_label);
+
+									// Display a hovered highlight
+									action_data->system->SetSprite(
+										action_data->dockspace,
+										action_data->border_index,
+										ECS_TOOLS_UI_TEXTURE_MASK,
+										position,
+										scale,
+										action_data->buffers,
+										action_data->counts,
+										runnable_data->drag_highlight_color
+									);
+									return true;
+								}
+								return false;
+							});
 						}
 
 						if (!active_renamed) {
@@ -13143,6 +13323,12 @@ namespace ECSEngine {
 								SolidColorRectangle(configuration, current_position, current_scale, current_color);
 							}
 						}
+					}
+					else {
+						if (~configuration & UI_CONFIG_DO_NOT_UPDATE_RENDER_BOUNDS) {
+							UpdateRenderBoundsRectangle(position, scale);
+						}
+						UpdateCurrentScale(position, scale);
 					}
 
 					//FinalizeRectangle(configuration, current_position, current_scale);
@@ -15238,7 +15424,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		static void SetWholeWindowHandler(const UIDrawer* drawer, UIHandler* handler, const UIActionHandler* action_handler) {
+		static void SetWholeWindowHandler(const UIDrawer* drawer, UIHandler* handler, const UIActionHandler* action_handler, UIHandlerCopyBuffers copy_function) {
 			// Check for other whole window actions and override them
 			// While leaving all other actions after this one
 			unsigned int handler_count = handler->GetLastHandlerIndex() + 1;
@@ -15252,31 +15438,39 @@ namespace ECSEngine {
 				}
 			}
 			index++;
-			drawer->system->AddHandlerToDockspaceRegionAtIndex(drawer->thread_id, handler, drawer->GetRegionPosition(), drawer->GetRegionScale(), *action_handler, index);
+			drawer->system->AddHandlerToDockspaceRegionAtIndex(
+				drawer->thread_id, 
+				handler, 
+				drawer->GetRegionPosition(), 
+				drawer->GetRegionScale(),
+				*action_handler, 
+				copy_function, 
+				index
+			);
 		}
 
-		void UIDrawer::SetWindowHoverable(const UIActionHandler* handler) {
+		void UIDrawer::SetWindowHoverable(const UIActionHandler* handler, UIHandlerCopyBuffers copy_function) {
 			if (!initializer) {
 				UIHandler* border_handler = system->GetDockspaceBorderHandler(dockspace, border_index, true, ECS_MOUSE_BUTTON_COUNT, false);
-				SetWholeWindowHandler(this, border_handler, handler);
+				SetWholeWindowHandler(this, border_handler, handler, copy_function);
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::SetWindowClickable(const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type) {
+		void UIDrawer::SetWindowClickable(const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type, UIHandlerCopyBuffers copy_function) {
 			if (!initializer) {
 				UIHandler* border_handler = system->GetDockspaceBorderHandler(dockspace, border_index, false, button_type, false);
-				SetWholeWindowHandler(this, border_handler, handler);
+				SetWholeWindowHandler(this, border_handler, handler, copy_function);
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::SetWindowGeneral(const UIActionHandler* handler) {
+		void UIDrawer::SetWindowGeneral(const UIActionHandler* handler, UIHandlerCopyBuffers copy_function) {
 			if (!initializer) {
 				UIHandler* border_handler = system->GetDockspaceBorderHandler(dockspace, border_index, false, ECS_MOUSE_BUTTON_COUNT, true);
-				SetWholeWindowHandler(this, border_handler, handler);
+				SetWholeWindowHandler(this, border_handler, handler, copy_function);
 			}
 		}
 
@@ -15477,6 +15671,58 @@ namespace ECSEngine {
 				else {
 					clickable_data.notifier = nullptr;
 				}
+
+				struct HoverableData {
+					Color theme_color;
+					Color checkbox_color;
+					Color checkbox_background_color;
+					float2 check_box_position;
+					float2 check_box_scale;
+				};
+
+				auto hoverable_action = [](ActionData* action_data) {
+					UI_UNPACK_ACTION_DATA;
+
+					HoverableData* data = (HoverableData*)_data;
+
+					// Draw first the entire background
+					UIDefaultHoverableData entire_hoverable;
+					entire_hoverable.colors[0] = data->theme_color;
+					entire_hoverable.percentages[0] = 1.0f;
+					action_data->data = &entire_hoverable;
+					DefaultHoverableAction(action_data);
+
+					UIDefaultHoverableData check_box_hoverable;
+					check_box_hoverable.colors[0] = data->checkbox_background_color;
+					check_box_hoverable.positions[0] = data->check_box_position;
+					check_box_hoverable.scales[0] = data->check_box_scale;
+					check_box_hoverable.count = 1;
+					check_box_hoverable.is_single_action_parameter_draw = false;
+					action_data->data = &check_box_hoverable;
+					DefaultHoverableAction(action_data);
+
+					SetSpriteRectangle(
+						data->check_box_position,
+						data->check_box_scale,
+						data->checkbox_color,
+						{ 0.0f, 0.0f },
+						{ 1.0f, 1.0f },
+						buffers,
+						counts,
+						ECS_TOOLS_UI_SPRITE
+					);
+				};
+
+				auto fill_hoverable_data = [&]() {
+					HoverableData hoverable_data;
+					hoverable_data.theme_color = color_theme.theme;
+					hoverable_data.checkbox_color = checkbox_color;
+					hoverable_data.checkbox_background_color = background_color;
+					hoverable_data.check_box_position = current_position;
+					hoverable_data.check_box_scale = square_scale;
+					return hoverable_data;
+				};
+
 				for (size_t index = 0; index < data->labels.size; index++) {
 					current_row_y_scale = square_scale.y;
 
@@ -15491,21 +15737,22 @@ namespace ECSEngine {
 					clickable_data.state = destination_ptr;
 
 					if (*destination_ptr) {
-						Color current_color = background_color;
-						Color current_checkbox_color = checkbox_color;
-						if (IsMouseInRectangle(current_position, { scale.x, square_scale.y })) {
-							current_color = LightenColorClamp(current_color, 1.5f);
-							current_checkbox_color = LightenColorClamp(current_checkbox_color, 1.5f);
-						}
-
-						SolidColorRectangle(UI_CONFIG_LATE_DRAW, current_position, square_scale, current_color);
-						SpriteRectangle(UI_CONFIG_LATE_DRAW, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, current_checkbox_color);
+						SolidColorRectangle(UI_CONFIG_LATE_DRAW, current_position, square_scale, background_color);
+						SpriteRectangle(UI_CONFIG_LATE_DRAW, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, checkbox_color);
 					}
 
-					AddDefaultClickableHoverable(configuration, current_position, { scale.x, square_scale.y }, { StateTableBoolClickable, &clickable_data, sizeof(clickable_data) }, background_color);
+					HoverableData hoverable_data = fill_hoverable_data();
+					AddDefaultClickable(
+						configuration, 
+						current_position, 
+						{ scale.x, square_scale.y },
+						{ hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_LATE },
+						{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data) }
+					);
 
 					current_position.x += square_scale.x + element_descriptor.label_padd.x;
-					Text(configuration | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_ALIGN_TO_ROW_Y, config, data->labels.buffer + index, current_position);
+					Text(configuration | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_ALIGN_TO_ROW_Y
+						| UI_CONFIG_LATE_DRAW, config, data->labels.buffer + index, current_position);
 					NextRow();
 
 					current_position = { current_x - region_render_offset.x, current_y - region_render_offset.y };
@@ -15528,15 +15775,8 @@ namespace ECSEngine {
 					}
 
 					if (all_true) {
-						Color current_color = background_color;
-						Color current_checkbox_color = checkbox_color;
-						if (IsMouseInRectangle(current_position, { scale.x, square_scale.y })) {
-							current_color = LightenColorClamp(current_color, 1.5f);
-							current_checkbox_color = LightenColorClamp(current_checkbox_color, 1.5f);
-						}
-
-						SolidColorRectangle(UI_CONFIG_LATE_DRAW, current_position, square_scale, current_color);
-						SpriteRectangle(UI_CONFIG_LATE_DRAW, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, current_checkbox_color);
+						SolidColorRectangle(UI_CONFIG_LATE_DRAW, current_position, square_scale, background_color);
+						SpriteRectangle(UI_CONFIG_LATE_DRAW, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, checkbox_color);
 					}
 
 					UIDrawerStateTableAllButtonData button_data;
@@ -15554,16 +15794,18 @@ namespace ECSEngine {
 						button_data.notifier = nullptr;
 					}
 
-					AddDefaultClickableHoverable(
+					HoverableData hoverable_data = fill_hoverable_data();
+					AddDefaultClickable(
 						configuration, 
 						current_position, 
-						{ scale.x, square_scale.y }, 
-						{ StateTableAllButtonAction, &button_data, sizeof(button_data) }, 
-						background_color
+						{ scale.x, square_scale.y },
+						{ hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_LATE },
+						{ StateTableAllButtonAction, &button_data, sizeof(button_data) }
 					);
 
 					current_position.x += square_scale.x + element_descriptor.label_padd.x;
-					Text(configuration | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_ALIGN_TO_ROW_Y, config, "All", current_position);
+					Text(configuration | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_ALIGN_TO_ROW_Y
+						| UI_CONFIG_LATE_DRAW, config, "All", current_position);
 					NextRow();
 
 					current_position = { current_x - region_render_offset.x, current_y - region_render_offset.y };
@@ -16451,15 +16693,17 @@ namespace ECSEngine {
 			ECS_UI_DRAW_PHASE phase
 		)
 		{
-			size_t total_storage[256];
-			unsigned int write_size = sizeof(*data);
-			if (!stable_characters) {
-				UITextTooltipHoverableData* stack_data = (UITextTooltipHoverableData*)total_storage;
-				memcpy(stack_data, data, sizeof(*data));
-				write_size = stack_data->Write(data->characters);
-				data = stack_data;
+			if (record_actions) {
+				size_t total_storage[256];
+				unsigned int write_size = sizeof(*data);
+				if (!stable_characters) {
+					UITextTooltipHoverableData* stack_data = (UITextTooltipHoverableData*)total_storage;
+					memcpy(stack_data, data, sizeof(*data));
+					write_size = stack_data->Write(data->characters);
+					data = stack_data;
+				}
+				return { TextTooltipHoverable, (void*)data, write_size, phase };
 			}
-			return { TextTooltipHoverable, (void*)data, write_size, phase };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -16877,6 +17121,8 @@ namespace ECSEngine {
 			UIDrawerDescriptor descriptor = drawer_to_copy.system->GetDrawerDescriptor(drawer_to_copy.window_index);
 			descriptor.do_not_initialize_viewport_sliders = true;
 			descriptor.do_not_allocate_buffers = true;
+			descriptor.record_handlers = false;
+			descriptor.record_snapshot_runnables = false;
 
 			UIDrawer drawer = UIDrawer(
 				descriptor,

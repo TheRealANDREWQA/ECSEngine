@@ -380,7 +380,10 @@ namespace ECSEngine {
 	}
 
 	// Only linear/stack/multipool/arena are considered base allocator types
-	ECSENGINE_API size_t BaseAllocatorSize(ECS_ALLOCATOR_TYPE type);
+	ECSENGINE_API size_t BaseAllocatorByteSize(ECS_ALLOCATOR_TYPE type);
+
+	// The maximum allocation this allocator supports
+	ECSENGINE_API size_t BaseAllocatorMaxAllocationSize(CreateBaseAllocatorInfo info);
 
 	ECSENGINE_API size_t BaseAllocatorBufferSize(CreateBaseAllocatorInfo info);
 

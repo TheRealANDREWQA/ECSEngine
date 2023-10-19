@@ -78,6 +78,10 @@ namespace ECSEngine {
 			}
 		}
 		
+		if (size > BaseAllocatorMaxAllocationSize(memory_manager->m_backup_info)) {
+			return nullptr;
+		}
+
 		bool was_acquired = true;
 		if constexpr (thread_safe) {
 			was_acquired = memory_manager->m_spin_lock.try_lock();
@@ -204,7 +208,7 @@ namespace ECSEngine {
 
 		manager->m_allocator_count = 0;
 		manager->m_backup = backup;
-		size_t base_allocator_size = BaseAllocatorSize(initial_info.allocator_type);
+		size_t base_allocator_size = BaseAllocatorByteSize(initial_info.allocator_type);
 		void* allocation = AllocateTsEx(backup, (base_allocator_size)*ECS_MEMORY_MANAGER_SIZE);
 		manager->m_allocators = allocation;
 		manager->m_backup_info = backup_info;
@@ -301,7 +305,7 @@ namespace ECSEngine {
 
 	void MemoryManager::Trim()
 	{
-		size_t allocator_byte_size = BaseAllocatorSize(m_backup.allocator_type);
+		size_t allocator_byte_size = BaseAllocatorByteSize(m_backup.allocator_type);
 		for (size_t index = 1; index < m_allocator_count; index++) {
 			AllocatorPolymorphic current_allocator = GetAllocator(index);
 			if (IsAllocatorEmpty(current_allocator)) {

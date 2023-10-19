@@ -6,8 +6,8 @@
 namespace ECSEngine {
 
 	struct EntityHierarchyHash {
-		static inline unsigned int Hash(Entity entity) {
-			return (entity.value + entity.value) * entity.value;
+		ECS_INLINE static unsigned int Hash(Entity entity) {
+			return entity.value;
 		};
 	};
 	

@@ -153,11 +153,8 @@ namespace ECSEngine {
 
 	ECS_THREAD_WRAPPER_TASK(StaticTaskSchedulerWrapper) {
 		TaskScheduler* scheduler = world->task_scheduler;
-		
-		int task_index = world->task_manager->GetThreadTaskIndex();
-		if (task_index < scheduler->task_barriers.size && scheduler->task_barriers[task_index] == ECS_TASK_SCHEDULER_BARRIER_PRESENT) {
-			//world->task_manager->WaitThreads();
-		}
+
+		// The waiting was moved to the task manager - it now has a barrier
 
 		// Can now call the thread function
 		task.function(thread_id, world, task.data);

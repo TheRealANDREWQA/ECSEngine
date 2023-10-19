@@ -12,7 +12,7 @@ namespace ECSEngine {
 		ECS_ASSERT(allocator_count < UCHAR_MAX);
 
 		ECS_ALLOCATOR_TYPE nested_type = base_info.allocator_type == ECS_ALLOCATOR_ARENA ? base_info.arena_nested_type : base_info.allocator_type;
-		size_t allocator_size = BaseAllocatorSize(nested_type) * allocator_count;
+		size_t allocator_size = BaseAllocatorByteSize(nested_type) * allocator_count;
 		size_t total_allocation_size = base_info.allocator_type == ECS_ALLOCATOR_ARENA ? 
 			arena->MemoryOf(allocator_count, base_info.arena_capacity, base_info.arena_nested_type) : 
 			arena->MemoryOf(allocator_count, base_info);
@@ -275,12 +275,12 @@ namespace ECSEngine {
 
 	size_t MemoryArena::MemoryOf(size_t allocator_count, CreateBaseAllocatorInfo info)
 	{
-		return allocator_count * (BaseAllocatorBufferSize(info) + BaseAllocatorSize(info.allocator_type));
+		return allocator_count * (BaseAllocatorBufferSize(info) + BaseAllocatorByteSize(info.allocator_type));
 	}
 
 	size_t MemoryArena::MemoryOf(size_t allocator_count, size_t total_capacity, ECS_ALLOCATOR_TYPE allocator_type)
 	{
-		return allocator_count * BaseAllocatorSize(allocator_type) + total_capacity;
+		return allocator_count * BaseAllocatorByteSize(allocator_type) + total_capacity;
 	}
 
 }

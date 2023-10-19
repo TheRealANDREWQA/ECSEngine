@@ -28,7 +28,7 @@ namespace ECSEngine {
 			void* allocation = system->m_memory->Allocate(system->m_descriptors.misc.window_handler_revert_command_count * sizeof(HandlerCommand));
 			window_data->revert_commands = Stack<HandlerCommand>(allocation, system->m_descriptors.misc.window_handler_revert_command_count);
 			window_data->last_frame = system->GetFrameIndex();
-			window_data->commit_cursor = ECS_CURSOR_TYPE::ECS_CURSOR_DEFAULT;
+			window_data->commit_cursor = ECS_CURSOR_DEFAULT;
 
 			const char* window_name = (const char*)_additional_data;
 
@@ -609,7 +609,7 @@ namespace ECSEngine {
 					}
 				}
 
-				system->m_focused_window_data.always_hoverable = true;
+				//system->m_focused_window_data.always_hoverable = true;
 				UIDefaultWindowHandler* default_handler_data = system->GetDefaultWindowHandlerData(window_index);
 				default_handler_data->ChangeCursor(ECS_CURSOR_IBEAM);
 			}
@@ -810,8 +810,7 @@ namespace ECSEngine {
 							},
 							system->m_descriptors.color_theme.hierarchy_drag_node_bar,
 							buffers,
-							counts,
-							0
+							counts
 						);
 
 						if (data->previous_index != index) {
@@ -884,11 +883,14 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		void GraphHoverable(ActionData* action_data) {
-			constexpr size_t tool_tip_character_count = 128;
-
 			UI_UNPACK_ACTION_DATA;
+			
+			const size_t tool_tip_character_count = 128;
 
 			UIDrawerGraphHoverableData* data = (UIDrawerGraphHoverableData*)_data;
+
+			// Draw the line
+			SetLine(data->line_start, data->line_end, data->line_color, counts, buffers);
 
 			char tool_tip_characters[tool_tip_character_count];
 			Stream<char> tool_tip_stream = Stream<char>(tool_tip_characters, 0);
@@ -924,8 +926,9 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		void HistogramHoverable(ActionData* action_data) {
-			constexpr size_t temp_character_count = 128;
 			UI_UNPACK_ACTION_DATA;
+			
+			constexpr size_t temp_character_count = 128;
 
 			UIDrawerHistogramHoverableData* data = (UIDrawerHistogramHoverableData*)_data;
 			char stack_memory[temp_character_count];
@@ -940,7 +943,15 @@ namespace ECSEngine {
 
 			data->tool_tip_data.characters = stack_memory;
 			data->tool_tip_data.base.offset_scale = { false, false };
-			data->tool_tip_data.base.offset = { mouse_position.x - position.x + system->m_descriptors.misc.histogram_hover_offset.x, mouse_position.y - position.y + system->m_descriptors.misc.histogram_hover_offset.y };
+			data->tool_tip_data.base.offset = mouse_position - position + system->m_descriptors.misc.histogram_hover_offset;
+			
+			SetSolidColorRectangle(
+				position,
+				scale,
+				data->bar_color,
+				buffers,
+				counts
+			);
 
 			action_data->data = &data->tool_tip_data;
 			TextTooltipHoverable(action_data);
@@ -1569,16 +1580,17 @@ namespace ECSEngine {
 		{
 			UI_UNPACK_ACTION_DATA;
 
-			UIDrawerFilesystemHierarchy* data = (UIDrawerFilesystemHierarchy*)_data;
+			UIDrawerFilesystemHierarchySelectableData* data = (UIDrawerFilesystemHierarchySelectableData*)_data;
 
 			if (mouse->IsReleased(ECS_MOUSE_LEFT) && IsPointInRectangle(mouse_position, position, scale)) {
-				data->active_label.CopyOther(data->selected_label_temporary);
-				data->active_label[data->active_label.size] = '\0';
+				data->hierarchy->active_label.CopyOther(data->label);
+				ECS_ASSERT(data->hierarchy->active_label.size < data->hierarchy->active_label.capacity);
+				data->hierarchy->active_label[data->hierarchy->active_label.size] = '\0';
 
-				if (data->selectable_callback != nullptr) {
-					action_data->additional_data = data->active_label.buffer;
-					action_data->data = data->selectable_callback_data;
-					data->selectable_callback(action_data);
+				if (data->hierarchy->selectable_callback != nullptr) {
+					action_data->additional_data = data->hierarchy->active_label.buffer;
+					action_data->data = data->hierarchy->selectable_callback_data;
+					data->hierarchy->selectable_callback(action_data);
 				}
 			}
 		}
@@ -2023,9 +2035,8 @@ namespace ECSEngine {
 				}
 
 				input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
-
-				system->DeallocateGeneralHandler();
-				system->m_focused_window_data.ChangeGeneralHandler({ 0.0f, 0.0f }, { 0.0f, 0.0f }, nullptr, nullptr, 0, ECS_UI_DRAW_NORMAL);
+				UIActionHandler null_handler = {nullptr, nullptr, 0, ECS_UI_DRAW_NORMAL};
+				system->m_focused_window_data.ChangeGeneralHandler({ 0.0f, 0.0f }, { 0.0f, 0.0f }, &null_handler, nullptr);
 			}
 			else if (!UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
 				keyboard->DoNotCaptureCharacters();
@@ -2083,7 +2094,6 @@ namespace ECSEngine {
 				}
 				else if (keyboard->IsPressed(ECS_KEY_ENTER)) {
 					bool is_valid_data = terminate_lambda();
-					system->DeallocateGeneralHandler();
 					system->m_focused_window_data.ResetGeneralHandler();
 				}
 				else {
@@ -2691,8 +2701,6 @@ namespace ECSEngine {
 							cleanup_data.window_names[index] = data->menu->windows[index].name;
 						}
 						system->PushFrameHandler({ MenuCleanupSystemHandler, &cleanup_data, sizeof(cleanup_data) });
-						system->DeallocateGeneralHandler();
-						system->DeallocateHoverableHandler();
 						system->m_focused_window_data.ResetGeneralHandler();
 						system->m_focused_window_data.ResetHoverableHandler();
 					}
@@ -2820,7 +2828,7 @@ namespace ECSEngine {
 			UIDrawerSubmenuHoverable* data = (UIDrawerSubmenuHoverable*)_data;
 			UIDrawerSubmenuHoverable* additional_data = nullptr;
 			system->m_focused_window_data.clean_up_call_hoverable = true;
-			system->m_focused_window_data.always_hoverable = true;
+			//system->m_focused_window_data.always_hoverable = true;
 
 			if (_additional_data != nullptr) {
 				additional_data = (UIDrawerSubmenuHoverable*)_additional_data;
@@ -3158,7 +3166,6 @@ namespace ECSEngine {
 					// mouse position -2.0f -2.0f ensures that it will not fall into an existing 
 					// window and avoid destroying the windows
 					system->HandleFocusedWindowCleanupGeneral({ -2.0f, -2.0f }, 0);
-					system->DeallocateGeneralHandler();
 					system->m_focused_window_data.ResetGeneralHandler();
 					// The window destruction handler and the release handlers are somewhere here
 					system->HandleFrameHandlers();
@@ -3176,21 +3183,18 @@ namespace ECSEngine {
 				UIDrawConfig config;
 				drawer.Menu(UI_CONFIG_DO_CACHE | UI_CONFIG_MENU_COPY_STATES, config, data->name, &data->state);
 
-				UIDrawerMenuGeneralData* general_data = (UIDrawerMenuGeneralData*)system->m_memory->Allocate(sizeof(UIDrawerMenuGeneralData));
-				general_data->menu_initializer_index = 255;
-				general_data->initialize_from_right_click = true;
-				general_data->menu = (UIDrawerMenu*)drawer.GetResource(data->name);
-				general_data->is_opened_when_clicked = false;
-
 				system->SetNewFocusedDockspaceRegion(dockspace, border_index, dockspace_type);
 				system->SetNewFocusedDockspace(dockspace, dockspace_type);
 
 				// call the general handler if it wants to have destruction
 				system->HandleFocusedWindowCleanupGeneral(mouse_position, 0);
 
-				UIActionHandler handler = { MenuGeneral, general_data, sizeof(*general_data), ECS_UI_DRAW_SYSTEM };
-				system->DeallocateGeneralHandler();
-				system->m_focused_window_data.ChangeGeneralHandler(position, scale, &handler);
+				UIActionHandler handler = { MenuGeneral, nullptr, sizeof(UIDrawerMenuGeneralData), ECS_UI_DRAW_SYSTEM };
+				UIDrawerMenuGeneralData* general_data = (UIDrawerMenuGeneralData*)system->m_focused_window_data.ChangeGeneralHandler(position, scale, &handler, nullptr);
+				general_data->menu_initializer_index = 255;
+				general_data->initialize_from_right_click = true;
+				general_data->menu = (UIDrawerMenu*)drawer.GetResource(data->name);
+				general_data->is_opened_when_clicked = false;
 
 				action_data->data = general_data;
 				action_data->position.x = mouse_position.x;
@@ -3703,7 +3707,6 @@ namespace ECSEngine {
 					// Check to see if the general action was changed. If it was, don't deallocate it
 					if (system->m_focused_window_data.general_handler.action == TextInputAction) {
 						system->HandleFocusedWindowCleanupGeneral(mouse_position, 0);
-						system->DeallocateGeneralHandler();
 						system->m_focused_window_data.ResetGeneralHandler();
 					}
 

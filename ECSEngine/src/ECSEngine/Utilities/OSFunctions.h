@@ -181,7 +181,7 @@ namespace ECSEngine {
 
 #pragma region Error With Window Or Console
 
-		ECSENGINE_API void LaunchFileExplorerWithError(Stream<wchar_t> path, UISystem* system);
+		ECSENGINE_API void LaunchFileExplorerWithError(Stream<wchar_t> path, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void LaunchFileExplorerWithError(Stream<wchar_t> path);
@@ -190,7 +190,7 @@ namespace ECSEngine {
 		template<typename PointerType>
 		ECSENGINE_API void GetFileTimesWithError(
 			Stream<wchar_t> path,
-			UISystem* system,
+			Tools::UISystem* system,
 			PointerType* ECS_RESTRICT creation_time = nullptr,
 			PointerType* ECS_RESTRICT access_time = nullptr,
 			PointerType* ECS_RESTRICT last_write_time = nullptr
@@ -200,7 +200,7 @@ namespace ECSEngine {
 		template<typename PointerType>
 		ECSENGINE_API void GetRelativeFileTimesWithError(
 			Stream<wchar_t> path,
-			UISystem* system,
+			Tools::UISystem* system,
 			PointerType* ECS_RESTRICT creation_time = nullptr,
 			PointerType* ECS_RESTRICT access_time = nullptr,
 			PointerType* ECS_RESTRICT last_write_time = nullptr
@@ -226,62 +226,62 @@ namespace ECSEngine {
 			PointerType* ECS_RESTRICT last_write_time = nullptr
 		);
 
-		ECSENGINE_API void ClearFileWithError(Stream<wchar_t> path, UISystem* system);
+		ECSENGINE_API void ClearFileWithError(Stream<wchar_t> path, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void ClearFileWithError(Stream<wchar_t> path);
 
-		ECSENGINE_API void FileCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to, UISystem* system);
+		ECSENGINE_API void FileCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void FileCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to);
 
-		ECSENGINE_API void FolderCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to, UISystem* system);
+		ECSENGINE_API void FolderCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void FolderCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to);
 
-		ECSENGINE_API void CreateFolderWithError(Stream<wchar_t> path, UISystem* system);
+		ECSENGINE_API void CreateFolderWithError(Stream<wchar_t> path, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void CreateFolderWithError(Stream<wchar_t> path);
 
-		ECSENGINE_API void DeleteFolderWithError(Stream<wchar_t> path, UISystem* system);
+		ECSENGINE_API void DeleteFolderWithError(Stream<wchar_t> path, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void DeleteFolderWithError(Stream<wchar_t> path);
 
-		ECSENGINE_API void DeleteFileWithError(Stream<wchar_t> path, UISystem* system);
+		ECSENGINE_API void DeleteFileWithError(Stream<wchar_t> path, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void DeleteFileWithError(Stream<wchar_t> path);
 
-		ECSENGINE_API void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system);
+		ECSENGINE_API void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name);
 
-		ECSENGINE_API void ResizeFileWithError(Stream<wchar_t> path, size_t new_size, UISystem* system);
+		ECSENGINE_API void ResizeFileWithError(Stream<wchar_t> path, size_t new_size, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void ResizeFileWithError(Stream<wchar_t> path, size_t new_size);
 
-		ECSENGINE_API void ChangeFileExtensionWithError(Stream<wchar_t> path, Stream<wchar_t> extension, UISystem* system);
+		ECSENGINE_API void ChangeFileExtensionWithError(Stream<wchar_t> path, Stream<wchar_t> extension, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void ChangeFileExtensionWithError(Stream<wchar_t> path, Stream<wchar_t> extension);
 
-		ECSENGINE_API void ExistsFileOrFolderWithError(Stream<wchar_t> path, UISystem* system);
+		ECSENGINE_API void ExistsFileOrFolderWithError(Stream<wchar_t> path, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void ExistsFileOrFolderWithError(Stream<wchar_t> path);
 
-		ECSENGINE_API void DeleteFolderContentsWithError(Stream<wchar_t> path, UISystem* system);
+		ECSENGINE_API void DeleteFolderContentsWithError(Stream<wchar_t> path, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void DeleteFolderContentsWithError(Stream<wchar_t> path);
 
-		ECSENGINE_API void OpenFileWithDefaultApplicationWithError(Stream<wchar_t> path, UISystem* system);
+		ECSENGINE_API void OpenFileWithDefaultApplicationWithError(Stream<wchar_t> path, Tools::UISystem* system);
 
 		// Uses the console to print the message
 		ECSENGINE_API void OpenFileWithDefaultApplicationWithError(Stream<wchar_t> path);

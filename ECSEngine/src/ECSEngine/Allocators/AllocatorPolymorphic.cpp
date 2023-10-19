@@ -110,6 +110,7 @@ namespace ECSEngine {
 				return allocator->Deallocate(buffer, debug_info);
 			}
 		}
+		return false;
 	}
 
 	template<typename Allocator>
@@ -310,7 +311,7 @@ namespace ECSEngine {
 		ECS_JUMP_TABLE(UnlockAllocatorFunctionAllocator)
 	};
 
-	size_t BaseAllocatorSize(ECS_ALLOCATOR_TYPE type)
+	size_t BaseAllocatorByteSize(ECS_ALLOCATOR_TYPE type)
 	{
 		switch (type) {
 		case ECS_ALLOCATOR_LINEAR:
@@ -324,6 +325,40 @@ namespace ECSEngine {
 		}
 
 		ECS_ASSERT(false, "Invalid base allocator type when getting the size");
+		return -1;
+	}
+
+	size_t BaseAllocatorMaxAllocationSize(CreateBaseAllocatorInfo info)
+	{
+		switch (info.allocator_type) {
+		case ECS_ALLOCATOR_LINEAR:
+			return info.linear_capacity;
+		case ECS_ALLOCATOR_STACK:
+			return info.stack_capacity;
+		case ECS_ALLOCATOR_MULTIPOOL:
+			return info.multipool_capacity;
+		case ECS_ALLOCATOR_ARENA: {
+			CreateBaseAllocatorInfo nested_info;
+			nested_info.allocator_type = info.arena_nested_type;
+			switch (nested_info.allocator_type) {
+			case ECS_ALLOCATOR_LINEAR:
+				nested_info.linear_capacity = info.arena_capacity;
+				break;
+			case ECS_ALLOCATOR_STACK:
+				nested_info.stack_capacity = info.arena_capacity;
+				break;
+			case ECS_ALLOCATOR_MULTIPOOL:
+				nested_info.multipool_block_count = info.arena_capacity;
+				nested_info.multipool_block_count = info.arena_multipool_block_count;
+				break;
+			default:
+				ECS_ASSERT(false, "Invalid arena nested allocator type");
+			}
+			return BaseAllocatorMaxAllocationSize(nested_info);
+		}
+		}
+
+		ECS_ASSERT(false, "Invalid base allocator type when getting max allocation size");
 		return -1;
 	}
 

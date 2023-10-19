@@ -1220,12 +1220,9 @@ namespace ECSEngine {
 		// -------------------------------------------------------------------------------------------------------
 
 		size_t ParseStringIdentifier(Stream<char> string) {
-			for (int64_t index = (int64_t)string.size - 1; index >= ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT - 1; index--) {
-				size_t count = 0;
-				for (; count < ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT && string[index] == ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR && index >= 0; count++, index--) {}
-				if (count == ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT) {
-					return (size_t)(index + 1);
-				}
+			Stream<char> separator = FindFirstToken(string, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+			if (separator.size > 0) {
+				return string.StartDifference(separator).size;
 			}
 			return string.size;
 		}

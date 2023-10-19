@@ -414,7 +414,9 @@ namespace ECSEngine {
         void* temp_buffer = ECS_STACK_ALLOC(sizeof(unsigned char) * ECS_KB * 64);
         uintptr_t temp_ptr = (uintptr_t)temp_buffer;
 
-        hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
+        // The parent table can be deduced from the children table
+        // Return the negation since this will return true if it early exited
+        return !hierarchy->children_table.ForEachConst<true>([&](const auto children, const auto parent) {
             temp_ptr = (uintptr_t)temp_buffer;
 
             Write<true>(&temp_ptr, &parent, sizeof(Entity));
@@ -424,12 +426,10 @@ namespace ECSEngine {
 
             success = WriteFile(file, { temp_buffer, temp_ptr - (uintptr_t)temp_buffer });
             if (!success) {
-                return false;
+                return true;
             }
+            return false;
         });
-
-        // The parent table can be deduced from the children table
-        return true;
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------

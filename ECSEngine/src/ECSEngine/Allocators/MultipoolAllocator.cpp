@@ -15,6 +15,11 @@ namespace ECSEngine {
 	
 	void* MultipoolAllocator::Allocate(size_t size, size_t alignment, DebugInfo debug_info) {
 		ECS_ASSERT(alignment <= ECS_CACHE_LINE_SIZE);
+		if (size > m_size) {
+			// Early exit if it is too large
+			return nullptr;
+		}
+
 		// To make sure that the allocation is aligned we are requesting a surplus of alignment from the block range.
 		// Then we are aligning the pointer like the stack one and placing the offset byte before the allocation
 		unsigned int index = m_range.Request(size + alignment);

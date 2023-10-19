@@ -148,13 +148,13 @@ namespace ECSEngine {
 			}
 
 			// The last elements
-			int last_element_count = element_count - simd_count;
+			size_t last_element_count = element_count - simd_count;
 			const void* ptr = OffsetPointer(data, byte_size * simd_count);
 			if constexpr (reverse) {
 				ptr = data;
 			}
 
-			values.load(ptr);
+			values.load_partial(last_element_count, ptr);
 			auto compare = values == simd_value_to_search;
 			if (horizontal_or(compare)) {
 				unsigned int bits = to_bits(compare);
@@ -166,7 +166,7 @@ namespace ECSEngine {
 					first = FirstLSB(bits);
 				}
 
-				if (first != -1 && first < last_element_count) {
+				if (first != -1 && (size_t)first < last_element_count) {
 					if constexpr (reverse) {
 						return (size_t)first;
 					}
@@ -180,7 +180,7 @@ namespace ECSEngine {
 						bits &= ~(1 << first);
 						while (bits != 0) {
 							first = FirstMSB(bits);
-							if (first != -1 && first < last_element_count) {
+							if (first != -1 && (size_t)first < last_element_count) {
 								return (size_t)first;
 							}
 							bits &= ~(1 << first);

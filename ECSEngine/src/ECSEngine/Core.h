@@ -11,6 +11,8 @@
 	#error Windows is the only platform
 #endif
 
+#pragma warning(disable:26812)
+
 constexpr float PI = 3.14159265358979323846f;
 constexpr float PI_INVERSE = 1.0f / PI;
 constexpr float DEG_TO_RAD_FACTOR = PI / 180.0f;

@@ -101,12 +101,14 @@ namespace ECSEngine {
 		DeserializeEntityManagerGlobalComponentTable global_component_table;
 		CreateDeserializeEntityManagerGlobalComponentTableAddOverrides(global_component_table, load_data->reflection_manager, stack_allocator, load_data->global_overrides);
 
+		DeserializeEntityManagerOptions deserialize_options;
+		deserialize_options.component_table = &component_table;
+		deserialize_options.shared_component_table = &shared_component_table;
+		deserialize_options.global_component_table = &global_component_table;
 		ECS_DESERIALIZE_ENTITY_MANAGER_STATUS deserialize_status = DeserializeEntityManager(
 			load_data->entity_manager,
 			ptr,
-			&component_table,
-			&shared_component_table,
-			&global_component_table
+			&deserialize_options
 		);
 		
 		if (deserialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
@@ -206,7 +208,11 @@ namespace ECSEngine {
 		SerializeEntityManagerGlobalComponentTable global_component_table;
 		CreateSerializeEntityManagerGlobalComponentTableAddOverrides(global_component_table, save_data->reflection_manager, stack_allocator, save_data->global_overrides);
 
-		success = SerializeEntityManager(save_data->entity_manager, file_handle, &component_table, &shared_component_table, &global_component_table);
+		SerializeEntityManagerOptions serialize_options;
+		serialize_options.component_table = &component_table;
+		serialize_options.shared_component_table = &shared_component_table;
+		serialize_options.global_component_table = &global_component_table;
+		success = SerializeEntityManager(save_data->entity_manager, file_handle, &serialize_options);
 		if (!success) {
 			return false;
 		}

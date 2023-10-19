@@ -66,6 +66,7 @@ namespace ECSEngine {
 
 				void* allocation = AllocateEx(m_backup, m_backup_size);
 				m_allocated_buffers[m_allocated_buffer_size++] = allocation;
+				current_buffer_allocated_size = 0;
 			}
 
 			uintptr_t ptr = (uintptr_t)m_allocated_buffers[m_allocated_buffer_size - 1];

@@ -825,6 +825,8 @@ namespace ECSEngine {
 			}
 
 			Stream<char> characters;
+			// Optimization flag to avoid some copies
+			bool is_stable = false;
 		};
 
 		struct UIDrawerStateTable {
@@ -914,9 +916,7 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerFilesystemHierarchy {
-			Stream<char> active_label;
-			Stream<char> selected_label_temporary;
-			Stream<char> right_click_label_temporary;
+			CapacityStream<char> active_label;
 			HashTableDefault<UIDrawerFilesystemHierarchyLabelData> label_states;
 			Action selectable_callback;
 			void* selectable_callback_data;

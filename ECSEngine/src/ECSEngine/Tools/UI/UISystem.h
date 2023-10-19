@@ -32,6 +32,15 @@ namespace ECSEngine {
 
 		ECSENGINE_API UIToolsAllocator DefaultUISystemAllocator(GlobalMemoryManager* global_manager);
 
+		// If the windows_to_draw are given, then it will use the draw function only for those,
+		// All the other ones being used with a snapshot. When that mode is engaged, you can
+		// Give the lazy update value to tell the ui system when to update the snapshot
+		// The default is 25 ms, which is 40 fps
+		struct UISystemDoFrameOptions {
+			Stream<Stream<char>> windows_to_draw = {};
+			unsigned int lazy_update_milliseconds = 25;
+		};
+
 		class ECSENGINE_API UISystem
 		{
 		public:
@@ -62,7 +71,8 @@ namespace ECSEngine {
 				UIHandler* handler,
 				float2 position,
 				float2 scale,
-				UIActionHandler action
+				UIActionHandler action,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			template<typename T>
@@ -73,7 +83,8 @@ namespace ECSEngine {
 				float2 scale,
 				const T* data,
 				Action action,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL,
+				UIHandlerCopyBuffers copy_function = nullptr
 			) {
 				AddActionHandler(
 					allocator,
@@ -94,7 +105,8 @@ namespace ECSEngine {
 				UIHandler* handler,
 				float2 position,
 				float2 scale,
-				UIActionHandler action_handler
+				UIActionHandler action_handler,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			// Returns { nullptr, 0 } if there is no drag data. If there is, it returns it.
@@ -115,7 +127,8 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			void AddHoverableToDockspaceRegion(
@@ -124,7 +137,8 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			// Pushes the item without allocating anything
@@ -133,34 +147,9 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
-
-			template<typename T>
-			void AddHoverableToDockspaceRegion(
-				unsigned int thread_id,
-				UIDockspace* dockspace,
-				unsigned int border_index,
-				float2 position,
-				float2 scale,
-				T* data,
-				Action action,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
-			) {
-				AddHoverableToDockspaceRegion(
-					thread_id,
-					dockspace,
-					border_index,
-					position,
-					scale,
-					{
-						action,
-						(void*)data,
-						sizeof(T),
-						phase
-					}	
-				);
-			}
 
 			void AddDefaultClickable(const UISystemDefaultClickableData& data);
 
@@ -173,7 +162,8 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale,
 				UIActionHandler handler,
-				ECS_MOUSE_BUTTON button_type
+				ECS_MOUSE_BUTTON button_type,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			void AddClickableToDockspaceRegion(
@@ -183,7 +173,8 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale,
 				UIActionHandler handler,
-				ECS_MOUSE_BUTTON button_type
+				ECS_MOUSE_BUTTON button_type,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			void AddClickableToDockspaceRegionForced(
@@ -192,36 +183,9 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale,
 				UIActionHandler handler,
-				ECS_MOUSE_BUTTON button_type
-			);
-
-			template<typename T>
-			void AddClickableToDockspaceRegion(
-				unsigned int thread_id,
-				UIDockspace* dockspace,
-				unsigned int border_index,
-				float2 position,
-				float2 scale,
-				T* data,
-				Action action,
 				ECS_MOUSE_BUTTON button_type,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
-			) {
-				AddClickableToDockspaceRegion(
-					thread_id,
-					dockspace,
-					border_index,
-					position,
-					scale,
-					{
-						action,
-						data,
-						sizeof(T),
-						phase
-					},
-					button_type
-				);
-			}
+				UIHandlerCopyBuffers copy_function = nullptr
+			);
 
 			// This is a general action
 			// The identifier is used to differentiate between multiple double click actions
@@ -233,7 +197,8 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			void AddGeneralActionToDockspaceRegion(
@@ -242,7 +207,8 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			void AddGeneralActionToDockspaceRegionForced(
@@ -250,34 +216,9 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float2 position,
 				float2 scale,
-				UIActionHandler handler
+				UIActionHandler handler,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
-
-			template<typename T>
-			void AddGeneralActionToDockspaceRegion(
-				unsigned int thread_id,
-				UIDockspace* dockspace,
-				unsigned int border_index,
-				float2 position,
-				float2 scale,
-				T* data,
-				Action action,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
-			) {
-				AddGeneralActionToDockspaceRegion(
-					thread_id,
-					dockspace,
-					border_index,
-					position,
-					scale,
-					{
-						action,
-						data,
-						sizeof(T),
-						phase
-					}
-				);
-			}
 
 			void AddHandlerToDockspaceRegionAtIndex(
 				unsigned int thread_id,
@@ -285,6 +226,7 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale,
 				UIActionHandler action_handler,
+				UIHandlerCopyBuffers copy_function,
 				unsigned int add_index
 			);
 			
@@ -293,13 +235,20 @@ namespace ECSEngine {
 				unsigned int window_index,
 				unsigned int dockspace_index,
 				CapacityStream<UIDockspace>& dockspace_stream,
-				unsigned char border_index
+				unsigned int border_index
 			);
 
 			void AddWindowToDockspaceRegion(
 				unsigned int window_index,
 				UIDockspace* dockspace,
-				unsigned char border_index
+				unsigned int border_index
+			);
+
+			void AddWindowSnapshotRunnable(
+				unsigned int thread_id,
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				UIDockspaceBorderDrawSnapshotRunnable runnable
 			);
 
 			float AlignMiddleTextY(float position_y, float scale_y, float font_size_y, float padding = 0.0f);
@@ -307,6 +256,8 @@ namespace ECSEngine {
 			void* AllocateHandlerMemory(unsigned int thread_id, size_t size, size_t alignment, const void* memory_to_copy);
 
 			void* AllocateHandlerMemory(LinearAllocator* allocator, size_t size, size_t alignment, const void* memory_to_copy);
+
+			AllocatorPolymorphic AllocatorSnapshotRunnables(const UIDockspace* dockspace, unsigned int border_index);
 
 			// this is triggered when the element is placed over one of the four sides of the Docking gizmo, not in center of it
 			void AddElementToDockspace(
@@ -677,13 +628,7 @@ namespace ECSEngine {
 
 			void DeactiveWrapCursorPosition();
 
-			void DeallocateDockspaceBorderResource(UIDockspace* dockspace, unsigned int border_index);
-
-			void DeallocateClickableHandler(ECS_MOUSE_BUTTON button_type);
-
-			void DeallocateHoverableHandler();
-
-			void DeallocateGeneralHandler();
+			void DeallocateDockspaceBorderResources(UIDockspace* dockspace, unsigned int border_index);
 
 			void DeallocateEventData();
 
@@ -749,11 +694,9 @@ namespace ECSEngine {
 				unsigned int offset
 			);
 
-			// Can optionally give a stream of windows to be drawn this frame
-			// All other windows are ignored. Returns a frame pacing 
-			ECS_UI_FRAME_PACING DoFrame();
+			ECS_UI_FRAME_PACING DoFrame(UISystemDoFrameOptions options = {});
 
-			void Draw(float2 mouse_position, void** system_buffers, size_t* system_counts);
+			void Draw(float2 mouse_position, void** system_buffers, size_t* system_counts, UISystemDoFrameOptions options);
 
 			void DrawCollapseTriangleHeader(
 				void** buffers,
@@ -1384,7 +1327,8 @@ namespace ECSEngine {
 				const void* data, 
 				size_t data_size,
 				ECS_UI_DRAW_PHASE phase,
-				ECS_MOUSE_BUTTON button_type
+				ECS_MOUSE_BUTTON button_type,
+				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
 			void RegisterVertexShaderAndLayout(wchar_t* filename);
@@ -1527,8 +1471,6 @@ namespace ECSEngine {
 			void SetCleanupGeneralHandler();
 
 			void SetCleanupHoverableHandler();
-
-			void SetSystemDrawRegion(UIElementTransform transform);
 
 			void SetTextureEvictionCount(unsigned int frame_count);
 
@@ -1861,11 +1803,13 @@ namespace ECSEngine {
 			UIGlobalResources m_global_resources;
 			// This is used to set the default handler for windows
 			UIActionHandler m_window_handler;
-			UIElementTransform m_system_draw_region;
 			size_t m_frame_index;
 			// Useful for calculating the normalized mouse value when scaling is being applied
 			// at the OS level and try to remedy it
 			uint2 m_window_os_size;
+			Timer m_snapshot_mode_timer;
+			// Record the duration here such that it is consistent for the entire frame
+			unsigned int m_snapshot_mode_elapsed_time;
 			// This is used to keep track of the frame delta time
 			Timer m_frame_timer;
 			float m_frame_delta_time;

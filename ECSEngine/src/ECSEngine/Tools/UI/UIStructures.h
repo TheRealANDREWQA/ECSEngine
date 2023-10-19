@@ -6,6 +6,7 @@
 #include "../../Allocators/MemoryArena.h"
 #include "../../Allocators/MemoryManager.h"
 #include "../../Allocators/LinearAllocator.h"
+#include "../../Allocators/ResizableLinearAllocator.h"
 #include "../../Rendering/RenderingStructures.h"
 #include "../../ECS/InternalStructures.h"
 #include "UIMacros.h"
@@ -65,9 +66,19 @@ namespace ECSEngine {
 
 		struct UIDrawerDescriptor;
 
+		struct WindowRetainedModeInfo;
+
 		typedef void (*Action)(ActionData* action_data);
 		typedef void (*WindowDraw)(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initializer);
+		// This function is used to ask the window if it wants to redraw itself or not
+		// This is optional - if not specified, it will be drawn according to the normal rules
+		// (that is, every frame the window is drawn unless you specify to do a selective frame drawing)
+		typedef bool (*WindowRetainedMode)(void* window_data, WindowRetainedModeInfo* info);
 		typedef void (*UIDrawerElementDraw)(void* element_data, void* drawer_ptr);
+
+		// This is a function that can be provided to be called when an action is selected
+		// Such that temporary buffers can be copied over to an allocator tied to the action selection lifetime
+		typedef void (*UIHandlerCopyBuffers)(void* data, AllocatorPolymorphic allocator);
 
 		// data size 0 will be interpreted as take data as a pointer, with no data copy
 		struct UIActionHandler {
@@ -78,6 +89,7 @@ namespace ECSEngine {
 		};
 
 #pragma region Vertex types
+
 		struct ECSENGINE_API UISpriteVertex {
 			UISpriteVertex();
 			UISpriteVertex(float position_x, float position_y, float uv_u, float uv_v, Color color);
@@ -368,27 +380,55 @@ namespace ECSEngine {
 		typedef HashTableDefault<Stream<void>> UIGlobalResources;
 
 		struct ECSENGINE_API UIHandler {
+			bool Add(float _position_x, float _position_y, float _scale_x, float _scale_y, UIActionHandler handler, UIHandlerCopyBuffers copy_function);
 
-			bool Add(float _position_x, float _position_y, float _scale_x, float _scale_y, UIActionHandler handler);
+			bool Add(float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function);
 
-			bool Add(float2 position, float2 scale, UIActionHandler handler);
+			unsigned int AddResizable(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function);
 
-			unsigned int AddResizable(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler);
+			// Copies all the data that is currently stored here. If you want to use a coalesced allocation
+			// For the action data, specify the pointer and it will give it to you back to know when to deallocate
+			UIHandler Copy(AllocatorPolymorphic allocator, void** coalesced_action_data = nullptr) const;
+
+			// You can optionally specify a handler data allocator for the system phase - by default
+			// it will use the simple handler_data_allocator
+			void CopyData(
+				const UIHandler* other, 
+				AllocatorPolymorphic buffers_allocator, 
+				AllocatorPolymorphic handler_data_allocator,
+				AllocatorPolymorphic handler_system_data_allocator = {}
+			);
+
+			void Deallocate(AllocatorPolymorphic allocator) const;
 
 			// position, scale, data and late_update are set inside the call
 			void Execute(unsigned int action_index, ActionData* data) const;
 
-			UIActionHandler* GetLastHandler() const;
+			ECS_INLINE UIActionHandler* GetLastHandler() const {
+				return action + GetLastHandlerIndex();
+			}
 
-			float2 GetPositionFromIndex(unsigned int index) const;
+			ECS_INLINE float2 GetPositionFromIndex(unsigned int index) const {
+				return { position_x[index], position_y[index] };
+			}
 
-			float2 GetScaleFromIndex(unsigned int index) const;
+			ECS_INLINE float2 GetScaleFromIndex(unsigned int index) const {
+				return { scale_x[index], scale_y[index] };
+			}
 
-			UIActionHandler GetActionFromIndex(unsigned int index) const;
+			ECS_INLINE UIActionHandler GetActionFromIndex(unsigned int index) const {
+				return action[index];
+			}
 
-			unsigned int GetLastHandlerIndex() const;
+			ECS_INLINE UIHandlerCopyBuffers GetCopyFunctionFromIndex(unsigned int index) const {
+				return copy_function[index];
+			}
 
-			void Insert(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, unsigned int insert_index);
+			ECS_INLINE unsigned int GetLastHandlerIndex() const {
+				return position_x.size - 1;
+			}
+
+			void Insert(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function, unsigned int insert_index);
 
 			void Resize(AllocatorPolymorphic allocator, size_t new_count);
 
@@ -405,6 +445,7 @@ namespace ECSEngine {
 			float* scale_x;
 			float* scale_y;
 			UIActionHandler* action;
+			UIHandlerCopyBuffers* copy_function;
 		};
 
 		struct ECSENGINE_API UIReservedHandler {
@@ -421,9 +462,107 @@ namespace ECSEngine {
 
 #pragma region Dockspace
 
+		// The position and the scale in action data are undefined - you need to provide them in the data 
+		// Pointer if you need those. Returns a boolean - true if you want to redraw the window, else false
+		typedef bool (*UIDockspaceBorderDrawSnapshotRunnableFunction)(void* data, ActionData* action_data);
+
+		// The draw phase is used to give the action data the correct buffers and counts
+		struct UIDockspaceBorderDrawSnapshotRunnable {
+			UIDockspaceBorderDrawSnapshotRunnableFunction function;
+			void* data;
+			unsigned int data_size;
+			ECS_UI_DRAW_PHASE draw_phase;
+		};
+
+		struct UIDockspaceBorderDrawOutputSnapshotCreateInfo {
+			const void** buffers;
+			const size_t* counts;
+			const void** system_buffers;
+			const size_t* system_counts;
+			const size_t* previous_system_counts;
+			Stream<Stream<UISpriteTexture>> border_sprite_textures;
+			Stream<Stream<UISpriteTexture>> system_sprite_textures;
+			Stream<unsigned int> border_cluster_sprite_count;
+			const UIHandler* hoverable_handler;
+			Stream<UIHandler> clickable_handlers; // There must be ECS_MOUSE_BUTTON_COUNT
+			const UIHandler* general_handler;
+			Stream<UIDockspaceBorderDrawSnapshotRunnable> runnables;
+
+			// This can be malloc as well
+			AllocatorPolymorphic allocator;
+			// This is used to allocate the runnables
+			AllocatorPolymorphic runnable_allocator;
+		};
+
+		struct UIDockspaceBorderDrawOutputSnapshotRestoreInfo {
+			void** buffers;
+			size_t* counts;
+			void** system_buffers;
+			size_t* system_counts;
+			Stream<UIDynamicStream<UISpriteTexture>> border_sprite_textures;
+			Stream<UIDynamicStream<UISpriteTexture>> system_sprite_textures;
+			ResizableStream<unsigned int>* border_cluster_sprite_count;
+
+			UIHandler* hoverable_handler;
+			Stream<UIHandler> clickable_handlers; // There must be ECS_MOUSE_BUTTON_COUNT
+			UIHandler* general_handler;
+			AllocatorPolymorphic handler_buffer_allocator;
+			AllocatorPolymorphic handler_data_allocator;
+			AllocatorPolymorphic handler_system_data_allocator;
+
+			// This will be passed to the runnables
+			ActionData runnable_data;
+		};
+
+		struct ECSENGINE_API UIDockspaceBorderDrawOutputSnapshot {
+			ECS_INLINE void InitializeEmpty() {
+				ZeroStructure(this);
+			}
+
+			// It will override the current contents
+			void ConstructFrom(const UIDockspaceBorderDrawOutputSnapshotCreateInfo* info);
+
+			// Can optionally choose not to deallocate the runnables data pointers
+			// If that is the case, the runnable allocator is useless
+			void Deallocate(AllocatorPolymorphic allocator, AllocatorPolymorphic runnable_allocator, bool deallocate_runnable_data = true);
+
+			bool IsValid() const;
+
+			// Returns true if the region should have the snapshot redrawn
+			bool Restore(UIDockspaceBorderDrawOutputSnapshotRestoreInfo* restore_info);
+
+			// This is the draw state
+			struct {
+				void* buffers[ECS_TOOLS_UI_MATERIALS * (ECS_TOOLS_UI_PASSES + 1)];
+				// Normal draw, late draw, system draw
+				size_t counts[ECS_TOOLS_UI_MATERIALS * (ECS_TOOLS_UI_PASSES + 1)];
+
+				Stream<UISpriteTexture> sprites[ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS * (ECS_TOOLS_UI_PASSES + 1)];
+				Stream<unsigned int> cluster_sprite_counts[ECS_TOOLS_UI_PASSES + 1];
+			};
+
+			// We also need the handler state
+			struct {
+				UIHandler hoverables;
+				UIHandler clickables[ECS_MOUSE_BUTTON_COUNT];
+				UIHandler generals;
+				// This is where all the action data that needs to be copied will be written
+				void* hoverables_action_allocated_data;
+				void* clickables_action_allocated_data[ECS_MOUSE_BUTTON_COUNT];
+				void* generals_action_allocated_data;
+			};
+
+			// The snapshot runnables
+			struct {
+				Stream<UIDockspaceBorderDrawSnapshotRunnable> runnables;
+			};
+		};
+
 		// window_indices contain the windows that are held inside that section
 		// if it contains a dockspace, index 0 indicates the dockspace held in it
 		struct ECSENGINE_API UIDockspaceBorder {
+			void DeallocateSnapshot(AllocatorPolymorphic snapshot_allocator, bool free_runnable_allocator);
+			
 			void Reset();
 			
 			size_t Serialize(void* buffer) const;
@@ -444,6 +583,28 @@ namespace ECSEngine {
 			UIHandler hoverable_handler;
 			UIHandler clickable_handler[ECS_MOUSE_BUTTON_COUNT];
 			UIHandler general_handler;
+
+			// This is the index inside the window_indices
+			unsigned char snapshot_active_window;
+			// This is the index inside the array of windows
+			// It is used to trigger a snapshot recalculation
+			// When the window is changed even when the trigger
+			// Period is not reached
+			unsigned int snapshot_window_index;
+			UIDockspaceBorderDrawOutputSnapshot snapshot;
+			ResizableStream<UIDockspaceBorderDrawSnapshotRunnable> snapshot_runnables;
+			// From this allocator the allocations for the data for the snapshot_runnables are being made
+			// This makes easier allocation of data for routines in the UIDrawer
+			ResizableLinearAllocator snapshot_runnable_data_allocator;
+			// This is stored in case the window is resized/moved in order to retrigger a redraw
+			// Earlier than the lazy evaluation timer
+			float2 snapshot_position;
+			float2 snapshot_scale;
+			// These are used to determine if the window has hidden during the create
+			// And the current frame. If it was hidden once, then we need to recompute the snapshot
+			// Once the window is visible
+			size_t snapshot_frame_create_index;
+			size_t snapshot_frame_display_count;
 		};
 
 		struct ECSENGINE_API UIDockspace {
@@ -480,6 +641,8 @@ namespace ECSEngine {
 			unsigned int border_index;
 			DockspaceType type;
 			bool is_fixed_default_when_border_zero;
+			bool snapshot_mode;
+			unsigned int snapshot_mode_lazy_update;
 			unsigned int draw_index;
 			unsigned int last_index;
 			unsigned int thread_id;
@@ -536,12 +699,18 @@ namespace ECSEngine {
 
 		typedef HashTableDefault<void*> WindowTable;
 
-		struct ECSENGINE_API UIWindowDynamicResource {
+		struct UIWindowDynamicResource {
 			Stream<void*> element_allocations;
 			Stream<ResourceIdentifier> table_resources;
 			// The resource can add allocations without changing the coalesced allocation
 			Stream<void*> added_allocations;
 			unsigned int reference_count;
+		};
+
+		struct WindowRetainedModeInfo {
+			UIDockspace* dockspace;
+			unsigned int border_index;
+			unsigned int window_index;
 		};
 
 		struct ECSENGINE_API UIWindow {
@@ -566,6 +735,7 @@ namespace ECSEngine {
 			UIDynamicStream<void*> memory_resources;
 			HashTableDefault<UIWindowDynamicResource> dynamic_resources;
 			WindowDraw draw;
+			WindowRetainedMode retained_mode;
 			UIActionHandler private_handler;
 			UIActionHandler default_handler;
 			UIActionHandler destroy_handler;
@@ -599,6 +769,7 @@ namespace ECSEngine {
 			void* window_data = nullptr;
 			size_t window_data_size = 0;
 			WindowDraw draw = nullptr;
+			WindowRetainedMode retained_mode = nullptr;
 			Action private_action = nullptr;
 			void* private_action_data = nullptr;
 			size_t private_action_data_size = 0;
@@ -612,20 +783,20 @@ namespace ECSEngine {
 #pragma region Event data
 
 		struct ECSENGINE_API UIFocusedWindowData {
-			void ChangeHoverableHandler(float2 position, float2 scale, const UIActionHandler* handler);
-			void ChangeHoverableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
-			void ChangeHoverableHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
-			void ChangeHoverableHandler(const UIHandler* handler, unsigned int index, void* data);
+			// Returns the final data pointer
+			void* ChangeHoverableHandler(float2 position, float2 scale, const UIActionHandler* handler, UIHandlerCopyBuffers copy_function);
+			// Returns the final data pointer
+			void* ChangeHoverableHandler(const UIHandler* handler, unsigned int index);
 			
-			void ChangeClickable(float2 position, float2 scale, const UIActionHandler* handler, ECS_MOUSE_BUTTON button_type);
-			void ChangeClickable(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase, ECS_MOUSE_BUTTON button_type);
-			void ChangeClickable(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase, ECS_MOUSE_BUTTON button_type);
-			void ChangeClickable(const UIHandler* handler, unsigned int index, void* data, ECS_MOUSE_BUTTON button_type);
-			
-			void ChangeGeneralHandler(float2 position, float2 scale, const UIActionHandler* handler);
-			void ChangeGeneralHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
-			void ChangeGeneralHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
-			void ChangeGeneralHandler(const UIHandler* handler, unsigned int index, void* data);
+			// Returns the final data pointer
+			void* ChangeClickable(float2 position, float2 scale, const UIActionHandler* handler, UIHandlerCopyBuffers copy_function, ECS_MOUSE_BUTTON button_type);
+			// Returns the final data pointer
+			void* ChangeClickable(const UIHandler* handler, unsigned int index, ECS_MOUSE_BUTTON button_type);
+
+			// Returns the final data pointer
+			void* ChangeGeneralHandler(float2 position, float2 scale, const UIActionHandler* handler, UIHandlerCopyBuffers copy_function);
+			// Returns the final data pointer
+			void* ChangeGeneralHandler(const UIHandler* handler, unsigned int index);
 
 			bool ExecuteHoverableHandler(ActionData* action_data);
 			bool ExecuteClickableHandler(ActionData* action_data, ECS_MOUSE_BUTTON button_type);
@@ -647,7 +818,7 @@ namespace ECSEngine {
 			Location cleanup_hoverable_location;
 			Location cleanup_general_location;
 
-			bool always_hoverable;
+			//bool always_hoverable;
 			bool clean_up_call_hoverable;
 			bool clean_up_call_general;
 			unsigned char locked_window;
@@ -660,10 +831,15 @@ namespace ECSEngine {
 
 			UIActionHandler hoverable_handler;
 			UIElementTransform hoverable_transform;
+			ResizableLinearAllocator hoverable_handler_allocator;
+
 			UIActionHandler general_handler;
 			UIElementTransform general_transform;
+			ResizableLinearAllocator general_handler_allocator;
+
 			UIActionHandler clickable_handler[ECS_MOUSE_BUTTON_COUNT];
 			UIElementTransform mouse_click_transform[ECS_MOUSE_BUTTON_COUNT];
+			ResizableLinearAllocator clickable_handler_allocator[ECS_MOUSE_BUTTON_COUNT];
 		};
 
 		struct UIMoveDockspaceBorderEventData {

@@ -1,4 +1,4 @@
-#include "ecspch.h";
+#include "ecspch.h"
 #include "LinearAllocator.h"
 #include "../Utilities/PointerUtilities.h"
 #include "AllocatorCallsDebug.h"

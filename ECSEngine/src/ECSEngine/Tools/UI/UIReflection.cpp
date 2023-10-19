@@ -854,6 +854,7 @@ namespace ECSEngine {
 
 				UIConfigArrayAddCallback* add_callback = (UIConfigArrayAddCallback*)stack_memory;
 				add_callback->handler = handler;
+				add_callback->copy_on_initialization = false;
 				stack_memory = OffsetPointer(stack_memory, sizeof(*add_callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, add_callback);
@@ -861,6 +862,7 @@ namespace ECSEngine {
 				if (HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE)) {
 					UIConfigArrayRemoveCallback remove_callback;
 					remove_callback.handler = handler;
+					remove_callback.copy_on_initialization = false;
 					UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, &remove_callback);
 					splat_type = (ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT)ClearFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE);
 				}
@@ -876,6 +878,7 @@ namespace ECSEngine {
 
 				UIConfigArrayRemoveCallback* remove_callback = (UIConfigArrayRemoveCallback*)stack_memory;
 				remove_callback->handler = handler;
+				remove_callback->copy_on_initialization = false;
 				stack_memory = OffsetPointer(stack_memory, sizeof(*remove_callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, remove_callback);
@@ -891,6 +894,7 @@ namespace ECSEngine {
 				
 				UIConfigCheckBoxCallback* callback = (UIConfigCheckBoxCallback*)stack_memory;
 				callback->handler = handler;
+				callback->disable_value_to_modify = false;
 				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
@@ -940,6 +944,7 @@ namespace ECSEngine {
 
 				UIConfigComboBoxCallback* callback = (UIConfigComboBoxCallback*)stack_memory;
 				callback->handler = handler;
+				callback->copy_on_initialization = false;
 				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
@@ -961,6 +966,7 @@ namespace ECSEngine {
 
 				UIConfigTextInputCallback* callback = (UIConfigTextInputCallback*)stack_memory;
 				callback->handler = handler;
+				callback->copy_on_initialization = false;
 				callback->trigger_only_on_release = trigger_only_on_release;
 				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
@@ -983,6 +989,7 @@ namespace ECSEngine {
 
 				UIConfigSliderChangedValueCallback* callback = (UIConfigSliderChangedValueCallback*)stack_memory;
 				callback->handler = handler;
+				callback->copy_on_initialization = false;
 				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
@@ -1000,6 +1007,7 @@ namespace ECSEngine {
 
 				UIConfigPathInputCallback* callback = (UIConfigPathInputCallback*)stack_memory;
 				callback->callback = handler;
+				callback->copy_on_initialization = false;
 				callback->trigger_on_release = trigger_only_on_release;
 				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
@@ -1017,6 +1025,7 @@ namespace ECSEngine {
 
 				UIConfigTextInputCallback* callback = (UIConfigTextInputCallback*)stack_memory;
 				callback->handler = handler;
+				callback->copy_on_initialization = false;
 				callback->trigger_only_on_release = trigger_only_on_release;
 				stack_memory = OffsetPointer(stack_memory, sizeof(*callback));
 
@@ -4472,7 +4481,7 @@ namespace ECSEngine {
 					{
 						UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)type.fields[index].data;
 						// The boolean is prefixing this
-						allocator->Deallocate(OffsetPointer(data->default_values, -sizeof(bool)));
+						allocator->Deallocate(OffsetPointer(data->default_values, -(int64_t)sizeof(bool)));
 					}
 					break;
 					case UIReflectionElement::UserDefined: 
