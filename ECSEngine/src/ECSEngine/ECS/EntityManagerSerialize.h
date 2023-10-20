@@ -29,7 +29,9 @@ namespace ECSEngine {
 		// ----------------------- Mandatory --------------------------------------
 
 		// ------------------------ Optional --------------------------------------
-
+		// If this is true, and a component fixup is not found, then 
+		// It will continue the deserialization by omitting that data
+		bool remove_missing_components = false;
 		CapacityStream<char>* detailed_error_string = nullptr;
 		// ------------------------ Optional --------------------------------------
 	};

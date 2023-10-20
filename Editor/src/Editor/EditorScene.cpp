@@ -84,6 +84,9 @@ bool GetLoadSceneDataBase(
 	load_data->shared_overrides = shared_overrides;
 	load_data->global_overrides = global_overrides;
 	load_data->randomize_assets = true;
+	load_data->detailed_error_string = (CapacityStream<char>*)Allocate(stack_allocator, sizeof(CapacityStream<char>));
+	load_data->detailed_error_string->Initialize(stack_allocator, 0, 512);
+	load_data->allow_missing_components = true;
 	return true;
 }
 
@@ -122,6 +125,11 @@ bool LoadEditorSceneCore(
 		reload_options.mount_point = assets_folder;
 		reload_options.material_change_dependencies.database = database->database;
 		ReloadAssetMetadataFromFilesParameters(editor_state->RuntimeResourceManager(), database, &reload_options);
+	}
+	else {
+		// Print the error message
+		ECS_FORMAT_TEMP_STRING(error_message, "The scene {#} could not be loaded. Reason: {#}", filename, *load_data.detailed_error_string);
+		EditorSetConsoleError(error_message);
 	}
 
 	return success;

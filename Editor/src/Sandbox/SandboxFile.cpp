@@ -128,7 +128,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 			if (!ChangeSandboxScenePath(editor_state, index, sandboxes[index].scene_path)) {
 				ECS_FORMAT_TEMP_STRING(console_message, "The scene path {#} doesn't exist or is invalid when trying to deserialize sandbox {#}. "
-					"The sandbox will revert to no scene.", sandboxes[index].scene_path, index);
+					"The sandbox will revert to no scene (check previous messages for more info).", sandboxes[index].scene_path, index);
 				EditorSetConsoleWarn(console_message);
 
 				ChangeSandboxScenePath(editor_state, index, { nullptr, 0 });
