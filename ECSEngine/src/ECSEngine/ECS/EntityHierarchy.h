@@ -117,7 +117,7 @@ namespace ECSEngine {
 		void RemoveEntry(Entity entity);
 
 		union Children {
-			Children() {}
+			ECS_INLINE Children() {}
 
 			ECS_INLINE Entity* Entities() {
 				return IsPointer() ? entities : static_children;

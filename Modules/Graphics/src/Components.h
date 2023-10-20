@@ -43,7 +43,7 @@ struct ECS_REFLECT_COMPONENT RenderEverything {
 //
 //	ECSEngine::Stream<char> name;
 //};
-//
+
 //struct ECS_REFLECT_COMPONENT CheckBOXU {
 //	constexpr static ECS_INLINE short ID() {
 //		return 2313;

@@ -687,6 +687,9 @@ namespace ECSEngine {
 			ResetRecoveryCrashHandler();
 			functor.FreeBuffering();
 			ECS_GLOBAL_ASSERT_CRASH = previous_assert_crash;
+			if (options->detailed_error_string) {
+				options->detailed_error_string->AddStreamAssert("Unknown error - corrupt data");
+			}
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FILE_IS_CORRUPT;
 		}
 
@@ -710,15 +713,24 @@ namespace ECSEngine {
 		SerializeEntityManagerHeader header;
 		bool success = functor.ReadInto(&header, sizeof(header));
 		if (!success) {
+			if (options->detailed_error_string) {
+				options->detailed_error_string->AddStreamAssert("Failed to read deserialize header");
+			}
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 		}
 
 		if (header.version != ENTITY_MANAGER_SERIALIZE_VERSION || header.archetype_count > ECS_MAIN_ARCHETYPE_MAX_COUNT) {
+			if (options->detailed_error_string) {
+				options->detailed_error_string->AddStreamAssert("The deserialize header is corrupted");
+			}
 			return ECS_DESERIALIZE_ENTITY_MANAGER_HEADER_IS_INVALID;
 		}
 
 		// Too many components
 		if (header.component_count > SHORT_MAX || header.shared_component_count > SHORT_MAX || header.global_component_count > SHORT_MAX) {
+			if (options->detailed_error_string) {
+				options->detailed_error_string->AddStreamAssert("The deserialize header is corrupted");
+			}
 			return ECS_DESERIALIZE_ENTITY_MANAGER_HEADER_IS_INVALID;
 		}
 
@@ -728,7 +740,17 @@ namespace ECSEngine {
 		unsigned int global_component_pair_size = header.global_component_count * sizeof(GlobalComponentPair);
 
 		bool allocation_failure = false;
-		auto allocate_and_read_failure = [&]() {
+		auto allocate_and_read_failure = [&](Stream<char> data_section_name) {
+			if (options->detailed_error_string) {
+				if (allocation_failure) {
+					ECS_FORMAT_TEMP_STRING(message, "The data section {#} does not fit into the buffering", data_section_name);
+					options->detailed_error_string->AddStreamAssert(message);
+				}
+				else {
+					ECS_FORMAT_TEMP_STRING(message, "The data section {#} could not be read from disk", data_section_name);
+					options->detailed_error_string->AddStreamAssert(message);
+				}
+			}
 			return allocation_failure ? ECS_DESERIALIZE_ENTITY_MANAGER_TOO_MUCH_DATA : ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 		};
 
@@ -737,7 +759,7 @@ namespace ECSEngine {
 			&allocation_failure
 		);
 		if (component_pairs == nullptr) {
-			return allocate_and_read_failure();
+			return allocate_and_read_failure("Component Pairs");
 		}
 		SharedComponentPair* shared_component_pairs = (SharedComponentPair*)OffsetPointer(component_pairs, component_pair_size);
 		GlobalComponentPair* global_component_pairs = (GlobalComponentPair*)OffsetPointer(shared_component_pairs, shared_component_pair_size);
@@ -780,7 +802,7 @@ namespace ECSEngine {
 			+ sizeof(SharedInstance) * shared_instance_total_count + global_name_total_size + header_global_component_total_size;
 		void* unique_name_characters = functor.AllocateAndRead(total_size_to_read, &allocation_failure);
 		if (unique_name_characters == nullptr) {
-			return allocate_and_read_failure();
+			return allocate_and_read_failure("Component Headers");
 		}
 
 		void* shared_name_characters = OffsetPointer(unique_name_characters, component_name_total_size);
@@ -810,6 +832,16 @@ namespace ECSEngine {
 		unsigned int current_unique_name_offset = construct_name_offsets(component_name_offsets, Stream<ComponentPair>(component_pairs, header.component_count));
 		unsigned int current_shared_name_offset = construct_name_offsets(shared_component_name_offsets, Stream<SharedComponentPair>(shared_component_pairs, header.shared_component_count));
 		unsigned int current_global_name_offset = construct_name_offsets(global_component_name_offsets, Stream<GlobalComponentPair>(global_component_pairs, header.global_component_count));
+
+		auto get_unique_component_name = [&](unsigned int index) {
+			return Stream<char>(OffsetPointer(unique_name_characters, component_name_offsets[index]), component_pairs[index].name_size);
+		};
+		auto get_shared_component_name = [&](unsigned int index) {
+			return Stream<char>(OffsetPointer(shared_name_characters, shared_component_name_offsets[index]), shared_component_pairs[index].name_size);
+		};
+		auto get_global_component_name = [&](unsigned int index) {
+			return Stream<char>(OffsetPointer(global_name_characters, global_component_name_offsets[index]), global_component_pairs[index].name_size);
+		};
 
 		struct CachedComponentInfo {
 			const DeserializeEntityManagerComponentInfo* info;
@@ -845,8 +877,7 @@ namespace ECSEngine {
 			unsigned int component_count,
 			const auto* pairs,
 			const auto* component_table,
-			void* name_characters,
-			unsigned int* name_offsets
+			auto get_name_functor
 		) {
 				const DeserializeEntityManagerComponentInfo* component_info = nullptr;
 
@@ -862,8 +893,8 @@ namespace ECSEngine {
 				unsigned char serialize_version = pairs[component_pair_index].serialize_version;
 				Component found_at = { -1 };
 
-				auto iterate_table = [&](unsigned int name_offset, unsigned char name_size) {
-					ResourceIdentifier name(OffsetPointer(name_characters, name_offset), name_size);
+				auto iterate_table = [&](Stream<char> component_name) {
+					ResourceIdentifier name = component_name;
 					component_table->ForEachConst<true>([&](const auto& info, Component current_component) {
 						if (info.name.size > 0) {
 							ResourceIdentifier identifier(info.name.buffer, info.name.size);
@@ -878,21 +909,20 @@ namespace ECSEngine {
 				};
 
 				if (pairs[component_pair_index].name_size > 0) {
+					Stream<char> current_component_name = get_name_functor(component_pair_index);
+
 					const void* untyped_component_info;
 					if (component_table->TryGetValuePtrUntyped(component, untyped_component_info)) {
 						component_info = (decltype(component_info))untyped_component_info;
 						if (component_info->name.size == 0) {
 							// Iterate through the table
 							component_info = nullptr;
-							iterate_table(name_offsets[component_pair_index], pairs[component_pair_index].name_size);
+							iterate_table(current_component_name);
 						}
 						else {
-							if (component_info->name != Stream<char>(
-									OffsetPointer(name_characters, name_offsets[component_pair_index]),
-									pairs[component_pair_index].name_size
-								)) {
+							if (component_info->name != current_component_name) {
 								component_info = nullptr;
-								iterate_table(name_offsets[component_pair_index], pairs[component_pair_index].name_size);
+								iterate_table(current_component_name);
 							}
 							else {
 								found_at = component;
@@ -900,7 +930,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						iterate_table(name_offsets[component_pair_index], pairs[component_pair_index].name_size);
+						iterate_table(current_component_name);
 					}
 				}
 				else {
@@ -919,8 +949,7 @@ namespace ECSEngine {
 				header.component_count, 
 				component_pairs, 
 				options->component_table, 
-				unique_name_characters, 
-				component_name_offsets
+				get_unique_component_name
 			);
 		};
 
@@ -930,8 +959,7 @@ namespace ECSEngine {
 				header.shared_component_count, 
 				shared_component_pairs, 
 				options->shared_component_table, 
-				shared_name_characters, 
-				shared_component_name_offsets
+				get_shared_component_name
 			);
 		};
 
@@ -941,8 +969,7 @@ namespace ECSEngine {
 				header.global_component_count, 
 				global_component_pairs, 
 				options->global_component_table, 
-				global_name_characters, 
-				global_component_name_offsets
+				get_global_component_name
 			);
 		};
 
@@ -955,14 +982,15 @@ namespace ECSEngine {
 		memset(cached_shared_infos, 0, sizeof(*cached_shared_infos) * header.shared_component_count);
 		memset(cached_global_infos, 0, sizeof(*cached_global_infos) * header.global_component_count);
 
-		auto initialize_cached_infos = [](
+		auto initialize_cached_infos = [options](
 			auto component_pair_stream, 
 			auto cached_component_infos, 
 			auto& search_matching_component, 
 			auto* header_data, 
-			void** header_component_data
+			void** header_component_data,
+			Stream<char> component_type_string,
+			auto get_name_functor
 		) {
-			// Initialize the components, the shared components and the global components from the headers
 			for (unsigned int index = 0; index < component_pair_stream.size; index++) {
 				if (component_pair_stream[index].header_data_size > 0) {
 					cached_component_infos[index] = search_matching_component(component_pair_stream[index].component);
@@ -975,6 +1003,11 @@ namespace ECSEngine {
 
 							bool is_valid = cached_component_infos[index].info->header_function(header_data);
 							if (!is_valid) {
+								if (options->detailed_error_string) {
+									ECS_FORMAT_TEMP_STRING(message, "The {#} component {#} header is invalid", component_type_string,
+										get_name_functor(index));
+									options->detailed_error_string->AddStreamAssert(message);
+								}
 								return ECS_DESERIALIZE_ENTITY_MANAGER_HEADER_IS_INVALID;
 							}
 						}
@@ -992,7 +1025,9 @@ namespace ECSEngine {
 			cached_component_infos,
 			search_matching_component_unique,
 			&header_unique_data,
-			&header_component_data
+			&header_component_data,
+			"unique",
+			get_unique_component_name
 		);
 		if (initialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
 			return initialize_status;
@@ -1005,7 +1040,9 @@ namespace ECSEngine {
 			cached_shared_infos,
 			search_matching_component_shared,
 			&header_shared_data,
-			&header_shared_component_data
+			&header_shared_component_data,
+			"shared",
+			get_shared_component_name
 		);
 		if (initialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
 			return initialize_status;
@@ -1018,7 +1055,9 @@ namespace ECSEngine {
 			cached_global_infos,
 			search_matching_component_global,
 			&header_global_data,
-			&header_global_component_data
+			&header_global_component_data,
+			"global",
+			get_global_component_name
 		);
 		if (initialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
 			return initialize_status;
@@ -1032,7 +1071,7 @@ namespace ECSEngine {
 
 		void* named_shared_instances_identifiers = functor.AllocateAndRead(named_shared_instances_identifier_total_size, &allocation_failure);
 		if (named_shared_instances_identifiers == nullptr) {
-			return allocate_and_read_failure();
+			return allocate_and_read_failure("Named shared instance identifiers");
 		}
 
 		// Now the components and the shared components must be created such that when creating the shared components
@@ -1058,6 +1097,10 @@ namespace ECSEngine {
 
 				// The byte size cannot be 0
 				if (component_fixup->component_byte_size == 0) {
+					if (options->detailed_error_string) {
+						ECS_FORMAT_TEMP_STRING(message, "Illegal byte size of 0 for unique component {#} fixup", get_unique_component_name(index));
+						options->detailed_error_string->AddStreamAssert(message);
+					}
 					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
 				}
 
@@ -1080,7 +1123,13 @@ namespace ECSEngine {
 			// Allow the deserialization to continue since we can skip the header
 			if (cached_shared_infos[index].info == nullptr && (shared_component_pairs[index].instance_count > 0 ||
 				shared_component_pairs[index].named_instance_count > 0)) {
-				return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
+				if (!options->remove_missing_components) {
+					if (options->detailed_error_string) {
+						ECS_FORMAT_TEMP_STRING(message, "The shared component fixup for {#} is missing", get_shared_component_name(index));
+						options->detailed_error_string->AddStreamAssert(message);
+					}
+					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
+				}
 			}
 
 			// If the info is still nullptr after this call, it means that the component was removed
@@ -1090,6 +1139,10 @@ namespace ECSEngine {
 
 				// If even after this call the component byte size is still 0, then fail
 				if (component_fixup->component_byte_size == 0) {
+					if (options->detailed_error_string) {
+						ECS_FORMAT_TEMP_STRING(message, "Illegal byte size of 0 for shared component {#} fixup", get_shared_component_name(index));
+						options->detailed_error_string->AddStreamAssert(message);
+					}
 					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
 				}
 
@@ -1109,55 +1162,73 @@ namespace ECSEngine {
 			}
 
 			if (cached_global_infos[index].info == nullptr) {
-				// Fail, there is a component missing
-				return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
+				if (!options->remove_missing_components) {
+					// Fail, there is a component missing
+					if (options->detailed_error_string) {
+						ECS_FORMAT_TEMP_STRING(message, "The global component fixup for {#} is missing", get_global_component_name(index));
+						options->detailed_error_string->AddStreamAssert(message);
+					}
+					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
+				}
 			}
 
-			const auto* component_fixup = &cached_global_infos[index].info->component_fixup;
+			// We still need to check in case the remove_missing_components flag is set to true
+			if (cached_global_infos[index].info != nullptr) {
+				const auto* component_fixup = &cached_global_infos[index].info->component_fixup;
 
-			// The byte size cannot be 0
-			if (component_fixup->component_byte_size == 0) {
-				return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
+				// The byte size cannot be 0
+				if (component_fixup->component_byte_size == 0) {
+					if (options->detailed_error_string) {
+						ECS_FORMAT_TEMP_STRING(message, "Illegal byte size of 0 for global component {#} fixup", get_global_component_name(index));
+						options->detailed_error_string->AddStreamAssert(message);
+					}
+					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
+				}
+
+				// Copy some dummy data - it doesn't matter exactly what gets copied here as long as it doesn't crash
+				// Since we will overwrite that later. We can register the component directly with the new ID - such
+				// that we don't need to perform any remapping
+				ECS_STACK_CAPACITY_STREAM(size_t, dummy_data, 256);
+				entity_manager->RegisterGlobalComponentCommit(
+					cached_global_infos[index].found_at,
+					component_fixup->component_byte_size,
+					dummy_data.buffer,
+					component_fixup->allocator_size,
+					cached_global_infos[index].info->name
+				);
 			}
-
-			// Copy some dummy data - it doesn't matter exactly what gets copied here as long as it doesn't crash
-			// Since we will overwrite that later. We can register the component directly with the new ID - such
-			// that we don't need to perform any remapping
-			ECS_STACK_CAPACITY_STREAM(size_t, dummy_data, 256);
-			entity_manager->RegisterGlobalComponentCommit(
-				cached_global_infos[index].found_at,
-				component_fixup->component_byte_size,
-				dummy_data.buffer,
-				component_fixup->allocator_size,
-				cached_global_infos[index].info->name
-			);
 		}
 
 		// Now the shared component data
 		for (unsigned int index = 0; index < header.shared_component_count; index++) {
-			if (entity_manager->ExistsSharedComponent(shared_component_pairs[index].component)) {
+			bool exists_shared_component = entity_manager->ExistsSharedComponent(shared_component_pairs[index].component);
+			functor.MarkBufferingResetPoint();
+
+			// Read the header of sizes
+			unsigned int* instances_sizes = (unsigned int*)functor.AllocateAndRead(sizeof(unsigned int) * shared_component_pairs[index].instance_count, &allocation_failure);
+			if (instances_sizes == nullptr) {
+				ECS_FORMAT_TEMP_STRING(section_name, "Instance byte sizes for shared component {#}", get_shared_component_name(index));
+				return allocate_and_read_failure(section_name);
+			}
+
+			// Determine the size of the all instances such that they can be read in bulk
+			unsigned int total_instance_size = 0;
+			for (unsigned int subindex = 0; subindex < shared_component_pairs[index].instance_count; subindex++) {
+				total_instance_size += instances_sizes[subindex];
+			}
+
+			// Read in bulk now the instance data
+			void* instances_data = functor.AllocateAndRead(total_instance_size, &allocation_failure);
+			if (instances_data == nullptr) {
+				ECS_FORMAT_TEMP_STRING(section_name, "Instance byte data for shared component {#}", get_shared_component_name(index));
+				return allocate_and_read_failure(section_name);
+			}
+
+			// The steps before that need to be performed no matter if the component is ignored or not
+			
+			if (exists_shared_component) {
 				// If it has a name, search for its match
 				const DeserializeEntityManagerSharedComponentInfo* component_info = cached_shared_infos[index].info;
-
-				functor.MarkBufferingResetPoint();
-
-				// Read the header of sizes
-				unsigned int* instances_sizes = (unsigned int*)functor.AllocateAndRead(sizeof(unsigned int) * shared_component_pairs[index].instance_count, &allocation_failure);
-				if (instances_sizes == nullptr) {
-					return allocate_and_read_failure();
-				}
-
-				// Determine the size of the all instances such that they can be read in bulk
-				unsigned int total_instance_size = 0;
-				for (unsigned int subindex = 0; subindex < shared_component_pairs[index].instance_count; subindex++) {
-					total_instance_size += instances_sizes[subindex];
-				}
-
-				// Read in bulk now the instance data
-				void* instances_data = functor.AllocateAndRead(total_instance_size, &allocation_failure);
-				if (instances_data == nullptr) {
-					return allocate_and_read_failure();
-				}
 
 				AllocatorPolymorphic component_allocator = entity_manager->GetSharedComponentAllocatorPolymorphic(shared_component_pairs[index].component);
 				ECS_STACK_CAPACITY_STREAM(size_t, component_storage, 1024);
@@ -1176,6 +1247,10 @@ namespace ECSEngine {
 					// Now call the extract function
 					bool is_data_valid = component_info->function(&function_data);
 					if (!is_data_valid) {
+						if (options->detailed_error_string) {
+							ECS_FORMAT_TEMP_STRING(message, "A shared instance for component {#} has corrupted data", get_shared_component_name(index));
+							options->detailed_error_string->AddStreamAssert(message);
+						}
 						return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
 					}
 
@@ -1183,23 +1258,30 @@ namespace ECSEngine {
 					entity_manager->RegisterSharedInstanceCommit(shared_component_pairs[index].component, component_storage.buffer);
 					current_instance_offset += instances_sizes[shared_instance];
 				}
-
-				// The size doesn't need to be updated - the data is commited right away - this will ensure that the 
-				// data is always hot in cache
-				functor.ResetBuffering();
 			}
+
+			// The size doesn't need to be updated - the data is commited right away - this will ensure that the 
+			// data is always hot in cache
+			functor.ResetBuffering();
 		}
 
 		// After the instances have been created, we can now bind the named tags to them
 		named_shared_instances_identifier_total_size = 0;
 		named_shared_instances_count = 0;
 		for (unsigned int index = 0; index < header.shared_component_count; index++) {
-			for (unsigned int instance_index = 0; instance_index < shared_component_pairs[index].named_instance_count; instance_index++) {
-				entity_manager->RegisterNamedSharedInstanceCommit(
-					shared_component_pairs[index].component,
-					{ OffsetPointer(named_shared_instances_identifiers, named_shared_instances_identifier_total_size), named_headers[named_shared_instances_count].identifier_size },
-					named_headers[named_shared_instances_count].instance
-				);
+			unsigned int named_instance_count = shared_component_pairs[index].named_instance_count;
+			// In case the shared component exists in the file but not in the entity manager, we need to ignore
+			// Its instances
+			bool exists_shared_component = entity_manager->ExistsSharedComponent(shared_component_pairs[index].component);
+
+			for (unsigned int instance_index = 0; instance_index < named_instance_count; instance_index++) {
+				if (exists_shared_component) {
+					entity_manager->RegisterNamedSharedInstanceCommit(
+						shared_component_pairs[index].component,
+						{ OffsetPointer(named_shared_instances_identifiers, named_shared_instances_identifier_total_size), named_headers[named_shared_instances_count].identifier_size },
+						named_headers[named_shared_instances_count].instance
+					);
+				}
 
 				named_shared_instances_identifier_total_size += named_headers[named_shared_instances_count].identifier_size;
 				named_shared_instances_count++;
@@ -1208,37 +1290,48 @@ namespace ECSEngine {
 
 		// Now we need to read the global components
 		for (unsigned short index = 0; index < header.global_component_count; index++) {
+			bool exists = entity_manager->ExistsGlobalComponent(global_component_pairs[index].component);
 			functor.MarkBufferingResetPoint();
 
 			unsigned int* write_size = (unsigned int*)functor.AllocateAndRead(sizeof(unsigned int), &allocation_failure);
 			if (write_size == nullptr) {
-				return allocate_and_read_failure();
+				ECS_FORMAT_TEMP_STRING(section, "Byte size for global component {#}", get_global_component_name(index));
+				return allocate_and_read_failure(section);
 			}
 
 			void* component_data = functor.AllocateAndRead(*write_size, &allocation_failure);
 			if (component_data == nullptr) {
-				return allocate_and_read_failure();
+				ECS_FORMAT_TEMP_STRING(section, "Data for global component {#}", get_global_component_name(index));
+				return allocate_and_read_failure(section);
 			}
 
-			// If it has a name, search for its match
-			const DeserializeEntityManagerGlobalComponentInfo* component_info = cached_global_infos[index].info;
+			// At the steps beforehand need to be performed no matter if the component is ignored or not
+			
+			if (exists) {
+				// If it has a name, search for its match
+				const DeserializeEntityManagerGlobalComponentInfo* component_info = cached_global_infos[index].info;
 
-			// Allocate the data from the entity manager allocator
-			void* global_data = entity_manager->GetGlobalComponent(cached_global_infos[index].found_at);
-			AllocatorPolymorphic component_allocator = entity_manager->GetGlobalComponentAllocatorPolymorphic(cached_global_infos[index].found_at);
+				// Allocate the data from the entity manager allocator
+				void* global_data = entity_manager->GetGlobalComponent(cached_global_infos[index].found_at);
+				AllocatorPolymorphic component_allocator = entity_manager->GetGlobalComponentAllocatorPolymorphic(cached_global_infos[index].found_at);
 
-			DeserializeEntityManagerComponentData function_data;
-			function_data.components = global_data;
-			function_data.file_data = component_data;
-			function_data.extra_data = component_info->extra_data;
-			function_data.version = global_component_pairs[index].serialize_version;
-			function_data.component_allocator = component_allocator;
-			function_data.count = 1;
+				DeserializeEntityManagerComponentData function_data;
+				function_data.components = global_data;
+				function_data.file_data = component_data;
+				function_data.extra_data = component_info->extra_data;
+				function_data.version = global_component_pairs[index].serialize_version;
+				function_data.component_allocator = component_allocator;
+				function_data.count = 1;
 
-			// Now call the extract function
-			bool is_data_valid = component_info->function(&function_data);
-			if (!is_data_valid) {
-				return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
+				// Now call the extract function
+				bool is_data_valid = component_info->function(&function_data);
+				if (!is_data_valid) {
+					if (options->detailed_error_string) {
+						ECS_FORMAT_TEMP_STRING(message, "The global component {#} has corrupted data", get_global_component_name(index));
+						options->detailed_error_string->AddStreamAssert(message);
+					}
+					return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
+				}
 			}
 
 			functor.ResetBuffering();
@@ -1249,7 +1342,7 @@ namespace ECSEngine {
 
 		ArchetypeHeader* archetype_headers = (ArchetypeHeader*)functor.AllocateAndRead(sizeof(ArchetypeHeader) * header.archetype_count, &allocation_failure);
 		if (archetype_headers == nullptr) {
-			return allocate_and_read_failure();
+			return allocate_and_read_failure("Archetype Headers");
 		}
 
 		// Now calculate how much is needed to read the shared instances and the base archetype sizes
@@ -1269,10 +1362,19 @@ namespace ECSEngine {
 		Component* archetype_component_signatures = (Component*)functor.AllocateAndRead(archetypes_component_signature_size 
 			+ base_archetypes_instance_size + base_archetypes_counts_size, &allocation_failure);
 		if (archetype_component_signatures == nullptr) {
-			return allocate_and_read_failure();
+			return allocate_and_read_failure("Archetype Signatures and Counts");
 		}
 		SharedInstance* base_archetypes_instances = (SharedInstance*)OffsetPointer(archetype_component_signatures, archetypes_component_signature_size);
 		unsigned int* base_archetypes_sizes = (unsigned int*)OffsetPointer(base_archetypes_instances, base_archetypes_instance_size);	
+
+		// This is used to map from the header index to the actual entity manager index
+		unsigned int* archetype_mappings = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * header.archetype_count);
+		// This is used to map from the archetype base index to the actual archetype base index (since it can be found
+		// when a component was removed
+		unsigned int* archetype_base_mappings = (unsigned int*)stack_allocator.Allocate(base_archetypes_counts_size);
+		// This is used to remap the entities stream index when some entities are moved to another base archetype when there are
+		// Missing components. We record the base size when that base is found such that we can offset the stream index with that value
+		unsigned int* archetype_base_count_mappings = (unsigned int*)stack_allocator.Allocate(base_archetypes_counts_size);
 
 		unsigned int component_signature_offset = 0;
 		unsigned int base_archetype_instances_offset = 0;
@@ -1283,43 +1385,90 @@ namespace ECSEngine {
 			unique.indices = archetype_component_signatures + component_signature_offset;
 			unique.count = archetype_headers[index].unique_count;
 
-			bool unique_component_is_missing = false;
+			bool missing_shared_components[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+			memset(missing_shared_components, false, sizeof(missing_shared_components));
+			ComponentSignature shared;
+			shared.indices = unique.indices + unique.count;
+			shared.count = archetype_headers[index].shared_count;
+
+			unsigned char original_unique_count = unique.count;
+			unsigned char original_shared_count = shared.count;
+
 			// Check to see if one of the unique components is missing
-			for (unsigned char component_index = 0; component_index < unique.count && !unique_component_is_missing; component_index++) {
+			for (unsigned char component_index = 0; component_index < unique.count; component_index++) {
 				if (!entity_manager->ExistsComponent(unique.indices[component_index])) {
-					unique_component_is_missing = true;
+					unique.count--;
+					unique.indices[component_index] = unique.indices[unique.count];
+					component_index--;
 				}
 			}
 
-			if (unique_component_is_missing) {
-				// Fail
-				return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
+			unsigned char missing_index = 0;
+			for (unsigned char shared_index = 0; shared_index < shared.count; shared_index++) {
+				if (!entity_manager->ExistsSharedComponent(shared.indices[shared_index])) {
+					missing_shared_components[missing_index] = true;
+					shared.count--;
+					shared.indices[shared_index] = shared.indices[shared.count];
+					shared_index--;
+				}
+				missing_index++;
 			}
 
-			ComponentSignature shared;
-			shared.indices = archetype_component_signatures + component_signature_offset + archetype_headers[index].unique_count;
-			shared.count = archetype_headers[index].shared_count;
-			unsigned int archetype_index = entity_manager->CreateArchetypeCommit(unique, shared);
+			if (unique.count != original_unique_count || shared.count != original_shared_count) {
+				if (!options->remove_missing_components) {
+					// Fail
+					if (options->detailed_error_string) {
+						options->detailed_error_string->AddStreamAssert("An archetype has missing unique components");
+					}
+					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
+				}
+			}
+
+			// In order to handle the case when a component is removed, use the FindOrCreate functions
+			unsigned int archetype_index = entity_manager->FindOrCreateArchetype(unique, shared);
+			// Need to fill in the mapping
+			archetype_mappings[index] = archetype_index;
+
 			SharedComponentSignature shared_signature;
 			shared_signature.indices = shared.indices;
 			shared_signature.count = shared.count;
 			for (unsigned int base_index = 0; base_index < archetype_headers[index].base_count; base_index++) {
 				shared_signature.instances = base_archetypes_instances + base_archetype_instances_offset;
-				// Create the base archetypes
-				entity_manager->CreateArchetypeBaseCommit(archetype_index, shared_signature, base_archetypes_sizes[base_archetype_sizes_offset]);
+				// We need to shuffle the instances according to the order the components were shuffled
+				unsigned char current_shared_count = original_shared_count;
+				for (unsigned char shared_index = 0; shared_index < original_shared_count; shared_index++) {
+					if (missing_shared_components[shared_index]) {
+						current_shared_count--;
+						shared_signature.instances[shared_index] = shared_signature.instances[current_shared_count];
+						shared_index--;
+					}
+				}
 
-				ArchetypeBase* base = entity_manager->GetBase(archetype_index, base_index);
+				// Find/Create the base archetype
+				unsigned int existing_base_index = entity_manager->GetArchetype(archetype_index)->FindBaseIndex(shared_signature);
+				if (existing_base_index != -1) {
+					// In case it exists, we need to reserve new space for the entities
+					ArchetypeBase* base = entity_manager->GetBase(archetype_index, existing_base_index);
+					base->Reserve(base_archetypes_sizes[base_archetype_sizes_offset]);
+				}
+				else {
+					existing_base_index = entity_manager->CreateArchetypeBaseCommit(archetype_index, shared_signature, base_archetypes_sizes[base_archetype_sizes_offset]);
+				}
+				// Fill in the mapping
+				archetype_base_mappings[base_archetype_sizes_offset] = existing_base_index;
+
+				ArchetypeBase* base = entity_manager->GetBase(archetype_index, existing_base_index);
+				// We need to record the base size before incrementing with the current value
+				archetype_base_count_mappings[base_archetype_sizes_offset] = base->m_size;
 				// Set the size of the base now - it's going to be used again when deserializing
-				base->m_size = base_archetypes_sizes[base_archetype_sizes_offset];
-
-				// We also need to update the shared instance mapping
+				base->m_size += base_archetypes_sizes[base_archetype_sizes_offset];
 
 				// Bump forward the shared indices
-				base_archetype_instances_offset += shared.count;
+				base_archetype_instances_offset += original_shared_count;
 				base_archetype_sizes_offset++;
 			}
 			// Bump forward the component offset
-			component_signature_offset += unique.count + shared.count;
+			component_signature_offset += original_unique_count + original_shared_count;
 		}
 
 		// Before bumping back the buffering size we need to copy the unique names because they will be used in
@@ -1328,6 +1477,7 @@ namespace ECSEngine {
 		// Another thing that we need to keep is the base archetype sizes.
 		unsigned int unique_name_total_size = current_unique_name_offset;
 		if (functor.HasBuffering()) {
+			// This uses _alloca, which is tied to function scope instead of block scope
 			ECS_STACK_CAPACITY_STREAM_DYNAMIC(char, stack_unique_component_names, unique_name_total_size);
 			memcpy(stack_unique_component_names.buffer, unique_name_characters, unique_name_total_size);
 			unique_name_characters = stack_unique_component_names.buffer;
@@ -1336,46 +1486,72 @@ namespace ECSEngine {
 		// The buffering can be bumped back, it is no longer needed
 		functor.ClearBuffering();
 
+		component_signature_offset = 0;
+		base_archetype_sizes_offset = 0;
 		// Only the component data of the base archetypes remains to be restored, the entities must be deduces from the entity pool
 		for (unsigned int index = 0; index < header.archetype_count; index++) {
-			Archetype* archetype = entity_manager->GetArchetype(index);
+			Archetype* archetype = entity_manager->GetArchetype(archetype_mappings[index]);
 			unsigned int base_count = archetype->GetBaseCount();
+
+			// We need the unique signature of the current archetype - but we also need the signature for the original
+			// Archetype from the file in order to skip the components that are missing
 			ComponentSignature unique = archetype->GetUniqueSignature();
 
+			ComponentSignature original_unique_signature = { archetype_component_signatures + component_signature_offset, archetype_headers[index].unique_count };
+
 			// The order of the loops cannot be interchanged - the serialized data is written for each base together
-			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-				ArchetypeBase* base = archetype->GetBase(base_index);
-				for (unsigned int component_index = 0; component_index < unique.count; component_index++) {
-					auto component_info = search_matching_component_unique(unique.indices[component_index]);
+			for (unsigned int base_index = 0; base_index < archetype_headers[index].base_count; base_index++) {
+				ArchetypeBase* base = archetype->GetBase(archetype_base_mappings[base_archetype_sizes_offset]);
+				for (unsigned int component_index = 0; component_index < original_unique_signature.count; component_index++) {
+					unsigned char current_unique_index = unique.Find(original_unique_signature[component_index]);
+
+					Component current_component;
+					CachedComponentInfo component_info;
+					if (current_unique_index != UCHAR_MAX) {
+						current_component = unique.indices[current_unique_index];
+						component_info = search_matching_component_unique(current_component);
+					}
 
 					// Use the buffering to read in. Read the write count first
 					unsigned int* data_size = (unsigned int*)functor.AllocateAndRead(sizeof(unsigned int), &allocation_failure);
 					if (data_size == nullptr) {
-						return allocate_and_read_failure();
+						ECS_FORMAT_TEMP_STRING(section, "Data size for component {#} while reading an archetype could not be read", component_info.info->name);
+						return allocate_and_read_failure(section);
 					}
 					const void* starting_component_data = functor.AllocateAndRead(*data_size, &allocation_failure);
 					if (starting_component_data == nullptr) {
-						return allocate_and_read_failure();
+						ECS_FORMAT_TEMP_STRING(section, "Data for component {#} while reading an archetype could not be read", component_info.info->name);
+						return allocate_and_read_failure(section);
 					}
 
-					// Now call the extract function for each component
-					void* archetype_buffer = base->m_buffers[component_index];
-					unsigned int component_size = entity_manager->m_unique_components[unique.indices[component_index].value].size;
+					if (current_unique_index != UCHAR_MAX) {
+						// Now call the extract function for each component
+						void* archetype_buffer = base->m_buffers[current_unique_index];
+						unsigned int component_size = entity_manager->m_unique_components[current_component.value].size;
 
-					DeserializeEntityManagerComponentData function_data;
-					function_data.count = base->m_size;
-					function_data.extra_data = component_info.info->extra_data;
-					function_data.file_data = starting_component_data;
-					function_data.components = archetype_buffer;
-					function_data.version = component_info.version;
-					function_data.component_allocator = entity_manager->GetComponentAllocatorPolymorphic(unique.indices[component_index]);
+						DeserializeEntityManagerComponentData function_data;
+						function_data.count = base->m_size;
+						function_data.extra_data = component_info.info->extra_data;
+						function_data.file_data = starting_component_data;
+						function_data.components = archetype_buffer;
+						function_data.version = component_info.version;
+						function_data.component_allocator = entity_manager->GetComponentAllocatorPolymorphic(current_component);
 
-					bool is_data_valid = component_info.info->function(&function_data);
-					if (!is_data_valid) {
-						return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
+						bool is_data_valid = component_info.info->function(&function_data);
+						if (!is_data_valid) {
+							if (options->detailed_error_string) {
+								ECS_FORMAT_TEMP_STRING(message, "Data for component {#} for an archetype is corrupted", component_info.info->name);
+								options->detailed_error_string->AddStreamAssert(message);
+							}
+							return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
+						}
 					}
 				}
+
+				base_archetype_sizes_offset++;
 			}
+
+			component_signature_offset += archetype_headers[index].unique_count + archetype_headers[index].shared_count;
 		}
 
 		functor.ClearBuffering();
@@ -1563,7 +1739,20 @@ namespace ECSEngine {
 		// which can be read now
 		success = DeserializeEntityPool(entity_manager->m_entity_pool, read_instrument);
 		if (!success) {
+			if (options->detailed_error_string) {
+				options->detailed_error_string->AddStreamAssert("Failed to deserialize the entity pool");
+			}
 			return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
+		}
+
+		// Construct a helper array with the offsets of the base mappings such that they can be easily referenced by the
+		// Loop down bellow
+		unsigned int* archetype_base_mappings_offsets = (unsigned int*)stack_allocator.Allocate(sizeof(unsigned int) * header.archetype_count);
+		if (header.archetype_count > 0) {
+			archetype_base_mappings_offsets[0] = 0;
+			for (unsigned int index = 1; index < header.archetype_count; index++) {
+				archetype_base_mappings_offsets[index] = archetype_base_mappings_offsets[index - 1] + archetype_headers[index - 1].base_count;
+			}
 		}
 
 		// Walk through the list of entities and write them inside the base archetypes
@@ -1571,15 +1760,30 @@ namespace ECSEngine {
 			if (entity_manager->m_entity_pool->m_entity_infos[pool_index].is_in_use) {
 				entity_manager->m_entity_pool->m_entity_infos[pool_index].stream.ForEachIndex([&](unsigned int entity_index) {
 					// Construct the entity from the entity info
-					EntityInfo info = entity_manager->m_entity_pool->m_entity_infos[pool_index].stream[entity_index];
+					EntityInfo* info = &entity_manager->m_entity_pool->m_entity_infos[pool_index].stream[entity_index];
 					Entity entity = entity_manager->m_entity_pool->GetEntityFromPosition(pool_index, entity_index);
 					// Set the entity generation count the same as in the info
-					entity.generation_count = info.generation_count;
+					entity.generation_count = info->generation_count;
 
 					// Now set the according archetype's entity inside the entities buffer
-					Archetype* archetype = entity_manager->GetArchetype(info.main_archetype);
-					ArchetypeBase* base = archetype->GetBase(info.base_archetype);
-					base->m_entities[info.stream_index] = entity;
+
+					unsigned int main_archetype = info->main_archetype;
+					unsigned int base_archetype = info->base_archetype;
+					// We need to remap the entities here since the archetypes might have changed when missing components
+					// Are allowed
+					if (options->remove_missing_components) {
+						// First do the stream index, then the base index and at last the main archetype in this order
+						// Since the calculation of them is dependent on those other values
+						info->stream_index += archetype_base_count_mappings[archetype_base_mappings_offsets[main_archetype] + base_archetype];
+						info->base_archetype = archetype_base_mappings[archetype_base_mappings_offsets[main_archetype] + base_archetype];
+						info->main_archetype = archetype_mappings[main_archetype];
+
+						base_archetype = info->base_archetype;
+						main_archetype = info->main_archetype;
+					}
+					Archetype* archetype = entity_manager->GetArchetype(main_archetype);
+					ArchetypeBase* base = archetype->GetBase(base_archetype);
+					base->m_entities[info->stream_index] = entity;
 				});
 			}
 		}
@@ -1588,6 +1792,9 @@ namespace ECSEngine {
 		entity_manager->m_hierarchy = EntityHierarchy(entity_manager->m_hierarchy_allocator);
 		success = DeserializeEntityHierarchy(&entity_manager->m_hierarchy, read_instrument);
 		if (!success) {
+			if (options->detailed_error_string) {
+				options->detailed_error_string->AddStreamAssert("Failed to deserialize the entity hierarchy");
+			}
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 		}
 

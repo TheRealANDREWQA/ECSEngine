@@ -27,6 +27,9 @@ namespace ECSEngine {
 		ECS_FILE_HANDLE file_handle = -1;
 		ECS_FILE_STATUS_FLAGS status = OpenFile(load_data->file, &file_handle, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL | ECS_FILE_ACCESS_BINARY);
 		if (status != ECS_FILE_STATUS_OK) {
+			if (load_data->detailed_error_string) {
+				load_data->detailed_error_string->AddStreamAssert("Failed to open the scene file");
+			}
 			return false;
 		}
 
@@ -65,6 +68,9 @@ namespace ECSEngine {
 
 		bool success = ReadFile(file_handle, { file_allocation, file_byte_size });
 		if (!success) {
+			if (load_data->detailed_error_string) {
+				load_data->detailed_error_string->AddStreamAssert("Failed to read the scene file");
+			}
 			return false;
 		}
 
@@ -83,6 +89,9 @@ namespace ECSEngine {
 		}
 
 		if (!success) {
+			if (load_data->detailed_error_string) {
+				load_data->detailed_error_string->AddStreamAssert("Failed to deserialize the asset database of the scene");
+			}
 			return false;
 		}
 
@@ -105,6 +114,8 @@ namespace ECSEngine {
 		deserialize_options.component_table = &component_table;
 		deserialize_options.shared_component_table = &shared_component_table;
 		deserialize_options.global_component_table = &global_component_table;
+		deserialize_options.detailed_error_string = load_data->detailed_error_string;
+		deserialize_options.remove_missing_components = load_data->allow_missing_components;
 		ECS_DESERIALIZE_ENTITY_MANAGER_STATUS deserialize_status = DeserializeEntityManager(
 			load_data->entity_manager,
 			ptr,

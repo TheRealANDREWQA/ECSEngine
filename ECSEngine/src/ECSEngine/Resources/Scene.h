@@ -28,6 +28,8 @@ namespace ECSEngine {
 		AssetDatabaseReference* database_reference = nullptr;
 
 		// ------------------------ Optional -----------------------------
+		CapacityStream<char>* detailed_error_string = nullptr;
+		bool allow_missing_components = false;
 
 		// If you want the asset database to have metadatas unique (but invalid, they don't point to valid data)
 		// after the load such that the link assets can be still identified, you must give an allocator for the temporary allocations needed
