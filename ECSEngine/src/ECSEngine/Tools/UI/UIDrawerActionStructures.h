@@ -265,9 +265,10 @@ namespace ECSEngine {
 
 			UIActionHandler callback;
 			UIActionHandler final_callback;
+			Stream<char> target_window_name;
 		};
 
-		struct ColorInputHSVGradientInfo {
+		struct UIColorInputHSVGradientInfo {
 			UIDrawerColorInput* input;
 			float2 gradient_position;
 			float2 gradient_scale;
@@ -306,6 +307,7 @@ namespace ECSEngine {
 		struct UIDrawerColorInputWindowData {
 			UIDrawerColorInput* input;
 			Color initial_color;
+			Stream<char> target_window_name;
 		};
 
 		struct UIDrawerColorInputSliderCallback {
@@ -347,6 +349,7 @@ namespace ECSEngine {
 			UIDrawConfig config;
 			size_t configuration;
 			bool is_opened_on_press;
+			Stream<char> target_window_name;
 		};
 
 		struct UIDrawerComboBoxLabelHoverable {
@@ -357,6 +360,7 @@ namespace ECSEngine {
 		struct UIDrawerComboBoxLabelClickable {
 			UIDrawerComboBox* box;
 			unsigned int index;
+			Stream<char> target_window_name;
 		};
 
 		struct UIDrawerBoolClickableWithPinData {

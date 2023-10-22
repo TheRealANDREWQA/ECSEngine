@@ -628,12 +628,20 @@ namespace ECSEngine {
 
 			void DeactiveWrapCursorPosition();
 
+			void DeallocateDockspaceBorderSnapshot(UIDockspace* dockspace, unsigned int border_index);
+
 			void DeallocateDockspaceBorderResources(UIDockspace* dockspace, unsigned int border_index);
 
 			void DeallocateEventData();
 
 			// Removes all dynamic window resources - irrespective of their reference count
 			void DeallocateWindowDynamicResources(unsigned int window_index);
+
+			// Deallocates the border's snapshot that this window belongs to
+			void DeallocateWindowSnapshot(unsigned int window_index);
+
+			// Will deallocate the snapshot only if the window with that name exists, else it does nothing
+			void DeallocateWindowSnapshot(Stream<char> window_name);
 
 			void DecrementWindowDynamicResource(unsigned int window_index);
 

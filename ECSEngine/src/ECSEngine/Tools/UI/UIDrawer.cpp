@@ -2257,16 +2257,17 @@ namespace ECSEngine {
 					}
 				}
 
-				if ((input->trigger_callback == UIDrawerTextInput::TRIGGER_CALLBACK_MODIFY && !input->trigger_callback_on_release) ||
-					input->trigger_callback == UIDrawerTextInput::TRIGGER_CALLBACK_EXIT) {
-					SnapshotRunnable(input, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
-						UIDrawerTextInput* input = (UIDrawerTextInput*)_data;
+				SnapshotRunnable(input, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+					UIDrawerTextInput* input = (UIDrawerTextInput*)_data;
+
+					if ((input->trigger_callback == UIDrawerTextInput::TRIGGER_CALLBACK_MODIFY && !input->trigger_callback_on_release) ||
+						input->trigger_callback == UIDrawerTextInput::TRIGGER_CALLBACK_EXIT) 
+					{
 						input->Callback(action_data);
 						input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
-
-						return false;
-					});
-				}
+					}
+					return false;
+				});
 			}
 
 			// Determine if the text was changed from outside the UI - do this after the callback to give it
@@ -2283,9 +2284,12 @@ namespace ECSEngine {
 						input->previous_text.CopyOther(*input->text);
 						return true;
 					}
+					return false;
 				}
 
-				return false;
+				// When we are selected, always redraw otherwise we have to update many actions to
+				// Support redrawing, but this should suffice
+				return true;
 			});
 
 			if (ValidatePosition(configuration, position, scale)) {
@@ -2780,7 +2784,6 @@ namespace ECSEngine {
 					memcpy(storage, value_to_modify, slider->value_byte_size);
 
 					functions.convert_text_input(slider->characters, value_to_modify);
-					slider->slider_position = functions.to_float(value_to_modify);
 					if (!mouse_draggable_fixed_offset) {
 						bool is_greater = functions.is_smaller(upper_bound, value_to_modify);
 						bool is_smaller = functions.is_smaller(value_to_modify, lower_bound);
@@ -2791,6 +2794,7 @@ namespace ECSEngine {
 							memcpy(value_to_modify, lower_bound, slider->value_byte_size);
 						}
 					}
+					slider->slider_position = functions.percentage(lower_bound, upper_bound, value_to_modify);
 					slider->character_value = false;
 					slider->changed_value = memcmp(storage, value_to_modify, slider->value_byte_size) != 0;
 				}
@@ -2966,24 +2970,33 @@ namespace ECSEngine {
 
 			if (slider->changed_value) {
 				if (slider->changed_value_callback.action != nullptr) {
-					// Update the data if needed
 					if (configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
 						const UIConfigSliderChangedValueCallback* callback = (const UIConfigSliderChangedValueCallback*)config.GetParameter(UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK);
 						if (callback->handler.data_size > 0 && !callback->copy_on_initialization) {
 							memcpy(slider->changed_value_callback.data, callback->handler.data, callback->handler.data_size);
 						}
 					}
-
-					ActionData action_data = GetDummyActionData();
-					action_data.data = slider->changed_value_callback.data;
-					action_data.position = position;
-					action_data.scale = scale;
-					action_data.buffers = buffers;
-					action_data.counts = counts;
-					slider->changed_value_callback.action(&action_data);
 				}
-				slider->changed_value = false;
 			}
+
+			// Add a snapshot runnable that will redraw the window if the changed value is modified
+			// And call the callback
+			SnapshotRunnable(slider, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+				UIDrawerSlider* slider = (UIDrawerSlider*)_data;
+
+				bool was_changed = slider->changed_value;
+				if (slider->changed_value) {
+					if (slider->changed_value_callback.action != nullptr) {
+						// Update the data if needed
+						action_data->data = slider->changed_value_callback.data;
+						slider->changed_value_callback.action(action_data);
+					}
+					slider->changed_value = false;
+				}
+
+				// We need to redraw if the slider needs to transition to a text input as well
+				return was_changed || slider->text_input_counter == 1;
+			});
 
 			bool is_name_after = IsElementNameAfter(configuration, UI_CONFIG_SLIDER_NO_NAME);
 			size_t finalize_configuration = is_name_after ? configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW : configuration;
@@ -3472,6 +3485,7 @@ namespace ECSEngine {
 					}
 
 					if (new_value != *data->value_to_modify) {
+						action_data->redraw_window = true;
 						*data->value_to_modify = new_value;
 						if (data->callback.action != nullptr) {
 							action_data->data = data->callback.data;
@@ -3573,6 +3587,7 @@ namespace ECSEngine {
 								WrapperData* data = (WrapperData*)_data;
 								bool old_value = *data->value_to_modify;
 								*data->value_to_modify = !old_value;
+								action_data->redraw_window = true;
 
 								if (data->callback_data != nullptr) {
 									action_data->data = data->callback_data;
@@ -3762,6 +3777,7 @@ namespace ECSEngine {
 						if ((unsigned char)mapping_index != *data->combo_box->active_label) {
 							// The value needs to be changed
 							*data->combo_box->active_label = mapping_index;
+							action_data->redraw_window = true;
 
 							if (data->combo_box->callback != nullptr) {
 								action_data->data = data->combo_box->callback_data;
@@ -3780,6 +3796,7 @@ namespace ECSEngine {
 
 						if (value != *data->combo_box->active_label) {
 							*data->combo_box->active_label = value;
+							action_data->redraw_window = true;
 
 							if (data->combo_box->callback != nullptr) {
 								action_data->data = data->combo_box->callback_data;
@@ -3982,13 +3999,21 @@ namespace ECSEngine {
 				bool alpha = false;
 				bool hex = false;
 
+				Stream<char> target_window_name = system->GetWindowName(window_index);
+
 				if (configuration & UI_CONFIG_COLOR_INPUT_SLIDERS) {
 					const UIConfigColorInputSliders* sliders = (const UIConfigColorInputSliders*)config.GetParameter(UI_CONFIG_COLOR_INPUT_SLIDERS);
 					rgb = sliders->rgb;
 					hsv = sliders->hsv;
 					alpha = sliders->alpha;
 					hex = sliders->hex;
+					target_window_name = sliders->target_window_name;
 				}
+
+				void* target_window_name_allocation = GetMainAllocatorBuffer(target_window_name.MemoryOf(target_window_name.size));
+				uintptr_t target_window_name_allocation_ptr = (uintptr_t)target_window_name_allocation;
+				target_window_name.InitializeAndCopy(target_window_name_allocation_ptr, target_window_name);
+				data->target_window_name = target_window_name;
 
 				if (rgb) {
 					UIConfigSliderChangedValueCallback previous_callback;
@@ -5080,64 +5105,81 @@ namespace ECSEngine {
 			}
 
 			NumberInputDrawer(configuration, config, name, number, FloatInputHoverable, FloatInputNoNameHoverable, FloatInputDragValue,
-				&drag_data, sizeof(drag_data), position, scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
-					float EPSILON = 1.0f;
+				&drag_data, sizeof(drag_data), position, scale, [&](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
+					struct RunnableData {
+						UIDrawerTextInput* input;
+						bool callback_on_release;
+					};
 
-					char temp_chars[256];
-					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
-					UIDrawerFloatInputCallbackData* data = (UIDrawerFloatInputCallbackData*)input->callback_data;
+					RunnableData runnable_data = { input, drag_data.callback_on_release };
+					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+						RunnableData* runnable_data = (RunnableData*)_data;
+						UIDrawerTextInput* input = runnable_data->input;
+						UIDrawerFloatInputCallbackData* data = (UIDrawerFloatInputCallbackData*)input->callback_data;
 
-					if (!IsFloatingPointNumber(*input->text) && !input->is_currently_selected) {
-						input->DeleteAllCharacters();
-						ConvertFloatToChars(temp_stream, Clamp(0.0f, data->min, data->max));
-						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
-						temp_stream.size = 0;
-					}
+						ECS_STACK_CAPACITY_STREAM(char, temp_stream, 256);
+						float EPSILON = 1.0f;
 
-					unsigned int digit_count = 0;
-					Stream<char> dot = FindFirstCharacter(*input->text, '.');
-					if (dot.size > 0) {
-						digit_count = dot.size - 1;
-					}
-
-					// If the value changed, update the input stream
-					float current_value = ConvertCharactersToFloat(*input->text);
-					
-					for (unsigned int digit_index = 0; digit_index < digit_count; digit_index++) {
-						EPSILON *= 0.1f;
-					}
-
-					if (!input->is_currently_selected) {
-						float difference = abs(current_value - *number);
-
-						auto has_changed_action = [&]() {
+						bool return_value = false;
+						if (!IsFloatingPointNumber(*input->text) && !input->is_currently_selected) {
 							input->DeleteAllCharacters();
-							ConvertFloatToChars(temp_stream, *number, 3);
-							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
-							data->number_data.external_value_change = true;
+							ConvertFloatToChars(temp_stream, Clamp(0.0f, data->min, data->max));
+							input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
+							temp_stream.size = 0;
 
-							if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
-								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+							return_value = true;
+						}
+
+						unsigned int digit_count = 0;
+						Stream<char> dot = FindFirstCharacter(*input->text, '.');
+						if (dot.size > 0) {
+							digit_count = dot.size - 1;
+						}
+
+						for (unsigned int digit_index = 0; digit_index < digit_count; digit_index++) {
+							EPSILON *= 0.1f;
+						}
+
+						// If the value changed, update the input stream
+						float current_value = ConvertCharactersToFloat(*input->text);
+						if (!input->is_currently_selected) {
+							float difference = abs(current_value - *data->number);
+
+							auto has_changed_action = [&]() {
+								input->DeleteAllCharacters();
+								ConvertFloatToChars(temp_stream, *data->number, 3);
+								input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
+								data->number_data.external_value_change = true;
+
+								if (runnable_data->callback_on_release && !action_data->mouse->IsReleased(ECS_MOUSE_LEFT)) {
+									input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+								}
+							};
+
+							if (isnan(difference)) {
+								bool current_nan = isnan(current_value);
+								bool number_nan = isnan(*data->number);
+								if ((!current_nan && number_nan) || (current_nan && !number_nan)) {
+									has_changed_action();
+									return_value = true;
+								}
 							}
-						};
-
-						if (isnan(difference)) {
-							bool current_nan = isnan(current_value);
-							bool number_nan = isnan(*number);
-							if ((!current_nan && number_nan) || (current_nan && !number_nan)) {
+							else if (difference > EPSILON || digit_count != 3) {
 								has_changed_action();
+								return_value = true;
 							}
 						}
-						else if (difference > EPSILON || digit_count != 3) {
-							has_changed_action();
+						else {
+							// If the input is selected, disable the external value change flag
+							data->number_data.external_value_change = false;
 						}
-					}
-					else {
-						// If the input is selected, disable the external value change flag
-						data->number_data.external_value_change = false;
-					}
+
+						return return_value;
+					});
+					
 					
 					if (configuration & UI_CONFIG_NUMBER_INPUT_RANGE) {
+						UIDrawerFloatInputCallbackData* data = (UIDrawerFloatInputCallbackData*)input->callback_data;
 						bool is_different = data->max != max || data->min != min;
 						data->max = max;
 						data->min = min;
@@ -5177,63 +5219,81 @@ namespace ECSEngine {
 			}
 
 			NumberInputDrawer(configuration, config, name, number, DoubleInputHoverable, DoubleInputNoNameHoverable, DoubleInputDragValue,
-				&drag_data, sizeof(drag_data), position, scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
-					double EPSILON = 1.0;
+				&drag_data, sizeof(drag_data), position, scale, [&](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
+					struct RunnableData {
+						UIDrawerTextInput* input;
+						bool callback_on_release;
+					};
 
-					char temp_chars[256];
-					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
-					UIDrawerDoubleInputCallbackData* data = (UIDrawerDoubleInputCallbackData*)input->callback_data;
+					RunnableData runnable_data = { input, drag_data.callback_on_release };
+					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+						RunnableData* runnable_data = (RunnableData*)_data;
+						UIDrawerTextInput* input = runnable_data->input;
 
-					if (!IsFloatingPointNumber(*input->text) && !input->is_currently_selected) {
-						input->DeleteAllCharacters();
-						ConvertDoubleToChars(temp_stream, Clamp(0.0, data->min, data->max), 3);
-						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
-						temp_stream.size = 0;
-					}
+						double EPSILON = 1.0;
 
-					unsigned int digit_count = 0;
-					const char* dot = strchr(input->text->buffer, '.');
-					if (dot != nullptr) {
-						digit_count = input->text->buffer + input->text->size - dot - 1;
-					}
+						ECS_STACK_CAPACITY_STREAM(char, temp_stream, 256);
+						UIDrawerDoubleInputCallbackData* data = (UIDrawerDoubleInputCallbackData*)input->callback_data;
 
-					if (digit_count > 0) {
-						EPSILON = pow(0.1, digit_count);
-					}
-
-					// If the value changed, update the input stream
-					double current_value = ConvertCharactersToDouble(*input->text);
-					if (!input->is_currently_selected) {
-						double difference = abs(current_value - *number);
-
-						auto has_changed_action = [&]() {
+						bool return_value = false;
+						if (!IsFloatingPointNumber(*input->text) && !input->is_currently_selected) {
 							input->DeleteAllCharacters();
-							ConvertDoubleToChars(temp_stream, *number, 3);
-							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
-							data->number_data.external_value_change = true;
+							ConvertDoubleToChars(temp_stream, Clamp(0.0, data->min, data->max), 3);
+							input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
+							temp_stream.size = 0;
 
-							if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
-								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+							return_value = true;
+						}
+
+						unsigned int digit_count = 0;
+						Stream<char> dot = FindFirstCharacter(*input->text, '.');
+						if (dot.size > 0) {
+							digit_count = dot.size - 1;
+						}
+
+						if (digit_count > 0) {
+							EPSILON = pow(0.1, digit_count);
+						}
+
+						// If the value changed, update the input stream
+						double current_value = ConvertCharactersToDouble(*input->text);
+						if (!input->is_currently_selected) {
+							double difference = abs(current_value - *data->number);
+
+							auto has_changed_action = [&]() {
+								input->DeleteAllCharacters();
+								ConvertDoubleToChars(temp_stream, *data->number, 3);
+								input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
+								data->number_data.external_value_change = true;
+
+								if (runnable_data->callback_on_release && !action_data->mouse->IsReleased(ECS_MOUSE_LEFT)) {
+									input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+								}
+							};
+
+							if (isnan(difference)) {
+								bool current_nan = isnan(current_value);
+								bool number_nan = isnan(*data->number);
+								if ((!current_nan && number_nan) || (current_nan && !number_nan)) {
+									has_changed_action();
+									return_value = true;
+								}
 							}
-						};
-
-						if (isnan(difference)) {
-							bool current_nan = isnan(current_value);
-							bool number_nan = isnan(*number);
-							if ((!current_nan && number_nan) || (current_nan && !number_nan)) {
+							else if (difference > EPSILON || digit_count != 3) {
 								has_changed_action();
+								return_value = true;
 							}
 						}
-						else if (difference > EPSILON || digit_count != 3) {
-							has_changed_action();
+						else {
+							// If the input is selected, disable the external value change flag
+							data->number_data.external_value_change = false;
 						}
-					}
-					else {
-						// If the input is selected, disable the external value change flag
-						data->number_data.external_value_change = false;
-					}
+
+						return return_value;
+					});
 
 					if (configuration & UI_CONFIG_NUMBER_INPUT_RANGE) {
+						UIDrawerDoubleInputCallbackData* data = (UIDrawerDoubleInputCallbackData*)input->callback_data;
 						bool is_different = data->max != max || data->min != min;
 						data->max = max;
 						data->min = min;
@@ -5272,37 +5332,53 @@ namespace ECSEngine {
 			}
 
 			NumberInputDrawer(configuration, config, name, number, IntInputHoverable<Integer>, IntInputNoNameHoverable<Integer>, IntegerInputDragValue<Integer>,
-				&drag_data, sizeof(drag_data), position, scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
-					char temp_chars[256];
-					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
-					UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)input->callback_data;
+				&drag_data, sizeof(drag_data), position, scale, [&](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
+					struct RunnableData {
+						UIDrawerTextInput* input;
+						bool callback_on_release;
+					};
 
-					if (!IsIntegerNumber(*input->text) && !input->is_currently_selected) {
-						input->DeleteAllCharacters();
-						ConvertIntToChars(temp_stream, Clamp((Integer)0, data->min, data->max));
-						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
-						temp_stream.size = 0;
+					RunnableData runnable_data = { input, drag_data.callback_on_release };
+					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+						RunnableData* runnable_data = (RunnableData*)_data;
+						UIDrawerTextInput* input = runnable_data->input;
 
-						if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
-							input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
-						}
-					}
+						ECS_STACK_CAPACITY_STREAM(char, temp_stream, 256);
+						UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)input->callback_data;
 
-					// If the value changed, update the input stream
-					Integer current_value = ConvertCharactersToIntImpl<Integer, char>(*input->text);
-					if (!input->is_currently_selected) {
-						if (current_value != *number) {
+						bool return_value = false;
+						if (!IsIntegerNumber(*input->text) && !input->is_currently_selected) {
 							input->DeleteAllCharacters();
-							ConvertIntToChars(temp_stream, (int64_t)*number);
-							input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
+							ConvertIntToChars(temp_stream, Clamp((Integer)0, data->min, data->max));
+							input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
+							temp_stream.size = 0;
 
-							if (drag_data.callback_on_release && !system->m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
-								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
+							if (runnable_data->callback_on_release && !action_data->mouse->IsReleased(ECS_MOUSE_LEFT)) {
+								input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+							}
+							return_value = true;
+						}
+
+						// If the value changed, update the input stream
+						Integer current_value = ConvertCharactersToIntImpl<Integer, char>(*input->text);
+						if (!input->is_currently_selected) {
+							if (current_value != *data->number) {
+								input->DeleteAllCharacters();
+								ConvertIntToChars(temp_stream, (int64_t)*data->number);
+								input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, action_data->system);
+
+								if (runnable_data->callback_on_release && !action_data->mouse->IsReleased(ECS_MOUSE_LEFT)) {
+									input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
+								}
+								return_value = true;
 							}
 						}
-					}
+
+						return return_value;
+					});
 
 					if (configuration & UI_CONFIG_NUMBER_INPUT_RANGE) {
+						UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)input->callback_data;
 						bool is_different = data->max != max || data->min != min;
 						data->max = max;
 						data->min = min;
@@ -10286,7 +10362,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ComboBoxDropDownDrawer(size_t configuration, UIDrawConfig& config, UIDrawerComboBox* data) {
+		void UIDrawer::ComboBoxDropDownDrawer(size_t configuration, UIDrawConfig& config, UIDrawerComboBox* data, Stream<char> target_window_name) {
 			float2 position = region_position - region_render_offset;
 			float2 scale = { region_scale.x, data->label_y_scale };
 
@@ -10307,6 +10383,8 @@ namespace ECSEngine {
 					UIDrawerComboBoxLabelClickable click_data;
 					click_data.index = index;
 					click_data.box = data;
+					// This is stable, doesn't need to be allocated
+					click_data.target_window_name = target_window_name;
 
 					if (data->unavailables != nullptr) {
 						UIConfigActiveState active_state;
@@ -10440,7 +10518,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::ColorFloatInputDrawer(size_t configuration, UIDrawConfig& config, Stream<char> name, ColorFloat* color, float2 position, float2 scale) {
-			float min_x_scale = GetSquareScale(scale.y).x + layout.element_indentation + 0.002f;
+			float min_x_scale = GetSquareScale(scale.y).x + layout.element_indentation + layout.default_element_x * 2;
 			scale.x = ClampMin(scale.x, min_x_scale);
 
 			Stream<char> identifier = HandleResourceIdentifier(name);
@@ -10780,6 +10858,7 @@ namespace ECSEngine {
 			UIDrawerPathTextCallbackData* data = (UIDrawerPathTextCallbackData*)_data;
 			data->target->size = 0;
 			ConvertASCIIToWide(*data->target, *data->input->text);
+			action_data->redraw_window = true;
 
 			data->CallCallback(action_data);
 		}
@@ -10914,29 +10993,42 @@ namespace ECSEngine {
 			float2 input_scale = { scale.x - folder_icon_size.x - drawer->layout.element_indentation, scale.y };
 			drawer->TextInputDrawer(input_configuration, config, text_input, position, input_scale, UIDrawerTextInputFilterAll);
 
-			// If the path has changed, change the text input as well
-			// This must be done after the text input because the callback will be called
-			// from inside the text input
-			ECS_STACK_CAPACITY_STREAM(char, path_converted, 512);
-			ConvertWideCharsToASCII(*path, path_converted);
-			if (*text_input->text != path_converted) {
-				if (!trigger_on_release || !text_input->is_currently_selected) {
-					text_input->DeleteAllCharacters();
-					if (path_converted.size > 0) {
-						text_input->InsertCharacters(path_converted.buffer, path_converted.size, 0, drawer->system);
-					}
+			struct RunnableData {
+				UIDrawerTextInput* text_input;
+				CapacityStream<wchar_t>* path;
+				bool trigger_on_release;
+			};
 
-					// Call the user callback, if any
-					if (callback_data->user_callback != nullptr) {
-						ActionData action_data = drawer->GetDummyActionData();
-						action_data.data = callback_data;
-						callback_data->CallCallback(&action_data);
-					}
+			RunnableData runnable_data = { text_input, path, trigger_on_release };
+			drawer->SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+				RunnableData* data = (RunnableData*)_data;
 
-					// Disable the callback
-					text_input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+				// If the path has changed, change the text input as well
+				// This must be done after the text input because the callback will be called
+				// from inside the text input
+				ECS_STACK_CAPACITY_STREAM(char, path_converted, 512);
+				ConvertWideCharsToASCII(*data->path, path_converted);
+				if (*data->text_input->text != path_converted) {
+					if (!data->trigger_on_release || !data->text_input->is_currently_selected) {
+						data->text_input->DeleteAllCharacters();
+						if (path_converted.size > 0) {
+							data->text_input->InsertCharacters(path_converted.buffer, path_converted.size, 0, action_data->system);
+						}
+
+						UIDrawerPathTextCallbackData* callback_data = (UIDrawerPathTextCallbackData*)data->text_input->callback;
+						// Call the user callback, if any
+						if (callback_data->user_callback != nullptr) {
+							action_data->data = callback_data;
+							callback_data->CallCallback(action_data);
+						}
+
+						// Disable the callback
+						data->text_input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+						return true;
+					}
 				}
-			}
+				return false;
+			});		
 
 			config.flag_count--;
 
@@ -12712,6 +12804,7 @@ namespace ECSEngine {
 										data->data->active_label.CopyOther(data->label);
 										ECS_ASSERT(data->data->active_label.size < data->data->active_label.capacity);
 										data->data->active_label[data->data->active_label.size] = '\0';
+										action_data->redraw_window = true;
 
 										// Call the right click callback first, then the selectable one
 										UIDrawerFilesystemHierarchyUserRightClickData right_click_data;
@@ -13366,43 +13459,57 @@ namespace ECSEngine {
 			}
 
 			if (configuration & UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS) {
-				// Check if the window is focused
-				if (system->GetActiveWindow() == window_index) {
-					// Check for Ctrl+C, Ctrl+X, Ctrl+V and delete
-					if (system->m_keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-						if (system->m_keyboard->IsPressed(ECS_KEY_C)) {
-							data->SetSelectionCut(false);
-							data->RecordSelection(&action_data);
-						}
-						else if (system->m_keyboard->IsPressed(ECS_KEY_X)) {
-							data->SetSelectionCut(true);
-							data->RecordSelection(&action_data);
-						}
-						else if (system->m_keyboard->IsPressed(ECS_KEY_V)) {
-							// Call the appropriate callback
-							// Only if there is no selection or just a single selection
-							if (data->copied_labels.size > 0 /*&& (data->selected_labels.size == 0 || data->selected_labels.size == 1)*/) {
-								if (data->is_selection_cut && data->cut_action != nullptr) {
-									data->TriggerCut(&action_data);
-								}
-								else if (data->copy_action != nullptr) {
-									data->TriggerCopy(&action_data);
+				SnapshotRunnable(data, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+					UIDrawerLabelHierarchyData* data = (UIDrawerLabelHierarchyData*)_data;
+
+					UISystem* system = action_data->system;
+					Keyboard* keyboard = action_data->keyboard;
+					// Check if the window is focused
+					if (system->GetActiveWindow() == system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index)) {
+						// Check for Ctrl+C, Ctrl+X, Ctrl+V and delete
+						if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+							if (keyboard->IsPressed(ECS_KEY_C)) {
+								data->SetSelectionCut(false);
+								data->RecordSelection(action_data);
+								return true;
+							}
+							else if (keyboard->IsPressed(ECS_KEY_X)) {
+								data->SetSelectionCut(true);
+								data->RecordSelection(action_data);
+								return true;
+							}
+							else if (keyboard->IsPressed(ECS_KEY_V)) {
+								// Call the appropriate callback
+								// Only if there is no selection or just a single selection
+								if (data->copied_labels.size > 0 /*&& (data->selected_labels.size == 0 || data->selected_labels.size == 1)*/) {
+									if (data->is_selection_cut && data->cut_action != nullptr) {
+										data->TriggerCut(action_data);
+										return true;
+									}
+									else if (data->copy_action != nullptr) {
+										data->TriggerCopy(action_data);
+										return true;
+									}
 								}
 							}
-						}
-						else if (system->m_keyboard->IsPressed(ECS_KEY_D)) {
-							data->SetSelectionCut(false);
-							data->RecordSelection(&action_data);
+							else if (keyboard->IsPressed(ECS_KEY_D)) {
+								data->SetSelectionCut(false);
+								data->RecordSelection(action_data);
 
-							data->TriggerCopy(&action_data);
+								data->TriggerCopy(action_data);
+								return true;
+							}
+						}
+						else if (keyboard->IsPressed(ECS_KEY_DELETE)) {
+							if (data->selected_labels.size > 0) {
+								data->TriggerDelete(action_data);
+								return true;
+							}
 						}
 					}
-					else if (system->m_keyboard->IsPressed(ECS_KEY_DELETE)) {
-						if (data->selected_labels.size > 0) {
-							data->TriggerDelete(&action_data);
-						}
-					}
-				}
+					
+					return false;
+				});		
 			}
 		}
 
@@ -15266,17 +15373,22 @@ namespace ECSEngine {
 			// Acts as a wrapper. It automatically checks to see when the window is destroyed
 			// if the selection has changed to trigger the calllback
 			struct DestroyWindowCallbackData {
-				void* GetSelectionData() const {
+				ECS_INLINE void* GetSelectionData() const {
 					return OffsetPointer(this, sizeof(*this));
 				}
 
-				void* GetDestroyData() const {
-					return OffsetPointer(this, sizeof(*this) + handler_data.data_size);
+				ECS_INLINE void* GetDestroyData() const {
+					return OffsetPointer(GetSelectionData(), handler_data.data_size);
+				}
+
+				ECS_INLINE Stream<char> GetTargetWindow() const {
+					return { OffsetPointer(GetDestroyData(), destroy_action.data_size), target_window_name_size };
 				}
 
 				CapacityStream<char>* selection;
 				UIActionHandler handler_data;
 				UIActionHandler destroy_action;
+				unsigned int target_window_name_size;
 			};
 
 			auto destroy_window_callback = [](ActionData* action_data) {
@@ -15293,12 +15405,19 @@ namespace ECSEngine {
 					action_data->data = data->destroy_action.data;
 					data->destroy_action.action(action_data);
 				}
+
+				// Trigger a redraw for the target window
+				Stream<char> window_name = data->GetTargetWindow();
+				system->DeallocateWindowSnapshot(window_name);
 			};
 			
+			Stream<char> current_window_name = system->GetWindowName(window_index);
+
 			size_t _callback_data_storage[256];
 			DestroyWindowCallbackData* callback_data = (DestroyWindowCallbackData*)_callback_data_storage;
 			callback_data->handler_data = selection_callback;
 			callback_data->selection = selection;
+			callback_data->target_window_name_size = current_window_name.size;
 
 			unsigned int write_size = sizeof(*callback_data);
 
@@ -15315,6 +15434,11 @@ namespace ECSEngine {
 				write_size += final_descriptor.destroy_action_data_size;
 			}
 
+			// Write the window name
+			void* target_window_name_characters = OffsetPointer(callback_data, write_size);
+			current_window_name.CopyTo(target_window_name_characters);
+			write_size += current_window_name.MemoryOf(current_window_name.size);
+
 			if (final_descriptor.window_name.size == 0) {
 				final_descriptor.window_name = "Selection Input Window";
 			}
@@ -15325,7 +15449,7 @@ namespace ECSEngine {
 			final_descriptor.destroy_action_data_size = write_size;
 
 			size_t border_flags = UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW | UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER;
-			MenuButton(SPRITE_CONFIGURATION, menu_config, { nullptr,0 }, final_descriptor, border_flags);
+			MenuButton(SPRITE_CONFIGURATION, menu_config, { nullptr, 0 }, final_descriptor, border_flags);
 
 			if (name.size > 0 && !name_first) {
 				ElementName(configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y, config, name, position, scale);
@@ -16991,6 +17115,7 @@ namespace ECSEngine {
 			else {
 				data->capacity_data->size = data->new_size;
 			}
+			data->array_data->should_redraw = true;
 
 			if (data->array_data->add_callback != nullptr) {
 				data->new_size = old_size;
@@ -17021,6 +17146,7 @@ namespace ECSEngine {
 			else {
 				data->capacity_data->size = data->new_size;
 			}
+			data->array_data->should_redraw = true;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -17080,10 +17206,11 @@ namespace ECSEngine {
 						data->array_data->add_callback(action_data);
 					}
 				}
+
 				// It can happen that the add/remove buttons modify the value and this fires later on
 				// after the callbacks were called. So check that the size is smaller or greater
-
 				data->capacity_data->size = data->new_size;
+				data->array_data->should_redraw = true;
 			}
 		}
 

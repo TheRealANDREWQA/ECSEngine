@@ -2045,6 +2045,16 @@ namespace ECSEngine {
 				size_t NEW_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM,
 					UI_CONFIG_WINDOW_DEPENDENT_SIZE, UI_CONFIG_MAKE_SQUARE, UI_CONFIG_DO_CACHE);
 
+				// Add a snapshot runnable that monitors the should redraw flag
+				SnapshotRunnable(data, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
+					UIDrawerArrayData* data = (UIDrawerArrayData*)_data;
+					if (data->should_redraw) {
+						data->should_redraw = false;
+						return true;
+					}
+					return false;
+				});
+
 				// Draw the collapsing header - nullified configurations - relative transform, window dependent size, make square
 				CollapsingHeader(NEW_CONFIGURATION | UI_CONFIG_COLLAPSING_HEADER_DO_NOT_INFER | UI_CONFIG_GET_TRANSFORM,
 					header_config, 
@@ -2094,6 +2104,7 @@ namespace ECSEngine {
 						if (IsClickableTrigger(action_data)) {
 							SelectElementData* data = (SelectElementData*)_data;
 							data->array_data->remove_anywhere_index = data->index;
+							data->array_data->should_redraw = true;
 						}
 					};
 
@@ -3214,7 +3225,8 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ComboBoxDropDownDrawer(size_t configuration, UIDrawConfig& config, UIDrawerComboBox* data);
+			// The target window name needs to be stable
+			void ComboBoxDropDownDrawer(size_t configuration, UIDrawConfig& config, UIDrawerComboBox* data, Stream<char> target_window_name);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3836,7 +3848,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename T>
-			T* GetMainAllocatorBuffer() {
+			ECS_INLINE T* GetMainAllocatorBuffer() {
 				return (T*)GetMainAllocatorBuffer(sizeof(T), alignof(T));
 			}
 
@@ -3844,7 +3856,7 @@ namespace ECSEngine {
 
 			// name must not conflict with other element names
 			template<typename T>
-			T* GetMainAllocatorBufferAndStoreAsResource(Stream<char> name) {
+			ECS_INLINE T* GetMainAllocatorBufferAndStoreAsResource(Stream<char> name) {
 				return (T*)GetMainAllocatorBufferAndStoreAsResource(name, sizeof(T), alignof(T));
 			}
 
