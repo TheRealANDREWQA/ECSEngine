@@ -1422,6 +1422,9 @@ namespace ECSEngine {
 		struct UIDrawerArrayData {
 			bool collapsing_header_state;
 			bool drag_is_released;
+			// Having a boolean flag here makes it easy for all callbacks to change
+			// This and have a snapshot runnable redraw the window
+			bool should_redraw;
 			ECS_UI_DRAW_PHASE add_callback_phase;
 			ECS_UI_DRAW_PHASE remove_callback_phase;
 			ECS_UI_DRAW_PHASE remove_anywhere_callback_phase;
@@ -1945,6 +1948,7 @@ namespace ECSEngine {
 			bool hsv = true;
 			bool alpha = true;
 			bool hex = true;
+			Stream<char> target_window_name = {};
 		};
 
 	}

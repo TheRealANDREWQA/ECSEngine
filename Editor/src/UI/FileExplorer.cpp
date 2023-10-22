@@ -1893,9 +1893,6 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 
 	if (initialize) {
 		if (data->file_functors.m_capacity == 0) {
-			//InitializeFileExplorer(data, editor_allocator, task_manager->GetThreadCount());
-			//InitializeFileExplorer(editor_state);
-
 			ProjectFile* project_file = editor_state->project_file;
 			data->current_directory.CopyOther(project_file->path);
 			data->current_directory.AddAssert(ECS_OS_PATH_SEPARATOR);

@@ -48,11 +48,15 @@ namespace ECSEngine {
 		};
 
 		// additional data is primarly intended for general actions which depend on previous information or next one
+		// Or for callbacks to receive extra data
 		struct ActionData {
 			UISystem* system;
 			UIDockspace* dockspace;
 			unsigned int border_index;
 			DockspaceType type;
+			// This is used for snapshots - callbacks can set this to true
+			// To informt the UISystem to discard the existing window snapshot, if there is one
+			bool redraw_window;
 			float2 mouse_position;
 			float2 position;
 			float2 scale;

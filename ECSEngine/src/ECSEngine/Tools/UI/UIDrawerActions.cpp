@@ -235,7 +235,9 @@ namespace ECSEngine {
 				}
 			}
 
-			data->slider->changed_value = initial_position != data->slider->slider_position;
+			if (!data->slider->changed_value) {
+				data->slider->changed_value = initial_position != data->slider->slider_position;
+			}
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -246,7 +248,8 @@ namespace ECSEngine {
 			UIDrawerSlider* data = (UIDrawerSlider*)_data;
 			if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
 				memcpy(data->value_to_change, data->default_value, data->value_byte_size);
-
+				data->changed_value = true;
+				data->character_value = false;
 				data->Callback(action_data);
 			}
 
@@ -631,6 +634,7 @@ namespace ECSEngine {
 				data->input->hsv.alpha = data->input->rgb->alpha;
 			}
 
+			system->DeallocateWindowSnapshot(data->input->target_window_name);
 			data->input->Callback(action_data, false);
 		}
 
@@ -650,6 +654,8 @@ namespace ECSEngine {
 				// For debug
 				Color back_to_rgb = HSVToRGB(input->hsv);
 
+				system->DeallocateWindowSnapshot(input->target_window_name);
+
 				input->Callback(action_data, false);
 			}
 		}
@@ -664,6 +670,8 @@ namespace ECSEngine {
 				*data->rgb = data->default_color;
 				data->hsv = RGBToHSV(data->default_color);
 
+				//action_data->redraw_window = true;
+				system->DeallocateWindowSnapshot(data->target_window_name);
 				action_data->data = data->callback.data;
 				data->Callback(action_data, true);
 			}
@@ -674,11 +682,13 @@ namespace ECSEngine {
 		void ColorInputPreviousRectangleClickableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			UIDrawerColorInput* data = (UIDrawerColorInput*)_data;
-			data->hsv = RGBToHSV(data->color_picker_initial_color);
-			*data->rgb = data->color_picker_initial_color;
+			UIDrawerColorInput* input = (UIDrawerColorInput*)_data;
+			input->hsv = RGBToHSV(input->color_picker_initial_color);
+			*input->rgb = input->color_picker_initial_color;
 
-			data->Callback(action_data, false);
+			system->DeallocateWindowSnapshot(input->target_window_name);
+
+			input->Callback(action_data, false);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -687,16 +697,27 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerComboBoxLabelClickable* data = (UIDrawerComboBoxLabelClickable*)_data;
+			bool changed = false;
 			if (data->box->mappings != nullptr) {
-				memcpy(data->box->active_label, OffsetPointer(data->box->mappings, data->box->mapping_byte_size * data->index), data->box->mapping_byte_size);
+				const void* new_value = OffsetPointer(data->box->mappings, data->box->mapping_byte_size * data->index);
+				if (memcmp(new_value, data->box->active_label, data->box->mapping_byte_size) != 0) {
+					changed = true;
+					memcpy(data->box->active_label, new_value, data->box->mapping_byte_size);
+				}
 			}
 			else {
-				*data->box->active_label = data->index;
+				if (data->index != *data->box->active_label) {
+					changed = true;
+					*data->box->active_label = data->index;
+				}
 			}
 
-			if (data->box->callback != nullptr) {
-				action_data->data = data->box->callback_data;
-				data->box->callback(action_data);
+			if (changed) {
+				system->DeallocateWindowSnapshot(data->target_window_name);
+				if (data->box->callback != nullptr) {
+					action_data->data = data->box->callback_data;
+					data->box->callback(action_data);
+				}
 			}
 
 			system->DestroyWindowIfFound("ComboBoxOpened");
@@ -709,6 +730,7 @@ namespace ECSEngine {
 
 			bool* data = (bool*)_data;
 			*data = !(*data);
+			action_data->redraw_window = true;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -720,6 +742,7 @@ namespace ECSEngine {
 			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 
 			*data->pointer = !*data->pointer;
+			action_data->redraw_window = true;
 			if (data->is_horizontal) {
 				system->m_windows[window_index].pin_horizontal_slider_count += data->pin_count;
 			}
@@ -1499,6 +1522,7 @@ namespace ECSEngine {
 			else {
 				*data->state |= data->flag;
 			}
+			action_data->redraw_window = true;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1586,6 +1610,7 @@ namespace ECSEngine {
 				data->hierarchy->active_label.CopyOther(data->label);
 				ECS_ASSERT(data->hierarchy->active_label.size < data->hierarchy->active_label.capacity);
 				data->hierarchy->active_label[data->hierarchy->active_label.size] = '\0';
+				action_data->redraw_window = true;
 
 				if (data->hierarchy->selectable_callback != nullptr) {
 					action_data->additional_data = data->hierarchy->active_label.buffer;
@@ -1610,6 +1635,7 @@ namespace ECSEngine {
 				
 				PinWindowVerticalSliderPosition(system, system->GetWindowIndexFromBorder(dockspace, border_index));
 
+				action_data->redraw_window = true;
 				action_data->data = data->hierarchy;
 				FilesystemHierarchySelectable(action_data);
 			}
@@ -1652,6 +1678,7 @@ namespace ECSEngine {
 				data->array_data->drag_current_position = mouse_position.y;
 				data->array_data->drag_index = data->index;
 			}
+			data->array_data->should_redraw = true;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1679,6 +1706,7 @@ namespace ECSEngine {
 			*data->color_float = SDRColorToHDR(data->base_color, data->intensity);
 		
 			UIDrawerColorFloatInputCallbackData* color_input_callback_data = (UIDrawerColorFloatInputCallbackData*)data->color_input->callback.data;
+			// Here we don't need to redraw the target window since the intensity won't affect the color output
 			if (color_input_callback_data->callback != nullptr) {
 				action_data->data = color_input_callback_data->callback_data;
 				color_input_callback_data->callback(action_data);
@@ -2072,6 +2100,8 @@ namespace ECSEngine {
 					TextInputAction(action_data);
 					slider->text_input_counter = 0;
 					slider->character_value = true;
+					// Set this to true for snapshot windows in order to trigger a redraw
+					slider->changed_value = true;
 					system->m_keyboard->DoNotCaptureCharacters();
 					return true;
 				}
@@ -2116,7 +2146,7 @@ namespace ECSEngine {
 		void ColorInputSVRectangleClickableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			ColorInputHSVGradientInfo* data = (ColorInputHSVGradientInfo*)_data;
+			UIColorInputHSVGradientInfo* data = (UIColorInputHSVGradientInfo*)_data;
 			float x_factor = InverseLerp(position.x, position.x + scale.x, mouse_position.x);
 			x_factor = Clamp(x_factor, 0.0f, 1.0f);
 
@@ -2127,6 +2157,9 @@ namespace ECSEngine {
 			data->input->hsv.value = (1.0f - y_factor) * Color::GetRange();
 			*data->input->rgb = HSVToRGB(data->input->hsv);
 
+			// Trigger a redraw for the target window
+			system->DeallocateWindowSnapshot(data->input->target_window_name);
+
 			data->input->Callback(action_data, false);
 		}
 
@@ -2135,13 +2168,15 @@ namespace ECSEngine {
 		void ColorInputHRectangleClickableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			ColorInputHSVGradientInfo* info = (ColorInputHSVGradientInfo*)_data;
+			UIColorInputHSVGradientInfo* info = (UIColorInputHSVGradientInfo*)_data;
 
 			float factor = InverseLerp(info->gradient_position.y, info->gradient_position.y + info->gradient_scale.y, mouse_position.y);
 			factor = Clamp(factor, 0.0f, 1.0f);
 
 			info->input->hsv.hue = factor * Color::GetRange();
 			*info->input->rgb = HSVToRGB(info->input->hsv);
+
+			system->DeallocateWindowSnapshot(info->input->target_window_name);
 
 			info->input->Callback(action_data, false);
 		}
@@ -2151,13 +2186,15 @@ namespace ECSEngine {
 		void ColorInputARectangleClickableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			ColorInputHSVGradientInfo* info = (ColorInputHSVGradientInfo*)_data;
+			UIColorInputHSVGradientInfo* info = (UIColorInputHSVGradientInfo*)_data;
 
 			float factor = InverseLerp(info->gradient_position.y, info->gradient_position.y + info->gradient_scale.y, mouse_position.y);
 			factor = Clamp(factor, 0.0f, 1.0f);
 
 			info->input->rgb->alpha = (1.0f - factor) * Color::GetRange();
 			info->input->hsv.alpha = info->input->rgb->alpha;
+
+			system->DeallocateWindowSnapshot(info->input->target_window_name);
 
 			info->input->Callback(action_data, false);
 		}
@@ -2201,7 +2238,7 @@ namespace ECSEngine {
 			drawer.DisablePaddingForRenderSliders();
 			drawer.DisablePaddingForRenderRegion();
 			drawer.DisableZoom();
-			drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_INDENT);
+			drawer.SetDrawMode(ECS_UI_DRAWER_INDENT);
 
 			UIDrawerColorInputWindowData* data = (UIDrawerColorInputWindowData*)window_data;
 			UIDrawerColorInput* main_input = data->input;
@@ -2272,10 +2309,10 @@ namespace ECSEngine {
 			UIDrawConfig sv_config;
 
 			UIConfigWindowDependentSize sv_size;
-			sv_size.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_BOTH;
+			sv_size.type = ECS_UI_WINDOW_DEPENDENT_BOTH;
 			sv_size.scale_factor = { RECTANGLE_Y_SCALE, RECTANGLE_Y_SCALE };
 
-			ColorInputHSVGradientInfo h_info;
+			UIColorInputHSVGradientInfo h_info;
 			h_info.input = input;
 
 			UIConfigClickableAction sv_clickable_action;
@@ -2346,7 +2383,7 @@ namespace ECSEngine {
 			a_size.scale_factor = { HUE_ALPHA_X_SCALE, RECTANGLE_Y_SCALE };
 
 			float2 a_gradient_position = drawer.GetCurrentPositionNonOffset();
-			ColorInputHSVGradientInfo a_gradient_info;
+			UIColorInputHSVGradientInfo a_gradient_info;
 			a_gradient_info.gradient_position = a_gradient_position;
 			a_gradient_info.gradient_scale = gradient_scale;
 			a_gradient_info.input = input;
@@ -2455,6 +2492,7 @@ namespace ECSEngine {
 			mouse_draggable.interpolate_bounds = true;
 
 			UIConfigColorInputSliders sliders;
+			sliders.target_window_name = main_input->target_window_name;
 
 			color_input_config.AddFlag(color_input_transform);
 			color_input_config.AddFlag(mouse_draggable);
@@ -2470,7 +2508,11 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerColorInput* color_input = (UIDrawerColorInput*)_data;
+			UIDrawerColorInputWindowData* window_data = (UIDrawerColorInputWindowData*)_additional_data;
 			color_input->Callback(action_data, true);
+
+			// Deallocate the target window name since it was allocated using the system allocator
+			window_data->target_window_name.Deallocate(system->Allocator());
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -2512,6 +2554,9 @@ namespace ECSEngine {
 			UIDrawerColorInputWindowData window_data;
 			window_data.initial_color = *data->rgb;
 			window_data.input = data;
+			unsigned int target_window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+			Stream<char> target_window_name = system->GetWindowName(target_window_index);
+			window_data.target_window_name = target_window_name.Copy(system->Allocator());
 
 			window_descriptor.window_name = "ColorInputWindow";
 			window_descriptor.window_data = &window_data;
@@ -2549,14 +2594,14 @@ namespace ECSEngine {
 
 				size_t new_configuration = ClearFlag(ClearFlag(data->configuration, UI_CONFIG_LATE_DRAW), UI_CONFIG_SYSTEM_DRAW);
 				new_configuration = ClearFlag(new_configuration, UI_CONFIG_ALIGN_TO_ROW_Y);
-				drawer.ComboBoxDropDownDrawer(new_configuration, data->config, data->box);
+				drawer.ComboBoxDropDownDrawer(new_configuration, data->config, data->box, data->target_window_name);
 			}
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		void ComboBoxClickable(ActionData* action_data) {
-			constexpr const char* COMBO_BOX_WINDOW_NAME = "ComboBoxOpened";
+			const char* COMBO_BOX_WINDOW_NAME = "ComboBoxOpened";
 
 			UI_UNPACK_ACTION_DATA;
 
@@ -2569,8 +2614,17 @@ namespace ECSEngine {
 			}
 			else if (IsClickableTrigger(action_data) && !clickable_data->is_opened_on_press) {
 				if (combo_index == -1) {
+					// We need in the destroy action to deallocate the target window name
+					auto destroy_action = [](ActionData* action_data) {
+						UI_UNPACK_ACTION_DATA;
+
+						UIDrawerComboBoxClickable* window_data = (UIDrawerComboBoxClickable*)_additional_data;
+						window_data->target_window_name.Deallocate(system->Allocator());
+					};
+
 					UIWindowDescriptor window_descriptor;
 					window_descriptor.draw = ComboBoxWindowDraw;
+					window_descriptor.destroy_action = destroy_action;
 					window_descriptor.initial_position_x = position.x;
 					window_descriptor.initial_size_x = scale.x;
 
@@ -2586,7 +2640,10 @@ namespace ECSEngine {
 					window_descriptor.initial_size_y = label_display_size;
 					window_descriptor.window_name = COMBO_BOX_WINDOW_NAME;
 					window_descriptor.window_data = clickable_data;
-					window_descriptor.window_data_size = sizeof(UIDrawerComboBoxClickable);
+					window_descriptor.window_data_size = sizeof(*clickable_data);
+					unsigned int current_window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+					Stream<char> current_window_name = system->GetWindowName(current_window_index);
+					clickable_data->target_window_name = current_window_name.Copy(system->Allocator());
 
 					system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_FIXED | UI_DOCKSPACE_POP_UP_WINDOW
 						| UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X | UI_DOCKSPACE_BORDER_FLAG_NO_TITLE | UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER);
@@ -3692,6 +3749,7 @@ namespace ECSEngine {
 				if (data->hierarchy->has_monitor_selection) {
 					data->hierarchy->UpdateMonitorSelection(&data->hierarchy->monitor_selection);
 				}
+				action_data->redraw_window = true;
 			}
 		}
 
@@ -3836,6 +3894,8 @@ namespace ECSEngine {
 						}
 					}
 				}
+
+				action_data->redraw_window = true;
 			}
 		}
 
@@ -3868,6 +3928,7 @@ namespace ECSEngine {
 
 				data->data = data->hierarchy->right_click_data;
 				data->hierarchy->right_click_action(action_data);
+				action_data->redraw_window = true;
 			}
 		}
 

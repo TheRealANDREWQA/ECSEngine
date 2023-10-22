@@ -28,6 +28,18 @@ struct ECS_REFLECT_COMPONENT RenderEverything {
 	ECSEngine::Stream<void> misc_data;
 };
 
+//struct ECS_REFLECT_COMPONENT Colorssss {
+//	constexpr static ECS_INLINE short ID() {
+//		return GRAPHICS_SHARED_COMPONENT_BASE + 7;
+//	}
+//
+//	constexpr static ECS_INLINE bool IsShared() {
+//		return true;
+//	}
+//
+//	ECSEngine::Color value;
+//};
+
 //struct ECS_REFLECT_COMPONENT GraphicsName {
 //	constexpr static inline short ID() {
 //		return GRAPHICS_SHARED_COMPONENT_BASE + 2;

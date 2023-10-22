@@ -110,7 +110,7 @@ namespace ECSEngine {
 	template<typename FirstPointer, typename... Pointers>
 	void SoADisplaceElements(size_t size, size_t offset, int64_t displacement, FirstPointer first_pointer, Pointers... pointers) {
 		size_t count = size - offset;
-		memmove(first_pointer + offset, first_pointer + (int64_t)offset + displacement, count * sizeof(*first_pointer));
+		memmove(first_pointer + (int64_t)offset + displacement, first_pointer + offset, count * sizeof(*first_pointer));
 
 		if constexpr (sizeof...(Pointers) > 0) {
 			SoADisplaceElements(size, offset, displacement, pointers...);

@@ -23,8 +23,14 @@ namespace ECSEngine {
 			UISystem* system;
 		};
 
-		static float2 NormalizedMousePosition(float2 window_size, float2 mouse_position) {
+		ECS_INLINE static float2 NormalizedMousePosition(float2 window_size, float2 mouse_position) {
 			return float2(mouse_position) / float2(window_size) * float2::Splat(2.0f) - float2::Splat(1.0f);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		ECS_INLINE static void DeallocateBorderSnapshot(UIDockspace* dockspace, unsigned int border_index, bool free_allocator) {
+			dockspace->borders[border_index].DeallocateSnapshot({ nullptr }, free_allocator);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -34,7 +40,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		template<typename RollbackFunction>
-		bool ResizeDockspaceInternal(
+		static bool ResizeDockspaceInternal(
 			UISystem* system,
 			unsigned int dockspace_index,
 			float delta_scale,
@@ -2669,6 +2675,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::DeallocateDockspaceBorderSnapshot(UIDockspace* dockspace, unsigned int border_index)
+		{
+			DeallocateBorderSnapshot(dockspace, border_index, false);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DeallocateDockspaceBorderResources(UIDockspace* dockspace, unsigned int border_index)
 		{
 			// releasing graphics objects
@@ -2691,7 +2704,7 @@ namespace ECSEngine {
 			}
 
 			// If it has a snapshot, we need to deallocate it
-			dockspace->borders[border_index].DeallocateSnapshot({ nullptr }, true);
+			DeallocateBorderSnapshot(dockspace, border_index, true);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2826,6 +2839,31 @@ namespace ECSEngine {
 				});
 			m_windows[window_index].dynamic_resources.Deallocate(Allocator());
 			m_windows[window_index].dynamic_resources.InitializeFromBuffer(nullptr, 0);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::DeallocateWindowSnapshot(unsigned int window_index)
+		{
+			unsigned int border_index;
+			DockspaceType type;
+			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
+			if (dockspace) {
+				// Check that the window is also the visible one
+				if (dockspace->borders[border_index].window_indices[dockspace->borders[border_index].active_window] == window_index) {
+					DeallocateBorderSnapshot(dockspace, border_index, false);
+				}
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::DeallocateWindowSnapshot(Stream<char> window_name)
+		{
+			unsigned int window_index = GetWindowFromName(window_name);
+			if (window_index != -1) {
+				DeallocateWindowSnapshot(window_index);
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3263,24 +3301,8 @@ namespace ECSEngine {
 				m_focused_window_data.hovered_location.type = type;
 
 				if (hoverable_handler->action[hoverable_index].phase == ECS_UI_DRAW_NORMAL) {
-					ActionData action_data = {
-						this,
-						dockspace,
-						border_index,
-						type,
-						mouse_position,
-						float2(hoverable_handler->position_x[hoverable_index], hoverable_handler->position_y[hoverable_index]),
-						float2(hoverable_handler->scale_x[hoverable_index], hoverable_handler->scale_y[hoverable_index]),
-						hoverable_handler->action[hoverable_index].data,
-						nullptr,
-						counts,
-						buffers,
-						m_keyboard,
-						m_mouse
-					};
-
 					m_focused_window_data.additional_hoverable_data = additional_data;
-					m_focused_window_data.ExecuteHoverableHandler(&action_data);
+					HandleHoverable(mouse_position, 0, buffers, counts);
 				}
 				return true;
 			}
@@ -3322,24 +3344,9 @@ namespace ECSEngine {
 				m_focused_window_data.ChangeClickable(clickable_handler, clickable_index, button_type);
 
 				if (clickable_handler->action[clickable_index].phase == ECS_UI_DRAW_NORMAL) {
-					ActionData action_data;
-					action_data.system = this;
-					action_data.dockspace = dockspace;
-					action_data.border_index = border_index;
-					action_data.buffers = buffers;
-					action_data.counts = counts;
-					action_data.mouse = m_mouse;
-					action_data.keyboard = m_keyboard;
-					action_data.mouse_position = mouse_position;
-					action_data.type = type;
-
-					action_data.additional_data = nullptr;
-					m_resources.thread_resources[thread_id].phase = clickable_handler->action[clickable_index].phase;
-
-					if (m_focused_window_data.clickable_handler[button_type].action == DefaultClickableAction) {
-						action_data.additional_data = m_focused_window_data.additional_hoverable_data;
-					}
-					m_focused_window_data.ExecuteClickableHandler(&action_data, button_type);
+					m_focused_window_data.buffers = buffers;
+					m_focused_window_data.counts = counts;
+					HandleFocusedWindowClickable(mouse_position, 0, button_type);
 				}
 				return_value = true;
 			}
@@ -3402,25 +3409,10 @@ namespace ECSEngine {
 				m_focused_window_data.ChangeGeneralHandler(general_handler, general_index);
 
 				if (general_handler->action[general_index].phase == ECS_UI_DRAW_NORMAL) {
-					ActionData action_data = {
-						this,
-						dockspace,
-						border_index,
-						type,
-						mouse_position,
-						float2(general_handler->position_x[general_index], general_handler->position_y[general_index]),
-						float2(general_handler->scale_x[general_index], general_handler->scale_y[general_index]),
-						general_handler->action[general_index].data,
-						additional_data,
-						counts,
-						buffers,
-						m_keyboard,
-						m_mouse
-					};
-					m_resources.thread_resources[thread_id].phase = general_handler->action[general_index].phase;
-
 					m_focused_window_data.additional_general_data = additional_data;
-					m_focused_window_data.ExecuteGeneralHandler(&action_data);
+					m_focused_window_data.buffers = buffers;
+					m_focused_window_data.counts = counts;
+					HandleFocusedWindowGeneral(mouse_position, 0);
 				}
 				return true;
 			}
@@ -3916,7 +3908,7 @@ namespace ECSEngine {
 
 					// We will need to record a new snapshot
 					// Deallocate the previous one before the window runs to not overflow the allocator
-					border.DeallocateSnapshot({ nullptr }, false);
+					DeallocateBorderSnapshot(data->dockspace, data->border_index, false);
 				}
 
 				if (!data->is_fixed_default_when_border_zero) {
@@ -4035,7 +4027,7 @@ namespace ECSEngine {
 
 				if (should_redraw) {
 					// Deallocate the snapshot - such that the next time the window is redrawn
-					border.DeallocateSnapshot({ nullptr }, false);
+					DeallocateBorderSnapshot(data->dockspace, data->border_index, false);
 				}
 			}
 
@@ -6983,30 +6975,6 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id, ECS_MOUSE_BUTTON button_type) {
-			ActionData action_data;
-			action_data.system = this;
-			action_data.dockspace = m_focused_window_data.active_location.dockspace;
-			action_data.border_index = m_focused_window_data.active_location.border_index;
-			action_data.buffers = m_focused_window_data.buffers;
-			action_data.counts = m_focused_window_data.counts;
-			action_data.type = m_focused_window_data.active_location.type;
-			action_data.mouse_position = mouse_position;
-			action_data.keyboard = m_keyboard;
-			action_data.mouse = m_mouse;
-			action_data.additional_data = nullptr;
-
-			if (m_focused_window_data.clickable_handler[button_type].action == DefaultClickableAction) {
-				action_data.additional_data = m_focused_window_data.additional_hoverable_data;
-			}
-
-			m_resources.thread_resources[thread_id].phase = m_focused_window_data.clickable_handler[button_type].phase;
-			m_execute_events = !m_focused_window_data.ExecuteClickableHandler(&action_data, button_type);
-			m_frame_pacing = (!m_execute_events && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		float UISystem::GetFrameDeltaTime() const
 		{
 			return m_frame_delta_time;
@@ -7036,10 +7004,45 @@ namespace ECSEngine {
 			action_data.keyboard = m_keyboard;
 			action_data.mouse = m_mouse;
 			action_data.additional_data = m_focused_window_data.additional_hoverable_data;
+			action_data.redraw_window = false;
 
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.hoverable_handler.phase;
 			bool executed = m_focused_window_data.ExecuteHoverableHandler(&action_data);
 			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_LOW) ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
+
+			if (action_data.redraw_window) {
+				// Discard the snapshot of the border
+				DeallocateBorderSnapshot(action_data.dockspace, action_data.border_index, false);
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id, ECS_MOUSE_BUTTON button_type) {
+			ActionData action_data;
+			action_data.system = this;
+			action_data.dockspace = m_focused_window_data.active_location.dockspace;
+			action_data.border_index = m_focused_window_data.active_location.border_index;
+			action_data.buffers = m_focused_window_data.buffers;
+			action_data.counts = m_focused_window_data.counts;
+			action_data.type = m_focused_window_data.active_location.type;
+			action_data.mouse_position = mouse_position;
+			action_data.keyboard = m_keyboard;
+			action_data.mouse = m_mouse;
+			action_data.additional_data = nullptr;
+			action_data.redraw_window = false;
+
+			if (m_focused_window_data.clickable_handler[button_type].action == DefaultClickableAction) {
+				action_data.additional_data = m_focused_window_data.additional_hoverable_data;
+			}
+
+			m_resources.thread_resources[thread_id].phase = m_focused_window_data.clickable_handler[button_type].phase;
+			m_execute_events = !m_focused_window_data.ExecuteClickableHandler(&action_data, button_type);
+			m_frame_pacing = (!m_execute_events && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
+
+			if (action_data.redraw_window) {
+				DeallocateBorderSnapshot(action_data.dockspace, action_data.border_index, false);
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7056,10 +7059,15 @@ namespace ECSEngine {
 			action_data.keyboard = m_keyboard;
 			action_data.mouse = m_mouse;
 			action_data.additional_data = nullptr;
+			action_data.redraw_window = false;
 
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.general_handler.phase;
 			bool executed = m_focused_window_data.ExecuteGeneralHandler(&action_data);
 			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
+
+			if (action_data.redraw_window) {
+				DeallocateBorderSnapshot(action_data.dockspace, action_data.border_index, false);
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -12461,7 +12469,7 @@ namespace ECSEngine {
 			// That the window is changed into a new window that does not use a snapshot
 			// And the system will falsely think that we have a valid snapshot for the
 			// Border when in fact it is outdated
-			dockspace->borders[border_index].DeallocateSnapshot({ nullptr }, false);
+			DeallocateBorderSnapshot(dockspace, border_index, false);
 
 			const float EPSILON = 0.03f;
 
