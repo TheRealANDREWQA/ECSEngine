@@ -948,10 +948,7 @@ namespace ECSEngine {
 
 							system->m_windows[window_index].descriptors->UpdateZoom(before_zoom, system->m_windows[window_index].zoom);
 							// Deallocate the snapshot of the window, if there is one
-							unsigned int border_index;
-							DockspaceType dockspace_type;
-							UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, dockspace_type);
-							dockspace->borders[border_index].DeallocateSnapshot({ nullptr }, false);
+							system->DeallocateWindowSnapshot(window_index);
 						}
 					}
 					else {
@@ -961,10 +958,7 @@ namespace ECSEngine {
 						system->m_windows[window_index].descriptors->UpdateZoom(before_zoom, system->m_windows[window_index].zoom);
 
 						// Deallocate the snapshot of the window, if there is one
-						unsigned int border_index;
-						DockspaceType dockspace_type;
-						UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, dockspace_type);
-						dockspace->borders[border_index].DeallocateSnapshot({ nullptr }, false);
+						system->DeallocateWindowSnapshot(window_index);
 					}
 				}
 			}
@@ -987,16 +981,11 @@ namespace ECSEngine {
 						float previous_slider_position = vertical_slider->slider_position;
 						vertical_slider->interpolate_value = true;
 						vertical_slider->slider_position -= total_scroll;
-
-						vertical_slider->slider_position = vertical_slider->slider_position > 1.0f ? 1.0f : vertical_slider->slider_position;
-						vertical_slider->slider_position = vertical_slider->slider_position < 0.0f ? 0.0f : vertical_slider->slider_position;
+						vertical_slider->slider_position = Clamp(vertical_slider->slider_position, 0.0f, 1.0f);
 
 						if (previous_slider_position != vertical_slider->slider_position) {
 							// Deallocate the snapshot of the window, if there is one
-							unsigned int border_index;
-							DockspaceType dockspace_type;
-							UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, dockspace_type);
-							dockspace->borders[border_index].DeallocateSnapshot({ nullptr }, false);
+							system->DeallocateWindowSnapshot(window_index);
 						}
 					}
 				}
@@ -1026,6 +1015,14 @@ namespace ECSEngine {
 				system->m_application->ChangeCursor(data->commit_cursor);
 			}
 			data->commit_cursor = ECS_CURSOR_DEFAULT;
+
+			// Now at last check if the render region has changed in order to trigger a redraw since
+			// The visual output lags behind 1 frame the change of the value
+			bool has_changed = system->m_windows[window_index].render_region_offset != data->last_window_render_offset;
+			if (has_changed) {
+				system->DeallocateWindowSnapshot(window_index);
+				data->last_window_render_offset = system->m_windows[window_index].render_region_offset;
+			}
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

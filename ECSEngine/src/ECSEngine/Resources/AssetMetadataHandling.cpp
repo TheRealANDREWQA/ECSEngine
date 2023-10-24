@@ -379,12 +379,44 @@ namespace ECSEngine {
 
 				user_material->buffers[buffer_total_count].tags = { nullptr, 0 };
 				if (material->buffers[index][subindex].reflection_type != nullptr) {
+					// Check to see if the material has Color fields - these are passed as float4
+					// For the constant buffers and we need to splat the color into a color float
 					Stream<Reflection::ReflectionField> fields = material->buffers[index][subindex].reflection_type->fields;
+					bool has_color_fields = false;
+					for (size_t field_index = 0; field_index < fields.size && !has_color_fields; field_index++) {
+						if (fields[field_index].definition == STRING(Color)) {
+							has_color_fields = true;
+						}
+					}
+
+					if (has_color_fields) {
+						// We need to allocate a new data pointer from the temporary allocator such that
+						// We can override the color value with the color float value
+						Stream<void> material_data = user_material->buffers[buffer_total_count].data;
+						user_material->buffers[buffer_total_count].data.buffer = Allocate(allocator, material_data.size);
+						material_data.CopyTo(user_material->buffers[buffer_total_count].data.buffer);
+					}
+
+					// Now we need to add the existing tags and change the colors to color floats
 					for (size_t field_index = 0; field_index < fields.size; field_index++) {
 						if (fields[field_index].tag.size > 0) {
 							user_material->buffers[buffer_total_count].tags.AddResize({ fields[field_index].tag, fields[field_index].info.pointer_offset }, allocator, true);
 						}
+						if (fields[field_index].definition == "Color") {
+							// We need to change the field value from a color into a color float
+							if (field_index < fields.size - 1) {
+								ECS_ASSERT(fields[field_index].info.pointer_offset + sizeof(ColorFloat) <= fields[field_index + 1].info.pointer_offset);
+							}
+							else {
+								ECS_ASSERT(fields[field_index].info.pointer_offset + sizeof(ColorFloat) <= material->buffers[index][subindex].reflection_type->byte_size);
+							}
+							Color* color_value = (Color*)OffsetPointer(user_material->buffers[buffer_total_count].data.buffer, fields[field_index].info.pointer_offset);
+							ColorFloat* color_float_value = (ColorFloat*)color_value;
+							Color current_color_value = *color_value;
+							*color_float_value = current_color_value;
+						}
 					}
+
 					if (user_material->buffers[buffer_total_count].tags.size > 0) {
 						// Now remove all tags that come from compound elements
 						for (size_t tag_index = 0; tag_index < user_material->buffers[buffer_total_count].tags.size - 1; tag_index++) {

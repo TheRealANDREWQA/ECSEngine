@@ -9985,6 +9985,8 @@ namespace ECSEngine {
 					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_SYSTEM, [](void* _data, ActionData* action_data) {
 						RunnableData* data = (RunnableData*)_data;
 						if (IsPointInRectangle(action_data->mouse_position, data->position, data->scale)) {
+							action_data->position = data->position;
+							action_data->scale = data->scale;
 							action_data->data = &data->hover_data;
 							TextTooltipHoverable(action_data);
 						}
@@ -10558,6 +10560,9 @@ namespace ECSEngine {
 			FLOAT_INPUT_CONFIGURATION |= configuration & UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE ? UI_CONFIG_NUMBER_INPUT_DEFAULT : 0;
 			FLOAT_INPUT_CONFIGURATION = ClearFlag(FLOAT_INPUT_CONFIGURATION, UI_CONFIG_NAME_PADDING);
 
+			bool pushed_string_pattern = PushIdentifierStackStringPattern();
+			PushIdentifierStack(name);
+
 			// Add the callback
 			UIConfigTextInputCallback callback;
 			callback.handler.action = ColorFloatInputIntensityCallback;
@@ -10575,6 +10580,11 @@ namespace ECSEngine {
 				{ current_x - region_render_offset.x, position.y }, 
 				scale
 			);
+
+			PopIdentifierStack();
+			if (pushed_string_pattern) {
+				PopIdentifierStack();
+			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -10621,6 +10631,9 @@ namespace ECSEngine {
 			size_t FLOAT_INPUT_CONFIGURATION = configuration | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN | UI_CONFIG_TEXT_INPUT_CALLBACK;
 			FLOAT_INPUT_CONFIGURATION |= configuration & UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE ? UI_CONFIG_NUMBER_INPUT_DEFAULT : 0;
 
+			bool pushed_string_pattern = PushIdentifierStackStringPattern();
+			PushIdentifierStack(name);
+
 			// Add the number input default
 			FloatInputInitializer(
 				FLOAT_INPUT_CONFIGURATION,
@@ -10634,6 +10647,11 @@ namespace ECSEngine {
 				scale
 			);
 			config.flag_count--;
+
+			PopIdentifierStack();
+			if (pushed_string_pattern) {
+				PopIdentifierStack();
+			}
 
 			UIConfigColorInputCallback initial_color_callback;
 			

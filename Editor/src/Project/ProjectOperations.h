@@ -88,3 +88,5 @@ void SaveCurrentProjectFileAction(ActionData* action_data);
 void SaveCurrentProjectWithConfirmation(EditorState* editor_state, Stream<char> description, UIActionHandler callback);
 
 void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
+
+void TickSaveProjectUIAutomatically(EditorState* editor_state);

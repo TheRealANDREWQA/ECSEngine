@@ -1,4 +1,5 @@
 #include "editorpch.h"
+#include "InspectorMaterialFile.h"
 #include "ECSEngineCBufferTags.h"
 
 #include "InspectorMiscFile.h"
@@ -215,6 +216,8 @@ static void RegisterNewCBuffers(
 	ShaderReflectedBuffer* new_reflected_buffers,
 	Stream<ShaderReflectionBufferMatrixField>* matrix_types
 ) {
+	EditorState* editor_state = draw_data->editor_state;
+
 	ECS_STACK_CAPACITY_STREAM(MaterialAssetBuffer, new_buffers, MAX_BUFFER_SLOT_COUNT);
 	ECS_ASSERT(new_cbuffers.size <= MAX_BUFFER_SLOT_COUNT);
 
@@ -257,12 +260,12 @@ static void RegisterNewCBuffers(
 			old_cbuffers.buffer + index,
 			ui_type_name
 		);
-		draw_data->editor_state->ui_reflection->DestroyType(ui_type_name);
+		editor_state->ui_reflection->DestroyType(ui_type_name);
 
 		if (subindex < new_cbuffers.size) {
 			const void* buffer_data = draw_data->material_asset.buffers[material_shader_type][index].data.buffer;
 			// We have a match
-			const Reflection::ReflectionManager* reflection_manager = draw_data->editor_state->ui_reflection->reflection;
+			const Reflection::ReflectionManager* reflection_manager = editor_state->ui_reflection->reflection;
 			if (Reflection::CompareReflectionTypes(reflection_manager, reflection_manager, old_cbuffers.buffer + index, new_cbuffers.buffer + subindex)) {
 				memcpy(new_buffers[subindex].data.buffer, buffer_data, new_buffers[subindex].data.size);
 			}
@@ -307,7 +310,7 @@ static void RegisterNewCBuffers(
 		UIReflectionDrawerCreateTypeOptions create_options;
 		create_options.identifier_name = ui_type_name;
 		create_options.ignore_fields = ignore_type_fields;
-		UIReflectionType* ui_type = draw_data->editor_state->ui_reflection->CreateType(draw_data->cbuffers[order].buffer + index, &create_options);
+		UIReflectionType* ui_type = editor_state->ui_reflection->CreateType(draw_data->cbuffers[order].buffer + index, &create_options);
 		// Add matrix types if any - if they are not skipped by the inject fields
 		for (size_t subindex = 0; subindex < matrix_types[index].size; subindex++) {
 			bool is_injected = SearchBytes(ignore_type_fields.ToStream(), matrix_types[index][subindex].position.x) != -1;
@@ -317,12 +320,12 @@ static void RegisterNewCBuffers(
 				grouping.range = matrix_types[index][subindex].position.y;
 				grouping.name = matrix_types[index][subindex].name;
 				grouping.per_element_name = "row";
-				draw_data->editor_state->ui_reflection->AddTypeGrouping(ui_type, grouping);
+				editor_state->ui_reflection->AddTypeGrouping(ui_type, grouping);
 			}
 		}
 
-		UIReflectionInstance* instance = draw_data->editor_state->ui_reflection->CreateInstance(ui_type_name, ui_type, ui_type_name);
-		draw_data->editor_state->ui_reflection->BindInstancePtrs(instance, new_buffers[index].data.buffer, draw_data->cbuffers[order].buffer + index);
+		UIReflectionInstance* instance = editor_state->ui_reflection->CreateInstance(ui_type_name, ui_type, ui_type_name);
+		editor_state->ui_reflection->BindInstancePtrs(instance, new_buffers[index].data.buffer, draw_data->cbuffers[order].buffer + index);
 		draw_data->material_asset.buffers[material_shader_type][index].reflection_type = draw_data->cbuffers[order].buffer + index;
 	}
 }
@@ -509,10 +512,44 @@ static void RecreateReflectionManagerForShaders(InspectorDrawMaterialFileData* d
 
 // ------------------------------------------------------------------------------------------------------------
 
-static void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_index) {
+struct AddReloadInvalidStructuresEventData {
+	unsigned int inspector_index;
+	Stream<wchar_t> path;
+};
+
+EDITOR_EVENT(AddReloadInvalidStructuresEvent) {
+	AddReloadInvalidStructuresEventData* data = (AddReloadInvalidStructuresEventData*)_data;
+	ChangeInspectorToNothing(editor_state, data->inspector_index);
+	ChangeInspectorToMaterialFile(editor_state, data->path, data->inspector_index);
+	data->path.Deallocate(editor_state->EditorAllocator());
+
+	return false;
+}
+
+static void AddReloadInvalidStructures(EditorState* editor_state, unsigned int inspector_index, Stream<wchar_t> path) {
+	AddReloadInvalidStructuresEventData event_data;
+	event_data.inspector_index = inspector_index;
+	event_data.path = path.Copy(editor_state->EditorAllocator());
+	EditorAddEvent(editor_state, AddReloadInvalidStructuresEvent, &event_data, sizeof(event_data));
+}
+
+// ------------------------------------------------------------------------------------------------------------
+
+static void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int inspector_index, bool initial_reload) {
 	// Returns true if it managed to open the file, else false
 	EditorState* editor_state = data->editor_state;
-	auto reload_shader = [data, editor_state, inspector_index](Stream<wchar_t> shader_path, ORDER order) {
+	auto reload_shader = [&](Stream<wchar_t> shader_path, ORDER order) {
+		// We need this in case it is the initial reload and everything could be reflected
+		// To match the resources
+		MaterialAsset initial_material_asset = data->material_asset;
+
+		// We need to deallocate the dynamic resources in case a field changes types and the dynamic resources
+		// Match causing an unexpected result
+		ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
+		GetInspectorName(inspector_index, window_name);
+		unsigned int inspector_window_index = editor_state->ui_system->GetWindowFromName(window_name);
+		editor_state->ui_system->DeallocateWindowDynamicResources(inspector_window_index);
+
 		AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 		const ShaderReflection* shader_reflection = editor_state->UIGraphics()->GetShaderReflection();
 
@@ -524,7 +561,8 @@ static void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int insp
 			unsigned int shader_handle = GetShaderHandle(data, order);
 			// Get the shader metadata such that we can get the macros in order to remove the conditional blocks
 			const ShaderMetadata* metadata = data->temporary_database.GetShaderConst(shader_handle);
-			ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, shader_macros, metadata->macros.size);
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, shader_macros, 128);
+			ECS_ASSERT(metadata->macros.size <= shader_macros.capacity);
 			for (size_t index = 0; index < metadata->macros.size; index++) {
 				shader_macros[index] = metadata->macros[index].name;
 			}
@@ -545,40 +583,96 @@ static void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int insp
 			options.matrix_types_storage = matrix_types_storage;
 			options.matrix_types = matrix_types.buffer;
 			options.matrix_type_name_storage = matrix_types_name_storage;
+
+			bool all_reflect_success = true;
 			bool success = shader_reflection->ReflectShaderBuffersSource(source_code, shader_buffers, stack_allocator, options);
 			shader_cbuffer_types.size = shader_buffers.size;
-			data->success[order][SUCCESS_CBUFFER] = success;
 			if (success) {
+				// Check to see if any of the structures could not be parsed - if that is the case,
+				// Then change the inspector to nothing and back to this material in order to have
+				// The previous values be recovered when the parsing succeeds
+				if (!data->success[order][SUCCESS_CBUFFER]) {
+					AddReloadInvalidStructures(editor_state, inspector_index, data->path);
+					Deallocate(editor_allocator, source_code.buffer);
+					return true;
+				}
+
 				RegisterNewCBuffers(data, inspector_index, order, shader_cbuffer_types, shader_buffers.buffer, matrix_types.buffer);
 			}
 			else {
 				if (data->cbuffers[order].size > 0) {
 					DeallocateCBuffers(data, inspector_index, order);
 				}
+				all_reflect_success = false;
 			}
+			// Set this last since we need the previous value to check for the missing case
+			data->success[order][SUCCESS_CBUFFER] = success;
 
 			ECS_STACK_CAPACITY_STREAM(ShaderReflectedTexture, shader_textures, MAX_TEXTURE_SLOT_COUNT);
 			success = shader_reflection->ReflectShaderTexturesSource(source_code, shader_textures, stack_allocator);
-			data->success[order][SUCCESS_TEXTURE] = success;
 			if (success) {
+				if (!data->success[order][SUCCESS_TEXTURE]) {
+					AddReloadInvalidStructures(editor_state, inspector_index, data->path);
+					Deallocate(editor_allocator, source_code.buffer);
+					return true;
+				}
+
 				RegisterNewTextures(data, order, shader_textures);
 			}
 			else {
 				DeallocateTextures(data, order);
+				all_reflect_success = false;
 			}
+			// Set this last since we need the previous value to check for the missing case
+			data->success[order][SUCCESS_TEXTURE] = success;
 
 			ECS_STACK_CAPACITY_STREAM(ShaderReflectedSampler, shader_samplers, MAX_SAMPLER_SLOT_COUNT);
 			success = shader_reflection->ReflectShaderSamplersSource(source_code, shader_samplers, stack_allocator);
-			data->success[order][SUCCESS_SAMPLER] = success;
 			if (success) {
+				if (!data->success[order][SUCCESS_SAMPLER]) {
+					AddReloadInvalidStructures(editor_state, inspector_index, data->path);
+					Deallocate(editor_allocator, source_code.buffer);
+					return true;
+				}
+
 				RegisterNewSamplers(data, order, shader_samplers);
 			}
 			else {
 				DeallocateSamplers(data, order);
+				all_reflect_success = false;
 			}
+			// Set this last since we need the previous value to check for the missing case
+			data->success[order][SUCCESS_SAMPLER] = success;
 
 			Deallocate(editor_allocator, source_code.buffer);
 			RecreateReflectionManagerForShaders(data);
+
+			if (all_reflect_success) {
+				if (initial_reload) {
+					// Try to match the serialized data with the current buffers
+					data->material_asset.CopyMatchingNames(&initial_material_asset);
+				}
+
+				// Update the material asset metadata file such that any new additions/removals will be picked up by the reload system
+				// Do this only if the material could be reflected correctly and if the existing metadata file is different than this
+				// Current version
+				MaterialAsset file_asset;
+				file_asset.Default(GetAssetName(&data->material_asset, ECS_ASSET_MATERIAL), GetAssetFile(&data->material_asset, ECS_ASSET_MATERIAL));
+				_stack_allocator.Clear();
+				bool read_success = data->temporary_database.ReadMaterialFile(data->material_asset.name, &file_asset, stack_allocator);
+				bool write_new_metadata_file = true;
+				if (read_success) {
+					write_new_metadata_file = file_asset.Compare(&data->material_asset).is_different;
+				}
+
+				if (write_new_metadata_file) {
+					bool write_file_success = data->temporary_database.WriteMaterialFile(&data->material_asset);
+					if (!write_file_success) {
+						ECS_FORMAT_TEMP_STRING(message, "Failed to write material metadata file for {#} after reflecting shaders", GetAssetName(&data->material_asset, ECS_ASSET_MATERIAL));
+						EditorSetConsoleWarn(message);
+					}
+				}
+			}
 
 			return true;
 		}
@@ -688,7 +782,7 @@ static void ShaderModifyCallback(ActionData* action_data) {
 		data->data->material_asset.Resize(resize_counts, data->data->MaterialAssetAlllocator());
 	}
 
-	ReloadShaders(data->data, data->inspector_index);
+	ReloadShaders(data->data, data->inspector_index, false);
 	action_data->data = data->data;
 	BaseModifyCallback(action_data);
 }
@@ -765,7 +859,7 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 	shader_modify.order = PIXEL_ORDER;
 	editor_state->module_reflection->BindInstanceFieldOverride(data->shader_override_data[PIXEL_ORDER], PIXEL_TAG, AssetOverrideBindCallback, &bind_data);
 
-	ReloadShaders(data, inspector_index);
+	ReloadShaders(data, inspector_index, false);
 
 	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_MATERIAL_ICON, drawer->color_theme.text, drawer->color_theme.theme);
 
@@ -1066,7 +1160,13 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 			draw_data->samplers[index].size = 0;
 			draw_data->shader_stamp[index] = 0;
 			draw_data->metadata_shader_stamp[index] = 0;
-			draw_data->shader_collapsing_header_state[index] = false;
+			// Set this to true since most of the time you want to see these
+			draw_data->shader_collapsing_header_state[index] = true;
+			// Set these to true such that when the first reload occurs it won't trigger
+			// A reload event because the previous success is false
+			for (size_t subindex = 0; subindex < SUCCESS_COUNT; subindex++) {
+				draw_data->success[index][subindex] = true;
+			}
 
 			// Create the shader allocators
 			draw_data->shader_cbuffer_allocator_index[index] = 0;
@@ -1112,11 +1212,8 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 		else {
 			// The buffers and the material are allocated from the asset database
 			// Reload the shaders and then determine what data to copy
-			MaterialAsset staging_asset = draw_data->material_asset;
-			ReloadShaders(draw_data, inspector_index);
-
-			// Try to match the serialized data with the current buffers
-			draw_data->material_asset.CopyMatchingNames(&staging_asset);
+			// The reload will correctly copy the matching names for the resources it manages to read
+			ReloadShaders(draw_data, inspector_index, true);
 		}
 		draw_data->material_asset.name = StringCopy(editor_state->EditorAllocator(), asset_name);
 	}

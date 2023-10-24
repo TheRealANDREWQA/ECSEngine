@@ -77,6 +77,7 @@ namespace ECSEngine {
 		// This function is used to ask the window if it wants to redraw itself or not
 		// This is optional - if not specified, it will be drawn according to the normal rules
 		// (that is, every frame the window is drawn unless you specify to do a selective frame drawing)
+		// Should return true in order to stay in retained mode, else false when to redraw
 		typedef bool (*WindowRetainedMode)(void* window_data, WindowRetainedModeInfo* info);
 		typedef void (*UIDrawerElementDraw)(void* element_data, void* drawer_ptr);
 
@@ -1117,6 +1118,11 @@ namespace ECSEngine {
 			HandlerCommand last_command;
 			unsigned int max_size;
 			size_t last_frame;
+			// This field is primarly intended to detect when changes to
+			// The render offsets are made in order to trigger a redraw for retained
+			// Windows since the slider modification lags behind 1 frame with the actual screen
+			// Drawn image
+			float2 last_window_render_offset;
 			Stack<HandlerCommand> revert_commands;
 		};
 

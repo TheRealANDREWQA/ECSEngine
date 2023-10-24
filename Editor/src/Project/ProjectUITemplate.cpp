@@ -280,11 +280,6 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 	// Destroy invalid windows - like Scene and Game with invalid sandbox index
 	DestroyInvalidGameUIWindows(editor_state);
 	DestroyInvalidSceneUIWindows(editor_state);
-
-	SaveProjectUIAutomaticallyData save_data;
-	save_data.editor_state = editor_state;
-	save_data.timer.SetMarker();
-	ui_system->PushFrameHandler({ SaveProjectUIAutomatically, &save_data, sizeof(save_data) });
 	return true;
 }
 

@@ -358,28 +358,35 @@ namespace ECSEngine {
 		void RemapAssetDependencies(const AssetDatabase* other);
 
 		// It does not set the name or the file
-		bool ReadMeshFile(Stream<char> name, Stream<wchar_t> file, MeshMetadata* metadata) const;
+		bool ReadMeshFile(Stream<char> name, Stream<wchar_t> file, MeshMetadata* metadata, bool default_initialize_if_missing = false) const;
 
 		// It does not set the name or the file
-		bool ReadTextureFile(Stream<char> name, Stream<wchar_t> file, TextureMetadata* metadata) const;
+		bool ReadTextureFile(Stream<char> name, Stream<wchar_t> file, TextureMetadata* metadata, bool default_initialize_if_missing = false) const;
 
 		// It does not set the name or the file
-		bool ReadGPUSamplerFile(Stream<char> name, GPUSamplerMetadata* metadata) const;
+		bool ReadGPUSamplerFile(Stream<char> name, GPUSamplerMetadata* metadata, bool default_initialize_if_missing = false) const;
 
 		// It does not set the name or the file. Can optionally provide an allocator for the buffers that are used
 		// otherwise the allocator from this database will be used.
-		bool ReadShaderFile(Stream<char> name, ShaderMetadata* metadata, AllocatorPolymorphic allocator = { nullptr }) const;
+		bool ReadShaderFile(Stream<char> name, ShaderMetadata* metadata, AllocatorPolymorphic allocator = { nullptr }, bool default_initialize_if_missing = false) const;
 
 		// It does not set the name or the file. Can optionally provide an allocator for the buffers that are used
 		// otherwise the allocator from this database will be used.
-		bool ReadMaterialFile(Stream<char> name, MaterialAsset* asset, AllocatorPolymorphic allocator = { nullptr }) const;
+		bool ReadMaterialFile(Stream<char> name, MaterialAsset* asset, AllocatorPolymorphic allocator = { nullptr }, bool default_initialize_if_missing = false) const;
 
 		// It does not set the name or the file
-		bool ReadMiscFile(Stream<char> name, Stream<wchar_t> file, MiscAsset* asset) const;
+		bool ReadMiscFile(Stream<char> name, Stream<wchar_t> file, MiscAsset* asset, bool default_initialize_if_missing = false) const;
 
 		// It does not set the name or the file.  Can optionally provide an allocator for the buffers that are used
 		// otherwise the allocator from this database will be used. (this is used only for shaders and materials)
-		bool ReadAssetFile(Stream<char> name, Stream<wchar_t> file, void* metadata, ECS_ASSET_TYPE asset_type, AllocatorPolymorphic allocator = { nullptr }) const;
+		bool ReadAssetFile(
+			Stream<char> name, 
+			Stream<wchar_t> file, 
+			void* metadata, 
+			ECS_ASSET_TYPE asset_type, 
+			AllocatorPolymorphic allocator = { nullptr }, 
+			bool default_initialize_if_missing = false
+		) const;
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file

@@ -58,12 +58,13 @@ cbuffer Environment : register(b1)
 
 cbuffer Modifiers : register(b2)
 {
-    float4 tint : packoffset(c0); ECS_REFLECT_AS_FLOAT_COLOR
+    float4 tint : packoffset(c0); ECS_REFLECT_AS_COLOR
     float metallic_factor : packoffset(c1.x); ECS_REFLECT_DEFAULT(1.0)
     float roughness_factor : packoffset(c1.y); ECS_REFLECT_DEFAULT(1.0)
     float normal_strength : packoffset(c1.z); ECS_REFLECT_DEFAULT(1.0)
     float ambient_occlusion_factor : packoffset(c1.w);
     float3 emissive_factor : packoffset(c2);
+    //float4 another_tint : packoffset(c3); ECS_REFLECT_AS_COLOR
 }
 
 #ifdef POINT_LIGHTS

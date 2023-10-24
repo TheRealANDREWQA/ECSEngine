@@ -93,6 +93,16 @@ namespace ECSEngine {
 		unsigned short type_name_size = (unsigned short)type->name.size;
 		total_size += WriteWithSizeShort<write_data>(&stream, type->name.buffer, type_name_size);
 
+		// Write the byte size, alignment, and is_blittable booleans here
+		ECS_ASSERT(type->byte_size < UINT_MAX);
+		ECS_ASSERT(type->alignment < UINT_MAX);
+		unsigned int byte_size = type->byte_size;
+		unsigned int alignment = type->alignment;
+		total_size += Write<write_data>(&stream, &byte_size, sizeof(byte_size));
+		total_size += Write<write_data>(&stream, &alignment, sizeof(alignment));
+		total_size += Write<write_data>(&stream, &type->is_blittable, sizeof(type->is_blittable));
+		total_size += Write<write_data>(&stream, &type->is_blittable_with_pointer, sizeof(type->is_blittable_with_pointer));
+
 		if (write_tags) {
 			unsigned short tag_size = (unsigned short)type->tag.size;
 			total_size += WriteWithSizeShort<write_data>(&stream, type->tag.buffer, tag_size);
@@ -1518,6 +1528,10 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		const DeserializeFieldTableOptions* options
 	) {
+		// We are always reading with true here such that we can validate that the fields that are deserialized
+		// Are valid, in case they are not we can return -1 to the caller even when read_data is false to let it know
+		// That there is some corruption
+
 		uintptr_t initial_data = data;
 
 		unsigned short main_type_name_size = 0;
@@ -1527,6 +1541,16 @@ namespace ECSEngine {
 		ReferenceDataWithSizeShort<true>(&data, &main_type_name, main_type_name_size);
 		type->name = { main_type_name, main_type_name_size / sizeof(char) };
 
+		// Read the byte size, alignment and is_blittable flags
+		unsigned int byte_size;
+		unsigned int alignment;
+		Read<true>(&data, &byte_size, sizeof(byte_size));
+		Read<true>(&data, &alignment, sizeof(alignment));
+		type->byte_size = byte_size;
+		type->alignment = alignment;
+		Read<true>(&data, &type->is_blittable, sizeof(type->is_blittable));
+		Read<true>(&data, &type->is_blittable_with_pointer, sizeof(type->is_blittable_with_pointer));
+		
 		if (options->read_type_tags) {
 			unsigned short main_type_tag_size = 0;
 			void* main_type_tag = nullptr;
@@ -2078,8 +2102,7 @@ namespace ECSEngine {
 		ReflectionManager* reflection_manager, 
 		AllocatorPolymorphic allocator, 
 		bool allocate_all,
-		bool check_for_insertion,
-		bool calculate_parameters
+		bool check_for_insertion
 	) const
 	{
 		// Commit all types and then calculate the byte size and the alignment for them
@@ -2094,6 +2117,10 @@ namespace ECSEngine {
 			type.fields.Initialize(allocator, types[index].fields.size);
 			type.tag = { nullptr, 0 };
 			type.evaluations = { nullptr, 0 };
+			type.byte_size = types[index].byte_size;
+			type.alignment = types[index].alignment;
+			type.is_blittable = types[index].is_blittable;
+			type.is_blittable_with_pointer = types[index].is_blittable_with_pointer;
 			for (size_t field_index = 0; field_index < types[index].fields.size; field_index++) {
 				type.fields[field_index].name = types[index].fields[field_index].name;
 				type.fields[field_index].definition = types[index].fields[field_index].definition;
@@ -2124,16 +2151,6 @@ namespace ECSEngine {
 			}
 			else {
 				add_type(index);
-			}
-		}
-
-		if (calculate_parameters) {
-			for (size_t index = 0; index < types.size; index++) {
-				Reflection::ReflectionType* ptr = reflection_manager->type_definitions.GetValuePtr(types[index].name);
-				ptr->byte_size = CalculateReflectionTypeByteSize(reflection_manager, ptr);
-				ptr->alignment = CalculateReflectionTypeAlignment(reflection_manager, ptr);
-				ptr->is_blittable = SearchIsBlittable(reflection_manager, ptr);
-				ptr->is_blittable_with_pointer = SearchIsBlittableWithPointer(reflection_manager, ptr);
 			}
 		}
 	}

@@ -493,7 +493,10 @@ namespace ECSEngine {
 							asset->buffers[material_shader][matching_index].reflection_type,
 							buffers[material_shader][index].reflection_type,
 							asset->buffers[material_shader][matching_index].data.buffer,
-							buffers[material_shader][index].data.buffer
+							buffers[material_shader][index].data.buffer,
+							{ nullptr },
+							false,
+							true
 						);
 					}
 				}
@@ -505,8 +508,6 @@ namespace ECSEngine {
 
 	MaterialAsset MaterialAsset::Copy(AllocatorPolymorphic allocator) const
 	{
-		Timer timer;
-
 		MaterialAsset material;
 		material.CopyAndResize(this, allocator, true);
 
