@@ -92,6 +92,7 @@ namespace ECSEngine {
 				Stream<char> name;
 				size_t byte_size;
 				size_t alignment;
+				void* default_data;
 			};
 
 			ReflectionManager() {}
@@ -100,11 +101,11 @@ namespace ECSEngine {
 			ReflectionManager(const ReflectionManager& other) = default;
 			ReflectionManager& operator = (const ReflectionManager& other) = default;
 
-			static void GetKnownBlittableExceptions(CapacityStream<BlittableType>* blittable_types);
+			static void GetKnownBlittableExceptions(CapacityStream<BlittableType>* blittable_types, AllocatorPolymorphic temp_allocator);
 
 			void AddKnownBlittableExceptions();
 
-			void AddBlittableException(Stream<char> definition, size_t byte_size, size_t alignment);
+			void AddBlittableException(Stream<char> definition, size_t byte_size, size_t alignment, const void* default_data = nullptr);
 
 			// Adds a type which is not bound to any folder hierarchy. If the allocator is nullptr
 			// then it will only reference the type streams, not actually copy
@@ -124,6 +125,9 @@ namespace ECSEngine {
 				unsigned int data_count,
 				unsigned int folder_index
 			);
+
+			// Returns -1 if it doesn't find it
+			unsigned int BlittableExceptionIndex(Stream<char> name) const;
 
 			// Clears all allocations made by reflection types and frees the hash table. If the isolated_use is set to true,
 			// then will assume that the types have been added manually. Can optionally specify if the
@@ -574,7 +578,8 @@ namespace ECSEngine {
 		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
 		// for buffers it will always allocate even when the type is the same
 		// The old and the new reflection manager can be made nullptr if you are sure there are no nested types
-		// Or custom types
+		// Or custom types. By default, it will copy matching padding bytes between versions, but you can specify
+		// The last boolean in order to ignore that and set the padding bytes to zero for the new type
 		ECSENGINE_API void CopyReflectionTypeToNewVersion(
 			const ReflectionManager* old_reflection_manager,
 			const ReflectionManager* new_reflection_manager,
@@ -583,7 +588,8 @@ namespace ECSEngine {
 			const void* old_data,
 			void* new_data,
 			AllocatorPolymorphic allocator = { nullptr },
-			bool always_allocate_for_buffers = false
+			bool always_allocate_for_buffers = false,
+			bool set_padding_bytes_to_zero = false
 		);
 
 		// Does not work for user defined types

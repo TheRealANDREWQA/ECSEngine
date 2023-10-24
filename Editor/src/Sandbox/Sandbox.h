@@ -412,6 +412,11 @@ ECSEngine::GraphicsResourceSnapshot RenderSandboxInitializeGraphics(EditorState*
 
 // -------------------------------------------------------------------------------------------------------------
 
+// This version does not restore the graphics snapshot
+void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // The snapshot must be given from the Initialize call
 void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::GraphicsResourceSnapshot snapshot, EDITOR_SANDBOX_VIEWPORT viewport);
 

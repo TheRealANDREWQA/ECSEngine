@@ -19,7 +19,6 @@ using namespace ECSEngine;
 ECS_TOOLS;
 
 constexpr float2 CREATE_PROJECT_WIZARD_SCALE = float2(0.75f, 0.65f);
-constexpr size_t SAVE_PROJECT_AUTOMATICALLY_TICK = 1000;
 
 struct SaveCurrentProjectConfirmationData {
 	EditorState* editor_state;
@@ -44,12 +43,6 @@ void CreateProjectMisc(ProjectOperationData* data) {
 	AddHubProject(data->editor_state, hub_path);
 
 	data->editor_state->editor_tick = EditorStateProjectTick;
-
-	SaveProjectUIAutomaticallyData save_automatically_data;
-	save_automatically_data.editor_state = data->editor_state;;
-	save_automatically_data.timer = Timer();
-	save_automatically_data.timer.SetMarker();
-	data->editor_state->ui_system->PushFrameHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -669,12 +662,6 @@ bool OpenProject(ProjectOperationData data)
 	// Delete all the auxiliary build files .build, .clean, .rebuild
 	DeleteModuleFlagFiles(data.editor_state);
 
-	SaveProjectUIAutomaticallyData save_automatically_data;
-	save_automatically_data.editor_state = data.editor_state;
-	save_automatically_data.timer = Timer();
-	save_automatically_data.timer.SetMarker();
-	ui_system->PushFrameHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
-
 	struct RemoveEditorStateDoNotAddTasksData {
 		EditorState* editor_state;
 		unsigned int frame_count;
@@ -929,38 +916,6 @@ void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_st
 	descriptor.window_data = window_data;
 	descriptor.window_data_size = sizeof(*window_data);
 	descriptor.window_name = CONSOLE_WINDOW_NAME;
-}
-
-// -------------------------------------------------------------------------------------------------------------------
-
-ECS_THREAD_TASK(SaveProjectThreadTask) {
-	EditorState* editor_state = (EditorState*)_data;
-	ProjectFile* project_file = editor_state->project_file;
-
-	ECS_STACK_CAPACITY_STREAM(wchar_t, template_path, 256);
-	template_path.CopyOther(project_file->path);
-	template_path.Add(ECS_OS_PATH_SEPARATOR);
-	template_path.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);
-
-	CapacityStream<char> error_message = { nullptr, 0, 0 };
-	bool success = SaveProjectUITemplate(editor_state->ui_system, { template_path }, error_message);
-	if (!success) {
-		EditorSetConsoleError("Automatic project UI save failed.");
-	}
-}
-
-// -------------------------------------------------------------------------------------------------------------------
-
-void SaveProjectUIAutomatically(ActionData* action_data)
-{
-	UI_UNPACK_ACTION_DATA;
-
-	SaveProjectUIAutomaticallyData* data = (SaveProjectUIAutomaticallyData*)_data;
-	if (data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) > SAVE_PROJECT_AUTOMATICALLY_TICK) {
-		ThreadTask task = ECS_THREAD_TASK_NAME(SaveProjectThreadTask, data->editor_state, 0);
-		data->editor_state->task_manager->AddDynamicTaskAndWake(task);
-		data->timer.SetMarker();
-	}
 }
 
 // -------------------------------------------------------------------------------------------------------------------

@@ -4071,7 +4071,7 @@ namespace ECSEngine {
 						// Now less than the evict count and the texture can get evicted while the snapshot is running
 						// For this case we need to set the reference count to at least the evict count + 1
 						unsigned int current_reference_count = m_resource_manager->GetReferenceCount(ResourceType::Texture, resource_index);
-						unsigned int additional_increment_amount = current_reference_count < m_texture_evict_count ?
+						unsigned int additional_increment_amount = current_reference_count <= m_texture_evict_count ?
 							m_texture_evict_count - current_reference_count + 1 : 0;
 						m_resource_manager->IncrementReferenceCount(ResourceType::Texture, resource_index, additional_increment_amount + 1);
 					}

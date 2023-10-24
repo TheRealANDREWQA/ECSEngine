@@ -25,6 +25,7 @@ namespace ECSEngine {
 			window_data->scroll = system->m_mouse->GetScrollValue();
 			window_data->scroll_factor = 1.0f;
 			window_data->allow_zoom = true;
+			window_data->last_window_render_offset = float2::Splat(0.0f);
 			void* allocation = system->m_memory->Allocate(system->m_descriptors.misc.window_handler_revert_command_count * sizeof(HandlerCommand));
 			window_data->revert_commands = Stack<HandlerCommand>(allocation, system->m_descriptors.misc.window_handler_revert_command_count);
 			window_data->last_frame = system->GetFrameIndex();
@@ -133,28 +134,29 @@ namespace ECSEngine {
 			float dimming_factor = keyboard->IsDown(ECS_KEY_LEFT_CTRL) ? 0.1f : 1.0f;
 
 			if (slider->is_vertical) {
+				float change_value = mouse_delta.y / slider->current_scale.y * dimming_factor;
 				if (mouse_delta.y > 0.0f) {
 					if (previous_mouse.y >= slider->current_position.y) {
-						slider->slider_position += mouse_delta.y / slider->current_scale.y * dimming_factor;
+						slider->slider_position += change_value;
 					}
 				}
 				else if (mouse_position.y <= slider->current_position.y + slider->current_scale.y) {
-					slider->slider_position += mouse_delta.y / slider->current_scale.y * dimming_factor;
+					slider->slider_position += change_value;
 				}
 			}
 			else {
+				float change_value = mouse_delta.x / slider->current_scale.x * dimming_factor;
 				if (mouse_delta.x > 0.0f) {
 					if (previous_mouse.x >= slider->current_position.x) {
-						slider->slider_position += mouse_delta.x / slider->current_scale.x * dimming_factor;
+						slider->slider_position += change_value;
 					}
 				}
 				else if (mouse_position.x <= slider->current_position.x + slider->current_scale.x) {
-					slider->slider_position += mouse_delta.x / slider->current_scale.x * dimming_factor;
+					slider->slider_position += change_value;
 				}
 			}
-			slider->slider_position = slider->slider_position < 0.0f ? 0.0f : slider->slider_position;
-			slider->slider_position = slider->slider_position > 1.0f ? 1.0f : slider->slider_position;
 
+			slider->slider_position = Clamp(slider->slider_position, 0.0f, 1.0f);
 			slider->changed_value = initial_value != slider->slider_position;
 		}
 

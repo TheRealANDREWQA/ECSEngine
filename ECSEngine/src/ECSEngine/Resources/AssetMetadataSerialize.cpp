@@ -351,7 +351,7 @@ namespace ECSEngine {
 						}
 						else {
 							Reflection::ReflectionManager* reflection_manager = asset->reflection_manager;
-							field_table.ToNormalReflection(reflection_manager, allocator, true, true, true);
+							field_table.ToNormalReflection(reflection_manager, allocator, true, true);
 
 							type_to_be_deserialized = reflection_manager->GetType(field_table.types[0].name);
 							allocation = Allocate(allocator, type_to_be_deserialized->byte_size);

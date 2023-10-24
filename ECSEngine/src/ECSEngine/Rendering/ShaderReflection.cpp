@@ -198,7 +198,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Returns the count of a basic type array inside a constant buffer. It returns 0 if there is no basic type array
-	unsigned short ParseBasicTypeArrayCount(const char* starting_character, const char* new_line_character) {
+	static unsigned short ParseBasicTypeArrayCount(const char* starting_character, const char* new_line_character) {
 		unsigned short result = 0;
 
 		starting_character = SkipWhitespace(starting_character);
@@ -224,7 +224,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Returns the byte offset of the element. If no packoffset is specified, then it will return USHORT_MAX
-	unsigned short ParsePackoffset(const char* starting_character, const char* new_line_character) {
+	static unsigned short ParsePackoffset(const char* starting_character, const char* new_line_character) {
 		unsigned short offset = USHORT_MAX;
 
 		starting_character = SkipWhitespace(starting_character);
@@ -286,7 +286,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// It will parse the color tags as well
 	// If it contains miscellaneous tags, it will reference the string in the file
-	void ParseShaderReflectionConstantBufferFieldTags(
+	static void ParseShaderReflectionConstantBufferFieldTags(
 		ShaderReflectionConstantBufferField* field,
 		const char* semicolon,
 		const char* new_line
@@ -405,7 +405,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	}
 
 	// Returns true if it managed to determine the type of the field
-	bool ParseShaderReflectionConstantBufferField(
+	static bool ParseShaderReflectionConstantBufferField(
 		const ShaderReflection* shader_reflection, 
 		ShaderReflectionConstantBufferField* field,
 		const char* type_start, 
@@ -466,7 +466,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	}
 
 	// Returns how many fields where used - there can be more fields used for example for matrix types
-	unsigned int ConvertConstantBufferFieldToReflectionField(
+	static unsigned int ConvertConstantBufferFieldToReflectionField(
 		const ShaderReflectionConstantBufferField* shader_field, 
 		Reflection::ReflectionField* reflection_fields,
 		AllocatorPolymorphic allocator,
@@ -619,13 +619,13 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	Stream<char> SetName(const char* name, size_t size, AllocatorPolymorphic allocator) {
+	ECS_INLINE static Stream<char> SetName(const char* name, size_t size, AllocatorPolymorphic allocator) {
 		return StringCopy(allocator, Stream<char>(name, size));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	Stream<char> SetName(const char* starting_ptr, const char* ending_ptr, AllocatorPolymorphic allocator) {
+	ECS_INLINE static Stream<char> SetName(const char* starting_ptr, const char* ending_ptr, AllocatorPolymorphic allocator) {
 		size_t name_size = ending_ptr - starting_ptr;
 		return SetName(starting_ptr, name_size, allocator);
 	}
@@ -633,7 +633,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Returns USHORT_MAX if there is an error
-	unsigned short GetRegisterIndex(const char* register_ptr) {
+	static unsigned short GetRegisterIndex(const char* register_ptr) {
 		const char* number_start = strchr(register_ptr, '(');
 		if (number_start == nullptr) {
 			return USHORT_MAX;
@@ -648,7 +648,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Returns whether or not the register is a default one
-	bool ParseNameAndRegister(const char* type_start, AllocatorPolymorphic allocator, Stream<char>& output_name, unsigned short& register_index) {
+	static bool ParseNameAndRegister(const char* type_start, AllocatorPolymorphic allocator, Stream<char>& output_name, unsigned short& register_index) {
 		const char* current_character = type_start;
 		// Get the buffer name
 		while (*current_character != ' ' && *current_character != '\t') {
@@ -674,7 +674,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	size_t GetBasicTypeSemanticCount(const char* type_start, const char* type_end) {
+	static size_t GetBasicTypeSemanticCount(const char* type_start, const char* type_end) {
 		// Get the number of components 
 		const char* current_character = type_start;
 		while (!IsNumberCharacter(*current_character) && current_character < type_end) {
@@ -1858,51 +1858,54 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			current_character += *current_character == '\n';
 			current_character = SkipWhitespace(current_character);
 
-			const char* start_type_ptr = current_character;
-			current_character = SkipCodeIdentifier(current_character);
-			Stream<char> identifier = { start_type_ptr, PointerDifference(current_character, start_type_ptr) };
+			// If the line is empty, skip it
+			if (current_character != next_new_line) {
+				const char* start_type_ptr = current_character;
+				current_character = SkipCodeIdentifier(current_character);
+				Stream<char> identifier = { start_type_ptr, PointerDifference(current_character, start_type_ptr) };
 
-			ShaderConstantBufferReflectionTypeMapping mapping;
-			if (shader_reflection->cb_mapping_table.TryGetValue(identifier, mapping)) {
-				size_t byte_size = Reflection::GetReflectionBasicFieldTypeByteSize(mapping.basic_type) * (size_t)mapping.component_count;
-				total_byte_size += (unsigned short)byte_size;
+				ShaderConstantBufferReflectionTypeMapping mapping;
+				if (shader_reflection->cb_mapping_table.TryGetValue(identifier, mapping)) {
+					size_t byte_size = Reflection::GetReflectionBasicFieldTypeByteSize(mapping.basic_type) * (size_t)mapping.component_count;
+					total_byte_size += (unsigned short)byte_size;
 
-				if (reflection_type != nullptr) {
-					// We need to record other properties
-					ShaderReflectionConstantBufferField buffer_field;
-					ParseShaderReflectionConstantBufferField(shader_reflection, &buffer_field, identifier.buffer, next_new_line, &current_offset);
-					unsigned int previous_offset = buffer_field.pointer_offset;
-					unsigned int field_count = ConvertConstantBufferFieldToReflectionField(
-						&buffer_field, 
-						reflected_fields.buffer + reflected_fields.size, 
-						allocator, 
-						matrix_type_name_storage, 
-						matrix_types
-					); 
-					if (field_count > 1) {
-						if (matrix_types != nullptr) {
-							matrix_types->buffer[matrix_types->size].position = { reflected_fields.size, field_count };
-							matrix_types->size++;
+					if (reflection_type != nullptr) {
+						// We need to record other properties
+						ShaderReflectionConstantBufferField buffer_field;
+						ParseShaderReflectionConstantBufferField(shader_reflection, &buffer_field, identifier.buffer, next_new_line, &current_offset);
+						unsigned int previous_offset = buffer_field.pointer_offset;
+						unsigned int field_count = ConvertConstantBufferFieldToReflectionField(
+							&buffer_field,
+							reflected_fields.buffer + reflected_fields.size,
+							allocator,
+							matrix_type_name_storage,
+							matrix_types
+						);
+						if (field_count > 1) {
+							if (matrix_types != nullptr) {
+								matrix_types->buffer[matrix_types->size].position = { reflected_fields.size, field_count };
+								matrix_types->size++;
+							}
+						}
+						reflected_fields.size += field_count;
+						total_byte_size = 0;
+					}
+					else {
+						unsigned short parsed_offset = ParsePackoffset(identifier.buffer, next_new_line);
+						if (parsed_offset != USHORT_MAX) {
+							current_offset = parsed_offset;
+							total_byte_size = byte_size;
 						}
 					}
-					reflected_fields.size += field_count;
-					total_byte_size = 0;
 				}
 				else {
-					unsigned short parsed_offset = ParsePackoffset(identifier.buffer, next_new_line);
-					if (parsed_offset != USHORT_MAX) {
-						current_offset = parsed_offset;
-						total_byte_size = byte_size;
-					}
+					reflected_buffer.byte_size = -1;
+					return reflected_buffer;
 				}
+			}
 
-				current_character = (char*)next_new_line;
-				next_new_line = strchr(current_character + 1, '\n');
-			}
-			else {
-				reflected_buffer.byte_size = -1;
-				return reflected_buffer;
-			}
+			current_character = (char*)next_new_line;
+			next_new_line = strchr(current_character + 1, '\n');
 		}
 		*end_bracket = '}';
 		reflected_buffer.byte_size = current_offset == 0 ? total_byte_size : current_offset + total_byte_size;
@@ -1917,6 +1920,32 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			reflection_type->is_blittable = true;
 			reflection_type->is_blittable_with_pointer = true;
 			reflection_type->folder_hierarchy_index = -1;
+
+			// Now go through all fields that are Color type and make sure that there is enough room
+			// to convert into a color float since all constant buffers use float4 when giving simple colors
+			Stream<Reflection::ReflectionField> fields = reflection_type->fields;
+			unsigned short color_type_offset = 0;
+			for (size_t index = 0; index < fields.size - 1; index++) {
+				if (fields[index].definition == STRING(Color)) {
+					if (fields[index].info.pointer_offset + sizeof(ColorFloat) > fields[index + 1].info.pointer_offset) {
+						// We need to relocate that field - all fields should have alignment of float
+						size_t next_field_alignment = sizeof(float);
+						unsigned short new_next_field_offset = (unsigned short)AlignPointer(fields[index].info.pointer_offset + sizeof(ColorFloat), next_field_alignment);
+						unsigned short field_offset_relocation = new_next_field_offset - fields[index + 1].info.pointer_offset;
+						color_type_offset += field_offset_relocation;
+						for (size_t subindex = index + 1; subindex < fields.size; subindex++) {
+							fields[subindex].info.pointer_offset += field_offset_relocation;
+						}
+					}
+				}
+			}
+
+			// Also check the last field in order to make sure that the total byte size conforms
+			if (fields[fields.size - 1].definition == STRING(Color)) {
+				color_type_offset += sizeof(ColorFloat) - sizeof(Color);
+			}
+
+			reflection_type->byte_size += color_type_offset;
 		}
 
 		return reflected_buffer;

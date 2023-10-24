@@ -36,6 +36,13 @@ namespace ECSEngine {
 			Stream<DeserializeFieldInfo> fields;
 			Stream<char> name;
 			Stream<char> tag;
+
+			// We record these as well in order to have the identical reproduction
+			// Of the serialized type
+			unsigned int byte_size;
+			unsigned int alignment;
+			bool is_blittable;
+			bool is_blittable_with_pointer;
 		};
 
 		unsigned int TypeIndex(Stream<char> type_name) const;
@@ -53,14 +60,12 @@ namespace ECSEngine {
 		) const;
 
 		// Writes all types into the reflection manager. A stack allocator should be passed such that small allocations can be made
-		// Can optionally specify if the byte size, alignment and the is_blittable status are calculated afterwards or if the names
-		// and the definition for the fields are allocated from the given allocator
+		// Can optionally specify if the names and the definition for the fields are allocated from the given allocator
 		void ToNormalReflection(
 			Reflection::ReflectionManager* reflection_manager, 
 			AllocatorPolymorphic allocator,
 			bool allocate_all = false,
-			bool check_before_insertion = false,
-			bool calculate_parameters = false
+			bool check_before_insertion = false
 		) const;
 
 		// Fills in the types that came from this deserialize table

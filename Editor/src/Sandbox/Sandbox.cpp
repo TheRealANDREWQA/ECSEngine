@@ -1661,16 +1661,8 @@ GraphicsResourceSnapshot RenderSandboxInitializeGraphics(EditorState* editor_sta
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, GraphicsResourceSnapshot snapshot, EDITOR_SANDBOX_VIEWPORT viewport)
+void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	// Restore the graphics snapshot and deallocate it
-	bool are_resources_valid = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(snapshot);
-	if (!are_resources_valid) {
-		ECS_FORMAT_TEMP_STRING(console_message, "Restoring graphics resources after sandbox {#} failed.", sandbox_index);
-		EditorSetConsoleError(console_message);
-	}
-	snapshot.Deallocate(editor_state->EditorAllocator());
-
 	// Remove from the system manager bound resources
 	SystemManager* system_manager = GetSandbox(editor_state, sandbox_index)->sandbox_world.system_manager;
 	RemoveEditorRuntimeType(system_manager);
@@ -1682,6 +1674,21 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 		RemoveEditorRuntimeInstancedFramebuffer(system_manager);
 		RemoveEditorExtraTransformGizmos(system_manager);
 	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, GraphicsResourceSnapshot snapshot, EDITOR_SANDBOX_VIEWPORT viewport)
+{
+	// Restore the graphics snapshot and deallocate it
+	bool are_resources_valid = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(snapshot);
+	if (!are_resources_valid) {
+		ECS_FORMAT_TEMP_STRING(console_message, "Restoring graphics resources after sandbox {#} failed.", sandbox_index);
+		EditorSetConsoleError(console_message);
+	}
+	snapshot.Deallocate(editor_state->EditorAllocator());
+
+	RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1844,6 +1851,8 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			sandbox->sandbox_world.task_manager = runtime_task_manager;
 			sandbox->sandbox_world.entity_manager = runtime_entity_manager;
 			sandbox->sandbox_world.task_scheduler = runtime_task_scheduler;
+
+			RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport);
 		};
 
 		// Prepare the task scheduler

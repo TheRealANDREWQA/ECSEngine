@@ -1449,18 +1449,25 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	bool ReadAssetFileImpl(
+	static bool ReadAssetFileImpl(
 		const AssetDatabase* database, 
 		Stream<char> name, 
 		Stream<wchar_t> file, 
 		void* asset, 
 		const char* asset_string, 
 		ECS_ASSET_TYPE asset_type,
-		AllocatorPolymorphic allocator = { nullptr }
+		AllocatorPolymorphic allocator,
+		bool default_initialize_if_missing
 	) {
 		if (database->metadata_file_location.size > 0) {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
 			database->FileLocationAsset(name, file, path, asset_type);
+			if (default_initialize_if_missing) {
+				if (!ExistsFileOrFolder(path)) {
+					CreateDefaultAsset(asset, name, file, asset_type);
+					return true;
+				}
+			}
 
 			if (allocator.allocator == nullptr) {
 				allocator = database->Allocator();
@@ -1483,68 +1490,75 @@ namespace ECSEngine {
 		return true;
 	}
 
-	bool AssetDatabase::ReadMeshFile(Stream<char> name, Stream<wchar_t> file, MeshMetadata* metadata) const {
-		return ReadAssetFileImpl(this, name, file, metadata, STRING(MeshMetadata), ECS_ASSET_MESH);
+	bool AssetDatabase::ReadMeshFile(Stream<char> name, Stream<wchar_t> file, MeshMetadata* metadata, bool default_initialize_if_missing) const {
+		return ReadAssetFileImpl(this, name, file, metadata, STRING(MeshMetadata), ECS_ASSET_MESH, { nullptr }, default_initialize_if_missing);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::ReadTextureFile(Stream<char> name, Stream<wchar_t> file, TextureMetadata* metadata) const {
-		return ReadAssetFileImpl(this, name, file, metadata, STRING(TextureMetadata), ECS_ASSET_TEXTURE);
+	bool AssetDatabase::ReadTextureFile(Stream<char> name, Stream<wchar_t> file, TextureMetadata* metadata, bool default_initialize_if_missing) const {
+		return ReadAssetFileImpl(this, name, file, metadata, STRING(TextureMetadata), ECS_ASSET_TEXTURE, { nullptr }, default_initialize_if_missing);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::ReadGPUSamplerFile(Stream<char> name, GPUSamplerMetadata* metadata) const {
-		return ReadAssetFileImpl(this, name, {}, metadata, STRING(GPUSamplerMetadata), ECS_ASSET_GPU_SAMPLER);
+	bool AssetDatabase::ReadGPUSamplerFile(Stream<char> name, GPUSamplerMetadata* metadata, bool default_initialize_if_missing) const {
+		return ReadAssetFileImpl(this, name, {}, metadata, STRING(GPUSamplerMetadata), ECS_ASSET_GPU_SAMPLER, { nullptr }, default_initialize_if_missing);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::ReadShaderFile(Stream<char> name, ShaderMetadata* metadata, AllocatorPolymorphic allocator) const {
-		return ReadAssetFileImpl(this, name, {}, metadata, STRING(ShaderMetadata), ECS_ASSET_SHADER, allocator);
+	bool AssetDatabase::ReadShaderFile(Stream<char> name, ShaderMetadata* metadata, AllocatorPolymorphic allocator, bool default_initialize_if_missing) const {
+		return ReadAssetFileImpl(this, name, {}, metadata, STRING(ShaderMetadata), ECS_ASSET_SHADER, allocator, default_initialize_if_missing);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::ReadMaterialFile(Stream<char> name, MaterialAsset* asset, AllocatorPolymorphic allocator) const {
-		return ReadAssetFileImpl(this, name, {}, asset, STRING(MaterialAsset), ECS_ASSET_MATERIAL, allocator);
+	bool AssetDatabase::ReadMaterialFile(Stream<char> name, MaterialAsset* asset, AllocatorPolymorphic allocator, bool default_initialize_if_missing) const {
+		return ReadAssetFileImpl(this, name, {}, asset, STRING(MaterialAsset), ECS_ASSET_MATERIAL, allocator, default_initialize_if_missing);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::ReadMiscFile(Stream<char> name, Stream<wchar_t> file, MiscAsset* asset) const {
+	bool AssetDatabase::ReadMiscFile(Stream<char> name, Stream<wchar_t> file, MiscAsset* asset, bool default_initialize_if_missing) const {
 		// At the moment there is nothing to be read from the misc asset
 		return true;
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::ReadAssetFile(Stream<char> name, Stream<wchar_t> file, void* metadata, ECS_ASSET_TYPE asset_type, AllocatorPolymorphic allocator) const {
+	bool AssetDatabase::ReadAssetFile(
+		Stream<char> name, 
+		Stream<wchar_t> file, 
+		void* metadata, 
+		ECS_ASSET_TYPE asset_type, 
+		AllocatorPolymorphic allocator, 
+		bool default_initialize_if_missing
+	) const {
 		switch (asset_type) {
 		case ECS_ASSET_MESH:
 		{
-			return ReadMeshFile(name, file, (MeshMetadata*)metadata);
+			return ReadMeshFile(name, file, (MeshMetadata*)metadata, default_initialize_if_missing);
 		}
 		case ECS_ASSET_TEXTURE:
 		{
-			return ReadTextureFile(name, file, (TextureMetadata*)metadata);
+			return ReadTextureFile(name, file, (TextureMetadata*)metadata, default_initialize_if_missing);
 		}
 		case ECS_ASSET_GPU_SAMPLER:
 		{
-			return ReadGPUSamplerFile(name, (GPUSamplerMetadata*)metadata);
+			return ReadGPUSamplerFile(name, (GPUSamplerMetadata*)metadata, default_initialize_if_missing);
 		}
 		case ECS_ASSET_SHADER:
 		{
-			return ReadShaderFile(name, (ShaderMetadata*)metadata, allocator);
+			return ReadShaderFile(name, (ShaderMetadata*)metadata, allocator, default_initialize_if_missing);
 		}
 		case ECS_ASSET_MATERIAL:
 		{
-			return ReadMaterialFile(name, (MaterialAsset*)metadata, allocator);
+			return ReadMaterialFile(name, (MaterialAsset*)metadata, allocator, default_initialize_if_missing);
 		}
 		case ECS_ASSET_MISC:
 		{
-			return ReadMiscFile(name, file, (MiscAsset*)metadata);
+			return ReadMiscFile(name, file, (MiscAsset*)metadata, default_initialize_if_missing);
 		}
 		default:
 			ECS_ASSERT(false, "Invalid asset type.");
@@ -2003,7 +2017,8 @@ namespace ECSEngine {
 					GetAssetFile(current_metadata, asset_type), 
 					temporary_asset, 
 					asset_type, 
-					GetAllocatorPolymorphic(&stack_allocator)
+					GetAllocatorPolymorphic(&stack_allocator),
+					true
 				);
 				if (current_success) {
 					// Now we only need to remove the old dependencies

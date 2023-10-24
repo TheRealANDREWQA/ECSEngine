@@ -107,6 +107,7 @@ namespace ECSEngine {
 		bool dont_load_referenced = false
 	);
 
+	// The given allocator must be a temporary allocator
 	ECSENGINE_API void ConvertMaterialAssetToUserMaterial(
 		const AssetDatabase* asset_database,
 		const MaterialAsset* material, 

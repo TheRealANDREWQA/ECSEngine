@@ -874,19 +874,26 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::GetKnownBlittableExceptions(CapacityStream<BlittableType>* blittable_types)
+		void ReflectionManager::GetKnownBlittableExceptions(CapacityStream<BlittableType>* blittable_types, AllocatorPolymorphic allocator)
 		{
 			// Stream<void> is here for assets
-			blittable_types->AddAssert({ STRING(Stream<void>), sizeof(Stream<void>), alignof(Stream<void>) });
+			blittable_types->AddAssert({ STRING(Stream<void>), sizeof(Stream<void>), alignof(Stream<void>), nullptr });
 			
+			void* color_default = Allocate(allocator, sizeof(unsigned char) * 4);
+			memset(color_default, UCHAR_MAX, sizeof(unsigned char) * 4);
 			// Don't add an additional include just for the Color and ColorFloat types
-			blittable_types->AddAssert({ STRING(Color), sizeof(unsigned char) * 4, alignof(unsigned char) });
-			blittable_types->AddAssert({ STRING(ColorFloat), sizeof(float) * 4, alignof(float) });
+			blittable_types->AddAssert({ STRING(Color), sizeof(unsigned char) * 4, alignof(unsigned char), color_default });
+
+			float* float_color_default = (float*)Allocate(allocator, sizeof(float) * 4);
+			for (unsigned int index = 0; index < 4; index++) {
+				float_color_default[index] = 1.0f;
+			}
+			blittable_types->AddAssert({ STRING(ColorFloat), sizeof(float) * 4, alignof(float), float_color_default });
 
 			// Add the math types now
 			// Don't include the headers just for the byte sizes - use the MathTypeSizes.h
 			for (size_t index = 0; index < ECS_MATH_STRUCTURE_TYPE_COUNT; index++) {
-				blittable_types->AddAssert({ ECS_MATH_STRUCTURE_TYPE_STRINGS[index], ECS_MATH_STRUCTURE_TYPE_BYTE_SIZES[index], MathStructureAlignment() });
+				blittable_types->AddAssert({ ECS_MATH_STRUCTURE_TYPE_STRINGS[index], ECS_MATH_STRUCTURE_TYPE_BYTE_SIZES[index], MathStructureAlignment(), nullptr });
 			}
 		}
 
@@ -894,19 +901,27 @@ namespace ECSEngine {
 
 		void ReflectionManager::AddKnownBlittableExceptions()
 		{
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 			ECS_STACK_CAPACITY_STREAM(BlittableType, blittable_types, 64);
-			GetKnownBlittableExceptions(&blittable_types);
+			GetKnownBlittableExceptions(&blittable_types, GetAllocatorPolymorphic(&stack_allocator));
 
 			for (unsigned int index = 0; index < blittable_types.size; index++) {
-				AddBlittableException(blittable_types[index].name, blittable_types[index].byte_size, blittable_types[index].alignment);
+				AddBlittableException(blittable_types[index].name, blittable_types[index].byte_size, blittable_types[index].alignment, blittable_types[index].default_data);
 			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddBlittableException(Stream<char> definition, size_t byte_size, size_t alignment)
+		void ReflectionManager::AddBlittableException(Stream<char> definition, size_t byte_size, size_t alignment, const void* default_data)
 		{
-			blittable_types.Add({ definition, byte_size, alignment });
+			void* allocated_data = Allocate(Allocator(), byte_size);
+			if (default_data) {
+				memcpy(allocated_data, default_data, byte_size);
+			}
+			else {
+				memset(allocated_data, 0, byte_size);
+			}
+			blittable_types.Add({ definition, byte_size, alignment, allocated_data });
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1468,6 +1483,15 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		unsigned int ReflectionManager::BlittableExceptionIndex(Stream<char> name) const
+		{
+			return FindString(name, blittable_types.ToStream(), [](BlittableType type) {
+				return type.name;
+			});
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::ClearTypesFromAllocator(bool isolated_use, bool isolated_use_deallocate_types)
 		{
 			AllocatorPolymorphic allocator = folders.allocator;
@@ -1516,6 +1540,10 @@ namespace ECSEngine {
 			AllocatorPolymorphic allocator = folders.allocator;
 
 			ClearTypesFromAllocator(isolated_use, isolated_use_deallocate_types);
+			
+			for (unsigned int index = 0; index < blittable_types.size; index++) {
+				Deallocate(allocator, blittable_types[index].default_data);
+			}
 
 			constants.FreeBuffer();
 			field_table.Deallocate(allocator);
@@ -1698,9 +1726,7 @@ namespace ECSEngine {
 
 		ulong2 ReflectionManager::FindBlittableException(Stream<char> name) const
 		{
-			unsigned int index = FindString(name, blittable_types.ToStream(), [](BlittableType type) {
-				return type.name;
-			});
+			unsigned int index = BlittableExceptionIndex(name);
 			return index != -1 ? ulong2(blittable_types[index].byte_size, blittable_types[index].alignment) : ulong2(-1, -1);
 		}
 
@@ -2513,8 +2539,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						SetInstanceDefaultData(field->definition, current_field);
 					}
 					else {
-						// Might be a custom type. These should be fine with memsetting to 0
-						memset(current_field, 0, field->info.byte_size);
+						// Check blittable exceptions
+						unsigned int blittable_index = BlittableExceptionIndex(field->definition);
+						if (blittable_index == -1) {
+							// Might be a custom type. These should be fine with memsetting to 0
+							memset(current_field, 0, field->info.byte_size);
+						}
+						else {
+							// Use the blittable exception default value
+							memcpy(current_field, blittable_types[blittable_index].default_data, field->info.byte_size);
+						}
 					}
 				}
 				else {
@@ -5220,7 +5254,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const void* old_data, 
 			void* new_data,
 			AllocatorPolymorphic allocator,
-			bool always_allocate_for_buffers
+			bool always_allocate_for_buffers,
+			bool set_padding_bytes_to_zero
 		)
 		{
 			if (always_allocate_for_buffers) {
@@ -5236,7 +5271,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					name_to_search = FindDelimitedString(mapping_tag, '(', ')', true);
 				}
 				
-				unsigned int field_index = old_type->FindField(new_type->fields[new_index].name);
+				unsigned int field_index = old_type->FindField(name_to_search);
 				if (field_index != -1) {
 					ConvertReflectionFieldToOtherField(
 						old_reflection_manager,
@@ -5248,6 +5283,43 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						allocator,
 						always_allocate_for_buffers
 					);
+
+					// If there are padding bytes between this field and the next one, and they match in length, make sure to copy
+					// That as well otherwise comparison checks will fail because of them
+					unsigned short current_next_field_offset = 0;
+					unsigned short old_next_field_offset = 0;
+					if (new_index < new_type->fields.size - 1) {
+						current_next_field_offset = new_type->fields[new_index + 1].info.pointer_offset;
+					}
+					else {
+						current_next_field_offset = new_type->byte_size;
+					}
+
+					if (field_index < old_type->fields.size - 1) {
+						old_next_field_offset = old_type->fields[field_index + 1].info.pointer_offset;
+					}
+					else {
+						old_next_field_offset = old_type->byte_size;
+					}
+
+					unsigned short current_padding_bytes = current_next_field_offset - new_type->fields[new_index].info.pointer_offset - 
+						new_type->fields[new_index].info.byte_size;
+					if (set_padding_bytes_to_zero) {
+						if (current_padding_bytes > 0) {
+							memset(OffsetPointer(new_type->GetField(new_data, new_index), new_type->fields[new_index].info.byte_size), 0, current_padding_bytes);
+						}
+					}
+					else {
+						unsigned short old_padding_bytes = old_next_field_offset - old_type->fields[field_index].info.pointer_offset -
+							old_type->fields[field_index].info.byte_size;
+						if (current_padding_bytes == old_padding_bytes && current_padding_bytes > 0) {
+							memcpy(
+								OffsetPointer(new_type->GetField(new_data, new_index), new_type->fields[new_index].info.byte_size),
+								OffsetPointer(old_type->GetField(old_data, field_index), old_type->fields[field_index].info.byte_size),
+								current_padding_bytes
+							);
+						}
+					}
 				}
 				else {
 					// Use the default
@@ -5353,7 +5425,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// If not a user defined type, can copy it
 				if (first_info->info.basic_type != ReflectionBasicFieldType::UserDefined) {
 					if (first_info->info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
-						if (always_allocate_for_buffers) {
+						if (always_allocate_for_buffers && IsStream(first_info->info.stream_type)) {
 							ResizableStream<void> previous_data = GetReflectionFieldResizableStreamVoid(first_info->info, first_data);
 							size_t allocation_size = (size_t)second_info->info.stream_byte_size * previous_data.size;
 							void* allocation = Allocate(allocator, allocation_size);

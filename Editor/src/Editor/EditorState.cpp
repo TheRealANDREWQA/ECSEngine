@@ -8,6 +8,7 @@
 #include "../Modules/Module.h"
 #include "../Project/ProjectFolders.h"
 #include "../Project/ProjectBackup.h"
+#include "../Project/ProjectUITemplate.h"
 #include "../Sandbox/Sandbox.h"
 
 #include "../UI/CreateScene.h"
@@ -228,6 +229,27 @@ void TickPendingTasks(EditorState* editor_state) {
 	}
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
+void TickSaveProjectUIAutomatically(EditorState* editor_state) {
+	const size_t SAVE_PROJECT_AUTOMATICALLY_TICK = 1000;
+
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_SAVE_PROJECT_UI, SAVE_PROJECT_AUTOMATICALLY_TICK)) {
+		ProjectFile* project_file = editor_state->project_file;
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, template_path, 256);
+		template_path.CopyOther(project_file->path);
+		template_path.Add(ECS_OS_PATH_SEPARATOR);
+		template_path.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);
+
+		CapacityStream<char> error_message = { nullptr, 0, 0 };
+		bool success = SaveProjectUITemplate(editor_state->ui_system, { template_path }, error_message);
+		if (!success) {
+			EditorSetConsoleError("Automatic project UI save failed.");
+		}
+	}
+}
+
 // -----------------------------------------------------------------------------------------------------------------
 
 void EditorStateProjectTick(EditorState* editor_state) {
@@ -257,6 +279,8 @@ void EditorStateProjectTick(EditorState* editor_state) {
 
 		// At the end we need to tick the sandboxes that are running
 		TickSandboxRuntimes(editor_state);
+
+		TickSaveProjectUIAutomatically(editor_state);
 	}
 }
 
@@ -446,7 +470,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 		graphics->m_window_size,
 		global_memory_manager
 	);
-	ui->BindWindowHandler(WindowHandler, WindowHandlerInitializer, sizeof(ECSEngine::Tools::UIDefaultWindowHandler));
+	ui->BindWindowHandler(WindowHandler, WindowHandlerInitializer, sizeof(Tools::UIDefaultWindowHandler));
 	editor_state->ui_system = ui;
 
 	Reflection::ReflectionManager* editor_reflection_manager = (Reflection::ReflectionManager*)malloc(sizeof(Reflection::ReflectionManager));
