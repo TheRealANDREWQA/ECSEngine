@@ -1132,9 +1132,6 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 							// Set the pointer of the file metadata to the one in the database and then update the database
 							SetAssetToMetadata(file_metadata, asset_type, old_asset);
 
-							Stream<void> new_asset_pointer = GetAssetFromMetadata(metadata, asset_type);
-							bool modified_database_metadata = false;
-
 							if (ValidateAssetMetadataOptions(file_metadata, asset_type)) {
 								ReloadAssetResult reload_result = ReloadAssetFromMetadata(
 									editor_state->RuntimeResourceManager(),
@@ -1200,7 +1197,6 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 										DeallocateAssetBase(temporary_metadata, asset_type, editor_state->asset_database->Allocator());
 
 										SetAssetToMetadata(metadata, asset_type, GetAssetFromMetadata(file_metadata, asset_type));
-										modified_database_metadata = true;
 
 										for (unsigned int dependency = 0; dependency < old_dependencies.size; dependency++) {
 											DecrementAssetReference(editor_state, old_dependencies[dependency].handle, old_dependencies[dependency].type);
@@ -1252,19 +1248,17 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 									}
 								}
 
-								new_asset_pointer = GetAssetFromMetadata(metadata, asset_type);
+								// This value should be randomized invalid pointer - since the asset was deallocated
+								Stream<void> previous_asset_pointer = GetAssetFromMetadata(metadata, asset_type);
 
 								// We don't need to remove the time stamps because they were not added
 								editor_state->asset_database->RemoveAssetDependencies(metadata, asset_type);
-							}
 
-							// This can happen before in one of the branches
-							if (!modified_database_metadata) {
 								// Copy back into the database the new asset
 								DeallocateAssetBase(metadata, asset_type, editor_state->asset_database->Allocator());
 								CopyAssetBase(metadata, file_metadata, asset_type, editor_state->asset_database->Allocator());
 
-								SetAssetToMetadata(metadata, asset_type, new_asset_pointer);
+								SetAssetToMetadata(metadata, asset_type, previous_asset_pointer);
 							}
 						}
 					}

@@ -113,6 +113,7 @@ static void RegisterSandboxModuleSnapshots(EditorState* editor_state, unsigned i
 		snapshot.module_configuration = sandbox->modules_in_use[index].module_configuration;
 		snapshot.reflected_settings = StreamDeepCopy(sandbox->modules_in_use[index].reflected_settings, snapshot_allocator);
 		snapshot.library_timestamp = module_info->library_last_write_time;
+		snapshot.tried_loading = false;
 
 		sandbox->runtime_module_snapshots.Add(&snapshot);
 	}
@@ -157,8 +158,39 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 	bool are_modules_loaded = AreSandboxModulesLoaded(editor_state, sandbox_index, true);
 	if (!are_modules_loaded) {
 		if (!is_waiting_compilation) {
-			// Compile all the out of date modules now
-			CompileSandboxModules(editor_state, sandbox_index);
+			// Compile all the modules which are not yet loaded - but skip those
+			// For which we have already tried reloading and their dependencies
+			// Are not satisfied
+			ECS_STACK_CAPACITY_STREAM(unsigned int, missing_modules, 512);
+			GetSandboxNeededButMissingModules(editor_state, sandbox_index, missing_modules, true);
+			
+			ECS_STACK_CAPACITY_STREAM(unsigned int, compile_module_indices, 512);
+			ECS_STACK_CAPACITY_STREAM(EDITOR_MODULE_CONFIGURATION, compile_module_configuration, 512);
+
+			for (unsigned int index = 0; index < missing_modules.size; index++) {
+				unsigned int snapshot_index = FindString(
+					editor_state->project_modules->buffer[missing_modules[index]].solution_path,
+					sandbox->runtime_module_snapshots.ToStream(),
+					[](const EditorSandboxModuleSnapshot& snapshot) {
+						return snapshot.solution_path;
+					}
+				);
+				if (snapshot_index != -1) {
+					// Check to see if we have already tried compiling this and it failed
+					if (!sandbox->runtime_module_snapshots[snapshot_index].tried_loading) {
+						// Add it
+						compile_module_indices.AddAssert(missing_modules[index]);
+						compile_module_configuration.Add(sandbox->runtime_module_snapshots[snapshot_index].module_configuration);
+						sandbox->runtime_module_snapshots[snapshot_index].tried_loading = true;
+					}
+				}
+			}
+
+			if (compile_module_indices.size > 0) {
+				// We don't need this, but it is required to be passed
+				ECS_STACK_CAPACITY_STREAM(EDITOR_LAUNCH_BUILD_COMMAND_STATUS, launch_status, 512);
+				BuildModules(editor_state, compile_module_indices, compile_module_configuration.buffer, launch_status.buffer);
+			}
 		}
 
 		// Check if the there are modules being compiled and wait for them if that is the case
@@ -2543,6 +2575,9 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 					EndSandboxWorldSimulations(editor_state);
 				}
 			}
+			else {
+				EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+			}
 		}
 	}
 	else {
@@ -2566,6 +2601,9 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 				if (!are_all_default_not_started) {
 					EndSandboxWorldSimulations(editor_state);
 				}
+			}
+			else {
+				EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
 			}
 		}
 	}

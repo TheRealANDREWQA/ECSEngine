@@ -536,6 +536,11 @@ namespace ECSEngine {
 			// Returns true if the region should have the snapshot redrawn
 			bool Restore(UIDockspaceBorderDrawOutputSnapshotRestoreInfo* restore_info);
 
+			bool ContainsTexture(UISpriteTexture texture) const;
+
+			// Returns true if the old texture was found and replaced, else false
+			bool ReplaceTexture(UISpriteTexture old_texture, UISpriteTexture new_texture);
+
 			// This is the draw state
 			struct {
 				void* buffers[ECS_TOOLS_UI_MATERIALS * (ECS_TOOLS_UI_PASSES + 1)];

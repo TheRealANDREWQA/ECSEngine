@@ -10,6 +10,7 @@ namespace ECSEngine {
 		ECS_ALLOCATOR_MANAGER,
 		ECS_ALLOCATOR_ARENA,
 		ECS_ALLOCATOR_RESIZABLE_LINEAR,
+		ECS_ALLOCATOR_MEMORY_PROTECTED,
 		ECS_ALLOCATOR_TYPE_COUNT
 	};
 
@@ -58,7 +59,8 @@ template ECSENGINE_API return_type function_name(StackAllocator*, __VA_ARGS__); 
 template ECSENGINE_API return_type function_name(MultipoolAllocator*, __VA_ARGS__); \
 template ECSENGINE_API return_type function_name(MemoryManager*, __VA_ARGS__); \
 template ECSENGINE_API return_type function_name(MemoryArena*, __VA_ARGS__); \
-template ECSENGINE_API return_type function_name(ResizableLinearAllocator*, __VA_ARGS__);
+template ECSENGINE_API return_type function_name(ResizableLinearAllocator*, __VA_ARGS__); \
+template ECSENGINE_API return_type function_name(MemoryProtectedAllocator*, __VA_ARGS__);
 
 #define ECS_TEMPLATE_FUNCTION_ALLOCATOR(return_type, function_name, ...) template return_type function_name(LinearAllocator*, __VA_ARGS__); \
 template return_type function_name(StackAllocator*, __VA_ARGS__); \
@@ -66,6 +68,7 @@ template return_type function_name(StackAllocator*, __VA_ARGS__); \
 template return_type function_name(MultipoolAllocator*, __VA_ARGS__); \
 template return_type function_name(MemoryManager*, __VA_ARGS__); \
 template return_type function_name(MemoryArena*, __VA_ARGS__); \
-template return_type function_name(ResizableLinearAllocator*, __VA_ARGS__);
+template return_type function_name(ResizableLinearAllocator*, __VA_ARGS__); \
+template return_type function_name(MemoryProtectedAllocator*, __VA_ARGS__);
 
 }

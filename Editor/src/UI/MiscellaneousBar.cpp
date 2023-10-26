@@ -3,6 +3,7 @@
 #include "ToolbarUI.h"
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorPalette.h"
+#include "../Editor/EditorEvent.h"
 #include "../Modules/Module.h"
 #include "../Sandbox/Sandbox.h"
 
@@ -12,6 +13,14 @@ using namespace ECSEngine::Tools;
 constexpr float TOOP_TIP_OFFSET = 0.01f;
 
 // ----------------------------------------------------------------------------------------------------------------------
+
+EDITOR_EVENT(StartUnstartedSandboxEvent) {
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		return true;
+	}
+	StartSandboxWorlds(editor_state);
+	return false;
+}
 
 void RunProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
@@ -25,12 +34,25 @@ void RunProjectAction(ActionData* action_data) {
 		}
 	}
 	else {
-		StartSandboxWorlds(editor_state);
+		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+			EditorAddEvent(editor_state, StartUnstartedSandboxEvent, nullptr, 0);
+		}
+		else {
+			StartSandboxWorlds(editor_state);
+		}
 		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
 	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------
+
+EDITOR_EVENT(StartPausedSandboxEvent) {
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		return true;
+	}
+	StartSandboxWorlds(editor_state, true);
+	return false;
+}
 
 void PauseProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
@@ -38,7 +60,13 @@ void PauseProjectAction(ActionData* action_data) {
 	EditorState* editor_state = (EditorState*)_data;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
 		EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PAUSED);
-		StartSandboxWorlds(editor_state, true);
+		// In case there are assets being loaded, push an event to start the runtimes
+		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+			EditorAddEvent(editor_state, StartPausedSandboxEvent, nullptr, 0);
+		}
+		else {
+			StartSandboxWorlds(editor_state, true);
+		}
 	}
 	else {
 		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
@@ -48,12 +76,26 @@ void PauseProjectAction(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------
 
+EDITOR_EVENT(StepProjectEvent) {
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		return true;
+	}
+	RunSandboxWorlds(editor_state, true);
+	return false;
+}
+
 void StepProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
-		RunSandboxWorlds(editor_state, true);
+		// In case there are assets being loaded, we need to push an event to run a step
+		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) || EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+			EditorAddEvent(editor_state, StepProjectEvent, nullptr, 0);
+		}
+		else {
+			RunSandboxWorlds(editor_state, true);
+		}
 	}
 }
 

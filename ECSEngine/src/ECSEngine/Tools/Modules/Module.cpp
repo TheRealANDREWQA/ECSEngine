@@ -84,8 +84,9 @@ namespace ECSEngine {
 		Stream<Stream<char>> result = { nullptr, 0 };
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, dependencies, 512);
 
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 		// Read the file as binary, but interpret it as text
-		Stream<void> file = ReadWholeFileBinary(path);
+		Stream<void> file = ReadWholeFileBinary(path, GetAllocatorPolymorphic(&stack_allocator));
 		if (file.buffer != nullptr) {
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 
@@ -138,7 +139,6 @@ namespace ECSEngine {
 				}
 			}
 
-			free(file.buffer);
 			if (dependencies.size > 0) {
 				for (unsigned int index = 0; index < dependencies.size; index++) {
 					dependencies[index] = PathFilenameBoth(dependencies[index]);

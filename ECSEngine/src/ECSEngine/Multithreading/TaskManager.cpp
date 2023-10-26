@@ -569,7 +569,10 @@ namespace ECSEngine {
 			// We are the last ones to finish the frame - set the new frame delta time
 			// Use the microsecond variant and divide by with the float factor to have a floating point
 			// Value since GetDuration returns an integer value
-			world->delta_time = (float)world->timer.GetDuration(ECS_TIMER_DURATION_US) / 1'000'000.0f;
+			float new_delta_time = (float)world->timer.GetDuration(ECS_TIMER_DURATION_US) / 1'000'000.0f;
+			if (new_delta_time <= ECS_WORLD_DELTA_TIME_REUSE_THRESHOLD) {
+				world->delta_time = new_delta_time;
+			}
 		}
 	}
 

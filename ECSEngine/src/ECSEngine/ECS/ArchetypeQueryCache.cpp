@@ -72,7 +72,7 @@ namespace ECSEngine {
 		exclude_query_results.lock.lock();
 
 		// Check to see if this query already exists
-		for (unsigned int index = 0; index < query_results.count; index++) {
+		for (unsigned int index = 0; index < exclude_query_results.count; index++) {
 			if (exclude_query_results.components[index] == query) {
 				// It matches this query - don't need to create a new one
 				exclude_query_results.lock.unlock();

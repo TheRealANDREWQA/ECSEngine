@@ -86,6 +86,11 @@ struct ECS_REFLECT EditorSandboxModule {
 struct EditorSandboxModuleSnapshot {
 	EDITOR_MODULE_CONFIGURATION module_configuration;
 	EDITOR_MODULE_LOAD_STATUS load_status;
+	// Use this flag to determine if we should compile this module or not - by default
+	// We should try to compile modules that failed since their dependencies might have been fixed
+	// Now and we wouldn't catch them if we used out of date. But we need this flag in order
+	// To not try to recompile endlessly when there is no changed made
+	bool tried_loading;
 	size_t library_timestamp;
 	ECSEngine::Stream<wchar_t> library_name;
 	ECSEngine::Stream<wchar_t> solution_path;

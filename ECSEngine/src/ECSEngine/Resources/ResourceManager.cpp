@@ -622,7 +622,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::EvictOutdatedResources(ResourceType type)
+	void ResourceManager::EvictOutdatedResources(ResourceType type, EvictOutdatedResourcesOptions* options)
 	{
 		unsigned int int_type = (unsigned int)type;
 		// Iterate through all resources and check their new stamps
@@ -631,33 +631,12 @@ namespace ECSEngine {
 			ResourceIdentifier identifier = m_resource_types[int_type].GetIdentifierFromIndex(index);
 			size_t new_stamp = OS::GetFileLastWrite({ identifier.ptr, identifier.size / sizeof(wchar_t) });
 			if (new_stamp > m_resource_types[int_type].GetValueFromIndex(index).time_stamp) {
-				// Kick this resource
-				DELETE_FUNCTIONS[int_type](this, index, 1);
-				// Decrement the index because other resources can move into this place
-				return true;
-			}
-
-			return false;
-		});
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	Stream<ResourceIdentifier> ResourceManager::EvictOutdatedResources(ResourceType type, AllocatorPolymorphic allocator)
-	{
-		unsigned int int_type = (unsigned int)type;
-		
-		Stream<ResourceIdentifier> identifiers;
-		identifiers.Initialize(allocator, m_resource_types[int_type].GetCount());
-		identifiers.size = 0;
-
-		// Iterate through all resources and check their new stamps
-		m_resource_types[int_type].ForEachIndex([&](unsigned int index) {
-			// Get the new stamp
-			ResourceIdentifier identifier = m_resource_types[int_type].GetIdentifierFromIndex(index);
-			size_t new_stamp = OS::GetFileLastWrite({ identifier.ptr, identifier.size / sizeof(wchar_t) });
-			if (new_stamp > m_resource_types[int_type].GetValueFromIndex(index).time_stamp) {
-				identifiers.Add(identifier.Copy(allocator));
+				if (options->removed_identifiers.IsInitialized()) {
+					options->removed_identifiers.Add(identifier.Copy(options->allocator));
+				}
+				if (options->removed_values.IsInitialized()) {
+					options->removed_values.Add(m_resource_types[int_type].GetValueFromIndex(index).data);
+				}
 
 				// Kick this resource
 				DELETE_FUNCTIONS[int_type](this, index, 1);
@@ -667,8 +646,6 @@ namespace ECSEngine {
 
 			return false;
 		});
-
-		return identifiers;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------

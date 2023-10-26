@@ -27,7 +27,7 @@ namespace ECSEngine {
 
 		size_t GetMarker() const;
 
-		void* GetAllocatedBuffer();
+		void* GetAllocatedBuffer() const;
 
 		void ReturnToMarker(size_t marker, DebugInfo debug_info = ECS_DEBUG_INFO);
 

@@ -1,11 +1,9 @@
 #include "pch.h"
 #include "ModuleFunction.h"
 
-using namespace ECSEngine;
-
 template<bool get_query>
 ECS_THREAD_TASK(ApplyMovement) {
-	ForEachEntity<get_query, QueryWrite<Translation>>(thread_id, world).Function([](
+	ForEachEntity<get_query, QueryWrite<Translation>>(thread_id, world).Function<QueryExclude<Scale>>([](
 		ForEachEntityData* for_each_data, 
 		Translation* translation
 	) {

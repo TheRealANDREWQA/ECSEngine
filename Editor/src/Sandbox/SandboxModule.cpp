@@ -367,12 +367,14 @@ void GetSandboxNeededButMissingModules(
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
-		const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration);
-		if (info->load_status == EDITOR_MODULE_LOAD_FAILED) {
-			in_stream_indices.AddAssert(index);
-		}
-		else if (include_out_of_date && info->load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
-			in_stream_indices.AddAssert(index);
+		if (!sandbox->modules_in_use[index].is_deactivated) {
+			const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration);
+			if (info->load_status == EDITOR_MODULE_LOAD_FAILED) {
+				in_stream_indices.AddAssert(index);
+			}
+			else if (include_out_of_date && info->load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
+				in_stream_indices.AddAssert(index);
+			}
 		}
 	}
 }

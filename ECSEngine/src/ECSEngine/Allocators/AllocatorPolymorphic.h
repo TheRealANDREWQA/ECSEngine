@@ -405,6 +405,7 @@ namespace ECSEngine {
 	struct MemoryManager;
 	struct MemoryArena;
 	struct ResizableLinearAllocator;
+	struct MemoryProtectedAllocator;
 
 	template<typename Allocator>
 	ECS_INLINE AllocatorPolymorphic GetAllocatorPolymorphic(Allocator* allocator, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE) {
@@ -427,6 +428,9 @@ namespace ECSEngine {
 		}
 		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, ResizableLinearAllocator>) {
 			allocator_type = ECS_ALLOCATOR_RESIZABLE_LINEAR;
+		}
+		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, MemoryProtectedAllocator>) {
+			allocator_type = ECS_ALLOCATOR_MEMORY_PROTECTED;
 		}
 		else {
 			static_assert(false, "Incorrect allocator type for GetAllocatorPolymorphic");

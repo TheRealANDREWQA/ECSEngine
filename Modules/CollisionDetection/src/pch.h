@@ -9,3 +9,5 @@
 #include "ECSEngineForEach.h"
 #include "ECSEngineComponents.h"
 #include "ECSEngineWorld.h"
+
+using namespace ECSEngine;

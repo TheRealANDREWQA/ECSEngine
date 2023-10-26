@@ -177,6 +177,19 @@ namespace ECSEngine {
 
 		ECSENGINE_API uint2 GetOSWindowPosition(void* window_handle);
 
+		// Returns an allocation from the system virtual allocation where you can specify if the memory is
+		// to be commited or not
+		ECSENGINE_API void* VirtualAllocation(size_t size);
+
+		// The pointer must be obtained from VirtualAllocation
+		ECSENGINE_API void VirtualDeallocation(void* block);
+
+		// Returns true if it succeeded, else false. The page enter read-write mode
+		ECSENGINE_API bool DisableVirtualWriteProtection(void* allocation);
+
+		// Returns true if it succeeded, else false. The page enter read only mode
+		ECSENGINE_API bool EnableVirtualWriteProtection(void* allocation);
+
 #pragma endregion
 
 #pragma region Error With Window Or Console

@@ -9,6 +9,7 @@
 #include "PoolAllocator.h"
 #include "StackAllocator.h"
 #include "ResizableLinearAllocator.h"
+#include "MemoryProtectedAllocator.h"
 #include "../Utilities/PointerUtilities.h"
 
 namespace ECSEngine {
@@ -198,20 +199,23 @@ namespace ECSEngine {
 										function_name<MultipoolAllocator>, \
 										function_name<MemoryManager>, \
 										function_name<MemoryArena>, \
-										function_name<ResizableLinearAllocator>
+										function_name<ResizableLinearAllocator>, \
+										function_name<MemoryProtectedAllocator>
 
 #define ECS_JUMP_TABLE_FOR_RESIZABLE(resizable_function, fixed_function)	fixed_function, \
 																			fixed_function, \
 																			fixed_function, \
 																			resizable_function<MemoryManager>, \
 																			fixed_function, \
-																			resizable_function<ResizableLinearAllocator>
+																			resizable_function<ResizableLinearAllocator>, \
+																			resizable_function<MemoryProtectedAllocator>
 
 #define ECS_JUMP_TABLE_FOR_FIXED(fixed_function, resizable_function)	fixed_function<LinearAllocator>, \
 																		fixed_function<StackAllocator>, \
 																		fixed_function<MultipoolAllocator>, \
 																		resizable_function, \
 																		fixed_function<MemoryArena>, \
+																		resizable_function, \
 																		resizable_function
 
 #define ECS_JUMP_TABLE_FOR_FIXED_AND_RESIZABLE(fixed_function, resizable_function)	fixed_function<LinearAllocator>, \
@@ -219,7 +223,8 @@ namespace ECSEngine {
 																					fixed_function<MultipoolAllocator>, \
 																					resizable_function<MemoryManager>, \
 																					fixed_function<MemoryArena>, \
-																					resizable_function<ResizableLinearAllocator>
+																					resizable_function<ResizableLinearAllocator>, \
+																					resizable_function<MemoryProtectedAllocator>
 
 
 
@@ -505,7 +510,8 @@ namespace ECSEngine {
 		"Multipool",
 		"Manager",
 		"Arena",
-		"ResizableLinear"
+		"ResizableLinear",
+		"MemoryProtectet"
 	};
 
 	static_assert(std::size(ALLOCATOR_NAMES) == ECS_ALLOCATOR_TYPE_COUNT);
