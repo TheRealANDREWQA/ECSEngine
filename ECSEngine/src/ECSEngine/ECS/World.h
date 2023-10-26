@@ -13,6 +13,13 @@
 #include "../Multithreading/TaskScheduler.h"
 #include "../Tools/Debug Draw/DebugDraw.h"
 
+// This is a value in seconds describing the case when the simulation is stopped
+// And then restarted some time later, which results in a very large value (like when a 
+// debug breakpoint was met or when the world is stopped and restarted later)
+// which breaks the simulation. In order to avoid that, use a threshold value above which
+// the delta time will not be changed if the value crosses it
+#define ECS_WORLD_DELTA_TIME_REUSE_THRESHOLD 1.0f
+
 namespace ECSEngine {
 
 	struct DebugDrawer;

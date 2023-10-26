@@ -67,6 +67,8 @@ namespace ECSEngine {
 		// From a fixed size and a number of known block count, calculate the amount of memory it can reference
 		static size_t CapacityFromFixedSize(unsigned int fixed_size, unsigned int pool_count);
 
+		// We have this as unsigned char to make it easier to use the alignment stack trick
+		// where we write before the allocation a byte telling us the real offset of the allocation
 		unsigned char* m_buffer;
 		size_t m_size;
 		SpinLock m_spin_lock;

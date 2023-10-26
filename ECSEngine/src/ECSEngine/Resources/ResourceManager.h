@@ -142,6 +142,12 @@ namespace ECSEngine {
 		Stream<Resource> resources[(unsigned int)ResourceType::TypeCount];
 	};
 
+	struct EvictOutdatedResourcesOptions {
+		AllocatorPolymorphic allocator = {};
+		AdditionStream<ResourceIdentifier> removed_identifiers = {};
+		AdditionStream<void*> removed_values = {};
+	};
+
 	// Defining ECS_RESOURCE_MANAGER_CHECK_RESOURCE will make AddResource check if the resource exists already 
 	struct ECSENGINE_API ResourceManager
 	{
@@ -216,11 +222,7 @@ namespace ECSEngine {
 
 		// Walks through the table and removes all resources which are outdated - implies that all resource identifiers have as their
 		// ptr the path to the resource
-		void EvictOutdatedResources(ResourceType type);
-
-		// Walks through the table and removes all resources which are outdated - implies that all resource identifiers have as their
-		// ptr the path to the resource. This version also records which assets have been removed
-		Stream<ResourceIdentifier> EvictOutdatedResources(ResourceType type, AllocatorPolymorphic allocator);
+		void EvictOutdatedResources(ResourceType type, EvictOutdatedResourcesOptions* options = {});
 
 		// The functor will receive as parameter the ResourceIdentifier of the resource. If the resource was added
 		// with a suffix, the identifier includes the suffix. For early exit it must return true to exit

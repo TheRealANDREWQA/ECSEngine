@@ -981,6 +981,32 @@ namespace ECSEngine {
 			return should_redraw;
 		}
 
+		bool UIDockspaceBorderDrawOutputSnapshot::ContainsTexture(UISpriteTexture texture) const
+		{
+			for (size_t index = 0; index < std::size(sprites); index++) {
+				for (size_t subindex = 0; subindex < sprites[index].size; subindex++) {
+					if (texture.Interface() == sprites[index][subindex].Interface()) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		bool UIDockspaceBorderDrawOutputSnapshot::ReplaceTexture(UISpriteTexture old_texture, UISpriteTexture new_texture)
+		{
+			bool was_replaced = false;
+			for (size_t index = 0; index < std::size(sprites); index++) {
+				for (size_t subindex = 0; subindex < sprites[index].size; subindex++) {
+					if (sprites[index][subindex].Interface() == old_texture.Interface()) {
+						sprites[index][subindex] = new_texture;
+						was_replaced = true;
+					}
+				}
+			}
+			return was_replaced;
+		}
+
 		void UIDockspaceBorderDrawOutputSnapshot::ConstructFrom(const UIDockspaceBorderDrawOutputSnapshotCreateInfo* info)
 		{
 			AllocatorPolymorphic allocator = info->allocator;

@@ -1965,7 +1965,7 @@ namespace ECSEngine {
 
 	template<typename T>
 	struct AdditionStream {
-		ECS_INLINE AdditionStream() {}
+		ECS_INLINE AdditionStream() : is_capacity(true), capacity_stream(nullptr) {}
 		ECS_INLINE AdditionStream(CapacityStream<T>* capacity) {
 			is_capacity = true;
 			capacity_stream = capacity;
@@ -2031,7 +2031,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE bool IsInitialized() const {
-			return is_capacity ? capacity_stream->capacity > 0 : resizable_stream->allocator.allocator != nullptr;
+			return is_capacity ? capacity_stream && capacity_stream->capacity > 0 : resizable_stream && resizable_stream->allocator.allocator != nullptr;
 		}
 		
 		ECS_INLINE T& operator[](unsigned int index) {

@@ -322,9 +322,6 @@ namespace ECSEngine {
 			constexpr bool is_shared[component_count] = {
 				T::IsShared()...
 			};
-			constexpr bool is_exclude[component_count] = {
-				T::IsExclude()...
-			};
 
 			void** components[2] = {
 				data->unique_components,
@@ -336,11 +333,9 @@ namespace ECSEngine {
 			size_t component_index[2] = { 0 };
 
 			for (size_t index = 0; index < component_count; index++) {
-				if (!is_exclude[index]) {
-					void** component_ptrs = components[is_shared[index]];
-					size_t ptr_index = component_index[is_shared[index]]++;
-					current_components[total_index++] = component_ptrs[ptr_index];
-				}
+				void** component_ptrs = components[is_shared[index]];
+				size_t ptr_index = component_index[is_shared[index]]++;
+				current_components[total_index++] = component_ptrs[ptr_index];
 			}
 
 			// We need to decrement index to reflect the correct final index
@@ -440,7 +435,7 @@ namespace ECSEngine {
 				}
 			}
 
-			template<typename Functor>
+			template<typename... ExcludeComponents, typename Functor>
 			void Function(Functor& functor) {
 				if constexpr (!get_query) {
 					// Retrieve the optional components since they are not stored in the query cache
@@ -467,6 +462,9 @@ namespace ECSEngine {
 						query_descriptor.unique_optional,
 						query_descriptor.shared_optional
 					);
+
+					ECS_CRASH_RETURN(query_descriptor.unique_exclude.count == 0 && query_descriptor.shared_exclude.count == 0, "ECS ForEach:"
+						" You must specify the exclude components in the Function template parameter pack");
 
 					if constexpr (options & FOR_EACH_IS_COMMIT) {
 						if constexpr (options & FOR_EACH_IS_BATCH) {
@@ -513,6 +511,10 @@ namespace ECSEngine {
 							);
 						}
 					}
+				}
+				else {
+					Internal::RegisterForEachInfo* info = (Internal::RegisterForEachInfo*)world;
+					Internal::AddQueryComponents<ExcludeComponents...>(info);
 				}
 			}
 

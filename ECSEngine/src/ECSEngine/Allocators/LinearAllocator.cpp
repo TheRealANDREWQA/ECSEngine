@@ -56,7 +56,7 @@ namespace ECSEngine {
 		return m_top;
 	}
 
-	void* LinearAllocator::GetAllocatedBuffer()
+	void* LinearAllocator::GetAllocatedBuffer() const
 	{
 		return m_buffer;
 	}

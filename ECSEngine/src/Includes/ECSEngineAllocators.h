@@ -6,5 +6,6 @@
 #include "../ECSEngine/Allocators/MultipoolAllocator.h"
 #include "../ECSEngine/Allocators/PoolAllocator.h"
 #include "../ECSEngine/Allocators/StackAllocator.h"
+#include "../ECSEngine/Allocators/MemoryProtectedAllocator.h"
 #include "../ECSEngine/Allocators/AllocatorPolymorphic.h"
 #include "../ECSEngine/Allocators/AllocatorCallsDebug.h"

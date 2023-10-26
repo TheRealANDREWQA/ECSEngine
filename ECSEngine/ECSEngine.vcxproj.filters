@@ -239,6 +239,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\StringUtilities.h" />
     <ClInclude Include="src\ECSEngine\Utilities\EvaluateExpression.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Algorithms.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\MemoryProtectedAllocator.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -374,6 +375,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\FilePreprocessor.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\StringUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\EvaluateExpression.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\MemoryProtectedAllocator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

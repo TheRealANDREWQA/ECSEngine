@@ -216,6 +216,7 @@
     <ClInclude Include="src\ECSEngine\Allocators\LinearAllocator.h" />
     <ClInclude Include="src\ECSEngine\Allocators\MemoryArena.h" />
     <ClInclude Include="src\ECSEngine\Allocators\MemoryManager.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\MemoryProtectedAllocator.h" />
     <ClInclude Include="src\ECSEngine\Allocators\MultipoolAllocator.h" />
     <ClInclude Include="src\ECSEngine\Allocators\PoolAllocator.h" />
     <ClInclude Include="src\ECSEngine\Allocators\ResizableLinearAllocator.h" />
@@ -435,6 +436,7 @@
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\MemoryArena.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\MemoryManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\MemoryProtectedAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\MultipoolAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\PoolAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\ResizableLinearAllocator.cpp" />

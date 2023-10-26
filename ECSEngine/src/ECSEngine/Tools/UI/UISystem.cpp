@@ -3533,9 +3533,12 @@ namespace ECSEngine {
 			m_texture_evict_count++;
 			if (m_texture_evict_count == m_texture_evict_target) {
 				m_resource_manager->DecrementReferenceCounts(ResourceType::Texture, m_texture_evict_count);
-				// Evict the outdated resources aswell
-				EvictOutdatedTextures();
 				m_texture_evict_count = 0;
+			}
+			// For the evict outdated textures, use a a smaller evict target count such that changes will be displayed quickly
+			// Use every multiple of one sixth of the normal evict target count
+			if (m_texture_evict_count % (m_texture_evict_target / 6) == 0) {
+				EvictOutdatedTextures();
 			}
 
 			UpdateDockspaceHierarchy();
@@ -5247,7 +5250,37 @@ namespace ECSEngine {
 
 		void UISystem::EvictOutdatedTextures()
 		{
-			m_resource_manager->EvictOutdatedResources(ResourceType::Texture);
+			// We want to evict the outdated textures. But if a snapshot contains one of these textures,
+			// Then deallocate the snapshot and have the window redraw itself
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+
+			ResizableStream<void*> removed_textures(GetAllocatorPolymorphic(&stack_allocator), 16);
+			EvictOutdatedResourcesOptions evict_options;
+			evict_options.allocator = GetAllocatorPolymorphic(&stack_allocator);
+			evict_options.removed_values = &removed_textures;
+			m_resource_manager->EvictOutdatedResources(ResourceType::Texture, &evict_options);
+
+			auto iterate_dockspaces = [&](Stream<UIDockspace> dockspaces) {
+				for (size_t index = 0; index < dockspaces.size; index++) {
+					for (unsigned int border_index = 0; border_index < dockspaces[index].borders.size - 1; border_index++) {
+						if (!dockspaces[index].borders[border_index].is_dock) {
+							if (dockspaces[index].borders[border_index].snapshot.IsValid()) {
+								for (unsigned int texture_index = 0; texture_index < removed_textures.size; texture_index++) {
+									if (dockspaces[index].borders[border_index].snapshot.ContainsTexture((ID3D11ShaderResourceView*)removed_textures[texture_index])) {
+										DeallocateBorderSnapshot(dockspaces.buffer + index, border_index, false);
+										break;
+									}
+								}
+							}
+						}
+					}
+				}
+			};
+
+			iterate_dockspaces(m_floating_horizontal_dockspaces);
+			iterate_dockspaces(m_floating_vertical_dockspaces);
+			iterate_dockspaces(m_horizontal_dockspaces);
+			iterate_dockspaces(m_vertical_dockspaces);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -11771,9 +11804,28 @@ namespace ECSEngine {
 						// and remove the reference count since it will bottleneck the file explorer when many textures are loaded
 						// at the same time
 						ResourceIdentifier identifier(data->filename);
+						UISpriteTexture previous_view = *data->texture;
 						data->system->m_resource_manager->RebindResource(identifier, ResourceType::Texture, new_view.view);
 						data->system->m_resource_manager->RemoveReferenceCountForResource(identifier, ResourceType::Texture);
 						*data->texture = new_view;
+
+						// We also need to update any reference to the previous texture inside window snapshots
+						auto iterate_dockspaces = [previous_view, new_view](Stream<UIDockspace> dockspaces) {
+							for (size_t index = 0; index < dockspaces.size; index++) {
+								for (unsigned int border_index = 0; border_index < dockspaces[index].borders.size - 1; border_index++) {
+									if (!dockspaces[index].borders[border_index].is_dock) {
+										if (dockspaces[index].borders[border_index].snapshot.IsValid()) {
+											dockspaces[index].borders[border_index].snapshot.ReplaceTexture(previous_view, new_view);
+										}
+									}
+								}
+							}
+						};
+
+						iterate_dockspaces(data->system->m_floating_horizontal_dockspaces);
+						iterate_dockspaces(data->system->m_floating_vertical_dockspaces);
+						iterate_dockspaces(data->system->m_horizontal_dockspaces);
+						iterate_dockspaces(data->system->m_vertical_dockspaces);
 					}
 				}
 				else {

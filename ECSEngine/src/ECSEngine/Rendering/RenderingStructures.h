@@ -964,6 +964,10 @@ namespace ECSEngine {
 			return Texture3D(GetResource());
 		}
 
+		ECS_INLINE void FromUntyped(void* pointer) {
+			view = (ID3D11ShaderResourceView*)pointer;
+		}
+
 		static ResourceView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_SHADER_RESOURCE_VIEW_DESC* descriptor);
 
 		// It will copy using the descriptor from the view

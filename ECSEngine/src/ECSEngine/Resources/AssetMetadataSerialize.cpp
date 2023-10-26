@@ -341,7 +341,7 @@ namespace ECSEngine {
 						field_options.read_type_tags = true;
 						DeserializeFieldTable field_table = DeserializeFieldTableFromData(*data->stream, temp_allocator, &field_options);
 						void* allocation = nullptr;
-						size_t byte_size = ECS_KB * 64;
+						size_t byte_size = ECS_KB;
 						Reflection::ReflectionType* type_to_be_deserialized = nullptr;
 
 						if (field_table.types.size == 0) {
@@ -356,6 +356,8 @@ namespace ECSEngine {
 							type_to_be_deserialized = reflection_manager->GetType(field_table.types[0].name);
 							allocation = Allocate(allocator, type_to_be_deserialized->byte_size);
 							byte_size = type_to_be_deserialized->byte_size;
+							// Memset the allocation such that padding bytes are reset to 0
+							memset(allocation, 0, byte_size);
 
 							DeserializeOptions options;
 							options.deserialized_field_manager = reflection_manager;
