@@ -592,6 +592,16 @@ namespace ECSEngine {
 			bool set_padding_bytes_to_zero = false
 		);
 
+		// It does a memcpy into the corresponding field of the instance
+		// It does not allocate anything. It returns true if the field exists,
+		// else false (in which case it doesn't do anything)
+		ECSENGINE_API bool CopyIntoReflectionFieldValue(
+			const ReflectionType* type,
+			Stream<char> field_name,
+			void* instance,
+			const void* data
+		);
+
 		// Does not work for user defined types
 		ECSENGINE_API void ConvertReflectionBasicField(
 			ReflectionBasicFieldType first_type,

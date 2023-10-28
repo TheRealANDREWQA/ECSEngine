@@ -178,20 +178,12 @@ namespace ECSEngine {
 	struct ECSENGINE_API ECS_REFLECT MeshMetadata {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
-		ECS_INLINE bool Compare(const MeshMetadata* other) const {
-			return name == other->name && file == other->file && CompareOptions(other);
-		}
+		bool Compare(const MeshMetadata* other) const;
 
 		// Returns true if the parameters besides the name, target file and the asset pointer are the same
-		ECS_INLINE bool CompareOptions(const MeshMetadata* other) const {
-			return scale_factor == other->scale_factor && invert_z_axis == other->invert_z_axis && optimize_level == other->optimize_level;
-		}
+		bool CompareOptions(const MeshMetadata* other) const;
 
-		ECS_INLINE void CopyOptions(const MeshMetadata* other) {
-			scale_factor = other->scale_factor;
-			invert_z_axis = other->invert_z_axis;
-			optimize_level = other->optimize_level;
-		}
+		void CopyOptions(const MeshMetadata* other);
 
 		MeshMetadata Copy(AllocatorPolymorphic allocator) const;
 
@@ -212,6 +204,7 @@ namespace ECSEngine {
 		Stream<wchar_t> file;
 		float scale_factor;
 		bool invert_z_axis;
+		bool origin_to_object_center;
 		ECS_ASSET_MESH_OPTIMIZE_LEVEL optimize_level;
 
 		CoalescedMesh* mesh_pointer; ECS_SKIP_REFLECTION()
@@ -220,20 +213,12 @@ namespace ECSEngine {
 	struct ECSENGINE_API ECS_REFLECT TextureMetadata {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 		
-		ECS_INLINE bool Compare(const TextureMetadata* other) const {
-			return name == other->name && file == other->file && CompareOptions(other);
-		}
+		bool Compare(const TextureMetadata* other) const;
 
 		// Returns true if the parameters besides the name, target file and the asset pointer are the same
-		ECS_INLINE bool CompareOptions(const TextureMetadata* other) const {
-			return sRGB == other->sRGB && generate_mip_maps == other->generate_mip_maps && compression_type == other->compression_type;
-		}
+		bool CompareOptions(const TextureMetadata* other) const;
 
-		ECS_INLINE void CopyOptions(const TextureMetadata* other) {
-			sRGB = other->sRGB;
-			generate_mip_maps = other->generate_mip_maps;
-			compression_type = other->compression_type;
-		}
+		void CopyOptions(const TextureMetadata* other);
 
 		TextureMetadata Copy(AllocatorPolymorphic allocator) const;
 
@@ -262,27 +247,12 @@ namespace ECSEngine {
 	struct ECSENGINE_API ECS_REFLECT GPUSamplerMetadata {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
-		ECS_INLINE bool Compare(const GPUSamplerMetadata* other) const {
-			return name == other->name && CompareOptions(other);
-		}
+		bool Compare(const GPUSamplerMetadata* other) const;
 
 		// Returns true if the parameters besides the name, target file and the asset pointer are the same
-		ECS_INLINE bool CompareOptions(const GPUSamplerMetadata* other) const {
-			bool compare = address_mode == other->address_mode && filter_mode == other->filter_mode;
-			if (compare) {
-				if (filter_mode == ECS_SAMPLER_FILTER_ANISOTROPIC) {
-					return anisotropic_level == other->anisotropic_level;
-				}
-				return true;
-			}
-			return false;
-		}
+		bool CompareOptions(const GPUSamplerMetadata* other) const;
 
-		ECS_INLINE void CopyOptions(const GPUSamplerMetadata* other) {
-			address_mode = other->address_mode;
-			filter_mode = other->filter_mode;
-			anisotropic_level = other->anisotropic_level;
-		}
+		void CopyOptions(const GPUSamplerMetadata* other);
 
 		GPUSamplerMetadata Copy(AllocatorPolymorphic allocator) const;
 
@@ -314,20 +284,7 @@ namespace ECSEngine {
 		bool Compare(const ShaderMetadata* other) const;
 
 		// Returns true if the parameters besides the name, target file and the asset pointer are the same
-		ECS_INLINE bool CompareOptions(const ShaderMetadata* other) const {
-			bool compare = shader_type == other->shader_type && compile_flag == other->compile_flag;
-			if (compare) {
-				if (macros.size == other->macros.size) {
-					for (size_t index = 0; index < macros.size; index++) {
-						if (!macros[index].Compare(other->macros[index])) {
-							return false;
-						}
-					}
-					return true;
-				}
-			}
-			return false;
-		}
+		bool CompareOptions(const ShaderMetadata* other) const;
 
 		// Daellocates the current options and allocates them accordingly
 		void CopyOptions(const ShaderMetadata* other, AllocatorPolymorphic allocator);
@@ -405,8 +362,12 @@ namespace ECSEngine {
 	// The name is separately allocated from the other buffers
 	// The MaterialAssetResource buffers are maintained as a single coalesced buffer
 	struct ECSENGINE_API MaterialAsset {
-		MaterialAsset() = default;
+		ECS_INLINE MaterialAsset() = default;
 		MaterialAsset(Stream<char> name, AllocatorPolymorphic allocator);
+
+		void AddTexture(ECS_MATERIAL_SHADER shader, Stream<char> name, unsigned int handle, unsigned char slot, AllocatorPolymorphic allocator);
+
+		void AddSampler(ECS_MATERIAL_SHADER shader, Stream<char> name, unsigned int handle, unsigned char slot, AllocatorPolymorphic allocator);
 
 		CompareMaterialsResult Compare(const MaterialAsset* other) const;
 
@@ -451,15 +412,20 @@ namespace ECSEngine {
 		// Deallocates all the possible allocations from the MaterialAssetBuffer structures. By default it will
 		// also deallocate the reflection type
 		// If the shader is left at default then it will deallocate all shader types
-		void DeallocateBuffers(AllocatorPolymorphic allocator, bool include_reflection_type = true, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT) const;
+		void DeallocateBuffers(
+			AllocatorPolymorphic allocator, 
+			bool include_reflection_type = true, 
+			ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT, 
+			bool assert_if_not_found = true
+		) const;
 
 		// Deallocates the name from the textures
 		// If the shader is left at default then it will deallocate all shader types
-		void DeallocateTextures(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT) const;
+		void DeallocateTextures(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT, bool assert_if_not_found = true) const;
 
 		// Deallocates the name from the samplers
 		// If the shader is left at default then it will deallocate all shader types
-		void DeallocateSamplers(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT) const;
+		void DeallocateSamplers(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader = ECS_MATERIAL_SHADER_COUNT, bool assert_if_not_found = true) const;
 
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
@@ -494,17 +460,17 @@ namespace ECSEngine {
 		size_t GetBufferTotalCount() const;
 
 		// Can be iterated in a single round
-		inline Stream<MaterialAssetResource> GetCombinedTextures() const {
+		ECS_INLINE Stream<MaterialAssetResource> GetCombinedTextures() const {
 			return { textures[0].buffer, GetTextureTotalCount() };
 		}
 
 		// Can be iterated in a single round
-		inline Stream<MaterialAssetResource> GetCombinedSamplers() const {
+		ECS_INLINE Stream<MaterialAssetResource> GetCombinedSamplers() const {
 			return { samplers[0].buffer, GetSamplerTotalCount() };
 		}
 
 		// Can be iterated in a single round
-		inline Stream<MaterialAssetBuffer> GetCombinedBuffers() const {
+		ECS_INLINE Stream<MaterialAssetBuffer> GetCombinedBuffers() const {
 			return { buffers[0].buffer, GetBufferTotalCount() };
 		}
 
@@ -532,7 +498,7 @@ namespace ECSEngine {
 			bool do_not_copy = false
 		);
 
-		// Convinience function if you want to change a single buffer value
+		// Convenience function if you want to change the buffer size for a single shader
 		void ResizeBufferNewValue(
 			unsigned int value,
 			ECS_MATERIAL_SHADER shader_type,
@@ -540,7 +506,7 @@ namespace ECSEngine {
 			bool do_not_copy = false
 		);
 
-		// Convinience function if you want to change a single texture value
+		// Convenience function if you want to change the texture size for a single shader
 		void ResizeTexturesNewValue(
 			unsigned int value,
 			ECS_MATERIAL_SHADER shader_type,
@@ -548,7 +514,7 @@ namespace ECSEngine {
 			bool do_not_copy = false
 		);
 
-		// Convinience function if you want to change a single sampler value
+		// Convenience function if you want to change the sampler size for a single shader
 		void ResizeSamplersNewValue(
 			unsigned int value,
 			ECS_MATERIAL_SHADER shader_type,
@@ -614,9 +580,7 @@ namespace ECSEngine {
 	struct ECSENGINE_API ECS_REFLECT MiscAsset {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
-		ECS_INLINE bool Compare(const MiscAsset* other) const {
-			return name == other->name && file == other->file && data.Equals(other->data);
-		}
+		bool Compare(const MiscAsset* other) const;
 
 		// Returns true if the parameters besides the name, target file and the asset pointer are the same
 		ECS_INLINE bool CompareOptions(const MiscAsset* other) const {
@@ -671,15 +635,15 @@ namespace ECSEngine {
 
 	ECSENGINE_API void CreateDefaultAsset(void* asset, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
 
-	inline VertexShader GetVertexShaderFromMetadata(const ShaderMetadata* metadata) {
+	ECS_INLINE VertexShader GetVertexShaderFromMetadata(const ShaderMetadata* metadata) {
 		return (ID3D11VertexShader*)metadata->shader_interface;
 	}
 
-	inline PixelShader GetPixelShaderFromMetadata(const ShaderMetadata* metadata) {
+	ECS_INLINE PixelShader GetPixelShaderFromMetadata(const ShaderMetadata* metadata) {
 		return (ID3D11PixelShader*)metadata->shader_interface;
 	}
 
-	inline ComputeShader GetComputeShaderFromMetadata(const ShaderMetadata* metadata) {
+	ECS_INLINE ComputeShader GetComputeShaderFromMetadata(const ShaderMetadata* metadata) {
 		return (ID3D11ComputeShader*)metadata->shader_interface;
 	}
 

@@ -1737,11 +1737,13 @@ namespace ECSEngine {
 		unsigned char p_tag_buffer_index[ECS_MATERIAL_PIXEL_TAG_COUNT];
 	};
 
-	struct PBRMaterial {
+	struct ECSENGINE_API PBRMaterial {
 		// Returns the start of the textures as paths, can use indices to index into them
 		ECS_INLINE Stream<wchar_t>* TextureStart() {
 			return &color_texture;
 		}
+
+		bool HasTextures() const;
 
 		Stream<char> name;
 		float metallic_factor;
@@ -1862,6 +1864,12 @@ namespace ECSEngine {
 	// in the name buffer
 	ECSENGINE_API void FreePBRMaterial(const PBRMaterial& material, AllocatorPolymorphic allocator);
 
+	struct CreatePBRMaterialFromNameOptions {
+		Stream<PBRMaterialTextureIndex>* texture_mask = nullptr;
+		// If you set this flag to true, then all paths will be relatived to search directory
+		bool search_directory_is_mount_point = false;
+	};
+
 	// It will search every directory in order to find each texture - they can be situated
 	// in different folders; the texture mask can be used to tell the function which textures
 	// to look for, by default it will search for all
@@ -1871,7 +1879,7 @@ namespace ECSEngine {
 		Stream<char> texture_base_name, 
 		Stream<wchar_t> search_directory, 
 		AllocatorPolymorphic allocator,
-		Stream<PBRMaterialTextureIndex>* texture_mask = nullptr
+		CreatePBRMaterialFromNameOptions options = {}
 	);
 
 	// It will search every directory in order to find each texture - they can be situated
@@ -1883,7 +1891,7 @@ namespace ECSEngine {
 		Stream<wchar_t> texture_base_name,
 		Stream<wchar_t> search_directory,
 		AllocatorPolymorphic allocator,
-		Stream<PBRMaterialTextureIndex>* texture_mask = nullptr
+		CreatePBRMaterialFromNameOptions options = {}
 	);
 
 	ECSENGINE_API VertexBuffer GetMeshVertexBuffer(const Mesh& mesh, ECS_MESH_INDEX buffer_type);

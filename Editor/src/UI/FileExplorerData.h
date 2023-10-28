@@ -28,6 +28,18 @@ struct FileExplorerData {
 	// Have the UI redrawn
 	bool should_redraw;
 
+	// This is an array with all the files/directory which have been displayed
+	// in the last draw call. It is used when new items have been added or removed
+	// to make a redraw in that case
+	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> displayed_items;
+	// Use a special allocator for the displayed items such that we can clear the
+	// memory just by clearing this allocator. Use 2 such allocators in order to
+	// Have one keep the old data and the other one be used for the new data that will
+	// be compared with the old one. In case they are different, we just have clear the
+	// old allocator and change the allocator index
+	ECSEngine::ResizableLinearAllocator displayed_items_allocator[2];
+	unsigned int displayed_items_allocator_index;
+
 	ECSEngine::CapacityStream<wchar_t> current_directory;
 	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> selected_files;
 	ECSEngine::Stream<ECSEngine::Stream<wchar_t>> copied_files;

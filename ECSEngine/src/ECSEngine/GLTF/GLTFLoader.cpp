@@ -960,6 +960,10 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			if (options->center_object_midpoint) {
+				GLTFMeshOriginToCenter(mesh);
+			}
 		}
 		return success;
 	}
@@ -1682,6 +1686,14 @@ namespace ECSEngine {
 		}
 		
 		return bounding_box;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	void GLTFMeshOriginToCenter(const GLTFMesh* mesh)
+	{
+		float3 midpoint = CalculateFloat3Midpoint(mesh->positions);
+		ApplyFloat3Subtraction(mesh->positions, midpoint);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------

@@ -48,6 +48,9 @@ void ChangeInspectorToAsset(EditorState* editor_state, const void* metadata, ECS
 
 void ChangeInspectorToAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE asset_type, unsigned int inspector_index = -1);
 
+// The initial setting is relevant only for meshes and textures
+void ChangeInspectorToAsset(EditorState* editor_state, Stream<wchar_t> path, Stream<char> initial_setting, ECS_ASSET_TYPE asset_type, unsigned int inspector_index = -1);
+
 // Returns true if the inspector at that index exists, else false
 bool ExistsInspector(const EditorState* editor_state, unsigned int inspector_index);
 
@@ -65,3 +68,7 @@ void LockInspector(EditorState* editor_state, unsigned int inspector_index);
 
 // If the index is already known, can be used to directly index into the array
 void UnlockInspector(EditorState* editor_state, unsigned int inspector_index);
+
+// It will change the inspector to nothing and back to the current asset such that a reload
+// Will happen from the base metadata
+void ReloadInspectorAssetFromMetadata(EditorState* editor_state, unsigned int inspector_index);

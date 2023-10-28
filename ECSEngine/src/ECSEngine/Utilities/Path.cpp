@@ -267,24 +267,33 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename PathType>
-	PathType PathRelativeToAbsoluteImpl(PathType path, PathType absolute_reference) {
+	PathType PathRelativeToAbsoluteImpl(PathType path, PathType absolute_reference, bool change_separators) {
 		if (memcmp(path.buffer, absolute_reference.buffer, absolute_reference.MemoryOf(absolute_reference.size)) == 0) {
 			if (path.size == absolute_reference.size) {
 				return { path.buffer + path.size, 0 };
 			}
-			return { path.buffer + absolute_reference.size + 1, path.size - absolute_reference.size - 1 };
+			PathType relative_path = { path.buffer + absolute_reference.size + 1, path.size - absolute_reference.size - 1 };
+			if (change_separators) {
+				if constexpr (std::is_same_v<PathType, ASCIIPath>) {
+					ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR_ASCII, ECS_OS_PATH_SEPARATOR_ASCII_REL);
+				}
+				else {
+					ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR, ECS_OS_PATH_SEPARATOR_REL);
+				}
+			}
+			return relative_path;
 		}
 		return { nullptr, 0 };
 	}
 
-	Path PathRelativeToAbsolute(Path path, Path absolute_reference)
+	Path PathRelativeToAbsolute(Path path, Path absolute_reference, bool change_separators)
 	{
-		return PathRelativeToAbsoluteImpl(path, absolute_reference);
+		return PathRelativeToAbsoluteImpl(path, absolute_reference, change_separators);
 	}
 
-	ASCIIPath PathRelativeToAbsolute(ASCIIPath path, ASCIIPath absolute_reference)
+	ASCIIPath PathRelativeToAbsolute(ASCIIPath path, ASCIIPath absolute_reference, bool change_separators)
 	{
-		return PathRelativeToAbsoluteImpl(path, absolute_reference);
+		return PathRelativeToAbsoluteImpl(path, absolute_reference, change_separators);
 	}
 
 	// --------------------------------------------------------------------------------------------------

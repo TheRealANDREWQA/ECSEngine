@@ -104,4 +104,53 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	float3 CalculateFloat3Midpoint(Stream<float3> values)
+	{
+		Vec8f simd_midpoint = 0.0f;
+		size_t simd_count = GetSimdCount(values.size, 2);
+		for (size_t index = 0; index < simd_count; index += 2) {
+			Vec8f float_values = Vec8f().load((const float*)(values.buffer + index));
+			simd_midpoint += float_values;
+		}
+
+		// Use 3 values to use a simple store
+		float3 scalar_midpoint_values[3];
+		simd_midpoint.store((float*)scalar_midpoint_values);
+
+		float3 midpoint = scalar_midpoint_values[0] + scalar_midpoint_values[1];
+
+		for (size_t index = simd_count; index < values.size; index++) {
+			midpoint += values[index];
+		}
+
+		return midpoint * float3::Splat(1.0f / (float)values.size);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	void ApplyFloat3Addition(Stream<float3> values, float3 add_value)
+	{
+		size_t simd_count = GetSimdCount(values.size, 2);
+		Vec8f simd_value(add_value.x, add_value.y, add_value.z, add_value.x, add_value.y, add_value.z, 0.0f, 0.0f);
+		for (size_t index = 0; index < simd_count; index += 2) {
+			float* float_values = (float*)(values.buffer + index);
+			Vec8f current_value = Vec8f().load(float_values);
+			current_value += simd_value;
+			current_value.store(float_values);
+		}
+
+		for (size_t index = simd_count; index < values.size; index++) {
+			values[index] += add_value;
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	void ApplyFloat3Subtraction(Stream<float3> values, float3 subtract_value)
+	{
+		ApplyFloat3Addition(values, -subtract_value);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 }

@@ -27,7 +27,7 @@ Texture2D RoughnessMap : register(t6);
 #endif
 
 #ifdef OCCLUSION_TEXTURE
-Texture2D AmbientOcclusion : register(t7);
+Texture2D AmbientOcclusionMap : register(t7);
 #endif
 
 
@@ -113,7 +113,7 @@ float4 main(in PS_INPUT input) : SV_TARGET
     #endif
     
     #ifdef OCCLUSION_TEXTURE
-    float ambient_occlusion = AmbientOcclusion.SampleGrad(pbr_texture_sampler, input.uv, uv_derivatives_x, uv_derivatives_y).r * ambient_occlusion_factor;
+    float ambient_occlusion = AmbientOcclusionMap.SampleGrad(pbr_texture_sampler, input.uv, uv_derivatives_x, uv_derivatives_y).r * ambient_occlusion_factor;
     #else
     float ambient_occlusion = ambient_occlusion_factor;
     #endif

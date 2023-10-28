@@ -516,6 +516,12 @@ string_name.AssertCapacity();
 	// Returns the string isolated from other strings delimited using the given delimiter
 	ECSENGINE_API Stream<wchar_t> IsolateString(Stream<wchar_t> string, Stream<wchar_t> token, Stream<wchar_t> delimiter);
 
+	// Returns the longest common starting string
+	ECSENGINE_API Stream<char> StringsPrefix(Stream<Stream<char>> strings);
+
+	// Returns the longest common starting string
+	ECSENGINE_API Stream<wchar_t> StringsPrefix(Stream<Stream<wchar_t>> strings);
+
 	// Calculates the integral and fractional parts and then commits them into a float each that then get summed up
 	ECSENGINE_API float ConvertCharactersToFloat(Stream<char> characters);
 

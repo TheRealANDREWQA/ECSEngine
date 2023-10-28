@@ -5335,6 +5335,19 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		bool CopyIntoReflectionFieldValue(const ReflectionType* type, Stream<char> field_name, void* instance, const void* data)
+		{
+			unsigned int field_index = type->FindField(field_name);
+			if (field_index != -1) {
+				void* field_data = type->GetField(instance, field_index);
+				memcpy(field_data, data, type->fields[field_index].info.byte_size);
+				return true;
+			}
+			return false;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ConvertReflectionBasicField(
 			ReflectionBasicFieldType first_type, 
 			ReflectionBasicFieldType second_type, 

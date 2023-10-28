@@ -99,6 +99,9 @@ constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE = ECS_MB * 400;
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_LAZY_EVALUATION = 1'500;
 constexpr size_t FILE_EXPLORER_MESH_THUMBNAIL_LAZY_EVALUATION = 500;
 
+constexpr size_t FILE_EXPLORER_RETAINED_MODE_FILE_RECHECK_LAZY_EVALUATION = 50;
+constexpr size_t FILE_EXPLORER_DISPLAYED_ITEMS_ALLOCATOR_CAPACITY = ECS_KB * 32;
+
 #define MAX_MESH_THUMBNAILS_PER_FRAME 2
 
 enum FILE_RIGHT_CLICK_INDEX {
@@ -891,6 +894,7 @@ ECS_THREAD_TASK(MeshExportAllTask) {
 		size_t ERROR_STRING_CAPACITY = ECS_KB;
 		GLTFExportTexturesOptions export_options;
 		export_options.task_manager = data->editor_state->task_manager;
+		export_options.use_standard_texture_names = true;
 		GLTFExportTexturesOptionsAllocateAll(&export_options, ERROR_STRING_CAPACITY, data->editor_state->MultithreadedEditorAllocator());
 		
 		bool has_textures = GLTFExportTexturesDirectly(gltf_data, write_directory, &export_options);
@@ -1028,6 +1032,7 @@ void MeshExportSelectionDrawWindow(void* window_data, UIDrawerDescriptor* drawer
 			}
 
 			options.textures_to_write = window_data->export_textures;
+			options.use_standard_texture_names = true;
 			GLTFExportTexturesDirectly(window_data->gltf_data, write_directory, &options);
 
 			// We don't need to handle the case where there is nothing written
@@ -2723,6 +2728,16 @@ void InitializeFileExplorer(EditorState* editor_state)
 	// Hold texture display for some frames when loading in order to make a smoother transition - noticeably faster
 	data->flags = 0;
 	data->preload_flags = 0;
+
+	for (size_t index = 0; index < std::size(data->displayed_items_allocator); index++) {
+		data->displayed_items_allocator[index] = ResizableLinearAllocator(
+			FILE_EXPLORER_DISPLAYED_ITEMS_ALLOCATOR_CAPACITY,
+			FILE_EXPLORER_DISPLAYED_ITEMS_ALLOCATOR_CAPACITY,
+			polymorphic_allocator
+		);
+	}
+	data->displayed_items.Initialize(GetAllocatorPolymorphic(data->displayed_items_allocator + 0), 0);
+	data->displayed_items_allocator_index = 0;
 }
 
 void FileExplorerPrivateAction(ActionData* action_data) {
@@ -2754,6 +2769,44 @@ void FileExplorerPrivateAction(ActionData* action_data) {
 static bool FileExplorerRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
 	EditorState* editor_state = (EditorState*)window_data;
 	FileExplorerData* explorer_data = editor_state->file_explorer_data;
+	
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_RETAINED_FILE_CHECK, FILE_EXPLORER_RETAINED_MODE_FILE_RECHECK_LAZY_EVALUATION)) {
+		unsigned int next_allocator_index = explorer_data->displayed_items_allocator_index == 0 ? 1 : 0;
+		AllocatorPolymorphic next_allocator = GetAllocatorPolymorphic(explorer_data->displayed_items_allocator + next_allocator_index);
+		ResizableStream<Stream<wchar_t>> current_file_paths(next_allocator, 0);
+		AdditionStream<Stream<wchar_t>> addition_stream = &current_file_paths;
+
+		GetDirectoriesOrFilesOptions options;
+		options.relative_root = explorer_data->current_directory;
+		GetDirectoryOrFiles(explorer_data->current_directory, next_allocator, addition_stream, options);
+
+		bool are_different = false;
+		if (current_file_paths.size != explorer_data->displayed_items.size) {
+			are_different = true;
+		}
+		else {
+			for (unsigned int index = 0; index < explorer_data->displayed_items.size && !are_different; index++) {
+				unsigned int existing_index = FindString(current_file_paths[index], explorer_data->displayed_items.ToStream());
+				if (existing_index == -1) {
+					are_different = true;
+				}
+			}
+		}
+
+		if (are_different) {
+			explorer_data->should_redraw = false;
+			// Deallocate the current allocator
+			explorer_data->displayed_items_allocator[explorer_data->displayed_items_allocator_index].Clear();
+			explorer_data->displayed_items_allocator_index = next_allocator_index;
+			explorer_data->displayed_items = current_file_paths;
+			return false;
+		}
+		else {
+			// Clear the allocator which was used for the current entries
+			ClearAllocator(next_allocator);
+		}
+	}
+
 	if (explorer_data->should_redraw) {
 		explorer_data->should_redraw = false;
 		return false;

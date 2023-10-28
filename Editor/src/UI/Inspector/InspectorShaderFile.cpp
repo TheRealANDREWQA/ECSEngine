@@ -751,3 +751,9 @@ void InspectorShaderFileAddFunctors(InspectorTable* table) {
 		AddInspectorTableFunction(table, { InspectorDrawShaderFile, InspectorCleanShader }, ASSET_SHADER_EXTENSIONS[index]);
 	}
 }
+
+InspectorAssetTarget InspectorDrawShaderTarget(const void* inspector_data)
+{
+	InspectorDrawShaderFileData* data = (InspectorDrawShaderFileData*)inspector_data;
+	return { data->path, {} };
+}

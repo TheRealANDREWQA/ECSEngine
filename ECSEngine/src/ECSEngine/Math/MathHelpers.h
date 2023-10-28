@@ -132,4 +132,13 @@ namespace ECSEngine {
 
 	ECSENGINE_API Rectangle3D GetRectangle3D(float3 center, float3 half_width, float3 half_height);
 
+	// Uses SIMD operations
+	ECSENGINE_API float3 CalculateFloat3Midpoint(Stream<float3> values);
+
+	// Uses SIMD operations
+	ECSENGINE_API void ApplyFloat3Addition(Stream<float3> values, float3 add_value);
+
+	// Uses SIMD operations
+	ECSENGINE_API void ApplyFloat3Subtraction(Stream<float3> values, float3 subtract_value);
+
 }

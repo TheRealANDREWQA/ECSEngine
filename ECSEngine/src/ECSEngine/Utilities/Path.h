@@ -117,13 +117,15 @@ namespace ECSEngine {
 
 	// It is assumed that the path is absolute. For example path C:\Users\Name\Project\NewFolder
 	// and absolute_reference C:\Users\Name\Project it returns NewFolder (it skips the first backslash)
+	// If you set the change_separators to true, then it will change absolute separators into relative ones
 	// Returns { nullptr, 0 } if the absolute reference doesn't exist in the path
-	ECSENGINE_API Path PathRelativeToAbsolute(Path path, Path absolute_reference);
+	ECSENGINE_API Path PathRelativeToAbsolute(Path path, Path absolute_reference, bool change_separators = false);
 
 	// It is assumed that the path is absolute. For example path C:\Users\Name\Project\NewFolder
 	// and absolute_reference C:\Users\Name\Project it returns NewFolder (it skips the first backslash)
+	// If you set the change_separators to true, then it will change absolute separators into relative ones
 	// Returns { nullptr, 0 } if the absolute reference doesn't exist in the path
-	ECSENGINE_API ASCIIPath PathRelativeToAbsolute(ASCIIPath path, ASCIIPath absolute_reference);
+	ECSENGINE_API ASCIIPath PathRelativeToAbsolute(ASCIIPath path, ASCIIPath absolute_reference, bool change_separators = false);
 
 	// -------------------------------------------------------------------------------------------------
 

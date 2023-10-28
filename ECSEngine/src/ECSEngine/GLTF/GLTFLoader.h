@@ -94,6 +94,10 @@ namespace ECSEngine {
 
 		// If this is set, then it will deduce the AABBStorage of the object
 		bool deduce_submesh_bounds = true;
+		// If this is set, then it will calculate the midpoint of the object
+		// and offset the vertices such that the origin is at the center of
+		// the object
+		bool center_object_midpoint = false;
 	};
 
 	// Coallesces on the CPU side the values to be directly copied to the GPU
@@ -253,6 +257,9 @@ namespace ECSEngine {
 	ECSENGINE_API void GetGLTFMeshesBoundingBox(Stream<GLTFMesh> meshes, AABBStorage* bounding_boxes);
 
 	ECSENGINE_API AABBStorage GetGLTFMeshesCombinedBoundingBox(Stream<GLTFMesh> meshes);
+
+	// Updates the location of the vertices such that the origin is at the center of the object
+	ECSENGINE_API void GLTFMeshOriginToCenter(const GLTFMesh* mesh);
 
 	namespace internal {
 

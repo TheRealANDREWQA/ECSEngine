@@ -33,6 +33,11 @@ struct InspectorManager {
 	ECSEngine::Stream<unsigned int> round_robin_index;
 };
 
+struct InspectorAssetTarget {
+	ECSEngine::Stream<wchar_t> path;
+	ECSEngine::Stream<char> initial_asset;
+};
+
 // Returns the index of the inspector instance. Does not create the UI window, only registers it
 unsigned int CreateInspectorInstance(EditorState* editor_state);
 

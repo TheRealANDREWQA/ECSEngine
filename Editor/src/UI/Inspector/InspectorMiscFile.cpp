@@ -90,3 +90,9 @@ void InspectorMiscFileAddFunctors(InspectorTable* table) {
 		AddInspectorTableFunction(table, { InspectorDrawMiscFile, InspectorCleanMisc }, ASSET_MISC_EXTENSIONS[index]);
 	}
 }
+
+InspectorAssetTarget InspectorDrawMiscTarget(const void* inspector_data)
+{
+	InspectorDrawMiscFileData* data = (InspectorDrawMiscFileData*)inspector_data;
+	return { data->asset.file, {} };
+}

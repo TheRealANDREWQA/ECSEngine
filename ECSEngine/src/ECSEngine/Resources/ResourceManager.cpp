@@ -1207,6 +1207,7 @@ namespace ECSEngine {
 	)
 	{
 		bool has_invert = !HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
+		bool has_origin_to_center = HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALESCED_MESH_ORIGIN_TO_CENTER);
 
 		// Calculate the allocation size
 		size_t allocation_size = sizeof(CoalescedMesh) + sizeof(Submesh) * data->mesh_count;
@@ -1221,6 +1222,7 @@ namespace ECSEngine {
 		options.allocate_submesh_name = true;
 		options.permanent_allocator = AllocatorTs();
 		options.scale_factor = scale_factor;
+		options.center_object_midpoint = has_origin_to_center;
 		bool success = LoadCoalescedMeshFromGLTFToGPU(m_graphics, *data, mesh, has_invert, &options);
 		if (!success) {
 			Deallocate(allocation);
@@ -1256,7 +1258,7 @@ namespace ECSEngine {
 
 		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, load_descriptor, ex_desc);
 
-		if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
+		if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
 			ScaleGLTFMeshes(gltf_meshes, 1.0f / scale_factor);
 		}
@@ -1286,13 +1288,17 @@ namespace ECSEngine {
 		// We also need to coallesce the names of the submeshes
 		StreamCoalescedInplaceDeepCopy(mesh->submeshes, AllocatorTs());
 
+		// We should perform the origin operation before scaling
+		if (HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALESCED_MESH_ORIGIN_TO_CENTER)) {
+			GLTFMeshOriginToCenter(gltf_mesh);
+		}
 		ScaleGLTFMeshes({ gltf_mesh, 1 }, scale_factor);
-
+		
 		mesh->mesh = GLTFMeshToMesh(m_graphics, *gltf_mesh);
 
 		AddResourceEx(this, ResourceType::CoalescedMesh, mesh, load_descriptor, ex_desc);
 
-		if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
+		if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
 			ScaleGLTFMeshes({ gltf_mesh, 1 }, 1.0f / scale_factor);
 		}

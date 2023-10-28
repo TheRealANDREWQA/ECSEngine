@@ -147,12 +147,18 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 
 		config.flag_count--;
 
+		const size_t CHECK_BOX_CONFIGURATION = base_configuration ^ UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_MAKE_SQUARE | UI_CONFIG_CHECK_BOX_CALLBACK;
+
 		UIConfigCheckBoxCallback check_box_callback;
 		check_box_callback.handler = float_input_callback.handler;
 		config.AddFlag(check_box_callback);
-		drawer->CheckBox(base_configuration ^ UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_MAKE_SQUARE | UI_CONFIG_CHECK_BOX_CALLBACK, 
-			config, "Invert Z axis", &data->current_metadata.invert_z_axis);
+		drawer->CheckBox(CHECK_BOX_CONFIGURATION, config, "Invert Z axis", &data->current_metadata.invert_z_axis);
 		drawer->NextRow();
+
+		drawer->CheckBox(CHECK_BOX_CONFIGURATION, config, "Origin To Object Center", &data->current_metadata.origin_to_object_center);
+		drawer->NextRow();
+
+		// This removed the check box callback
 		config.flag_count--;
 
 		const Reflection::ReflectionEnum* optimize_enum = editor_state->ui_reflection->reflection->GetEnum(STRING(ECS_ASSET_MESH_OPTIMIZE_LEVEL));
@@ -350,4 +356,10 @@ void ChangeInspectorMeshFileConfiguration(EditorState* editor_state, unsigned in
 {
 	InspectorDrawMeshFileData* draw_data = (InspectorDrawMeshFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 	draw_data->helper_data.SetNewSetting(name);
+}
+
+InspectorAssetTarget InspectorDrawMeshTarget(const void* inspector_data)
+{
+	InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)inspector_data;
+	return { data->path, data->current_metadata.name };
 }

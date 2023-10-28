@@ -6,6 +6,92 @@
 
 namespace ECSEngine {
 
+#pragma region Example Use
+
+        //Stream<char> names[] = {
+        //	"SearchBytes",
+        //	"FindFirstToken",
+        //	"Std",
+        //	"CString",
+        //	"Loop"
+        //};
+
+        //typedef unsigned short t;
+        //BenchmarkState benchmark_state(editor_state.EditorAllocator(), 5, nullptr, names);
+        //benchmark_state.options.element_size = sizeof(t);
+        //benchmark_state.options.max_step_count = 18;
+        ////benchmark_state.options.timed_run = 50;
+
+        //while (benchmark_state.KeepRunning()) {
+        //	Stream<void> iteration_buffer = benchmark_state.GetIterationBuffer();
+
+        //	Stream<t> ts = { iteration_buffer.buffer, iteration_buffer.size / sizeof(t) };
+        //	//MakeSequence(ts);
+        //	char* it = (char*)iteration_buffer.buffer;
+        //	it[iteration_buffer.size - 1] = '\0';
+        //	for (size_t index = 0; index < iteration_buffer.size - 1; index++) {
+        //		if (it[index] > 1) {
+        //			it[index] = 'a';
+        //		}
+        //		else {
+        //			it[index] = 'b';
+        //		}
+        //	}
+        //	//t ptr = (t)ts.buffer;
+        //	t ptr = -1;
+
+        //	while (benchmark_state.Run()) {
+        //		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
+        //		size_t indexu = SearchBytes(current_buffer.buffer, current_buffer.size / sizeof(ptr), (size_t)ptr, sizeof(ptr));
+        //		benchmark_state.DoNotOptimize(indexu);
+        //	}
+
+        //	while (benchmark_state.Run()) {
+        //		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
+        //		auto resultu = FindFirstToken(Stream<char>(current_buffer.buffer, current_buffer.size), { &ptr, sizeof(ptr) });
+        //		benchmark_state.DoNotOptimize(resultu.buffer == nullptr ? -1 : resultu.size);
+        //	}
+
+        //	while (benchmark_state.Run()) {
+        //		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
+        //		std::string_view view = { (const char*)current_buffer.buffer, current_buffer.size };
+        //		auto resultuu = view.find((const char*)&ptr, sizeof(ptr));
+        //		benchmark_state.DoNotOptimize(resultuu);
+        //	}
+
+        //	char null_terminated[16];
+        //	memcpy(null_terminated, &ptr, sizeof(ptr));
+        //	null_terminated[sizeof(ptr)] = '\0';
+        //	while (benchmark_state.Run()) {
+        //		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
+        //		const char* c_string = (const char*)current_buffer.buffer;
+        //		const char* result = strstr(c_string, null_terminated);
+        //		benchmark_state.DoNotOptimize((size_t)result);
+        //	}
+
+        //	while (benchmark_state.Run()) {
+        //		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
+
+        //		Stream<t> ts = { current_buffer.buffer, current_buffer.size / sizeof(t) };
+        //		size_t subindex = 0;
+        //		for (size_t i = 0; i < ts.size; i++) {
+        //			if (ts[i] == ptr) {
+        //				subindex = i;
+        //				break;
+        //			}
+        //		}
+        //		benchmark_state.DoNotOptimize(subindex);
+        //	}
+        //}
+
+        //ECS_STACK_CAPACITY_STREAM(char, bench_string, ECS_KB * 64);
+        //benchmark_state.GetString(bench_string, false);
+        //bench_string[bench_string.size] = '\0';
+        //OutputDebugStringA(bench_string.buffer);
+
+#pragma endregion
+
+
     BenchmarkState::BenchmarkState(AllocatorPolymorphic allocator, size_t functor_count, const BenchmarkOptions* _options, Stream<char>* _names)
     {
         durations.Initialize(allocator, 0, functor_count);

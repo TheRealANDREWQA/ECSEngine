@@ -225,7 +225,7 @@ namespace ECSEngine {
 
 	// The functor takes as parameter the ECS_MATERIAL_SHADER to apply the functor to
 	template<typename Functor>
-	void ForEachShaderType(ECS_MATERIAL_SHADER shader, Functor&& functor) {
+	static void ForEachShaderType(ECS_MATERIAL_SHADER shader, Functor&& functor) {
 		if (shader == ECS_MATERIAL_SHADER_COUNT) {
 			for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
 				functor((ECS_MATERIAL_SHADER)type);
@@ -241,6 +241,24 @@ namespace ECSEngine {
 	MaterialAsset::MaterialAsset(Stream<char> _name, AllocatorPolymorphic allocator)
 	{
 		name = StringCopy(allocator, _name);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::AddTexture(ECS_MATERIAL_SHADER shader, Stream<char> name, unsigned int handle, unsigned char slot, AllocatorPolymorphic allocator)
+	{
+		unsigned int count = textures[shader].size;
+		ResizeTexturesNewValue(count + 1, shader, allocator);
+		textures[shader][count] = { name.Copy(allocator), handle, slot };
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::AddSampler(ECS_MATERIAL_SHADER shader, Stream<char> name, unsigned int handle, unsigned char slot, AllocatorPolymorphic allocator)
+	{
+		unsigned int count = samplers[shader].size;
+		ResizeSamplersNewValue(count + 1, shader, allocator);
+		samplers[shader][count] = { name.Copy(allocator), handle, slot };
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -589,16 +607,22 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::DeallocateBuffers(AllocatorPolymorphic allocator, bool include_reflection_type, ECS_MATERIAL_SHADER shader) const
+	void MaterialAsset::DeallocateBuffers(AllocatorPolymorphic allocator, bool include_reflection_type, ECS_MATERIAL_SHADER shader, bool assert_if_not_found) const
 	{
+		auto check = [assert_if_not_found](bool was_deallocated) {
+			if (assert_if_not_found) {
+				ECS_ASSERT(was_deallocated);
+			}
+		};
+
 		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
 			for (size_t index = 0; index < buffers[shader].size; index++) {
-				ECS_ASSERT(buffers[shader][index].name.DeallocateIfBelongs(allocator));
-				ECS_ASSERT(DeallocateIfBelongs(allocator, buffers[shader][index].data.buffer));
+				check(buffers[shader][index].name.DeallocateIfBelongs(allocator));
+				check(DeallocateIfBelongs(allocator, buffers[shader][index].data.buffer));
 				if (include_reflection_type) {
 					if (buffers[shader][index].reflection_type != nullptr) {
 						buffers[shader][index].reflection_type->Deallocate(allocator);
-						ECS_ASSERT(DeallocateIfBelongs(allocator, buffers[shader][index].reflection_type));
+						check(DeallocateIfBelongs(allocator, buffers[shader][index].reflection_type));
 					}
 				}
 			}
@@ -607,22 +631,34 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::DeallocateTextures(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader) const
+	void MaterialAsset::DeallocateTextures(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader, bool assert_if_not_found) const
 	{
-		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
+		auto check = [assert_if_not_found](bool check) {
+			if (assert_if_not_found) {
+				ECS_ASSERT(check);
+			}
+		};
+		
+		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {		
 			for (size_t index = 0; index < textures[shader].size; index++) {
-				ECS_ASSERT(textures[shader][index].name.DeallocateIfBelongs(allocator));
+				check(textures[shader][index].name.DeallocateIfBelongs(allocator));
 			}
 		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::DeallocateSamplers(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader) const
+	void MaterialAsset::DeallocateSamplers(AllocatorPolymorphic allocator, ECS_MATERIAL_SHADER shader, bool assert_if_not_found) const
 	{
+		auto check = [assert_if_not_found](bool check) {
+			if (assert_if_not_found) {
+				ECS_ASSERT(check);
+			}
+		};
+
 		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
 			for (size_t index = 0; index < samplers[shader].size; index++) {
-				ECS_ASSERT(samplers[shader][index].name.DeallocateIfBelongs(allocator));
+				check(samplers[shader][index].name.DeallocateIfBelongs(allocator));
 			}
 		});
 	}
@@ -1090,6 +1126,24 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	bool ShaderMetadata::CompareOptions(const ShaderMetadata* other) const
+	{
+		bool compare = shader_type == other->shader_type && compile_flag == other->compile_flag;
+		if (compare) {
+			if (macros.size == other->macros.size) {
+				for (size_t index = 0; index < macros.size; index++) {
+					if (!macros[index].Compare(other->macros[index])) {
+						return false;
+					}
+				}
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	void ShaderMetadata::CopyOptions(const ShaderMetadata* other, AllocatorPolymorphic allocator)
 	{
 		shader_type = other->shader_type;
@@ -1234,6 +1288,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	bool MiscAsset::Compare(const MiscAsset* other) const
+	{
+		return name == other->name && file == other->file && data.Equals(other->data);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	MiscAsset MiscAsset::Copy(AllocatorPolymorphic allocator) const
 	{
 		MiscAsset asset;
@@ -1265,6 +1326,36 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	bool GPUSamplerMetadata::Compare(const GPUSamplerMetadata* other) const
+	{
+		return name == other->name && CompareOptions(other);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	bool GPUSamplerMetadata::CompareOptions(const GPUSamplerMetadata* other) const
+	{
+		bool compare = address_mode == other->address_mode && filter_mode == other->filter_mode;
+		if (compare) {
+			if (filter_mode == ECS_SAMPLER_FILTER_ANISOTROPIC) {
+				return anisotropic_level == other->anisotropic_level;
+			}
+			return true;
+		}
+		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void GPUSamplerMetadata::CopyOptions(const GPUSamplerMetadata* other)
+	{
+		address_mode = other->address_mode;
+		filter_mode = other->filter_mode;
+		anisotropic_level = other->anisotropic_level;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	GPUSamplerMetadata GPUSamplerMetadata::Copy(AllocatorPolymorphic allocator) const
 	{
 		GPUSamplerMetadata metadata;
@@ -1288,6 +1379,29 @@ namespace ECSEngine {
 	{
 		DeallocateIfBelongs(allocator, name.buffer);
 		DeallocateIfBelongs(allocator, file.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	bool TextureMetadata::Compare(const TextureMetadata* other) const
+	{
+		return name == other->name && file == other->file && CompareOptions(other);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	bool TextureMetadata::CompareOptions(const TextureMetadata* other) const
+	{
+		return sRGB == other->sRGB && generate_mip_maps == other->generate_mip_maps && compression_type == other->compression_type;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void TextureMetadata::CopyOptions(const TextureMetadata* other)
+	{
+		sRGB = other->sRGB;
+		generate_mip_maps = other->generate_mip_maps;
+		compression_type = other->compression_type;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1331,6 +1445,31 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	bool MeshMetadata::Compare(const MeshMetadata* other) const
+	{
+		return name == other->name && file == other->file && CompareOptions(other);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	bool MeshMetadata::CompareOptions(const MeshMetadata* other) const
+	{
+		return scale_factor == other->scale_factor && invert_z_axis == other->invert_z_axis && optimize_level == other->optimize_level
+			&& origin_to_object_center == other->origin_to_object_center;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MeshMetadata::CopyOptions(const MeshMetadata* other)
+	{
+		scale_factor = other->scale_factor;
+		invert_z_axis = other->invert_z_axis;
+		optimize_level = other->optimize_level;
+		origin_to_object_center = other->origin_to_object_center;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	MeshMetadata MeshMetadata::Copy(AllocatorPolymorphic allocator) const
 	{
 		MeshMetadata metadata;
@@ -1349,6 +1488,7 @@ namespace ECSEngine {
 		invert_z_axis = true;
 		file = _file;
 		optimize_level = ECS_ASSET_MESH_OPTIMIZE_NONE;
+		origin_to_object_center = true;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
