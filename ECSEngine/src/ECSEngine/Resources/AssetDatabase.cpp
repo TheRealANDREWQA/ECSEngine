@@ -2000,6 +2000,55 @@ namespace ECSEngine {
 	}
 
 	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::UpdateAssetsFromFiles(CapacityStream<AssetTypedHandle>* modified_assets)
+	{
+		bool success = true;
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+		ForEachAsset([&](unsigned int handle, ECS_ASSET_TYPE asset_type) {
+			void* current_metadata = GetAsset(handle, asset_type);
+
+			// Load the asset into a temporary and then get its dependencies
+			size_t temporary_asset[AssetMetadataMaxSizetSize()];
+			CreateDefaultAsset(temporary_asset, { nullptr, 0 }, { nullptr, 0 }, asset_type);
+			bool current_success = ReadAssetFile(
+				ECSEngine::GetAssetName(current_metadata, asset_type),
+				GetAssetFile(current_metadata, asset_type),
+				temporary_asset,
+				asset_type,
+				GetAllocatorPolymorphic(&stack_allocator),
+				true
+			);
+			if (current_success) {
+				// Now we only need to remove the old dependencies
+				ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, current_dependencies, 512);
+				GetAssetDependencies(current_metadata, asset_type, &current_dependencies);
+
+				// Before finishing we must remove the dependencies for the pre-existing entry
+				for (unsigned int index = 0; index < current_dependencies.size; index++) {
+					RemoveAsset(current_dependencies[index].handle, current_dependencies[index].type);
+				}
+
+				if (modified_assets != nullptr) {
+					// Determine if they are different
+					if (!CompareAssetOptions(current_metadata, temporary_asset, asset_type)) {
+						modified_assets->AddAssert({ handle, asset_type });
+					}
+				}
+
+				// Now update the asset to contain the new data - this will also deallocate
+				// the previous data
+				CopyAssetOptions(current_metadata, temporary_asset, asset_type, Allocator());
+			}
+			else {
+				success = false;
+			}
+		});
+
+		return success;
+	}
+
+	// --------------------------------------------------------------------------------------
 	
 	bool AssetDatabase::UpdateAssetsWithDependenciesFromFiles(CapacityStream<AssetTypedHandle>* modified_assets)
 	{

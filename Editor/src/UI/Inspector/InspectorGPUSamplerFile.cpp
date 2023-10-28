@@ -8,6 +8,7 @@
 #include "../../Assets/AssetExtensions.h"
 #include "../AssetIcons.h"
 #include "../AssetSettingHelper.h"
+#include "InspectorGPUSamplerFile.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -160,4 +161,10 @@ void InspectorGPUSamplerFileAddFunctors(InspectorTable* table) {
 	for (size_t index = 0; index < std::size(ASSET_GPU_SAMPLER_EXTENSIONS); index++) {
 		AddInspectorTableFunction(table, { InspectorDrawGPUSamplerFile, InspectorCleanGPUSampler }, ASSET_GPU_SAMPLER_EXTENSIONS[index]);
 	}
+}
+
+InspectorAssetTarget InspectorDrawGPUSamplerTarget(const void* inspector_data)
+{
+	InspectorDrawGPUSamplerFileData* data = (InspectorDrawGPUSamplerFileData*)inspector_data;
+	return { data->path, {} };
 }

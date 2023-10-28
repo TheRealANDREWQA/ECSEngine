@@ -619,6 +619,13 @@ namespace ECSEngine {
 		// in its previous state)
 		bool UpdateAssetFromFile(unsigned int handle, ECS_ASSET_TYPE type);
 
+		// It will read all assets that are currently loaded from files and reload them,
+		// if they have changed, they will be reflected afterwards
+		// Can optionally give a stream of typed handles to be filled in for those assets whose
+		// content has changed
+		// Returns true if all file reads were successful, else false (at least one failed)
+		bool UpdateAssetsFromFiles(CapacityStream<AssetTypedHandle>* modified_assets = nullptr);
+
 		// It will read all assets from files which have dependencies that are currently loaded and
 		// reload them - if they have changed, they will be reflected afterwards
 		// Can optionally give a stream of typed handles to be filled in for those assets whose

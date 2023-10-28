@@ -144,3 +144,11 @@ void ChangeInspectorTextureFileConfiguration(EditorState* editor_state, unsigned
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
+
+InspectorAssetTarget InspectorDrawTextureTarget(const void* inspector_data)
+{
+	InspectorDrawTextureData* data = (InspectorDrawTextureData*)inspector_data;
+	return { data->Path(), data->current_metadata.name };
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------

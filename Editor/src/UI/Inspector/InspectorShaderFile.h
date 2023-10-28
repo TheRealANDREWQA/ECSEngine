@@ -8,3 +8,5 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 void ChangeInspectorToShaderFile(EditorState* editor_state, ECSEngine::Stream<wchar_t> path, unsigned int inspector_index);
 
 void InspectorShaderFileAddFunctors(InspectorTable* table);
+
+InspectorAssetTarget InspectorDrawShaderTarget(const void* inspector_data);

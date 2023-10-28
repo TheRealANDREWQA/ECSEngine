@@ -5,10 +5,11 @@
 #include "../Utilities/File.h"
 #include "../Utilities/ForEachFiles.h"
 #include "../Utilities/Crash.h"
+#include "../Utilities/Path.h"
 
 namespace ECSEngine {
 
-	constexpr const wchar_t* PBR_MATERIAL_COLOR_TEXTURE_STRINGS[] = {
+	static const wchar_t* PBR_MATERIAL_COLOR_TEXTURE_STRINGS[] = {
 		L"diff",
 		L"diffuse",
 		L"color",
@@ -16,24 +17,27 @@ namespace ECSEngine {
 		L"Diff",
 		L"Diffuse",
 		L"albedo",
-		L"Albedo"
+		L"Albedo",
+		L"A"
 	};
 
-	constexpr const wchar_t* PBR_MATERIAL_METALLIC_TEXTURE_STRINGS[] = {
+	static const wchar_t* PBR_MATERIAL_METALLIC_TEXTURE_STRINGS[] = {
 		L"Metallic",
 		L"metallic",
 		L"met",
-		L"Met"
+		L"Met",
+		L"M"
 	};
 
-	constexpr const wchar_t* PBR_MATERIAL_ROUGHNESS_TEXTURE_STRINGS[] = {
+	static const wchar_t* PBR_MATERIAL_ROUGHNESS_TEXTURE_STRINGS[] = {
 		L"roughness",
 		L"Roughness",
 		L"rough",
-		L"Rough"
+		L"Rough",
+		L"R"
 	};
 
-	constexpr const wchar_t* PBR_MATERIAL_OCCLUSION_TEXTURE_STRINGS[] = {
+	static const wchar_t* PBR_MATERIAL_OCCLUSION_TEXTURE_STRINGS[] = {
 		L"AO",
 		L"AmbientOcclusion",
 		L"Occlusion",
@@ -42,18 +46,20 @@ namespace ECSEngine {
 		L"occ"
 	};
 
-	constexpr const wchar_t* PBR_MATERIAL_NORMAL_TEXTURE_STRINGS[] = {
+	static const wchar_t* PBR_MATERIAL_NORMAL_TEXTURE_STRINGS[] = {
 		L"Normal",
 		L"normal",
 		L"Nor",
-		L"nor"
+		L"nor",
+		L"N"
 	};
 
-	constexpr const wchar_t* PBR_MATERIAL_EMISSIVE_TEXTURE_STRINGS[] = {
+	static const wchar_t* PBR_MATERIAL_EMISSIVE_TEXTURE_STRINGS[] = {
 		L"Emissive",
 		L"emissive",
 		L"emiss",
-		L"Emiss"
+		L"Emiss",
+		L"E"
 	};
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -690,14 +696,14 @@ namespace ECSEngine {
 		Stream<char> texture_base_name,
 		Stream<wchar_t> search_directory, 
 		AllocatorPolymorphic allocator, 
-		Stream<PBRMaterialTextureIndex>* texture_mask
+		CreatePBRMaterialFromNameOptions options
 	)
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, wide_base_name, 512);
 		ECS_ASSERT(texture_base_name.size < 512);
 		ConvertASCIIToWide(wide_base_name, texture_base_name);
 
-		return CreatePBRMaterialFromName(material_name, wide_base_name, search_directory, allocator, texture_mask);
+		return CreatePBRMaterialFromName(material_name, wide_base_name, search_directory, allocator, options);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -707,7 +713,7 @@ namespace ECSEngine {
 		Stream<wchar_t> texture_base_name,
 		Stream<wchar_t> search_directory,
 		AllocatorPolymorphic allocator,
-		Stream<PBRMaterialTextureIndex>* texture_mask
+		CreatePBRMaterialFromNameOptions options
 	) {
 		PBRMaterial material;
 		memset(&material, 0, sizeof(PBRMaterial));
@@ -735,8 +741,9 @@ namespace ECSEngine {
 		_default_mappings[5] = ECS_PBR_MATERIAL_ROUGHNESS;
 
 		Stream<PBRMaterialTextureIndex> default_mappings(_default_mappings, ECS_PBR_MATERIAL_MAPPING_COUNT);
-		if (texture_mask == nullptr) {
-			texture_mask = &default_mappings;
+		Stream<PBRMaterialTextureIndex>* texture_mask = &default_mappings;
+		if (options.texture_mask != nullptr) {
+			texture_mask = options.texture_mask;
 		}
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_memory, 2048);
@@ -754,6 +761,8 @@ namespace ECSEngine {
 			Stream<PBRMaterialMapping>* valid_textures;
 			CapacityStream<wchar_t>* temp_memory;
 			Stream<Stream<const wchar_t*>> material_strings;
+			Stream<wchar_t> search_directory;
+			bool relativize_paths;
 		};
 
 		auto functor = [](Stream<wchar_t> path, void* _data) {
@@ -767,6 +776,8 @@ namespace ECSEngine {
 				}
 				size_t mask_count = data->texture_mask->size;
 
+				Stream<wchar_t> search_string = { base_start, wcslen(base_start) };
+				
 				unsigned int found_index = -1;
 				// linear search for every pbr material texture
 				for (size_t index = 0; index < mask_count && found_index == -1; index++) {
@@ -781,9 +792,13 @@ namespace ECSEngine {
 
 				// The path is valid, a texture matches
 				if (found_index != -1) {
-					data->valid_textures->Add({ {data->temp_memory->buffer + data->temp_memory->size, path.size}, data->texture_mask->buffer[found_index] });
-					data->texture_mask->RemoveSwapBack(found_index);
+					Stream<wchar_t> texture_path = { data->temp_memory->buffer + data->temp_memory->size, path.size };
 					data->temp_memory->AddStreamSafe(path);
+					if (data->relativize_paths) {
+						texture_path = PathRelativeToAbsolute(texture_path, data->search_directory, true);
+					}
+					data->valid_textures->Add({ texture_path, data->texture_mask->buffer[found_index] });
+					data->texture_mask->RemoveSwapBack(found_index);
 				}
 			}
 
@@ -796,6 +811,13 @@ namespace ECSEngine {
 		data.temp_memory = &temp_memory;
 		data.texture_mask = texture_mask;
 		data.valid_textures = &valid_textures;
+		if (options.search_directory_is_mount_point) {
+			data.relativize_paths = true;
+			data.search_directory = search_directory;
+		}
+		else {
+			data.relativize_paths = false;
+		}
 		ForEachFileInDirectoryRecursive(search_directory, &data, functor);
 
 		size_t total_size = sizeof(wchar_t) * temp_memory.size + sizeof(char) * material_name.size;
@@ -1977,6 +1999,19 @@ namespace ECSEngine {
 		}
 
 		return uint2(-1, -1);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool PBRMaterial::HasTextures() const
+	{
+		const Stream<wchar_t>* texture_start = &color_texture;
+		for (size_t index = 0; index < ECS_PBR_MATERIAL_MAPPING_COUNT; index++) {
+			if (texture_start[index].size > 0) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------

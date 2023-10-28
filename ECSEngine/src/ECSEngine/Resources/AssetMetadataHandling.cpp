@@ -18,6 +18,7 @@ namespace ECSEngine {
 		identifier.Add(&metadata->scale_factor);
 		identifier.Add(&metadata->invert_z_axis);
 		identifier.Add(&metadata->optimize_level);
+		identifier.Add(&metadata->origin_to_object_center);
 
 		// Add the name as well in order to differentiate between distinct settings with the same options
 		identifier.Add(metadata->name);
@@ -55,6 +56,9 @@ namespace ECSEngine {
 
 		ResourceManagerLoadDesc load_descriptor;
 		load_descriptor.load_flags = metadata->invert_z_axis ? 0 : ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT;
+		if (metadata->origin_to_object_center) {
+			load_descriptor.load_flags = SetFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALESCED_MESH_ORIGIN_TO_CENTER);
+		}
 
 		ECS_STACK_VOID_STREAM(suffix, 512);
 		MeshMetadataIdentifier(metadata, suffix);
@@ -2041,6 +2045,75 @@ namespace ECSEngine {
 	)
 	{
 		return ReloadAssetMetadataFromFilesParametersImpl(resource_manager, database_reference, options);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	bool CreateMaterialAssetFromPBRMaterial(AssetDatabase* database, MaterialAsset* material_asset, const PBRMaterial* pbr_material, AllocatorPolymorphic allocator)
+	{
+		// Determine which macros need to set for the pixel shader
+		// And set the textures accordingly in the material asset
+		ShaderMetadata* pixel_metadata = database->GetShader(material_asset->pixel_shader_handle);
+		pixel_metadata->DeallocateMacros(allocator);
+
+		// Deallocate the textures such that we can add them in the ifs
+		material_asset->DeallocateTextures(allocator, ECS_MATERIAL_SHADER_PIXEL, false);
+		// The deallocate doesn't change the size
+		material_asset->textures[ECS_MATERIAL_SHADER_PIXEL].size = 0;
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+
+		bool success = true;
+		auto add_texture = [&](Stream<wchar_t> texture, Stream<char> macro_string, Stream<char> display_name, unsigned char slot) {
+			if (texture.size > 0 && success) {
+				// Get the default setting for the texture, or any one of them if there is no "Default" setting
+				Stream<Stream<char>> settings = database->GetMetadatasForFile(texture, ECS_ASSET_TEXTURE, GetAllocatorPolymorphic(&stack_allocator));
+				if (settings.size > 0) {
+					pixel_metadata->AddMacro(macro_string, "", allocator);
+					unsigned int default_texture_index = FindString("Default", settings);
+					Stream<char> setting_name = default_texture_index == -1 ? settings[0] : "Default";
+					unsigned int handle = database->AddTexture(setting_name, texture);
+					if (handle != -1) {
+						material_asset->AddTexture(ECS_MATERIAL_SHADER_PIXEL, display_name, handle, slot, allocator);
+					}
+					else {
+						success = false;
+					}
+				}
+				stack_allocator.Clear();
+			}
+		};
+
+		add_texture(pbr_material->color_texture, STRING(COLOR_TEXTURE), "ColorMap", 3);
+		add_texture(pbr_material->normal_texture, STRING(NORMAL_TEXTURE), "NormalMap", 4);
+		add_texture(pbr_material->metallic_texture, STRING(METALLIC_TEXTURE), "MetallicMap", 5);
+		add_texture(pbr_material->roughness_texture, STRING(ROUGHNESS_TEXTURE), "RoughnessMap", 6);
+		add_texture(pbr_material->occlusion_texture, STRING(OCCLUSION_TEXTURE), "AmbientOcclusionMap", 7);
+
+		if (!success) {
+			return false;
+		}
+
+		// Set the factors for the constant buffers
+		size_t modifiers_cb_index = material_asset->FindBuffer(STRING(Modifiers), ECS_MATERIAL_SHADER_PIXEL);
+		if (modifiers_cb_index == -1) {
+			return false;
+		}
+
+		MaterialAssetBuffer* modifiers_cb = &material_asset->buffers[ECS_MATERIAL_SHADER_PIXEL][modifiers_cb_index];
+		Reflection::CopyIntoReflectionFieldValue(modifiers_cb->reflection_type, "tint", modifiers_cb->data.buffer, &pbr_material->tint);
+		Reflection::CopyIntoReflectionFieldValue(modifiers_cb->reflection_type, "metallic_factor", modifiers_cb->data.buffer, &pbr_material->metallic_factor);
+		Reflection::CopyIntoReflectionFieldValue(modifiers_cb->reflection_type, "roughness_factor", modifiers_cb->data.buffer, &pbr_material->roughness_factor);
+		Reflection::CopyIntoReflectionFieldValue(modifiers_cb->reflection_type, "emissive_factor", modifiers_cb->data.buffer, &pbr_material->emissive_factor);
+
+		// Now write the metadata files
+		if (database->WriteShaderFile(pixel_metadata)) {
+			if (database->WriteMaterialFile(material_asset)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------

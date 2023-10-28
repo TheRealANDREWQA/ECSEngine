@@ -514,6 +514,21 @@ namespace ECSEngine {
 		ReloadAssetMetadataFromFilesOptions* options
 	);
 
+	// The shaders should already be set to the PBR shaders
+	// It will modify the macros for the pixel shader such that
+	// they match the textures from the pbr material. It will also
+	// set the constant buffers to match the pbr_material factors
+	// It will modify the metadata for the material and shaders and
+	// then write to file these changes. The new allocations will be
+	// made from the given allocator
+	// Returns true if it succeeded, else false
+	ECSENGINE_API bool CreateMaterialAssetFromPBRMaterial(
+		AssetDatabase* database,
+		MaterialAsset* material_asset,
+		const PBRMaterial* pbr_material,
+		AllocatorPolymorphic allocator
+	);
+
 	ECS_INLINE void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code) {
 		metadata->source_code = source_code;
 	}

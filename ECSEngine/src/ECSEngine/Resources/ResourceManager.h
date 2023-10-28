@@ -24,7 +24,11 @@
 
 // For the variant that takes the GLTFMeshes, if the scale is not 1.0f, this disables the
 // rescaling of the meshes (it rescales them back to appear the same to the outside caller)
-#define ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK (1 << 19)
+#define ECS_RESOURCE_MANAGER_COALESCED_MESH_EX_DO_NOT_SCALE_BACK (1 << 19)
+
+// It will bring the origin to the center of the object such that
+// the geometry will properly resemble the location
+#define ECS_RESOURCE_MANAGER_COALESCED_MESH_ORIGIN_TO_CENTER (1 << 20)
 
 // Applies a tonemap on the texture pixels before sending to the GPU (useful for thumbnails)
 #define ECS_RESOURCE_MANAGER_TEXTURE_HDR_TONEMAP (1 << 17)

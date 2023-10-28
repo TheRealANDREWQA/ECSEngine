@@ -8,3 +8,5 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 void ChangeInspectorToMaterialFile(EditorState* editor_state, ECSEngine::Stream<wchar_t> path, unsigned int inspector_index);
 
 void InspectorMaterialFileAddFunctors(InspectorTable* table);
+
+InspectorAssetTarget InspectorDrawMaterialTarget(const void* inspector_data);

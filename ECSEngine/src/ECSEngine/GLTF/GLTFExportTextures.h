@@ -17,6 +17,7 @@ namespace ECSEngine {
 
 		// If this is given, it will only the textures specified here
 		Stream<PBRMaterialMapping> textures_to_write = {};
+		bool use_standard_texture_names = false;
 	};
 
 	// This does not allocate textures_to_write

@@ -1523,6 +1523,46 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	template<typename CharacterType>
+	Stream<CharacterType> StringsPrefixImpl(Stream<Stream<CharacterType>> strings) {
+		if (strings.size == 0) {
+			return {};
+		}
+
+		size_t smallest_string_size = ULLONG_MAX;
+		for (size_t index = 0; index < strings.size; index++) {
+			smallest_string_size = std::min(smallest_string_size, strings[index].size);
+		}
+
+		for (size_t prefix_size = smallest_string_size; prefix_size > 0; prefix_size--) {
+			bool all_have_it = true;
+			Stream<CharacterType> prefix = { strings[0].buffer, prefix_size };
+			for (size_t subindex = 0; subindex < strings.size && all_have_it; subindex++) {
+				if (!strings[subindex].StartsWith(prefix)) {
+					all_have_it = false;
+				}
+			}
+
+			if (all_have_it) {
+				return prefix;
+			}
+		}
+
+		return {};
+	}
+
+	Stream<char> StringsPrefix(Stream<Stream<char>> strings)
+	{
+		return StringsPrefixImpl(strings);
+	}
+
+	Stream<wchar_t> StringsPrefix(Stream<Stream<wchar_t>> strings)
+	{
+		return StringsPrefixImpl(strings);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	template<typename FloatingPoint, typename CharacterType>
 	FloatingPoint ConvertCharactersToFloatingPoint(Stream<CharacterType> stream) {
 		// Check for the special case of nan and inf

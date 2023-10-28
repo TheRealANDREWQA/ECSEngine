@@ -39,6 +39,8 @@ ECS_TOOLS;
 #define TEXTURE_TAG STRING(ECS_TEXTURE_HANDLE)
 #define SAMPLER_TAG STRING(ECS_GPU_SAMPLER_HANDLE)
 
+#define REFLECTED_SETTINGS_NAME_PADDING 0.22f
+
 // #define GENERAL_ARRAYS
 
 enum SUCCESS_ORDER : unsigned char {
@@ -92,6 +94,7 @@ struct InspectorDrawMaterialFileData {
 	MemoryManager database_allocator;
 
 	EDITOR_MATERIAL_BUILTIN builtin;
+	CapacityStream<char> construct_pbr_from_prefix_characters;
 };
 
 // ------------------------------------------------------------------------------------------------------------
@@ -512,25 +515,47 @@ static void RecreateReflectionManagerForShaders(InspectorDrawMaterialFileData* d
 
 // ------------------------------------------------------------------------------------------------------------
 
-struct AddReloadInvalidStructuresEventData {
-	unsigned int inspector_index;
-	Stream<wchar_t> path;
+struct ConstructFromNameActionData {
+	InspectorDrawMaterialFileData* data;
+	bool text_input_enter;
 };
 
-EDITOR_EVENT(AddReloadInvalidStructuresEvent) {
-	AddReloadInvalidStructuresEventData* data = (AddReloadInvalidStructuresEventData*)_data;
-	ChangeInspectorToNothing(editor_state, data->inspector_index);
-	ChangeInspectorToMaterialFile(editor_state, data->path, data->inspector_index);
-	data->path.Deallocate(editor_state->EditorAllocator());
+static void ConstructFromNameAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
 
-	return false;
-}
+	ConstructFromNameActionData* construct_data = (ConstructFromNameActionData*)_data;
+	InspectorDrawMaterialFileData* data = construct_data->data;
+	if (!construct_data->text_input_enter || keyboard->IsPressed(ECS_KEY_ENTER)) {
+		if (data->construct_pbr_from_prefix_characters.size > 0) {
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+			GetProjectAssetsFolder(data->editor_state, assets_folder);
 
-static void AddReloadInvalidStructures(EditorState* editor_state, unsigned int inspector_index, Stream<wchar_t> path) {
-	AddReloadInvalidStructuresEventData event_data;
-	event_data.inspector_index = inspector_index;
-	event_data.path = path.Copy(editor_state->EditorAllocator());
-	EditorAddEvent(editor_state, AddReloadInvalidStructuresEvent, &event_data, sizeof(event_data));
+			CreatePBRMaterialFromNameOptions create_options;
+			create_options.search_directory_is_mount_point = true;
+			PBRMaterial pbr_material = CreatePBRMaterialFromName(
+				data->material_asset.name,
+				data->construct_pbr_from_prefix_characters,
+				assets_folder,
+				GetAllocatorPolymorphic(&stack_allocator),
+				create_options
+			);
+
+			// Check to see if it has textures
+			if (pbr_material.HasTextures()) {
+				bool success = CreateMaterialAssetFromPBRMaterial(&data->temporary_database, &data->material_asset, &pbr_material, GetAllocatorPolymorphic(&stack_allocator));
+				if (!success) {
+					EditorSetConsoleError("Failed to construct the material from texture group");
+				}
+
+				Stream<char> window_name = system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index));
+				unsigned int inspector_index = GetInspectorIndex(window_name);
+				// In any case, we need to now change the inspector to nothing and then back to this
+				// material to reload the material from the metadata and have the values be correctly re-read
+				ReloadInspectorAssetFromMetadata(data->editor_state, inspector_index);
+			}
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -654,7 +679,7 @@ static void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int insp
 				// Then change the inspector to nothing and back to this material in order to have
 				// The previous values be recovered when the parsing succeeds
 				if (!data->success[order][SUCCESS_CBUFFER]) {
-					AddReloadInvalidStructures(editor_state, inspector_index, data->path);
+					ReloadInspectorAssetFromMetadata(editor_state, inspector_index);
 					return true;
 				}
 
@@ -675,7 +700,7 @@ static void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int insp
 			success = shader_reflection->ReflectShaderTexturesSource(source_code, shader_textures, stack_allocator);
 			if (success) {
 				if (!data->success[order][SUCCESS_TEXTURE]) {
-					AddReloadInvalidStructures(editor_state, inspector_index, data->path);
+					ReloadInspectorAssetFromMetadata(editor_state, inspector_index);
 					return true;
 				}
 
@@ -694,7 +719,7 @@ static void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int insp
 			success = shader_reflection->ReflectShaderSamplersSource(source_code, shader_samplers, stack_allocator);
 			if (success) {
 				if (!data->success[order][SUCCESS_SAMPLER]) {
-					AddReloadInvalidStructures(editor_state, inspector_index, data->path);
+					ReloadInspectorAssetFromMetadata(editor_state, inspector_index);
 					return true;
 				}
 
@@ -902,6 +927,7 @@ static void InspectorCleanMaterial(EditorState* editor_state, unsigned int inspe
 	}
 
 	Deallocate(editor_allocator, data->material_asset.name.buffer);
+	data->construct_pbr_from_prefix_characters.Deallocate(editor_allocator);
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -1032,9 +1058,25 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 		std::size(EDITOR_MATERIAL_BUILTIN_NAME),
 		(unsigned char*)&data->builtin
 	);
+	config.flag_count--;
 	drawer->NextRow();
 
-	config.flag_count--;
+	if (data->builtin == EDITOR_MATERIAL_BUILTIN_PBR) {
+		ConstructFromNameActionData construct_data = { data, true };
+
+		// Draw the Construct from name input and button
+		UIConfigTextInputCallback input_callback;
+		input_callback.handler = { ConstructFromNameAction, &construct_data, sizeof(construct_data) };
+		input_callback.trigger_only_on_release = true;
+		config.AddFlag(input_callback);
+
+		drawer->TextInput(BASE_CONFIGURATION | UI_CONFIG_TEXT_INPUT_CALLBACK, config, "Create from prefix", &data->construct_pbr_from_prefix_characters);
+		drawer->NextRow();
+
+		config.flag_count--;
+	}
+
+	drawer->CrossLine();
 
 	editor_state->module_reflection->DrawFieldOverride(
 		STRING(ECS_VERTEX_SHADER_HANDLE),
@@ -1081,7 +1123,7 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 
 				UIDrawConfig config;
 				UIConfigNamePadding name_padding;
-				name_padding.total_length = 0.22f;
+				name_padding.total_length = REFLECTED_SETTINGS_NAME_PADDING;
 				config.AddFlag(name_padding);
 				UIConfigWindowDependentSize window_dependent;
 				config.AddFlag(window_dependent);
@@ -1208,6 +1250,10 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 		memset(draw_data->success, 0, sizeof(draw_data->success));
 		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.CopyOther(path);
+		
+		const size_t CONSTRUCT_PBR_INPUT_CAPACITY = 256;
+		draw_data->construct_pbr_from_prefix_characters.Initialize(editor_allocator, 0, CONSTRUCT_PBR_INPUT_CAPACITY);
+
 		draw_data->shader_override_data[VERTEX_ORDER] = editor_state->module_reflection->InitializeFieldOverride(VERTEX_TAG, "Vertex Shader");
 		draw_data->shader_override_data[PIXEL_ORDER] = editor_state->module_reflection->InitializeFieldOverride(PIXEL_TAG, "Pixel Shader");
 		// Initialize the reflection manager
@@ -1291,6 +1337,14 @@ void InspectorMaterialFileAddFunctors(InspectorTable* table) {
 	for (size_t index = 0; index < std::size(ASSET_MATERIAL_EXTENSIONS); index++) {
 		AddInspectorTableFunction(table, { InspectorDrawMaterialFile, InspectorCleanMaterial }, ASSET_MATERIAL_EXTENSIONS[index]);
 	}
+}
+
+// ------------------------------------------------------------------------------------------------------------
+
+InspectorAssetTarget InspectorDrawMaterialTarget(const void* inspector_data)
+{
+	InspectorDrawMaterialFileData* data = (InspectorDrawMaterialFileData*)inspector_data;
+	return { data->path, {} };
 }
 
 // ------------------------------------------------------------------------------------------------------------

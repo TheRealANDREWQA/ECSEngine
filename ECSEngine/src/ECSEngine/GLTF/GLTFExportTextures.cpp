@@ -330,6 +330,15 @@ namespace ECSEngine {
 		// We have finished
 		options->semaphore->Enter();
 
+		Stream<wchar_t> standard_texture_names[ECS_PBR_MATERIAL_MAPPING_COUNT] = {
+			L"diffuse",
+			L"normal",
+			L"metallic",
+			L"roughness",
+			L"occlusion",
+			L"emissive"
+		};
+
 		bool at_least_one_export = false;
 		internal::ForEachMeshInGLTF(gltf_data, [&](const cgltf_node* nodes, size_t node_index, size_t node_count) {
 			PBRMaterial placeholder;
@@ -341,6 +350,27 @@ namespace ECSEngine {
 						Stream<wchar_t> metallic_name;
 						TextureExtension orm_extension;
 						Stream<void> orm_data;
+
+						Stream<wchar_t> prefix;
+						if (options->use_standard_texture_names) {
+							if (mapping_count > 1) {
+								ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, texture_names, ECS_PBR_MATERIAL_MAPPING_COUNT);
+								for (size_t index = 0; index < mapping_count; index++) {
+									texture_names[index] = mappings[index].texture;
+								}
+								texture_names.size = mapping_count;
+								prefix = StringsPrefix(texture_names);
+							}
+							else {
+								// Check for an underscore when there is a single texture
+								Stream<wchar_t> underscore = FindFirstCharacter(mappings[0].texture, L'_');
+								if (underscore.size > 0) {
+									// Advance such that we get the underscore in the prefix
+									underscore.Advance();
+									prefix = mappings[0].texture.StartDifference(underscore);
+								}
+							}
+						}
 
 						for (size_t index = 0; index < mapping_count; index++) {
 							DecodedTexture current_decoded_texture;
@@ -358,8 +388,21 @@ namespace ECSEngine {
 							}
 
 							Stream<wchar_t> texture_name = mappings[index].texture;
-							wchar_t* stable_texture_name = (wchar_t*)malloc(texture_name.MemoryOf(texture_name.size));
-							texture_name.CopyTo(stable_texture_name);
+							// Allocate the string large enough such that we cover the use standard name case
+							wchar_t* stable_texture_name = (wchar_t*)malloc(texture_name.MemoryOf(texture_name.size + standard_texture_names[pbr_index].size));
+							if (options->use_standard_texture_names) {
+								if (prefix.size > 0) {
+									prefix.CopyTo(stable_texture_name);
+									standard_texture_names[pbr_index].CopyTo(stable_texture_name + prefix.size);
+									texture_name.size = prefix.size + standard_texture_names[pbr_index].size;
+								}
+								else {
+									texture_name.CopyTo(stable_texture_name);
+								}
+							}
+							else {
+								texture_name.CopyTo(stable_texture_name);
+							}
 							texture_name.buffer = stable_texture_name;
 
 							if (pbr_index == ECS_PBR_MATERIAL_METALLIC) {

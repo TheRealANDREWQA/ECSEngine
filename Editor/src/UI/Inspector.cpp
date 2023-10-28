@@ -459,6 +459,67 @@ void UnlockInspector(EditorState* editor_state, unsigned int inspector_index)
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+struct ReloadInspectorAssetEventData {
+	Stream<wchar_t> path;
+	Stream<char> initial_setting;
+	unsigned int inspector_index;
+	ECS_ASSET_TYPE asset_type;
+};
+
+EDITOR_EVENT(ReloadInspectorAssetEvent) {
+	ReloadInspectorAssetEventData* data = (ReloadInspectorAssetEventData*)_data;
+	ChangeInspectorToNothing(editor_state, data->inspector_index);
+	ChangeInspectorToAsset(editor_state, data->path, data->initial_setting, data->asset_type, data->inspector_index);
+	data->path.Deallocate(editor_state->EditorAllocator());
+	data->initial_setting.Deallocate(editor_state->EditorAllocator());
+	return false;
+}
+
+void ReloadInspectorAssetFromMetadata(EditorState* editor_state, unsigned int inspector_index)
+{
+	InspectorDrawFunction draw_function = GetInspectorDrawFunction(editor_state, inspector_index);
+	const void* inspector_data = GetInspectorDrawFunctionData(editor_state, inspector_index);
+	InspectorAssetTarget asset_target;
+	ECS_ASSET_TYPE asset_type = ECS_ASSET_TYPE_COUNT;
+
+	if (draw_function == InspectorDrawMeshFile) {
+		asset_target = InspectorDrawMeshTarget(inspector_data);
+		asset_type = ECS_ASSET_MESH;
+	}
+	else if (draw_function == InspectorDrawTextureFile) {
+		asset_target = InspectorDrawTextureTarget(inspector_data);
+		asset_type = ECS_ASSET_TEXTURE;
+	}
+	else if (draw_function == InspectorDrawGPUSamplerFile) {
+		asset_target = InspectorDrawGPUSamplerTarget(inspector_data);
+		asset_type = ECS_ASSET_GPU_SAMPLER;
+	}
+	else if (draw_function == InspectorDrawShaderFile) {
+		asset_target = InspectorDrawShaderTarget(inspector_data);
+		asset_type = ECS_ASSET_SHADER;
+	}
+	else if (draw_function == InspectorDrawMaterialFile) {
+		asset_target = InspectorDrawMaterialTarget(inspector_data);
+		asset_type = ECS_ASSET_MATERIAL;
+	}
+	else if (draw_function == InspectorDrawMiscFile) {
+		asset_target = InspectorDrawMiscTarget(inspector_data);
+		asset_type = ECS_ASSET_MISC;
+	}
+	else {
+		ECS_ASSERT(false, "Invalid inspector asset target type");
+	}
+
+	ReloadInspectorAssetEventData event_data;
+	event_data.inspector_index = inspector_index;
+	event_data.path = asset_target.path.Copy(editor_state->EditorAllocator());
+	event_data.initial_setting = asset_target.initial_asset.Copy(editor_state->EditorAllocator());
+	event_data.asset_type = asset_type;
+	EditorAddEvent(editor_state, ReloadInspectorAssetEvent, &event_data, sizeof(event_data));
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void InitializeInspectorTable(EditorState* editor_state) {
 	void* allocation = editor_state->editor_allocator->Allocate(InspectorTable::MemoryOf(FUNCTION_TABLE_CAPACITY));
 	editor_state->inspector_manager.function_table.InitializeFromBuffer(allocation, FUNCTION_TABLE_CAPACITY);
@@ -579,28 +640,7 @@ void ChangeInspectorToAsset(EditorState* editor_state, const void* metadata, ECS
 		return;
 	}
 
-	switch (asset_type) {
-	case ECS_ASSET_MESH:
-		ChangeInspectorToMeshFile(editor_state, metadata_file, inspector_index, GetAssetName(metadata, asset_type));
-		break;
-	case ECS_ASSET_TEXTURE:
-		ChangeInspectorToTextureFile(editor_state, metadata_file, inspector_index, GetAssetName(metadata, asset_type));
-		break;
-	case ECS_ASSET_GPU_SAMPLER:
-		ChangeInspectorToGPUSamplerFile(editor_state, metadata_file, inspector_index);
-		break;
-	case ECS_ASSET_SHADER:
-		ChangeInspectorToShaderFile(editor_state, metadata_file, inspector_index);
-		break;
-	case ECS_ASSET_MATERIAL:
-		ChangeInspectorToMaterialFile(editor_state, metadata_file, inspector_index);
-		break;
-	case ECS_ASSET_MISC:
-		ChangeInspectorToMiscFile(editor_state, metadata_file, inspector_index);
-		break;
-	default:
-		ECS_ASSERT(false, "Invalid asset type");
-	}
+	ChangeInspectorToAsset(editor_state, metadata_file, GetAssetName(metadata, asset_type), asset_type, inspector_index);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -608,6 +648,34 @@ void ChangeInspectorToAsset(EditorState* editor_state, const void* metadata, ECS
 void ChangeInspectorToAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE asset_type, unsigned int inspector_index)
 {
 	ChangeInspectorToAsset(editor_state, editor_state->asset_database->GetAssetConst(handle, asset_type), asset_type, inspector_index);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void ChangeInspectorToAsset(EditorState* editor_state, Stream<wchar_t> path, Stream<char> initial_setting, ECS_ASSET_TYPE asset_type, unsigned int inspector_index)
+{
+	switch (asset_type) {
+	case ECS_ASSET_MESH:
+		ChangeInspectorToMeshFile(editor_state, path, inspector_index, initial_setting);
+		break;
+	case ECS_ASSET_TEXTURE:
+		ChangeInspectorToTextureFile(editor_state, path, inspector_index, initial_setting);
+		break;
+	case ECS_ASSET_GPU_SAMPLER:
+		ChangeInspectorToGPUSamplerFile(editor_state, path, inspector_index);
+		break;
+	case ECS_ASSET_SHADER:
+		ChangeInspectorToShaderFile(editor_state, path, inspector_index);
+		break;
+	case ECS_ASSET_MATERIAL:
+		ChangeInspectorToMaterialFile(editor_state, path, inspector_index);
+		break;
+	case ECS_ASSET_MISC:
+		ChangeInspectorToMiscFile(editor_state, path, inspector_index);
+		break;
+	default:
+		ECS_ASSERT(false, "Invalid asset type");
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
