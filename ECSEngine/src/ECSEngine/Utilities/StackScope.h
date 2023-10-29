@@ -16,6 +16,10 @@ namespace ECSEngine {
 		Deallocator deallocator;
 	};
 
+	// Deduction rule for lambdas
+	template<typename Deallocator>
+	StackScope(Deallocator&&) -> StackScope<Deallocator>;
+
 	struct ReleaseMalloca {
 		void operator() () const {
 			ECS_FREEA(buffer);

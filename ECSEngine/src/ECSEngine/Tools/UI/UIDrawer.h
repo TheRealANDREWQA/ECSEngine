@@ -4934,7 +4934,8 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void TextToolTip(Stream<char> characters, float2 position, float2 scale, const UITooltipBaseData* base = nullptr);
+			// The default base data is center horizontal_x true, offset_scale_y true, offset.y a small offset
+			void TextToolTip(Stream<char> characters, float2 position, float2 scale, bool stable_characters, const UITooltipBaseData* base = nullptr);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4944,6 +4945,11 @@ namespace ECSEngine {
 				bool stable_characters = false, 
 				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Checks to see if the UI_CONFIG_TOOL_TIP flag is enable and uses the default TextToolTip addition
+			void HandleTextToolTip(size_t configuration, const UIDrawConfig& config, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

@@ -7,7 +7,15 @@ ECS_THREAD_TASK(ApplyMovement) {
 		ForEachEntityData* for_each_data, 
 		Translation* translation
 	) {
+			static bool was_used = false;
+
 		translation->value.x -= 5.50f * for_each_data->world->delta_time;
+		if (for_each_data->thread_id == 2) {
+			if (!was_used) {
+				for_each_data->world->entity_manager->GetComponent(Entity{ (unsigned int)-1 }, Translation::ID());
+				was_used = true;
+			}
+		}
 	});
 }
 

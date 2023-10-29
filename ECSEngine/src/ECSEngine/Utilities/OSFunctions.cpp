@@ -6,6 +6,7 @@
 #include "Path.h"
 
 #include <DbgHelp.h>
+#include <winternl.h>
 
 #pragma comment(lib, "dbghelp.lib")
 
@@ -660,7 +661,9 @@ namespace ECSEngine {
 				search_paths.AddStream(module_paths[index]);
 				search_paths.AddAssert(L':');
 			}
-			search_paths[search_paths.size - 1] = L'\0';
+			// This has to be size - 1 to replace the last colon that was added in the loop
+			unsigned int null_terminator_index = search_paths.size == 0 ? 0 : search_paths.size - 1;
+			search_paths[null_terminator_index] = L'\0';
 
 			bool success = false;
 			if (!SYM_INITIALIZED) {

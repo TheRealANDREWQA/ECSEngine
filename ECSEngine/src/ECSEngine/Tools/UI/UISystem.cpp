@@ -2596,6 +2596,243 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		struct ComposedActionData {
+			Action actions[2];
+			void* data[2];
+			UIHandlerCopyBuffers copy_functions[2];
+			unsigned int data_size[2];
+		};
+
+		static void ComposeCopyBuffersAction(void* _data, AllocatorPolymorphic allocator) {
+			ComposedActionData* data = (ComposedActionData*)_data;
+			if (data->copy_functions[0] != nullptr) {
+				data->copy_functions[0](data->data[0], allocator);
+			}
+			if (data->copy_functions[1] != nullptr) {
+				data->copy_functions[1](data->data[1], allocator);
+			}
+		}
+
+		static void ComposedAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			ComposedActionData* data = (ComposedActionData*)_data;
+			void* written_data_pointer = OffsetPointer(data, sizeof(*data));
+			if (data->data_size[0] == 0) {
+				action_data->data = data->data[0];
+			}
+			else {
+				action_data->data = written_data_pointer;
+				written_data_pointer = OffsetPointer(written_data_pointer, data->data_size[0]);
+			}
+			data->actions[0](action_data);
+
+			if (data->data_size[1] == 0) {
+				action_data->data = data->data[1];
+			}
+			else {
+				action_data->data = written_data_pointer;
+			}
+			data->actions[1](action_data);
+		}
+
+		static void ComposeAction(
+			UISystem* system,
+			LinearAllocator* temporary_allocator,
+			UIHandler* dockspace_handler,
+			float2 position,
+			float2 scale,
+			UIActionHandler handler,
+			bool call_previous_before,
+			UIHandlerCopyBuffers copy_function
+		) {
+			int32_t index = dockspace_handler->position_x.size - 1;
+			for (; index >= 0; index--) {
+				if (dockspace_handler->position_x[index] == position.x && dockspace_handler->position_y[index] == position.y
+					&& dockspace_handler->scale_x[index] == scale.x && dockspace_handler->scale_y[index] == scale.y) {
+					size_t composed_action_storage[1024];
+					ComposedActionData* composed_data = (ComposedActionData*)composed_action_storage;
+					// At the moment, use the phase of the given composed action
+					ECS_UI_DRAW_PHASE aggregate_phase = handler.phase;
+
+					uintptr_t action_write_data = (uintptr_t)OffsetPointer(composed_data, sizeof(*composed_data));
+					unsigned int composed_write_size = sizeof(*composed_data);
+					auto set_previous = [&](unsigned int write_index) {
+						composed_data->actions[write_index] = dockspace_handler->action[index].action;
+						composed_data->copy_functions[write_index] = dockspace_handler->copy_function[index];
+						composed_data->data[write_index] = dockspace_handler->action[index].data;
+						unsigned int previous_write_size = dockspace_handler->action[index].data_size > 0;
+						if (previous_write_size) {
+							composed_data->data[write_index] = (void*)action_write_data;
+							memcpy((void*)action_write_data, dockspace_handler->action[index].data, previous_write_size);
+							action_write_data += previous_write_size;
+							composed_write_size += previous_write_size;
+						}
+						composed_data->data_size[write_index] = previous_write_size;
+					};
+					auto set_current = [&](unsigned int write_index) {
+						composed_data->actions[write_index] = handler.action;
+						composed_data->copy_functions[write_index] = copy_function;
+						composed_data->data[write_index] = handler.data;
+						if (handler.data_size > 0) {
+							composed_data->data[write_index] = (void*)action_write_data;
+							memcpy((void*)action_write_data, handler.data, handler.data_size);
+							action_write_data += handler.data_size;
+							composed_write_size += handler.data_size;
+						}
+						composed_data->data_size[write_index] = handler.data_size;
+					};
+
+					if (call_previous_before) {
+						set_previous(0);
+						set_current(1);
+					}
+					else {
+						set_current(0);
+						set_previous(1);
+					}
+
+					ECS_ASSERT(action_write_data - (uintptr_t)composed_data <= sizeof(composed_action_storage));
+					void* temporary_allocation = temporary_allocator->Allocate(composed_write_size);
+					memcpy(temporary_allocation, composed_data, composed_write_size);
+					composed_data = (ComposedActionData*)temporary_allocation;
+					dockspace_handler->action[index] = { ComposedAction, composed_data, composed_write_size, aggregate_phase };
+					dockspace_handler->copy_function[index] = ComposeCopyBuffersAction;
+					break;
+				}
+			}
+
+			if (index < 0) {
+				// There was no match for that position, we need to insert it
+				system->AddActionHandler(temporary_allocator, dockspace_handler, position, scale, handler, copy_function);
+			}
+		}
+
+		void UISystem::ComposeHoverable(
+			unsigned int thread_id, 
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			float2 position, 
+			float2 scale, 
+			UIActionHandler handler, 
+			bool call_previous_before, 
+			UIHandlerCopyBuffers copy_function
+		)
+		{
+			ComposeHoverable(
+				TemporaryAllocator(thread_id, handler.phase),
+				dockspace,
+				border_index,
+				position,
+				scale,
+				handler,
+				call_previous_before,
+				copy_function
+			);
+		}
+
+		void UISystem::ComposeHoverable(
+			LinearAllocator* allocator, 
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			float2 position, 
+			float2 scale, 
+			UIActionHandler handler, 
+			bool call_previous_before, 
+			UIHandlerCopyBuffers copy_function
+		)
+		{
+			UIHandler* dockspace_handler = &dockspace->borders[border_index].hoverable_handler;
+			ComposeAction(this, allocator, dockspace_handler, position, scale, handler, call_previous_before, copy_function);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ComposeClickable(
+			unsigned int thread_id, 
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			float2 position, 
+			float2 scale, 
+			UIActionHandler handler, 
+			bool call_previous_before, 
+			ECS_MOUSE_BUTTON button_type, 
+			UIHandlerCopyBuffers copy_function
+		)
+		{
+			ComposeClickable(
+				TemporaryAllocator(thread_id, handler.phase),
+				dockspace,
+				border_index,
+				position,
+				scale,
+				handler,
+				call_previous_before,
+				button_type,
+				copy_function
+			);
+		}
+
+		void UISystem::ComposeClickable(
+			LinearAllocator* allocator, 
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			float2 position, 
+			float2 scale, 
+			UIActionHandler handler, 
+			bool call_previous_before, 
+			ECS_MOUSE_BUTTON button_type, 
+			UIHandlerCopyBuffers copy_function
+		)
+		{
+			// Check to see if there is a previous handler on the same location
+			UIHandler* dockspace_handler = &dockspace->borders[border_index].clickable_handler[button_type];
+			ComposeAction(this, allocator, dockspace_handler, position, scale, handler, call_previous_before, copy_function);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ComposeGeneral(
+			unsigned int thread_id, 
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			float2 position, 
+			float2 scale, 
+			UIActionHandler handler, 
+			bool call_previous_before, 
+			UIHandlerCopyBuffers copy_function
+		)
+		{
+			ComposeGeneral(
+				TemporaryAllocator(thread_id, handler.phase),
+				dockspace,
+				border_index,
+				position,
+				scale,
+				handler,
+				call_previous_before,
+				copy_function
+			);
+		}
+
+		void UISystem::ComposeGeneral(
+			LinearAllocator* allocator, 
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			float2 position, 
+			float2 scale,
+			UIActionHandler handler, 
+			bool call_previous_before, 
+			UIHandlerCopyBuffers copy_function
+		)
+		{
+			// Check to see if there is a previous handler on the same location
+			UIHandler* dockspace_handler = &dockspace->borders[border_index].general_handler;
+			ComposeAction(this, allocator, dockspace_handler, position, scale, handler, call_previous_before, copy_function);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::CullRegionHeader(
 			const UIDockspace* dockspace,
 			unsigned int border_index,

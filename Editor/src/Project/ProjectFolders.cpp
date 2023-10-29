@@ -22,7 +22,7 @@ size_t PROJECT_DIRECTORIES_SIZE()
 	return std::size(PROJECT_DIRECTORIES);
 }
 
-void GetProjectOrganizationFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path, const wchar_t* relative_path) {
+static void GetProjectOrganizationFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path, const wchar_t* relative_path) {
 	const ProjectFile* project_file = editor_state->project_file;
 	path.AddStream(project_file->path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
@@ -97,6 +97,13 @@ void GetProjectMetadataFolder(const EditorState* editor_state, ECSEngine::Capaci
 void GetProjectConfigurationFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path)
 {
 	GetProjectOrganizationFolder(editor_state, path, PROJECT_CONFIGURATION_RELATIVE_PATH);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+void GetProjectModulesFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path)
+{
+	GetProjectOrganizationFolder(editor_state, path, PROJECT_MODULES_RELATIVE_PATH);
 }
 
 // -------------------------------------------------------------------------------------------------------------

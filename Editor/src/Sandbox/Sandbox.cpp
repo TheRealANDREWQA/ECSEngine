@@ -2,6 +2,7 @@
 #include "Sandbox.h"
 #include "SandboxScene.h"
 #include "SandboxModule.h"
+#include "SandboxCrashHandler.h"
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorEvent.h"
 #include "../Editor/EditorPalette.h"
@@ -1562,6 +1563,8 @@ bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sand
 		// We also need to prepare the world concurrency
 		PrepareWorldConcurrency(&sandbox->sandbox_world);
 
+		// In this editor context we must also add a dynamic task wrapper that
+
 		// Bind again the module settings
 		BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
 
@@ -2139,6 +2142,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		return false;
 	}
 	else if (solve_module_snapshot_result == SOLVE_SANDBOX_MODULE_SNAPSHOT_WAIT) {
+		sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 		return true;
 	}
 	else {
@@ -2147,8 +2151,18 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 
 	if (was_waiting && !HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION)) {
+		// Clear the runtime info just in case there is something bound from before
+		ClearSandboxRuntimeWorldInfo(editor_state, sandbox_index);
+
 		// We need to reconstruct the scheduling order
+		bool scheduling_success = PrepareSandboxRuntimeWorldInfo(editor_state, sandbox_index);
+		if (!scheduling_success) {
+			PauseSandboxWorld(editor_state, sandbox_index);
+			return false;
+		}
 	}
+
+	SandboxSetCrashHandler(editor_state, sandbox_index);
 
 	// If it returned OK, then we can proceed as normal
 
@@ -2406,6 +2420,11 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 			asset_database->IncrementReferenceCounts(true);
 		}
 	}
+	else {
+		// We need to delay the world timer in case the world is restarted quickly after it has been paused
+		sandbox->sandbox_world.timer.DelayStart(10, ECS_TIMER_DURATION_S);
+	}
+
 	// Else if we are in the paused state we just need to change the state
 	if (success) {
 		// Disable the rendering of the scene and game windows - we will draw them every frame

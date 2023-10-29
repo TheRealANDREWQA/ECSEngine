@@ -15,9 +15,7 @@ namespace ECSEngine {
 	WorldCrashHandlerData WORLD_GLOBAL_DATA;
 
 	void WorldCrashHandlerFunction(void* _data, Stream<char> error_string) {
-		WorldCrashHandlerData* data = (WorldCrashHandlerData*)_data;
-
-		if (data->should_break) {
+		if (WORLD_GLOBAL_DATA.should_break) {
 			__debugbreak();
 		}
 
@@ -57,7 +55,7 @@ namespace ECSEngine {
 		OS::InitializeSymbolicLinksPaths(module_search_path);
 		WORLD_GLOBAL_DATA.world = world;
 		WORLD_GLOBAL_DATA.should_break = should_break;
-		SetCrashHandler(WorldCrashHandlerFunction, &WORLD_GLOBAL_DATA);
+		SetCrashHandler(WorldCrashHandlerFunction, nullptr);
 	}
 
 	void SetRecoveryCrashHandler(jmp_buf jump_buffer, bool should_break)

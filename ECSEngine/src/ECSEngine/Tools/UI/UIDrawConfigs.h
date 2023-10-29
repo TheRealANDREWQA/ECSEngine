@@ -32,16 +32,16 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_DYNAMIC_RESOURCE = (size_t)1 << 25;
 		constexpr size_t UI_CONFIG_GET_TRANSFORM = (size_t)1 << 26;
 		constexpr size_t UI_CONFIG_INITIALIZER_DO_NOT_BEGIN = (size_t)1 << 27;
+		constexpr size_t UI_CONFIG_TOOL_TIP = (size_t)1 << 28;
 		
-		// Low slots available 28, 29
+		// Low slots available 29
 
-		// High slots available 60, 61, 62, 63 (60 aliases with the an array config)
+		// High slots available 60, 61, 62, 63 (60 aliases with an array config)
 		
 		constexpr size_t UI_CONFIG_RECTANGLE_VERTEX_COLOR = (size_t)1 << 55;
 		constexpr size_t UI_CONFIG_RECTANGLE_HOVERABLE_ACTION = (size_t)1 << 56;
 		constexpr size_t UI_CONFIG_RECTANGLE_CLICKABLE_ACTION = (size_t)1 << 57;
 		constexpr size_t UI_CONFIG_RECTANGLE_GENERAL_ACTION = (size_t)1 << 58;
-		constexpr size_t UI_CONFIG_RECTANGLE_TOOL_TIP = (size_t)1 << 59;
 
 		// Internal flag used by the group slider and text input to signal to element name
 		// that they should fit the group name to the scale

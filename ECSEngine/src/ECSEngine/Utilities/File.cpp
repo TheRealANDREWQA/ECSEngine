@@ -392,7 +392,10 @@ namespace ECSEngine {
 	bool RemoveFile(Stream<wchar_t> file)
 	{
 		NULL_TERMINATE_WIDE(file);
-		return _wremove(file.buffer) == 0;
+		bool return_status = _wremove(file.buffer) == 0;
+		// For debug purposes
+		int errno_val = errno;
+		return return_status;
 	}
 
 	// --------------------------------------------------------------------------------------------------

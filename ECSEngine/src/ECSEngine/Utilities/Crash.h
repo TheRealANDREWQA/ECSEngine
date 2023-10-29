@@ -11,11 +11,12 @@ namespace ECSEngine {
 		void* data;
 	};
 
-	extern CrashHandler ECS_GLOBAL_CRASH_HANDLER;
-	extern const char* ECS_GLOBAL_DEFERRED_FILE;
-	extern const char* ECS_GLOBAL_DEFERRED_FUNCTION;
-	extern unsigned int ECS_GLOBAL_DEFERRED_LINE;
+	ECSENGINE_API extern CrashHandler ECS_GLOBAL_CRASH_HANDLER;
+	ECSENGINE_API extern const char* ECS_GLOBAL_DEFERRED_FILE;
+	ECSENGINE_API extern const char* ECS_GLOBAL_DEFERRED_FUNCTION;
+	ECSENGINE_API extern unsigned int ECS_GLOBAL_DEFERRED_LINE;
 
+	// This doesn't allocate the data - it will only reference it
 	ECSENGINE_API void SetCrashHandler(CrashHandlerFunction handler, void* data);
 
 	// It will __debugbreak() only
@@ -58,6 +59,6 @@ namespace ECSEngine {
 	// The __VA_ARGS__ can be used to format the error string
 #define ECS_CRASH_RETURN_EX(condition, error_string, file, function, line, ...) ECS_CRASH_RETURN_IMPLEMENTATION(condition, ECS_CRASH_EX, error_string, file, function, line, __VA_ARGS__)
 	// The __VA_ARGS__ can be used to format the error string
-#define ECS_CRASH_RETURN_VALUE_EX(condition, return_value, error_string, file, function, line, ...) if (!(condition)) { ECS_CRASH_EX(error_string, file, function, file, __VA_ARGS__); return return_value; }
+#define ECS_CRASH_RETURN_VALUE_EX(condition, return_value, error_string, file, function, line, ...) if (!(condition)) { ECS_CRASH_EX(error_string, file, function, line, __VA_ARGS__); return return_value; }
 
 }

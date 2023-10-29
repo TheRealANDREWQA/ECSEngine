@@ -147,7 +147,7 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	transform.scale = button_scale;
 	config.AddFlag(transform);
 
-	const size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | UI_CONFIG_RECTANGLE_TOOL_TIP;
+	const size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | UI_CONFIG_TOOL_TIP;
 	const float triangle_scale_factor = 0.8f;
 	const float stop_scale_factor = 0.45f;
 
