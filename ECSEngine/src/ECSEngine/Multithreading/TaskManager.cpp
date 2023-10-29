@@ -392,6 +392,80 @@ namespace ECSEngine {
 	void TaskManager::ChangeDynamicWrapperMode(ThreadFunctionWrapperData wrapper_data) {
 		TaskManagerChangeWrapperMode(this, wrapper_data, &m_dynamic_wrapper);
 	}
+	
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	struct ComposeWrapperData {
+		ThreadFunctionWrapperData wrappers[2];
+	};
+
+	ECS_THREAD_WRAPPER_TASK(ComposeWrapper) {
+		ComposeWrapperData* data = (ComposeWrapperData*)_wrapper_data;
+
+		void* embedded_wrapper_data = OffsetPointer(data, sizeof(*data));
+		void* current_wrapper_data = data->wrappers[0].data;
+		if (data->wrappers[0].data_size > 0) {
+			current_wrapper_data = embedded_wrapper_data;
+			embedded_wrapper_data = OffsetPointer(embedded_wrapper_data, data->wrappers[0].data_size);
+		}
+		data->wrappers[0].function(thread_id, task_thread_id, world, task, current_wrapper_data);
+
+		current_wrapper_data = data->wrappers[1].data;
+		if (data->wrappers[1].data_size > 0) {
+			current_wrapper_data = embedded_wrapper_data;
+			embedded_wrapper_data = OffsetPointer(embedded_wrapper_data, data->wrappers[1].data_size);
+		}
+		data->wrappers[1].function(thread_id, task_thread_id, world, task, current_wrapper_data);
+	}
+
+	static ThreadFunctionWrapperData CreateComposeWrapper(
+		ThreadFunctionWrapperData existing_wrapper, 
+		ThreadFunctionWrapperData addition_wrapper, 
+		bool run_after_existing_one,
+		CapacityStream<size_t> compose_wrapper_data_storage
+	) {
+		ComposeWrapperData* compose_data = (ComposeWrapperData*)compose_wrapper_data_storage.buffer;
+		void* embedded_data = OffsetPointer(compose_data, sizeof(*compose_data));
+		unsigned int compose_data_write_size = sizeof(*compose_data);
+
+		ECS_ASSERT(compose_wrapper_data_storage.capacity >= compose_data_write_size + existing_wrapper.data_size + addition_wrapper.data_size);
+
+		auto set_wrapper = [&](ThreadFunctionWrapperData wrapper, unsigned int write_index) {
+			compose_data->wrappers[write_index] = wrapper;
+			if (wrapper.data_size > 0) {
+				memcpy(embedded_data, wrapper.data, wrapper.data_size);
+				embedded_data = OffsetPointer(embedded_data, wrapper.data_size);
+				compose_data_write_size += wrapper.data_size;
+			}
+		};
+
+		if (run_after_existing_one) {
+			set_wrapper(existing_wrapper, 0);
+			set_wrapper(addition_wrapper, 1);
+		}
+		else {
+			set_wrapper(addition_wrapper, 0);
+			set_wrapper(existing_wrapper, 1);
+		}
+
+		return { ComposeWrapper, compose_data, compose_data_write_size };
+	}
+
+	void TaskManager::ComposeStaticWrapper(ThreadFunctionWrapperData addition_wrapper, bool run_after_existing_one)
+	{
+		ECS_STACK_CAPACITY_STREAM(size_t, compose_data_storage, 64);
+		ThreadFunctionWrapperData composed_wrapper = CreateComposeWrapper(m_static_wrapper, addition_wrapper, run_after_existing_one, compose_data_storage);
+		ChangeStaticWrapperMode(composed_wrapper);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void TaskManager::ComposeDynamicWrapper(ThreadFunctionWrapperData addition_wrapper, bool run_after_existing_one)
+	{
+		ECS_STACK_CAPACITY_STREAM(size_t, compose_data_storage, 64);
+		ThreadFunctionWrapperData composed_wrapper = CreateComposeWrapper(m_dynamic_wrapper, addition_wrapper, run_after_existing_one, compose_data_storage);
+		ChangeDynamicWrapperMode(composed_wrapper);
+	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 

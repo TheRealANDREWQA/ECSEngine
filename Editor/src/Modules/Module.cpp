@@ -61,15 +61,15 @@ ECS_INLINE static void OpenModuleLogFile(Stream<wchar_t> log_path) {
 // -------------------------------------------------------------------------------------------------------------------------
 
 static bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path, bool disable_logging) {
-	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
-	editor_allocator.allocation_type = ECS_ALLOCATION_MULTI;
-
-	Stream<char> contents = ReadWholeFileText(log_path, editor_allocator);
+	Stream<char> contents = ReadWholeFileText(log_path, editor_state->MultithreadedEditorAllocator());
 
 	if (contents.buffer != nullptr) {
+		auto contents_deallocator = StackScope([editor_state, contents]() {
+			contents.Deallocate(editor_state->MultithreadedEditorAllocator());
+		});
+
 		Stream<char> build_FAILED = FindFirstToken(contents, "Build FAILED.");
 
-		Deallocate(editor_allocator, contents.buffer);
 		if (build_FAILED.size > 0) {
 			// Extract the module name from the log path
 			Stream<wchar_t> debug_ptr = FindFirstToken(log_path, CMD_BUILD_SYSTEM_LOG_FILE_PATH);
@@ -157,7 +157,7 @@ void SetCrashHandlerPDBPaths(const EditorState* editor_state) {
 
 		// Add all the configurations as search paths - they will be different based on the name
 		const EditorModule* current_module = editor_state->project_modules->buffer + index;
-		GetModulesFolder(editor_state, pdb_characters);
+		GetProjectModulesFolder(editor_state, pdb_characters);
 		// Advance the '\0'
 		pdb_characters.size++;
 		pdb_paths[pdb_index++] = current_path;
@@ -1253,16 +1253,6 @@ EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, u
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path) {
-	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
-	path.CopyOther(project_file->path);
-	path.Add(ECS_OS_PATH_SEPARATOR);
-	path.AddStreamSafe(PROJECT_MODULES_RELATIVE_PATH);
-	path[path.size] = L'\0';
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
 void GetModuleStem(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path)
 {
 	module_path.AddStream(library_name);
@@ -1293,7 +1283,7 @@ void GetModuleFilenameNoConfig(Stream<wchar_t> library_name, CapacityStream<wcha
 
 void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path)
 {
-	GetModulesFolder(editor_state, module_path);
+	GetProjectModulesFolder(editor_state, module_path);
 	module_path.Add(ECS_OS_PATH_SEPARATOR);
 	GetModuleFilename(library_name, configuration, module_path);
 }
@@ -1975,7 +1965,7 @@ void RemoveModuleAssociatedFiles(EditorState* editor_state, unsigned int module_
 	Stream<Stream<wchar_t>> associated_file_extensions(MODULE_ASSOCIATED_FILES, MODULE_ASSOCIATED_FILES_SIZE());
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
-	GetModulesFolder(editor_state, path);
+	GetProjectModulesFolder(editor_state, path);
 	GetModuleStem(modules->buffer[module_index].library_name, configuration, path);
 	size_t path_size = path.size;
 
@@ -2058,7 +2048,7 @@ void TickUpdateModulesDLLImports(EditorState* editor_state)
 size_t GetVisualStudioLockedFilesSize(const EditorState* editor_state)
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, module_path, 256);
-	GetModulesFolder(editor_state, module_path);
+	GetProjectModulesFolder(editor_state, module_path);
 
 	auto file_functor = [](Stream<wchar_t> path, void* data) {
 		Stream<wchar_t> filename = PathFilename(path);
@@ -2078,7 +2068,7 @@ size_t GetVisualStudioLockedFilesSize(const EditorState* editor_state)
 
 void DeleteVisualStudioLockedFiles(const EditorState* editor_state) {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, module_path, 256);
-	GetModulesFolder(editor_state, module_path);
+	GetProjectModulesFolder(editor_state, module_path);
 
 	auto file_functor = [](Stream<wchar_t> path, void* data) {
 		Stream<wchar_t> filename = PathFilename(path);

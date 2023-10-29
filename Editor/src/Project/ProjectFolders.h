@@ -45,6 +45,8 @@ void GetProjectMetadataFolder(const EditorState* editor_state, ECSEngine::Capaci
 
 void GetProjectConfigurationFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
+void GetProjectModulesFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
+
 void GetProjectConfigurationModuleFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 void GetProjectBackupFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);

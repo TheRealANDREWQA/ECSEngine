@@ -607,6 +607,74 @@ namespace ECSEngine {
 
 			unsigned int CreateWindowAndDockspace(const UIWindowDescriptor& descriptor, size_t additional_flags = 0);
 
+			void ComposeHoverable(
+				unsigned int thread_id,
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				float2 position,
+				float2 scale,
+				UIActionHandler handler,
+				bool call_previous_before,
+				UIHandlerCopyBuffers copy_function = nullptr
+			);
+
+			void ComposeHoverable(
+				LinearAllocator* allocator,
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				float2 position,
+				float2 scale,
+				UIActionHandler handler,
+				bool call_previous_before,
+				UIHandlerCopyBuffers copy_function = nullptr
+			);
+
+			void ComposeClickable(
+				unsigned int thread_id,
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				float2 position,
+				float2 scale,
+				UIActionHandler handler,
+				bool call_previous_before,
+				ECS_MOUSE_BUTTON button_type,
+				UIHandlerCopyBuffers copy_function = nullptr
+			);
+
+			void ComposeClickable(
+				LinearAllocator* allocator,
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				float2 position,
+				float2 scale,
+				UIActionHandler handler,
+				bool call_previous_before,
+				ECS_MOUSE_BUTTON button_type,
+				UIHandlerCopyBuffers copy_function = nullptr
+			);
+
+			void ComposeGeneral(
+				unsigned int thread_id,
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				float2 position,
+				float2 scale,
+				UIActionHandler handler,
+				bool call_previous_before,
+				UIHandlerCopyBuffers copy_function = nullptr
+			);
+
+			void ComposeGeneral(
+				LinearAllocator* allocator,
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				float2 position,
+				float2 scale,
+				UIActionHandler handler,
+				bool call_previous_before,
+				UIHandlerCopyBuffers copy_function = nullptr
+			);
+
 			void CullRegionHeader(
 				const UIDockspace* dockspace,
 				unsigned int border_index,

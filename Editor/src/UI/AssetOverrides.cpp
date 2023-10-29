@@ -580,11 +580,11 @@ static void DrawFileAndName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET
 		base_return.absolute_path.size = base_size;
 
 		base_return.converted_filename.size = 0;
-		Stream<wchar_t> filename = PathFilenameBoth(base_data->asset_name_with_path[index].identifier);
-		ConvertWideCharsToASCII(filename, base_return.converted_filename);
+		ConvertWideCharsToASCII(base_data->asset_name_with_path[index].identifier, base_return.converted_filename);
+		Stream<char> filename = PathFilenameBoth(base_return.converted_filename);
 
 		if (base_data->filter.size > 0) {
-			if (FindFirstToken(base_return.converted_filename, base_data->filter).size == 0) {
+			if (FindFirstToken(filename, base_data->filter).size == 0) {
 				continue;
 			}
 		}
@@ -655,7 +655,11 @@ static void DrawFileAndName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET
 			}
 
 			// Draw the name
-			drawer.TextLabel(UI_CONFIG_WINDOW_DEPENDENT_SIZE, base_return.label_config, base_return.converted_filename);
+			UIConfigToolTip tool_tip;
+			tool_tip.characters = base_return.converted_filename;
+			base_return.label_config.AddFlag(tool_tip);
+			drawer.TextLabel(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TOOL_TIP, base_return.label_config, filename);
+			base_return.label_config.flag_count--;
 		}
 	}
 }
@@ -680,6 +684,7 @@ static void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TY
 		base_return.converted_filename.size = 0;
 		
 		AssetDatabase::ExtractNameFromFile(base_data->asset_paths[index], base_return.converted_filename);
+		Stream<char> filename = PathFilenameBoth(base_return.converted_filename);
 
 		if (base_data->filter.size > 0) {
 			if (FindFirstToken(base_return.converted_filename, base_data->filter).size == 0) {
@@ -714,7 +719,11 @@ static void DrawOnlyName(UIDrawer& drawer, BaseDrawData* base_data, ECS_ASSET_TY
 		base_return.config.flag_count--;
 
 		// Draw the name
-		drawer.TextLabel(UI_CONFIG_WINDOW_DEPENDENT_SIZE, base_return.label_config, base_return.converted_filename);
+		UIConfigToolTip tool_tip;
+		tool_tip.characters = base_return.converted_filename;
+		base_return.label_config.AddFlag(tool_tip);
+		drawer.TextLabel(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TOOL_TIP, base_return.label_config, filename);
+		base_return.label_config.flag_count--;
 	}
 }
 

@@ -1657,6 +1657,7 @@ namespace ECSEngine {
 				}
 
 				FinalizeRectangle(configuration, position, scale);
+				HandleTextToolTip(configuration, config, position, scale);
 			}
 		}
 
@@ -1734,38 +1735,10 @@ namespace ECSEngine {
 					VertexColorRectangle(configuration, position, scale, *colors, *(colors + 1), *(colors + 2), *(colors + 3));
 				}
 
-				if (configuration & UI_CONFIG_RECTANGLE_TOOL_TIP) {
-					const UIConfigToolTip* tool_tip = (const UIConfigToolTip*)config.GetParameter(UI_CONFIG_RECTANGLE_TOOL_TIP);
-
-					struct RunnableData {
-						UITextTooltipHoverableData hover_data;
-						float2 position;
-						float2 scale;
-					};
-
-					RunnableData runnable_data;
-					runnable_data.hover_data.characters = tool_tip->characters;
-					runnable_data.hover_data.base.offset.y = 0.005f;
-					runnable_data.hover_data.base.offset_scale.y = true;
-					if (record_snapshot_runnables) {
-						runnable_data.hover_data.characters = tool_tip->is_stable ? tool_tip->characters : tool_tip->characters.Copy(SnapshotRunnableAllocator());
-					}
-
-					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_SYSTEM, [](void* _data, ActionData* action_data) {
-						RunnableData* data = (RunnableData*)_data;
-						if (IsPointInRectangle(action_data->mouse_position, data->position, data->scale)) {
-							action_data->data = &data->hover_data;
-							action_data->position = data->position;
-							action_data->scale = data->scale;
-							TextTooltipHoverable(action_data);
-						}
-
-						return false;
-					});
-				}
-
 				HandleRectangleActions(configuration, config, position, scale);
 				HandleBorder(configuration, config, position, scale);
+
+				HandleTextToolTip(configuration, config, position, scale);
 			}
 			FinalizeRectangle(configuration, position, scale);
 		}
@@ -1974,6 +1947,7 @@ namespace ECSEngine {
 			HandleLateAndSystemDrawActionNullify(configuration, position, scale);
 
 			FinalizeRectangle(configuration, position, scale);
+			HandleTextToolTip(configuration, config, position, scale);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9962,37 +9936,7 @@ namespace ECSEngine {
 					}
 				}
 
-				if (configuration & UI_CONFIG_RECTANGLE_TOOL_TIP) {
-					const UIConfigToolTip* tool_tip = (const UIConfigToolTip*)config.GetParameter(UI_CONFIG_RECTANGLE_TOOL_TIP);
-
-					struct RunnableData {
-						UITextTooltipHoverableData hover_data;
-						float2 position;
-						float2 scale;
-					};
-
-					RunnableData runnable_data;
-					runnable_data.hover_data.characters = tool_tip->characters;
-					runnable_data.hover_data.base.offset.y = 0.01f;
-					runnable_data.hover_data.base.offset_scale.y = true;
-					runnable_data.hover_data.base.center_horizontal_x = true;
-					runnable_data.position = position;
-					runnable_data.scale = scale;
-					if (record_snapshot_runnables) {
-						runnable_data.hover_data.characters = tool_tip->is_stable ? tool_tip->characters : tool_tip->characters.Copy(SnapshotRunnableAllocator());
-					}
-						
-					SnapshotRunnable(&runnable_data, sizeof(runnable_data), ECS_UI_DRAW_SYSTEM, [](void* _data, ActionData* action_data) {
-						RunnableData* data = (RunnableData*)_data;
-						if (IsPointInRectangle(action_data->mouse_position, data->position, data->scale)) {
-							action_data->position = data->position;
-							action_data->scale = data->scale;
-							action_data->data = &data->hover_data;
-							TextTooltipHoverable(action_data);
-						}
-						return false;
-					});
-				}
+				HandleTextToolTip(configuration, config, position, scale);
 			}
 			else {
 				TextLabel(configuration, config, text);
@@ -16807,22 +16751,30 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::TextToolTip(Stream<char> characters, float2 position, float2 scale, const UITooltipBaseData* base) {
-			UITextTooltipHoverableData tool_tip_data;
-			if (base != nullptr) {
-				tool_tip_data.base = *base;
-			}
-			tool_tip_data.characters = characters;
+		void UIDrawer::TextToolTip(Stream<char> characters, float2 position, float2 scale, bool stable_characters, const UITooltipBaseData* base) {
+			if (record_actions) {
+				size_t tool_tip_data_storage[512];
+				UITextTooltipHoverableData* tool_tip_data = (UITextTooltipHoverableData*)tool_tip_data_storage;
+				unsigned int write_size = sizeof(*tool_tip_data);
+				if (base != nullptr) {
+					tool_tip_data->base = *base;
+				}
+				else {
+					tool_tip_data->base = UITooltipBaseData();
+					tool_tip_data->base.offset.y = 0.01f;
+					tool_tip_data->base.offset_scale.y = true;
+					tool_tip_data->base.center_horizontal_x = true;
+				}
 
-			if (IsPointInRectangle(mouse_position, position, scale)) {
-				ActionData default_action_data = system->GetFilledActionData(window_index);
-				default_action_data.buffers = system_buffers;
-				default_action_data.counts = system_counts;
-				default_action_data.data = &tool_tip_data;
-				default_action_data.position = position;
-				default_action_data.scale = scale;
+				if (stable_characters) {
+					tool_tip_data->characters = characters;
+				}
+				else {
+					write_size = tool_tip_data->Write(characters);
+				}
+				ECS_ASSERT(write_size <= sizeof(tool_tip_data_storage));
 
-				TextTooltipHoverable(&default_action_data);
+				system->ComposeHoverable(thread_id, dockspace, border_index, position, scale, { TextTooltipHoverable, tool_tip_data, write_size, ECS_UI_DRAW_SYSTEM }, true);
 			}
 		}
 
@@ -16845,6 +16797,16 @@ namespace ECSEngine {
 					data = stack_data;
 				}
 				return { TextTooltipHoverable, (void*)data, write_size, phase };
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::HandleTextToolTip(size_t configuration, const UIDrawConfig& config, float2 position, float2 scale)
+		{
+			if (configuration & UI_CONFIG_TOOL_TIP) {
+				const UIConfigToolTip* tool_tip = (const UIConfigToolTip*)config.GetParameter(UI_CONFIG_TOOL_TIP);
+				TextToolTip(tool_tip->characters, position, scale, tool_tip->is_stable);
 			}
 		}
 

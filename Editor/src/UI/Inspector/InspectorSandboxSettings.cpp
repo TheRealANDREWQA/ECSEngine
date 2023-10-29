@@ -426,7 +426,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			module_config.AddFlag(align_element);
 
 			drawer->ComboBox(
-				UI_CONFIG_ALIGN_ELEMENT | UI_CONFIG_COMBO_BOX_NO_NAME,
+				UI_CONFIG_ALIGN_ELEMENT | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_CALLBACK,
 				module_config,
 				"configuration",
 				{ MODULE_CONFIGURATIONS, EDITOR_MODULE_CONFIGURATION_COUNT },

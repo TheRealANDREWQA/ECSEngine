@@ -821,7 +821,7 @@ namespace ECSEngine {
 
 		struct UIConfigToolTip {
 			ECS_INLINE static size_t GetAssociatedBit() {
-				return UI_CONFIG_RECTANGLE_TOOL_TIP;
+				return UI_CONFIG_TOOL_TIP;
 			}
 
 			Stream<char> characters;

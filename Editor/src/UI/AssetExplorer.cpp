@@ -94,7 +94,7 @@ void AssetExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 					UIConfigToolTip tooltip_config;
 					tooltip_config.characters = long_asset_string;
 					config.AddFlag(tooltip_config);
-					configuration |= UI_CONFIG_RECTANGLE_TOOL_TIP;
+					configuration |= UI_CONFIG_TOOL_TIP;
 				}
 					
 				bool is_asset_referenced = IsAssetReferencedInSandboxEntities(editor_state, asset, asset_type);

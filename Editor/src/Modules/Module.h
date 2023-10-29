@@ -152,8 +152,6 @@ EditorModuleInfo* GetModuleInfo(const EditorState* editor_state, unsigned int in
 
 EDITOR_MODULE_LOAD_STATUS GetModuleLoadStatus(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
 
-void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& module_folder_path);
-
 void GetModuleStem(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path);
 
 void GetModuleFilename(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path);

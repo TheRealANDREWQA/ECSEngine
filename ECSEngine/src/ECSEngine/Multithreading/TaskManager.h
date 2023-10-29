@@ -210,6 +210,12 @@ namespace ECSEngine {
 
 		void ChangeDynamicWrapperMode(ThreadFunctionWrapperData wrapper_data);
 
+		// It will use a compose wrapper that will in turn call both sub wrappers to run
+		void ComposeStaticWrapper(ThreadFunctionWrapperData addition_wrapper, bool run_after_existing_one = true);
+
+		// It will use a compose wrapper that will in turn call both sub wrappers to run
+		void ComposeDynamicWrapper(ThreadFunctionWrapperData addition_wrapper, bool run_after_existing_one = true);
+
 		void ClearThreadAllocators();
 
 		void ClearThreadAllocator(unsigned int thread_id);
@@ -404,8 +410,8 @@ namespace ECSEngine {
 
 #ifdef ECS_TASK_MANAGER_WRAPPER
 		// Embed the data directly here
-		size_t m_static_wrapper_data_storage[8];
-		size_t m_dynamic_wrapper_data_storage[8];
+		size_t m_static_wrapper_data_storage[32];
+		size_t m_dynamic_wrapper_data_storage[32];
 		ThreadFunctionWrapperData m_static_wrapper;
 		ThreadFunctionWrapperData m_dynamic_wrapper;
 #endif
