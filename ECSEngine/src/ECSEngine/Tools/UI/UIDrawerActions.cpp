@@ -1279,7 +1279,8 @@ namespace ECSEngine {
 				if (!data->number_data.external_value_change) {
 					Integer number = 0;
 					if (data->number_data.input->text->size > 0) {
-						number = ConvertCharactersToIntImpl<Integer, char>(*data->number_data.input->text);
+						bool dummy;
+						number = ConvertCharactersToIntImpl<Integer, char, false>(*data->number_data.input->text, dummy);
 					}
 
 					Integer previous_number = number;

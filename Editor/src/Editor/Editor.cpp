@@ -12,6 +12,7 @@
 #include "EntryPoint.h"
 #include "ECSEngineMath.h"
 #include "../Sandbox/Sandbox.h"
+#include "ECSEngineCrash.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -106,6 +107,10 @@ public:
 		Graphics* graphics = editor_state.UIGraphics();
 
 		Hub(&editor_state);
+		
+		bool valid_internal_state = false;
+		ECS_STACK_CAPACITY_STREAM(GraphicsLiveObject, live_objects, 512);
+		bool success = graphics->VerifyLeaksAndValidateInteralState(valid_internal_state, &live_objects);
 
 		MSG message;
 		BOOL result = 0;

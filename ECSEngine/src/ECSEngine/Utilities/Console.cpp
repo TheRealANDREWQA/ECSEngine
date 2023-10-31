@@ -117,9 +117,6 @@ namespace ECSEngine {
 		}
 		bool flush_success = FlushFileToDisk(console->dump_file);
 		
-		success &= flush_success;
-		ECS_ASSERT(success);
-
 #ifdef ENABLE_PENDING_MESSAGES
 		// Now add all the remaining pending messages
 		//unsigned int previous_write_index = data->console->pending_messages.write_index.load(ECS_RELAXED);
@@ -131,7 +128,9 @@ namespace ECSEngine {
 #endif
 
 #pragma endregion
-	
+
+		success &= flush_success;
+		ECS_ASSERT(success);
 	}
 
 	void ConsoleAppendToDump(unsigned int thread_index, World* world, void* _data)
@@ -157,13 +156,13 @@ namespace ECSEngine {
 		write_success &= FlushFileToDisk(console->dump_file);
 		console->last_dumped_message = console->messages.size;
 
-		ECS_ASSERT(write_success);
-
 #ifdef ENABLE_PENDING_MESSAGES
 		console->dump_lock.unlock();
 #else
 		console->allocator->Unlock();
 #endif
+
+		ECS_ASSERT(write_success);
 	}
 
 	// -------------------------------------------------------------------------------------------------------

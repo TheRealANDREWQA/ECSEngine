@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "BasicTypes.h"
 #include "PointerUtilities.h"
+#include "StringUtilities.h"
 
 namespace ECSEngine {
 
@@ -103,5 +104,80 @@ namespace ECSEngine {
 		CharacterType internal_delimiter = Character<CharacterType>(','),
 		Stream<CharacterType> ignore_tag = { nullptr, 0 }
 	);
+
+	// Based on a format where {#} represents a token to be parsed, it will add them to the capacity stream
+	// Returns true if it could match all the tokens, else false
+	ECSENGINE_API bool ParseTokensFromFormat(Stream<char> string, Stream<char> format, CapacityStream<Stream<char>>* tokens);
+
+	// It will try to transform the token according to the value given
+	// Returns true if the token matches the value type, else false
+	template<typename Value>
+	bool ParseValueFromToken(Stream<char> token, Value* value) {
+		// Include the Stream<char> as well - this function can consist the basis for other functions
+		// That might need Stream<char>
+		if constexpr (std::is_same_v<std::remove_const_t<Value>, Stream<char>>) {
+			*value = token;
+			return true;
+		}
+		else if constexpr (std::is_integral_v<std::remove_const_t<Value>>) {
+			// Try to parse as integer
+			bool success = false;
+			*value = ConvertCharactersToIntStrict(token, success);
+			return success;
+		}
+		else if constexpr (std::is_same_v<std::remove_const_t<Value>, float>) {
+			bool success = false;
+			*value = ConvertCharactersToFloatStrict(token, success);
+			return success;
+		}
+		else if constexpr (std::is_same_v<std::remove_const_t<Value>, double>) {
+			bool success = false;
+			*value = ConvertCharactersToDoubleStrict(token, success);
+			return success;
+		}
+		else if constexpr (std::is_pointer_v<std::remove_const_t<Value>>) {
+			bool success = false;
+			*value = (Value)ConvertCharactersToPointerStrict(token, success);
+			return success;
+		}
+		else if constexpr (std::is_same_v<std::remove_const_t<Value>, bool>) {
+			bool success = false;
+			*value = ConvertCharactersToBoolStrict(token, success);
+			return success;
+		}
+		else {
+			static_assert(false, "Invalid parse value type from token");
+		}
+	}
+
+	namespace Internal {
+		template<typename Value, typename... Values>
+		bool ParseValueFromTokens(Stream<Stream<char>> tokens, Value* value, Values... values) {
+			bool success = ParseValueFromToken(tokens[0], value);
+			if (!success) {
+				return false;
+			}
+			
+			if constexpr (sizeof...(Values) > 0) {
+				return ParseValueFromTokens(tokens.AdvanceReturn(), values...);
+			}
+			else {
+				return true;
+			}
+		}
+	}
+
+	// Based on a format where {#} represents a token to be parsed it will try to parse the values according
+	// To the primitive types. Returns true if the format is matched all values correspond to the type of the
+	// Values, else false
+	template<typename... Values>
+	bool ParseValuesFromFormat(Stream<char> string, Stream<char> format, Values... values) {
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, tokens, 128);
+		bool success = ParseTokensFromFormat(string, format, &tokens);
+		if (success) {
+			return Internal::ParseValueFromTokens(tokens, values...);
+		}
+		return false;
+	}
 
 }

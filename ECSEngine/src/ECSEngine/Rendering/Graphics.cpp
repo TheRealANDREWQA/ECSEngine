@@ -8,6 +8,8 @@
 #include "ShaderInclude.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "../Utilities/Crash.h"
+#include "../Utilities/ParsingUtilities.h"
+#include "../Allocators/ResizableLinearAllocator.h"
 
 // The library won't compile with this macro, microsoft quality btw
 #define FAR 
@@ -128,8 +130,193 @@ namespace ECSEngine {
 	static_assert(std::size(ECS_GRAPHICS_RESOURCE_TYPE_STRING) == ECS_GRAPHICS_RESOURCE_TYPE_COUNT);
 
 #define GRAPHICS_INTERNAL_RESOURCE_STARTING_COUNT 1024
+	
+	static ECS_GRAPHICS_RESOURCE_TYPE StringToResourceType(Stream<char> string) {
+		ECS_GRAPHICS_RESOURCE_TYPE resource_type = ECS_GRAPHICS_RESOURCE_TYPE_COUNT;
+		// Now try to match the interface type with the resource type
+		if (string == "ID3D11BlendState") {
+			resource_type = ECS_GRAPHICS_RESOURCE_BLEND_STATE;
+		}
+		else if (string == "ID3D11Buffer") {
+			resource_type = ECS_GRAPHICS_RESOURCE_GENERIC_BUFFER;
+		}
+		else if (string == "ID3D11CommandList") {
+			resource_type = ECS_GRAPHICS_RESOURCE_COMMAND_LIST;
+		}
+		else if (string == "ID3D11ComputeShader") {
+			resource_type = ECS_GRAPHICS_RESOURCE_COMPUTE_SHADER;
+		}
+		else if (string == "ID3D11Counter") {
+			resource_type = ECS_GRAPHICS_RESOURCE_COUNTER;
+		}
+		else if (string == "ID3D11DepthStencilState") {
+			resource_type = ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_STATE;
+		}
+		else if (string == "ID3D11DepthStencilView") {
+			resource_type = ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_VIEW;
+		}
+		else if (string == "ID3D11DepthStencilState") {
+			resource_type = ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_STATE;
+		}
+		else if (string == "ID3D11Device") {
+			resource_type = ECS_GRAPHICS_RESOURCE_DEVICE;
+		}
+		else if (string == "ID3D11Context") {
+			resource_type = ECS_GRAPHICS_RESOURCE_GRAPHICS_CONTEXT;
+		}
+		else if (string == "ID3D11DomainShader") {
+			resource_type = ECS_GRAPHICS_RESOURCE_DOMAIN_SHADER;
+		}
+		else if (string == "ID3D11GeometryShader") {
+			resource_type = ECS_GRAPHICS_RESOURCE_GEOMETRY_SHADER;
+		}
+		else if (string == "ID3D11HullShader") {
+			resource_type = ECS_GRAPHICS_RESOURCE_HULL_SHADER;
+		}
+		else if (string == "ID3D11InputLayout") {
+			resource_type = ECS_GRAPHICS_RESOURCE_INPUT_LAYOUT;
+		}
+		else if (string == "ID3D11Query") {
+			resource_type = ECS_GRAPHICS_RESOURCE_QUERY;
+		}
+		else if (string == "ID3D11RasterizerState") {
+			resource_type = ECS_GRAPHICS_RESOURCE_RASTERIZER_STATE;
+		}
+		else if (string == "ID3D11RenderTargetView") {
+			resource_type = ECS_GRAPHICS_RESOURCE_RENDER_TARGET_VIEW;
+		}
+		else if (string == "ID3D11SamplerState") {
+			resource_type = ECS_GRAPHICS_RESOURCE_SAMPLER_STATE;
+		}
+		else if (string == "ID3D11ShaderResourceView") {
+			resource_type = ECS_GRAPHICS_RESOURCE_RESOURCE_VIEW;
+		}
+		else if (string == "ID3D11Texture1D") {
+			resource_type = ECS_GRAPHICS_RESOURCE_TEXTURE_1D;
+		}
+		else if (string == "ID3D11Texture2D") {
+			resource_type = ECS_GRAPHICS_RESOURCE_TEXTURE_2D;
+		}
+		else if (string == "ID3D11Texture3D") {
+			resource_type = ECS_GRAPHICS_RESOURCE_TEXTURE_3D;
+		}
+		else if (string == "ID3D11UnorderedAccessView") {
+			resource_type = ECS_GRAPHICS_RESOURCE_UA_VIEW;
+		}
+		else if (string == "ID3D11VertexShader") {
+			resource_type = ECS_GRAPHICS_RESOURCE_VERTEX_SHADER;
+		}
+		else if (string == "IDXGISwapChain") {
+			resource_type = ECS_GRAPHICS_RESOURCE_SWAP_CHAIN;
+		}
+		
+		return resource_type;
+	}
 
-	void InitializeGraphicsCachedResources(Graphics* graphics) {
+	// Returns true if it succeeded, else false
+	static bool ExtractLiveObjectsFromDebugInterface(const Graphics* graphics, ResizableStream<GraphicsLiveObject>* live_objects) {
+		ID3D11Debug* debug_device = nullptr;
+		if (graphics->m_debug_device == nullptr) {
+			HRESULT result = graphics->m_device->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast<void**>(&debug_device));
+			if (FAILED(result)) {
+				return false;
+			}
+		}
+		else {
+			debug_device = graphics->m_debug_device;
+		}
+
+		auto release_debug_interface = StackScope([graphics, debug_device]() {
+			if (graphics->m_debug_device != debug_device) {
+				debug_device->Release();
+			}
+		});
+
+		ID3D11InfoQueue* info_queue = nullptr;
+		if (graphics->m_info_queue == nullptr) {
+			HRESULT result = graphics->m_device->QueryInterface(__uuidof(ID3D11InfoQueue), reinterpret_cast<void**>(&info_queue));
+			if (FAILED(result)) {
+				return false;
+			}
+		}
+		else {
+			info_queue = graphics->m_info_queue;
+		}
+
+		auto release_info_queue = StackScope([graphics, info_queue]() {
+			if (graphics->m_info_queue != info_queue) {
+				info_queue->Release();
+			}
+		});
+
+		// Clear the messages in order to have enough space for all objects since each object will take
+		// One message and we have around 4K message limit
+		info_queue->ClearStoredMessages();
+		HRESULT result = debug_device->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL);
+		if (FAILED(result)) {
+			return false;
+		}
+		
+		size_t discarded_message_count = info_queue->GetNumMessagesDiscardedByMessageCountLimit();
+		if (discarded_message_count > 0) {
+			// Clear the queue, increase the limit and retry again
+			info_queue->ClearStoredMessages();
+			info_queue->SetMessageCountLimit(ECS_KB * 64);
+			debug_device->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL);
+
+			discarded_message_count = info_queue->GetNumMessagesDiscardedByMessageCountLimit();
+			if (discarded_message_count > 0) {
+				// Fail if we still got denied messages
+				return false;
+			}
+		}
+		size_t message_count = info_queue->GetNumStoredMessagesAllowedByRetrievalFilter();
+
+		ECS_STACK_CAPACITY_STREAM(char, current_message, ECS_KB * 4);
+		D3D11_MESSAGE* queue_message = (D3D11_MESSAGE*)current_message.buffer;
+		size_t message_capacity = current_message.capacity;
+
+		for (size_t index = 0; index < message_count; index++) {
+			message_capacity = current_message.capacity;
+			HRESULT hr = info_queue->GetMessage(index, queue_message, &message_capacity);
+			if (SUCCEEDED(hr)) {
+				// Parse the string
+				// The description byte length contains the terminating '\0'
+				Stream<char> string = { queue_message->pDescription, queue_message->DescriptionByteLength - 1 };
+				if (string[0] == '\t') {
+					string.Advance();
+				}
+				Stream<char> interface_type;
+				void* address;
+				unsigned int reference_count;
+				unsigned int internal_reference_count;
+				bool success;
+				if (index == 0) {
+					// The first object is always the device
+					success = ParseValuesFromFormat(string, "Live {#} at {#}, Refcount: {#}", &interface_type, &address, &reference_count);
+				}
+				else {
+					success = ParseValuesFromFormat(string, "Live {#} at {#}, Refcount: {#}, IntRef: {#}", &interface_type, &address, &reference_count, &internal_reference_count);
+					if (!success) {
+						// Retry with the single refcount - the IDXGISwapChain is like this that appears afterwards with a single refcount
+						success = ParseValuesFromFormat(string, "Live {#} at {#}, Refcount: {#}", &interface_type, &address, &reference_count);
+					}
+				}
+
+				if (success) {
+					ECS_GRAPHICS_RESOURCE_TYPE resource_type = StringToResourceType(interface_type);
+					live_objects->Add({ address, resource_type, reference_count });
+				}
+				else {
+					__debugbreak();
+				}
+			}
+		}
+
+		return true;
+	}
+
+	static void InitializeGraphicsCachedResources(Graphics* graphics) {
 		// A quad is represented like
 		// A - B
 		// |   |
@@ -152,7 +339,7 @@ namespace ECSEngine {
 		);
 	}
 
-	void InitializeGraphicsHelpers(Graphics* graphics) {
+	static void InitializeGraphicsHelpers(Graphics* graphics) {
 		graphics->m_shader_helpers.Initialize(graphics->Allocator(), ECS_GRAPHICS_SHADER_HELPER_COUNT, ECS_GRAPHICS_SHADER_HELPER_COUNT);
 		graphics->m_depth_stencil_helpers.Initialize(graphics->Allocator(), ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT, ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT);
 
@@ -242,7 +429,7 @@ namespace ECSEngine {
 		graphics->m_depth_stencil_helpers[ECS_GRAPHICS_DEPTH_STENCIL_HELPER_HIGHLIGHT] = graphics->CreateDepthStencilState(depth_stencil_state, true);
 	}
 
-	void EnumGPU(CapacityStream<IDXGIAdapter1*>& adapters, DXGI_GPU_PREFERENCE preference) {
+	static void EnumGPU(CapacityStream<IDXGIAdapter1*>& adapters, DXGI_GPU_PREFERENCE preference) {
 		IDXGIAdapter1* adapter;
 		IDXGIFactory6* factory = NULL;
 
@@ -267,11 +454,11 @@ namespace ECSEngine {
 		}
 	}
 	
-	void EnumerateDiscreteGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
+	static void EnumerateDiscreteGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
 		EnumGPU(adapters, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE);
 	}
 
-	void EnumerateIntegratedGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
+	static void EnumerateIntegratedGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
 		EnumGPU(adapters, DXGI_GPU_PREFERENCE_MINIMUM_POWER);
 	}
 
@@ -355,11 +542,30 @@ namespace ECSEngine {
 			);
 		}
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Initializing device and swap chain failed!");
+		ECS_CRASH_CONDITION(SUCCEEDED(result), "Initializing device and swap chain failed!");
 
 		result = m_device->CreateDeferredContext(0, &m_deferred_context);
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Creating deferred context failed!");
+		ECS_CRASH_CONDITION(SUCCEEDED(result), "Creating deferred context failed!");
+
+		if (HasFlag(flags, D3D11_CREATE_DEVICE_DEBUG)) {
+			HRESULT result = m_device->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast<void**>(&m_debug_device));
+			if (FAILED(result)) {
+				m_debug_device = nullptr;
+			}
+			result = m_device->QueryInterface(__uuidof(ID3D11InfoQueue), reinterpret_cast<void**>(&m_info_queue));
+			if (FAILED(result)) {
+				m_info_queue = nullptr;
+			}
+			else {
+				// Change the maximum count of messages to 4K - a higher limit just in case
+				m_info_queue->SetMessageCountLimit(ECS_KB * 4);
+			}
+		}
+		else {
+			m_debug_device = nullptr;
+			m_info_queue = nullptr;
+		}
 
 		if (descriptor->create_swap_chain) {
 			CreateRenderTargetViewFromSwapChain(descriptor->gamma_corrected);
@@ -884,7 +1090,7 @@ namespace ECSEngine {
 		index_buffer_descriptor.StructureByteStride = int_size;
 
 		result = m_device->CreateBuffer(&index_buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating index buffer failed");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating index buffer failed");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -920,7 +1126,7 @@ namespace ECSEngine {
 		subresource_data.pSysMem = data;
 
 		result = m_device->CreateBuffer(&index_buffer_descriptor, &subresource_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating index buffer failed");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating index buffer failed");
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
 	}
@@ -931,7 +1137,7 @@ namespace ECSEngine {
 		D3D_SHADER_MACRO macros[64];
 		// For strings that are nullptr or of size 0, redirect them to this
 		char empty_string = '\0';
-		ECS_ASSERT(options.macros.size <= std::size(macros) - 1);
+		ECS_CRASH_CONDITION_RETURN(options.macros.size <= std::size(macros) - 1, nullptr, "Too many shaders");
 		ECS_STACK_CAPACITY_STREAM(char, null_terminated_strings, ECS_KB * 8);
 
 		for (size_t index = 0; index < options.macros.size; index++) {
@@ -1293,7 +1499,7 @@ namespace ECSEngine {
 			vertex_byte_code.size,
 			&layout.layout
 		);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), layout, "Creating input layout failed");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), layout, "Creating input layout failed");
 		
 		if (deallocate_byte_code) {
 			m_allocator->Deallocate_ts(vertex_byte_code.buffer);
@@ -1328,7 +1534,7 @@ namespace ECSEngine {
 		HRESULT result;
 		result = m_device->CreateBuffer(&vertex_buffer_descriptor, nullptr, &buffer.buffer);
 
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating vertex buffer failed");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating vertex buffer failed");
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
 	}
@@ -1364,7 +1570,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateBuffer(&vertex_buffer_descriptor, &initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating vertex buffer failed");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating vertex buffer failed");
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
 	}
@@ -1396,7 +1602,7 @@ namespace ECSEngine {
 		initial_data_constant.pSysMem = buffer_data;
 
 		result = m_device->CreateBuffer(&constant_buffer_descriptor, &initial_data_constant, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating pixel constant buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating pixel constant buffer failed.");
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
 	}
@@ -1424,7 +1630,7 @@ namespace ECSEngine {
 		constant_buffer_descriptor.StructureByteStride = 0u;
 
 		result = m_device->CreateBuffer(&constant_buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating pixel constant buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating pixel constant buffer failed.");
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
 	}
@@ -1454,7 +1660,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = 0u;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating standard buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating standard buffer failed.");
 		buffer.count = element_count;
 		
 		AddInternalResource(buffer, temporary, debug_info);
@@ -1490,7 +1696,7 @@ namespace ECSEngine {
 		initial_data.pSysMem = data;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, &initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating standard buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating standard buffer failed.");
 		buffer.count = element_count;
 
 		AddInternalResource(buffer, temporary, debug_info);
@@ -1522,7 +1728,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = element_size;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating structred buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating structred buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1557,7 +1763,7 @@ namespace ECSEngine {
 		initial_data.pSysMem = data;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, &initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating Structred Buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating Structred Buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1589,7 +1795,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = 0u;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating UA Buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating UA Buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1625,7 +1831,7 @@ namespace ECSEngine {
 		initial_data.pSysMem = data;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, &initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating UA Buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating UA Buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1664,7 +1870,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = 0;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating Indirect Buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating Indirect Buffer failed.");
 		
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1685,7 +1891,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = element_size;
 
 		HRESULT result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating Append Buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating Append Buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1706,7 +1912,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = element_size;
 
 		HRESULT result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating Consume Buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating Consume Buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1732,7 +1938,7 @@ namespace ECSEngine {
 		SamplerState state;
 		HRESULT result = m_device->CreateSamplerState(&sampler_desc, &state.sampler);
 
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Constructing sampler state failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Constructing sampler state failed!");
 		AddInternalResource(state, temporary, debug_info);
 		return state;
 	}
@@ -1759,10 +1965,10 @@ namespace ECSEngine {
 			}
 		}
 
-		if constexpr (assert) {
-			ECS_ASSERT(resource == nullptr);
-		}
 		graphics->m_internal_resources_reader_count.fetch_sub(1, ECS_RELAXED);
+		if constexpr (assert) {
+			ECS_CRASH_CONDITION_RETURN_VOID(resource == nullptr, "Trying to remove resource from Graphics tracking that was not added");
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1865,7 +2071,7 @@ namespace ECSEngine {
 		Microsoft::WRL::ComPtr<ID3D11Resource> back_buffer;
 		result = m_swap_chain->GetBuffer(0, __uuidof(ID3D11Resource), &back_buffer);
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Acquiring buffer resource failed");
+		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Acquiring buffer resource failed");
 
 		if (gamma_corrected) {
 			D3D11_RENDER_TARGET_VIEW_DESC descriptor;
@@ -1878,7 +2084,7 @@ namespace ECSEngine {
 			result = m_device->CreateRenderTargetView(back_buffer.Get(), nullptr, &m_target_view.view);
 		}
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Creating render target view failed");
+		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Creating render target view failed");
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1901,12 +2107,12 @@ namespace ECSEngine {
 
 		result = m_device->CreateTexture2D(&depth_texture_descriptor, nullptr, &depth_texture);
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Creating depth texture failed");
+		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Creating depth texture failed");
 
 		// creating depth stencil texture view
 		result = m_device->CreateDepthStencilView(depth_texture, nullptr, &m_depth_stencil_view.view);
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Creating depth stencil view failed");
+		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Creating depth stencil view failed");
 		depth_texture->Release();
 	}
 
@@ -1916,7 +2122,7 @@ namespace ECSEngine {
 	{
 		GraphicsContext* context = nullptr;
 		HRESULT result = m_device->CreateDeferredContext(0, &context);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), context, "Failed to create deferred context.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), context, "Failed to create deferred context.");
 
 		AddInternalResource(context, debug_info);
 		return context;
@@ -1951,7 +2157,7 @@ namespace ECSEngine {
 			result = m_device->CreateTexture1D(&descriptor, subresource_data, &resource.tex);
 		}
 
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), resource, "Creating Texture 1D failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), resource, "Creating Texture 1D failed!");
 		AddInternalResource(resource, temporary, debug_info);
 		return resource;
 	}
@@ -1999,7 +2205,7 @@ namespace ECSEngine {
 			result = m_device->CreateTexture2D(&descriptor, subresource_data, &resource.tex);
 		}
 
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), resource, "Creating Texture 2D failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), resource, "Creating Texture 2D failed!");
 		AddInternalResource(resource, temporary, debug_info);
 		return resource;
 	}
@@ -2027,7 +2233,7 @@ namespace ECSEngine {
 		ID3D11ShaderResourceView* texture_view = nullptr;
 
 		HRESULT result = GetDevice()->CreateTexture2D(&dx_descriptor, nullptr, &texture_interface);
-		ECS_ASSERT(!FAILED(result), "Creating texture mip chain from first mip failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), nullptr, "Creating texture mip chain from first mip failed");
 
 		D3D11_BOX box;
 		box.left = 0;
@@ -2043,7 +2249,11 @@ namespace ECSEngine {
 		GetContext()->UpdateSubresource(texture_interface, 0, &box, first_mip.buffer, row_pitch, slice_pitch);
 
 		result = GetDevice()->CreateShaderResourceView(texture_interface, nullptr, &texture_view);
-		ECS_ASSERT(!FAILED(result), "Creating texture mip chain view from first mip failed.");
+		if (FAILED(result)) {
+			// Release the texture
+			texture_interface->Release();
+			ECS_CRASH_CONDITION_RETURN(false, nullptr, "Creating texture mip chain view from first mip failed");
+		}
 
 		// Generate mips
 		GetContext()->GenerateMips(texture_view);
@@ -2094,7 +2304,7 @@ namespace ECSEngine {
 			result = m_device->CreateTexture3D(&descriptor, subresource_data, &resource.tex);
 		}
 
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), resource, "Creating Texture 3D failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), resource, "Creating Texture 3D failed!");
 		AddInternalResource(resource, temporary, debug_info);
 		return resource;
 	}
@@ -2132,7 +2342,7 @@ namespace ECSEngine {
 			result = m_device->CreateTexture2D(&descriptor, subresource_data, &resource.tex);
 		}
 
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), resource, "Creating Texture Cube failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), resource, "Creating Texture Cube failed!");
 		AddInternalResource(resource, temporary, debug_info);
 		return resource;
 	}
@@ -2163,7 +2373,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 1D Shader View failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating Texture 1D Shader View failed.");
 		
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2176,7 +2386,7 @@ namespace ECSEngine {
 		ResourceView view;
 
 		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 1D Shader Entire View failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating Texture 1D Shader Entire View failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2208,7 +2418,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 2D Shader View.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating Texture 2D Shader View.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2221,7 +2431,7 @@ namespace ECSEngine {
 		ResourceView view;
 
 		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 2D Shader Entire View failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating Texture 2D Shader Entire View failed.");
 		AddInternalResource(view, temporary, debug_info);
 		return view;
 	}
@@ -2252,7 +2462,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 3D Shader View failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating Texture 3D Shader View failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2265,7 +2475,7 @@ namespace ECSEngine {
 		ResourceView view;
 
 		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 3D Shader Entire View failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating Texture 3D Shader Entire View failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2299,7 +2509,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &component.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture Cube Shader View.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating Texture Cube Shader View.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2312,7 +2522,7 @@ namespace ECSEngine {
 		ResourceView view;
 
 		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture Cube Shader Entire View failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating Texture Cube Shader Entire View failed.");
 		
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2330,7 +2540,7 @@ namespace ECSEngine {
 		descriptor.Buffer.ElementOffset = 0;
 		descriptor.Buffer.ElementWidth = buffer.count;
 		HRESULT result = m_device->CreateShaderResourceView(buffer.buffer, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating standard buffer view failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating standard buffer view failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2343,7 +2553,7 @@ namespace ECSEngine {
 		ResourceView view;
 
 		HRESULT result = m_device->CreateShaderResourceView(buffer.buffer, nullptr, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating structured buffer view failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating structured buffer view failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2364,7 +2574,7 @@ namespace ECSEngine {
 		descriptor.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 		descriptor.Texture2D.MipSlice = mip_level;
 		result = m_device->CreateRenderTargetView(texture.tex, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating render target view failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating render target view failed!");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2387,7 +2597,7 @@ namespace ECSEngine {
 		view_descriptor.Texture2DArray.FirstArraySlice = face;
 		view_descriptor.Texture2DArray.MipSlice = mip_level;
 		result = m_device->CreateRenderTargetView(cube.tex, &view_descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating render target view failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating render target view failed!");
 
 		if (!temporary) {
 			AddInternalResource(view, debug_info);
@@ -2414,7 +2624,7 @@ namespace ECSEngine {
 
 		DepthStencilView view;
 		result = m_device->CreateDepthStencilView(texture.tex, view_desc_ptr, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating render target view failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating render target view failed!");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2434,7 +2644,7 @@ namespace ECSEngine {
 		descriptor.Format = GetGraphicsNativeFormat(format);
 
 		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from UABuffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating UAView from UABuffer failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2454,7 +2664,7 @@ namespace ECSEngine {
 		descriptor.Format = DXGI_FORMAT_R32_TYPELESS;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Indirect Buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating UAView from Indirect Buffer failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2473,7 +2683,7 @@ namespace ECSEngine {
 		descriptor.Format = DXGI_FORMAT_UNKNOWN;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Append Buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating UAView from Append Buffer failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2492,7 +2702,7 @@ namespace ECSEngine {
 		descriptor.Format = DXGI_FORMAT_UNKNOWN;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Consume Buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating UAView from Consume Buffer failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2512,7 +2722,7 @@ namespace ECSEngine {
 		descriptor.Format = format == ECS_GRAPHICS_FORMAT_UNKNOWN ? texture_desc.Format : GetGraphicsNativeFormat(format);
 
 		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Texture 1D failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating UAView from Texture 1D failed.");
 		
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2533,7 +2743,7 @@ namespace ECSEngine {
 		descriptor.Format = format == ECS_GRAPHICS_FORMAT_UNKNOWN ? texture_desc.Format : GetGraphicsNativeFormat(format);
 
 		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Texture 2D failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating UAView from Texture 2D failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2553,7 +2763,7 @@ namespace ECSEngine {
 		descriptor.Format = format == ECS_GRAPHICS_FORMAT_UNKNOWN ? texture_desc.Format : GetGraphicsNativeFormat(format);
 
 		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Texture 3D failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating UAView from Texture 3D failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2566,7 +2776,7 @@ namespace ECSEngine {
 		RasterizerState state;
 
 		HRESULT result = m_device->CreateRasterizerState(&descriptor, &state.state);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Creating Rasterizer state failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Creating Rasterizer state failed.");
 
 		AddInternalResource(state, temporary, debug_info);
 		return state;
@@ -2591,7 +2801,7 @@ namespace ECSEngine {
 		DepthStencilState state;
 
 		HRESULT result = m_device->CreateDepthStencilState(&descriptor, &state.state);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Creating Depth Stencil State failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Creating Depth Stencil State failed.");
 
 		AddInternalResource(state, temporary, debug_info);
 		return state;
@@ -2617,7 +2827,7 @@ namespace ECSEngine {
 		BlendState state;
 
 		HRESULT result = m_device->CreateBlendState(&descriptor, &state.state);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Creating Blend State failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Creating Blend State failed.");
 
 		AddInternalResource(state, temporary, debug_info);
 		return state;
@@ -3028,10 +3238,8 @@ namespace ECSEngine {
 		HRESULT result;
 		result = m_context->FinishCommandList(restore_state, &list.list);
 
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), list, "Creating command list failed!");
-		if (!temporary) {
-			AddInternalResource(list, debug_info);
-		}
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), list, "Creating command list failed!");
+		AddInternalResource(list, temporary, debug_info);
 		return list;
 	}
 
@@ -3410,7 +3618,7 @@ namespace ECSEngine {
 
 		HRESULT result = m_swap_chain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
 
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Resizing swap chain failed!");
+		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Resizing swap chain failed!");
 
 		/*DXGI_MODE_DESC descriptor;
 		descriptor.Width = m_window_size.x;
@@ -3594,6 +3802,46 @@ namespace ECSEngine {
 		}
 
 		return new_material;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	bool Graphics::IsInternalStateValid()
+	{
+		// Commit the resource freeing first
+		CommitInternalResourcesToBeFreed();
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+		ResizableStream<GraphicsLiveObject> live_objects(GetAllocatorPolymorphic(&stack_allocator), 512);
+		bool success = ExtractLiveObjectsFromDebugInterface(this, &live_objects);
+		if (!success) {
+			return false;
+		}
+		
+		// Try to validate the internal resources now
+		unsigned int resource_count = m_internal_resources.Size();
+		for (unsigned int index = 0; index < resource_count; index++) {
+			// Don't have to check for is_deleted since we commited those freed resources
+
+			unsigned int subindex = 0;
+			for (; subindex < live_objects.size; subindex++) {
+				if (live_objects[subindex].interface_pointer == m_internal_resources[index].interface_pointer) {
+					break;
+				}
+			}
+			if (subindex == live_objects.size) {
+				// It wasn't found in the live objects list - fail
+				return false;
+			}
+			else {
+				// Decrement the reference count such that we know that decrementing it is still valid
+				if (live_objects[subindex].external_reference_count == 0) {
+					return false;
+				}
+				live_objects[subindex].external_reference_count--;
+			}
+		}
+		return true;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3851,6 +4099,109 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	// This function is used both by the VerifyLeaks and VerifyLeaksAndValidateInteralState
+	template<bool validate_internal_state>
+	static bool VerifyLeaksAndInternalStateImpl(Graphics* graphics, bool& internal_state_valid, CapacityStream<GraphicsLiveObject>* leaks) {
+		// Commit the internal resources to be freed
+		graphics->CommitInternalResourcesToBeFreed();
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+		ResizableStream<GraphicsLiveObject> live_objects(GetAllocatorPolymorphic(&stack_allocator), 512);
+		bool success = ExtractLiveObjectsFromDebugInterface(graphics, &live_objects);
+		if (!success) {
+			return false;
+		}
+
+		// Returns true if it was found, else false
+		auto decrement_count = [&](void* pointer, unsigned int decrement_count = 1) {
+			for (unsigned int index = 0; index < live_objects.size; index++) {
+				if (pointer == live_objects[index].interface_pointer) {
+					// Decrement the reference count for the live_object
+					live_objects[index].external_reference_count -= decrement_count;
+					return true;
+				}
+			}
+			return false;
+		};
+
+		internal_state_valid = true;
+		unsigned int resource_count = graphics->m_internal_resources.Size();
+		// Go through our all internal resources and decrement the count for the corresponding live object
+		for (unsigned int index = 0; index < resource_count; index++) {
+			// Don't need to check for the is_deleted flag since the freed resources were removed
+			bool was_found = decrement_count(graphics->m_internal_resources[index].interface_pointer);
+			if constexpr (validate_internal_state) {
+				if (!was_found) {
+					internal_state_valid = false;
+				}
+			}
+		}
+
+		// Now search for the known resources
+		unsigned int device_decrement_count = 1;
+		device_decrement_count += graphics->m_debug_device != nullptr;
+		device_decrement_count += graphics->m_info_queue != nullptr;
+		// The device has only 1 reference count - which includes an increment from all the other objects
+		decrement_count(graphics->m_device, device_decrement_count + live_objects.size);
+		decrement_count(graphics->m_context);
+		decrement_count(graphics->m_swap_chain);
+		decrement_count(graphics->m_deferred_context);
+
+		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
+			if (graphics->m_shader_helpers[index].vertex.Interface() != nullptr) {
+				decrement_count(graphics->m_shader_helpers[index].vertex.Interface());
+			}
+			if (graphics->m_shader_helpers[index].pixel.Interface() != nullptr) {
+				decrement_count(graphics->m_shader_helpers[index].pixel.Interface());
+			}
+			if (graphics->m_shader_helpers[index].input_layout.Interface() != nullptr) {
+				decrement_count(graphics->m_shader_helpers[index].input_layout.Interface());
+			}
+			if (graphics->m_shader_helpers[index].pixel_sampler.Interface() != nullptr) {
+				decrement_count(graphics->m_shader_helpers[index].pixel_sampler.Interface());
+			}
+			if (graphics->m_shader_helpers[index].compute.Interface() != nullptr) {
+				decrement_count(graphics->m_shader_helpers[index].compute.Interface());
+			}
+		}
+
+		for (size_t index = 0; index < ECS_GRAPHICS_DEPTH_STENCIL_HELPER_COUNT; index++) {
+			decrement_count(graphics->m_depth_stencil_helpers[index].Interface());
+		}
+
+		for (size_t index = 0; index < ECS_GRAPHICS_CACHED_VERTEX_BUFFER_COUNT; index++) {
+			decrement_count(graphics->m_cached_resources.vertex_buffer[index].Interface());
+		}
+
+		// Now go through all live objects and if one of them has a reference count non zero, then we have a leak
+		for (unsigned int index = 0; index < live_objects.size; index++) {
+			if (live_objects[index].external_reference_count > 0) {
+				leaks->AddAssert(live_objects[index]);
+			}
+		}
+
+		return true;
+	}
+
+	bool Graphics::VerifyLeaks(CapacityStream<GraphicsLiveObject>* leaks)
+	{
+		bool valid_state_dummy;
+		bool success = VerifyLeaksAndInternalStateImpl<false>(this, valid_state_dummy, leaks);
+		if (!success) {
+			return false;
+		}
+		return leaks->size == 0;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	bool Graphics::VerifyLeaksAndValidateInteralState(bool& internal_state_valid, CapacityStream<GraphicsLiveObject>* leaks)
+	{
+		return VerifyLeaksAndInternalStateImpl<true>(this, internal_state_valid, leaks);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 #pragma region Free functions
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3956,14 +4307,22 @@ namespace ECSEngine {
 
 		graphics->m_context->Flush();
 
-		ID3D11Debug* debug_device = nullptr;
-		HRESULT result = graphics->GetDevice()->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast<void**>(&debug_device));
-		ECS_ASSERT(SUCCEEDED(result));
+		if (graphics->m_debug_device == nullptr) {
+			ID3D11Debug* debug_device = nullptr;
+			HRESULT result = graphics->GetDevice()->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast<void**>(&debug_device));
+			if (SUCCEEDED(result)) {
+				result = debug_device->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL);
+				debug_device->Release();
+			}
+		}
+		else {
+			graphics->m_debug_device->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL);
+			graphics->m_debug_device->Release();
+		}
 
-		result = debug_device->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL);
-		ECS_ASSERT(SUCCEEDED(result));
-
-		debug_device->Release();
+		if (graphics->m_info_queue != nullptr) {
+			graphics->m_info_queue->Release();
+		}
 
 		unsigned int count = graphics->m_device->Release();
 		count = graphics->m_deferred_context->Release();
@@ -4971,8 +5330,6 @@ namespace ECSEngine {
 			count = state.depth_stencil_state.Release();
 		}
 		
-		// ECS_ASSERT(ref_count > 0);
-
 		return state;
 	}
 
@@ -5004,7 +5361,7 @@ namespace ECSEngine {
 		else {
 			result = context->Map(resource, subresource_index, GetGraphicsNativeMapType(map_type), map_flags, &mapped_subresource);
 		}
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), mapped_subresource, error_string);
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), mapped_subresource, error_string);
 		return mapped_subresource;
 	}
 
@@ -5125,19 +5482,19 @@ namespace ECSEngine {
 
 		IDXGIResource* dxgi_resource;
 		HRESULT result = dx_resource->QueryInterface(__uuidof(IDXGIResource), (void**)&dxgi_resource);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_dx_resource, "Getting the DXGI resource from shared resource failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), new_dx_resource, "Getting the DXGI resource from shared resource failed.");
 
 		// Query interface updates the reference count, release it to maintain invariance
 		unsigned int count = dxgi_resource->Release();
 
 		HANDLE handle;
 		result = dxgi_resource->GetSharedHandle(&handle);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_dx_resource, "Acquiring a handle for a shared resource failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), new_dx_resource, "Acquiring a handle for a shared resource failed.");
 
-		ECS_CRASH_RETURN_VALUE(handle, new_dx_resource, "Trying to transfer a GPU resource that was not created with MISC flag");
+		ECS_CRASH_CONDITION_RETURN(handle, new_dx_resource, "Trying to transfer a GPU resource that was not created with MISC flag");
 
 		result = device->OpenSharedResource(handle, __uuidof(ID3D11Resource), (void**)&new_dx_resource);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_dx_resource, "Obtaining shared resource from handle failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), new_dx_resource, "Obtaining shared resource from handle failed.");
 
 		return new_dx_resource;
 	}
@@ -5154,7 +5511,7 @@ namespace ECSEngine {
 		auto get_buffer_resource = [](ID3D11Resource* resource) {
 			ID3D11Buffer* buffer = nullptr;
 			HRESULT result = resource->QueryInterface(__uuidof(ID3D11Buffer), (void**)&buffer);
-			ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Converting a shared resource to buffer failed.");
+			ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Converting a shared resource to buffer failed.");
 
 			buffer->Release();
 			return buffer;
@@ -5196,6 +5553,7 @@ namespace ECSEngine {
 			new_resource = TextureCube(new_dx_resource);
 		}
 		else {
+			static_assert(false);
 			ECS_ASSERT(false);
 		}
 
@@ -5243,7 +5601,7 @@ namespace ECSEngine {
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
 		result = context->Map(texture.Interface(), subresource_index, GetGraphicsNativeMapType(map_type), map_flags, &mapped_subresource);
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Updating texture failed.");
+		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Updating texture failed.");
 
 		memcpy(mapped_subresource.pData, data, data_size);
 		context->Unmap(texture.Interface(), subresource_index);
@@ -5263,7 +5621,7 @@ namespace ECSEngine {
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
 		result = context->Map(texture.Interface(), subresource_index, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource);
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Updating texture failed.");
+		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Updating texture failed.");
 
 		memcpy(mapped_subresource.pData, data, data_size);
 		context->Unmap(texture.Interface(), subresource_index);
@@ -5291,7 +5649,7 @@ namespace ECSEngine {
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
 		result = context->Map(buffer, subresource_index, GetGraphicsNativeMapType(map_type), map_flags, &mapped_subresource);
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Updating buffer failed.");
+		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Updating buffer failed.");
 
 		memcpy(mapped_subresource.pData, data, data_size);
 		context->Unmap(buffer, subresource_index);
@@ -5310,7 +5668,7 @@ namespace ECSEngine {
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
 		result = context->Map(buffer, subresource_index, D3D11_MAP_WRITE_DISCARD, 0u, &mapped_subresource);
-		ECS_CRASH_RETURN(SUCCEEDED(result), "Updating buffer resource failed.");
+		ECS_CRASH_CONDITION_RETURN_VOID(SUCCEEDED(result), "Updating buffer resource failed.");
 
 		memcpy(mapped_subresource.pData, data, data_size);
 		context->Unmap(buffer, subresource_index);

@@ -9,6 +9,24 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	template<typename CharacterType>
+	static bool IsHexCharImpl(CharacterType value) {
+		return IsNumberCharacter(value) || (value >= Character<CharacterType>('a') && value <= Character<CharacterType>('f')) ||
+			(value >= Character<CharacterType>('A') && value <= Character<CharacterType>('F'));
+	}
+
+	bool IsHexChar(char value)
+	{
+		return IsHexCharImpl(value);
+	}
+
+	bool IsHexChar(wchar_t value)
+	{
+		return IsHexCharImpl(value);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	// returns the count of decoded numbers
 	size_t ParseNumbersFromCharString(Stream<char> characters, unsigned int* number_buffer) {
 		size_t count = 0, index = 0;
@@ -1563,8 +1581,8 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	template<typename FloatingPoint, typename CharacterType>
-	FloatingPoint ConvertCharactersToFloatingPoint(Stream<CharacterType> stream) {
+	template<typename FloatingPoint, bool strict_parsing, typename CharacterType>
+	FloatingPoint ConvertCharactersToFloatingPoint(Stream<CharacterType> stream, bool& success) {
 		// Check for the special case of nan and inf
 		if (stream.size == 3 || stream.size == 4) {
 			// Check for nan and inf
@@ -1592,41 +1610,64 @@ namespace ECSEngine {
 			}
 		}
 
-		FloatingPoint value = 0;
 		size_t starting_index = stream[0] == Character<CharacterType>('-') || stream[0] == Character<CharacterType>('+') ? 1 : 0;
 
-		size_t dot_index = stream.size;
-		for (size_t index = 0; index < stream.size; index++) {
-			if (stream[index] == Character<CharacterType>('.')) {
-				dot_index = index;
-				break;
-			}
-		}
+		Stream<CharacterType> dot = FindFirstCharacter(stream, Character<CharacterType>('.'));
+		size_t dot_index = dot.size > 0 ? (size_t)(dot.buffer - stream.buffer) : stream.size;
+
 		if (dot_index < stream.size) {
-			int64_t integral_part = ConvertCharactersToInt(Stream<CharacterType>(stream.buffer + starting_index, dot_index - starting_index));
+			int64_t integral_part = ConvertCharactersToIntImpl<int64_t, CharacterType, strict_parsing>(
+				Stream<CharacterType>(stream.buffer + starting_index, dot_index - starting_index), 
+				success
+			);
+			if constexpr (strict_parsing) {
+				if (!success) {
+					return FloatingPoint(0);
+				}
+			}
 
 			size_t fractional_digit_count = 0;
-			int64_t fractional_part = ConvertCharactersToInt(Stream<CharacterType>(stream.buffer + dot_index + 1, stream.size - dot_index - 1), fractional_digit_count);
+			int64_t fractional_part = ConvertCharactersToIntImpl<int64_t, CharacterType, strict_parsing>(
+				Stream<CharacterType>(stream.buffer + dot_index + 1, stream.size - dot_index - 1), 
+				fractional_digit_count, 
+				success
+			);
+			if constexpr (strict_parsing) {
+				if (!success) {
+					return FloatingPoint(0);
+				}
+			}
 
-			FloatingPoint integral_float = static_cast<FloatingPoint>(integral_part);
-			FloatingPoint fractional_float = static_cast<FloatingPoint>(fractional_part);
+			// Use doubles since they allow better precision for large values
+			double integral_float = (double)(integral_part);
+			double fractional_float = (double)(fractional_part);
 
-			// reversed in order to speed up calculations
-			FloatingPoint fractional_power = 0.1;
-			for (size_t index = 1; index < fractional_digit_count; index++) {
-				fractional_power *= 0.1;
+			// Reversed in order to speed up calculations
+			double fractional_power = 0.1;
+			if (fractional_digit_count > 1) {
+				fractional_power = pow(fractional_power, fractional_digit_count);
 			}
 			fractional_float *= fractional_power;
-			FloatingPoint value = integral_float + fractional_float;
+			FloatingPoint value = (FloatingPoint)(integral_float + fractional_float);
 			if (stream[0] == Character<CharacterType>('-')) {
 				value = -value;
 			}
 			return value;
 		}
 		else {
+			FloatingPoint value = 0;
 			if (stream.size > 0) {
-				int64_t integer = ConvertCharactersToInt(Stream<CharacterType>(stream.buffer + starting_index, stream.size - starting_index));
-				value = static_cast<FloatingPoint>(integer);
+				int64_t integer = ConvertCharactersToIntImpl<int64_t, CharacterType, strict_parsing>(
+					Stream<CharacterType>(stream.buffer + starting_index, stream.size - starting_index),
+					success
+				);
+				if constexpr (strict_parsing) {
+					if (!success) {
+						return value;
+					}
+				}
+
+				value = (FloatingPoint)(integer);
 				if (stream[0] == Character<CharacterType>('-')) {
 					value = -value;
 				}
@@ -1638,41 +1679,49 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------
 
 	float ConvertCharactersToFloat(Stream<char> characters) {
-		return ConvertCharactersToFloatingPoint<float>(characters);
+		bool dummy;
+		return ConvertCharactersToFloatingPoint<float, false>(characters, dummy);
 	}
 
 	float ConvertCharactersToFloat(Stream<wchar_t> characters) {
-		return ConvertCharactersToFloatingPoint<float>(characters);
+		bool dummy;
+		return ConvertCharactersToFloatingPoint<float, false>(characters, dummy);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------
 
 	double ConvertCharactersToDouble(Stream<char> characters) {
-		return ConvertCharactersToFloatingPoint<double>(characters);
+		bool dummy;
+		return ConvertCharactersToFloatingPoint<double, false>(characters, dummy);
 	}
 
 	double ConvertCharactersToDouble(Stream<wchar_t> characters) {
-		return ConvertCharactersToFloatingPoint<double>(characters);
+		bool dummy;
+		return ConvertCharactersToFloatingPoint<double, false>(characters, dummy);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------
 
 	int64_t ConvertCharactersToInt(Stream<char> stream) {
-		return ConvertCharactersToIntImpl<int64_t, char>(stream);
+		bool dummy;
+		return ConvertCharactersToIntImpl<int64_t, char, false>(stream, dummy);
 	}
 
 	int64_t ConvertCharactersToInt(Stream<wchar_t> stream) {
-		return ConvertCharactersToIntImpl<int64_t, wchar_t>(stream);
+		bool dummy;
+		return ConvertCharactersToIntImpl<int64_t, wchar_t, false>(stream, dummy);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------
 
 	int64_t ConvertCharactersToInt(Stream<char> stream, size_t& digit_count) {
-		return ConvertCharactersToIntImpl<int64_t, char>(stream, digit_count);
+		bool dummy;
+		return ConvertCharactersToIntImpl<int64_t, char, false>(stream, digit_count, dummy);
 	}
 
 	int64_t ConvertCharactersToInt(Stream<wchar_t> stream, size_t& digit_count) {
-		return ConvertCharactersToIntImpl<int64_t, wchar_t>(stream, digit_count);
+		bool dummy;
+		return ConvertCharactersToIntImpl<int64_t, wchar_t, false>(stream, digit_count, dummy);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------
@@ -2149,10 +2198,145 @@ namespace ECSEngine {
 		return ConvertCharactersToBoolImpl(characters);
 	}
 
-	// ----------------------------------------------------------------------------------------------------------
-
 	char ConvertCharactersToBool(Stream<wchar_t> characters) {
 		return ConvertCharactersToBoolImpl(characters);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------
+
+	template<bool strict_parsing, typename CharacterType>
+	void* ConvertCharactersToPointerImpl(Stream<CharacterType> characters, bool& success)
+	{
+		Stream<CharacterType> prefix;
+		if constexpr (std::is_same_v<CharacterType, char>) {
+			prefix = "0x";
+		}
+		else {
+			prefix = L"0x";
+		}
+
+		if constexpr (!strict_parsing) {
+			Stream<CharacterType> prefix_in_string = FindFirstToken(characters, prefix);
+			if (prefix_in_string.size > 0) {
+				// Start from the prefix
+				characters = characters.StartDifference(prefix_in_string);
+				// Skip the prefix
+				characters.Advance(2);
+			}
+		}
+		else {
+			if (characters[0] < Character<CharacterType>('0') || characters[0] > Character<CharacterType>('9')) {
+				success = false;
+				return nullptr;
+			}
+
+			if ((characters[1] < Character<CharacterType>('0') || characters[1] > Character<CharacterType>('9')) && characters[1] != Character<CharacterType>('x')) {
+				success = false;
+				return nullptr;
+			}
+			else if (characters[1] == Character<CharacterType>('x')) {
+				characters.Advance(2);
+			}
+		}
+
+		// Determine all the hex characters suchn that we can start in reverse order to build the value
+		size_t index = 0;
+		while (index < characters.size && IsHexChar(characters[index])) {
+			index++;
+		}
+		if constexpr (strict_parsing) {
+			if (index < characters.size) {
+				success = false;
+				return nullptr;
+			}
+		}
+
+		if (index > 16) {
+			// Too many digits - they do not fit into a 64 bit value
+			success = false;
+			return nullptr;
+		}
+
+		size_t current_shift_value = 0;
+		size_t pointer_value = 0;
+		size_t current_hex_value = 0;
+		for (int64_t subindex = (int64_t)index - 1; subindex >= 0; subindex--) {
+			if (IsNumberCharacter(characters[subindex])) {
+				current_hex_value = characters[subindex] - Character<CharacterType>('0');
+			}
+			else if (characters[subindex] >= Character<CharacterType>('a') && characters[subindex] <= Character<CharacterType>('f')) {
+				current_hex_value = characters[subindex] - Character<CharacterType>('a') + 10;
+			}
+			else {
+				current_hex_value = characters[subindex] - Character<CharacterType>('A') + 10;
+			}
+
+			current_hex_value <<= current_shift_value;
+			pointer_value |= current_hex_value;
+			current_shift_value += 4;
+		}
+
+		if constexpr (strict_parsing) {
+			success = true;
+		}
+		return (void*)pointer_value;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------
+
+	void* ConvertCharactersToPointer(Stream<char> characters)
+	{
+		bool dummy;
+		return ConvertCharactersToPointerImpl<false>(characters, dummy);
+	}
+
+	void* ConvertCharactersToPointer(Stream<wchar_t> characters) 
+	{
+		bool dummy;
+		return ConvertCharactersToPointerImpl<false>(characters, dummy);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------
+
+	int64_t ConvertCharactersToIntStrict(Stream<char> string, bool& success)
+	{
+		return ConvertCharactersToIntImpl<int64_t, char, true>(string, success);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------
+
+	float ConvertCharactersToFloatStrict(Stream<char> string, bool& success)
+	{
+		return ConvertCharactersToFloatingPoint<float, true>(string, success);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------
+
+	double ConvertCharactersToDoubleStrict(Stream<char> string, bool& success)
+	{
+		return ConvertCharactersToFloatingPoint<double, true>(string, success);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------
+
+	void* ConvertCharactersToPointerStrict(Stream<char> string, bool& success)
+	{
+		return ConvertCharactersToPointerImpl<true>(string, success);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------
+
+	bool ConvertCharactersToBoolStrict(Stream<char> string, bool& success)
+	{
+		char value = ConvertCharactersToBool(string);
+		if (value == -1) {
+			success = false;
+			return false;
+		}
+		else {
+			success = true;
+			return value == 0 ? false : true;
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------

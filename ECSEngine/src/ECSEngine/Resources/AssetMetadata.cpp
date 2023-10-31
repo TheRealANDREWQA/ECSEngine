@@ -1315,6 +1315,7 @@ namespace ECSEngine {
 	void MiscAsset::Default(Stream<char> _name, Stream<wchar_t> _file) {
 		name = _name;
 		file = _file;
+		data = { nullptr, 0 };
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1371,6 +1372,7 @@ namespace ECSEngine {
 		filter_mode = ECS_SAMPLER_FILTER_ANISOTROPIC;
 		address_mode = ECS_SAMPLER_ADDRESS_WRAP;
 		anisotropic_level = 8;
+		sampler = { nullptr };
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1425,6 +1427,7 @@ namespace ECSEngine {
 		file = _file;
 
 		compression_type = ECS_TEXTURE_COMPRESSION_EX_NONE;
+		texture = { nullptr };
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1489,6 +1492,8 @@ namespace ECSEngine {
 		file = _file;
 		optimize_level = ECS_ASSET_MESH_OPTIMIZE_NONE;
 		origin_to_object_center = true;
+
+		mesh_pointer = nullptr;
 	}
 
 	// ------------------------------------------------------------------------------------------------------

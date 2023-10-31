@@ -315,7 +315,8 @@ namespace ECSEngine {
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			bool is_integer = IsIntegerNumber(trimmed_characters);
 			if (is_integer) {
-				Integer integer = ConvertCharactersToIntImpl<Integer, char>(trimmed_characters);
+				bool dummy = false;
+				Integer integer = ConvertCharactersToIntImpl<Integer, char, false>(trimmed_characters, dummy);
 				*ptr = integer;
 				return true;
 			}

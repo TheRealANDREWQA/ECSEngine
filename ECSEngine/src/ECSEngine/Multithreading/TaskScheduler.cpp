@@ -78,9 +78,6 @@ namespace ECSEngine {
 				}
 			}
 		}
-
-		// Some tasks can lack queries
-		//ECS_ASSERT(current_query_index == query_infos.size);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -112,7 +109,7 @@ namespace ECSEngine {
 			}
 		}
 
-		ECS_ASSERT(false);
+		ECS_ASSERT_FORMAT(false, "Invalid task name {#} when trying to remove from TaskScheduler", task_name);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -127,7 +124,7 @@ namespace ECSEngine {
 	const TaskSchedulerInfo* TaskScheduler::GetCurrentQueryInfo() const
 	{
 		unsigned int current_query_index = GetCurrentQueryIndex();
-		ECS_CRASH_RETURN_VALUE(current_query_index < query_infos.size, nullptr, "TaskScheduler: Trying to retrieve query index over the bound");
+		ECS_CRASH_CONDITION_RETURN(current_query_index < query_infos.size, nullptr, "TaskScheduler: Trying to retrieve query index over the bound");
 		return &query_infos[current_query_index];
 	}
 

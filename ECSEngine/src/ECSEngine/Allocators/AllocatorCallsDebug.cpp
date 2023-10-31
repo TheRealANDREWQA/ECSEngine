@@ -107,7 +107,7 @@ namespace ECSEngine {
 		AllocatorManager.global_allocator = CreateGlobalMemoryManager(global_allocator_capacity, ECS_KB * 16, backup_allocator_capacity);
 		const wchar_t* log_file = descriptor->log_file ? descriptor->log_file : ECS_DEBUG_ALLOCATOR_DEFAULT_FILE;
 		if (descriptor->enable_global_write_to_file || descriptor->log_file) {
-			ECS_ASSERT(FileCreate(log_file, &AllocatorManager.file_handle, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TRUNCATE_FILE) == ECS_FILE_STATUS_OK);
+			ECS_HARD_ASSERT(FileCreate(log_file, &AllocatorManager.file_handle, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TRUNCATE_FILE) == ECS_FILE_STATUS_OK);
 		}
 		AllocatorManager.write_to_file_on_fill = descriptor->enable_global_write_to_file;
 		AllocatorManager.hash_table_lock.Clear();
@@ -140,7 +140,7 @@ namespace ECSEngine {
 		TrackedAllocator* tracked_allocator;
 		if (AllocatorManager.allocators.TryGetValuePtr(allocator, tracked_allocator)) {
 			if (resizable) {
-				ECS_ASSERT(!tracked_allocator->is_resizable);
+				ECS_HARD_ASSERT(!tracked_allocator->is_resizable);
 				ThreadSafeQueue<TrackedAllocation> queue_allocations = tracked_allocator->queue_allocations;
 				unsigned int entries_count = queue_allocations.GetSize();
 				tracked_allocator->resizable_allocations.Initialize({ nullptr }, entries_count);
@@ -238,7 +238,7 @@ namespace ECSEngine {
 	{
 		ECS_FILE_HANDLE file_to_write_handle = 0;
 		if (log_file) {
-			ECS_ASSERT(FileCreate(log_file, &file_to_write_handle, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE) == ECS_FILE_STATUS_OK);
+			ECS_HARD_ASSERT(FileCreate(log_file, &file_to_write_handle, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE) == ECS_FILE_STATUS_OK);
 		}
 		else {
 			file_to_write_handle = AllocatorManager.file_handle;
@@ -255,7 +255,7 @@ namespace ECSEngine {
 			DebugAllocatorManagerWriteAllocatorState(&text_stream, allocator_pointer, allocator);
 		});
 
-		ECS_ASSERT(WriteToFile(file_to_write_handle, text_stream.ToStream()) != -1);
+		ECS_HARD_ASSERT(WriteToFile(file_to_write_handle, text_stream.ToStream()) != -1);
 
 		free(allocation);
 		if (log_file) {
@@ -294,7 +294,7 @@ namespace ECSEngine {
 						DebugAllocatorManagerWriteAllocatorState(&text, allocator, *tracked_allocator_ptr);
 						// Transition the lock to the write since the file write needs to be single threaded
 						bool locked_by_us = AllocatorManager.hash_table_lock.TransitionReadToWriteLock();
-						ECS_ASSERT(WriteToFile(AllocatorManager.file_handle, text.ToStream()) != -1);
+						ECS_HARD_ASSERT(WriteToFile(AllocatorManager.file_handle, text.ToStream()) != -1);
 						// Flush the file to disk as well
 						FlushFileToDisk(AllocatorManager.file_handle);
 						AllocatorManager.hash_table_lock.ReadToWriteUnlock(locked_by_us);
@@ -342,7 +342,7 @@ namespace ECSEngine {
 
 	const char* DebugAllocatorFunctionName(ECS_DEBUG_ALLOCATOR_FUNCTION function)
 	{
-		ECS_ASSERT(function < ECS_DEBUG_ALLOCATOR_FUNCTION_COUNT);
+		ECS_HARD_ASSERT(function < ECS_DEBUG_ALLOCATOR_FUNCTION_COUNT);
 		return DEBUG_ALLOCATOR_FUNCTION_NAMES[function];
 	}
 

@@ -31,7 +31,7 @@ namespace ECSEngine {
 		CURSORINFO info = { sizeof(CURSORINFO), 0, nullptr, {} };
 		if (!GetCursorInfo(&info))
 		{
-			ECS_ASSERT(false);
+			ECS_ASSERT(false, "Could not change cursor visibility");
 		}
 
 		bool is_visible = (info.flags & CURSOR_SHOWING) != 0;

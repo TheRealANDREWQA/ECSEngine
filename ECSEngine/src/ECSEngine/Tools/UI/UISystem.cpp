@@ -4104,7 +4104,9 @@ namespace ECSEngine {
 
 			bool snapshot_mode = has_snapshot_mode && border.snapshot.IsValid();
 			if (snapshot_mode) {
-				snapshot_mode = m_snapshot_mode_elapsed_time < data->snapshot_mode_lazy_update;
+				if (!m_snapshot_mode_timer.IsUninitialized()) {
+					snapshot_mode = m_snapshot_mode_elapsed_time < data->snapshot_mode_lazy_update;
+				}
 				if (snapshot_mode) {
 					// Check to see if the window has changed
 					if (border.snapshot_active_window != border.active_window || border.snapshot_window_index != border.window_indices[border.active_window]) {

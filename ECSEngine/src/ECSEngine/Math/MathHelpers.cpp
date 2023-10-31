@@ -2,6 +2,7 @@
 #include "MathHelpers.h"
 #include "../Utilities/Utilities.h"
 
+
 namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------

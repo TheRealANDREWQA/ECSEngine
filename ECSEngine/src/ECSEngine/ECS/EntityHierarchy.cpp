@@ -28,7 +28,7 @@ namespace ECSEngine {
     static void RemoveEntityFromParent(EntityHierarchy* hierarchy, Entity entity, Entity parent) {
         // Remove the entity from its parent and the entry from the parent table
         unsigned int parent_children_index = hierarchy->children_table.Find(parent);
-        ECS_CRASH_RETURN(parent_children_index != -1, "EntityHierarchy: Could not find the parent's {#} children data when trying to remove entity {#} as its child.", parent.value, entity.value);
+        ECS_CRASH_CONDITION(parent_children_index != -1, "EntityHierarchy: Could not find the parent's {#} children data when trying to remove entity {#} as its child.", parent.value, entity.value);
         EntityHierarchy::Children* children = hierarchy->children_table.GetValuePtrFromIndex(parent_children_index);
         if (children->count == 1) {
             // The node becomes childless, can be removed from the children table
@@ -59,7 +59,7 @@ namespace ECSEngine {
                     break;
                 }
             }
-            ECS_CRASH_RETURN(before_count > children->count, "EntityHierarchy: Could not find the child {#} inside the parent's {#} children data. The hierarchy is corrupted.", parent.value, entity.value);
+            ECS_CRASH_CONDITION(before_count > children->count, "EntityHierarchy: Could not find the child {#} inside the parent's {#} children data. The hierarchy is corrupted.", parent.value, entity.value);
         }
     }
 
@@ -186,7 +186,7 @@ namespace ECSEngine {
         else {
             // It is a root. Need to remove it from the buffer
             unsigned int root_index = SearchBytes(hierarchy->roots.ToStream(), child);
-            ECS_CRASH_RETURN(root_index != -1, "EntityHierarchy: Fatal internal error. Parent table says {#} is a root but the root buffer doesn't contain it.", child.value);
+            ECS_CRASH_CONDITION(root_index != -1, "EntityHierarchy: Fatal internal error. Parent table says {#} is a root but the root buffer doesn't contain it.", child.value);
             hierarchy->roots.RemoveSwapBack(root_index);
         }
         *current_parent = new_parent;
@@ -198,7 +198,7 @@ namespace ECSEngine {
     void EntityHierarchy::ChangeParent(Entity new_parent, Entity child)
     {
         unsigned int parent_index = parent_table.Find(child);
-        ECS_CRASH_RETURN(parent_index == -1, "EntityHierarchy: Could not change the parent of entity {#}. It doesn't exist in the hierarchy.", child.value);
+        ECS_CRASH_CONDITION(parent_index == -1, "EntityHierarchy: Could not change the parent of entity {#}. It doesn't exist in the hierarchy.", child.value);
 
         ChangeParentImpl(this, new_parent, child, parent_index);
     }
@@ -228,7 +228,7 @@ namespace ECSEngine {
 
     void EntityHierarchy::RemoveEntry(Entity entity)
     {
-        ECS_CRASH_RETURN(roots.size > 0, "EntityHierarchy: There are no entities inserted when trying to remove {#}.", entity.value);
+        ECS_CRASH_CONDITION(roots.size > 0, "EntityHierarchy: There are no entities inserted when trying to remove {#}.", entity.value);
 
         // Determine if it has children or not
         unsigned int children_index = children_table.Find(entity);
@@ -243,12 +243,12 @@ namespace ECSEngine {
         }
 
         unsigned int parent_index = parent_table.Find(entity);
-        ECS_CRASH_RETURN(parent_index != -1, "EntityHierarchy: The entity {#} doesn't exist in the hierarchy when trying to remove it.", entity.value);
+        ECS_CRASH_CONDITION(parent_index != -1, "EntityHierarchy: The entity {#} doesn't exist in the hierarchy when trying to remove it.", entity.value);
         Entity parent = parent_table.GetValueFromIndex(parent_index);
         if (parent.value == -1) {
             // It is a root, it must be eliminated from the
             unsigned int root_parent_index = SearchBytes(roots.ToStream(), entity);
-            ECS_CRASH_RETURN(root_parent_index != -1, "EntityHierarchy: The entity {#} doesn't exist in the root buffer but the parent table says it's a root.", entity.value);
+            ECS_CRASH_CONDITION(root_parent_index != -1, "EntityHierarchy: The entity {#} doesn't exist in the root buffer but the parent table says it's a root.", entity.value);
             roots.RemoveSwapBack(root_parent_index);
             parent_table.EraseFromIndex(parent_index);
         }
@@ -316,7 +316,7 @@ namespace ECSEngine {
         };
         
         size_t first_children_to_search = children.size;
-        ECS_CRASH_RETURN(initial_children_entities.size <= children.capacity - children.size, "EntityHierarchy: The given capacity stream for retrieving entity's {#} children is too small.");
+        ECS_CRASH_CONDITION(initial_children_entities.size <= children.capacity - children.size, "EntityHierarchy: The given capacity stream for retrieving entity's {#} children is too small.");
         children.AddStream(initial_children_entities);
 
         while (first_children_to_search != children.size) {
@@ -329,7 +329,7 @@ namespace ECSEngine {
                         current_children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? current_children.entities : current_children.static_children, 
                         current_children.count 
                     };
-                    ECS_CRASH_RETURN(current_children_entities.size <= children.capacity - children.size, "EntityHierarchy: The given capacity stream for retrieving entity's {#} children is too small.");
+                    ECS_CRASH_CONDITION(current_children_entities.size <= children.capacity - children.size, "EntityHierarchy: The given capacity stream for retrieving entity's {#} children is too small.");
                     children.AddStream(current_children_entities);
                 }
             }

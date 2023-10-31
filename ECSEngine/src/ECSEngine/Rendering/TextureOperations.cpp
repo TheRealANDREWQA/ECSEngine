@@ -572,7 +572,7 @@ namespace ECSEngine {
 		TextureCube cube_texture;
 		cube_texture.tex = nullptr;
 
-		ECS_CRASH_RETURN_VALUE(result, cube_texture, "Converting textures to cube textures failed.");
+		ECS_CRASH_CONDITION_RETURN(result, cube_texture, "Converting textures to cube textures failed.");
 		cube_texture = { texture };
 
 		GraphicsContext* context = graphics->GetContext();

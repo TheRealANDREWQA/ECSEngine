@@ -122,7 +122,15 @@ namespace ECSEngine {
 		ECS_GRAPHICS_RESOURCE_RASTERIZER_STATE,
 		ECS_GRAPHICS_RESOURCE_COMMAND_LIST,
 		ECS_GRAPHICS_RESOURCE_DX_RESOURCE_INTERFACE,
-		ECS_GRAPHICS_RESOURCE_TYPE_COUNT
+		ECS_GRAPHICS_RESOURCE_TYPE_COUNT,
+
+		// These values from here are used only by the report live objects debug device
+		// Where we try to map those objects into our own types
+		ECS_GRAPHICS_RESOURCE_GENERIC_BUFFER,
+		ECS_GRAPHICS_RESOURCE_DEVICE,
+		ECS_GRAPHICS_RESOURCE_QUERY,
+		ECS_GRAPHICS_RESOURCE_COUNTER,
+		ECS_GRAPHICS_RESOURCE_SWAP_CHAIN
 	};
 
 	extern const char* ECS_GRAPHICS_RESOURCE_TYPE_STRING[];
@@ -145,6 +153,13 @@ namespace ECSEngine {
 		DebugInfo debug_info;
 		ECS_GRAPHICS_RESOURCE_TYPE type;
 		std::atomic<bool> is_deleted;
+	};
+
+	// These objects can be retrieved with the debug interface of the device
+	struct GraphicsLiveObject {
+		void* interface_pointer;
+		ECS_GRAPHICS_RESOURCE_TYPE type;
+		unsigned int external_reference_count;
 	};
 
 	struct GraphicsResourceSnapshot {
@@ -1111,6 +1126,10 @@ namespace ECSEngine {
 
 		uint2 GetWindowSize() const;
 
+		// Validates the resources which are being tracked with the ID3D11Debug output to see if they match
+		// This is not const since it will commit internal resources to be freed
+		bool IsInternalStateValid();
+
 		void RestoreBlendState(GraphicsPipelineBlendState state);
 
 		void RestoreDepthStencilState(GraphicsPipelineDepthStencilState state);
@@ -1166,6 +1185,15 @@ namespace ECSEngine {
 		// It will register the newly created resources if not temporary
 		Material TransferMaterial(const Material* material, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
+		// Returns true if there are no leaks, else false. When there are leaks, it will fill them in the given
+		// capacity stream. If it fails since it couldn't capture the live objects, then the leaks size will be 0
+		bool VerifyLeaks(CapacityStream<GraphicsLiveObject>* leaks);
+
+		// Returns true if there was no internal error, else false. If there was no internal error,
+		// Then it will set the internal_state_valid boolean to true if the internal state is correct, else false
+		// and fill in any leaks (combines VerifyLeaks and IsInternalStateValid into a single call for performance)
+		bool VerifyLeaksAndValidateInteralState(bool& internal_state_valid, CapacityStream<GraphicsLiveObject>* leaks);
+
 #pragma endregion
 
 		struct CachedResources {
@@ -1182,6 +1210,12 @@ namespace ECSEngine {
 		size_t m_bound_render_target_count;
 		DepthStencilView m_depth_stencil_view;
 		DepthStencilView m_current_depth_stencil;
+		// The debug device is used for leak detection and validation that the current
+		// Graphical objects are valid
+		ID3D11Debug* m_debug_device;
+		// This is used to capture messages from D3D runtime and display them in our
+		// Own console
+		ID3D11InfoQueue* m_info_queue;
 
 		CachedResources m_cached_resources;
 		ShaderReflection* m_shader_reflection;

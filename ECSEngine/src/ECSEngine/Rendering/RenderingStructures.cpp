@@ -71,7 +71,7 @@ namespace ECSEngine {
 		com_buffer.Attach(buffer.buffer);
 		HRESULT result = com_buffer.As(&_resource);
 
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, error_message);
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), nullptr, error_message);
 
 		return _resource.Detach();
 	}
@@ -85,7 +85,7 @@ namespace ECSEngine {
 		com_tex.Attach(texture);
 		HRESULT result = com_tex.As(&_resource);
 
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, error_message);
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), nullptr, error_message);
 
 		return _resource.Detach();
 	}
@@ -114,7 +114,7 @@ namespace ECSEngine {
 		VertexBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating vertex buffer failed");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating vertex buffer failed");
 
 		return buffer;	
 	}
@@ -133,7 +133,7 @@ namespace ECSEngine {
 		IndexBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating index buffer failed");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating index buffer failed");
 
 		return buffer;
 	}
@@ -152,7 +152,7 @@ namespace ECSEngine {
 			byte_code.size,
 			&layout.layout
 		);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), layout, "Creating input layout failed");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), layout, "Creating input layout failed");
 
 		return layout;
 	}
@@ -165,7 +165,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateVertexShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Vertex shader failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), shader, "Creating Vertex shader failed.");
 
 		return shader;
 	}
@@ -178,7 +178,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreatePixelShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Pixel shader failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), shader, "Creating Pixel shader failed.");
 
 		return shader;
 	}
@@ -191,7 +191,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateGeometryShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Geometry shader failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), shader, "Creating Geometry shader failed.");
 
 		return shader;
 	}
@@ -204,7 +204,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateDomainShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Domain shader failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), shader, "Creating Domain shader failed.");
 		return shader;
 	}
 
@@ -216,7 +216,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateHullShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Hull shader failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), shader, "Creating Hull shader failed.");
 
 		return shader;
 	}
@@ -229,7 +229,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateComputeShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Compute shader failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), shader, "Creating Compute shader failed.");
 
 		return shader;
 	}
@@ -249,7 +249,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateShaderResourceView(resource, descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture Shader View failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating Texture Shader View failed.");
 
 		return view;
 	}
@@ -278,7 +278,7 @@ namespace ECSEngine {
 		ConstantBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating ConstantBuffer failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating ConstantBuffer failed!");
 
 		return buffer;
 	}
@@ -289,7 +289,7 @@ namespace ECSEngine {
 	{
 		SamplerState state;
 		HRESULT result = device->CreateSamplerState(descriptor, &state.sampler);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Constructing SamplerState failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), state, "Constructing SamplerState failed!");
 
 		return state;
 	}
@@ -308,7 +308,7 @@ namespace ECSEngine {
 		UAView view;
 
 		HRESULT result = device->CreateUnorderedAccessView(resource, descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating UAView failed.");
 
 		return view;
 	}
@@ -336,7 +336,7 @@ namespace ECSEngine {
 	{
 		RenderTargetView view;
 		HRESULT result = device->CreateRenderTargetView(resource, descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating RenderTargetView failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating RenderTargetView failed!");
 
 		return view;
 	}
@@ -365,7 +365,7 @@ namespace ECSEngine {
 		DepthStencilView view;
 
 		HRESULT result = device->CreateDepthStencilView(resource, descriptor, &view.view);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating DepthStencilView failed!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), view, "Creating DepthStencilView failed!");
 
 		return view;
 	}
@@ -394,7 +394,7 @@ namespace ECSEngine {
 		StandardBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating StandardBuffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating StandardBuffer failed.");
 
 		return buffer;
 	}
@@ -413,7 +413,7 @@ namespace ECSEngine {
 		StructuredBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating StructuredBuffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating StructuredBuffer failed.");
 
 		return buffer;
 	}
@@ -432,7 +432,7 @@ namespace ECSEngine {
 		IndirectBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating IndirectBuffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating IndirectBuffer failed.");
 
 		return buffer;
 	}
@@ -451,7 +451,7 @@ namespace ECSEngine {
 		UABuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating UABuffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating UABuffer failed.");
 
 		return buffer;
 	}
@@ -470,7 +470,7 @@ namespace ECSEngine {
 		AppendStructuredBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating AppendStructuredBuffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating AppendStructuredBuffer failed.");
 
 		return buffer;
 	}
@@ -489,7 +489,7 @@ namespace ECSEngine {
 		ConsumeStructuredBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating ConsumeStructuredBuffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), buffer, "Creating ConsumeStructuredBuffer failed.");
 
 		return buffer;
 	}
@@ -504,7 +504,7 @@ namespace ECSEngine {
 			Microsoft::WRL::ComPtr<ID3D11Texture1D> com_tex;
 			HRESULT result = ptr.As(&com_tex);
 
-			ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture1D failed!");
+			ECS_CRASH_CONDITION(SUCCEEDED(result), "Converting resource to Texture1D failed!");
 			tex = com_tex.Detach();
 		}
 		else {
@@ -525,7 +525,7 @@ namespace ECSEngine {
 	{
 		RawInterface* interface_;
 		HRESULT result = device->CreateTexture1D(descriptor, initial_data, &interface_);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), interface_, "Creating Texture1D failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), interface_, "Creating Texture1D failed.");
 
 		return interface_;
 	}
@@ -540,7 +540,7 @@ namespace ECSEngine {
 			Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
 			HRESULT result = ptr.As(&com_tex);
 
-			ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture2D failed!");
+			ECS_CRASH_CONDITION(SUCCEEDED(result), "Converting resource to Texture2D failed!");
 			tex = com_tex.Detach();
 		}
 		else {
@@ -561,7 +561,7 @@ namespace ECSEngine {
 	{
 		RawInterface* interface_;
 		HRESULT result = device->CreateTexture2D(descriptor, initial_data, &interface_);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), interface_, "Creating Texture2D failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), interface_, "Creating Texture2D failed.");
 
 		return interface_;
 	}
@@ -576,7 +576,7 @@ namespace ECSEngine {
 			Microsoft::WRL::ComPtr<ID3D11Texture3D> com_tex;
 			HRESULT result = ptr.As(&com_tex);
 
-			ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture3D failed!");
+			ECS_CRASH_CONDITION(SUCCEEDED(result), "Converting resource to Texture3D failed!");
 			tex = com_tex.Detach();
 		}
 		else {
@@ -597,7 +597,7 @@ namespace ECSEngine {
 	{
 		RawInterface* interface_;
 		HRESULT result = device->CreateTexture3D(descriptor, initial_data, &interface_);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), interface_, "Creating Texture3D failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), interface_, "Creating Texture3D failed.");
 
 		return interface_;
 	}
@@ -611,7 +611,7 @@ namespace ECSEngine {
 			Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
 			HRESULT result = ptr.As(&com_tex);
 
-			ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to TextureCube failed!");
+			ECS_CRASH_CONDITION(SUCCEEDED(result), "Converting resource to TextureCube failed!");
 			tex = com_tex.Detach();
 		}
 		else {
@@ -632,7 +632,7 @@ namespace ECSEngine {
 	{
 		RawInterface* interface_;
 		HRESULT result = device->CreateTexture2D(descriptor, initial_data, &interface_);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), interface_, "Creating TextureCube failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), interface_, "Creating TextureCube failed.");
 
 		return interface_;
 	}

@@ -90,8 +90,8 @@ namespace ECSEngine {
 	{
 		// Assume that everything is deallocated before
 		// Everything can be just memcpy'ed after the correct number of pools have been allocated
-		ECS_CRASH_RETURN(m_entity_infos.size == 0, "EntityPool: Copying entity pool failed. The destination pool is not allocated.");
-		ECS_CRASH_RETURN(m_pool_power_of_two == entity_pool->m_pool_power_of_two, "EntityPool: Copying entity pool failed. The power of two of the chunks is different.");
+		ECS_CRASH_CONDITION(m_entity_infos.size == 0, "EntityPool: Copying entity pool failed. The destination pool is not allocated.");
+		ECS_CRASH_CONDITION(m_pool_power_of_two == entity_pool->m_pool_power_of_two, "EntityPool: Copying entity pool failed. The power of two of the chunks is different.");
 
 		for (size_t index = 0; index < entity_pool->m_entity_infos.size; index++) {
 			CreatePool();
@@ -268,7 +268,7 @@ namespace ECSEngine {
 		unsigned int line
 	) {
 		uint2 entity_indices = GetPoolAndEntityIndex(entity_pool, entity);
-		ECS_CRASH_RETURN_VALUE_EX(
+		ECS_CRASH_CONDITION_RETURN_EX(
 			entity_indices.x < entity_pool->m_entity_infos.size && entity_pool->m_entity_infos[entity_indices.x].is_in_use,
 			{},
 			"EntityPool: Invalid entity {#} when trying to retrieve EntityInfo.",
@@ -316,7 +316,7 @@ namespace ECSEngine {
 		unsigned int line
 	) {
 		uint2 entity_indices = GetPoolAndEntityIndex(entity_pool, entity);
-		ECS_CRASH_RETURN_VALUE_EX(
+		ECS_CRASH_CONDITION_RETURN_EX(
 			entity_indices.x < entity_pool->m_entity_infos.size && entity_pool->m_entity_infos[entity_indices.x].is_in_use,
 			nullptr,
 			"EntityPool: Invalid entity {#} when trying to retrieve EntityInfo.",
@@ -372,7 +372,7 @@ namespace ECSEngine {
 	void EntityPool::Deallocate(Entity entity)
 	{
 		uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
-		ECS_CRASH_RETURN(
+		ECS_CRASH_CONDITION(
 			entity_indices.x < m_entity_infos.size && m_entity_infos[entity_indices.x].is_in_use,
 			"EntityPool: Incorrect entity {#} when trying to delete it.",
 			entity.index
@@ -380,7 +380,7 @@ namespace ECSEngine {
 
 		EntityInfo* info = m_entity_infos[entity_indices.x].stream.ElementPointer(entity_indices.y);
 		// Check that they have the same generation counter
-		ECS_CRASH_RETURN(info->generation_count == entity.generation_count, "EntityPool: Trying to delete an entity {#} which has already been deleted.", entity.index);
+		ECS_CRASH_CONDITION(info->generation_count == entity.generation_count, "EntityPool: Trying to delete an entity {#} which has already been deleted.", entity.index);
 		m_entity_infos[entity_indices.x].stream.Remove(entity_indices.y);
 		// Signal that the entity has been removed by increasing the generation counter
 		info->generation_count++;

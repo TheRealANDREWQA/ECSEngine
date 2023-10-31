@@ -420,7 +420,7 @@ namespace ECSEngine {
 
 	bool MemoryProtectedAllocator::DisableWriteProtection(void* block) const
 	{
-		ECS_ASSERT(chunk_size == 0);
+		ECS_ASSERT(chunk_size == 0, "MemoryProtectedAllocator: Cannot disable write protection for a particular block in chunked mode");
 
 		// We cannot block directly to the function since we need to get the original pointer
 		size_t search_index = SearchBytes(allocation_pointers, count, (size_t)block, sizeof(block));
@@ -458,7 +458,7 @@ namespace ECSEngine {
 
 	bool MemoryProtectedAllocator::EnableWriteProtection(void* block) const
 	{
-		ECS_ASSERT(chunk_size == 0);
+		ECS_ASSERT(chunk_size == 0, "MemoryProtectedAllocator: Cannot enable write protection for a particular block in chunked mode");
 
 		// We cannot block directly to the function since we need to get the original pointer
 		size_t search_index = SearchBytes(allocation_pointers, count, (size_t)block, sizeof(block));

@@ -261,7 +261,7 @@ namespace ECSEngine {
 			return data_pointer.GetPointer();
 		}
 		
-		ECS_CRASH_RETURN_VALUE(false, nullptr, "System Manager error: there is no data associated to {#}.", identifier);
+		ECS_CRASH_CONDITION_RETURN(false, nullptr, "System Manager error: there is no data associated to {#}.", identifier);
 		return nullptr;
 	}
 
@@ -277,10 +277,10 @@ namespace ECSEngine {
 				}
 			}
 
-			ECS_CRASH_RETURN_VALUE(false, nullptr, "System manager error: failed to find setting {#} for system {#}.", setting_name, system_name);
+			ECS_CRASH_CONDITION_RETURN(false, nullptr, "System manager error: failed to find setting {#} for system {#}.", setting_name, system_name);
 		}
 
-		ECS_CRASH_RETURN_VALUE(false, nullptr, "System Manager error: there are no settings for system {#}.", system_name);
+		ECS_CRASH_CONDITION_RETURN(false, nullptr, "System Manager error: there are no settings for system {#}.", system_name);
 		return nullptr;
 	}
 
@@ -293,7 +293,7 @@ namespace ECSEngine {
 			return data;
 		}
 
-		ECS_CRASH_RETURN_VALUE(false, nullptr, "System Manager error: there is no temporary data associated to {#}.", identifier);
+		ECS_CRASH_CONDITION_RETURN(false, nullptr, "System Manager error: there is no temporary data associated to {#}.", identifier);
 		return nullptr;
 	}
 
@@ -340,7 +340,7 @@ namespace ECSEngine {
 	{
 		unsigned int index = data_table.Find(identifier);
 		if (index == -1) {
-			ECS_CRASH_RETURN(false, "System Manager error: there is no data associated to {#} when trying to remove.", identifier);
+			ECS_CRASH_CONDITION(false, "System Manager error: there is no data associated to {#} when trying to remove.", identifier);
 		}
 
 		// Normally the identifier is coalesced with the data if it has a byte size to be copied
@@ -362,7 +362,7 @@ namespace ECSEngine {
 	{
 		unsigned int index = system_settings.Find(system_name);
 		if (index == -1) {
-			ECS_CRASH_RETURN(false, "System Manager error: there are no system settings for {#} when trying to remove.", system_name);
+			ECS_CRASH_CONDITION(false, "System Manager error: there are no system settings for {#} when trying to remove.", system_name);
 		}
 		
 		// Deallocate the buffer as well

@@ -12,7 +12,9 @@ namespace ECSEngine {
     // Uses the metadata from the image to set the flags accordingly. If mip-maps want to be generated from the first mip then give the context
     // It will use the immediate context in order to generate those mips
     // It will not add the resource into the graphics monitoring array
-    ECSENGINE_API void DXTexCreateTexture(
+    // Returns true if it succeeded, else false. In case the texture was created but the view not,
+    // it will free the texture and return false
+    ECSENGINE_API bool DXTexCreateTexture(
         ID3D11Device* device,
         const DirectX::ScratchImage* image,
         ID3D11Texture2D** resource = nullptr,
@@ -24,7 +26,9 @@ namespace ECSEngine {
     // If mip-maps want to be generated from the first mip then give the context
     // It will use the immediate context in order to generate those mips
     // It will not add the resource into the graphics monitoring array
-    ECSENGINE_API void DXTexCreateTextureEx(
+    // Returns true if it succeeded, else false. In case the texture was created but the view not,
+    // it will free the texture and return false
+    ECSENGINE_API bool DXTexCreateTextureEx(
         ID3D11Device* device,
         const DirectX::ScratchImage* image,
         unsigned int bind_flags,

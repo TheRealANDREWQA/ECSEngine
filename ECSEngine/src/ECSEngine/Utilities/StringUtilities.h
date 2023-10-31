@@ -31,6 +31,8 @@ string_name.AssertCapacity();
 	error_message->size += FormatString(error_message->buffer + error_message->size, base_characters, __VA_ARGS__); \
 }
 
+#define ECS_FORMAT_SPECIFIER "{#}"
+
 	ECS_INLINE void Capitalize(char* character) {
 		if (*character >= 'a' && *character <= 'z') {
 			*character = *character - 32;
@@ -149,6 +151,10 @@ string_name.AssertCapacity();
 	ECS_INLINE bool IsCodeIdentifierCharacter(wchar_t value) {
 		return IsNumberCharacter(value) || IsAlphabetCharacter(value) || value == L'_';
 	}
+
+	ECSENGINE_API bool IsHexChar(char value);
+
+	ECSENGINE_API bool IsHexChar(wchar_t value);
 
 	// Can use the increment to go backwards by setting it to -1
 	ECS_INLINE const char* SkipSpace(const char* pointer, int increment = 1) {
@@ -612,9 +618,15 @@ string_name.AssertCapacity();
 	// Else returns -1
 	ECSENGINE_API char ConvertCharactersToBool(Stream<wchar_t> characters);
 
+	// Non digit characters are discarded (exception x)
+	ECSENGINE_API void* ConvertCharactersToPointer(Stream<char> characters);
+	
+	// Non digit characters are discarded (exception x)
+	ECSENGINE_API void* ConvertCharactersToPointer(Stream<wchar_t> characters);
+
 	// non digit characters are discarded
-	template<typename Integer, typename CharacterType, typename Stream>
-	Integer ConvertCharactersToIntImpl(Stream stream, size_t& digit_count) {
+	template<typename Integer, typename CharacterType, bool strict_parsing, typename Stream>
+	Integer ConvertCharactersToIntImpl(Stream stream, size_t& digit_count, bool& success) {
 		Integer integer = Integer(0);
 		size_t starting_index = stream[0] == Character<CharacterType>('-') ? 1 : 0;
 		digit_count = 0;
@@ -624,26 +636,55 @@ string_name.AssertCapacity();
 				integer = integer * 10 + stream[index] - Character<CharacterType>('0');
 				digit_count++;
 			}
+			else {
+				if constexpr (strict_parsing) {
+					success = false;
+					return integer;
+				}
+			}
+		}
+
+		if constexpr (strict_parsing) {
+			success = true;
 		}
 		integer = starting_index == 1 ? -integer : integer;
-
 		return integer;
 	}
 
-	// non digit characters are discarded
-	template<typename Integer, typename CharacterType, typename Stream>
-	ECS_INLINE Integer ConvertCharactersToIntImpl(Stream stream) {
+	// Non digit characters are discarded
+	template<typename Integer, typename CharacterType, bool strict_parsing, typename Stream>
+	ECS_INLINE Integer ConvertCharactersToIntImpl(Stream stream, bool& success) {
 		// Dummy
 		size_t digit_count = 0;
-		return ConvertCharactersToIntImpl<Integer, CharacterType>(stream, digit_count);
+		return ConvertCharactersToIntImpl<Integer, CharacterType, strict_parsing>(stream, digit_count, success);
 	}
+
+	// It will try to convert the string into a number using strict verification
+	// It will write the success status in the given boolean
+	int64_t ConvertCharactersToIntStrict(Stream<char> string, bool& success);
+
+	// It will try to convert the string into a float using strict verification
+	// It will write the success status in the given boolean
+	float ConvertCharactersToFloatStrict(Stream<char> string, bool& success);
+
+	// It will try to convert the string into a double using strict verification
+	// It will write the success status in the given boolean
+	double ConvertCharactersToDoubleStrict(Stream<char> string, bool& success);
+
+	// It will try to convert the string into a pointer using strict verification
+	// It will write the success status in the given boolean
+	void* ConvertCharactersToPointerStrict(Stream<char> string, bool& success);
+
+	// It will try to convert the string into a bool using strict verification
+	// It will write the success status in the given boolean
+	bool ConvertCharactersToBoolStrict(Stream<char> string, bool& success);
 
 #define ECS_CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X (1 << 0)
 #define ECS_CONVERT_INT_TO_HEX_ADD_NORMAL_VALUE_AFTER (1 << 1)
 
 	template<size_t flags = 0, typename Integer>
 	void ConvertIntToHex(Stream<char>& characters, Integer integer) {
-		constexpr char hex_characters[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+		static char hex_characters[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 		if constexpr ((flags & ECS_CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X) == 0) {
 			characters.Add('0');
@@ -697,7 +738,7 @@ string_name.AssertCapacity();
 			const char* base_characters,
 			Parameter parameter
 		) {
-			const char* string_ptr = strstr(base_characters, "{#}");
+			const char* string_ptr = strstr(base_characters, ECS_FORMAT_SPECIFIER);
 			if (string_ptr != nullptr) {
 				size_t copy_count = (uintptr_t)string_ptr - (uintptr_t)base_characters;
 				memcpy(end_characters, base_characters, copy_count);

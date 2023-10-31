@@ -234,7 +234,8 @@ namespace ECSEngine {
 			UIDrawerSliderFunctions result;
 
 			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
-				Integer character_value = ConvertCharactersToIntImpl<Integer, char>(characters);
+				bool dummy;
+				Integer character_value = ConvertCharactersToIntImpl<Integer, char, false>(characters, dummy);
 				Integer* value = (Integer*)_value;
 				*value = character_value;
 			};
