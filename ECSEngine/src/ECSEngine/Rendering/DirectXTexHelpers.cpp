@@ -5,7 +5,7 @@
 
 namespace ECSEngine {
 
-	void DXTexCreateTexture(
+	bool DXTexCreateTexture(
 		ID3D11Device* device,
 		const DirectX::ScratchImage* image,
 		ID3D11Texture2D** resource,
@@ -13,10 +13,10 @@ namespace ECSEngine {
 		ID3D11DeviceContext* context
 	)
 	{
-		DXTexCreateTextureEx(device, image, D3D11_BIND_SHADER_RESOURCE, D3D11_USAGE_DEFAULT, 0, 0, resource, view, context);
+		return DXTexCreateTextureEx(device, image, D3D11_BIND_SHADER_RESOURCE, D3D11_USAGE_DEFAULT, 0, 0, resource, view, context);
 	}
 
-	void DXTexCreateTextureEx(
+	bool DXTexCreateTextureEx(
 		ID3D11Device* device,
 		const DirectX::ScratchImage* image,
 		unsigned int bind_flags,
@@ -50,7 +50,9 @@ namespace ECSEngine {
 
 		size_t row_pitch, slice_pitch;
 		HRESULT result = DirectX::ComputePitch(metadata.format, metadata.width, metadata.height, row_pitch, slice_pitch);
-		ECS_ASSERT(!FAILED(result));
+		if (FAILED(result)) {
+			return false;
+		}
 
 		// No context provided - don't generate mips
 		if (context == nullptr) {
@@ -62,12 +64,17 @@ namespace ECSEngine {
 			subresource_data.pSysMem = image->GetPixels();
 
 			result = device->CreateTexture2D(&dx_descriptor, &subresource_data, &texture_interface);
-			ECS_ASSERT(!FAILED(result), "Creating texture from DXTex failed.");
+			if (FAILED(result)) {
+				return false;
+			}
 
 			if (view != nullptr) {
 				// Create a shader view
 				result = device->CreateShaderResourceView(texture_interface, nullptr, &texture_view);
-				ECS_ASSERT(!FAILED(result), "Creating texture view from DXTex failed.");
+				if (FAILED(result)) {
+					texture_interface->Release();
+					return false;
+				}
 			}
 		}
 		else {
@@ -78,7 +85,9 @@ namespace ECSEngine {
 			dx_descriptor.BindFlags |= D3D11_BIND_RENDER_TARGET;
 
 			HRESULT result = device->CreateTexture2D(&dx_descriptor, nullptr, &texture_interface);
-			ECS_ASSERT(!FAILED(result), "Creating texture from DXTex failed.");
+			if (FAILED(result)) {
+				return false;
+			}
 
 			D3D11_BOX box;
 			box.left = 0;
@@ -90,7 +99,10 @@ namespace ECSEngine {
 			context->UpdateSubresource(texture_interface, 0, &box, image->GetPixels(), row_pitch, slice_pitch);
 
 			result = device->CreateShaderResourceView(texture_interface, nullptr, &texture_view);
-			ECS_ASSERT(!FAILED(result), "Creating texture view from DXTex failed.");
+			if (FAILED(result)) {
+				texture_interface->Release();
+				return false;
+			}
 
 			// Generate mips
 			context->GenerateMips(texture_view);
@@ -102,6 +114,7 @@ namespace ECSEngine {
 		if (view != nullptr) {
 			*view = texture_view;
 		}
+		return true;
 	}
 
 }

@@ -15,6 +15,8 @@ namespace ECSEngine {
 	ECSENGINE_API extern const char* ECS_GLOBAL_DEFERRED_FILE;
 	ECSENGINE_API extern const char* ECS_GLOBAL_DEFERRED_FUNCTION;
 	ECSENGINE_API extern unsigned int ECS_GLOBAL_DEFERRED_LINE;
+	// This is a value that can be used to determine if multiple crashes try to run at the same time
+	ECSENGINE_API extern std::atomic<unsigned int> ECS_GLOBAL_CRASH_IN_PROGRESS;
 
 	// This doesn't allocate the data - it will only reference it
 	ECSENGINE_API void SetCrashHandler(CrashHandlerFunction handler, void* data);
@@ -45,6 +47,7 @@ namespace ECSEngine {
 
 #define ECS_CRASH_RETURN_IMPLEMENTATION(condition, crash_function, error_string, ...) if (!(condition)) { crash_function(error_string, __VA_ARGS__); return; }
 #define ECS_CRASH_RETURN_VALUE_IMPLEMENTATION(condition, crash_function, return_value, error_string, ...) if (!(condition)) { crash_function(error_string, __VA_ARGS__); return return_value; }
+#define ECS_CRASH_RETURN_VOID_IMPLEMENTATION(condition, crash_function, error_string, ...) if (!(condition)) { crash_function(error_string, __VA_ARGS__); return; }
 
 	// The __VA_ARGS__ can be used to format the error string
 #define ECS_CRASH(error_string, ...) ECS_CRASH_IMPLEMENTATION(error_string, Crash, __VA_ARGS__);
@@ -52,13 +55,14 @@ namespace ECSEngine {
 #define ECS_CRASH_EX(error_string, file, function, line, ...) ECS_CRASH_IMPLEMENTATION_EX(error_string, Crash, file, function, line, __VA_ARGS__);
 
 	// The __VA_ARGS__ can be used to format the error string
-#define ECS_CRASH_RETURN(condition, error_string, ...) ECS_CRASH_RETURN_IMPLEMENTATION(condition, ECS_CRASH, error_string, __VA_ARGS__)
+#define ECS_CRASH_CONDITION(condition, error_string, ...) ECS_CRASH_RETURN_IMPLEMENTATION(condition, ECS_CRASH, error_string, __VA_ARGS__)
 	// The __VA_ARGS__ can be used to format the error string
-#define ECS_CRASH_RETURN_VALUE(condition, return_value, error_string, ...) ECS_CRASH_RETURN_VALUE_IMPLEMENTATION(condition, ECS_CRASH, return_value, error_string, __VA_ARGS__)
+#define ECS_CRASH_CONDITION_RETURN(condition, return_value, error_string, ...) ECS_CRASH_RETURN_VALUE_IMPLEMENTATION(condition, ECS_CRASH, return_value, error_string, __VA_ARGS__)
+#define ECS_CRASH_CONDITION_RETURN_VOID(condition, error_string, ...) ECS_CRASH_RETURN_VOID_IMPLEMENTATION(condition, ECS_CRASH, error_string, __VA_ARGS__)
 
 	// The __VA_ARGS__ can be used to format the error string
-#define ECS_CRASH_RETURN_EX(condition, error_string, file, function, line, ...) ECS_CRASH_RETURN_IMPLEMENTATION(condition, ECS_CRASH_EX, error_string, file, function, line, __VA_ARGS__)
+#define ECS_CRASH_CONDITION_EX(condition, error_string, file, function, line, ...) ECS_CRASH_RETURN_IMPLEMENTATION(condition, ECS_CRASH_EX, error_string, file, function, line, __VA_ARGS__)
 	// The __VA_ARGS__ can be used to format the error string
-#define ECS_CRASH_RETURN_VALUE_EX(condition, return_value, error_string, file, function, line, ...) if (!(condition)) { ECS_CRASH_EX(error_string, file, function, line, __VA_ARGS__); return return_value; }
+#define ECS_CRASH_CONDITION_RETURN_EX(condition, return_value, error_string, file, function, line, ...) if (!(condition)) { ECS_CRASH_EX(error_string, file, function, line, __VA_ARGS__); return return_value; }
 
 }

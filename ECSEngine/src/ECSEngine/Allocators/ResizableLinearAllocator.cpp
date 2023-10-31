@@ -16,7 +16,7 @@ namespace ECSEngine {
 	ResizableLinearAllocator::ResizableLinearAllocator(void* buffer, size_t capacity, size_t backup_size, AllocatorPolymorphic allocator) 
 		: m_top(0), m_marker(0), m_backup_size(backup_size), m_backup(allocator), m_debug_mode(false)
 	{
-		ECS_ASSERT(capacity > MAX_BACKUPS * sizeof(void*));
+		ECS_ASSERT(capacity > MAX_BACKUPS * sizeof(void*), "Too small of a capacity for ResizableLinearAllocator");
 
 		m_allocated_buffers = (void**)buffer;
 		m_allocated_buffer_capacity = MAX_BACKUPS;

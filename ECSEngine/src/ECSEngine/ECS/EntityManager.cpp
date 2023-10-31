@@ -272,10 +272,10 @@ namespace ECSEngine {
 	static void WriteCommandStream(EntityManager* manager, DeferredActionParameters parameters, DeferredAction action) {
 		if (parameters.command_stream == nullptr) {
 			unsigned int index = manager->m_deferred_actions.Add(action);
-			ECS_CRASH_RETURN(index < manager->m_deferred_actions.capacity, "EntityManager: Insufficient space for the entity manager command stream.");
+			ECS_CRASH_CONDITION(index < manager->m_deferred_actions.capacity, "EntityManager: Insufficient space for the entity manager command stream.");
 		}
 		else {
-			ECS_CRASH_RETURN(parameters.command_stream->size == parameters.command_stream->capacity, "EntityManager: Insufficient space for the user given command stream.");
+			ECS_CRASH_CONDITION(parameters.command_stream->size == parameters.command_stream->capacity, "EntityManager: Insufficient space for the user given command stream.");
 			parameters.command_stream->Add(action);
 		}
 	}
@@ -863,7 +863,7 @@ namespace ECSEngine {
 				}
 			}
 			// If the component was not found, fail
-			ECS_CRASH_RETURN(
+			ECS_CRASH_CONDITION(
 				subindex != unique_signature.count, 
 				"EntityManager: Could not find component {#} when trying to remove components from entities. First entity is {#}.",
 				manager->GetComponentName(data->components.indices[index]),
@@ -1194,7 +1194,7 @@ namespace ECSEngine {
 				}
 			}
 			// Fail if the component doesn't exist
-			ECS_CRASH_RETURN(subindex < data->components.count || subindex == -1, "EntityManager: A component could not be found when trying to remove components from entities. "
+			ECS_CRASH_CONDITION(subindex < data->components.count || subindex == -1, "EntityManager: A component could not be found when trying to remove components from entities. "
 				"The first entity is {#}. The component is {#}.", data->entities[0].value, manager->GetComponentName(data->components.indices[index]));
 		}
 
@@ -1222,14 +1222,14 @@ namespace ECSEngine {
 		for (size_t index = 0; index < data->elements.size; index++) {
 			SharedComponentSignature shared_signature = { &data->elements[index].component, &data->elements[index].new_instance, 1 };
 
-			ECS_CRASH_RETURN(
+			ECS_CRASH_CONDITION(
 				manager->ExistsComponent(data->elements[index].component),
 				"EntityManager: The shared component {#} does not exist when trying to change the shared instance for entity {#}.",
 				manager->GetSharedComponentName(data->elements[index].component),
 				data->elements[index].entity
 			);
 
-			ECS_CRASH_RETURN(
+			ECS_CRASH_CONDITION(
 				manager->ExistsSharedInstanceOnly(data->elements[index].component, data->elements[index].new_instance),
 				"EntityManager: The shared instance {#} does not exist for component {#} when trying to change the shared instance for entity {#}.",
 				data->elements[index].new_instance,
@@ -1331,7 +1331,7 @@ namespace ECSEngine {
 			archetype_index = manager->FindArchetype({ data->unique_components, data->shared_components });
 		}
 		// Fail if it doesn't exist
-		ECS_CRASH_RETURN(archetype_index != -1, "EntityManager: Could not find archetype when trying to destroy it.");
+		ECS_CRASH_CONDITION(archetype_index != -1, "EntityManager: Could not find archetype when trying to destroy it.");
 
 		Archetype* archetype = manager->GetArchetype(archetype_index);
 		// If it has components with buffers, those need to be deallocated manually
@@ -1406,7 +1406,7 @@ namespace ECSEngine {
 		VectorComponentSignature vector_shared;
 		vector_shared.InitializeSharedComponent(data->shared_components);
 		unsigned int main_archetype_index = manager->FindArchetype({ data->unique_components, vector_shared });
-		ECS_CRASH_RETURN(main_archetype_index != -1, "EntityManager: Could not find main archetype when trying to create base archetype.");
+		ECS_CRASH_CONDITION(main_archetype_index != -1, "EntityManager: Could not find main archetype when trying to create base archetype.");
 
 		Archetype* archetype = manager->GetArchetype(main_archetype_index);
 
@@ -1435,10 +1435,10 @@ namespace ECSEngine {
 			VectorComponentSignature vector_instances;
 			vector_instances.InitializeSharedInstances(data->shared_components);
 			Archetype* archetype = manager->FindArchetypePtr({ data->unique_components, vector_shared });
-			ECS_CRASH_RETURN(archetype != nullptr, "EntityManager: Could not find main archetype when trying to delete base from components.");
+			ECS_CRASH_CONDITION(archetype != nullptr, "EntityManager: Could not find main archetype when trying to delete base from components.");
 
 			unsigned int base_index = archetype->FindBaseIndex(vector_shared, vector_instances);
-			ECS_CRASH_RETURN(base_index != -1, "EntityManager: Could not find base archetype index when trying to delete it from components.");
+			ECS_CRASH_CONDITION(base_index != -1, "EntityManager: Could not find base archetype index when trying to delete it from components.");
 		}
 		else {
 			archetype = manager->GetArchetype(data->indices.x);
@@ -1468,7 +1468,7 @@ namespace ECSEngine {
 		}
 
 		// Crash if the allocator is specified but the buffer offsets are not
-		ECS_CRASH_RETURN(
+		ECS_CRASH_CONDITION(
 			data->allocator_size == 0 || data->component_buffers_count > 0, 
 			"EntityManager: Trying to create component {#} with an allocator but without buffer offsets.", 
 			component_name
@@ -1497,7 +1497,7 @@ namespace ECSEngine {
 			}
 		}
 		// If the size is different from -1, it means there is a component actually allocated to this slot
-		ECS_CRASH_RETURN(!manager->ExistsComponent(data->component), "EntityManager: Creating component {#} at position {#} failed. It already exists.", 
+		ECS_CRASH_CONDITION(!manager->ExistsComponent(data->component), "EntityManager: Creating component {#} at position {#} failed. It already exists.", 
 			component_name, data->component.value);
 		manager->m_unique_components[data->component.value].size = data->size;
 		manager->m_unique_components[data->component.value].component_buffers_count = data->component_buffers_count;
@@ -1513,9 +1513,9 @@ namespace ECSEngine {
 	static void CommitDestroyComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroyComponent* data = (DeferredDestroyComponent*)_data;
 
-		ECS_CRASH_RETURN(data->component.value < manager->m_unique_components.size, "EntityManager: Incorrect component index {#} when trying to delete it.", data->component.value);
+		ECS_CRASH_CONDITION(data->component.value < manager->m_unique_components.size, "EntityManager: Incorrect component index {#} when trying to delete it.", data->component.value);
 		// -1 Signals it's empty - a component was never associated to this slot
-		ECS_CRASH_RETURN(manager->ExistsComponent(data->component), "EntityManager: Trying to destroy component {#} when it doesn't exist.", 
+		ECS_CRASH_CONDITION(manager->ExistsComponent(data->component), "EntityManager: Trying to destroy component {#} when it doesn't exist.", 
 			data->component.value);
 
 		// If it has an allocator, deallocate it
@@ -1543,7 +1543,7 @@ namespace ECSEngine {
 		}
 
 		// Crash if the allocator size is specified but the buffer offsets are not
-		ECS_CRASH_RETURN(data->allocator_size == 0 || data->component_buffers_count > 0,
+		ECS_CRASH_CONDITION(data->allocator_size == 0 || data->component_buffers_count > 0,
 			"EntityManager: Trying to create shared component {#} with an allocator but without buffer_offsets.", component_name);
 
 		if (manager->m_shared_components.size <= data->component.value) {
@@ -1560,7 +1560,7 @@ namespace ECSEngine {
 
 
 		// If the size is different from -1, it means there is a component actually allocated to this slot
-		ECS_CRASH_RETURN(manager->m_shared_components[data->component.value].info.size == -1, 
+		ECS_CRASH_CONDITION(manager->m_shared_components[data->component.value].info.size == -1, 
 			"EntityManager: Trying to create shared component {#} when it already exists {#} at that slot.", component_name, manager->GetSharedComponentName(data->component));
 		manager->m_shared_components[data->component.value].info.size = data->size;
 		manager->m_shared_components[data->component.value].info.component_buffers_count = data->component_buffers_count;
@@ -1580,9 +1580,9 @@ namespace ECSEngine {
 	static void CommitDestroySharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroySharedComponent* data = (DeferredDestroySharedComponent*)_data;
 
-		ECS_CRASH_RETURN(data->component.value < manager->m_shared_components.size, "EntityManager: Invalid shared component {#} when trying to destroy it.", data->component.value);
+		ECS_CRASH_CONDITION(data->component.value < manager->m_shared_components.size, "EntityManager: Invalid shared component {#} when trying to destroy it.", data->component.value);
 		// -1 Signals it's empty - a component was never associated to this slot
-		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component), "EntityManager: Trying to destroy shared component {#} when it doesn't exist.", 
+		ECS_CRASH_CONDITION(manager->ExistsSharedComponent(data->component), "EntityManager: Trying to destroy shared component {#} when it doesn't exist.", 
 			data->component.value);
 
 		// If it has an allocator deallocate it
@@ -1616,7 +1616,7 @@ namespace ECSEngine {
 
 		// If no component is allocated at that slot, fail
 		unsigned int component_size = manager->m_shared_components[data->component.value].info.size;
-		ECS_CRASH_RETURN(component_size != -1, "EntityManager: Trying to create a shared instance of shared component {#} failed. "
+		ECS_CRASH_CONDITION(component_size != -1, "EntityManager: Trying to create a shared instance of shared component {#} failed. "
 			"There is no such component.", manager->GetSharedComponentName(data->component));
 
 		// Allocate the memory
@@ -1624,7 +1624,7 @@ namespace ECSEngine {
 		memcpy(allocation, data->data, component_size);
 
 		unsigned int instance_index = manager->m_shared_components[data->component.value].instances.Add(allocation);
-		ECS_CRASH_RETURN(instance_index < ECS_SHARED_INSTANCE_MAX_VALUE, "EntityManager: Too many shared instances created for component {#}.",
+		ECS_CRASH_CONDITION(instance_index < ECS_SHARED_INSTANCE_MAX_VALUE, "EntityManager: Too many shared instances created for component {#}.",
 			manager->GetSharedComponentName(data->component));
 		
 		if (data->copy_buffers) {
@@ -1663,10 +1663,10 @@ namespace ECSEngine {
 	static void CommitBindNamedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredBindNamedSharedInstance* data = (DeferredBindNamedSharedInstance*)_data;
 
-		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component),
+		ECS_CRASH_CONDITION(manager->ExistsSharedComponent(data->component),
 			"Entity Manager: Trying to bind a named shared instance for component which doesn't exist", manager->GetSharedComponentName(data->component));
 
-		ECS_CRASH_RETURN(manager->ExistsSharedInstanceOnly(data->component, data->instance), 
+		ECS_CRASH_CONDITION(manager->ExistsSharedInstanceOnly(data->component, data->instance), 
 			"EntityManager: Trying to bind named shared instance {#} for component {#} at slot {#} which doesn't exist.", data->identifier, manager->GetSharedComponentName(data->component), data->instance.value);
 		
 		Stream<char> allocated_identifier;
@@ -1683,10 +1683,10 @@ namespace ECSEngine {
 	static void CommitDestroySharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroySharedInstance* data = (DeferredDestroySharedInstance*)_data;
 
-		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component), "EntityManager: The component {#} doesn't exist when trying to destroy a shared instance.",
+		ECS_CRASH_CONDITION(manager->ExistsSharedComponent(data->component), "EntityManager: The component {#} doesn't exist when trying to destroy a shared instance.",
 			manager->GetSharedComponentName(data->component));
 
-		ECS_CRASH_RETURN(manager->ExistsSharedInstanceOnly(data->component, data->instance), "EntityManager: The shared instance {#} for component {#} "
+		ECS_CRASH_CONDITION(manager->ExistsSharedInstanceOnly(data->component, data->instance), "EntityManager: The shared instance {#} for component {#} "
 			"doesn't exist when trying to destroy it.", data->instance.value, manager->GetSharedComponentName(data->component));
 
 		void* instance_data = manager->m_shared_components[data->component.value].instances[data->instance.value];
@@ -1711,11 +1711,11 @@ namespace ECSEngine {
 		DeferredDestroyNamedSharedInstance* data = (DeferredDestroyNamedSharedInstance*)_data;
 
 		Stream<char> identifier = data->identifier;
-		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component), "EntityManager: Incorrect shared component {#} when trying to destroy named shared instance {#}.",
+		ECS_CRASH_CONDITION(manager->ExistsSharedComponent(data->component), "EntityManager: Incorrect shared component {#} when trying to destroy named shared instance {#}.",
 			manager->GetSharedComponentName(data->component), identifier);
 		
 		SharedInstance instance;
-		ECS_CRASH_RETURN(manager->m_shared_components[data->component.value].named_instances.TryGetValue(data->identifier, instance), "EntityManager: There is no shared "
+		ECS_CRASH_CONDITION(manager->m_shared_components[data->component.value].named_instances.TryGetValue(data->identifier, instance), "EntityManager: There is no shared "
 			"instance {#} at shared component {#}.", identifier, manager->GetSharedComponentName(data->component));
 
 		DeferredDestroySharedInstance commit_data;
@@ -1732,7 +1732,7 @@ namespace ECSEngine {
 		DeferredDestroyUnreferencedSharedInstance* data = (DeferredDestroyUnreferencedSharedInstance*)_data;
 		DeferredDestroyUnreferencedSharedInstanceAdditional* return_value = (DeferredDestroyUnreferencedSharedInstanceAdditional*)_additional_data;
 
-		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component), "EntityManager: Incorrect shared component {#} when trying to destroy "
+		ECS_CRASH_CONDITION(manager->ExistsSharedComponent(data->component), "EntityManager: Incorrect shared component {#} when trying to destroy "
 			"unreferenced shared instances.", manager->GetSharedComponentName(data->component));
 
 		// Go through the archetypes and pop the shared instances which are matched
@@ -1776,7 +1776,7 @@ namespace ECSEngine {
 	static void CommitDestroyUnreferencedSharedInstances(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroyUnreferencedSharedInstances* data = (DeferredDestroyUnreferencedSharedInstances*)_data;
 
-		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component), "EntityManager: Incorrect shared component {#} when trying to destroy "
+		ECS_CRASH_CONDITION(manager->ExistsSharedComponent(data->component), "EntityManager: Incorrect shared component {#} when trying to destroy "
 			"unreferenced shared instances.", manager->GetSharedComponentName(data->component));
 
 		// Gather all the shared instances and put them inside an array and pop them out when we find a match
@@ -2255,7 +2255,7 @@ namespace ECSEngine {
 		default:
 		{
 			ECS_STACK_CAPACITY_STREAM(char, component_signature_string, 1024);
-			ECS_CRASH_RETURN(false, "EntityManager: Copy entity data type is incorrect when trying to add component/s { {#} } to entities. First entity is {#}.",
+			ECS_CRASH_CONDITION(false, "EntityManager: Copy entity data type is incorrect when trying to add component/s { {#} } to entities. First entity is {#}.",
 				GetComponentSignatureString(components, component_signature_string), entities[0].value);
 		}
 		}
@@ -2295,7 +2295,7 @@ namespace ECSEngine {
 		default:
 		{
 			ECS_STACK_CAPACITY_STREAM(char, component_string_storage, 1024);
-			ECS_CRASH_RETURN(false, "EntityManager: Incorrect copy type when trying to add components {#} to entities. First entity is {#}.",
+			ECS_CRASH_CONDITION(false, "EntityManager: Incorrect copy type when trying to add components {#} to entities. First entity is {#}.",
 				GetComponentSignatureString(components, component_string_storage), entities[0].value);
 		}
 		}
@@ -2591,7 +2591,7 @@ namespace ECSEngine {
 		EntityInfo* info = m_entity_pool->GetInfoPtr(entity);
 		Archetype* archetype = GetArchetype(info->main_archetype);
 		unsigned char shared_index = archetype->FindSharedComponentIndex(component);
-		ECS_CRASH_RETURN_VALUE(
+		ECS_CRASH_CONDITION_RETURN(
 			shared_index != UCHAR_MAX, 
 			{},
 			"EntityManager: Entity {#} doesn't have shared component {#} when trying to change shared instance to {#}.", 
@@ -2603,7 +2603,7 @@ namespace ECSEngine {
 		SharedInstance shared_instances[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
 		SharedComponentSignature shared_signature = archetype->GetSharedSignature(info->base_archetype);
 		// Check to see that the instance is indeed different
-		ECS_CRASH_RETURN_VALUE(
+		ECS_CRASH_CONDITION_RETURN(
 			shared_signature.instances[shared_index] != new_instance,
 			{},
 			"EntityManager: Trying to replace shared instance {#} with the same instance for entity {#}, component {#}.",
@@ -3168,7 +3168,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, component_signature_storage, 1024);
 			ECS_STACK_CAPACITY_STREAM(char, shared_component_signature_storage, 1024);
 
-			ECS_CRASH_RETURN(false, "EntityManager: Incorrect copy type when trying to create entities from source data. "
+			ECS_CRASH_CONDITION(false, "EntityManager: Incorrect copy type when trying to create entities from source data. "
 				"Components: { {#} }. Shared Components{{#}}. Number of entities into command{#}.",
 				GetComponentSignatureString(unique_components, component_signature_storage),
 				GetSharedComponentSignatureString(shared_components.ComponentSignature(), shared_component_signature_storage),
@@ -3223,7 +3223,7 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(char, component_string_storage, 1024);
 			ECS_STACK_CAPACITY_STREAM(char, shared_component_string_storage, 1024);
 
-			ECS_CRASH_RETURN(false, "EntityManager: Incorrect copy type when trying to create entities from source data. "
+			ECS_CRASH_CONDITION(false, "EntityManager: Incorrect copy type when trying to create entities from source data. "
 				"Components: { {#} }. Shared Components : { {#} }. Entity count in command : {#}.",
 				GetComponentSignatureString(unique_components, component_string_storage),
 				GetSharedComponentSignatureString(shared_components.ComponentSignature(), shared_component_string_storage),
@@ -3300,7 +3300,7 @@ namespace ECSEngine {
 
 	unsigned int EntityManager::ComponentSize(Component component) const
 	{
-		ECS_CRASH_RETURN_VALUE(component.value < m_unique_components.size, -1, "EntityManager: Trying to retrieve invalid component byte size for {#}", component.value);
+		ECS_CRASH_CONDITION_RETURN(component.value < m_unique_components.size, -1, "EntityManager: Trying to retrieve invalid component byte size for {#}", component.value);
 		return m_unique_components[component.value].size;
 	}
 
@@ -3308,7 +3308,7 @@ namespace ECSEngine {
 
 	unsigned int EntityManager::SharedComponentSize(Component component) const
 	{
-		ECS_CRASH_RETURN_VALUE(component.value < m_shared_components.size, -1, "EntityManager: Trying to retrieve invalid shared component byte size for {#}", component.value);
+		ECS_CRASH_CONDITION_RETURN(component.value < m_shared_components.size, -1, "EntityManager: Trying to retrieve invalid shared component byte size for {#}", component.value);
 		return m_shared_components[component.value].info.size;
 	}
 
@@ -3317,7 +3317,7 @@ namespace ECSEngine {
 	unsigned int EntityManager::GlobalComponentSize(Component component) const
 	{
 		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
-		ECS_CRASH_RETURN_VALUE(index != -1, -1, "EntityManager: Trying to retrieve invalid global component byte size for {#}", component.value);
+		ECS_CRASH_CONDITION_RETURN(index != -1, -1, "EntityManager: Trying to retrieve invalid global component byte size for {#}", component.value);
 		return m_global_components_info[component.value].size;
 	}
 
@@ -3328,7 +3328,7 @@ namespace ECSEngine {
 		EntityInfo entity_info = GetEntityInfo(entity);
 		Archetype* archetype = GetArchetype(entity_info.main_archetype);
 		unsigned char deallocate_index = archetype->FindDeallocateComponentIndex(component);
-		ECS_CRASH_RETURN(deallocate_index != UCHAR_MAX, "EntityManager: Trying to deallocate buffers for component {#} for entity {#} but the "
+		ECS_CRASH_CONDITION(deallocate_index != UCHAR_MAX, "EntityManager: Trying to deallocate buffers for component {#} for entity {#} but the "
 			"component doesn't exist", GetComponentName(component), entity.value);
 		archetype->DeallocateEntityBuffers(deallocate_index, entity_info);
 	}
@@ -3618,7 +3618,7 @@ namespace ECSEngine {
 
 	unsigned char EntityManager::FindArchetypeUniqueComponent(unsigned int archetype_index, Component component) const
 	{
-		ECS_CRASH_RETURN_VALUE(archetype_index < m_archetypes.size, UCHAR_MAX, "EntityManager: The archetype {#} is invalid when trying to find unique component {#}.",
+		ECS_CRASH_CONDITION_RETURN(archetype_index < m_archetypes.size, UCHAR_MAX, "EntityManager: The archetype {#} is invalid when trying to find unique component {#}.",
 			archetype_index, GetComponentName(component));
 		return m_archetypes[archetype_index].FindUniqueComponentIndex(component);
 	}
@@ -3627,7 +3627,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_CAPACITY_STREAM(char, components_string, 1024);
 
-		ECS_CRASH_RETURN(archetype_index < m_archetypes.size, "EntityManager: The archetype {#} is invalid when trying to find unique components { {#} }.", 
+		ECS_CRASH_CONDITION(archetype_index < m_archetypes.size, "EntityManager: The archetype {#} is invalid when trying to find unique components { {#} }.", 
 			archetype_index, GetComponentSignatureString(components, components_string));
 
 		for (size_t index = 0; index < components.count; index++) {
@@ -3639,7 +3639,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_CAPACITY_STREAM(char, component_string_storage, 1024);
 
-		ECS_CRASH_RETURN(archetype_index < m_archetypes.size, "EntityManager: The archetype {#} is invalid when trying to find unique components { {#} }.", 
+		ECS_CRASH_CONDITION(archetype_index < m_archetypes.size, "EntityManager: The archetype {#} is invalid when trying to find unique components { {#} }.", 
 			archetype_index, GetComponentSignatureString(components, component_string_storage));
 		// Use the fast SIMD compare
 		GetArchetypeUniqueComponents(archetype_index).Find(components, indices);
@@ -3648,7 +3648,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	unsigned char EntityManager::FindArchetypeSharedComponent(unsigned int archetype_index, Component component) const {
-		ECS_CRASH_RETURN_VALUE(archetype_index < m_archetypes.size, UCHAR_MAX, "EntityManager: The archetype {#} is invalid when trying to find shared component {#}.",
+		ECS_CRASH_CONDITION_RETURN(archetype_index < m_archetypes.size, UCHAR_MAX, "EntityManager: The archetype {#} is invalid when trying to find shared component {#}.",
 			archetype_index, GetSharedComponentName(component));
 		return m_archetypes[archetype_index].FindSharedComponentIndex(component);
 	}
@@ -3656,7 +3656,7 @@ namespace ECSEngine {
 	void EntityManager::FindArchetypeSharedComponent(unsigned int archetype_index, ComponentSignature components, unsigned char* indices) const {
 		ECS_STACK_CAPACITY_STREAM(char, component_string_storage, 1024);
 
-		ECS_CRASH_RETURN(archetype_index < m_archetypes.size, "EntityManager: The archetype {#} is invalid when trying to find shared components { {#} }.",
+		ECS_CRASH_CONDITION(archetype_index < m_archetypes.size, "EntityManager: The archetype {#} is invalid when trying to find shared components { {#} }.",
 			archetype_index, GetSharedComponentSignatureString(components, component_string_storage));
 		for (size_t index = 0; index < components.count; index++) {
 			indices[index] = m_archetypes[archetype_index].FindSharedComponentIndex(components[index]);
@@ -3666,7 +3666,7 @@ namespace ECSEngine {
 	void ECS_VECTORCALL EntityManager::FindArchetypeSharedComponentVector(unsigned int archetype_index, VectorComponentSignature components, unsigned char* indices) const {
 		ECS_STACK_CAPACITY_STREAM(char, component_string_storage, 1024);
 		
-		ECS_CRASH_RETURN(archetype_index < m_archetypes.size, "EntityManager: The archetype {#} is invalid when trying to find shared components { {#} }.", 
+		ECS_CRASH_CONDITION(archetype_index < m_archetypes.size, "EntityManager: The archetype {#} is invalid when trying to find shared components { {#} }.", 
 			archetype_index, GetSharedComponentSignatureString(components, component_string_storage));
 		// Use the fast SIMD compare
 		GetArchetypeSharedComponents(archetype_index).Find(components, indices);
@@ -3768,14 +3768,14 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	Archetype* EntityManager::GetArchetype(unsigned int index) {
-		ECS_CRASH_RETURN_VALUE(index < m_archetypes.size, nullptr, "EntityManager: Invalid archetype index {#} when trying to retrive archetype pointer.", index);
+		ECS_CRASH_CONDITION_RETURN(index < m_archetypes.size, nullptr, "EntityManager: Invalid archetype index {#} when trying to retrive archetype pointer.", index);
 		return &m_archetypes[index];
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	const Archetype* EntityManager::GetArchetype(unsigned int index) const {
-		ECS_CRASH_RETURN_VALUE(index < m_archetypes.size, nullptr, "EntityManager: Invalid archetype index {#} when trying to retrive archetype pointer.", index);
+		ECS_CRASH_CONDITION_RETURN(index < m_archetypes.size, nullptr, "EntityManager: Invalid archetype index {#} when trying to retrive archetype pointer.", index);
 		return &m_archetypes[index];
 	}
 
@@ -3847,7 +3847,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < manager->m_archetypes.size; index++) {
 			if (query.VerifiesUnique(manager->m_archetypes[index].GetUniqueSignature())) {
 				if (query.VerifiesShared(manager->m_archetypes[index].GetSharedSignature())) {
-					ECS_CRASH_RETURN(archetypes.size < archetypes.capacity, "EntityManager: Not enough space for capacity stream when getting archetype indices.");
+					ECS_CRASH_CONDITION(archetypes.size < archetypes.capacity, "EntityManager: Not enough space for capacity stream when getting archetype indices.");
 					archetypes.Add(index);
 				}
 			}
@@ -3859,7 +3859,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < manager->m_archetypes.size; index++) {
 			if (query.VerifiesUnique(manager->m_archetypes[index].GetUniqueSignature())) {
 				if (query.VerifiesShared(manager->m_archetypes[index].GetSharedSignature())) {
-					ECS_CRASH_RETURN(archetypes.size < archetypes.capacity, "EntityManager: Not enough space for capacity stream when getting archetype pointers.");
+					ECS_CRASH_CONDITION(archetypes.size < archetypes.capacity, "EntityManager: Not enough space for capacity stream when getting archetype pointers.");
 					archetypes.Add(manager->m_archetypes.buffer + index);
 				}
 			}
@@ -3999,10 +3999,10 @@ namespace ECSEngine {
 
 	const void* EntityManager::GetGlobalComponent(Component component) const
 	{
-		ECS_CRASH_RETURN_VALUE(ExistsGlobalComponent(component), nullptr, "The global component {#} doesn't exist when trying to retrieve the value.",
+		ECS_CRASH_CONDITION_RETURN(ExistsGlobalComponent(component), nullptr, "The global component {#} doesn't exist when trying to retrieve the value.",
 			GetGlobalComponentName(component));
 		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
-		ECS_CRASH_RETURN_VALUE(index != -1, nullptr, "Missing global component {#} in SoA stream", GetGlobalComponentName(component));
+		ECS_CRASH_CONDITION_RETURN(index != -1, nullptr, "Missing global component {#} in SoA stream", GetGlobalComponentName(component));
 		return m_global_components_data[index];
 	}
 
@@ -4010,7 +4010,7 @@ namespace ECSEngine {
 
 	MemoryArena* EntityManager::GetComponentAllocator(Component component)
 	{
-		ECS_CRASH_RETURN_VALUE(ExistsComponent(component), nullptr, "The component {#} doesn't exist when retrieving its allocator.", GetComponentName(component));
+		ECS_CRASH_CONDITION_RETURN(ExistsComponent(component), nullptr, "The component {#} doesn't exist when retrieving its allocator.", GetComponentName(component));
 		return m_unique_components[component.value].allocator;
 	}
 
@@ -4025,7 +4025,7 @@ namespace ECSEngine {
 
 	MemoryArena* EntityManager::GetSharedComponentAllocator(Component component)
 	{
-		ECS_CRASH_RETURN_VALUE(ExistsSharedComponent(component), nullptr, "The shared component {#} doesn't exist when retrieving its allocator.", GetSharedComponentName(component));
+		ECS_CRASH_CONDITION_RETURN(ExistsSharedComponent(component), nullptr, "The shared component {#} doesn't exist when retrieving its allocator.", GetSharedComponentName(component));
 		return m_shared_components[component.value].info.allocator;
 	}
 
@@ -4041,7 +4041,7 @@ namespace ECSEngine {
 	MemoryArena* EntityManager::GetGlobalComponentAllocator(Component component)
 	{
 		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
-		ECS_CRASH_RETURN_VALUE(index != -1, nullptr, "The global component {#} doesn't exist when retrieving its allocator.", component.value);
+		ECS_CRASH_CONDITION_RETURN(index != -1, nullptr, "The global component {#} doesn't exist when retrieving its allocator.", component.value);
 		return m_global_components_info[index].allocator;
 	}
 
@@ -4064,7 +4064,7 @@ namespace ECSEngine {
 			return GetGlobalComponentAllocator(component);
 		}
 
-		ECS_CRASH_RETURN_VALUE(false, nullptr, "EntityManager: invalid component type when trying to retrieve component memory allocator.");
+		ECS_CRASH_CONDITION_RETURN(false, nullptr, "EntityManager: invalid component type when trying to retrieve component memory allocator.");
 
 		// Shouldn't reach here
 		return nullptr;
@@ -4218,7 +4218,7 @@ namespace ECSEngine {
 					// Matches the query
 					for (size_t base_index = 0; base_index < manager->m_archetypes[index].GetBaseCount(); base_index++) {
 						const ArchetypeBase* base = manager->GetBase(index, base_index);
-						ECS_CRASH_RETURN(entities->size + base->m_size <= entities->capacity, "EntityManager: Not enough space for capacity stream when retrieving entities.");
+						ECS_CRASH_CONDITION(entities->size + base->m_size <= entities->capacity, "EntityManager: Not enough space for capacity stream when retrieving entities.");
 						base->GetEntitiesCopy(entities->buffer + entities->size);
 						entities->size += base->m_size;
 					}
@@ -4235,7 +4235,7 @@ namespace ECSEngine {
 					// Matches the query
 					for (size_t base_index = 0; base_index < manager->m_archetypes[index].GetBaseCount(); base_index++) {
 						const ArchetypeBase* base = manager->GetBase(index, base_index);
-						ECS_CRASH_RETURN(entities->size < entities->capacity, "EntityManager: Not enough space for capacity stream when retrieving entities' pointers.");
+						ECS_CRASH_CONDITION(entities->size < entities->capacity, "EntityManager: Not enough space for capacity stream when retrieving entities' pointers.");
 						entities->Add(base->m_entities);
 					}
 				}
@@ -4274,9 +4274,9 @@ namespace ECSEngine {
 
 	const void* EntityManager::GetSharedData(Component component, SharedInstance instance) const
 	{
-		ECS_CRASH_RETURN_VALUE(ExistsSharedComponent(component), nullptr, "EntityManager: Shared component {#} is invalid when trying to retrieve instance {#} data.",
+		ECS_CRASH_CONDITION_RETURN(ExistsSharedComponent(component), nullptr, "EntityManager: Shared component {#} is invalid when trying to retrieve instance {#} data.",
 			GetSharedComponentName(component), instance.value);
-		ECS_CRASH_RETURN_VALUE(ExistsSharedInstanceOnly(component, instance), nullptr, "EntityManager: Shared instance "
+		ECS_CRASH_CONDITION_RETURN(ExistsSharedInstanceOnly(component, instance), nullptr, "EntityManager: Shared instance "
 			"{#} for component {#} is invalid.", instance.value, GetSharedComponentName(component));
 		return m_shared_components[component.value].instances[instance.value];
 	}
@@ -4303,12 +4303,12 @@ namespace ECSEngine {
 
 	SharedInstance EntityManager::GetSharedComponentInstance(Component component, const void* data) const
 	{
-		ECS_CRASH_RETURN_VALUE(component.value < m_shared_components.size, { -1 }, "EntityManager: Shared component {#} is out of bounds when trying to"
+		ECS_CRASH_CONDITION_RETURN(component.value < m_shared_components.size, { -1 }, "EntityManager: Shared component {#} is out of bounds when trying to"
 			" get shared instance data.", component.value);
 		unsigned int component_size = m_shared_components[component.value].info.size;
 		
 		// If the component size is -1, it means no actual component lives at that index
-		ECS_CRASH_RETURN_VALUE(component_size != -1, { -1 },  "EntityManager: There is no shared component allocated at {#}. Cannot retrieve shared instance data.",
+		ECS_CRASH_CONDITION_RETURN(component_size != -1, { -1 },  "EntityManager: There is no shared component allocated at {#}. Cannot retrieve shared instance data.",
 			component.value);
 
 		short instance_index = -1;
@@ -4328,7 +4328,7 @@ namespace ECSEngine {
 
 	SharedInstance EntityManager::GetSharedComponentInstance(Component component, Entity entity) const
 	{
-		ECS_CRASH_RETURN_VALUE(HasSharedComponent(entity, component), { -1 }, "EntityManager: The entity {#} doesn't have the shared component {#}.",
+		ECS_CRASH_CONDITION_RETURN(HasSharedComponent(entity, component), { -1 }, "EntityManager: The entity {#} doesn't have the shared component {#}.",
 			entity, GetSharedComponentName(component));
 
 		EntityInfo info = GetEntityInfo(entity);
@@ -4339,15 +4339,15 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	SharedInstance EntityManager::GetNamedSharedComponentInstance(Component component, Stream<char> identifier) const {
-		ECS_CRASH_RETURN_VALUE(component.value < m_shared_components.size, { -1 }, "EntityManager: Shared component {#} is out of bounds when trying to retrieve named "
+		ECS_CRASH_CONDITION_RETURN(component.value < m_shared_components.size, { -1 }, "EntityManager: Shared component {#} is out of bounds when trying to retrieve named "
 			"shared instance.", component.value);
 		unsigned int component_size = m_shared_components[component.value].info.size;
 
 		// If the component size is -1, it means no actual component lives at that index
-		ECS_CRASH_RETURN_VALUE(component_size != -1, { -1 }, "EntityManager: There is no shared component allocated at {#} when trying to retrieve named shared instance.", 
+		ECS_CRASH_CONDITION_RETURN(component_size != -1, { -1 }, "EntityManager: There is no shared component allocated at {#} when trying to retrieve named shared instance.", 
 			component.value);
 		SharedInstance instance;
-		ECS_CRASH_RETURN_VALUE(m_shared_components[component.value].named_instances.TryGetValue(identifier, instance), { -1 }, "EntityManager: There is no named shared"
+		ECS_CRASH_CONDITION_RETURN(m_shared_components[component.value].named_instances.TryGetValue(identifier, instance), { -1 }, "EntityManager: There is no named shared"
 			" instance {#} of shared component type {#}.", identifier, GetSharedComponentName(component));
 
 		return instance;
@@ -4410,7 +4410,7 @@ namespace ECSEngine {
 	void EntityManager::GetHierarchyChildrenCopy(Entity parent, CapacityStream<Entity>& children) const
 	{
 		Stream<Entity> parent_children = GetHierarchyChildren(parent);
-		ECS_CRASH_RETURN(
+		ECS_CRASH_CONDITION(
 			children.capacity >= parent_children.size, 
 			"EntityManager: Not enough space to copy the children for entity {#} into the capacity stream. Current capacity {#}, size needed {#}.",
 			parent.value,
@@ -4796,7 +4796,7 @@ namespace ECSEngine {
 		}
 
 		size_t existing_index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
-		ECS_CRASH_RETURN_VALUE(existing_index == -1, "EntityManager: Trying to create global component {#} when it already exists", component_name);
+		ECS_CRASH_CONDITION_RETURN(existing_index == -1, "EntityManager: Trying to create global component {#} when it already exists", component_name);
 
 		// Allocate a new slot in the SoA stream
 		// Firstly write the void* and then the Component
@@ -4958,7 +4958,7 @@ namespace ECSEngine {
 
 	void EntityManager::ResizeSharedComponent(Component component, unsigned int new_size)
 	{
-		ECS_CRASH_RETURN(ExistsSharedComponent(component), "EntityManager: There is no shared component {#} when trying to resize it.", component.value);
+		ECS_CRASH_CONDITION(ExistsSharedComponent(component), "EntityManager: There is no shared component {#} when trying to resize it.", component.value);
 
 		m_shared_components[component.value].info.size = new_size;
 		m_shared_components[component.value].instances.stream.ForEach([&](void*& data) {
@@ -4982,7 +4982,7 @@ namespace ECSEngine {
 
 		const char* crash_string = shared ? "EntityManager: There is no shared component {#} when trying to resize its allocator." :
 			"EntityManager: There is no component {#} when trying to resize its allocator.";
-		ECS_CRASH_RETURN_VALUE(exists, nullptr, crash_string, component.value);
+		ECS_CRASH_CONDITION_RETURN(exists, nullptr, crash_string, component.value);
 
 		MemoryArena* previous_arena;
 		if constexpr (shared) {
@@ -5050,9 +5050,9 @@ namespace ECSEngine {
 
 	void EntityManager::SetSharedComponentData(Component component, SharedInstance instance, const void* data)
 	{
-		ECS_CRASH_RETURN(ExistsSharedComponent(component), "EntityManager: The component {#} doesn't exist when trying to set shared component data.", component.value);
+		ECS_CRASH_CONDITION(ExistsSharedComponent(component), "EntityManager: The component {#} doesn't exist when trying to set shared component data.", component.value);
 
-		ECS_CRASH_RETURN(ExistsSharedInstanceOnly(component, instance), "EntityManager: The instance {#} doesn't exist when trying to set "
+		ECS_CRASH_CONDITION(ExistsSharedInstanceOnly(component, instance), "EntityManager: The instance {#} doesn't exist when trying to set "
 			"shared component data for component {#}.", GetSharedComponentName(component), instance.value);
 
 		unsigned int component_size = SharedComponentSize(component);
@@ -5062,14 +5062,14 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::SetNamedSharedComponentData(Component component, Stream<char> identifier, const void* data) {
-		ECS_CRASH_RETURN(component.value < m_shared_components.size, "EntityManager: Shared component {#} is out of bounds when trying to set named shared instance {#}.",
+		ECS_CRASH_CONDITION(component.value < m_shared_components.size, "EntityManager: Shared component {#} is out of bounds when trying to set named shared instance {#}.",
 			component.value, identifier);
 
-		ECS_CRASH_RETURN(ExistsSharedComponent(component), "EntityManager: Shared component {#} does not exist when trying to set named shared instance {#}.", 
+		ECS_CRASH_CONDITION(ExistsSharedComponent(component), "EntityManager: Shared component {#} does not exist when trying to set named shared instance {#}.", 
 			component.value, identifier);
 
 		SharedInstance instance;
-		ECS_CRASH_RETURN(
+		ECS_CRASH_CONDITION(
 			m_shared_components[component.value].named_instances.TryGetValue(identifier, instance), 
 			"EntityManager: Shared component {#} does not have named shared instance {#}.", 
 			GetSharedComponentName(component), 
@@ -5244,7 +5244,7 @@ namespace ECSEngine {
 	void EntityManager::UnregisterGlobalComponentCommit(Component component)
 	{
 		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
-		ECS_CRASH_RETURN(index != -1, "Missing global component {#} when trying to unregister it", component.value);
+		ECS_CRASH_CONDITION(index != -1, "Missing global component {#} when trying to unregister it", component.value);
 
 		DeallocateGlobalComponent(this, index);
 
@@ -5268,7 +5268,7 @@ namespace ECSEngine {
 	void EntityManager::UnregisterSharedInstance(Component component, SharedInstance instance, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
 	{
 		// If the component doesn't exist, fail
-		ECS_CRASH_RETURN(ExistsSharedComponent(component), "EntityManager: Incorrect shared component {#} when trying to destroy shared instance {#}. ",
+		ECS_CRASH_CONDITION(ExistsSharedComponent(component), "EntityManager: Incorrect shared component {#} when trying to destroy shared instance {#}. ",
 			component.value, instance.value);
 
 		size_t allocation_size = sizeof(DeferredDestroySharedInstance);
@@ -5296,7 +5296,7 @@ namespace ECSEngine {
 	void EntityManager::UnregisterNamedSharedInstance(Component component, Stream<char> name, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
 	{
 		// If the component doesn't exist, fail
-		ECS_CRASH_RETURN(ExistsSharedComponent(component), "EntityManager: Incorrect shared component {#} when trying to register call to destroy shared instance {#}.",
+		ECS_CRASH_CONDITION(ExistsSharedComponent(component), "EntityManager: Incorrect shared component {#} when trying to register call to destroy shared instance {#}.",
 			component.value, name);
 
 		size_t allocation_size = sizeof(DeferredDestroyNamedSharedInstance) + name.size;
@@ -5340,7 +5340,7 @@ namespace ECSEngine {
 	}
 
 	bool EntityManager::IsUnreferencedSharedInstance(Component component, SharedInstance instance) const {
-		ECS_CRASH_RETURN_VALUE(ExistsSharedComponent(component), false, "EntityManager: Shared component {#} is invalid when trying to determine "
+		ECS_CRASH_CONDITION_RETURN(ExistsSharedComponent(component), false, "EntityManager: Shared component {#} is invalid when trying to determine "
 			"unreferenced shared instance {#}.", GetSharedComponentName(component), instance.value);
 
 		unsigned int max_instance_count = m_shared_components[component].instances.stream.capacity;
@@ -5397,7 +5397,7 @@ namespace ECSEngine {
 
 	void EntityManager::GetUnreferencedSharedInstances(Component component, CapacityStream<SharedInstance>* instances) const
 	{
-		ECS_CRASH_RETURN(ExistsSharedComponent(component), "EntityManager: Shared component {#} is invalid when trying to determine "
+		ECS_CRASH_CONDITION(ExistsSharedComponent(component), "EntityManager: Shared component {#} is invalid when trying to determine "
 			"unreferenced shared instances.", GetSharedComponentName(component));
 
 		ForEachUnreferencedSharedInstance(component, [&](SharedInstance instance, const void* data) {

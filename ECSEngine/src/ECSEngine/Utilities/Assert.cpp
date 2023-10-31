@@ -4,14 +4,27 @@
 #include "../Allocators/AllocatorCallsDebug.h"
 #include "StringUtilities.h"
 
-#define ECS_ASSERT_TRIGGER
-
 namespace ECSEngine {
 
 	bool ECS_GLOBAL_ASSERT_CRASH = false;
 	bool ECS_GLOBAL_ASSERT_WRITE_DEBUG_ALLOCATOR_CALLS = true;
 
-	void Assert(bool condition, const char* filename, unsigned int line, const char* error_message)
+	static void HardAssertImpl(const char* filename, const char* function, unsigned int line, const char* error_message) {
+		if (ECS_GLOBAL_ASSERT_WRITE_DEBUG_ALLOCATOR_CALLS) {
+			DebugAllocatorManagerWriteState();
+		}
+
+		ECS_FORMAT_TEMP_STRING(temp_string, "[File] {#}\n[Function] {#}\n[Line] {#}\n", filename, function, line);
+		if (error_message != nullptr) {
+			temp_string.AddStream(error_message);
+		}
+		temp_string.AddAssert('\0');
+		MessageBoxA(nullptr, temp_string.buffer, "ECS Assert", MB_OK | MB_ICONERROR);
+		__debugbreak();
+		::exit(0);
+	}
+
+	void Assert(bool condition, const char* filename, const char* function, unsigned int line, const char* error_message)
 	{
 		if (!condition) {
 			if (ECS_GLOBAL_ASSERT_CRASH) {
@@ -19,33 +32,20 @@ namespace ECSEngine {
 					ECS_CRASH_EX("Assert changed into crash.", filename, "Assert", line);
 				}
 				else {
-					ECS_FORMAT_TEMP_STRING(error_message_ex, "Assert crash from file {#} and line {#}.", filename, line);
+					ECS_FORMAT_TEMP_STRING(error_message_ex, "Assert crash from file {#} in function {#} on line {#}.", filename, function, line);
 					error_message_ex.AddStreamSafe(error_message);
 					Crash(error_message_ex.buffer);
 				}
 			}
-
 			else {
-#ifndef ECSENGINE_DISTRIBUTION
-#ifdef ECS_ASSERT_TRIGGER
-				if (ECS_GLOBAL_ASSERT_WRITE_DEBUG_ALLOCATOR_CALLS) {
-					DebugAllocatorManagerWriteState();
-				}
-
-				ECS_FORMAT_TEMP_STRING(temp_string, "[File] {#}\n[Line] {#}\n", filename, line);
-				if (error_message != nullptr) {
-					temp_string.AddStream(error_message);
-				}
-				MessageBoxA(nullptr, temp_string.buffer, "ECS Assert", MB_OK | MB_ICONERROR);
-				__debugbreak();
-				::exit(0);
-#endif
-#else
-				if (!condition) {
-					__debugbreak();
-				}
-#endif
+				HardAssertImpl(filename, function, line, error_message);
 			}
+		}
+	}
+
+	void HardAssert(bool condition, const char* filename, const char* function, unsigned int line, const char* error_message) {
+		if (!condition) {
+			HardAssertImpl(filename, function, line, error_message);
 		}
 	}
 

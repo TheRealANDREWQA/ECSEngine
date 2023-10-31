@@ -122,7 +122,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, nullptr, &_new_buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_buffer, "Could not create a staging buffer!");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), new_buffer, "Could not create a staging buffer!");
 
 		new_buffer.buffer = _new_buffer;
 
@@ -215,7 +215,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, &subresource_data, &_new_buffer);
-		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_buffer, "Converting a buffer to immutable with staging buffer failed.");
+		ECS_CRASH_CONDITION_RETURN(SUCCEEDED(result), new_buffer, "Converting a buffer to immutable with staging buffer failed.");
 
 		UnmapBuffer(staging_buffer.buffer, graphics->GetContext());
 		staging_buffer.Release();

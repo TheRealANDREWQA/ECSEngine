@@ -217,7 +217,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::AddTask(StaticThreadTask task) {
-		ECS_ASSERT(task.task.name.size > 0);
+		ECS_ASSERT(task.task.name.size > 0, "Missing Static Task name");
 
 		task.task.data = CopyNonZero(StaticTaskAllocator(this), task.task.data, task.task.data_size);
 
@@ -574,7 +574,6 @@ namespace ECSEngine {
 
 		if (wait_frame) {
 			m_is_frame_done.Wait(thread_count);
-			ECS_ASSERT(m_is_frame_done.signal_count.load(ECS_RELAXED) == 0);
 		}
 	}
 

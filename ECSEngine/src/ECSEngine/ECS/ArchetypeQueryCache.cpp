@@ -125,12 +125,12 @@ namespace ECSEngine {
 	{
 		// This stream is used by the crash functions to "return" a value.
 		Stream<unsigned int> result = { nullptr, 0 };
-		ECS_CRASH_RETURN_VALUE(handle != -1, result, "ArchetypeQueryCache: Handle is empty for archetype query cache.");
+		ECS_CRASH_CONDITION_RETURN(handle != -1, result, "ArchetypeQueryCache: Handle is empty for archetype query cache.");
 
 		if (handle >= EXCLUDE_HANDLE_OFFSET) {
 			// Check the exclude results
 			handle -= EXCLUDE_HANDLE_OFFSET;
-			ECS_CRASH_RETURN_VALUE(
+			ECS_CRASH_CONDITION_RETURN(
 				handle > exclude_query_results.count, 
 				result, 
 				"ArchetypeQueryCache: Invalid handle for exclude query. Requested index {#} when count is {#}.", 
@@ -141,7 +141,7 @@ namespace ECSEngine {
 			return exclude_query_results.results[handle];
 		}
 		else {
-			ECS_CRASH_RETURN_VALUE(
+			ECS_CRASH_CONDITION_RETURN(
 				handle > query_results.count,
 				result,
 				"ArchetypeQueryCache: Invalid handle for normal query. Requested index {#} when count is {#}.",
@@ -159,12 +159,12 @@ namespace ECSEngine {
 	{
 		// This query is used by the crash functions to "return" a value.
 		ArchetypeQuery query;
-		ECS_CRASH_RETURN_VALUE(handle != -1, query, "ArchetypeQueryCache: Handle is empty for archetype query cache.");
+		ECS_CRASH_CONDITION_RETURN(handle != -1, query, "ArchetypeQueryCache: Handle is empty for archetype query cache.");
 
 		if (handle >= EXCLUDE_HANDLE_OFFSET) {
 			// Check the exclude results
 			handle -= EXCLUDE_HANDLE_OFFSET;
-			ECS_CRASH_RETURN_VALUE(
+			ECS_CRASH_CONDITION_RETURN(
 				handle > exclude_query_results.count,
 				query,
 				"ArchetypeQueryCache: Invalid handle for exclude query. Requested index {#} when count is {#}.",
@@ -175,7 +175,7 @@ namespace ECSEngine {
 			return { exclude_query_results.components[handle].unique, exclude_query_results.components[handle].shared };
 		}
 		else {
-			ECS_CRASH_RETURN_VALUE(
+			ECS_CRASH_CONDITION_RETURN(
 				handle > query_results.count,
 				query,
 				"ArchetypeQueryCache: Invalid handle for normal query. Requested index {#} when count is {#}.",
@@ -193,12 +193,12 @@ namespace ECSEngine {
 	{
 		ArchetypeQueryResult result;
 
-		ECS_CRASH_RETURN_VALUE(handle != -1, result, "ArchetypeQueryCache: Handle is empty for archetype query cache.");
+		ECS_CRASH_CONDITION_RETURN(handle != -1, result, "ArchetypeQueryCache: Handle is empty for archetype query cache.");
 
 		if (handle >= EXCLUDE_HANDLE_OFFSET) {
 			// Check the exclude results
 			handle -= EXCLUDE_HANDLE_OFFSET;
-			ECS_CRASH_RETURN_VALUE(
+			ECS_CRASH_CONDITION_RETURN(
 				handle < exclude_query_results.count,
 				result,
 				"ArchetypeQueryCache: Invalid handle for exclude query. Requested index {#} when count is {#}.",
@@ -210,7 +210,7 @@ namespace ECSEngine {
 			result.components = { exclude_query_results.components[handle].unique, exclude_query_results.components[handle].shared };
 		}
 		else {
-			ECS_CRASH_RETURN_VALUE(
+			ECS_CRASH_CONDITION_RETURN(
 				handle < query_results.count,
 				result,
 				"ArchetypeQueryCache: Invalid handle for normal query. Requested index {#} when count is {#}.",

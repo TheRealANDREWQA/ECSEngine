@@ -9,6 +9,7 @@ namespace ECSEngine {
 	const char* ECS_GLOBAL_DEFERRED_FILE = nullptr;
 	const char* ECS_GLOBAL_DEFERRED_FUNCTION = nullptr;
 	unsigned int ECS_GLOBAL_DEFERRED_LINE = -1;
+	std::atomic<unsigned int> ECS_GLOBAL_CRASH_IN_PROGRESS = 0;
 
 	// --------------------------------------------------------------------------------------------------------
 

@@ -83,6 +83,18 @@ namespace ECSEngine {
 	struct GLTFMesh;
 
 	struct ResourceManagerLoadDesc {
+		ECS_INLINE void GPULock() {
+			if (gpu_lock != nullptr) {
+				gpu_lock->lock();
+			}
+		}
+
+		ECS_INLINE void GPUUnlock() {
+			if (gpu_lock != nullptr) {
+				gpu_lock->unlock();
+			}
+		}
+
 		// This can be used as unload flags as well
 		size_t load_flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT;
 		// This can be used for unload as well

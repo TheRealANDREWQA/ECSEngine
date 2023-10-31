@@ -5334,7 +5334,8 @@ namespace ECSEngine {
 						}
 
 						// If the value changed, update the input stream
-						Integer current_value = ConvertCharactersToIntImpl<Integer, char>(*input->text);
+						bool dummy;
+						Integer current_value = ConvertCharactersToIntImpl<Integer, char, false>(*input->text, dummy);
 						if (!input->is_currently_selected) {
 							if (current_value != *data->number) {
 								input->DeleteAllCharacters();

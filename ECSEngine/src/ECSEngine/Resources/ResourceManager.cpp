@@ -9,7 +9,6 @@
 #include "../Utilities/ForEachFiles.h"
 #include "../Rendering/ShaderInclude.h"
 #include "../Rendering/Shader Application Stage/PBR.h"
-#include "../Rendering/DirectXTexHelpers.h"
 #include "../Utilities/OSFunctions.h"
 
 #define ECS_RESOURCE_MANAGER_CHECK_RESOURCE
@@ -1037,13 +1036,9 @@ namespace ECSEngine {
 		else {
 			if (descriptor->context != nullptr) {
 				// Lock the gpu lock, if any
-				if (load_descriptor.gpu_lock != nullptr) {
-					load_descriptor.gpu_lock->lock();
-				}
+				load_descriptor.GPULock();
 				texture_view = m_graphics->CreateTextureWithMips(decoded_texture.data, decoded_texture.format, { decoded_texture.width, decoded_texture.height }, temporary);
-				if (load_descriptor.gpu_lock != nullptr) {
-					load_descriptor.gpu_lock->unlock();
-				}
+				load_descriptor.GPUUnlock();
 			}
 			else {
 				Texture2DDescriptor graphics_descriptor;
@@ -2581,161 +2576,164 @@ namespace ECSEngine {
 
 	bool PBRToMaterial(ResourceManager* resource_manager, const PBRMaterial& pbr, Stream<wchar_t> folder_to_search, Material* material)
 	{
-		ShaderMacro _shader_macros[64];
-		Stream<ShaderMacro> shader_macros(_shader_macros, 0);
-		ResourceView texture_views[ECS_PBR_MATERIAL_MAPPING_COUNT] = { nullptr };
+		ECS_ASSERT(false, "PBRToMaterial Function is deprecated");
+		return false;
 
-		// For each texture, check to see if it exists and add the macro and load the texture
-		// The textures will be missing their extension, so do a search using .jpg, .png and .tiff, .bmp
-		Stream<wchar_t> texture_extensions[] = {
-			L".jpg",
-			L".png",
-			L".tiff",
-			L".bmp"
-		};
+		//ShaderMacro _shader_macros[64];
+		//Stream<ShaderMacro> shader_macros(_shader_macros, 0);
+		//ResourceView texture_views[ECS_PBR_MATERIAL_MAPPING_COUNT] = { nullptr };
 
-		wchar_t* memory = (wchar_t*)ECS_STACK_ALLOC(sizeof(wchar_t) * ECS_KB * 8);
+		//// For each texture, check to see if it exists and add the macro and load the texture
+		//// The textures will be missing their extension, so do a search using .jpg, .png and .tiff, .bmp
+		//Stream<wchar_t> texture_extensions[] = {
+		//	L".jpg",
+		//	L".png",
+		//	L".tiff",
+		//	L".bmp"
+		//};
 
-		struct Mapping {
-			Stream<wchar_t> texture;
-			PBRMaterialTextureIndex index;
-			ECS_TEXTURE_COMPRESSION_EX compression;
-		};
+		//wchar_t* memory = (wchar_t*)ECS_STACK_ALLOC(sizeof(wchar_t) * ECS_KB * 8);
 
-		Mapping _mapping[ECS_PBR_MATERIAL_MAPPING_COUNT];
-		Stream<Mapping> mappings(_mapping, 0);
-		LinearAllocator _temporary_allocator(memory, ECS_KB * 8);
-		AllocatorPolymorphic temporary_allocator = GetAllocatorPolymorphic(&_temporary_allocator);
+		//struct Mapping {
+		//	Stream<wchar_t> texture;
+		//	PBRMaterialTextureIndex index;
+		//	ECS_TEXTURE_COMPRESSION_EX compression;
+		//};
 
-		unsigned int macro_texture_count = 0;
+		//Mapping _mapping[ECS_PBR_MATERIAL_MAPPING_COUNT];
+		//Stream<Mapping> mappings(_mapping, 0);
+		//LinearAllocator _temporary_allocator(memory, ECS_KB * 8);
+		//AllocatorPolymorphic temporary_allocator = GetAllocatorPolymorphic(&_temporary_allocator);
 
-		if (pbr.color_texture.buffer != nullptr && pbr.color_texture.size > 0) {
-			shader_macros.Add({ "COLOR_TEXTURE", "" });
+		//unsigned int macro_texture_count = 0;
 
-			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.color_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_COLOR, ECS_TEXTURE_COMPRESSION_EX_COLOR });
-			macro_texture_count++;
-		}
+		//if (pbr.color_texture.buffer != nullptr && pbr.color_texture.size > 0) {
+		//	shader_macros.Add({ "COLOR_TEXTURE", "" });
 
-		if (pbr.emissive_texture.buffer != nullptr && pbr.emissive_texture.size > 0) {
-			shader_macros.Add({ "EMISSIVE_TEXTURE", "" });
-			
-			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.emissive_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_EMISSIVE, ECS_TEXTURE_COMPRESSION_EX_COLOR });
-			macro_texture_count++;
-		}
+		//	Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.color_texture);
+		//	mappings.Add({ texture, ECS_PBR_MATERIAL_COLOR, ECS_TEXTURE_COMPRESSION_EX_COLOR });
+		//	macro_texture_count++;
+		//}
 
-		if (pbr.metallic_texture.buffer != nullptr && pbr.metallic_texture.size > 0) {
-			shader_macros.Add({ "METALLIC_TEXTURE", "" });
+		//if (pbr.emissive_texture.buffer != nullptr && pbr.emissive_texture.size > 0) {
+		//	shader_macros.Add({ "EMISSIVE_TEXTURE", "" });
+		//	
+		//	Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.emissive_texture);
+		//	mappings.Add({ texture, ECS_PBR_MATERIAL_EMISSIVE, ECS_TEXTURE_COMPRESSION_EX_COLOR });
+		//	macro_texture_count++;
+		//}
 
-			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.metallic_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_METALLIC, ECS_TEXTURE_COMPRESSION_EX_GRAYSCALE });
-			macro_texture_count++;
-		}
+		//if (pbr.metallic_texture.buffer != nullptr && pbr.metallic_texture.size > 0) {
+		//	shader_macros.Add({ "METALLIC_TEXTURE", "" });
 
-		if (pbr.normal_texture.buffer != nullptr && pbr.normal_texture.size > 0) {
-			shader_macros.Add({ "NORMAL_TEXTURE", "" });
+		//	Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.metallic_texture);
+		//	mappings.Add({ texture, ECS_PBR_MATERIAL_METALLIC, ECS_TEXTURE_COMPRESSION_EX_GRAYSCALE });
+		//	macro_texture_count++;
+		//}
 
-			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.normal_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_NORMAL, ECS_TEXTURE_COMPRESSION_EX_TANGENT_SPACE_NORMAL });
-			macro_texture_count++;
-		}
+		//if (pbr.normal_texture.buffer != nullptr && pbr.normal_texture.size > 0) {
+		//	shader_macros.Add({ "NORMAL_TEXTURE", "" });
 
-		if (pbr.occlusion_texture.buffer != nullptr && pbr.occlusion_texture.size > 0) {
-			shader_macros.Add({ "OCCLUSION_TEXTURE", "" });
+		//	Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.normal_texture);
+		//	mappings.Add({ texture, ECS_PBR_MATERIAL_NORMAL, ECS_TEXTURE_COMPRESSION_EX_TANGENT_SPACE_NORMAL });
+		//	macro_texture_count++;
+		//}
 
-			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.occlusion_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_OCCLUSION, ECS_TEXTURE_COMPRESSION_EX_GRAYSCALE });
-			macro_texture_count++;
-		}
+		//if (pbr.occlusion_texture.buffer != nullptr && pbr.occlusion_texture.size > 0) {
+		//	shader_macros.Add({ "OCCLUSION_TEXTURE", "" });
 
-		if (pbr.roughness_texture.buffer != nullptr && pbr.roughness_texture.size > 0) {
-			shader_macros.Add({ "ROUGHNESS_TEXTURE", "" });
+		//	Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.occlusion_texture);
+		//	mappings.Add({ texture, ECS_PBR_MATERIAL_OCCLUSION, ECS_TEXTURE_COMPRESSION_EX_GRAYSCALE });
+		//	macro_texture_count++;
+		//}
 
-			Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.roughness_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_ROUGHNESS, ECS_TEXTURE_COMPRESSION_EX_GRAYSCALE });
-			macro_texture_count++;
-		}
+		//if (pbr.roughness_texture.buffer != nullptr && pbr.roughness_texture.size > 0) {
+		//	shader_macros.Add({ "ROUGHNESS_TEXTURE", "" });
 
-		struct FunctorData {
-			AllocatorPolymorphic allocator;
-			Stream<Mapping>* mappings;
-		};
+		//	Stream<wchar_t> texture = StringCopy(temporary_allocator, pbr.roughness_texture);
+		//	mappings.Add({ texture, ECS_PBR_MATERIAL_ROUGHNESS, ECS_TEXTURE_COMPRESSION_EX_GRAYSCALE });
+		//	macro_texture_count++;
+		//}
 
-		// Search the directory for the textures
-		auto search_functor = [](Stream<wchar_t> path, void* _data) {
-			FunctorData* data = (FunctorData*)_data;
+		//struct FunctorData {
+		//	AllocatorPolymorphic allocator;
+		//	Stream<Mapping>* mappings;
+		//};
 
-			Stream<wchar_t> filename = PathStem(path);
+		//// Search the directory for the textures
+		//auto search_functor = [](Stream<wchar_t> path, void* _data) {
+		//	FunctorData* data = (FunctorData*)_data;
 
-			for (size_t index = 0; index < data->mappings->size; index++) {
-				if (filename == data->mappings->buffer[index].texture) {
-					Stream<wchar_t> new_texture = StringCopy(data->allocator, path);
-					data->mappings->buffer[index].texture = new_texture;
-					data->mappings->Swap(index, data->mappings->size - 1);
-					data->mappings->size--;
-					return data->mappings->size > 0;
-				}
-			}
-			return data->mappings->size > 0;
-		};
+		//	Stream<wchar_t> filename = PathStem(path);
 
-		size_t texture_count = mappings.size;
-		FunctorData functor_data = { temporary_allocator, &mappings };
-		ForEachFileInDirectoryRecursiveWithExtension(folder_to_search, { texture_extensions, std::size(texture_extensions) }, &functor_data, search_functor);
-		ECS_ASSERT(mappings.size == 0);
-		if (mappings.size != 0) {
-			return false;
-		}
+		//	for (size_t index = 0; index < data->mappings->size; index++) {
+		//		if (filename == data->mappings->buffer[index].texture) {
+		//			Stream<wchar_t> new_texture = StringCopy(data->allocator, path);
+		//			data->mappings->buffer[index].texture = new_texture;
+		//			data->mappings->Swap(index, data->mappings->size - 1);
+		//			data->mappings->size--;
+		//			return data->mappings->size > 0;
+		//		}
+		//	}
+		//	return data->mappings->size > 0;
+		//};
 
-		GraphicsContext* context = resource_manager->m_graphics->GetContext();
+		//size_t texture_count = mappings.size;
+		//FunctorData functor_data = { temporary_allocator, &mappings };
+		//ForEachFileInDirectoryRecursiveWithExtension(folder_to_search, { texture_extensions, std::size(texture_extensions) }, &functor_data, search_functor);
+		//ECS_ASSERT(mappings.size == 0);
+		//if (mappings.size != 0) {
+		//	return false;
+		//}
 
-		ResourceManagerTextureDesc texture_descriptor;
-		texture_descriptor.context = context;
-		texture_descriptor.usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		//GraphicsContext* context = resource_manager->m_graphics->GetContext();
 
-		for (size_t index = 0; index < texture_count; index++) {
-			texture_descriptor.compression = mappings[index].compression;
-			texture_views[mappings[index].index] = resource_manager->LoadTextureImplementation(mappings[index].texture.buffer, &texture_descriptor);
-		}
+		//ResourceManagerTextureDesc texture_descriptor;
+		//texture_descriptor.context = context;
+		//texture_descriptor.usage = ECS_GRAPHICS_USAGE_DEFAULT;
 
-		// Compile the shaders and reflect their buffers and structures
-		ShaderCompileOptions options;
-		options.macros = shader_macros;
+		//for (size_t index = 0; index < texture_count; index++) {
+		//	texture_descriptor.compression = mappings[index].compression;
+		//	texture_views[mappings[index].index] = resource_manager->LoadTextureImplementation(mappings[index].texture.buffer, &texture_descriptor);
+		//}
 
-		ECS_MESH_INDEX _vertex_mappings[8];
-		CapacityStream<ECS_MESH_INDEX> vertex_mappings(_vertex_mappings, 0, 8);
+		//// Compile the shaders and reflect their buffers and structures
+		//ShaderCompileOptions options;
+		//options.macros = shader_macros;
 
-		Stream<char> shader_source;
-		Stream<void> byte_code;
-		material->vertex_shader = resource_manager->LoadShaderImplementation(ECS_VERTEX_SHADER_SOURCE(PBR), ECS_SHADER_VERTEX, &shader_source, &byte_code);
-		ECS_ASSERT(material->vertex_shader.shader != nullptr);
-		material->layout = resource_manager->m_graphics->ReflectVertexShaderInput(shader_source, byte_code);
-		bool success = resource_manager->m_graphics->ReflectVertexBufferMapping(shader_source, vertex_mappings);
-		ECS_ASSERT(success);
-		memcpy(material->vertex_buffer_mappings, _vertex_mappings, vertex_mappings.size * sizeof(ECS_MESH_INDEX));
-		material->vertex_buffer_mapping_count = vertex_mappings.size;
-		resource_manager->Deallocate(shader_source.buffer);
+		//ECS_MESH_INDEX _vertex_mappings[8];
+		//CapacityStream<ECS_MESH_INDEX> vertex_mappings(_vertex_mappings, 0, 8);
 
-		material->pixel_shader = resource_manager->LoadShaderImplementation(ECS_PIXEL_SHADER_SOURCE(PBR), ECS_SHADER_PIXEL, nullptr, nullptr, options);
-		ECS_ASSERT(material->pixel_shader.shader != nullptr);
+		//Stream<char> shader_source;
+		//Stream<void> byte_code;
+		//material->vertex_shader = resource_manager->LoadShaderImplementation(ECS_VERTEX_SHADER_SOURCE(PBR), ECS_SHADER_VERTEX, &shader_source, &byte_code);
+		//ECS_ASSERT(material->vertex_shader.shader != nullptr);
+		//material->layout = resource_manager->m_graphics->ReflectVertexShaderInput(shader_source, byte_code);
+		//bool success = resource_manager->m_graphics->ReflectVertexBufferMapping(shader_source, vertex_mappings);
+		//ECS_ASSERT(success);
+		//memcpy(material->vertex_buffer_mappings, _vertex_mappings, vertex_mappings.size * sizeof(ECS_MESH_INDEX));
+		//material->vertex_buffer_mapping_count = vertex_mappings.size;
+		//resource_manager->Deallocate(shader_source.buffer);
 
-		material->v_buffers[0] = Shaders::CreatePBRVertexConstants(resource_manager->m_graphics);
-		material->v_buffer_slot[0] = 0;
-		material->v_buffer_count = 1;
+		//material->pixel_shader = resource_manager->LoadShaderImplementation(ECS_PIXEL_SHADER_SOURCE(PBR), ECS_SHADER_PIXEL, nullptr, nullptr, options);
+		//ECS_ASSERT(material->pixel_shader.shader != nullptr);
 
-		for (size_t index = 0; index < macro_texture_count; index++) {
-			material->p_textures[index] = texture_views[mappings[index].index];
-			// The slot is + 3 because of the environment maps
-			material->p_texture_slot[index] = 3 + mappings[index].index;
-		}
-		material->p_texture_count = macro_texture_count;
+		//material->v_buffers[0] = Shaders::CreatePBRVertexConstants(resource_manager->m_graphics);
+		//material->v_buffer_slot[0] = 0;
+		//material->v_buffer_count = 1;
 
-		material->p_buffers[0] = Shaders::CreatePBRPixelConstants(resource_manager->m_graphics);
-		material->p_buffer_slot[0] = 2;
-		material->p_buffer_count = 1;
+		//for (size_t index = 0; index < macro_texture_count; index++) {
+		//	material->p_textures[index] = texture_views[mappings[index].index];
+		//	// The slot is + 3 because of the environment maps
+		//	material->p_texture_slot[index] = 3 + mappings[index].index;
+		//}
+		//material->p_texture_count = macro_texture_count;
 
-		return true;
+		//material->p_buffers[0] = Shaders::CreatePBRPixelConstants(resource_manager->m_graphics);
+		//material->p_buffer_slot[0] = 2;
+		//material->p_buffer_count = 1;
+
+		//return true;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------

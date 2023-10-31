@@ -707,7 +707,7 @@ namespace ECSEngine {
 			stack_frame.AddrPC.Mode = AddrModeFlat;
 			stack_frame.AddrStack.Offset = context.Rsp;
 			stack_frame.AddrStack.Mode = AddrModeFlat;
-			stack_frame.AddrFrame.Offset = context.Rsp;
+			stack_frame.AddrFrame.Offset = context.Rbp;
 			stack_frame.AddrFrame.Mode = AddrModeFlat;
 			IMAGEHLP_SYMBOL64* image_symbol = (IMAGEHLP_SYMBOL64*)ECS_STACK_ALLOC(sizeof(IMAGEHLP_SYMBOL64) + 512);
 			image_symbol->MaxNameLength = 511;
@@ -719,9 +719,11 @@ namespace ECSEngine {
 			string.AddStreamSafe("Stack trace:\n");
 			while (StackWalk64(IMAGE_FILE_MACHINE_AMD64, process_handle, GetCurrentThread(), &stack_frame, &context, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr)) {
 				success = SymGetSymFromAddr64(process_handle, (size_t)stack_frame.AddrPC.Offset, &displacement, image_symbol);
-				DWORD characters_written = UnDecorateSymbolName(image_symbol->Name, string.buffer + string.size, string.capacity - string.size, UNDNAME_COMPLETE);
-				string.size += characters_written;
-				string.Add('\n');
+				if (success) {
+					DWORD characters_written = UnDecorateSymbolName(image_symbol->Name, string.buffer + string.size, string.capacity - string.size, UNDNAME_COMPLETE);
+					string.size += characters_written;
+					string.Add('\n');
+				}
 			}
 
 			string.AssertCapacity();

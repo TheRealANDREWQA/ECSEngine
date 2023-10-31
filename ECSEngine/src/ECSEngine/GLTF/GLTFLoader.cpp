@@ -705,7 +705,7 @@ namespace ECSEngine {
 
 			positions.size = buffer_sizes->count[ECS_MESH_POSITION] - positions.size;
 			normals.size = buffer_sizes->count[ECS_MESH_NORMAL] - normals.size;
-			ECS_ASSERT(positions.size == normals.size, "Mismatch betwenn mesh position and normal vertex count.");
+			ECS_ASSERT(positions.size == normals.size, "Mismatch between mesh position and normal vertex count.");
 
 			Stream<unsigned int> indices = { nullptr, 0 };
 			if (primitive->indices != nullptr) {
@@ -1261,8 +1261,9 @@ namespace ECSEngine {
 		size_t total_vertex_buffer_count = 0;
 		size_t total_index_buffer_count = 0;
 
-		ECS_ASSERT(gltf_meshes.size <= COUNT_MAX);
-		unsigned int* sorted_indices = (unsigned int*)ECS_STACK_ALLOC(sizeof(unsigned int) * gltf_meshes.size);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, sorted_indices_storage, 2048);
+		ECS_ASSERT(gltf_meshes.size <= sorted_indices_storage.capacity);
+		unsigned int* sorted_indices = sorted_indices_storage.buffer;
 
 		// The x component will hold the total vertex count
 		// The y component will hold the total index count

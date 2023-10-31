@@ -463,7 +463,7 @@ namespace ECSEngine {
 						query_descriptor.shared_optional
 					);
 
-					ECS_CRASH_RETURN(query_descriptor.unique_exclude.count == 0 && query_descriptor.shared_exclude.count == 0, "ECS ForEach:"
+					ECS_CRASH_CONDITION(query_descriptor.unique_exclude.count == 0 && query_descriptor.shared_exclude.count == 0, "ECS ForEach:"
 						" You must specify the exclude components in the Function template parameter pack");
 
 					if constexpr (options & FOR_EACH_IS_COMMIT) {

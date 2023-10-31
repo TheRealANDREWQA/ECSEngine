@@ -235,4 +235,56 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------
 
+	bool ParseTokensFromFormat(Stream<char> string, Stream<char> format, CapacityStream<Stream<char>>* tokens)
+	{
+		ECS_STACK_CAPACITY_STREAM(unsigned int, token_indices, 512);
+		AdditionStream<unsigned int> addition_stream = &token_indices;
+		FindToken(format, ECS_FORMAT_SPECIFIER, addition_stream);
+
+		size_t specifier_size = strlen(ECS_FORMAT_SPECIFIER);
+
+		unsigned int format_starting_index = 0;
+		unsigned int string_starting_index = 0;
+		for (unsigned int index = 0; index < token_indices.size; index++) {
+			// Try to match the previous part before the token
+			Stream<char> format_previous_part = { format.buffer + format_starting_index, token_indices[index] - format_starting_index };
+			Stream<char> string_previous_part = { string.buffer + string_starting_index, format_previous_part.size };
+			if (format_previous_part == string_previous_part) {
+				// Add the token up to the next character in the format
+				unsigned int next_character_index = token_indices[index] + specifier_size;
+				Stream<char> parse_range = { string.buffer + string_starting_index + format_previous_part.size, string.size - string_starting_index - format_previous_part.size };
+				if (next_character_index < format.size) {
+					char next_character = format[token_indices[index] + specifier_size];
+					Stream<char> next_character_in_range = FindFirstCharacter(parse_range, next_character);
+					if (next_character_in_range.size > 0) {
+						// We found a next character - take the token from the start of the parse range up to it
+						Stream<char> token = parse_range.StartDifference(next_character_in_range);
+						tokens->AddAssert(token);
+
+						// Update the starting indices
+						format_starting_index = next_character_index;
+						string_starting_index = token.buffer - string.buffer + token.size;
+					}
+					else {
+						// Returns since the parsing did not match
+						return false;
+					}
+				}
+				else {
+					// This specifier is exactly at the end
+					// Add the token from the string up to the end of the string
+					tokens->AddAssert(parse_range);
+				}
+			}
+			else {
+				// The parsing failed since the format is not matched
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------
+
 }

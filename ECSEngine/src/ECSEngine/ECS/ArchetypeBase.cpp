@@ -55,7 +55,7 @@ namespace ECSEngine {
 	void ArchetypeBase::CopyOther(const ArchetypeBase* other)
 	{
 		// Assert they have the same capacity
-		ECS_CRASH_RETURN(
+		ECS_CRASH_CONDITION(
 			other->m_capacity == m_capacity, 
 			"Trying to copy a base archetype with different capacity. Expected {#}, got {#}.", 
 			m_capacity,
@@ -110,7 +110,7 @@ namespace ECSEngine {
 	void CopyEntitiesInternal(ArchetypeBase* archetype, ComponentSignature components, unsigned int copy_position, Functor&& functor) {
 		for (size_t index = 0; index < components.count; index++) {
 			unsigned char component_index = archetype->FindComponentIndex(components.indices[index]);
-			ECS_CRASH_RETURN(component_index != UCHAR_MAX, "Incorrect component {#} when trying to copy entities. The component is missing from the base archetype.", components.indices[index].value);
+			ECS_CRASH_CONDITION(component_index != UCHAR_MAX, "Incorrect component {#} when trying to copy entities. The component is missing from the base archetype.", components.indices[index].value);
 
 			unsigned short component_size = archetype->m_infos[components.indices[index].value].size;
 
@@ -186,7 +186,7 @@ namespace ECSEngine {
 			// Determine what the component index is in both archetypes
 			unsigned char component_index = FindComponentIndex(components_to_copy.indices[index]);
 			// If the components was not found fail
-			ECS_CRASH_RETURN(
+			ECS_CRASH_CONDITION(
 				component_index != -1, 
 				"Could not find component {#} in destination archetype when copying entities from another base archetype.", 
 				components_to_copy.indices[index].value
@@ -203,7 +203,7 @@ namespace ECSEngine {
 				}
 			}
 			// If no match was found, fail
-			ECS_CRASH_RETURN(
+			ECS_CRASH_CONDITION(
 				archetype_to_copy_component_index != -1,
 				"Could not find component {#} in source archetype when copying entities from another base archetype.",
 				components_to_copy.indices[index]
@@ -344,7 +344,7 @@ namespace ECSEngine {
 	void* ArchetypeBase::GetComponent(EntityInfo info, Component component)
 	{
 		unsigned char component_index = FindComponentIndex(component);
-		ECS_CRASH_RETURN_VALUE(component_index != -1, nullptr, "The entity {#} does not have component {#} when trying to retrieve it.", m_entities[info.stream_index].value);
+		ECS_CRASH_CONDITION_RETURN(component_index != -1, nullptr, "The entity {#} does not have component {#} when trying to retrieve it.", m_entities[info.stream_index].value);
 		return GetComponentByIndex(info, component_index);
 	}
 
@@ -353,7 +353,7 @@ namespace ECSEngine {
 	const void* ArchetypeBase::GetComponent(EntityInfo info, Component component) const
 	{
 		unsigned char component_index = FindComponentIndex(component);
-		ECS_CRASH_RETURN_VALUE(component_index != -1, nullptr, "The entity {#} does not have component {#} when trying to retrieve it.", m_entities[info.stream_index].value);
+		ECS_CRASH_CONDITION_RETURN(component_index != -1, nullptr, "The entity {#} does not have component {#} when trying to retrieve it.", m_entities[info.stream_index].value);
 		return GetComponentByIndex(info, component_index);
 	}
 
@@ -478,7 +478,7 @@ namespace ECSEngine {
 	void ArchetypeBase::UpdateComponent(unsigned int stream_index, Component component, const void* data)
 	{
 		unsigned char component_index = FindComponentIndex(component);
-		ECS_CRASH_RETURN(component_index != -1, "The entity {#} does not have component {#} when trying to update it.", m_entities[stream_index].value, component.value);
+		ECS_CRASH_CONDITION(component_index != -1, "The entity {#} does not have component {#} when trying to update it.", m_entities[stream_index].value, component.value);
 		UpdateComponentByIndex(stream_index, component_index, data);
 	}
 

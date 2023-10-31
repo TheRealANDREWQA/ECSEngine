@@ -199,7 +199,7 @@ namespace ECSEngine {
 				// Check that there is no component index with -1
 				// If it happens, then there is a memory corruption
 				for (unsigned char component_index = 0; component_index < task_data.component_map_count; component_index++) {
-					ECS_CRASH_RETURN(
+					ECS_CRASH_CONDITION(
 						task_data.component_map[component_index] != -1,
 						"ForEachEntity/Batch: An archetype was corrupted. During query {#} execution a component was not found.",
 						functor_name
@@ -207,7 +207,7 @@ namespace ECSEngine {
 				}
 
 				for (unsigned char shared_component_index = 0; shared_component_index < task_data.shared_component_map_count; shared_component_index++) {
-					ECS_CRASH_RETURN(
+					ECS_CRASH_CONDITION(
 						task_data.shared_component_map[shared_component_index] != -1,
 						"ForEachEntity/Batch: An archetype was corrupted. During query {#} execution a shared component was not found.",
 						functor_name
