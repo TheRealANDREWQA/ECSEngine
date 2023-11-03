@@ -389,6 +389,18 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	bool ClearFile(ECS_FILE_HANDLE file_handle)
+	{
+		bool success = ResizeFile(file_handle, 0);
+		// We also need to reset the file pointer
+		if (success) {
+			return SetFileCursorBool(file_handle, 0, ECS_FILE_SEEK_BEG);
+		}
+		return false;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	bool RemoveFile(Stream<wchar_t> file)
 	{
 		NULL_TERMINATE_WIDE(file);
@@ -587,9 +599,16 @@ namespace ECSEngine {
 			return false;
 		}
 
-		bool success = _chsize(file_handle, size) == 0;
+		bool success = ResizeFile(file_handle, size);
 		CloseFile(file_handle);
 		return success;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool ResizeFile(ECS_FILE_HANDLE file_handle, int size)
+	{
+		return _chsize(file_handle, size) == 0;
 	}
 
 	// --------------------------------------------------------------------------------------------------

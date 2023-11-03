@@ -718,6 +718,7 @@ namespace ECSEngine {
 		};
 
 		struct WindowRetainedModeInfo {
+			UISystem* system;
 			UIDockspace* dockspace;
 			unsigned int border_index;
 			unsigned int window_index;

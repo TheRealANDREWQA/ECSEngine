@@ -654,6 +654,15 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
+		bool CaptureCurrentThreadStackContext(ThreadContext* thread_context)
+		{
+			LPCONTEXT context = (LPCONTEXT)thread_context->bytes;
+			RtlCaptureContext(context);
+			return true;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
 		void InitializeSymbolicLinksPaths(Stream<Stream<wchar_t>> module_paths)
 		{
 			ECS_STACK_CAPACITY_STREAM(wchar_t, search_paths, ECS_KB * 8);
@@ -696,18 +705,26 @@ namespace ECSEngine {
 
 		void GetCallStackFunctionNames(CapacityStream<char>& string)
 		{
+			ThreadContext current_thread_context;
+			bool success = CaptureCurrentThreadStackContext(&current_thread_context);
+			if (success) {
+				GetCallStackFunctionNames(&current_thread_context, string);
+			}
+		}
+
+		void GetCallStackFunctionNames(ThreadContext* context, CapacityStream<char>& string)
+		{
 			bool success;
 			STACKFRAME64 stack_frame;
 			memset(&stack_frame, 0, sizeof(stack_frame));
 
-			CONTEXT context;
-			RtlCaptureContext(&context);
+			LPCONTEXT os_context = (LPCONTEXT)context->bytes;
 
-			stack_frame.AddrPC.Offset = context.Rip;
+			stack_frame.AddrPC.Offset = os_context->Rip;
 			stack_frame.AddrPC.Mode = AddrModeFlat;
-			stack_frame.AddrStack.Offset = context.Rsp;
+			stack_frame.AddrStack.Offset = os_context->Rsp;
 			stack_frame.AddrStack.Mode = AddrModeFlat;
-			stack_frame.AddrFrame.Offset = context.Rbp;
+			stack_frame.AddrFrame.Offset = os_context->Rbp;
 			stack_frame.AddrFrame.Mode = AddrModeFlat;
 			IMAGEHLP_SYMBOL64* image_symbol = (IMAGEHLP_SYMBOL64*)ECS_STACK_ALLOC(sizeof(IMAGEHLP_SYMBOL64) + 512);
 			image_symbol->MaxNameLength = 511;
@@ -732,41 +749,14 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
-#pragma region Error With Window Or Console
-
-		using FolderFunction = bool (*)(Stream<wchar_t> path);
-
-		// -----------------------------------------------------------------------------------------------------
-
-		void ErrorWindow(Stream<wchar_t> path, FolderFunction function, const char* error_string, UISystem* system) {
-			bool success = function(path);
-			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, error_string, path);
-				ECS_ASSERT(written_characters < 512);
-				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
-			}
-		}
-
-		void ErrorConsole(Stream<wchar_t> path, FolderFunction function, const char* error_string) {
-			bool success = function(path);
-			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = FormatString(temp_characters, error_string, path);
-				ECS_ASSERT(written_characters < 512);
-				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
-			}
-		}
-
-		// -----------------------------------------------------------------------------------------------------
-
-#define LAUNCH_FILE_EXPLORER_ERROR_STRING "Launching file explorer at {#} failed. Incorrect path."
-
-		// -----------------------------------------------------------------------------------------------------
-
 		void ChangeThreadPriority(ECS_THREAD_PRIORITY priority)
+		{
+			ChangeThreadPriority(GetCurrentThread(), priority);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void ChangeThreadPriority(void* thread_handle, ECS_THREAD_PRIORITY priority)
 		{
 			int thread_priority = 0;
 			switch (priority) {
@@ -787,7 +777,7 @@ namespace ECSEngine {
 				break;
 			}
 
-			BOOL success = SetThreadPriority(GetCurrentThread(), thread_priority);
+			BOOL success = SetThreadPriority(thread_handle, thread_priority);
 			ECS_ASSERT(success, "Changing thread priority failed.");
 		}
 
@@ -814,7 +804,7 @@ namespace ECSEngine {
 			HWND hwnd = (HWND)window_handle;
 			RECT window_rect;
 			ECS_ASSERT(GetClientRect(hwnd, &window_rect));
-			
+
 			// If we have a top border we need to take that into account
 			RECT bounds;
 			GetWindowRect(hwnd, &bounds);
@@ -887,6 +877,104 @@ namespace ECSEngine {
 			DWORD previous_access;
 			return VirtualProtect(allocation, memory_info.RegionSize, PAGE_READONLY, &previous_access);
 		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void ExitThread(int error_code) {
+			::ExitThread(error_code);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool SuspendThread(void* handle)
+		{
+			DWORD suspend_count = ::SuspendThread(handle);
+			DWORD last_error = GetLastError();
+			return suspend_count != -1;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void* GetCurrentThreadHandle()
+		{
+			HANDLE pseudo_handle = GetCurrentThread();
+			return DuplicateThreadHandle(pseudo_handle);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void CloseThreadHandle(void* handle)
+		{
+			CloseHandle(handle);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void* DuplicateThreadHandle(void* handle)
+		{
+			HANDLE process_handle = GetCurrentProcess();
+			HANDLE new_handle = nullptr;
+			BOOL success = DuplicateHandle(process_handle, handle, process_handle, &new_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+			return success ? new_handle : nullptr;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		size_t GetCurrentThreadID()
+		{
+			return GetCurrentThreadId();
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		size_t GetThreadID(void* handle)
+		{
+			DWORD value = GetThreadId(handle);
+			size_t last_error = GetLastError();
+			return value == 0 ? (size_t)-1 : (size_t)value;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool CaptureThreadStackContext(void* thread_handle, ThreadContext* thread_context)
+		{
+			static_assert(sizeof(ThreadContext) >= sizeof(CONTEXT));
+			return GetThreadContext(thread_handle, (LPCONTEXT)thread_context->bytes) != 0;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Error With Window Or Console
+
+		using FolderFunction = bool (*)(Stream<wchar_t> path);
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void ErrorWindow(Stream<wchar_t> path, FolderFunction function, const char* error_string, UISystem* system) {
+			bool success = function(path);
+			if (!success) {
+				char temp_characters[512];
+				size_t written_characters = FormatString(temp_characters, error_string, path);
+				ECS_ASSERT(written_characters < 512);
+				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
+			}
+		}
+
+		void ErrorConsole(Stream<wchar_t> path, FolderFunction function, const char* error_string) {
+			bool success = function(path);
+			if (!success) {
+				char temp_characters[512];
+				size_t written_characters = FormatString(temp_characters, error_string, path);
+				ECS_ASSERT(written_characters < 512);
+				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+#define LAUNCH_FILE_EXPLORER_ERROR_STRING "Launching file explorer at {#} failed. Incorrect path."
 
 		// -----------------------------------------------------------------------------------------------------
 

@@ -87,6 +87,19 @@ void InspectorDrawSceneFile(EditorState* editor_state, unsigned int inspector_in
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+void ChangeInspectorToSceneFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
+	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 512);
+	null_terminated_path.CopyOther(path);
+	null_terminated_path.AddAssert(L'\0');
+	ChangeInspectorDrawFunctionWithSearch(editor_state, inspector_index, { InspectorDrawSceneFile, InspectorCleanNothing }, null_terminated_path.buffer, sizeof(wchar_t) * (path.size + 1), -1,
+		[=](void* inspector_data) {
+			const wchar_t* other_data = (const wchar_t*)inspector_data;
+			return other_data == path;
+		});
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	const float PADLOCK_SIZE = 0.04f;
 	const float REDUCE_FONT_SIZE = 1.0f;
@@ -288,21 +301,19 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsi
 	InspectorFunctions functions;
 	Stream<wchar_t> extension = PathExtension(path);
 
-	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 256);
-	null_terminated_path.CopyOther(path);
-	null_terminated_path[null_terminated_path.size] = L'\0';
 	if (extension.size == 0 || !TryGetInspectorTableFunction(editor_state, functions, extension)) {
 		functions.draw_function = InspectorDrawBlankFile;
 		functions.clean_function = InspectorCleanNothing;
 	}
 
-	InspectorDrawFunction asset_draws[] = {
+	InspectorDrawFunction draw_functions[] = {
 		InspectorDrawMeshFile,
 		InspectorDrawTextureFile,
 		InspectorDrawGPUSamplerFile,
 		InspectorDrawShaderFile,
 		InspectorDrawMaterialFile,
-		InspectorDrawMiscFile
+		InspectorDrawMiscFile,
+		InspectorDrawSceneFile
 	};
 
 	auto mesh_wrapper = [](EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
@@ -319,21 +330,27 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsi
 		ChangeInspectorToGPUSamplerFile,
 		ChangeInspectorToShaderFile,
 		ChangeInspectorToMaterialFile,
-		ChangeInspectorToMiscFile
+		ChangeInspectorToMiscFile,
+		ChangeInspectorToSceneFile
 	};
 	
 	size_t index = 0;
-	size_t asset_draw_count = std::size(asset_draws);
-	for (; index < asset_draw_count; index++) {
-		if (functions.draw_function == asset_draws[index]) {
+	size_t draw_function_count = std::size(draw_functions);
+	for (; index < draw_function_count; index++) {
+		if (functions.draw_function == draw_functions[index]) {
 			change_functions[index](editor_state, path, inspector_index);
 			break;
 		}
 	}
-	
-	// If it didn't match an asset
-	if (index == asset_draw_count) {
-		ChangeInspectorDrawFunction(editor_state, inspector_index, functions, null_terminated_path.buffer, sizeof(wchar_t) * (path.size + 1));
+
+	if (index == draw_function_count) {
+		if (IsInspectorTextFileDraw(functions.draw_function)) {
+			// These are the only types of draws left
+			ChangeInspectorToTextFile(editor_state, path, inspector_index);
+		}
+		else {
+			ECS_ASSERT(false, "Unknown inspector file");
+		}
 	}
 }
 
@@ -520,10 +537,30 @@ void ReloadInspectorAssetFromMetadata(EditorState* editor_state, unsigned int in
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+static bool InspectorRetainedModeWrapper(void* window_data, WindowRetainedModeInfo* info) {
+	EditorState* editor_state = (EditorState*)window_data;
+
+	Stream<char> window_name = info->system->GetWindowName(info->window_index);
+	unsigned int inspector_index = GetInspectorIndex(window_name);
+
+	void* draw_data = GetInspectorDrawFunctionData(editor_state, inspector_index);
+	return editor_state->inspector_manager.data[inspector_index].retained_mode(draw_data, info);
+}
+
+void SetInspectorRetainedMode(EditorState* editor_state, unsigned int inspector_index, WindowRetainedMode retained_mode)
+{
+	ECS_STACK_CAPACITY_STREAM(char, inspector_name, 512);
+	GetInspectorName(inspector_index, inspector_name);
+	editor_state->inspector_manager.data[inspector_index].retained_mode = retained_mode;
+	WindowRetainedMode inspector_retained_mode = retained_mode != nullptr ? InspectorRetainedModeWrapper : nullptr;
+	editor_state->ui_system->SetWindowRetainedFunction(inspector_name, inspector_retained_mode);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void InitializeInspectorTable(EditorState* editor_state) {
 	void* allocation = editor_state->editor_allocator->Allocate(InspectorTable::MemoryOf(FUNCTION_TABLE_CAPACITY));
 	editor_state->inspector_manager.function_table.InitializeFromBuffer(allocation, FUNCTION_TABLE_CAPACITY);
-	
 	
 	AddInspectorTableFunction(&editor_state->inspector_manager.function_table, { InspectorDrawSceneFile, InspectorCleanNothing }, L".scene");
 	InspectorTextFileAddFunctors(&editor_state->inspector_manager.function_table);

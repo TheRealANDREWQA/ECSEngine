@@ -73,7 +73,8 @@ namespace ECSEngine {
 		}
 		
 		ECS_INLINE static AllocatorPolymorphic TemporaryAllocator(const UIDrawer* drawer, ECS_UI_DRAW_PHASE phase) {
-			return GetAllocatorPolymorphic(drawer->system->TemporaryAllocator(drawer->thread_id, phase));
+			return drawer->record_snapshot_runnables ? drawer->SnapshotRunnableAllocator() : 
+				GetAllocatorPolymorphic(drawer->system->TemporaryAllocator(drawer->thread_id, phase));
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -8089,6 +8090,7 @@ namespace ECSEngine {
 					system->m_windows[window_index].pin_horizontal_slider_count--;
 				}
 
+				float previous_value = region_offset->x;
 				FloatSliderDrawer(
 					slider_configuration,
 					config,
@@ -8099,6 +8101,10 @@ namespace ECSEngine {
 					0.0f,
 					difference
 				);
+				if (FloatCompare(previous_value, region_offset->x, 0.0001f)) {
+					// Avoid micro bounces
+					region_offset->x = previous_value;
+				}
 				system->m_windows[window_index].is_horizontal_render_slider = true;
 			}
 			else {
@@ -8144,6 +8150,7 @@ namespace ECSEngine {
 					system->m_windows[window_index].pin_vertical_slider_count--;
 				}
 
+				float previous_value = region_offset->y;
 				FloatSliderDrawer(
 					slider_configuration,
 					config,
@@ -8154,6 +8161,10 @@ namespace ECSEngine {
 					0.0f,
 					difference
 				);
+				if (FloatCompare(previous_value, region_offset->y, 0.0001f)) {
+					// Avoid micro bounces
+					region_offset->y = previous_value;
+				}
 				system->m_windows[window_index].is_vertical_render_slider = true;
 			}
 			else {
@@ -12728,7 +12739,7 @@ namespace ECSEngine {
 
 						UIDrawerFilesystemHierarchyChangeStateData change_state_data;
 						change_state_data.hierarchy = data;
-						change_state_data.label = table_char_stream;
+						change_state_data.label = clickable_data.label;
 						if (keep_triangle && has_children) {
 							if (label_state) {
 								SpriteRectangle(configuration, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, text_color);

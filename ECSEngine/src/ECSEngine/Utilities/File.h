@@ -220,6 +220,8 @@ namespace ECSEngine {
 
 	ECSENGINE_API bool ClearFile(Stream<wchar_t> path);
 
+	ECSENGINE_API bool ClearFile(ECS_FILE_HANDLE file_handle);
+
 	// Returns true if the file was removed, false if it doesn't exist
 	ECSENGINE_API bool RemoveFile(Stream<wchar_t> file);
 
@@ -245,6 +247,8 @@ namespace ECSEngine {
 	ECSENGINE_API bool RenameFileAbsolute(Stream<wchar_t> path, Stream<wchar_t> new_absolute_path);
 
 	ECSENGINE_API bool ResizeFile(Stream<wchar_t> file, int size);
+
+	ECSENGINE_API bool ResizeFile(ECS_FILE_HANDLE file_handle, int size);
 
 	// The extension must start with a dot; operation applies to the OS file, not for the in memory paths
 	ECSENGINE_API bool ChangeFileExtension(Stream<wchar_t> path, Stream<wchar_t> new_extension);

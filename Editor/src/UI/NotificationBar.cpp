@@ -48,7 +48,8 @@ void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 	constexpr float REGION_PADDING = 0.01f;
 
 	Console* console = GetConsole();
-	unsigned int message_index = console->messages.size - 1;
+	unsigned int console_message_size = console->messages.Size();
+	unsigned int message_index = console_message_size - 1;
 	unsigned int console_window = drawer.system->GetWindowFromName(CONSOLE_WINDOW_NAME);
 
 	if (console_window != -1) {
@@ -66,7 +67,7 @@ void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 				drawer.window_index = previous_window_index;
 			}
 
-			if (console_data->filtered_message_indices.size > 0 && console->messages.size > 0) {
+			if (console_data->filtered_message_indices.size > 0 && console_message_size > 0) {
 				message_index = console_data->filtered_message_indices[console_data->filtered_message_indices.size - 1];
 			}
 			else {
@@ -82,7 +83,7 @@ void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 	// Display only the last notification - if any
 	if (message_index != -1) {
 		float2 action_position = drawer.GetCurrentPositionNonOffset();
-		const ConsoleMessage* message = console->messages.buffer + message_index;
+		const ConsoleMessage* message = &console->messages[message_index];
 
 		UIConfigRelativeTransform relative_transform;
 		relative_transform.scale.y = drawer.GetRelativeTransformFactors({ 0.0f, TEXT_LABEL_Y_SIZE }).y;

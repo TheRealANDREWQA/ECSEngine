@@ -6,7 +6,6 @@ using namespace ECSEngine;
 ECS_TOOLS;
 
 #define INSPECTOR_WINDOW_NAME "Inspector "
-#define MAX_INSPECTOR_WINDOWS 8
 
 struct EditorState;
 
@@ -72,3 +71,5 @@ void UnlockInspector(EditorState* editor_state, unsigned int inspector_index);
 // It will change the inspector to nothing and back to the current asset such that a reload
 // Will happen from the base metadata
 void ReloadInspectorAssetFromMetadata(EditorState* editor_state, unsigned int inspector_index);
+
+void SetInspectorRetainedMode(EditorState* editor_state, unsigned int inspector_index, WindowRetainedMode retained_mode);

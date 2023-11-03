@@ -524,8 +524,9 @@ namespace ECSEngine {
 				ThreadProcedure(this, index);
 			});
 
-			// Register the handle
-			m_thread_handles[index] = thread.native_handle();
+			// Register the handle. We need to create a copy of the handle since
+			// thread.detach() will make the handle invalid
+			m_thread_handles[index] = OS::DuplicateThreadHandle(thread.native_handle());
 
 			thread.detach();
 		}
@@ -536,6 +537,8 @@ namespace ECSEngine {
 	void TaskManager::DestroyThreads()
 	{
 		for (unsigned int index = 0; index < GetThreadCount(); index++) {
+			// Close our thread handle
+			OS::CloseThreadHandle(m_thread_handles[index]);
 			AddDynamicTaskAndWakeWithAffinity(ECS_THREAD_TASK_NAME(ExitThreadTask, nullptr, 0), index);
 		}
 	}
@@ -875,7 +878,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ECS_THREAD_TASK(TerminateThreadTask) {
-		ExitThread(0);
+		OS::ExitThread(0);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

@@ -202,6 +202,7 @@ unsigned int ChangeInspectorDrawFunction(
 		inspector_data->draw_data = CopyNonZero(editor_allocator, data, data_size);
 		inspector_data->draw_function = functions.draw_function;
 		inspector_data->clean_function = functions.clean_function;
+		SetInspectorRetainedMode(editor_state, inspector_index, functions.retained_function);
 		inspector_data->data_size = data_size;
 
 		// Same as the comment above, the window is firstly created

@@ -4090,16 +4090,15 @@ namespace ECSEngine {
 
 			bool has_snapshot_mode = data->snapshot_mode;
 			bool is_retained = false;
-			if (!has_snapshot_mode) {
-				// Check to see if the window is in "retained" mode
-				if (m_windows[window_index].retained_mode != nullptr) {
-					WindowRetainedModeInfo info;
-					info.border_index = data->border_index;
-					info.dockspace = data->dockspace;
-					info.window_index = window_index;
-					has_snapshot_mode = m_windows[window_index].retained_mode(m_windows[window_index].window_data, &info);
-					is_retained = true;
-				}
+			// Check to see if the window is in "retained" mode
+			if (m_windows[window_index].retained_mode != nullptr) {
+				WindowRetainedModeInfo info;
+				info.border_index = data->border_index;
+				info.dockspace = data->dockspace;
+				info.window_index = window_index;
+				info.system = this;
+				has_snapshot_mode = m_windows[window_index].retained_mode(m_windows[window_index].window_data, &info);
+				is_retained = true;
 			}
 
 			bool snapshot_mode = has_snapshot_mode && border.snapshot.IsValid();
@@ -9655,6 +9654,20 @@ namespace ECSEngine {
 			unsigned int window_index = GetWindowFromName(name);
 			ECS_ASSERT(window_index != -1);
 			SetWindowPrivateAction(window_index, handler);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::SetWindowRetainedFunction(unsigned int index, WindowRetainedMode retained_mode) {
+			m_windows[index].retained_mode = retained_mode;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+		
+		void UISystem::SetWindowRetainedFunction(Stream<char> name, WindowRetainedMode retained_mode) {
+			unsigned int window_index = GetWindowFromName(name);
+			ECS_ASSERT(window_index != -1);
+			SetWindowRetainedFunction(window_index, retained_mode);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

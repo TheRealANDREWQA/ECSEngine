@@ -1,7 +1,7 @@
 #pragma once
 #include "../Utilities/Assert.h"
-#include "ecspch.h"
 #include "Stream.h"
+#include <atomic>
 
 namespace ECSEngine {
 
@@ -18,19 +18,12 @@ namespace ECSEngine {
 		ECS_INLINE AtomicStream(const void* buffer, unsigned int size, unsigned int capacity) : buffer((T*)buffer), size(size), capacity(capacity), write_index(size) {}
 		ECS_INLINE AtomicStream(Stream<T> other) : buffer(other.buffer), size(other.size), capacity(other.size), write_index(other.size) {}
 
-		AtomicStream(const AtomicStream<T>& other) {
-			buffer = other.buffer;
-			size.store(other.size.load(std::memory_order_relaxed), std::memory_order_relaxed);
-			write_index.store(other.write_index.load(std::memory_order_relaxed), std::memory_order_relaxed);
-			capacity = other.capacity;
+		ECS_INLINE AtomicStream(const AtomicStream<T>& other) {
+			memcpy(this, &other, sizeof(*this));
 		}
 
-		AtomicStream<T>& operator = (const AtomicStream<T>& other) {
-			buffer = other.buffer;
-			size.store(other.size.load(std::memory_order_relaxed), std::memory_order_relaxed);
-			write_index.store(other.write_index.load(std::memory_order_relaxed), std::memory_order_relaxed);
-			capacity = other.capacity;
-
+		ECS_INLINE AtomicStream<T>& operator = (const AtomicStream<T>& other) {
+			memcpy(this, &other, sizeof(*this));
 			return *this;
 		}
 
@@ -112,6 +105,20 @@ namespace ECSEngine {
 
 		// This only increments the write index, it does not advance the size value!!
 		// Must be paired with a FinishRequest call with the number of values written
+		// It will set the boolean flag to true if there is not enough space for the elements
+		ECS_INLINE Stream<T> Request(unsigned int count, bool& not_enough_capacity) {
+			Stream<T> request = Request(count);
+			if (request.buffer + request.size > buffer + capacity) {
+				not_enough_capacity = true;
+			}
+			else {
+				not_enough_capacity = false;
+			}
+			return request;
+		}
+
+		// This only increments the write index, it does not advance the size value!!
+		// Must be paired with a FinishRequest call with the number of values written
 		ECS_INLINE unsigned int RequestInt(unsigned int count) {
 			return write_index.fetch_add(count, std::memory_order_acquire);
 		}
@@ -144,9 +151,18 @@ namespace ECSEngine {
 		// It will wait until all writes are commited into the stream
 		// (i.e. size becomes equal to write index). Returns the size at that point
 		ECS_INLINE unsigned int SpinWaitWrites() const {
-			unsigned int write_count = write_index.load(ECS_RELAXED);
+			unsigned int write_count = write_index.load(std::memory_order_relaxed);
 			SpinWait<'<'>(size, write_count);
 			return write_count;
+		}
+
+		// It will wait until all writes up to the min between capacity and write index 
+		// have been written to the stream. Returns the size at that point
+		ECS_INLINE unsigned int SpinWaitCapacity() const {
+			unsigned int write_count = write_index.load(std::memory_order_relaxed);
+			unsigned int wait_count = std::min(write_count, capacity);
+			SpinWait<'<'>(size, wait_count);
+			return wait_count;
 		}
 
 		void Swap(unsigned int first, unsigned int second) {
@@ -172,10 +188,10 @@ namespace ECSEngine {
 		// the threads using this stream use this function to advance the size
 		bool TryGet(T& type) {
 			// Do a read first in order to avoid a fetch_add when not necessary
-			unsigned int current_size = size.load(ECS_RELAXED);
+			unsigned int current_size = size.load(std::memory_order_relaxed);
 			if (current_size < capacity) {
 				// Do an increment now
-				unsigned int index = size.fetch_add(1, ECS_RELAXED);
+				unsigned int index = size.fetch_add(1, std::memory_order_relaxed);
 				// If the index is still in bounds, read the element
 				if (index < capacity) {
 					type = buffer[index];

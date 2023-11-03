@@ -1631,15 +1631,18 @@ namespace ECSEngine {
 
 			if (IsClickableTrigger(action_data)) {
 				UIDrawerFilesystemHierarchyChangeStateData* data = (UIDrawerFilesystemHierarchyChangeStateData*)_data;
-				ResourceIdentifier identifier(data->label.buffer, data->label.size);
+				ResourceIdentifier identifier(data->label);
 
 				UIDrawerFilesystemHierarchyLabelData* node = data->hierarchy->label_states.GetValuePtr(identifier);
 				node->state = !node->state;
 				
 				PinWindowVerticalSliderPosition(system, system->GetWindowIndexFromBorder(dockspace, border_index));
 
+				UIDrawerFilesystemHierarchySelectableData selectable_data;
+				selectable_data.hierarchy = data->hierarchy;
+				selectable_data.label = data->label;
 				action_data->redraw_window = true;
-				action_data->data = data->hierarchy;
+				action_data->data = &selectable_data;
 				FilesystemHierarchySelectable(action_data);
 			}
 		}

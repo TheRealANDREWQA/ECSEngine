@@ -138,10 +138,12 @@ namespace ECSEngine {
 	void BitWaitState(std::atomic<unsigned char>& byte, unsigned char bit_index, bool sleep_wait, CheckBit&& check_bit) {
 		const size_t SPIN_COUNT_UNTIL_WAIT = GLOBAL_SPIN_COUNT;
 
+		// Use acquire semantics such that further reads don't cross this barrier
+
 		// Wait for lock to be released without generating cache misses
-		while (check_bit(byte.load(ECS_RELAXED), bit_index)) {
+		while (check_bit(byte.load(ECS_ACQUIRE), bit_index)) {
 			for (size_t index = 0; index < SPIN_COUNT_UNTIL_WAIT; index++) {
-				if (!check_bit(byte.load(ECS_RELAXED), bit_index)) {
+				if (!check_bit(byte.load(ECS_ACQUIRE), bit_index)) {
 					return;
 				}
 				// pause instruction to help multithreading
@@ -150,10 +152,10 @@ namespace ECSEngine {
 
 			if (sleep_wait) {
 				// Do this in a loop since the WaitOnAddress can wake the thread spuriously
-				unsigned char current_value = byte.load(ECS_RELAXED);
+				unsigned char current_value = byte.load(ECS_ACQUIRE);
 				while (check_bit(current_value, bit_index)) {
 					BOOL success = WaitOnAddress(&byte, &current_value, sizeof(unsigned char), INFINITE);
-					current_value = byte.load(ECS_RELAXED);
+					current_value = byte.load(ECS_ACQUIRE);
 				}
 			}
 		}
@@ -203,7 +205,8 @@ namespace ECSEngine {
 		unsigned int value = count.load(ECS_RELAXED);
 		if (value == check_value) {
 			// Use a compare exchange
-			return count.compare_exchange_weak(value, value + enter_count, ECS_RELAXED) ? value : -1;
+			// We need acquire barrier in case we successfully changed the count
+			return count.compare_exchange_weak(value, value + enter_count, ECS_ACQUIRE) ? value : -1;
 		}
 		else {
 			return -1;
@@ -229,6 +232,7 @@ namespace ECSEngine {
 			}
 		};
 
+		// Acquire semantics to prevent reads cross this barrier
 		if (count_value == -1 && target_value == -1) {
 			loop([&]() {
 				return count.load(ECS_ACQUIRE) != target.load(ECS_ACQUIRE);
@@ -236,12 +240,12 @@ namespace ECSEngine {
 		}
 		else if (count_value != -1) {
 			loop([&]() {
-				return count.load(ECS_RELAXED) != count_value;
+				return count.load(ECS_ACQUIRE) != count_value;
 			});
 		}
 		else {
 			loop([&]() {
-				return target.load(ECS_RELAXED) != target_value;
+				return target.load(ECS_ACQUIRE) != target_value;
 			});
 		}
 	}
@@ -258,22 +262,23 @@ namespace ECSEngine {
 				}
 				
 				// Do this in a loop since the WaitOnAddress can wake the thread spuriously
-				unsigned int current_value = wait_address->load(ECS_RELAXED);
+				// Acquire semantics in order to prevent reads crossing this barrier
+				unsigned int current_value = wait_address->load(ECS_ACQUIRE);
 				while (condition()) {
 					BOOL success = WaitOnAddress(wait_address, &current_value, sizeof(unsigned int), INFINITE);
-					current_value = wait_address->load(ECS_RELAXED);
+					current_value = wait_address->load(ECS_ACQUIRE);
 				}
 			}
 		};
 
 		if (count_value != -1) {
 			loop(&count, [&]() {
-				return count.load(ECS_RELAXED) != count_value;
+				return count.load(ECS_ACQUIRE) != count_value;
 				});
 		}
 		else {
 			loop(&target, [&]() {
-				return target.load(ECS_RELAXED) != target_value;
+				return target.load(ECS_ACQUIRE) != target_value;
 			});
 		}
 	}
@@ -303,22 +308,22 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------
 
 	void ConditionVariable::Wait(int count) {
-		int initial_count = signal_count.fetch_sub(count, ECS_ACQ_REL);
+		int initial_count = signal_count.fetch_sub(count, ECS_ACQUIRE);
 		int current_count = initial_count - count;
 		while (current_count < 0) {
 			WaitOnAddress(&signal_count, &current_count, sizeof(int), INFINITE);
-			current_count = signal_count.load(ECS_RELAXED);
+			current_count = signal_count.load(ECS_ACQUIRE);
 		}
 	}
 
 	int ConditionVariable::Notify(int count) {
-		int previous_count = signal_count.fetch_add(count, ECS_ACQ_REL);
+		int previous_count = signal_count.fetch_add(count, ECS_RELEASE);
 		WakeByAddressSingle(&signal_count);
 		return previous_count;
 	}
 
 	int ConditionVariable::NotifyAll(int count) {
-		int previous_count = signal_count.fetch_add(count, ECS_ACQ_REL);
+		int previous_count = signal_count.fetch_add(count, ECS_RELEASE);
 		WakeByAddressAll(&signal_count);
 		return previous_count;
 	}
@@ -328,7 +333,8 @@ namespace ECSEngine {
 	}
 
 	void ConditionVariable::ResetAndNotify() {
-		Reset();
+		// Use release semantics to not have writes cross this barrier
+		signal_count.store(0, ECS_RELEASE);
 		WakeByAddressAll(&signal_count);
 	}
 
@@ -552,16 +558,25 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------
 
-	void AtomicFlag::wait()
+	void AtomicFlag::Wait()
 	{
-		value.store(true, ECS_RELAXED);
+		// We must use ACQUIRE semantics in order to guarantee that further reads don't cross this barrier
+		value.store(true, ECS_ACQUIRE);
 
 		// Do this in a loop since the WaitOnAddress can wake the thread spuriously
 		bool current_value = true;
 		while (current_value) {
 			BOOL success = WaitOnAddress(&value, &current_value, sizeof(unsigned char), INFINITE);
-			current_value = value.load(ECS_RELAXED);
+			current_value = value.load(ECS_ACQUIRE);
 		}
+	}
+
+	// ----------------------------------------------------------------------------------------------
+
+	void AtomicFlag::Signal()
+	{
+		value.store(false, ECS_RELEASE);
+		WakeByAddressAll(&value);
 	}
 
 	// ----------------------------------------------------------------------------------------------
