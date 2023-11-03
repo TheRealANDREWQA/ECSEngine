@@ -380,14 +380,11 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 	editor_state->hub_data = hub_data;
 
 	GlobalMemoryManager* console_global_memory = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
-	*console_global_memory = CreateGlobalMemoryManager(ECS_MB * 3, 64, ECS_MB * 2);
+	*console_global_memory = CreateGlobalMemoryManager(ECS_MB * 10, 64, ECS_MB * 5);
 	MemoryManager* console_memory_manager = (MemoryManager*)malloc(sizeof(MemoryManager));
-	*console_memory_manager = DefaultConsoleAllocator(console_global_memory);
-
-	TaskManager* console_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
-	new (console_task_manager) TaskManager(1, console_global_memory);
-	SetConsole(console_memory_manager, console_task_manager, L"TempDump.txt");
-	console_task_manager->CreateThreads();
+	*console_memory_manager = DefaultConsoleStableAllocator(console_global_memory);
+	AtomicStream<char> console_message_allocator = DefaultConsoleMessageAllocator(console_global_memory);
+	SetConsole(console_memory_manager, console_message_allocator, L"TempDump.txt");
 
 	*keyboard = Keyboard(hub_allocator);
 }
@@ -536,8 +533,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->project_file = project_file;
 
 	Console* console = GetConsole();
-	console->allocator->Clear();
-	SetConsole(console->allocator, console->task_manager, L"TempDump.txt");
+	console->stable_allocator->Clear();
+	SetConsole(console->stable_allocator, console->message_allocator, L"TempDump.txt");
 
 	GetConsole()->AddSystemFilterString(EDITOR_CONSOLE_SYSTEM_NAME);
 

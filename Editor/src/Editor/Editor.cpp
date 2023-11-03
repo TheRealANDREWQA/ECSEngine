@@ -107,10 +107,6 @@ public:
 		Graphics* graphics = editor_state.UIGraphics();
 
 		Hub(&editor_state);
-		
-		bool valid_internal_state = false;
-		ECS_STACK_CAPACITY_STREAM(GraphicsLiveObject, live_objects, 512);
-		bool success = graphics->VerifyLeaksAndValidateInteralState(valid_internal_state, &live_objects);
 
 		MSG message;
 		BOOL result = 0;
@@ -140,10 +136,10 @@ public:
 
 						timer.SetNewStart();
 
-						ECS_STACK_CAPACITY_STREAM(Stream<char>, windows, 2);
-						windows[0] = "Game 0";
-						windows[1] = "Scene 0";
-						windows.size = 2;
+						//ECS_STACK_CAPACITY_STREAM(Stream<char>, windows, 2);
+						//windows[0] = "Game 0";
+						//windows[1] = "Scene 0";
+						//windows.size = 2;
 
 						frame_pacing = editor_state.ui_system->DoFrame();
 

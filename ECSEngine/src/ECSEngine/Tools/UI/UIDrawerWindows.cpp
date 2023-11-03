@@ -1415,68 +1415,50 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void DrawTextFile(UIDrawer* drawer, Stream<wchar_t> path, float2 border_padding, float next_row_y_offset) {
-			float2 current_position = drawer->GetCurrentPositionNonOffset();
-			drawer->OffsetNextRow(border_padding.x);
-			drawer->OffsetX(border_padding.x);
-			drawer->OffsetY(border_padding.y);
-
-			UIDrawConfig config;
-			Stream<char> contents = ReadWholeFileText(path);
-
-			bool draw_border = false;
-			if (contents.buffer != nullptr) {
-				contents[contents.size - 1] = '\0';
-				float old_next_row_y_offset = drawer->layout.next_row_y_offset;
-				drawer->OffsetY(old_next_row_y_offset);
-				drawer->SetNextRowYOffset(next_row_y_offset);
-				drawer->Sentence(UI_CONFIG_SENTENCE_FIT_SPACE, config, contents.buffer);
-				drawer->SetNextRowYOffset(old_next_row_y_offset);
-				draw_border = true;
-				free(contents.buffer);
+		void DeallocateTextFileDrawData(TextFileDrawData* draw_data, AllocatorPolymorphic path_allocator)
+		{
+			draw_data->path.Deallocate(path_allocator);
+			if (draw_data->file_data.size > 0) {
+				free(draw_data->file_data.buffer);
 			}
-			else {
-				drawer->Text("File could not be opened.");
-			}
-
-			if (draw_border) {
-				drawer->NextRow();
-				float2 end_position = drawer->GetCurrentPositionNonOffset();
-				UIConfigAbsoluteTransform transform;
-				transform.position = current_position;
-				transform.scale = { drawer->region_limit.x - current_position.x, end_position.y - current_position.y + next_row_y_offset - drawer->layout.next_row_y_offset };
-				config.AddFlag(transform);
-
-				UIConfigBorder border;
-				border.color = drawer->color_theme.borders;
-				config.AddFlag(border);
-				drawer->Rectangle(UI_CONFIG_BORDER | UI_CONFIG_ABSOLUTE_TRANSFORM, config);
-			}
-			drawer->OffsetNextRow(-border_padding.x);
-			drawer->NextRow();
 		}
 
-		void DrawTextFileEx(UIDrawer* drawer, Stream<wchar_t> path, float2 border_padding, float next_row_y_offset) {
-			constexpr const char* STABILIZE_STRING_NAME = "Stabilized render span";
-
+		void DrawTextFile(UIDrawer* drawer, TextFileDrawData* draw_data) {
 			float2 current_position = drawer->GetCurrentPositionNonOffset();
-			drawer->OffsetNextRow(border_padding.x);
-			drawer->OffsetX(border_padding.x);
-			drawer->OffsetY(border_padding.y);
+			drawer->OffsetNextRow(draw_data->border_padding.x);
+			drawer->OffsetX(draw_data->border_padding.x);
+			drawer->OffsetY(draw_data->border_padding.y);
 
+			draw_data->file_data_was_changed = false;
 			UIDrawConfig config;
-			Stream<char> contents = ReadWholeFileText(path);
+			size_t elapsed_milliseconds = draw_data->timer.GetDuration(ECS_TIMER_DURATION_MS);
+			if (elapsed_milliseconds >= draw_data->timer_milliseconds_recheck) {
+				Stream<char> contents = ReadWholeFileText(draw_data->path);
+				if (contents.size != 0) {
+					// Also do a compare with the old data since this will save us
+					// Having to redraw the window
+					if (contents != draw_data->file_data) {
+						if (draw_data->file_data.size > 0) {
+							free(draw_data->file_data.buffer);
+						}
+						draw_data->file_data_was_changed = true;
+						draw_data->file_data = contents;
+					}
+					else {
+						free(contents.buffer);
+					}
+				}
+				draw_data->timer.SetNewStart();
+			}
 
 			bool draw_border = false;
-			if (contents.buffer) {
-				contents[contents.size - 1] = '\0';
+			if (draw_data->file_data.size > 0) {
 				float old_next_row_y_offset = drawer->layout.next_row_y_offset;
 				drawer->OffsetY(old_next_row_y_offset);
-				drawer->SetNextRowYOffset(next_row_y_offset);
-				drawer->Sentence(UI_CONFIG_SENTENCE_FIT_SPACE, config, contents.buffer);
+				drawer->SetNextRowYOffset(draw_data->next_row_y_offset);
+				drawer->Sentence(UI_CONFIG_SENTENCE_FIT_SPACE, config, draw_data->file_data);
 				drawer->SetNextRowYOffset(old_next_row_y_offset);
 				draw_border = true;
-				free(contents.buffer);
 			}
 			else {
 				drawer->Text("File could not be opened.");
@@ -1487,7 +1469,10 @@ namespace ECSEngine {
 				float2 end_position = drawer->GetCurrentPositionNonOffset();
 				UIConfigAbsoluteTransform transform;
 				transform.position = current_position;
-				transform.scale = { drawer->region_limit.x - current_position.x, end_position.y - current_position.y + next_row_y_offset - drawer->layout.next_row_y_offset };
+				transform.scale = { 
+					drawer->region_limit.x - current_position.x, 
+					end_position.y - current_position.y + draw_data->next_row_y_offset - drawer->layout.next_row_y_offset 
+				};
 				config.AddFlag(transform);
 
 				UIConfigBorder border;
@@ -1495,7 +1480,7 @@ namespace ECSEngine {
 				config.AddFlag(border);
 				drawer->Rectangle(UI_CONFIG_BORDER | UI_CONFIG_ABSOLUTE_TRANSFORM, config);
 			}
-			drawer->OffsetNextRow(-border_padding.x);
+			drawer->OffsetNextRow(-draw_data->border_padding.x);
 			drawer->NextRow();
 		}
 
@@ -1503,21 +1488,35 @@ namespace ECSEngine {
 		{
 			UI_PREPARE_DRAWER(initialize);
 
-			const TextFileDrawData* data = (const TextFileDrawData*)window_data;
+			TextFileDrawData* data = (TextFileDrawData*)window_data;
 
 			if (!initialize) {
-				DrawTextFileEx(&drawer, data->path, data->border_padding, data->next_row_y_offset);
+				DrawTextFile(&drawer, data);
 			}
 		}
 
-		unsigned int CreateTextFileWindow(TextFileDrawData data, UISystem* system, Stream<char> window_name) {
+		static void TextFileWindowDestroy(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			TextFileDrawData* draw_data = (TextFileDrawData*)_additional_data;
+			DeallocateTextFileDrawData(draw_data, system->Allocator());
+		}
+
+		static bool TextFileWindowRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+			TextFileDrawData* data = (TextFileDrawData*)window_data;
+			return !data->file_data_was_changed;
+		}
+
+		unsigned int CreateTextFileWindow(const TextFileDrawData* data, UISystem* system, Stream<char> window_name) {
 			UIWindowDescriptor descriptor;
 			
-			descriptor.window_data = &data;
+			descriptor.window_data = (void*)data;
 			descriptor.window_data_size = sizeof(data);
 			descriptor.window_name = window_name;
 
 			descriptor.draw = TextFileDraw;
+			descriptor.destroy_action = TextFileWindowDestroy;
+			descriptor.retained_mode = TextFileWindowRetainedMode;
 			descriptor.initial_size_x = 1.0f;
 			descriptor.initial_size_y = 1.5f;
 			descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, descriptor.initial_size_x);
@@ -1525,11 +1524,12 @@ namespace ECSEngine {
 
 			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_POP_UP_WINDOW);
 			TextFileDrawData* window_data = (TextFileDrawData*)system->GetWindowData(window_index);
-
-			size_t path_size = wcslen(data.path) + 1;
-			wchar_t* allocation = (wchar_t*)system->m_memory->Allocate(path_size * sizeof(wchar_t), alignof(wchar_t));
-			memcpy(allocation, data.path, sizeof(wchar_t) * path_size);
-			window_data->path = allocation;
+			window_data->path = data->path.Copy(system->Allocator());
+			// Make sure it's empty on start
+			window_data->file_data = {};
+			// Make sure to trigger a recheck
+			window_data->timer.DelayStart(-window_data->timer_milliseconds_recheck, ECS_TIMER_DURATION_MS);
+			window_data->file_data_was_changed = false;
 
 			return window_index;
 		}
@@ -1538,7 +1538,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			const TextFileDrawActionData* data = (const TextFileDrawActionData*)_data;
-			CreateTextFileWindow(data->draw_data, system, data->window_name);
+			CreateTextFileWindow(&data->draw_data, system, data->window_name);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -1708,7 +1708,8 @@ namespace ECSEngine {
 			drawer.NextRow();
 
 			// Display a warning if there are too many messages
-			if (data->console->messages.size == data->console->messages.capacity && data->console->messages.capacity > data->console->MaxMessageCount()) {
+			unsigned int console_message_size = data->console->messages.WaitWrites();
+			if (console_message_size == Console::MaxMessageCount()) {
 				drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[ECS_CONSOLE_WARN], CONSOLE_COLORS[ECS_CONSOLE_WARN]);
 				drawer.Text("Too many console messages - the console should be cleared otherwise incoming messages will be ignored");
 				drawer.NextRow();
@@ -1943,7 +1944,9 @@ namespace ECSEngine {
 
 		void ConsoleFilterMessages(ConsoleWindowData* data, UIDrawer& drawer)
 		{
-			bool recalculate_counts = (data->console->messages.size != data->last_frame_message_count) || data->filter_message_type_changed
+			unsigned int message_count = data->console->messages.WaitWrites();
+
+			bool recalculate_counts = (message_count != data->last_frame_message_count) || data->filter_message_type_changed
 				|| (data->console->verbosity_level != data->previous_verbosity_level) || data->system_filter_changed;
 			if (recalculate_counts) {
 				unsigned int dummy;
@@ -1955,7 +1958,7 @@ namespace ECSEngine {
 				auto update_kernel = [&](size_t starting_index) {
 					size_t system_mask = GetSystemMaskFromConsoleWindowData(data);
 
-					for (size_t index = starting_index; index < data->console->messages.size; index++) {
+					for (size_t index = starting_index; index < message_count; index++) {
 						(*ptrs[(unsigned int)data->console->messages[index].type])++;
 						ResourceIdentifier identifier = {
 							data->console->messages[index].message.buffer + data->console->messages[index].client_message_start,
@@ -2005,7 +2008,7 @@ namespace ECSEngine {
 				};
 
 				// if more messages have been added, only account for them
-				if (data->last_frame_message_count < data->console->messages.size) {
+				if (data->last_frame_message_count < message_count) {
 					update_kernel(data->last_frame_message_count);
 				}
 				// else start from scratch; console has been cleared, type filter changed, verbosity filter changed,
@@ -2025,7 +2028,7 @@ namespace ECSEngine {
 
 					update_kernel(0);
 				}
-				data->last_frame_message_count = data->console->messages.size;
+				data->last_frame_message_count = message_count;
 			}
 		}
 

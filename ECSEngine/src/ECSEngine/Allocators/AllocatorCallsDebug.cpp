@@ -26,7 +26,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE unsigned int Size() const {
-			return is_resizable ? resizable_allocations.stream.size : queue_allocations.GetSize();
+			return is_resizable ? resizable_allocations.stream.size.load(ECS_RELAXED) : queue_allocations.GetSize();
 		}
 
 		template<typename Functor>
@@ -280,7 +280,7 @@ namespace ECSEngine {
 
 			if (tracked_allocator_ptr->is_resizable) {
 				// We can push directly
-				tracked_allocator_ptr->resizable_allocations.Add(allocation);
+				tracked_allocator_ptr->resizable_allocations.Add(*allocation);
 			}
 			else {
 				// If we are full and we have the write to file activated, write to file

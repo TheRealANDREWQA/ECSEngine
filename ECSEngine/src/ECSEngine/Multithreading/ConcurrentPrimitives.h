@@ -19,7 +19,7 @@ namespace ECSEngine {
 			value.store(other.value.load(ECS_RELAXED), ECS_RELAXED);
 		}
 		ECS_INLINE SpinLock& operator = (const SpinLock& other) {
-			value.store(other.value.load(ECS_ACQUIRE), ECS_RELEASE);
+			value.store(other.value.load(ECS_RELAXED), ECS_RELAXED);
 			return *this;
 		}
 
@@ -45,6 +45,9 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API AtomicFlag {
+		ECS_INLINE AtomicFlag() {
+			Clear();
+		}
 		ECS_INLINE AtomicFlag(const AtomicFlag& other) {
 			value.store(other.value.load(ECS_RELAXED), ECS_RELAXED);
 		}
@@ -53,14 +56,16 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		void wait();
+		void Wait();
 
-		ECS_INLINE bool is_waiting() const {
+		ECS_INLINE bool IsWaiting() const {
 			return value.load(ECS_RELAXED);
 		}
 
-		ECS_INLINE void signal() {
-			value.store(false, ECS_RELAXED);
+		void Signal();
+
+		ECS_INLINE void Clear() {
+			value.store(0, ECS_RELEASE);
 		}
 
 		std::atomic<bool> value = false;
@@ -111,35 +116,35 @@ namespace ECSEngine {
 			target.store(0, ECS_RELEASE);
 		}
 
-		// Relaxed load
+		// Acquire load
 		ECS_INLINE unsigned int Count() const {
-			return count.load(ECS_RELAXED);
+			return count.load(ECS_ACQUIRE);
 		}
 
-		// Relaxed store
+		// Releasae store
 		ECS_INLINE void SetCount(unsigned int value) {
-			count.store(value, ECS_RELAXED);
+			count.store(value, ECS_RELEASE);
 		}
 
-		// Relaxed store and wakes up waiting threads
+		// Release store and wakes up waiting threads
 		ECS_INLINE void SetCountEx(unsigned int value) {
-			count.store(value, ECS_RELAXED);
+			count.store(value, ECS_RELEASE);
 			WakeByAddressAll(&count);
 		}
 
-		// Relaxed load
+		// Acquire load
 		ECS_INLINE unsigned int Target() const {
-			return target.load(ECS_RELAXED);
+			return target.load(ECS_ACQUIRE);
 		}
 
-		// Relaxed store
+		// Release store
 		ECS_INLINE void SetTarget(unsigned int value) {
-			target.store(value, ECS_RELAXED);
+			target.store(value, ECS_RELEASE);
 		}
 
-		// Relaxed store and wakes up waiting threads
+		// Release store and wakes up waiting threads
 		ECS_INLINE void SetTargetEx(unsigned int value) {
-			target.store(value, ECS_RELAXED);
+			target.store(value, ECS_RELEASE);
 			WakeByAddressAll(&count);
 		}
 
@@ -164,10 +169,12 @@ namespace ECSEngine {
 		// a futex call to wake any waiting threads
 		unsigned int ExitEx(unsigned int count = 1);
 
+		// Relaxed load
 		ECS_INLINE bool CheckCount(unsigned int value) const {
 			return count.load(ECS_RELAXED) == value;
 		}
 
+		// Relaxed load
 		ECS_INLINE bool CheckTarget(unsigned int value) const {
 			return target.load(ECS_RELAXED) == value;
 		}
@@ -341,22 +348,22 @@ namespace ECSEngine {
 
 		if constexpr (WaitType == '<') {
 			loop([&]() {
-				return variable.load(ECS_RELAXED) < value_to_compare;
+				return variable.load(ECS_ACQUIRE) < value_to_compare;
 			});
 		}
 		else if constexpr (WaitType == '>') {
 			loop([&]() {
-				return variable.load(ECS_RELAXED) > value_to_compare;
+				return variable.load(ECS_ACQUIRE) > value_to_compare;
 			});
 		}
 		else if constexpr (WaitType == '=') {
 			loop([&]() {
-				return variable.load(ECS_RELAXED) == value_to_compare;
+				return variable.load(ECS_ACQUIRE) == value_to_compare;
 			});
 		}
 		else if constexpr (WaitType == '!') {
 			loop([&]() {
-				return variable.load(ECS_RELAXED) != value_to_compare;
+				return variable.load(ECS_ACQUIRE) != value_to_compare;
 			});
 		}
 
@@ -381,22 +388,22 @@ namespace ECSEngine {
 
 		if constexpr (WaitType == '<') {
 			loop([&]() {
-				return variable.load(ECS_RELAXED) < value_to_compare;
+				return variable.load(ECS_ACQUIRE) < value_to_compare;
 			});
 		}
 		else if constexpr (WaitType == '>') {
 			loop([&]() {
-				return variable.load(ECS_RELAXED) > value_to_compare;
+				return variable.load(ECS_ACQUIRE) > value_to_compare;
 			});
 		}
 		else if constexpr (WaitType == '=') {
 			loop([&]() {
-				return variable.load(ECS_RELAXED) == value_to_compare;
+				return variable.load(ECS_ACQUIRE) == value_to_compare;
 			});
 		}
 		else if constexpr (WaitType == '!') {
 			loop([&]() {
-				return variable.load(ECS_RELAXED) != value_to_compare;
+				return variable.load(ECS_ACQUIRE) != value_to_compare;
 			});
 		}
 	}

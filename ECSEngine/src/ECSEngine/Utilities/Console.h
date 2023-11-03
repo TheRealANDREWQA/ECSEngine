@@ -1,12 +1,18 @@
 #pragma once
 #include "../Core.h"
-#include "../Multithreading/TaskManager.h"
 #include "File.h"
-#include "../Containers/AtomicStream.h"
+#include "../Containers/ResizableAtomicDeck.h"
+#include "../Allocators/MemoryManager.h"
 
 namespace ECSEngine {
 
-	ECSENGINE_API MemoryManager DefaultConsoleAllocator(GlobalMemoryManager* global_manager);
+	// This is a small memory manager used for smaller allocations
+	ECSENGINE_API MemoryManager DefaultConsoleStableAllocator(GlobalMemoryManager* global_manager);
+
+	// This is a an atomic stream "allocator" that is used for the message allocations
+	// This allows extremely fast allocations since it is essentially a single atomic add
+	// Operation to make the allocation
+	ECSENGINE_API AtomicStream<char> DefaultConsoleMessageAllocator(GlobalMemoryManager* global_manager);
 
 #define CONSOLE_APPEREANCE_TABLE_COUNT 256
 
@@ -32,6 +38,8 @@ namespace ECSEngine {
 		ECS_CONSOLE_DUMP_NONE
 	};
 
+	typedef void (*ConsoleOnErrorTrigger)(void* user_data);
+
 	struct ConsoleMessage {
 		Stream<char> message;
 		size_t system_filter;
@@ -42,20 +50,21 @@ namespace ECSEngine {
 
 	// Dump path can be allocated on the stack, it will copy to a private buffer
 	struct ECSENGINE_API Console {
-		Console() = default;
-		Console(MemoryManager* allocator, TaskManager* task_manager, Stream<wchar_t> _dump_path);
+		ECS_INLINE Console() = default;
+		Console(MemoryManager* stable_allocator, AtomicStream<char> message_allocator, Stream<wchar_t> _dump_path);
 
 		Console(const Console& other) = default;
 		Console& operator = (const Console& other) = default;
 
-		void Lock();
+		ECS_INLINE AllocatorPolymorphic StableAllocator() const {
+			return GetAllocatorPolymorphic(stable_allocator);
+		}
+
 		void Clear();
 
 		void AddSystemFilterString(Stream<char> string);
 
 		size_t GetFormatCharacterCount() const;
-
-		void CommitPendingMessages();
 
 		void ConvertToMessage(Stream<char> message, ConsoleMessage& console_message);
 
@@ -64,8 +73,12 @@ namespace ECSEngine {
 		// Appends to the dump output
 		void AppendDump();
 
-		// Dumps from the start
+		// Dumps from the start using the background thread
 		void Dump();
+
+		// Dumps all the contents into the specified file - it uses this thread,
+		// It does not use the background thread. Returns true if it succeeded, else false
+		bool DumpToFile(Stream<wchar_t> path);
 
 		void Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
 
@@ -85,42 +98,47 @@ namespace ECSEngine {
 
 		void SetVerbosity(unsigned char new_level);
 
+		// If the data_size is 0 then it will only reference the pointer, it will not copy the data
+		void SetOnErrorTrigger(ConsoleOnErrorTrigger function, void* data, size_t data_size);
+
 		ECS_INLINE static size_t MaxMessageCount() {
 			return 25'000;
 		}
 
-		SpinLock commit_lock;
+		// This flag is used to notify the dumping thread when to write
+		AtomicFlag dump_flag;
 		bool pause_on_error;
 		unsigned char verbosity_level;
 		ECS_CONSOLE_DUMP_TYPE dump_type;
 		unsigned int last_dumped_message;
 		unsigned int dump_count_for_commit;
 		ECS_FILE_HANDLE dump_file;
+
+		ConsoleOnErrorTrigger on_error_trigger;
+		void* on_error_trigger_data;
+		MemoryManager* stable_allocator;
 		
-		// Messages will be put firstly into this buffer such that they won't have to wait too much
-		// On each other 
-		AtomicStream<ConsoleMessage> pending_messages;
-		MemoryManager* allocator;
-		TaskManager* task_manager;
-		ResizableStream<ConsoleMessage> messages;
+		ResizableAtomicDeck<ConsoleMessage> messages;
 		ResizableStream<Stream<char>> system_filter_strings;
 		size_t format;
 		Stream<wchar_t> dump_path;
-		SpinLock dump_lock;
+
+	private:
+		char padding[ECS_CACHE_LINE_SIZE];
+	public:
+		// The message allocator is an atomic stream to allow for very fast
+		// Allocations of the message. Even tho it is fixed, we can set a reasonable
+		// Bound for the size of the message. Padd this stream on a separate cache line
+		// Such that it won't false share a cache line with other fields and cause slow downs
+		AtomicStream<char> message_allocator;
 	};
 
-	ECSENGINE_API bool ConsoleAppendMessageToDump(ECS_FILE_HANDLE file, unsigned int index, Console* console);
+	//ECSENGINE_API bool ConsoleAppendMessageToDump(ECS_FILE_HANDLE file, unsigned int index, Console* console);
 
 	struct World;
 
-	// Thread task
-	ECSENGINE_API void ConsoleDump(unsigned int thread_index, World* world, void* data);
-
-	// Thread task
-	ECSENGINE_API void ConsoleAppendToDump(unsigned int thread_index, World* world, void* data);
-
 	ECSENGINE_API Console* GetConsole();
 
-	ECSENGINE_API void SetConsole(MemoryManager* allocator, TaskManager* task_manager, const wchar_t* dump_path);
+	ECSENGINE_API void SetConsole(MemoryManager* stable_allocator, AtomicStream<char> message_allocator, Stream<wchar_t> dump_path);
 
 }

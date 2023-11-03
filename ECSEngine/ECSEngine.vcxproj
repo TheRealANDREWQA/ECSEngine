@@ -230,12 +230,14 @@
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AnySuitable</InlineFunctionExpansion>
     </ClInclude>
+    <ClInclude Include="src\ECSEngine\Containers\ResizableAtomicDeck.h" />
     <ClInclude Include="src\ECSEngine\Containers\ResizableAtomicStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\ResizableStableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\SoA.h" />
     <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
     <ClInclude Include="src\ECSEngine\Containers\StableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />
+    <ClInclude Include="src\ECSEngine\ECS\RuntimeCrashPersistence.h" />
     <ClInclude Include="src\ECSEngine\ECS\RuntimeResources.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFExportTextures.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFThumbnail.h" />
@@ -455,6 +457,7 @@
     <ClCompile Include="src\ECSEngine\Containers\SparseSet.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\ComponentHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\Components.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\RuntimeCrashPersistence.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeResources.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\cgtlf.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>

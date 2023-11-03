@@ -313,19 +313,26 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void DrawTextFile(UIDrawer* drawer, Stream<wchar_t> path, float2 border_padding, float next_row_y_offset);
-
-		ECSENGINE_API void DrawTextFileEx(UIDrawer* drawer, Stream<wchar_t> path, float2 border_padding, float next_row_y_offset);
-
-		struct ECSENGINE_API TextFileDrawData {
-			const wchar_t* path;
+		struct TextFileDrawData {
+			Stream<wchar_t> path;
 			float2 border_padding = { 0.01f, 0.01f };
 			float next_row_y_offset = 0.01f;
+			unsigned int timer_milliseconds_recheck = 60;
+
+			// These values are internal, don't need to be filled in
+			Timer timer;
+			// This is a boolean flag that is set when the data is changed
+			bool file_data_was_changed;
+			Stream<char> file_data = {};
 		};
+
+		ECSENGINE_API void DeallocateTextFileDrawData(TextFileDrawData* draw_data, AllocatorPolymorphic path_allocator);
+
+		ECSENGINE_API void DrawTextFile(UIDrawer* drawer, TextFileDrawData* draw_data);
 
 		ECSENGINE_API void TextFileDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
-		ECSENGINE_API unsigned int CreateTextFileWindow(TextFileDrawData data, UISystem* system, Stream<char> window_name);
+		ECSENGINE_API unsigned int CreateTextFileWindow(const TextFileDrawData* data, UISystem* system, Stream<char> window_name);
 		
 		struct ECSENGINE_API TextFileDrawActionData {
 			TextFileDrawData draw_data;

@@ -68,6 +68,7 @@ void DirectoryExplorerHierarchySelectableCallback(ActionData* action_data) {
 	ConvertASCIIToWide(temp_characters, label, 256);
 	data->current_path->AddStreamSafe(Stream<wchar_t>(temp_characters, label_stream.size));
 	data->current_path->buffer[data->current_path->size] = L'\0';
+
 }
 
 void DirectoryExplorerRightClick(ActionData* action_data) {

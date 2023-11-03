@@ -2769,43 +2769,6 @@ void FileExplorerPrivateAction(ActionData* action_data) {
 static bool FileExplorerRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
 	EditorState* editor_state = (EditorState*)window_data;
 	FileExplorerData* explorer_data = editor_state->file_explorer_data;
-	
-	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_RETAINED_FILE_CHECK, FILE_EXPLORER_RETAINED_MODE_FILE_RECHECK_LAZY_EVALUATION)) {
-		unsigned int next_allocator_index = explorer_data->displayed_items_allocator_index == 0 ? 1 : 0;
-		AllocatorPolymorphic next_allocator = GetAllocatorPolymorphic(explorer_data->displayed_items_allocator + next_allocator_index);
-		ResizableStream<Stream<wchar_t>> current_file_paths(next_allocator, 0);
-		AdditionStream<Stream<wchar_t>> addition_stream = &current_file_paths;
-
-		GetDirectoriesOrFilesOptions options;
-		options.relative_root = explorer_data->current_directory;
-		GetDirectoryOrFiles(explorer_data->current_directory, next_allocator, addition_stream, options);
-
-		bool are_different = false;
-		if (current_file_paths.size != explorer_data->displayed_items.size) {
-			are_different = true;
-		}
-		else {
-			for (unsigned int index = 0; index < explorer_data->displayed_items.size && !are_different; index++) {
-				unsigned int existing_index = FindString(current_file_paths[index], explorer_data->displayed_items.ToStream());
-				if (existing_index == -1) {
-					are_different = true;
-				}
-			}
-		}
-
-		if (are_different) {
-			explorer_data->should_redraw = false;
-			// Deallocate the current allocator
-			explorer_data->displayed_items_allocator[explorer_data->displayed_items_allocator_index].Clear();
-			explorer_data->displayed_items_allocator_index = next_allocator_index;
-			explorer_data->displayed_items = current_file_paths;
-			return false;
-		}
-		else {
-			// Clear the allocator which was used for the current entries
-			ClearAllocator(next_allocator);
-		}
-	}
 
 	if (explorer_data->should_redraw) {
 		explorer_data->should_redraw = false;
@@ -2872,6 +2835,42 @@ void TickFileExplorer(EditorState* editor_state)
 	// Commit preloaded textures
 	if (HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED) && HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_ENDED)) {
 		FileExplorerCommitStagingPreloadTextures(editor_state);
+	}
+
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_RETAINED_FILE_CHECK, FILE_EXPLORER_RETAINED_MODE_FILE_RECHECK_LAZY_EVALUATION)) {
+		unsigned int next_allocator_index = data->displayed_items_allocator_index == 0 ? 1 : 0;
+		AllocatorPolymorphic next_allocator = GetAllocatorPolymorphic(data->displayed_items_allocator + next_allocator_index);
+		ResizableStream<Stream<wchar_t>> current_file_paths(next_allocator, 0);
+		AdditionStream<Stream<wchar_t>> addition_stream = &current_file_paths;
+
+		GetDirectoriesOrFilesOptions options;
+		options.relative_root = data->current_directory;
+		GetDirectoryOrFiles(data->current_directory, next_allocator, addition_stream, options);
+
+		bool are_different = false;
+		if (current_file_paths.size != data->displayed_items.size) {
+			are_different = true;
+		}
+		else {
+			for (unsigned int index = 0; index < data->displayed_items.size && !are_different; index++) {
+				unsigned int existing_index = FindString(current_file_paths[index], data->displayed_items.ToStream());
+				if (existing_index == -1) {
+					are_different = true;
+				}
+			}
+		}
+
+		if (are_different) {
+			data->should_redraw = true;
+			// Deallocate the current allocator
+			data->displayed_items_allocator[data->displayed_items_allocator_index].Clear();
+			data->displayed_items_allocator_index = next_allocator_index;
+			data->displayed_items = current_file_paths;
+		}
+		else {
+			// Clear the allocator which was used for the current entries
+			ClearAllocator(next_allocator);
+		}
 	}
 }
 

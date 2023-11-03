@@ -1690,6 +1690,10 @@ namespace ECSEngine {
 
 			void SetWindowPrivateAction(Stream<char> name, UIActionHandler handler);
 
+			void SetWindowRetainedFunction(unsigned int index, WindowRetainedMode retained_mode);
+
+			void SetWindowRetainedFunction(Stream<char> name, WindowRetainedMode retained_mode);
+
 			void SetWindowName(unsigned int window_index, Stream<char> name);
 
 			void SetWindowMaxZoom(unsigned int window_index, float max_zoom);

@@ -3,11 +3,14 @@
 
 struct EditorState;
 
+#define MAX_INSPECTOR_WINDOWS 8
+
 typedef void (*InspectorDrawFunction)(EditorState* editor_state, unsigned int inspector_index, void* data, ECSEngine::Tools::UIDrawer* drawer);
 typedef void (*InspectorCleanDrawFunction)(EditorState* editor_state, unsigned int inspector_index, void* data);
 struct InspectorFunctions {
 	InspectorDrawFunction draw_function;
 	InspectorCleanDrawFunction clean_function;
+	WindowRetainedMode retained_function = nullptr;
 };
 typedef ECSEngine::HashTableDefault<InspectorFunctions> InspectorTable;
 
@@ -16,6 +19,9 @@ struct InspectorData {
 	// This function will be called when the inspector changes to another type
 	// in order to release resources that were created/loaded in the draw function
 	InspectorCleanDrawFunction clean_function;
+	// This function will be called in case the current inspector draw wants to be in
+	// Retained mode
+	WindowRetainedMode retained_mode;
 	void* draw_data;
 	unsigned int data_size;
 	unsigned int target_sandbox;
