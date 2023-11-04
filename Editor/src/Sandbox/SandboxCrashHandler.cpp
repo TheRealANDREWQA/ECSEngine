@@ -13,7 +13,8 @@ CrashHandler SandboxSetCrashHandler(EditorState* editor_state, unsigned int sand
 	ECS_STACK_CAPACITY_STREAM(wchar_t, modules_folder, 512);
 	GetProjectModulesFilePath(editor_state, modules_folder);
 	module_paths.Add(modules_folder);
-	SetAbortWorldCrashHandler(sandbox_world, module_paths, true);
+
+	//SetContinueWorldCrashHandler(sandbox_world, module_paths, true);
 
 	return current_crash_handler;
 }

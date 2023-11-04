@@ -156,6 +156,8 @@ namespace ECSEngine {
 		// Returns true if it succeeded, else false
 		ECSENGINE_API bool SuspendThread(void* handle);
 
+		ECSENGINE_API bool ResumeThread(void* handle);
+
 		// Returns nullptr if it failed, else the handle value. This handle value must be
 		// Closed when you are finished using it
 		ECSENGINE_API void* GetCurrentThreadHandle();
@@ -240,6 +242,8 @@ namespace ECSEngine {
 
 		// Returns true if it succeeded, else false. The page enter read only mode
 		ECSENGINE_API bool EnableVirtualWriteProtection(void* allocation);
+
+		ECSENGINE_API void OSMessageBox(const char* message, const char* title);
 
 #pragma endregion
 

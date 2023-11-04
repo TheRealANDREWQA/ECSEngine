@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "StringUtilities.h"
+#include "../Multithreading/ConcurrentPrimitives.h"
 
 namespace ECSEngine {
 
@@ -17,6 +18,12 @@ namespace ECSEngine {
 	ECSENGINE_API extern unsigned int ECS_GLOBAL_DEFERRED_LINE;
 	// This is a value that can be used to determine if multiple crashes try to run at the same time
 	ECSENGINE_API extern std::atomic<unsigned int> ECS_GLOBAL_CRASH_IN_PROGRESS;
+	// This is the OS thread id of the thread that is currently crashing
+	// This is used to detect if the crashing thread crashes again during
+	// the crash save
+	ECSENGINE_API extern size_t ECS_GLOBAL_CRASH_OS_THREAD_ID;
+	// This value can be used to synchronize the crashing thread with other threads
+	ECSENGINE_API extern Semaphore ECS_GLOBAL_CRASH_SEMAPHORE;
 
 	// This doesn't allocate the data - it will only reference it
 	ECSENGINE_API void SetCrashHandler(CrashHandlerFunction handler, void* data);
@@ -29,6 +36,9 @@ namespace ECSEngine {
 	ECSENGINE_API void SetCrashHandlerCaller(const char* file, const char* function, unsigned int line);
 
 	ECSENGINE_API void ResetCrashHandlerCaller();
+
+	// Resets all global variables related to crashing except the crash handler
+	ECSENGINE_API void ResetCrashHandlerGlobalVariables();
 
 #define ECS_STRING_CONCAT_INNER(a, b) a ## b
 #define ECS_STRING_CONCAT(a, b) ECS_STRING_CONCAT_INNER(a, b)

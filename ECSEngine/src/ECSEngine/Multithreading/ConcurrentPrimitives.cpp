@@ -338,7 +338,12 @@ namespace ECSEngine {
 		WakeByAddressAll(&signal_count);
 	}
 
-	unsigned int ConditionVariable::WaitingThreadCount()
+	unsigned int ConditionVariable::WaitingThreadCount() const
+	{
+		return SignalCount();
+	}
+
+	unsigned int ConditionVariable::SignalCount() const
 	{
 		int current_count = signal_count.load(ECS_RELAXED);
 		if (current_count < 0) {

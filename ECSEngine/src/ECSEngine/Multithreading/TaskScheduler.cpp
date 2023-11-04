@@ -428,6 +428,73 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void TaskScheduler::StringifyScheduleOrder(AdditionStream<char> string) const
+	{
+		// The information for each element should be on a separate line
+		// Determine the bounds for each thread group
+		unsigned int thread_bounds_start[ECS_THREAD_TASK_GROUP_COUNT];
+		memset(thread_bounds_start, 0, sizeof(thread_bounds_start));
+		ECS_THREAD_TASK_GROUP current_group = ECS_THREAD_TASK_INITIALIZE_EARLY;
+		for (unsigned int index = 0; index < elements.size; index++) {
+			thread_bounds_start[current_group] = index;
+			while (index < elements.size && elements[index].task_group == current_group) {
+				index++;
+			}
+			current_group = (ECS_THREAD_TASK_GROUP)(current_group + 1);
+		}
+		while (current_group < ECS_THREAD_TASK_GROUP_COUNT) {
+			thread_bounds_start[current_group] = thread_bounds_start[current_group - 1];
+			current_group = (ECS_THREAD_TASK_GROUP)(current_group + 1);
+		}
+
+		for (unsigned int group_index = 0; group_index < ECS_THREAD_TASK_GROUP_COUNT; group_index++) {
+			unsigned int start = thread_bounds_start[group_index];
+			unsigned int end = 0;
+			if (group_index == ECS_THREAD_TASK_GROUP_COUNT - 1) {
+				end = elements.size;
+			}
+			else {
+				end = thread_bounds_start[group_index + 1];
+			}
+
+			if (start < end) {
+				// Print a header before that
+				ECS_STACK_CAPACITY_STREAM(char, group_string, 128);
+				TaskGroupToString((ECS_THREAD_TASK_GROUP)group_index, group_string);
+				group_string.AddAssert('\n');
+				string.AddStream(group_string);
+
+				for (unsigned int index = start; index < end; index++) {
+					ECS_STACK_CAPACITY_STREAM(char, element_string, ECS_KB * 4);
+
+					Stream<char> task_name = elements[index].task_name;
+					bool has_initialize = elements[index].initialize_task_function != nullptr;
+					Stream<TaskDependency> dependencies = elements[index].task_dependencies;
+					
+					ECS_FORMAT_STRING(element_string, "\tTask Name: {#}\n\tInitialize Function: {#}\n\tDependencies: ", task_name, has_initialize);
+					if (dependencies.size == 0) {
+						element_string.AddStreamAssert("None\n\n");
+					}
+					else {
+						element_string.Add('[');
+						for (size_t subindex = 0; subindex < dependencies.size; subindex++) {
+							dependencies[subindex].ToString(element_string);
+							element_string.Add(',');
+							element_string.Add(' ');
+						}
+						// Reduce the size by 2 such that we remove the last added ',' and  ' '
+						element_string.size -= 2;
+						element_string.Add(']\n\n');
+					}
+
+					string.AddStream(element_string);
+				}
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	void TaskScheduler::RunInitializeTasks(World* world) const
 	{
 		for (unsigned int index = 0; index < elements.size; index++) {

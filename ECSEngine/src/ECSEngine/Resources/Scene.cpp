@@ -127,6 +127,12 @@ namespace ECSEngine {
 			database->RestoreSnapshot(asset_database_snapshot);
 			return false;
 		}
+
+		if (load_data->delta_time != nullptr) {
+			ECS_ASSERT(ptr - (uintptr_t)file_allocation <= file_byte_size - sizeof(float));
+			memcpy((void*)ptr, load_data->delta_time, sizeof(*load_data->delta_time));
+			ptr += sizeof(*load_data->delta_time);
+		}
 		
 		return true;
 	}
@@ -224,6 +230,12 @@ namespace ECSEngine {
 		serialize_options.shared_component_table = &shared_component_table;
 		serialize_options.global_component_table = &global_component_table;
 		success = SerializeEntityManager(save_data->entity_manager, file_handle, &serialize_options);
+		if (!success) {
+			return false;
+		}
+
+		// Write the final float value
+		success = WriteFile(file_handle, &save_data->delta_time);
 		if (!success) {
 			return false;
 		}

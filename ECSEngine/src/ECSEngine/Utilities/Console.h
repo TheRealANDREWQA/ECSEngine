@@ -78,7 +78,7 @@ namespace ECSEngine {
 
 		// Dumps all the contents into the specified file - it uses this thread,
 		// It does not use the background thread. Returns true if it succeeded, else false
-		bool DumpToFile(Stream<wchar_t> path);
+		bool DumpToFile(Stream<wchar_t> path, bool write_as_binary = true);
 
 		void Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
 

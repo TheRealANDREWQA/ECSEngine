@@ -73,6 +73,10 @@ namespace ECSEngine {
 		// Most likely cause for unsuccessful solution is circular dependencies
 		// Or missing tasks
 		bool Solve(CapacityStream<char>* error_message = nullptr);
+
+		// It will write a string version of the stored tasks inside and their order
+		// Alongside any other useful information
+		void StringifyScheduleOrder(AdditionStream<char> string) const;
 		
 		// Performs the initialization phase of the systems
 		void RunInitializeTasks(World* world) const;

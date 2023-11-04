@@ -3,6 +3,7 @@
 #include "Crash.h"
 #include "../Allocators/AllocatorCallsDebug.h"
 #include "StringUtilities.h"
+#include "../Utilities/OSFunctions.h"
 
 namespace ECSEngine {
 
@@ -19,7 +20,7 @@ namespace ECSEngine {
 			temp_string.AddStream(error_message);
 		}
 		temp_string.AddAssert('\0');
-		MessageBoxA(nullptr, temp_string.buffer, "ECS Assert", MB_OK | MB_ICONERROR);
+		OS::OSMessageBox(temp_string.buffer, "ECS Assert");
 		__debugbreak();
 		::exit(0);
 	}
