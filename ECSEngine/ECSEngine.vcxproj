@@ -237,6 +237,7 @@
     <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
     <ClInclude Include="src\ECSEngine\Containers\StableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\ECS\ComponentHelpers.h" />
+    <ClInclude Include="src\ECSEngine\ECS\CrashHandler.h" />
     <ClInclude Include="src\ECSEngine\ECS\RuntimeCrashPersistence.h" />
     <ClInclude Include="src\ECSEngine\ECS\RuntimeResources.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFExportTextures.h" />
@@ -457,6 +458,7 @@
     <ClCompile Include="src\ECSEngine\Containers\SparseSet.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\ComponentHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\Components.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\CrashHandler.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeCrashPersistence.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeResources.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\cgtlf.c">

@@ -229,8 +229,12 @@ namespace ECSEngine {
 		// Returns the signal count value before the addition
 		int Notify(int count = 1);
 
-		// Returns the number of threads waiting on this variable
-		unsigned int WaitingThreadCount();
+		// Returns the number of threads waiting on this variable - basically the signal count
+		// If you use wait with a count greater than 1, then this will no longer reflect the exact thread count
+		unsigned int WaitingThreadCount() const;
+
+		// Returns the current signal value
+		unsigned int SignalCount() const;
 
 		std::atomic<int> signal_count;
 	};

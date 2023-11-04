@@ -1,5 +1,4 @@
 #pragma once
-#include "ecspch.h"
 #include "../Core.h"
 #include "../Utilities/Timer.h"
 #include "../Containers/Stream.h"
@@ -9,6 +8,7 @@
 #include "../Allocators/LinearAllocator.h"
 #include "RingBuffer.h"
 #include "../Utilities/OSFunctions.h"
+#include <setjmp.h>
 
 #ifndef ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD
 #define ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD 128
@@ -255,6 +255,9 @@ namespace ECSEngine {
 		// when all the tasks have been finished
 		void FinishStaticTasks();
 
+		// Returns the thread id (the index) given the OS thread id. Returns -1 if it doesn't find it
+		unsigned int FindThreadID(size_t os_thread_id) const;
+
 		ECS_INLINE void IncrementThreadTaskIndex() {
 			m_thread_task_index->fetch_add(1, ECS_ACQ_REL);
 		}
@@ -312,6 +315,19 @@ namespace ECSEngine {
 
 		void ResetDynamicQueue(unsigned int thread_id);
 
+		// Returns true if it managed to resume all threads, else false
+		// You can call this function even if you are a thread belonging to this task manager
+		// It will skip resuming in that case
+		bool ResumeThreads() const;
+
+		// Longjumps into the start of the thread procedure. You can choose to enter a sleep state after
+		// Going back to the recovery point or continuing immediately
+		void ResetThreadToProcedure(unsigned int thread_id, bool sleep) const;
+
+		// It will deduce the thread id of the running thread and jump to the thread procedure
+		// You can choose to abort if the thread id is not found or just skip the call
+		void ResetCurrentThreadToProcedure(bool sleep, bool abort_if_not_found = true) const;
+
 		// Sets a specific task, should only be used in initialization
 		void SetTask(StaticThreadTask task, unsigned int index, size_t task_data_size = 0);
 
@@ -341,8 +357,17 @@ namespace ECSEngine {
 		// Elevates or reduces the priority of the threads
 		void SetThreadPriorities(OS::ECS_THREAD_PRIORITY priority);
 
+		// Adds wrappers for both dynamic tasks and static tasks such that after a crash
+		// They won't execute those tasks
+		void SetThreadWorldCrashWrappers();
+
 		// Spin waits until someone pushes something into the thread's queue
 		void SpinThread(unsigned int thread_id);
+
+		// Returns true if it managed to suspend all threads, else false
+		// You can call this function even if you are a thread belonging to this task manager
+		// It will skip suspending itself in that case
+		bool SuspendThreads() const;
 
 		void TerminateThread(unsigned int thread_id);
 
@@ -406,6 +431,10 @@ namespace ECSEngine {
 
 		// data for tasks + names for static tasks
 		LinearAllocator m_static_task_data_allocator;
+
+		// These will be filled with a stack environment of the thread procedure
+		// Such that you can longjmp into the thread procedure
+		jmp_buf* m_threads_reset_point;
 
 
 #ifdef ECS_TASK_MANAGER_WRAPPER

@@ -733,7 +733,7 @@ namespace ECSEngine {
 			HANDLE process_handle = GetCurrentProcess();
 
 			size_t displacement = 0;
-			string.AddStreamSafe("Stack trace:\n");
+			string.AddStreamAssert("Stack trace:\n");
 			while (StackWalk64(IMAGE_FILE_MACHINE_AMD64, process_handle, GetCurrentThread(), &stack_frame, &context, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr)) {
 				success = SymGetSymFromAddr64(process_handle, (size_t)stack_frame.AddrPC.Offset, &displacement, image_symbol);
 				if (success) {
@@ -880,6 +880,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
+		void OSMessageBox(const char* message, const char* title)
+		{
+			MessageBoxA(nullptr, message, title, MB_OK | MB_ICONERROR);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
 		void ExitThread(int error_code) {
 			::ExitThread(error_code);
 		}
@@ -889,6 +896,15 @@ namespace ECSEngine {
 		bool SuspendThread(void* handle)
 		{
 			DWORD suspend_count = ::SuspendThread(handle);
+			DWORD last_error = GetLastError();
+			return suspend_count != -1;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool ResumeThread(void* handle)
+		{
+			DWORD suspend_count = ::ResumeThread(handle);
 			DWORD last_error = GetLastError();
 			return suspend_count != -1;
 		}

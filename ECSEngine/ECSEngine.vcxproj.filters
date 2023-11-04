@@ -242,6 +242,7 @@
     <ClInclude Include="src\ECSEngine\Allocators\MemoryProtectedAllocator.h" />
     <ClInclude Include="src\ECSEngine\ECS\RuntimeCrashPersistence.h" />
     <ClInclude Include="src\ECSEngine\Containers\ResizableAtomicDeck.h" />
+    <ClInclude Include="src\ECSEngine\ECS\CrashHandler.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -379,6 +380,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\EvaluateExpression.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\MemoryProtectedAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeCrashPersistence.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\CrashHandler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

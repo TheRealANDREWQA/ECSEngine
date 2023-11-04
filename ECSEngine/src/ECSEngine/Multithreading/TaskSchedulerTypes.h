@@ -68,7 +68,7 @@ namespace ECSEngine {
 	// dependency is at the task level (not query).
 	struct TaskDependency {
 		ECS_INLINE void ToString(CapacityStream<char>& string) const {
-			string.AddStreamSafe(name);
+			string.AddStreamAssert(name);
 		}
 
 		Stream<char> name;

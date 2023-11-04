@@ -294,10 +294,11 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 	
-	bool Console::DumpToFile(Stream<wchar_t> path)
+	bool Console::DumpToFile(Stream<wchar_t> path, bool write_as_binary)
 	{
 		ECS_FILE_HANDLE file_handle;
-		ECS_FILE_STATUS_FLAGS status = FileCreate(path, &file_handle);
+		ECS_FILE_ACCESS_FLAGS translation_mode = write_as_binary ? ECS_FILE_ACCESS_BINARY : ECS_FILE_ACCESS_TEXT;
+		ECS_FILE_STATUS_FLAGS status = FileCreate(path, &file_handle, ECS_FILE_ACCESS_WRITE_ONLY | translation_mode);
 		if (status != ECS_FILE_STATUS_OK) {
 			return false;
 		}

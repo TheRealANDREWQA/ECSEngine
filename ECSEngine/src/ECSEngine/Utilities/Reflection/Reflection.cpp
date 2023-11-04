@@ -3508,12 +3508,25 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							colons = strstr(definition_start, "::");
 						}
 
-						const char* definition_end = SkipCodeIdentifier(definition_start);
-						// Include the pointer asterisk
-						while (*definition_end == '*') {
-							definition_end++;
+						// We need to take into account types that contain multiple words
+						// like unsigned int. So determine the name and go reverse
+						const char* equals = strchr(last_line_character, '=');
+						const char* name_end = equals != nullptr && equals < semicolon_character ? equals : semicolon_character;
+						while (!IsCodeIdentifierCharacter(*name_end)) {
+							name_end--;
 						}
-						type.fields[field_index].definition = { definition_start, PointerDifference(definition_end, definition_start) };
+						const char* name_start = name_end;
+						while (IsCodeIdentifierCharacter(*name_start)) {
+							name_start--;
+						}
+
+						const char* definition_end = name_start;
+						// We need to have the pointer * included as well
+						while (IsWhitespace(*definition_end)) {
+							definition_end--;
+						}
+
+						type.fields[field_index].definition = { definition_start, PointerDifference(definition_end, definition_start) + 1 };
 						type.fields.size++;
 						return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
 					}

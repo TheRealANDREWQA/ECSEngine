@@ -1984,6 +1984,15 @@ namespace ECSEngine {
 			}
 		}
 
+		ECS_INLINE unsigned int AddStream(Stream<T> elements) {
+			if (is_capacity) {
+				return capacity_stream->AddStreamAssert(elements);
+			}
+			else {
+				return resizable_stream->AddStream(elements);
+			}
+		}
+
 		ECS_INLINE bool IsCapacity() const {
 			return is_capacity;
 		}

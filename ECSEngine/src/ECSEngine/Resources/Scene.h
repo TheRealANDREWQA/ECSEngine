@@ -45,6 +45,9 @@ namespace ECSEngine {
 		// When using randomized assets, these can clash when commiting into a master database afterwards.
 		// This is used to make each randomized asset again unique
 		CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remapping = nullptr;
+
+		// You can retrieve the delta time of the simulation if you choose to
+		float* delta_time = nullptr;
 	};
 
 	ECSENGINE_API bool CreateEmptyScene(Stream<wchar_t> file);
@@ -66,6 +69,9 @@ namespace ECSEngine {
 		Stream<SerializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
 		Stream<SerializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
 		Stream<SerializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
+
+		// This value will also be serialized such that upon loading the simulation can continue as before
+		float delta_time = 0.0f;
 	};
 
 	ECSENGINE_API bool SaveScene(SaveSceneData* save_data);

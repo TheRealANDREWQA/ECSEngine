@@ -1,8 +1,7 @@
 #include "ecspch.h"
 #include "TaskManager.h"
 #include "../ECS/World.h"
-#include "ECSEngineConsole.h"
-
+#include "../Utilities/Crash.h"
 
 // In milliseconds
 #define SLEEP_UNTIL_DYNAMIC_TASKS_FINISH_INTERVAL 25
@@ -12,6 +11,8 @@
 #define DYNAMIC_TASK_ALLOCATOR_SIZE (25'000)
 
 #define STATIC_TASK_ALLOCATOR_SIZE (10'000)
+
+#define RECOVERY_POINT_LONG_JUMP_SLEEP_VALUE 2
 
 namespace ECSEngine {
 
@@ -127,6 +128,9 @@ namespace ECSEngine {
 
 		total_memory += STATIC_TASK_ALLOCATOR_SIZE;
 
+		// Align the recovery pojnts to another cache line
+		total_memory += ECS_CACHE_LINE_SIZE + sizeof(jmp_buf) * thread_count;
+
 		void* allocation = memory->Allocate(total_memory, ECS_CACHE_LINE_SIZE);
 		uintptr_t buffer_start = (uintptr_t)allocation;
 		m_thread_queue = Stream<ThreadQueue*>(allocation, thread_count);
@@ -186,6 +190,10 @@ namespace ECSEngine {
 
 		m_static_task_data_allocator = LinearAllocator((void*)buffer_start, STATIC_TASK_ALLOCATOR_SIZE);
 		buffer_start += STATIC_TASK_ALLOCATOR_SIZE;
+
+		// At last the recovery points must be allocated
+		m_threads_reset_point = (jmp_buf*)AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
+		buffer_start += sizeof(jmp_buf) * thread_count;
 
 		m_tasks = ResizableStream<StaticTask>(GetAllocatorPolymorphic(memory), 0);
 
@@ -402,20 +410,38 @@ namespace ECSEngine {
 	ECS_THREAD_WRAPPER_TASK(ComposeWrapper) {
 		ComposeWrapperData* data = (ComposeWrapperData*)_wrapper_data;
 
+		// To achieve composition, for the first wrapper give an impersonated
+		// thread task that will call the second wrapper which in turn should call
+		// the real function
+
+		struct LocalWrapperData {
+			ComposeWrapperData* data;
+			unsigned int task_thread_id;
+			ThreadTask task;
+		};
+
+		auto task_function_wrapper = [](unsigned int thread_id, World* world, void* _data) {
+			LocalWrapperData* data = (LocalWrapperData*)_data;
+			ComposeWrapperData* wrapper_data = data->data;
+
+			void* current_wrapper_data = wrapper_data->wrappers[1].data;
+			void* embedded_wrapper_data = OffsetPointer(wrapper_data, sizeof(*wrapper_data) + wrapper_data->wrappers[0].data_size);
+			if (wrapper_data->wrappers[1].data_size > 0) {
+				current_wrapper_data = embedded_wrapper_data;
+			}
+			wrapper_data->wrappers[1].function(thread_id, data->task_thread_id, world, data->task, current_wrapper_data);
+		};
+
 		void* embedded_wrapper_data = OffsetPointer(data, sizeof(*data));
 		void* current_wrapper_data = data->wrappers[0].data;
 		if (data->wrappers[0].data_size > 0) {
 			current_wrapper_data = embedded_wrapper_data;
 			embedded_wrapper_data = OffsetPointer(embedded_wrapper_data, data->wrappers[0].data_size);
 		}
-		data->wrappers[0].function(thread_id, task_thread_id, world, task, current_wrapper_data);
 
-		current_wrapper_data = data->wrappers[1].data;
-		if (data->wrappers[1].data_size > 0) {
-			current_wrapper_data = embedded_wrapper_data;
-			embedded_wrapper_data = OffsetPointer(embedded_wrapper_data, data->wrappers[1].data_size);
-		}
-		data->wrappers[1].function(thread_id, task_thread_id, world, task, current_wrapper_data);
+		LocalWrapperData local_wrapper_data = { data, task_thread_id, task };
+		ThreadTask local_task = { task_function_wrapper, &local_wrapper_data, sizeof(local_wrapper_data), task.name };
+		data->wrappers[0].function(thread_id, task_thread_id, world, local_task, current_wrapper_data);
 	}
 
 	static ThreadFunctionWrapperData CreateComposeWrapper(
@@ -666,6 +692,20 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	unsigned int TaskManager::FindThreadID(size_t os_thread_id) const
+	{
+		unsigned int thread_count = GetThreadCount();
+		for (unsigned int index = 0; index < thread_count; index++) {
+			size_t current_os_thread_id = OS::GetThreadID(m_thread_handles[index]);
+			if (current_os_thread_id == os_thread_id) {
+				return index;
+			}
+		}
+		return -1;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	ThreadFunctionWrapperData TaskManager::GetStaticThreadWrapper(CapacityStream<void>* data) const
 	{
 		ThreadFunctionWrapperData wrapper = m_static_wrapper;
@@ -739,6 +779,48 @@ namespace ECSEngine {
 	void TaskManager::ResetDynamicQueues() {
 		for (size_t index = 0; index < m_thread_queue.size; index++) {
 			ResetDynamicQueue(index);
+		}
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	bool TaskManager::ResumeThreads() const
+	{
+		unsigned int thread_count = GetThreadCount();
+		size_t running_thread_id = OS::GetCurrentThreadID();
+		bool managed_to_resume_threads = true;
+
+		for (unsigned int index = 0; index < thread_count && managed_to_resume_threads; index++) {
+			size_t os_thread_id = OS::GetThreadID(m_thread_handles[index]);
+			if (os_thread_id != running_thread_id) {
+				// We don't want to suspend ourselves in case the crashing thread produces the crash report
+				bool success = OS::ResumeThread(m_thread_handles[index]);
+				managed_to_resume_threads &= success;
+			}
+		}
+
+		return managed_to_resume_threads;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void TaskManager::ResetThreadToProcedure(unsigned int thread_id, bool sleep) const
+	{
+		longjmp(m_threads_reset_point[thread_id], sleep ? RECOVERY_POINT_LONG_JUMP_SLEEP_VALUE : RECOVERY_POINT_LONG_JUMP_SLEEP_VALUE - 1);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void TaskManager::ResetCurrentThreadToProcedure(bool sleep, bool abort_if_not_found) const
+	{
+		unsigned int thread_id = FindThreadID(OS::GetCurrentThreadID());
+		if (thread_id == -1) {
+			if (abort_if_not_found) {
+				abort();
+			}
+		}
+		else {
+			ResetThreadToProcedure(thread_id, sleep);
 		}
 	}
 
@@ -877,8 +959,33 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(TerminateThreadTask) {
+	static ECS_THREAD_TASK(TerminateThreadTask) {
 		OS::ExitThread(0);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	static ECS_THREAD_WRAPPER_TASK(StaticCrashWrapper) {
+		unsigned int crash_count = ECS_GLOBAL_CRASH_IN_PROGRESS.load(ECS_RELAXED);
+		if (crash_count == 0) {
+			task.function(thread_id, world, task.data);
+		}
+		else {
+			// Go back to the recovery point and sleep afterwards
+			world->task_manager->ResetThreadToProcedure(thread_id, true);
+		}
+	}
+
+	static ECS_THREAD_WRAPPER_TASK(DynamicCrashWrapper) {
+		// At the moment these 2 are the same
+		StaticCrashWrapper(thread_id, task_thread_id, world, task, _wrapper_data);
+	}
+
+	void TaskManager::SetThreadWorldCrashWrappers()
+	{
+		// We want these to be run first
+		ComposeStaticWrapper({ StaticCrashWrapper, nullptr, 0 }, false);
+		ComposeDynamicWrapper({ DynamicCrashWrapper, nullptr, 0 }, false);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -887,6 +994,26 @@ namespace ECSEngine {
 	{
 		ThreadQueue* thread_queue = GetThreadQueue(thread_id);
 		thread_queue->SpinWaitElements();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	bool TaskManager::SuspendThreads() const
+	{
+		unsigned int thread_count = GetThreadCount();
+		size_t running_thread_id = OS::GetCurrentThreadID();
+		bool managed_to_suspend_threads = true;
+
+		for (unsigned int index = 0; index < thread_count && managed_to_suspend_threads; index++) {
+			size_t os_thread_id = OS::GetThreadID(m_thread_handles[index]);
+			if (os_thread_id != running_thread_id) {
+				// We don't want to suspend ourselves in case the crashing thread produces the crash report
+				bool success = OS::SuspendThread(m_thread_handles[index]);
+				managed_to_suspend_threads &= success;
+			}
+		}
+
+		return managed_to_suspend_threads;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -997,7 +1124,12 @@ namespace ECSEngine {
 		TaskManager* task_manager,
 		unsigned int thread_id
 	) {
-		// keeping the pointer to its own dynamic task queue in order to avoid reloading the pointer
+		// Store the recovery point first
+		if (setjmp(task_manager->m_threads_reset_point[thread_id]) == RECOVERY_POINT_LONG_JUMP_SLEEP_VALUE) {
+			task_manager->SleepThread(thread_id);
+		}
+
+		// Keeping the pointer to its own dynamic task queue in order to avoid reloading the pointer
 		// when calling the method
 		ThreadQueue* thread_queue = task_manager->GetThreadQueue(thread_id);
 

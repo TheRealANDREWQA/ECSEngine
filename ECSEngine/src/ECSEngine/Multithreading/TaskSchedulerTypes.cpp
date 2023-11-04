@@ -439,7 +439,7 @@ namespace ECSEngine {
 			ECS_ASSERT(false);
 		}
 
-		error_message.AddStreamSafe(string_to_add);
+		error_message.AddStreamAssert(string_to_add);
 	}
 
 	// --------------------------------------------------------------------------------------

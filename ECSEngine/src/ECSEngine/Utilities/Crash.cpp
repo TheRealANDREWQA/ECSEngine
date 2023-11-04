@@ -10,6 +10,8 @@ namespace ECSEngine {
 	const char* ECS_GLOBAL_DEFERRED_FUNCTION = nullptr;
 	unsigned int ECS_GLOBAL_DEFERRED_LINE = -1;
 	std::atomic<unsigned int> ECS_GLOBAL_CRASH_IN_PROGRESS = 0;
+	size_t ECS_GLOBAL_CRASH_OS_THREAD_ID = 0;
+	Semaphore ECS_GLOBAL_CRASH_SEMAPHORE;
 
 	// --------------------------------------------------------------------------------------------------------
 
@@ -57,6 +59,19 @@ namespace ECSEngine {
 	void ResetCrashHandlerCaller()
 	{
 		SetCrashHandlerCaller(nullptr, nullptr, -1);
+	}
+
+	// --------------------------------------------------------------------------------------------------------
+
+	void ResetCrashHandlerGlobalVariables()
+	{
+		ECS_GLOBAL_DEFERRED_FILE = nullptr;
+		ECS_GLOBAL_DEFERRED_FUNCTION = nullptr;
+		ECS_GLOBAL_DEFERRED_LINE = -1;
+		ECS_GLOBAL_CRASH_IN_PROGRESS.store(0, ECS_RELAXED);
+		ECS_GLOBAL_CRASH_OS_THREAD_ID = 0;
+		ECS_GLOBAL_CRASH_SEMAPHORE.ClearCount();
+		ECS_GLOBAL_CRASH_SEMAPHORE.ClearTarget();
 	}
 
 	// --------------------------------------------------------------------------------------------------------
