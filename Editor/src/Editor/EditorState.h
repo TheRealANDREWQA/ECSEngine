@@ -2,6 +2,7 @@
 #include "editorpch.h"
 #include "ECSEngineUI.h"
 #include "../Project/ProjectFile.h"
+#include "../Project/ProjectSettings.h"
 #include "../UI/InspectorData.h"
 #include "../UI/FileExplorerData.h"
 #include "../UI/HubData.h"
@@ -48,7 +49,11 @@ struct EditorState {
 		return editor_allocator->m_backup;
 	}
 
-	ECS_INLINE ECSEngine::Reflection::ReflectionManager* ReflectionManager() {
+	ECS_INLINE ECSEngine::Reflection::ReflectionManager* EditorReflectionManager() {
+		return ui_reflection->reflection;
+	}
+
+	ECS_INLINE const ECSEngine::Reflection::ReflectionManager* EditorReflectionManager() const {
 		return ui_reflection->reflection;
 	}
 
@@ -117,6 +122,7 @@ struct EditorState {
 	FileExplorerData* file_explorer_data;
 	HubData* hub_data;
 	ProjectFile* project_file;
+	ProjectSettings project_settings;
 
 	InspectorManager inspector_manager;
 	EditorComponents editor_components;
@@ -146,11 +152,11 @@ struct EditorState {
 
 void EditorSetConsoleError(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MEDIUM);
 
-void EditorSetConsoleWarn(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MINIMAL);
+void EditorSetConsoleWarn(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_IMPORTANT);
 
-void EditorSetConsoleInfo(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MINIMAL);
+void EditorSetConsoleInfo(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_IMPORTANT);
 
-void EditorSetConsoleTrace(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MINIMAL);
+void EditorSetConsoleTrace(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_IMPORTANT);
 
 void EditorStateProjectTick(EditorState* editor_state);
 

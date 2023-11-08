@@ -1,5 +1,6 @@
 #include "editorpch.h"
 #include "ProjectOperations.h"
+#include "ProjectSettings.h"
 #include "../Editor/EditorParameters.h"
 #include "../UI/ToolbarUI.h"
 #include "../UI/MiscellaneousBar.h"
@@ -58,7 +59,7 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 
 	size_t predirectory_size = new_directory_path.size;
 	for (size_t index = 0; index < PROJECT_DIRECTORIES_SIZE(); index++) {
-		new_directory_path.AddStreamSafe(PROJECT_DIRECTORIES[index]);
+		new_directory_path.AddStreamAssert(PROJECT_DIRECTORIES[index]);
 
 		bool success = CreateFolder(new_directory_path);
 		if (!success) {
@@ -206,7 +207,7 @@ void CreateProject(ProjectOperationData* data)
 		handler.action = delete_project;
 		handler.data = &delete_data;
 		handler.data_size = sizeof(delete_data);
-		handler.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM;
+		handler.phase = ECS_UI_DRAW_SYSTEM;
 		
 		CreateConfirmWindow(ui_system, error_message, handler);
 		return;
@@ -686,6 +687,13 @@ bool OpenProject(ProjectOperationData data)
 
 	data.editor_state->editor_tick = EditorStateProjectTick;
 
+	bool read_settings_success = ReadProjectSettings(data.editor_state);
+	if (!read_settings_success) {
+		EditorSetConsoleWarn("Failed to read project settings");
+	}
+
+	// Also don't forget to set the pdb path
+	SetCrashHandlerPDBPaths(data.editor_state);
 	return true;
 }
 
@@ -728,7 +736,7 @@ void RepairProjectAuxiliaryDirectories(ProjectOperationData data)
 	unsigned int path_base_size = project_path.size;
 	size_t project_directory_count = PROJECT_DIRECTORIES_SIZE();
 	for (size_t index = 0; index < project_directory_count; index++) {
-		project_path.AddStreamSafe(PROJECT_DIRECTORIES[index]);
+		project_path.AddStreamAssert(PROJECT_DIRECTORIES[index]);
 		if (!ExistsFileOrFolder(project_path)) {
 			CreateFolder(project_path);
 		}

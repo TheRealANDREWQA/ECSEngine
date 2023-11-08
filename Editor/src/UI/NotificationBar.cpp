@@ -10,8 +10,7 @@ struct NotificationBarData {
 	EditorState* editor_state;
 };
 
-constexpr size_t NOTIFICATION_HISTORY_STRING_FORMAT = ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_SECONDS;
-
+static ECS_FORMAT_DATE_FLAGS NOTIFICATION_HISTORY_STRING_FORMAT = ECS_FORMAT_DATE_HOUR | ECS_FORMAT_DATE_MINUTES | ECS_FORMAT_DATE_SECONDS;
 
 void NotificationBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
 {

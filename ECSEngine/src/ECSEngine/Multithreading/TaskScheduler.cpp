@@ -435,7 +435,8 @@ namespace ECSEngine {
 		unsigned int thread_bounds_start[ECS_THREAD_TASK_GROUP_COUNT];
 		memset(thread_bounds_start, 0, sizeof(thread_bounds_start));
 		ECS_THREAD_TASK_GROUP current_group = ECS_THREAD_TASK_INITIALIZE_EARLY;
-		for (unsigned int index = 0; index < elements.size; index++) {
+		unsigned int index = 0;
+		for (unsigned int current_group_index = 0; current_group_index < ECS_THREAD_TASK_GROUP_COUNT; current_group_index++) {
 			thread_bounds_start[current_group] = index;
 			while (index < elements.size && elements[index].task_group == current_group) {
 				index++;
@@ -484,7 +485,7 @@ namespace ECSEngine {
 						}
 						// Reduce the size by 2 such that we remove the last added ',' and  ' '
 						element_string.size -= 2;
-						element_string.Add(']\n\n');
+						element_string.AddStream("]\n\n");
 					}
 
 					string.AddStream(element_string);

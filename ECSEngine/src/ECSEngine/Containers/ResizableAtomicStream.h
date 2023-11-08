@@ -33,7 +33,7 @@ namespace ECSEngine {
 			unsigned int write_position = stream.RequestInt(1);
 			while (write_position > stream.capacity) {
 				// Try to acquire the resize lock
-				bool locked_by_us = lock.try_lock();
+				bool locked_by_us = lock.TryLock();
 				if (locked_by_us) {
 					// Wait for all writes to finish
 					unsigned int capacity = stream.SpinWaitWrites();
@@ -46,11 +46,11 @@ namespace ECSEngine {
 					// We must set this to false such that the outer __finally
 					// Block won't unlock again
 					locked_by_us = false;
-					lock.unlock();
+					lock.Unlock();
 				}
 				else {
 					// Wait for the lock to be released
-					lock.wait_locked();
+					lock.WaitLocked();
 				}
 			}
 			stream[write_position] = element;
@@ -64,7 +64,7 @@ namespace ECSEngine {
 			unsigned int write_position = write_position = stream.RequestInt(elements.size);
 			while (write_position + elements.size > stream.capacity) {
 				// Try to acquire the resize lock
-				bool locked_by_us = lock.try_lock();
+				bool locked_by_us = lock.TryLock();
 				if (locked_by_us) {
 					// Wait for all writes to finish
 					unsigned int capacity = stream.SpinWaitWrites();
@@ -78,11 +78,11 @@ namespace ECSEngine {
 
 					locked_by_us = false;
 					// The unlock must be released in case of a crash
-					lock.unlock();
+					lock.Unlock();
 				}
 				else {
 					// Wait for the lock to be released
-					lock.wait_locked();
+					lock.WaitLocked();
 				}
 			}
 			elements.CopyTo(stream.buffer + write_position);
@@ -167,8 +167,8 @@ namespace ECSEngine {
 
 		// Acquires the lock and waits for the writes to finish. You must release the lock
 		// with WaitWritesExit
-		ECS_INLINE unsigned int WaitWritesEnter() {
-			lock.lock();
+		unsigned int WaitWritesEnter() {
+			lock.Lock();
 			// Check to see if we got the lock while a resize was attempted - in that case
 			// We shouldn't wait for the writes to finish, instead read the entire contents as they are now
 			if (stream.write_index.load(std::memory_order_relaxed) > stream.capacity) {
@@ -181,7 +181,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void WaitWritesExit() {
-			lock.unlock();
+			lock.Unlock();
 		}
 
 		// You can use this in case you are sure that no writes are being made
@@ -203,7 +203,7 @@ namespace ECSEngine {
 
 		ECS_INLINE void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity) {
 			stream.Initialize(_allocator, _capacity);
-			lock.unlock();
+			lock.Clear();
 		}
 
 		AtomicStream<T> stream;

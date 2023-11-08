@@ -120,14 +120,23 @@ namespace ECSEngine {
 		unsigned int handle;
 	};
 
+	struct DeallocateAssetsWithRemappingOptions {
+		Stream<wchar_t> mount_point = {};
+		// There must be ECS_ASSET_TYPE_COUNT entries in this
+		Stream<unsigned int>* asset_mask = nullptr;
+		// If this is set to true, then it will decrement the reference count
+		// Of the dependencies for assets that have them even when the asset itself
+		// is not deallocated
+		bool decrement_dependencies = false;
+	};
+
 	// Releases all assets from the database. If an asset is not found, it is placed into the missing assets list if specified, else ignored
 	// If the asset mask is specified, then there must be ECS_ASSET_TYPE_COUNT streams to indicate which handles to unload
 	// This is single threaded.
 	ECSENGINE_API void DeallocateAssetsWithRemapping(
 		AssetDatabase* database, 
 		ResourceManager* resource_manager,
-		Stream<wchar_t> mount_point = { nullptr, 0 },
-		Stream<unsigned int>* asset_mask = nullptr,
+		const DeallocateAssetsWithRemappingOptions* options,
 		CapacityStream<MissingAsset>* missing_assets = nullptr
 	);
 
@@ -137,8 +146,7 @@ namespace ECSEngine {
 	ECSENGINE_API void DeallocateAssetsWithRemapping(
 		AssetDatabaseReference* database_reference,
 		ResourceManager* resource_manager,
-		Stream<wchar_t> mount_point = { nullptr, 0 },
-		Stream<unsigned int>* asset_mask = nullptr
+		const DeallocateAssetsWithRemappingOptions* options
 	);
 
 	ECSENGINE_API bool LoadAssetHasFailed(Stream<LoadAssetFailure> failures, unsigned int handle, ECS_ASSET_TYPE type);

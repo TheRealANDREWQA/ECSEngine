@@ -12,11 +12,37 @@ void* EditorEventLastData(EditorState* editor_state);
 // Returns true if it finds an event with the given function
 bool EditorHasEvent(const EditorState* editor_state, EditorEventFunction function);
 
-// Returns the data for an event if it finds the givne function else nullptr
+// Returns the data for an event if it finds the given function else nullptr
 void* EditorGetEventData(const EditorState* editor_state, EditorEventFunction function);
 
 // Fills in the stream with the data pointers for all events currently stored with the given function
 void EditorGetEventTypeData(const EditorState* editor_state, EditorEventFunction function, ECSEngine::CapacityStream<void*>* data);
+
+// Can be called from multiple threads.
+// It will execute the given event after a certain other event has finished executing
+// It does a memcpy comparison between the data. Returns the data stored
+// for this added event
+void* EditorAddEventAfter(
+	EditorState* editor_state,
+	EditorEventFunction function,
+	void* event_data,
+	size_t event_data_size,
+	EditorEventFunction event_to_finish,
+	void* event_to_finish_compare_data,
+	size_t event_to_finish_compare_data_size
+);
+
+// Can be called from multiple threads.
+// It add 2 events, the second one waiting for the first one to finish before executing
+void EditorAddEventWithContinuation(
+	EditorState* editor_state,
+	EditorEventFunction first_function,
+	void* first_event_data,
+	size_t first_event_data_size,
+	EditorEventFunction second_function,
+	void* second_event_data,
+	size_t second_event_data_size
+);
 
 template<typename Functor>
 EDITOR_EVENT(EditorEventExecuteFunctor) {

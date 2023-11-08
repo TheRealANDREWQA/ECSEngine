@@ -4,9 +4,7 @@ struct EditorState;
 
 // -------------------------------------------------------------------------------------------------------------
 
-bool LoadEditorSandboxFile(
-	EditorState* editor_state
-);
+bool LoadEditorSandboxFile(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 

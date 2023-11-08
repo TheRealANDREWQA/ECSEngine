@@ -845,8 +845,25 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 
 void LoadSandboxMissingAssets(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* missing_assets)
 {
+	LoadSandboxMissingAssets(editor_state, sandbox_index, missing_assets, nullptr, nullptr, 0);
+}
+
+void LoadSandboxMissingAssets(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	CapacityStream<unsigned int>* missing_assets, 
+	EditorEventFunction callback,
+	void* callback_data, 
+	size_t callback_data_size
+)
+{
 	LoadSandboxMissingAssetsEventData* event_data = InitializeEventData(editor_state, sandbox_index, missing_assets);
-	EditorAddEvent(editor_state, LoadSandboxMissingAssetsEvent, event_data, 0);
+	if (callback == nullptr) {
+		EditorAddEvent(editor_state, LoadSandboxMissingAssetsEvent, event_data, 0);
+	}
+	else {
+		EditorAddEventWithContinuation(editor_state, LoadSandboxMissingAssetsEvent, event_data, 0, callback, callback_data, callback_data_size);
+	}
 	// Lock the sandbox as well
 	LockSandbox(editor_state, sandbox_index);
 }
@@ -855,11 +872,18 @@ void LoadSandboxMissingAssets(EditorState* editor_state, unsigned int sandbox_in
 
 void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index)
 {
+	LoadSandboxAssets(editor_state, sandbox_index, nullptr, nullptr, 0);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, EditorEventFunction callback, void* callback_data, size_t callback_data_size)
+{
 	const size_t HANDLES_PER_ASSET_TYPE = ECS_KB;
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(unsigned int, missing_assets, ECS_ASSET_TYPE_COUNT, HANDLES_PER_ASSET_TYPE);
 
 	GetSandboxMissingAssets(editor_state, sandbox_index, missing_assets.buffer);
-	LoadSandboxMissingAssets(editor_state, sandbox_index, missing_assets.buffer);
+	LoadSandboxMissingAssets(editor_state, sandbox_index, missing_assets.buffer, callback, callback_data, callback_data_size);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1377,7 +1401,11 @@ EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 		GetProjectAssetsFolder(editor_state, assets_folder);
 
-		DeallocateAssetsWithRemapping(&data->sandbox_reference_copy, editor_state->runtime_resource_manager, assets_folder, data->asset_mask);
+		DeallocateAssetsWithRemappingOptions deallocate_options;
+		deallocate_options.asset_mask = data->asset_mask;
+		deallocate_options.mount_point = assets_folder;
+		deallocate_options.decrement_dependencies = true;
+		DeallocateAssetsWithRemapping(&data->sandbox_reference_copy, editor_state->runtime_resource_manager, &deallocate_options);
 
 		// Deallocate the streams
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {

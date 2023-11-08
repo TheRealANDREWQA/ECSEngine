@@ -272,13 +272,14 @@ namespace ECSEngine {
 			position_x.size = 0;
 		}
 
-		void UIHandler::SetBuffer(void* buffer, size_t count) {
-			uintptr_t ptr = (uintptr_t)buffer;
-			SoAInitializeFromBuffer(count, ptr, &position_x.buffer, &position_y, &scale_x, &scale_y);
-		}
-
-		size_t UIHandler::MemoryOf(size_t count) {
-			return (sizeof(float) * 4 + sizeof(UIActionHandler)) * count + 8;
+		void UIHandler::WriteOnIndex(unsigned int index, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers _copy_function)
+		{
+			position_x[index] = position.x;
+			position_y[index] = position.y;
+			scale_x[index] = scale.x;
+			scale_y[index] = scale.y;
+			action[index] = handler;
+			copy_function[index] = _copy_function;
 		}
 
 		void UIWindowDescriptor::Center(float2 size) {
@@ -852,14 +853,10 @@ namespace ECSEngine {
 			return ptr - (uintptr_t)buffer;
 		}
 
-		void UIReservedHandler::Write(float2 position, float2 scale, UIActionHandler action_handler)
+		void UIReservedHandler::Write(float2 position, float2 scale, UIActionHandler action_handler, UIHandlerCopyBuffers copy_function)
 		{
 			action_handler.data = CopyNonZero(allocator, action_handler.data, action_handler.data_size);
-			handler->action[index] = action_handler;
-			handler->position_x[index] = position.x;
-			handler->position_y[index] = position.y;
-			handler->scale_x[index] = scale.x;
-			handler->scale_y[index] = scale.y;
+			handler->WriteOnIndex(index, position, scale, action_handler, copy_function);
 		}
 
 		void* UIReservedHandler::WrittenBuffer() const

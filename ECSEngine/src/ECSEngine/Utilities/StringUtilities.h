@@ -6,19 +6,23 @@
 
 namespace ECSEngine {
 
-	constexpr size_t ECS_LOCAL_TIME_FORMAT_HOUR = 1 << 0;
-	constexpr size_t ECS_LOCAL_TIME_FORMAT_MINUTES = 1 << 1;
-	constexpr size_t ECS_LOCAL_TIME_FORMAT_SECONDS = 1 << 2;
-	constexpr size_t ECS_LOCAL_TIME_FORMAT_MILLISECONDS = 1 << 3;
-	constexpr size_t ECS_LOCAL_TIME_FORMAT_DAY = 1 << 4;
-	constexpr size_t ECS_LOCAL_TIME_FORMAT_MONTH = 1 << 5;
-	constexpr size_t ECS_LOCAL_TIME_FORMAT_YEAR = 1 << 6;
-	constexpr size_t ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON = 1 << 7;
-	constexpr size_t ECS_LOCAL_TIME_FORMAT_ALL = ECS_LOCAL_TIME_FORMAT_MILLISECONDS | ECS_LOCAL_TIME_FORMAT_SECONDS | ECS_LOCAL_TIME_FORMAT_MINUTES
-		| ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_DAY | ECS_LOCAL_TIME_FORMAT_MONTH | ECS_LOCAL_TIME_FORMAT_YEAR;
-	constexpr size_t ECS_LOCAL_TIME_FORMAT_ALL_FROM_MINUTES = ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_HOUR
-		| ECS_LOCAL_TIME_FORMAT_DAY | ECS_LOCAL_TIME_FORMAT_MONTH | ECS_LOCAL_TIME_FORMAT_YEAR;
+	enum ECS_FORMAT_DATE_FLAGS : size_t {
+		ECS_FORMAT_DATE_MILLISECONDS = 1 << 0,
+		ECS_FORMAT_DATE_SECONDS = 1 << 1,
+		ECS_FORMAT_DATE_MINUTES = 1 << 2,
+		ECS_FORMAT_DATE_HOUR = 1 << 3,
+		ECS_FORMAT_DATE_DAY = 1 << 4,
+		ECS_FORMAT_DATE_MONTH = 1 << 5,
+		ECS_FORMAT_DATE_YEAR = 1 << 6,
+		ECS_FORMAT_DATE_COLON_INSTEAD_OF_DASH = 1 << 7,
 
+		ECS_FORMAT_DATE_ALL = ECS_FORMAT_DATE_MILLISECONDS | ECS_FORMAT_DATE_SECONDS | ECS_FORMAT_DATE_MINUTES
+			| ECS_FORMAT_DATE_HOUR | ECS_FORMAT_DATE_DAY | ECS_FORMAT_DATE_MONTH | ECS_FORMAT_DATE_YEAR,
+		ECS_FORMAT_DATE_ALL_FROM_MINUTES = ECS_FORMAT_DATE_MINUTES | ECS_FORMAT_DATE_HOUR | ECS_FORMAT_DATE_DAY 
+			| ECS_FORMAT_DATE_MONTH | ECS_FORMAT_DATE_YEAR
+	};
+
+	ECS_ENUM_BITWISE_OPERATIONS(ECS_FORMAT_DATE_FLAGS)
 
 #define ECS_FORMAT_TEMP_STRING(string_name, base_characters, ...) ECS_STACK_CAPACITY_STREAM(char, string_name, 2048); \
 string_name.size = FormatString(string_name.buffer, base_characters, __VA_ARGS__); \
@@ -408,17 +412,19 @@ string_name.AssertCapacity();
 	// Generates the string variants of the given numbers
 	ECSENGINE_API void FromNumbersToStrings(size_t count, CapacityStream<char>& storage, Stream<char>* strings, size_t offset = 0);
 
-	ECSENGINE_API void ConvertDateToString(Date date, Stream<char>& characters, size_t format_flags);
+	ECSENGINE_API void ConvertDateToString(Date date, Stream<char>& characters, ECS_FORMAT_DATE_FLAGS format_flags);
 
-	ECSENGINE_API void ConvertDateToString(Date date, CapacityStream<char>& characters, size_t format_flags);
+	ECSENGINE_API void ConvertDateToString(Date date, CapacityStream<char>& characters, ECS_FORMAT_DATE_FLAGS format_flags);
 
-	ECSENGINE_API void ConvertDateToString(Date date, Stream<wchar_t>& characters, size_t format_flags);
+	ECSENGINE_API void ConvertDateToString(Date date, Stream<wchar_t>& characters, ECS_FORMAT_DATE_FLAGS format_flags);
 
-	ECSENGINE_API void ConvertDateToString(Date date, CapacityStream<wchar_t>& characters, size_t format_flags);
+	ECSENGINE_API void ConvertDateToString(Date date, CapacityStream<wchar_t>& characters, ECS_FORMAT_DATE_FLAGS format_flags);
 
-	ECSENGINE_API Date ConvertStringToDate(Stream<char> characters, size_t format_flags);
+	ECSENGINE_API size_t ConvertDateToStringMaxCharacterCount(ECS_FORMAT_DATE_FLAGS format_flags);
 
-	ECSENGINE_API Date ConvertStringToDate(Stream<wchar_t> characters, size_t format_flags);
+	ECSENGINE_API Date ConvertStringToDate(Stream<char> characters, ECS_FORMAT_DATE_FLAGS format_flags);
+
+	ECSENGINE_API Date ConvertStringToDate(Stream<wchar_t> characters, ECS_FORMAT_DATE_FLAGS format_flags);
 
 	// Returns the string enclosed in a set of paranthesis. If there are no paranthesis, it returns { nullptr, 0 }
 	// Example AAAA(BBB) returns BBB

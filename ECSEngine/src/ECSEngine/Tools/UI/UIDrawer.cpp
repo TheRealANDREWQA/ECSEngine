@@ -74,7 +74,7 @@ namespace ECSEngine {
 		
 		ECS_INLINE static AllocatorPolymorphic TemporaryAllocator(const UIDrawer* drawer, ECS_UI_DRAW_PHASE phase) {
 			return drawer->record_snapshot_runnables ? drawer->SnapshotRunnableAllocator() : 
-				GetAllocatorPolymorphic(drawer->system->TemporaryAllocator(drawer->thread_id, phase));
+				GetAllocatorPolymorphic(drawer->system->TemporaryAllocator(phase));
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -636,7 +636,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::HandleLateAndSystemDrawActionNullify(size_t configuration, float2 position, float2 scale) {
-			if (record_actions && (configuration & UI_CONFIG_LATE_DRAW) || (configuration & UI_CONFIG_SYSTEM_DRAW)) {
+			if (record_actions && ((configuration & UI_CONFIG_LATE_DRAW) || (configuration & UI_CONFIG_SYSTEM_DRAW))) {
 				AddHoverable(0, position, scale, { SkipAction, nullptr, 0 });
 				AddClickable(0, position, scale, { SkipAction, nullptr, 0 });
 				AddGeneral(0, position, scale, { SkipAction, nullptr, 0 });
@@ -3596,7 +3596,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						drawer->AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, value_to_modify, 0, phase }, color);
+						drawer->AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, value_to_modify, 0, phase }, nullptr, color);
 					}
 				}
 
@@ -4811,6 +4811,7 @@ namespace ECSEngine {
 						initial_position,
 						{ total_x_scale, scale.y }, 
 						{ BoolClickableWithPin, &click_data, sizeof(click_data) },
+						nullptr,
 						current_color
 					);
 				}
@@ -4837,68 +4838,6 @@ namespace ECSEngine {
 
 		void UIDrawer::CollapsingHeaderDrawer(size_t configuration, UIDrawConfig& config, Stream<char> name, bool* state, float2 position, float2 scale) {
 			CollapsingHeaderDrawerImpl(this, configuration, config, name, state, position, scale);
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		UIDrawerHierarchy* UIDrawer::HierarchyInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name) {
-			UIDrawerHierarchy* data = nullptr;
-
-			// Begin recording allocations and table resources for dynamic resources
-			if (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
-				BeginElement();
-				configuration |= UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
-			}
-			AddWindowResource(name, [&](Stream<char> identifier) {
-				data = (UIDrawerHierarchy*)GetMainAllocatorBuffer<UIDrawerHierarchy>();
-
-				data->nodes.allocator = GetAllocatorPolymorphic(system->m_memory);
-				data->nodes.capacity = 0;
-				data->nodes.size = 0;
-				data->nodes.buffer = nullptr;
-				data->pending_initializations.allocator = GetAllocatorPolymorphic(system->m_memory);
-				data->pending_initializations.buffer = nullptr;
-				data->pending_initializations.size = 0;
-				data->pending_initializations.capacity = 0;
-				data->system = system;
-				data->data = nullptr;
-				data->data_size = 0;
-				data->window_index = window_index;
-
-				if (((configuration & UI_CONFIG_HIERARCHY_SELECTABLE) != 0) || ((configuration & UI_CONFIG_HIERARCHY_DRAG_NODE) != 0)) {
-					const UIConfigHierarchySelectable* selectable = (const UIConfigHierarchySelectable*)config.GetParameter(UI_CONFIG_HIERARCHY_SELECTABLE);
-					data->selectable.selected_index = 0;
-					data->selectable.offset = selectable->offset;
-					data->selectable.pointer = selectable->pointer;
-					data->selectable.callback = selectable->callback_action;
-					data->selectable.callback_data = selectable->callback_data;
-					if (selectable->callback_data_size > 0) {
-						void* allocation = GetMainAllocatorBuffer(selectable->callback_data_size);
-						memcpy(allocation, selectable->callback_data, selectable->callback_data_size);
-						data->selectable.callback_data = allocation;
-					}
-				}
-
-				if (((configuration & UI_CONFIG_HIERARCHY_CHILD) == 0) && (((configuration & UI_CONFIG_HIERARCHY_SELECTABLE) != 0) || ((configuration & UI_CONFIG_HIERARCHY_DRAG_NODE) != 0))) {
-					data->multiple_hierarchy_data = GetMainAllocatorBuffer<UIDrawerHierarchiesData>();
-					data->multiple_hierarchy_data->hierarchy_transforms = UIDynamicStream<UIElementTransform>(GetAllocatorPolymorphic(system->m_memory), 0);
-					data->multiple_hierarchy_data->elements = UIDynamicStream<UIDrawerHierarchiesElement>(GetAllocatorPolymorphic(system->m_memory), 0);
-					data->multiple_hierarchy_data->active_hierarchy = data;
-				}
-				else if (configuration & UI_CONFIG_HIERARCHY_CHILD) {
-					const UIConfigHierarchyChild* child_data = (const UIConfigHierarchyChild*)config.GetParameter(UI_CONFIG_HIERARCHY_CHILD);
-					UIDrawerHierarchy* parent_hierarchy = (UIDrawerHierarchy*)child_data->parent;
-					data->multiple_hierarchy_data = parent_hierarchy->multiple_hierarchy_data;
-				}
-				else {
-					data->multiple_hierarchy_data = nullptr;
-				}
-
-
-				return data;
-				});
-
-			return data;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -5500,226 +5439,6 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::HierarchyDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerHierarchy* data, float2 scale) {
-			if (~configuration & UI_CONFIG_HIERARCHY_DO_NOT_REDUCE_Y) {
-				scale.y *= 0.75f;
-			}
-
-			if (~configuration & UI_CONFIG_HIERARCHY_CHILD) {
-				data->multiple_hierarchy_data->hierarchy_transforms.Reset();
-				data->multiple_hierarchy_data->elements.Reset();
-			}
-
-			if (data->pending_initializations.size > 0) {
-				// creating a temporary initializer
-				UIDrawer drawer_initializer = UIDrawer(color_theme, font, layout, element_descriptor, true);
-				memcpy(&drawer_initializer, this, sizeof(UIDrawer));
-				drawer_initializer.deallocate_constructor_allocations = false;
-
-				for (size_t index = 0; index < data->pending_initializations.size; index++) {
-					size_t current_window_allocation_count = system->m_windows[window_index].memory_resources.size;
-					data->pending_initializations[index].function(&drawer_initializer, window_data, data);
-					for (size_t subindex = current_window_allocation_count; subindex < system->m_windows[window_index].memory_resources.size; subindex++) {
-						data->nodes[data->pending_initializations[index].bound_node].internal_allocations.Add(system->m_windows[window_index].memory_resources[subindex]);
-					}
-				}
-			}
-			data->pending_initializations.Reset();
-
-			float initial_scale = scale.x;
-			float2 position = { GetNextRowXPosition() - region_render_offset.x, current_y - region_render_offset.y };
-			float2 initial_position = position;
-
-			scale.x = GetXScaleUntilBorder(position.x);
-			if (configuration & UI_CONFIG_HIERARCHY_NODE_DO_NOT_INFER_SCALE_X) {
-				scale.x = initial_scale;
-			}
-
-			float2 sprite_scale = GetSquareScale(scale.y);
-
-			UIConfigTextAlignment alignment;
-			alignment.horizontal = ECS_UI_ALIGN::ECS_UI_ALIGN_LEFT;
-			alignment.vertical = ECS_UI_ALIGN::ECS_UI_ALIGN_MIDDLE;
-
-			UIDrawConfig label_config;
-			label_config.AddFlag(alignment);
-
-			Color hover_color = HandleColor(configuration, config);
-			LPCWSTR texture = nullptr;
-			float2 top_left_closed_uv;
-			float2 bottom_right_closed_uv;
-			float2 top_left_opened_uv;
-			float2 bottom_right_opened_uv;
-			float2 sprite_scale_factor;
-			Color texture_color;
-			UIConfigHierarchyNoAction* extra_info = nullptr;
-
-			bool extra_draw_index = false;
-			if (configuration & UI_CONFIG_HIERARCHY_SPRITE_TEXTURE) {
-				const UIConfigHierarchySpriteTexture* sprite_texture = (const UIConfigHierarchySpriteTexture*)config.GetParameter(UI_CONFIG_HIERARCHY_SPRITE_TEXTURE);
-				texture = sprite_texture->texture;
-				top_left_closed_uv = sprite_texture->top_left_closed_uv;
-				bottom_right_closed_uv = sprite_texture->bottom_right_closed_uv;
-				top_left_opened_uv = sprite_texture->top_left_opened_uv;
-				bottom_right_opened_uv = sprite_texture->bottom_right_opened_uv;
-				sprite_scale_factor = sprite_texture->scale_factor;
-				texture_color = sprite_texture->color;
-				extra_draw_index = sprite_texture->keep_triangle;
-			}
-			else {
-				texture = ECS_TOOLS_UI_TEXTURE_TRIANGLE;
-				top_left_closed_uv = { 1.0f, 0.0f };
-				bottom_right_closed_uv = { 0.0f, 1.0f };
-				top_left_opened_uv = { 0.0f, 0.0f };
-				bottom_right_opened_uv = { 1.0f, 1.0f };
-				sprite_scale_factor = { 1.0f, 1.0f };
-				texture_color = ECS_COLOR_WHITE;
-			}
-
-			sprite_scale *= sprite_scale_factor;
-
-			if (configuration & UI_CONFIG_HIERARCHY_NO_ACTION_NO_NAME) {
-				extra_info = (UIConfigHierarchyNoAction*)config.GetParameter(UI_CONFIG_HIERARCHY_NO_ACTION_NO_NAME);
-			}
-
-			float max_label_scale = scale.x;
-
-			auto extra_draw_triangle_opened = [](UIDrawer& drawer, float2& position, float2 sprite_scale, size_t configuration) {
-				drawer.SpriteRectangle(configuration, position, sprite_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, drawer.color_theme.text);
-				position.x += sprite_scale.x;
-			};
-
-			auto extra_draw_triangle_closed = [](UIDrawer& drawer, float2& position, float2 sprite_scale, size_t configuration) {
-				drawer.SpriteRectangle(configuration, position, sprite_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, drawer.color_theme.text, { 1.0f, 0.0f }, { 0.0f, 1.0f });
-				position.x += sprite_scale.x;
-			};
-
-			auto extra_draw_nothing = [](UIDrawer& drawer, float2& position, float2 sprite_scale, size_t configuration) {};
-
-			using ExtraDrawFunction = void (*)(UIDrawer&, float2&, float2, size_t);
-
-			ExtraDrawFunction opened_table[] = { extra_draw_nothing, extra_draw_triangle_opened };
-			ExtraDrawFunction closed_table[] = { extra_draw_nothing, extra_draw_triangle_closed };
-
-			for (size_t index = 0; index < data->nodes.size; index++) {
-				float label_scale = scale.x;
-
-				// general implementation
-				if (~configuration & UI_CONFIG_HIERARCHY_NO_ACTION_NO_NAME) {
-					unsigned int hierarchy_children_start = 0;
-					if ((configuration & UI_CONFIG_HIERARCHY_DRAG_NODE) != 0) {
-						data->multiple_hierarchy_data->elements.Add({ data, (unsigned int)index, 0 });
-						data->multiple_hierarchy_data->hierarchy_transforms.Add({ position, {label_scale, scale.y} });
-						hierarchy_children_start = data->multiple_hierarchy_data->hierarchy_transforms.size;
-					}
-
-					if (data->nodes[index].state) {
-						if (ValidatePosition(0, position, { label_scale, scale.y })) {
-							opened_table[extra_draw_index](*this, position, sprite_scale, configuration);
-							SpriteRectangle(configuration, position, sprite_scale, texture, texture_color, top_left_opened_uv, bottom_right_opened_uv);
-							TextLabelDrawer
-							(
-								UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_TEXT_ALIGNMENT
-								| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_VALIDATE_POSITION,
-								label_config,
-								&data->nodes[index].name_element,
-								{ position.x + sprite_scale.x, position.y },
-								{ 0.0f, scale.y }
-							);
-						}
-						UpdateCurrentRowScale(scale.y);
-						UpdateRenderBoundsRectangle(position, { 0.0f, scale.y });
-
-						OffsetNextRow(layout.node_indentation);
-						NextRow(0.5f);
-						data->nodes[index].function(this, window_data, data);
-						NextRow(0.5f);
-						OffsetNextRow(-layout.node_indentation);
-
-						if (configuration & UI_CONFIG_HIERARCHY_DRAG_NODE) {
-							data->multiple_hierarchy_data->elements[hierarchy_children_start - 1].children_count = data->multiple_hierarchy_data->elements.size - hierarchy_children_start;
-						}
-					}
-					else {
-						if (ValidatePosition(0, position, { label_scale, scale.y })) {
-							closed_table[extra_draw_index](*this, position, sprite_scale, configuration);
-							SpriteRectangle(configuration, position, sprite_scale, texture, texture_color, top_left_closed_uv, bottom_right_closed_uv);
-							TextLabelDrawer
-							(
-								UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_TEXT_ALIGNMENT
-								| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_DO_NOT_ADVANCE,
-								label_config,
-								&data->nodes[index].name_element,
-								{ position.x + sprite_scale.x, position.y },
-								{ 0.0f, scale.y }
-							);
-						}
-						FinalizeRectangle(0, position, { sprite_scale.x + data->nodes[index].name_element.scale.x, scale.y });
-						NextRow(0.5f);
-					}
-
-					float element_scale = data->nodes[index].name_element.scale.x + 2 * element_descriptor.label_padd.x + sprite_scale.x;
-					label_scale = ClampMin(label_scale, element_scale);
-
-					UIDrawerBoolClickableWithPinData click_data;
-					click_data.pointer = &data->nodes[index].state;
-					click_data.is_vertical = true;
-
-					float2 hoverable_scale = { label_scale, scale.y };
-					if (configuration & UI_CONFIG_HIERARCHY_SELECTABLE) {
-						if (data->selectable.selected_index == index && data->multiple_hierarchy_data->active_hierarchy == data) {
-							SolidColorRectangle(configuration, config, position, hoverable_scale);
-						}
-						UIDrawerHierarchySelectableData selectable_data;
-						selectable_data.bool_data = click_data;
-						selectable_data.hierarchy = data;
-						selectable_data.node_index = index;
-						AddDefaultClickableHoverable(configuration, position, hoverable_scale, { HierarchySelectableClick, &selectable_data, sizeof(selectable_data) }, hover_color);
-					}
-					else if (configuration & UI_CONFIG_HIERARCHY_DRAG_NODE) {
-						if (data->selectable.selected_index == index && data->multiple_hierarchy_data->active_hierarchy == data) {
-							SolidColorRectangle(configuration, config, position, hoverable_scale);
-						}
-
-						UIDrawerHierarchyDragNode drag_data;
-						drag_data.hierarchies_data = data->multiple_hierarchy_data;
-						drag_data.selectable_data.hierarchy = data;
-						drag_data.selectable_data.node_index = index;
-						drag_data.selectable_data.bool_data = click_data;
-						drag_data.timer.SetMarker();
-
-						AddClickable(configuration, position, hoverable_scale, { HierarchyNodeDrag, &drag_data, sizeof(drag_data) });
-						AddDefaultHoverable(configuration, position, hoverable_scale, hover_color);
-					}
-					else {
-						AddDefaultClickableHoverable(configuration, position, hoverable_scale, { BoolClickableWithPin, &click_data, sizeof(click_data) }, hover_color);
-					}
-					max_label_scale = ClampMin(max_label_scale, label_scale);
-					position = { GetNextRowXPosition() - region_render_offset.x, current_y - region_render_offset.y };
-				}
-				// list implementation is here
-				else {
-					float2 sprite_position = position;
-					FinalizeRectangle(0, position, sprite_scale);
-					data->nodes[index].function(this, window_data, extra_info->extra_information);
-					NextRow();
-					position = { current_x - region_render_offset.x, current_y - region_render_offset.y };
-
-					sprite_position.y = AlignMiddle(sprite_position.y, extra_info->row_y_scale, sprite_scale.y);
-					SpriteRectangle(configuration, sprite_position, sprite_scale, texture, texture_color, top_left_closed_uv, bottom_right_closed_uv);
-				}
-			}
-
-			// adding a sentinel in order to have nodes placed at the back
-			if ((configuration & UI_CONFIG_HIERARCHY_DRAG_NODE) != 0) {
-				data->multiple_hierarchy_data->elements.Add({ data, data->nodes.size });
-				data->multiple_hierarchy_data->hierarchy_transforms.Add({ position, {0.0f, scale.y} });
-			}
-
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
 		void UIDrawer::HistogramDrawer(size_t configuration, const UIDrawConfig& config, const Stream<float> samples, Stream<char> name, float2 position, float2 scale, unsigned int precision) {
 			const size_t STACK_CHARACTER_COUNT = 128;
 
@@ -5854,59 +5573,6 @@ namespace ECSEngine {
 			}
 
 			FinalizeRectangle(configuration, position, scale);
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		UIDrawerList* UIDrawer::ListInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name) {
-			UIDrawerList* list = nullptr;
-
-			// Begin recording allocations and table resources for dynamic resources
-			if (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
-				BeginElement();
-				configuration |= UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
-			}
-			AddWindowResource(name, [&](Stream<char> identifier) {
-				list = GetMainAllocatorBuffer<UIDrawerList>();
-
-				list->hierarchy.nodes.allocator = GetAllocatorPolymorphic(system->m_memory);
-				list->hierarchy.nodes.capacity = 0;
-				list->hierarchy.nodes.size = 0;
-				list->hierarchy.nodes.buffer = nullptr;
-				list->hierarchy.pending_initializations.allocator = GetAllocatorPolymorphic(system->m_memory);
-				list->hierarchy.pending_initializations.buffer = nullptr;
-				list->hierarchy.pending_initializations.size = 0;
-				list->hierarchy.pending_initializations.capacity = 0;
-				list->hierarchy.system = system;
-				list->hierarchy.data = nullptr;
-				list->hierarchy.data_size = 0;
-				list->hierarchy.window_index = window_index;
-
-				if (~configuration & UI_CONFIG_LIST_NO_NAME) {
-					InitializeElementName(configuration, UI_CONFIG_LIST_NO_NAME, config, identifier, &list->name, { 0.0f, 0.0f }, { 0.0f, 0.0f });
-				}
-
-				return list;
-				});
-			return list;
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		void UIDrawer::ListDrawer(size_t configuration, UIDrawConfig& config, UIDrawerList* data, float2 position, float2 scale) {
-			if (IsElementNameFirst(configuration, UI_CONFIG_LIST_NO_NAME) || IsElementNameAfter(configuration, UI_CONFIG_LIST_NO_NAME)) {
-				current_x += layout.element_indentation;
-				ElementName(configuration, config, &data->name, position, scale);
-				NextRow();
-			}
-
-			UIConfigHierarchyNoAction info;
-			info.extra_information = data;
-
-			config.AddFlag(info);
-			data->hierarchy_extra = (UIConfigHierarchyNoAction*)config.GetParameter(UI_CONFIG_HIERARCHY_NO_ACTION_NO_NAME);
-
-			HierarchyDrawer(configuration | UI_CONFIG_HIERARCHY_NO_ACTION_NO_NAME | UI_CONFIG_HIERARCHY_CHILD, config, &data->hierarchy, scale);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -8954,7 +8620,7 @@ namespace ECSEngine {
 			UIDrawerDescriptor& descriptor,
 			void* _window_data,
 			bool _initializer
-		) : dockspace(descriptor.dockspace), thread_id(descriptor.thread_id), window_index(descriptor.window_index),
+		) : dockspace(descriptor.dockspace), window_index(descriptor.window_index),
 			border_index(descriptor.border_index), dockspace_type(descriptor.dockspace_type), buffers(descriptor.buffers),
 			counts(descriptor.counts), system_buffers(descriptor.system_buffers), system_counts(descriptor.system_counts),
 			window_data(_window_data), mouse_position(descriptor.mouse_position), color_theme(descriptor.color_theme),
@@ -9092,7 +8758,6 @@ namespace ECSEngine {
 		void UIDrawer::AddHoverable(size_t configuration, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function) {
 			if (!initializer && record_actions) {
 				system->AddHoverableToDockspaceRegion(
-					thread_id,
 					dockspace,
 					border_index,
 					position,
@@ -9116,7 +8781,7 @@ namespace ECSEngine {
 					write_size = stack_data->Write(data->characters);
 					data = stack_data;
 				}
-				system->AddHoverableToDockspaceRegion(thread_id, dockspace, border_index, position, scale, { TextTooltipHoverable, data, write_size, phase });
+				system->AddHoverableToDockspaceRegion(dockspace, border_index, position, scale, { TextTooltipHoverable, data, write_size, phase });
 				AddLateOrSystemAction(this, configuration, true, false, ECS_MOUSE_BUTTON_COUNT);
 			}
 		}
@@ -9133,7 +8798,6 @@ namespace ECSEngine {
 		) {
 			if (!initializer && record_actions) {
 				system->AddClickableToDockspaceRegion(
-					thread_id,
 					dockspace,
 					border_index,
 					position,
@@ -9157,7 +8821,6 @@ namespace ECSEngine {
 		) {
 			if (!initializer && record_actions) {
 				system->AddGeneralActionToDockspaceRegion(
-					thread_id,
 					dockspace,
 					border_index,
 					position,
@@ -9187,7 +8850,6 @@ namespace ECSEngine {
 				data.data.percentages[0] = percentage;
 				data.position = position;
 				data.scale = scale;
-				data.thread_id = thread_id;
 				data.phase = phase;
 				system->AddDefaultHoverable(data);
 
@@ -9222,7 +8884,6 @@ namespace ECSEngine {
 				data.data.is_single_action_parameter_draw = false;
 				data.border_index = border_index;
 				data.dockspace = dockspace;
-				data.thread_id = thread_id;
 				data.phase = phase;
 				data.position = main_position;
 				data.scale = main_scale;
@@ -9240,6 +8901,8 @@ namespace ECSEngine {
 			float2 scale,
 			UIActionHandler hoverable_handler,
 			UIActionHandler clickable_handler,
+			UIHandlerCopyBuffers hoverable_copy_function,
+			UIHandlerCopyBuffers clickable_copy_function,
 			ECS_MOUSE_BUTTON button_type
 		) {
 			if (!initializer && record_actions) {
@@ -9250,8 +8913,9 @@ namespace ECSEngine {
 				data.dockspace = dockspace;
 				data.position = position;
 				data.scale = scale;
-				data.thread_id = thread_id;
 				data.button_type = button_type;
+				data.hoverable_copy_function = hoverable_copy_function;
+				data.clickable_copy_function = clickable_copy_function;
 				system->AddDefaultClickable(data);
 
 				AddLateOrSystemAction(this, configuration, true, false, button_type);
@@ -9267,6 +8931,8 @@ namespace ECSEngine {
 			float2 scale, 
 			UIActionHandler hoverable_handler,
 			UIActionHandler clickable_handler,
+			UIHandlerCopyBuffers hoverable_copy_function,
+			UIHandlerCopyBuffers clickable_copy_function,
 			ECS_MOUSE_BUTTON button_type
 		)
 		{
@@ -9278,8 +8944,9 @@ namespace ECSEngine {
 				data.dockspace = dockspace;
 				data.position = position;
 				data.scale = scale;
-				data.thread_id = thread_id;
 				data.button_type = button_type;
+				data.hoverable_copy_function = hoverable_copy_function;
+				data.clickable_copy_function = clickable_copy_function;
 				system->WriteReservedDefaultClickable(reserved_hoverable, reserved_clickable, data);
 			}
 		}
@@ -9299,7 +8966,6 @@ namespace ECSEngine {
 				UISystemDoubleClickData register_data;
 				register_data.border_index = border_index;
 				register_data.dockspace = dockspace;
-				register_data.thread_id = thread_id;
 				register_data.position = position;
 				register_data.scale = scale;
 				register_data.duration_between_clicks = duration_between_clicks;
@@ -9329,7 +8995,6 @@ namespace ECSEngine {
 				UISystemDoubleClickData register_data;
 				register_data.border_index = border_index;
 				register_data.dockspace = dockspace;
-				register_data.thread_id = thread_id;
 				register_data.position = position;
 				register_data.scale = scale;
 				register_data.duration_between_clicks = duration_between_clicks;
@@ -9348,7 +9013,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIDrawerMenuRightClickData UIDrawer::PrepareRightClickActionData(
+		UIDrawerMenuRightClickData UIDrawer::PrepareRightClickMenuActionData(
 			Stream<char> name, 
 			UIDrawerMenuState* menu_state, 
 			UIActionHandler custom_handler,
@@ -9400,7 +9065,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIActionHandler UIDrawer::PrepareRightClickHandler(
+		UIActionHandler UIDrawer::PrepareRightClickMenuHandler(
 			Stream<char> name, 
 			UIDrawerMenuState* menu_state, 
 			UIActionHandler custom_handler,
@@ -9415,13 +9080,13 @@ namespace ECSEngine {
 				right_click = (UIDrawerMenuRightClickData*)Allocate(override_allocator, sizeof(UIDrawerMenuRightClickData));
 			}
 
-			*right_click = PrepareRightClickActionData(name, menu_state, custom_handler, override_allocator);
+			*right_click = PrepareRightClickMenuActionData(name, menu_state, custom_handler, override_allocator);
 			return { RightClickMenu, right_click, sizeof(*right_click), ECS_UI_DRAW_SYSTEM };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::AddRightClickAction(
+		void UIDrawer::AddRightClickMenuAction(
 			size_t configuration, 
 			float2 position, 
 			float2 scale, 
@@ -9431,67 +9096,7 @@ namespace ECSEngine {
 		)
 		{
 			if (record_actions) {
-				AddClickable(configuration, position, scale, PrepareRightClickHandler(name, menu_state, custom_handler), ECS_MOUSE_RIGHT);
-			}
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		void UIDrawer::AddDefaultClickableHoverableWithText(
-			size_t configuration,
-			float2 position,
-			float2 scale,
-			UIActionHandler handler,
-			Color color,
-			Stream<char> text,
-			float2 text_offset,
-			ECS_UI_DRAW_PHASE phase,
-			Color font_color,
-			float percentage,
-			ECS_MOUSE_BUTTON button_type
-		) {
-			if (record_actions) {
-				UIDefaultTextHoverableData hoverable_data;
-				hoverable_data.color = color;
-				hoverable_data.percentage = percentage;
-				hoverable_data.character_spacing = font.character_spacing;
-				hoverable_data.font_size = GetFontSize();
-				hoverable_data.text = text;
-				if (font_color == ECS_COLOR_WHITE) {
-					hoverable_data.text_color = color_theme.text;
-				}
-				else {
-					hoverable_data.text_color = font_color;
-				}
-				hoverable_data.text_offset = text_offset;
-
-				AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler, button_type);
-			}
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		// Either horizontal or vertical cull should be set
-		void UIDrawer::AddDefaultClickableHoverableWithTextEx(
-			size_t configuration,
-			float2 position,
-			float2 scale,
-			UIActionHandler handler,
-			UIDefaultTextHoverableData* hoverable_data,
-			Color text_color,
-			ECS_UI_DRAW_PHASE phase,
-			ECS_MOUSE_BUTTON button_type
-		) {
-			if (record_actions) {
-				hoverable_data->character_spacing = font.character_spacing;
-				hoverable_data->font_size = GetFontSize();
-				if (text_color == ECS_COLOR_WHITE) {
-					hoverable_data->text_color = color_theme.text;
-				}
-				else {
-					hoverable_data->text_color = text_color;
-				}
-				AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, hoverable_data, sizeof(*hoverable_data), phase }, handler, button_type);
+				AddClickable(configuration, position, scale, PrepareRightClickMenuHandler(name, menu_state, custom_handler), ECS_MOUSE_RIGHT);
 			}
 		}
 
@@ -9502,6 +9107,7 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale,
 			UIActionHandler handler,
+			UIHandlerCopyBuffers copy_function,
 			Color color,
 			float percentage,
 			ECS_UI_DRAW_PHASE hoverable_phase,
@@ -9523,8 +9129,8 @@ namespace ECSEngine {
 				data.hoverable_data.percentages[0] = percentage;
 				data.position = position;
 				data.scale = scale;
-				data.thread_id = thread_id;
 				data.button_type = button_type;
+				data.clickable_copy_function = copy_function;
 				system->AddDefaultHoverableClickable(data);
 
 				AddLateOrSystemAction(this, configuration, true, false, button_type);
@@ -9538,7 +9144,8 @@ namespace ECSEngine {
 			UIReservedHandler reserved_clickable,
 			float2 position, 
 			float2 scale, 
-			UIActionHandler handler, 
+			UIActionHandler handler,
+			UIHandlerCopyBuffers copy_function,
 			Color color, 
 			float percentage,
 			ECS_UI_DRAW_PHASE hoverable_phase,
@@ -9561,8 +9168,8 @@ namespace ECSEngine {
 				data.hoverable_data.percentages[0] = percentage;
 				data.position = position;
 				data.scale = scale;
-				data.thread_id = thread_id;
 				data.button_type = button_type;
+				data.clickable_copy_function = copy_function;
 				system->WriteReservedDefaultHoverableClickable(reserved_hoverable, reserved_clickable, data);
 			}
 		}
@@ -9579,6 +9186,7 @@ namespace ECSEngine {
 			const float* percentages,
 			unsigned int count,
 			UIActionHandler handler,
+			UIHandlerCopyBuffers copy_function,
 			ECS_MOUSE_BUTTON button_type
 		) {
 			if (!initializer && record_actions) {
@@ -9599,8 +9207,8 @@ namespace ECSEngine {
 				data.dockspace = dockspace;
 				data.position = main_position;
 				data.scale = main_scale;
-				data.thread_id = thread_id;
 				data.button_type = button_type;
+				data.clickable_copy_function = copy_function;
 				system->AddDefaultHoverableClickable(data);
 
 				AddLateOrSystemAction(this, configuration, true, false, button_type);
@@ -9620,6 +9228,7 @@ namespace ECSEngine {
 			const float* percentages,
 			unsigned int count, 
 			UIActionHandler handler,
+			UIHandlerCopyBuffers copy_function,
 			ECS_MOUSE_BUTTON button_type
 		)
 		{
@@ -9641,8 +9250,8 @@ namespace ECSEngine {
 				data.dockspace = dockspace;
 				data.position = main_position;
 				data.scale = main_scale;
-				data.thread_id = thread_id;
 				data.button_type = button_type;
+				data.clickable_copy_function = copy_function;
 				system->WriteReservedDefaultHoverableClickable(reserved_hoverable, reserved_clickable, data);
 			}
 		}
@@ -10000,7 +9609,7 @@ namespace ECSEngine {
 						SolidColorRectangle(configuration, position, scale, color);
 					}
 
-					AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 }, color);
+					AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 }, nullptr, color);
 				}
 				else {
 					TextLabel(ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_UNAVAILABLE_TEXT, config, name, position, scale);
@@ -10053,7 +9662,7 @@ namespace ECSEngine {
 					float2 sprite_position = ExpandRectangle(position, scale, expand_factor, sprite_scale);
 					if (is_active) {
 						SpriteRectangle(configuration, position, scale, texture, color, top_left_uv, bottom_right_uv);
-						AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 }, color);
+						AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 }, nullptr, color);
 					}
 					else {
 						color.alpha *= color_theme.alpha_inactive_item;
@@ -11949,27 +11558,27 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void* UIDrawer::GetTempBuffer(size_t size, ECS_UI_DRAW_PHASE phase, size_t alignment) {
-			return system->TemporaryAllocator(thread_id, phase)->Allocate(size, alignment);
+			return system->TemporaryAllocator(phase)->Allocate(size, alignment);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void* UIDrawer::GetHandlerBuffer(size_t size, ECS_UI_DRAW_PHASE phase)
 		{
-			return system->AllocateFromHandlerAllocator(thread_id, phase, size);
+			return system->AllocateFromHandlerAllocator(phase, size);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// Can be used to release some temp memory - cannot be used when handlers are used
 		void UIDrawer::ReturnTempAllocator(size_t marker, ECS_UI_DRAW_PHASE phase) {
-			system->TemporaryAllocator(thread_id, phase)->ReturnToMarker(marker);
+			system->TemporaryAllocator(phase)->ReturnToMarker(marker);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		size_t UIDrawer::GetTempAllocatorMarker(ECS_UI_DRAW_PHASE phase) {
-			return system->TemporaryAllocator(thread_id, phase)->m_top;
+			return system->TemporaryAllocator(phase)->m_top;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -12271,55 +11880,6 @@ namespace ECSEngine {
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
-
-#pragma region Hierarchy
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		UIDrawerHierarchy* UIDrawer::Hierarchy(Stream<char> name) {
-			UIDrawConfig config;
-			return Hierarchy(0, config, name);
-		}
-
-		UIDrawerHierarchy* UIDrawer::Hierarchy(size_t configuration, const UIDrawConfig& config, Stream<char> name) {
-			ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
-
-			if (!initializer) {
-				if (configuration & UI_CONFIG_DO_CACHE) {
-					UIDrawerHierarchy* data = (UIDrawerHierarchy*)GetResource(name);
-
-					HierarchyDrawer(configuration, config, data, scale);
-					HandleDynamicResource(configuration, name);
-					return data;
-				}
-				else {
-					bool exists = ExistsResource(name);
-					if (!exists) {
-						UIDrawerInitializeHierarchy initialize_data;
-						initialize_data.config = (UIDrawConfig*)&config;
-						ECS_FORWARD_STRUCT_MEMBERS_1(initialize_data, name);
-						InitializeDrawerElement(
-							*this,
-							&initialize_data,
-							name,
-							InitializeHierarchyElement,
-							DynamicConfiguration(configuration)
-						);
-					}
-					return Hierarchy(DynamicConfiguration(configuration), config, name);
-				}
-			}
-			else {
-				if (configuration & UI_CONFIG_DO_CACHE) {
-					return HierarchyInitializer(configuration, config, name);
-				}
-				return nullptr;
-			}
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
 
 #pragma region Histogram
 
@@ -12846,61 +12406,6 @@ namespace ECSEngine {
 
 			config.flag_count--;
 			OffsetNextRow(-next_row_offset);
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
-#pragma region List
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		UIDrawerList* UIDrawer::List(Stream<char> name) {
-			UIDrawConfig config;
-			return List(0, config, name);
-		}
-
-		UIDrawerList* UIDrawer::List(size_t configuration, UIDrawConfig& config, Stream<char> name) {
-			ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
-
-			if (!initializer) {
-				if (configuration & UI_CONFIG_DO_CACHE) {
-					UIDrawerList* list = (UIDrawerList*)GetResource(name);
-
-					ListDrawer(configuration, config, list, position, scale);
-					HandleDynamicResource(configuration, name);
-					return list;
-				}
-				else {
-					bool exists = ExistsResource(name);
-					if (!exists) {
-						UIDrawerInitializeList initialize_data;
-						initialize_data.config = &config;
-						ECS_FORWARD_STRUCT_MEMBERS_1(initialize_data, name);
-						InitializeDrawerElement(
-							*this,
-							&initialize_data,
-							name,
-							InitializeListElement,
-							DynamicConfiguration(configuration)
-						);
-					}
-					return List(DynamicConfiguration(configuration), config, name);
-				}
-			}
-			else {
-				if (configuration & UI_CONFIG_DO_CACHE) {
-					return ListInitializer(configuration, config, name);
-				}
-				return nullptr;
-			}
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
-		void UIDrawer::ListFinalizeNode(UIDrawerList* list) {
-			list->FinalizeNodeYscale((const void**)buffers, counts);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -14475,21 +13980,21 @@ namespace ECSEngine {
 
 		UIReservedHandler UIDrawer::ReserveHoverable(ECS_UI_DRAW_PHASE phase)
 		{
-			return system->ReserveHoverable(thread_id, dockspace, border_index, phase);
+			return system->ReserveHoverable(dockspace, border_index, phase);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		UIReservedHandler UIDrawer::ReserveClickable(ECS_MOUSE_BUTTON button_type, ECS_UI_DRAW_PHASE phase)
 		{
-			return system->ReserveClickable(thread_id, dockspace, border_index, phase, button_type);
+			return system->ReserveClickable(dockspace, border_index, phase, button_type);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		UIReservedHandler UIDrawer::ReserveGeneral(ECS_UI_DRAW_PHASE phase)
 		{
-			return system->ReserveGeneral(thread_id, dockspace, border_index, phase);
+			return system->ReserveGeneral(dockspace, border_index, phase);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -15537,7 +15042,6 @@ namespace ECSEngine {
 			}
 			index++;
 			drawer->system->AddHandlerToDockspaceRegionAtIndex(
-				drawer->thread_id, 
 				handler, 
 				drawer->GetRegionPosition(), 
 				drawer->GetRegionScale(),
@@ -16786,7 +16290,7 @@ namespace ECSEngine {
 				}
 				ECS_ASSERT(write_size <= sizeof(tool_tip_data_storage));
 
-				system->ComposeHoverable(thread_id, dockspace, border_index, position, scale, { TextTooltipHoverable, tool_tip_data, write_size, ECS_UI_DRAW_SYSTEM }, true);
+				system->ComposeHoverable(dockspace, border_index, position, scale, { TextTooltipHoverable, tool_tip_data, write_size, ECS_UI_DRAW_SYSTEM }, true);
 			}
 		}
 
@@ -17309,13 +16813,6 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void InitializeHierarchyElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration) {
-			UIDrawerInitializeHierarchy* data = (UIDrawerInitializeHierarchy*)additional_data;
-			drawer_ptr->Hierarchy(configuration, *data->config, data->name);
-		}
-
-		// --------------------------------------------------------------------------------------------------------------
-
 		void InitializeFilesystemHierarchyElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration) {
 			UIDrawerInitializeFilesystemHierarchy* data = (UIDrawerInitializeFilesystemHierarchy*)additional_data;
 			drawer_ptr->FilesystemHierarchy(configuration, *data->config, data->identifier, data->labels);
@@ -17326,13 +16823,6 @@ namespace ECSEngine {
 		void InitializeLabelHierarchyElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration) {
 			UIDrawerInitializeLabelHierarchy* data = (UIDrawerInitializeLabelHierarchy*)additional_data;
 			drawer_ptr->LabelHierarchyInitializer(configuration, *data->config, data->name, data->storage_type_size);
-		}
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		void InitializeListElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration) {
-			UIDrawerInitializeList* data = (UIDrawerInitializeList*)additional_data;
-			drawer_ptr->List(configuration, *data->config, data->name);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

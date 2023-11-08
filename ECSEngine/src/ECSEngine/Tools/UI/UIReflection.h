@@ -218,6 +218,7 @@ namespace ECSEngine {
 			ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ALL = (1 << 10) - 1
 		};
 
+		// It will fill in the ui_config buffer that you give to this function
 		// Before calling this function, if nothing is set make sure that the index count is 0
 		// There must be at least 15 slots in the ui_config array.
 		// Returns the number of used indices. The stack allocation should be 512 bytes or greater

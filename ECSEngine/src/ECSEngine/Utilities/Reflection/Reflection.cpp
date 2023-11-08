@@ -846,14 +846,14 @@ namespace ECSEngine {
 		// If the path index is -1 it won't write it
 		void WriteErrorMessage(ReflectionManagerParseStructuresThreadTaskData* data, const char* message, unsigned int path_index) {
 			data->success = false;
-			data->error_message_lock.lock();
+			data->error_message_lock.Lock();
 			data->error_message->AddStream(message);
 			if (path_index != -1) {
 				ConvertWideCharsToASCII((data->paths[path_index]), *data->error_message);
 			}
 			data->error_message->Add('\n');
 			data->error_message->AssertCapacity();
-			data->error_message_lock.unlock();
+			data->error_message_lock.Unlock();
 
 			data->condition_variable->Notify();
 		}
@@ -2181,7 +2181,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			data.field_table = &field_table;
 			data.success = true;
 			data.total_memory = 0;
-			data.error_message_lock.unlock();
+			data.error_message_lock.Clear();
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

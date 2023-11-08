@@ -24,20 +24,27 @@ namespace ECSEngine {
 			ECS_TOOLS_UI_TEXTURE_INFO_ICON,
 			ECS_TOOLS_UI_TEXTURE_WARN_ICON,
 			ECS_TOOLS_UI_TEXTURE_ERROR_ICON,
-			ECS_TOOLS_UI_TEXTURE_TRACE_ICON
+			ECS_TOOLS_UI_TEXTURE_TRACE_ICON,
+			ECS_TOOLS_UI_TEXTURE_GRAPHICS_ICON
 		};
+
+		static_assert(std::size(CONSOLE_TEXTURE_ICONS) == ECS_CONSOLE_MESSAGE_COUNT);
 
 #define CONSOLE_INFO_COLOR Color(40, 170, 50)
 #define CONSOLE_WARN_COLOR Color(120, 130, 30)
 #define CONSOLE_ERROR_COLOR Color(160, 20, 20)
 #define CONSOLE_TRACE_COLOR Color(140, 30, 120)
+#define CONSOLE_GRAPHICS_COLOR Color(240, 240, 240)
 
 		const Color CONSOLE_COLORS[] = {
 			CONSOLE_INFO_COLOR,
 			CONSOLE_WARN_COLOR,
 			CONSOLE_ERROR_COLOR,
-			CONSOLE_TRACE_COLOR
+			CONSOLE_TRACE_COLOR,
+			CONSOLE_GRAPHICS_COLOR
 		};
+
+		static_assert(std::size(CONSOLE_COLORS) == ECS_CONSOLE_MESSAGE_COUNT);
 
 #pragma region General Additional Draw
 
@@ -357,23 +364,13 @@ namespace ECSEngine {
 			bool collapse;
 			bool clear_on_play;
 
-			struct {
-				bool filter_info;
-				bool filter_warn;
-				bool filter_error;
-				bool filter_trace;
-				// acts as padding
-				bool filter_all;
-			};
+			bool filter[ECS_CONSOLE_MESSAGE_COUNT + 1];
 			bool filter_message_type_changed;
 			bool system_filter_changed;
 			unsigned char previous_verbosity_level;
 
 			unsigned int last_frame_message_count;
-			unsigned int info_count;
-			unsigned int warn_count;
-			unsigned int error_count;
-			unsigned int trace_count;
+			unsigned int type_count[ECS_CONSOLE_MESSAGE_COUNT];
 			CapacityStream<unsigned int> filtered_message_indices;
 			HashTableDefault<UniqueConsoleMessage> unique_messages;
 			Stream<bool> system_filter;

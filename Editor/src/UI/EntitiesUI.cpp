@@ -246,7 +246,7 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 		state.submenues = submenu_states;
 	}
 
-	drawer.SetWindowClickable(&drawer.PrepareRightClickHandler("Entities Right Click", &state), ECS_MOUSE_RIGHT);
+	drawer.SetWindowClickable(&drawer.PrepareRightClickMenuHandler("Entities Right Click", &state), ECS_MOUSE_RIGHT);
 }
 
 static void RenameCallback(ActionData* action_data) {

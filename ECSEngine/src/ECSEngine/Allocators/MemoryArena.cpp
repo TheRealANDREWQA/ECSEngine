@@ -45,7 +45,7 @@ namespace ECSEngine {
 
 		CreateBaseAllocators(arena->m_data_buffer, nested_info, buffer, allocator_count);
 		arena->m_allocator_count = allocator_count;
-		arena->m_lock.unlock();
+		arena->m_lock.Clear();
 		arena->m_allocators = buffer;
 		arena->m_base_allocator_type = nested_type;
 		arena->m_size_per_allocator = (total_allocation_size - allocator_size) / allocator_count;

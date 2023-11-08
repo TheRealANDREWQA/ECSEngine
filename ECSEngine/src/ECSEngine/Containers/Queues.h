@@ -506,7 +506,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void Lock() {
-			m_lock.lock();
+			m_lock.Lock();
 		}
 
 		bool Pop(T& element) {
@@ -593,17 +593,17 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE void Unlock() {
-			m_lock.unlock();
+			m_lock.Unlock();
 		}
 
 		ECS_INLINE bool TryLock() {
-			return m_lock.try_lock();
+			return m_lock.TryLock();
 		}
 
 		// It has good sleep behaviour on many missed loads
 		ECS_INLINE void SpinWaitElements() {
 			if (m_queue.GetSize() == 0) {
-				m_lock.wait_signaled();
+				m_lock.WaitSignaled();
 			}
 		}
 
@@ -613,7 +613,7 @@ namespace ECSEngine {
 
 		void InitializeFromBuffer(void* buffer, size_t capacity) {
 			m_queue.InitializeFromBuffer(buffer, capacity);
-			m_lock.clear();
+			m_lock.Clear();
 		}
 
 		ECS_INLINE void InitializeFromBuffer(uintptr_t& buffer, size_t capacity) {
@@ -624,12 +624,12 @@ namespace ECSEngine {
 		template<typename Allocator>
 		void Initialize(Allocator* allocator, size_t capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			m_queue.Initialize(allocator, capacity, debug_info);
-			m_lock.clear();
+			m_lock.Clear();
 		}
 
 		void Initialize(AllocatorPolymorphic allocator, size_t capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			m_queue.Initialize(allocator, capacity, debug_info);
-			m_lock.clear();
+			m_lock.Clear();
 		}
 
 		// This can be used when on single thread - it performs no locking

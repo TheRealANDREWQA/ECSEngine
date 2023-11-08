@@ -401,7 +401,7 @@ void EditorComponents::RecoverData(
 			// Remove the asset fields in a separate pass for easier logic handling
 			for (unsigned int index = 0; index < matching_archetypes.size; index++) {
 				if (has_locks) {
-					archetype_locks[matching_archetypes[index]].lock();
+					archetype_locks[matching_archetypes[index]].Lock();
 				}
 
 				const Archetype* archetype = entity_manager->GetArchetype(matching_archetypes[index]);
@@ -417,7 +417,7 @@ void EditorComponents::RecoverData(
 				}
 
 				if (has_locks) {
-					archetype_locks[matching_archetypes[index]].unlock();
+					archetype_locks[matching_archetypes[index]].Unlock();
 				}
 			}
 		}
@@ -431,7 +431,7 @@ void EditorComponents::RecoverData(
 			for (unsigned int index = 0; index < matching_archetypes.size; index++) {
 				if (has_locks) {
 					// Lock the archetype
-					archetype_locks[matching_archetypes[index]].lock();
+					archetype_locks[matching_archetypes[index]].Lock();
 				}
 				Archetype* archetype = entity_manager->GetArchetype(matching_archetypes[index]);
 				unsigned char component_index = archetype->FindUniqueComponentIndex(component);
@@ -449,7 +449,7 @@ void EditorComponents::RecoverData(
 				}
 
 				if (has_locks) {
-					archetype_locks[matching_archetypes[index]].unlock();
+					archetype_locks[matching_archetypes[index]].Unlock();
 				}
 			}
 
@@ -457,7 +457,7 @@ void EditorComponents::RecoverData(
 
 			if (has_locks) {
 				// Lock the memory manager allocator
-				entity_manager_lock->lock();
+				entity_manager_lock->Lock();
 			}
 
 			MemoryArena* arena = entity_manager->GetComponentAllocator(component);
@@ -470,7 +470,7 @@ void EditorComponents::RecoverData(
 			}
 
 			if (has_locks) {
-				entity_manager_lock->unlock();
+				entity_manager_lock->Unlock();
 			}
 
 			if (arena != nullptr) {
@@ -490,7 +490,7 @@ void EditorComponents::RecoverData(
 				// Now deserialize the data
 				for (unsigned int index = 0; index < matching_archetypes.size; index++) {
 					if (has_locks) {
-						archetype_locks[matching_archetypes[index]].lock();
+						archetype_locks[matching_archetypes[index]].Lock();
 					}
 
 					Archetype* archetype = entity_manager->GetArchetype(matching_archetypes[index]);
@@ -516,7 +516,7 @@ void EditorComponents::RecoverData(
 					}
 
 					if (has_locks) {
-						archetype_locks[matching_archetypes[index]].unlock();
+						archetype_locks[matching_archetypes[index]].Unlock();
 					}
 				}
 			}
@@ -524,14 +524,14 @@ void EditorComponents::RecoverData(
 				MemoryArena* arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
-						entity_manager_lock->lock();
+						entity_manager_lock->Lock();
 					}
 
 					// Need to resize the component allocator
 					arena = entity_manager->ResizeComponentAllocator(component, new_allocator_size);
 
 					if (has_locks) {
-						entity_manager_lock->unlock();
+						entity_manager_lock->Unlock();
 					}
 				}
 				else {
@@ -546,7 +546,7 @@ void EditorComponents::RecoverData(
 
 				for (unsigned int index = 0; index < matching_archetypes.size; index++) {
 					if (has_locks) {
-						archetype_locks[matching_archetypes[index]].lock();
+						archetype_locks[matching_archetypes[index]].Lock();
 					}
 					Archetype* archetype = entity_manager->GetArchetype(matching_archetypes[index]);
 					unsigned char component_index = archetype->FindUniqueComponentIndex(component);
@@ -568,7 +568,7 @@ void EditorComponents::RecoverData(
 					}
 
 					if (has_locks) {
-						archetype_locks[matching_archetypes[index]].unlock();
+						archetype_locks[matching_archetypes[index]].Unlock();
 					}
 				}
 			}
@@ -581,7 +581,7 @@ void EditorComponents::RecoverData(
 			auto resize_archetype = [&](auto same_component_copy, auto same_component_handler) {
 				for (unsigned int index = 0; index < matching_archetypes.size; index++) {
 					if (has_locks) {
-						archetype_locks[matching_archetypes[index]].lock();
+						archetype_locks[matching_archetypes[index]].Lock();
 					}
 					Archetype* archetype = entity_manager->GetArchetype(matching_archetypes[index]);
 					ComponentSignature current_signature = archetype->GetUniqueSignature();
@@ -628,13 +628,13 @@ void EditorComponents::RecoverData(
 
 						// We need to lock because resize does an allocation inside
 						if (has_locks) {
-							entity_manager_lock->lock();
+							entity_manager_lock->Lock();
 						}
 						// The size 0 it tells the base to just resize.
 						// Now everything will be in its place
 						base->Resize(previous_capacity);
 						if (has_locks) {
-							entity_manager_lock->unlock();
+							entity_manager_lock->Unlock();
 						}
 
 						base->m_size = previous_size;
@@ -664,7 +664,7 @@ void EditorComponents::RecoverData(
 					}
 
 					if (has_locks) {
-						archetype_locks[matching_archetypes[index]].unlock();
+						archetype_locks[matching_archetypes[index]].Unlock();
 					}
 				}
 			};
@@ -699,14 +699,14 @@ void EditorComponents::RecoverData(
 				MemoryArena* arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
-						entity_manager_lock->lock();
+						entity_manager_lock->Lock();
 					}
 
 					// Need to resize the component allocator
 					arena = entity_manager->ResizeComponentAllocator(component, new_allocator_size);
 
 					if (has_locks) {
-						entity_manager_lock->unlock();
+						entity_manager_lock->Unlock();
 					}
 				}
 				else {
@@ -771,11 +771,11 @@ void EditorComponents::RecoverData(
 				MemoryArena* arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
-						entity_manager_lock->lock();
+						entity_manager_lock->Lock();
 					}
 					arena = entity_manager->ResizeSharedComponentAllocator(component, new_allocator_size);
 					if (has_locks) {
-						entity_manager_lock->unlock();
+						entity_manager_lock->Unlock();
 					}
 				}
 				else {
@@ -801,11 +801,11 @@ void EditorComponents::RecoverData(
 				MemoryArena* arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
-						entity_manager_lock->lock();
+						entity_manager_lock->Lock();
 					}
 					arena = entity_manager->ResizeSharedComponentAllocator(component, new_allocator_size);
 					if (has_locks) {
-						entity_manager_lock->unlock();
+						entity_manager_lock->Unlock();
 					}
 				}
 				else {
@@ -836,11 +836,11 @@ void EditorComponents::RecoverData(
 			});
 
 			if (has_locks) {
-				entity_manager_lock->lock();
+				entity_manager_lock->Lock();
 			}
 			entity_manager->ResizeSharedComponent(component, new_size);
 			if (has_locks) {
-				entity_manager_lock->unlock();
+				entity_manager_lock->Unlock();
 			}
 
 			ptr = (uintptr_t)temporary_allocation;
@@ -1004,7 +1004,7 @@ void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stre
 
 	// Lock the small memory manager in order to commit the type
 	if (lock != nullptr) {
-		lock->lock();
+		lock->Lock();
 	}
 	// Check to see if it already exists. If it does, don't commit it
 	if (is_component) {
@@ -1018,7 +1018,7 @@ void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stre
 		}
 	}
 	if (lock != nullptr) {
-		lock->unlock();
+		lock->Unlock();
 	}
 }
 
@@ -1042,7 +1042,7 @@ void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<c
 
 	MemoryArena* arena = nullptr;
 	if (lock != nullptr) {
-		lock->lock();
+		lock->Lock();
 	}
 	if (is_component) {
 		entity_manager->ChangeComponentIndex(old_component, new_component);
@@ -1051,7 +1051,7 @@ void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<c
 		entity_manager->ChangeSharedComponentIndex(old_component, new_component);
 	}
 	if (lock != nullptr) {
-		lock->unlock();
+		lock->Unlock();
 	}
 }
 
@@ -1628,7 +1628,7 @@ void EditorComponents::RemoveTypeFromManager(
 
 	// Lock the small memory manager
 	if (lock != nullptr) {
-		lock->lock();
+		lock->Lock();
 	}
 
 	bool has_assets = editor_state->editor_components.HasComponentAssets(component, component_type);
@@ -1705,7 +1705,7 @@ void EditorComponents::RemoveTypeFromManager(
 
 	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
 	if (lock != nullptr) {
-		lock->unlock();
+		lock->Unlock();
 	}
 }
 
@@ -2548,14 +2548,14 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 		data->unhandled_events->Add(data->event_to_handle);
 	}
 	else {
-		data->finalize_event_lock->lock();
+		data->finalize_event_lock->Lock();
 		data->editor_state->editor_components.FinalizeEvent(
 			data->editor_state, 
 			data->editor_state->module_reflection->reflection, 
 			data->event_to_handle
 		);
 		data->handled_events->Add(data->event_to_handle);
-		data->finalize_event_lock->unlock();
+		data->finalize_event_lock->Unlock();
 	}
 
 	unsigned int previous_count = data->semaphore->Exit();
@@ -2733,7 +2733,7 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 		ptr += sizeof(*semaphore);
 
 		SpinLock* finalize_event_lock = (SpinLock*)ptr;
-		finalize_event_lock->unlock();
+		finalize_event_lock->Unlock();
 		ptr += sizeof(SpinLock);
 
 		AtomicStream<EditorComponentEvent>* unhandled_events = (AtomicStream<EditorComponentEvent>*)Allocate(

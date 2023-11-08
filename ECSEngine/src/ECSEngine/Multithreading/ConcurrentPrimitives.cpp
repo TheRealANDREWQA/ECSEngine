@@ -15,33 +15,33 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------
 
-	void SpinLock::lock() {
+	void SpinLock::Lock() {
 		while (true) {
 			// Optimistically assume the lock is free on the first try
 			if (!value.exchange(1, ECS_ACQUIRE)) {
 				return;
 			}
 
-			wait_locked();
+			WaitLocked();
 		}
 	}
 
-	void SpinLock::unlock() {
+	void SpinLock::Unlock() {
 		value.store(0, ECS_RELEASE);
 		WakeByAddressAll(&value);
 	}
 
-	bool SpinLock::is_locked() const
+	bool SpinLock::IsLocked() const
 	{
 		return value.load(ECS_RELAXED) > 0;
 	}
 
-	void SpinLock::wait_locked() 
+	void SpinLock::WaitLocked() 
 	{
 		// Wait for lock to be released without generating cache misses
-		while (is_locked()) {
+		while (IsLocked()) {
 			for (size_t index = 0; index < GLOBAL_SPIN_COUNT; index++) {
-				if (!is_locked()) {
+				if (!IsLocked()) {
 					return;
 				}
 				// pause instruction to help multithreading
@@ -56,11 +56,11 @@ namespace ECSEngine {
 		}
 	}
 
-	void SpinLock::wait_signaled()
+	void SpinLock::WaitSignaled()
 	{
-		while (!is_locked()) {
+		while (!IsLocked()) {
 			for (size_t index = 0; index < GLOBAL_SPIN_COUNT; index++) {
-				if (is_locked()) {
+				if (IsLocked()) {
 					return;
 				}
 				_mm_pause();
@@ -68,14 +68,27 @@ namespace ECSEngine {
 
 			// Here we don't want to use a loop since the thread will be woken up
 			// when the value becomes 0
-			if (!is_locked()) {
+			if (!IsLocked()) {
 				unsigned char compare_value = 0;
 				WaitOnAddress(&value, &compare_value, sizeof(unsigned char), INFINITE);
 			}
 		}
 	}
 
-	bool SpinLock::try_lock() {
+	void SpinLock::LockNotify()
+	{
+		while (true) {
+			// Optimistically assume the lock is free on the first try
+			if (!value.exchange(1, ECS_ACQUIRE)) {
+				WakeByAddressAll(&value);
+				return;
+			}
+
+			WaitLocked();
+		}
+	}
+
+	bool SpinLock::TryLock() {
 		// First do a relaxed load to check if lock is free in order to prevent
 		// unnecessary cache misses in while(!try_lock())
 		return value.load(ECS_RELAXED) == 0 && value.exchange(1, ECS_ACQUIRE) == 0;
@@ -254,13 +267,14 @@ namespace ECSEngine {
 	{
 		auto loop = [](std::atomic<unsigned int>* wait_address, auto condition) {
 			while (condition()) {
+				// This value here should mirror
 				for (size_t index = 0; index < GLOBAL_SPIN_COUNT; index++) {
 					if (!condition()) {
 						return;
 					}
 					_mm_pause();
 				}
-				
+
 				// Do this in a loop since the WaitOnAddress can wake the thread spuriously
 				// Acquire semantics in order to prevent reads crossing this barrier
 				unsigned int current_value = wait_address->load(ECS_ACQUIRE);
@@ -357,19 +371,19 @@ namespace ECSEngine {
 
 	void ReadWriteLock::Clear()
 	{
-		lock.unlock();
+		lock.Clear();
 		reader_count.store(0, ECS_RELAXED);
 	}
 
 	void ReadWriteLock::EnterWrite()
 	{
-		lock.lock();
+		lock.Lock();
 		SpinWait<'!'>(reader_count, (unsigned char)0);
 	}
 
 	bool ReadWriteLock::TryEnterWrite()
 	{
-		bool acquired_lock = lock.try_lock();
+		bool acquired_lock = lock.TryLock();
 		if (acquired_lock) {
 			// Spin wait while the readers exit
 			SpinWait<'!'>(reader_count, (unsigned char)0);
@@ -381,7 +395,7 @@ namespace ECSEngine {
 	void ReadWriteLock::EnterRead()
 	{
 		// Test to see if there is a pending write
-		lock.wait_locked();
+		lock.WaitLocked();
 
 		// An acquire memory barrier should be enough - we are interested in protecting
 		// everything that is being done after the atomic operation
@@ -402,19 +416,19 @@ namespace ECSEngine {
 
 	bool ReadWriteLock::IsLocked() const
 	{
-		return lock.is_locked();
+		return lock.IsLocked();
 	}
 
 	void ReadWriteLock::ExitWrite()
 	{
-		lock.unlock();
+		lock.Unlock();
 	}
 
 	bool ReadWriteLock::TransitionReadToWriteLock()
 	{
 		// We don't care about the return of this
 		// We should need to make sure that the lock is held
-		bool is_locked_by_us = lock.try_lock();
+		bool is_locked_by_us = lock.TryLock();
 
 		unsigned char reader_locked_check_value = ECS_BIT(7) | ECS_BIT(0);
 
@@ -428,7 +442,7 @@ namespace ECSEngine {
 			ExitRead();
 			// We also need to acquire the write lock if we haven't previously
 			if (!is_locked_by_us) {
-				lock.lock();
+				lock.Lock();
 				is_locked_by_us = true;
 			}
 
@@ -458,7 +472,7 @@ namespace ECSEngine {
 		reader_count.store(0, ECS_RELEASE);
 
 		if (was_locked_by_us) {
-			lock.unlock();
+			lock.Unlock();
 		}
 	}
 

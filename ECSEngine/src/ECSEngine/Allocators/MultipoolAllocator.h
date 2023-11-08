@@ -44,11 +44,11 @@ namespace ECSEngine {
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
 
 		ECS_INLINE void Lock() {
-			m_spin_lock.lock();
+			m_spin_lock.Lock();
 		}
 
 		ECS_INLINE void Unlock() {
-			m_spin_lock.unlock();
+			m_spin_lock.Unlock();
 		}
 
 		// --------------------------------------------------- Thread safe variants ------------------------------------------

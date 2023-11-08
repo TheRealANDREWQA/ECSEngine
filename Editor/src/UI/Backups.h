@@ -5,8 +5,6 @@ struct EditorState;
 
 #define BACKUPS_WINDOW_NAME "Backups"
 
-struct EditorState;
-
 void BackupsWindowSetDescriptor(ECSEngine::Tools::UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
 void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);

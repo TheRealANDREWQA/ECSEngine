@@ -183,6 +183,9 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::ECS_TRANSFORM_SPACE transform_keyboard_space;
 
 	bool is_camera_wasd_movement;
+	// We need to keep this flag in order to prevent running the simulation
+	// Once the sandbox crashed
+	bool is_crashed;
 
 	EDITOR_SANDBOX_STATE run_state;
 	bool is_scene_dirty;

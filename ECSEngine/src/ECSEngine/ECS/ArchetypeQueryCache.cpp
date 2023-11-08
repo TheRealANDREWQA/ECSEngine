@@ -34,14 +34,14 @@ namespace ECSEngine {
 	unsigned int ArchetypeQueryCache::AddQuery(ArchetypeQuery query)
 	{
 		// Just lock, add or resize and unlock
-		query_results.lock.lock();
+		query_results.lock.Lock();
 
 		// Check to see if this query already exists
 		for (unsigned int index = 0; index < query_results.count; index++) {
 			if (query_results.components[index] == query) {
 				// It matches this query - don't need to create a new one
 				// Unlock the lock
-				query_results.lock.unlock();
+				query_results.lock.Unlock();
 				return index;
 			}
 		}
@@ -58,7 +58,7 @@ namespace ECSEngine {
 		query_results.results[index].InitializeAndCopy(allocator, results);
 		query_results.count++;
 
-		query_results.lock.unlock();
+		query_results.lock.Unlock();
 
 		// Can return the index as is, only the exclude one will be offseted
 		return index;
@@ -69,13 +69,13 @@ namespace ECSEngine {
 	unsigned int ArchetypeQueryCache::AddQuery(ArchetypeQueryExclude query)
 	{
 		// Just lock, add or resize and unlock
-		exclude_query_results.lock.lock();
+		exclude_query_results.lock.Lock();
 
 		// Check to see if this query already exists
 		for (unsigned int index = 0; index < exclude_query_results.count; index++) {
 			if (exclude_query_results.components[index] == query) {
 				// It matches this query - don't need to create a new one
-				exclude_query_results.lock.unlock();
+				exclude_query_results.lock.Unlock();
 				return index;
 			}
 		}
@@ -92,7 +92,7 @@ namespace ECSEngine {
 		exclude_query_results.results[index].InitializeAndCopy(allocator, results);
 		exclude_query_results.count++;
 
-		exclude_query_results.lock.unlock();
+		exclude_query_results.lock.Unlock();
 		return index + EXCLUDE_HANDLE_OFFSET;
 	}
 

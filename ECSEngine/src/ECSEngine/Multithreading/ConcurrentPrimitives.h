@@ -8,7 +8,6 @@
 #define ECS_ACQ_REL std::memory_order_acq_rel
 #define ECS_SEQ_CST std::memory_order_seq_cst
 
-
 namespace ECSEngine {
 
 	struct ECSENGINE_API SpinLock {
@@ -23,23 +22,26 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		ECS_INLINE void clear() {
+		ECS_INLINE void Clear() {
 			value.store(false, ECS_RELAXED);
 		}
 
-		void lock();
+		void Lock();
+
+		// Locks and notifies waiting threads that use WaitSignaled()
+		void LockNotify();
+
+		bool TryLock();
 		
-		bool try_lock();
-		
-		void unlock();
+		void Unlock();
 
-		bool is_locked() const;
+		bool IsLocked() const;
 
-		void wait_locked();
+		// Waits until the lock is unlocked. It uses waiting after spinning
+		void WaitLocked();
 
-		// The thread will use a sleep behaviour if after many tries
-		// the lock doesn't get once locked
-		void wait_signaled();
+		// Waits until the lock is acquired. It uses waiting after spinning
+		void WaitSignaled();
 
 		std::atomic<unsigned char> value;
 	};
@@ -188,6 +190,18 @@ namespace ECSEngine {
 		// The difference between the two variants is that this uses
 		// a futex call to wait for threads to exit
 		void SpinWaitEx(unsigned int count_value, unsigned int target_value);
+
+		// One of the parameters needs to be different from -1 and the other -1
+		// It can wait only on a single address at a time
+		// The difference between the two variants is that this uses
+		// a futex call to wait for threads to exit. It also has a custom
+		// Functor that can be used to exit before the value reaches the given
+		// count/target value. The functor should return true when it wants to exit,
+		// else false
+		template<typename Functor>
+		void SpinWaitEx(unsigned int count_value, unsigned int target_value, Functor&& functor) {
+			
+		}
 
 		// It will check a value at certain intervals. In between it will sleep.
 		// Default behaviour - wait until count is the same as target
@@ -414,16 +428,16 @@ namespace ECSEngine {
 
 	template<typename Functor>
 	ECS_INLINE void ThreadSafeFunctor(SpinLock* spin_lock, Functor&& functor) {
-		spin_lock->lock();
+		spin_lock->Lock();
 		functor();
-		spin_lock->unlock();
+		spin_lock->Unlock();
 	}
 
 	template<typename Functor>
 	ECS_INLINE auto ThreadSafeFunctorReturn(SpinLock* spin_lock, Functor&& functor) {
-		spin_lock->lock();
+		spin_lock->Lock();
 		auto return_value = functor();
-		spin_lock->unlock();
+		spin_lock->Unlock();
 		return return_value;
 	}
 

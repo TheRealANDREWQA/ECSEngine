@@ -145,12 +145,15 @@ namespace ECSEngine {
 		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
 
 		// Rename the file to a temporary name such that if we fail to serialize we don't lose the previous data
+		// Do this only if the file exists at that location
 		ECS_STACK_CAPACITY_STREAM(wchar_t, renamed_file, 512);
-		renamed_file.CopyOther(PathFilename(save_data->file));
-		renamed_file.AddStream(L".temp");
-		if (!RenameFolderOrFile(save_data->file, renamed_file)) {
-			// If we fail, then return now.
-			return false;
+		if (ExistsFileOrFolder(save_data->file)) {
+			renamed_file.CopyOther(PathFilename(save_data->file));
+			renamed_file.AddStream(L".temp");
+			if (!RenameFolderOrFile(save_data->file, renamed_file)) {
+				// If we fail, then return now.
+				return false;
+			}
 		}
 
 		struct StackDeallocator {
@@ -160,6 +163,8 @@ namespace ECSEngine {
 
 				Stream<wchar_t> original_file_filename = PathFilename(original_file);
 
+				// Here we can skip checking if the renaming file exists or not,
+				// the calls will simply fail and we don't care about that
 				if (file_handle != -1) {
 					CloseFile(file_handle);
 

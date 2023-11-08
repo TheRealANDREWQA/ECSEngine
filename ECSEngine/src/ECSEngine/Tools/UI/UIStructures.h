@@ -357,19 +357,13 @@ namespace ECSEngine {
 			UIDynamicStream<unsigned int> sprite_cluster_subtreams;
 		};
 
-		struct UIRenderThreadResources {
-			GraphicsContext* deferred_context;
+		struct UIRenderResources
+		{
 			// Used by the normal and late phase handler allocations
 			// such that it can be reset in between window renders
 			LinearAllocator temp_allocator;
 			// System phase allocation are made from this allocator
 			LinearAllocator system_temp_allocator;
-			ECS_UI_DRAW_PHASE phase;
-		};
-
-		struct UIRenderResources
-		{
-			Stream<UIRenderThreadResources> thread_resources;
 			CapacityStream<VertexShader> vertex_shaders;
 			CapacityStream<PixelShader> pixel_shaders;
 			CapacityStream<InputLayout> input_layouts;
@@ -441,9 +435,8 @@ namespace ECSEngine {
 
 			void Reset();
 
-			void SetBuffer(void* buffer, size_t count);
-
-			static size_t MemoryOf(size_t count);
+			// The handler data must be allocated before hand
+			void WriteOnIndex(unsigned int index, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function);
 
 			CapacityStream<float> position_x;
 			float* position_y;
@@ -454,7 +447,7 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIReservedHandler {
-			void Write(float2 position, float2 scale, UIActionHandler action_handler);
+			void Write(float2 position, float2 scale, UIActionHandler action_handler, UIHandlerCopyBuffers copy_function);
 
 			void* WrittenBuffer() const;
 
@@ -655,7 +648,6 @@ namespace ECSEngine {
 			unsigned int snapshot_mode_lazy_update;
 			unsigned int draw_index;
 			unsigned int last_index;
-			unsigned int thread_id;
 			unsigned int active_region_index;
 			void** system_buffers;
 			size_t* system_count;
@@ -1040,7 +1032,6 @@ namespace ECSEngine {
 
 		struct UISystemDefaultHoverableData {
 			unsigned int border_index;
-			unsigned int thread_id;
 			UIDockspace* dockspace;
 			float2 position;
 			float2 scale;
@@ -1050,31 +1041,31 @@ namespace ECSEngine {
 
 		struct UISystemDefaultClickableData {
 			unsigned int border_index;
-			unsigned int thread_id;
 			UIDockspace* dockspace;
 			float2 position;
 			float2 scale;
 			UIActionHandler hoverable_handler;
 			UIActionHandler clickable_handler;
+			UIHandlerCopyBuffers hoverable_copy_function = nullptr;
+			UIHandlerCopyBuffers clickable_copy_function = nullptr;
 			bool disable_system_phase_retarget = false;
 			ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT;
 		};
 
 		struct UISystemDefaultHoverableClickableData {
-			unsigned int thread_id;
 			unsigned int border_index;
 			UIDockspace* dockspace;
 			float2 position;
 			float2 scale;
 			UIDefaultHoverableData hoverable_data;
 			UIActionHandler clickable_handler;
+			UIHandlerCopyBuffers clickable_copy_function = nullptr;
 			ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL;
 			bool disable_system_phase_retarget = false;
 			ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT;
 		};
 
 		struct UISystemDoubleClickData {
-			unsigned int thread_id;
 			unsigned int border_index;
 			UIDockspace* dockspace;
 			float2 position;

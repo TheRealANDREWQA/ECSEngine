@@ -550,9 +550,9 @@ namespace ECSEngine {
 		misc_data_resizable.capacity = file_data.size;
 
 		// Insert the resource into the resource manager
-		data->control_block->manager_lock.lock();
+		data->control_block->manager_lock.Lock();
 		data->control_block->resource_manager->AddResource(file_path, ResourceType::Misc, &misc_data_resizable, misc_block_pointer->time_stamp);
-		data->control_block->manager_lock.unlock();
+		data->control_block->manager_lock.Unlock();
 
 		// Go through all the misc handles and set their data
 		for (size_t index = 0; index < misc_block_pointer->different_handles.size; index++) {
@@ -908,8 +908,8 @@ namespace ECSEngine {
 			}
 		}
 
-		control_block->gpu_lock.unlock();
-		control_block->manager_lock.unlock();
+		control_block->gpu_lock.Clear();
+		control_block->manager_lock.Clear();
 		control_block->database = database;
 		control_block->resource_manager = resource_manager;
 		control_block->extra = *extra;
@@ -1103,15 +1103,14 @@ namespace ECSEngine {
 	void DeallocateAssetsWithRemapping(
 		AssetDatabase* database, 
 		ResourceManager* resource_manager, 
-		Stream<wchar_t> mount_point, 
-		Stream<unsigned int>* asset_mask, 
+		const DeallocateAssetsWithRemappingOptions* options,
 		CapacityStream<MissingAsset>* missing_assets
 	)
 	{
 		auto iterate = [=](ECS_ASSET_TYPE type, auto use_mask) {
 			unsigned int count;
 			if constexpr (use_mask) {
-				count = asset_mask[type].size;
+				count = options->asset_mask[type].size;
 			}
 			else {
 				count = database->GetAssetCount(type);
@@ -1120,21 +1119,35 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < count; index++) {
 				unsigned int handle;
 				if constexpr (use_mask) {
-					handle = asset_mask[type][index];
+					handle = options->asset_mask[type][index];
 				}
 				else {
 					handle = database->GetAssetHandleFromIndex(index, type);
 				}
 
 				void* metadata = database->GetAsset(handle, type);
-				if (IsAssetFromMetadataLoaded(resource_manager, metadata, type, mount_point)) {
-					DeallocateAssetFromMetadata(resource_manager, database, metadata, type, mount_point);
-					database->RemoveAsset(handle, type);
+				if (options->decrement_dependencies) {
+					// Check to see if it has dependencies and try to get them
+					ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
+					GetAssetDependencies(metadata, type, &dependencies);
+					for (unsigned int dependency_index = 0; dependency_index < dependencies.size; dependency_index++) {
+						unsigned int dependency_handle = dependencies[dependency_index].handle;
+						ECS_ASSET_TYPE dependency_type = dependencies[dependency_index].type;
+						const void* dependency = database->GetAssetConst(dependency_handle, dependency_type);
+						if (IsAssetFromMetadataLoaded(resource_manager, dependency, dependency_type, options->mount_point)) {
+							DeallocateAssetFromMetadata(resource_manager, database, dependency, dependency_type, options->mount_point);
+							database->RemoveAssetForced(dependency_handle, dependency_type);
+						}
+					}
+				}
+				if (IsAssetFromMetadataLoaded(resource_manager, metadata, type, options->mount_point)) {
+					DeallocateAssetFromMetadata(resource_manager, database, metadata, type, options->mount_point);
+					database->RemoveAssetForced(handle, type);
 				}
 			}
 		};
 
-		if (asset_mask != nullptr) {
+		if (options->asset_mask != nullptr) {
 			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 				iterate((ECS_ASSET_TYPE)index, std::true_type{});
 			}
@@ -1151,8 +1164,7 @@ namespace ECSEngine {
 	void DeallocateAssetsWithRemapping(
 		AssetDatabaseReference* database_reference, 
 		ResourceManager* resource_manager, 
-		Stream<wchar_t> mount_point,
-		Stream<unsigned int>* asset_mask
+		const DeallocateAssetsWithRemappingOptions* options
 	)
 	{
 		AssetDatabase* database = database_reference->GetDatabase();
@@ -1162,32 +1174,52 @@ namespace ECSEngine {
 				ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)asset_index;
 				unsigned int current_count;
 				if constexpr (use_mask) {
-					current_count = asset_mask[current_type].size;
+					current_count = options->asset_mask[current_type].size;
 				}
 				else {
 					current_count = database_reference->GetCount(current_type);
 				}
 
+				// We need to record the handles for which we have already decremented the
+				// dependencies in order to not decrement them again on a new appeareance
+				// of the handle
+				ECS_STACK_CAPACITY_STREAM(unsigned int, decremented_dependencies_handles, 512);
+
 				for (unsigned int index = 0; index < current_count; index++) {
 					unsigned int index_to_remove;
 					if constexpr (use_mask) {
-						index_to_remove = database_reference->GetIndex(asset_mask[current_type][index], current_type);
+						index_to_remove = database_reference->GetIndex(options->asset_mask[current_type][index], current_type);
 					}
 					else {
 						index_to_remove = index;
 					}
 
-					size_t metadata_storage[AssetMetadataMaxByteSize()];
-					AssetDatabaseRemoveInfo remove_info;
-					remove_info.storage = metadata_storage;
+					if (options->decrement_dependencies) {
+						unsigned int current_handle = database_reference->GetHandle(index_to_remove, current_type);
+						bool exists_handle = SearchBytes(decremented_dependencies_handles.ToStream(), current_handle) != -1;
+						if (!exists_handle) {
+							// Check to see if it has dependencies and try to get them
+							ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
+							GetAssetDependencies(database_reference->GetAsset(index_to_remove, current_type), current_type, &dependencies);
+							for (unsigned int dependency_index = 0; dependency_index < dependencies.size; dependency_index++) {
+								unsigned int dependency_handle = dependencies[dependency_index].handle;
+								ECS_ASSET_TYPE dependency_type = dependencies[dependency_index].type;
+								database->RemoveAssetWithAction(dependency_handle, dependency_type, [&](unsigned int handle, ECS_ASSET_TYPE type, const void* metadata) {
+									DeallocateAssetFromMetadata(resource_manager, database, metadata, type, options->mount_point);
+								});
+							}
+							decremented_dependencies_handles.AddAssert(current_handle);
+						}
+					}
+
 					database_reference->RemoveAssetWithAction(index_to_remove, current_type, [&](unsigned int handle, ECS_ASSET_TYPE type, const void* metadata) {
-						DeallocateAssetFromMetadata(resource_manager, database, metadata, current_type, mount_point);
+						DeallocateAssetFromMetadata(resource_manager, database, metadata, type, options->mount_point);
 					});
 				}
 			}
 		};
 
-		if (asset_mask != nullptr) {
+		if (options->asset_mask != nullptr) {
 			loop(std::true_type{});
 		}
 		else {

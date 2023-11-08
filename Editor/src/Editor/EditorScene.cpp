@@ -79,7 +79,7 @@ bool GetLoadSceneDataBase(
 	load_data->file = filename;
 	load_data->database = standalone_database;
 	load_data->entity_manager = entity_manager;
-	load_data->reflection_manager = editor_state->editor_components.internal_manager;
+	load_data->reflection_manager = editor_state->GlobalReflectionManager();
 	load_data->unique_overrides = unique_overrides;
 	load_data->shared_overrides = shared_overrides;
 	load_data->global_overrides = global_overrides;
@@ -229,6 +229,58 @@ bool SaveEditorSceneRuntime(EditorState* editor_state, unsigned int sandbox_inde
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	return SaveEditorScene(editor_state, sandbox->sandbox_world.entity_manager, &sandbox->database, filename);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool GetEditorSceneSerializeOverrides(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	CapacityStream<SerializeEntityManagerComponentInfo>* unique_overrides, 
+	CapacityStream<SerializeEntityManagerSharedComponentInfo>* shared_overrides, 
+	CapacityStream<SerializeEntityManagerGlobalComponentInfo>* global_overrides, 
+	AllocatorPolymorphic temporary_allocator
+)
+{
+	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
+	ModulesToAppliedModules(editor_state, applied_modules);
+	ModuleGatherSerializeAllOverrides(applied_modules, *unique_overrides, *shared_overrides, *global_overrides);
+	return ModuleGatherLinkSerializeAllOverrides(
+		applied_modules,
+		editor_state->GlobalReflectionManager(),
+		editor_state->asset_database,
+		temporary_allocator,
+		*unique_overrides,
+		*shared_overrides,
+		*global_overrides,
+		editor_state->ecs_link_components
+	);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool GetEditorSceneDeserializeOverrides(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	CapacityStream<DeserializeEntityManagerComponentInfo>* unique_overrides, 
+	CapacityStream<DeserializeEntityManagerSharedComponentInfo>* shared_overrides, 
+	CapacityStream<DeserializeEntityManagerGlobalComponentInfo>* global_overrides, 
+	AllocatorPolymorphic temporary_allocator
+)
+{
+	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
+	ModulesToAppliedModules(editor_state, applied_modules);
+	ModuleGatherDeserializeAllOverrides(applied_modules, *unique_overrides, *shared_overrides, *global_overrides);
+	return ModuleGatherLinkDeserializeAllOverrides(
+		applied_modules,
+		editor_state->GlobalReflectionManager(),
+		editor_state->asset_database,
+		temporary_allocator,
+		*unique_overrides,
+		*shared_overrides,
+		*global_overrides,
+		editor_state->ecs_link_components
+	);
 }
 
 // ----------------------------------------------------------------------------------------------

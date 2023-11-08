@@ -12,7 +12,7 @@ namespace ECSEngine {
 
 	// When the crash happens, it will jump to the point right after this call
 	// Usage: ECS_SET_RECOVERY_CRASH_HANDLER(should_break) { ResetRecoveryCrashHandler(); /* Error handling code */ }
-#define ECS_SET_RECOVERY_CRASH_HANDLER(should_break) jmp_buf __jump_buffer; if (!setjmp(__jump_buffer)) { SetRecoveryCrashHandler(__jump_buffer); } else  
+#define ECS_SET_RECOVERY_CRASH_HANDLER(should_break) jmp_buf __jump_buffer; if (!setjmp(__jump_buffer)) { SetRecoveryCrashHandler(__jump_buffer, should_break); } else  
 
 	// Changes the crash handler to the previous one (if it is the same, then it will reset the recorded jump)
 	ECSENGINE_API void ResetRecoveryCrashHandler();

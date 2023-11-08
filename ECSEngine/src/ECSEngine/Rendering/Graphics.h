@@ -1192,7 +1192,7 @@ namespace ECSEngine {
 		// Returns true if there was no internal error, else false. If there was no internal error,
 		// Then it will set the internal_state_valid boolean to true if the internal state is correct, else false
 		// and fill in any leaks (combines VerifyLeaks and IsInternalStateValid into a single call for performance)
-		bool VerifyLeaksAndValidateInteralState(bool& internal_state_valid, CapacityStream<GraphicsLiveObject>* leaks);
+		bool VerifyLeaksAndValidateInternalState(bool& internal_state_valid, CapacityStream<GraphicsLiveObject>* leaks);
 
 #pragma endregion
 

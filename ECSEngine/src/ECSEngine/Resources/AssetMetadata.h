@@ -551,8 +551,10 @@ namespace ECSEngine {
 			return (void**)&material_pointer;
 		}
 
+		// These are all the dependencies
 		void GetDependencies(CapacityStream<AssetTypedHandle>* handles) const;
 
+		// These are all the dependencies for which their metadata is reflected here
 		void GetDependenciesForMetadata(CapacityStream<AssetTypedHandle>* handles) const;
 
 		// After retrieving the dependencies using GetDependencies, you can change the handle values
@@ -693,8 +695,10 @@ namespace ECSEngine {
 	// Returns true if the asset given references the given handle
 	ECSENGINE_API bool DoesAssetReferenceOtherAsset(unsigned int handle, ECS_ASSET_TYPE handle_type, const void* asset, ECS_ASSET_TYPE type);
 
+	// These are all the dependencies of the asset
 	ECSENGINE_API void GetAssetDependencies(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* handles);
 
+	// These are all the dependencies for which their metadata is reflected here
 	ECSENGINE_API void GetAssetDependenciesForMetadata(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* handles);
 
 	ECSENGINE_API void RemapAssetDependencies(void* metadata, ECS_ASSET_TYPE type, Stream<AssetTypedHandle> handles);

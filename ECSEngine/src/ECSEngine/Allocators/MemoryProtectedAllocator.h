@@ -32,11 +32,11 @@ namespace ECSEngine {
 		bool IsEmpty() const;
 
 		ECS_INLINE void Lock() {
-			lock.lock();
+			lock.Lock();
 		}
 
 		ECS_INLINE void Unlock() {
-			lock.unlock();
+			lock.Unlock();
 		}
 
 		// Disables write protection for all allocations which were made by this allocator

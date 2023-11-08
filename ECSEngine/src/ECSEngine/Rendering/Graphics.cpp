@@ -468,7 +468,7 @@ namespace ECSEngine {
 	{
 		// The internal resources
 		m_internal_resources.Initialize(descriptor->allocator, GRAPHICS_INTERNAL_RESOURCE_STARTING_COUNT);
-		m_internal_resources_lock.unlock();
+		m_internal_resources_lock.Unlock();
 
 		unsigned int flags = 0;
 //#ifdef ECSENGINE_DEBUG
@@ -1948,7 +1948,7 @@ namespace ECSEngine {
 	template<bool assert>
 	void RemoveResourceFromTrackingImplementation(Graphics* graphics, void* resource) {
 		// Spin lock while the resizing is finished
-		graphics->m_internal_resources_lock.wait_locked();
+		graphics->m_internal_resources_lock.WaitLocked();
 		graphics->m_internal_resources_reader_count.fetch_add(1, ECS_RELAXED);
 
 		// If the resource_count and the write count are different, then wait until they get equal
@@ -3339,7 +3339,7 @@ namespace ECSEngine {
 
 		unsigned int write_index = m_internal_resources.RequestInt(1);
 		if (write_index >= m_internal_resources.capacity) {
-			bool do_resizing = m_internal_resources_lock.try_lock();
+			bool do_resizing = m_internal_resources_lock.TryLock();
 			// The first one to acquire the lock - do the resizing or the flush of removals
 			if (do_resizing) {
 				// Spin wait while there are still readers
@@ -3359,11 +3359,11 @@ namespace ECSEngine {
 				m_internal_resources[write_index] = internal_res;
 				m_internal_resources.FinishRequest(1);
 
-				m_internal_resources_lock.unlock();
+				m_internal_resources_lock.Unlock();
 			}
 			// Other thread got to do the resizing or freeing of the resources - stall until it finishes
 			else {
-				m_internal_resources_lock.wait_locked();
+				m_internal_resources_lock.WaitLocked();
 				// Rerequest the position
 				write_index = m_internal_resources.RequestInt(1);
 				if (write_index >= m_internal_resources.capacity) {
@@ -3557,7 +3557,6 @@ namespace ECSEngine {
 	GraphicsResourceSnapshot Graphics::GetResourceSnapshot(AllocatorPolymorphic allocator) {
 		GraphicsResourceSnapshot snapshot;
 
-		m_internal_resources_lock.lock();
 		unsigned int resource_count = m_internal_resources.SpinWaitWrites();
 		size_t total_size_to_allocate = snapshot.interface_pointers.MemoryOf(resource_count) + snapshot.types.MemoryOf(resource_count) 
 			+ snapshot.debug_infos.MemoryOf(resource_count);
@@ -3579,7 +3578,6 @@ namespace ECSEngine {
 				snapshot.debug_infos.Add(m_internal_resources[index].debug_info);
 			}
 		}
-		m_internal_resources_lock.unlock();
 
 		return snapshot;
 	}
@@ -3898,12 +3896,10 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	bool Graphics::RestoreResourceSnapshot(GraphicsResourceSnapshot snapshot, CapacityStream<char>* mismatch_string) {
-		m_internal_resources_lock.lock();
 		unsigned int current_resource_count = m_internal_resources.SpinWaitWrites();
 		bool size_success = true;
 		if (current_resource_count < snapshot.interface_pointers.size) {
 			if (mismatch_string == nullptr) {
-				m_internal_resources_lock.unlock();
 				return false;
 			}
 			else {
@@ -3958,8 +3954,6 @@ namespace ECSEngine {
 				}
 			}
 		}
-
-		m_internal_resources_lock.unlock();
 
 		if (mismatch_string == nullptr) {
 			// Now check for all the old resources to see if they have been accidentally removed
@@ -4195,7 +4189,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	bool Graphics::VerifyLeaksAndValidateInteralState(bool& internal_state_valid, CapacityStream<GraphicsLiveObject>* leaks)
+	bool Graphics::VerifyLeaksAndValidateInternalState(bool& internal_state_valid, CapacityStream<GraphicsLiveObject>* leaks)
 	{
 		return VerifyLeaksAndInternalStateImpl<true>(this, internal_state_valid, leaks);
 	}

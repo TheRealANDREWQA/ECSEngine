@@ -1,5 +1,6 @@
 #pragma once
 #include "ECSEngineContainers.h"
+#include "ECSEngineEntitiesSerialize.h"
 
 struct EditorState;
 
@@ -59,4 +60,26 @@ bool SaveEditorSceneRuntime(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	ECSEngine::Stream<wchar_t> filename
+);
+
+// Returns true if it managed to get all overrides, else false. It can fail if there is a
+// link component mismatch
+bool GetEditorSceneSerializeOverrides(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::CapacityStream<ECSEngine::SerializeEntityManagerComponentInfo>* unique_overrides,
+	ECSEngine::CapacityStream<ECSEngine::SerializeEntityManagerSharedComponentInfo>* shared_overrides,
+	ECSEngine::CapacityStream<ECSEngine::SerializeEntityManagerGlobalComponentInfo>* global_overrides,
+	ECSEngine::AllocatorPolymorphic temporary_allocator
+);
+
+// Returns true if it managed to get all overrides, else false. It can fail if there is a
+// link component mismatch
+bool GetEditorSceneDeserializeOverrides(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::CapacityStream<ECSEngine::DeserializeEntityManagerComponentInfo>* unique_overrides,
+	ECSEngine::CapacityStream<ECSEngine::DeserializeEntityManagerSharedComponentInfo>* shared_overrides,
+	ECSEngine::CapacityStream<ECSEngine::DeserializeEntityManagerGlobalComponentInfo>* global_overrides,
+	ECSEngine::AllocatorPolymorphic temporary_allocator
 );

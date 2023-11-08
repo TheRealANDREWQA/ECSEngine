@@ -549,7 +549,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
 		editor_state->launched_module_compilation[index].Initialize(polymorphic_editor_allocator, 4);
 	}
-	editor_state->launched_module_compilation_lock.unlock();
+	editor_state->launched_module_compilation_lock.Unlock();
 
 	InitializeInspectorManager(editor_state);
 	

@@ -21,6 +21,10 @@ enum EDITOR_STATE_FLAGS : unsigned char {
 	EDITOR_STATE_IS_PLAYING,
 	EDITOR_STATE_IS_PAUSED,
 	EDITOR_STATE_IS_STEP,
+	// By default, the editor will step using the delta time
+	// Of the world from the previous frame. When this is set,
+	// Then it will use a fixed step to update the simulation
+	EDITOR_STATE_IS_FIXED_STEP,
 	EDITOR_STATE_FREEZE_TICKS,
 	EDITOR_STATE_PREVENT_LAUNCH,
 	// This is for runtime only - it doesn't affect the UI loads

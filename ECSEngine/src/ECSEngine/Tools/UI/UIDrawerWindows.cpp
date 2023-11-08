@@ -1636,12 +1636,12 @@ namespace ECSEngine {
 
 			constexpr size_t filter_menu_configuration = button_configuration | UI_CONFIG_FILTER_MENU_ALL | UI_CONFIG_FILTER_MENU_NOTIFY_ON_CHANGE;
 
-			Stream<char> filter_labels[] = { "Info", "Warn", "Error", "Trace" };
+			Stream<char> filter_labels[] = { "Info", "Warn", "Error", "Trace", "Graphics" };
 			Stream<Stream<char>> filter_stream = Stream<Stream<char>>(filter_labels, std::size(filter_labels));
 			UIConfigFilterMenuNotify menu_notify;
 			menu_notify.notifier = &data->filter_message_type_changed;
 			config.AddFlag(menu_notify);
-			drawer.FilterMenu(filter_menu_configuration | UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES, config, "Filter", filter_stream, &data->filter_info);
+			drawer.FilterMenu(filter_menu_configuration | UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES, config, "Filter", filter_stream, data->filter);
 			config.flag_count -= 2;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
@@ -1656,7 +1656,7 @@ namespace ECSEngine {
 			transform.position.x += transform.scale.x + border_thickness.x;
 			transform.scale = drawer.GetLabelScale("Verbosity");
 			config.AddFlag(transform);
-			Stream<char> verbosity_labels[] = { "Minimal", "Medium", "Detailed" };
+			Stream<char> verbosity_labels[] = { "Important", "Medium", "Detailed" };
 			Stream<Stream<char>> verbosity_label_stream = Stream<Stream<char>>(verbosity_labels, std::size(verbosity_labels));
 
 			UIConfigComboBoxPrefix verbosity_prefix;
@@ -1717,7 +1717,7 @@ namespace ECSEngine {
 
 			UIConfigTextParameters parameters;
 			float2 icon_scale = drawer.GetSquareScale(drawer.layout.default_element_y);
-			const bool* filter_ptr = &data->filter_info;
+			const bool* filter_ptr = data->filter;
 
 			size_t system_mask = GetSystemMaskFromConsoleWindowData(data);
 
@@ -1820,16 +1820,19 @@ namespace ECSEngine {
 			size_t initial_solid_color_count = *drawer.HandleSolidColorCount(UI_CONFIG_LATE_DRAW);
 			size_t initial_sprite_count = *drawer.HandleSpriteCount(UI_CONFIG_LATE_DRAW);
 
-			auto counter_backwards = [&](LPCWSTR texture, Color color, bool* filter_status, unsigned int counter) {
+			auto counter_backwards = [&](ECS_CONSOLE_MESSAGE_TYPE type) {
 				const size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_FIT_SPACE 
 					| UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_LATE_DRAW;
 
-				if (counter == 0 || !(*filter_status)) {
+				unsigned int count = data->type_count[type];
+				bool* filter = &data->filter[type];
+				Color color = CONSOLE_COLORS[type];
+				if (count == 0 || !(*filter)) {
 					color = drawer.color_theme.unavailable_text;
 				}
 
 				Stream<char> stream = Stream<char>(temp_characters, 0);
-				ConvertIntToCharsFormatted(stream, static_cast<int64_t>(counter));
+				ConvertIntToCharsFormatted(stream, (int64_t)(count));
 				float2 label_scale = drawer.GetLabelScale(temp_characters);
 
 				float initial_x_position = transform.position.x;
@@ -1844,7 +1847,7 @@ namespace ECSEngine {
 				transform.position.x -= drawer.element_descriptor.label_padd.x + sprite_scale.x;
 				transform.scale = sprite_scale;
 				config.AddFlag(transform);
-				drawer.SpriteRectangle(configuration, config, texture, color);
+				drawer.SpriteRectangle(configuration, config, CONSOLE_TEXTURE_ICONS[type], color);
 				config.flag_count--;
 
 				transform.position.x -= drawer.element_descriptor.label_padd.x;
@@ -1856,34 +1859,38 @@ namespace ECSEngine {
 
 				UIDrawerStateTableBoolClickable clickable_data;
 				clickable_data.notifier = &data->filter_message_type_changed;
-				clickable_data.state = filter_status;
+				clickable_data.state = filter;
 				drawer.AddDefaultClickableHoverable(
 					configuration,
 					{ transform.position.x, transform.position.y - drawer.region_render_offset.y }, 
 					transform.scale, 
 					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_LATE },
+					nullptr,
 					drawer.color_theme.theme
 				);
 				transform.position.x -= border_thickness.x;
 			};
 			
-			auto counter_forwards = [&](LPCWSTR texture, Color color, bool* filter_status, unsigned int counter) {
+			auto counter_forwards = [&](ECS_CONSOLE_MESSAGE_TYPE type) {
 				constexpr size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_FIT_SPACE
 					| UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_LATE_DRAW;
 
-				if (counter == 0 || !(*filter_status)) {
+				unsigned int count = data->type_count[type];
+				bool* filter = &data->filter[type];
+				Color color = CONSOLE_COLORS[type];
+				if (count == 0 || !(*filter)) {
 					color = drawer.color_theme.unavailable_text;
 				}
 
 				Stream<char> stream = Stream<char>(temp_characters, 0);
-				ConvertIntToCharsFormatted(stream, static_cast<int64_t>(counter));
+				ConvertIntToCharsFormatted(stream, (int64_t)count);
 				float2 label_scale = drawer.GetLabelScale(temp_characters);
 
 				float initial_x_position = transform.position.x;
 				transform.position.x += drawer.element_descriptor.label_padd.x;
 				transform.scale = sprite_scale;
 				config.AddFlag(transform);
-				drawer.SpriteRectangle(configuration, config, texture, color);
+				drawer.SpriteRectangle(configuration, config, CONSOLE_TEXTURE_ICONS[type], color);
 				config.flag_count--;
 
 				transform.position.x += sprite_scale.x + drawer.element_descriptor.label_padd.x;
@@ -1903,12 +1910,13 @@ namespace ECSEngine {
 
 				UIDrawerStateTableBoolClickable clickable_data;
 				clickable_data.notifier = &data->filter_message_type_changed;
-				clickable_data.state = filter_status;
+				clickable_data.state = filter;
 				drawer.AddDefaultClickableHoverable(
 					configuration,
 					{ transform.position.x, transform.position.y - drawer.region_render_offset.y },
 					transform.scale,
 					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_LATE },
+					nullptr,
 					drawer.color_theme.theme
 				);
 				transform.position.x += border_thickness.x + transform.scale.x;
@@ -1917,10 +1925,11 @@ namespace ECSEngine {
 			UIDrawerBufferState drawer_state = drawer.GetBufferState(UI_CONFIG_LATE_DRAW);
 			UIDrawerHandlerState handler_state = drawer.GetHandlerState();
 
-			counter_backwards(ECS_TOOLS_UI_TEXTURE_TRACE_ICON, CONSOLE_TRACE_COLOR, &data->filter_trace, data->trace_count);
-			counter_backwards(ECS_TOOLS_UI_TEXTURE_ERROR_ICON, ECS_COLOR_WHITE, &data->filter_error, data->error_count);
-			counter_backwards(ECS_TOOLS_UI_TEXTURE_WARN_ICON, CONSOLE_WARN_COLOR, &data->filter_warn, data->warn_count);
-			counter_backwards(ECS_TOOLS_UI_TEXTURE_INFO_ICON, CONSOLE_INFO_COLOR, &data->filter_info, data->info_count);
+			counter_backwards(ECS_CONSOLE_GRAPHICS);
+			counter_backwards(ECS_CONSOLE_TRACE);
+			counter_backwards(ECS_CONSOLE_ERROR);
+			counter_backwards(ECS_CONSOLE_WARN);
+			counter_backwards(ECS_CONSOLE_INFO);
 
 			// if it overpassed the bound, revert to the initial state and redo the drawing from the bound
 			if (transform.position.x < counter_bound) {
@@ -1928,10 +1937,11 @@ namespace ECSEngine {
 				drawer.RestoreHandlerState(handler_state);
 
 				transform.position.x = counter_bound;
-				counter_forwards(ECS_TOOLS_UI_TEXTURE_INFO_ICON, CONSOLE_INFO_COLOR, &data->filter_info, data->info_count);
-				counter_forwards(ECS_TOOLS_UI_TEXTURE_WARN_ICON, CONSOLE_WARN_COLOR, &data->filter_warn, data->warn_count);
-				counter_forwards(ECS_TOOLS_UI_TEXTURE_ERROR_ICON, ECS_COLOR_WHITE, &data->filter_error, data->error_count);
-				counter_forwards(ECS_TOOLS_UI_TEXTURE_TRACE_ICON, CONSOLE_TRACE_COLOR, &data->filter_trace, data->trace_count);
+				counter_forwards(ECS_CONSOLE_INFO);
+				counter_forwards(ECS_CONSOLE_WARN);
+				counter_forwards(ECS_CONSOLE_ERROR);
+				counter_forwards(ECS_CONSOLE_TRACE);
+				counter_forwards(ECS_CONSOLE_GRAPHICS);
 			}
 
 			data->previous_verbosity_level = data->console->verbosity_level;
@@ -1949,9 +1959,8 @@ namespace ECSEngine {
 			bool recalculate_counts = (message_count != data->last_frame_message_count) || data->filter_message_type_changed
 				|| (data->console->verbosity_level != data->previous_verbosity_level) || data->system_filter_changed;
 			if (recalculate_counts) {
-				unsigned int dummy;
-				unsigned int* ptrs[] = { &data->info_count, &data->warn_count, &data->error_count, &data->trace_count, &dummy };
-				bool* type_ptrs = &data->filter_info;
+				unsigned int* ptrs = data->type_count;
+				bool* type_ptrs = data->filter;
 				data->filter_message_type_changed = false;
 				data->system_filter_changed = false;
 
@@ -1959,7 +1968,7 @@ namespace ECSEngine {
 					size_t system_mask = GetSystemMaskFromConsoleWindowData(data);
 
 					for (size_t index = starting_index; index < message_count; index++) {
-						(*ptrs[(unsigned int)data->console->messages[index].type])++;
+						ptrs[(unsigned int)data->console->messages[index].type]++;
 						ResourceIdentifier identifier = {
 							data->console->messages[index].message.buffer + data->console->messages[index].client_message_start,
 							(unsigned int)data->console->messages[index].message.size - data->console->messages[index].client_message_start
@@ -2014,7 +2023,7 @@ namespace ECSEngine {
 				// else start from scratch; console has been cleared, type filter changed, verbosity filter changed,
 				// or system filter changed
 				else {
-					*ptrs[0] = *ptrs[1] = *ptrs[2] = *ptrs[3] = 0;
+					memset(ptrs, 0, sizeof(unsigned int) * ECS_CONSOLE_MESSAGE_COUNT);
 					// Remove the allocations and reinitialize with 0
 					if (data->filtered_message_indices.size > 0) {
 						drawer.RemoveAllocation(data->filtered_message_indices.buffer);
@@ -2098,15 +2107,8 @@ namespace ECSEngine {
 			data.console = GetConsole();
 			data.clear_on_play = false;
 			data.collapse = false;
-			data.filter_all = true;
-			data.filter_error = true;
-			data.filter_info = true;
-			data.filter_trace = true;
-			data.filter_warn = true;
-			data.error_count = 0;
-			data.info_count = 0;
-			data.warn_count = 0;
-			data.trace_count = 0;
+			memset(data.filter, true, sizeof(data.filter));
+			memset(data.type_count, 0, sizeof(data.type_count));
 			data.last_frame_message_count = 0;
 			data.filtered_message_indices.InitializeFromBuffer(nullptr, 0, 0);
 		}
