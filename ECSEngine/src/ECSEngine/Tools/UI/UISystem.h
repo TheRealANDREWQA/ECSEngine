@@ -64,7 +64,7 @@ namespace ECSEngine {
 			// If the cursor is at the border of the window it will be relocated to the other side
 			void ActiveWrapCursorPosition();
 
-			void* AllocateFromHandlerAllocator(unsigned int thread_id, ECS_UI_DRAW_PHASE phase, size_t size);
+			void* AllocateFromHandlerAllocator(ECS_UI_DRAW_PHASE phase, size_t size);
 
 			void AddActionHandler(
 				LinearAllocator* allocator,
@@ -122,7 +122,6 @@ namespace ECSEngine {
 			void* AddGlobalResource(Stream<void> resource, Stream<char> name);
 
 			void AddHoverableToDockspaceRegion(
-				unsigned int thread_id,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float2 position,
@@ -156,7 +155,6 @@ namespace ECSEngine {
 			void AddDefaultHoverableClickable(const UISystemDefaultHoverableClickableData& data);
 
 			void AddClickableToDockspaceRegion(
-				unsigned int thread_id,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float2 position,
@@ -192,7 +190,6 @@ namespace ECSEngine {
 			void AddDoubleClickActionToDockspaceRegion(const UISystemDoubleClickData& data);
 
 			void AddGeneralActionToDockspaceRegion(
-				unsigned int thread_id,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float2 position,
@@ -221,7 +218,6 @@ namespace ECSEngine {
 			);
 
 			void AddHandlerToDockspaceRegionAtIndex(
-				unsigned int thread_id,
 				UIHandler* handler,
 				float2 position,
 				float2 scale,
@@ -245,7 +241,6 @@ namespace ECSEngine {
 			);
 
 			void AddWindowSnapshotRunnable(
-				unsigned int thread_id,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				UIDockspaceBorderDrawSnapshotRunnable runnable
@@ -253,7 +248,7 @@ namespace ECSEngine {
 
 			float AlignMiddleTextY(float position_y, float scale_y, float font_size_y, float padding = 0.0f);
 
-			void* AllocateHandlerMemory(unsigned int thread_id, size_t size, size_t alignment, const void* memory_to_copy);
+			void* AllocateHandlerMemory(size_t size, size_t alignment, const void* memory_to_copy);
 
 			void* AllocateHandlerMemory(LinearAllocator* allocator, size_t size, size_t alignment, const void* memory_to_copy);
 
@@ -608,7 +603,6 @@ namespace ECSEngine {
 			unsigned int CreateWindowAndDockspace(const UIWindowDescriptor& descriptor, size_t additional_flags = 0);
 
 			void ComposeHoverable(
-				unsigned int thread_id,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float2 position,
@@ -630,7 +624,6 @@ namespace ECSEngine {
 			);
 
 			void ComposeClickable(
-				unsigned int thread_id,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float2 position,
@@ -654,7 +647,6 @@ namespace ECSEngine {
 			);
 
 			void ComposeGeneral(
-				unsigned int thread_id,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float2 position,
@@ -754,7 +746,6 @@ namespace ECSEngine {
 				unsigned int border_index,
 				DockspaceType type,
 				float2 mouse_position,
-				unsigned int thread_id,
 				unsigned int offset,
 				ECS_MOUSE_BUTTON button_type
 			);
@@ -766,7 +757,6 @@ namespace ECSEngine {
 				unsigned int border_index,
 				DockspaceType type,
 				float2 mouse_position,
-				unsigned int thread_id,
 				unsigned int offset
 			);
 
@@ -823,7 +813,6 @@ namespace ECSEngine {
 			void DrawDockspaceRegion(const UIDrawDockspaceRegionData* draw_data, bool active_region);
 
 			void DrawDockspaceRegionHeader(
-				unsigned int thread_id,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float offset_mask,
@@ -832,7 +821,6 @@ namespace ECSEngine {
 			);
 
 			void DrawDockspaceRegionBackground(
-				unsigned int thread_id,
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float offset_mask,
@@ -1280,21 +1268,19 @@ namespace ECSEngine {
 
 			float2 GetPreviousMousePosition() const;
 
-			void HandleHoverable(float2 mouse_position, unsigned int thread_id, void** buffers, size_t* counts);
+			void HandleHoverable(float2 mouse_position, void** buffers, size_t* counts);
 
-			void HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id, ECS_MOUSE_BUTTON button_type);
+			void HandleFocusedWindowClickable(float2 mouse_position, ECS_MOUSE_BUTTON button_type);
 
-			void HandleFocusedWindowGeneral(float2 mouse_position, unsigned int thread_id);
+			void HandleFocusedWindowGeneral(float2 mouse_position);
 
 			void HandleFocusedWindowCleanupGeneral(
 				float2 mouse_position, 
-				unsigned int thread_id,
 				void* additional_data = nullptr
 			);
 
 			void HandleFocusedWindowCleanupHoverable(
 				float2 mouse_position,
-				unsigned int thread_id,
 				void* additional_data = nullptr
 			);
 
@@ -1473,17 +1459,16 @@ namespace ECSEngine {
 			// removes the last sprite texture written
 			void RemoveSpriteTexture(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type = ECS_UI_SPRITE_NORMAL);
 
-			UIReservedHandler ReserveHoverable(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase);
+			UIReservedHandler ReserveHoverable(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase);
 
 			UIReservedHandler ReserveClickable(
-				unsigned int thread_id, 
 				UIDockspace* dockspace, 
 				unsigned int border_index, 
 				ECS_UI_DRAW_PHASE phase, 
 				ECS_MOUSE_BUTTON button_type
 			);
 
-			UIReservedHandler ReserveGeneral(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE);
+			UIReservedHandler ReserveGeneral(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE);
 
 			// returns whether or not the parent can continue resizing
 			bool ResizeDockspace(
@@ -1561,21 +1546,15 @@ namespace ECSEngine {
 			// immediate context
 			void SetSolidColorRenderState();
 
-			void SetSolidColorRenderState(unsigned int thread_id);
-
 			void SetSolidColorRenderState(GraphicsContext* context);
 
 			// immediate context
 			void SetTextSpriteRenderState();
 
-			void SetTextSpriteRenderState(unsigned int thread_id);
-
 			void SetTextSpriteRenderState(GraphicsContext* context);
 
 			// immediate context
 			void SetSpriteRenderState();
-
-			void SetSpriteRenderState(unsigned int thread_id);
 
 			void SetSpriteRenderState(GraphicsContext* context);
 
@@ -1662,7 +1641,7 @@ namespace ECSEngine {
 				unsigned int border_index,
 				UISpriteTexture texture,
 				ECS_UI_SPRITE_TYPE type = ECS_UI_SPRITE_NORMAL,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			void SetPopUpWindowPosition(unsigned int window_index, float2 new_position);
@@ -1713,7 +1692,7 @@ namespace ECSEngine {
 
 			void TranslateDockspace(UIDockspace* dockspace, float2 translation);
 
-			LinearAllocator* TemporaryAllocator(unsigned int thread_id, ECS_UI_DRAW_PHASE phase);
+			LinearAllocator* TemporaryAllocator(ECS_UI_DRAW_PHASE phase);
 
 			template<size_t flags = 0>
 			void TrimPopUpWindow(

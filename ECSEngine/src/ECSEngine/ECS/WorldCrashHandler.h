@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "../Containers/Stream.h"
+#include "EntityManagerSerializeTypes.h"
 
 namespace ECSEngine {
 
@@ -18,7 +19,8 @@ namespace ECSEngine {
 
 	// This is a function that is called before writing the actual crash in order to set extra
 	// parameters like misc files or component overrides for scene serialization
-	typedef void (*WorldCrashHandlerPreCallbackFunction)(WorldCrashHandlerPreCallbackFunctionData* function_data);
+	// This function can return false if there is an error
+	typedef bool (*WorldCrashHandlerPreCallbackFunction)(WorldCrashHandlerPreCallbackFunctionData* function_data);
 
 	struct WorldCrashHandlerPostCallbackFunctionData {
 		bool suspending_threads_success;
@@ -30,7 +32,8 @@ namespace ECSEngine {
 
 	// This is a function that will be called after finishing writing the crash
 	// For an abort handler, right before exiting, for continuation, right before
-	// Returning the control flow
+	// Returning the control flow. This callback is called even when the pre callback
+	// returned false indicating an error
 	typedef void (*WorldCrashHandlerPostCallbackFunction)(WorldCrashHandlerPostCallbackFunctionData* function_data);
 
 	struct WorldCrashHandlerPreCallback {
@@ -53,14 +56,20 @@ namespace ECSEngine {
 		// --------------------- Mandatory ------------------------------
 		World* world;
 		Stream<wchar_t> crash_directory;
-		Stream<Stream<wchar_t>> module_search_paths;
 		// This is necessary in order to have a reliable identification of asset resources
 		const AssetDatabase* asset_database;
 		const Reflection::ReflectionManager* reflection_manager;
 		bool should_break = true;
+		// If this is set to true, then it won't copy the infos, it will just reference them
+		bool infos_are_stable = true;
+		Stream<SerializeEntityManagerComponentInfo> unique_infos;
+		Stream<SerializeEntityManagerSharedComponentInfo> shared_infos;
+		Stream<SerializeEntityManagerGlobalComponentInfo> global_infos;
 
 		// ---------------------- Optional ------------------------------
 		// If the world descriptor is missing, it won't write a file for it
+		// The module search paths is used to locate the .pdbs for stack walking
+		Stream<Stream<wchar_t>> module_search_paths = {};
 		WorldDescriptor* world_descriptor = nullptr;
 		WorldCrashHandlerPreCallback pre_callback = {};
 		WorldCrashHandlerPostCallback post_callback = {};

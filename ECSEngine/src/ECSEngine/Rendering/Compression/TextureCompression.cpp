@@ -142,16 +142,12 @@ namespace ECSEngine {
 
 		// Create a staging resource that will copy the original texture and map every mip level
 		// For compression
-		if (descriptor.spin_lock != nullptr) {
-			descriptor.spin_lock->lock();
-		}
+		descriptor.Lock();
 
 		Texture2D staging_texture = TextureToStaging(graphics, texture);
 		if (staging_texture.tex == nullptr) {
 			SetErrorMessageInternal(descriptor.error_message, "Failed compressing a texture. Could not create staging texture.");
-			if (descriptor.spin_lock != nullptr) {
-				descriptor.spin_lock->unlock();
-			}
+			descriptor.Unlock();
 			return false;
 		}
 
@@ -159,9 +155,7 @@ namespace ECSEngine {
 			HRESULT result = context->Map(staging_texture.tex, index, D3D11_MAP_READ, 0, &mapping);
 			if (FAILED(result)) {
 				SetErrorMessageInternal(descriptor.error_message, "Failed compressing a texture. Mapping a mip level failed.");
-				if (descriptor.spin_lock != nullptr) {
-					descriptor.spin_lock->unlock();
-				}
+				descriptor.Unlock();
 				return false;
 			}
 			const DirectX::Image* image = initial_image.GetImage(index, 0, 0);
@@ -183,9 +177,7 @@ namespace ECSEngine {
 		HRESULT result;
 		// CPU codec
 		if (IsCPUCodec(compression_type)) {
-			if (descriptor.spin_lock != nullptr) {
-				descriptor.spin_lock->unlock();
-			}
+			descriptor.Unlock();
 
 			result = DirectX::Compress(
 				initial_image.GetImages(),
@@ -209,9 +201,7 @@ namespace ECSEngine {
 				1.0f,
 				final_image
 			);
-			if (descriptor.spin_lock != nullptr) {
-				descriptor.spin_lock->unlock();
-			}
+			descriptor.Unlock();
 		}
 		else {
 			SetErrorMessageInternal(descriptor.error_message, "Invalid compression codec for texture compression.");
@@ -336,9 +326,7 @@ namespace ECSEngine {
 			}
 
 			// Lock the gpu lock, if any
-			if (descriptor.spin_lock != nullptr) {
-				descriptor.spin_lock->lock();
-			}
+			descriptor.Lock();
 
 			ID3D11Texture2D* final_texture = nullptr;
 			HRESULT result = DirectX::CompressGPU(
@@ -352,9 +340,7 @@ namespace ECSEngine {
 				&final_texture
 			);
 
-			if (descriptor.spin_lock != nullptr) {
-				descriptor.spin_lock->unlock();
-			}
+			descriptor.Unlock();
 
 			if (!temporary_texture) {
 				// Add the resource to the graphics internal tracked resources
@@ -596,6 +582,22 @@ namespace ECSEngine {
 	ECS_GRAPHICS_FORMAT GetCompressedRenderFormat(ECS_TEXTURE_COMPRESSION_EX compression, bool srgb)
 	{
 		return GetCompressedRenderFormat(EXPLICIT_COMPRESSION_MAPPING[(unsigned int)compression], srgb);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	void CompressTextureDescriptor::Lock()
+	{
+		if (spin_lock != nullptr) {
+			spin_lock->Lock();
+		}
+	}
+
+	void CompressTextureDescriptor::Unlock()
+	{
+		if (spin_lock != nullptr) {
+			spin_lock->Unlock();
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------------

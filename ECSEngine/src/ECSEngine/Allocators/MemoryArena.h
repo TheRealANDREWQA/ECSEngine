@@ -51,11 +51,11 @@ namespace ECSEngine {
 		bool IsEmpty() const;
 
 		ECS_INLINE void Lock() {
-			m_lock.lock();
+			m_lock.Lock();
 		}
 
 		ECS_INLINE void Unlock() {
-			m_lock.unlock();
+			m_lock.Unlock();
 		}
 
 		ECS_INLINE size_t InitialArenaCapacity() const {

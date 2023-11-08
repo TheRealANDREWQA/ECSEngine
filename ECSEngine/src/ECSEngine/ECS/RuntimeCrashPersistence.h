@@ -52,6 +52,10 @@ namespace ECSEngine {
 		// one of them failed to write
 		bool dont_stop_on_first_failure;
 
+		// If this is set to true, then it will create a new folder entry inside the directory
+		// given based on the date and use that one in order to write the crash
+		bool create_unique_folder_entry;
+
 		// These is used to write a separate file that will help the loader
 		// Re-create the scene
 		WorldDescriptor* world_descriptor;

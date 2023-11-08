@@ -1,5 +1,5 @@
 #include "ecspch.h"
-#include "CrashHandler.h"
+#include "WorldCrashHandler.h"
 #include "../Utilities/OSFunctions.h"
 #include "../Utilities/Crash.h"
 #include "../Utilities/Console.h"
@@ -25,6 +25,24 @@ namespace ECSEngine {
 			__debugbreak();
 		}
 
+		auto return_thread_to_procedure = []() {
+			TaskManager* task_manager = WORLD_GLOBAL_DATA.descriptor.world->task_manager;
+
+			// Decrement the wait counter for the task manager for that world
+			// To indicate that this thread exited
+			task_manager->m_is_frame_done.Notify();
+
+			unsigned int this_thread_id = task_manager->FindThreadID(OS::GetCurrentThreadID());
+			if (this_thread_id == -1) {
+				// Abort in this case
+				__debugbreak();
+				abort();
+			}
+			// Now we need to jump to the task manager thread procedure
+			// We want to sleep after returning
+			task_manager->ResetThreadToProcedure(this_thread_id, true);
+		};
+
 		if (last_progress_value == 0) {
 			// Set the crashing thread ID
 			ECS_GLOBAL_CRASH_OS_THREAD_ID = OS::GetCurrentThreadID();
@@ -45,27 +63,35 @@ namespace ECSEngine {
 			write_options.resume_threads = !WORLD_GLOBAL_DATA.is_abort_handler && suspend_success;
 			write_options.resuming_threads_success = &resume_threads_success;
 			write_options.world_descriptor = WORLD_GLOBAL_DATA.descriptor.world_descriptor;
+			write_options.create_unique_folder_entry = true;
 
 			SaveSceneData save_data;
 			save_data.delta_time = WORLD_GLOBAL_DATA.descriptor.world->delta_time;
 			save_data.asset_database = WORLD_GLOBAL_DATA.descriptor.asset_database;
-			
+			save_data.unique_overrides = WORLD_GLOBAL_DATA.descriptor.unique_infos;
+			save_data.shared_overrides = WORLD_GLOBAL_DATA.descriptor.shared_infos;
+			save_data.global_overrides = WORLD_GLOBAL_DATA.descriptor.global_infos;
+
+			bool should_write_crash = true;
 			if (WORLD_GLOBAL_DATA.descriptor.pre_callback.function != nullptr) {
 				WorldCrashHandlerPreCallbackFunctionData callback_data;
 				callback_data.write_options = &write_options;
 				callback_data.save_data = &save_data;
 				callback_data.user_data = WORLD_GLOBAL_DATA.descriptor.pre_callback.data;
-				WORLD_GLOBAL_DATA.descriptor.pre_callback.function(&callback_data);
+				should_write_crash = WORLD_GLOBAL_DATA.descriptor.pre_callback.function(&callback_data);
 			}
 
-			// We can call the persistence function now after all the setup was done
-			bool write_success = RuntimeCrashPersistenceWrite(
-				WORLD_GLOBAL_DATA.descriptor.crash_directory,
-				WORLD_GLOBAL_DATA.descriptor.world,
-				WORLD_GLOBAL_DATA.descriptor.reflection_manager,
-				&save_data,
-				&write_options
-			);
+			bool write_success = false;
+			if (should_write_crash) {
+				// We can call the persistence function now after all the setup was done
+				write_success = RuntimeCrashPersistenceWrite(
+					WORLD_GLOBAL_DATA.descriptor.crash_directory,
+					WORLD_GLOBAL_DATA.descriptor.world,
+					WORLD_GLOBAL_DATA.descriptor.reflection_manager,
+					&save_data,
+					&write_options
+				);
+			}
 
 			if (WORLD_GLOBAL_DATA.descriptor.post_callback.function != nullptr) {
 				WorldCrashHandlerPostCallbackFunctionData callback_data;
@@ -81,19 +107,10 @@ namespace ECSEngine {
 				abort();
 			}
 			else {
-				// Decrement the wait counter for the task manager for that world
-				// To indicate that this thread exited
-				task_manager->m_is_frame_done.Notify();
+				// We should signal the static tasks for those threads that are stuck in barriers
+				task_manager->SignalStaticTasks();
 
-				unsigned int this_thread_id = task_manager->FindThreadID(OS::GetCurrentThreadID());
-				if (this_thread_id == -1) {
-					// Abort in this case
-					__debugbreak();
-					abort();
-				}
-				// Now we need to jump to the task manager thread procedure
-				// We want to sleep after returning
-				task_manager->ResetThreadToProcedure(this_thread_id, true);
+				return_thread_to_procedure();
 			}
 		}
 		else {
@@ -101,6 +118,10 @@ namespace ECSEngine {
 			// If that is the case, just abort since there is nothing that can be done at that point
 			if (ECS_GLOBAL_CRASH_OS_THREAD_ID == OS::GetCurrentThreadID()) {
 				abort();
+			}
+			else {
+				// We need to reset the thread to the start of the procedure still
+				return_thread_to_procedure();
 			}
 		}
 	}
@@ -115,8 +136,16 @@ namespace ECSEngine {
 		if (WORLD_GLOBAL_DATA.descriptor.post_callback.data_size > 0) {
 			free(WORLD_GLOBAL_DATA.descriptor.post_callback.data);
 		}
+		if (!WORLD_GLOBAL_DATA.descriptor.infos_are_stable) {
+			// These are coalesced into a single allocation
+			free(WORLD_GLOBAL_DATA.descriptor.unique_infos.buffer);
+			free(WORLD_GLOBAL_DATA.descriptor.shared_infos.buffer);
+			free(WORLD_GLOBAL_DATA.descriptor.global_infos.buffer);
+		}
 
-		OS::InitializeSymbolicLinksPaths(descriptor->module_search_paths);
+		if (descriptor->module_search_paths.size > 0) {
+			OS::SetSymbolicLinksPaths(descriptor->module_search_paths);
+		}
 		WORLD_GLOBAL_DATA.descriptor = *descriptor;
 		WORLD_GLOBAL_DATA.is_abort_handler = is_abort;
 		
@@ -126,6 +155,12 @@ namespace ECSEngine {
 
 		WORLD_GLOBAL_DATA.descriptor.pre_callback.data = CopyNonZeroMalloc(descriptor->pre_callback.data, descriptor->pre_callback.data_size);
 		WORLD_GLOBAL_DATA.descriptor.post_callback.data = CopyNonZeroMalloc(descriptor->post_callback.data, descriptor->post_callback.data_size);
+
+		if (!descriptor->infos_are_stable) {
+			WORLD_GLOBAL_DATA.descriptor.unique_infos = StreamCoalescedDeepCopy(descriptor->unique_infos, { nullptr });
+			WORLD_GLOBAL_DATA.descriptor.shared_infos = StreamCoalescedDeepCopy(descriptor->shared_infos, { nullptr });
+			WORLD_GLOBAL_DATA.descriptor.global_infos = StreamCoalescedDeepCopy(descriptor->global_infos, { nullptr });
+		}
 
 		SetCrashHandler(WorldCrashHandlerFunction, nullptr);
 	}

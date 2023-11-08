@@ -11,6 +11,7 @@ struct ProjectFile;
 #define PROJECT_METADATA_RELATIVE_PATH L"Metadata"
 #define PROJECT_CONFIGURATION_RELATIVE_PATH L"Configuration"
 #define PROJECT_BACKUP_RELATIVE_PATH L".backup"
+#define PROJECT_CRASH_RELATIVE_PATH L"Crash"
 
 #define PROJECT_CONFIGURATION_MODULES_RELATIVE_PATH L"Configuration\\Modules"
 #define PROJECT_CONFIGURATION_RUNTIME_RELATIVE_PATH L"Configuration\\Runtime"
@@ -23,6 +24,7 @@ struct ProjectFile;
 #define PROJECT_RUNTIME_SETTINGS_FILE_EXTENSION L".config"
 #define PROJECT_SANDBOX_FILE_EXTENSION L".ecss"
 #define PROJECT_MODULES_FILE_EXTENSION L".ecsmodules"
+#define PROJECT_SETTINGS_FILE_EXTENSION L".projsettings"
 
 extern const wchar_t* PROJECT_DIRECTORIES[];
 
@@ -30,6 +32,8 @@ size_t PROJECT_DIRECTORIES_SIZE();
 
 // It will make the concatenation between path and project name
 void GetProjectFilePath(const ProjectFile* project_file, ECSEngine::CapacityStream<wchar_t>& path);
+
+void GetProjectSettingsFilePath(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 void GetProjectModulesFilePath(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
@@ -52,6 +56,8 @@ void GetProjectConfigurationModuleFolder(const EditorState* editor_state, ECSEng
 void GetProjectBackupFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 void GetProjectConfigurationRuntimeFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
+
+void GetProjectCrashFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 void GetProjectRootPath(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 

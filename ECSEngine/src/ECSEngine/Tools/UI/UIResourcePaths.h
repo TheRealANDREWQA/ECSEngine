@@ -15,6 +15,7 @@
 #define ECS_TOOLS_UI_TEXTURE_WARN_ICON L"Resources/WarnIcon.png"
 #define ECS_TOOLS_UI_TEXTURE_ERROR_ICON L"Resources/ErrorIcon.png"
 #define ECS_TOOLS_UI_TEXTURE_TRACE_ICON L"Resources/TraceIcon.png"
+#define ECS_TOOLS_UI_TEXTURE_GRAPHICS_ICON L"Resources/WireframeCube.png"
 #define ECS_TOOLS_UI_TEXTURE_FOLDER L"Resources/Folder.png"
 #define ECS_TOOLS_UI_TEXTURE_PLUS L"Resources/Plus.png"
 #define ECS_TOOLS_UI_TEXTURE_X L"Resources/X.png"

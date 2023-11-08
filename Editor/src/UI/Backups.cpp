@@ -110,8 +110,7 @@ void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 			FunctorData* data = (FunctorData*)_data;
 
 			Stream<wchar_t> filename = PathFilename(path);
-			Date date = ConvertStringToDate(filename, ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_DAY
-				| ECS_LOCAL_TIME_FORMAT_MONTH | ECS_LOCAL_TIME_FORMAT_YEAR);
+			Date date = ConvertStringToDate(filename, ECS_FORMAT_DATE_ALL_FROM_MINUTES);
 			if (IsDateLater(data->current_date, date)) {
 				data->current_date = date;
 				data->folder->size = data->base_folder_size;
@@ -260,7 +259,7 @@ void BackupsDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 
 	Date current_date = OS::GetLocalTime();
 	backup_folder.Add(ECS_OS_PATH_SEPARATOR);
-	ConvertDateToString(current_date, backup_folder, ECS_LOCAL_TIME_FORMAT_ALL ^ ECS_LOCAL_TIME_FORMAT_SECONDS ^ ECS_LOCAL_TIME_FORMAT_MILLISECONDS | ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON);
+	ConvertDateToString(current_date, backup_folder, ECS_FORMAT_DATE_ALL_FROM_MINUTES);
 	active_state.state = !ExistsFileOrFolder(backup_folder);
 	config.AddFlag(active_state);
 	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ACTIVE_STATE, config, "Manual backup", { manual_backup, editor_state, 0 });

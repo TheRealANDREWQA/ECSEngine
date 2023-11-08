@@ -65,3 +65,83 @@ void EditorGetEventTypeData(const EditorState* editor_state, EditorEventFunction
 		}
 	});
 }
+
+struct WaitEventWrapperData {
+	EditorEventFunction wait_function;
+	void* wait_function_data;
+	size_t wait_function_data_size;
+
+	EditorEventFunction execute_function;
+	void* execute_function_data;
+	size_t execute_function_data_size;
+};
+
+EDITOR_EVENT(WaitEventWrapper) {
+	WaitEventWrapperData* data = (WaitEventWrapperData*)_data;
+	ECS_STACK_CAPACITY_STREAM(void*, target_data, 512);
+	EditorGetEventTypeData(editor_state, data->wait_function, &target_data);
+	bool exists = false;
+	for (unsigned int index = 0; index < target_data.size; index++) {
+		if (data->wait_function_data_size > 0) {
+			if (memcmp(data->wait_function_data, target_data[index], data->wait_function_data_size) == 0) {
+				exists = true;
+				break;
+			}
+		}
+		else {
+			if (target_data[index] == data->wait_function_data) {
+				exists = true;
+				break;
+			}
+		}
+	}
+
+	if (!exists) {
+		// We can add the wrapper event to be executed
+		EditorAddEvent(editor_state, data->execute_function, data->execute_function_data, data->execute_function_data_size);
+		if (data->execute_function_data_size > 0) {
+			Deallocate(editor_state->EditorAllocator(), data->execute_function_data);
+		}
+		if (data->wait_function_data_size > 0) {
+			Deallocate(editor_state->EditorAllocator(), data->wait_function_data);
+		}
+		return false;
+	}
+	return true;
+}
+
+void* EditorAddEventAfter(
+	EditorState* editor_state, 
+	EditorEventFunction function, 
+	void* event_data, 
+	size_t event_data_size, 
+	EditorEventFunction event_to_finish, 
+	void* event_to_finish_compare_data, 
+	size_t event_to_finish_compare_data_size
+)
+{
+	WaitEventWrapperData wrapper_data;
+	wrapper_data.execute_function = function;
+	wrapper_data.execute_function_data = CopyNonZero(editor_state->EditorAllocator(), event_data, event_data_size);;
+	wrapper_data.execute_function_data_size = event_data_size;
+	wrapper_data.wait_function = event_to_finish;
+	wrapper_data.wait_function_data = CopyNonZero(editor_state->EditorAllocator(), event_to_finish_compare_data, event_to_finish_compare_data_size);
+	wrapper_data.wait_function_data_size = event_to_finish_compare_data_size;
+	
+	EditorAddEvent(editor_state, WaitEventWrapper, &wrapper_data, sizeof(wrapper_data));
+	return wrapper_data.execute_function_data;
+}
+
+void EditorAddEventWithContinuation(
+	EditorState* editor_state, 
+	EditorEventFunction first_function, 
+	void* first_event_data, 
+	size_t first_event_data_size,
+	EditorEventFunction second_function,
+	void* second_event_data,
+	size_t second_event_data_size
+)
+{
+	first_event_data = EditorAddEvent(editor_state, first_function, first_event_data, first_event_data_size);
+	EditorAddEventAfter(editor_state, second_function, second_event_data, second_event_data_size, first_function, first_event_data, first_event_data_size);
+}

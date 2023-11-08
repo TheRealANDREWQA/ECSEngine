@@ -126,11 +126,27 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 // runtime start new sandboxes
 void LoadSandboxMissingAssets(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* missing_assets);
 
+// It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
+// runtime start new sandboxes. It will call the callback once the load is finished (both when it is successful and when it failed)
+void LoadSandboxMissingAssets(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	CapacityStream<unsigned int>* missing_assets,
+	EditorEventFunction callback,
+	void* callback_data,
+	size_t callback_data_size
+);
+
 // -------------------------------------------------------------------------------------------------------------
 
 // It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
 // editor start runtimes. It will copy the current asset handles before forwarding to the event
 void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index);
+
+// It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
+// editor start runtimes. It will copy the current asset handles before forwarding to the event.
+// After the load is finalized (with success or not), it will call the callback
+void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, EditorEventFunction callback, void* callback_data, size_t callback_data_size);
 
 // -------------------------------------------------------------------------------------------------------------
 

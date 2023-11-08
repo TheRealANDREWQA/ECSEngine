@@ -2758,7 +2758,7 @@ namespace ECSEngine {
 	template<typename Deck, typename ThreadStream>
 	void FlushType(DebugDrawer* drawer, Deck* deck, ThreadStream* thread_buffering, DebugPrimitive debug_primitive, unsigned int thread_index) {
 		if (thread_buffering[thread_index].size > 0) {
-			drawer->thread_locks[debug_primitive]->lock();
+			drawer->thread_locks[debug_primitive]->Lock();
 			auto* copy_position = deck->GetEntries(thread_buffering[thread_index].size);
 			if (copy_position == nullptr) {
 				drawer->allocator->Lock();
@@ -2768,7 +2768,7 @@ namespace ECSEngine {
 			}
 			thread_buffering[thread_index].CopyTo(copy_position);
 			thread_buffering[thread_index].size = 0;
-			drawer->thread_locks[debug_primitive]->unlock();
+			drawer->thread_locks[debug_primitive]->Unlock();
 		}
 	}
 
@@ -3059,7 +3059,7 @@ namespace ECSEngine {
 		// Padd the locks to different cache lines
 		for (size_t index = 0; index < ECS_DEBUG_PRIMITIVE_COUNT; index++) {
 			thread_locks[index] = (SpinLock*)buffer;
-			thread_locks[index]->clear();
+			thread_locks[index]->Clear();
 			buffer += ECS_CACHE_LINE_SIZE;
 		}
 		string_character_bounds = (float2*)buffer;

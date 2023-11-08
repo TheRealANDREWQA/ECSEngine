@@ -64,7 +64,7 @@ namespace ECSEngine {
 
 				if (elements.size > 0) {
 					// Try to get the lock and resize
-					bool locked_by_us = lock.try_lock();
+					bool locked_by_us = lock.TryLock();
 					if (locked_by_us) {
 						// We need to check to see if someone else expanded the chunks before use
 						// And write into the last chunk if so
@@ -91,7 +91,7 @@ namespace ECSEngine {
 								elements.size -= chunk_size;
 							}
 							stream[chunk_index + resize_chunk_count - 1].RequestInt(elements.size);
-							lock.unlock();
+							lock.Unlock();
 
 							// After requesting all of these values, we can start writing the values
 							for (unsigned int index = 0; index < resize_chunk_count - 1; index++) {
@@ -105,14 +105,14 @@ namespace ECSEngine {
 						}
 						else {
 							// We need to release the lock since we've written into a newly created chunk by someone else
-							lock.unlock();
+							lock.Unlock();
 						}
 
 						// We can exit now - we've written all elements
 						break;
 					}
 					else {
-						lock.wait_locked();
+						lock.WaitLocked();
 						chunk_index = stream.size - 1;
 						write_position = stream[chunk_index].RequestInt(elements.size);
 					}
@@ -296,7 +296,7 @@ namespace ECSEngine {
 				}
 				else {
 					// The chunk is full, we need another one
-					bool locked_by_us = lock.try_lock();
+					bool locked_by_us = lock.TryLock();
 					if (locked_by_us) {
 						// Verify if the size changed
 						bool found_spot = false;
@@ -311,7 +311,7 @@ namespace ECSEngine {
 							else if (chunk_index == stream.capacity - 1) {
 								// Fail - no more space
 								success = false;
-								lock.unlock();
+								lock.Unlock();
 								return -1;
 							}
 						}
@@ -320,15 +320,15 @@ namespace ECSEngine {
 							Expand(1);
 							chunk_index++;
 							stream[chunk_index].RequestInt(1);
-							lock.unlock();
+							lock.Unlock();
 							write_position = 0;
 						}
 						else {
-							lock.unlock();
+							lock.Unlock();
 						}
 					}
 					else {
-						lock.wait_locked();
+						lock.WaitLocked();
 						chunk_index = stream.size - 1;
 						// Re-request the value - this has to be valid since t
 						write_position = stream[chunk_index].RequestInt(1);

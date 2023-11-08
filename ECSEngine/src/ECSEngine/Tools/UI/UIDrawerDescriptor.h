@@ -19,7 +19,6 @@ namespace ECSEngine {
 			float2* export_scale;
 			void* system;
 			UIDockspace* dockspace;
-			unsigned int thread_id;
 			unsigned int window_index;
 			unsigned int border_index;
 			DockspaceType dockspace_type;

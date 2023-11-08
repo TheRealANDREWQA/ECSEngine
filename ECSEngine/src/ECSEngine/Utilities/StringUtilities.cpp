@@ -932,7 +932,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------
 
 	template<typename CharacterType>
-	static void ConvertDateToStringImplementation(Date date, Stream<CharacterType>& characters, size_t format_flags) {
+	static void ConvertDateToStringImplementation(Date date, Stream<CharacterType>& characters, ECS_FORMAT_DATE_FLAGS format_flags) {
 		auto flag = [&](size_t integer) {
 			CharacterType temp[256];
 			Stream<CharacterType> temp_stream = Stream<CharacterType>(temp, 0);
@@ -944,16 +944,16 @@ namespace ECSEngine {
 			characters.AddStream(temp_stream);
 		};
 
-		CharacterType colon_or_dash = (format_flags & ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON) != 0 ? Character<CharacterType>('-') : Character<CharacterType>(':');
+		CharacterType colon_or_dash = (format_flags & ECS_FORMAT_DATE_COLON_INSTEAD_OF_DASH) == 0 ? Character<CharacterType>('-') : Character<CharacterType>(':');
 
 		bool has_hour = false;
-		if (HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_HOUR)) {
+		if (HasFlag(format_flags, ECS_FORMAT_DATE_HOUR)) {
 			flag(date.hour);
 			has_hour = true;
 		}
 
 		bool has_minutes = false;
-		if (HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_MINUTES)) {
+		if (HasFlag(format_flags, ECS_FORMAT_DATE_MINUTES)) {
 			if (has_hour) {
 				characters.Add(colon_or_dash);
 			}
@@ -962,7 +962,7 @@ namespace ECSEngine {
 		}
 
 		bool has_seconds = false;
-		if (HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_SECONDS)) {
+		if (HasFlag(format_flags, ECS_FORMAT_DATE_SECONDS)) {
 			if (has_minutes || has_hour) {
 				characters.Add(colon_or_dash);
 			}
@@ -971,7 +971,7 @@ namespace ECSEngine {
 		}
 
 		bool has_milliseconds = false;
-		if (HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_MILLISECONDS)) {
+		if (HasFlag(format_flags, ECS_FORMAT_DATE_MILLISECONDS)) {
 			if (has_hour || has_minutes || has_seconds) {
 				characters.Add(colon_or_dash);
 			}
@@ -983,7 +983,7 @@ namespace ECSEngine {
 		bool has_space_been_written = false;
 
 		bool has_day = false;
-		if (HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_DAY)) {
+		if (HasFlag(format_flags, ECS_FORMAT_DATE_DAY)) {
 			if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
 				characters.Add(Character<CharacterType>(' '));
 				has_space_been_written = true;
@@ -993,7 +993,7 @@ namespace ECSEngine {
 		}
 
 		bool has_month = false;
-		if (HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_MONTH)) {
+		if (HasFlag(format_flags, ECS_FORMAT_DATE_MONTH)) {
 			if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
 				characters.Add(Character<CharacterType>(' '));
 				has_space_been_written = true;
@@ -1005,7 +1005,7 @@ namespace ECSEngine {
 			flag(date.month);
 		}
 
-		if (HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_YEAR)) {
+		if (HasFlag(format_flags, ECS_FORMAT_DATE_YEAR)) {
 			if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
 				characters.Add(Character<CharacterType>(' '));
 				has_space_been_written = true;
@@ -1019,14 +1019,14 @@ namespace ECSEngine {
 		characters[characters.size] = Character<CharacterType>('\0');
 	}
 
-	void ConvertDateToString(Date date, Stream<char>& characters, size_t format_flags)
+	void ConvertDateToString(Date date, Stream<char>& characters, ECS_FORMAT_DATE_FLAGS format_flags)
 	{
 		ConvertDateToStringImplementation(date, characters, format_flags);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	void ConvertDateToString(Date date, CapacityStream<char>& characters, size_t format_flags)
+	void ConvertDateToString(Date date, CapacityStream<char>& characters, ECS_FORMAT_DATE_FLAGS format_flags)
 	{
 		Stream<char> stream(characters);
 		ConvertDateToString(date, stream, format_flags);
@@ -1036,13 +1036,13 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	void ConvertDateToString(Date date, Stream<wchar_t>& characters, size_t format_flags) {
+	void ConvertDateToString(Date date, Stream<wchar_t>& characters, ECS_FORMAT_DATE_FLAGS format_flags) {
 		ConvertDateToStringImplementation(date, characters, format_flags);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	void ConvertDateToString(Date date, CapacityStream<wchar_t>& characters, size_t format_flags) {
+	void ConvertDateToString(Date date, CapacityStream<wchar_t>& characters, ECS_FORMAT_DATE_FLAGS format_flags) {
 		Stream<wchar_t> stream(characters);
 		ConvertDateToString(date, stream, format_flags);
 		characters.size = stream.size;
@@ -1051,8 +1051,25 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	size_t ConvertDateToStringMaxCharacterCount(ECS_FORMAT_DATE_FLAGS format_flags)
+	{
+		size_t count = 0;
+		count += HasFlag(format_flags, ECS_FORMAT_DATE_MILLISECONDS) ? 4 : 0;
+		count += HasFlag(format_flags, ECS_FORMAT_DATE_SECONDS) ? 3 : 0;
+		count += HasFlag(format_flags, ECS_FORMAT_DATE_MINUTES) ? 3 : 0;
+		count += HasFlag(format_flags, ECS_FORMAT_DATE_HOUR) ? 2 : 0;
+		count += HasFlag(format_flags, ECS_FORMAT_DATE_DAY) ? 3 : 0;
+		count += HasFlag(format_flags, ECS_FORMAT_DATE_MONTH) ? 3 : 0;
+		count += HasFlag(format_flags, ECS_FORMAT_DATE_YEAR) ? 5 : 0;
+
+		count += 3;
+		return count;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	template<typename CharacterType>
-	static Date ConvertStringToDateImplementation(Stream<CharacterType> characters, size_t format_flags) {
+	static Date ConvertStringToDateImplementation(Stream<CharacterType> characters, ECS_FORMAT_DATE_FLAGS format_flags) {
 		Date date;
 
 		if (characters[0] == Character<CharacterType>('[')) {
@@ -1120,37 +1137,37 @@ namespace ECSEngine {
 
 		ECS_ASSERT(number_count > 0);
 		unsigned char numbers_parsed = 0;
-		if (format_flags & ECS_LOCAL_TIME_FORMAT_HOUR) {
+		if (format_flags & ECS_FORMAT_DATE_HOUR) {
 			date.hour = numbers[0];
 			numbers_parsed++;
 		}
-		if (format_flags & ECS_LOCAL_TIME_FORMAT_MINUTES) {
+		if (format_flags & ECS_FORMAT_DATE_MINUTES) {
 			ECS_ASSERT(number_count > numbers_parsed);
 			date.minute = numbers[numbers_parsed];
 			numbers_parsed++;
 		}
-		if (format_flags & ECS_LOCAL_TIME_FORMAT_SECONDS) {
+		if (format_flags & ECS_FORMAT_DATE_SECONDS) {
 			ECS_ASSERT(number_count > numbers_parsed);
 			date.seconds = numbers[numbers_parsed];
 			numbers_parsed++;
 		}
-		if (format_flags & ECS_LOCAL_TIME_FORMAT_MILLISECONDS) {
+		if (format_flags & ECS_FORMAT_DATE_MILLISECONDS) {
 			ECS_ASSERT(number_count > numbers_parsed);
 			date.milliseconds = numbers[numbers_parsed];
 			numbers_parsed++;
 		}
 
-		if (format_flags & ECS_LOCAL_TIME_FORMAT_DAY) {
+		if (format_flags & ECS_FORMAT_DATE_DAY) {
 			ECS_ASSERT(number_count > numbers_parsed);
 			date.day = numbers[numbers_parsed];
 			numbers_parsed++;
 		}
-		if (format_flags & ECS_LOCAL_TIME_FORMAT_MONTH) {
+		if (format_flags & ECS_FORMAT_DATE_MONTH) {
 			ECS_ASSERT(number_count > numbers_parsed);
 			date.month = numbers[numbers_parsed];
 			numbers_parsed++;
 		}
-		if (format_flags & ECS_LOCAL_TIME_FORMAT_YEAR) {
+		if (format_flags & ECS_FORMAT_DATE_YEAR) {
 			ECS_ASSERT(number_count > numbers_parsed);
 			date.year = numbers[numbers_parsed];
 			numbers_parsed++;
@@ -1159,14 +1176,14 @@ namespace ECSEngine {
 		return date;
 	}
 
-	Date ConvertStringToDate(Stream<char> characters, size_t format_flags)
+	Date ConvertStringToDate(Stream<char> characters, ECS_FORMAT_DATE_FLAGS format_flags)
 	{
 		return ConvertStringToDateImplementation(characters, format_flags);
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	Date ConvertStringToDate(Stream<wchar_t> characters, size_t format_flags)
+	Date ConvertStringToDate(Stream<wchar_t> characters, ECS_FORMAT_DATE_FLAGS format_flags)
 	{
 		return ConvertStringToDateImplementation(characters, format_flags);
 	}

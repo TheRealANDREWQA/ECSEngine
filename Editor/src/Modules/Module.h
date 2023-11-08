@@ -276,6 +276,10 @@ void ResetModules(EditorState* editor_state);
 
 void SetModuleLoadStatus(EditorState* editor_state, unsigned int module_index, bool is_failed, EDITOR_MODULE_CONFIGURATION configuration);
 
+// This should be called once when the project is loaded since all the modules and their .pdbs
+// Are located in the same location
+void SetCrashHandlerPDBPaths(const EditorState* editor_state);
+
 // Returns whether or not the module has been modified; it updates both the solution and the library last write times
 // If the configuration is defaulted, it will update all configurations for the library. In this case, it will return true
 // if any of the configurations was updated

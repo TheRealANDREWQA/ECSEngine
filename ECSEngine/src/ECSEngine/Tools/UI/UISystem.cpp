@@ -151,13 +151,8 @@ namespace ECSEngine {
 
 			total_memory += sizeof(UIActionHandler) * ECS_TOOLS_UI_SYSTEM_HANDLER_FRAME_COUNT;
 
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-			total_memory += sizeof(UIRenderThreadResources) * m_task_manager->GetThreadCount();
-			total_memory += m_descriptors.misc.thread_temp_memory * m_task_manager->GetThreadCount();
-#else
 			// 2 times the thread memory for the system allocator and for the normal/late allocator
-			total_memory += sizeof(UIRenderThreadResources) + m_descriptors.misc.thread_temp_memory * 2;
-#endif
+			total_memory += m_descriptors.misc.thread_temp_memory * 2;
 
 			// material memory
 			total_memory += sizeof(VertexShader) * m_descriptors.materials.count;
@@ -199,24 +194,11 @@ namespace ECSEngine {
 			m_font_character_uvs = (float2*)buffer;
 			buffer += sizeof(float2) * m_descriptors.font.symbol_count * 2;
 
-			buffer = AlignPointer(buffer, alignof(UIRenderThreadResources));
-			m_resources.thread_resources.buffer = (UIRenderThreadResources*)buffer;
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-			m_resources.thread_resources.size = m_task_manager->GetThreadCount();
-			buffer += sizeof(UIRenderThreadResources) * m_task_manager->GetThreadCount();
-#else
-			m_resources.thread_resources.size = 1;
-			buffer += sizeof(UIRenderThreadResources);
-#endif
+			m_resources.temp_allocator = LinearAllocator((void*)buffer, m_descriptors.misc.thread_temp_memory);
+			buffer += m_descriptors.misc.thread_temp_memory;
 
-			for (size_t index = 0; index < m_resources.thread_resources.size; index++) {
-				m_resources.thread_resources[index].deferred_context = m_graphics->CreateDeferredContext();
-				m_resources.thread_resources[index].temp_allocator = LinearAllocator((void*)buffer, m_descriptors.misc.thread_temp_memory);
-				buffer += m_descriptors.misc.thread_temp_memory;
-
-				m_resources.thread_resources[index].system_temp_allocator = LinearAllocator((void*)buffer, m_descriptors.misc.thread_temp_memory);
-				buffer += m_descriptors.misc.thread_temp_memory;
-			}
+			m_resources.system_temp_allocator = LinearAllocator((void*)buffer, m_descriptors.misc.thread_temp_memory);
+			buffer += m_descriptors.misc.thread_temp_memory;
 
 			buffer = AlignPointer(buffer, alignof(VertexShader));
 			m_resources.vertex_shaders.InitializeFromBuffer(buffer, 0, m_descriptors.materials.count);
@@ -301,9 +283,9 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void* UISystem::AllocateFromHandlerAllocator(unsigned int thread_id, ECS_UI_DRAW_PHASE phase, size_t size)
+		void* UISystem::AllocateFromHandlerAllocator(ECS_UI_DRAW_PHASE phase, size_t size)
 		{
-			return TemporaryAllocator(thread_id, phase)->Allocate(size);
+			return TemporaryAllocator(phase)->Allocate(size);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -363,7 +345,6 @@ namespace ECSEngine {
 		void UISystem::AddDefaultHoverable(const UISystemDefaultHoverableData& data)
 		{
 			AddHoverableToDockspaceRegion(
-				data.thread_id,
 				data.dockspace,
 				data.border_index,
 				data.position,
@@ -385,7 +366,6 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddHoverableToDockspaceRegion(
-			unsigned int thread_id,
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			float2 position,
@@ -395,7 +375,7 @@ namespace ECSEngine {
 		)
 		{
 			AddHoverableToDockspaceRegion(
-				TemporaryAllocator(thread_id, handler.phase),
+				TemporaryAllocator(handler.phase),
 				dockspace,
 				border_index,
 				position,
@@ -466,16 +446,15 @@ namespace ECSEngine {
 			}
 
 			AddHoverableToDockspaceRegion(
-				data.thread_id,
 				data.dockspace,
 				data.border_index,
 				data.position,
 				data.scale,
-				data.hoverable_handler
+				data.hoverable_handler,
+				data.hoverable_copy_function
 			);
 
 			AddClickableToDockspaceRegion(
-				data.thread_id,
 				data.dockspace,
 				data.border_index,
 				data.position,
@@ -486,7 +465,8 @@ namespace ECSEngine {
 					sizeof(UIDefaultClickableData) + data.hoverable_handler.data_size + data.clickable_handler.data_size,
 					clickable_phase
 				},
-				ECS_MOUSE_LEFT
+				ECS_MOUSE_LEFT,
+				data.clickable_copy_function
 			);
 
 			// Manually copy the data into the structure. Offset it such that it remains relocatable
@@ -510,7 +490,6 @@ namespace ECSEngine {
 			clickable_data.dockspace = data.dockspace;
 			clickable_data.position = data.position;
 			clickable_data.scale = data.scale;
-			clickable_data.thread_id = data.thread_id;
 			clickable_data.border_index = data.border_index;
 			clickable_data.disable_system_phase_retarget = data.disable_system_phase_retarget;
 			AddDefaultClickable(clickable_data);
@@ -519,7 +498,6 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddClickableToDockspaceRegion(
-			unsigned int thread_id,
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			float2 position,
@@ -530,7 +508,7 @@ namespace ECSEngine {
 		)
 		{
 			AddClickableToDockspaceRegion(
-				TemporaryAllocator(thread_id, handler.phase),
+				TemporaryAllocator(handler.phase),
 				dockspace,
 				border_index,
 				position,
@@ -609,7 +587,6 @@ namespace ECSEngine {
 			void* second_click_data = data.second_click_handler.data == nullptr ? &click_data : data.second_click_handler.data;
 			ECS_UI_DRAW_PHASE phase = data.first_click_handler.phase > data.second_click_handler.phase ? data.first_click_handler.phase : data.second_click_handler.phase;
 			AddGeneralActionToDockspaceRegion(
-				data.thread_id,
 				data.dockspace,
 				data.border_index,
 				data.position,
@@ -630,7 +607,6 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddGeneralActionToDockspaceRegion(
-			unsigned int thread_id,
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			float2 position,
@@ -640,7 +616,7 @@ namespace ECSEngine {
 		)
 		{
 			AddGeneralActionToDockspaceRegion(
-				TemporaryAllocator(thread_id, handler.phase),
+				TemporaryAllocator(handler.phase),
 				dockspace,
 				border_index,
 				position,
@@ -695,7 +671,6 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddHandlerToDockspaceRegionAtIndex(
-			unsigned int thread_id,
 			UIHandler* handler,
 			float2 position,
 			float2 scale,
@@ -704,7 +679,7 @@ namespace ECSEngine {
 			unsigned int add_index
 		)
 		{
-			LinearAllocator* temp_allocator = TemporaryAllocator(thread_id, action_handler.phase);
+			LinearAllocator* temp_allocator = TemporaryAllocator(action_handler.phase);
 			if (action_handler.data_size > 0) {
 				action_handler.data = AllocateHandlerMemory(temp_allocator, action_handler.data_size, 8, action_handler.data);
 			}
@@ -734,9 +709,9 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::AddWindowSnapshotRunnable(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, UIDockspaceBorderDrawSnapshotRunnable runnable)
+		void UISystem::AddWindowSnapshotRunnable(UIDockspace* dockspace, unsigned int border_index, UIDockspaceBorderDrawSnapshotRunnable runnable)
 		{
-			runnable.data = CopyNonZero(TemporaryAllocator(thread_id, ECS_UI_DRAW_NORMAL), runnable.data, runnable.data_size);
+			runnable.data = CopyNonZero(TemporaryAllocator(ECS_UI_DRAW_NORMAL), runnable.data, runnable.data_size);
 			dockspace->borders[border_index].snapshot_runnables.Add(runnable);
 		}
 
@@ -750,8 +725,8 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void* UISystem::AllocateHandlerMemory(unsigned int thread_id, size_t size, size_t alignment, const void* memory_to_copy) {
-			return AllocateHandlerMemory(&m_resources.thread_resources[thread_id].temp_allocator, size, alignment, memory_to_copy);
+		void* UISystem::AllocateHandlerMemory(size_t size, size_t alignment, const void* memory_to_copy) {
+			return AllocateHandlerMemory(&m_resources.temp_allocator, size, alignment, memory_to_copy);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1854,8 +1829,8 @@ namespace ECSEngine {
 			BorderHover initial_hover;
 			initial_hover.value = 0;
 
-			float2 border_position = GetOuterDockspaceBorderPosition(&dockspace_stream[dockspace_index], ECS_UI_BORDER_TYPE::ECS_UI_BORDER_TOP);
-			float2 border_scale = GetOuterDockspaceBorderScale(&dockspace_stream[dockspace_index], ECS_UI_BORDER_TYPE::ECS_UI_BORDER_TOP);
+			float2 border_position = GetOuterDockspaceBorderPosition(&dockspace_stream[dockspace_index], ECS_UI_BORDER_TOP);
+			float2 border_scale = GetOuterDockspaceBorderScale(&dockspace_stream[dockspace_index], ECS_UI_BORDER_TOP);
 
 			// top border
 			if (IsPointInRectangle(
@@ -1868,8 +1843,8 @@ namespace ECSEngine {
 
 			// bottom border; must flip scale
 			else {
-				border_position = GetOuterDockspaceBorderPosition(&dockspace_stream[dockspace_index], ECS_UI_BORDER_TYPE::ECS_UI_BORDER_BOTTOM);
-				border_scale = GetOuterDockspaceBorderScale(&dockspace_stream[dockspace_index], ECS_UI_BORDER_TYPE::ECS_UI_BORDER_BOTTOM);
+				border_position = GetOuterDockspaceBorderPosition(&dockspace_stream[dockspace_index], ECS_UI_BORDER_BOTTOM);
+				border_scale = GetOuterDockspaceBorderScale(&dockspace_stream[dockspace_index], ECS_UI_BORDER_BOTTOM);
 
 				if (IsPointInRectangle(
 					point_position,
@@ -1879,8 +1854,8 @@ namespace ECSEngine {
 				}
 			}
 
-			border_position = GetOuterDockspaceBorderPosition(&dockspace_stream[dockspace_index], ECS_UI_BORDER_TYPE::ECS_UI_BORDER_LEFT);
-			border_scale = GetOuterDockspaceBorderScale(&dockspace_stream[dockspace_index], ECS_UI_BORDER_TYPE::ECS_UI_BORDER_LEFT);
+			border_position = GetOuterDockspaceBorderPosition(&dockspace_stream[dockspace_index], ECS_UI_BORDER_LEFT);
+			border_scale = GetOuterDockspaceBorderScale(&dockspace_stream[dockspace_index], ECS_UI_BORDER_LEFT);
 			// left border
 			if (IsPointInRectangle(
 				point_position,
@@ -1892,8 +1867,8 @@ namespace ECSEngine {
 			}
 
 			else {
-				border_position = GetOuterDockspaceBorderPosition(&dockspace_stream[dockspace_index], ECS_UI_BORDER_TYPE::ECS_UI_BORDER_RIGHT);
-				border_scale = GetOuterDockspaceBorderScale(&dockspace_stream[dockspace_index], ECS_UI_BORDER_TYPE::ECS_UI_BORDER_RIGHT);
+				border_position = GetOuterDockspaceBorderPosition(&dockspace_stream[dockspace_index], ECS_UI_BORDER_RIGHT);
+				border_scale = GetOuterDockspaceBorderScale(&dockspace_stream[dockspace_index], ECS_UI_BORDER_RIGHT);
 				// right border
 				if (IsPointInRectangle(
 					point_position,
@@ -2338,7 +2313,7 @@ namespace ECSEngine {
 				m_resources.texture_semaphore.Enter();
 
 				ProcessTextureData data;
-				data.filename = StringCopy(GetAllocatorPolymorphic(&m_resources.thread_resources[0].temp_allocator), filename).buffer;
+				data.filename = StringCopy(GetAllocatorPolymorphic(&m_resources.temp_allocator), filename).buffer;
 				data.system = this;
 				data.texture = sprite_texture;
 
@@ -2601,6 +2576,11 @@ namespace ECSEngine {
 			void* data[2];
 			UIHandlerCopyBuffers copy_functions[2];
 			unsigned int data_size[2];
+			ECS_UI_DRAW_PHASE draw_phase[2];
+			ECS_UI_DRAW_PHASE current_phase;
+			bool is_hoverable;
+			ECS_MOUSE_BUTTON is_clickable;
+			bool is_general;
 		};
 
 		static void ComposeCopyBuffersAction(void* _data, AllocatorPolymorphic allocator) {
@@ -2618,22 +2598,51 @@ namespace ECSEngine {
 
 			ComposedActionData* data = (ComposedActionData*)_data;
 			void* written_data_pointer = OffsetPointer(data, sizeof(*data));
-			if (data->data_size[0] == 0) {
-				action_data->data = data->data[0];
+			if (data->current_phase == data->draw_phase[0]) {
+				if (data->data_size[0] == 0) {
+					action_data->data = data->data[0];
+				}
+				else {
+					action_data->data = written_data_pointer;
+					written_data_pointer = OffsetPointer(written_data_pointer, data->data_size[0]);
+				}
+				data->actions[0](action_data);
 			}
 			else {
-				action_data->data = written_data_pointer;
 				written_data_pointer = OffsetPointer(written_data_pointer, data->data_size[0]);
 			}
-			data->actions[0](action_data);
 
-			if (data->data_size[1] == 0) {
-				action_data->data = data->data[1];
+			if (data->current_phase == data->draw_phase[1]) {
+				if (data->data_size[1] == 0) {
+					action_data->data = data->data[1];
+				}
+				else {
+					action_data->data = written_data_pointer;
+				}
+				data->actions[1](action_data);
 			}
-			else {
-				action_data->data = written_data_pointer;
+
+			if (data->draw_phase[0] != data->draw_phase[1]) {
+				// We need to change the handler phase such that it gets called correctly the next time
+				if (data->current_phase == data->draw_phase[0]) {
+					data->current_phase = data->draw_phase[1];
+				}
+				else {
+					data->current_phase = data->draw_phase[0];
+				}
+				if (data->is_hoverable) {
+					system->m_focused_window_data.hoverable_handler.phase = data->current_phase;
+				}
+				else if (data->is_clickable != ECS_MOUSE_BUTTON_COUNT) {
+					system->m_focused_window_data.clickable_handler[data->is_clickable].phase = data->current_phase;
+				}
+				else if (data->is_general) {
+					system->m_focused_window_data.general_handler.phase = data->current_phase;
+				}
+				else {
+					ECS_ASSERT(false);
+				}
 			}
-			data->actions[1](action_data);
 		}
 
 		static void ComposeAction(
@@ -2652,8 +2661,10 @@ namespace ECSEngine {
 					&& dockspace_handler->scale_x[index] == scale.x && dockspace_handler->scale_y[index] == scale.y) {
 					size_t composed_action_storage[1024];
 					ComposedActionData* composed_data = (ComposedActionData*)composed_action_storage;
-					// At the moment, use the phase of the given composed action
-					ECS_UI_DRAW_PHASE aggregate_phase = handler.phase;
+					// Check to see if we need to change the temporary allocator
+					if (handler.phase != ECS_UI_DRAW_SYSTEM && dockspace_handler->action[index].phase == ECS_UI_DRAW_SYSTEM) {
+						temporary_allocator = system->TemporaryAllocator(ECS_UI_DRAW_SYSTEM);
+					}
 
 					uintptr_t action_write_data = (uintptr_t)OffsetPointer(composed_data, sizeof(*composed_data));
 					unsigned int composed_write_size = sizeof(*composed_data);
@@ -2661,8 +2672,9 @@ namespace ECSEngine {
 						composed_data->actions[write_index] = dockspace_handler->action[index].action;
 						composed_data->copy_functions[write_index] = dockspace_handler->copy_function[index];
 						composed_data->data[write_index] = dockspace_handler->action[index].data;
-						unsigned int previous_write_size = dockspace_handler->action[index].data_size > 0;
-						if (previous_write_size) {
+						composed_data->draw_phase[write_index] = dockspace_handler->action[index].phase;
+						unsigned int previous_write_size = dockspace_handler->action[index].data_size;
+						if (previous_write_size > 0) {
 							composed_data->data[write_index] = (void*)action_write_data;
 							memcpy((void*)action_write_data, dockspace_handler->action[index].data, previous_write_size);
 							action_write_data += previous_write_size;
@@ -2674,13 +2686,15 @@ namespace ECSEngine {
 						composed_data->actions[write_index] = handler.action;
 						composed_data->copy_functions[write_index] = copy_function;
 						composed_data->data[write_index] = handler.data;
-						if (handler.data_size > 0) {
+						unsigned write_size = handler.data_size;
+						if (write_size > 0) {
 							composed_data->data[write_index] = (void*)action_write_data;
-							memcpy((void*)action_write_data, handler.data, handler.data_size);
-							action_write_data += handler.data_size;
-							composed_write_size += handler.data_size;
+							memcpy((void*)action_write_data, handler.data, write_size);
+							action_write_data += write_size;
+							composed_write_size += write_size;
 						}
-						composed_data->data_size[write_index] = handler.data_size;
+						composed_data->data_size[write_index] = write_size;
+						composed_data->draw_phase[write_index] = handler.phase;
 					};
 
 					if (call_previous_before) {
@@ -2691,12 +2705,13 @@ namespace ECSEngine {
 						set_current(0);
 						set_previous(1);
 					}
+					composed_data->current_phase = composed_data->draw_phase[0];
 
 					ECS_ASSERT(action_write_data - (uintptr_t)composed_data <= sizeof(composed_action_storage));
 					void* temporary_allocation = temporary_allocator->Allocate(composed_write_size);
 					memcpy(temporary_allocation, composed_data, composed_write_size);
 					composed_data = (ComposedActionData*)temporary_allocation;
-					dockspace_handler->action[index] = { ComposedAction, composed_data, composed_write_size, aggregate_phase };
+					dockspace_handler->action[index] = { ComposedAction, composed_data, composed_write_size, composed_data->draw_phase[0] };
 					dockspace_handler->copy_function[index] = ComposeCopyBuffersAction;
 					break;
 				}
@@ -2709,7 +2724,6 @@ namespace ECSEngine {
 		}
 
 		void UISystem::ComposeHoverable(
-			unsigned int thread_id, 
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
 			float2 position, 
@@ -2720,7 +2734,7 @@ namespace ECSEngine {
 		)
 		{
 			ComposeHoverable(
-				TemporaryAllocator(thread_id, handler.phase),
+				TemporaryAllocator(handler.phase),
 				dockspace,
 				border_index,
 				position,
@@ -2749,7 +2763,6 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::ComposeClickable(
-			unsigned int thread_id, 
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
 			float2 position, 
@@ -2761,7 +2774,7 @@ namespace ECSEngine {
 		)
 		{
 			ComposeClickable(
-				TemporaryAllocator(thread_id, handler.phase),
+				TemporaryAllocator(handler.phase),
 				dockspace,
 				border_index,
 				position,
@@ -2793,7 +2806,6 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::ComposeGeneral(
-			unsigned int thread_id, 
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
 			float2 position, 
@@ -2804,7 +2816,7 @@ namespace ECSEngine {
 		)
 		{
 			ComposeGeneral(
-				TemporaryAllocator(thread_id, handler.phase),
+				TemporaryAllocator(handler.phase),
 				dockspace,
 				border_index,
 				position,
@@ -3515,7 +3527,7 @@ namespace ECSEngine {
 				}
 				m_focused_window_data.additional_hoverable_data = additional_data;
 
-				HandleFocusedWindowCleanupHoverable(mouse_position, 0, additional_data);
+				HandleFocusedWindowCleanupHoverable(mouse_position, additional_data);
 
 				if (additional_data != nullptr) {
 					additional_data = m_focused_window_data.hoverable_handler.data;
@@ -3539,7 +3551,7 @@ namespace ECSEngine {
 
 				if (hoverable_handler->action[hoverable_index].phase == ECS_UI_DRAW_NORMAL) {
 					m_focused_window_data.additional_hoverable_data = additional_data;
-					HandleHoverable(mouse_position, 0, buffers, counts);
+					HandleHoverable(mouse_position, buffers, counts);
 				}
 				return true;
 			}
@@ -3558,7 +3570,6 @@ namespace ECSEngine {
 			unsigned int border_index,
 			DockspaceType type,
 			float2 mouse_position,
-			unsigned int thread_id,
 			unsigned int offset,
 			ECS_MOUSE_BUTTON button_type
 		) {
@@ -3583,7 +3594,7 @@ namespace ECSEngine {
 				if (clickable_handler->action[clickable_index].phase == ECS_UI_DRAW_NORMAL) {
 					m_focused_window_data.buffers = buffers;
 					m_focused_window_data.counts = counts;
-					HandleFocusedWindowClickable(mouse_position, 0, button_type);
+					HandleFocusedWindowClickable(mouse_position, button_type);
 				}
 				return_value = true;
 			}
@@ -3602,7 +3613,6 @@ namespace ECSEngine {
 			unsigned int border_index,
 			DockspaceType type,
 			float2 mouse_position,
-			unsigned int thread_id,
 			unsigned int offset
 		) {
 			if (!m_mouse->m_is_visible) {
@@ -3626,7 +3636,7 @@ namespace ECSEngine {
 				}
 
 				// cleaning up the last action; signaling clean up call by marking the buffers and the counts as nullptr
-				HandleFocusedWindowCleanupGeneral(mouse_position, thread_id, additional_data);
+				HandleFocusedWindowCleanupGeneral(mouse_position, additional_data);
 
 				if (additional_data != nullptr) {
 					additional_data = m_focused_window_data.general_handler.data;
@@ -3649,7 +3659,7 @@ namespace ECSEngine {
 					m_focused_window_data.additional_general_data = additional_data;
 					m_focused_window_data.buffers = buffers;
 					m_focused_window_data.counts = counts;
-					HandleFocusedWindowGeneral(mouse_position, 0);
+					HandleFocusedWindowGeneral(mouse_position);
 				}
 				return true;
 			}
@@ -3794,7 +3804,7 @@ namespace ECSEngine {
 
 			m_execute_events = DetectEvents(mouse_position);
 
-			m_resources.thread_resources[0].system_temp_allocator.Clear();
+			m_resources.system_temp_allocator.Clear();
 
 			Draw(mouse_position, buffers, counts, options);
 
@@ -3802,31 +3812,23 @@ namespace ECSEngine {
 			m_focused_window_data.counts = counts;
 
 			if (m_focused_window_data.hoverable_handler.phase == ECS_UI_DRAW_SYSTEM) {
-				auto phase_copy = m_resources.thread_resources[0].phase;
-				HandleHoverable(mouse_position, 0, buffers, counts);
-				m_resources.thread_resources[0].phase = phase_copy;
+				HandleHoverable(mouse_position, buffers, counts);
 				m_frame_pacing = m_frame_pacing < ECS_UI_FRAME_PACING_LOW ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
 			}
 			ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 				if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_SYSTEM) {
 					if (m_mouse->IsDown(button_type)) {
-						auto phase_copy = m_resources.thread_resources[0].phase;
-						HandleFocusedWindowClickable(mouse_position, 0, button_type);
-						m_resources.thread_resources[0].phase = phase_copy;
+						HandleFocusedWindowClickable(mouse_position, button_type);
 					}
 					else if (m_mouse->IsReleased(button_type)) {
-						auto phase_copy = m_resources.thread_resources[0].phase;
-						HandleFocusedWindowClickable(mouse_position, 0, button_type);
+						HandleFocusedWindowClickable(mouse_position, button_type);
 						m_focused_window_data.ResetClickableHandler(button_type);
-						m_resources.thread_resources[0].phase = phase_copy;
 					}
 					m_frame_pacing = m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 				}
 				});
 			if (m_focused_window_data.general_handler.phase == ECS_UI_DRAW_SYSTEM) {
-				auto phase_copy = m_resources.thread_resources[0].phase;
-				HandleFocusedWindowGeneral(mouse_position, 0);
-				m_resources.thread_resources[0].phase = phase_copy;
+				HandleFocusedWindowGeneral(mouse_position);
 				m_frame_pacing = m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 			}
 
@@ -4086,7 +4088,6 @@ namespace ECSEngine {
 			void* buffers[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES];
 
 			border.draw_resources.Map(buffers, m_graphics->GetContext());
-			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_NORMAL;
 
 			bool has_snapshot_mode = data->snapshot_mode;
 			bool is_retained = false;
@@ -4154,7 +4155,6 @@ namespace ECSEngine {
 
 				if (!data->is_fixed_default_when_border_zero) {
 					DrawDockspaceRegionBackground(
-						data->thread_id,
 						data->dockspace,
 						data->border_index,
 						dockspace_mask,
@@ -4181,7 +4181,6 @@ namespace ECSEngine {
 					drawer_descriptor.counts = vertex_count;
 					drawer_descriptor.dockspace_type = data->type;
 					drawer_descriptor.system = this;
-					drawer_descriptor.thread_id = data->thread_id;
 					drawer_descriptor.window_index = window_index;
 					drawer_descriptor.system_buffers = data->system_buffers;
 					drawer_descriptor.system_counts = data->system_count;
@@ -4195,7 +4194,6 @@ namespace ECSEngine {
 						m_windows[drawer_descriptor.window_index].draw(m_windows[drawer_descriptor.window_index].window_data, &drawer_descriptor, false);
 
 					DrawDockspaceRegionHeader(
-						data->thread_id,
 						data->dockspace,
 						data->border_index,
 						dockspace_mask,
@@ -4259,8 +4257,8 @@ namespace ECSEngine {
 				restore_info.clickable_handlers = { border.clickable_handler, std::size(border.clickable_handler) };
 				restore_info.general_handler = &border.general_handler;
 				restore_info.handler_buffer_allocator = Allocator();
-				restore_info.handler_data_allocator = GetAllocatorPolymorphic(TemporaryAllocator(data->thread_id, ECS_UI_DRAW_NORMAL));
-				restore_info.handler_system_data_allocator = GetAllocatorPolymorphic(TemporaryAllocator(data->thread_id, ECS_UI_DRAW_SYSTEM));
+				restore_info.handler_data_allocator = GetAllocatorPolymorphic(TemporaryAllocator(ECS_UI_DRAW_NORMAL));
+				restore_info.handler_system_data_allocator = GetAllocatorPolymorphic(TemporaryAllocator(ECS_UI_DRAW_SYSTEM));
 				restore_info.runnable_data = GetFilledActionData(window_index);
 
 				bool should_redraw = border.snapshot.Restore(&restore_info);
@@ -4350,7 +4348,6 @@ namespace ECSEngine {
 							data->border_index,
 							data->type,
 							data->mouse_position,
-							data->thread_id,
 							0,
 							button_type
 						);
@@ -4363,7 +4360,6 @@ namespace ECSEngine {
 								data->border_index,
 								data->type,
 								data->mouse_position,
-								data->thread_id,
 								0
 							);
 						}
@@ -4393,16 +4389,16 @@ namespace ECSEngine {
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 					if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_NORMAL) {
 						if (m_mouse->IsHeld(button_type)) {
-							HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
+							HandleFocusedWindowClickable(data->mouse_position, button_type);
 						}
 						else if (m_mouse->IsReleased(button_type)) {
-							HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
+							HandleFocusedWindowClickable(data->mouse_position, button_type);
 							m_focused_window_data.ResetClickableHandler(button_type);
 						}
 					}
 				});
 				if (m_focused_window_data.general_handler.phase == ECS_UI_DRAW_NORMAL && !m_mouse->IsPressed(ECS_MOUSE_LEFT)) {
-					HandleFocusedWindowGeneral(data->mouse_position, data->thread_id);
+					HandleFocusedWindowGeneral(data->mouse_position);
 				}
 			}
 
@@ -4467,7 +4463,7 @@ namespace ECSEngine {
 				);
 
 			if (is_hoverable && m_focused_window_data.hoverable_handler.phase == ECS_UI_DRAW_LATE) {
-				HandleHoverable(data->mouse_position, data->thread_id, buffers + ECS_TOOLS_UI_MATERIALS, vertex_count + ECS_TOOLS_UI_MATERIALS);
+				HandleHoverable(data->mouse_position, buffers + ECS_TOOLS_UI_MATERIALS, vertex_count + ECS_TOOLS_UI_MATERIALS);
 			}
 			if (active_region) {
 				m_focused_window_data.buffers = buffers + ECS_TOOLS_UI_MATERIALS;
@@ -4477,29 +4473,28 @@ namespace ECSEngine {
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
 					if (m_focused_window_data.clickable_handler[button_type].phase == ECS_UI_DRAW_LATE) {
 						if (m_mouse->IsDown(button_type)) {
-							HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
+							HandleFocusedWindowClickable(data->mouse_position, button_type);
 						}
 						else if (m_mouse->IsReleased(button_type)) {
-							HandleFocusedWindowClickable(data->mouse_position, data->thread_id, button_type);
+							HandleFocusedWindowClickable(data->mouse_position, button_type);
 							m_focused_window_data.ResetClickableHandler(button_type);
 						}
 					}
 				});
 				if (m_focused_window_data.general_handler.phase == ECS_UI_DRAW_LATE && !m_mouse->IsPressed(ECS_MOUSE_LEFT)) {
-					HandleFocusedWindowGeneral(data->mouse_position, data->thread_id);
+					HandleFocusedWindowGeneral(data->mouse_position);
 				}
 			}
 
 			border.draw_resources.UnmapLate(m_graphics->GetContext());
 
-			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_LATE;
 			DrawPass<ECS_UI_DRAW_LATE>(
 				border.draw_resources,
 				vertex_count,
 				region_position,
 				region_scale,
 				m_graphics->GetContext()
-				);
+			);
 
 			//if (data->snapshot_mode) {
 			//	// We need to draw this texture into the main one
@@ -4574,7 +4569,6 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DrawDockspaceRegionHeader(
-			unsigned int thread_id,
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			float offset_mask,
@@ -4611,7 +4605,6 @@ namespace ECSEngine {
 			collapse_triangle_data.dockspace = dockspace;
 			collapse_triangle_data.position = collapse_triangle_hover_box_position;
 			collapse_triangle_data.scale = expanded_collapse_triangle_scale;
-			collapse_triangle_data.thread_id = thread_id;
 			collapse_triangle_data.hoverable_handler.action = DefaultHoverableAction;
 			collapse_triangle_data.hoverable_handler.data_size = sizeof(collapse_triangle_hoverable_data);
 			collapse_triangle_data.hoverable_handler.data = &collapse_triangle_hoverable_data;
@@ -4641,7 +4634,6 @@ namespace ECSEngine {
 					vertex_count[ECS_TOOLS_UI_SOLID_COLOR]
 				);
 				AddHoverableToDockspaceRegion(
-					thread_id,
 					dockspace,
 					border_index,
 					dockspace_region_position,
@@ -4649,7 +4641,6 @@ namespace ECSEngine {
 					{ SkipAction, nullptr, 0 }
 				);
 				AddClickableToDockspaceRegion(
-					thread_id,
 					dockspace,
 					border_index,
 					dockspace_region_position,
@@ -4658,7 +4649,6 @@ namespace ECSEngine {
 					ECS_MOUSE_LEFT
 				);
 				AddGeneralActionToDockspaceRegion(
-					thread_id,
 					dockspace,
 					border_index,
 					dockspace_region_position,
@@ -4697,14 +4687,12 @@ namespace ECSEngine {
 					region_header_data.dockspace_to_drag = nullptr;
 					hoverable_data.border_index = border_index;
 					hoverable_data.dockspace = dockspace;
-					hoverable_data.thread_id = thread_id;
 					hoverable_data.data.colors[0] = region_header_color;
 					hoverable_data.position = header_position;
 					hoverable_data.scale = header_scale;
 					hoverable_data.phase = ECS_UI_DRAW_LATE;
 					AddDefaultHoverable(hoverable_data);
 					AddClickableToDockspaceRegion(
-						thread_id,
 						dockspace,
 						border_index,
 						header_position,
@@ -4754,13 +4742,12 @@ namespace ECSEngine {
 						clickable_data.dockspace = dockspace;
 						clickable_data.position = expanded_position;
 						clickable_data.scale = expanded_close_x_scale;
-						clickable_data.thread_id = thread_id;
 						clickable_data.hoverable_handler.action = CloseXBorderHoverableAction;
 						clickable_data.hoverable_handler.data = &x_hoverable_data;
 						clickable_data.hoverable_handler.data_size = sizeof(x_hoverable_data);
 						clickable_data.hoverable_handler.phase = ECS_UI_DRAW_LATE;
 						AddDefaultClickable(clickable_data);
-						AddHoverableToDockspaceRegion(thread_id, dockspace, border_index, expanded_position, expanded_close_x_scale, { CloseXBorderHoverableAction, &x_hoverable_data, sizeof(x_hoverable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE });
+						AddHoverableToDockspaceRegion(dockspace, border_index, expanded_position, expanded_close_x_scale, { CloseXBorderHoverableAction, &x_hoverable_data, sizeof(x_hoverable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE });
 					}
 				}
 			}
@@ -4803,7 +4790,6 @@ namespace ECSEngine {
 				clickable_data.dockspace = dockspace;
 				clickable_data.position = expanded_position;
 				clickable_data.scale = expanded_close_x_scale;
-				clickable_data.thread_id = thread_id;
 				clickable_data.hoverable_handler.phase = ECS_UI_DRAW_LATE;
 				clickable_data.hoverable_handler.action = CloseXBorderHoverableAction;
 				clickable_data.hoverable_handler.data = &close_x_hoverable_data;
@@ -4816,7 +4802,6 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DrawDockspaceRegionBackground(
-			unsigned int thread_id,
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			float offset_mask,
@@ -4841,7 +4826,6 @@ namespace ECSEngine {
 			drag_dockspace_data.floating_dockspace = nullptr;
 			float normalized_margin = NormalizeHorizontalToWindowDimensions(m_descriptors.dockspaces.border_margin);
 			AddClickableToDockspaceRegion(
-				thread_id,
 				dockspace,
 				border_index,
 				/*{
@@ -7090,7 +7074,6 @@ namespace ECSEngine {
 			descriptor.system = this;
 			descriptor.system_buffers = nullptr;
 			descriptor.system_counts = nullptr;
-			descriptor.thread_id = 0;
 			descriptor.window_index = window_index;
 			descriptor.export_scale = nullptr;
 			descriptor.do_not_initialize_viewport_sliders = false;
@@ -7260,7 +7243,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::HandleHoverable(float2 mouse_position, unsigned int thread_id, void** buffers, size_t* counts)
+		void UISystem::HandleHoverable(float2 mouse_position, void** buffers, size_t* counts)
 		{
 			ActionData action_data;
 			action_data.system = this;
@@ -7277,7 +7260,6 @@ namespace ECSEngine {
 			action_data.additional_data = m_focused_window_data.additional_hoverable_data;
 			action_data.redraw_window = false;
 
-			m_resources.thread_resources[thread_id].phase = m_focused_window_data.hoverable_handler.phase;
 			bool executed = m_focused_window_data.ExecuteHoverableHandler(&action_data);
 			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_LOW) ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
 
@@ -7289,7 +7271,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id, ECS_MOUSE_BUTTON button_type) {
+		void UISystem::HandleFocusedWindowClickable(float2 mouse_position, ECS_MOUSE_BUTTON button_type) {
 			ActionData action_data;
 			action_data.system = this;
 			action_data.dockspace = m_focused_window_data.active_location.dockspace;
@@ -7307,7 +7289,6 @@ namespace ECSEngine {
 				action_data.additional_data = m_focused_window_data.additional_hoverable_data;
 			}
 
-			m_resources.thread_resources[thread_id].phase = m_focused_window_data.clickable_handler[button_type].phase;
 			m_execute_events = !m_focused_window_data.ExecuteClickableHandler(&action_data, button_type);
 			m_frame_pacing = (!m_execute_events && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 
@@ -7318,7 +7299,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::HandleFocusedWindowGeneral(float2 mouse_position, unsigned int thread_id) {
+		void UISystem::HandleFocusedWindowGeneral(float2 mouse_position) {
 			ActionData action_data;
 			action_data.system = this;
 			action_data.dockspace = m_focused_window_data.active_location.dockspace;
@@ -7332,7 +7313,6 @@ namespace ECSEngine {
 			action_data.additional_data = nullptr;
 			action_data.redraw_window = false;
 
-			m_resources.thread_resources[thread_id].phase = m_focused_window_data.general_handler.phase;
 			bool executed = m_focused_window_data.ExecuteGeneralHandler(&action_data);
 			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 
@@ -7345,7 +7325,6 @@ namespace ECSEngine {
 
 		void UISystem::HandleFocusedWindowCleanupGeneral(
 			float2 mouse_position,
-			unsigned int thread_id,
 			void* additional_data
 		)
 		{
@@ -7357,7 +7336,6 @@ namespace ECSEngine {
 				action_data.buffers = nullptr;
 				action_data.counts = nullptr;
 				action_data.data = m_focused_window_data.general_handler.data;
-				action_data.keyboard = m_keyboard;
 				action_data.keyboard = m_keyboard;
 				action_data.mouse = m_mouse;
 				action_data.mouse_position = mouse_position;
@@ -7373,7 +7351,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::HandleFocusedWindowCleanupHoverable(float2 mouse_position, unsigned int thread_id, void* additional_data)
+		void UISystem::HandleFocusedWindowCleanupHoverable(float2 mouse_position, void* additional_data)
 		{
 			if (m_focused_window_data.clean_up_call_hoverable) {
 				ActionData action_data;
@@ -7384,10 +7362,8 @@ namespace ECSEngine {
 				action_data.counts = nullptr;
 				action_data.data = m_focused_window_data.hoverable_handler.data;
 				action_data.keyboard = m_keyboard;
-				action_data.keyboard = m_keyboard;
 				action_data.mouse = m_mouse;
 				action_data.mouse_position = mouse_position;
-				action_data.mouse = m_mouse;
 				action_data.system = this;
 				action_data.type = m_focused_window_data.cleanup_hoverable_location.type;
 				action_data.position = m_focused_window_data.hoverable_transform.position;
@@ -8533,7 +8509,6 @@ namespace ECSEngine {
 			drawer_descriptor.counts = counts;
 			drawer_descriptor.system = this;
 			drawer_descriptor.window_index = index;
-			drawer_descriptor.thread_id = 0;
 			drawer_descriptor.do_not_initialize_viewport_sliders = false;
 			drawer_descriptor.do_not_allocate_buffers = false;
 			drawer_descriptor.export_scale = nullptr;
@@ -9279,17 +9254,6 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::SetSolidColorRenderState(unsigned int thread_id) {
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-			GraphicsContext* context = m_resources.thread_resources[thread_id].deferred_context.Get();
-#else
-			GraphicsContext* context = m_graphics->GetContext();
-#endif
-			SetSolidColorRenderState(context);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		void UISystem::SetSolidColorRenderState(GraphicsContext* context) {
 			BindVertexShader(m_resources.vertex_shaders[ECS_TOOLS_UI_SOLID_COLOR], context);
 			BindPixelShader(m_resources.pixel_shaders[ECS_TOOLS_UI_SOLID_COLOR], context);
@@ -9305,17 +9269,6 @@ namespace ECSEngine {
 
 		void UISystem::SetTextSpriteRenderState() {
 			GraphicsContext* context = m_graphics->GetContext();
-			SetTextSpriteRenderState(m_graphics->GetContext());
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		void UISystem::SetTextSpriteRenderState(unsigned int thread_id) {
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-			GraphicsContext* context = m_resources.thread_resources[thread_id].deferred_context.Get();
-#else
-			GraphicsContext* context = m_graphics->GetContext();
-#endif
 			SetTextSpriteRenderState(m_graphics->GetContext());
 		}
 
@@ -9341,17 +9294,6 @@ namespace ECSEngine {
 
 		void UISystem::SetSpriteRenderState() {
 			GraphicsContext* context = m_graphics->GetContext();
-			SetSpriteRenderState(context);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		void UISystem::SetSpriteRenderState(unsigned int thread_id) {
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-			GraphicsContext* context = m_resources.thread_resources[thread_id].deferred_context.Get();
-#else
-			GraphicsContext* context = m_graphics->GetContext();
-#endif
 			SetSpriteRenderState(context);
 		}
 
@@ -9765,12 +9707,12 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		LinearAllocator* UISystem::TemporaryAllocator(unsigned int thread_id, ECS_UI_DRAW_PHASE phase)
+		LinearAllocator* UISystem::TemporaryAllocator(ECS_UI_DRAW_PHASE phase)
 		{
 			if (phase == ECS_UI_DRAW_SYSTEM) {
-				return &m_resources.thread_resources[thread_id].system_temp_allocator;
+				return &m_resources.system_temp_allocator;
 			}
-			return &m_resources.thread_resources[thread_id].temp_allocator;
+			return &m_resources.temp_allocator;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10173,16 +10115,15 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		UIReservedHandler UISystem::ReserveHoverable(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase)
+		UIReservedHandler UISystem::ReserveHoverable(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase)
 		{
 			UIHandler* handler = &dockspace->borders[border_index].hoverable_handler;
-			return { TemporaryAllocator(thread_id, phase), handler, handler->ReserveOne(GetAllocatorPolymorphic(m_memory)) };
+			return { TemporaryAllocator(phase), handler, handler->ReserveOne(GetAllocatorPolymorphic(m_memory)) };
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		UIReservedHandler UISystem::ReserveClickable(
-			unsigned int thread_id,
 			UIDockspace* dockspace,
 			unsigned int border_index,
 			ECS_UI_DRAW_PHASE phase,
@@ -10190,15 +10131,15 @@ namespace ECSEngine {
 		)
 		{
 			UIHandler* handler = &dockspace->borders[border_index].clickable_handler[button_type];
-			return { TemporaryAllocator(thread_id, phase), handler, handler->ReserveOne(GetAllocatorPolymorphic(m_memory)) };
+			return { TemporaryAllocator(phase), handler, handler->ReserveOne(GetAllocatorPolymorphic(m_memory)) };
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		UIReservedHandler UISystem::ReserveGeneral(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase)
+		UIReservedHandler UISystem::ReserveGeneral(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase)
 		{
 			UIHandler* handler = &dockspace->borders[border_index].general_handler;
-			return { TemporaryAllocator(thread_id, phase), handler, handler->ReserveOne(GetAllocatorPolymorphic(m_memory)) };
+			return { TemporaryAllocator(phase), handler, handler->ReserveOne(GetAllocatorPolymorphic(m_memory)) };
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -11674,7 +11615,8 @@ namespace ECSEngine {
 			hoverable_reservation.Write(
 				data.position,
 				data.scale,
-				data.hoverable_handler
+				data.hoverable_handler,
+				data.hoverable_copy_function
 			);
 
 			clickable_reservation.Write(
@@ -11685,7 +11627,8 @@ namespace ECSEngine {
 					&default_click,
 					(unsigned int)(sizeof(UIDefaultClickableData) + data.hoverable_handler.data_size + data.clickable_handler.data_size),
 					clickable_phase
-				}
+				},
+				data.clickable_copy_function
 			);
 
 			// Manually copy the data into the structure. Offset it such that it remains relocatable
@@ -11714,7 +11657,6 @@ namespace ECSEngine {
 			clickable_data.dockspace = data.dockspace;
 			clickable_data.position = data.position;
 			clickable_data.scale = data.scale;
-			clickable_data.thread_id = data.thread_id;
 			clickable_data.border_index = data.border_index;
 			clickable_data.disable_system_phase_retarget = data.disable_system_phase_retarget;
 			clickable_data.button_type = data.button_type;
@@ -12023,10 +11965,9 @@ namespace ECSEngine {
 
 		void DrawDockspaceRegionThreadTask(unsigned int thread_id, World* world, void* data) {
 			UIDrawDockspaceRegionData* reinterpretation = (UIDrawDockspaceRegionData*)data;
-			reinterpretation->thread_id = thread_id;
 			UISystem* system = (UISystem*)reinterpretation->system;
 
-			system->m_resources.thread_resources[thread_id].temp_allocator.Clear();
+			system->m_resources.temp_allocator.Clear();
 			system->DrawDockspaceRegion(reinterpretation, reinterpretation->active_region_index == reinterpretation->draw_index);
 		}
 
@@ -12037,9 +11978,9 @@ namespace ECSEngine {
 
 			Texture2D old_texture(data->texture->GetResource());
 
-			data->system->m_resources.texture_spinlock.lock();
+			data->system->m_resources.texture_spinlock.Lock();
 			Texture2D new_texture = ResizeTextureWithStaging(data->system->m_graphics, old_texture, 256, 256, ECS_RESIZE_TEXTURE_FILTER_BOX, true);
-			data->system->m_resources.texture_spinlock.unlock();
+			data->system->m_resources.texture_spinlock.Unlock();
 			if (new_texture.tex != nullptr) {
 				// Compress the texture
 				CompressTextureDescriptor compress_descriptor;
@@ -12888,7 +12829,7 @@ namespace ECSEngine {
 
 							float2 region_position = system->GetDockspaceRegionPosition(dockspace, border_index, dockspace_mask);
 							float2 region_scale = system->GetDockspaceRegionScale(dockspace, border_index, dockspace_mask);
-							system->DrawDockspaceRegionHeader(0, dockspace, border_index, dockspace_mask, buffers, counts);
+							system->DrawDockspaceRegionHeader(dockspace, border_index, dockspace_mask, buffers, counts);
 							system->DrawDockspaceRegionBorders(region_position, region_scale, buffers, counts);
 							system->DrawCollapseTriangleHeader(buffers, counts, dockspace, border_index, dockspace_mask, dockspace->borders[border_index].draw_region_header, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM);
 							has_moved = true;
@@ -13234,7 +13175,7 @@ namespace ECSEngine {
 				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 					// cleaning up the last action; signaling clean up call by marking the buffers and the counts as nullptr
 					if (system->m_focused_window_data.general_handler.action != nullptr) {
-						system->HandleFocusedWindowCleanupGeneral({ normalized_mouse_x, normalized_mouse_y }, 0, nullptr);
+						system->HandleFocusedWindowCleanupGeneral({ normalized_mouse_x, normalized_mouse_y }, nullptr);
 						system->m_focused_window_data.ResetGeneralHandler();
 					}
 

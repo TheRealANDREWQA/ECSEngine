@@ -360,6 +360,13 @@ namespace ECSEngine {
 		// Adds wrappers for both dynamic tasks and static tasks such that after a crash
 		// They won't execute those tasks
 		void SetThreadWorldCrashWrappers();
+		
+		// It will go through all static tasks and "nullify" the barrier
+		// Basically, it will set the thread target count to be the one
+		// Necessary for the barrier to let the thread escape from it
+		// (useful for example to make a thread stuck in the wait escape
+		// during a crash)
+		void SignalStaticTasks();
 
 		// Spin waits until someone pushes something into the thread's queue
 		void SpinThread(unsigned int thread_id);
@@ -399,9 +406,18 @@ namespace ECSEngine {
 
 		Stream<ThreadQueue*> m_thread_queue;
 
+		// Make this structure occupy a cache line to avoid any false sharing possibility
+		// There are not a whole lot of padding bytes added, so this is probably worth it
 		struct StaticTask {
 			ThreadTask task;
 			Semaphore barrier;
+			// The lock is used to acquire exclude access to the task to be executed
+			SpinLock single_thread_lock;
+			// The atomic flag is used indicate to the barrier threads when the main
+			// Single thread part finished executing
+			SpinLock single_thread_finished;
+		private:
+			char padding[ECS_CACHE_LINE_SIZE - sizeof(task) - sizeof(barrier) - sizeof(single_thread_lock) - sizeof(single_thread_finished)];
 		};
 
 		ResizableStream<StaticTask> m_tasks;

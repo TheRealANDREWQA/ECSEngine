@@ -183,7 +183,7 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	}
 	
 	float2 action_scale = { transform.scale.x - border_size_horizontal, transform.scale.y };
-	drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { RunProjectAction, editor_state, 0 }, playing_theme_color);
+	drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { RunProjectAction, editor_state, 0 }, nullptr, playing_theme_color);
 	
 	config.flag_count--;
 	transform.position.x += button_scale.x;
@@ -207,7 +207,7 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	drawer.SpriteRectangle(configuration, bar_position, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, paused_accent_color);
 	drawer.SpriteRectangle(configuration, { bar_position.x + bar_scale.x * 2, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, paused_accent_color);
 	if (is_playing) {
-		drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { PauseProjectAction, editor_state, 0 }, paused_theme_color);
+		drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { PauseProjectAction, editor_state, 0 }, nullptr, paused_theme_color);
 		drawer.TextToolTip("Pause", transform.position, transform.scale, &base_tool_tip);
 	}
 
@@ -222,11 +222,37 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	Color frame_color = drawer.color_theme.unavailable_text;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
 		frame_color = EDITOR_GREEN_COLOR;
+		// For some reason in Distribution this fails without this reassignment to action scale
+		// Using OutputDebugString the value seems right but totally unexplicable to me the value
+		// That gets written into the handler is wrong. I don't know what to make of this, for the
+		// moment I'll leave it at this since this was enoguh trouble as it is
+		action_scale = { transform.scale.x - border_size_horizontal, transform.scale.y };
+		
 		drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { StepProjectAction, editor_state, 0 });
 		drawer.TextToolTip("Frame", transform.position, transform.scale, &base_tool_tip);
+
+		auto change_fixed_step = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			EditorState* editor_state = (EditorState*)_data;
+			if (IsPointInRectangle(mouse_position, position, scale) && mouse->IsReleased(ECS_MOUSE_RIGHT)) {
+				if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
+					EditorStateClearFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP);
+				}
+				else {
+					EditorStateSetFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP);
+				}
+			}
+		};
+		drawer.AddClickable(0, transform.position, action_scale, { change_fixed_step, editor_state, 0 }, ECS_MOUSE_RIGHT);
 	}
-	drawer.SpriteRectangle(configuration, triangle_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, frame_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
-	drawer.SpriteRectangle(configuration, { triangle_position.x + scaled_scale.x, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, frame_color);
+
+	Color step_color = frame_color;
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP) && EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
+		step_color = EDITOR_RED_COLOR;
+	}
+	drawer.SpriteRectangle(configuration, triangle_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, step_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
+	drawer.SpriteRectangle(configuration, { triangle_position.x + scaled_scale.x, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, step_color);
 
 #pragma endregion
 }

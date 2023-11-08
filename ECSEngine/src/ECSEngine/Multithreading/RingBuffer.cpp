@@ -26,24 +26,27 @@ namespace ECSEngine {
 	{
 		// TODO: Investigate if there is a way of removing these locks here since
 		// They have a bit of overhead
-		lock.lock();
+		lock.Lock();
 
 		if (size + allocation_size > capacity) {
 			size = 0;
 		}
 
-		lock.unlock();
+		lock.Unlock();
 
 		// The only wait condition is that the size is less than last_in_use
 		// and the size + allocation_size is greater than last_in_use
 		size_t current_last_in_use = last_in_use.load(ECS_RELAXED);
 		while (size < current_last_in_use && size + allocation_size > current_last_in_use) {
+			// At the moment assert that this never happens
+			ECS_ASSERT(false, "Task Manager Dynamic Task Allocator size too small");
+
 			// We need to wait
-			BOOL success = WaitOnAddress(&last_in_use, &current_last_in_use, sizeof(last_in_use), INFINITE);
-			current_last_in_use = last_in_use.load(ECS_RELAXED);
+			//BOOL success = WaitOnAddress(&last_in_use, &current_last_in_use, sizeof(last_in_use), INFINITE);
+			//current_last_in_use = last_in_use.load(ECS_RELAXED);
 		}
 
-		lock.lock();
+		lock.Lock();
 		// Recheck again if the size + the allocation size exceed the capacity
 		if (size + allocation_size > capacity) {
 			size = 0;
@@ -51,7 +54,7 @@ namespace ECSEngine {
 
 		void* allocation = OffsetPointer(buffer, size);
 		size += allocation_size;
-		lock.unlock();
+		lock.Unlock();
 
 		return allocation;
 	}
@@ -72,7 +75,8 @@ namespace ECSEngine {
 		ECS_ASSERT(offset < capacity);
 
 		last_in_use.store(offset + allocation_size, ECS_RELAXED);
-		WakeByAddressAll(&last_in_use);
+		// At the moment we don't use waiting
+		//WakeByAddressAll(&last_in_use);
 	}
 
 	// ------------------------------------------------------------------------------------

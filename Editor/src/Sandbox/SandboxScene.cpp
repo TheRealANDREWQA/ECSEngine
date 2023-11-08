@@ -12,6 +12,18 @@ using namespace ECSEngine;
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+struct ChangeSceneRenderViewportsEventData {
+	unsigned int sandbox_index;
+};
+
+EDITOR_EVENT(ChangeSceneRenderViewportsEvent) {
+	ChangeSceneRenderViewportsEventData* data = (ChangeSceneRenderViewportsEventData*)_data;
+
+	// Trigger a rerender of the viewport
+	RenderSandboxViewports(editor_state, data->sandbox_index);
+	return false;
+}
+
 bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> new_scene)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -34,13 +46,13 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 		sandbox->scene_path.CopyOther(new_scene);
 		sandbox->is_scene_dirty = false;
 
-		// Load the assets
-		LoadSandboxAssets(editor_state, sandbox_index);
+		// Load the assets and trigger a re-render of the viewports
+		ChangeSceneRenderViewportsEventData event_data = { sandbox_index };
+		LoadSandboxAssets(editor_state, sandbox_index, ChangeSceneRenderViewportsEvent, &event_data, sizeof(event_data));
 	}
 
 	// If the load failed, the scene will be reset with an empty value
 	editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
-
 	return success;
 }
 

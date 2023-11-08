@@ -1,18 +1,19 @@
 #include "ecspch.h"
 #include "RuntimeCrashPersistence.h"
+#include "World.h"
 #include "../Resources/Scene.h"
 #include "../Utilities/Console.h"
-#include "World.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
 #include "../Utilities/Reflection/Reflection.h"
+#include "../Utilities/Path.h"
 
 namespace ECSEngine {
 
 	static const wchar_t* FILE_STRINGS[] = {
 		L".scene",
-		L".console",
-		L".stack_trace",
-		L".scheduler",
+		L"console.txt",
+		L"stack_trace.txt",
+		L"scheduler.txt",
 		L".world_descriptor",
 		L".misc0",
 		L".misc1",
@@ -100,19 +101,18 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(char, stack_trace, ECS_KB * 128);
 		const TaskManager* task_manager = world->task_manager;
 		unsigned int thread_count = task_manager->GetThreadCount();
+
+		unsigned int this_thread_id = task_manager->FindThreadID(OS::GetCurrentThreadID());
 		for (unsigned int index = 0; index < thread_count; index++) {
-			OS::ThreadContext thread_context;
-			bool success = OS::CaptureThreadStackContext(task_manager->m_thread_handles[index], &thread_context);
+			stack_trace.AddStreamAssert("Thread ");
+			ConvertIntToChars(stack_trace, index);
+			stack_trace.AddAssert(' ');
+			bool success = OS::GetCallStackFunctionNames(task_manager->m_thread_handles[index], stack_trace);
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(message, "Failed to retrieve thread {#} stack context\n", index);
 				WriteErrorMessage(options, message);
 			}
-			else {
-				stack_trace.AddStreamAssert("Thread ");
-				ConvertIntToChars(stack_trace, index);
-				stack_trace.AddAssert(' ');
-				OS::GetCallStackFunctionNames(&thread_context, stack_trace);
-			}
+			stack_trace.AddAssert('\n');
 		}
 
 		RuntimeCrashPersistenceFilePath(&mutable_directory, ECS_RUNTIME_CRASH_FILE_STACK_TRACE);
@@ -251,6 +251,20 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, mutable_directory, 512);
 		mutable_directory.CopyOther(directory);
 
+		unsigned int final_directory_size = mutable_directory.size;
+		if (options->create_unique_folder_entry) {
+			Date current_date = OS::GetLocalTime();
+			bool is_absolute_path = PathIsAbsolute(mutable_directory);
+			mutable_directory.AddSafe(is_absolute_path ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
+			ConvertDateToString(current_date, mutable_directory, ECS_FORMAT_DATE_ALL);
+			final_directory_size = mutable_directory.size;
+
+			// Create the directory, if we fail, return now
+			if (!CreateFolder(mutable_directory)) {
+				return false;
+			}
+		}
+
 		// Start with the scene file since it's the most important
 		bool success = WriteSceneFile(mutable_directory, world, reflection_manager, save_scene_data, options);
 		if (!success) {
@@ -259,32 +273,33 @@ namespace ECSEngine {
 
 		// Continue with the descriptor file as it is the 2nd most important one
 		if (options->world_descriptor) {
-			mutable_directory.size = directory.size;
+			mutable_directory.size = final_directory_size;
 			success = WriteWorldDescriptorFile(mutable_directory, world, reflection_manager, options);
 			if (!success) {
 				return false;
 			}
 		}
 
+		mutable_directory.size = final_directory_size;
 		success = WriteConsoleFile(mutable_directory, options);
 		if (!success) {
 			return false;
 		}
 
-		mutable_directory.size = directory.size;
+		mutable_directory.size = final_directory_size;
 		success = WriteStackTraceFile(mutable_directory, world, options);
 		if (!success) {
 			return false;
 		}
 		
-		mutable_directory.size = directory.size;
+		mutable_directory.size = final_directory_size;
 		success = WriteSchedulerFile(mutable_directory, world, options);
 		if (!success) {
 			return false;
 		}
 
 		// At last the misc files
-		mutable_directory.size = directory.size;
+		mutable_directory.size = final_directory_size;
 		success = WriteMiscFiles(mutable_directory, options);
 		if (!success) {
 			return false;

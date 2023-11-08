@@ -186,7 +186,12 @@ namespace ECSEngine {
 		// This struct is used to wrapp the largest OS context platform
 		// We do not attempt to let the user do anything with it, just passed
 		// To other OS functions
-		struct ThreadContext {
+		struct ECSENGINE_API ThreadContext {
+			ThreadContext();
+
+			// Sets up anything that is necessary
+			void Initialize();
+
 			char bytes[1300];
 		};
 
@@ -201,12 +206,21 @@ namespace ECSEngine {
 
 		ECSENGINE_API void SetSymbolicLinksPaths(Stream<Stream<wchar_t>> module_paths);
 
+		// Looks at the loaded modules by the process and loads the symbol information
+		// For them such that stack unwinding can recognize the symbols correctly
+		ECSENGINE_API void RefreshModuleSymbols();
+
 		// Assumes that InitializeSymbolicLinksPaths has been called
 		ECSENGINE_API void GetCallStackFunctionNames(CapacityStream<char>& string);
 
 		// Assumes that InitializeSymbolicLinksPaths has been called
 		// The thread should be suspended before getting its context
-		ECSENGINE_API void GetCallStackFunctionNames(ThreadContext* context, CapacityStream<char>& string);
+		ECSENGINE_API void GetCallStackFunctionNames(ThreadContext* context, void* thread_handle, CapacityStream<char>& string);
+
+		// Assumes that InitializeSymbolicLinksPaths has been called
+		// The thread should be suspended before getting its context
+		// Returns true if it managed to get the stack frame, else false
+		ECSENGINE_API bool GetCallStackFunctionNames(void* thread_handle, CapacityStream<char>& string);
 
 		enum ECS_THREAD_PRIORITY : unsigned char {
 			ECS_THREAD_PRIORITY_VERY_LOW,

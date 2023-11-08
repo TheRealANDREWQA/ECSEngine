@@ -140,13 +140,13 @@ function(int32_t); function(uint32_t); function(int64_t); function(uint64_t);
 
 #define ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(type) type(const type& other) = default; type& operator = (const type& other) = default;
 
-#define ECS_ENUM_BITWISE_OPERATIONS(T) inline T operator~ (T a) { return (T)~(int)a; } \
-inline T operator| (T a, T b) { return (T)((int)a | (int)b); } \
-inline T operator& (T a, T b) { return (T)((int)a & (int)b); } \
-inline T operator^ (T a, T b) { return (T)((int)a ^ (int)b); } \
-inline T& operator|= (T& a, T b) { return (T&)((int&)a |= (int)b); } \
-inline T& operator&= (T& a, T b) { return (T&)((int&)a &= (int)b); } \
-inline T& operator^= (T& a, T b) { return (T&)((int&)a ^= (int)b); }
+#define ECS_ENUM_BITWISE_OPERATIONS(T) ECS_INLINE T operator~ (T a) { return (T)~(int)a; } \
+ECS_INLINE T operator| (T a, T b) { return (T)((int)a | (int)b); } \
+ECS_INLINE T operator& (T a, T b) { return (T)((int)a & (int)b); } \
+ECS_INLINE T operator^ (T a, T b) { return (T)((int)a ^ (int)b); } \
+ECS_INLINE T& operator|= (T& a, T b) { return (T&)((int&)a |= (int)b); } \
+ECS_INLINE T& operator&= (T& a, T b) { return (T&)((int&)a &= (int)b); } \
+ECS_INLINE T& operator^= (T& a, T b) { return (T&)((int&)a ^= (int)b); }
 
 // Have faith in the optimizer that it will eliminate these dead branches
 #define LOOP_UNROLL_4(count, function, pivot)	if (count >= pivot + 1) { function(pivot); } \

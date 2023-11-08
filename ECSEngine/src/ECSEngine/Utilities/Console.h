@@ -6,6 +6,8 @@
 
 namespace ECSEngine {
 
+	enum ECS_FORMAT_DATE_FLAGS : size_t;
+
 	// This is a small memory manager used for smaller allocations
 	ECSENGINE_API MemoryManager DefaultConsoleStableAllocator(GlobalMemoryManager* global_manager);
 
@@ -17,7 +19,7 @@ namespace ECSEngine {
 #define CONSOLE_APPEREANCE_TABLE_COUNT 256
 
 	enum ECS_CONSOLE_VERBOSITY : unsigned char {
-		ECS_CONSOLE_VERBOSITY_MINIMAL,
+		ECS_CONSOLE_VERBOSITY_IMPORTANT,
 		ECS_CONSOLE_VERBOSITY_MEDIUM,
 		ECS_CONSOLE_VERBOSITY_DETAILED
 	};
@@ -29,6 +31,7 @@ namespace ECSEngine {
 		ECS_CONSOLE_WARN,
 		ECS_CONSOLE_ERROR,
 		ECS_CONSOLE_TRACE,
+		ECS_CONSOLE_GRAPHICS,
 		ECS_CONSOLE_MESSAGE_COUNT
 	};
 
@@ -45,7 +48,7 @@ namespace ECSEngine {
 		size_t system_filter;
 		unsigned char client_message_start;
 		ECS_CONSOLE_MESSAGE_TYPE type = ECS_CONSOLE_MESSAGE_COUNT;
-		unsigned char verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL;
+		unsigned char verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT;
 	};
 
 	// Dump path can be allocated on the stack, it will copy to a private buffer
@@ -80,21 +83,23 @@ namespace ECSEngine {
 		// It does not use the background thread. Returns true if it succeeded, else false
 		bool DumpToFile(Stream<wchar_t> path, bool write_as_binary = true);
 
-		void Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
+		void Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
 
-		void Info(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
+		void Info(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
 
-		void Warn(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
+		void Warn(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
 
-		void Error(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
+		void Error(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
 
-		void Trace(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
+		void Trace(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
+
+		void Graphics(Stream<char> message, Stream<char> system = { nullptr, 0 }, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_IMPORTANT);
 
 		void WriteFormatCharacters(Stream<char>& characters);
 
 		void SetDumpType(ECS_CONSOLE_DUMP_TYPE type, unsigned int count = 1);
 
-		void SetFormat(size_t format);
+		void SetFormat(ECS_FORMAT_DATE_FLAGS format);
 
 		void SetVerbosity(unsigned char new_level);
 
@@ -120,7 +125,7 @@ namespace ECSEngine {
 		
 		ResizableAtomicDeck<ConsoleMessage> messages;
 		ResizableStream<Stream<char>> system_filter_strings;
-		size_t format;
+		ECS_FORMAT_DATE_FLAGS format;
 		Stream<wchar_t> dump_path;
 
 	private:

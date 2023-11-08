@@ -181,7 +181,7 @@ namespace ECSEngine {
 		on_error_trigger = nullptr;
 		on_error_trigger_data = nullptr;
 
-		format = ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_SECONDS;
+		format = ECS_FORMAT_DATE_HOUR | ECS_FORMAT_DATE_MINUTES | ECS_FORMAT_DATE_SECONDS;
 		// Don't choose a power of two as chunk size to avoid cache associativity problems
 		const size_t MESSAGE_CHUNK_COUNT = 500;
 		size_t max_chunk_allocation_count = (MaxMessageCount() / MESSAGE_CHUNK_COUNT) + 1;
@@ -226,17 +226,7 @@ namespace ECSEngine {
 
 	size_t Console::GetFormatCharacterCount() const
 	{
-		size_t count = 0;
-		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_MILLISECONDS) ? 4 : 0;
-		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_SECONDS) ? 3 : 0;
-		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_MINUTES) ? 3 : 0;
-		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_HOUR) ? 2 : 0;
-		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_DAY) ? 3 : 0;
-		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_MONTH) ? 3 : 0;
-		count += HasFlag(format, ECS_LOCAL_TIME_FORMAT_YEAR) ? 5 : 0;
-
-		count += 3;
-		return count;
+		return ConvertDateToStringMaxCharacterCount(format);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
@@ -389,6 +379,13 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
+	void Console::Graphics(Stream<char> message, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity)
+	{
+		Message(message, ECS_CONSOLE_GRAPHICS, system, verbosity);
+	}
+
+	// -------------------------------------------------------------------------------------------------------
+
 	void Console::WriteFormatCharacters(Stream<char>& characters)
 	{
 		Date current_date = OS::GetLocalTime();
@@ -409,7 +406,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::SetFormat(size_t _format)
+	void Console::SetFormat(ECS_FORMAT_DATE_FLAGS _format)
 	{
 		format = _format;
 	}

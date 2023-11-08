@@ -85,13 +85,13 @@ namespace ECSEngine {
 	struct ResourceManagerLoadDesc {
 		ECS_INLINE void GPULock() {
 			if (gpu_lock != nullptr) {
-				gpu_lock->lock();
+				gpu_lock->Lock();
 			}
 		}
 
 		ECS_INLINE void GPUUnlock() {
 			if (gpu_lock != nullptr) {
-				gpu_lock->unlock();
+				gpu_lock->Unlock();
 			}
 		}
 
@@ -117,13 +117,13 @@ namespace ECSEngine {
 
 		ECS_INLINE void Lock() {
 			if (push_lock != nullptr) {
-				push_lock->lock();
+				push_lock->Lock();
 			}
 		}
 
 		ECS_INLINE void Unlock() {
 			if (push_lock != nullptr) {
-				push_lock->unlock();
+				push_lock->Unlock();
 			}
 		}
 

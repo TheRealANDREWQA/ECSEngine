@@ -185,7 +185,7 @@ namespace ECSEngine {
 			buffer_start += sizeof(RingBuffer);
 
 			m_dynamic_task_allocators[index]->InitializeFromBuffer(buffer_start, DYNAMIC_TASK_ALLOCATOR_SIZE);
-			m_dynamic_task_allocators[index]->lock.unlock();
+			m_dynamic_task_allocators[index]->lock.Clear();
 		}
 
 		m_static_task_data_allocator = LinearAllocator((void*)buffer_start, STATIC_TASK_ALLOCATOR_SIZE);
@@ -523,6 +523,8 @@ namespace ECSEngine {
 		// Make all initialize locks to 0 again
 		for (unsigned int index = 0; index < m_tasks.size; index++) {
 			m_tasks[index].barrier.ClearCount();
+			m_tasks[index].single_thread_finished.Clear();
+			m_tasks[index].single_thread_lock.Clear();
 		}
 	}
 
@@ -616,32 +618,50 @@ namespace ECSEngine {
 			return false;
 		}
 
-		unsigned int barrier_value = m_tasks[task_index].barrier.TryEnter(0);
-		unsigned int target_value = m_tasks[task_index].barrier.Target();
-		if (barrier_value == 0) {
-			// We are the first thread to reach this task - we should do the initialization
-			// We will anounce to the other threads that we finished the serial
-			// part by setting the count to -2 - we need to preserve the target value for future uses
-			// (cannot use -1 because it will not be detected by the spin wait as a valid value)
-
-			// If this is a barrier, we need to wait for all threads to reach this task
-			if (target_value > 1) {
-				m_tasks[task_index].barrier.SpinWaitEx(target_value, -1);
-			}
-
-			m_static_wrapper.function(thread_id, thread_id, m_world, m_tasks[task_index].task, m_static_wrapper.data);
-			// Increment the static index and then set the high bit
-			IncrementThreadTaskIndex();
-
-			m_tasks[task_index].barrier.SetCountEx(-2);
+		// Check to see if a crash has occured - we might endlessly come here over and
+		// Over again since the static task counter won't be incremented and the barrier value
+		// Will be correctly unlocked
+		if (ECS_GLOBAL_CRASH_IN_PROGRESS.load(ECS_RELAXED) > 0) {
+			// Notify the frame counter and go to the recovery point
+			m_is_frame_done.Notify();
+			ResetThreadToProcedure(thread_id, true);
 		}
-		else {
-			if (target_value > 1 && barrier_value == -1) {
-				m_tasks[task_index].barrier.EnterEx();
-			}
 
-			// Wait while the serial part is being finished
-			m_tasks[task_index].barrier.SpinWaitEx(-2, -1);
+		// Try to acquire the single thread lock, 
+		bool acquired_lock = m_tasks[task_index].single_thread_lock.TryLock();
+		unsigned int target_value = m_tasks[task_index].barrier.Target();
+		__try {
+			if (acquired_lock) {
+				// If this is a barrier, we need to wait for all threads to reach this task
+				if (target_value > 1) {
+					// We need to wait for the thread count - 1 since we don't increase the barrier count
+					m_tasks[task_index].barrier.SpinWaitEx(target_value - 1, -1);
+				}
+
+				m_static_wrapper.function(thread_id, thread_id, m_world, m_tasks[task_index].task, m_static_wrapper.data);
+				// Increment the static index and then set the high bit
+				IncrementThreadTaskIndex();
+				// The finished lock is done in the __finally block to ensure that
+				// the threads are woken up in case we crash
+			}
+			else {
+				if (target_value > 1) {
+					m_tasks[task_index].barrier.EnterEx();
+				}
+
+				// Wait while the serial part is being finished
+				m_tasks[task_index].single_thread_finished.WaitSignaled();
+			}
+		}
+		__finally {
+			if (acquired_lock) {
+				// We need to use try lock here since the crashing thread might set this before us
+				bool acquired_finished_lock = m_tasks[task_index].single_thread_finished.TryLock();
+				if (acquired_finished_lock) {
+					// Notify the waiting threads
+					WakeByAddressAll(&m_tasks[task_index].single_thread_finished);
+				}
+			}
 		}
 
 		return true;
@@ -666,16 +686,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ECS_THREAD_TASK(FinishFrameTaskDynamic) {
-		int signal_count = world->task_manager->m_is_frame_done.Notify();
-		if (signal_count == -1) {
-			// We are the last ones to finish the frame - set the new frame delta time
-			// Use the microsecond variant and divide by with the float factor to have a floating point
-			// Value since GetDuration returns an integer value
-			float new_delta_time = (float)world->timer.GetDuration(ECS_TIMER_DURATION_US) / 1'000'000.0f;
-			if (new_delta_time <= ECS_WORLD_DELTA_TIME_REUSE_THRESHOLD) {
-				world->delta_time = new_delta_time;
-			}
-		}
+		world->task_manager->m_is_frame_done.Notify();
 	}
 
 	ECS_THREAD_TASK(FinishFrameTask) {
@@ -972,6 +983,9 @@ namespace ECSEngine {
 		}
 		else {
 			// Go back to the recovery point and sleep afterwards
+			// Before that tho we need to notify the main thread that
+			// we acknowledged the crash
+			world->task_manager->m_is_frame_done.Notify();
 			world->task_manager->ResetThreadToProcedure(thread_id, true);
 		}
 	}
@@ -990,10 +1004,47 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void TaskManager::SignalStaticTasks()
+	{
+		unsigned int task_count = GetThreadTaskIndex();
+		for (unsigned int index = task_count; index < m_tasks.size; index++) {
+			// Try to acquire the lock and signal the finished single threaded lock,
+			// if that failed we need to set the barrier count to target - 1 for those
+			// tasks that have barriers in order to wake the thread executing the single
+			// threaded part
+			bool acquired_lock = m_tasks[index].single_thread_lock.TryLock();
+			if (!acquired_lock) {
+				unsigned int target_count = m_tasks[index].barrier.Target();
+				if (target_count > 1) {
+					unsigned int current_value = m_tasks[index].barrier.count.load(ECS_RELAXED);
+					if (current_value < target_count - 1) {
+						bool compare_success = m_tasks[index].barrier.count.compare_exchange_weak(current_value, target_count - 1);
+						while (current_value < target_count - 1 && !compare_success) {
+							compare_success = m_tasks[index].barrier.count.compare_exchange_weak(current_value, target_count - 1);
+						}
+						if (compare_success) {
+							// Wake the threads waiting for this
+							WakeByAddressAll(&m_tasks[index].barrier.count);
+						}
+					}
+				}
+			}
+
+			bool acquired_finished_lock = m_tasks[index].single_thread_finished.TryLock();
+			if (acquired_finished_lock) {
+				// We also need to wake the threads waiting on this lock
+				WakeByAddressAll(&m_tasks[index].single_thread_finished);
+			}
+		}
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::SpinThread(unsigned int thread_id)
 	{
-		ThreadQueue* thread_queue = GetThreadQueue(thread_id);
-		thread_queue->SpinWaitElements();
+		ECS_ASSERT(false, "Spinning threads inside the task manager is currently broken since they are not notified with WakeByAddress that an element was added");
+		//ThreadQueue* thread_queue = GetThreadQueue(thread_id);
+		//thread_queue->SpinWaitElements();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1070,15 +1121,15 @@ namespace ECSEngine {
 
 	ECS_THREAD_TASK(WaitThreadTask) {
 		SpinLock* flag = (SpinLock*)_data;
-		flag->unlock();
+		flag->Unlock();
 	}
 
 	void TaskManager::WaitThread(unsigned int thread_id) {
 		SpinLock* lock = (SpinLock*)m_dynamic_task_allocators[thread_id]->Allocate(sizeof(SpinLock));
-		lock->lock();
+		lock->Lock();
 
 		AddDynamicTaskWithAffinity(ECS_THREAD_TASK_NAME(WaitThreadTask, lock, 0), thread_id, false);
-		lock->wait_locked();
+		lock->WaitLocked();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

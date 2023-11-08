@@ -558,7 +558,7 @@ bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 		ECS_STACK_CAPACITY_STREAM(wchar_t, file_path, 512);
 		GetSandboxRuntimeSettingsPath(editor_state, settings_name, file_path);
 
-		const Reflection::ReflectionManager* reflection = editor_state->ReflectionManager();
+		const Reflection::ReflectionManager* reflection = editor_state->EditorReflectionManager();
 		ECS_DESERIALIZE_CODE code = Deserialize(reflection, reflection->GetType(STRING(WorldDescriptor)), &file_descriptor, file_path);
 		if (code != ECS_DESERIALIZE_OK) {
 			return false;
@@ -632,6 +632,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->should_play = true;
 	sandbox->should_step = true;
 	sandbox->is_scene_dirty = false;
+	sandbox->is_crashed = false;
 	sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
 	sandbox->transform_space = ECS_TRANSFORM_LOCAL_SPACE;
 	sandbox->transform_keyboard_space = ECS_TRANSFORM_LOCAL_SPACE;
@@ -1004,6 +1005,8 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	// Clear the waiting compilation flag
 	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+	// Clear the crashed status as well
+	sandbox->is_crashed = false;
 
 	if (EnableSceneUIRendering(editor_state, sandbox_index)) {
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
@@ -1563,7 +1566,7 @@ bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sand
 		// We also need to prepare the world concurrency
 		PrepareWorldConcurrency(&sandbox->sandbox_world);
 
-		// In this editor context we must also add a dynamic task wrapper that
+		SetSandboxCrashHandlerWrappers(editor_state, sandbox_index);
 
 		// Bind again the module settings
 		BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
@@ -2129,6 +2132,11 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_RUNNING);
 	}
 
+	// If the sandbox is crashed, early return in order to prevent running invalid sandboxes
+	if (sandbox->is_crashed) {
+		return false;
+	}
+
 	// Clear the sandbox waiting compilation flag - it will be reset if it is still valid
 	bool was_waiting = HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 	
@@ -2162,8 +2170,6 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		}
 	}
 
-	SandboxSetCrashHandler(editor_state, sandbox_index);
-
 	// If it returned OK, then we can proceed as normal
 
 	// Before actually running, we also need to check the asset reference snapshot
@@ -2187,8 +2193,33 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 	GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(GetAllocatorPolymorphic(&stack_allocator));
+
+	CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, GetAllocatorPolymorphic(&stack_allocator));
+
+	// In case we are stepping, we need to restore the delta time
+	// In both cases, for fixed step for and the dynamic default mode
+	bool keep_delta_time = false;
+	if (is_step) {
+		keep_delta_time = true;
+		// Check to see if we are in fixed time step mode
+		if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
+			// We need to change the delta time
+			sandbox->sandbox_world.delta_time = editor_state->project_settings.fixed_timestep;
+		}
+	}
+
 	DoFrame(&sandbox->sandbox_world);
+	if (!keep_delta_time) {
+		// We also need to update the delta time
+		float new_delta_time = (float)sandbox->sandbox_world.timer.GetDuration(ECS_TIMER_DURATION_US) / 1'000'000.0f;
+		if (new_delta_time <= ECS_WORLD_DELTA_TIME_REUSE_THRESHOLD) {
+			sandbox->sandbox_world.delta_time = new_delta_time;
+		}
+	}
+
 	sandbox->sandbox_world.timer.SetNewStart();
+
+	SandboxRestorePreviousCrashHandler(previous_crash_handler);
 
 	bool graphics_snapshot_success = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(graphics_snapshot, &snapshot_message);
 	if (snapshot_message.size > 0) {
@@ -2208,13 +2239,40 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	// The graphics snapshot was allocated from the editor allocator, we need to deallocate it
 	graphics_snapshot.Deallocate(editor_state->EditorAllocator());
 
-	// Render the scene if it is visible - the runtime is rendered by the game now		
-	EnableSceneUIRendering(editor_state, sandbox_index);
+	// Check to see if a crash happened - do this after the snapshots were restored
+	if (ECS_GLOBAL_CRASH_IN_PROGRESS.load(ECS_RELAXED) > 0) {
+		// A crash has occured
+		// Determine if a critical corruption happened
+		// At the moment, critical corruptions can be verified only on the graphics object
+		bool valid_internal_state = SandboxValidateStateAfterCrash(editor_state);
+		if (!valid_internal_state) {
+			// In case the internal state is not valid, just abort
+			abort();
+		}
+
+		// We need to reset the crash variables before pausing since the threads
+		// Might reference the crash counter
+		ResetCrashHandlerGlobalVariables();
+
+		// Pause the current sandbox
+		PauseSandboxWorld(editor_state, sandbox_index);
+		// At last set the is_crashed flag to indicate to the runtime
+		// That this sandbox is invalid at this moment and should not be run
+		sandbox->is_crashed = true;
+		return false;
+	}
+
+	if (!is_step) {
+		// Render the scene if it is visible - the runtime is rendered by the game now		
+		EnableSceneUIRendering(editor_state, sandbox_index);
+	}
 
 	RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
-	// Disable this irrespective if it was enabled here or not
-	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	if (!is_step) {
+		// Disable this irrespective if it was enabled here or not
+		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	}
 
 	return graphics_snapshot_success && resource_snapshot_success;
 }
@@ -2391,6 +2449,11 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_SCENE);
 
+	// Check to see if the sandbox is crashed, if it is, we shouldn't let the start commence
+	if (sandbox->is_crashed) {
+		return false;
+	}
+
 	// Check to see if the modules referenced by the sandbox are loaded
 	bool success = AreSandboxModulesLoaded(editor_state, sandbox_index, true);
 	bool waiting_sandbox_compile = false;
@@ -2413,6 +2476,10 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
 			// Prepare the sandbox world
 			PrepareWorld(&sandbox->sandbox_world);
+
+			// We have to set the crash wrappers when starting the
+			// Simulation and after resuming after a module change
+			SetSandboxCrashHandlerWrappers(editor_state, sandbox_index);
 
 			// Here we also need to double the reference counts of the assets stored in the runtime
 			// Since when returning to the scene representation, we can have the scene assets still loaded
@@ -2581,21 +2648,23 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 {
 	// Each frame check to see if we need to update the state of the master buttons
 	bool are_all_default_running = AreAllDefaultSandboxesRunning(editor_state);
-	bool are_all_default_paused = AreAllDefaultSandboxesPaused(editor_state);
-	bool are_all_default_not_started = AreAllDefaultSandboxesNotStarted(editor_state);
 
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
 		if (!are_all_default_running) {
-			EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PLAYING);
-
-			if (!are_all_default_paused) {
-				// If any of them is terminated, terminate all of them - if the are not already
-				if (!are_all_default_not_started) {
-					EndSandboxWorldSimulations(editor_state);
+			if (IsAnyDefaultSandboxNotStarted(editor_state)) {
+				EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+				// One of them is terminated, terminate 
+				EndSandboxWorldSimulations(editor_state);
+				if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
+					EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PAUSED);
 				}
 			}
 			else {
-				EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+				if (!EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
+					EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+				}
+				// We need to pause all the other running sandboxes
+				PauseSandboxWorlds(editor_state);
 			}
 		}
 	}
@@ -2608,8 +2677,8 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 
 	// These need to be refreshed since some action before might have changed the values
 	are_all_default_running = AreAllDefaultSandboxesRunning(editor_state);
-	are_all_default_paused = AreAllDefaultSandboxesPaused(editor_state);
-	are_all_default_not_started = AreAllDefaultSandboxesNotStarted(editor_state);
+	bool are_all_default_paused = AreAllDefaultSandboxesPaused(editor_state);
+	bool are_all_default_not_started = AreAllDefaultSandboxesNotStarted(editor_state);
 
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
 		if (!are_all_default_paused) {
@@ -2619,6 +2688,9 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 				// If any of them is terminated, terminate all of them - if they are not already
 				if (!are_all_default_not_started) {
 					EndSandboxWorldSimulations(editor_state);
+					if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
+						EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+					}
 				}
 			}
 			else {

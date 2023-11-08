@@ -688,17 +688,50 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
+#if 1
+
+		struct Data {
+			CapacityStream<Stream<wchar_t>> modules;
+			AllocatorPolymorphic stack_allocator;
+		};
+
+		static BOOL EnumerateModules(PCWSTR ModuleName, DWORD64 BaseOfDll, PVOID UserContext) {
+			Data* data = (Data*)UserContext;
+			Stream<wchar_t> module = ModuleName;
+			module.size++;
+			data->modules.AddAssert(module.Copy(data->stack_allocator));
+			return TRUE;
+		}
+		
+		// This is useful only when for some reason symbols are not loaded
+		// And want to inspector what modules are loaded
+		static void EnumerateModulesDebug() {
+			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, modules, 512);
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+			Data data = { modules, GetAllocatorPolymorphic(&stack_allocator) };
+			BOOL success = SymEnumerateModulesW64(GetCurrentProcess(), EnumerateModules, &data);
+		}
+
+#endif
+
 		void SetSymbolicLinksPaths(Stream<Stream<wchar_t>> module_paths)
 		{
 			ECS_STACK_CAPACITY_STREAM(wchar_t, search_paths, ECS_KB * 16);
 			for (size_t index = 0; index < module_paths.size; index++) {
 				search_paths.AddStream(module_paths[index]);
-				search_paths.AddAssert(L':');
+				search_paths.AddAssert(L';');
 			}
 			search_paths[search_paths.size - 1] = L'\0';
-
+			
 			bool success = SymSetSearchPathW(GetCurrentProcess(), search_paths.buffer);
 			ECS_ASSERT(success, "Setting symbolic link paths failed.");
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void RefreshModuleSymbols()
+		{
+			SymRefreshModuleList(GetCurrentProcess());
 		}
 
 		// -----------------------------------------------------------------------------------------------------
@@ -708,17 +741,18 @@ namespace ECSEngine {
 			ThreadContext current_thread_context;
 			bool success = CaptureCurrentThreadStackContext(&current_thread_context);
 			if (success) {
-				GetCallStackFunctionNames(&current_thread_context, string);
+				GetCallStackFunctionNames(&current_thread_context, GetCurrentThread(), string);
 			}
 		}
 
-		void GetCallStackFunctionNames(ThreadContext* context, CapacityStream<char>& string)
+		void GetCallStackFunctionNames(ThreadContext* context, void* thread_handle, CapacityStream<char>& string)
 		{
 			bool success;
 			STACKFRAME64 stack_frame;
 			memset(&stack_frame, 0, sizeof(stack_frame));
 
 			LPCONTEXT os_context = (LPCONTEXT)context->bytes;
+			os_context->ContextFlags = CONTEXT_FULL;
 
 			stack_frame.AddrPC.Offset = os_context->Rip;
 			stack_frame.AddrPC.Mode = AddrModeFlat;
@@ -734,7 +768,7 @@ namespace ECSEngine {
 
 			size_t displacement = 0;
 			string.AddStreamAssert("Stack trace:\n");
-			while (StackWalk64(IMAGE_FILE_MACHINE_AMD64, process_handle, GetCurrentThread(), &stack_frame, &context, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr)) {
+			while (StackWalk64(IMAGE_FILE_MACHINE_AMD64, process_handle, thread_handle, &stack_frame, os_context, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr)) {
 				success = SymGetSymFromAddr64(process_handle, (size_t)stack_frame.AddrPC.Offset, &displacement, image_symbol);
 				if (success) {
 					DWORD characters_written = UnDecorateSymbolName(image_symbol->Name, string.buffer + string.size, string.capacity - string.size, UNDNAME_COMPLETE);
@@ -745,6 +779,19 @@ namespace ECSEngine {
 
 			string.AssertCapacity();
 			string[string.size] = '\0';
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetCallStackFunctionNames(void* thread_handle, CapacityStream<char>& string)
+		{
+			ThreadContext thread_context;
+			bool success = OS::CaptureThreadStackContext(thread_handle, &thread_context);
+			if (success) {
+				GetCallStackFunctionNames(&thread_context, thread_handle, string);
+				return true;
+			}
+			return false;
 		}
 
 		// -----------------------------------------------------------------------------------------------------
@@ -955,7 +1002,17 @@ namespace ECSEngine {
 		bool CaptureThreadStackContext(void* thread_handle, ThreadContext* thread_context)
 		{
 			static_assert(sizeof(ThreadContext) >= sizeof(CONTEXT));
-			return GetThreadContext(thread_handle, (LPCONTEXT)thread_context->bytes) != 0;
+			size_t thread_id = GetThreadID(thread_handle);
+			size_t running_thread_id = GetCurrentThreadID();
+			if (thread_id == running_thread_id) {
+				// In case we are the running thread, we need to use RtlCaptureContext
+				// Since GetThreadContext doesn't work on the running thread
+				RtlCaptureContext((LPCONTEXT)thread_context->bytes);
+				return true;
+			}
+			else {
+				return GetThreadContext(thread_handle, (LPCONTEXT)thread_context->bytes) != 0;
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------
@@ -1559,6 +1616,19 @@ namespace ECSEngine {
 				data->path.size = 0;
 				return false;
 			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		ThreadContext::ThreadContext()
+		{
+			Initialize();
+		}
+
+		void ThreadContext::Initialize()
+		{
+			LPCONTEXT context = (LPCONTEXT)bytes;
+			context->ContextFlags = CONTEXT_FULL;
 		}
 
 		// -----------------------------------------------------------------------------------------------------

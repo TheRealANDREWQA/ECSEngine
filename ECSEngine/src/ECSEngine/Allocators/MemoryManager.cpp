@@ -84,17 +84,17 @@ namespace ECSEngine {
 
 		bool was_acquired = true;
 		if constexpr (thread_safe) {
-			was_acquired = memory_manager->m_spin_lock.try_lock();
+			was_acquired = memory_manager->m_spin_lock.TryLock();
 		}
 		if (was_acquired) {
 			memory_manager->CreateAllocator(memory_manager->m_backup_info);
 			if constexpr (thread_safe) {
-				memory_manager->m_spin_lock.unlock();
+				memory_manager->m_spin_lock.Unlock();
 			}
 		}
 		else {
 			if constexpr (thread_safe) {
-				memory_manager->m_spin_lock.wait_locked();
+				memory_manager->m_spin_lock.WaitLocked();
 			}
 		}
 		AllocatorPolymorphic last_allocator = memory_manager->GetAllocator(allocator_count);

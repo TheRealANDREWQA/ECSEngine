@@ -1,2 +1,2 @@
 #pragma once
-#include "../ECSEngine/Internal/EntityManagerSerialize.h"
+#include "../ECSEngine/ECS/EntityManagerSerialize.h"

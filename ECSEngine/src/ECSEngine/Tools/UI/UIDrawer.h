@@ -725,10 +725,6 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerHierarchy* HierarchyInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
 			template<typename InitialValueInitializer, typename CallbackHover>
 			UIDrawerTextInput* NumberInputInitializer(
 				size_t configuration,
@@ -1167,20 +1163,8 @@ namespace ECSEngine {
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
-			
-			void HierarchyDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerHierarchy* data, float2 scale);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void HistogramDrawer(size_t configuration, const UIDrawConfig& config, const Stream<float> samples, Stream<char> name, float2 position, float2 scale, unsigned int precision = 2);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			UIDrawerList* ListInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			void ListDrawer(size_t configuration, UIDrawConfig& config, UIDrawerList* data, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1722,6 +1706,8 @@ namespace ECSEngine {
 				float2 scale,
 				UIActionHandler hoverable_handler,
 				UIActionHandler clickable_handler,
+				UIHandlerCopyBuffers hoverable_copy_function = nullptr,
+				UIHandlerCopyBuffers clickable_copy_function = nullptr,
 				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
@@ -1733,6 +1719,8 @@ namespace ECSEngine {
 				float2 scale,
 				UIActionHandler hoverable_handler,
 				UIActionHandler clickable_handler,
+				UIHandlerCopyBuffers hoverable_copy_function = nullptr,
+				UIHandlerCopyBuffers clickable_copy_function = nullptr,
 				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
@@ -1763,7 +1751,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// If the override allocator is specified, it will use that allocator for the memory
-			UIDrawerMenuRightClickData PrepareRightClickActionData(
+			UIDrawerMenuRightClickData PrepareRightClickMenuActionData(
 				Stream<char> name, 
 				UIDrawerMenuState* menu_state, 
 				UIActionHandler custom_handler = { nullptr },
@@ -1771,7 +1759,7 @@ namespace ECSEngine {
 			);
 
 			// If the override allocator is specified, it will use that allocator for the memory
-			UIActionHandler PrepareRightClickHandler(
+			UIActionHandler PrepareRightClickMenuHandler(
 				Stream<char> name, 
 				UIDrawerMenuState* menu_state, 
 				UIActionHandler custom_handler = { nullptr },
@@ -1779,7 +1767,7 @@ namespace ECSEngine {
 			);
 
 			// This will always have the system phase
-			void AddRightClickAction(
+			void AddRightClickMenuAction(
 				size_t configuration,
 				float2 position,
 				float2 scale,
@@ -1790,42 +1778,12 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void AddDefaultClickableHoverableWithText(
-				size_t configuration,
-				float2 position,
-				float2 scale,
-				UIActionHandler handler,
-				Color color,
-				Stream<char> text,
-				float2 text_offset,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_LATE,
-				Color font_color = ECS_COLOR_WHITE,
-				float percentage = 1.25f,
-				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
-			);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			// Either horizontal or vertical cull should be set
-			// White color by default means use the color from the color theme
-			void AddDefaultClickableHoverableWithTextEx(
-				size_t configuration,
-				float2 position,
-				float2 scale,
-				UIActionHandler handler,
-				UIDefaultTextHoverableData* hoverable_data,
-				Color text_color = ECS_COLOR_WHITE,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL,
-				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
-			);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
 			void AddDefaultClickableHoverable(
 				size_t configuration,
 				float2 position,
 				float2 scale,
 				UIActionHandler handler,
+				UIHandlerCopyBuffers copy_function = nullptr,
 				Color color = ECS_COLOR_WHITE,
 				float percentage = 1.25f,
 				ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL,
@@ -1839,6 +1797,7 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale,
 				UIActionHandler handler,
+				UIHandlerCopyBuffers copy_function = nullptr,
 				Color color = ECS_COLOR_WHITE,
 				float percentage = 1.25f,
 				ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL,
@@ -1857,6 +1816,7 @@ namespace ECSEngine {
 				const float* percentages,
 				unsigned int count,
 				UIActionHandler handler,
+				UIHandlerCopyBuffers copy_function = nullptr,
 				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
@@ -1872,14 +1832,15 @@ namespace ECSEngine {
 				const float* percentages,
 				unsigned int count,
 				UIActionHandler handler,
-				ECS_MOUSE_BUTTON button_type
+				UIHandlerCopyBuffers copy_function = nullptr,
+				ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			ECS_INLINE void AddSnapshotRunnable(UIDockspaceBorderDrawSnapshotRunnable runnable) {
 				if (record_snapshot_runnables) {
-					system->AddWindowSnapshotRunnable(thread_id, dockspace, border_index, runnable);
+					system->AddWindowSnapshotRunnable(dockspace, border_index, runnable);
 				}
 			}
 
@@ -2417,6 +2378,7 @@ namespace ECSEngine {
 								button_position,
 								button_scale,
 								{ UIDrawerArrayAddAction, &add_remove_data, sizeof(add_remove_data), data->add_callback_phase },
+								nullptr,
 								color_theme.theme
 							);
 						}
@@ -2430,6 +2392,7 @@ namespace ECSEngine {
 							button_position,
 							button_scale,
 							{ UIDrawerArrayAddAction, &add_remove_data, sizeof(add_remove_data), data->add_callback_phase },
+							nullptr,
 							color_theme.theme
 						);
 					}
@@ -2462,6 +2425,7 @@ namespace ECSEngine {
 							button_position,
 							button_scale,
 							{ UIDrawerArrayRemoveAction, &add_remove_data, sizeof(add_remove_data), data->remove_callback_phase },
+							nullptr,
 							color_theme.theme
 						);
 						sprite_color.alpha = 255;
@@ -3870,18 +3834,6 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-#pragma region Hierarchy
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			// TODO: Deprecate this (eliminate)
-			UIDrawerHierarchy* Hierarchy(Stream<char> name);
-
-			// TODO: Deprecate this (eliminate)
-			UIDrawerHierarchy* Hierarchy(size_t configuration, const UIDrawConfig& config, Stream<char> name);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
 #pragma endregion
 
 #pragma region Histogram
@@ -3922,25 +3874,6 @@ namespace ECSEngine {
 			void IndentWindowSize(float percentage);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
-
-#pragma region List
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			// TODO: Deprecated (eliminate completely)
-			UIDrawerList* List(Stream<char> name);
-
-			// TODO: Deprecated (eliminate completely)
-			UIDrawerList* List(size_t configuration, UIDrawConfig& config, Stream<char> name);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			// TODO: Deprecated (eliminate completely)
-			void ListFinalizeNode(UIDrawerList* list);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
 
 #pragma region Label Hierarchy
 
@@ -5050,7 +4983,6 @@ namespace ECSEngine {
 
 			UISystem* system;
 			UIDockspace* dockspace;
-			unsigned int thread_id;
 			unsigned int window_index;
 			unsigned int border_index;
 			DockspaceType dockspace_type;
@@ -5146,16 +5078,8 @@ namespace ECSEngine {
 		ECSENGINE_API void InitializeFilterMenuSinglePointerElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
 
 		// --------------------------------------------------------------------------------------------------------------
-		
-		ECSENGINE_API void InitializeHierarchyElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
-
-		// --------------------------------------------------------------------------------------------------------------
 
 		ECSENGINE_API void InitializeFilesystemHierarchyElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void InitializeListElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
 
 		// --------------------------------------------------------------------------------------------------------------
 

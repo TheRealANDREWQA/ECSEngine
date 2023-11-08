@@ -56,7 +56,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	GetProjectBackupFolder(editor_state, path);
 	path.Add(ECS_OS_PATH_SEPARATOR);
 	Date date = OS::GetLocalTime();
-	ConvertDateToString(date, path, ECS_LOCAL_TIME_FORMAT_ALL_FROM_MINUTES | ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON);
+	ConvertDateToString(date, path, ECS_FORMAT_DATE_ALL_FROM_MINUTES);
 
 	auto error_lambda = [&](Stream<char> reason) {
 		ECS_STACK_CAPACITY_STREAM(char, message, 1024);

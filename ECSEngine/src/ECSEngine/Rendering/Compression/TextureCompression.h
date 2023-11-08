@@ -10,7 +10,11 @@ namespace ECSEngine {
 	struct Graphics;
 	struct SpinLock;
 
-	struct CompressTextureDescriptor {
+	struct ECSENGINE_API CompressTextureDescriptor {
+		void Lock();
+
+		void Unlock();
+
 		AllocatorPolymorphic allocator = { nullptr };
 		ECS_TEXTURE_COMPRESS_FLAGS flags = ECS_TEXTURE_COMPRESS_NONE;
 		CapacityStream<char>* error_message = nullptr;
