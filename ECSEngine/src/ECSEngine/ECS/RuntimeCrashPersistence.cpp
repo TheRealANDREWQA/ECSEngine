@@ -10,10 +10,10 @@
 namespace ECSEngine {
 
 	static const wchar_t* FILE_STRINGS[] = {
-		L".scene",
-		L"console.txt",
-		L"stack_trace.txt",
-		L"scheduler.txt",
+		L"Scene.scene",
+		L"Console.txt",
+		L"StackTrace.txt",
+		L"Scheduler.txt",
 		L".world_descriptor",
 		L".misc0",
 		L".misc1",
@@ -22,19 +22,6 @@ namespace ECSEngine {
 	};
 
 	static_assert(std::size(FILE_STRINGS) == ECS_RUNTIME_CRASH_FILE_TYPE_COUNT);
-
-	void RuntimeCrashPersistenceFilePath(Stream<wchar_t> directory, CapacityStream<wchar_t>* file_path, ECS_RUNTIME_CRASH_FILE_TYPE type)
-	{
-		file_path->CopyOther(directory);
-		file_path->Add(ECS_OS_PATH_SEPARATOR);
-		file_path->AddStreamAssert(FILE_STRINGS[type]);
-	}
-
-	void RuntimeCrashPersistenceFilePath(CapacityStream<wchar_t>* directory, ECS_RUNTIME_CRASH_FILE_TYPE type)
-	{
-		directory->Add(ECS_OS_PATH_SEPARATOR);
-		directory->AddStreamAssert(FILE_STRINGS[type]);
-	}
 
 	static void WriteErrorMessage(const RuntimeCrashPersistenceWriteOptions* options, Stream<char> error_message) {
 		if (options->error_message) {
@@ -46,6 +33,21 @@ namespace ECSEngine {
 		if (options->error_message) {
 			options->error_message->AddStreamAssert(error_message);
 		}
+	}
+
+	Stream<wchar_t> RuntimeCrashPersistenceFilePath(Stream<wchar_t> directory, CapacityStream<wchar_t>* file_path, ECS_RUNTIME_CRASH_FILE_TYPE type)
+	{
+		file_path->CopyOther(directory);
+		file_path->Add(ECS_OS_PATH_SEPARATOR);
+		file_path->AddStreamAssert(FILE_STRINGS[type]);
+		return *file_path;
+	}
+
+	Stream<wchar_t> RuntimeCrashPersistenceFilePath(CapacityStream<wchar_t>* directory, ECS_RUNTIME_CRASH_FILE_TYPE type)
+	{
+		directory->Add(ECS_OS_PATH_SEPARATOR);
+		directory->AddStreamAssert(FILE_STRINGS[type]);
+		return *directory;
 	}
 
 #pragma region Write
@@ -102,17 +104,32 @@ namespace ECSEngine {
 		const TaskManager* task_manager = world->task_manager;
 		unsigned int thread_count = task_manager->GetThreadCount();
 
-		unsigned int this_thread_id = task_manager->FindThreadID(OS::GetCurrentThreadID());
+		Stream<char> CRASHING_THREAD_MESSAGE = "*********************** Crashing Thread **************************\n";
+
+		unsigned int current_thread_id = task_manager->FindThreadID(OS::GetCurrentThreadID());
 		for (unsigned int index = 0; index < thread_count; index++) {
+			if (current_thread_id == index) {
+				stack_trace.AddStreamAssert(CRASHING_THREAD_MESSAGE);
+			}
 			stack_trace.AddStreamAssert("Thread ");
 			ConvertIntToChars(stack_trace, index);
 			stack_trace.AddAssert(' ');
-			bool success = OS::GetCallStackFunctionNames(task_manager->m_thread_handles[index], stack_trace);
+			bool success = false;
+			if (current_thread_id == index && options->crashing_thread_context != nullptr) {
+				OS::GetCallStackFunctionNames(options->crashing_thread_context, task_manager->m_thread_handles[index], stack_trace);
+				success = true;
+			}
+			else {
+				success = OS::GetCallStackFunctionNames(task_manager->m_thread_handles[index], stack_trace);
+			}
 			if (!success) {
 				ECS_FORMAT_TEMP_STRING(message, "Failed to retrieve thread {#} stack context\n", index);
 				WriteErrorMessage(options, message);
 			}
 			stack_trace.AddAssert('\n');
+			if (current_thread_id == index) {
+				stack_trace.AddStreamAssert(CRASHING_THREAD_MESSAGE);
+			}
 		}
 
 		RuntimeCrashPersistenceFilePath(&mutable_directory, ECS_RUNTIME_CRASH_FILE_STACK_TRACE);
@@ -210,6 +227,22 @@ namespace ECSEngine {
 		return true;
 	}
 
+	// The returned string will reference the storage
+	// Returns empty string if the directory creation failed
+	static Stream<wchar_t> GetUniqueCrashDirectory(Stream<wchar_t> directory, CapacityStream<wchar_t>* storage) {
+		storage->CopyOther(directory);
+		Date current_date = OS::GetLocalTime();
+		bool is_absolute_path = PathIsAbsolute(directory);
+		storage->AddAssert(is_absolute_path ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
+
+		ConvertDateToString(current_date, *storage, ECS_FORMAT_DATE_ALL);
+		// Create the directory, if we fail, return now
+		if (!CreateFolder(*storage)) {
+			return {};
+		}
+		return *storage;
+	}
+
 	bool RuntimeCrashPersistenceWrite(
 		Stream<wchar_t> directory,
 		World* world,
@@ -233,7 +266,9 @@ namespace ECSEngine {
 			}
 		}
 
-		// Resume the threads if we have to
+		// Resume the threads if we have to, whenever we exit the function
+		// It doesn't really matter when we resume them since they will quickly
+		// Determine that there is a crash on going and return
 		auto resume_threads = StackScope([options, world]() {
 			if (options->resume_threads) {
 				// We can resume the threads immediately after retrieving the stack trace
@@ -253,16 +288,13 @@ namespace ECSEngine {
 
 		unsigned int final_directory_size = mutable_directory.size;
 		if (options->create_unique_folder_entry) {
-			Date current_date = OS::GetLocalTime();
-			bool is_absolute_path = PathIsAbsolute(mutable_directory);
-			mutable_directory.AddSafe(is_absolute_path ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
-			ConvertDateToString(current_date, mutable_directory, ECS_FORMAT_DATE_ALL);
-			final_directory_size = mutable_directory.size;
-
-			// Create the directory, if we fail, return now
-			if (!CreateFolder(mutable_directory)) {
+			Stream<wchar_t> final_path = GetUniqueCrashDirectory(directory, &mutable_directory);
+			// If the folder creation failed, return now
+			if (final_path.size == 0) {
 				return false;
 			}
+
+			final_directory_size = mutable_directory.size;
 		}
 
 		// Start with the scene file since it's the most important
@@ -306,6 +338,20 @@ namespace ECSEngine {
 		}
 
 		return true;
+	}
+
+	Stream<wchar_t> RuntimeCrashPersistenceWriteDirectory(
+		Stream<wchar_t> directory,
+		RuntimeCrashPersistenceWriteOptions* options,
+		CapacityStream<wchar_t>& storage
+	)
+	{
+		if (options->create_unique_folder_entry) {
+			Stream<wchar_t> final_path = GetUniqueCrashDirectory(directory, &storage);
+			options->create_unique_folder_entry = false;
+			return final_path;
+		}
+		return directory;
 	}
 
 #pragma endregion

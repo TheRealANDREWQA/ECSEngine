@@ -8,6 +8,7 @@
 #include "ShaderInclude.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "../Utilities/Crash.h"
+#include "../Utilities/Console.h"
 #include "../Utilities/ParsingUtilities.h"
 #include "../Allocators/ResizableLinearAllocator.h"
 
@@ -274,10 +275,10 @@ namespace ECSEngine {
 
 		ECS_STACK_CAPACITY_STREAM(char, current_message, ECS_KB * 4);
 		D3D11_MESSAGE* queue_message = (D3D11_MESSAGE*)current_message.buffer;
-		size_t message_capacity = current_message.capacity;
+		size_t message_capacity = current_message.capacity - sizeof(D3D11_MESSAGE);
 
 		for (size_t index = 0; index < message_count; index++) {
-			message_capacity = current_message.capacity;
+			message_capacity = current_message.capacity - sizeof(D3D11_MESSAGE);
 			HRESULT hr = info_queue->GetMessage(index, queue_message, &message_capacity);
 			if (SUCCEEDED(hr)) {
 				// Parse the string
@@ -312,6 +313,9 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		// Clear the queue such that we don't let these prints be received by the PrintRuntimeMessage
+		info_queue->ClearStoredMessages();
 
 		return true;
 	}
@@ -433,7 +437,7 @@ namespace ECSEngine {
 		IDXGIAdapter1* adapter;
 		IDXGIFactory6* factory = NULL;
 
-		// Create a DXGIFactory object.
+		// Create a DXGIFactory object
 		if (FAILED(CreateDXGIFactory(__uuidof(IDXGIFactory6), (void**)&factory))) {
 			return;
 		}
@@ -462,7 +466,7 @@ namespace ECSEngine {
 		EnumGPU(adapters, DXGI_GPU_PREFERENCE_MINIMUM_POWER);
 	}
 
-	Graphics::Graphics(const GraphicsDescriptor* descriptor) 
+	Graphics::Graphics(const GraphicsDescriptor* descriptor)
 		: m_target_view(nullptr), m_depth_stencil_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator),
 		m_bound_render_target_count(1)
 	{
@@ -908,7 +912,7 @@ namespace ECSEngine {
 
 	void Graphics::BindRenderTargetViewFromInitialViews()
 	{
-		m_context->OMSetRenderTargets(1u, &m_target_view.view, m_depth_stencil_view.view);
+		BindRenderTargetViewFromInitialViews(m_context);
 		m_bound_render_targets[0] = m_target_view;
 		m_bound_render_target_count = 1;
 		m_current_depth_stencil = m_depth_stencil_view;
@@ -918,7 +922,7 @@ namespace ECSEngine {
 
 	void Graphics::BindRenderTargetViewFromInitialViews(GraphicsContext* context)
 	{
-		context->OMSetRenderTargets(1u, &m_target_view.view, m_depth_stencil_view.view);
+		ECSEngine::BindRenderTargetView(m_target_view, m_depth_stencil_view, context);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -948,7 +952,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindDefaultViewport() {
-		BindViewport(0.0f, 0.0f, m_window_size.x, m_window_size.y, 0.0f, 1.0f);
+		BindDefaultViewport(m_context);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2913,9 +2917,8 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::ClearBackBuffer(float red, float green, float blue) {
-		const float color[] = { red, green, blue, 1.0f };
-		m_context->ClearRenderTargetView(m_target_view.view, color);
-		m_context->ClearDepthStencilView(m_depth_stencil_view.view, D3D11_CLEAR_DEPTH, 1.0f, 0u);
+		ClearRenderTarget(m_target_view, ColorFloat(red, green, blue, 1.0f));
+		ClearDepth(m_depth_stencil_view);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3840,6 +3843,31 @@ namespace ECSEngine {
 			}
 		}
 		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::PrintRuntimeMessagesToConsole()
+	{
+		if (m_info_queue) {
+			unsigned int message_count = m_info_queue->GetNumStoredMessagesAllowedByRetrievalFilter();
+
+			if (message_count > 0) {
+				ECS_STACK_CAPACITY_STREAM(char, current_message, ECS_KB * 4);
+				D3D11_MESSAGE* queue_message = (D3D11_MESSAGE*)current_message.buffer;
+				size_t message_capacity = current_message.capacity - sizeof(D3D11_MESSAGE);
+
+				for (unsigned int index = 0; index < message_count; index++) {
+					message_capacity = message_capacity = current_message.capacity - sizeof(D3D11_MESSAGE);
+					HRESULT result = m_info_queue->GetMessageW(index, queue_message, &message_capacity);
+					if (SUCCEEDED(result)) {
+						GetConsole()->Graphics({ queue_message->pDescription, queue_message->DescriptionByteLength - 1 });
+					}
+				}
+				// Always clear the stored messages such that we never get into issues with not enough space
+				m_info_queue->ClearStoredMessages();
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

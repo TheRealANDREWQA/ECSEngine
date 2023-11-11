@@ -11984,7 +11984,7 @@ namespace ECSEngine {
 			if (new_texture.tex != nullptr) {
 				// Compress the texture
 				CompressTextureDescriptor compress_descriptor;
-				compress_descriptor.spin_lock = &data->system->m_resources.texture_spinlock;
+				compress_descriptor.gpu_lock = &data->system->m_resources.texture_spinlock;
 				bool success = CompressTexture(data->system->m_graphics, new_texture, ECS_TEXTURE_COMPRESSION_EX_COLOR, compress_descriptor);
 
 				if (success) {

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Distribution|x64">
@@ -197,6 +197,7 @@
     <ClInclude Include="src\Sandbox\SandboxFile.h" />
     <ClInclude Include="src\Sandbox\SandboxAccessor.h" />
     <ClInclude Include="src\Sandbox\SandboxModule.h" />
+    <ClInclude Include="src\Sandbox\SandboxProfiling.h" />
     <ClInclude Include="src\Sandbox\SandboxScene.h" />
     <ClInclude Include="src\Sandbox\SandboxTypes.h" />
     <ClInclude Include="src\Editor\EditorScene.h" />
@@ -290,6 +291,7 @@
     <ClCompile Include="src\Sandbox\SandboxFile.cpp" />
     <ClCompile Include="src\Sandbox\SandboxAccessor.cpp" />
     <ClCompile Include="src\Sandbox\SandboxModule.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxProfiling.cpp" />
     <ClCompile Include="src\Sandbox\SandboxScene.cpp" />
     <ClCompile Include="src\UI\HelperWindows.cpp" />
     <ClCompile Include="src\UI\AssetExplorer.cpp" />

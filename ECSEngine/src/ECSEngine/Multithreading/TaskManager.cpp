@@ -2,6 +2,7 @@
 #include "TaskManager.h"
 #include "../ECS/World.h"
 #include "../Utilities/Crash.h"
+#include "../Profiling/FrameProfilerGlobal.h"
 
 // In milliseconds
 #define SLEEP_UNTIL_DYNAMIC_TASKS_FINISH_INTERVAL 25
@@ -16,7 +17,7 @@
 
 namespace ECSEngine {
 
-	inline AllocatorPolymorphic StaticTaskAllocator(TaskManager* manager) {
+	ECS_INLINE AllocatorPolymorphic StaticTaskAllocator(TaskManager* manager) {
 		return GetAllocatorPolymorphic(&manager->m_static_task_data_allocator);
 	}
 
@@ -220,6 +221,7 @@ namespace ECSEngine {
 		}
 
 		SetWaitType(ECS_TASK_MANAGER_WAIT_SLEEP);
+		SetExceptionHandler(nullptr, nullptr, 0);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -407,6 +409,23 @@ namespace ECSEngine {
 		ThreadFunctionWrapperData wrappers[2];
 	};
 
+	static ThreadFunctionWrapperData GetWrapperFromComposed(const ComposeWrapperData* wrapper_data, unsigned int index) {
+		ThreadFunctionWrapperData maintain_wrapper;
+		if (index == 0) {
+			maintain_wrapper = wrapper_data->wrappers[0];
+			if (wrapper_data->wrappers[0].data_size > 0) {
+				maintain_wrapper.data = OffsetPointer(wrapper_data, sizeof(*wrapper_data));
+			}
+		}
+		else {
+			maintain_wrapper = wrapper_data->wrappers[1];
+			if (wrapper_data->wrappers[1].data_size > 0) {
+				maintain_wrapper.data = OffsetPointer(wrapper_data, sizeof(*wrapper_data) + wrapper_data->wrappers[1].data_size);
+			}
+		}
+		return maintain_wrapper;
+	}
+
 	ECS_THREAD_WRAPPER_TASK(ComposeWrapper) {
 		ComposeWrapperData* data = (ComposeWrapperData*)_wrapper_data;
 
@@ -491,6 +510,22 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(size_t, compose_data_storage, 64);
 		ThreadFunctionWrapperData composed_wrapper = CreateComposeWrapper(m_dynamic_wrapper, addition_wrapper, run_after_existing_one, compose_data_storage);
 		ChangeDynamicWrapperMode(composed_wrapper);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	static ECS_THREAD_WRAPPER_TASK(FrameTimingWrapper) {
+		Timer timer;
+		FrameProfilerPush(thread_id, task.name);
+		task.function(thread_id, world, task.data);
+		FrameProfilerPop(thread_id, timer.GetDurationFloat(ECS_TIMER_DURATION_US));
+	}
+
+	void TaskManager::ComposeFrameTimingWrappers()
+	{
+		ThreadFunctionWrapperData frame_wrapper = { FrameTimingWrapper, nullptr, 0 };
+		ComposeDynamicWrapper(frame_wrapper, false);
+		ComposeStaticWrapper(frame_wrapper, false);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -837,6 +872,44 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void TaskManager::RemoveComposedDynamicWrapper(bool keep_first_wrapper)
+	{
+		ECS_ASSERT(m_dynamic_wrapper.function == ComposeWrapper);
+
+		const ComposeWrapperData* wrapper_data = (const ComposeWrapperData*)m_dynamic_wrapper.data;
+		ThreadFunctionWrapperData maintain_wrapper = GetWrapperFromComposed(wrapper_data, keep_first_wrapper ? 0 : 1);
+		ChangeDynamicWrapperMode(maintain_wrapper);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void TaskManager::RemoveComposedStaticWrapper(bool keep_first_wrapper)
+	{
+		ECS_ASSERT(m_static_wrapper.function == ComposeWrapper);
+		
+		const ComposeWrapperData* wrapper_data = (const ComposeWrapperData*)m_static_wrapper.data;
+		ThreadFunctionWrapperData maintain_wrapper = GetWrapperFromComposed(wrapper_data, keep_first_wrapper ? 0 : 1);
+		ChangeStaticWrapperMode(maintain_wrapper);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void TaskManager::SetExceptionHandler(TaskManagerExceptionHandler handler, void* data, size_t data_size)
+	{
+		m_exception_handler = handler;
+		ECS_ASSERT(data_size <= sizeof(m_exception_handler_data));
+		if (data_size == 0) {
+			m_exception_handler_data_ptr = data;
+			m_is_exception_handler_data_ptr = true;
+		}
+		else {
+			m_is_exception_handler_data_ptr = false;
+			memcpy(m_exception_handler_data, data, data_size);
+		}
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::SetTask(StaticThreadTask task, unsigned int index, size_t task_data_size) {
 		ECS_ASSERT(m_tasks.size < m_tasks.capacity);
 		if (task_data_size > 0) {
@@ -1171,6 +1244,25 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	static int ThreadExceptionFilter(TaskManager* task_manager, unsigned int thread_id, EXCEPTION_POINTERS* exception) {
+		TaskManagerExceptionHandlerData handler_data;
+		handler_data.exception_information = OS::GetExceptionInformationFromNative(exception);
+
+		if (OS::IsExceptionCodeCritical(handler_data.exception_information.error_code)) {
+			if (task_manager->m_exception_handler) {
+				handler_data.user_data = task_manager->m_is_exception_handler_data_ptr ? task_manager->m_exception_handler_data_ptr : task_manager->m_exception_handler_data;
+				handler_data.thread_id = thread_id;
+				task_manager->m_exception_handler(&handler_data);
+			}
+			
+			ECS_FORMAT_TEMP_STRING(error_message, "Thread {#} has hard crashed with a ", thread_id);
+			OS::ExceptionCodeToString(handler_data.exception_information.error_code, error_message);
+			Crash(error_message);
+			return EXCEPTION_EXECUTE_HANDLER;
+		}
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
 	void ThreadProcedure(
 		TaskManager* task_manager,
 		unsigned int thread_id
@@ -1183,61 +1275,63 @@ namespace ECSEngine {
 		// Keeping the pointer to its own dynamic task queue in order to avoid reloading the pointer
 		// when calling the method
 		ThreadQueue* thread_queue = task_manager->GetThreadQueue(thread_id);
-
-		DynamicThreadTask thread_task;
-		while (true) {
-			if (thread_queue->Pop(thread_task)) {
+		__try {
+			DynamicThreadTask thread_task;
+			while (true) {
+				if (thread_queue->Pop(thread_task)) {
 #ifdef ECS_TASK_MANAGER_WRAPPER
-				task_manager->ExecuteDynamicTask(thread_task.task, thread_id, thread_id);
+					task_manager->ExecuteDynamicTask(thread_task.task, thread_id, thread_id);
 #else
-				thread_task.task.function(thread_id, task_manager->m_world, thread_task.task.data);
+					thread_task.task.function(thread_id, task_manager->m_world, thread_task.task.data);
 #endif
-			}
-			else {
-				auto go_to_sleep = [=]() {
-					if (HasFlag(task_manager->m_wait_type, ECS_TASK_MANAGER_WAIT_SLEEP)) {
-						task_manager->SleepThread(thread_id);
+				}
+				else {
+					auto go_to_sleep = [=]() {
+						if (HasFlag(task_manager->m_wait_type, ECS_TASK_MANAGER_WAIT_SLEEP)) {
+							task_manager->SleepThread(thread_id);
+						}
+						else {
+							task_manager->SpinThread(thread_id);
+						}
+					};
+
+					auto go_to_sleep_dynamic_task_check = [&]() {
+						// We need to recheck before going to sleep if there is something on the dynamic task queue
+						bool was_executed = false;
+						if (thread_queue->Pop(thread_task)) {
+							was_executed = true;
+							task_manager->ExecuteDynamicTask(thread_task.task, thread_id, thread_id);
+						}
+						if (!was_executed) {
+							go_to_sleep();
+						}
+					};
+
+					// We failed to get a thread task from our queue.
+					// If the stealing is enabled, try to do it
+					if (HasFlag(task_manager->m_wait_type, ECS_TASK_MANAGER_WAIT_STEAL)) {
+						unsigned int stolen_thread_id = thread_id;
+						thread_task.task = task_manager->StealTask(stolen_thread_id);
+						// We managed to get a task
+						if (thread_task.task.function != nullptr) {
+							task_manager->ExecuteDynamicTask(thread_task.task, thread_id, stolen_thread_id);
+						}
+						else {
+							// There is nothing to be stolen - either try to get the next static task or go to wait if overpassed
+							if (!task_manager->ExecuteStaticTask(thread_id)) {
+								go_to_sleep_dynamic_task_check();
+							}
+						}
 					}
 					else {
-						task_manager->SpinThread(thread_id);
-					}
-				};
-
-				auto go_to_sleep_dynamic_task_check = [&]() {
-					// We need to recheck before going to sleep if there is something on the dynamic task queue
-					bool was_executed = false;
-					if (thread_queue->Pop(thread_task)) {
-						was_executed = true;
-						task_manager->ExecuteDynamicTask(thread_task.task, thread_id, thread_id);
-					}
-					if (!was_executed) {
-						go_to_sleep();
-					}
-				};
-
-				// We failed to get a thread task from our queue.
-				// If the stealing is enabled, try to do it
-				if (HasFlag(task_manager->m_wait_type, ECS_TASK_MANAGER_WAIT_STEAL)) {
-					unsigned int stolen_thread_id = thread_id;
-					thread_task.task = task_manager->StealTask(stolen_thread_id);
-					// We managed to get a task
-					if (thread_task.task.function != nullptr) {
-						task_manager->ExecuteDynamicTask(thread_task.task, thread_id, stolen_thread_id);
-					}
-					else {
-						// There is nothing to be stolen - either try to get the next static task or go to wait if overpassed
 						if (!task_manager->ExecuteStaticTask(thread_id)) {
 							go_to_sleep_dynamic_task_check();
 						}
 					}
 				}
-				else {
-					if (!task_manager->ExecuteStaticTask(thread_id)) {
-						go_to_sleep_dynamic_task_check();
-					}
-				}
 			}
 		}
+		__except (ThreadExceptionFilter(task_manager, thread_id, GetExceptionInformation())) {}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

@@ -328,16 +328,19 @@ namespace ECSEngine {
 
 			// These values are internal, don't need to be filled in
 			Timer timer;
-			// This is a boolean flag that is set when the data is changed
-			bool file_data_was_changed;
 			Stream<char> file_data = {};
 		};
 
 		ECSENGINE_API void DeallocateTextFileDrawData(TextFileDrawData* draw_data, AllocatorPolymorphic path_allocator);
 
+		// This is used in conjunction with a retained mode draw mode
 		ECSENGINE_API void DrawTextFile(UIDrawer* drawer, TextFileDrawData* draw_data);
 
+		// This is used in conjunction with a retained mode draw mode
 		ECSENGINE_API void TextFileDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
+
+		// Window_data must be a TextFileDrawData* info
+		ECSENGINE_API bool TextFileWindowRetainedMode(void* window_data, WindowRetainedModeInfo* info);
 
 		ECSENGINE_API unsigned int CreateTextFileWindow(const TextFileDrawData* data, UISystem* system, Stream<char> window_name);
 		

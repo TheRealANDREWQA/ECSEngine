@@ -33,10 +33,19 @@ namespace ECSEngine {
 	// Should return true if it managed to write, else false
 	typedef bool (*RuntimeCrashPersistenceWriteCallback)(Stream<wchar_t> path, void* user_data);
 
+	namespace OS {
+		struct ThreadContext;
+	}
+
 	struct ECSENGINE_API RuntimeCrashPersistenceWriteOptions {
 		ECS_INLINE RuntimeCrashPersistenceWriteOptions() {
 			memset(this, 0, sizeof(*this));
 		}
+
+		// If this is set, it will use this context for generating the stack trace
+		// of the crashing thread. This is useful for hard crashes where the thread
+		// left the point where the hard crash occured and got to the exception handler
+		OS::ThreadContext* crashing_thread_context;
 
 		// If this is set to true, it will suspend the threads before gathering the stack trace
 		bool suspend_threads;
@@ -112,9 +121,9 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message;
 	};
 
-	ECSENGINE_API void RuntimeCrashPersistenceFilePath(Stream<wchar_t> directory, CapacityStream<wchar_t>* file_path, ECS_RUNTIME_CRASH_FILE_TYPE type);
+	ECSENGINE_API Stream<wchar_t> RuntimeCrashPersistenceFilePath(Stream<wchar_t> directory, CapacityStream<wchar_t>* file_path, ECS_RUNTIME_CRASH_FILE_TYPE type);
 
-	ECSENGINE_API void RuntimeCrashPersistenceFilePath(CapacityStream<wchar_t>* directory, ECS_RUNTIME_CRASH_FILE_TYPE type);
+	ECSENGINE_API Stream<wchar_t> RuntimeCrashPersistenceFilePath(CapacityStream<wchar_t>* directory, ECS_RUNTIME_CRASH_FILE_TYPE type);
 
 	// Returns true if it succeeded, else false
 	// For the save scene data only the asset database and the overrides need to be specified
@@ -124,6 +133,17 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		const SaveSceneData* save_scene_data,
 		const RuntimeCrashPersistenceWriteOptions* options
+	);
+
+	// If the options unique crash directory is set to false, it will return the given directory
+	// If the option is activated, it will create the path into the given storage and attempt to create
+	// the directory there. If the creation fails, it returns an empty string.
+	// It will also deactivate the option such that you can call the normal write function with this
+	// directory and work
+	ECSENGINE_API Stream<wchar_t> RuntimeCrashPersistenceWriteDirectory(
+		Stream<wchar_t> directory,
+		RuntimeCrashPersistenceWriteOptions* options,
+		CapacityStream<wchar_t>& storage
 	);
 
 	// Returns true if it succeeded, else false. Only reads the misc files.

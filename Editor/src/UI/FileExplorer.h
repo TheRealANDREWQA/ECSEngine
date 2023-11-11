@@ -16,10 +16,4 @@ unsigned int CreateFileExplorerWindow(EditorState* editor_state);
 
 void CreateFileExplorerAction(ECSEngine::Tools::ActionData* action_data);
 
-// Index is used to reset the shift indices, can be omitted by external setters
-void ChangeFileExplorerDirectory(EditorState* editor_state, ECSEngine::Stream<wchar_t> path, unsigned int index = -1);
-
-// Index is used to reset the shift indices, can be omitted by external setters
-void ChangeFileExplorerFile(EditorState* editor_state, ECSEngine::Stream<wchar_t> path, unsigned int index = -1);
-
 void TickFileExplorer(EditorState* editor_state);

@@ -1429,28 +1429,7 @@ namespace ECSEngine {
 			drawer->OffsetX(draw_data->border_padding.x);
 			drawer->OffsetY(draw_data->border_padding.y);
 
-			draw_data->file_data_was_changed = false;
 			UIDrawConfig config;
-			size_t elapsed_milliseconds = draw_data->timer.GetDuration(ECS_TIMER_DURATION_MS);
-			if (elapsed_milliseconds >= draw_data->timer_milliseconds_recheck) {
-				Stream<char> contents = ReadWholeFileText(draw_data->path);
-				if (contents.size != 0) {
-					// Also do a compare with the old data since this will save us
-					// Having to redraw the window
-					if (contents != draw_data->file_data) {
-						if (draw_data->file_data.size > 0) {
-							free(draw_data->file_data.buffer);
-						}
-						draw_data->file_data_was_changed = true;
-						draw_data->file_data = contents;
-					}
-					else {
-						free(contents.buffer);
-					}
-				}
-				draw_data->timer.SetNewStart();
-			}
-
 			bool draw_border = false;
 			if (draw_data->file_data.size > 0) {
 				float old_next_row_y_offset = drawer->layout.next_row_y_offset;
@@ -1502,9 +1481,31 @@ namespace ECSEngine {
 			DeallocateTextFileDrawData(draw_data, system->Allocator());
 		}
 
-		static bool TextFileWindowRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
-			TextFileDrawData* data = (TextFileDrawData*)window_data;
-			return !data->file_data_was_changed;
+		bool TextFileWindowRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+			TextFileDrawData* draw_data = (TextFileDrawData*)window_data;
+
+			bool has_changed = false;
+			size_t elapsed_milliseconds = draw_data->timer.GetDuration(ECS_TIMER_DURATION_MS);
+			if (elapsed_milliseconds >= draw_data->timer_milliseconds_recheck) {
+				Stream<char> contents = ReadWholeFileText(draw_data->path);
+				if (contents.size != 0) {
+					// Also do a compare with the old data since this will save us
+					// Having to redraw the window
+					if (contents != draw_data->file_data) {
+						if (draw_data->file_data.size > 0) {
+							free(draw_data->file_data.buffer);
+						}
+						has_changed = true;
+						draw_data->file_data = contents;
+					}
+					else {
+						free(contents.buffer);
+					}
+				}
+				draw_data->timer.SetNewStart();
+			}
+
+			return !has_changed;
 		}
 
 		unsigned int CreateTextFileWindow(const TextFileDrawData* data, UISystem* system, Stream<char> window_name) {
@@ -1529,7 +1530,6 @@ namespace ECSEngine {
 			window_data->file_data = {};
 			// Make sure to trigger a recheck
 			window_data->timer.DelayStart(-window_data->timer_milliseconds_recheck, ECS_TIMER_DURATION_MS);
-			window_data->file_data_was_changed = false;
 
 			return window_index;
 		}
@@ -1830,6 +1830,10 @@ namespace ECSEngine {
 				if (count == 0 || !(*filter)) {
 					color = drawer.color_theme.unavailable_text;
 				}
+				else if (type == ECS_CONSOLE_ERROR) {
+					// This is a special case
+					color = ECS_COLOR_WHITE;
+				}
 
 				Stream<char> stream = Stream<char>(temp_characters, 0);
 				ConvertIntToCharsFormatted(stream, (int64_t)(count));
@@ -1880,6 +1884,10 @@ namespace ECSEngine {
 				Color color = CONSOLE_COLORS[type];
 				if (count == 0 || !(*filter)) {
 					color = drawer.color_theme.unavailable_text;
+				}
+				else if (type == ECS_CONSOLE_ERROR) {
+					// This is a special case
+					color = ECS_COLOR_WHITE;
 				}
 
 				Stream<char> stream = Stream<char>(temp_characters, 0);

@@ -12,6 +12,7 @@ namespace ECSEngine {
 	}
 
 	struct WorldCrashHandlerPreCallbackFunctionData {
+		Stream<wchar_t> crash_directory;
 		RuntimeCrashPersistenceWriteOptions* write_options;
 		SaveSceneData* save_data; 
 		void* user_data;
@@ -23,6 +24,7 @@ namespace ECSEngine {
 	typedef bool (*WorldCrashHandlerPreCallbackFunction)(WorldCrashHandlerPreCallbackFunctionData* function_data);
 
 	struct WorldCrashHandlerPostCallbackFunctionData {
+		Stream<wchar_t> crash_directory;
 		bool suspending_threads_success;
 		bool resuming_threads_success;
 		bool crash_write_success;
@@ -75,10 +77,24 @@ namespace ECSEngine {
 		WorldCrashHandlerPostCallback post_callback = {};
 	};
 
+	namespace OS {
+		struct ThreadContext;
+	}
+
+	// This thread context can be set for hard crashes where the stack trace is given
+	// to us and the moment we execute the soft crash the thread exited out of the
+	// function that crashed and the stack frame won't reflect that. So you can set
+	// this thread context instead and have it be reflected in the stack trace
+	ECSENGINE_API void SetWorldCrashHandlerThreadContext(const OS::ThreadContext* thread_context);
+
 	// The paths must be absolute paths, not relative ones
 	ECSENGINE_API void SetAbortWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor);
 
 	// The paths must be absolute paths, not relative ones
 	ECSENGINE_API void SetContinueWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor);
+
+	struct TaskManager;
+
+	ECSENGINE_API void SetWorldCrashHandlerTaskManagerExceptionHandler(TaskManager* task_manager);
 
 }

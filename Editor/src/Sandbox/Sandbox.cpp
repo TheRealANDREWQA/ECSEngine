@@ -656,7 +656,6 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->scene_path.Initialize(editor_state->EditorAllocator(), 0, SCENE_PATH_STRING_CAPACITY);
 
 	// The runtime snapshots and their allocator are being created in the preinitialize phase
-
 	ResetSandboxCameras(editor_state, sandbox_index);
 
 	if (initialize_runtime) {
@@ -866,7 +865,7 @@ void DrawSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sand
 						}
 					}
 
-					ForEachEntityCommitFunctor(&sandbox->sandbox_world, query_descriptor, [&](ForEachEntityFunctorData* for_each_data) {
+					ForEachEntityCommitFunctor(&sandbox->sandbox_world, query_descriptor, [&](ForEachEntityUntypedFunctorData* for_each_data) {
 						ModuleDebugDrawComponentFunctionData draw_data;
 						draw_data.thread_id = 0;
 						draw_data.debug_drawer = debug_drawer;
@@ -1622,6 +1621,8 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 		sandbox->runtime_descriptor.per_thread_temporary_memory_size
 	);
 	sandbox->runtime_descriptor.task_manager = task_manager;
+	// Set the exception handler once when the task manager is created
+	SetWorldCrashHandlerTaskManagerExceptionHandler(task_manager);
 
 	// Create the threads for the task manager
 	sandbox->runtime_descriptor.task_manager->CreateThreads();
@@ -2220,6 +2221,9 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	sandbox->sandbox_world.timer.SetNewStart();
 
 	SandboxRestorePreviousCrashHandler(previous_crash_handler);
+
+	// Print any graphics messages that have accumulated
+	sandbox->sandbox_world.graphics->PrintRuntimeMessagesToConsole();
 
 	bool graphics_snapshot_success = editor_state->RuntimeGraphics()->RestoreResourceSnapshot(graphics_snapshot, &snapshot_message);
 	if (snapshot_message.size > 0) {

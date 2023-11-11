@@ -27,8 +27,10 @@ namespace ECSEngine {
 	ECSENGINE_API void* GetModuleHandleFromPath(Stream<wchar_t> module_path);
 
 	// It does not load any stream from the functions. Use the corresponding load functions for that
-	// The function LoadModuleTasks can be used to load them at a later time
-	ECSENGINE_API Module LoadModule(Stream<wchar_t> path);
+	// The function LoadModuleTasks can be used to load them at a later time. If the boolean pointer
+	// is specified, it will attempt to load the debugging symbols for this module and it will set the
+	// boolean value with the success of that load.
+	ECSENGINE_API Module LoadModule(Stream<wchar_t> path, bool* load_debug_symbols = nullptr);
 
 	// Loads the streams from the given module
 	ECSENGINE_API void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, CapacityStream<char>* error_message = nullptr);
@@ -102,14 +104,20 @@ namespace ECSEngine {
 	ECSENGINE_API Stream<ModuleDebugDrawElement> LoadModuleDebugDrawElements(ModuleRegisterDebugDrawFunction function, AllocatorPolymorphic allocator);
 
 	// Frees the OS handle to the valid module function but it does not deallocate the tasks
-	// or any other stream that was previously allocated. They must be manually deallocated.
-	ECSENGINE_API void ReleaseModule(Module* module);
+	// or any other stream that was previously allocated. They must be manually deallocated
+	// If the bool pointer is specified, it will attempt to unload the debugging symbols
+	// and set the value with the success of that action
+	ECSENGINE_API void ReleaseModule(Module* module, bool* unload_debugging_symbols = nullptr);
 
-	ECSENGINE_API void ReleaseModuleHandle(void* handle);
+	// If the bool pointer is specified, it will attempt to unload the debugging symbols
+	// and set the value with the success of that action
+	ECSENGINE_API void ReleaseModuleHandle(void* handle, bool* unload_debugging_symbols = nullptr);
 
 	ECSENGINE_API void ReleaseAppliedModuleStreams(AppliedModule* module, AllocatorPolymorphic allocator);
 
-	ECSENGINE_API void ReleaseAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator);
+	// If the bool pointer is specified, it will attempt to unload the debugging symbols
+	// and set the value with the success of that action
+	ECSENGINE_API void ReleaseAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, bool* unload_debugging_symbols = nullptr);
 
 	// It will move all the valid tasks in front of the stream while keeping the invalid ones at the end
 	// Returns the previous size, the new size will reflect the count of the valid tasks

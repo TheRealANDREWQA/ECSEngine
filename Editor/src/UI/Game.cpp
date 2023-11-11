@@ -56,6 +56,11 @@ void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 			DisplayNoGraphicsModule(drawer, multiple_graphics_module);
 		}
 	}
+
+	// Display the crash message if necessary
+	DisplayCrashedSandbox(drawer, editor_state, sandbox_index);
+	// Display the compiling message if necessary
+	DisplayCompilingSandbox(drawer, editor_state, sandbox_index);
 }
 
 void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)

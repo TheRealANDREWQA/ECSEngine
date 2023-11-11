@@ -3,6 +3,7 @@
 #include "ECSEngineContainers.h"
 #include "ECSEngineReflectionMacros.h"
 #include "ECSEngineRuntime.h"
+#include "ECSEngineProfiling.h"
 #include "../Modules/ModuleDefinition.h"
 
 enum EDITOR_SANDBOX_STATE : unsigned char {
@@ -134,6 +135,28 @@ enum EDITOR_SANDBOX_FLAG : size_t {
 	EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION = 1 << 0
 };
 
+enum ECS_REFLECT EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY : unsigned char {
+	EDITOR_SANDBOX_STATISTIC_CPU_USAGE,
+	EDITOR_SANDBOX_STATISTIC_GPU_USAGE,
+	EDITOR_SANDBOX_STATISTIC_RAM_USAGE,
+	EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT
+};
+
+enum ECS_REFLECT EDITOR_SANDBOX_STATISTIC_DISPLAY_FORM : unsigned char {
+	EDITOR_SANDBOX_STATISTIC_DISPLAY_TEXT,
+	EDITOR_SANDBOX_STATISTIC_DISPLAY_GRAPH
+};
+
+// We are reflecting this since we want this to be stored in the sandbox file
+struct ECS_REFLECT EditorSandboxStatisticsDisplay {
+	bool should_display[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];
+	EDITOR_SANDBOX_STATISTIC_DISPLAY_FORM display_form[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];
+};
+
+struct EditorSandboxStatistics {
+	ECSEngine::Statistic<float> values[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];
+};
+
 struct ECS_REFLECT EditorSandbox {
 	ECS_INLINE ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
 		return (ECSEngine::GlobalMemoryManager*)modules_in_use.allocator.allocator;
@@ -170,6 +193,9 @@ struct ECS_REFLECT EditorSandbox {
 
 	ECSEngine::CameraParametersFOV camera_parameters[EDITOR_SANDBOX_VIEWPORT_COUNT];
 	ECSEngine::OrientedPoint camera_saved_orientations[EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT];
+
+	// Save these to the sandbox file
+	EditorSandboxStatisticsDisplay system_statistics_display;
 
 	ECS_FIELDS_END_REFLECT;
 
@@ -224,6 +250,9 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::ResizableStream<EditorSandboxModuleSnapshot> runtime_module_snapshots;
 
 	EditorSandboxAssetHandlesSnapshot runtime_asset_handle_snapshot;
+
+	ECSEngine::FrameProfiler frame_statistics;
+	EditorSandboxStatistics system_statistics;
 
 	// Miscellaneous flags
 	size_t flags;

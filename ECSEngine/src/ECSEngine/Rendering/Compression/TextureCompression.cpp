@@ -104,26 +104,31 @@ namespace ECSEngine {
 
 		// Check if the compression type conforms to the range
 		if ((unsigned int)compression_type > (unsigned int)ECS_TEXTURE_COMPRESSION_BC7) {
-			SetErrorMessageInternal(descriptor.error_message, "Incorrect compression type - out of range.");
+			SetErrorMessageInternal(descriptor.error_message, "Incorrect compression type - out of range");
 			return false;
 		}
 
 		// Check to see that the dimensions are multiple of 4
 		if ((texture_descriptor.size.x & 3) != 0 || (texture_descriptor.size.y & 3) != 0) {
-			SetErrorMessageInternal(descriptor.error_message, "Cannot compress textures that do not have dimensions multiple of 4.");
+			SetErrorMessageInternal(descriptor.error_message, "Cannot compress textures that do not have dimensions multiple of 4");
 			return false;
 		}
 
 		DirectX::ScratchImage initial_image;
 		SetInternalImageAllocator(&initial_image, descriptor.allocator);
 
-		initial_image.Initialize2D(
+		HRESULT dx_result = initial_image.Initialize2D(
 			GetGraphicsNativeFormat(texture_descriptor.format), 
 			texture_descriptor.size.x, 
 			texture_descriptor.size.y, 
 			texture_descriptor.array_size, 
 			texture_descriptor.mip_levels
 		);
+		if (FAILED(dx_result)) {
+			SetErrorMessageInternal(descriptor.error_message, "Could not initialize internal image 2D");
+			return false;
+		}
+
 		ECS_GRAPHICS_FORMAT compressed_format;
 		if (HasFlag(descriptor.flags, ECS_TEXTURE_COMPRESS_SRGB)) {
 			compressed_format = COMPRESSED_FORMATS_SRGB[(unsigned int)compression_type];
@@ -142,75 +147,94 @@ namespace ECSEngine {
 
 		// Create a staging resource that will copy the original texture and map every mip level
 		// For compression
-		descriptor.Lock();
+		descriptor.GPULock();
+		bool is_locked = true;
 
-		Texture2D staging_texture = TextureToStaging(graphics, texture);
-		if (staging_texture.tex == nullptr) {
-			SetErrorMessageInternal(descriptor.error_message, "Failed compressing a texture. Could not create staging texture.");
-			descriptor.Unlock();
-			return false;
-		}
-
-		for (size_t index = 0; index < texture_descriptor.mip_levels; index++) {
-			HRESULT result = context->Map(staging_texture.tex, index, D3D11_MAP_READ, 0, &mapping);
-			if (FAILED(result)) {
-				SetErrorMessageInternal(descriptor.error_message, "Failed compressing a texture. Mapping a mip level failed.");
-				descriptor.Unlock();
+		HRESULT compress_result = 0;
+		Texture2D staging_texture;
+		staging_texture.tex = nullptr;
+		__try {
+			staging_texture = TextureToStaging(graphics, texture);
+			if (staging_texture.tex == nullptr) {
+				SetErrorMessageInternal(descriptor.error_message, "Failed compressing a texture. Could not create staging texture");
+				descriptor.GPUUnlock();
+				is_locked = false;
 				return false;
 			}
-			const DirectX::Image* image = initial_image.GetImage(index, 0, 0);
-			if (image->rowPitch == mapping.RowPitch) {
-				memcpy(image->pixels, mapping.pData, image->rowPitch * image->height);
+
+			for (size_t index = 0; index < texture_descriptor.mip_levels; index++) {
+				HRESULT result = context->Map(staging_texture.tex, index, D3D11_MAP_READ, 0, &mapping);
+				if (FAILED(result)) {
+					SetErrorMessageInternal(descriptor.error_message, "Failed compressing a texture. Mapping a mip level failed");
+					descriptor.GPUUnlock();
+					is_locked = false;
+					return false;
+				}
+				const DirectX::Image* image = initial_image.GetImage(index, 0, 0);
+				if (image->rowPitch == mapping.RowPitch) {
+					memcpy(image->pixels, mapping.pData, image->rowPitch * image->height);
+				}
+				else {
+					size_t offset = 0;
+					size_t mapping_offset = 0;
+					for (size_t subindex = 0; subindex < image->height; subindex++) {
+						memcpy(OffsetPointer(image->pixels, offset), OffsetPointer(mapping.pData, mapping_offset), image->rowPitch);
+						offset += image->rowPitch;
+						mapping_offset += mapping.RowPitch;
+					}
+				}
+				context->Unmap(staging_texture.tex, index);
+			}
+
+			// CPU codec
+			if (IsCPUCodec(compression_type)) {
+				descriptor.GPUUnlock();
+
+				compress_result = DirectX::Compress(
+					initial_image.GetImages(),
+					initial_image.GetImageCount(),
+					initial_image.GetMetadata(),
+					GetGraphicsNativeFormat(compressed_format),
+					compress_flag,
+					DirectX::TEX_THRESHOLD_DEFAULT,
+					final_image
+				);
+			}
+			// GPU Codec
+			else if (IsGPUCodec(compression_type)) {
+				compress_result = DirectX::Compress(
+					device,
+					initial_image.GetImages(),
+					initial_image.GetImageCount(),
+					initial_image.GetMetadata(),
+					GetGraphicsNativeFormat(compressed_format),
+					compress_flag | DirectX::TEX_COMPRESS_BC7_QUICK,
+					1.0f,
+					final_image
+				);
+				descriptor.GPUUnlock();
+				is_locked = false;
 			}
 			else {
-				size_t offset = 0;
-				size_t mapping_offset = 0;
-				for (size_t subindex = 0; subindex < image->height; subindex++) {
-					memcpy(OffsetPointer(image->pixels, offset), OffsetPointer(mapping.pData, mapping_offset), image->rowPitch);
-					offset += image->rowPitch;
-					mapping_offset += mapping.RowPitch;
+				SetErrorMessageInternal(descriptor.error_message, "Invalid compression codec for texture compression");
+				return false;
+			}
+
+			if (FAILED(compress_result)) {
+				SetErrorMessageInternal(descriptor.error_message, "Texture compression failed during codec");
+				return false;
+			}
+		}
+		__finally {
+			if (is_locked) {
+				descriptor.GPUUnlock();
+			}
+			if (AbnormalTermination()) {
+				// Release the staging texture - if it is set
+				if (staging_texture.Interface() != nullptr) {
+					staging_texture.Release();
 				}
 			}
-			context->Unmap(staging_texture.tex, index);
-		}
-
-		HRESULT result;
-		// CPU codec
-		if (IsCPUCodec(compression_type)) {
-			descriptor.Unlock();
-
-			result = DirectX::Compress(
-				initial_image.GetImages(),
-				initial_image.GetImageCount(),
-				initial_image.GetMetadata(),
-				GetGraphicsNativeFormat(compressed_format),
-				compress_flag,
-				DirectX::TEX_THRESHOLD_DEFAULT,
-				final_image
-			);
-		}
-		// GPU Codec
-		else if (IsGPUCodec(compression_type)) {
-			result = DirectX::Compress(
-				device,
-				initial_image.GetImages(),
-				initial_image.GetImageCount(),
-				initial_image.GetMetadata(),
-				GetGraphicsNativeFormat(compressed_format),
-				compress_flag | DirectX::TEX_COMPRESS_BC7_QUICK,
-				1.0f,
-				final_image
-			);
-			descriptor.Unlock();
-		}
-		else {
-			SetErrorMessageInternal(descriptor.error_message, "Invalid compression codec for texture compression.");
-			return false;
-		}
-
-		if (FAILED(result)) {
-			SetErrorMessageInternal(descriptor.error_message, "Texture compression failed during codec.");
-			return false;
 		}
 
 		ECS_STACK_CAPACITY_STREAM(Stream<void>, mip_data, 32);
@@ -227,14 +251,13 @@ namespace ECSEngine {
 			texture_descriptor.bind_flag = (ECS_GRAPHICS_BIND_TYPE)ClearFlag(texture_descriptor.bind_flag, ECS_GRAPHICS_BIND_RENDER_TARGET);
 		}
 		texture_descriptor.misc_flag = (ECS_GRAPHICS_MISC_FLAGS)ClearFlag(texture_descriptor.misc_flag, D3D11_RESOURCE_MISC_GENERATE_MIPS);
-		if (FAILED(result)) {
-			SetErrorMessageInternal(descriptor.error_message, "Creating final texture after compression failed.");
-			return false;
+		__try {
+			texture = graphics->CreateTexture(&texture_descriptor, false, debug_info);
 		}
-		texture = graphics->CreateTexture(&texture_descriptor, false, debug_info);
-
-		// Release the staging texture
-		staging_texture.Release();
+		__finally {
+			// Release the staging texture - even when faced with a crash
+			staging_texture.Release();
+		}
 		old_texture->Release();
 		graphics->RemovePossibleResourceFromTracking(old_texture);
 
@@ -294,10 +317,13 @@ namespace ECSEngine {
 			texture_descriptor.mip_levels = data.size;
 			texture_descriptor.mip_data = { new_data.buffer, data.size };
 
-			texture_result = graphics->CreateTexture(&texture_descriptor, temporary_texture, debug_info);
-
-			// Release the memory for the compressed texture
-			DeallocateEx(descriptor.allocator, new_data[0].buffer);
+			__try {
+				texture_result = graphics->CreateTexture(&texture_descriptor, temporary_texture, debug_info);
+			}
+			__finally {
+				// Release the memory for the compressed texture - even when faced with a crash
+				DeallocateEx(descriptor.allocator, new_data[0].buffer);
+			}
 		}
 		else {
 			// Need to call the GPU version.
@@ -314,7 +340,20 @@ namespace ECSEngine {
 				non_compressed_format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB;
 			}
 			DirectX::ScratchImage initial_image;
-			initial_image.Initialize2DNoMemory((const void**)mip_data, data.size, initial_images, GetGraphicsNativeFormat(non_compressed_format), width, height, 1, data.size);
+			HRESULT dx_result = initial_image.Initialize2DNoMemory(
+				(const void**)mip_data, 
+				data.size, 
+				initial_images, 
+				GetGraphicsNativeFormat(non_compressed_format), 
+				width, 
+				height, 
+				1, 
+				data.size
+			);
+			if (FAILED(dx_result)) {
+				SetErrorMessageInternal(descriptor.error_message, "Failed to set internal compression image settings");
+				return texture_result;
+			}
 
 			// Validate that the buffer has enough data to be read - for example if mistankenly choosing HDR compression for a texture
 			// That does not sufficient byte size might cause a crash
@@ -326,21 +365,26 @@ namespace ECSEngine {
 			}
 
 			// Lock the gpu lock, if any
-			descriptor.Lock();
+			descriptor.GPULock();
 
 			ID3D11Texture2D* final_texture = nullptr;
-			HRESULT result = DirectX::CompressGPU(
-				graphics->GetDevice(),
-				initial_images, 
-				data.size, 
-				initial_image.GetMetadata(),
-				GetGraphicsNativeFormat(compressed_format),
-				compress_flag | DirectX::TEX_COMPRESS_BC7_QUICK,
-				1.0f, 
-				&final_texture
-			);
-
-			descriptor.Unlock();
+			HRESULT result = E_FAIL;
+			__try {
+				result = DirectX::CompressGPU(
+					graphics->GetDevice(),
+					initial_images,
+					data.size,
+					initial_image.GetMetadata(),
+					GetGraphicsNativeFormat(compressed_format),
+					compress_flag | DirectX::TEX_COMPRESS_BC7_QUICK,
+					1.0f,
+					&final_texture
+				);
+			}
+			__finally {
+				// Unlock the lock even when faced with a crash
+				descriptor.GPUUnlock();
+			}
 
 			if (!temporary_texture) {
 				// Add the resource to the graphics internal tracked resources
@@ -348,7 +392,7 @@ namespace ECSEngine {
 			}
 
 			if (FAILED(result)) {
-				SetErrorMessageInternal(descriptor.error_message, "Texture compression failed during codec.");
+				SetErrorMessageInternal(descriptor.error_message, "Texture compression failed during codec");
 				return texture_result;
 			}
 
@@ -356,7 +400,7 @@ namespace ECSEngine {
 		}
 
 		if (texture_result.tex == nullptr) {
-			SetErrorMessageInternal(descriptor.error_message, "Creating final texture after compression failed.");
+			SetErrorMessageInternal(descriptor.error_message, "Creating final texture after compression failed");
 			return texture_result;
 		}
 
@@ -425,7 +469,12 @@ namespace ECSEngine {
 		DirectX::ScratchImage initial_image;
 		SetInternalImageAllocator(&initial_image, descriptor.allocator);
 
-		initial_image.Initialize2D(GetGraphicsNativeFormat(texture_format), width, height, 1, data.size);
+		HRESULT dx_result = initial_image.Initialize2D(GetGraphicsNativeFormat(texture_format), width, height, 1, data.size);
+		if (FAILED(dx_result)) {
+			SetErrorMessageInternal(descriptor.error_message, "Failed to set internal image settings for compression");
+			return false;
+		}
+
 		ECS_GRAPHICS_FORMAT compressed_format = COMPRESSED_FORMATS[(unsigned int)compression_type];
 		DirectX::ScratchImage final_image;
 		SetInternalImageAllocator(&final_image, descriptor.allocator);
@@ -586,17 +635,17 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------------
 
-	void CompressTextureDescriptor::Lock()
+	void CompressTextureDescriptor::GPULock()
 	{
-		if (spin_lock != nullptr) {
-			spin_lock->Lock();
+		if (gpu_lock != nullptr) {
+			gpu_lock->Lock();
 		}
 	}
 
-	void CompressTextureDescriptor::Unlock()
+	void CompressTextureDescriptor::GPUUnlock()
 	{
-		if (spin_lock != nullptr) {
-			spin_lock->Unlock();
+		if (gpu_lock != nullptr) {
+			gpu_lock->Unlock();
 		}
 	}
 

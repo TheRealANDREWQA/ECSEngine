@@ -2835,6 +2835,9 @@ namespace ECSEngine {
 						*m_shared_components[index].named_instances.GetIdentifierPtrFromIndex(subindex) = identifier;
 					});
 				}
+				else {
+					m_shared_components[index].named_instances.Reset();
+				}
 
 				// Allocate the allocator
 				if (entity_manager->m_shared_components[index].info.allocator != nullptr) {

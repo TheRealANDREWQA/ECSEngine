@@ -262,7 +262,7 @@ namespace ECSEngine {
 		void* unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
 		InitializeForEachDataUniqueData(data, unique_components);
 
-		ForEachEntityFunctorData functor_data;
+		ForEachEntityUntypedFunctorData functor_data;
 		functor_data.thread_id = thread_id;
 		functor_data.world = world;
 		functor_data.unique_components = unique_components;
@@ -270,7 +270,7 @@ namespace ECSEngine {
 		functor_data.data = data->functor_data;
 		functor_data.command_stream = data->command_stream;
 
-		ForEachEntityFunctor functor = (ForEachEntityFunctor)data->thread_function;
+		ForEachEntityUntypedFunctor functor = (ForEachEntityUntypedFunctor)data->thread_function;
 		for (unsigned short index = 0; index < data->count; index++) {
 			functor_data.entity = data->entities[data->entity_offset + index];
 			functor(&functor_data);
@@ -297,7 +297,7 @@ namespace ECSEngine {
 		void* unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
 		InitializeForEachDataUniqueData(data, unique_components);
 
-		ForEachBatchFunctorData functor_data;
+		ForEachBatchUntypedFunctorData functor_data;
 		functor_data.thread_id = thread_id;
 		functor_data.world = world;
 		functor_data.entities = data->entities;
@@ -307,7 +307,7 @@ namespace ECSEngine {
 		functor_data.shared_components = data->shared_data;
 		functor_data.data = data->functor_data;
 
-		ForEachBatchFunctor functor = (ForEachBatchFunctor)data->thread_function;
+		ForEachBatchUntypedFunctor functor = (ForEachBatchUntypedFunctor)data->thread_function;
 		functor(&functor_data);
 	}
 
@@ -358,7 +358,7 @@ namespace ECSEngine {
 
 	void ForEachEntityCommitFunctor(
 		World* world,
-		ForEachEntityFunctor functor,
+		ForEachEntityUntypedFunctor functor,
 		void* data,
 		const ArchetypeQueryDescriptor& query_descriptor
 	) {
@@ -369,7 +369,7 @@ namespace ECSEngine {
 
 	void ForEachBatchCommitFunctor(
 		World* world,
-		ForEachBatchFunctor functor,
+		ForEachBatchUntypedFunctor functor,
 		void* data,
 		unsigned short batch_size,
 		const ArchetypeQueryDescriptor& query_descriptor
@@ -387,7 +387,7 @@ namespace ECSEngine {
 		void ForEachEntity(
 			unsigned int thread_id,
 			World* world,
-			ForEachEntityFunctor functor,
+			ForEachEntityUntypedFunctor functor,
 			const char* functor_name,
 			void* data,
 			size_t data_size,
@@ -412,7 +412,7 @@ namespace ECSEngine {
 		void ForEachBatch(
 			unsigned int thread_id,
 			World* world,
-			ForEachBatchFunctor functor,
+			ForEachBatchUntypedFunctor functor,
 			const char* functor_name,
 			void* data,
 			size_t data_size,

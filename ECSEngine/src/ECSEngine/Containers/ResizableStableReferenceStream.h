@@ -92,7 +92,9 @@ namespace ECSEngine {
 			// Now copy the old content
 			stream.Copy(old_stream);
 			// Deallocate the old buffer
-			Deallocate(allocator, old_stream.buffer, debug_info);
+			if (old_stream.buffer != nullptr) {
+				Deallocate(allocator, old_stream.buffer, debug_info);
+			}
 		}
 
 		// It will determine how many elements at the end are freed and will move all the existing elements

@@ -1444,7 +1444,7 @@ void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandb
 void SandboxForEachEntity(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	ForEachEntityFunctor functor, 
+	ForEachEntityUntypedFunctor functor, 
 	void* functor_data, 
 	const ArchetypeQueryDescriptor& query_descriptor,
 	EDITOR_SANDBOX_VIEWPORT viewport
@@ -1466,7 +1466,7 @@ struct SplatLinkComponentBasicData {
 	Stream<Stream<void>> assets;
 };
 
-void SplatLinkComponentBasic(ForEachEntityFunctorData* functor_data) {
+void SplatLinkComponentBasic(ForEachEntityUntypedFunctorData* functor_data) {
 	SplatLinkComponentBasicData* data = (SplatLinkComponentBasicData*)functor_data->data;
 	for (size_t index = 0; index < data->asset_fields.size; index++) {
 		SetAssetTargetFieldFromReflection(
@@ -1485,7 +1485,7 @@ struct SplatLinkComponentBuildData {
 	ModuleLinkComponentFunction link_function;
 };
 
-void SplatLinkComponentBuild(ForEachEntityFunctorData* functor_data) {
+void SplatLinkComponentBuild(ForEachEntityUntypedFunctorData* functor_data) {
 	SplatLinkComponentBuildData* data = (SplatLinkComponentBuildData*)functor_data->data;
 
 	ModuleLinkComponentFunctionData function_data;

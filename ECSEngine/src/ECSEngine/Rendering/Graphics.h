@@ -1130,6 +1130,10 @@ namespace ECSEngine {
 		// This is not const since it will commit internal resources to be freed
 		bool IsInternalStateValid();
 
+		// It will print any warnings/messages that the underlying runtime
+		// stored for us
+		void PrintRuntimeMessagesToConsole();
+
 		void RestoreBlendState(GraphicsPipelineBlendState state);
 
 		void RestoreDepthStencilState(GraphicsPipelineDepthStencilState state);

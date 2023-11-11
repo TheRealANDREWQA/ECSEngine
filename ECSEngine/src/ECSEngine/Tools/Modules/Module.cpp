@@ -176,21 +176,12 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	Module LoadModule(Stream<wchar_t> path)
+	Module LoadModule(Stream<wchar_t> path, bool* load_debugging_symbols)
 	{
 		Module module;
 		memset(&module, 0, sizeof(module));
 
-		ECS_STACK_CAPACITY_STREAM(wchar_t, library_path, 256);
-		if (path[path.size] != L'\0') {
-			library_path.CopyOther(path);
-			library_path[library_path.size] = L'\0';
-		}
-		else {
-			library_path = path;
-		}
-
-		HMODULE module_handle = LoadLibraryEx(library_path.buffer, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
+		void* module_handle = OS::LoadDLL(path);
 
 		if (module_handle == nullptr) {
 			DWORD error = GetLastError();
@@ -198,24 +189,28 @@ namespace ECSEngine {
 			return module;
 		}
 
-		module.task_function = (ModuleTaskFunction)GetProcAddress(module_handle, STRING(ModuleTaskFunction));
+		module.task_function = (ModuleTaskFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleTaskFunction));
 		if (module.task_function == nullptr) {
-			FreeLibrary(module_handle);
+			OS::UnloadDLL(module_handle);
 			module.code = ECS_GET_MODULE_FUNCTION_MISSING;
 			return module;
 		}
 
 		// Now the optional functions
-		module.build_functions = (ModuleBuildFunctions)GetProcAddress(module_handle, STRING(ModuleBuildFunctions));
-		module.ui_function = (ModuleUIFunction)GetProcAddress(module_handle, STRING(ModuleUIFunction));
-		module.link_components = (ModuleRegisterLinkComponentFunction)GetProcAddress(module_handle, STRING(ModuleRegisterLinkComponentFunction));
-		module.serialize_function = (ModuleSerializeComponentFunction)GetProcAddress(module_handle, STRING(ModuleSerializeComponentFunction));
-		module.set_world = (ModuleSetCurrentWorld)GetProcAddress(module_handle, STRING(ModuleSetCurrentWorld));
-		module.extra_information = (ModuleRegisterExtraInformationFunction)GetProcAddress(module_handle, STRING(ModuleRegisterExtraInformationFunction));
-		module.debug_draw = (ModuleRegisterDebugDrawFunction)GetProcAddress(module_handle, STRING(ModuleRegisterDebugDrawFunction));
+		module.build_functions = (ModuleBuildFunctions)OS::GetDLLSymbol(module_handle, STRING(ModuleBuildFunctions));
+		module.ui_function = (ModuleUIFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleUIFunction));
+		module.link_components = (ModuleRegisterLinkComponentFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterLinkComponentFunction));
+		module.serialize_function = (ModuleSerializeComponentFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleSerializeComponentFunction));
+		module.set_world = (ModuleSetCurrentWorld)OS::GetDLLSymbol(module_handle, STRING(ModuleSetCurrentWorld));
+		module.extra_information = (ModuleRegisterExtraInformationFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterExtraInformationFunction));
+		module.debug_draw = (ModuleRegisterDebugDrawFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterDebugDrawFunction));
 
 		module.code = ECS_GET_MODULE_OK;
 		module.os_module_handle = module_handle;
+
+		if (load_debugging_symbols != nullptr) {
+			*load_debugging_symbols = OS::LoadDLLSymbols(path, module_handle);
+		}
 
 		return module;
 	}
@@ -549,18 +544,22 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void ReleaseModule(Module* module) {
+	void ReleaseModule(Module* module, bool* unload_debugging_symbols) {
 		if (module->code != ECS_GET_MODULE_FAULTY_PATH) {
-			ReleaseModuleHandle(module->os_module_handle);
+			ReleaseModuleHandle(module->os_module_handle, unload_debugging_symbols);
 		}
 		module->code = ECS_GET_MODULE_FAULTY_PATH;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void ReleaseModuleHandle(void* handle)
+	void ReleaseModuleHandle(void* handle, bool* unload_debugging_symbols)
 	{
-		BOOL success = FreeLibrary((HMODULE)handle);
+		// This must be done before unloading the dll otherwise it will be invalid
+		if (unload_debugging_symbols != nullptr) {
+			OS::UnloadDLLSymbols(handle);
+		}
+		OS::UnloadDLL(handle);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -603,10 +602,10 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void ReleaseAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator)
+	void ReleaseAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, bool* unload_debugging_symbols)
 	{
 		ReleaseAppliedModuleStreams(module, allocator);
-		ReleaseModule(&module->base_module);
+		ReleaseModule(&module->base_module, unload_debugging_symbols);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

@@ -16,8 +16,77 @@ ECS_INLINE unsigned int GizmoRenderIndex(unsigned int instance_index, bool extra
 	return GenerateRenderInstanceValue(instance_index, extra_thick ? ECS_GENERATE_INSTANCE_FRAMEBUFFER_MAX_PIXEL_THICKNESS : GIZMO_THICKNESS);
 }
 
+struct DrawMeshTaskData {
+	Matrix camera_matrix;
+	float3 camera_translation;
+};
+
+static void DrawMeshTask(
+	ForEachEntityData* for_each_data,
+	const RenderMesh* render_mesh,
+	const Translation* translation,
+	const Rotation* rotation,
+	const Scale* scale
+) {
+	DrawMeshTaskData* data = (DrawMeshTaskData*)for_each_data->user_data;
+
+	Graphics* graphics = for_each_data->world->graphics;
+
+	if (render_mesh->Validate()) {
+		float3 translation_value = { 0.0f, 0.0f, 0.0f };
+		float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
+		float3 scale_value = { 1.0f, 1.0f, 1.0f };
+		Matrix matrix_translation;
+		Matrix matrix_rotation;
+		Matrix matrix_scale;
+
+		if (translation != nullptr) {
+			translation_value = translation->value;
+			matrix_translation = MatrixTranslation(translation_value);
+		}
+		else {
+			matrix_translation = MatrixIdentity();
+		}
+
+		if (rotation != nullptr) {
+			rotation_value = rotation->value;
+			matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
+		}
+		else {
+			matrix_rotation = MatrixIdentity();
+		}
+
+		if (scale != nullptr) {
+			scale_value = scale->value;
+			matrix_scale = MatrixScale(scale_value);
+		}
+		else {
+			matrix_scale = MatrixIdentity();
+		}
+
+		Matrix object_matrix = MatrixTRS(matrix_translation, matrix_rotation, matrix_scale);
+		Matrix mvp_matrix = object_matrix * data->camera_matrix;
+
+		object_matrix = MatrixGPU(object_matrix);
+		mvp_matrix = MatrixGPU(mvp_matrix);
+
+		float3 camera_position = data->camera_translation;
+		const void* injected_values[ECS_CB_INJECT_TAG_COUNT];
+		injected_values[ECS_CB_INJECT_CAMERA_POSITION] = &camera_position;
+		injected_values[ECS_CB_INJECT_MVP_MATRIX] = &mvp_matrix;
+		injected_values[ECS_CB_INJECT_OBJECT_MATRIX] = &object_matrix;
+
+		BindConstantBufferInjectedCB(graphics, render_mesh->material, injected_values);
+
+		graphics->BindMesh(render_mesh->mesh->mesh);
+		graphics->BindMaterial(*render_mesh->material);
+
+		graphics->DrawCoalescedMeshCommand(*render_mesh->mesh);
+	}
+}
+
 template<bool schedule_element>
-ECS_THREAD_TASK(RenderTask) {
+ECS_THREAD_TASK(DrawMeshes) {
 	auto kernel = ForEachEntityCommit<
 		schedule_element,
 		QueryRead<RenderMesh>,
@@ -36,79 +105,16 @@ ECS_THREAD_TASK(RenderTask) {
 			float3 camera_translation = camera.translation;
 			world->debug_drawer->UpdateCameraMatrix(camera_matrix);
 
-			kernel.Function([&](
-				ForEachEntityData* for_each_data,
-				const RenderMesh* render_mesh,
-				const Translation* translation,
-				const Rotation* rotation,
-				const Scale* scale
-				) {
-					Graphics* graphics = for_each_data->world->graphics;
-
-					if (render_mesh->Validate()) {
-						float3 translation_value = { 0.0f, 0.0f, 0.0f };
-						float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
-						float3 scale_value = { 1.0f, 1.0f, 1.0f };
-						Matrix matrix_translation;
-						Matrix matrix_rotation;
-						Matrix matrix_scale;
-
-						if (translation != nullptr) {
-							translation_value = translation->value;
-							matrix_translation = MatrixTranslation(translation_value);
-						}
-						else {
-							matrix_translation = MatrixIdentity();
-						}
-
-						if (rotation != nullptr) {
-							rotation_value = rotation->value;
-							matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
-						}
-						else {
-							matrix_rotation = MatrixIdentity();
-						}
-
-						if (scale != nullptr) {
-							scale_value = scale->value;
-							matrix_scale = MatrixScale(scale_value);
-						}
-						else {
-							matrix_scale = MatrixIdentity();
-						}
-
-						Matrix object_matrix = MatrixTRS(matrix_translation, matrix_rotation, matrix_scale);
-						Matrix mvp_matrix = object_matrix * camera_matrix;
-
-						object_matrix = MatrixGPU(object_matrix);
-						mvp_matrix = MatrixGPU(mvp_matrix);
-
-						float3 camera_position = camera_translation;
-						const void* injected_values[ECS_CB_INJECT_TAG_COUNT];
-						injected_values[ECS_CB_INJECT_CAMERA_POSITION] = &camera_position;
-						injected_values[ECS_CB_INJECT_MVP_MATRIX] = &mvp_matrix;
-						injected_values[ECS_CB_INJECT_OBJECT_MATRIX] = &object_matrix;
-
-						BindConstantBufferInjectedCB(graphics, render_mesh->material, injected_values);
-
-						graphics->BindMesh(render_mesh->mesh->mesh);
-						graphics->BindMaterial(*render_mesh->material);
-
-						graphics->DrawCoalescedMeshCommand(*render_mesh->mesh);
-					}
-			});
+			DrawMeshTaskData draw_data = { camera_matrix, camera_translation };
+			kernel.Function(DrawMeshTask, &draw_data, sizeof(draw_data));
 		}
 	}
 }
 
-ECS_THREAD_TASK_TEMPLATE_BOOL(RenderTask);
-
-ECS_THREAD_TASK(RenderTaskInitialize) {
-	// Nothing to be performed at the moment
-}
+ECS_THREAD_TASK_TEMPLATE_BOOL(DrawMeshes);
 
 template<bool schedule_element>
-ECS_THREAD_TASK(RenderSelectables) {
+ECS_THREAD_TASK(DrawSelectables) {
 	if constexpr (!schedule_element) {
 		SystemManager* system_manager = world->system_manager;
 		EntityManager* entity_manager = world->entity_manager;
@@ -365,14 +371,10 @@ ECS_THREAD_TASK(RenderSelectables) {
 	}
 }
 
-ECS_THREAD_TASK_TEMPLATE_BOOL(RenderSelectables);
-
-ECS_THREAD_TASK(RenderSelectablesInitialize) {
-	// Nothing to be performed at the moment
-}
+ECS_THREAD_TASK_TEMPLATE_BOOL(DrawSelectables);
 
 template<bool schedule_element>
-ECS_THREAD_TASK(RenderFlush) {
+ECS_THREAD_TASK(FlushRenderCommands) {
 	if constexpr (!schedule_element) {
 		GraphicsPipelineRenderState render_state = world->debug_drawer->GetPreviousRenderState();
 		world->debug_drawer->DrawAll(1.0f);
@@ -381,10 +383,71 @@ ECS_THREAD_TASK(RenderFlush) {
 	}
 }
 
-ECS_THREAD_TASK_TEMPLATE_BOOL(RenderFlush);
+ECS_THREAD_TASK_TEMPLATE_BOOL(FlushRenderCommands);
+
+struct DrawInstancedFramebufferMeshTaskData {
+	ResizableStream<GenerateInstanceFramebufferElement>* elements;
+	Matrix camera_matrix;
+};
+
+static void DrawInstancedFramebufferMeshTask(
+	const ForEachEntityData* for_each_data,
+	const RenderMesh* render_mesh,
+	const Translation* translation,
+	const Rotation* rotation,
+	const Scale* scale
+) {
+	DrawInstancedFramebufferMeshTaskData* data = (DrawInstancedFramebufferMeshTaskData*)for_each_data->user_data;
+
+	World* world = for_each_data->world;
+	Graphics* graphics = world->graphics;
+
+	if (render_mesh->Validate()) {
+		float3 translation_value = { 0.0f, 0.0f, 0.0f };
+		//float3 rotation_value = { 0.0f, 0.0f, 0.0f };
+		float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
+		float3 scale_value = { 1.0f, 1.0f, 1.0f };
+		Matrix matrix_translation;
+		Matrix matrix_rotation;
+		Matrix matrix_scale;
+
+		if (translation != nullptr) {
+			translation_value = translation->value;
+			matrix_translation = MatrixTranslation(translation_value);
+		}
+		else {
+			matrix_translation = MatrixIdentity();
+		}
+
+		if (rotation != nullptr) {
+			rotation_value = rotation->value;
+			matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
+		}
+		else {
+			matrix_rotation = MatrixIdentity();
+		}
+
+		if (scale != nullptr) {
+			scale_value = scale->value;
+			matrix_scale = MatrixScale(scale_value);
+		}
+		else {
+			matrix_scale = MatrixIdentity();
+		}
+
+		Matrix gpu_mvp_matrix = MatrixMVPToGPU(matrix_translation, matrix_rotation, matrix_scale, data->camera_matrix);
+
+		GenerateInstanceFramebufferElement element;
+		element.base.is_submesh = false;
+		element.base.mesh = &render_mesh->mesh->mesh;
+		element.base.gpu_mvp_matrix = gpu_mvp_matrix;
+		element.instance_index = for_each_data->entity.index;
+		data->elements->Add(element);
+	}
+}
 
 template<bool schedule_element>
-ECS_THREAD_TASK(RenderInstancedFramebuffer) {
+ECS_THREAD_TASK(DrawInstancedFramebuffer) {
 	auto kernel = ForEachEntityCommit<
 		schedule_element,
 		QueryRead<RenderMesh>,
@@ -406,59 +469,8 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 					elements.Initialize(GetAllocatorPolymorphic(world->memory), 0);
 					Matrix camera_matrix = camera.GetViewProjectionMatrix();
 
-					kernel.Function([&](
-						const ForEachEntityData* for_each_data,
-						const RenderMesh* render_mesh,
-						const Translation* translation,
-						const Rotation* rotation,
-						const Scale* scale
-						) {
-							World* world = for_each_data->world;
-							Graphics* graphics = world->graphics;
-
-							if (render_mesh->Validate()) {
-								float3 translation_value = { 0.0f, 0.0f, 0.0f };
-								//float3 rotation_value = { 0.0f, 0.0f, 0.0f };
-								float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
-								float3 scale_value = { 1.0f, 1.0f, 1.0f };
-								Matrix matrix_translation;
-								Matrix matrix_rotation;
-								Matrix matrix_scale;
-
-								if (translation != nullptr) {
-									translation_value = translation->value;
-									matrix_translation = MatrixTranslation(translation_value);
-								}
-								else {
-									matrix_translation = MatrixIdentity();
-								}
-
-								if (rotation != nullptr) {
-									rotation_value = rotation->value;
-									matrix_rotation = QuaternionToMatrixLow(Quaternion(rotation_value));
-								}
-								else {
-									matrix_rotation = MatrixIdentity();
-								}
-
-								if (scale != nullptr) {
-									scale_value = scale->value;
-									matrix_scale = MatrixScale(scale_value);
-								}
-								else {
-									matrix_scale = MatrixIdentity();
-								}
-
-								Matrix gpu_mvp_matrix = MatrixMVPToGPU(matrix_translation, matrix_rotation, matrix_scale, camera_matrix);
-
-								GenerateInstanceFramebufferElement element;
-								element.base.is_submesh = false;
-								element.base.mesh = &render_mesh->mesh->mesh;
-								element.base.gpu_mvp_matrix = gpu_mvp_matrix;
-								element.instance_index = for_each_data->entity.index;
-								elements.Add(element);
-							}
-					});
+					DrawInstancedFramebufferMeshTaskData draw_instanced_mesh_data = { &elements, camera_matrix };
+					kernel.Function(DrawInstancedFramebufferMeshTask, &draw_instanced_mesh_data, sizeof(draw_instanced_mesh_data));
 
 					// Get the pipeline state before rendering the instances
 					GraphicsPipelineState pipeline_state = world->graphics->GetPipelineState();
@@ -476,9 +488,9 @@ ECS_THREAD_TASK(RenderInstancedFramebuffer) {
 	}
 }
 
-ECS_THREAD_TASK_TEMPLATE_BOOL(RenderInstancedFramebuffer);
+ECS_THREAD_TASK_TEMPLATE_BOOL(DrawInstancedFramebuffer);
 
-ECS_THREAD_TASK(RenderCameraRecalculate) {
+ECS_THREAD_TASK(RecalculateCamera) {
 	CameraComponent* camera_component = world->entity_manager->TryGetGlobalComponent<CameraComponent>();
 	if (camera_component != nullptr) {
 		camera_component->value.Recalculate();

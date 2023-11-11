@@ -243,6 +243,12 @@
     <ClInclude Include="src\ECSEngine\ECS\RuntimeCrashPersistence.h" />
     <ClInclude Include="src\ECSEngine\Containers\ResizableAtomicDeck.h" />
     <ClInclude Include="src\ECSEngine\ECS\WorldCrashHandler.h" />
+    <ClInclude Include="src\Includes\ECSEngineRuntimeCrash.h" />
+    <ClInclude Include="src\Includes\ECSEngineProfiling.h" />
+    <ClInclude Include="src\Includes\ECSEngineProfilingGlobal.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\FrameProfiler.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\FrameProfilerGlobal.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\Statistic.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -381,6 +387,8 @@
     <ClCompile Include="src\ECSEngine\Allocators\MemoryProtectedAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeCrashPersistence.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\WorldCrashHandler.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\FrameProfiler.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\FrameProfilerGlobal.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />
