@@ -83,3 +83,9 @@ void InitializeFileExplorer(EditorState* editor_state);
 // Returns a nullptr view if it doesn't exist
 // Implemented in FileExplorer.cpp
 ECSEngine::ResourceView FileExplorerGetMeshThumbnail(const EditorState* editor_state, ECSEngine::Stream<wchar_t> absolute_path);
+
+// Index is used to reset the shift indices, can be omitted by external setters
+void ChangeFileExplorerDirectory(EditorState* editor_state, ECSEngine::Stream<wchar_t> path, unsigned int index = -1);
+
+// Index is used to reset the shift indices, can be omitted by external setters
+void ChangeFileExplorerFile(EditorState* editor_state, ECSEngine::Stream<wchar_t> path, unsigned int index = -1);

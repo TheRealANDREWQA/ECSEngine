@@ -66,8 +66,8 @@ void DirectoryExplorerHierarchySelectableCallback(ActionData* action_data) {
 
 	wchar_t temp_characters[256];
 	ConvertASCIIToWide(temp_characters, label, 256);
-	data->current_path->AddStreamSafe(Stream<wchar_t>(temp_characters, label_stream.size));
-	data->current_path->buffer[data->current_path->size] = L'\0';
+	data->current_path->AddStreamAssert(Stream<wchar_t>(temp_characters, label_stream.size));
+	ChangeFileExplorerDirectory(data->editor_state, *data->current_path);
 
 }
 
@@ -124,7 +124,7 @@ void DirectoryExplorerCreateFolder(ActionData* action_data) {
 		choose_data.callback.action = DirectoryExplorerCreateFolderCallback;
 		choose_data.callback.data = data;
 		choose_data.callback.data_size = 0;
-		choose_data.callback.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
+		choose_data.callback.phase = ECS_UI_DRAW_NORMAL;
 
 		CreateChooseDirectoryOrFileNameDockspace(system, choose_data);
 	}

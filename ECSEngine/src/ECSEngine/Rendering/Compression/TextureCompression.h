@@ -11,14 +11,14 @@ namespace ECSEngine {
 	struct SpinLock;
 
 	struct ECSENGINE_API CompressTextureDescriptor {
-		void Lock();
+		void GPULock();
 
-		void Unlock();
+		void GPUUnlock();
 
 		AllocatorPolymorphic allocator = { nullptr };
 		ECS_TEXTURE_COMPRESS_FLAGS flags = ECS_TEXTURE_COMPRESS_NONE;
 		CapacityStream<char>* error_message = nullptr;
-		SpinLock* spin_lock = nullptr;
+		SpinLock* gpu_lock = nullptr;
 	};
 
 	// If the texture resides in GPU memory with no CPU access, for CPU compression i.e. BC1, BC3, BC4 

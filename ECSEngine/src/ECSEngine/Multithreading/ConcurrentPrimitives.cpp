@@ -579,8 +579,10 @@ namespace ECSEngine {
 
 	void AtomicFlag::Wait()
 	{
-		// We must use ACQUIRE semantics in order to guarantee that further reads don't cross this barrier
-		value.store(true, ECS_ACQUIRE);
+		// Here we would normally need ACQUIRE barrier in order to not have reads be moved before this
+		// value, but it is incompatible with the store, the same goes for ACQ_REL, so we must use SEQ_CST
+		// But, we will be waiting on the variable anyway, it shouldn't make too much of a difference
+		value.store(true, ECS_SEQ_CST);
 
 		// Do this in a loop since the WaitOnAddress can wake the thread spuriously
 		bool current_value = true;

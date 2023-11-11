@@ -13,19 +13,17 @@ void ModuleTaskFunction(ModuleTaskFunctionData* data) {
 		elements[index].initialize_task_function = nullptr;
 	}
 	
-	elements[0].initialize_task_function = RenderTaskInitialize;
-	ECS_REGISTER_FOR_EACH_TASK(elements[0], RenderTask, data);
+	ECS_REGISTER_FOR_EACH_TASK(elements[0], DrawMeshes, data);
 
-	elements[1].initialize_task_function = RenderSelectablesInitialize;
-	ECS_REGISTER_FOR_EACH_TASK(elements[1], RenderSelectables, data);
+	ECS_REGISTER_FOR_EACH_TASK(elements[1], DrawSelectables, data);
 	
-	ECS_REGISTER_FOR_EACH_TASK(elements[2], RenderInstancedFramebuffer, data);
+	ECS_REGISTER_FOR_EACH_TASK(elements[2], DrawInstancedFramebuffer, data);
 
-	ECS_REGISTER_FOR_EACH_TASK(elements[3], RenderFlush, data);
+	ECS_REGISTER_FOR_EACH_TASK(elements[3], FlushRenderCommands, data);
 
 	elements[4].task_group = ECS_THREAD_TASK_FINALIZE_EARLY;
-	elements[4].task_function = RenderCameraRecalculate;
-	elements[4].task_name = STRING(RenderCameraRecalculate);
+	elements[4].task_function = RecalculateCamera;
+	elements[4].task_name = STRING(RecalculateCamera);
 	data->tasks->AddAssert(elements[4]);
 
 	// Maintain the order since this is important

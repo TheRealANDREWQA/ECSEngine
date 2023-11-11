@@ -252,9 +252,6 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 		LoadEditorModule(editor_state, module_index, (EDITOR_MODULE_CONFIGURATION)index);
 	}
 
-	// We need to refresh the symbols
-	OS::RefreshModuleSymbols();
-
 	ECS_STACK_CAPACITY_STREAM(wchar_t, module_settings_folder, 512);
 	GetModuleSettingsFolderPath(editor_state, module_index, module_settings_folder);
 	if (!ExistsFileOrFolder(module_settings_folder)) {
@@ -1508,7 +1505,9 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 		// Copy the .dll to a temporary dll such that it will allow building the module again
 		bool copy_success = CreateEditorModuleTemporaryDLL(library_path, temporary_library);
 		if (copy_success) {
-			info->ecs_module.base_module = LoadModule(temporary_library);
+			// No need to verify if the symbols load failed or succeeded
+			bool load_debugging_symbols = false;
+			info->ecs_module.base_module = LoadModule(temporary_library, &load_debugging_symbols);
 			// The load succeded, now try to retrieve the streams for this module
 			if (info->ecs_module.base_module.code == ECS_GET_MODULE_OK) {
 				AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
@@ -1797,7 +1796,10 @@ void ReleaseModuleStreamsAndHandle(EditorState* editor_state, unsigned int index
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
 
-	ReleaseAppliedModule(&info->ecs_module, allocator);
+	// Also release the debugging symbols for the module
+	// Don't verify if it succeeded or not since it is of not much relevance
+	bool release_debugging_symbols = false;
+	ReleaseAppliedModule(&info->ecs_module, allocator, &release_debugging_symbols);
 	info->load_status = EDITOR_MODULE_LOAD_FAILED;
 }
 

@@ -261,6 +261,9 @@
     <ClInclude Include="src\ECSEngine\Multithreading\TaskStealing.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTaskExport.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\FrameProfiler.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\FrameProfilerGlobal.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\Statistic.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Camera.h" />
     <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Profiling.h" />
@@ -377,8 +380,11 @@
     <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
     <ClInclude Include="src\Includes\ECSEngineForEach.h" />
     <ClInclude Include="src\Includes\ECSEngineInput.h" />
+    <ClInclude Include="src\Includes\ECSEngineRuntimeCrash.h" />
     <ClInclude Include="src\Includes\ECSEngineSampleTexture.h" />
     <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />
+    <ClInclude Include="src\Includes\ECSEngineProfiling.h" />
+    <ClInclude Include="src\Includes\ECSEngineProfilingGlobal.h" />
     <ClInclude Include="src\Includes\ECSEngineThreadTaskExport.h" />
     <ClInclude Include="src\Includes\ECSEngineRuntime.h" />
     <ClInclude Include="src\Includes\ECSEngineLinkComponents.h" />
@@ -484,6 +490,8 @@
     <ClCompile Include="src\ECSEngine\Multithreading\TaskScheduler.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\TaskSchedulerTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\ThreadTask.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\FrameProfiler.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\FrameProfilerGlobal.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Camera.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />

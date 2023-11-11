@@ -119,7 +119,7 @@ namespace ECSEngine {
 		}
 	};
 
-	struct ForEachEntityFunctorData {
+	struct ForEachEntityUntypedFunctorData {
 		unsigned int thread_id;
 		Entity entity;
 		World* world;
@@ -129,9 +129,9 @@ namespace ECSEngine {
 		EntityManagerCommandStream* command_stream;
 	};
 
-	typedef void (*ForEachEntityFunctor)(ForEachEntityFunctorData* data);
+	typedef void (*ForEachEntityUntypedFunctor)(ForEachEntityUntypedFunctorData* data);
 
-	struct ForEachBatchFunctorData {
+	struct ForEachBatchUntypedFunctorData {
 		unsigned int thread_id;
 		World* world;
 		const Entity* entities;
@@ -142,13 +142,14 @@ namespace ECSEngine {
 		EntityManagerCommandStream* command_stream;
 	};
 
-	typedef void (*ForEachBatchFunctor)(ForEachBatchFunctorData* data);
+	typedef void (*ForEachBatchUntypedFunctor)(ForEachBatchUntypedFunctorData* data);
 	
 	struct ForEachEntityData {
 		unsigned int thread_id;
 		Entity entity;
 		World* world;
 		EntityManagerCommandStream* command_stream;
+		void* user_data;
 	};
 
 	struct ForEachBatchData {
@@ -157,13 +158,14 @@ namespace ECSEngine {
 		World* world;
 		const Entity* entities;
 		EntityManagerCommandStream* command_stream;
+		void* user_data;
 	};
 
 	// This is the same as the ForEachEntity with the difference that it can be outside the ECS runtime. This version
 	// doesn't use the archetype query acceleration. The world needs to contain an entity manager. (other fields are optional)
 	ECSENGINE_API void ForEachEntityCommitFunctor(
 		World* world,
-		ForEachEntityFunctor functor,
+		ForEachEntityUntypedFunctor functor,
 		void* data,
 		const ArchetypeQueryDescriptor& query_descriptor
 	);
@@ -172,19 +174,20 @@ namespace ECSEngine {
 	// doesn't use the archetype query acceleration. The world needs to contain an entity manager. (other fields are optional)
 	ECSENGINE_API void ForEachBatchCommitFunctor(
 		World* world,
-		ForEachBatchFunctor functor,
+		ForEachBatchUntypedFunctor functor,
 		void* data,
 		unsigned short batch_size,
 		const ArchetypeQueryDescriptor& query_descriptor
 	);
 
+	// TODO: This accepts lambdas at the moment, function pointer support is not decided yet
 	template<typename Functor>
 	ECS_INLINE void ForEachEntityCommitFunctor(
 		World* world,
 		const ArchetypeQueryDescriptor& query_descriptor,
-		Functor& functor
+		Functor functor
 	) {
-		auto functor_wrapper = [](ForEachEntityFunctorData* for_each_data) {
+		auto functor_wrapper = [](ForEachEntityUntypedFunctorData* for_each_data) {
 			Functor* functor = (Functor*)for_each_data->data;
 			(*functor)(for_each_data);
 		};
@@ -192,14 +195,15 @@ namespace ECSEngine {
 		ForEachEntityCommitFunctor(world, functor_wrapper, &functor, query_descriptor);
 	}
 
+	// TODO: This accepts lambdas at the moment, function pointer support is not decided yet
 	template<typename Functor>
 	ECS_INLINE void ForEachBatchCommitFunctor(
 		World* world,
 		unsigned short batch_size,
 		const ArchetypeQueryDescriptor& query_descriptor,
-		Functor& functor
+		Functor functor
 	) {
-		auto functor_wrapper = [](ForEachBatchFunctorData* for_each_data) {
+		auto functor_wrapper = [](ForEachBatchUntypedFunctorData* for_each_data) {
 			Functor* functor = (Functor*)for_each_data->data;
 			(*functor)(for_each_data);
 		};
@@ -215,7 +219,7 @@ namespace ECSEngine {
 		ECSENGINE_API void ForEachEntity(
 			unsigned int thread_id,
 			World* world,
-			ForEachEntityFunctor functor,
+			ForEachEntityUntypedFunctor functor,
 			const char* functor_name,
 			void* data,
 			size_t data_size,
@@ -233,7 +237,7 @@ namespace ECSEngine {
 		ECSENGINE_API void ForEachBatch(
 			unsigned int thread_id,
 			World* world,
-			ForEachBatchFunctor functor,
+			ForEachBatchUntypedFunctor functor,
 			const char* functor_name,
 			void* data,
 			size_t data_size,
@@ -290,18 +294,19 @@ namespace ECSEngine {
 			}
 		}
 
-		static ForEachEntityData FromFunctorToEntityData(ForEachEntityFunctorData* data) {
+		static ForEachEntityData FromFunctorToEntityData(ForEachEntityUntypedFunctorData* data, void* user_data) {
 			ForEachEntityData for_each_data;
 
 			for_each_data.command_stream = data->command_stream;
 			for_each_data.entity = data->entity;
 			for_each_data.thread_id = data->thread_id;
 			for_each_data.world = data->world;
+			for_each_data.user_data = user_data;
 
 			return for_each_data;
 		}
 
-		static ForEachBatchData FromFunctorToBatchData(ForEachBatchFunctorData* data) {
+		static ForEachBatchData FromFunctorToBatchData(ForEachBatchUntypedFunctorData* data, void* user_data) {
 			ForEachBatchData for_each_data;
 
 			for_each_data.command_stream = data->command_stream;
@@ -309,13 +314,20 @@ namespace ECSEngine {
 			for_each_data.thread_id = data->thread_id;
 			for_each_data.world = data->world;
 			for_each_data.count = data->count;
+			for_each_data.user_data = user_data;
 
 			return for_each_data;
 		}
+		
+		template<typename Functor>
+		struct ForEachEntityBatchTypeSafeWrapperData {
+			Functor functor;
+			void* functor_data;
+		};
 
 		template<bool is_batch, typename Functor, typename... T>
-		void ForEachEntityBatchTypeSafeWrapper(ForEachEntityFunctorData* data) {
-			std::remove_reference_t<Functor>* functor = (std::remove_reference_t<Functor>*)data->data;
+		void ForEachEntityBatchTypeSafeWrapper(ForEachEntityUntypedFunctorData* data) {
+			ForEachEntityBatchTypeSafeWrapperData<Functor>* wrapper_data = (ForEachEntityBatchTypeSafeWrapperData<Functor>*)data->data;
 			
 			constexpr size_t component_count = sizeof...(T);
 			
@@ -342,12 +354,12 @@ namespace ECSEngine {
 			total_index--;
 			
 			if constexpr (is_batch) {
-				ForEachBatchData for_each_data = FromFunctorToBatchData(data);
-				(*functor)(&for_each_data, (typename T::Type*)(current_components[total_index--])...);
+				ForEachBatchData for_each_data = FromFunctorToBatchData(data, wrapper_data->functor_data);
+				wrapper_data->functor(&for_each_data, (typename T::Type*)(current_components[total_index--])...);
 			}
 			else {
-				ForEachEntityData for_each_data = FromFunctorToEntityData(data);
-				(*functor)(&for_each_data, (typename T::Type*)(current_components[total_index--])...);
+				ForEachEntityData for_each_data = FromFunctorToEntityData(data, wrapper_data->functor_data);
+				wrapper_data->functor(&for_each_data, (typename T::Type*)(current_components[total_index--])...);
 			}
 		}
 
@@ -435,8 +447,17 @@ namespace ECSEngine {
 				}
 			}
 
+			// Here functor can be a self contained lambda (or functor struct) or a function pointer
+			// for which you can supply additional data in the default parameter function_pointer_data
+			// The use of lambdas is convenient when you want to do some single threaded preparation
+			// before hand and only reference the values from inside the functor but it has a big drawback
+			// The stack trace contains a mangled name that is very hard to pinpoint in source code which
+			// code actually crashed or produced a problem. The recommendation is to use named function pointers
+			// that you pass to the function with their required data to operate. Even tho it is more tedious,
+			// the fact that when a crash happens you don't know exactly where that is from looking at a stack trace
+			// is extremely annoying and can eat up a lot of time
 			template<typename... ExcludeComponents, typename Functor>
-			void Function(Functor& functor) {
+			void Function(Functor functor, void* function_pointer_data = nullptr, size_t function_pointer_data_size = 0) {
 				if constexpr (!get_query) {
 					// Retrieve the optional components since they are not stored in the query cache
 					Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
@@ -486,14 +507,20 @@ namespace ECSEngine {
 						}
 					}
 					else {
+						ForEachEntityBatchTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
+						if (function_pointer_data_size > 0) {
+							// We need to allocate this data, we can use the thread task manager allocator for this
+							wrapper_data.functor_data = world->task_manager->AllocateTempBuffer(thread_id, function_pointer_data_size);
+							memcpy(wrapper_data.functor_data, function_pointer_data, function_pointer_data_size);
+						}
 						if constexpr (options & FOR_EACH_IS_BATCH) {
 							Internal::ForEachBatch(
 								thread_id,
 								world,
 								Internal::ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
 								function_name,
-								&functor,
-								sizeof(functor),
+								&wrapper_data,
+								sizeof(wrapper_data),
 								query_descriptor.unique_optional,
 								query_descriptor.shared_optional
 							);
@@ -504,8 +531,8 @@ namespace ECSEngine {
 								world,
 								Internal::ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
 								function_name,
-								&functor,
-								sizeof(functor),
+								&wrapper_data,
+								sizeof(wrapper_data),
 								query_descriptor.unique_optional,
 								query_descriptor.shared_optional
 							);

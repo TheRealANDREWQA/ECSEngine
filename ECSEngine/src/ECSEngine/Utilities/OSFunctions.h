@@ -150,6 +150,14 @@ namespace ECSEngine {
 
 		ECSENGINE_API size_t GetFileLastWrite(Stream<wchar_t> path);
 
+		// Returns nullptr if it failed
+		ECSENGINE_API void* LoadDLL(Stream<wchar_t> path);
+
+		ECSENGINE_API void UnloadDLL(void* module_handle);
+
+		// Returns nullptr if there is no such symbol
+		ECSENGINE_API void* GetDLLSymbol(void* module_handle, const char* symbol_name);
+
 		// Exists the current thread
 		ECSENGINE_API void ExitThread(int error_code);
 
@@ -208,7 +216,20 @@ namespace ECSEngine {
 
 		// Looks at the loaded modules by the process and loads the symbol information
 		// For them such that stack unwinding can recognize the symbols correctly
-		ECSENGINE_API void RefreshModuleSymbols();
+		ECSENGINE_API void RefreshDLLSymbols();
+
+		// This will load the debugging symbols related to the module
+		// Returns true if it succeeded, else false
+		ECSENGINE_API bool LoadDLLSymbols(void* module_handle);
+
+		// This will load the debugging symbols related to the module. If the module handle
+		// is nullptr, it will try to deduce it from the name (the dll should be loaded previously)
+		// Returns true if it succeeded, else false
+		ECSENGINE_API bool LoadDLLSymbols(Stream<wchar_t> module_name, void* module_handle);
+
+		// This will unload the debugging symbols related to the module
+		// Returns true if it succeeded, else false
+		ECSENGINE_API bool UnloadDLLSymbols(void* module_handle);
 
 		// Assumes that InitializeSymbolicLinksPaths has been called
 		ECSENGINE_API void GetCallStackFunctionNames(CapacityStream<char>& string);
@@ -221,6 +242,58 @@ namespace ECSEngine {
 		// The thread should be suspended before getting its context
 		// Returns true if it managed to get the stack frame, else false
 		ECSENGINE_API bool GetCallStackFunctionNames(void* thread_handle, CapacityStream<char>& string);
+
+		enum ECS_OS_EXCEPTION_ERROR_CODE : unsigned char {
+			ECS_OS_EXCEPTION_ACCESS_VIOLATION,
+			ECS_OS_EXCEPTION_MISSALIGNMENT,
+			ECS_OS_EXCEPTION_STACK_OVERLOW,
+
+			// Floating point exceptions
+			ECS_OS_EXCEPTION_FLOAT_OVERFLOW,
+			ECS_OS_EXCEPTION_FLOAT_UNDERFLOW,
+			ECS_OS_EXCEPTION_FLOAT_DIVISION_BY_ZERO,
+			ECS_OS_EXCEPTION_FLOAT_DENORMAL,
+			ECS_OS_EXCEPTION_FLOAT_INEXACT_VALUE,
+
+			// Integer exceptions
+			ECS_OS_EXCEPTION_INT_DIVISION_BY_ZERO,
+			ECS_OS_EXCEPTION_INT_OVERFLOW,
+
+			// Instruction exceptions
+			ECS_OS_EXCEPTION_ILLEGAL_INSTRUCTION,
+			ECS_OS_EXCEPTION_PRIVILEGED_INSTRUCTION,
+
+			// Other types of exceptions - mostly should be ignored
+			ECS_OS_EXCEPTION_UNKNOWN,
+			ECS_OS_EXCEPTION_ERROR_CODE_COUNT
+		};
+
+		enum ECS_OS_EXCEPTION_CONTINUE_STATUS : unsigned char {
+			// The exception won't propagate further, but it is discarded
+			// And the execution will continue at that location
+			ECS_OS_EXCEPTION_CONTINUE_IGNORE,
+			// The exception is not handled, and will look further up
+			// The handler chain
+			ECS_OS_EXCEPTION_CONTINUE_UNHANDLED,
+			// The exception is handled and the execution continues after
+			// The handler block
+			ECS_OS_EXCEPTION_CONTINUE_RESOLVED
+		};
+
+		struct ExceptionInformation {
+			ECS_OS_EXCEPTION_ERROR_CODE error_code;
+			// This is the context of the thread at the point of the crash
+			ThreadContext thread_context;
+		};
+
+		// This should be used to convert from the native OS to the ECS variant
+		ECSENGINE_API ExceptionInformation GetExceptionInformationFromNative(EXCEPTION_POINTERS* exception_pointers);
+
+		ECSENGINE_API void ExceptionCodeToString(ECS_OS_EXCEPTION_ERROR_CODE code, CapacityStream<char>& string);
+
+		// Returns true if the error indicates a real issue with the execution, like stack overflow,
+		// Memory violation or invalid instruction
+		ECSENGINE_API bool IsExceptionCodeCritical(ECS_OS_EXCEPTION_ERROR_CODE code);
 
 		enum ECS_THREAD_PRIORITY : unsigned char {
 			ECS_THREAD_PRIORITY_VERY_LOW,

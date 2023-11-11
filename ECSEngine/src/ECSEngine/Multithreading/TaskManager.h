@@ -8,7 +8,7 @@
 #include "../Allocators/LinearAllocator.h"
 #include "RingBuffer.h"
 #include "../Utilities/OSFunctions.h"
-#include <setjmp.h>
+#include <setjmpex.h>
 
 #ifndef ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD
 #define ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD 128
@@ -78,6 +78,16 @@ namespace ECSEngine {
 		ThreadTask task;
 		bool barrier_task;
 	};
+
+	struct TaskManagerExceptionHandlerData {
+		OS::ExceptionInformation exception_information;
+		unsigned int thread_id;
+		void* user_data;
+	};
+
+	// This handler will be called before the crash will be executed. This function
+	// gets to setup anything that might be needed before the crash
+	typedef void (*TaskManagerExceptionHandler)(TaskManagerExceptionHandlerData* function_data);
 
 	// The static threads are executed by a single thread
 	// The purpose of the static tasks is to dynamically detect how the data
@@ -216,6 +226,9 @@ namespace ECSEngine {
 		// It will use a compose wrapper that will in turn call both sub wrappers to run
 		void ComposeDynamicWrapper(ThreadFunctionWrapperData addition_wrapper, bool run_after_existing_one = true);
 
+		// It will compose wrappers for both static and dynamic tasks that will monitor how long each task takes
+		void ComposeFrameTimingWrappers();
+
 		void ClearThreadAllocators();
 
 		void ClearThreadAllocator(unsigned int thread_id);
@@ -327,6 +340,16 @@ namespace ECSEngine {
 		// It will deduce the thread id of the running thread and jump to the thread procedure
 		// You can choose to abort if the thread id is not found or just skip the call
 		void ResetCurrentThreadToProcedure(bool sleep, bool abort_if_not_found = true) const;
+
+		// It will remove the last composed wrapper that was added, but you need
+		// To specify which of the wrappers to keep
+		void RemoveComposedDynamicWrapper(bool keep_first_wrapper);
+
+		// It will remove the last composed wrapper that was added, but you need
+		// To specify which of the wrappers to keep
+		void RemoveComposedStaticWrapper(bool keep_first_wrapper);
+
+		void SetExceptionHandler(TaskManagerExceptionHandler handler, void* data, size_t data_size);
 
 		// Sets a specific task, should only be used in initialization
 		void SetTask(StaticThreadTask task, unsigned int index, size_t task_data_size = 0);
@@ -452,6 +475,13 @@ namespace ECSEngine {
 		// Such that you can longjmp into the thread procedure
 		jmp_buf* m_threads_reset_point;
 
+		TaskManagerExceptionHandler m_exception_handler;
+		// Embed the data directly here to avoid another allocation
+		union {
+			size_t m_exception_handler_data[32];
+			void* m_exception_handler_data_ptr;
+		};
+		bool m_is_exception_handler_data_ptr;
 
 #ifdef ECS_TASK_MANAGER_WRAPPER
 		// Embed the data directly here

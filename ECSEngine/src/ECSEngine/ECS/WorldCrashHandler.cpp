@@ -9,6 +9,9 @@
 
 namespace ECSEngine {
 
+	static OS::ThreadContext ECS_WORLD_CRASH_HANDLER_THREAD_CONTEXT;
+	static bool ECS_WORLD_CRASH_HANDLER_THREAD_CONTEXT_SET = false;
+
 	struct WorldCrashHandlerData {
 		SetWorldCrashHandlerDescriptor descriptor;
 		bool is_abort_handler;
@@ -64,6 +67,12 @@ namespace ECSEngine {
 			write_options.resuming_threads_success = &resume_threads_success;
 			write_options.world_descriptor = WORLD_GLOBAL_DATA.descriptor.world_descriptor;
 			write_options.create_unique_folder_entry = true;
+			if (ECS_WORLD_CRASH_HANDLER_THREAD_CONTEXT_SET) {
+				write_options.crashing_thread_context = &ECS_WORLD_CRASH_HANDLER_THREAD_CONTEXT;
+			}
+
+			ECS_STACK_CAPACITY_STREAM(wchar_t, crash_directory_storage, 512);
+			Stream<wchar_t> crash_directory = RuntimeCrashPersistenceWriteDirectory(WORLD_GLOBAL_DATA.descriptor.crash_directory, &write_options, crash_directory_storage);
 
 			SaveSceneData save_data;
 			save_data.delta_time = WORLD_GLOBAL_DATA.descriptor.world->delta_time;
@@ -78,6 +87,7 @@ namespace ECSEngine {
 				callback_data.write_options = &write_options;
 				callback_data.save_data = &save_data;
 				callback_data.user_data = WORLD_GLOBAL_DATA.descriptor.pre_callback.data;
+				callback_data.crash_directory = crash_directory;
 				should_write_crash = WORLD_GLOBAL_DATA.descriptor.pre_callback.function(&callback_data);
 			}
 
@@ -85,12 +95,21 @@ namespace ECSEngine {
 			if (should_write_crash) {
 				// We can call the persistence function now after all the setup was done
 				write_success = RuntimeCrashPersistenceWrite(
-					WORLD_GLOBAL_DATA.descriptor.crash_directory,
+					crash_directory,
 					WORLD_GLOBAL_DATA.descriptor.world,
 					WORLD_GLOBAL_DATA.descriptor.reflection_manager,
 					&save_data,
 					&write_options
 				);
+				// now we can reset the thread context, in case there is any
+				ECS_WORLD_CRASH_HANDLER_THREAD_CONTEXT_SET = false;
+
+				if (!write_success) {
+					// Check to see if the thread resuming was successful, if it was not, retry again here
+					if (!resume_threads_success) {
+						resume_threads_success = WORLD_GLOBAL_DATA.descriptor.world->task_manager->ResumeThreads();
+					}
+				}
 			}
 
 			if (WORLD_GLOBAL_DATA.descriptor.post_callback.function != nullptr) {
@@ -100,6 +119,7 @@ namespace ECSEngine {
 				callback_data.suspending_threads_success = suspend_success;
 				callback_data.user_data = WORLD_GLOBAL_DATA.descriptor.post_callback.data;
 				callback_data.error_message = *write_options.error_message;
+				callback_data.crash_directory = crash_directory;
 				WORLD_GLOBAL_DATA.descriptor.post_callback.function(&callback_data);
 			}
 
@@ -165,12 +185,27 @@ namespace ECSEngine {
 		SetCrashHandler(WorldCrashHandlerFunction, nullptr);
 	}
 
+	void SetWorldCrashHandlerThreadContext(const OS::ThreadContext* thread_context)
+	{
+		memcpy(&ECS_WORLD_CRASH_HANDLER_THREAD_CONTEXT, thread_context, sizeof(*thread_context));
+		ECS_WORLD_CRASH_HANDLER_THREAD_CONTEXT_SET = true;
+	}
+
 	void SetAbortWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor) {
 		SetFunction(descriptor, true);
 	}
 
 	void SetContinueWorldCrashHandler(const SetWorldCrashHandlerDescriptor* descriptor) {
 		SetFunction(descriptor, false);
+	}
+
+	static void WorldTaskManagerExceptionHandler(TaskManagerExceptionHandlerData* function_data) {
+		SetWorldCrashHandlerThreadContext(&function_data->exception_information.thread_context);
+	}
+
+	void SetWorldCrashHandlerTaskManagerExceptionHandler(TaskManager* task_manager)
+	{
+		task_manager->SetExceptionHandler(WorldTaskManagerExceptionHandler, nullptr, 0);
 	}
 
 }

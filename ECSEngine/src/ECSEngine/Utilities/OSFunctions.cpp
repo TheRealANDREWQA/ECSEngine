@@ -7,6 +7,7 @@
 
 #include <DbgHelp.h>
 #include <winternl.h>
+#include <psapi.h>
 
 #pragma comment(lib, "dbghelp.lib")
 
@@ -654,6 +655,28 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
+		void* LoadDLL(Stream<wchar_t> path)
+		{
+			NULL_TERMINATE_WIDE(path);
+			return LoadLibraryEx(path.buffer, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void UnloadDLL(void* module_handle)
+		{
+			FreeLibrary((HMODULE)module_handle);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void* GetDLLSymbol(void* module_handle, const char* symbol_name)
+		{
+			return GetProcAddress((HMODULE)module_handle, symbol_name);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
 		bool CaptureCurrentThreadStackContext(ThreadContext* thread_context)
 		{
 			LPCONTEXT context = (LPCONTEXT)thread_context->bytes;
@@ -729,9 +752,49 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		void RefreshModuleSymbols()
+		void RefreshDLLSymbols()
 		{
 			SymRefreshModuleList(GetCurrentProcess());
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool LoadDLLSymbols(void* module_handle)
+		{
+			ECS_STACK_CAPACITY_STREAM(wchar_t, module_name, 512);
+			DWORD written_size = GetModuleFileName((HMODULE)module_handle, module_name.buffer, module_name.capacity);
+			if (written_size == 0 || written_size == module_name.capacity) {
+				return false;
+			}
+			else {
+				return LoadDLLSymbols(module_name, module_handle);
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool LoadDLLSymbols(Stream<wchar_t> module_name, void* module_handle)
+		{
+			NULL_TERMINATE_WIDE(module_name);
+			HANDLE process_handle = GetCurrentProcess();
+			if (module_handle == nullptr) {
+				module_handle = GetModuleHandle(module_name.buffer);
+			}
+			DWORD64 base_address = SymLoadModuleExW(process_handle, nullptr, module_name.buffer, nullptr, (DWORD64)module_handle, 0, nullptr, 0);
+			if (base_address != 0) {
+				return true;
+			}
+			else {
+				// If the module is already loaded, it returns 0 for the base address but the last error is success
+				return GetLastError() == ERROR_SUCCESS;
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool UnloadDLLSymbols(void* module_handle)
+		{
+			return SymUnloadModule64(GetCurrentProcess(), (DWORD64)module_handle);
 		}
 
 		// -----------------------------------------------------------------------------------------------------
@@ -795,6 +858,100 @@ namespace ECSEngine {
 		}
 
 		// -----------------------------------------------------------------------------------------------------
+
+		ExceptionInformation GetExceptionInformationFromNative(EXCEPTION_POINTERS* exception_pointers)
+		{
+			ExceptionInformation exception_information;
+
+			memcpy(exception_information.thread_context.bytes, exception_pointers->ContextRecord, sizeof(*exception_pointers->ContextRecord));
+			ECS_OS_EXCEPTION_ERROR_CODE error_code = ECS_OS_EXCEPTION_UNKNOWN;
+			switch (exception_pointers->ExceptionRecord->ExceptionCode) {
+			case EXCEPTION_ACCESS_VIOLATION:
+				error_code = ECS_OS_EXCEPTION_ACCESS_VIOLATION;
+				break;
+			case EXCEPTION_DATATYPE_MISALIGNMENT:
+				error_code = ECS_OS_EXCEPTION_MISSALIGNMENT;
+				break;
+			case EXCEPTION_FLT_DENORMAL_OPERAND:
+				error_code = ECS_OS_EXCEPTION_FLOAT_DENORMAL;
+				break;
+			case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+				error_code = ECS_OS_EXCEPTION_FLOAT_DIVISION_BY_ZERO;
+				break;
+			case EXCEPTION_FLT_INEXACT_RESULT:
+				error_code = ECS_OS_EXCEPTION_FLOAT_INEXACT_VALUE;
+				break;
+			case EXCEPTION_FLT_OVERFLOW:
+				error_code = ECS_OS_EXCEPTION_FLOAT_OVERFLOW;
+				break;
+			case EXCEPTION_FLT_UNDERFLOW:
+				error_code = ECS_OS_EXCEPTION_FLOAT_UNDERFLOW;
+				break;
+			case EXCEPTION_ILLEGAL_INSTRUCTION:
+				error_code = ECS_OS_EXCEPTION_ILLEGAL_INSTRUCTION;
+				break;
+			case EXCEPTION_INT_DIVIDE_BY_ZERO:
+				error_code = ECS_OS_EXCEPTION_INT_DIVISION_BY_ZERO;
+				break;
+			case EXCEPTION_INT_OVERFLOW:
+				error_code = ECS_OS_EXCEPTION_INT_OVERFLOW;
+				break;
+			case EXCEPTION_STACK_OVERFLOW:
+				error_code = ECS_OS_EXCEPTION_STACK_OVERLOW;
+				break;
+			}
+			exception_information.error_code = error_code;
+
+			return exception_information;
+		}
+
+		// ----------------------------------------------------------------------------------------------------
+
+		static const char* OS_EXCEPTION_TO_STRING[] = {
+			"Access violation",
+			"Data missalignment",
+			"Stack overflow",
+			"Float overflow",
+			"Float underflow",
+			"Float division by zero",
+			"Float denormal",
+			"Float inexact value",
+			"Integer division by zero",
+			"Integer overflow",
+			"Illegal instruction",
+			"Privileged instruction",
+			"Unknown"
+		};
+
+		static_assert(std::size(OS_EXCEPTION_TO_STRING) == ECS_OS_EXCEPTION_ERROR_CODE_COUNT);
+
+		void ExceptionCodeToString(ECS_OS_EXCEPTION_ERROR_CODE code, CapacityStream<char>& string)
+		{
+			ECS_ASSERT(code < ECS_OS_EXCEPTION_ERROR_CODE_COUNT);
+			string.AddStreamAssert(OS_EXCEPTION_TO_STRING[code]);
+		}
+
+		// ----------------------------------------------------------------------------------------------------
+
+		bool IsExceptionCodeCritical(ECS_OS_EXCEPTION_ERROR_CODE code)
+		{
+			// Include unknown as well
+			switch (code) {
+			case ECS_OS_EXCEPTION_ACCESS_VIOLATION:
+			case ECS_OS_EXCEPTION_MISSALIGNMENT:
+			case ECS_OS_EXCEPTION_STACK_OVERLOW:
+			case ECS_OS_EXCEPTION_ILLEGAL_INSTRUCTION:
+			case ECS_OS_EXCEPTION_PRIVILEGED_INSTRUCTION:
+			case ECS_OS_EXCEPTION_FLOAT_DIVISION_BY_ZERO:
+			case ECS_OS_EXCEPTION_INT_DIVISION_BY_ZERO:
+			case ECS_OS_EXCEPTION_UNKNOWN:
+				return true;
+			}
+
+			return false;
+		}
+
+		// ----------------------------------------------------------------------------------------------------
 
 		void ChangeThreadPriority(ECS_THREAD_PRIORITY priority)
 		{

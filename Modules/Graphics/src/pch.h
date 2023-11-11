@@ -10,3 +10,5 @@
 #include "ECSEngineRendering.h"
 #include "ECSEngineDebugDrawer.h"
 #include "ECSEngineComponents.h"
+
+using namespace ECSEngine;

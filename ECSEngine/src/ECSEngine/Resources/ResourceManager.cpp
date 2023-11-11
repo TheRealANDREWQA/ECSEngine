@@ -355,11 +355,16 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void AddResourceEx(ResourceManager* resource_manager, ResourceType type, void* data, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc) {
+	static void AddResourceEx(ResourceManager* resource_manager, ResourceType type, void* data, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc) {
 		if (ex_desc != nullptr && ex_desc->HasFilename()) {
 			ex_desc->Lock();
-			resource_manager->AddResource(ex_desc->filename, type, data, ex_desc->time_stamp, load_descriptor.identifier_suffix, ex_desc->reference_count);
-			ex_desc->Unlock();
+			__try {
+				resource_manager->AddResource(ex_desc->filename, type, data, ex_desc->time_stamp, load_descriptor.identifier_suffix, ex_desc->reference_count);
+			}
+			__finally {
+				// Always release the lock in case of a crash
+				ex_desc->Unlock();
+			}
 		}
 	}
 
@@ -394,7 +399,14 @@ namespace ECSEngine {
 
 	// TODO: Implement invariance allocations - some resources need when unloaded to have deallocated some buffers and those might not come
 	// from the resource manager
-	void ResourceManager::AddResource(ResourceIdentifier identifier, ResourceType resource_type, void* resource, size_t time_stamp, Stream<void> suffix, unsigned short reference_count)
+	void ResourceManager::AddResource(
+		ResourceIdentifier identifier, 
+		ResourceType resource_type, 
+		void* resource, 
+		size_t time_stamp, 
+		Stream<void> suffix, 
+		unsigned short reference_count
+	)
 	{
 		ResourceManagerEntry entry;
 		entry.data = resource;
@@ -1023,7 +1035,7 @@ namespace ECSEngine {
 			}
 
 			CompressTextureDescriptor compress_descriptor;
-			compress_descriptor.spin_lock = load_descriptor.gpu_lock;
+			compress_descriptor.gpu_lock = load_descriptor.gpu_lock;
 			if (descriptor->srgb) {
 				compress_descriptor.flags |= ECS_TEXTURE_COMPRESS_SRGB;
 			}
@@ -1037,8 +1049,13 @@ namespace ECSEngine {
 			if (descriptor->context != nullptr) {
 				// Lock the gpu lock, if any
 				load_descriptor.GPULock();
-				texture_view = m_graphics->CreateTextureWithMips(decoded_texture.data, decoded_texture.format, { decoded_texture.width, decoded_texture.height }, temporary);
-				load_descriptor.GPUUnlock();
+				__try {
+					texture_view = m_graphics->CreateTextureWithMips(decoded_texture.data, decoded_texture.format, { decoded_texture.width, decoded_texture.height }, temporary);
+				}
+				__finally {
+					// Perform the unlock even when faced with a crash
+					load_descriptor.GPUUnlock();
+				}
 			}
 			else {
 				Texture2DDescriptor graphics_descriptor;
@@ -1999,23 +2016,27 @@ namespace ECSEngine {
 			if (ex_desc != nullptr && ex_desc->HasFilename()) {
 				ex_desc->Lock();
 
-				void* allocation = manager->Allocate(sizeof(VertexShaderStorage));
-				VertexShaderStorage* storage = (VertexShaderStorage*)allocation;
+				__try {
+					void* allocation = manager->Allocate(sizeof(VertexShaderStorage));
+					VertexShaderStorage* storage = (VertexShaderStorage*)allocation;
 
-				// Doesn't matter the type here
-				storage->shader = (ID3D11VertexShader*)shader;
-				storage->source_code = { nullptr, 0 };
-				storage->byte_code = { nullptr, 0 };
-				manager->AddResource(
-					ex_desc->filename, 
-					ResourceType::Shader, 
-					allocation, 
-					ex_desc->time_stamp, 
-					load_descriptor.identifier_suffix, 
-					ex_desc->reference_count
-				);
-
-				ex_desc->Unlock();
+					// Doesn't matter the type here
+					storage->shader = (ID3D11VertexShader*)shader;
+					storage->source_code = { nullptr, 0 };
+					storage->byte_code = { nullptr, 0 };
+					manager->AddResource(
+						ex_desc->filename,
+						ResourceType::Shader,
+						allocation,
+						ex_desc->time_stamp,
+						load_descriptor.identifier_suffix,
+						ex_desc->reference_count
+					);
+				}
+				__finally {
+					// Perform the unlock even when faced with a crash
+					ex_desc->Unlock();
+				}
 			}
 		}
 

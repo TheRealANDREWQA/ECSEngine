@@ -616,6 +616,9 @@ bool OpenProject(ProjectOperationData data)
 	ECS_STACK_CAPACITY_STREAM(wchar_t, module_path, 256);
 	GetProjectModulesFilePath(data.editor_state, module_path);
 
+	// Set the pdb paths before calling the load module file
+	SetCrashHandlerPDBPaths(data.editor_state);
+
 	// The modules
 	if (ExistsFileOrFolder(module_path)) {
 		bool success = LoadModuleFile(data.editor_state);
@@ -692,8 +695,6 @@ bool OpenProject(ProjectOperationData data)
 		EditorSetConsoleWarn("Failed to read project settings");
 	}
 
-	// Also don't forget to set the pdb path
-	SetCrashHandlerPDBPaths(data.editor_state);
 	return true;
 }
 

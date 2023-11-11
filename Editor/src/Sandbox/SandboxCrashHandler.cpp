@@ -4,6 +4,12 @@
 #include "SandboxModule.h"
 #include "../Project/ProjectFolders.h"
 #include "../Editor/EditorScene.h"
+#include "ECSEngineRuntimeCrash.h"
+
+// Use these to redirect the editor to the crashed folder location
+// and open an inspector with the stack trace of the crash
+#include "../UI/Inspector.h"
+#include "../UI/FileExplorerData.h"
 
 struct PostCrashCallbackData {
 	EditorState* editor_state;
@@ -13,7 +19,6 @@ struct PostCrashCallbackData {
 // This callback is used only for printing any extra information related to the crash
 // In the console. The main thread will set the is_crashed flag for the sandbox
 static void PostCrashCallback(WorldCrashHandlerPostCallbackFunctionData* function_data) {
-
 	PostCrashCallbackData* data = (PostCrashCallbackData*)function_data->user_data;
 
 	// Print a default error message in the console which indicates the sandbox index
@@ -35,6 +40,14 @@ static void PostCrashCallback(WorldCrashHandlerPostCallbackFunctionData* functio
 	if (function_data->error_message.size > 0) {
 		EditorSetConsoleError(function_data->error_message);
 	}
+
+	// Change the file explorer to the crash directory
+	ChangeFileExplorerDirectory(data->editor_state, function_data->crash_directory);
+
+	// Change an inspector to the stack trace
+	ECS_STACK_CAPACITY_STREAM(wchar_t, stack_trace_file_storage, 512);
+	Stream<wchar_t> stack_trace_file = RuntimeCrashPersistenceFilePath(function_data->crash_directory, &stack_trace_file_storage, ECS_RUNTIME_CRASH_FILE_STACK_TRACE);
+	ChangeInspectorToFile(data->editor_state, stack_trace_file);
 }
 
 void SetSandboxCrashHandlerWrappers(EditorState* editor_state, unsigned int sandbox_index)
@@ -61,6 +74,9 @@ CrashHandler SandboxSetCrashHandler(EditorState* editor_state, unsigned int sand
 	descriptor.should_break = true;
 	descriptor.world = sandbox_world;
 	descriptor.world_descriptor = &sandbox->runtime_descriptor;
+
+	PostCrashCallbackData post_callback_data = { editor_state, sandbox_index };
+	descriptor.post_callback = { PostCrashCallback, &post_callback_data, sizeof(post_callback_data) };
 
 	CapacityStream<SerializeEntityManagerComponentInfo> unique_infos;
 	CapacityStream<SerializeEntityManagerSharedComponentInfo> shared_infos;

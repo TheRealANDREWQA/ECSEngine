@@ -11,7 +11,11 @@ namespace ECSEngine {
 		ECS_TIMER_DURATION_S // Seconds
 	};
 
-	ECSENGINE_API size_t GetFactor(ECS_TIMER_DURATION type);
+	ECSENGINE_API size_t GetTimeFactor(ECS_TIMER_DURATION type);
+
+	ECSENGINE_API float GetTimeFactorFloat(ECS_TIMER_DURATION type);
+
+	ECSENGINE_API float GetTimeFactorFloatInverse(ECS_TIMER_DURATION type);
 
 #define ECS_MINUTES_AS_SECONDS(minutes) (60 * (minutes))
 #define ECS_MINUTES_AS_MILLISECONDS(minutes) (1000 * ECS_MINUTES_AS_SECONDS(minutes))
@@ -33,14 +37,14 @@ namespace ECSEngine {
 		ECS_INLINE void DelayStart(int64_t duration, ECS_TIMER_DURATION type) {
 			// This is fine even for negative numbers since adding with a negative means adding with a
 			// large positive which will yield the correct result
-			m_start += std::chrono::nanoseconds((size_t)duration) * GetFactor(type);
+			m_start += std::chrono::nanoseconds((size_t)duration) * GetTimeFactor(type);
 		}
 
 		// Increases/Decreases the marker point by the given amount
 		ECS_INLINE void DelayMarker(int64_t nanoseconds, ECS_TIMER_DURATION type) {
 			// This is fine even for negative numbers since adding with a negative means adding with a
 			// large positive which will yield the correct result
-			m_marker += std::chrono::nanoseconds((size_t)nanoseconds) * GetFactor(type);
+			m_marker += std::chrono::nanoseconds((size_t)nanoseconds) * GetTimeFactor(type);
 		}
 
 		ECS_INLINE bool IsUninitialized() const {
@@ -63,9 +67,13 @@ namespace ECSEngine {
 			memset(this, 0, sizeof(*this));
 		}
 
-		size_t GetDuration(ECS_TIMER_DURATION yep) const;
+		size_t GetDuration(ECS_TIMER_DURATION type) const;
 
 		size_t GetDurationSinceMarker(ECS_TIMER_DURATION type) const;
+
+		float GetDurationFloat(ECS_TIMER_DURATION type) const;
+
+		float GetDurationSinceMarkerFloat(ECS_TIMER_DURATION type) const;
 
 		std::chrono::high_resolution_clock::time_point m_start;
 		std::chrono::high_resolution_clock::time_point m_marker;

@@ -630,7 +630,7 @@ void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandb
 void SandboxForEachEntity(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	ForEachEntityFunctor functor,
+	ForEachEntityUntypedFunctor functor,
 	void* functor_data,
 	const ArchetypeQueryDescriptor& query_descriptor,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT

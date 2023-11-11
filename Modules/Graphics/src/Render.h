@@ -2,21 +2,17 @@
 #include "Export.h"
 
 template<bool schedule_element>
-ECS_THREAD_TASK(RenderTask);
-
-ECS_THREAD_TASK(RenderTaskInitialize);
+ECS_THREAD_TASK(DrawMeshes);
 
 // Used by the editor
 template<bool schedule_element>
-ECS_THREAD_TASK(RenderSelectables);
-
-ECS_THREAD_TASK(RenderSelectablesInitialize);
+ECS_THREAD_TASK(DrawSelectables);
 
 template<bool schedule_element>
-ECS_THREAD_TASK(RenderFlush);
+ECS_THREAD_TASK(FlushRenderCommands);
 
 // Used by the editor
 template<bool schedule_element>
-ECS_THREAD_TASK(RenderInstancedFramebuffer);
+ECS_THREAD_TASK(DrawInstancedFramebuffer);
 
-ECS_THREAD_TASK(RenderCameraRecalculate);
+ECS_THREAD_TASK(RecalculateCamera);

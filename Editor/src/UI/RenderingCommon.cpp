@@ -112,6 +112,45 @@ void DisplayNoGraphicsModule(UIDrawer& drawer, bool multiple_graphics_modules)
 
 // ------------------------------------------------------------------------------------------------------------
 
+static void DisplayBottomText(UIDrawer& drawer, Stream<char> message, Color text_color, float font_size) {
+	UIDrawerRowLayout row = drawer.GenerateRowLayout();
+	row.SetVerticalAlignment(ECS_UI_ALIGN_BOTTOM);
+	row.SetHorizontalAlignment(ECS_UI_ALIGN_MIDDLE);
+	row.AddLabel(message);
+
+	UIConfigTextParameters text_parameters;
+	text_parameters.color = text_color;
+	text_parameters.size *= float2::Splat(font_size);
+
+	UIDrawConfig crash_config;
+	size_t crash_configuration = UI_CONFIG_TEXT_PARAMETERS;
+	crash_config.AddFlag(text_parameters);
+
+	row.GetTransform(crash_config, crash_configuration);
+
+	drawer.Text(crash_configuration, crash_config, message);
+}
+
+void DisplayCrashedSandbox(UIDrawer& drawer, const EditorState* editor_state, unsigned int sandbox_index)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	if (sandbox->is_crashed) {
+		DisplayBottomText(drawer, "Crashed", EDITOR_RED_COLOR, 3.0f);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------
+
+void DisplayCompilingSandbox(UIDrawer& drawer, const EditorState* editor_state, unsigned int sandbox_index)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	if (HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION)) {
+		DisplayBottomText(drawer, "Compiling", EDITOR_YELLOW_COLOR, 3.0f);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------
+
 void ResizeSandboxTextures(
 	EditorState* editor_state, 
 	const UIDrawer& drawer, 

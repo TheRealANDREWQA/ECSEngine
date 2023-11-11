@@ -1198,6 +1198,11 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			DisplayNoGraphicsModule(drawer, multiple_graphics_module);
 		}
 	}
+
+	// Display the crash message if necessary
+	DisplayCrashedSandbox(drawer, editor_state, sandbox_index);
+	// Display the compiling message if necessary
+	DisplayCompilingSandbox(drawer, editor_state, sandbox_index);
 }
 
 void CreateSceneUIWindow(EditorState* editor_state, unsigned int index) {

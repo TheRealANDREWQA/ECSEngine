@@ -221,8 +221,8 @@ namespace ECSEngine {
 	template<typename T>
 	struct ResizableStack {
 	public:
-		ResizableStack() {}
-		ResizableStack(AllocatorPolymorphic allocator, unsigned int capacity) : m_stack(allocator, capacity) {}
+		ECS_INLINE ResizableStack() {}
+		ECS_INLINE ResizableStack(AllocatorPolymorphic allocator, unsigned int capacity) : m_stack(allocator, capacity) {}
 
 		ResizableStack(const ResizableStack& other) = default;
 		ResizableStack& operator = (const ResizableStack& other) = default;
