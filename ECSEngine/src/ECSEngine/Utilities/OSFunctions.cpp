@@ -66,7 +66,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimesInternal(HANDLE file_handle, char* creation_time, char* access_time, char* last_write_time)
+		bool GetFileTimesInternal(void* file_handle, char* creation_time, char* access_time, char* last_write_time)
 		{
 			FILETIME filetime_creation, filetime_last_access, filetime_last_write;
 
@@ -106,7 +106,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimesInternal(HANDLE file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+		bool GetFileTimesInternal(void* file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
 		{
 			char _creation_time[256];
 			char _access_time[256];
@@ -134,7 +134,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimesInternal(HANDLE file_handle, size_t* creation_time, size_t* access_time, size_t* last_write_time)
+		bool GetFileTimesInternal(void* file_handle, size_t* creation_time, size_t* access_time, size_t* last_write_time)
 		{
 			FILETIME filetime_creation, filetime_last_access, filetime_last_write;
 
@@ -181,7 +181,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetRelativeFileTimesInternal(HANDLE file_handle, char* creation_time, char* access_time, char* last_write_time)
+		bool GetRelativeFileTimesInternal(void* file_handle, char* creation_time, char* access_time, char* last_write_time)
 		{
 			size_t creation_time_int, access_time_int, last_write_time_int;
 			size_t* ptr1 = nullptr;
@@ -210,7 +210,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetRelativeFileTimesInternal(HANDLE file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+		bool GetRelativeFileTimesInternal(void* file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
 		{
 			char temp_characters1[256];
 			char temp_characters2[256];
@@ -238,7 +238,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetRelativeFileTimesInternal(HANDLE file_handle, size_t* creation_time, size_t* access_time, size_t* last_write_time)
+		bool GetRelativeFileTimesInternal(void* file_handle, size_t* creation_time, size_t* access_time, size_t* last_write_time)
 		{
 			FILETIME filetime_creation, filetime_last_access, filetime_last_write;
 
@@ -1136,6 +1136,39 @@ namespace ECSEngine {
 			HANDLE new_handle = nullptr;
 			BOOL success = DuplicateHandle(process_handle, handle, process_handle, &new_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
 			return success ? new_handle : nullptr;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		ECS_INLINE static size_t CombineInt32(unsigned int low, unsigned int high) {
+			return (size_t)low | ((size_t)high << 32);
+		}
+
+		ulong2 GetThreadTimes(void* handle)
+		{
+			FILETIME creation_time;
+			FILETIME exit_time;
+			FILETIME user_time;
+			FILETIME kernel_time;
+			BOOL success = ::GetThreadTimes(handle, &creation_time, &exit_time, &kernel_time, &user_time);
+			if (success) {
+				// These are in 100s of nanoseconds
+				size_t long_user_time = CombineInt32(user_time.dwLowDateTime, user_time.dwHighDateTime);
+				size_t long_kernel_time = CombineInt32(kernel_time.dwLowDateTime, kernel_time.dwHighDateTime);
+				return { long_user_time, long_kernel_time };
+			}
+			return { (size_t)-1, (size_t)-1 };
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		float2 ThreadTimesDuration(ulong2 current_times, ulong2 previous_times, ECS_TIMER_DURATION duration_type)
+		{
+			// The current values are in 100s of nanoseconds
+			float duration_factor = GetTimeFactorFloatInverse(duration_type);
+			ulong2 difference = current_times - previous_times;
+			// We need to multiply by 100.0f since these are in 100s of nanoseconds
+			return { difference.x * duration_factor * 100.0f, difference.y * duration_factor * 100.0f };
 		}
 
 		// -----------------------------------------------------------------------------------------------------

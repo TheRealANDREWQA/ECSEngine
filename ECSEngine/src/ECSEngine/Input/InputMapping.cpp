@@ -11,6 +11,9 @@ namespace ECSEngine {
 	bool InputMapping::IsTriggered(unsigned int index) const
 	{
 		InputMappingElement element = mappings[index];
+		if ((element.first.is_key || element.second.is_key || element.third.is_key) && keyboard->IsCaptureCharacters()) {
+			return false;
+		}
 		return element.first.IsTriggered(mouse, keyboard) && element.second.IsTriggered(mouse, keyboard) && element.third.IsTriggered(mouse, keyboard);
 	}
 
@@ -32,26 +35,26 @@ namespace ECSEngine {
 			// Return true since this element is not yet initialized
 			// Or is unused
 			if (key == ECS_KEY_NONE || key == ECS_KEY_COUNT) {
-				return true;
+				return !exclude;
 			}
 
 			if (state != keyboard->Get(key)) {
-				return false;
+				return exclude;
 			}
 		}
 		else {
 			// Return true since this element is not yet initialized
 			// Or is unused
 			if (mouse_button == ECS_MOUSE_BUTTON_COUNT) {
-				return true;
+				return !exclude;
 			}
 
 			if (state != mouse->Get(mouse_button)) {
-				return false;
+				return exclude;
 			}
 		}
 
-		return true;
+		return !exclude;
 	}
 
 }

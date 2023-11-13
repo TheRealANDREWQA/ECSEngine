@@ -362,6 +362,9 @@ namespace ECSEngine {
 		// Returns a stable value
 		ECSENGINE_API Stream<char> GetBasicFieldDefinition(ReflectionBasicFieldType basic_type);
 
+		// Fields that are not matched have DBL_MAX as value
+		ECSENGINE_API double4 ConvertToDouble4FromBasic(ReflectionBasicFieldType basic_type, const void* values);
+
 		ECSENGINE_API void ConvertFromDouble4ToBasic(ReflectionBasicFieldType basic_type, double4 values, void* converted_values);
 
 		// Checks for single, double, triple and quadruple component integers

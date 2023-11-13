@@ -6,6 +6,8 @@
 #include "../Editor/EditorState.h"
 #include "../Sandbox/Sandbox.h"
 #include "../Sandbox/SandboxModule.h"
+#include "../Sandbox/SandboxProfiling.h"
+#include "../Editor/EditorInputMapping.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
@@ -15,7 +17,7 @@ struct GameData {
 	uint2 previous_size;
 };
 
-void GameWindowDestroy(ActionData* action_data) {
+static void GameWindowDestroy(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
@@ -23,10 +25,25 @@ void GameWindowDestroy(ActionData* action_data) {
 	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 }
 
+static void GameWindowPrivateAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(window_index));
+	// Check the display statistics mapping
+	if (window_index == system->GetActiveWindow() && editor_state->input_mapping.IsTriggered(EDITOR_INPUT_SANDBOX_STATISTICS_TOGGLE)) {
+		InvertSandboxStatisticsDisplay(editor_state, sandbox_index);
+	}
+}
+
 #define RESIZE_THRESHOLD 1
 
 void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
+
+	drawer.DisableZoom();
+	drawer.DisablePaddingForRenderSliders();
 
 	GameData* data = (GameData*)window_data;
 	EditorState* editor_state = data->editor_state;
@@ -57,6 +74,9 @@ void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		}
 	}
 
+	// Display the statistics
+	DisplaySandboxStatistics(drawer, editor_state, sandbox_index);
+
 	// Display the crash message if necessary
 	DisplayCrashedSandbox(drawer, editor_state, sandbox_index);
 	// Display the compiling message if necessary
@@ -76,6 +96,9 @@ void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state,
 
 	descriptor.destroy_action = GameWindowDestroy;
 	descriptor.destroy_action_data = editor_state;
+
+	descriptor.private_action = GameWindowPrivateAction;
+	descriptor.private_action_data = editor_state;
 
 	CapacityStream<char> window_name(OffsetPointer(game_data, sizeof(*game_data)), 0, 128);
 	GetGameUIWindowName(index, window_name);

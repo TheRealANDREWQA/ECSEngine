@@ -2,7 +2,7 @@
 #include "TaskManager.h"
 #include "../ECS/World.h"
 #include "../Utilities/Crash.h"
-#include "../Profiling/FrameProfilerGlobal.h"
+#include "../Profiling/CPUFrameProfilerGlobal.h"
 
 // In milliseconds
 #define SLEEP_UNTIL_DYNAMIC_TASKS_FINISH_INTERVAL 25
@@ -516,9 +516,9 @@ namespace ECSEngine {
 
 	static ECS_THREAD_WRAPPER_TASK(FrameTimingWrapper) {
 		Timer timer;
-		FrameProfilerPush(thread_id, task.name);
+		CPUFrameProfilerPush(thread_id, task.name);
 		task.function(thread_id, world, task.data);
-		FrameProfilerPop(thread_id, timer.GetDurationFloat(ECS_TIMER_DURATION_US));
+		CPUFrameProfilerPop(thread_id, timer.GetDurationFloat(ECS_TIMER_DURATION_US));
 	}
 
 	void TaskManager::ComposeFrameTimingWrappers()

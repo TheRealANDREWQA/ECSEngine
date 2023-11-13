@@ -139,6 +139,13 @@ enum ECS_REFLECT EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY : unsigned char {
 	EDITOR_SANDBOX_STATISTIC_CPU_USAGE,
 	EDITOR_SANDBOX_STATISTIC_GPU_USAGE,
 	EDITOR_SANDBOX_STATISTIC_RAM_USAGE,
+	EDITOR_SANDBOX_STATISTIC_VRAM_USAGE,
+	// This is the time of the simulation only
+	EDITOR_SANDBOX_STATISTIC_SANDBOX_TIME,
+	// This is the time of the total editor frame
+	EDITOR_SANDBOX_STATISTIC_FRAME_TIME,
+	// This is the time of the GPU simulation render time
+	EDITOR_SANDBOX_STATISTIC_GPU_SANDBOX_TIME,
 	EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT
 };
 
@@ -147,14 +154,24 @@ enum ECS_REFLECT EDITOR_SANDBOX_STATISTIC_DISPLAY_FORM : unsigned char {
 	EDITOR_SANDBOX_STATISTIC_DISPLAY_GRAPH
 };
 
-// We are reflecting this since we want this to be stored in the sandbox file
-struct ECS_REFLECT EditorSandboxStatisticsDisplay {
-	bool should_display[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];
-	EDITOR_SANDBOX_STATISTIC_DISPLAY_FORM display_form[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];
+enum ECS_REFLECT EDITOR_SANDBOX_CPU_STATISTICS_TYPE : unsigned char {
+	EDITOR_SANDBOX_CPU_STATISTICS_NONE,
+	EDITOR_SANDBOX_CPU_STATISTICS_BASIC,
+	EDITOR_SANDBOX_CPU_STATISTICS_ADVANCED
 };
 
-struct EditorSandboxStatistics {
-	ECSEngine::Statistic<float> values[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];
+enum ECS_REFLECT EDITOR_SANDBOX_GPU_STATISTICS_TYPE : unsigned char {
+	EDITOR_SANDBOX_GPU_STATISTICS_NONE,
+	EDITOR_SANDBOX_GPU_STATISTICS_BASIC,
+	EDITOR_SANDBOX_GPU_STATISTICS_ADVANCED
+};
+
+// We are reflecting this since we want this to be stored in the sandbox file
+struct ECS_REFLECT EditorSandboxStatisticsDisplay {
+	// This works like a master selection that hides all or allows the display
+	bool is_enabled;
+	bool should_display[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];
+	EDITOR_SANDBOX_STATISTIC_DISPLAY_FORM display_form[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];
 };
 
 struct ECS_REFLECT EditorSandbox {
@@ -185,6 +202,9 @@ struct ECS_REFLECT EditorSandbox {
 
 	// When the step button is clicked, if this sandbox should step
 	bool should_step;
+	
+	EDITOR_SANDBOX_CPU_STATISTICS_TYPE cpu_statistics_type;
+	EDITOR_SANDBOX_GPU_STATISTICS_TYPE gpu_statistics_type;
 
 	ECSEngine::ECS_TRANSFORM_TOOL transform_tool;
 	ECSEngine::ECS_TRANSFORM_SPACE transform_space;
@@ -195,7 +215,7 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::OrientedPoint camera_saved_orientations[EDITOR_SANDBOX_SAVED_CAMERA_TRANSFORM_COUNT];
 
 	// Save these to the sandbox file
-	EditorSandboxStatisticsDisplay system_statistics_display;
+	EditorSandboxStatisticsDisplay statistics_display;
 
 	ECS_FIELDS_END_REFLECT;
 
@@ -251,8 +271,7 @@ struct ECS_REFLECT EditorSandbox {
 
 	EditorSandboxAssetHandlesSnapshot runtime_asset_handle_snapshot;
 
-	ECSEngine::FrameProfiler frame_statistics;
-	EditorSandboxStatistics system_statistics;
+	ECSEngine::CPUFrameProfiler cpu_frame_profiler;
 
 	// Miscellaneous flags
 	size_t flags;

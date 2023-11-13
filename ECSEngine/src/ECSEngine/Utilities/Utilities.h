@@ -10,7 +10,7 @@ namespace ECSEngine {
 
 	// Determines how many slots are needed to hold the given count with the chunk size
 	ECS_INLINE size_t SlotsFor(size_t count, size_t chunk_size) {
-		return count / chunk_size + ((count % chunk_size) != 0);
+		return (count + chunk_size - 1) / chunk_size;
 	}
 
 	template<typename Integer>

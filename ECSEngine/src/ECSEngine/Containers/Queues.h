@@ -63,6 +63,22 @@ namespace ECSEngine {
 			return m_queue.buffer + m_first_item;
 		}
 
+		// The index is counted backwards - that is, index 0 means the first element
+		// to be popped, while index size - 1 means the last added element
+		T PeekByIndex(unsigned int index) const {
+			unsigned int final_index = index + m_first_item;
+			final_index = final_index >= m_queue.capacity ? final_index - m_queue.capacity : final_index;
+			return m_queue[final_index];
+		}
+
+		// The index is counted "normally" - that is, index 0 means the last pushed element
+		// while index 0 means the first element to be popped
+		T PushPeekByIndex(unsigned int index) const {
+			unsigned int final_index = m_first_item + m_queue.size - 1 - index;
+			final_index = final_index >= m_queue.capacity ? final_index - m_queue.capacity : final_index;
+			return m_queue[final_index];
+		}
+
 		bool Pop(T& element) {
 			if (m_queue.size > 0) {
 				unsigned int element_index = m_first_item;
@@ -299,6 +315,22 @@ namespace ECSEngine {
 		// Make sure that the size is greater than 0
 		ECS_INLINE T* PeekIntrusive() {
 			return m_queue.buffer + m_first_item;
+		}
+
+		// The index is counted backwards - that is, index 0 means the first element
+		// to be popped, while index size - 1 means the last added element
+		T PeekByIndex(unsigned int index) const {
+			unsigned int final_index = index + m_first_item;
+			final_index = final_index >= m_queue.capacity ? final_index - m_queue.capacity : final_index;
+			return m_queue[final_index];
+		}
+
+		// The index is counted "normally" - that is, index 0 means the last pushed element
+		// while index 0 means the first element to be popped
+		T PushPeekByIndex(unsigned int index) const {
+			unsigned int final_index = m_first_item + m_queue.size - 1 - index;
+			final_index = final_index >= m_queue.capacity ? final_index - m_queue.capacity : final_index;
+			return m_queue[final_index];
 		}
 
 		bool Pop(T& element) {

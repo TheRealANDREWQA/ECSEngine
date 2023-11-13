@@ -3587,6 +3587,37 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	size_t Graphics::GetMemoryUsage(ECS_BYTE_UNIT_TYPE byte_unit)
+	{
+		Microsoft::WRL::ComPtr<IDXGIDevice> dxgi_device = nullptr;
+		HRESULT success = m_device->QueryInterface(__uuidof(IDXGIDevice), (void**)&dxgi_device);
+		if (FAILED(success)) {
+			return 0;
+		}
+
+		Microsoft::WRL::ComPtr<IDXGIAdapter> base_adapter = nullptr;
+		success = dxgi_device->GetAdapter(&base_adapter);
+		if (FAILED(success)) {
+			return 0;
+		}
+
+		Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter = nullptr;
+		success = base_adapter->QueryInterface(__uuidof(IDXGIAdapter3), (void**)&adapter);
+		if (FAILED(success)) {
+			return 0;
+		}
+
+		DXGI_QUERY_VIDEO_MEMORY_INFO query_info;
+		success = adapter->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &query_info);
+		if (FAILED(success)) {
+			return 0;
+		}
+
+		return ConvertToByteUnit(query_info.CurrentUsage, byte_unit);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	RenderTargetView Graphics::GetBoundRenderTarget() const
 	{
 		ECS_ASSERT(m_bound_render_target_count > 0);

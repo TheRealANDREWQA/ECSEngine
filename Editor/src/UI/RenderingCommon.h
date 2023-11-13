@@ -38,6 +38,13 @@ void DisplayCompilingSandbox(
 	unsigned int sandbox_index
 );
 
+// These are the basic ones like CPU usage, RAM usage, GPU usage, etc
+void DisplaySandboxStatistics(
+	UIDrawer& drawer,
+	const EditorState* editor_state,
+	unsigned int sandbox_index
+);
+
 // Performs the resizing and the re-render of the viewport if the difference between the sizes is at least
 // equal to the threshold (if left at the default of 1 it means on every pixel size change). It will also update
 // the previous size accordingly. If the sandbox index is -1 it will deduce it from the drawer

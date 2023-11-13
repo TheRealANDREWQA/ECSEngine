@@ -150,6 +150,8 @@ namespace ECSEngine {
 			float indentation;
 			// This field is the actual double of the value given since the border is symmetrical
 			float2 border_thickness;
+			// Used to calculate label sizes
+			float font_scaling;
 			unsigned int current_index;
 			unsigned int element_count;
 

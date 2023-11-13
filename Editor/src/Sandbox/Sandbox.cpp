@@ -3,6 +3,7 @@
 #include "SandboxScene.h"
 #include "SandboxModule.h"
 #include "SandboxCrashHandler.h"
+#include "SandboxProfiling.h"
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorEvent.h"
 #include "../Editor/EditorPalette.h"
@@ -656,7 +657,9 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->scene_path.Initialize(editor_state->EditorAllocator(), 0, SCENE_PATH_STRING_CAPACITY);
 
 	// The runtime snapshots and their allocator are being created in the preinitialize phase
+
 	ResetSandboxCameras(editor_state, sandbox_index);
+	ResetSandboxStatistics(editor_state, sandbox_index);
 
 	if (initialize_runtime) {
 		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
@@ -1583,12 +1586,13 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
+	size_t statistics_reserve_size = CPUFrameProfilerAllocatorReserve(std::thread::hardware_concurrency());
 	// Create a sandbox allocator - a global one - such that it can accomodate the default entity manager requirements
 	GlobalMemoryManager* allocator = (GlobalMemoryManager*)editor_state->editor_allocator->Allocate(sizeof(GlobalMemoryManager));
 	*allocator = CreateGlobalMemoryManager(
-		sandbox->runtime_descriptor.entity_manager_memory_size + ECS_MB * 10,
+		sandbox->runtime_descriptor.entity_manager_memory_size + ECS_MB * 10 + statistics_reserve_size,
 		1024,
-		sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size + ECS_MB * 2
+		sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size + ECS_MB * 5
 	);
 
 	AllocatorPolymorphic sandbox_allocator = GetAllocatorPolymorphic(allocator);
@@ -1661,6 +1665,9 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->virtual_entities_slots.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
 	sandbox->virtual_entity_slot_type.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
 	sandbox->virtual_entities_slots_recompute = false;
+
+	InitializeSandboxCPUProfiler(editor_state, sandbox_index);
+	InitializeSandboxGPUProfiler(editor_state, sandbox_index);
 
 	// Resize the textures for the viewport to a 1x1 texture such that rendering commands will fallthrough even
 	// when the UI has not yet run to resize them
@@ -2189,14 +2196,15 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	// Add the sandbox debug elements
 	DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
 
-	if (sandbox->sandbox_world.delta_time == 0.0f) {
-		sandbox->sandbox_world.timer.SetNewStart();
-	}
 	GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(GetAllocatorPolymorphic(&stack_allocator));
 
 	CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, GetAllocatorPolymorphic(&stack_allocator));
+	StartSandboxFrameProfiling(editor_state, sandbox_index);
 
+	if (sandbox->sandbox_world.delta_time == 0.0f) {
+		sandbox->sandbox_world.timer.SetNewStart();
+	}
 	// In case we are stepping, we need to restore the delta time
 	// In both cases, for fixed step for and the dynamic default mode
 	bool keep_delta_time = false;
@@ -2217,8 +2225,9 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			sandbox->sandbox_world.delta_time = new_delta_time;
 		}
 	}
-
 	sandbox->sandbox_world.timer.SetNewStart();
+
+	EndSandboxFrameProfiling(editor_state, sandbox_index);
 
 	SandboxRestorePreviousCrashHandler(previous_crash_handler);
 
@@ -2489,6 +2498,10 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 			// Since when returning to the scene representation, we can have the scene assets still loaded
 			AssetDatabaseReference* asset_database = &sandbox->database;
 			asset_database->IncrementReferenceCounts(true);
+
+			// Clear the CPU / GPU frame profilers
+			ClearSandboxCPUProfiler(editor_state, sandbox_index);
+			ClearSandboxGPUProfiler(editor_state, sandbox_index);
 		}
 	}
 	else {

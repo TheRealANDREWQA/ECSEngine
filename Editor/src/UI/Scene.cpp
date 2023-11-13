@@ -16,6 +16,7 @@
 #include "../Sandbox/Sandbox.h"
 #include "../Sandbox/SandboxModule.h"
 #include "../Sandbox/SandboxFile.h"
+#include "../Sandbox/SandboxProfiling.h"
 
 // These defined the bounds under which the mouse
 // is considered that it clicked and not selected yet
@@ -415,7 +416,8 @@ static void ScenePrivateAction(ActionData* action_data) {
 	SceneDrawData* draw_data = (SceneDrawData*)_additional_data;
 	EditorState* editor_state = data->editor_state;
 
-	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
+	unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(window_index));
 	// Determine if the transform tool needs to be changed
 	unsigned int target_sandbox = GetActiveWindowSandbox(editor_state);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -448,6 +450,22 @@ static void ScenePrivateAction(ActionData* action_data) {
 				// Check the focus on object
 				if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_FOCUS_OBJECT)) {
 					FocusOnSelection(editor_state, sandbox_index);
+				}
+
+				// Check the display statistics mapping - only if we are the active window
+				// Since the Game UI window will check for this as well
+				if (window_index == system->GetActiveWindow() && editor_state->input_mapping.IsTriggered(EDITOR_INPUT_SANDBOX_STATISTICS_TOGGLE)) {
+					InvertSandboxStatisticsDisplay(editor_state, sandbox_index);
+				}
+
+				// This is for testing only
+				if (window_index == system->GetActiveWindow()) {
+					if (keyboard->IsPressed(ECS_KEY_M)) {
+						ChangeSandboxCPUStatisticsType(editor_state, sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_BASIC);
+					}
+					else if (keyboard->IsPressed(ECS_KEY_N)) {
+						ChangeSandboxCPUStatisticsType(editor_state, sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_NONE);
+					}
 				}
 
 				ECS_TRANSFORM_TOOL current_tool = sandbox->transform_tool;
@@ -1151,6 +1169,9 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
+	drawer.DisableZoom();
+	drawer.DisablePaddingForRenderSliders();
+
 	SceneDrawData* data = (SceneDrawData*)window_data;
 	EditorState* editor_state = data->editor_state;
 
@@ -1198,6 +1219,9 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			DisplayNoGraphicsModule(drawer, multiple_graphics_module);
 		}
 	}
+
+	// Display the statistics
+	DisplaySandboxStatistics(drawer, editor_state, sandbox_index);
 
 	// Display the crash message if necessary
 	DisplayCrashedSandbox(drawer, editor_state, sandbox_index);

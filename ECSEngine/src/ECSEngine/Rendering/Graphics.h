@@ -7,6 +7,7 @@
 #include "ShaderReflection.h"
 #include "../Allocators/MemoryManager.h"
 #include "../Containers/AtomicStream.h"
+#include "../Utilities/ByteUnits.h"
 
 #define ECS_PIXEL_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Pixel\\" TEXT(STRING(name.hlsl))
 #define ECS_VERTEX_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\" TEXT(STRING(name.hlsl))
@@ -1121,6 +1122,8 @@ namespace ECSEngine {
 		void* GetCurrentShader(ECS_SHADER_TYPE shader_type) const;
 
 		GraphicsResourceSnapshot GetResourceSnapshot(AllocatorPolymorphic allocator);
+
+		size_t GetMemoryUsage(ECS_BYTE_UNIT_TYPE byte_unit = ECS_BYTE_TO_MB);
 
 		void GetWindowSize(unsigned int& width, unsigned int& height) const;
 

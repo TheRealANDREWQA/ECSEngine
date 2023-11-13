@@ -1,8 +1,8 @@
 #pragma once
 #include "../Core.h"
-#include "ecspch.h"
 #include "../Containers/Stream.h"
 #include "BasicTypes.h"
+#include "Timer.h"
 
 // Forward the UISystem and Console
 namespace ECSEngine {
@@ -27,7 +27,7 @@ namespace ECSEngine {
 		// Should prefer the other variants. This can be used when getting OS handles for files
 		// Works on directories too
 		ECSENGINE_API bool GetFileTimesInternal(
-			HANDLE file_handle, 
+			void* file_handle, 
 			char* creation_time = nullptr,
 			char* access_time = nullptr,
 			char* last_write_time = nullptr
@@ -36,7 +36,7 @@ namespace ECSEngine {
 		// Should prefer the other variants. This can be used when getting OS handles for files
 		// Works on directories too
 		ECSENGINE_API bool GetFileTimesInternal(
-			HANDLE file_handle,
+			void* file_handle,
 			wchar_t* creation_time = nullptr,
 			wchar_t* access_time = nullptr,
 			wchar_t* last_write_time = nullptr
@@ -45,7 +45,7 @@ namespace ECSEngine {
 		// Should prefer the other variants. This can be used when getting OS handles for files
 		// Works on directories too
 		ECSENGINE_API bool GetFileTimesInternal(
-			HANDLE file_handle,
+			void* file_handle,
 			size_t* creation_time = nullptr,
 			size_t* access_time = nullptr,
 			size_t* last_write_time = nullptr
@@ -54,7 +54,7 @@ namespace ECSEngine {
 		// Should prefer the other variants. This can be used when getting OS handles for files
 		// Works on directories too
 		ECSENGINE_API bool GetRelativeFileTimesInternal(
-			HANDLE file_handle,
+			void* file_handle,
 			char* creation_time = nullptr,
 			char* access_time = nullptr,
 			char* last_write_time = nullptr
@@ -63,7 +63,7 @@ namespace ECSEngine {
 		// Should prefer the other variants. This can be used when getting OS handles for files
 		// Works on directories too
 		ECSENGINE_API bool GetRelativeFileTimesInternal(
-			HANDLE file_handle,
+			void* file_handle,
 			wchar_t* creation_time = nullptr,
 			wchar_t* access_time = nullptr,
 			wchar_t* last_write_time = nullptr
@@ -72,7 +72,7 @@ namespace ECSEngine {
 		// Should prefer the other variants. This can be used when getting OS handles for files
 		// Works on directories too
 		ECSENGINE_API bool GetRelativeFileTimesInternal(
-			HANDLE file_handle,
+			void* file_handle,
 			size_t* creation_time = nullptr,
 			size_t* access_time = nullptr,
 			size_t* last_write_time = nullptr
@@ -177,6 +177,13 @@ namespace ECSEngine {
 		// It creates a new separate handle from the given one. You must release it with CloseThreadHandle
 		// Returns nullptr if it failed
 		ECSENGINE_API void* DuplicateThreadHandle(void* handle);
+		
+		// Returns the times that the thread has spent executing. The first value
+		// Is the user mode execution time, the second one the kernel time
+		// Returns { -1, -1 } if it failed. To obtain durations, you must subtract from a previous value
+		ECSENGINE_API ulong2 GetThreadTimes(void* handle);
+
+		ECSENGINE_API float2 ThreadTimesDuration(ulong2 current_times, ulong2 previous_times, ECS_TIMER_DURATION duration_type);
 
 		/*
 			To determine if two threads are the same, don't use handles.
