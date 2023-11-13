@@ -273,24 +273,102 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+#define CASE(type) case ReflectionBasicFieldType::type
+#define CASE4(type) CASE(type): CASE(type##2): CASE(type##3): CASE(type##4):
+#define CASE4_INT32(type) CASE(type##32): CASE(type##2): CASE(type##3): CASE(type##4):
+#define CASE4_INT_BASE(base_int, other_int) CASE(base_int): CASE(other_int##2): CASE(other_int##3): CASE(other_int##4):
+
 		template<typename Type>
-		ECS_INLINE void ConvertFromDouble(double* values, unsigned int count, void* converted_values) {
+		ECS_INLINE void ConvertToDouble(double4* double_values, unsigned char count, const void* values) {
+			const Type* typed_values = (const Type*)values;
+			double* double_values_ptr = (double*)double_values;
+			for (unsigned char index = 0; index < count; index++) {
+				double_values_ptr[index] = (double)typed_values[index];
+			}
+		}
+
+		double4 ConvertToDouble4FromBasic(ReflectionBasicFieldType basic_type, const void* values)
+		{
+			double4 value = double4::Splat(DBL_MAX);
+			unsigned char basic_type_count = BasicTypeComponentCount(basic_type);
+
+			switch (basic_type) {
+			CASE4(Bool)
+			{
+				ConvertToDouble<bool>(&value, basic_type_count, values);
+			}
+			break;
+			CASE4(Float) 
+			{
+				ConvertToDouble<float>(&value, basic_type_count, values);
+			}
+			break;
+			CASE4(Double) 
+			{
+				ConvertToDouble<double>(&value, basic_type_count, values);
+			}
+			break;
+			CASE4_INT32(Int)
+			{
+				ConvertToDouble<int>(&value, basic_type_count, values);
+			}
+			break;
+			CASE4_INT32(UInt)
+			{
+				ConvertToDouble<unsigned int>(&value, basic_type_count, values);
+			}
+			break;
+			CASE4_INT_BASE(Int8, Char)
+			{
+				ConvertToDouble<char>(&value, basic_type_count, values);
+			}
+			break;
+			CASE4_INT_BASE(Int16, Short)
+			{
+				ConvertToDouble<short>(&value, basic_type_count, values);
+			}
+			break;
+			CASE4_INT_BASE(Int64, Long)
+			{
+				ConvertToDouble<long long>(&value, basic_type_count, values);
+			}
+			break;
+			CASE4_INT_BASE(UInt8, UChar)
+			{
+				ConvertToDouble<unsigned char>(&value, basic_type_count, values);
+			}
+			break;
+			CASE4_INT_BASE(UInt16, UShort)
+			{
+				ConvertToDouble<unsigned short>(&value, basic_type_count, values);
+			}
+			break;
+			CASE4_INT_BASE(UInt64, ULong)
+			{
+				ConvertToDouble<unsigned long long>(&value, basic_type_count, values);
+			}
+			break;
+			// Ignore all the other cases
+			}
+
+			return value;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		template<typename Type>
+		ECS_INLINE void ConvertFromDouble(const double* values, unsigned char count, void* converted_values) {
 			Type* type_ptr = (Type*)converted_values;
-			for (unsigned int index = 0; index < count; index++) {
+			for (unsigned char index = 0; index < count; index++) {
 				type_ptr[index] = (Type)values[index];
 			}
 		}
 
 		void ConvertFromDouble4ToBasic(ReflectionBasicFieldType basic_type, double4 values, void* converted_values)
 		{
-			double* double_values = (double*)&values;
+			const double* double_values = (double*)&values;
 
-#define CASE(type) case ReflectionBasicFieldType::type
-#define CASE4(type) CASE(type): CASE(type##2): CASE(type##3): CASE(type##4):
-#define CASE4_INT32(type) CASE(type##32): CASE(type##2): CASE(type##3): CASE(type##4):
-#define CASE4_INT_BASE(base_int, other_int) CASE(base_int): CASE(other_int##2): CASE(other_int##3): CASE(other_int##4):
-
-			unsigned short basic_type_count = BasicTypeComponentCount(basic_type);
+			unsigned char basic_type_count = BasicTypeComponentCount(basic_type);
 			switch (basic_type) {
 				CASE4(Bool)
 				{
@@ -349,12 +427,12 @@ namespace ECSEngine {
 				break;
 				// Ignore all the other cases
 			}
+		}
 
 #undef CASE
 #undef CASE4
 #undef CASE4_INT32
 #undef CASE4_INT_BASE
-		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 

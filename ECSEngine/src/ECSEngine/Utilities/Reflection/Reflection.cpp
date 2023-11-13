@@ -4608,6 +4608,23 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void CopyReflectionTypeBlittableFields(
+			const ReflectionManager* reflection_manager, 
+			const ReflectionType* type, 
+			const void* source, 
+			void* destination
+		)
+		{
+			for (size_t index = 0; index < type->fields.size; index++) {
+				if (SearchIsBlittable(reflection_manager, type->fields[index].definition)) {
+					// We can copy the field
+					memcpy(type->GetField(destination, index), type->GetField(source, index), type->fields[index].info.byte_size);
+				}
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		size_t GetFieldTypeAlignmentEx(const ReflectionManager* reflection_manager, const ReflectionField& field)
 		{
 			// Check the give size macro

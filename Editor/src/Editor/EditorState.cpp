@@ -5,6 +5,7 @@
 #include "ECSEngineApplicationUtilities.h"
 #include "EditorParameters.h"
 #include "EditorEvent.h"
+#include "EditorGeneralInputTick.h"
 #include "../Modules/Module.h"
 #include "../Project/ProjectFolders.h"
 #include "../Project/ProjectBackup.h"
@@ -281,6 +282,8 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickSandboxRuntimes(editor_state);
 
 		TickSaveProjectUIAutomatically(editor_state);
+
+		EditorGeneralInputTick(editor_state);
 	}
 }
 
@@ -593,6 +596,11 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->Mouse()->AttachToWindow(application->GetOSWindowHandle());
 	// Change the dump type to none during the hub phase
 	console->SetDumpType(ECS_CONSOLE_DUMP_NONE);
+
+	bool gpu_stats_success = InitializeGPUStatsRecording();
+	if (!gpu_stats_success) {
+		EditorSetConsoleError("Failed to initialize GPU stats recording support");
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -702,6 +710,9 @@ void EditorStateBeforeExitCleanup(EditorState* editor_state)
 
 	DestroyGraphics(editor_state->RuntimeGraphics());
 	DestroyGraphics(editor_state->UIGraphics());
+
+	// The the gpu stats recording as well
+	FreeGPUStatsRecording();
 }
 
 // -----------------------------------------------------------------------------------------------------------------

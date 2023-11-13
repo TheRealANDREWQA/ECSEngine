@@ -108,7 +108,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ImportLibrary>..\bin\$(Configuration)\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
-      <AdditionalDependencies>dxguid.lib;synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(ProjectDir)\Dependencies\NVAPI\amd64\nvapi64.lib;dxguid.lib;synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
@@ -153,7 +153,7 @@
       <OptimizeReferences>false</OptimizeReferences>
       <ImportLibrary>..\bin\$(Configuration)\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
-      <AdditionalDependencies>dxguid.lib;synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(ProjectDir)\Dependencies\NVAPI\amd64\nvapi64.lib;dxguid.lib;synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
@@ -198,7 +198,7 @@
       <OptimizeReferences>false</OptimizeReferences>
       <ImportLibrary>..\bin\$(Configuration)\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
-      <AdditionalDependencies>dxguid.lib;synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(ProjectDir)\Dependencies\NVAPI\amd64\nvapi64.lib;dxguid.lib;synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
@@ -261,8 +261,9 @@
     <ClInclude Include="src\ECSEngine\Multithreading\TaskStealing.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTaskExport.h" />
-    <ClInclude Include="src\ECSEngine\Profiling\FrameProfiler.h" />
-    <ClInclude Include="src\ECSEngine\Profiling\FrameProfilerGlobal.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\CPUFrameProfiler.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\CPUFrameProfilerGlobal.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\GPUStats.h" />
     <ClInclude Include="src\ECSEngine\Profiling\Statistic.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Camera.h" />
     <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
@@ -324,6 +325,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\Assert.h" />
     <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
     <ClInclude Include="src\ECSEngine\Input\ButtonInput.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\ByteUnits.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
     <ClInclude Include="src\ECSEngine\Input\InputMapping.h" />
     <ClInclude Include="src\ECSEngine\Utilities\DebugInfo.h" />
@@ -490,8 +492,10 @@
     <ClCompile Include="src\ECSEngine\Multithreading\TaskScheduler.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\TaskSchedulerTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\ThreadTask.cpp" />
-    <ClCompile Include="src\ECSEngine\Profiling\FrameProfiler.cpp" />
-    <ClCompile Include="src\ECSEngine\Profiling\FrameProfilerGlobal.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\CPUFrameProfiler.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\CPUFrameProfilerGlobal.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\GPUStats.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\Statistic.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Camera.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
@@ -567,6 +571,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\BasicTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Benchmark.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\ByteUnits.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Console.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\CrashHandler.cpp" />

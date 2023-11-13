@@ -1,4 +1,4 @@
-2048 32          // texture dimensions
+2048 33          // texture dimensions
 0 32             // uv.v top | uv.v bottom
 
 0 4

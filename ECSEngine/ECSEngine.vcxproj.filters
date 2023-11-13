@@ -246,9 +246,11 @@
     <ClInclude Include="src\Includes\ECSEngineRuntimeCrash.h" />
     <ClInclude Include="src\Includes\ECSEngineProfiling.h" />
     <ClInclude Include="src\Includes\ECSEngineProfilingGlobal.h" />
-    <ClInclude Include="src\ECSEngine\Profiling\FrameProfiler.h" />
-    <ClInclude Include="src\ECSEngine\Profiling\FrameProfilerGlobal.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\CPUFrameProfiler.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\CPUFrameProfilerGlobal.h" />
     <ClInclude Include="src\ECSEngine\Profiling\Statistic.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\GPUStats.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\ByteUnits.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -387,8 +389,11 @@
     <ClCompile Include="src\ECSEngine\Allocators\MemoryProtectedAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeCrashPersistence.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\WorldCrashHandler.cpp" />
-    <ClCompile Include="src\ECSEngine\Profiling\FrameProfiler.cpp" />
-    <ClCompile Include="src\ECSEngine\Profiling\FrameProfilerGlobal.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\CPUFrameProfiler.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\CPUFrameProfilerGlobal.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\GPUStats.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\ByteUnits.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\Statistic.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

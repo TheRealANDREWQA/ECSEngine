@@ -202,7 +202,7 @@ namespace ECSEngine {
 			m_process_characters = false;
 		}
 
-        ECS_INLINE bool IsCaptureCharacters() {
+        ECS_INLINE bool IsCaptureCharacters() const {
             return m_process_characters;
         }
 

@@ -454,6 +454,14 @@ namespace ECSEngine {
 			AllocatorPolymorphic field_allocator
 		);
 
+		// Copies all blittable fields from one type instance to the other
+		ECSENGINE_API void CopyReflectionTypeBlittableFields(
+			const Reflection::ReflectionManager* reflection_manager,
+			const Reflection::ReflectionType* type,
+			const void* source,
+			void* destination
+		);
+
 		// Works for user defined types as well
 		ECSENGINE_API size_t GetFieldTypeAlignmentEx(const ReflectionManager* reflection_manager, const ReflectionField& field);
 

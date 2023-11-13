@@ -6,31 +6,63 @@
 
 namespace ECSEngine {
 
+#define ECS_STATISTIC_SMALL_AVERAGE_PERCENTAGE 0.2f
+
+	enum ECS_STATISTIC_VALUE_TYPE : unsigned char {
+		// The last value from the statistic
+		ECS_STATISTIC_VALUE_INSTANT,
+		// An average of a small set of the last values
+		ECS_STATISTIC_VALUE_SMALL_AVERAGE,
+		// The overall average
+		ECS_STATISTIC_VALUE_AVERAGE
+	};
+
 	template<typename T>
 	struct Statistic {
 		void Add(T value) {
 			entries.Push(value);
 			min = value < min ? value : min;
 			max = value > max ? value : max;
-			unsigned int insert_index = 0;
-			while (insert_index < min_values.size && min_values[insert_index] <= value) {
-				insert_index++;
-			}
-			// If there is not enough space and the value is indeed smaller,
-			if (min_values.size == min_values.capacity) {
-				if (insert_index < min_values.capacity) {
-					min_values.size--;
-					min_values.Insert(insert_index, value);
-				}
-			}
-			else {
-				// We need to insert since we already have space
-				min_values.Insert(insert_index, value);
-			}
 		}
 
-		// Uses a coalesced allocation
-		void Initialize(AllocatorPolymorphic allocator, unsigned int entries_capacity, unsigned int min_values_capacity) {
+		void Clear() {
+			entries.Reset();
+			InitializeMinMax();
+		}
+
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+			DeallocateEx(allocator, entries.GetAllocatedBuffer());
+		}
+
+		T GetValue(ECS_STATISTIC_VALUE_TYPE value_type) const {
+			T value = 0;
+			// Use this check to avoid any divisions by zero
+			// Or incorrect acces
+			if (entries.GetSize() > 0) {
+				if (value_type == ECS_STATISTIC_VALUE_AVERAGE) {
+					entries.ForEach([&](T current_value) {
+						value += current_value;
+					});
+					value /= (T)entries.GetSize();
+				}
+				else if (value_type >= ECS_STATISTIC_VALUE_SMALL_AVERAGE) {
+					unsigned int count = (unsigned int)((float)entries.GetSize() * ECS_STATISTIC_SMALL_AVERAGE_PERCENTAGE);
+					// Make it at least contain one value
+					count = count == 0 ? 1 : count;
+					for (unsigned int index = 0; index < count; index++) {
+						value += entries.PushPeekByIndex(index);
+					}
+					value /= (T)count;
+				}
+				else {
+					value = entries.PushPeekByIndex(0);
+				}
+			}
+
+			return value;
+		}
+
+		void InitializeMinMax() {
 			if constexpr (std::is_integral_v<T>) {
 				IntegerRange<T>(min, max);
 			}
@@ -45,41 +77,61 @@ namespace ECSEngine {
 			else {
 				static_assert(false, "Statistic does not support types other than integers and floats/doubles");
 			}
+		}
 
-			min_values_capacity = min_values_capacity == 0 ? 1 : min_values_capacity;
+		void Initialize(AllocatorPolymorphic allocator, unsigned int entries_capacity) {
+			InitializeMinMax();
+
 			entries_capacity = entries_capacity == 0 ? 1 : entries_capacity;
-			size_t allocation_size = entries.MemoryOf(entries_capacity) + min_values.MemoryOf(min_values_capacity);
+			size_t allocation_size = entries.MemoryOf(entries_capacity);
 			void* allocation = AllocateEx(allocator, allocation_size);
-			uintptr_t allocation_ptr = (uintptr_t)allocation_ptr;
+			uintptr_t allocation_ptr = (uintptr_t)allocation;
 			entries.InitializeFromBuffer(allocation_ptr, entries_capacity);
-			min_values.InitializeFromBuffer(allocation_ptr, 0, min_values_capacity);
-		}
-
-		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
-			DeallocateEx(allocator, entries.GetAllocatedBuffer());
-		}
-
-		T GetAverage() const {
-			T average = 0;
-			entries.ForEach([&](T value) {
-				average += value;
-			});
-			return average / (T)entries.GetSize();
-		}
-
-		T GetMinAverage() const {
-			T min_average = 0;
-			for (unsigned int index = 0; index < min_values.size; index++) {
-				min_average += min_values[index];
-			}
-			return min_average / (T)min_values.size;
 		}
 
 		Queue<T> entries;
-		// The min values are kept in order - from lowest to highest
-		CapacityStream<T> min_values;
 		T min;
 		T max;
 	};
+
+	namespace Reflection {
+		struct ReflectionManager;
+		struct ReflectionType;
+	}
+
+	// These variants are provided such that other files can use these declarations
+	// Without including Reflection.h
+
+	// Returns the number of statistics necessary for this type. Works for nested types as well
+	// But it must contain only elementary types except pointers (so only integers, floats or doubles)
+	ECSENGINE_API size_t StatisticCountForReflectionType(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> type_name
+	);
+
+	// Updates the statistics with the values from the given instance. It returns the pointer of statistics
+	// Right after those that were updated (so you can keep going if there are multiple types)
+	ECSENGINE_API Statistic<float>* FillStatisticsForReflectionType(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> type_name,
+		const void* instance,
+		Statistic<float>* statistics
+	);
+
+	// Returns the number of statistics necessary for this type. Works for nested types as well
+	// But it must contain only elementary types except pointers (so only integers, floats or doubles)
+	ECSENGINE_API size_t StatisticCountForReflectionType(
+		const Reflection::ReflectionManager* reflection_manager, 
+		const Reflection::ReflectionType* type
+	);
+
+	// Updates the statistics with the values from the given instance. It returns the pointer of statistics
+	// Right after those that were updated (so you can keep going if there are multiple types)
+	ECSENGINE_API Statistic<float>* FillStatisticsForReflectionType(
+		const Reflection::ReflectionManager* reflection_manager, 
+		const Reflection::ReflectionType* type, 
+		const void* instance,
+		Statistic<float>* statistics
+	);
 
 }

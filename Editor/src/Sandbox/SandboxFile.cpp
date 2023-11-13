@@ -115,6 +115,10 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 			CreateSandbox(editor_state, false);
 
 			EditorSandbox* sandbox = GetSandbox(editor_state, index);
+
+			// Copy all the blittable information
+			Reflection::CopyReflectionTypeBlittableFields(reflection_manager, type, sandboxes + index, sandbox);
+
 			// Set the runtime settings path - this will also create the runtime
 			// If it fails, default initialize the runtime
 			if (!ChangeSandboxRuntimeSettings(editor_state, index, sandboxes[index].runtime_settings)) {
@@ -133,12 +137,6 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 				ChangeSandboxScenePath(editor_state, index, { nullptr, 0 });
 			}
-
-			// Copy the camera positions and parameters
-			for (size_t viewport = 0; viewport < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport++) {
-				sandbox->camera_parameters[viewport] = sandboxes[index].camera_parameters[viewport];
-			}
-			memcpy(sandbox->camera_saved_orientations, sandboxes[index].camera_saved_orientations, sizeof(sandbox->camera_saved_orientations));
 
 			// Now the modules
 			for (unsigned int subindex = 0; subindex < sandboxes[index].modules_in_use.size; subindex++) {

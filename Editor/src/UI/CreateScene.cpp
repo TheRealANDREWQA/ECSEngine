@@ -40,11 +40,13 @@ void SaveSceneAction(ActionData* action_data) {
 		}
 		results.sandbox_indices[index] = data->sandbox_indices[index];
 	}
-	results.cancel_call = false;
-	action_data->additional_data = &results;
+	if (data->continue_handler.action != nullptr) {
+		results.cancel_call = false;
+		action_data->additional_data = &results;
 
-	action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : OffsetPointer(data, sizeof(*data));
-	data->continue_handler.action(action_data);
+		action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : OffsetPointer(data, sizeof(*data));
+		data->continue_handler.action(action_data);
+	}
 
 	DestroyCurrentActionWindow(action_data);
 }
@@ -56,17 +58,19 @@ void DoNotSaveSceneAction(ActionData* action_data) {
 
 	SaveScenePopUpDrawData* data = (SaveScenePopUpDrawData*)_data;
 
-	SaveScenePopUpResult results;
-	memset(results.statuses, SAVE_SCENE_POP_UP_ABORTED, sizeof(SAVE_SCENE_POP_UP_STATUS) * data->sandbox_index_count);
-	results.count = data->sandbox_index_count;
-	for (unsigned int index = 0; index < data->sandbox_index_count; index++) {
-		results.sandbox_indices[index] = data->sandbox_indices[index];
+	if (data->continue_handler.action != nullptr) {
+		SaveScenePopUpResult results;
+		memset(results.statuses, SAVE_SCENE_POP_UP_ABORTED, sizeof(SAVE_SCENE_POP_UP_STATUS) * data->sandbox_index_count);
+		results.count = data->sandbox_index_count;
+		for (unsigned int index = 0; index < data->sandbox_index_count; index++) {
+			results.sandbox_indices[index] = data->sandbox_indices[index];
+		}
+		results.cancel_call = false;
+		action_data->additional_data = &results;
+
+		action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : OffsetPointer(data, sizeof(*data));
+		data->continue_handler.action(action_data);
 	}
-	results.cancel_call = false;
-	action_data->additional_data = &results;
-	
-	action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : OffsetPointer(data, sizeof(*data));
-	data->continue_handler.action(action_data);
 
 	DestroyCurrentActionWindow(action_data);
 }
@@ -76,12 +80,14 @@ void CancelSceneAction(ActionData* action_data) {
 
 	SaveScenePopUpDrawData* data = (SaveScenePopUpDrawData*)_data;
 
-	SaveScenePopUpResult results;
-	results.cancel_call = true;
-	action_data->additional_data = &results;
+	if (data->continue_handler.action != nullptr) {
+		SaveScenePopUpResult results;
+		results.cancel_call = true;
+		action_data->additional_data = &results;
 
-	action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : OffsetPointer(data, sizeof(*data));
-	data->continue_handler.action(action_data);
+		action_data->data = data->continue_handler.data_size == 0 ? data->continue_handler.data : OffsetPointer(data, sizeof(*data));
+		data->continue_handler.action(action_data);
+	}
 
 	DestroyCurrentActionWindow(action_data);
 }
@@ -212,18 +218,20 @@ void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbo
 	}
 	else {
 		// Call the continue_handler with all successful
-		SaveScenePopUpResult result;
-		result.cancel_call = false;
-		result.count = initial_indices.size;
-		memcpy(result.sandbox_indices, initial_indices.buffer, initial_indices.MemoryOf(initial_indices.size));
-		memset(result.statuses, SAVE_SCENE_POP_UP_SUCCESSFUL, sizeof(SAVE_SCENE_POP_UP_STATUS) * initial_indices.size);
+		if (continue_handler.action != nullptr) {
+			SaveScenePopUpResult result;
+			result.cancel_call = false;
+			result.count = initial_indices.size;
+			memcpy(result.sandbox_indices, initial_indices.buffer, initial_indices.MemoryOf(initial_indices.size));
+			memset(result.statuses, SAVE_SCENE_POP_UP_SUCCESSFUL, sizeof(SAVE_SCENE_POP_UP_STATUS) * initial_indices.size);
 
-		// It shouldn't need the window index
-		ActionData action_data = editor_state->ui_system->GetFilledActionData(0);
-		action_data.data = continue_handler.data;
-		action_data.additional_data = &result;
+			// It shouldn't need the window index
+			ActionData action_data = editor_state->ui_system->GetFilledActionData(0);
+			action_data.data = continue_handler.data;
+			action_data.additional_data = &result;
 
-		continue_handler.action(&action_data);
+			continue_handler.action(&action_data);
+		}
 	}
 }
 

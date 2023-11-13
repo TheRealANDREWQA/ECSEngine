@@ -11397,6 +11397,7 @@ namespace ECSEngine {
 			row_layout.vertical_alignment = ECS_UI_ALIGN_TOP;
 			row_layout.offset_render_region = { false, false };
 			row_layout.SetBorderThickness(GetDefaultBorderThickness());
+			row_layout.font_scaling = 1.0f;
 			memset(row_layout.indentations, 0, sizeof(row_layout.indentations));
 			
 			return row_layout;
@@ -12946,43 +12947,45 @@ namespace ECSEngine {
 					// Check if the window is focused
 					if (system->GetActiveWindow() == system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index)) {
 						// Check for Ctrl+C, Ctrl+X, Ctrl+V and delete
-						if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-							if (keyboard->IsPressed(ECS_KEY_C)) {
-								data->SetSelectionCut(false);
-								data->RecordSelection(action_data);
-								return true;
-							}
-							else if (keyboard->IsPressed(ECS_KEY_X)) {
-								data->SetSelectionCut(true);
-								data->RecordSelection(action_data);
-								return true;
-							}
-							else if (keyboard->IsPressed(ECS_KEY_V)) {
-								// Call the appropriate callback
-								// Only if there is no selection or just a single selection
-								if (data->copied_labels.size > 0 /*&& (data->selected_labels.size == 0 || data->selected_labels.size == 1)*/) {
-									if (data->is_selection_cut && data->cut_action != nullptr) {
-										data->TriggerCut(action_data);
-										return true;
-									}
-									else if (data->copy_action != nullptr) {
-										data->TriggerCopy(action_data);
-										return true;
+						if (!keyboard->IsCaptureCharacters()) {
+							if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+								if (keyboard->IsPressed(ECS_KEY_C)) {
+									data->SetSelectionCut(false);
+									data->RecordSelection(action_data);
+									return true;
+								}
+								else if (keyboard->IsPressed(ECS_KEY_X)) {
+									data->SetSelectionCut(true);
+									data->RecordSelection(action_data);
+									return true;
+								}
+								else if (keyboard->IsPressed(ECS_KEY_V)) {
+									// Call the appropriate callback
+									// Only if there is no selection or just a single selection
+									if (data->copied_labels.size > 0 /*&& (data->selected_labels.size == 0 || data->selected_labels.size == 1)*/) {
+										if (data->is_selection_cut && data->cut_action != nullptr) {
+											data->TriggerCut(action_data);
+											return true;
+										}
+										else if (data->copy_action != nullptr) {
+											data->TriggerCopy(action_data);
+											return true;
+										}
 									}
 								}
-							}
-							else if (keyboard->IsPressed(ECS_KEY_D)) {
-								data->SetSelectionCut(false);
-								data->RecordSelection(action_data);
+								else if (keyboard->IsPressed(ECS_KEY_D)) {
+									data->SetSelectionCut(false);
+									data->RecordSelection(action_data);
 
-								data->TriggerCopy(action_data);
-								return true;
+									data->TriggerCopy(action_data);
+									return true;
+								}
 							}
-						}
-						else if (keyboard->IsPressed(ECS_KEY_DELETE)) {
-							if (data->selected_labels.size > 0) {
-								data->TriggerDelete(action_data);
-								return true;
+							else if (keyboard->IsPressed(ECS_KEY_DELETE)) {
+								if (data->selected_labels.size > 0) {
+									data->TriggerDelete(action_data);
+									return true;
+								}
 							}
 						}
 					}
@@ -17357,6 +17360,7 @@ namespace ECSEngine {
 		void UIDrawerRowLayout::AddLabel(Stream<char> characters, ECS_UI_ALIGN alignment)
 		{
 			float2 scale = drawer->GetLabelScale(characters);
+			scale *= float2::Splat(font_scaling);
 			AddElement(UI_CONFIG_ABSOLUTE_TRANSFORM, scale, alignment);
 		}
 

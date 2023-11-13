@@ -74,6 +74,8 @@
     <ClInclude Include="src\Sandbox\SandboxCrashHandler.h" />
     <ClInclude Include="src\Project\ProjectSettings.h" />
     <ClInclude Include="src\UI\ProjectSettingsWindow.h" />
+    <ClInclude Include="src\Sandbox\SandboxProfiling.h" />
+    <ClInclude Include="src\Editor\EditorGeneralInputTick.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -140,6 +142,8 @@
     <ClCompile Include="src\Sandbox\SandboxCrashHandler.cpp" />
     <ClCompile Include="src\Project\ProjectSettings.cpp" />
     <ClCompile Include="src\UI\ProjectSettingsWindow.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxProfiling.cpp" />
+    <ClCompile Include="src\Editor\EditorGeneralInputTick.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

@@ -35,11 +35,16 @@ void InitializeInputMapping(EditorState* editor_state) {
 	mappings[EDITOR_INPUT_AXIS_Z].SetFirstKeyPressed(ECS_KEY_Z);
 
 	mappings[EDITOR_INPUT_INITIATE_TRANSLATION].SetFirstKeyPressed(ECS_KEY_G);
+	mappings[EDITOR_INPUT_INITIATE_TRANSLATION].SetExcludeCtrl();
 	mappings[EDITOR_INPUT_INITIATE_ROTATION].SetFirstKeyPressed(ECS_KEY_R);
+	mappings[EDITOR_INPUT_INITIATE_ROTATION].SetExcludeCtrl();
 	mappings[EDITOR_INPUT_INITIATE_SCALE].SetFirstKeyPressed(ECS_KEY_S);
+	mappings[EDITOR_INPUT_INITIATE_SCALE].SetExcludeCtrl();
 
 	mappings[EDITOR_INPUT_CHANGE_TRANSFORM_SPACE].SetFirstKeyPressed(ECS_KEY_L);
+	mappings[EDITOR_INPUT_CHANGE_TRANSFORM_SPACE].SetExcludeCtrl();
 	mappings[EDITOR_INPUT_FOCUS_OBJECT].SetFirstKeyPressed(ECS_KEY_F);
+	mappings[EDITOR_INPUT_FOCUS_OBJECT].SetExcludeCtrl();
 
 	mappings[EDITOR_INPUT_CAMERA_WALK].SetFirstKey(ECS_KEY_LEFT_SHIFT, ECS_BUTTON_HELD);
 	mappings[EDITOR_INPUT_CAMERA_WALK].SetSecondKey(ECS_KEY_SHARP_QUOTE, ECS_BUTTON_HELD);
@@ -50,6 +55,9 @@ void InitializeInputMapping(EditorState* editor_state) {
 	mappings[EDITOR_INPUT_WASD_INCREASE_SPEED].SetFirstKeyPressed(ECS_KEY_E);
 	mappings[EDITOR_INPUT_WASD_DECREASE_SPEED].SetFirstKeyPressed(ECS_KEY_Q);
 	mappings[EDITOR_INPUT_WASD_RESET_SPEED].SetFirstKeyPressed(ECS_KEY_R);
+
+	mappings[EDITOR_INPUT_SANDBOX_STATISTICS_TOGGLE].SetFirstKey(ECS_KEY_LEFT_CTRL, ECS_BUTTON_HELD);
+	mappings[EDITOR_INPUT_SANDBOX_STATISTICS_TOGGLE].SetSecondKey(ECS_KEY_P, ECS_BUTTON_PRESSED);
 
 	editor_state->input_mapping.ChangeMapping(mappings);
 }

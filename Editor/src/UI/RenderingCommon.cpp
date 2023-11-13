@@ -114,6 +114,8 @@ void DisplayNoGraphicsModule(UIDrawer& drawer, bool multiple_graphics_modules)
 
 static void DisplayBottomText(UIDrawer& drawer, Stream<char> message, Color text_color, float font_size) {
 	UIDrawerRowLayout row = drawer.GenerateRowLayout();
+	row.font_scaling = font_size;
+
 	row.SetVerticalAlignment(ECS_UI_ALIGN_BOTTOM);
 	row.SetHorizontalAlignment(ECS_UI_ALIGN_MIDDLE);
 	row.AddLabel(message);
@@ -121,6 +123,7 @@ static void DisplayBottomText(UIDrawer& drawer, Stream<char> message, Color text
 	UIConfigTextParameters text_parameters;
 	text_parameters.color = text_color;
 	text_parameters.size *= float2::Splat(font_size);
+	text_parameters.character_spacing *= font_size;
 
 	UIDrawConfig crash_config;
 	size_t crash_configuration = UI_CONFIG_TEXT_PARAMETERS;
@@ -146,6 +149,109 @@ void DisplayCompilingSandbox(UIDrawer& drawer, const EditorState* editor_state, 
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	if (HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION)) {
 		DisplayBottomText(drawer, "Compiling", EDITOR_YELLOW_COLOR, 3.0f);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------
+
+void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state, unsigned int sandbox_index)
+{
+	const float font_scaling = 1.0f;
+	drawer.element_descriptor.label_padd = float2::Splat(0.0f);
+
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	if (sandbox->statistics_display.is_enabled) {
+		UIDrawConfig config;
+		size_t configuration = 0;
+		ECS_STATISTIC_VALUE_TYPE statistic_value_type = ECS_STATISTIC_VALUE_SMALL_AVERAGE;
+
+		UIConfigTextParameters text_parameters;
+		text_parameters.size *= float2::Splat(font_scaling);
+		text_parameters.character_spacing *= font_scaling;
+
+		auto get_text_configuration = [&configuration]() {
+			return configuration | UI_CONFIG_TEXT_PARAMETERS | UI_CONFIG_LABEL_TRANSPARENT;
+		};
+
+		auto draw_text_info = [&](Stream<char> base_label, Color base_color, auto get_value_display_string) {
+			UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+			row_layout.font_scaling = font_scaling;
+			row_layout.SetHorizontalAlignment(ECS_UI_ALIGN_RIGHT);
+
+			ECS_STACK_CAPACITY_STREAM(char, value_label, 512);
+			get_value_display_string(value_label);
+
+			row_layout.AddLabel(base_label);
+			row_layout.AddLabel(value_label);
+
+			row_layout.GetTransform(config, configuration);
+			text_parameters.color = base_color;
+			config.AddFlag(text_parameters);
+
+			drawer.TextLabel(get_text_configuration(), config, base_label);
+
+			config.flag_count = 0;
+			configuration = 0;
+			row_layout.GetTransform(config, configuration);
+
+			text_parameters.color = EDITOR_STATISTIC_TEXT_COLOR;
+			config.AddFlag(text_parameters);
+			drawer.TextLabel(get_text_configuration(), config, value_label);
+
+			config.flag_count = 0;
+			configuration = 0;
+			drawer.NextRow();
+		};
+
+		auto draw_graph_info = [&](Stream<char> base_label, Color base_color, auto get_value_display_string) {
+
+		};
+
+		auto draw_entry = [&](EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry, Stream<char> base_label, Color base_color, auto get_value_display_string) {
+			if (sandbox->statistics_display.should_display[entry]) {
+				if (sandbox->statistics_display.display_form[entry] == EDITOR_SANDBOX_STATISTIC_DISPLAY_TEXT) {
+					draw_text_info(base_label, base_color, get_value_display_string);
+				}
+				else {
+					draw_graph_info(base_label, base_color, get_value_display_string);
+				}
+			}
+		};
+
+		draw_entry(EDITOR_SANDBOX_STATISTIC_CPU_USAGE, "CPU Usage", EDITOR_STATISTIC_CPU_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
+			unsigned char cpu_usage = sandbox->cpu_frame_profiler.CalculateUsage(-1, statistic_value_type);
+			unsigned char user_to_overall_ratio = sandbox->cpu_frame_profiler.CalculateUserToOverall(-1, statistic_value_type);
+			ECS_FORMAT_STRING(value_label, "{#} % ({#} % User)", cpu_usage, user_to_overall_ratio);
+		});
+
+		draw_entry(EDITOR_SANDBOX_STATISTIC_RAM_USAGE, "RAM Usage", EDITOR_STATISTIC_RAM_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
+
+		});
+
+		/*draw_entry(EDITOR_SANDBOX_STATISTIC_CPU_USAGE, "GPU Usage", EDITOR_STATISTIC_GPU_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
+
+		});*/
+
+		/*draw_entry(EDITOR_SANDBOX_STATISTIC_VRAM_USAGE, "VRAM Usage", EDITOR_STATISTIC_VRAM_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
+
+		});*/
+
+		draw_entry(EDITOR_SANDBOX_STATISTIC_SANDBOX_TIME, "Framerate (Simulation)", EDITOR_STATISTIC_SANDBOX_TIME_COLOR, [&](CapacityStream<char>& value_label) {
+			float simulation_time_ms = sandbox->cpu_frame_profiler.GetSimulationFrameTime(statistic_value_type);
+			float fps = simulation_time_ms == 0.0f ? 0.0f : 1000.0f / simulation_time_ms;
+			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", fps, simulation_time_ms);
+		});
+
+		draw_entry(EDITOR_SANDBOX_STATISTIC_FRAME_TIME, "Framerate (Overall)", EDITOR_STATISTIC_FRAME_TIME_COLOR, [&](CapacityStream<char>& value_label) {
+			float frame_time_ms = sandbox->cpu_frame_profiler.GetOverallFrameTime(statistic_value_type);
+			float fps = frame_time_ms == 0.0f ? 0.0f : 1000.0f / frame_time_ms;
+			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", fps, frame_time_ms);
+		});
+
+		/*draw_entry(EDITOR_SANDBOX_STATISTIC_GPU_SANDBOX_TIME, "Framerate (GPU)", EDITOR_STATISTIC_GPU_TIME_COLOR, [&](CapacityStream<char>& value_label) {
+
+		});*/
+		
 	}
 }
 

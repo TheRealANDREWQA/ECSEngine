@@ -96,7 +96,7 @@ ECS_THREAD_TASK(DrawMeshes) {
 	>(thread_id, world);
 
 	if constexpr (!schedule_element) {
-		world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.5f, 0.6f, 1.0f, 1.0f));
+		world->graphics->ClearRenderTarget(world->graphics->GetBoundRenderTarget(), ColorFloat(0.2f, 0.2f, 0.2f, 1.0f));
 		world->graphics->ClearDepth(world->graphics->GetBoundDepthStencil());
 
 		CameraCached camera;
@@ -404,7 +404,6 @@ static void DrawInstancedFramebufferMeshTask(
 
 	if (render_mesh->Validate()) {
 		float3 translation_value = { 0.0f, 0.0f, 0.0f };
-		//float3 rotation_value = { 0.0f, 0.0f, 0.0f };
 		float4 rotation_value = { 0.0f, 0.0f, 0.0f, 1.0f };
 		float3 scale_value = { 1.0f, 1.0f, 1.0f };
 		Matrix matrix_translation;

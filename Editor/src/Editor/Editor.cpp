@@ -12,7 +12,6 @@
 #include "EntryPoint.h"
 #include "ECSEngineMath.h"
 #include "../Sandbox/Sandbox.h"
-#include "ECSEngineCrash.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -131,24 +130,24 @@ public:
 
 						editor_state.Tick();
 
-						static float average = 0.0f;
-						static int average_count = 0;
+						/*static float average = 0.0f;
+						static int average_count = 0;*/
 
 						timer.SetNewStart();
 
-						//ECS_STACK_CAPACITY_STREAM(Stream<char>, windows, 2);
-						//windows[0] = "Game 0";
-						//windows[1] = "Scene 0";
-						//windows.size = 2;
+						/*ECS_STACK_CAPACITY_STREAM(Stream<char>, windows, 2);
+						windows[0] = "Game 0";
+						windows[1] = "Scene 0";
+						windows.size = 2;*/
 
 						frame_pacing = editor_state.ui_system->DoFrame();
 
-						float duration = timer.GetDuration(ECS_TIMER_DURATION_US);
+						/*float duration = timer.GetDuration(ECS_TIMER_DURATION_US);
 						if (duration < 5000) {
 							average = average * average_count + duration;
 							average_count++;
 							average /= average_count;
-						}
+						}*/
 
 						// Refresh the graphics object since it might be changed
 						graphics = editor_state.UIGraphics();

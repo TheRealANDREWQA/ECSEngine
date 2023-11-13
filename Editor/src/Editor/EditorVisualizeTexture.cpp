@@ -10,7 +10,12 @@ void ChangeVisualizeTexture(EditorState* editor_state, ECSEngine::Stream<char> n
 }
 
 void RemoveVisualizeTexture(EditorState* editor_state, ECSEngine::Stream<char> name) {
-	editor_state->visualize_texture.mapping.Erase(name);
+	// We need to deallocate the name as well
+	unsigned int index = editor_state->visualize_texture.mapping.Find(name);
+	ECS_ASSERT(index != -1, "Did not find visualize texture");
+	Stream<char> stored_name = editor_state->visualize_texture.mapping.GetIdentifierFromIndex(index).AsASCII();
+	stored_name.Deallocate(editor_state->EditorAllocator());
+	editor_state->visualize_texture.mapping.EraseFromIndex(index);
 }
 
 void SetVisualizeTexture(EditorState* editor_state, ECSEngine::Tools::VisualizeTextureSelectElement select_element) {
