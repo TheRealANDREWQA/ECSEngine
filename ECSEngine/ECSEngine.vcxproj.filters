@@ -165,7 +165,6 @@
     <ClInclude Include="src\ECSEngine\Utilities\ParsingUtilities.h" />
     <ClInclude Include="src\ECSEngine\Input\Keyboard.h" />
     <ClInclude Include="src\ECSEngine\Input\Mouse.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\OSFunctions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Path.h" />
     <ClInclude Include="src\Includes\ECSEngineSerializationHelpers.h" />
     <ClInclude Include="src\ECSEngine\Utilities\StackScope.h" />
@@ -251,6 +250,19 @@
     <ClInclude Include="src\ECSEngine\Profiling\Statistic.h" />
     <ClInclude Include="src\ECSEngine\Profiling\GPUStats.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ByteUnits.h" />
+    <ClInclude Include="src\ECSEngine\OS\Memory.h" />
+    <ClInclude Include="src\ECSEngine\OS\Thread.h" />
+    <ClInclude Include="src\ECSEngine\OS\FileExplorer.h" />
+    <ClInclude Include="src\ECSEngine\OS\Cursor.h" />
+    <ClInclude Include="src\ECSEngine\OS\ExceptionHandling.h" />
+    <ClInclude Include="src\ECSEngine\OS\DLL.h" />
+    <ClInclude Include="src\ECSEngine\OS\FileOS.h" />
+    <ClInclude Include="src\ECSEngine\OS\Misc.h" />
+    <ClInclude Include="src\ECSEngine\OS\WithError.h" />
+    <ClInclude Include="src\Includes\ECSEngineOS.h" />
+    <ClInclude Include="src\ECSEngine\OS\PhysicalMemory.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\PhysicalMemoryProfiler.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\AllocatorProfiling.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -346,7 +358,6 @@
     <ClCompile Include="src\ECSEngine\Utilities\ParsingUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Keyboard.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Mouse.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\OSFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Path.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Timer.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\RingBuffer.cpp" />
@@ -394,6 +405,18 @@
     <ClCompile Include="src\ECSEngine\Profiling\GPUStats.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ByteUnits.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\Statistic.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Memory.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Thread.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\FileExplorer.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Cursor.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\ExceptionHandling.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\DLL.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\FileOS.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Misc.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\WithError.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\PhysicalMemory.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\PhysicalMemoryProfiler.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\AllocatorProfiling.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

@@ -109,6 +109,7 @@
       <ImportLibrary>..\bin\$(Configuration)\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AdditionalDependencies>$(ProjectDir)\Dependencies\NVAPI\amd64\nvapi64.lib;dxguid.lib;synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
     <PostBuildEvent>
       <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
@@ -155,6 +156,7 @@
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AdditionalDependencies>$(ProjectDir)\Dependencies\NVAPI\amd64\nvapi64.lib;dxguid.lib;synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
     <PostBuildEvent>
       <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
@@ -200,6 +202,7 @@
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AdditionalDependencies>$(ProjectDir)\Dependencies\NVAPI\amd64\nvapi64.lib;dxguid.lib;synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
     <PostBuildEvent>
       <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
@@ -261,9 +264,21 @@
     <ClInclude Include="src\ECSEngine\Multithreading\TaskStealing.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTaskExport.h" />
+    <ClInclude Include="src\ECSEngine\OS\Cursor.h" />
+    <ClInclude Include="src\ECSEngine\OS\DLL.h" />
+    <ClInclude Include="src\ECSEngine\OS\ExceptionHandling.h" />
+    <ClInclude Include="src\ECSEngine\OS\FileExplorer.h" />
+    <ClInclude Include="src\ECSEngine\OS\FileOS.h" />
+    <ClInclude Include="src\ECSEngine\OS\Memory.h" />
+    <ClInclude Include="src\ECSEngine\OS\Misc.h" />
+    <ClInclude Include="src\ECSEngine\OS\PhysicalMemory.h" />
+    <ClInclude Include="src\ECSEngine\OS\Thread.h" />
+    <ClInclude Include="src\ECSEngine\OS\WithError.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\AllocatorProfiling.h" />
     <ClInclude Include="src\ECSEngine\Profiling\CPUFrameProfiler.h" />
     <ClInclude Include="src\ECSEngine\Profiling\CPUFrameProfilerGlobal.h" />
     <ClInclude Include="src\ECSEngine\Profiling\GPUStats.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\PhysicalMemoryProfiler.h" />
     <ClInclude Include="src\ECSEngine\Profiling\Statistic.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Camera.h" />
     <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
@@ -348,7 +363,6 @@
     <ClInclude Include="src\ECSEngine\Utilities\ParsingUtilities.h" />
     <ClInclude Include="src\ECSEngine\Input\Keyboard.h" />
     <ClInclude Include="src\ECSEngine\Input\Mouse.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\OSFunctions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Path.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.h" />
@@ -382,6 +396,7 @@
     <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
     <ClInclude Include="src\Includes\ECSEngineForEach.h" />
     <ClInclude Include="src\Includes\ECSEngineInput.h" />
+    <ClInclude Include="src\Includes\ECSEngineOS.h" />
     <ClInclude Include="src\Includes\ECSEngineRuntimeCrash.h" />
     <ClInclude Include="src\Includes\ECSEngineSampleTexture.h" />
     <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />
@@ -492,9 +507,21 @@
     <ClCompile Include="src\ECSEngine\Multithreading\TaskScheduler.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\TaskSchedulerTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\ThreadTask.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Cursor.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\DLL.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\ExceptionHandling.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\FileExplorer.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\FileOS.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Memory.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Misc.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\PhysicalMemory.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Thread.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\WithError.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\AllocatorProfiling.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\CPUFrameProfiler.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\CPUFrameProfilerGlobal.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\GPUStats.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\PhysicalMemoryProfiler.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\Statistic.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Camera.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
@@ -591,7 +618,6 @@
     <ClCompile Include="src\ECSEngine\Input\InputMapping.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Keyboard.cpp" />
     <ClCompile Include="src\ECSEngine\Input\Mouse.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\OSFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Path.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\PointerUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ReferenceCountSerialize.cpp" />

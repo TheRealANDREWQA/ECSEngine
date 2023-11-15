@@ -46,6 +46,8 @@ namespace ECSEngine {
 			m_spin_lock.Unlock();
 		}
 
+		size_t GetCurrentUsage() const;
+
 		bool IsEmpty() const;
 
 		// Removes the last allocators if they have currently no allocations active
@@ -58,6 +60,12 @@ namespace ECSEngine {
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
 
 		AllocatorPolymorphic GetAllocator(size_t index) const;
+
+		const void* GetAllocatorBasePointer(size_t index) const;
+
+		void* GetAllocatorBasePointer(size_t index);
+
+		size_t GetAllocatorBaseAllocationSize(size_t index) const;
 
 		// ---------------------------------------------------- Thread safe --------------------------------------------------
 
@@ -80,6 +88,9 @@ namespace ECSEngine {
 		void* m_allocators;
 		CreateBaseAllocatorInfo m_backup_info;
 		AllocatorPolymorphic m_backup;
+		// This is needed for the GetAllocatorBaseAllocationSize() to report correctly
+		// For the first allocator
+		size_t m_initial_allocator_size;
 	};
 
 	typedef MemoryManager GlobalMemoryManager;

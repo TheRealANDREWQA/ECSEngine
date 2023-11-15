@@ -4,6 +4,7 @@
 #define ASSET_EXPLORER_WINDOW_NAME "Asset Explorer"
 
 struct EditorState;
+ECS_TOOLS;
 
 // Stack memory size should be at least 512
 void AssetExplorerSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);

@@ -227,6 +227,15 @@ namespace ECSEngine {
 		return { OffsetPointer(m_allocators, index * m_base_allocator_byte_size), m_base_allocator_type, ECS_ALLOCATION_SINGLE };
 	}
 
+	size_t MemoryArena::GetCurrentUsage() const
+	{
+		size_t total_usage = 0;
+		for (unsigned char index = 0; index < m_allocator_count; index++) {
+			total_usage += GetAllocatorCurrentUsage(GetAllocator(index));
+		}
+		return total_usage;
+	}
+
 	size_t GetAllocatorIndex(const MemoryArena* arena, const void* block) {
 		uintptr_t block_reinterpretation = (uintptr_t)block;
 		size_t offset = block_reinterpretation - (uintptr_t)arena->m_data_buffer;

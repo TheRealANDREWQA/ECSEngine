@@ -5,9 +5,10 @@
 #define MISCELLANEOUS_BAR_WINDOW_NAME "MiscellaneousBar"
 
 struct EditorState;
+ECS_TOOLS;
 
 // Stack memory size should be at least 512
-void MiscellaneousBarSetDescriptor(ECSEngine::Tools::UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
+void MiscellaneousBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
 void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 

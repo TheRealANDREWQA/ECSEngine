@@ -7,7 +7,7 @@
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "ForEachFiles.h"
 
-#include "OSFunctions.h"
+#include "../OS/FileOS.h"
 
 namespace ECSEngine {
 

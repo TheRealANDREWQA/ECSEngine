@@ -49,26 +49,42 @@ namespace ECSEngine {
 
 		// This is not the actual block range byte capacity
 		// Instead is the maximum number of blocks that there can be at the same time
-		unsigned int GetCapacity() const;
+		ECS_INLINE unsigned int GetCapacity() const {
+			return m_capacity;
+		}
 
 		unsigned int GetStart(unsigned int index) const;
 
 		unsigned int GetEnd(unsigned int index) const;
 
-		unsigned int GetFreeBlockCount() const;
+		ECS_INLINE unsigned int GetFreeBlockCount() const {
+			return m_free_block_count;
+		}
 
-		unsigned int GetUsedBlockCount() const;
+		ECS_INLINE unsigned int GetUsedBlockCount() const {
+			return m_used_block_count;
+		}
 
-		const void* GetAllocatedBuffer() const;
+		ECS_INLINE const void* GetAllocatedBuffer() const {
+			return m_buffer;
+		}
+
+		ECS_INLINE unsigned int GetCurrentUsage() const {
+			return m_current_usage;
+		}
 
 		void SetStart(unsigned int index, unsigned int value);
 
 		void SetEnd(unsigned int index, unsigned int value);
 
-		static size_t MemoryOf(unsigned int number);
+		ECS_INLINE static size_t MemoryOf(unsigned int number) {
+			return (sizeof(unsigned int) * number) * 2;
+		}
 
 		unsigned int* m_buffer;
 		unsigned int m_capacity;
+		// This value tracks the amount of bytes currently in use
+		unsigned int m_current_usage;
 		unsigned int m_free_block_count;
 		unsigned int m_used_block_count;
 	};

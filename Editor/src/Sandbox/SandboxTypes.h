@@ -74,7 +74,7 @@ struct ECS_REFLECT EditorSandboxModule {
 	ECSEngine::Stream<wchar_t> settings_name;
 
 	ECSEngine::Stream<EditorModuleReflectedSetting> reflected_settings; ECS_SKIP_REFLECTION()
-	ECSEngine::MemoryManager settings_allocator; ECS_SKIP_REFLECTION(static_assert(sizeof(ECSEngine::MemoryManager) == 72))
+	ECSEngine::MemoryManager settings_allocator; ECS_SKIP_REFLECTION(static_assert(sizeof(ECSEngine::MemoryManager) == 80))
 
 	ECS_FIELDS_END_REFLECT;
 };

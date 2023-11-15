@@ -119,8 +119,9 @@ namespace ECSEngine {
 	ECSENGINE_API void PrepareWorld(World* world, Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 });
 
 	// This will clear the system manager out of everything and the entity manager will also lose everything
-	// The debug drawer will also be cleared, if one is specified
-	ECSENGINE_API void ClearWorld(World* world);
+	// The debug drawer will also be cleared, if one is specified. If the boolean is set to true,
+	// Then it will release the physical pages used to reduce the working set
+	ECSENGINE_API void ClearWorld(World* world, bool release_physical_memory = true);
 
 	// Can choose whether or not to wait for the frame to finish
 	ECSENGINE_API void DoFrame(World* world, bool wait_for_frame = true);

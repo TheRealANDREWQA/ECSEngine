@@ -4,7 +4,7 @@
 #include "../../Allocators/AllocatorPolymorphic.h"
 #include "../../Utilities/Path.h"
 #include "../UI/UIStructures.h"
-
+#include "../../OS/DLL.h"
 
 namespace ECSEngine {
 

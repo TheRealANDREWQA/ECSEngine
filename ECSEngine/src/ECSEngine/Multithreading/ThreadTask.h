@@ -15,9 +15,9 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API ThreadTask
 	{
-		ThreadTask() : function(), data(nullptr), name() {}
-		ThreadTask(ThreadFunction _function, void* _data, size_t _data_size) : function(_function), data(_data), data_size(_data_size), name() {}
-		ThreadTask(ThreadFunction _function, void* _data, size_t _data_size, Stream<char> _name) : function(_function), data(_data), data_size(_data_size), name(_name) {}
+		ECS_INLINE ThreadTask() : function(), data(nullptr), name() {}
+		ECS_INLINE ThreadTask(ThreadFunction _function, void* _data, size_t _data_size) : function(_function), data(_data), data_size(_data_size), name() {}
+		ECS_INLINE ThreadTask(ThreadFunction _function, void* _data, size_t _data_size, Stream<char> _name) : function(_function), data(_data), data_size(_data_size), name(_name) {}
 
 		ThreadTask(const ThreadTask& other) = default;
 		ThreadTask& operator = (const ThreadTask& other) = default;

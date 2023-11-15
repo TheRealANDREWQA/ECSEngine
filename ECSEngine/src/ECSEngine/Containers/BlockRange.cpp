@@ -7,7 +7,7 @@
 namespace ECSEngine {
 
 	BlockRange::BlockRange(void* buffer, unsigned int capacity, unsigned int max_index) : 
-		m_buffer((unsigned int*)buffer), m_free_block_count(1), m_used_block_count(0), m_capacity(capacity)
+		m_buffer((unsigned int*)buffer), m_free_block_count(1), m_used_block_count(0), m_capacity(capacity), m_current_usage(0)
 	{
 		// initalizing the first block to be the whole range
 		if (buffer != nullptr) {
@@ -87,6 +87,8 @@ namespace ECSEngine {
 		}
 
 		unsigned int end = GetEnd(index);
+		// Update the current usage with the size of the block
+		m_current_usage -= end - start;
 		SetStart(index, GetStart(m_free_block_count + m_used_block_count - 1));
 		SetEnd(index, GetEnd(m_free_block_count + m_used_block_count - 1));
 		m_used_block_count--;
@@ -124,12 +126,10 @@ namespace ECSEngine {
 		}
 		// Only previous block is valid
 		else if (previous_block_index < m_free_block_count) {
-			ECS_ASSERT(GetEnd(previous_block_index) < end);
 			SetEnd(previous_block_index, end);
 		}
 		// Only next block is valid
 		else if (next_block_index < m_free_block_count) {
-			ECS_ASSERT(GetStart(next_block_index) > start);
 			SetStart(next_block_index, start);
 		}
 
@@ -169,6 +169,8 @@ namespace ECSEngine {
 					SetStart(m_free_block_count + m_used_block_count - 1, block_start);
 					SetEnd(m_free_block_count + m_used_block_count - 1, block_start + size);
 				}
+				// Update the current usage
+				m_current_usage += size;
 				return block_start;
 			}
 		}
@@ -195,6 +197,9 @@ namespace ECSEngine {
 			SetEnd(maximum_index, GetEnd(m_free_block_count));
 			SetStart(m_free_block_count, block_start);
 			SetEnd(m_free_block_count, block_end);
+
+			// Update the current usage as well
+			m_current_usage += size;
 		}
 	}
 
@@ -262,6 +267,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// Update the current usage
+		m_current_usage += new_size - block_size;
 		return request;
 	}
 
@@ -279,6 +286,7 @@ namespace ECSEngine {
 			copy_size = block_size;
 		}
 
+		// This function will update the current usage as well
 		unsigned int new_position = ReallocateBlock(start, new_size);
 		if (new_position != start && new_position != -1) {
 			memcpy(OffsetPointer(storage_buffer, new_position), OffsetPointer(storage_buffer, start), copy_size);
@@ -300,6 +308,7 @@ namespace ECSEngine {
 
 		// Capacity is the block capacity, not the max_size of the block range
 		SetEnd(0, maximum_size);
+		m_current_usage = 0;
 	}
 
 	ECS_INLINE unsigned int BlockRange::GetStart(unsigned int index) const {
@@ -320,26 +329,6 @@ namespace ECSEngine {
 	ECS_INLINE void BlockRange::SetEnd(unsigned int index, unsigned int value) {
 		ECS_ASSERT(index < m_free_block_count + m_used_block_count && index >= 0);
 		m_buffer[index + m_capacity] = value;
-	}
-
-	ECS_INLINE const void* BlockRange::GetAllocatedBuffer() const {
-		return m_buffer;
-	}
-
-	ECS_INLINE unsigned int BlockRange::GetFreeBlockCount() const {
-		return m_free_block_count;
-	}
-
-	ECS_INLINE unsigned int BlockRange::GetUsedBlockCount() const {
-		return m_used_block_count;
-	}
-
-	ECS_INLINE unsigned int BlockRange::GetCapacity() const {
-		return m_capacity;
-	}
-
-	ECS_INLINE size_t BlockRange::MemoryOf(unsigned int number) {
-		return (sizeof(unsigned int) * number) * 2;
 	}
 
 }

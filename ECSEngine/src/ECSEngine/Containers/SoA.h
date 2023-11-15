@@ -107,6 +107,14 @@ namespace ECSEngine {
 		}
 	}
 
+	template<typename CapacityInt, typename FirstPointer, typename... Pointers>
+	void SoAResizeIfFull(AllocatorPolymorphic allocator, CapacityInt size, CapacityInt& capacity, FirstPointer** first_pointer, Pointers... pointers) {
+		if (size == capacity) {
+			capacity = (CapacityInt)((float)capacity * 1.5f + 2);
+			SoAResize(allocator, size, capacity, first_pointer, pointers...);
+		}
+	}
+
 	template<typename FirstPointer, typename... Pointers>
 	void SoADisplaceElements(size_t size, size_t offset, int64_t displacement, FirstPointer first_pointer, Pointers... pointers) {
 		size_t count = size - offset;

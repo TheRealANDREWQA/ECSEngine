@@ -61,6 +61,12 @@ namespace ECSEngine {
 
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
 
+		ECS_INLINE size_t GetCurrentUsage() const {
+			// This function doesn't really have sense, since this allocator is used mostly
+			// To detect bugs and measuring its usage is not really something that should be done
+			return 0;
+		}
+
 		// ------------------------- Thread safe functions -----------------------------------------
 
 		void* Allocate_ts(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);

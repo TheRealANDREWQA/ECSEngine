@@ -6,7 +6,7 @@
 #include "AssetDatabaseReference.h"
 #include "../Allocators/ResizableLinearAllocator.h"
 #include "../Utilities/Path.h"
-#include "../Utilities/OSFunctions.h"
+#include "../OS/FileOS.h"
 #include "../Utilities/FilePreprocessor.h"
 
 namespace ECSEngine {

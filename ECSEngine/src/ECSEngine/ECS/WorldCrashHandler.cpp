@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "WorldCrashHandler.h"
-#include "../Utilities/OSFunctions.h"
+#include "../OS/DLL.h"
 #include "../Utilities/Crash.h"
 #include "../Utilities/Console.h"
 #include "../Utilities/Utilities.h"

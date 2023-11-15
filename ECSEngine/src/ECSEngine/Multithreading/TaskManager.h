@@ -7,7 +7,7 @@
 #include "../Allocators/MemoryManager.h"
 #include "../Allocators/LinearAllocator.h"
 #include "RingBuffer.h"
-#include "../Utilities/OSFunctions.h"
+#include "../OS/ExceptionHandling.h"
 #include <setjmpex.h>
 
 #ifndef ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD

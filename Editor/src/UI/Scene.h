@@ -5,6 +5,7 @@
 #define MAX_SCENE_WINDOWS 8u
 
 struct EditorState;
+ECS_TOOLS;
 
 // Stack memory size should be at least 512
 // In the stack memory the first 4 bytes need to be the sandbox index

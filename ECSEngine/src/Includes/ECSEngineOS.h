@@ -1,0 +1,10 @@
+#pragma once
+#include "../ECSEngine/OS/Cursor.h"
+#include "../ECSEngine/OS/DLL.h"
+#include "../ECSEngine/OS/ExceptionHandling.h"
+#include "../ECSEngine/OS/FileExplorer.h"
+#include "../ECSEngine/OS/FileOS.h"
+#include "../ECSEngine/OS/Memory.h"
+#include "../ECSEngine/OS/Misc.h"
+#include "../ECSEngine/OS/Thread.h"
+#include "../ECSEngine/OS/PhysicalMemory.h"

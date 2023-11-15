@@ -35,15 +35,17 @@ namespace ECSEngine {
 		}
 
 		T GetValue(ECS_STATISTIC_VALUE_TYPE value_type) const {
-			T value = 0;
+			// We double to calculate the value since if this is a small int like unsigned char,
+			// unsigned short it can overflow and give back incorrect results
+			double value = 0;
 			// Use this check to avoid any divisions by zero
 			// Or incorrect acces
 			if (entries.GetSize() > 0) {
 				if (value_type == ECS_STATISTIC_VALUE_AVERAGE) {
 					entries.ForEach([&](T current_value) {
-						value += current_value;
+						value += (double)current_value;
 					});
-					value /= (T)entries.GetSize();
+					value /= (double)entries.GetSize();
 				}
 				else if (value_type >= ECS_STATISTIC_VALUE_SMALL_AVERAGE) {
 					unsigned int count = (unsigned int)((float)entries.GetSize() * ECS_STATISTIC_SMALL_AVERAGE_PERCENTAGE);
@@ -52,14 +54,14 @@ namespace ECSEngine {
 					for (unsigned int index = 0; index < count; index++) {
 						value += entries.PushPeekByIndex(index);
 					}
-					value /= (T)count;
+					value /= (double)count;
 				}
 				else {
 					value = entries.PushPeekByIndex(0);
 				}
 			}
 
-			return value;
+			return (T)value;
 		}
 
 		void InitializeMinMax() {
@@ -87,6 +89,10 @@ namespace ECSEngine {
 			void* allocation = AllocateEx(allocator, allocation_size);
 			uintptr_t allocation_ptr = (uintptr_t)allocation;
 			entries.InitializeFromBuffer(allocation_ptr, entries_capacity);
+		}
+
+		ECS_INLINE static size_t MemoryOf(unsigned int entry_capacity) {
+			return Queue<T>::MemoryOf(entry_capacity);
 		}
 
 		Queue<T> entries;

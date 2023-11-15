@@ -64,6 +64,8 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic GetAllocator(size_t index) const;
 
+		size_t GetCurrentUsage() const;
+
 		// The return value is only useful when using assert_if_not_found set to false
 		// in which case it will return true if the deallocation was performed, else false
 		template<bool trigger_error_if_not_found = true>

@@ -2,7 +2,8 @@
 #include "Console.h"
 #include "StringUtilities.h"
 #include "Utilities.h"
-#include "OSFunctions.h"
+#include "../OS/Misc.h"
+#include "../OS/Thread.h"
 #include "../ECS/World.h"
 
 #define FILE_BUFFERING_STACK_SIZE ECS_KB * 128

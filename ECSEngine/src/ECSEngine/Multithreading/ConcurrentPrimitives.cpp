@@ -7,7 +7,7 @@ namespace ECSEngine {
 	// This value seems to be the sweet spot for best balance
 	// Between CPU usage (through spinning) and latency (waking up a thread
 	// has its latency which can be critical to us)
-#define GLOBAL_SPIN_COUNT 2000
+#define GLOBAL_SPIN_COUNT 500
 
 	ECS_INLINE bool IsBitUnlocked(unsigned char byte, unsigned char bit_index) {
 		return (byte & ECS_BIT(bit_index)) == 0;

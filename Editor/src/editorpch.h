@@ -7,5 +7,6 @@
 #include "ECSEngineWorld.h"
 #include "ECSEngineMultithreading.h"
 #include "ECSEngineUtilities.h"
+#include "ECSEngineOS.h"
 
 using namespace ECSEngine;

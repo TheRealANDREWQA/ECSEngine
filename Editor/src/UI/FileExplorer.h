@@ -4,6 +4,7 @@
 #define FILE_EXPLORER_WINDOW_NAME "File Explorer"
 
 struct EditorState;
+ECS_TOOLS;
 
 // Stack memory size should be at least 512
 void FileExplorerSetDescriptor(ECSEngine::Tools::UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);

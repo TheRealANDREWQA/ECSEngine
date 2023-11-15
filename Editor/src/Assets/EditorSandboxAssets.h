@@ -8,6 +8,7 @@
 struct EditorState;
 
 using namespace ECSEngine;
+ECS_TOOLS;
 
 struct LinkComponentWithAssetFields {
 	const Reflection::ReflectionType* type;

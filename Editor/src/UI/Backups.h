@@ -2,6 +2,7 @@
 #include "ECSEngineUI.h"
 
 struct EditorState;
+ECS_TOOLS;
 
 #define BACKUPS_WINDOW_NAME "Backups"
 

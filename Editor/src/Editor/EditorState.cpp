@@ -373,6 +373,8 @@ void InitializeRuntime(EditorState* editor_state) {
 
 void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mouse, Keyboard* keyboard)
 {
+	OS::InitializePhysicalMemoryPageSize();
+
 	GlobalMemoryManager* hub_allocator = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
 	*hub_allocator = CreateGlobalMemoryManager(ECS_KB * 16, 512, ECS_KB * 16);
 

@@ -3,6 +3,7 @@
 #include "ECSEngineVisualizeTexture.h"
 
 struct EditorState;
+ECS_TOOLS;
 
 #define VISUALIZE_TEXTURE_WINDOW_NAME "Visualize Texture"
 

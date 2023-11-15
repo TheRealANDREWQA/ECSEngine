@@ -3,7 +3,7 @@
 #include "Crash.h"
 #include "../Allocators/AllocatorCallsDebug.h"
 #include "StringUtilities.h"
-#include "../Utilities/OSFunctions.h"
+#include "../OS/Misc.h"
 
 namespace ECSEngine {
 
