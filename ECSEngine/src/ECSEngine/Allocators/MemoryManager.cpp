@@ -209,12 +209,13 @@ namespace ECSEngine {
 		manager->m_allocator_count = 0;
 		manager->m_backup = backup;
 		size_t base_allocator_size = BaseAllocatorByteSize(initial_info.allocator_type);
-		void* allocation = AllocateTsEx(backup, (base_allocator_size)*ECS_MEMORY_MANAGER_SIZE);
+		void* allocation = AllocateTsEx(backup, (base_allocator_size) * ECS_MEMORY_MANAGER_SIZE);
 		manager->m_allocators = allocation;
 		manager->m_backup_info = backup_info;
 		manager->m_base_allocator_byte_size = base_allocator_size;
 		manager->m_debug_mode = false;
 		manager->CreateAllocator(initial_info);
+		manager->m_initial_allocator_size = BaseAllocatorBufferSize(initial_info);
 	}
 
 	MemoryManager::MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, AllocatorPolymorphic backup)
@@ -292,6 +293,16 @@ namespace ECSEngine {
 		return DeallocateIfBelongsImpl<false>(this, block, debug_info);
 	}
 
+	size_t MemoryManager::GetCurrentUsage() const
+	{
+		size_t allocator_count = m_allocator_count;
+		size_t total_usage = 0;
+		for (size_t index = 0; index < allocator_count; index++) {
+			total_usage += GetAllocatorCurrentUsage(GetAllocator(index));
+		}
+		return total_usage;
+	}
+
 	bool MemoryManager::IsEmpty() const
 	{
 		size_t allocator_count = m_allocator_count;
@@ -344,6 +355,23 @@ namespace ECSEngine {
 	AllocatorPolymorphic MemoryManager::GetAllocator(size_t index) const
 	{
 		return { OffsetPointer(m_allocators, m_base_allocator_byte_size * index), m_backup_info.allocator_type, ECS_ALLOCATION_SINGLE };
+	}
+
+	const void* MemoryManager::GetAllocatorBasePointer(size_t index) const
+	{
+		AllocatorPolymorphic allocator = GetAllocator(index);
+		return GetAllocatorBuffer(allocator);
+	}
+
+	void* MemoryManager::GetAllocatorBasePointer(size_t index)
+	{
+		AllocatorPolymorphic allocator = GetAllocator(index);
+		return (void*)GetAllocatorBuffer(allocator);
+	}
+
+	size_t MemoryManager::GetAllocatorBaseAllocationSize(size_t index) const
+	{
+		return index == 0 ? m_initial_allocator_size : BaseAllocatorBufferSize(m_backup_info);
 	}
 
 	// ---------------------- Thread safe variants -----------------------------

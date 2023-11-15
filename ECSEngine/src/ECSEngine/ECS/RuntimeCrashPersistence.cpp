@@ -6,6 +6,7 @@
 #include "../Utilities/Serialization/Binary/Serialization.h"
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Utilities/Path.h"
+#include "../OS/Misc.h"
 
 namespace ECSEngine {
 

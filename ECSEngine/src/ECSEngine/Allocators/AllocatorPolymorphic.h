@@ -44,6 +44,9 @@ namespace ECSEngine {
 
 	typedef void (*UnlockAllocatorFunction)(void* allocator);
 
+	// The current amount of bytes in use from the allocator
+	typedef size_t (*GetAllocatorCurrentUsageFunction)(const void* allocator);
+
 	ECSENGINE_API extern AllocateFunction ECS_ALLOCATE_FUNCTIONS[];
 
 	ECSENGINE_API extern AllocateSizeFunction ECS_ALLOCATE_SIZE_FUNCTIONS[];
@@ -87,6 +90,8 @@ namespace ECSEngine {
 	ECSENGINE_API extern LockAllocatorFunction ECS_LOCK_ALLOCATOR_FUNCTIONS[];
 
 	ECSENGINE_API extern UnlockAllocatorFunction ECS_UNLOCK_ALLOCATOR_FUNCTIONS[];
+
+	ECSENGINE_API extern GetAllocatorCurrentUsageFunction ECS_ALLOCATOR_CURRENT_USAGE_FUNCTIONS[];
 
 	// Single threaded
 	ECS_INLINE void* Allocate(void* allocator, ECS_ALLOCATOR_TYPE type, size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
@@ -377,6 +382,10 @@ namespace ECSEngine {
 
 	ECS_INLINE void UnlockAllocator(AllocatorPolymorphic allocator) {
 		ECS_UNLOCK_ALLOCATOR_FUNCTIONS[allocator.allocator_type](allocator.allocator);
+	}
+
+	ECS_INLINE size_t GetAllocatorCurrentUsage(AllocatorPolymorphic allocator) {
+		return ECS_ALLOCATOR_CURRENT_USAGE_FUNCTIONS[allocator.allocator_type](allocator.allocator);
 	}
 
 	// Only linear/stack/multipool/arena are considered base allocator types

@@ -3,6 +3,7 @@
 #include "ECSEngineUI.h"
 
 using namespace ECSEngine;
+ECS_TOOLS;
 
 struct EditorState;
 

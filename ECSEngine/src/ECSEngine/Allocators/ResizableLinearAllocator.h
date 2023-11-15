@@ -42,9 +42,10 @@ namespace ECSEngine {
 		// given allocator, it will deallocate it as well
 		void Free(DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		size_t GetMarker() const;
+		void GetMarker(size_t* marker, size_t* current_usage) const;
 
-		void ReturnToMarker(size_t marker, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// You need to restore both values from the GetMarker function
+		void ReturnToMarker(size_t marker, size_t usage, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Returns true if the pointer was allocated from this allocator
 		bool Belongs(const void* buffer) const;
@@ -63,6 +64,10 @@ namespace ECSEngine {
 
 		ECS_INLINE void Unlock() {
 			m_spin_lock.Unlock();
+		}
+
+		ECS_INLINE size_t GetCurrentUsage() const {
+			return m_current_usage;
 		}
 
 		// ---------------------- Thread safe variants -----------------------------
@@ -91,6 +96,10 @@ namespace ECSEngine {
 		size_t m_top;
 		size_t m_marker;
 		size_t m_backup_size;
+		size_t m_current_usage;
+		// We need to keep a separate count for the current usage
+		// In order to properly restore it
+		size_t m_marker_current_usage;
 		AllocatorPolymorphic m_backup;
 	};
 

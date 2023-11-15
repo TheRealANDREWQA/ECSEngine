@@ -37,13 +37,15 @@ namespace ECSEngine {
 
 		void Clear();
 
-		void EndFrame();
+		void EndFrame(size_t frame_cycle_delta);
 
 		// Adds a new entry, either as a root or as a child of a current root
 		void Push(Stream<char> name, unsigned int entry_capacity, unsigned char tag = 0);
 
 		// Finalizes an entry
 		void Pop(float value);
+
+		void StartFrame();
 
 		void Initialize(
 			AllocatorPolymorphic backup_allocator, 
@@ -62,17 +64,16 @@ namespace ECSEngine {
 		unsigned int root_index;
 		// This is the index of the child of the current root
 		unsigned int child_index;
-		// Expressed in milliseconds
-		Statistic<float> frame_user_time;
-		// Expressed in milliseconds
-		Statistic<float> frame_kernel_time;
-		size_t previous_frame_user_time;
-		size_t previous_frame_kernel_time;
+		// Expressed in percentages
+		Statistic<unsigned char> frame_utilization;
 		void* thread_handle;
+		// This is the value returned by QueryThreadCycles
+		// That we use to subtract then from another call to determine
+		// For how long has this thread been executing during this frame
+		size_t start_frame_cycle_count;
 	private:
-		// Padd the struct on a cache line boundary to avoid any possible false sharing happening between threads
-		// Inside the manager
-		unsigned char padding[24];
+		// Add these bytes to eliminate the possibility of false sharing
+		char padding[24];
 	};
 
 	// Returns an estimate of how much memory this would use
@@ -88,23 +89,6 @@ namespace ECSEngine {
 		This is a profiler only for the CPU side of the frame. The GPU side profiler is not yet implemented
 	*/
 	struct ECSENGINE_API CPUFrameProfiler {
-		// Percentage from 0 to 100. Includes both user and kernel times
-		// If thread_id is set to -1, then it will calculate for all threads
-		unsigned char CalculateUsage(unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) const;
-
-		// Percentage from 0 to 100
-		// If thread_id is set to -1, then it will calculate for all threads
-		unsigned char CalculateUsageUser(unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) const;
-
-		// Percentage from 0 to 100
-		// If thread_id is set to -1, then it will calculate for all threads
-		unsigned char CalculateUsageKernel(unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) const;
-
-		// Percentage from 0 to 100. Calculates the percentage of time spent in user cycles
-		// from the overall time spent
-		// If thread_id is set to -1, then it will calculate for all threads
-		unsigned char CalculateUserToOverall(unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) const;
-
 		void Clear();
 
 		void EndFrame();
@@ -114,6 +98,10 @@ namespace ECSEngine {
 
 		// The duration is in ms
 		float GetOverallFrameTime(ECS_STATISTIC_VALUE_TYPE value_type) const;
+
+		// Percentage from 0 to 100. Includes both user and kernel times
+		// If thread_id is set to -1, then it will calculate for all threads
+		unsigned char GetCPUUsage(unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) const;
 
 		// Adds a new entry, either as a root or as a child of a current root
 		void Push(unsigned int thread_id, Stream<char> name, unsigned char tag = 0);
@@ -150,6 +138,7 @@ namespace ECSEngine {
 		// And the simulation frame time is calculated on EndFrame. The overall frame
 		// time is deduced from the next StartFrame call which will determine the value from start
 		Timer timer;
+		size_t start_frame_cycle_count;
 	};
 
 }

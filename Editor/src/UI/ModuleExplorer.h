@@ -2,6 +2,7 @@
 #include "ECSEngineUI.h"
 
 using namespace ECSEngine;
+ECS_TOOLS;
 
 #define MODULE_EXPLORER_WINDOW_NAME "Module Explorer"
 

@@ -3,6 +3,7 @@
 #include "EditorState.h"
 
 using namespace ECSEngine;
+ECS_TOOLS;
 
 void ChangeVisualizeTexture(EditorState* editor_state, ECSEngine::Stream<char> name, ECSEngine::Texture2D texture) {
 	VisualizeTextureSelectElement* select_element = editor_state->visualize_texture.mapping.GetValuePtr(name);

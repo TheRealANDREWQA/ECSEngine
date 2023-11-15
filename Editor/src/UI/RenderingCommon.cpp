@@ -159,11 +159,58 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 	const float font_scaling = 1.0f;
 	drawer.element_descriptor.label_padd = float2::Splat(0.0f);
 
+	// We need to keep these values the same for a small period of time otherwise
+	// If we update every single draw, the values cannot be read
+	struct DisplayValues {
+		unsigned char cpu_utilization;
+		unsigned char gpu_usage;
+		size_t ram_usage;
+		size_t vram_usage;
+		float simulation_fps;
+		float simulation_ms;
+		float overall_fps;
+		float overall_ms;
+		float gpu_fps;
+		float gpu_ms;
+		Timer timer;
+	};
+
+	const char* RESOURCE_NAME = "__DISPLAY_VALUES";
+	// In milliseconds
+	const size_t DISPLAY_VALUES_UPDATE_TICK_MS = 200;
+	DisplayValues* display_values = nullptr;
+	if (drawer.initializer) {
+		// Insert a structure to hold the display values for a small amount of time
+		display_values = drawer.GetMainAllocatorBufferAndStoreAsResource<DisplayValues>(RESOURCE_NAME);
+		display_values->timer.SetUninitialized();
+	}
+	else {
+		display_values = (DisplayValues*)drawer.GetResource(RESOURCE_NAME);
+	}
+
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	if (sandbox->statistics_display.is_enabled) {
+		ECS_STATISTIC_VALUE_TYPE statistic_value_type = ECS_STATISTIC_VALUE_SMALL_AVERAGE;
 		UIDrawConfig config;
 		size_t configuration = 0;
-		ECS_STATISTIC_VALUE_TYPE statistic_value_type = ECS_STATISTIC_VALUE_SMALL_AVERAGE;
+
+		// Verify if we need to update the values
+		if (display_values->timer.GetDuration(ECS_TIMER_DURATION_MS) >= DISPLAY_VALUES_UPDATE_TICK_MS) {
+			unsigned char cpu_usage = sandbox->cpu_frame_profiler.GetCPUUsage(-1, statistic_value_type);
+
+			float simulation_ms = sandbox->cpu_frame_profiler.GetSimulationFrameTime(statistic_value_type);
+			float simulation_fps = simulation_ms == 0.0f ? 0.0f : 1000.0f / simulation_ms;
+
+			float overall_ms = sandbox->cpu_frame_profiler.GetOverallFrameTime(statistic_value_type);
+			float overall_fps = overall_ms == 0.0f ? 0.0f : 1000.0f / overall_ms;
+
+			display_values->cpu_utilization = cpu_usage;
+			display_values->simulation_fps = simulation_fps;
+			display_values->simulation_ms = simulation_ms;
+			display_values->overall_ms = overall_ms;
+			display_values->overall_fps = overall_fps;
+			display_values->timer.SetNewStart();
+		}
 
 		UIConfigTextParameters text_parameters;
 		text_parameters.size *= float2::Splat(font_scaling);
@@ -219,9 +266,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 		};
 
 		draw_entry(EDITOR_SANDBOX_STATISTIC_CPU_USAGE, "CPU Usage", EDITOR_STATISTIC_CPU_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
-			unsigned char cpu_usage = sandbox->cpu_frame_profiler.CalculateUsage(-1, statistic_value_type);
-			unsigned char user_to_overall_ratio = sandbox->cpu_frame_profiler.CalculateUserToOverall(-1, statistic_value_type);
-			ECS_FORMAT_STRING(value_label, "{#} % ({#} % User)", cpu_usage, user_to_overall_ratio);
+			ECS_FORMAT_STRING(value_label, "{#} %", display_values->cpu_utilization);
 		});
 
 		draw_entry(EDITOR_SANDBOX_STATISTIC_RAM_USAGE, "RAM Usage", EDITOR_STATISTIC_RAM_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
@@ -237,15 +282,11 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 		});*/
 
 		draw_entry(EDITOR_SANDBOX_STATISTIC_SANDBOX_TIME, "Framerate (Simulation)", EDITOR_STATISTIC_SANDBOX_TIME_COLOR, [&](CapacityStream<char>& value_label) {
-			float simulation_time_ms = sandbox->cpu_frame_profiler.GetSimulationFrameTime(statistic_value_type);
-			float fps = simulation_time_ms == 0.0f ? 0.0f : 1000.0f / simulation_time_ms;
-			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", fps, simulation_time_ms);
+			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", display_values->simulation_fps, display_values->simulation_ms);
 		});
 
 		draw_entry(EDITOR_SANDBOX_STATISTIC_FRAME_TIME, "Framerate (Overall)", EDITOR_STATISTIC_FRAME_TIME_COLOR, [&](CapacityStream<char>& value_label) {
-			float frame_time_ms = sandbox->cpu_frame_profiler.GetOverallFrameTime(statistic_value_type);
-			float fps = frame_time_ms == 0.0f ? 0.0f : 1000.0f / frame_time_ms;
-			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", fps, frame_time_ms);
+			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", display_values->overall_fps, display_values->overall_ms);
 		});
 
 		/*draw_entry(EDITOR_SANDBOX_STATISTIC_GPU_SANDBOX_TIME, "Framerate (GPU)", EDITOR_STATISTIC_GPU_TIME_COLOR, [&](CapacityStream<char>& value_label) {

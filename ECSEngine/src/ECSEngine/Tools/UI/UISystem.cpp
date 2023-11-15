@@ -12,6 +12,7 @@
 #include "../../Utilities/StreamUtilities.h"
 #include "../../Utilities/Algorithms.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
+#include "../../OS/Cursor.h"
 
 namespace ECSEngine {
 

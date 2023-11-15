@@ -51,6 +51,10 @@ namespace ECSEngine {
 			m_spin_lock.Unlock();
 		}
 
+		ECS_INLINE size_t GetCurrentUsage() const {
+			return m_range.GetCurrentUsage();
+		}
+
 		// --------------------------------------------------- Thread safe variants ------------------------------------------
 
 		void* Allocate_ts(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);

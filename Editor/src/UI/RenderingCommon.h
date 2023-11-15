@@ -1,6 +1,7 @@
 #pragma once
 #include "ECSEngineUI.h"
 
+ECS_TOOLS;
 enum EDITOR_SANDBOX_VIEWPORT : unsigned char;
 struct EditorState;
 

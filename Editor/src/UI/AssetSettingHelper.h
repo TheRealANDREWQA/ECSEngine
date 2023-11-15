@@ -3,6 +3,7 @@
 #include "ECSEngineAssets.h"
 
 using namespace ECSEngine;
+ECS_TOOLS;
 
 #define ASSET_NAME_PADDING 0.2f
 

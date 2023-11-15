@@ -10,7 +10,6 @@
 #include "EditorEvent.h"
 #include "EditorPalette.h"
 #include "EntryPoint.h"
-#include "ECSEngineMath.h"
 #include "../Sandbox/Sandbox.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
@@ -25,7 +24,7 @@ using namespace ECSEngine::Tools;
 
 class Editor : public ECSEngine::Application {
 public:
-	Editor(int width, int height, LPCWSTR name);
+	Editor(int width, int height, const wchar_t* name);
 	Editor() {}
 	~Editor();
 	Editor(const Editor&) = delete;
@@ -135,10 +134,10 @@ public:
 
 						timer.SetNewStart();
 
-						/*ECS_STACK_CAPACITY_STREAM(Stream<char>, windows, 2);
+						ECS_STACK_CAPACITY_STREAM(Stream<char>, windows, 2);
 						windows[0] = "Game 0";
 						windows[1] = "Scene 0";
-						windows.size = 2;*/
+						windows.size = 2;
 
 						frame_pacing = editor_state.ui_system->DoFrame();
 
@@ -248,7 +247,7 @@ LPCWSTR Editor::EditorClass::GetName() noexcept {
 	return editorClassName;
 }
 
-Editor::Editor(int _width, int _height, LPCWSTR name)
+Editor::Editor(int _width, int _height, const wchar_t* name)
 {
 	timer.SetUninitialized();
 	timer.SetNewStart();

@@ -2,6 +2,7 @@
 #include "ECSEngineUI.h"
 
 struct EditorState;
+ECS_TOOLS;
 
 #define MAX_INSPECTOR_WINDOWS 8
 

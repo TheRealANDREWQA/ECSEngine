@@ -9,7 +9,7 @@
 #include "../Allocators/ResizableLinearAllocator.h"
 #include "../Utilities/Path.h"
 #include "../ECS/World.h"
-#include "../Utilities/OSFunctions.h"
+#include "../OS/FileOS.h"
 
 namespace ECSEngine {
 

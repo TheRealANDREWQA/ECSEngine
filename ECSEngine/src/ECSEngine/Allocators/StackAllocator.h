@@ -43,6 +43,10 @@ namespace ECSEngine {
 			m_spin_lock.Unlock();
 		}
 
+		ECS_INLINE size_t GetCurrentUsage() const {
+			return m_top;
+		}
+
 		void ExitDebugMode();
 
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);

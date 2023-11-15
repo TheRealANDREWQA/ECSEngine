@@ -14,7 +14,7 @@ namespace ECSEngine {
 		: ResizableLinearAllocator(ECSEngine::Allocate(allocator, capacity), capacity, backup_size, allocator) {}
 
 	ResizableLinearAllocator::ResizableLinearAllocator(void* buffer, size_t capacity, size_t backup_size, AllocatorPolymorphic allocator) 
-		: m_top(0), m_marker(0), m_backup_size(backup_size), m_backup(allocator), m_debug_mode(false)
+		: m_top(0), m_marker(0), m_backup_size(backup_size), m_backup(allocator), m_debug_mode(false), m_current_usage(0)
 	{
 		ECS_ASSERT(capacity > MAX_BACKUPS * sizeof(void*), "Too small of a capacity for ResizableLinearAllocator");
 
@@ -55,6 +55,7 @@ namespace ECSEngine {
 				tracked.function_type = ECS_DEBUG_ALLOCATOR_ALLOCATE;
 				DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_RESIZABLE_LINEAR, &tracked);
 			}
+			m_current_usage = m_top;
 			return (void*)ptr;
 		}
 		else {
@@ -70,10 +71,13 @@ namespace ECSEngine {
 			}
 
 			uintptr_t ptr = (uintptr_t)m_allocated_buffers[m_allocated_buffer_size - 1];
-			ptr = AlignPointer(ptr + current_buffer_allocated_size, alignment);
+			uintptr_t unaligned_pointer = ptr + current_buffer_allocated_size;
+			ptr = AlignPointer(unaligned_pointer, alignment);
 
 			m_top = m_initial_capacity + (m_allocated_buffer_size - 1) * m_backup_size +
 				PointerDifference((void*)ptr, m_allocated_buffers[m_allocated_buffer_size - 1]) + size;
+			// Update the current usage
+			m_current_usage += size + ptr - unaligned_pointer;
 			if (m_debug_mode) {
 				TrackedAllocation tracked;
 				tracked.allocated_pointer = (void*)ptr;
@@ -100,6 +104,7 @@ namespace ECSEngine {
 	void ResizableLinearAllocator::SetMarker()
 	{
 		m_marker = m_top;
+		m_marker_current_usage = m_current_usage;
 	}
 
 	// ---------------------------------------------------------------------------------
@@ -114,6 +119,7 @@ namespace ECSEngine {
 
 		if (allocator->m_top > allocator->m_initial_capacity) {
 			allocator->m_top = allocator->m_initial_capacity - 1;
+			allocator->m_current_usage = allocator->m_top;
 		}
 
 		if constexpr (disable_debug_info) {
@@ -136,6 +142,7 @@ namespace ECSEngine {
 	{
 		ClearBackupImpl<true>(this, debug_info);
 		m_top = 0;
+		m_current_usage = 0;
 
 		if (m_debug_mode) {
 			TrackedAllocation tracked;
@@ -165,14 +172,15 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------
 
-	size_t ResizableLinearAllocator::GetMarker() const
+	void ResizableLinearAllocator::GetMarker(size_t* marker, size_t* usage) const
 	{
-		return m_marker;
+		*marker = m_marker;
+		*usage = m_marker_current_usage;
 	}
 
 	// ---------------------------------------------------------------------------------
 
-	void ResizableLinearAllocator::ReturnToMarker(size_t marker, DebugInfo debug_info)
+	void ResizableLinearAllocator::ReturnToMarker(size_t marker, size_t usage, DebugInfo debug_info)
 	{
 		if (marker < m_initial_capacity) {
 			ClearBackup();
@@ -188,6 +196,7 @@ namespace ECSEngine {
 		}
 
 		m_top = marker;
+		m_current_usage = usage;
 
 		if (m_debug_mode) {
 			TrackedAllocation tracked;

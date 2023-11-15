@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "Mouse.h"
-#include "../Utilities/OSFunctions.h"
+#include "../OS/Cursor.h"
 
 namespace ECSEngine {
 

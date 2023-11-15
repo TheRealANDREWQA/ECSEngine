@@ -4,7 +4,7 @@
 #include "MultipoolAllocator.h"
 #include "AllocatorCallsDebug.h"
 #include "../Utilities/PointerUtilities.h"
-#include "../Utilities/OSFunctions.h"
+#include "../OS/Memory.h"
 #include "../Utilities/Utilities.h"
 
 #define DEFAULT_PAGE_SIZE ECS_KB * 4

@@ -4,6 +4,8 @@
 #include "FileExplorerData.h"
 #include "HelperWindows.h"
 
+#include "ECSEngineOS.h"
+
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 

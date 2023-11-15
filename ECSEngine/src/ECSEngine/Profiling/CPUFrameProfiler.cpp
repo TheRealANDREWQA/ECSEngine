@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "CPUFrameProfiler.h"
-#include "../Utilities/OSFunctions.h"
+#include "../OS/Thread.h"
+#include "../OS/Misc.h"
 #include "../Multithreading/TaskManager.h"
 
 namespace ECSEngine {
@@ -36,10 +37,9 @@ namespace ECSEngine {
 
 		thread->root_index = -1;
 		thread->child_index = 0;
-		thread->previous_frame_user_time = 0;
-		thread->previous_frame_kernel_time = 0;
-		thread->frame_user_time.Initialize(allocator_polymorphic, entry_capacity);
-		thread->frame_kernel_time.Initialize(allocator_polymorphic, entry_capacity);
+		thread->start_frame_cycle_count = 0;
+		thread->frame_utilization.Initialize(allocator_polymorphic, entry_capacity);
+		thread->start_frame_cycle_count = 0;
 		thread->thread_handle = thread_handle;
 	}
 
@@ -52,30 +52,18 @@ namespace ECSEngine {
 	{
 		// Clearing this is extremely easy - clear the allocator and re-initialize everything
 		allocator.Clear();
-		unsigned int entry_capacity = frame_kernel_time.entries.GetCapacity();
+		unsigned int entry_capacity = frame_utilization.entries.GetCapacity();
 		CPUFrameProfilerThreadInitializeAfterAllocator(this, entry_capacity, thread_handle);
 	}
 
-	void CPUFrameProfilerThread::EndFrame()
+	void CPUFrameProfilerThread::EndFrame(size_t frame_cycle_delta)
 	{
 		root_index = -1;
 		child_index = 0;
-
-		// Retrieve the thread times
-		ulong2 thread_times = OS::GetThreadTimes(thread_handle);
-		if (thread_times.x == -1 && thread_times.x == -1) {
-			// In case we failed, set these to the current values. They will skew the results
-			// But the user at least knows that some error has happened
-			thread_times.x = previous_frame_user_time;
-			thread_times.y = previous_frame_kernel_time;
-		}
-
-		float2 times = OS::ThreadTimesDuration(thread_times, { previous_frame_user_time, previous_frame_kernel_time }, ECS_TIMER_DURATION_MS);
-		frame_user_time.Add(times.x);
-		frame_kernel_time.Add(times.y);
-
-		previous_frame_user_time = thread_times.x;
-		previous_frame_kernel_time = thread_times.y;
+		size_t thread_cycle_stamp = OS::QueryThreadCycles(thread_handle);
+		size_t thread_cycle_delta = thread_cycle_stamp - start_frame_cycle_count;
+		unsigned char utilization_percentage = (unsigned char)((double)thread_cycle_delta / (double)frame_cycle_delta * 100.0);
+		frame_utilization.Add(utilization_percentage);
 	}
 
 	void CPUFrameProfilerThread::Push(Stream<char> name, unsigned int entry_capacity, unsigned char tag)
@@ -144,6 +132,11 @@ namespace ECSEngine {
 		roots[root_index][child_index].Add(value);
 	}
 
+	void CPUFrameProfilerThread::StartFrame()
+	{
+		start_frame_cycle_count = OS::QueryThreadCycles(thread_handle);
+	}
+
 	void CPUFrameProfilerThread::Initialize(
 		AllocatorPolymorphic backup_allocator, 
 		size_t arena_capacity, 
@@ -166,59 +159,6 @@ namespace ECSEngine {
 		CPUFrameProfilerThreadInitializeAfterAllocator(this, entry_capacity, _thread_handle);
 	}
 
-	template<bool user_time, bool kernel_time>
-	static unsigned char CalculateUsageImpl(const CPUFrameProfiler* profiler, unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) {
-		if (thread_id == -1) {
-			size_t usage = 0;
-			for (size_t index = 0; index < profiler->threads.size; index++) {
-				usage += (size_t)profiler->CalculateUsage(index, value_type);
-			}
-			return (unsigned char)((float)usage / (float)profiler->threads.size);
-		}
-		else {
-			float thread_execution_value = 0.0f;
-			if constexpr (user_time) {
-				thread_execution_value += profiler->threads[thread_id].frame_user_time.GetValue(value_type);
-			}
-			if (constexpr (kernel_time)) {
-				thread_execution_value += profiler->threads[thread_id].frame_kernel_time.GetValue(value_type);
-			}
-			float frame_value = profiler->GetSimulationFrameTime(value_type);
-			return (unsigned char)(thread_execution_value / frame_value * 100.0f);
-		}
-	}
-
-	unsigned char CPUFrameProfiler::CalculateUsage(unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) const
-	{
-		return CalculateUsageImpl<true, true>(this, thread_id, value_type);
-	}
-
-	unsigned char CPUFrameProfiler::CalculateUsageUser(unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) const
-	{
-		return CalculateUsageImpl<true, false>(this, thread_id, value_type);
-	}
-
-	unsigned char CPUFrameProfiler::CalculateUsageKernel(unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) const
-	{
-		return CalculateUsageImpl<false, true>(this, thread_id, value_type);
-	}
-
-	unsigned char CPUFrameProfiler::CalculateUserToOverall(unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) const
-	{
-		if (thread_id == -1) {
-			size_t ratio = 0;
-			for (size_t index = 0; index < threads.size; index++) {
-				ratio += (size_t)CalculateUserToOverall(index, value_type);
-			}
-			return (unsigned char)((float)ratio / (float)threads.size);
-		}
-		else {
-			float user_value = threads[thread_id].frame_user_time.GetValue(value_type);
-			float kernel_value = threads[thread_id].frame_kernel_time.GetValue(value_type);
-			return (unsigned char)(user_value / (user_value + kernel_value) * 100.0f);
-		}
-	}
-
 	void CPUFrameProfiler::Clear()
 	{
 		// Clear every thread, unitialize the timer and clear the frame statistics
@@ -232,11 +172,14 @@ namespace ECSEngine {
 
 	void CPUFrameProfiler::EndFrame()
 	{
+		size_t frame_cycle_stamp = OS::Rdtsc();
+		size_t frame_cycle_delta = frame_cycle_stamp - start_frame_cycle_count;
+			
 		// Get the simulation frame time here
 		float frame_time = timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 		simulation_frame_time.Add(frame_time);
 		for (size_t index = 0; index < threads.size; index++) {
-			threads[index].EndFrame();
+			threads[index].EndFrame(frame_cycle_delta);
 		}
 	}
 
@@ -248,6 +191,20 @@ namespace ECSEngine {
 	float CPUFrameProfiler::GetOverallFrameTime(ECS_STATISTIC_VALUE_TYPE value_type) const
 	{
 		return overall_frame_time.GetValue(value_type);
+	}
+
+	unsigned char CPUFrameProfiler::GetCPUUsage(unsigned int thread_id, ECS_STATISTIC_VALUE_TYPE value_type) const
+	{
+		if (thread_id == -1) {
+			size_t usage = 0;
+			for (size_t index = 0; index < threads.size; index++) {
+				usage += (size_t)GetCPUUsage(index, value_type);
+			}
+			return (unsigned char)((float)usage / (float)threads.size);
+		}
+		else {
+			return threads[thread_id].frame_utilization.GetValue(value_type);
+		}
 	}
 
 	void CPUFrameProfiler::Push(unsigned int thread_id, Stream<char> name, unsigned char tag)
@@ -270,7 +227,11 @@ namespace ECSEngine {
 	{
 		entry_capacity = _entry_capacity;;
 
-		threads.Initialize(allocator, thread_handles.size);
+		static_assert((sizeof(CPUFrameProfilerThread) % ECS_CACHE_LINE_SIZE) == 0);
+
+		// Align these to a cache line boundary such that they don't false share
+		void* threads_allocation = Allocate(allocator, threads.MemoryOf(thread_handles.size), ECS_CACHE_LINE_SIZE);
+		threads.InitializeFromBuffer(threads_allocation, thread_handles.size);
 		for (unsigned int index = 0; index < thread_handles.size; index++) {
 			threads[index].Initialize(allocator, thread_arena_capacity, thread_arena_backup_capacity, entry_capacity, thread_handles[index]);
 		}
@@ -278,6 +239,7 @@ namespace ECSEngine {
 		simulation_frame_time.Initialize(allocator, entry_capacity);
 		overall_frame_time.Initialize(allocator, entry_capacity);
 		timer.SetUninitialized();
+		start_frame_cycle_count = 0;
 	}
 
 	void CPUFrameProfiler::Initialize(
@@ -302,6 +264,11 @@ namespace ECSEngine {
 			overall_frame_time.Add(overall_frame_duration);
 			timer.SetNewStart();
 		}
+		// Also set the thread timestamps for the simulation start
+		for (size_t index = 0; index < threads.size; index++) {
+			threads[index].StartFrame();
+		}
+		start_frame_cycle_count = OS::Rdtsc();
 	}
 
 	size_t CPUFrameProfilerAllocatorReserve(unsigned int thread_count, size_t thread_arena_capacity, size_t thread_arena_backup_capacity)

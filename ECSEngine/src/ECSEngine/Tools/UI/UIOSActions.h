@@ -1,6 +1,6 @@
 #pragma once
 #include "../../Containers/Stream.h"
-#include "../../Utilities/OSFunctions.h"
+#include "../../OS/FileExplorer.h"
 
 namespace ECSEngine {
 

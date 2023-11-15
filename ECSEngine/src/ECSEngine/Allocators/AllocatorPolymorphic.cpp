@@ -194,6 +194,12 @@ namespace ECSEngine {
 		allocator->Unlock();
 	}
 
+	template<typename Allocator>
+	size_t GetAllocatorCurrentUsageAllocator(const void* _allocator) {
+		const Allocator* allocator = (const Allocator*)_allocator;
+		return allocator->GetCurrentUsage();
+	}
+
 #define ECS_JUMP_TABLE(function_name)	function_name<LinearAllocator>, \
 										function_name<StackAllocator>, \
 										function_name<MultipoolAllocator>, \
@@ -314,6 +320,10 @@ namespace ECSEngine {
 
 	UnlockAllocatorFunction ECS_UNLOCK_ALLOCATOR_FUNCTIONS[] = {
 		ECS_JUMP_TABLE(UnlockAllocatorFunctionAllocator)
+	};
+
+	GetAllocatorCurrentUsageFunction ECS_ALLOCATOR_CURRENT_USAGE_FUNCTIONS[] = {
+		ECS_JUMP_TABLE(GetAllocatorCurrentUsageAllocator)
 	};
 
 	size_t BaseAllocatorByteSize(ECS_ALLOCATOR_TYPE type)

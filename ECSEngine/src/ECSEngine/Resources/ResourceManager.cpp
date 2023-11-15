@@ -9,7 +9,7 @@
 #include "../Utilities/ForEachFiles.h"
 #include "../Rendering/ShaderInclude.h"
 #include "../Rendering/Shader Application Stage/PBR.h"
-#include "../Utilities/OSFunctions.h"
+#include "../OS/FileOS.h"
 
 #define ECS_RESOURCE_MANAGER_CHECK_RESOURCE
 

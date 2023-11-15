@@ -1,6 +1,7 @@
 // ECS_REFLECT
 #include "ecspch.h"
 #include "World.h"
+#include "../OS/PhysicalMemory.h"
 
 namespace ECSEngine {
 
@@ -294,7 +295,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-	void ClearWorld(World* world)
+	void ClearWorld(World* world, bool release_physical_memory)
 	{
 		// Clear everything that can be cleared
 		world->task_manager->Reset();
@@ -307,6 +308,17 @@ namespace ECSEngine {
 		}
 		world->timer.SetUninitialized();
 		world->delta_time = 0.0f;
+
+		if (release_physical_memory) {
+			// We can release the memory for the entire global memory manager
+			size_t global_memory_allocator_count = world->memory->m_allocator_count;
+			for (size_t index = 0; index < global_memory_allocator_count; index++) {
+				void* global_allocation = world->memory->GetAllocatorBasePointer(index);
+				size_t global_allocation_size = world->memory->GetAllocatorBaseAllocationSize(index);
+				// Here we can omit this check, but let's assert just for good measure
+				ECS_ASSERT(OS::EmptyPhysicalMemory(global_allocation, global_allocation_size), "Failed to release physical pages for World");
+			}
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
