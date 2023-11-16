@@ -75,7 +75,11 @@ namespace ECSEngine {
 
 		void ExitDebugMode();
 
+		void ExitProfilingMode();
+
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
+
+		void SetProfilingMode(const char* name);
 
 		// ----------------------------------------  Thread safe --------------------------------------------------------
 
@@ -100,6 +104,7 @@ namespace ECSEngine {
 		SpinLock m_lock;
 		unsigned char m_allocator_count;
 		bool m_debug_mode;
+		bool m_profiling_mode;
 		ECS_ALLOCATOR_TYPE m_base_allocator_type;
 		unsigned char m_current_index;
 		unsigned short m_base_allocator_byte_size;

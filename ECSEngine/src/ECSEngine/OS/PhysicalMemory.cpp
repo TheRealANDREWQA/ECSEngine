@@ -64,6 +64,12 @@ namespace ECSEngine {
 			return -1;
 		}
 
+		bool GuardPages(void* allocation, size_t allocation_size)
+		{
+			DWORD old_protect = 0;
+			return VirtualProtect(allocation, allocation_size, PAGE_READWRITE | PAGE_GUARD, &old_protect);
+		}
+
 	}
 
 }

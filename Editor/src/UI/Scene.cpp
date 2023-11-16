@@ -461,10 +461,16 @@ static void ScenePrivateAction(ActionData* action_data) {
 				// This is for testing only
 				if (window_index == system->GetActiveWindow()) {
 					if (keyboard->IsPressed(ECS_KEY_M)) {
-						ChangeSandboxCPUStatisticsType(editor_state, sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_BASIC);
+						InvertSandboxStatisticsDisplay(editor_state, sandbox_index);
 					}
 					else if (keyboard->IsPressed(ECS_KEY_N)) {
 						ChangeSandboxCPUStatisticsType(editor_state, sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_NONE);
+					}
+					else if (keyboard->IsPressed(ECS_KEY_B)) {
+						ChangeSandboxCPUStatisticsType(editor_state, sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_BASIC);
+					}
+					else if (keyboard->IsPressed(ECS_KEY_V)) {
+						ChangeSandboxCPUStatisticsType(editor_state, sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_ADVANCED);
 					}
 				}
 

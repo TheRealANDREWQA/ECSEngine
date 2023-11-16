@@ -164,7 +164,8 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 	struct DisplayValues {
 		unsigned char cpu_utilization;
 		unsigned char gpu_usage;
-		size_t ram_usage;
+		// This is the size in MB for the physical ram
+		size_t physical_ram_usage;
 		size_t vram_usage;
 		float simulation_fps;
 		float simulation_ms;
@@ -196,19 +197,22 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 
 		// Verify if we need to update the values
 		if (display_values->timer.GetDuration(ECS_TIMER_DURATION_MS) >= DISPLAY_VALUES_UPDATE_TICK_MS) {
-			unsigned char cpu_usage = sandbox->cpu_frame_profiler.GetCPUUsage(-1, statistic_value_type);
+			unsigned char cpu_usage = sandbox->world_profiling.cpu_profiler.GetCPUUsage(-1, statistic_value_type);
 
-			float simulation_ms = sandbox->cpu_frame_profiler.GetSimulationFrameTime(statistic_value_type);
+			float simulation_ms = sandbox->world_profiling.cpu_profiler.GetSimulationFrameTime(statistic_value_type);
 			float simulation_fps = simulation_ms == 0.0f ? 0.0f : 1000.0f / simulation_ms;
 
-			float overall_ms = sandbox->cpu_frame_profiler.GetOverallFrameTime(statistic_value_type);
+			float overall_ms = sandbox->world_profiling.cpu_profiler.GetOverallFrameTime(statistic_value_type);
 			float overall_fps = overall_ms == 0.0f ? 0.0f : 1000.0f / overall_ms;
+
+			size_t physical_ram_usage = sandbox->world_profiling.physical_memory_profiler.GetUsage(statistic_value_type, ECS_BYTE_TO_MB);
 
 			display_values->cpu_utilization = cpu_usage;
 			display_values->simulation_fps = simulation_fps;
 			display_values->simulation_ms = simulation_ms;
 			display_values->overall_ms = overall_ms;
 			display_values->overall_fps = overall_fps;
+			display_values->physical_ram_usage = physical_ram_usage;
 			display_values->timer.SetNewStart();
 		}
 
@@ -270,7 +274,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 		});
 
 		draw_entry(EDITOR_SANDBOX_STATISTIC_RAM_USAGE, "RAM Usage", EDITOR_STATISTIC_RAM_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
-
+			ECS_FORMAT_STRING(value_label, "{#} MB", display_values->physical_ram_usage);
 		});
 
 		/*draw_entry(EDITOR_SANDBOX_STATISTIC_CPU_USAGE, "GPU Usage", EDITOR_STATISTIC_GPU_USAGE_COLOR, [&](CapacityStream<char>& value_label) {

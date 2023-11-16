@@ -2,16 +2,17 @@
 #include "../Utilities/PointerUtilities.h"
 #include "MultipoolAllocator.h"
 #include "AllocatorCallsDebug.h"
+#include "../Profiling/AllocatorProfilingGlobal.h"
 
 namespace ECSEngine {
 	
 	MultipoolAllocator::MultipoolAllocator(void* buffer, size_t size, size_t pool_count)
 		: m_buffer((unsigned char*)buffer), m_spin_lock(), m_size(size), m_range((unsigned int*)OffsetPointer(buffer, size), pool_count, size),
-		m_debug_mode(false) {}
+		m_debug_mode(false), m_profiling_mode(false) {}
 
 	MultipoolAllocator::MultipoolAllocator(void* buffer, void* block_range_buffer, size_t size, size_t pool_count)
 		: m_buffer((unsigned char*)buffer), m_spin_lock(), m_size(size), m_range((unsigned int*)block_range_buffer, pool_count, size),
-		m_debug_mode(false) {}
+		m_debug_mode(false), m_profiling_mode(false) {}
 	
 	void* MultipoolAllocator::Allocate(size_t size, size_t alignment, DebugInfo debug_info) {
 		ECS_ASSERT(alignment <= ECS_CACHE_LINE_SIZE);
@@ -40,6 +41,10 @@ namespace ECSEngine {
 			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_MULTIPOOL, &tracked);
 		}
 
+		if (m_profiling_mode) {
+			AllocatorProfilingAddAllocation(this, GetCurrentUsage(), m_range.GetFreeBlockCount() + m_range.GetUsedBlockCount());
+		}
+
 		return (void*)allocation;
 	}
 
@@ -58,12 +63,17 @@ namespace ECSEngine {
 			}
 		}
 		bool was_deallocated = m_range.Free<trigger_error_if_not_found>((unsigned int)(byte_offset_position - byte_offset));
-		if (m_debug_mode && was_deallocated) {
-			TrackedAllocation tracked;
-			tracked.allocated_pointer = block;
-			tracked.function_type = ECS_DEBUG_ALLOCATOR_DEALLOCATE;
-			tracked.debug_info = debug_info;
-			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_MULTIPOOL, &tracked);
+		if (was_deallocated) {
+			if (m_debug_mode) {
+				TrackedAllocation tracked;
+				tracked.allocated_pointer = block;
+				tracked.function_type = ECS_DEBUG_ALLOCATOR_DEALLOCATE;
+				tracked.debug_info = debug_info;
+				DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_MULTIPOOL, &tracked);
+			}
+			if (m_profiling_mode) {
+				AllocatorProfilingAddDeallocation(this);
+			}
 		}
 		return was_deallocated;
 	}
@@ -93,6 +103,12 @@ namespace ECSEngine {
 				DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_MULTIPOOL, &tracked);
 			}
 
+			if (m_profiling_mode) {
+				// Consider reallocations as a deallocate + allocation
+				AllocatorProfilingAddAllocation(this, GetCurrentUsage(), m_range.GetFreeBlockCount() + m_range.GetUsedBlockCount());
+				AllocatorProfilingAddDeallocation(this);
+			}
+
 			return (void*)allocation;
 		}
 
@@ -117,16 +133,6 @@ namespace ECSEngine {
 		return m_range.GetUsedBlockCount() == 0;
 	}
 
-	void* MultipoolAllocator::GetAllocatedBuffer() const
-	{
-		return m_buffer;
-	}
-
-	size_t MultipoolAllocator::GetSize() const
-	{
-		return m_size;
-	}
-
 	bool MultipoolAllocator::Belongs(const void* buffer) const
 	{
 		uintptr_t ptr = (uintptr_t)buffer;
@@ -138,10 +144,21 @@ namespace ECSEngine {
 		m_debug_mode = false;
 	}
 
+	void MultipoolAllocator::ExitProfilingMode()
+	{
+		m_profiling_mode = false;
+	}
+
 	void MultipoolAllocator::SetDebugMode(const char* name, bool resizable)
 	{
 		m_debug_mode = true;
 		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_MULTIPOOL);
+	}
+
+	void MultipoolAllocator::SetProfilingMode(const char* name)
+	{
+		m_profiling_mode = true;
+		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_MULTIPOOL, name);
 	}
 
 	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count, unsigned int size) {

@@ -2,6 +2,7 @@
 #include "StackAllocator.h"
 #include "../Utilities/PointerUtilities.h"
 #include "AllocatorCallsDebug.h"
+#include "../Profiling/AllocatorProfilingGlobal.h"
 
 namespace ECSEngine {
 
@@ -31,6 +32,10 @@ namespace ECSEngine {
 			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_STACK, &tracked);
 		}
 
+		if (m_profiling_mode) {
+			AllocatorProfilingAddAllocation(this, GetCurrentUsage());
+		}
+
 		return pointer;
 	}
 
@@ -48,6 +53,8 @@ namespace ECSEngine {
 			tracked.debug_info = debug_info;
 			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_STACK, &tracked);
 		}
+		// For this type of allocator, we shouldn't record the deallocation
+		// Counts for profiling since they are of not much use
 
 		return true;
 	}
@@ -116,10 +123,21 @@ namespace ECSEngine {
 		m_debug_mode = false;
 	}
 
+	void StackAllocator::ExitProfilingMode()
+	{
+		m_profiling_mode = false;
+	}
+
 	void StackAllocator::SetDebugMode(const char* name, bool resizable)
 	{
 		m_debug_mode = true;
 		DebugAllocatorManagerChangeOrAddEntry(this, name, true, ECS_ALLOCATOR_STACK);
+	}
+
+	void StackAllocator::SetProfilingMode(const char* name)
+	{
+		m_profiling_mode = false;
+		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_STACK, name);
 	}
 
 	size_t StackAllocator::GetTop() const {

@@ -52,7 +52,11 @@ namespace ECSEngine {
 
 		void ExitDebugMode();
 
+		void ExitProfilingMode();
+
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
+
+		void SetProfilingMode(const char* name);
 
 		ECS_INLINE bool IsEmpty() const {
 			return m_top == 0;
@@ -81,6 +85,7 @@ namespace ECSEngine {
 
 		SpinLock m_spin_lock;
 		bool m_debug_mode;
+		bool m_profiling_mode;
 		// This is not the real buffer received in the constructor
 		// It is offsetted by a count of void* in order to keep the m_allocated_buffers
 		// inside the initial_allocation. So the buffer in the constructor is actually the

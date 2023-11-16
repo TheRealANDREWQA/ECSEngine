@@ -4,6 +4,7 @@
 #include "../Utilities/PointerUtilities.h"
 #include "AllocatorCallsDebug.h"
 #include "AllocatorPolymorphic.h"
+#include "../Profiling/AllocatorProfilingGlobal.h"
 
 #define ECS_MEMORY_MANAGER_SIZE 8
 
@@ -35,12 +36,17 @@ namespace ECSEngine {
 					}
 				}
 
-				if (was_deallocated && memory_manager->m_debug_mode) {
-					TrackedAllocation tracked;
-					tracked.allocated_pointer = block;
-					tracked.debug_info = debug_info;
-					tracked.function_type = ECS_DEBUG_ALLOCATOR_DEALLOCATE;
-					DebugAllocatorManagerAddEntry(memory_manager, ECS_ALLOCATOR_MANAGER, &tracked);
+				if (was_deallocated) {
+					if (memory_manager->m_debug_mode) {
+						TrackedAllocation tracked;
+						tracked.allocated_pointer = block;
+						tracked.debug_info = debug_info;
+						tracked.function_type = ECS_DEBUG_ALLOCATOR_DEALLOCATE;
+						DebugAllocatorManagerAddEntry(memory_manager, ECS_ALLOCATOR_MANAGER, &tracked);
+					}
+					if (memory_manager->m_profiling_mode) {
+						AllocatorProfilingAddDeallocation(memory_manager);
+					}
 				}
 				return was_deallocated;
 			}
@@ -49,6 +55,15 @@ namespace ECSEngine {
 			ECS_ASSERT(false, "Invalid deallocate block for Memory Manager");
 		}
 		return false;
+	}
+	
+	static void AddProfilingAllocation(const MemoryManager* memory_manager) {
+		// For the memory manager, we are interested in the total sum of block counts
+		size_t total_block_count = 0;
+		for (unsigned char index = 0; index < memory_manager->m_allocator_count; index++) {
+			total_block_count += AllocatorPolymorphicBlockCount(memory_manager->GetAllocator(index));
+		}
+		AllocatorProfilingAddAllocation(memory_manager, memory_manager->GetCurrentUsage(), total_block_count, memory_manager->m_allocator_count);
 	}
 
 	template<bool thread_safe, bool disable_debug_info>
@@ -72,6 +87,9 @@ namespace ECSEngine {
 						tracked.debug_info = debug_info;
 						tracked.function_type = ECS_DEBUG_ALLOCATOR_ALLOCATE;
 						DebugAllocatorManagerAddEntry(memory_manager, ECS_ALLOCATOR_MANAGER, &tracked);
+					}
+					if (memory_manager->m_profiling_mode) {
+						AddProfilingAllocation(memory_manager);
 					}
 				}
 				return allocation;
@@ -114,6 +132,9 @@ namespace ECSEngine {
 				tracked.function_type = ECS_DEBUG_ALLOCATOR_ALLOCATE;
 				DebugAllocatorManagerAddEntry(memory_manager, ECS_ALLOCATOR_MANAGER, &tracked);
 			}
+			if (memory_manager->m_profiling_mode) {
+				AddProfilingAllocation(memory_manager);
+			}
 		}
 		return allocation;
 	}
@@ -155,6 +176,11 @@ namespace ECSEngine {
 					tracked.function_type = ECS_DEBUG_ALLOCATOR_REALLOCATE;
 					DebugAllocatorManagerAddEntry(memory_manager, ECS_ALLOCATOR_MANAGER, &tracked);
 				}
+				if (memory_manager->m_profiling_mode) {
+					// We consider this as a deallocate + allocate
+					AllocatorProfilingAddDeallocation(memory_manager);
+					AddProfilingAllocation(memory_manager);
+				}
 
 				return reallocation;
 			}
@@ -195,6 +221,9 @@ namespace ECSEngine {
 						tracked.function_type = ECS_DEBUG_ALLOCATOR_DEALLOCATE;
 						DebugAllocatorManagerAddEntry(memory_manager, ECS_ALLOCATOR_MANAGER, &tracked);
 					}
+					if (memory_manager->m_profiling_mode) {
+						AllocatorProfilingAddDeallocation(memory_manager);
+					}
 				}
 				return was_deallocated;
 			}
@@ -214,6 +243,7 @@ namespace ECSEngine {
 		manager->m_backup_info = backup_info;
 		manager->m_base_allocator_byte_size = base_allocator_size;
 		manager->m_debug_mode = false;
+		manager->m_profiling_mode = false;
 		manager->CreateAllocator(initial_info);
 		manager->m_initial_allocator_size = BaseAllocatorBufferSize(initial_info);
 	}
@@ -346,10 +376,21 @@ namespace ECSEngine {
 		m_debug_mode = false;
 	}
 
+	void MemoryManager::ExitProfilingMode()
+	{
+		m_profiling_mode = false;
+	}
+
 	void MemoryManager::SetDebugMode(const char* name, bool resizable)
 	{
 		m_debug_mode = true;
 		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_MANAGER);
+	}
+
+	void MemoryManager::SetProfilingMode(const char* name)
+	{
+		m_profiling_mode = true;
+		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_MANAGER, name);
 	}
 
 	AllocatorPolymorphic MemoryManager::GetAllocator(size_t index) const
@@ -372,6 +413,17 @@ namespace ECSEngine {
 	size_t MemoryManager::GetAllocatorBaseAllocationSize(size_t index) const
 	{
 		return index == 0 ? m_initial_allocator_size : BaseAllocatorBufferSize(m_backup_info);
+	}
+
+	size_t MemoryManager::GetHighestOffsetInUse(size_t allocator_index) const
+	{
+		if (m_backup_info.allocator_type == ECS_ALLOCATOR_MULTIPOOL) {
+			const MultipoolAllocator* allocator = (const MultipoolAllocator*)GetAllocator(allocator_index).allocator;
+			return allocator->GetHighestOffsetInUse();
+		}
+		else {
+			return 0;
+		}
 	}
 
 	// ---------------------- Thread safe variants -----------------------------

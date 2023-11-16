@@ -2,6 +2,7 @@
 #include "ResizableLinearAllocator.h"
 #include "../Utilities/PointerUtilities.h"
 #include "AllocatorCallsDebug.h"
+#include "../Profiling/AllocatorProfilingGlobal.h"
 
 namespace ECSEngine {
 
@@ -14,7 +15,7 @@ namespace ECSEngine {
 		: ResizableLinearAllocator(ECSEngine::Allocate(allocator, capacity), capacity, backup_size, allocator) {}
 
 	ResizableLinearAllocator::ResizableLinearAllocator(void* buffer, size_t capacity, size_t backup_size, AllocatorPolymorphic allocator) 
-		: m_top(0), m_marker(0), m_backup_size(backup_size), m_backup(allocator), m_debug_mode(false), m_current_usage(0)
+		: m_top(0), m_marker(0), m_backup_size(backup_size), m_backup(allocator), m_debug_mode(false), m_profiling_mode(false), m_current_usage(0)
 	{
 		ECS_ASSERT(capacity > MAX_BACKUPS * sizeof(void*), "Too small of a capacity for ResizableLinearAllocator");
 
@@ -48,6 +49,7 @@ namespace ECSEngine {
 			ptr = AlignPointer(ptr, alignment);
 
 			m_top = m_initial_capacity + PointerDifference((void*)ptr, m_allocated_buffers[0]) + size;
+			m_current_usage = m_top;
 			if (m_debug_mode) {
 				TrackedAllocation tracked;
 				tracked.allocated_pointer = (void*)ptr;
@@ -55,7 +57,9 @@ namespace ECSEngine {
 				tracked.function_type = ECS_DEBUG_ALLOCATOR_ALLOCATE;
 				DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_RESIZABLE_LINEAR, &tracked);
 			}
-			m_current_usage = m_top;
+			if (m_profiling_mode) {
+				AllocatorProfilingAddAllocation(this, GetCurrentUsage(), 0, m_allocated_buffer_size);
+			}
 			return (void*)ptr;
 		}
 		else {
@@ -85,6 +89,9 @@ namespace ECSEngine {
 				tracked.function_type = ECS_DEBUG_ALLOCATOR_ALLOCATE;
 				DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_RESIZABLE_LINEAR, &tracked);
 			}
+			if (m_profiling_mode) {
+				AllocatorProfilingAddAllocation(this, GetCurrentUsage(), 0, m_allocated_buffer_size);
+			}
 			return (void*)ptr;
 		}
 	}
@@ -94,6 +101,7 @@ namespace ECSEngine {
 	// Do nothing
 	template<bool trigger_error_if_not_found>
 	bool ResizableLinearAllocator::Deallocate(const void* block, DebugInfo debug_info) {
+		// Don't record deallocations for this type of allocator
 		return true;
 	}
 
@@ -230,10 +238,21 @@ namespace ECSEngine {
 		m_debug_mode = false;
 	}
 
+	void ResizableLinearAllocator::ExitProfilingMode()
+	{
+		m_profiling_mode = false;
+	}
+
 	void ResizableLinearAllocator::SetDebugMode(const char* name, bool resizable)
 	{
 		m_debug_mode = true;
 		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_RESIZABLE_LINEAR);
+	}
+
+	void ResizableLinearAllocator::SetProfilingMode(const char* name)
+	{
+		m_profiling_mode = true;
+		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_RESIZABLE_LINEAR, name);
 	}
 
 	// ---------------------------------------------------------------------------------

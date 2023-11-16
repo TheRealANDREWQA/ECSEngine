@@ -321,6 +321,16 @@ namespace ECSEngine {
 		return m_buffer[index + m_capacity];
 	}
 
+	unsigned int BlockRange::GetHighestIndexInUse() const
+	{
+		unsigned int highest_index = 0;
+		for (unsigned int index = m_free_block_count; index < m_free_block_count + m_used_block_count; index++) {
+			unsigned int block_end = GetEnd(index);
+			highest_index = std::max(highest_index, block_end - 1);
+		}
+		return highest_index;
+	}
+
 	ECS_INLINE void BlockRange::SetStart(unsigned int index, unsigned int value) {
 		ECS_ASSERT(index < m_free_block_count + m_used_block_count && index >= 0);
 		m_buffer[index] = value;

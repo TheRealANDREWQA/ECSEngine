@@ -59,8 +59,15 @@ namespace ECSEngine {
 
 		void ExitDebugMode();
 
+		// This function is here to make the implementation of AllocatorPolymorphic easier
+		ECS_INLINE void ExitProfilingMode() {}
+
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
 
+		// This function is here to make the implementation of AllocatorPolymorphic easier
+		ECS_INLINE void SetProfilingMode(const char* name) {}
+
+		// This function is here to make the implementation of AllocatorPolymorphic easier
 		ECS_INLINE size_t GetCurrentUsage() const {
 			// This function doesn't really have sense, since this allocator is used mostly
 			// To detect bugs and measuring its usage is not really something that should be done

@@ -22,6 +22,12 @@
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 
+int ExceptionFilter(EXCEPTION_POINTERS* pointers) {
+	OS::ExceptionInformation exception_information = OS::GetExceptionInformationFromNative(pointers);
+	__debugbreak();
+	return EXCEPTION_EXECUTE_HANDLER;
+}
+
 class Editor : public ECSEngine::Application {
 public:
 	Editor(int width, int height, const wchar_t* name);
@@ -105,6 +111,43 @@ public:
 		Graphics* graphics = editor_state.UIGraphics();
 
 		Hub(&editor_state);
+
+		void* virtual_allocation = OS::VirtualAllocation(ECS_GB);
+		Sleep(100);
+		timer.SetMarker();
+		size_t total_memory = 0;
+		for (unsigned int index = 0; index < ECS_GB / ECS_KB / 400; index++) {
+			total_memory += OS::GetPhysicalMemoryBytesForAllocation(OffsetPointer(virtual_allocation, index * ECS_KB * 400), ECS_KB * 400);
+		}
+		//total_memory = OS::GetPhysicalMemoryBytesForAllocation(virtual_allocation, ECS_GB);
+		float durationsss = timer.GetDurationSinceMarkerFloat(ECS_TIMER_DURATION_MS);
+		//__try {
+		//memset(virtual_allocation, 0, ECS_KB * 64);
+		//	//timer.SetMarker();
+		//	//size_t physical_pages = OS::GetPhysicalMemoryBytesForAllocation(virtual_allocation, ECS_GB / 10);
+		//	//float durationu = timer.GetDurationSinceMarkerFloat(ECS_TIMER_DURATION_MS);
+		//	//OS::OfferPhysicalMemory(virtual_allocation, ECS_GB);
+		//	//memset(virtual_allocation, 1, ECS_KB);
+		//}
+		//__except (ExceptionFilter(GetExceptionInformation())) {
+		//	EditorSetConsoleError("Page fault");
+		//	__debugbreak();
+		//}
+
+		size_t count = 0;
+		auto filter = [&](EXCEPTION_POINTERS* pointers) {
+			count++;
+			return EXCEPTION_CONTINUE_EXECUTION;
+		};
+
+		/*void* malloced = malloc(ECS_GB);
+		OS::GuardPages(malloced, ECS_GB);
+		__try {
+			memset(malloced, 1, 1);
+		}
+		__except (filter(GetExceptionInformation())) {
+
+		}*/
 
 		MSG message;
 		BOOL result = 0;

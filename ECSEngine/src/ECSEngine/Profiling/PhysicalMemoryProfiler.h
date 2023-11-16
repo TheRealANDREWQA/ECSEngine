@@ -5,12 +5,28 @@
 
 namespace ECSEngine {
 
+	struct World;
+
+	// A default value for the allocator to fit the given entry count
+	ECSENGINE_API size_t PhysicalMemoryProfilerAllocatorSize(unsigned int entry_capacity);
+
 	struct ECSENGINE_API PhysicalMemoryProfiler {
-		void Begin();
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
+			return region_entries.allocator;
+		}
+
+		void AddEntry(Stream<void> region);
 
 		void Clear();
 
-		void End();
+		void EndSimulation();
+
+		void EndFrame();
+
+		void StartFrame();
+
+		// If this is nullptr, then it won't gather the initial physical memory
+		void StartSimulation(const World* world);
 
 		// Returns the value of bytes
 		ECS_INLINE size_t GetUsage(ECS_STATISTIC_VALUE_TYPE value_type, ECS_BYTE_UNIT_TYPE unit_type) const {
@@ -19,9 +35,21 @@ namespace ECSEngine {
 
 		void Initialize(AllocatorPolymorphic allocator, unsigned int entry_capacity);
 
+		struct Entry {
+			Stream<void> region;
+			// This is an array with all the contiguous physical pages that we have detected
+			// Up until now
+			ResizableStream<Stream<void>> physical_regions;
+			// When we get a guard page exception, we record it here
+			// In order to have it verified that it actually contains
+			// Physical memory
+			ResizableStream<Stream<void>> guard_pages_hit;
+			size_t current_usage;
+		};
+
 		// The values are expressed in bytes
 		Statistic<size_t> memory_usage;
-		size_t last_process_usage;
+		ResizableStream<Entry> region_entries;
 	};
 
 }

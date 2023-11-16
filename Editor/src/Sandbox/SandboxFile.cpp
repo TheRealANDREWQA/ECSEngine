@@ -6,6 +6,7 @@
 #include "Sandbox.h"
 #include "SandboxScene.h"
 #include "SandboxModule.h"
+#include "SandboxProfiling.h"
 
 using namespace ECSEngine;
 
@@ -151,6 +152,9 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 					}
 				}
 			}
+
+			// Synchronize the profiling options
+			SynchronizeSandboxProfilingWithStatisticTypes(editor_state, index);
 		}
 
 		return true;

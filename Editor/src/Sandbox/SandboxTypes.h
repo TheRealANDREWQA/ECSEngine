@@ -271,7 +271,7 @@ struct ECS_REFLECT EditorSandbox {
 
 	EditorSandboxAssetHandlesSnapshot runtime_asset_handle_snapshot;
 
-	ECSEngine::CPUFrameProfiler cpu_frame_profiler;
+	ECSEngine::WorldProfiling world_profiling;
 
 	// Miscellaneous flags
 	size_t flags;

@@ -73,6 +73,9 @@ namespace ECSEngine {
 			return m_current_usage;
 		}
 
+		// Returns the highest index which is part of a used block
+		unsigned int GetHighestIndexInUse() const;
+
 		void SetStart(unsigned int index, unsigned int value);
 
 		void SetEnd(unsigned int index, unsigned int value);

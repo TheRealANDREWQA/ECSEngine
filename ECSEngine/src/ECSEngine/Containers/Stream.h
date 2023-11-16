@@ -1238,6 +1238,15 @@ namespace ECSEngine {
 			size++;
 		}
 
+		// Returns true if the other stream is fully contained in this one
+		bool Contains(Stream<void> other) const {
+			uintptr_t ptr = (uintptr_t)buffer;
+			uintptr_t other_ptr = (uintptr_t)other.buffer;
+			uintptr_t final_ptr = (uintptr_t)buffer + size;
+			uintptr_t other_final_ptr = (uintptr_t)other.buffer + other.size;
+			return (ptr <= other_ptr && other_ptr < final_ptr) && (ptr <= other_final_ptr && other_final_ptr < final_ptr);
+		}
+
 		// it will set the size
 		ECS_INLINE void CopyOther(const void* memory, size_t memory_size) {
 			memcpy(buffer, memory, memory_size);

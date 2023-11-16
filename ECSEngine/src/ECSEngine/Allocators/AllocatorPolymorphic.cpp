@@ -200,6 +200,18 @@ namespace ECSEngine {
 		return allocator->GetCurrentUsage();
 	}
 
+	template<typename Allocator>
+	void ExitAllocatorProfilingModeAllocator(void* _allocator) {
+		Allocator* allocator = (Allocator*)_allocator;
+		allocator->ExitProfilingMode();
+	}
+
+	template<typename Allocator>
+	void SetAllocatorProfilingModeAllocator(void* _allocator, const char* name) {
+		Allocator* allocator = (Allocator*)_allocator;
+		allocator->SetProfilingMode(name);
+	}
+
 #define ECS_JUMP_TABLE(function_name)	function_name<LinearAllocator>, \
 										function_name<StackAllocator>, \
 										function_name<MultipoolAllocator>, \
@@ -326,6 +338,14 @@ namespace ECSEngine {
 		ECS_JUMP_TABLE(GetAllocatorCurrentUsageAllocator)
 	};
 
+	ExitAllocatorProfilingModeFunction ECS_ALLOCATOR_EXIT_PROFILING_FUNCTIONS[] = {
+		ECS_JUMP_TABLE(ExitAllocatorProfilingModeAllocator)
+	};
+
+	SetAllocatorProfilingModeFunction ECS_ALLOCATOR_SET_PROFILING_FUNCTIONS[] = {
+		ECS_JUMP_TABLE(SetAllocatorProfilingModeAllocator)
+	};
+
 	size_t BaseAllocatorByteSize(ECS_ALLOCATOR_TYPE type)
 	{
 		switch (type) {
@@ -397,6 +417,29 @@ namespace ECSEngine {
 	size_t BaseAllocatorBufferSize(CreateBaseAllocatorInfo info, size_t count)
 	{
 		return BaseAllocatorBufferSize(info) * count;
+	}
+
+	size_t AllocatorPolymorphicBlockCount(AllocatorPolymorphic allocator)
+	{
+		if (allocator.allocator_type == ECS_ALLOCATOR_MULTIPOOL) {
+			const MultipoolAllocator* multipool_allocator = (const MultipoolAllocator*)allocator.allocator;
+			return multipool_allocator->GetBlockCount();
+		}
+		else if (allocator.allocator_type == ECS_ALLOCATOR_ARENA) {
+			// For arenas that have multipool allocators as base, we are interested in the total
+			// Sum of the block count
+			const MemoryArena* arena = (const MemoryArena*)allocator.allocator;
+			if (arena->m_base_allocator_type == ECS_ALLOCATOR_MULTIPOOL) {
+				size_t count = 0;
+				for (unsigned char index = 0; index < arena->m_allocator_count; index++) {
+					const MultipoolAllocator* current_allocator = (const MultipoolAllocator*)arena->GetAllocator(index).allocator;
+					count += (size_t)current_allocator->GetBlockCount();
+				}
+				return count;
+			}
+		}
+
+		return 0;
 	}
 
 	void CreateBaseAllocator(AllocatorPolymorphic buffer_allocator, CreateBaseAllocatorInfo info, void* pointer_to_be_constructed)

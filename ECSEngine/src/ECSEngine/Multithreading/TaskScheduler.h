@@ -46,6 +46,10 @@ namespace ECSEngine {
 		TaskScheduler(const TaskScheduler& other) = default;
 		TaskScheduler& operator = (const TaskScheduler& other) = default;
 
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
+			return elements.allocator;
+		}
+
 		void Add(const TaskSchedulerElement& element, bool copy_data = false);
 
 		void Add(Stream<TaskSchedulerElement> stream, bool copy_data = false);

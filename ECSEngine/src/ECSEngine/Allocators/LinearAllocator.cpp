@@ -2,11 +2,12 @@
 #include "LinearAllocator.h"
 #include "../Utilities/PointerUtilities.h"
 #include "AllocatorCallsDebug.h"
+#include "../Profiling/AllocatorProfilingGlobal.h"
 
 namespace ECSEngine {
 	
 	LinearAllocator::LinearAllocator(AllocatorPolymorphic allocator, size_t capacity) : m_buffer(ECSEngine::Allocate(allocator, capacity)),
-		m_capacity(capacity), m_top(0), m_marker(0), m_spin_lock(), m_debug_mode(false) {}
+		m_capacity(capacity), m_top(0), m_marker(0), m_spin_lock(), m_debug_mode(false), m_profiling_mode(false) {}
 
 	void* LinearAllocator::Allocate(size_t size, size_t alignment, DebugInfo debug_info) {
 		// calculating the current pointer and aligning it
@@ -30,9 +31,14 @@ namespace ECSEngine {
 			DebugAllocatorManagerAddEntry(this, ECS_ALLOCATOR_LINEAR, &tracked);
 		}
 
+		if (m_profiling_mode) {
+			AllocatorProfilingAddAllocation(this, GetCurrentUsage());
+		}
+
 		return pointer;
 	}
 
+	// For this allocator, do not record the profiling deallocations
 	template<bool trigger_error_if_not_found>
 	bool LinearAllocator::Deallocate(const void* block, DebugInfo debug_info) { return true; }
 
@@ -85,10 +91,21 @@ namespace ECSEngine {
 		m_debug_mode = false;
 	}
 
+	void LinearAllocator::ExitProfilingMode()
+	{
+		m_profiling_mode = false;
+	}
+
 	void LinearAllocator::SetDebugMode(const char* name, bool resizable)
 	{
 		m_debug_mode = true;
 		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_LINEAR);
+	}
+
+	void LinearAllocator::SetProfilingMode(const char* name)
+	{
+		m_profiling_mode = true;
+		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_LINEAR, name);
 	}
 
 	void LinearAllocator::SetMarker() {

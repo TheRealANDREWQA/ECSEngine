@@ -20,6 +20,9 @@ namespace ECSEngine {
 			case EXCEPTION_DATATYPE_MISALIGNMENT:
 				error_code = ECS_OS_EXCEPTION_MISSALIGNMENT;
 				break;
+			case EXCEPTION_GUARD_PAGE:
+				error_code = ECS_OS_EXCEPTION_GUARD_PAGE;
+				break;
 			case EXCEPTION_FLT_DENORMAL_OPERAND:
 				error_code = ECS_OS_EXCEPTION_FLOAT_DENORMAL;
 				break;
@@ -59,6 +62,7 @@ namespace ECSEngine {
 			"Access violation",
 			"Data missalignment",
 			"Stack overflow",
+			"Guard Page access",
 			"Float overflow",
 			"Float underflow",
 			"Float division by zero",
@@ -88,6 +92,7 @@ namespace ECSEngine {
 			case ECS_OS_EXCEPTION_ACCESS_VIOLATION:
 			case ECS_OS_EXCEPTION_MISSALIGNMENT:
 			case ECS_OS_EXCEPTION_STACK_OVERLOW:
+			case ECS_OS_EXCEPTION_GUARD_PAGE:
 			case ECS_OS_EXCEPTION_ILLEGAL_INSTRUCTION:
 			case ECS_OS_EXCEPTION_PRIVILEGED_INSTRUCTION:
 			case ECS_OS_EXCEPTION_FLOAT_DIVISION_BY_ZERO:

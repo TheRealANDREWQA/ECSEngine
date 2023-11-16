@@ -1,5 +1,4 @@
 #pragma once
-#include "ecspch.h"
 #include "../Core.h"
 #include "../Utilities/BasicTypes.h"
 #include "../Allocators/MemoryManager.h"

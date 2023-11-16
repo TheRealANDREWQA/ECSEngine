@@ -4,31 +4,30 @@
 #include "SandboxFile.h"
 
 // More than enough for normal use cases
-#define STATISTICS_CAPACITY 1024
+#define PROFILING_ENTRIES 1024
 
 void ChangeSandboxCPUStatisticsType(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_TYPE type) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->cpu_statistics_type = type;
-	ClearSandboxCPUProfiler(editor_state, sandbox_index);
 	SaveEditorSandboxFile(editor_state);
+
+	// We need to synchronize now
+	SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_index);
 }
 
 void ChangeSandboxGPUStatisticsType(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_GPU_STATISTICS_TYPE type) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->gpu_statistics_type = type;
-	ClearSandboxGPUProfiler(editor_state, sandbox_index);
 	SaveEditorSandboxFile(editor_state);
+
+	// We need to synchronize now
+	SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_index);
 }
 
-void ClearSandboxCPUProfiler(EditorState* editor_state, unsigned int sandbox_index)
+void ClearSandboxProfilers(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->cpu_frame_profiler.Clear();
-}
-
-void ClearSandboxGPUProfiler(EditorState* editor_state, unsigned int sandbox_index)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->world_profiling.Clear();
 }
 
 void DisableSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sandbox_index)
@@ -48,12 +47,13 @@ void EnableSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sand
 void EndSandboxFrameProfiling(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	if (sandbox->cpu_statistics_type != EDITOR_SANDBOX_CPU_STATISTICS_NONE) {
-		sandbox->cpu_frame_profiler.EndFrame();
-	}
-	if (sandbox->gpu_statistics_type != EDITOR_SANDBOX_GPU_STATISTICS_NONE) {
+	sandbox->world_profiling.EndFrame();
+}
 
-	}
+void EndSandboxSimulationProfiling(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->world_profiling.EndSimulation();
 }
 
 void InvertSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sandbox_index)
@@ -63,17 +63,25 @@ void InvertSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sand
 	SaveEditorSandboxFile(editor_state);
 }
 
-void InitializeSandboxCPUProfiler(EditorState* editor_state, unsigned int sandbox_index)
+void InitializeSandboxProfilers(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	AllocatorPolymorphic sandbox_allocator = GetAllocatorPolymorphic(sandbox->GlobalMemoryManager());
-	sandbox->cpu_frame_profiler.Initialize(sandbox_allocator, sandbox->sandbox_world.task_manager, STATISTICS_CAPACITY);
+
+	WorldProfilingInitializeDescriptor descriptor;
+	descriptor.allocator = sandbox_allocator;
+	descriptor.entry_capacity = PROFILING_ENTRIES;
+	descriptor.init_options = ECS_WORLD_PROFILING_ALL;
+	descriptor.starting_options = ECS_WORLD_PROFILING_NONE;
+	descriptor.task_manager = sandbox->sandbox_world.task_manager;
+	descriptor.world = &sandbox->sandbox_world;
+
+	sandbox->world_profiling.Initialize(&descriptor);
 }
 
-void InitializeSandboxGPUProfiler(EditorState* editor_state, unsigned int sandbox_index)
+size_t ReserveSandboxProfilersAllocatorSize()
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	AllocatorPolymorphic sandbox_allocator = GetAllocatorPolymorphic(sandbox->GlobalMemoryManager());
+	return WorldProfiling::AllocatorSize(std::thread::hardware_concurrency(), PROFILING_ENTRIES);
 }
 
 void ResetSandboxStatistics(EditorState* editor_state, unsigned int sandbox_index)
@@ -86,16 +94,49 @@ void ResetSandboxStatistics(EditorState* editor_state, unsigned int sandbox_inde
 	}
 	sandbox->cpu_statistics_type = EDITOR_SANDBOX_CPU_STATISTICS_NONE;
 	sandbox->gpu_statistics_type = EDITOR_SANDBOX_GPU_STATISTICS_NONE;
+
+	SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_index);
 }
 
 void StartSandboxFrameProfiling(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	if (sandbox->cpu_statistics_type != EDITOR_SANDBOX_CPU_STATISTICS_NONE) {
-		ChangeCPUFrameProfilerGlobal(&sandbox->cpu_frame_profiler);
-		sandbox->cpu_frame_profiler.StartFrame();
-	}
-	if (sandbox->gpu_statistics_type != EDITOR_SANDBOX_GPU_STATISTICS_NONE) {
+	sandbox->world_profiling.StartFrame();
+}
 
+void StartSandboxSimulationProfiling(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->world_profiling.StartSimulation();
+}
+
+void SynchronizeSandboxProfilingWithStatisticTypes(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	if (sandbox->cpu_statistics_type == EDITOR_SANDBOX_CPU_STATISTICS_NONE) {
+		sandbox->world_profiling.DisableOption(ECS_WORLD_PROFILING_CPU | ECS_WORLD_PROFILING_ALLOCATOR | ECS_WORLD_PROFILING_PHYSICAL_MEMORY);
+	}
+	else if (sandbox->cpu_statistics_type == EDITOR_SANDBOX_CPU_STATISTICS_BASIC) {
+		sandbox->world_profiling.DisableOption(ECS_WORLD_PROFILING_ALLOCATOR);
+		sandbox->world_profiling.EnableOption(ECS_WORLD_PROFILING_CPU | ECS_WORLD_PROFILING_PHYSICAL_MEMORY);
+	}
+	else if (sandbox->cpu_statistics_type == EDITOR_SANDBOX_CPU_STATISTICS_ADVANCED) {
+		sandbox->world_profiling.EnableOption(ECS_WORLD_PROFILING_CPU | ECS_WORLD_PROFILING_ALLOCATOR | ECS_WORLD_PROFILING_PHYSICAL_MEMORY);
+	}
+	else {
+		ECS_ASSERT(false, "Invalid editor CPU statistic type");
+	}
+
+	if (sandbox->gpu_statistics_type == EDITOR_SANDBOX_GPU_STATISTICS_NONE) {
+
+	}
+	else if (sandbox->gpu_statistics_type == EDITOR_SANDBOX_GPU_STATISTICS_BASIC) {
+
+	}
+	else if (sandbox->gpu_statistics_type == EDITOR_SANDBOX_GPU_STATISTICS_ADVANCED) {
+
+	}
+	else {
+		ECS_ASSERT(false, "Invalid editor GPU statistic type");
 	}
 }

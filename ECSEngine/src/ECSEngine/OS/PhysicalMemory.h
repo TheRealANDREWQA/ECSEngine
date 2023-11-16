@@ -29,6 +29,10 @@ namespace ECSEngine {
 		// Returns -1 in case there was an error
 		ECSENGINE_API size_t GetPhysicalMemoryBytesForAllocation(void* allocation, size_t allocation_size);
 
+		// This function will add the PAGE_GUARD 
+		// Returns true if it succeeded, else false
+		ECSENGINE_API bool GuardPages(void* allocation, size_t allocation_size);
+
 	}
 
 }
