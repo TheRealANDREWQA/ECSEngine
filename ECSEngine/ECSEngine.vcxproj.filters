@@ -263,6 +263,8 @@
     <ClInclude Include="src\ECSEngine\OS\PhysicalMemory.h" />
     <ClInclude Include="src\ECSEngine\Profiling\PhysicalMemoryProfiler.h" />
     <ClInclude Include="src\ECSEngine\Profiling\AllocatorProfiling.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\AllocatorProfilingGlobal.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\WorldProfiling.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -417,6 +419,8 @@
     <ClCompile Include="src\ECSEngine\OS\PhysicalMemory.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\PhysicalMemoryProfiler.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\AllocatorProfiling.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\AllocatorProfilingGlobal.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\WorldProfiling.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

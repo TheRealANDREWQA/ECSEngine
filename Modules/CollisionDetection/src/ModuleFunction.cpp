@@ -8,6 +8,7 @@ static void ApplyMovementTask(
 	static bool was_used = false;
 
 	translation->value.x -= 5.50f * for_each_data->world->delta_time;
+	//translation->value.y -= 1.50f * for_each_data->world->delta_time;
 	//translation->value.x -= 5.50f * for_each_data->world->delta_time;
 	//if (for_each_data->thread_id == 2) {
 	//	if (!was_used) {

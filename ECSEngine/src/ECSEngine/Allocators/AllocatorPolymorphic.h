@@ -47,6 +47,10 @@ namespace ECSEngine {
 	// The current amount of bytes in use from the allocator
 	typedef size_t (*GetAllocatorCurrentUsageFunction)(const void* allocator);
 
+	typedef void (*ExitAllocatorProfilingModeFunction)(void* allocator);
+
+	typedef void (*SetAllocatorProfilingModeFunction)(void* allocator, const char* name);
+
 	ECSENGINE_API extern AllocateFunction ECS_ALLOCATE_FUNCTIONS[];
 
 	ECSENGINE_API extern AllocateSizeFunction ECS_ALLOCATE_SIZE_FUNCTIONS[];
@@ -92,6 +96,10 @@ namespace ECSEngine {
 	ECSENGINE_API extern UnlockAllocatorFunction ECS_UNLOCK_ALLOCATOR_FUNCTIONS[];
 
 	ECSENGINE_API extern GetAllocatorCurrentUsageFunction ECS_ALLOCATOR_CURRENT_USAGE_FUNCTIONS[];
+
+	ECSENGINE_API extern ExitAllocatorProfilingModeFunction ECS_ALLOCATOR_EXIT_PROFILING_FUNCTIONS[];
+
+	ECSENGINE_API extern SetAllocatorProfilingModeFunction ECS_ALLOCATOR_SET_PROFILING_FUNCTIONS[];
 
 	// Single threaded
 	ECS_INLINE void* Allocate(void* allocator, ECS_ALLOCATOR_TYPE type, size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
@@ -388,6 +396,14 @@ namespace ECSEngine {
 		return ECS_ALLOCATOR_CURRENT_USAGE_FUNCTIONS[allocator.allocator_type](allocator.allocator);
 	}
 
+	ECS_INLINE void ExitAllocatorProfilingMode(AllocatorPolymorphic allocator) {
+		return ECS_ALLOCATOR_EXIT_PROFILING_FUNCTIONS[allocator.allocator_type](allocator.allocator);
+	}
+
+	ECS_INLINE void SetAllocatorProfilingMode(AllocatorPolymorphic allocator, const char* name) {
+		return ECS_ALLOCATOR_SET_PROFILING_FUNCTIONS[allocator.allocator_type](allocator.allocator, name);
+	}
+
 	// Only linear/stack/multipool/arena are considered base allocator types
 	ECSENGINE_API size_t BaseAllocatorByteSize(ECS_ALLOCATOR_TYPE type);
 
@@ -397,6 +413,11 @@ namespace ECSEngine {
 	ECSENGINE_API size_t BaseAllocatorBufferSize(CreateBaseAllocatorInfo info);
 
 	ECSENGINE_API size_t BaseAllocatorBufferSize(CreateBaseAllocatorInfo info, size_t count);
+
+	// This is mostly intended to be used for profiling. It returns the number of total blocks
+	// for multipool allocators. This allocator needs to be a fundamental one (i.e. linear, stack
+	// multipool or arena)
+	ECSENGINE_API size_t AllocatorPolymorphicBlockCount(AllocatorPolymorphic allocator);
 
 	// Only linear/stack/multipool are considered base allocator types
 	// The buffer_allocator is used to make the initial allocator and/or set as backup

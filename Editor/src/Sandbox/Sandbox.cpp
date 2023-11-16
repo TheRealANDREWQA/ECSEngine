@@ -1016,6 +1016,9 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	if (EnableGameUIRendering(editor_state, sandbox_index)) {
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
+
+	// Notify the profilers
+	EndSandboxSimulationProfiling(editor_state, sandbox_index);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1666,8 +1669,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->virtual_entity_slot_type.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
 	sandbox->virtual_entities_slots_recompute = false;
 
-	InitializeSandboxCPUProfiler(editor_state, sandbox_index);
-	InitializeSandboxGPUProfiler(editor_state, sandbox_index);
+	InitializeSandboxProfilers(editor_state, sandbox_index);
 
 	// Resize the textures for the viewport to a 1x1 texture such that rendering commands will fallthrough even
 	// when the UI has not yet run to resize them
@@ -2500,8 +2502,10 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 			asset_database->IncrementReferenceCounts(true);
 
 			// Clear the CPU / GPU frame profilers
-			ClearSandboxCPUProfiler(editor_state, sandbox_index);
-			ClearSandboxGPUProfiler(editor_state, sandbox_index);
+			ClearSandboxProfilers(editor_state, sandbox_index);
+
+			// Now we need to initialize the simulation profiling
+			StartSandboxSimulationProfiling(editor_state, sandbox_index);
 		}
 	}
 	else {

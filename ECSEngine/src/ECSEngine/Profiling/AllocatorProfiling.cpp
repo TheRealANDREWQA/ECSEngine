@@ -16,22 +16,48 @@ namespace ECSEngine {
 		return Statistic<unsigned int>::MemoryOf(entry_count) * 2 + Statistic<size_t>::MemoryOf(entry_count);
 	}
 
-	void AllocatorProfiling::AddEntry(const void* address, ECS_ALLOCATOR_TYPE allocator_type, Stream<char> name, AllocatorProfilingCustomAllocatorUsage custom_usage)
+	bool AllocatorProfiling::AddEntry(
+		void* address, 
+		ECS_ALLOCATOR_TYPE allocator_type, 
+		Stream<char> name,
+		AllocatorProfilingCustomAllocatorUsage custom_usage_function,
+		AllocatorProfilingCustomExitFunction custom_exit_function
+	)
 	{
-		SoAResizeIfFull(allocator, address_size, address_capacity, &addresses, &entry_data);
-		unsigned int index = address_size;
-		addresses[index] = address;
-		entry_data[index].name = name.Copy(allocator);
-		entry_data[index].allocator_type = allocator_type;
-		entry_data[index].peak_memory_usage = 0;
-		entry_data[index].peak_block_count = 0;
-		entry_data[index].peak_suballocator_count = 0;
-		entry_data[index].custom_usage = custom_usage;
-		entry_data[index].allocations.Initialize(allocator, entry_data_capacity);
-		entry_data[index].deallocations.Initialize(allocator, entry_data_capacity);
-		entry_data[index].current_usage.Initialize(allocator, entry_data_capacity);
+		size_t index = Find(address);
+		if (index != -1) {
+			ECS_STACK_CAPACITY_STREAM(char, concatenated_name, 512);
+			concatenated_name.CopyOther(entry_data[index].name);
+			concatenated_name.Add(' ');
+			concatenated_name.Add('|');
+			concatenated_name.Add(' ');
+			concatenated_name.AddStreamAssert(name);
+			entry_data[index].name.Deallocate(allocator);
+			entry_data[index].name = concatenated_name.Copy(allocator);
+			return true;
+		}
+		else {
+			ECS_ASSERT(((custom_usage_function == nullptr) && (custom_exit_function == nullptr) && allocator_type != ECS_ALLOCATOR_TYPE_COUNT) || 
+				((custom_usage_function != nullptr) && (custom_exit_function != nullptr) && allocator_type == ECS_ALLOCATOR_TYPE_COUNT));
 
-		address_size++;
+			SoAResizeIfFull(allocator, address_size, address_capacity, &addresses, &entry_data);
+			unsigned int index = address_size;
+			addresses[index] = address;
+			entry_data[index].name = name.Copy(allocator);
+			entry_data[index].allocator_type = allocator_type;
+			entry_data[index].peak_memory_usage = 0;
+			entry_data[index].peak_block_count = 0;
+			entry_data[index].peak_suballocator_count = 0;
+			entry_data[index].lock.Unlock();
+			entry_data[index].custom_usage = custom_usage_function;
+			entry_data[index].custom_exit = custom_exit_function;
+			entry_data[index].allocations.Initialize(allocator, entry_data_capacity);
+			entry_data[index].deallocations.Initialize(allocator, entry_data_capacity);
+			entry_data[index].current_usage.Initialize(allocator, entry_data_capacity);
+
+			address_size++;
+			return false;
+		}
 	}
 
 	void AllocatorProfiling::AddAllocation(const void* address, size_t current_usage, size_t block_count, unsigned char suballocator_count)
@@ -39,18 +65,39 @@ namespace ECSEngine {
 		size_t index = Find(address);
 		// Here don't use an assert since we are sure that this function will be called
 		// Only when it is truly existent
-		entry_data[index].peak_memory_usage = std::max(entry_data[index].peak_memory_usage, current_usage);
-		entry_data[index].peak_block_count = std::max(entry_data[index].peak_block_count, block_count);
-		entry_data[index].peak_suballocator_count = std::max(entry_data[index].peak_suballocator_count, suballocator_count);
+		
+		// Get the lock first
+		entry_data[index].lock.Lock();
+		
+		__try {
+			entry_data[index].peak_memory_usage = std::max(entry_data[index].peak_memory_usage, current_usage);
+			entry_data[index].peak_block_count = std::max(entry_data[index].peak_block_count, block_count);
+			entry_data[index].peak_suballocator_count = std::max(entry_data[index].peak_suballocator_count, suballocator_count);
+			entry_data[index].current_frame_allocations++;
+		}
+		__finally {
+			entry_data[index].lock.Unlock();
+		}
 	}
 
 	void AllocatorProfiling::AddDeallocation(const void* address)
 	{
+		size_t index = Find(address);
+		// We can use relaxed fetch add since we care only about this variable being incremented correctly
+		entry_data[index].current_frame_deallocations.fetch_add(1, ECS_RELAXED);
 	}
 
 	void AllocatorProfiling::Clear()
 	{
 		for (unsigned int index = 0; index < address_size; index++) {
+			// Call the exit function
+			if (entry_data[index].custom_exit != nullptr) {
+				entry_data[index].custom_exit(addresses[index]);
+			}
+			else {
+				ExitAllocatorProfilingMode({ addresses[index], entry_data[index].allocator_type });
+			}
+
 			entry_data[index].name.Deallocate(allocator);
 			entry_data[index].current_usage.Deallocate(allocator);
 			entry_data[index].allocations.Deallocate(allocator);
@@ -58,6 +105,18 @@ namespace ECSEngine {
 		}
 		// Don't deallocate the SoA buffer, just reset it
 		address_size = 0;
+	}
+
+	void AllocatorProfiling::ExitAllocators()
+	{
+		for (unsigned int index = 0; index < address_size; index++) {
+			if (entry_data[index].custom_exit != nullptr) {
+				entry_data[index].custom_exit(addresses[index]);
+			}
+			else {
+				ExitAllocatorProfilingMode({ addresses[index], entry_data[index].allocator_type });
+			}
+		}
 	}
 
 	void AllocatorProfiling::EndFrame()
@@ -69,8 +128,15 @@ namespace ECSEngine {
 				current_usage = entry_data[index].custom_usage(addresses[index]);
 			}
 			else {
-
+				current_usage = GetAllocatorCurrentUsage(AllocatorPolymorphic{ addresses[index], entry_data[index].allocator_type });
 			}
+			entry_data[index].current_usage.Add(current_usage);
+			entry_data[index].allocations.Add(entry_data[index].current_frame_allocations);
+			entry_data[index].deallocations.Add(entry_data[index].current_frame_deallocations);
+			
+			// Make these values 0
+			entry_data[index].current_frame_allocations = 0;
+			entry_data[index].current_frame_deallocations = 0;
 		}
 	}
 
@@ -100,11 +166,7 @@ namespace ECSEngine {
 
 	void AllocatorProfiling::StartFrame()
 	{
-		// Zero out the frame allocation/deallocation counts
-		for (unsigned int index = 0; index < address_size; index++) {
-			entry_data[index].current_frame_allocations = 0;
-			entry_data[index].current_frame_deallocations = 0;
-		}
+		// Nothing to be done at the moment
 	}
 
 }

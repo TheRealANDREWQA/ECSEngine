@@ -9,7 +9,7 @@ namespace ECSEngine {
 	
 	struct ECSENGINE_API MemoryManager
 	{
-		ECS_INLINE MemoryManager() : m_backup({ nullptr }), m_allocators(nullptr), m_allocator_count(0), m_debug_mode(false) {}
+		ECS_INLINE MemoryManager() : m_backup({ nullptr }), m_allocators(nullptr), m_allocator_count(0), m_debug_mode(false), m_profiling_mode(false) {}
 		// This is a short hand for the multipool version
 		MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, AllocatorPolymorphic backup);
 		MemoryManager(CreateBaseAllocatorInfo initial_info, CreateBaseAllocatorInfo backup_info, AllocatorPolymorphic backup);
@@ -57,7 +57,11 @@ namespace ECSEngine {
 
 		void ExitDebugMode();
 
+		void ExitProfilingMode();
+
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
+
+		void SetProfilingMode(const char* name);
 
 		AllocatorPolymorphic GetAllocator(size_t index) const;
 
@@ -66,6 +70,10 @@ namespace ECSEngine {
 		void* GetAllocatorBasePointer(size_t index);
 
 		size_t GetAllocatorBaseAllocationSize(size_t index) const;
+
+		// For multipool base, it will report the highest byte currently in use,
+		// Else 0
+		size_t GetHighestOffsetInUse(size_t allocator_index) const;
 
 		// ---------------------------------------------------- Thread safe --------------------------------------------------
 
@@ -82,6 +90,7 @@ namespace ECSEngine {
 	
 		SpinLock m_spin_lock;
 		bool m_debug_mode;
+		bool m_profiling_mode;
 		unsigned char m_allocator_count;
 		// Cache this value such that we don't have to query it every single time
 		unsigned short m_base_allocator_byte_size;

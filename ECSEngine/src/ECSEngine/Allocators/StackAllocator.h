@@ -8,7 +8,7 @@ namespace ECSEngine {
 	struct ECSENGINE_API StackAllocator
 	{
 		ECS_INLINE StackAllocator(void* buffer, size_t capacity) : m_buffer((unsigned char*)buffer), m_capacity(capacity), m_top(0), m_marker(0),
-			m_last_top(0), m_spin_lock(), m_debug_mode(false) {}
+			m_last_top(0), m_spin_lock(), m_debug_mode(false), m_profiling_mode(false) {}
 
 		void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
 		
@@ -49,7 +49,11 @@ namespace ECSEngine {
 
 		void ExitDebugMode();
 
+		void ExitProfilingMode();
+
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
+
+		void SetProfilingMode(const char* name);
 
 		// ---------------------------------------------- Thread safe variants ---------------------------------------------
 
@@ -68,6 +72,7 @@ namespace ECSEngine {
 		size_t m_last_top;
 		SpinLock m_spin_lock;
 		bool m_debug_mode;
+		bool m_profiling_mode;
 	};
 }
 

@@ -5,6 +5,7 @@
 #include "AllocatorPolymorphic.h"
 #include "../Utilities/PointerUtilities.h"
 #include "MultipoolAllocator.h"
+#include "../Profiling/AllocatorProfilingGlobal.h"
 
 namespace ECSEngine {
 
@@ -51,6 +52,7 @@ namespace ECSEngine {
 		arena->m_size_per_allocator = (total_allocation_size - allocator_size) / allocator_count;
 		arena->m_current_index = 0;
 		arena->m_debug_mode = false;
+		arena->m_profiling_mode = false;
 		arena->m_base_allocator_byte_size = allocator_size / allocator_count;
 	}
 
@@ -81,6 +83,9 @@ namespace ECSEngine {
 							tracked.debug_info = debug_info;
 							tracked.function_type = ECS_DEBUG_ALLOCATOR_ALLOCATE;
 							DebugAllocatorManagerAddEntry(arena, ECS_ALLOCATOR_ARENA, &tracked);
+						}
+						if (arena->m_profiling_mode) {
+							AllocatorProfilingAddAllocation(arena, arena->GetCurrentUsage(), AllocatorPolymorphicBlockCount(GetAllocatorPolymorphic(arena)));
 						}
 					}
 					return allocation;
@@ -115,6 +120,9 @@ namespace ECSEngine {
 				tracked.debug_info = debug_info;
 				tracked.function_type = ECS_DEBUG_ALLOCATOR_DEALLOCATE;
 				DebugAllocatorManagerAddEntry(arena, ECS_ALLOCATOR_ARENA, &tracked);
+			}
+			if (arena->m_profiling_mode) {
+				AllocatorProfilingAddDeallocation(arena);
 			}
 		}
 		return was_deallocated;
@@ -160,6 +168,10 @@ namespace ECSEngine {
 			tracked.debug_info = debug_info;
 			tracked.function_type = ECS_DEBUG_ALLOCATOR_REALLOCATE;
 			DebugAllocatorManagerAddEntry(arena, ECS_ALLOCATOR_ARENA, &tracked);
+		}
+		if (arena->m_profiling_mode) {
+			AllocatorProfilingAddDeallocation(arena);
+			AllocatorProfilingAddAllocation(arena, arena->GetCurrentUsage(), AllocatorPolymorphicBlockCount(GetAllocatorPolymorphic(arena)));
 		}
 
 		return reallocation;
@@ -260,10 +272,21 @@ namespace ECSEngine {
 		m_debug_mode = false;
 	}
 
+	void MemoryArena::ExitProfilingMode()
+	{
+		m_profiling_mode = false;
+	}
+
 	void MemoryArena::SetDebugMode(const char* name, bool resizable)
 	{
 		m_debug_mode = true;
 		DebugAllocatorManagerChangeOrAddEntry(this, name, resizable, ECS_ALLOCATOR_ARENA);
+	}
+
+	void MemoryArena::SetProfilingMode(const char* name)
+	{
+		m_profiling_mode = true;
+		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_ARENA, name);
 	}
 
 	void* MemoryArena::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {

@@ -13,7 +13,7 @@ namespace ECSEngine {
 	*/
 	struct ECSENGINE_API MultipoolAllocator
 	{
-		ECS_INLINE MultipoolAllocator() : m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0), m_debug_mode(false) {}
+		ECS_INLINE MultipoolAllocator() : m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0), m_debug_mode(false), m_profiling_mode(false) {}
 		MultipoolAllocator(void* buffer, size_t size, size_t pool_count);
 		MultipoolAllocator(void* buffer, void* block_range_buffer, size_t size, size_t pool_count);
 		
@@ -33,15 +33,23 @@ namespace ECSEngine {
 		// Returns whether or not there is something currently allocated from this allocator
 		bool IsEmpty() const;
 
-		void* GetAllocatedBuffer() const;
+		ECS_INLINE void* GetAllocatedBuffer() const {
+			return m_buffer;
+		}
 
-		size_t GetSize() const;
+		ECS_INLINE size_t GetSize() const {
+			return m_size;
+		}
 
 		bool Belongs(const void* buffer) const;
 
 		void ExitDebugMode();
 
+		void ExitProfilingMode();
+
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
+
+		void SetProfilingMode(const char* name);
 
 		ECS_INLINE void Lock() {
 			m_spin_lock.Lock();
@@ -53,6 +61,14 @@ namespace ECSEngine {
 
 		ECS_INLINE size_t GetCurrentUsage() const {
 			return m_range.GetCurrentUsage();
+		}
+
+		ECS_INLINE unsigned int GetBlockCount() const {
+			return m_range.GetFreeBlockCount() + m_range.GetUsedBlockCount();
+		}
+
+		ECS_INLINE size_t GetHighestOffsetInUse() const {
+			return m_range.GetHighestIndexInUse();
 		}
 
 		// --------------------------------------------------- Thread safe variants ------------------------------------------
@@ -77,6 +93,7 @@ namespace ECSEngine {
 		size_t m_size;
 		SpinLock m_spin_lock;
 		bool m_debug_mode;
+		bool m_profiling_mode;
 		BlockRange m_range;
 	};
 

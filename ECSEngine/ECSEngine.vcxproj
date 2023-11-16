@@ -275,11 +275,13 @@
     <ClInclude Include="src\ECSEngine\OS\Thread.h" />
     <ClInclude Include="src\ECSEngine\OS\WithError.h" />
     <ClInclude Include="src\ECSEngine\Profiling\AllocatorProfiling.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\AllocatorProfilingGlobal.h" />
     <ClInclude Include="src\ECSEngine\Profiling\CPUFrameProfiler.h" />
     <ClInclude Include="src\ECSEngine\Profiling\CPUFrameProfilerGlobal.h" />
     <ClInclude Include="src\ECSEngine\Profiling\GPUStats.h" />
     <ClInclude Include="src\ECSEngine\Profiling\PhysicalMemoryProfiler.h" />
     <ClInclude Include="src\ECSEngine\Profiling\Statistic.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\WorldProfiling.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Camera.h" />
     <ClInclude Include="src\ECSEngine\Rendering\CBufferTags.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Profiling.h" />
@@ -518,11 +520,13 @@
     <ClCompile Include="src\ECSEngine\OS\Thread.cpp" />
     <ClCompile Include="src\ECSEngine\OS\WithError.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\AllocatorProfiling.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\AllocatorProfilingGlobal.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\CPUFrameProfiler.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\CPUFrameProfilerGlobal.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\GPUStats.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\PhysicalMemoryProfiler.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\Statistic.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\WorldProfiling.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Camera.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\CBufferTags.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Profiling.cpp" />
