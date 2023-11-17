@@ -8,10 +8,14 @@
 #include "../Project/ProjectFolders.h"
 #include "Inspector.h"
 
+#define RETAINED_MODE_REFRESH_DURATION_MS 100
+
 struct AssetExplorerData {
 	EditorState* editor_state;
 	bool asset_opened_headers[ECS_ASSET_TYPE_COUNT];
 	bool resource_manager_opened_headers[(unsigned char)ResourceType::TypeCount];
+
+	Timer retained_mode_timer;
 };
 
 void AssetExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
@@ -172,6 +176,15 @@ void AssetExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 
 }
 
+static bool AssetExplorerRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+	AssetExplorerData* explorer_data = (AssetExplorerData*)window_data;
+	if (explorer_data->retained_mode_timer.GetDuration(ECS_TIMER_DURATION_MS) >= RETAINED_MODE_REFRESH_DURATION_MS) {
+		explorer_data->retained_mode_timer.SetNewStart();
+		return false;
+	}
+	return true;
+}
+
 void AssetExplorerSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
 {
 	unsigned int index = *(unsigned int*)stack_memory;
@@ -180,8 +193,10 @@ void AssetExplorerSetDecriptor(UIWindowDescriptor& descriptor, EditorState* edit
 	data->editor_state = editor_state;
 	memset(data->asset_opened_headers, 0, sizeof(data->asset_opened_headers));
 	memset(data->resource_manager_opened_headers, 0, sizeof(data->resource_manager_opened_headers));
+	data->retained_mode_timer.SetUninitialized();
 
 	descriptor.draw = AssetExplorerDraw;
+	descriptor.retained_mode = AssetExplorerRetainedMode;
 
 	descriptor.window_name = ASSET_EXPLORER_WINDOW_NAME;
 	descriptor.window_data = data;

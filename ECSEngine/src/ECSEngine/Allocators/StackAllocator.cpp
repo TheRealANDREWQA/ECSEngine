@@ -93,7 +93,7 @@ namespace ECSEngine {
 		return ptr >= (uintptr_t)m_buffer && ptr < (uintptr_t)m_buffer + m_capacity;
 	}
 
-	void* StackAllocator::GetAllocatedBuffer()
+	void* StackAllocator::GetAllocatedBuffer() const
 	{
 		return m_buffer;
 	}
@@ -138,6 +138,15 @@ namespace ECSEngine {
 	{
 		m_profiling_mode = false;
 		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_STACK, name);
+	}
+
+	size_t StackAllocator::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	{
+		if (pointer_capacity >= 1) {
+			*region_start = GetAllocatedBuffer();
+			*region_size = m_top;
+		}
+		return 1;
 	}
 
 	size_t StackAllocator::GetTop() const {

@@ -82,7 +82,7 @@ void DirectoryExplorerRightClick(ActionData* action_data) {
 
 		UIDrawerMenuRightClickData menu_call_data;
 		menu_call_data.name = "Menu";
-		menu_call_data.window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+		menu_call_data.window_index = window_index;
 		menu_call_data.state.left_characters = (char*)RIGHT_CLICK_LEFT_CHARACTERS;
 		menu_call_data.state.row_count = RIGHT_CLICK_ROW_COUNT;
 		menu_call_data.state.row_has_submenu = nullptr;

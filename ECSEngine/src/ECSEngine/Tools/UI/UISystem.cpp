@@ -3331,8 +3331,13 @@ namespace ECSEngine {
 
 		void UISystem::DestroyWindowEx(unsigned int window_index)
 		{
+			Stream<char> window_name = GetWindowName(window_index);
 			RemoveWindowFromDockspaceRegion(window_index);
-			DestroyWindow(window_index);
+			// The remove might already destroy the window, so check to see if the window is still
+			// Valid before calling this destroy
+			if (m_windows.size > window_index && GetWindowName(window_index) == window_name) {
+				DestroyWindow(window_index);
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3775,7 +3780,14 @@ namespace ECSEngine {
 				m_snapshot_mode_timer.SetUninitialized();
 			}
 			else {
+				if (m_snapshot_mode_timer.IsUninitialized()) {
+					m_snapshot_mode_timer.SetNewStart();
+					m_snapshot_mode_timer.DelayStart(options.lazy_update_milliseconds, ECS_TIMER_DURATION_MS);
+				}
 				m_snapshot_mode_elapsed_time = m_snapshot_mode_timer.GetDuration(ECS_TIMER_DURATION_MS);
+				if (m_snapshot_mode_elapsed_time > options.lazy_update_milliseconds) {
+					m_snapshot_mode_timer.SetNewStart();
+				}
 			}
 
 			m_texture_evict_count++;
@@ -4557,6 +4569,7 @@ namespace ECSEngine {
 				window_handler.scale = region_scale;
 				window_handler.system = this;
 				window_handler.type = data->type;
+				window_handler.window_index = window_index;
 				m_windows[window_index].default_handler.action(&window_handler);
 			}
 
@@ -5569,6 +5582,7 @@ namespace ECSEngine {
 				initializer_data.dockspace = &m_floating_horizontal_dockspaces[0];
 				initializer_data.counts = &index;
 				initializer_data.buffers = (void**)&window_descriptor;
+				initializer_data.window_index = GetWindowIndexFromBorder(initializer_data.dockspace, initializer_data.border_index);
 
 				data_initializer(&initializer_data);
 
@@ -7180,6 +7194,7 @@ namespace ECSEngine {
 			result.counts = nullptr;
 			result.data = nullptr;
 			result.dockspace = dockspace;
+			result.window_index = window_index;
 			result.keyboard = m_keyboard;
 			result.mouse = m_mouse;
 			result.mouse_position = GetNormalizeMousePosition();
@@ -7260,6 +7275,7 @@ namespace ECSEngine {
 			action_data.mouse = m_mouse;
 			action_data.additional_data = m_focused_window_data.additional_hoverable_data;
 			action_data.redraw_window = false;
+			action_data.window_index = GetWindowIndexFromBorder(action_data.dockspace, action_data.border_index);
 
 			bool executed = m_focused_window_data.ExecuteHoverableHandler(&action_data);
 			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_LOW) ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
@@ -7285,6 +7301,7 @@ namespace ECSEngine {
 			action_data.mouse = m_mouse;
 			action_data.additional_data = nullptr;
 			action_data.redraw_window = false;
+			action_data.window_index = GetWindowIndexFromBorder(action_data.dockspace, action_data.border_index);
 
 			if (m_focused_window_data.clickable_handler[button_type].action == DefaultClickableAction) {
 				action_data.additional_data = m_focused_window_data.additional_hoverable_data;
@@ -7313,6 +7330,7 @@ namespace ECSEngine {
 			action_data.mouse = m_mouse;
 			action_data.additional_data = nullptr;
 			action_data.redraw_window = false;
+			action_data.window_index = GetWindowIndexFromBorder(action_data.dockspace, action_data.border_index);
 
 			bool executed = m_focused_window_data.ExecuteGeneralHandler(&action_data);
 			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
@@ -7345,6 +7363,7 @@ namespace ECSEngine {
 				action_data.type = m_focused_window_data.cleanup_general_location.type;
 				action_data.position = m_focused_window_data.general_transform.position;
 				action_data.scale = m_focused_window_data.general_transform.scale;
+				action_data.window_index = GetWindowIndexFromBorder(action_data.dockspace, action_data.border_index);
 
 				m_focused_window_data.general_handler.action(&action_data);
 			}
@@ -7369,6 +7388,7 @@ namespace ECSEngine {
 				action_data.type = m_focused_window_data.cleanup_hoverable_location.type;
 				action_data.position = m_focused_window_data.hoverable_transform.position;
 				action_data.scale = m_focused_window_data.hoverable_transform.scale;
+				action_data.window_index = GetWindowIndexFromBorder(action_data.dockspace, action_data.border_index);
 
 				m_focused_window_data.hoverable_handler.action(&action_data);
 			}
@@ -8284,6 +8304,7 @@ namespace ECSEngine {
 				data.buffers = nullptr;
 				data.counts = nullptr;
 				data.dockspace = nullptr;
+				data.window_index = -1;
 				data.keyboard = m_keyboard;
 				data.mouse = m_mouse;
 				data.mouse_position = GetNormalizeMousePosition();
@@ -8539,6 +8560,7 @@ namespace ECSEngine {
 			initializer_data.dockspace = &m_floating_horizontal_dockspaces[0];
 			initializer_data.counts = &window_index;
 			initializer_data.additional_data = (void**)&descriptor;
+			initializer_data.window_index = window_index;
 
 			data_initializer(&initializer_data);
 		}
@@ -12115,7 +12137,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UICloseXClickData* data = (UICloseXClickData*)_data;
-			unsigned int window_index = dockspace->borders[border_index].window_indices[data->window_in_border_index];
+			window_index = dockspace->borders[border_index].window_indices[data->window_in_border_index];
 			system->DestroyWindow(window_index);
 			system->RemoveWindowFromDockspaceRegion(dockspace, dockspace_type, border_index, data->window_in_border_index);
 		}
@@ -12480,8 +12502,6 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDragDockspaceData* data = (UIDragDockspaceData*)_data;
-
-			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 
 			if (data->floating_dockspace != nullptr && !system->IsFixedDockspace(data->floating_dockspace) && dockspace->allow_docking) {
 				DockspaceType types[32];
@@ -13046,8 +13066,8 @@ namespace ECSEngine {
 		{
 			UI_UNPACK_ACTION_DATA;
 
-			unsigned int* window_index = (unsigned int*)_data;
-			system->RemoveWindowFromDockspaceRegion(*window_index);
+			unsigned int* data_window_index = (unsigned int*)_data;
+			system->RemoveWindowFromDockspaceRegion(*data_window_index);
 			system->RemoveFrameHandler(DestroyWindowSystemHandler, _data);
 		}
 

@@ -233,6 +233,8 @@ namespace ECSEngine {
 		return false;
 	}
 
+	// ---------------------------------------------------------------------------------
+
 	void ResizableLinearAllocator::ExitDebugMode()
 	{
 		m_debug_mode = false;
@@ -253,6 +255,21 @@ namespace ECSEngine {
 	{
 		m_profiling_mode = true;
 		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_RESIZABLE_LINEAR, name);
+	}
+
+	// ---------------------------------------------------------------------------------
+
+	size_t ResizableLinearAllocator::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	{
+		if (pointer_capacity >= (size_t)m_allocated_buffer_size + 1) {
+			region_start[0] = m_initial_buffer;
+			region_size[0] = m_initial_capacity;
+			for (unsigned int index = 0; index < m_allocated_buffer_size; index++) {
+				region_start[index + 1] = m_allocated_buffers[index];
+				region_size[index + 1] = m_backup_size;
+			}
+		}
+		return m_allocated_buffer_size + 1;
 	}
 
 	// ---------------------------------------------------------------------------------

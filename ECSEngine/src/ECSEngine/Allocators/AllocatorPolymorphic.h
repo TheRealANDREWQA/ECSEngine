@@ -32,7 +32,7 @@ namespace ECSEngine {
 	typedef void (*FreeAllocatorFunction)(void* allocator, DebugInfo debug_info);
 
 	// Returns the allocated buffer for the given allocator.
-	typedef const void* (*GetAllocatorBufferFunction)(void* allocator);
+	typedef void* (*GetAllocatorBufferFunction)(void* allocator);
 
 	typedef void (*FreeAllocatorFromFunction)(void* allocator_to_deallocate, AllocatorPolymorphic initial_allocator);
 
@@ -50,6 +50,8 @@ namespace ECSEngine {
 	typedef void (*ExitAllocatorProfilingModeFunction)(void* allocator);
 
 	typedef void (*SetAllocatorProfilingModeFunction)(void* allocator, const char* name);
+
+	typedef size_t (*GetAllocatorRegionsFunction)(const void* allocator, void** region_pointers, size_t* region_size, size_t pointer_capacity);
 
 	ECSENGINE_API extern AllocateFunction ECS_ALLOCATE_FUNCTIONS[];
 
@@ -100,6 +102,8 @@ namespace ECSEngine {
 	ECSENGINE_API extern ExitAllocatorProfilingModeFunction ECS_ALLOCATOR_EXIT_PROFILING_FUNCTIONS[];
 
 	ECSENGINE_API extern SetAllocatorProfilingModeFunction ECS_ALLOCATOR_SET_PROFILING_FUNCTIONS[];
+
+	ECSENGINE_API extern GetAllocatorRegionsFunction ECS_ALLOCATOR_GET_REGIONS_FUNCTIONS[];
 
 	// Single threaded
 	ECS_INLINE void* Allocate(void* allocator, ECS_ALLOCATOR_TYPE type, size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO) {
@@ -267,7 +271,7 @@ namespace ECSEngine {
 
 	// Returns the buffer from which the allocator was initialized. It doesn't make sense for the resizable allocators
 	// (MemoryManager, ResizableLinearAllocator). It returns nullptr for these
-	ECS_INLINE const void* GetAllocatorBuffer(AllocatorPolymorphic allocator) {
+	ECS_INLINE void* GetAllocatorBuffer(AllocatorPolymorphic allocator) {
 		return ECS_GET_ALLOCATOR_BUFFER_FUNCTIONS[allocator.allocation_type](allocator.allocator);
 	}
 
@@ -402,6 +406,10 @@ namespace ECSEngine {
 
 	ECS_INLINE void SetAllocatorProfilingMode(AllocatorPolymorphic allocator, const char* name) {
 		return ECS_ALLOCATOR_SET_PROFILING_FUNCTIONS[allocator.allocator_type](allocator.allocator, name);
+	}
+
+	ECS_INLINE size_t GetAllocatorRegions(AllocatorPolymorphic allocator, void** region_pointers, size_t* region_size, size_t pointer_capacity) {
+		return ECS_ALLOCATOR_GET_REGIONS_FUNCTIONS[allocator.allocator_type](allocator.allocator, region_pointers, region_size, pointer_capacity);
 	}
 
 	// Only linear/stack/multipool/arena are considered base allocator types

@@ -10,7 +10,7 @@
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 
-constexpr float TOOP_TIP_OFFSET = 0.01f;
+#define TOOP_TIP_OFFSET 0.01f
 
 // ----------------------------------------------------------------------------------------------------------------------
 

@@ -75,7 +75,6 @@ void InspectorMeshPreviewClickable(ActionData* action_data) {
 void InspectorMeshPreviewHoverable(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 	InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)_data;
 	data->radius_delta -= mouse->GetScrollDelta() * MESH_PREVIEW_RADIUS_DELTA_FACTOR;
 	PinWindowVerticalSliderPosition(system, window_index);

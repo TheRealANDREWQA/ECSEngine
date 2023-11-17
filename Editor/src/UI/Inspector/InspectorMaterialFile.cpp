@@ -548,7 +548,7 @@ static void ConstructFromNameAction(ActionData* action_data) {
 					EditorSetConsoleError("Failed to construct the material from texture group");
 				}
 
-				Stream<char> window_name = system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index));
+				Stream<char> window_name = system->GetWindowName(window_index);
 				unsigned int inspector_index = GetInspectorIndex(window_name);
 				// In any case, we need to now change the inspector to nothing and then back to this
 				// material to reload the material from the metadata and have the values be correctly re-read

@@ -219,11 +219,6 @@ namespace ECSEngine {
 		}
 	}
 
-	const void* MemoryArena::GetAllocatedBuffer() const
-	{
-		return m_allocators;
-	}
-
 	bool MemoryArena::IsEmpty() const
 	{
 		for (size_t index = 0; index < m_allocator_count; index++) {
@@ -287,6 +282,15 @@ namespace ECSEngine {
 	{
 		m_profiling_mode = true;
 		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_ARENA, name);
+	}
+
+	size_t MemoryArena::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	{
+		if (pointer_capacity >= 1) {
+			*region_start = GetAllocatedBuffer();
+			*region_size = InitialArenaCapacity();
+		}
+		return 1;
 	}
 
 	void* MemoryArena::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {

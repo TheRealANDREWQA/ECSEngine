@@ -78,14 +78,14 @@ namespace ECSEngine {
 	{
 		// Clear all profilers
 		Clear();
+		// For the physical memory and the allocator profilers, we need to reinsert the allocators into them
 		if (HasFlag(options, ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
-			physical_memory_profiler.StartSimulation(world);
+			AddPhysicalMemoryWorldAllocators(&physical_memory_profiler, world);
+			// We also need to call this function
+			physical_memory_profiler.StartSimulation();
 		}
-		// For the allocator profiler, we also need to reinitialize from the world, if it is there
 		if (HasFlag(options, ECS_WORLD_PROFILING_ALLOCATOR)) {
-			if (world != nullptr) {
-				AddAllocatorProfilingWorldAllocators(&allocator_profiler, world);
-			}
+			AddAllocatorProfilingWorldAllocators(&allocator_profiler, world);
 		}
 	}
 
@@ -175,6 +175,25 @@ namespace ECSEngine {
 		}
 
 		ChangeAllocatorProfilingGlobal(previous_global);
+	}
+
+	void AddPhysicalMemoryWorldAllocators(PhysicalMemoryProfiler* physical_memory_profiler, const World* world)
+	{
+		// The global memory manager, the graphics allocator, the resource manager allocator, the task manager allocators,
+		// the task scheduler allocator and the debug drawer allocator
+		AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(world->memory), physical_memory_profiler);
+		AddAllocatorToPhysicalMemoryProfiling(world->graphics->Allocator(), physical_memory_profiler);
+		AddAllocatorToPhysicalMemoryProfiling(world->resource_manager->Allocator(), physical_memory_profiler);
+		unsigned int thread_count = world->task_manager->GetThreadCount();
+		for (unsigned int index = 0; index < thread_count; index++) {
+			AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(world->task_manager->m_thread_linear_allocators[index]), physical_memory_profiler);
+			// For the dynamic task allocators, we can insert them directly
+			physical_memory_profiler->AddEntry({ world->task_manager->m_dynamic_task_allocators[index]->buffer, world->task_manager->m_dynamic_task_allocators[index]->capacity });
+		}
+		AddAllocatorToPhysicalMemoryProfiling(world->task_scheduler->Allocator(), physical_memory_profiler);
+		if (world->debug_drawer != nullptr) {
+			AddAllocatorToPhysicalMemoryProfiling(world->debug_drawer->Allocator(), physical_memory_profiler);
+		}
 	}
 
 }

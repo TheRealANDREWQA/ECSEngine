@@ -178,6 +178,15 @@ namespace ECSEngine {
 		return BlockRange::MemoryOf(pool_count);
 	}
 
+	size_t MultipoolAllocator::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	{
+		if (pointer_capacity >= 1) {
+			*region_start = GetAllocatedBuffer();
+			*region_size = GetSize();
+		}
+		return 1;
+	}
+
 	// ---------------------- Thread safe variants -----------------------------
 
 	void* MultipoolAllocator::Allocate_ts(size_t size, size_t alignment, DebugInfo debug_info) {

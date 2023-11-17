@@ -74,6 +74,10 @@ namespace ECSEngine {
 			return m_current_usage;
 		}
 
+		// Region start and region size are parallel arrays. Returns the count of regions
+		// Pointer capacity must represent the count of valid entries for the given pointers
+		size_t GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const;
+
 		// ---------------------- Thread safe variants -----------------------------
 
 		void* Allocate_ts(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);

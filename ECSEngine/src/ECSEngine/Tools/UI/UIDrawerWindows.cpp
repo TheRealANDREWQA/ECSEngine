@@ -285,7 +285,6 @@ namespace ECSEngine {
 		void OpenWindowParameters(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			UIWindowDescriptor descriptor;
 			descriptor.draw = WindowParameterDraw;
 			descriptor.private_action = SkipAction;
@@ -861,7 +860,7 @@ namespace ECSEngine {
 			descriptor.initial_position_y = ClampMax(descriptor.initial_position_y + descriptor.initial_size_y, 1.0f) - descriptor.initial_size_y;
 
 			descriptor.window_name = "System Parameters";
-			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW);
+			system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW);
 
 			void* dummy_allocation = system->m_memory->Allocate(1, 1);
 
@@ -897,7 +896,6 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDefaultWindowHandler* data = (UIDefaultWindowHandler*)_data;
-			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 
 			Stream<char> window_name = system->GetWindowName(window_index);
 			ECS_STACK_CAPACITY_STREAM(char, new_name, 256);
@@ -1092,7 +1090,7 @@ namespace ECSEngine {
 		void ConfirmWindowOKAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			unsigned int window_index = system->GetWindowFromName(ECS_TOOLS_UI_CONFIRM_WINDOW_NAME);
+			window_index = system->GetWindowFromName(ECS_TOOLS_UI_CONFIRM_WINDOW_NAME);
 			ConfirmWindowData* data = (ConfirmWindowData*)_data;
 			action_data->data = data->handler.data;
 			data->handler.action(action_data);
@@ -1108,6 +1106,7 @@ namespace ECSEngine {
 
 					action_data->dockspace = dockspace;
 					action_data->border_index = border_index;
+					action_data->window_index = window_index;
 					action_data->type = dockspace_type;
 				}
 				DestroyCurrentActionWindow(action_data);
@@ -1262,7 +1261,6 @@ namespace ECSEngine {
 		void ChooseOptionAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			ChooseOptionActionData* data = (ChooseOptionActionData*)_data;
 			action_data->data = data->data->handlers[data->index].data;
 			data->data->handlers[data->index].action(action_data);
@@ -2322,7 +2320,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			InjectValuesActionData* data = (InjectValuesActionData*)_data;
-			unsigned int window_index = system->GetWindowFromName(data->name);
+			window_index = system->GetWindowFromName(data->name);
 			if (window_index == -1) {
 				CreateInjectValuesWindow(system, data->data, data->name, data->is_pop_up_window);
 			}
@@ -2902,7 +2900,6 @@ namespace ECSEngine {
 			
 			VisualizeTextureWindowData* window_data = (VisualizeTextureWindowData*)_additional_data;
 			unsigned int active_window_index = system->GetActiveWindow();
-			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			if (window_index == active_window_index) {
 				if (keyboard->IsPressed(ECS_KEY_O)) {
 					window_data->display_options = !window_data->display_options;
@@ -2996,7 +2993,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			const VisualizeTextureCreateData* data = (const VisualizeTextureCreateData*)_data;
-			unsigned int window_index = system->GetWindowFromName(data->window_name);
+			window_index = system->GetWindowFromName(data->window_name);
 			if (window_index == -1) {
 				CreateVisualizeTextureWindow(system, data);
 			}
@@ -3187,7 +3184,7 @@ namespace ECSEngine {
 				void* callback_data = wrapper_data->handler_data.data_size == 0 ? wrapper_data->handler_data.data : OffsetPointer(wrapper_data, sizeof(wrapper_data));
 				action_data->data = callback_data;
 				wrapper_data->handler_data.action(action_data);
-				system->PushDestroyWindowHandler(system->GetWindowIndexFromBorder(dockspace, border_index));
+				system->PushDestroyWindowHandler(window_index);
 			};
 
 			ECS_STACK_CAPACITY_STREAM(size_t, wrapper_data_storage, 512);

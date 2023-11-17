@@ -53,6 +53,7 @@ namespace ECSEngine {
 			UISystem* system;
 			UIDockspace* dockspace;
 			unsigned int border_index;
+			unsigned int window_index;
 			DockspaceType type;
 			// This is used for snapshots - callbacks can set this to true
 			// To informt the UISystem to discard the existing window snapshot, if there is one

@@ -65,7 +65,7 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic GetAllocator(size_t index) const;
 
-		const void* GetAllocatorBasePointer(size_t index) const;
+		void* GetAllocatorBasePointer(size_t index) const;
 
 		void* GetAllocatorBasePointer(size_t index);
 
@@ -74,6 +74,10 @@ namespace ECSEngine {
 		// For multipool base, it will report the highest byte currently in use,
 		// Else 0
 		size_t GetHighestOffsetInUse(size_t allocator_index) const;
+
+		// Region start and region size are parallel arrays. Returns the count of regions
+		// Pointer capacity must represent the count of valid entries for the given pointers
+		size_t GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const;
 
 		// ---------------------------------------------------- Thread safe --------------------------------------------------
 

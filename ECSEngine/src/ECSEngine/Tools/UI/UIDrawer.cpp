@@ -9480,13 +9480,14 @@ namespace ECSEngine {
 				}
 
 				configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
+				size_t label_configuration = ClearFlag(configuration, UI_CONFIG_TOOL_TIP);
 
 				size_t previous_text_sprite_count = *HandleTextSpriteCount(configuration);
 				if (~configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
-					TextLabel(configuration, config, text, position, scale);
+					TextLabel(label_configuration, config, text, position, scale);
 				}
 				else {
-					TextLabelWithCull(configuration, config, text, position, scale);
+					TextLabelWithCull(label_configuration, config, text, position, scale);
 				}
 
 				if (is_active) {
@@ -9544,7 +9545,12 @@ namespace ECSEngine {
 
 									UIDefaultTextHoverableData* handler_hoverable_data = (UIDefaultTextHoverableData*)system->GetLastHoverableData(dockspace, border_index);
 									Stream<char> identifier = HandleResourceIdentifier(text);
-									handler_hoverable_data->text.buffer = (char*)GetHandlerBuffer(identifier.size, hoverable_phase);
+									if (record_snapshot_runnables) {
+										handler_hoverable_data->text.buffer = (char*)Allocate(SnapshotRunnableAllocator(), identifier.size, alignof(char));
+									}
+									else {
+										handler_hoverable_data->text.buffer = (char*)GetHandlerBuffer(identifier.size, hoverable_phase);
+									}
 									handler_hoverable_data->text.CopyOther(identifier);
 								}
 							}
@@ -9557,6 +9563,7 @@ namespace ECSEngine {
 					}
 				}
 
+				// Handle the tool tip at the end such that we can compose with the existing hoverable
 				HandleTextToolTip(configuration, config, position, scale);
 			}
 			else {

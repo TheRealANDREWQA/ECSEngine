@@ -266,7 +266,7 @@ namespace ECSEngine {
 
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)index;
-			// Keep a stack reference since, if we need to add here, they additions will be registered ad infinitum
+			// Keep a stack reference since, if we need to add here, the additions will be registered ad infinitum
 			unsigned int current_count = streams[index].size;
 			for (unsigned int stream_index = 0; stream_index < current_count; stream_index++) {
 				unsigned int handle = GetHandle(stream_index, asset_type);
@@ -429,22 +429,33 @@ namespace ECSEngine {
 		ResizableStream<unsigned int>* asset_streams = (ResizableStream<unsigned int>*)this;
 		for (size_t type = 0; type < std::size(ECS_ASSET_TYPES_REFERENCEABLE); type++) {
 			external_references.size = 0;
-			standalone_database->GetReferenceCountsStandalone(ECS_ASSET_TYPES_REFERENCEABLE[type], &external_references);
+			ECS_ASSET_TYPE current_type = ECS_ASSET_TYPES_REFERENCEABLE[type];
+			standalone_database->GetReferenceCountsStandalone(current_type, &external_references);
 			for (unsigned int index = 0; index < external_references.size; index++) {
-				unsigned int reference_count = standalone_database->GetReferenceCount(external_references[index].x, ECS_ASSET_TYPES_REFERENCEABLE[type]);
+				unsigned int reference_count = standalone_database->GetReferenceCount(external_references[index].x, current_type);
 				unsigned int difference = reference_count - external_references[index].y;
 
 				if (difference > 0) {
-					unsigned int this_database_handle = database->FindAssetEx(standalone_database, external_references[index].x, ECS_ASSET_TYPES_REFERENCEABLE[type]);
+					unsigned int this_database_handle = database->FindAssetEx(standalone_database, external_references[index].x, current_type);
 					for (unsigned int diff_index = 0; diff_index < difference; diff_index++) {
 						unsigned int existing_index = SearchBytes(
-							asset_streams[ECS_ASSET_TYPES_REFERENCEABLE[type]].buffer,
-							asset_streams[ECS_ASSET_TYPES_REFERENCEABLE[type]].size,
+							asset_streams[current_type].buffer,
+							asset_streams[current_type].size,
 							this_database_handle,
 							sizeof(unsigned int)
 						);
 						ECS_ASSERT(existing_index != -1);
-						asset_streams[ECS_ASSET_TYPES_REFERENCEABLE[type]].RemoveSwapBack(existing_index);
+						asset_streams[current_type].RemoveSwapBack(existing_index);
+					}
+
+					// Check to see if this value existed before hand in the main database. If it did, we need
+					// to decrement the reference count there as well
+					unsigned int this_database_reference_count = database->GetReferenceCount(this_database_handle, current_type);
+					if (this_database_reference_count - difference > 0) {
+						for (unsigned int index = 0; index < difference; index++) {
+							// Decrement the reference count
+							database->RemoveAsset(this_database_handle, current_type);
+						}
 					}
 				}
 			}
@@ -455,12 +466,14 @@ namespace ECSEngine {
 			database->ForEachAsset([&](unsigned int handle, ECS_ASSET_TYPE type) {
 				const void* current_asset = database->GetAssetConst(handle, type);
 				unsigned int standalone_handle = standalone_database->FindAssetEx(database, handle, type);
-				const void* standalone_asset = standalone_database->GetAssetConst(standalone_handle, type);
+				if (standalone_handle != -1) {
+					const void* standalone_asset = standalone_database->GetAssetConst(standalone_handle, type);
 
-				Stream<void> current_pointer = GetAssetFromMetadata(current_asset, type);
-				Stream<void> standalone_pointer = GetAssetFromMetadata(standalone_asset, type);
-				if (current_pointer.buffer != standalone_pointer.buffer) {
-					options.pointer_remapping[type].AddAssert({ standalone_pointer.buffer, current_pointer.buffer, handle });
+					Stream<void> current_pointer = GetAssetFromMetadata(current_asset, type);
+					Stream<void> standalone_pointer = GetAssetFromMetadata(standalone_asset, type);
+					if (current_pointer.buffer != standalone_pointer.buffer) {
+						options.pointer_remapping[type].AddAssert({ standalone_pointer.buffer, current_pointer.buffer, handle });
+					}
 				}
 			});
 		}

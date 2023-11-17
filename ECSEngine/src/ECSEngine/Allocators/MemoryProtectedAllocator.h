@@ -74,6 +74,12 @@ namespace ECSEngine {
 			return 0;
 		}
 
+		// This is here to make allocator polymorphic implementation easier
+		// But it is not implemented
+		ECS_INLINE size_t GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const {
+			return 0;
+		}
+
 		// ------------------------- Thread safe functions -----------------------------------------
 
 		void* Allocate_ts(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);

@@ -103,30 +103,29 @@ struct EditorSandboxModuleSnapshot {
 struct EditorSandboxAssetHandlesSnapshot {
 	ECSEngine::MemoryManager allocator;
 
-	ECS_INLINE size_t StartOffset(ECSEngine::ECS_ASSET_TYPE type) const {
+	size_t FindHandle(unsigned int handle, ECS_ASSET_TYPE type) const {
 		size_t offset = 0;
-		for (size_t index = 0; index < type; index++) {
-			offset += asset_type_count[index];
-		}
-		return offset;
-	}
-
-	ECS_INLINE ECSEngine::ECS_ASSET_TYPE TypeFromIndex(size_t index) const {
-		size_t offset = 0;
-		for (size_t asset_type = 0; asset_type < ECSEngine::ECS_ASSET_TYPE_COUNT; asset_type++) {
-			if (offset <= index && index < offset + asset_type_count[asset_type]) {
-				return (ECSEngine::ECS_ASSET_TYPE)asset_type;
+		size_t index = SearchBytes(Stream<unsigned int>(handles + offset, handle_count - offset), handle);
+		while (index != -1) {
+			if (handle_types[index + offset] == type) {
+				return index + offset;
 			}
-			offset += asset_type_count[asset_type];
+			offset += index + 1;
+			index = SearchBytes(Stream<unsigned int>(handles + offset, handle_count - offset), handle);
 		}
-		return ECSEngine::ECS_ASSET_TYPE_COUNT;
+
+		return -1;
 	}
 
 	// Use a SoA approach to make the search fast - we will use the handle to look for the values
 	unsigned int* handles;
 	unsigned int* reference_counts;
-	size_t asset_type_count[ECSEngine::ECS_ASSET_TYPE_COUNT];
-	size_t total_size;
+	// We need to record for each sandbox the increments and decrements that is has done
+	// In order to be able to restore these when the simulation is finished
+	int* reference_counts_change;
+	ECS_ASSET_TYPE* handle_types;
+	unsigned int handle_count;
+	unsigned int handle_capacity;
 };
 
 // -------------------------------------------------------------------------------------------------------------

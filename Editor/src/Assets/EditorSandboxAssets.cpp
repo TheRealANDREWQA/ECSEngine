@@ -1404,7 +1404,6 @@ EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 		DeallocateAssetsWithRemappingOptions deallocate_options;
 		deallocate_options.asset_mask = data->asset_mask;
 		deallocate_options.mount_point = assets_folder;
-		deallocate_options.decrement_dependencies = true;
 		DeallocateAssetsWithRemapping(&data->sandbox_reference_copy, editor_state->runtime_resource_manager, &deallocate_options);
 
 		// Deallocate the streams

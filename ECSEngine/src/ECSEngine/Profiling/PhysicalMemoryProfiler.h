@@ -17,6 +17,8 @@ namespace ECSEngine {
 
 		void AddEntry(Stream<void> region);
 
+		bool AddPageGuard(void*);
+
 		void Clear();
 
 		void EndSimulation();
@@ -24,9 +26,9 @@ namespace ECSEngine {
 		void EndFrame();
 
 		void StartFrame();
-
-		// If this is nullptr, then it won't gather the initial physical memory
-		void StartSimulation(const World* world);
+		
+		// This needs to be called after the entries have been inserted
+		void StartSimulation();
 
 		// Returns the value of bytes
 		ECS_INLINE size_t GetUsage(ECS_STATISTIC_VALUE_TYPE value_type, ECS_BYTE_UNIT_TYPE unit_type) const {
@@ -51,5 +53,7 @@ namespace ECSEngine {
 		Statistic<size_t> memory_usage;
 		ResizableStream<Entry> region_entries;
 	};
+
+	ECSENGINE_API void AddAllocatorToPhysicalMemoryProfiling(AllocatorPolymorphic allocator, PhysicalMemoryProfiler* profiler);
 
 }

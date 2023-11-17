@@ -1161,7 +1161,6 @@ void FileExplorerDrag(ActionData* action_data) {
 	if (mouse->IsDown(ECS_MOUSE_LEFT)) {
 		// Display the hover only if the mouse exited the action box
 		if (!IsPointInRectangle(mouse_position, position, scale)) {
-			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			Color transparent_color = ECS_COLOR_WHITE;
 			transparent_color.alpha = 100;
 			Color theme_color = system->m_windows[window_index].descriptors->color_theme.theme;
@@ -1901,7 +1900,6 @@ struct CreateAssetFileStruct {
 		absolute_path.Add(ECS_OS_PATH_SEPARATOR);
 		ConvertASCIIToWide(absolute_path, *additional_data);
 
-		unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 		WindowTable* window_table = system->GetWindowTable(window_index);
 
 		Stream<wchar_t> relative_path = GetProjectAssetRelativePath(editor_state, absolute_path);

@@ -300,6 +300,7 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 // This will automatically change the reference counts accordingly
 static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state, unsigned int sandbox_index, bool initialize) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandboxAssetHandlesSnapshot& snapshot = sandbox->runtime_asset_handle_snapshot;
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
 	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
@@ -311,106 +312,117 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
 	GetAssetReferenceCountsFromEntities(entity_manager, editor_state->editor_components.internal_manager, database, asset_reference_counts.buffer);
 
-	if (!initialize) {
+	if (initialize) {
+		snapshot.allocator.Clear();
+		// Clear and reset everything
+		snapshot.handle_count = 0;
+		snapshot.handle_capacity = 0;
+	}
+	else {
 		// Determine the difference between the 2 snapshots
 		// Allocate for each handle in the stored snapshot a boolean such that we mark those that were already found
-		size_t snapshot_size = sandbox->runtime_asset_handle_snapshot.total_size;
-		bool* was_found = (bool*)_stack_allocator.Allocate(sizeof(bool) * snapshot_size);
-		memset(was_found, 0, sizeof(bool) * snapshot_size);
+		size_t was_found_size = snapshot.handle_count;
+		bool* was_found = (bool*)_stack_allocator.Allocate(sizeof(bool) * was_found_size);
+		memset(was_found, 0, sizeof(bool) * was_found_size);
 
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
-			size_t handle_start_offset = sandbox->runtime_asset_handle_snapshot.StartOffset(current_type);
-			size_t handle_snapshot_count = sandbox->runtime_asset_handle_snapshot.asset_type_count[current_type];
 			for (size_t subindex = 0; subindex < asset_reference_counts[index].size; subindex++) {
 				// Search for the handle in the stored snapshot
 				unsigned int current_handle = database->GetAssetHandleFromIndex(subindex, current_type);
-				size_t found_index = SearchBytes(
-					sandbox->runtime_asset_handle_snapshot.handles + handle_start_offset,
-					handle_snapshot_count,
-					current_handle,
-					sizeof(current_handle)
-				);
-
+				size_t found_index = snapshot.FindHandle(current_handle, current_type);
 				unsigned int current_reference_count = asset_reference_counts[index][subindex];
 				if (found_index != -1) {
-					found_index += handle_start_offset;
 					was_found[found_index] = true;
 					// Compare the reference count
-					unsigned int snapshot_reference_count = sandbox->runtime_asset_handle_snapshot.reference_counts[found_index];
+					unsigned int snapshot_reference_count = snapshot.reference_counts[found_index];
 
 					if (snapshot_reference_count < current_reference_count) {
 						// Increment the asset reference count
 						IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_index, current_reference_count - snapshot_reference_count);
+						// Record the delta change
+						snapshot.reference_counts_change[found_index] += current_reference_count - snapshot_reference_count;
 					}
 					else if (snapshot_reference_count > current_reference_count) {
 						unsigned int difference = snapshot_reference_count - current_reference_count;
 						for (unsigned int reference_index = 0; reference_index < difference; reference_index++) {
 							DecrementAssetReference(editor_state, current_handle, current_type, sandbox_index);
 						}
+						// Record the delta change
+						snapshot.reference_counts_change[found_index] -= difference;
 					}
 				}
 				else {
 					// The handle didn't exist before, now it exists - it will be added to the snapshot anyway
 					// Increment the reference count
-					IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_index, current_reference_count);
+					if (current_reference_count > 0) {
+						IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_index, current_reference_count);
+						SoAResizeIfFull(
+							GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()),
+							snapshot.handle_count,
+							snapshot.handle_capacity,
+							&snapshot.handles,
+							&snapshot.reference_counts,
+							&snapshot.reference_counts_change,
+							&snapshot.handle_types
+						);
+
+						unsigned int add_index = snapshot.handle_count;
+						snapshot.handles[add_index] = current_handle;
+						snapshot.reference_counts[add_index] = current_reference_count;
+						snapshot.reference_counts_change[add_index] = current_reference_count;
+						snapshot.handle_types[add_index] = current_type;
+						snapshot.handle_count++;
+					}
 				}
 			}
 		}
 
 		// Now check for asset handles that were previously in the snapshot but they are no longer
-		size_t was_found_size = snapshot_size;
 		size_t was_found_offset = 0;
 		size_t missing_index = SearchBytes(was_found + was_found_offset, was_found_size, false, sizeof(bool));
 		while (missing_index != -1) {
 			size_t final_index = missing_index + was_found_offset;
 			// Decrement all the reference counts from this sandbox
-			unsigned int reference_count = sandbox->runtime_asset_handle_snapshot.reference_counts[final_index];
+			unsigned int reference_count = snapshot.reference_counts[final_index];
 			for (unsigned int index = 0; index < reference_count; index++) {
 				DecrementAssetReference(
 					editor_state, 
-					sandbox->runtime_asset_handle_snapshot.handles[final_index],
-					sandbox->runtime_asset_handle_snapshot.TypeFromIndex(final_index),
+					snapshot.handles[final_index],
+					snapshot.handle_types[final_index],
 					sandbox_index
 				);
 			}
+			// Take into account the existing delta change as well
+			if (snapshot.reference_counts_change[final_index] > 0) {
+				// We need to decrement these increments
+				for (unsigned int index = 0; index < snapshot.reference_counts_change[final_index]; index++) {
+					DecrementAssetReference(
+						editor_state,
+						snapshot.handles[final_index],
+						snapshot.handle_types[final_index],
+						sandbox_index
+					);
+				}
+			}
+			else if (snapshot.reference_counts_change[final_index] < 0) {
+				IncrementAssetReferenceInSandbox(
+					editor_state, 
+					snapshot.handles[final_index], 
+					snapshot.handle_types[final_index], 
+					sandbox_index, 
+					(unsigned int)-snapshot.reference_counts_change[final_index]
+				);
+			}
 
+			SoARemoveSwapBack(snapshot.handle_count, final_index, snapshot.handles, snapshot.reference_counts, snapshot.reference_counts_change, snapshot.handle_types);
+
+			// Also, swap back the current entry for was found to keep them in sync
+			was_found[final_index] = was_found[snapshot.handle_count];
 			was_found_offset += missing_index;
 			was_found_size -= missing_index + 1;
 
 			missing_index = SearchBytes(was_found + was_found_offset, was_found_size, false, sizeof(bool));
-		}
-	}
-
-	size_t total_count = 0;
-	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-		size_t starting_total_count = total_count;
-		for (size_t subindex = 0; subindex < asset_reference_counts[index].size; subindex++) {
-			total_count += asset_reference_counts[index][subindex] > 0;
-		}
-		sandbox->runtime_asset_handle_snapshot.asset_type_count[index] = total_count - starting_total_count;
-	}
-
-	sandbox->runtime_asset_handle_snapshot.allocator.Clear();
-	SoAInitialize(
-		GetAllocatorPolymorphic(&sandbox->runtime_asset_handle_snapshot.allocator),
-		total_count,
-		&sandbox->runtime_asset_handle_snapshot.handles,
-		&sandbox->runtime_asset_handle_snapshot.reference_counts
-	);
-	// We will increase the size in the loop
-	sandbox->runtime_asset_handle_snapshot.total_size = 0;
-
-	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-		ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
-		for (size_t subindex = 0; subindex < asset_reference_counts[index].size; subindex++) {
-			if (asset_reference_counts[index][subindex] > 0) {
-				// Only add elements that have a reference count greater than 0
-				size_t current_index = sandbox->runtime_asset_handle_snapshot.total_size;
-				sandbox->runtime_asset_handle_snapshot.handles[current_index] = database->GetAssetHandleFromIndex(subindex, current_type);
-				sandbox->runtime_asset_handle_snapshot.reference_counts[current_index] = asset_reference_counts[index][subindex];
-				sandbox->runtime_asset_handle_snapshot.total_size++;
-			}
 		}
 	}
 }
@@ -763,7 +775,7 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool 
 		);
 	}
 
-	// Before destroying the sandbox runtime we need to destroy the threads
+	// Before destroying the sandbox runtime we need to terminate the threads
 	sandbox->sandbox_world.task_manager->TerminateThreads(true);
 
 	// Destroy the sandbox runtime
@@ -970,35 +982,24 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_RUNNING);
 
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 4);
-
-	// Before clearing the world, we need to retrieve all the asset references of the scene world and restore those counts
-	AssetDatabase* database = editor_state->asset_database;
-	ECS_STACK_CAPACITY_STREAM(Stream<unsigned int>, asset_handles, ECS_ASSET_TYPE_COUNT);
-	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-		ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
-		unsigned int asset_count = database->GetAssetCount(current_type);
-		asset_handles[index].Initialize(GetAllocatorPolymorphic(&stack_allocator), asset_count);
-		memset(asset_handles[index].buffer, 0, asset_handles[index].MemoryOf(asset_handles[index].size));
-	}
-	GetAssetReferenceCountsFromEntitiesOptions get_counts_options;
-	get_counts_options.add_reference_counts_to_dependencies = true;
-	GetAssetReferenceCountsFromEntities(&sandbox->scene_entities, editor_state->editor_components.internal_manager, database, asset_handles.buffer, get_counts_options);
-
-	// We need now to decrement the reference counts for this sandbox
-	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-		ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
-		for (size_t subindex = 0; subindex < asset_handles[index].size; subindex++) {
-			unsigned int handle = database->GetAssetHandleFromIndex(subindex, current_type);
-			unsigned int current_reference_count = database->GetReferenceCount(handle, current_type);
-			unsigned int scene_reference_count = asset_handles[index][subindex];
-			if (current_reference_count > scene_reference_count) {
-				for (unsigned int reference_index = 0; reference_index < current_reference_count - scene_reference_count; reference_index++) {
-					DecrementAssetReference(editor_state, handle, current_type, sandbox_index);
-				}
-			}
-			else if (current_reference_count < scene_reference_count) {
-				IncrementAssetReferenceInSandbox(editor_state, handle, current_type, sandbox_index, scene_reference_count - current_reference_count);
+	// We need now to decrement/increment the reference counts for this sandbox
+	// Use the snapshot to do that
+	for (unsigned int index = 0; index < sandbox->runtime_asset_handle_snapshot.handle_count; index++) {
+		unsigned int current_handle = sandbox->runtime_asset_handle_snapshot.handles[index];
+		int reference_count = sandbox->runtime_asset_handle_snapshot.reference_counts_change[index];
+		// If it is positive, then we need to decrement. If it is negative, we need to increment
+		if (reference_count < 0) {
+			IncrementAssetReferenceInSandbox(
+				editor_state, 
+				current_handle, 
+				sandbox->runtime_asset_handle_snapshot.handle_types[index], 
+				sandbox_index, 
+				(unsigned int)-reference_count
+			);
+		}
+		else {
+			for (int counter = 0; counter < reference_count; counter++) {
+				DecrementAssetReference(editor_state, current_handle, sandbox->runtime_asset_handle_snapshot.handle_types[index], sandbox_index);
 			}
 		}
 	}
@@ -1620,7 +1621,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	);
 	editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
 
-	// Create the task manager that is going to be reused accros runtime plays
+	// Create the task manager that is going to be reused across runtime plays
 	TaskManager* task_manager = (TaskManager*)allocator->Allocate(sizeof(TaskManager));
 	new (task_manager) TaskManager(
 		std::thread::hardware_concurrency(),
@@ -1663,7 +1664,8 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 
 	// Initialize the asset handle snapshots and their allocator
 	sandbox->runtime_asset_handle_snapshot.allocator = MemoryManager(ECS_KB * 128, ECS_KB, ECS_MB, sandbox_allocator);
-	sandbox->runtime_asset_handle_snapshot.total_size = 0;
+	sandbox->runtime_asset_handle_snapshot.handle_count = 0;
+	sandbox->runtime_asset_handle_snapshot.handle_capacity = 0;
 
 	sandbox->virtual_entities_slots.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
 	sandbox->virtual_entity_slot_type.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
@@ -1793,6 +1795,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	disable_logging = true;
 
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
 	// Change the new_texture_size if we have a pending request and this is { 0, 0 }
 	if (new_texture_size.x == 0 && new_texture_size.y == 0) {
 		new_texture_size = sandbox->viewport_pending_resize[viewport];
@@ -2496,10 +2499,7 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 			// Simulation and after resuming after a module change
 			SetSandboxCrashHandlerWrappers(editor_state, sandbox_index);
 
-			// Here we also need to double the reference counts of the assets stored in the runtime
-			// Since when returning to the scene representation, we can have the scene assets still loaded
-			AssetDatabaseReference* asset_database = &sandbox->database;
-			asset_database->IncrementReferenceCounts(true);
+			HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_index, true);
 
 			// Clear the CPU / GPU frame profilers
 			ClearSandboxProfilers(editor_state, sandbox_index);
@@ -2511,6 +2511,8 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 	else {
 		// We need to delay the world timer in case the world is restarted quickly after it has been paused
 		sandbox->sandbox_world.timer.DelayStart(10, ECS_TIMER_DURATION_S);
+		// We still need to get the handle snapshot
+		HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_index, false);
 	}
 
 	// Else if we are in the paused state we just need to change the state
@@ -2523,7 +2525,6 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 		// We need to record the snapshot of the current sandbox state
 		// We also need to bind the module runtime settings
 		RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
-		HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_index, true);
 		BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
 		BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}

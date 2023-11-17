@@ -108,6 +108,15 @@ namespace ECSEngine {
 		AllocatorProfilingAddEntry(this, ECS_ALLOCATOR_LINEAR, name);
 	}
 
+	size_t LinearAllocator::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	{
+		if (pointer_capacity >= 1) {
+			*region_start = GetAllocatedBuffer();
+			*region_size = m_capacity;
+		}
+		return 1;
+	}
+
 	void LinearAllocator::SetMarker() {
 		m_marker = m_top;
 	}

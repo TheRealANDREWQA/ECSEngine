@@ -282,7 +282,6 @@ static void SelectableCallback(ActionData* action_data) {
 		}
 	}
 	else if (select_data->labels.size == 0) {
-		unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 		unsigned int entities_ui_index = GetInspectorIndex(system->GetWindowName(window_index));
 		unsigned int target_sandbox = GetEntitiesUITargetSandbox(data->editor_state, entities_ui_index);
 
@@ -467,7 +466,7 @@ static void RightClickCallback(ActionData* action_data) {
 
 	UIDrawerMenuRightClickData menu_data;
 	menu_data.name = "Hierarchy Menu";
-	menu_data.window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+	menu_data.window_index = window_index;
 	menu_data.state = menu_state;
 
 	action_data->data = &menu_data;

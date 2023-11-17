@@ -398,7 +398,7 @@ namespace ECSEngine {
 		return { OffsetPointer(m_allocators, m_base_allocator_byte_size * index), m_backup_info.allocator_type, ECS_ALLOCATION_SINGLE };
 	}
 
-	const void* MemoryManager::GetAllocatorBasePointer(size_t index) const
+	void* MemoryManager::GetAllocatorBasePointer(size_t index) const
 	{
 		AllocatorPolymorphic allocator = GetAllocator(index);
 		return GetAllocatorBuffer(allocator);
@@ -407,7 +407,7 @@ namespace ECSEngine {
 	void* MemoryManager::GetAllocatorBasePointer(size_t index)
 	{
 		AllocatorPolymorphic allocator = GetAllocator(index);
-		return (void*)GetAllocatorBuffer(allocator);
+		return GetAllocatorBuffer(allocator);
 	}
 
 	size_t MemoryManager::GetAllocatorBaseAllocationSize(size_t index) const
@@ -424,6 +424,17 @@ namespace ECSEngine {
 		else {
 			return 0;
 		}
+	}
+
+	size_t MemoryManager::GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const
+	{
+		if (pointer_capacity >= (size_t)m_allocator_count) {
+			for (unsigned char index = 0; index < m_allocator_count; index++) {
+				region_start[index] = GetAllocatorBasePointer(index);
+				region_size[index] = GetAllocatorBaseAllocationSize(index);
+			}
+		}
+		return m_allocator_count;
 	}
 
 	// ---------------------- Thread safe variants -----------------------------

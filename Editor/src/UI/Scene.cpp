@@ -185,7 +185,7 @@ static void SceneUIDestroy(ActionData* action_data) {
 	SceneDrawData* draw_data = (SceneDrawData*)_additional_data;
 
 	// Determine the sandbox index
-	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
+	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(window_index));
 	// Disable the viewport rendering
 	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
@@ -416,7 +416,6 @@ static void ScenePrivateAction(ActionData* action_data) {
 	SceneDrawData* draw_data = (SceneDrawData*)_additional_data;
 	EditorState* editor_state = data->editor_state;
 
-	unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(window_index));
 	// Determine if the transform tool needs to be changed
 	unsigned int target_sandbox = GetActiveWindowSandbox(editor_state);
@@ -588,7 +587,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 						update_descriptor.system = system;
 						update_descriptor.tool_drag = &data->drag_tool;
 						update_descriptor.translation_midpoint = &data->translation_midpoint;
-						update_descriptor.window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+						update_descriptor.window_index = window_index;
 						update_descriptor.tool_to_use = sandbox->transform_keyboard_tool;
 						update_descriptor.launch_at_object_position = true;
 						update_descriptor.rotation_delta = &data->rotation_delta;
@@ -920,7 +919,6 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 	unsigned int sandbox_index = data->sandbox_index;
 
 	// Check to see if the mouse moved
-	unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 	uint2 hovered_texel_offset = system->GetWindowTexelPositionClamped(window_index, mouse_position);
 
 	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
@@ -1015,7 +1013,6 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			}
 
 			// Check to see if the mouse moved
-			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			uint2 hovered_texel_offset = system->GetWindowTexelPositionClamped(window_index, mouse_position);
 			if (!data->is_selection_mode) {
 				float2 mouse_difference = AbsoluteDifference(mouse_position, data->click_ui_position);
@@ -1142,7 +1139,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			update_descriptor.system = system;
 			update_descriptor.tool_drag = &data->transform_drag;
 			update_descriptor.translation_midpoint = &data->gizmo_translation_midpoint;
-			update_descriptor.window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+			update_descriptor.window_index = window_index;
 			update_descriptor.tool_to_use = GetSandbox(editor_state, sandbox_index)->transform_tool;
 
 			bool should_render_runtime = HandleSelectedEntitiesTransformUpdate(&update_descriptor);
@@ -1256,7 +1253,7 @@ void DestroyInvalidSceneUIWindows(EditorState* editor_state)
 }
 
 void GetSceneUIWindowName(unsigned int index, CapacityStream<char>& name) {
-	name.CopyOther(SCENE_WINDOW_NAME);
+	name.AddStreamAssert(SCENE_WINDOW_NAME);
 	ConvertIntToChars(name, index);
 }
 
