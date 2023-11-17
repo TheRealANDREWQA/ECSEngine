@@ -19,7 +19,6 @@ namespace ECSEngine {
 		void WindowHandlerInitializer(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			size_t window_index = *counts;
 			UIDefaultWindowHandler* window_data = (UIDefaultWindowHandler*)_data;
 			window_data->is_parameter_window_opened = false;
 			window_data->scroll = system->m_mouse->GetScrollValue();
@@ -332,8 +331,6 @@ namespace ECSEngine {
 				UIDrawerTextInputAddCommandInfo* data = (UIDrawerTextInputAddCommandInfo*)_data;
 				UIDrawerTextInput* input = data->input;
 
-				unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
-
 				unsigned char bytes[128];
 				UIDrawerTextInputRemoveCommandInfo* command_info = (UIDrawerTextInputRemoveCommandInfo*)&bytes;
 
@@ -361,7 +358,6 @@ namespace ECSEngine {
 			UIDrawerTextInputRemoveCommandInfo* data = (UIDrawerTextInputRemoveCommandInfo*)_data;
 			UIDrawerTextInput* input = data->input;
 			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
-				unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 				input->current_sprite_position = data->text_position;
 				input->current_selection = input->current_sprite_position;
 				char deleted_characters[256];
@@ -397,7 +393,6 @@ namespace ECSEngine {
 			UIDrawerTextInput* input = data->input;
 
 			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
-				unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 				input->current_sprite_position = data->text_position;
 				input->current_selection = data->text_position + data->text_count;
 
@@ -596,7 +591,6 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerTextInput* data = (UIDrawerTextInput*)_data;
-			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			float2 region_offset = system->GetWindowRenderRegion(window_index);
 			if (IsPointInRectangle(mouse_position, position, scale)) {
 				if (data->display_tooltip) {
@@ -741,7 +735,6 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerBoolClickableWithPinData* data = (UIDrawerBoolClickableWithPinData*)_data;
-			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 
 			*data->pointer = !*data->pointer;
 			action_data->redraw_window = true;
@@ -1551,7 +1544,7 @@ namespace ECSEngine {
 
 			UIDrawerMenuButtonData* data = (UIDrawerMenuButtonData*)_data;
 			data->Read();
-			unsigned int window_index = system->GetWindowFromName(data->descriptor.window_name);
+			window_index = system->GetWindowFromName(data->descriptor.window_name);
 
 			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				data->is_opened_when_pressed = window_index != -1;
@@ -1636,7 +1629,7 @@ namespace ECSEngine {
 				UIDrawerFilesystemHierarchyLabelData* node = data->hierarchy->label_states.GetValuePtr(identifier);
 				node->state = !node->state;
 				
-				PinWindowVerticalSliderPosition(system, system->GetWindowIndexFromBorder(dockspace, border_index));
+				PinWindowVerticalSliderPosition(system, window_index);
 
 				UIDrawerFilesystemHierarchySelectableData selectable_data;
 				selectable_data.hierarchy = data->hierarchy;
@@ -1735,7 +1728,6 @@ namespace ECSEngine {
 
 			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL && !keyboard->IsPressed(ECS_KEY_ENTER)) {
 				keyboard->CaptureCharacters();
-				unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 				input->is_currently_selected = true;
 
 				auto left_arrow_lambda = [&]() {
@@ -2560,7 +2552,7 @@ namespace ECSEngine {
 			UIDrawerColorInputWindowData window_data;
 			window_data.initial_color = *data->rgb;
 			window_data.input = data;
-			unsigned int target_window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+			unsigned int target_window_index = window_index;
 			Stream<char> target_window_name = system->GetWindowName(target_window_index);
 			window_data.target_window_name = target_window_name.Copy(system->Allocator());
 
@@ -2568,7 +2560,7 @@ namespace ECSEngine {
 			window_descriptor.window_data = &window_data;
 			window_descriptor.window_data_size = sizeof(window_data);
 
-			unsigned int window_index = system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING);
+			system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING);
 
 			// if it is desired to be destroyed when going out of focus
 			UIPopUpWindowData system_handler_data;
@@ -2647,7 +2639,7 @@ namespace ECSEngine {
 					window_descriptor.window_name = COMBO_BOX_WINDOW_NAME;
 					window_descriptor.window_data = clickable_data;
 					window_descriptor.window_data_size = sizeof(*clickable_data);
-					unsigned int current_window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+					unsigned int current_window_index = window_index;
 					Stream<char> current_window_name = system->GetWindowName(current_window_index);
 					clickable_data->target_window_name = current_window_name.Copy(system->Allocator());
 
@@ -3357,7 +3349,6 @@ namespace ECSEngine {
 			char* child_window_name = (char*)OffsetPointer(window_data, sizeof(UIDrawerPathInputFolderWindowData));
 			*window_data = { data->input, data->path, data->custom_handler, child_window_name };
 
-			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			Stream<char> window_name = system->GetWindowName(window_index);
 			window_name.CopyTo(child_window_name);
 
@@ -3677,7 +3668,6 @@ namespace ECSEngine {
 				path_stream = data->files;
 			}
 
-
 			PathInputFolderWithInputsWindowDrawData* window_data;
 			// At first just give dummy data. The reference will be restored afterwards
 			PathInputFolderWithInputsWindowDrawData dummy_window_data;
@@ -3697,9 +3687,9 @@ namespace ECSEngine {
 			descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.y);
 
 			descriptor.window_name = "Select a path";
-			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING);
+			unsigned int create_window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING);
 			// Get the window data
-			window_data = (PathInputFolderWithInputsWindowDrawData*)system->GetWindowData(window_index);
+			window_data = (PathInputFolderWithInputsWindowDrawData*)system->GetWindowData(create_window_index);
 
 			// Coallesce the memory into a single block
 			void* persistent_buffer = system->m_memory->Allocate(memory_usage);
@@ -3713,7 +3703,7 @@ namespace ECSEngine {
 			window_data->files = { paths, path_stream.size };
 
 			// Add the allocation to the window allocation list
-			system->AddWindowMemoryResource(persistent_buffer, window_index);
+			system->AddWindowMemoryResource(persistent_buffer, create_window_index);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

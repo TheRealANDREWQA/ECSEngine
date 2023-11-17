@@ -21,7 +21,7 @@ static void GameWindowDestroy(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
-	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(system->GetWindowIndexFromBorder(dockspace, border_index)));
+	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(window_index));
 	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 }
 
@@ -29,7 +29,6 @@ static void GameWindowPrivateAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
-	unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(window_index));
 	// Check the display statistics mapping
 	if (window_index == system->GetActiveWindow() && editor_state->input_mapping.IsTriggered(EDITOR_INPUT_SANDBOX_STATISTICS_TOGGLE)) {

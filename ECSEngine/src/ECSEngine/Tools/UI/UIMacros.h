@@ -2,6 +2,7 @@
 
 #define UI_UNPACK_ACTION_DATA	ECSEngine::Tools::UIDockspace* dockspace = action_data->dockspace; \
 								unsigned int border_index = action_data->border_index; \
+								unsigned int window_index = action_data->window_index; \
 								ECSEngine::Tools::UISystem* system = action_data->system; \
 								ECSEngine::Tools::DockspaceType dockspace_type = action_data->type; \
 								ECSEngine::float2 mouse_position = action_data->mouse_position; \

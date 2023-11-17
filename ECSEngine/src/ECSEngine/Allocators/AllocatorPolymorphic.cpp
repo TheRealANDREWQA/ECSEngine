@@ -130,12 +130,12 @@ namespace ECSEngine {
 	void FreeAllocatorDummy(void* _allocator, DebugInfo debug_info) {}
 
 	template<typename Allocator>
-	const void* GetAllocatorBuffer(void* _allocator) {
+	void* GetAllocatorBuffer(void* _allocator) {
 		Allocator* allocator = (Allocator*)_allocator;
 		return allocator->GetAllocatedBuffer();
 	}
 
-	const void* GetAllocatorBufferDummy(void* _allocator) {
+	void* GetAllocatorBufferDummy(void* _allocator) {
 		return nullptr;
 	}
 
@@ -210,6 +210,12 @@ namespace ECSEngine {
 	void SetAllocatorProfilingModeAllocator(void* _allocator, const char* name) {
 		Allocator* allocator = (Allocator*)_allocator;
 		allocator->SetProfilingMode(name);
+	}
+
+	template<typename Allocator>
+	size_t GetAllocatorRegionsAllocator(const void* _allocator, void** region_pointers, size_t* region_size, size_t pointer_capacity) {
+		const Allocator* allocator = (const Allocator*)_allocator;
+		return allocator->GetAllocatedRegions(region_pointers, region_size, pointer_capacity);
 	}
 
 #define ECS_JUMP_TABLE(function_name)	function_name<LinearAllocator>, \
@@ -344,6 +350,10 @@ namespace ECSEngine {
 
 	SetAllocatorProfilingModeFunction ECS_ALLOCATOR_SET_PROFILING_FUNCTIONS[] = {
 		ECS_JUMP_TABLE(SetAllocatorProfilingModeAllocator)
+	};
+
+	GetAllocatorRegionsFunction ECS_ALLOCATOR_GET_REGIONS_FUNCTIONS[] = {
+		ECS_JUMP_TABLE(GetAllocatorRegionsAllocator)
 	};
 
 	size_t BaseAllocatorByteSize(ECS_ALLOCATOR_TYPE type)

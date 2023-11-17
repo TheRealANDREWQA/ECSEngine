@@ -194,6 +194,8 @@ unsigned int ChangeInspectorDrawFunction(
 		// When this is firstly created, the window index will be -1 since there is no window at this point
 		if (inspector_window_index != -1) {
 			editor_state->ui_system->DeallocateWindowDynamicResources(inspector_window_index);
+			// Change the retained function only when the window is already created
+			SetInspectorRetainedMode(editor_state, inspector_index, functions.retained_function);
 		}
 
 		if (inspector_data->data_size > 0) {
@@ -202,7 +204,6 @@ unsigned int ChangeInspectorDrawFunction(
 		inspector_data->draw_data = CopyNonZero(editor_allocator, data, data_size);
 		inspector_data->draw_function = functions.draw_function;
 		inspector_data->clean_function = functions.clean_function;
-		SetInspectorRetainedMode(editor_state, inspector_index, functions.retained_function);
 		inspector_data->data_size = data_size;
 
 		// Same as the comment above, the window is firstly created

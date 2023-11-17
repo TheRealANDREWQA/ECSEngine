@@ -21,7 +21,7 @@ namespace ECSEngine {
 
 		bool Belongs(const void* pointer) const;
 
-		void* GetAllocatedBuffer();
+		void* GetAllocatedBuffer() const;
 
 		void SetMarker();
 
@@ -54,6 +54,10 @@ namespace ECSEngine {
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
 
 		void SetProfilingMode(const char* name);
+
+		// Region start and region size are parallel arrays. Returns the count of regions
+		// Pointer capacity must represent the count of valid entries for the given pointers
+		size_t GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const;
 
 		// ---------------------------------------------- Thread safe variants ---------------------------------------------
 

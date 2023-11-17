@@ -269,7 +269,7 @@ void SelectAction(ActionData* action_data) {
 		}
 	}
 
-	system->PushDestroyWindowHandler(system->GetWindowIndexFromBorder(dockspace, border_index));
+	system->PushDestroyWindowHandler(window_index);
 	if (data->destroy_selection) {
 		unsigned int selection_input = system->GetWindowFromName(SELECTION_INPUT_WINDOW_NAME);
 		if (selection_input != -1) {
@@ -972,7 +972,6 @@ void OverrideAssetHandle(
 		UI_UNPACK_ACTION_DATA;
 
 		DoubleClickActionData* data = (DoubleClickActionData*)_data;
-		unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 		Stream<char> window_name = system->GetWindowName(window_index);
 		unsigned int inspector_index = GetInspectorIndex(window_name);
 		if (inspector_index != -1) {

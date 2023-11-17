@@ -133,6 +133,10 @@ uint3 ChangeInspectorDrawFunctionWithSearchEx(
 	FindInspectorWithDrawFunction(editor_state, functions.draw_function, &indices, sandbox_index);
 	for (unsigned int index = 0; index < indices.size; index++) {
 		if (functor(GetInspectorDrawFunctionData(editor_state, indices[index]))) {
+			// Highlight the window to keep the same behaviour
+			ECS_STACK_CAPACITY_STREAM(char, inspector_window_name, 512);
+			GetInspectorName(indices[index], inspector_window_name);
+			editor_state->ui_system->SetActiveWindow(inspector_window_name);
 			return { indices[index], (unsigned int)-1, indices[index] };
 		}
 	}

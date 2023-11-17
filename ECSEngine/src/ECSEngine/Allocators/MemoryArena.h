@@ -46,7 +46,9 @@ namespace ECSEngine {
 		void Clear(DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Return the original buffer given
-		const void* GetAllocatedBuffer() const;
+		ECS_INLINE void* GetAllocatedBuffer() const {
+			return m_allocators;
+		}
 
 		bool IsEmpty() const;
 
@@ -80,6 +82,10 @@ namespace ECSEngine {
 		void SetDebugMode(const char* name = nullptr, bool resizable = false);
 
 		void SetProfilingMode(const char* name);
+
+		// Region start and region size are parallel arrays. Returns the count of regions
+		// Pointer capacity must represent the count of valid entries for the given pointers
+		size_t GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const;
 
 		// ----------------------------------------  Thread safe --------------------------------------------------------
 

@@ -112,30 +112,9 @@ public:
 
 		Hub(&editor_state);
 
-		void* virtual_allocation = OS::VirtualAllocation(ECS_GB);
-		Sleep(100);
-		timer.SetMarker();
-		size_t total_memory = 0;
-		for (unsigned int index = 0; index < ECS_GB / ECS_KB / 400; index++) {
-			total_memory += OS::GetPhysicalMemoryBytesForAllocation(OffsetPointer(virtual_allocation, index * ECS_KB * 400), ECS_KB * 400);
-		}
-		//total_memory = OS::GetPhysicalMemoryBytesForAllocation(virtual_allocation, ECS_GB);
-		float durationsss = timer.GetDurationSinceMarkerFloat(ECS_TIMER_DURATION_MS);
-		//__try {
-		//memset(virtual_allocation, 0, ECS_KB * 64);
-		//	//timer.SetMarker();
-		//	//size_t physical_pages = OS::GetPhysicalMemoryBytesForAllocation(virtual_allocation, ECS_GB / 10);
-		//	//float durationu = timer.GetDurationSinceMarkerFloat(ECS_TIMER_DURATION_MS);
-		//	//OS::OfferPhysicalMemory(virtual_allocation, ECS_GB);
-		//	//memset(virtual_allocation, 1, ECS_KB);
-		//}
-		//__except (ExceptionFilter(GetExceptionInformation())) {
-		//	EditorSetConsoleError("Page fault");
-		//	__debugbreak();
-		//}
-
 		size_t count = 0;
 		auto filter = [&](EXCEPTION_POINTERS* pointers) {
+			auto native_info = OS::GetExceptionInformationFromNative(pointers);
 			count++;
 			return EXCEPTION_CONTINUE_EXECUTION;
 		};
@@ -176,13 +155,23 @@ public:
 						static int average_count = 0;*/
 
 						timer.SetNewStart();
+						// Here write the Game/Scene windows to be focused, i.e. be drawn every single frame,
+						// While having all the other windows be drawn at a lesser frequency
+						ECS_STACK_CAPACITY_STREAM(char, focused_window_chars, ECS_KB * 2);
+						ECS_STACK_CAPACITY_STREAM(Stream<char>, focused_windows, 64);
+						unsigned int sandbox_count = GetSandboxCount(&editor_state);
+						for (unsigned int index = 0; index < sandbox_count; index++) {
+							unsigned int current_start = focused_window_chars.size;
+							GetSceneUIWindowName(index, focused_window_chars);
+							focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
 
-						ECS_STACK_CAPACITY_STREAM(Stream<char>, windows, 2);
-						windows[0] = "Game 0";
-						windows[1] = "Scene 0";
-						windows.size = 2;
+							current_start = focused_window_chars.size;
+							GetGameUIWindowName(index, focused_window_chars);
+							focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
+						}
 
-						frame_pacing = editor_state.ui_system->DoFrame();
+						//frame_pacing = editor_state.ui_system->DoFrame();
+						frame_pacing = editor_state.ui_system->DoFrame({focused_windows, 33});
 
 						/*float duration = timer.GetDuration(ECS_TIMER_DURATION_US);
 						if (duration < 5000) {

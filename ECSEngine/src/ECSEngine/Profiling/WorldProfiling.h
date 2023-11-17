@@ -85,4 +85,6 @@ namespace ECSEngine {
 
 	ECSENGINE_API void AddAllocatorProfilingWorldAllocators(AllocatorProfiling* allocator_profiler, const World* world);
 
+	ECSENGINE_API void AddPhysicalMemoryWorldAllocators(PhysicalMemoryProfiler* physical_memory_profiler, const World* world);
+
 }

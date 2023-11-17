@@ -16,7 +16,7 @@ void AutomaticRefreshCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	AutomaticRefreshCallbackData* data = (AutomaticRefreshCallbackData*)_data;
-	UpdateVisualizeTextureWindowAutomaticRefresh(system, system->GetWindowData(system->GetWindowIndexFromBorder(dockspace, border_index)), *data->flag);
+	UpdateVisualizeTextureWindowAutomaticRefresh(system, system->GetWindowData(window_index), *data->flag);
 }
 
 struct ComboCallbackData {
