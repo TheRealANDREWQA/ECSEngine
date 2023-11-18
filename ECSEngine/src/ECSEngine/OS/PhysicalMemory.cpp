@@ -20,6 +20,11 @@ namespace ECSEngine {
 			PAGE_SIZE = system_info.dwPageSize;
 		}
 
+		size_t GetPhysicalMemoryPageSize()
+		{
+			return PAGE_SIZE;
+		}
+
 		size_t ProcessPhysicalMemoryUsage()
 		{
 			PROCESS_MEMORY_COUNTERS counters;

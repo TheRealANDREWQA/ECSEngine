@@ -1042,6 +1042,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 								// This checks to see that the entity exists and 
 								RemoveSandboxSelectedEntity(editor_state, sandbox_index, selected_entities_stream[index]);
 							}
+							ChangeInspectorEntitySelection(editor_state, sandbox_index);
 						}
 						else if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 							// Add to the sxisting selection
@@ -1053,6 +1054,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 									AddSandboxSelectedEntity(editor_state, sandbox_index, selected_entities_stream[index]);
 								}
 							}
+							ChangeInspectorEntitySelection(editor_state, sandbox_index);
 						}
 						else {
 							if (selected_entities_stream.size > 0) {
@@ -1062,6 +1064,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 							else {
 								ClearSandboxSelectedEntities(editor_state, sandbox_index);
 							}
+							ChangeInspectorEntitySelection(editor_state, sandbox_index);
 						}
 					}
 
@@ -1115,6 +1118,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 								else {
 									AddSandboxSelectedEntity(editor_state, sandbox_index, selected_entity);
 								}
+								ChangeInspectorEntitySelection(editor_state, sandbox_index);
 							}
 						}
 						else {
@@ -1124,6 +1128,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 							else {
 								ClearSandboxSelectedEntities(editor_state, sandbox_index);
 							}
+							ChangeInspectorEntitySelection(editor_state, sandbox_index);
 						}
 					}
 				}

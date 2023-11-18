@@ -688,7 +688,7 @@ namespace ECSEngine {
 
 			void DeactiveWrapCursorPosition();
 
-			void DeallocateDockspaceBorderSnapshot(UIDockspace* dockspace, unsigned int border_index);
+			void DeallocateDockspaceBorderSnapshot(UIDockspace* dockspace, unsigned int border_index, bool free_allocator);
 
 			void DeallocateDockspaceBorderResources(UIDockspace* dockspace, unsigned int border_index);
 
@@ -1869,6 +1869,9 @@ namespace ECSEngine {
 			Timer m_snapshot_mode_timer;
 			// Record the duration here such that it is consistent for the entire frame
 			unsigned int m_snapshot_mode_elapsed_time;
+			// This is used to make the allocations for the snapshots
+			// Using malloc can produce really noticeable slowdowns
+			GlobalMemoryManager m_snapshot_allocator;
 			// This is used to keep track of the frame delta time
 			Timer m_frame_timer;
 			float m_frame_delta_time;

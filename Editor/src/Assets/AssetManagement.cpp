@@ -68,6 +68,10 @@ ECS_THREAD_TASK(CreateAssetAsyncTask) {
 	if (data->sandbox_index != -1) {
 		UnlockSandbox(data->editor_state, data->sandbox_index);
 	}
+
+	// Add an event to remove the loading asset entry
+	AssetTypedHandle typed_handle = { data->handle, data->asset_type };
+	RegisterRemoveLoadingAssetsEvent(data->editor_state, Stream<AssetTypedHandle>(&typed_handle, 1));
 }
 
 struct CreateAssetAsyncEventData {
@@ -175,6 +179,10 @@ EDITOR_EVENT(RegisterEvent) {
 
 		if (loaded_now) {
 			// We still have the lock on the sandbox here - the Async task will release it
+
+			// Add the asset to the loading array
+			AssetTypedHandle loading_asset = { handle, data->type };
+			AddLoadingAssets(editor_state, Stream<AssetTypedHandle>(&loading_asset, 1));
 
 			// Launch a background task - block the resource manager first
 			EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
@@ -454,6 +462,29 @@ Stream<wchar_t> AssetTargetFileTimeStampPath(
 
 // ----------------------------------------------------------------------------------------------
 
+void AddLoadingAssets(EditorState* editor_state, Stream<Stream<unsigned int>> handles) {
+	ECS_ASSERT(handles.size == ECS_ASSET_TYPE_COUNT);
+	for (size_t asset_type = 0; asset_type < ECS_ASSET_TYPE_COUNT; asset_type++) {
+		for (unsigned int index = 0; index < handles[asset_type].size; index++) {
+			editor_state->loading_assets.Add({ handles[asset_type][index], (ECS_ASSET_TYPE)asset_type });
+		}
+	}
+}
+
+void AddLoadingAssets(EditorState* editor_state, CapacityStream<unsigned int>* handles) {
+	for (size_t asset_type = 0; asset_type < ECS_ASSET_TYPE_COUNT; asset_type++) {
+		for (unsigned int index = 0; index < handles[asset_type].size; index++) {
+			editor_state->loading_assets.Add({ handles[asset_type][index], (ECS_ASSET_TYPE)asset_type });
+		}
+	}
+}
+
+void AddLoadingAssets(EditorState* editor_state, Stream<AssetTypedHandle> handles) {
+	editor_state->loading_assets.AddStream(handles);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 void AddUnregisterAssetEvent(
 	EditorState* editor_state,
 	Stream<UnregisterSandboxAssetElement> elements,
@@ -697,7 +728,11 @@ bool CreateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 void CreateAssetAsync(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback)
 {
 	callback.data = CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
-		
+	
+	// Add the asset to the loading array
+	AssetTypedHandle typed_handle = { handle, type };
+	AddLoadingAssets(editor_state, Stream<AssetTypedHandle>(&typed_handle, 1));
+
 	CreateAssetAsyncEventData event_data;
 	event_data.handle = handle;
 	event_data.type = type;
@@ -766,7 +801,7 @@ bool CreateAssetInternalDependencies(
 // which correspond to the asset types in the mapping
 // For materials, gpu samplers, shaders and misc files it returns the file path without extension
 template<typename ExecuteFunctor>
-void ForEachAssetMetadata(const EditorState* editor_state, Stream<ECS_ASSET_TYPE> asset_type_mapping, bool retrieve_existing_files, ExecuteFunctor&& functor) {
+static void ForEachAssetMetadata(const EditorState* editor_state, Stream<ECS_ASSET_TYPE> asset_type_mapping, bool retrieve_existing_files, ExecuteFunctor&& functor) {
 	// At the moment only meshes and textures need this.
 	ECS_STACK_CAPACITY_STREAM(Stream<Stream<wchar_t>>, extensions, ECS_ASSET_TYPE_COUNT);
 
@@ -882,14 +917,6 @@ void CreateAssetDefaultSetting(const EditorState* editor_state)
 
 // ----------------------------------------------------------------------------------------------
 
-void ChangeAssetName(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, const void* new_asset)
-{
-	// Change the file name inside the asset database and then recreate it
-	editor_state->asset_database->UpdateAsset(handle, new_asset, type);
-}
-
-// ----------------------------------------------------------------------------------------------
-
 void ChangeAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, size_t new_stamp)
 {
 	ChangeAssetTimeStamp(editor_state, editor_state->asset_database->GetAssetConst(handle, type), type, new_stamp);
@@ -903,45 +930,6 @@ void ChangeAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_A
 
 	Stream<wchar_t> metadata_file = AssetMetadataTimeStampPath(editor_state, metadata, type, storage);
 	editor_state->RuntimeResourceManager()->ChangeTimeStamp(metadata_file, ResourceType::TimeStamp, new_stamp);
-}
-
-// ----------------------------------------------------------------------------------------------
-
-// This takes the pointer as is, it does not copy it
-struct ChangeAssetFileEventData {
-	unsigned int handle;
-	ECS_ASSET_TYPE type;
-	const void* new_asset;
-	unsigned char* status;
-};
-
-EDITOR_EVENT(ChangeAssetFileEvent) {
-	ChangeAssetFileEventData* data = (ChangeAssetFileEventData*)_data;
-
-	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		// Also deallocate the current resource and recreate it again with the new path
-		bool success = DeallocateAsset(editor_state, data->handle, data->type);
-
-		if (success) {
-			// Change the file name inside the asset database and then recreate it
-			editor_state->asset_database->UpdateAsset(data->handle, data->new_asset, data->type);
-			success = CreateAsset(editor_state, data->handle, data->type);
-		}
-
-		*data->status = success;
-		return false;
-	}
-	else {
-		return true;
-	}
-}
-
-void ChangeAssetFile(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, const void* new_asset, unsigned char* status)
-{
-	// Set it different from 0 and 1
-	*status = UCHAR_MAX;
-	ChangeAssetFileEventData event_data = { handle, type, new_asset, status };
-	EditorAddEvent(editor_state, ChangeAssetFileEvent, &event_data, sizeof(event_data));
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1613,6 +1601,32 @@ Stream<Stream<wchar_t>> GetAssetsFromAssetsFolder(const EditorState* editor_stat
 
 // ----------------------------------------------------------------------------------------------
 
+Stream<Stream<unsigned int>> GetNotLoadedAssets(
+	const EditorState* editor_state, 
+	AllocatorPolymorphic stack_allocator, 
+	Stream<Stream<unsigned int>> handles,
+	bool* has_entries
+)
+{
+	*has_entries = false;
+
+	Stream<Stream<unsigned int>> entries;
+	entries.Initialize(stack_allocator, ECS_ASSET_TYPE_COUNT);
+	for (size_t asset_type = 0; asset_type < ECS_ASSET_TYPE_COUNT; asset_type++) {
+		entries[asset_type].Initialize(stack_allocator, handles[asset_type].size);
+		for (size_t index = 0; index < handles[asset_type].size; index++) {
+			if (!IsAssetBeingLoaded(editor_state, handles[asset_type][index], (ECS_ASSET_TYPE)asset_type)) {
+				entries[asset_type].Add(handles[asset_type][index]);
+				*has_entries = true;
+			}
+		}
+	}
+
+	return entries;
+}
+
+// ----------------------------------------------------------------------------------------------
+
 bool HasAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
 {
 	return HasAssetTimeStamp(editor_state, editor_state->asset_database->GetAssetConst(handle, type), type);
@@ -1675,6 +1689,42 @@ bool RegisterGlobalAsset(
 )
 {
 	return AddRegisterAssetEvent(editor_state, name, file, type, handle, -1, unload_if_existing, callback);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+struct RemoveLoadingAssetsEventData {
+	Stream<AssetTypedHandle> handles;
+};
+
+EDITOR_EVENT(RemoveLoadingAssetsEvent) {
+	RemoveLoadingAssetsEventData* data = (RemoveLoadingAssetsEventData*)_data;
+	RemoveLoadingAssets(editor_state, data->handles);
+	data->handles.Deallocate(editor_state->EditorAllocator());
+	return false;
+}
+
+void RegisterRemoveLoadingAssetsEvent(EditorState* editor_state, Stream<AssetTypedHandle> handles) {
+	RemoveLoadingAssetsEventData event_data = { handles.Copy(editor_state->EditorAllocator()) };
+	EditorAddEvent(editor_state, RemoveLoadingAssetsEvent, &event_data, sizeof(event_data));
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void RegisterRemoveLoadingAssetsEvent(EditorState* editor_state, Stream<Stream<unsigned int>> handles) {
+	RemoveLoadingAssetsEventData event_data;
+	size_t total_count = 0;
+	for (size_t asset_type = 0; asset_type < ECS_ASSET_TYPE_COUNT; asset_type++) {
+		total_count += handles[asset_type].size;
+	}
+	event_data.handles.Initialize(editor_state->EditorAllocator(), total_count);
+	event_data.handles.size = 0;
+	for (size_t asset_type = 0; asset_type < ECS_ASSET_TYPE_COUNT; asset_type) {
+		for (size_t index = 0; index < handles[asset_type].size; index++) {
+			event_data.handles.Add({ handles[asset_type][index], (ECS_ASSET_TYPE)asset_type });
+		}
+	}
+	EditorAddEvent(editor_state, RemoveLoadingAssetsEvent, &event_data, sizeof(event_data));
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1749,6 +1799,37 @@ void RemoveAssetDependencies(EditorState* editor_state, const void* metadata, EC
 	editor_state->asset_database->RemoveAssetDependencies(metadata, type, [=](unsigned int handle, ECS_ASSET_TYPE type) {
 		RemoveAssetTimeStamp(editor_state, handle, type);
 	});
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void RemoveLoadingAsset(EditorState* editor_state, AssetTypedHandle handle)
+{
+	unsigned int load_index = FindAssetBeingLoaded(editor_state, handle.handle, handle.type);
+	ECS_ASSERT(load_index != -1);
+	editor_state->loading_assets.RemoveSwapBack(load_index);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void RemoveLoadingAssets(EditorState* editor_state, Stream<Stream<unsigned int>> handles)
+{
+	ECS_ASSERT(handles.size == ECS_ASSET_TYPE_COUNT);
+	for (size_t asset_type = 0; asset_type < ECS_ASSET_TYPE_COUNT; asset_type++) {
+		for (size_t index = 0; index < handles[asset_type].size; index++) {
+			RemoveLoadingAsset(editor_state, { handles[asset_type][index], (ECS_ASSET_TYPE)asset_type });
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void RemoveLoadingAssets(EditorState* editor_state, Stream<AssetTypedHandle> handles)
+{
+	for (size_t index = 0; index < handles.size; index++) {
+		RemoveLoadingAsset(editor_state, handles[index]);
+	}
+	// We could trim here, but this won't occupy too much memory and it might not be worth it
 }
 
 // ----------------------------------------------------------------------------------------------

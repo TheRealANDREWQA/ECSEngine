@@ -30,12 +30,6 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		ECS_INLINE static void DeallocateBorderSnapshot(UIDockspace* dockspace, unsigned int border_index, bool free_allocator) {
-			dockspace->borders[border_index].DeallocateSnapshot({ nullptr }, free_allocator);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		void ProcessTexture(unsigned int thread_index, World* world, void* data);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -273,6 +267,9 @@ namespace ECSEngine {
 			// Unitialize the timer
 			m_frame_timer.SetUninitialized();
 			m_snapshot_mode_timer.SetUninitialized();
+			// Use large sizes since those will be virtual allocations calls - they won't actually
+			// Take that amount of memory (for most of the time)
+			m_snapshot_allocator = CreateGlobalMemoryManager(ECS_MB * 10, ECS_KB * 4, ECS_MB * 25);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2925,9 +2922,9 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::DeallocateDockspaceBorderSnapshot(UIDockspace* dockspace, unsigned int border_index)
+		void UISystem::DeallocateDockspaceBorderSnapshot(UIDockspace* dockspace, unsigned int border_index, bool free_allocator)
 		{
-			DeallocateBorderSnapshot(dockspace, border_index, false);
+			dockspace->borders[border_index].DeallocateSnapshot(GetAllocatorPolymorphic(&m_snapshot_allocator), free_allocator);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2954,7 +2951,7 @@ namespace ECSEngine {
 			}
 
 			// If it has a snapshot, we need to deallocate it
-			DeallocateBorderSnapshot(dockspace, border_index, true);
+			DeallocateDockspaceBorderSnapshot(dockspace, border_index, true);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3101,7 +3098,7 @@ namespace ECSEngine {
 			if (dockspace) {
 				// Check that the window is also the visible one
 				if (dockspace->borders[border_index].window_indices[dockspace->borders[border_index].active_window] == window_index) {
-					DeallocateBorderSnapshot(dockspace, border_index, false);
+					DeallocateDockspaceBorderSnapshot(dockspace, border_index, false);
 				}
 			}
 		}
@@ -4118,7 +4115,9 @@ namespace ECSEngine {
 			bool snapshot_mode = has_snapshot_mode && border.snapshot.IsValid();
 			if (snapshot_mode) {
 				if (!m_snapshot_mode_timer.IsUninitialized()) {
-					snapshot_mode = m_snapshot_mode_elapsed_time < data->snapshot_mode_lazy_update;
+					if (!is_retained) {
+						snapshot_mode = m_snapshot_mode_elapsed_time < data->snapshot_mode_lazy_update;
+					}
 				}
 				if (snapshot_mode) {
 					// Check to see if the window has changed
@@ -4163,7 +4162,7 @@ namespace ECSEngine {
 
 					// We will need to record a new snapshot
 					// Deallocate the previous one before the window runs to not overflow the allocator
-					DeallocateBorderSnapshot(data->dockspace, data->border_index, false);
+					DeallocateDockspaceBorderSnapshot(data->dockspace, data->border_index, false);
 				}
 
 				if (!data->is_fixed_default_when_border_zero) {
@@ -4245,7 +4244,7 @@ namespace ECSEngine {
 					snapshot_info.hoverable_handler = &border.hoverable_handler;
 					snapshot_info.clickable_handlers = { border.clickable_handler, std::size(border.clickable_handler) };
 					snapshot_info.general_handler = &border.general_handler;
-					snapshot_info.allocator = { nullptr };
+					snapshot_info.allocator = GetAllocatorPolymorphic(&m_snapshot_allocator);
 					snapshot_info.runnables = border.snapshot_runnables;
 					snapshot_info.runnable_allocator = AllocatorSnapshotRunnables(data->dockspace, data->border_index);
 					border.snapshot.ConstructFrom(&snapshot_info);
@@ -4279,7 +4278,7 @@ namespace ECSEngine {
 
 				if (should_redraw) {
 					// Deallocate the snapshot - such that the next time the window is redrawn
-					DeallocateBorderSnapshot(data->dockspace, data->border_index, false);
+					DeallocateDockspaceBorderSnapshot(data->dockspace, data->border_index, false);
 				}
 			}
 
@@ -5503,7 +5502,7 @@ namespace ECSEngine {
 							if (dockspaces[index].borders[border_index].snapshot.IsValid()) {
 								for (unsigned int texture_index = 0; texture_index < removed_textures.size; texture_index++) {
 									if (dockspaces[index].borders[border_index].snapshot.ContainsTexture((ID3D11ShaderResourceView*)removed_textures[texture_index])) {
-										DeallocateBorderSnapshot(dockspaces.buffer + index, border_index, false);
+										DeallocateDockspaceBorderSnapshot(dockspaces.buffer + index, border_index, false);
 										break;
 									}
 								}
@@ -7282,7 +7281,7 @@ namespace ECSEngine {
 
 			if (action_data.redraw_window) {
 				// Discard the snapshot of the border
-				DeallocateBorderSnapshot(action_data.dockspace, action_data.border_index, false);
+				DeallocateDockspaceBorderSnapshot(action_data.dockspace, action_data.border_index, false);
 			}
 		}
 
@@ -7311,7 +7310,7 @@ namespace ECSEngine {
 			m_frame_pacing = (!m_execute_events && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 
 			if (action_data.redraw_window) {
-				DeallocateBorderSnapshot(action_data.dockspace, action_data.border_index, false);
+				DeallocateDockspaceBorderSnapshot(action_data.dockspace, action_data.border_index, false);
 			}
 		}
 
@@ -7336,7 +7335,7 @@ namespace ECSEngine {
 			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 
 			if (action_data.redraw_window) {
-				DeallocateBorderSnapshot(action_data.dockspace, action_data.border_index, false);
+				DeallocateDockspaceBorderSnapshot(action_data.dockspace, action_data.border_index, false);
 			}
 		}
 
@@ -12735,7 +12734,7 @@ namespace ECSEngine {
 			// That the window is changed into a new window that does not use a snapshot
 			// And the system will falsely think that we have a valid snapshot for the
 			// Border when in fact it is outdated
-			DeallocateBorderSnapshot(dockspace, border_index, false);
+			system->DeallocateDockspaceBorderSnapshot(dockspace, border_index, false);
 
 			const float EPSILON = 0.03f;
 

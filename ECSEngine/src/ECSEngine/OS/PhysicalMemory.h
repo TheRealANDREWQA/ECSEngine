@@ -9,6 +9,8 @@ namespace ECSEngine {
 		// Call this before using any function from inside this header
 		ECSENGINE_API void InitializePhysicalMemoryPageSize();
 
+		ECSENGINE_API size_t GetPhysicalMemoryPageSize();
+
 		// Returns -1 if it fail
 		ECSENGINE_API size_t ProcessPhysicalMemoryUsage();
 

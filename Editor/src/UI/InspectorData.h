@@ -25,6 +25,11 @@ struct InspectorData {
 	WindowRetainedMode retained_mode;
 	void* draw_data;
 	unsigned int data_size;
+	// This is the sandbox that describes which sandbox is accepted
+	// If it is -1, it means that all sandboxes are accepted
+	unsigned int matching_sandbox;
+	// This is the sandbox that is currently bound
+	// To the display function
 	unsigned int target_sandbox;
 	size_t flags;
 	InspectorTable* table;
@@ -47,6 +52,8 @@ struct InspectorAssetTarget {
 
 // Returns the index of the inspector instance. Does not create the UI window, only registers it
 unsigned int CreateInspectorInstance(EditorState* editor_state);
+
+bool DoesInspectorMatchSandbox(const EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index);
 
 // This function does not destroy the UI window, just the backend for the inspector manager data
 void DestroyInspectorInstance(EditorState* editor_state, unsigned int inspector_index);
@@ -75,7 +82,13 @@ void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sa
 // Recreates the UI instances for the inspectors that target the settings of the given module
 void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int module_index);
 
-void SetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index);
+// Sandbox index -1 means accept information from any sandbox
+void SetInspectorMatchingSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index);
+
+void SetInspectorMatchingSandboxAll(EditorState* editor_state, unsigned int inspector_index);
 
 // Returns the target sandbox index if the UI window is an inspector window, else -1
 unsigned int GetInspectorTargetSandboxFromUIWindow(const EditorState* editor_state, unsigned int window_index);
+
+// It will change inspectors such that the selection will be shown (if possible)
+void ChangeInspectorEntitySelection(EditorState* editor_state, unsigned int sandbox_index);

@@ -136,7 +136,7 @@ void InspectorDrawFileTimes(UIDrawer* drawer, Stream<wchar_t> path) {
 unsigned int GetMatchingIndexFromRobin(EditorState* editor_state, unsigned int target_sandbox) {
 	// Look for an inspector that doesn't have a function assigned (i.e. the InspectorNothing function) and use that one
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		bool matches_sandbox = target_sandbox == -1 || GetInspectorTargetSandbox(editor_state, index) == target_sandbox;
+		bool matches_sandbox = target_sandbox == -1 || DoesInspectorMatchSandbox(editor_state, index, target_sandbox);
 		if (matches_sandbox && GetInspectorDrawFunction(editor_state, index) == InspectorDrawNothing) {
 			return index;
 		}
@@ -145,7 +145,7 @@ unsigned int GetMatchingIndexFromRobin(EditorState* editor_state, unsigned int t
 	unsigned int round_robing_index = target_sandbox == -1 ? editor_state->sandboxes.size : target_sandbox;
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
 		unsigned int current_inspector = (editor_state->inspector_manager.round_robin_index[round_robing_index] + index) % editor_state->inspector_manager.data.size;
-		bool matches_sandbox = target_sandbox == -1 || GetInspectorTargetSandbox(editor_state, current_inspector) == target_sandbox;
+		bool matches_sandbox = target_sandbox == -1 || DoesInspectorMatchSandbox(editor_state, current_inspector, target_sandbox);
 		if (matches_sandbox && !IsInspectorLocked(editor_state, current_inspector)) {
 			editor_state->inspector_manager.round_robin_index[round_robing_index] = current_inspector + 1 == editor_state->inspector_manager.data.size ?
 				0 : current_inspector + 1;
@@ -205,6 +205,8 @@ unsigned int ChangeInspectorDrawFunction(
 		inspector_data->draw_function = functions.draw_function;
 		inspector_data->clean_function = functions.clean_function;
 		inspector_data->data_size = data_size;
+		// Also change the target sandbox index
+		inspector_data->target_sandbox = sandbox_index;
 
 		// Same as the comment above, the window is firstly created
 		if (inspector_window_index != -1) {
@@ -229,7 +231,7 @@ unsigned int FindInspectorWithDrawFunction(
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
 		if (editor_state->inspector_manager.data[index].draw_function == draw_function) {
 			if (sandbox_index != -1) {
-				if (GetInspectorTargetSandbox(editor_state, index) == sandbox_index) {
+				if (DoesInspectorMatchSandbox(editor_state, index, sandbox_index)) {
 					return index;
 				}
 			}
@@ -253,7 +255,7 @@ void FindInspectorWithDrawFunction(
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
 		if (editor_state->inspector_manager.data[index].draw_function == draw_function) {
 			if (sandbox_index != -1) {
-				if (GetInspectorTargetSandbox(editor_state, index) == sandbox_index) {
+				if (DoesInspectorMatchSandbox(editor_state, index, sandbox_index)) {
 					inspector_indices->AddAssert(index);
 				}
 			}

@@ -748,153 +748,19 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void HierarchySelectableClick(ActionData* action_data) {
+		void BoolClickableWithPinCallback(ActionData* action_data)
+		{
 			UI_UNPACK_ACTION_DATA;
 
-			UIDrawerHierarchySelectableData* data = (UIDrawerHierarchySelectableData*)_data;
-			data->hierarchy->selectable.selected_index = data->node_index;
-			if (data->hierarchy->selectable.pointer != nullptr) {
-				*data->hierarchy->selectable.pointer = data->node_index + data->hierarchy->selectable.offset;
-			}
-			data->hierarchy->multiple_hierarchy_data->active_hierarchy = data->hierarchy;
+			UIDrawerBoolClickableWithPinCallbackData* data = (UIDrawerBoolClickableWithPinCallbackData*)_data;
 
-			if (data->hierarchy->selectable.callback != nullptr) {
-				action_data->additional_data = data->hierarchy;
-				action_data->data = data->hierarchy->selectable.callback_data;
-				data->hierarchy->selectable.callback(action_data);
-			}
+			action_data->data = &data->base;
+			BoolClickableWithPin(action_data);
 
-			if (IsPointInRectangle(mouse_position, position, system->GetSquareScale(scale.y))) {
-				action_data->data = &data->bool_data;
-				BoolClickableWithPin(action_data);
-			}
-		}
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		void HierarchyNodeDrag(ActionData* action_data) {
-			UI_UNPACK_ACTION_DATA;
-
-			UIDrawerHierarchyDragNode* data = (UIDrawerHierarchyDragNode*)_data;
-			float dockspace_mask = GetDockspaceMaskFromType(dockspace_type);
-			if (!data->has_been_cancelled) {
-				if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
-					data->selectable_data.hierarchy->selectable.selected_index = data->selectable_data.node_index;
-					data->hierarchies_data->active_hierarchy = data->selectable_data.hierarchy;
-					action_data->data = &data->selectable_data;
-					HierarchySelectableClick(action_data);
-
-					data->timer.SetNewStart();
-				}
-				else if (mouse->IsDown(ECS_MOUSE_LEFT)) {
-					if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) > system->m_descriptors.misc.hierarchy_drag_node_time) {
-						size_t index = 0;
-
-						bool has_selected_hierarchy_been_found = false;
-						unsigned int selected_hierarchy_index = 0;
-						unsigned int selected_node_children_count = 0;
-						bool is_child_hierarchy = false;
-						while (data->hierarchies_data->hierarchy_transforms.size > index && (data->hierarchies_data->hierarchy_transforms[index].position.y < mouse_position.y || is_child_hierarchy)) {
-							if (!has_selected_hierarchy_been_found) {
-								if (data->hierarchies_data->elements[index].hierarchy == data->selectable_data.hierarchy && data->hierarchies_data->elements[index].node_index == data->selectable_data.node_index) {
-									selected_hierarchy_index = index;
-									selected_node_children_count = data->hierarchies_data->elements[index].children_count;
-									has_selected_hierarchy_been_found = true;
-									is_child_hierarchy = data->hierarchies_data->elements[index].hierarchy != data->hierarchies_data->elements[index + 1].hierarchy;
-								}
-							}
-							else {
-								if (index <= selected_hierarchy_index + selected_node_children_count) {
-									is_child_hierarchy = true;
-								}
-								else {
-									is_child_hierarchy = false;
-								}
-							}
-							index++;
-						}
-
-						float2 region_position = system->GetDockspaceRegionPosition(dockspace, border_index, dockspace_mask);
-						float2 region_scale = system->GetDockspaceRegionScale(dockspace, border_index, dockspace_mask);
-
-						index -= index == data->hierarchies_data->hierarchy_transforms.size;
-						float2 rectangle_position = data->hierarchies_data->hierarchy_transforms[index].position;
-						rectangle_position.y -= 0.5f * system->m_descriptors.misc.rectangle_hierarchy_drag_node_dimension;
-						SetSolidColorRectangle(
-							rectangle_position,
-							{
-								region_position.x + region_scale.x - rectangle_position.x - system->m_descriptors.window_layout.next_row_padding,
-								system->m_descriptors.misc.rectangle_hierarchy_drag_node_dimension
-							},
-							system->m_descriptors.color_theme.hierarchy_drag_node_bar,
-							buffers,
-							counts
-						);
-
-						if (data->previous_index != index) {
-							data->timer.SetMarker();
-						}
-						else if (data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) > system->m_descriptors.misc.hierarchy_drag_node_hover_drop) {
-							unsigned int element_index = index - (index == data->hierarchies_data->elements.size);
-							element_index -= (element_index != 0);
-							UIDrawerHierarchy* hovered_hierarchy = (UIDrawerHierarchy*)data->hierarchies_data->elements[element_index].hierarchy;
-							// if it is not the current current node hovered and if it is not opened
-							if ((hovered_hierarchy != data->selectable_data.hierarchy)
-								|| (hovered_hierarchy == data->selectable_data.hierarchy && data->hierarchies_data->elements[element_index].node_index != data->selectable_data.node_index)
-								&& !hovered_hierarchy->nodes[data->hierarchies_data->elements[element_index].node_index].state) {
-								hovered_hierarchy->nodes[data->hierarchies_data->elements[element_index].node_index].state = true;
-							}
-						}
-						data->previous_index = index;
-					}
-				}
-				else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
-					if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) > system->m_descriptors.misc.hierarchy_drag_node_time) {
-						size_t index = 0;
-
-						bool has_selected_hierarchy_been_found = false;
-						unsigned int selected_hierarchy_index = 0;
-						unsigned int selected_node_children_count = 0;
-						bool is_child_hierarchy = false;
-						while (index < data->hierarchies_data->elements.size && (data->hierarchies_data->hierarchy_transforms[index].position.y < mouse_position.y || is_child_hierarchy)) {
-							if (!has_selected_hierarchy_been_found) {
-								if (data->hierarchies_data->elements[index].hierarchy == data->selectable_data.hierarchy && data->hierarchies_data->elements[index].node_index == data->selectable_data.node_index) {
-									selected_hierarchy_index = index;
-									selected_node_children_count = data->hierarchies_data->elements[index].children_count;
-									has_selected_hierarchy_been_found = true;
-									is_child_hierarchy = data->hierarchies_data->elements[index].hierarchy != data->hierarchies_data->elements[index + 1].hierarchy;
-								}
-							}
-							else {
-								if (index <= selected_hierarchy_index + selected_node_children_count) {
-									is_child_hierarchy = true;
-								}
-								else {
-									is_child_hierarchy = false;
-								}
-							}
-							index++;
-						}
-
-						unsigned int element_index = index - (index == data->hierarchies_data->elements.size);
-						UIDrawerHierarchy* hovered_hierarchy = (UIDrawerHierarchy*)data->hierarchies_data->elements[element_index].hierarchy;
-
-						UIDrawerHierarchyNode node = data->selectable_data.hierarchy->GetNode(data->selectable_data.node_index);
-						hovered_hierarchy->AddNode(node, data->hierarchies_data->elements[element_index].node_index);
-
-						data->hierarchies_data->active_hierarchy = hovered_hierarchy;
-						bool is_bumped_up = hovered_hierarchy == data->selectable_data.hierarchy && data->hierarchies_data->elements[element_index].node_index <= data->selectable_data.node_index;
-						data->selectable_data.hierarchy->RemoveNodeWithoutDeallocation(data->selectable_data.node_index + is_bumped_up);
-
-						hovered_hierarchy->SetSelectedNode(
-							data->hierarchies_data->elements[element_index].node_index - ((data->hierarchies_data->elements[element_index].node_index >= data->selectable_data.node_index + 1) && (hovered_hierarchy == data->selectable_data.hierarchy))
-						);
-					}
-				}
-
-				if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
-					data->has_been_cancelled = true;
-				}
+			if (data->handler.action != nullptr) {
+				void* user_data = data->handler.data_size == 0 ? data->handler.data : OffsetPointer(data, sizeof(*data));
+				action_data->data = user_data;
+				data->handler.action(action_data);
 			}
 		}
 

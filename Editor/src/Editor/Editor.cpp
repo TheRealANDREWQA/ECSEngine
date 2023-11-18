@@ -11,6 +11,7 @@
 #include "EditorPalette.h"
 #include "EntryPoint.h"
 #include "../Sandbox/Sandbox.h"
+#include "../UI/VisualizeTexture.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -146,10 +147,9 @@ public:
 
 					unsigned int frame_pacing = 0;
 
+					editor_state.Tick();
 					if (!IsIconic(hWnd)) {
 						graphics->BindRenderTargetViewFromInitialViews();
-
-						editor_state.Tick();
 
 						/*static float average = 0.0f;
 						static int average_count = 0;*/
@@ -169,9 +169,15 @@ public:
 							GetGameUIWindowName(index, focused_window_chars);
 							focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
 						}
+						// We also need to add the visualize texture window
+						focused_windows.AddAssert(VISUALIZE_TEXTURE_WINDOW_NAME);
 
-						//frame_pacing = editor_state.ui_system->DoFrame();
-						frame_pacing = editor_state.ui_system->DoFrame({focused_windows, 33});
+						// At the moment use the classical drawing since some windows have problems
+						// With the retained snapshots where invalid references are kept when they shouldn't
+						// For example, the inspector can have snapshot runnables on text inputs and when the
+						// entity is changed the runnable will refer to an invalid field
+						frame_pacing = editor_state.ui_system->DoFrame();
+						//frame_pacing = editor_state.ui_system->DoFrame({ focused_windows, 33 });
 
 						/*float duration = timer.GetDuration(ECS_TIMER_DURATION_US);
 						if (duration < 5000) {

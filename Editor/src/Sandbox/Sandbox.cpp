@@ -317,6 +317,9 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 		// Clear and reset everything
 		snapshot.handle_count = 0;
 		snapshot.handle_capacity = 0;
+
+		// When initializing, we can skip adding the handles at the start
+		// Since the next iteration will pick up on this
 	}
 	else {
 		// Determine the difference between the 2 snapshots
@@ -789,17 +792,18 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool 
 	// Release the runtime settings path as well - it was allocated from the editor allocator
 	editor_state->editor_allocator->Deallocate(sandbox->runtime_settings.buffer);
 
-	unsigned int previous_count = editor_state->sandboxes.size;
 	editor_state->sandboxes.RemoveSwapBack(sandbox_index);
+	unsigned int swapped_index = editor_state->sandboxes.size;
 
 	// Notify the UI and the inspector
 	if (editor_state->sandboxes.size > 0) {
 		// Destroy the associated windows first
 		DestroySandboxWindows(editor_state, sandbox_index);
-		FixInspectorSandboxReference(editor_state, previous_count, sandbox_index);
-		UpdateGameUIWindowIndex(editor_state, previous_count, sandbox_index);
-		UpdateSceneUIWindowIndex(editor_state, previous_count, sandbox_index);
-		UpdateEntitiesUITargetSandbox(editor_state, previous_count, sandbox_index);
+		FixInspectorSandboxReference(editor_state, swapped_index, sandbox_index);
+		UpdateGameUIWindowIndex(editor_state, swapped_index, sandbox_index);
+		UpdateSceneUIWindowIndex(editor_state, swapped_index, sandbox_index);
+		UpdateEntitiesUITargetSandbox(editor_state, swapped_index, sandbox_index);
+		UpdateVisualizeTextureSandboxReferences(editor_state, swapped_index, sandbox_index);
 	}
 
 	RegisterInspectorSandboxChange(editor_state);

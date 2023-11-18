@@ -4795,22 +4795,32 @@ namespace ECSEngine {
 				}
 
 				if (active_state) {
-					UIDrawerBoolClickableWithPinData click_data;
+					size_t click_data_storage[256];
+					UIDrawerBoolClickableWithPinCallbackData* click_data = (UIDrawerBoolClickableWithPinCallbackData*)click_data_storage;
 					if constexpr (std::is_same_v<Data, UIDrawerCollapsingHeader>) {
-						click_data.pointer = &data->state;
+						click_data->base.pointer = &data->state;
 					}
 					else {
-						click_data.pointer = data;
+						click_data->base.pointer = data;
 					}
-					click_data.is_vertical = true;
+					click_data->base.is_vertical = true;
 
-					
+					UIActionHandler clickable_handler = { BoolClickableWithPin, &click_data->base, sizeof(click_data->base) };
+					if (configuration & UI_CONFIG_COLLAPSING_HEADER_CALLBACK) {
+						const UIConfigCollapsingHeaderCallback* callback = (const UIConfigCollapsingHeaderCallback*)config.GetParameter(UI_CONFIG_COLLAPSING_HEADER_CALLBACK);
+						click_data->handler = callback->handler;
+						if (click_data->handler.data_size > 0) {
+							memcpy(OffsetPointer(click_data, sizeof(*click_data)), click_data->handler.data, click_data->handler.data_size);
+						}
+						clickable_handler = { BoolClickableWithPinCallback, click_data, sizeof(*click_data) + click_data->handler.data_size, click_data->handler.phase };
+					}
+
 					drawer->AddDefaultClickableHoverable(
 						reserved_hoverable, 
 						reserved_clickable, 
 						initial_position,
 						{ total_x_scale, scale.y }, 
-						{ BoolClickableWithPin, &click_data, sizeof(click_data) },
+						clickable_handler,
 						nullptr,
 						current_color
 					);

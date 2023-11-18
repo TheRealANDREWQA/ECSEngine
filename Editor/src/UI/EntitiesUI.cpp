@@ -267,31 +267,31 @@ static void SelectableCallback(ActionData* action_data) {
 	UIDrawerLabelHierarchySelectableData* select_data = (UIDrawerLabelHierarchySelectableData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)select_data->data;
 	
-	if (select_data->labels.size == 1) {
-		Entity* first_entity = (Entity*)select_data->labels.buffer;
-		// Check global component
-		Component global_component = DecodeVirtualEntityToComponent(data, *first_entity);
-		if (global_component.Valid()) {
-			ChangeInspectorToGlobalComponent(data->editor_state, data->sandbox_index, global_component);
-		}
-		else {
-			// Only change the entity if it is not the global component parent
-			if (*first_entity != GlobalComponentsParent()) {
-				ChangeInspectorToEntity(data->editor_state, data->sandbox_index, *first_entity);
+	EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+	if (!HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION)) {
+		bool change_inspector_selection = true;
+		if (select_data->labels.size == 1) {
+			Entity* first_entity = (Entity*)select_data->labels.buffer;
+			// Check global component
+			Component global_component = DecodeVirtualEntityToComponent(data, *first_entity);
+			if (global_component.Valid()) {
+				ChangeInspectorToGlobalComponent(data->editor_state, data->sandbox_index, global_component);
+				change_inspector_selection = false;
 			}
+			else {
+				// Only change the entity if it is not the global component parent
+				if (*first_entity == GlobalComponentsParent()) {
+					change_inspector_selection = false;
+				}
+			}
+		}
+
+		if (change_inspector_selection) {
+			ChangeInspectorEntitySelection(data->editor_state, data->sandbox_index);
 		}
 	}
-	else if (select_data->labels.size == 0) {
-		unsigned int entities_ui_index = GetInspectorIndex(system->GetWindowName(window_index));
-		unsigned int target_sandbox = GetEntitiesUITargetSandbox(data->editor_state, entities_ui_index);
-
-		ECS_STACK_CAPACITY_STREAM(unsigned int, inspector_indices, 512);
-		GetInspectorsForSandbox(data->editor_state, target_sandbox, &inspector_indices);
-		for (unsigned int index = 0; index < inspector_indices.size; index++) {
-			if (!IsInspectorLocked(data->editor_state, inspector_indices[index]) && IsInspectorDrawEntity(data->editor_state, inspector_indices[index])) {		
-				ChangeInspectorToNothing(data->editor_state, inspector_indices[index]);
-			}
-		}
+	else {
+		sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION);
 	}
 }
 
@@ -530,6 +530,9 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		const size_t FILTER_STRING_CAPACITY = 128;
 
 		data->filter_string.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * FILTER_STRING_CAPACITY), 0, FILTER_STRING_CAPACITY);
+		// Clear the changed selection flag
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION);
 	}
 	else {
 		

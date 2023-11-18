@@ -9,6 +9,7 @@
 #include "RingBuffer.h"
 #include "../OS/ExceptionHandling.h"
 #include <setjmpex.h>
+#include "../Utilities/BasicTypes.h"
 
 #ifndef ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD
 #define ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD 128
@@ -283,8 +284,12 @@ namespace ECSEngine {
 			return m_thread_queue.size;
 		}
 
-		ECS_INLINE ThreadQueue* GetThreadQueue(unsigned int thread_id) const {
-			return m_thread_queue[thread_id];
+		ECS_INLINE ThreadQueue* GetThreadQueue(unsigned int thread_id) {
+			return &m_thread_queue[thread_id].value;
+		}
+
+		ECS_INLINE const ThreadQueue* GetThreadQueue(unsigned int thread_id) const {
+			return &m_thread_queue[thread_id].value;
 		}
 
 		ECS_INLINE ThreadTask GetTask(unsigned int task_index) const {
@@ -302,7 +307,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE AllocatorPolymorphic GetThreadTempAllocator(unsigned int thread_id) const {
-			return GetAllocatorPolymorphic(m_thread_linear_allocators[thread_id]);
+			return GetAllocatorPolymorphic(&m_thread_linear_allocators[thread_id].value);
 		}
 
 		// Returns the current static thread wrapper. If the data pointer is specified, it will copy the thread
@@ -427,7 +432,7 @@ namespace ECSEngine {
 		World* m_world;
 		void** m_thread_handles;
 
-		Stream<ThreadQueue*> m_thread_queue;
+		Stream<CacheAligned<ThreadQueue>> m_thread_queue;
 
 		// Make this structure occupy a cache line to avoid any false sharing possibility
 		// There are not a whole lot of padding bytes added, so this is probably worth it
@@ -458,15 +463,15 @@ namespace ECSEngine {
 		// When all the static tasks and their spawned dynamic tasks are finished, it will set this variable to 0
 		ConditionVariable m_is_frame_done;
 
-		ConditionVariable* m_sleep_wait;
+		CacheAligned<ConditionVariable>* m_sleep_wait;
 
 		// These are pointer to pointers in order to have them on separated cache lines
 		// to avoid false sharing
-		LinearAllocator** m_thread_linear_allocators;
+		CacheAligned<LinearAllocator>* m_thread_linear_allocators;
 
 		// From this allocator the data for the tasks and the name of the task
 		// are allocated. It is used like a ring buffer		
-		RingBuffer** m_dynamic_task_allocators;
+		CacheAligned<RingBuffer>* m_dynamic_task_allocators;
 
 		// data for tasks + names for static tasks
 		LinearAllocator m_static_task_data_allocator;

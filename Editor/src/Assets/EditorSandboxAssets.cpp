@@ -305,6 +305,18 @@ void DeallocateAssetsWithRemappingMetadataChange(EditorState* editor_state, Stre
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+unsigned int FindAssetBeingLoaded(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
+{
+	for (unsigned int index = 0; index < editor_state->loading_assets.size; index++) {
+		if (editor_state->loading_assets[index].handle == handle && editor_state->loading_assets[index].type == type) {
+			return index;
+		}
+	}
+	return -1;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void GetAssetSandboxesInUse(
 	const EditorState* editor_state, 
 	const void* metadata, 
@@ -486,6 +498,11 @@ EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 				UnlockSandbox(editor_state, data->sandbox_index);
 			}
 
+			// Lastly, we need to remove the assets from the loading array
+			data->database.ForEachAsset([editor_state](unsigned int handle, ECS_ASSET_TYPE type) {
+				RemoveLoadingAsset(editor_state, { handle, type });
+			});
+
 			return false;
 		}
 	}
@@ -548,6 +565,16 @@ void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandb
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 	GetProjectAssetsFolder(editor_state, assets_folder);
 	GetDatabaseMissingAssets(editor_state->runtime_resource_manager, reference, missing_assets, assets_folder, true);
+
+	// For each handle, verify to see if it is being already being loaded
+	for (size_t asset_type = 0; asset_type < ECS_ASSET_TYPE_COUNT; asset_type++) {
+		for (unsigned int index = 0; index < missing_assets[asset_type].size; index++) {
+			if (IsAssetBeingLoaded(editor_state, missing_assets[asset_type][index], (ECS_ASSET_TYPE)asset_type)) {
+				missing_assets[asset_type].RemoveSwapBack(index);
+				index--;
+			}
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -843,6 +870,13 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool IsAssetBeingLoaded(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
+{
+	return FindAssetBeingLoaded(editor_state, handle, type) != -1;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void LoadSandboxMissingAssets(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* missing_assets)
 {
 	LoadSandboxMissingAssets(editor_state, sandbox_index, missing_assets, nullptr, nullptr, 0);
@@ -857,15 +891,26 @@ void LoadSandboxMissingAssets(
 	size_t callback_data_size
 )
 {
-	LoadSandboxMissingAssetsEventData* event_data = InitializeEventData(editor_state, sandbox_index, missing_assets);
-	if (callback == nullptr) {
-		EditorAddEvent(editor_state, LoadSandboxMissingAssetsEvent, event_data, 0);
+	// Check to see if there are actually any assets to be loaded
+	unsigned int total_count = 0;
+	for (size_t asset_type = 0; asset_type < ECS_ASSET_TYPE_COUNT; asset_type++) {
+		total_count += missing_assets[asset_type].size;
 	}
-	else {
-		EditorAddEventWithContinuation(editor_state, LoadSandboxMissingAssetsEvent, event_data, 0, callback, callback_data, callback_data_size);
+
+	if (total_count > 0) {
+		// Add the assets to the loading array
+		AddLoadingAssets(editor_state, missing_assets);
+
+		LoadSandboxMissingAssetsEventData* event_data = InitializeEventData(editor_state, sandbox_index, missing_assets);
+		if (callback == nullptr) {
+			EditorAddEvent(editor_state, LoadSandboxMissingAssetsEvent, event_data, 0);
+		}
+		else {
+			EditorAddEventWithContinuation(editor_state, LoadSandboxMissingAssetsEvent, event_data, 0, callback, callback_data, callback_data_size);
+		}
+		// Lock the sandbox as well
+		LockSandbox(editor_state, sandbox_index);
 	}
-	// Lock the sandbox as well
-	LockSandbox(editor_state, sandbox_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -881,7 +926,6 @@ void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, Ed
 {
 	const size_t HANDLES_PER_ASSET_TYPE = ECS_KB;
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(unsigned int, missing_assets, ECS_ASSET_TYPE_COUNT, HANDLES_PER_ASSET_TYPE);
-
 	GetSandboxMissingAssets(editor_state, sandbox_index, missing_assets.buffer);
 	LoadSandboxMissingAssets(editor_state, sandbox_index, missing_assets.buffer, callback, callback_data, callback_data_size);
 }
@@ -890,8 +934,18 @@ void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, Ed
 
 void LoadAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsigned int>> handles)
 {
-	LoadSandboxMissingAssetsEventData* event_data = InitializeEventData(editor_state, handles);
-	EditorAddEvent(editor_state, LoadSandboxMissingAssetsEvent, event_data, 0);
+	// Determine which handles are not already being loaded
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+	bool has_entries = false;
+	Stream<Stream<unsigned int>> not_loading_handles = GetNotLoadedAssets(editor_state, GetAllocatorPolymorphic(&stack_allocator), handles, &has_entries);
+
+	if (has_entries) {
+		// Add these entries to the loading array
+		AddLoadingAssets(editor_state, not_loading_handles);
+
+		LoadSandboxMissingAssetsEventData* event_data = InitializeEventData(editor_state, not_loading_handles);
+		EditorAddEvent(editor_state, LoadSandboxMissingAssetsEvent, event_data, 0);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1026,6 +1080,8 @@ EDITOR_EVENT(ReloadEvent) {
 		}
 
 		FinishReloadAsset(editor_state, update_elements, {});
+		// Remove the loading assets entries
+		RemoveLoadingAssets(editor_state, data->asset_handles);
 
 		data->asset_handles.Deallocate(editor_state->EditorAllocator());
 		return false;
@@ -1037,14 +1093,19 @@ EDITOR_EVENT(ReloadEvent) {
 
 void ReloadAssets(EditorState* editor_state, Stream<Stream<unsigned int>> assets_to_reload)
 {
-	size_t total_count = 0;
-	for (size_t index = 0; index < assets_to_reload.size; index++) {
-		total_count += assets_to_reload[index].size;
-	}
+	// In order to make sure that there are no conflicts, for reloads take into considerations
+	// Loads as well. In this way, we avoid load-reload conflicts (for assets that failed, this
+	// is the only case where it can happen) but also reload-reload conflicts
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+	bool has_entries = false;
+	Stream<Stream<unsigned int>> not_loaded_assets = GetNotLoadedAssets(editor_state, GetAllocatorPolymorphic(&stack_allocator), assets_to_reload, &has_entries);
 
-	if (total_count > 0) {
+	if (has_entries) {
+		// Add the entries to the load array
+		AddLoadingAssets(editor_state, not_loaded_assets);
+
 		ReloadEventData event_data;
-		event_data.asset_handles = StreamCoalescedDeepCopy(assets_to_reload, editor_state->EditorAllocator());
+		event_data.asset_handles = StreamCoalescedDeepCopy(not_loaded_assets, editor_state->EditorAllocator());
 		EditorAddEvent(editor_state, ReloadEvent, &event_data, sizeof(event_data));
 	}
 }
@@ -1315,6 +1376,9 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 		}
 
 		FinishReloadAsset(editor_state, update_elements, dirty_sandboxes);
+		// Also remove the entries from the loading array
+		RemoveLoadingAssets(editor_state, data->asset_handles);
+
 		return false;
 	}
 	else {
@@ -1324,14 +1388,14 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 
 void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigned int>> assets_to_reload)
 {
-	size_t total_count = 0;
-	for (size_t index = 0; index < assets_to_reload.size; index++) {
-		total_count += assets_to_reload[index].size;
-	}
+	// The same as the other reload, check the loading assets entries to avoid load-reload or reload-reload conflicts
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+	bool has_entries = false;
+	Stream<Stream<unsigned int>> not_loaded_assets = GetNotLoadedAssets(editor_state, GetAllocatorPolymorphic(&stack_allocator), assets_to_reload, &has_entries);
 
-	if (total_count > 0) {
+	if (has_entries) {
 		ReloadAssetsMetadataChangeEventData event_data;
-		event_data.asset_handles = StreamCoalescedDeepCopy(assets_to_reload, editor_state->MultithreadedEditorAllocator());
+		event_data.asset_handles = StreamCoalescedDeepCopy(not_loaded_assets, editor_state->MultithreadedEditorAllocator());
 		EditorAddEvent(editor_state, ReloadAssetsMetadataChangeEvent, &event_data, sizeof(event_data));
 	}
 }
