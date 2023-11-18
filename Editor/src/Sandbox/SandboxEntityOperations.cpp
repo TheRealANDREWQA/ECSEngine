@@ -103,6 +103,7 @@ void AddSandboxSelectedEntity(EditorState* editor_state, unsigned int sandbox_in
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->selected_entities.Add(entity);
+	sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION);
 	SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
 }
 
@@ -158,6 +159,8 @@ void ChangeSandboxSelectedEntities(EditorState* editor_state, unsigned int sandb
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->selected_entities.CopyOther(entities);
+	// This is used by the UI to deduce if the change was done by it or by some other service
+	sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION);
 	SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
 }
 
@@ -165,7 +168,7 @@ void ChangeSandboxSelectedEntities(EditorState* editor_state, unsigned int sandb
 
 void ClearSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index)
 {
-	ChangeSandboxSelectedEntities(editor_state, sandbox_index, { nullptr,0 });
+	ChangeSandboxSelectedEntities(editor_state, sandbox_index, { nullptr, 0 });
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -526,6 +529,7 @@ void DeleteSandboxEntity(
 
 		// If this entity belongs to the selected group, remove it from there as well
 		RemoveSandboxSelectedEntity(editor_state, sandbox_index, entity);
+		ChangeInspectorEntitySelection(editor_state, sandbox_index);
 
 		RenderSandboxViewports(editor_state, sandbox_index, { 0, 0 }, true);
 	}
@@ -1341,6 +1345,7 @@ bool RemoveSandboxSelectedEntity(EditorState* editor_state, unsigned int sandbox
 	if (selected_index != -1) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		sandbox->selected_entities.RemoveSwapBack(selected_index);
+		sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION);
 		SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
 		return true;
 	}

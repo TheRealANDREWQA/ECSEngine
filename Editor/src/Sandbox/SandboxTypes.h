@@ -131,7 +131,8 @@ struct EditorSandboxAssetHandlesSnapshot {
 // -------------------------------------------------------------------------------------------------------------
 
 enum EDITOR_SANDBOX_FLAG : size_t {
-	EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION = 1 << 0
+	EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION = 1 << 0,
+	EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION = 1 << 1
 };
 
 enum ECS_REFLECT EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY : unsigned char {

@@ -39,6 +39,13 @@ struct UnregisterAssetEventCallbackInfo {
 	ECS_ASSET_TYPE type;
 };
 
+void AddLoadingAssets(EditorState* editor_state, Stream<Stream<unsigned int>> handles);
+
+// There must be ECS_ASSET_TYPE_COUNT entries for the handles pointer
+void AddLoadingAssets(EditorState* editor_state, CapacityStream<unsigned int>* handles);
+
+void AddLoadingAssets(EditorState* editor_state, Stream<AssetTypedHandle> handles);
+
 // The sandbox_assets boolean should be true if the assets belong to a sandbox
 // If they belong to sandboxes and the sandbox_index is -1 then it will remove it
 // from every sandbox that contains it. The callback receives in the additional info field
@@ -128,16 +135,6 @@ bool CreateAssetInternalDependencies(
 // If an asset like a mesh or a texture doesn't have a default setting, it creates one
 void CreateAssetDefaultSetting(const EditorState* editor_state);
 
-// When the target file of an asset is changed this needs to be called
-// This may run delayed because of the prevent resource load flag
-// The new asset pointer needs to be stable. It will set the status to 1 if it completed successfully, 0 if it failed.
-// It will change the full name internally
-void ChangeAssetFile(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, const void* new_asset, unsigned char* status);
-
-// When the name of an asset is changed this needs to be called
-// It will create the full name internally
-void ChangeAssetName(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, const void* new_asset);
-
 void ChangeAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, size_t new_stamp);
 
 void ChangeAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, size_t new_stamp);
@@ -200,6 +197,9 @@ unsigned int FindAsset(const EditorState* editor_state, Stream<char> name, Strea
 // Returns the handle to that asset. If it doesn't exist, it will add it without creating the runtime asset
 // Can optionally specify whether or not to update the reference count (when it already exists)
 unsigned int FindOrAddAsset(EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, bool increment_reference_count = false);
+
+// Returns the index in the background loading array, -1 if it is not being loaded
+unsigned int FindAssetBeingLoaded(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
 // Fills in the relative path to the asset from the name (materials, gpu samplers, shaders and misc are available at the moment)
 void FromAssetNameToThunkOrForwardingFile(Stream<char> name, Stream<wchar_t> extension, CapacityStream<wchar_t>& relative_path);
@@ -272,6 +272,15 @@ unsigned int GetAssetReferenceCount(const EditorState* editor_state, unsigned in
 // Then buffer itself
 Stream<Stream<wchar_t>> GetAssetsFromAssetsFolder(const EditorState* editor_state, AllocatorPolymorphic allocator);
 
+// Using the stack_allocator, it will return back the handles which are not already being loaded in background
+// In the boolean pointer it will set the value to true if there are entries, else false
+Stream<Stream<unsigned int>> GetNotLoadedAssets(
+	const EditorState* editor_state, 
+	AllocatorPolymorphic stack_allocator, 
+	Stream<Stream<unsigned int>> handles, 
+	bool* has_entries
+);
+
 bool HasAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
 bool HasAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
@@ -287,6 +296,9 @@ void InsertAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_AS
 // Inserts a time stamp into the resource manager. If the is_missing flag is set to true it will only
 // insert the time stamp if it doesn't exist
 void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, bool if_is_missing = false);
+
+// Returns true if the asset is being loaded in the background, else false
+bool IsAssetBeingLoaded(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
 // The file is ignored for materials and samplers
 // It writes the handle of the asset. If the deserialization failed, it will write -1
@@ -304,6 +316,12 @@ bool RegisterGlobalAsset(
 	UIActionHandler callback = {}
 );
 
+// It will push an event to remove the handles from the loading assets array
+void RegisterRemoveLoadingAssetsEvent(EditorState* editor_state, Stream<AssetTypedHandle> handles);
+
+// It will push an event to remove the handles from the loading assets array
+void RegisterRemoveLoadingAssetsEvent(EditorState* editor_state, Stream<Stream<unsigned int>> handles);
+
 void RemoveAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
 void RemoveAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
@@ -319,6 +337,12 @@ bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 
 // Removes the dependencies and also the time stamps
 void RemoveAssetDependencies(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+void RemoveLoadingAsset(EditorState* editor_state, AssetTypedHandle handle);
+
+void RemoveLoadingAssets(EditorState* editor_state, Stream<Stream<unsigned int>> handles);
+
+void RemoveLoadingAssets(EditorState* editor_state, Stream<AssetTypedHandle> handles);
 
 // This unregister is for assets that are not tied down to a sandbox.
 // Useful for example for inspectors. It will wait until the flag EDITOR_STATE_PREVENT_RESOURCE_LOADING is cleared

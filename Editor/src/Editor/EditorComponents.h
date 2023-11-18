@@ -90,7 +90,7 @@ struct EditorComponents {
 		}
 		
 		ECS_INLINE static SpinLock* EntityManagerLock(Stream<SpinLock> archetype_locks) {
-			return archetype_locks.buffer + archetype_locks.size - 1;
+			return archetype_locks.size == 0 ? nullptr : archetype_locks.buffer + archetype_locks.size - 1;
 		}
 
 		// These locks are used to prevents multiple threads on performing actions on the same archetypes

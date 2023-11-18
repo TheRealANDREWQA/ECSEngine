@@ -29,3 +29,5 @@ unsigned GetVisualizeTextureCount(const EditorState* editor_state);
 void GetVisualizeTextureNames(const EditorState* editor_state, ECSEngine::CapacityStream<ECSEngine::Stream<char>>* names);
 
 void GetVisualizeTextureElements(const EditorState* editor_state, ECSEngine::CapacityStream<ECSEngine::Tools::VisualizeTextureSelectElement>* select_elements);
+
+void UpdateVisualizeTextureSandboxReferences(EditorState* editor_state, unsigned int previous_sandbox_index, unsigned int new_sandbox_index);

@@ -98,11 +98,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void HierarchySelectableClick(ActionData* action_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void HierarchyNodeDrag(ActionData* action_data);
+		ECSENGINE_API void BoolClickableWithPinCallback(ActionData* action_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 

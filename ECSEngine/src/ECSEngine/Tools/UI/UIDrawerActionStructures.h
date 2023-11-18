@@ -370,18 +370,9 @@ namespace ECSEngine {
 			unsigned int pin_count = 1;
 		};
 
-		struct UIDrawerHierarchySelectableData {
-			UIDrawerBoolClickableWithPinData bool_data;
-			UIDrawerHierarchy* hierarchy;
-			unsigned int node_index;
-		};
-
-		struct UIDrawerHierarchyDragNode {
-			UIDrawerHierarchiesData* hierarchies_data;
-			UIDrawerHierarchySelectableData selectable_data;
-			unsigned int previous_index = 0;
-			bool has_been_cancelled = false;
-			Timer timer;
+		struct UIDrawerBoolClickableWithPinCallbackData {
+			UIDrawerBoolClickableWithPinData base;
+			UIActionHandler handler;
 		};
 
 		struct UIDrawerGraphHoverableData {

@@ -101,22 +101,23 @@ namespace ECSEngine {
 
 	void WorldProfiling::Initialize(const WorldProfilingInitializeDescriptor* descriptor)
 	{
+		ECS_ASSERT(descriptor->world != nullptr);
+
 		if (HasFlag(descriptor->init_options, ECS_WORLD_PROFILING_CPU)) {
 			size_t arena_size = descriptor->cpu_thread_arena_capacity == 0 ? ECS_CPU_FRAME_PROFILER_THREAD_ALLOCATOR_CAPACITY : descriptor->cpu_thread_arena_capacity;
 			size_t backup_size = descriptor->cpu_thread_arena_backup_capacity == 0 ? ECS_CPU_FRAME_PROFILER_THREAD_ALLOCATOR_BACKUP_CAPACITY 
 				: descriptor->cpu_thread_arena_backup_capacity;
-			ECS_ASSERT(descriptor->task_manager != nullptr);
 
 			cpu_profiler.Initialize(
 				descriptor->allocator, 
-				descriptor->task_manager, 
+				descriptor->world->task_manager, 
 				descriptor->entry_capacity, 
 				arena_size,
 				backup_size
 			);
 		}
 		if (HasFlag(descriptor->init_options, ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
-			physical_memory_profiler.Initialize(descriptor->allocator, descriptor->entry_capacity);
+			physical_memory_profiler.Initialize(descriptor->allocator, descriptor->world->task_manager->GetThreadCount(), descriptor->entry_capacity);
 		}
 		if (HasFlag(descriptor->init_options, ECS_WORLD_PROFILING_ALLOCATOR)) {
 			allocator_profiler.Initialize(descriptor->allocator, descriptor->entry_capacity);
@@ -163,11 +164,11 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < thread_count; index++) {
 			thread_allocator_name.size = 0;
 			ECS_FORMAT_STRING(thread_allocator_name, "Thread {#} Linear", index);
-			world->task_manager->m_thread_linear_allocators[index]->SetProfilingMode(thread_allocator_name.buffer);
+			world->task_manager->m_thread_linear_allocators[index].value.SetProfilingMode(thread_allocator_name.buffer);
 
 			thread_allocator_name.size = 0;
 			ECS_FORMAT_STRING(thread_allocator_name, "Thread {#} Dynamic", index);
-			world->task_manager->m_dynamic_task_allocators[index]->SetProfilingMode(thread_allocator_name.buffer);
+			world->task_manager->m_dynamic_task_allocators[index].value.SetProfilingMode(thread_allocator_name.buffer);
 		}
 		SetAllocatorProfilingMode(world->task_scheduler->Allocator(), "Task Scheduler");
 		if (world->debug_drawer != nullptr) {
@@ -186,9 +187,12 @@ namespace ECSEngine {
 		AddAllocatorToPhysicalMemoryProfiling(world->resource_manager->Allocator(), physical_memory_profiler);
 		unsigned int thread_count = world->task_manager->GetThreadCount();
 		for (unsigned int index = 0; index < thread_count; index++) {
-			AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(world->task_manager->m_thread_linear_allocators[index]), physical_memory_profiler);
+			AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(&world->task_manager->m_thread_linear_allocators[index].value), physical_memory_profiler);
 			// For the dynamic task allocators, we can insert them directly
-			physical_memory_profiler->AddEntry({ world->task_manager->m_dynamic_task_allocators[index]->buffer, world->task_manager->m_dynamic_task_allocators[index]->capacity });
+			physical_memory_profiler->AddEntry({ 
+				world->task_manager->m_dynamic_task_allocators[index].value.buffer, 
+				world->task_manager->m_dynamic_task_allocators[index].value.capacity 
+			});
 		}
 		AddAllocatorToPhysicalMemoryProfiling(world->task_scheduler->Allocator(), physical_memory_profiler);
 		if (world->debug_drawer != nullptr) {

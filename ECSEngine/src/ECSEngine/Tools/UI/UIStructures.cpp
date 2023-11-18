@@ -154,14 +154,17 @@ namespace ECSEngine {
 					total_data_size += copy.action[index].data_size;
 				}
 
-				void* allocation = AllocateEx(allocator, total_data_size);
-				uintptr_t ptr = (uintptr_t)allocation;
-				for (unsigned int index = 0; index < copy.position_x.size; index++) {
-					if (copy.action[index].data_size > 0) {
-						void* previous_data = copy.action[index].data;
-						copy.action[index].data = (void*)ptr;
-						memcpy(copy.action[index].data, previous_data, copy.action[index].data_size);
-						ptr += copy.action[index].data_size;
+				void* allocation = nullptr;
+				if (total_data_size > 0) {
+					allocation = AllocateEx(allocator, total_data_size);
+					uintptr_t ptr = (uintptr_t)allocation;
+					for (unsigned int index = 0; index < copy.position_x.size; index++) {
+						if (copy.action[index].data_size > 0) {
+							void* previous_data = copy.action[index].data;
+							copy.action[index].data = (void*)ptr;
+							memcpy(copy.action[index].data, previous_data, copy.action[index].data_size);
+							ptr += copy.action[index].data_size;
+						}
 					}
 				}
 				*coalesced_action_data = allocation;

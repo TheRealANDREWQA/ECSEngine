@@ -595,7 +595,7 @@ void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int in
 		// Create a new inspector instance and set it to the sandbox with the draw on the settings
 		matched_inspector_index = CreateInspectorInstance(editor_state);
 		CreateInspectorDockspace(editor_state, matched_inspector_index);
-		SetInspectorTargetSandbox(editor_state, matched_inspector_index, sandbox_index);
+		SetInspectorMatchingSandbox(editor_state, matched_inspector_index, sandbox_index);
 		ChangeInspectorToSandboxSettings(editor_state, matched_inspector_index);
 	}
 

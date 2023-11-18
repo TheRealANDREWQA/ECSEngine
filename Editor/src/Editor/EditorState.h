@@ -130,6 +130,11 @@ struct EditorState {
 
 	EditorVisualizeTexture visualize_texture;
 
+	// Assets that are loaded in background will be placed in this
+	// Array such that we won't issue a second load for an asset that is already
+	// Loading. At the moment, make this single threaded
+	ECSEngine::ResizableStream<ECSEngine::AssetTypedHandle> loading_assets;
+
 	// These will be played back on the main thread. If multithreaded tasks are desired,
 	// use the AddBackgroundTask function. It is used in a multithreaded context
 	ECSEngine::ThreadSafeResizableQueue<EditorEvent> event_queue;

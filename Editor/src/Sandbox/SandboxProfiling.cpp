@@ -73,7 +73,6 @@ void InitializeSandboxProfilers(EditorState* editor_state, unsigned int sandbox_
 	descriptor.entry_capacity = PROFILING_ENTRIES;
 	descriptor.init_options = ECS_WORLD_PROFILING_ALL;
 	descriptor.starting_options = ECS_WORLD_PROFILING_NONE;
-	descriptor.task_manager = sandbox->sandbox_world.task_manager;
 	descriptor.world = &sandbox->sandbox_world;
 
 	sandbox->world_profiling.Initialize(&descriptor);

@@ -1668,7 +1668,6 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 	}
 
 	size_t _draw_data[128];
-
 	InspectorDrawEntityData* draw_data = (InspectorDrawEntityData*)_draw_data;
 	set_info_functor(draw_data);
 	draw_data->name_input.buffer = nullptr;
@@ -1677,13 +1676,12 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 	draw_data->matching_inputs.size = 0;
 	draw_data->created_instances.size = 0;
 	draw_data->link_components.size = 0;
-	draw_data->allocator = MemoryManager(ECS_KB * 64, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
 
 	memset(draw_data->header_state, 1, sizeof(bool) * (ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS));
 
 	DetermineDebugDrawStates(editor_state, sandbox_index, draw_data);
 
-	ChangeInspectorDrawFunction(
+	inspector_index = ChangeInspectorDrawFunction(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawEntity, InspectorCleanEntity },
@@ -1691,6 +1689,12 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 		sizeof(*draw_data) + INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY,
 		sandbox_index
 	);
+
+	if (inspector_index != -1) {
+		// Allocate the allocator - only if we get a match
+		draw_data = (InspectorDrawEntityData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
+		draw_data->allocator = MemoryManager(ECS_KB * 64, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
+	}
 }
 
 void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index)

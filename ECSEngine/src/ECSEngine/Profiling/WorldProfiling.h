@@ -29,8 +29,6 @@ namespace ECSEngine {
 		// ------------------------ Mandatory ----------------------------
 
 		// ------------------------- Optional ----------------------------
-		// For the CPU profiler
-		const TaskManager* task_manager = nullptr;
 		// If these are left at 0, it will use the defaults
 		size_t cpu_thread_arena_capacity = 0;
 		size_t cpu_thread_arena_backup_capacity = 0;

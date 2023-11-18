@@ -12,6 +12,14 @@ namespace ECSEngine {
 		unsigned int reference_count;
 	};
 
+	// Useful for multithreading contexts where 
+	template<typename T>
+	struct CacheAligned {
+		T value;
+	private:
+		char padding[(sizeof(T) % ECS_CACHE_LINE_SIZE) == 0 ? 0 : ECS_CACHE_LINE_SIZE - (sizeof(T) % ECS_CACHE_LINE_SIZE)];
+	};
+
 	struct Date {
 		unsigned char month;
 		unsigned char day;

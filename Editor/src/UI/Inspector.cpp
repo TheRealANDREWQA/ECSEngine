@@ -1,14 +1,14 @@
 #include "editorpch.h"
 #include "Inspector.h"
 #include "InspectorData.h"
+#include "FileExplorer.h"
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorPalette.h"
 #include "../Editor/EditorEvent.h"
-#include "FileExplorer.h"
 #include "../Modules/Module.h"
-#include "ECSEngineRendering.h"
 #include "../Modules/ModuleSettings.h"
 #include "../Assets/AssetManagement.h"
+#include "../Sandbox/Sandbox.h"
 
 #include "Inspector/InspectorUtilities.h"
 #include "Inspector/InspectorMeshFile.h"
@@ -52,16 +52,6 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 	CapacityStream<char> inspector_name(OffsetPointer(stack_memory, sizeof(unsigned int)), 0, 128);
 	GetInspectorName(inspector_index, inspector_name);
 	descriptor.window_name = inspector_name.buffer;
-}
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
-void GetInspectorsForModule(const EditorState* editor_state, unsigned int target_sandbox, CapacityStream<unsigned int>& inspector_indices) {
-	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		if (editor_state->inspector_manager.data[index].target_sandbox == target_sandbox) {
-			inspector_indices.AddAssert(index);
-		}
-	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -129,7 +119,7 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 
 		unsigned int sandbox_count = editor_state->sandboxes.size;
 
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, combo_labels, sandbox_count);
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, combo_labels, sandbox_count + 1);
 		// We need only to convert the sandbox indices. We will use a prefix to indicate that it is the sandbox index
 		ECS_STACK_CAPACITY_STREAM(char, converted_labels, 128);
 		for (unsigned int index = 0; index < sandbox_count; index++) {
@@ -138,7 +128,9 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 			// The last character was a '\0' but it is not included in the size
 			converted_labels.size++;
 		}
-		combo_labels.size = sandbox_count;
+		// The last entry is the All one
+		combo_labels.size = combo_labels.capacity - 1;
+		combo_labels.Add("All");
 
 		UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
 		row_layout.SetHorizontalAlignment(ECS_UI_ALIGN_MIDDLE);
@@ -203,8 +195,16 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 				UI_UNPACK_ACTION_DATA;
 
 				ComboCallbackData* data = (ComboCallbackData*)_data;
-				unsigned char new_sandbox = GetInspectorTargetSandbox(data->editor_state, data->inspector_index);
-				SetInspectorTargetSandbox(data->editor_state, data->inspector_index, new_sandbox);
+				// Truncate the value
+				unsigned char new_sandbox = (unsigned char)GetInspectorMatchingSandbox(data->editor_state, data->inspector_index);
+				// Compare as unsigned chars since the normal index is uint and might have something set in
+				// the upper bits
+				if (new_sandbox == (unsigned char)GetSandboxCount(data->editor_state)) {
+					SetInspectorMatchingSandboxAll(data->editor_state, data->inspector_index);
+				}
+				else {
+					SetInspectorMatchingSandbox(data->editor_state, data->inspector_index, new_sandbox);
+				}
 			};
 
 			ComboCallbackData combo_callback_data = { editor_state, inspector_index };
@@ -224,8 +224,8 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 				config,
 				"Sandbox combo",
 				combo_labels,
-				sandbox_count,
-				(unsigned char*)&editor_state->inspector_manager.data[inspector_index].target_sandbox
+				combo_labels.size,
+				(unsigned char*)&editor_state->inspector_manager.data[inspector_index].matching_sandbox
 			);
 		}
 		drawer.NextRow();
@@ -276,6 +276,14 @@ unsigned int CreateInspectorInstance(EditorState* editor_state) {
 	editor_state->inspector_manager.data.size++;
 	ChangeInspectorToNothing(editor_state, inspector_index);
 	return inspector_index;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+bool DoesInspectorMatchSandbox(const EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
+{
+	unsigned int matching_sandbox = GetInspectorMatchingSandbox(editor_state, inspector_index);
+	return matching_sandbox == sandbox_index || matching_sandbox == -1;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -366,7 +374,7 @@ unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned
 void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices)
 {
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		if (GetInspectorTargetSandbox(editor_state, index) == sandbox_index) {
+		if (DoesInspectorMatchSandbox(editor_state, index, sandbox_index)) {
 			inspector_indices->AddAssert(index);
 		}
 	}
@@ -374,13 +382,20 @@ void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandb
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void SetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
+void SetInspectorMatchingSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
 {
-	editor_state->inspector_manager.data[inspector_index].target_sandbox = sandbox_index;
+	editor_state->inspector_manager.data[inspector_index].matching_sandbox = sandbox_index;
 	// Reset the draw to nothing - some windows are dependent on the sandbox and changing it without anouncing
 	// them can result in inconsistent results
 
 	ChangeInspectorToNothing(editor_state, inspector_index);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void SetInspectorMatchingSandboxAll(EditorState* editor_state, unsigned int inspector_index)
+{
+	SetInspectorMatchingSandbox(editor_state, inspector_index, -1);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -394,6 +409,24 @@ unsigned int GetInspectorTargetSandboxFromUIWindow(const EditorState* editor_sta
 	}
 	else {
 		return -1;
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void ChangeInspectorEntitySelection(EditorState* editor_state, unsigned int sandbox_index) {
+	Stream<Entity> selection = GetSandboxSelectedEntities(editor_state, sandbox_index);
+	if (selection.size == 0) {
+		ECS_STACK_CAPACITY_STREAM(unsigned int, inspector_indices, 512);
+		GetInspectorsForSandbox(editor_state, sandbox_index, &inspector_indices);
+		for (unsigned int index = 0; index < inspector_indices.size; index++) {
+			if (!IsInspectorLocked(editor_state, inspector_indices[index]) && IsInspectorDrawEntity(editor_state, inspector_indices[index])) {
+				ChangeInspectorToNothing(editor_state, inspector_indices[index]);
+			}
+		}
+	}
+	else if (selection.size == 1) {
+		ChangeInspectorToEntity(editor_state, sandbox_index, selection[0]);
 	}
 }
 
@@ -582,6 +615,7 @@ void InitializeInspectorInstance(EditorState* editor_state, unsigned int index)
 	data->data_size = 0;
 	data->draw_data = nullptr;
 	data->flags = 0;
+	data->matching_sandbox = 0;
 	data->target_sandbox = 0;
 	data->table = &editor_state->inspector_manager.function_table;
 }
@@ -590,8 +624,8 @@ void InitializeInspectorInstance(EditorState* editor_state, unsigned int index)
 
 void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sandbox_index, unsigned int new_sandbox_index) {
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		if (editor_state->inspector_manager.data[index].target_sandbox == old_sandbox_index) {
-			editor_state->inspector_manager.data[index].target_sandbox = new_sandbox_index;
+		if (editor_state->inspector_manager.data[index].matching_sandbox == old_sandbox_index) {
+			editor_state->inspector_manager.data[index].matching_sandbox = new_sandbox_index;
 		}
 	}
 }
@@ -624,7 +658,7 @@ void RegisterInspectorSandboxChange(EditorState* editor_state) {
 		for (unsigned int index = 0; index < sandbox_count; index++) {
 			unsigned int target_inspectors_for_module = 0;
 			for (unsigned int subindex = 0; subindex < editor_state->inspector_manager.data.size; subindex++) {
-				target_inspectors_for_module += editor_state->inspector_manager.data[subindex].target_sandbox == index;
+				target_inspectors_for_module += GetInspectorMatchingSandbox(editor_state, subindex) == index;
 			}
 
 			if (target_inspectors_for_module > 0) {
@@ -642,10 +676,11 @@ void RegisterInspectorSandboxChange(EditorState* editor_state) {
 			editor_state->inspector_manager.round_robin_index[sandbox_count] = 0;
 		}
 
-		// Any inspectors that are targetting invalid sandboxes, retarget them to the 0th sandbox
+		// Any inspectors that are matching invalid sandboxes, retarget them to the 0th sandbox
 		for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-			if (GetInspectorTargetSandbox(editor_state, index) >= sandbox_count) {
-				ChangeInspectorTargetSandbox(editor_state, index, 0);
+			unsigned int matching_sandbox = GetInspectorMatchingSandbox(editor_state, index);
+			if (matching_sandbox >= sandbox_count && matching_sandbox != -1) {
+				ChangeInspectorMatchingSandbox(editor_state, index, 0);
 				ChangeInspectorToNothing(editor_state, index);
 			}
 		}
@@ -661,8 +696,9 @@ bool IsInspectorLocked(const EditorState* editor_state, unsigned int inspector_i
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
+void ChangeInspectorMatchingSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
 {
+	editor_state->inspector_manager.data[inspector_index].matching_sandbox = sandbox_index;
 	editor_state->inspector_manager.data[inspector_index].target_sandbox = sandbox_index;
 }
 
@@ -720,6 +756,13 @@ void ChangeInspectorToAsset(EditorState* editor_state, Stream<wchar_t> path, Str
 bool ExistsInspector(const EditorState* editor_state, unsigned int inspector_index)
 {
 	return editor_state->inspector_manager.data.size > inspector_index;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+unsigned int GetInspectorMatchingSandbox(const EditorState* editor_state, unsigned int inspector_index)
+{
+	return editor_state->inspector_manager.data[inspector_index].matching_sandbox;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

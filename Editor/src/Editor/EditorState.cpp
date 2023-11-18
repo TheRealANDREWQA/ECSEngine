@@ -572,25 +572,12 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	InitializeSandboxes(editor_state);
 
 	CreateWorldDescriptorUIReflectionType(editor_state);
+	OS::InitializeSymbolicLinksPaths({});
 
-	unsigned int ecs_runtime_index = 0;
-#ifdef ECSENGINE_RELEASE
-	ecs_runtime_index = 2;
-#endif
-
-#ifdef ECSENGINE_DISTRIBUTION
-	ecs_runtime_index = 4;
-#endif
-
-	Stream<wchar_t> pdb_paths[2] = {
-		 ECS_RUNTIME_PDB_PATHS[ecs_runtime_index],
-		 ECS_RUNTIME_PDB_PATHS[ecs_runtime_index + 1]
-	};
-	OS::InitializeSymbolicLinksPaths({ pdb_paths, std::size(pdb_paths) });
-
-	// Initialize the gpu_tasks and background tasks queues
+	// Initialize the gpu_tasks, background tasks queues and the loading assets array
 	editor_state->gpu_tasks.m_queue.Initialize(editor_state->EditorAllocator(), 8);
 	editor_state->pending_background_tasks.m_queue.Initialize(editor_state->EditorAllocator(), 8);
+	editor_state->loading_assets.Initialize(editor_state->EditorAllocator(), 0);
 
 	// This will be run asynchronously for the graphics object
 	InitializeRuntime(editor_state);
@@ -703,7 +690,8 @@ void EditorStateSetDatabasePath(EditorState* editor_state)
 
 void EditorStateBeforeExitCleanup(EditorState* editor_state)
 {
-	editor_state->task_manager->SleepUntilDynamicTasksFinish();
+	// At the moment, this is not really necessary
+	/*editor_state->task_manager->SleepUntilDynamicTasksFinish();
 	
 	unsigned int sandbox_count = editor_state->sandboxes.size;
 	for (size_t index = 0; index < sandbox_count; index++) {
@@ -711,7 +699,7 @@ void EditorStateBeforeExitCleanup(EditorState* editor_state)
 	}
 
 	DestroyGraphics(editor_state->RuntimeGraphics());
-	DestroyGraphics(editor_state->UIGraphics());
+	DestroyGraphics(editor_state->UIGraphics());*/
 
 	// The the gpu stats recording as well
 	FreeGPUStatsRecording();

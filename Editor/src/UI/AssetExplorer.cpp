@@ -8,12 +8,15 @@
 #include "../Project/ProjectFolders.h"
 #include "Inspector.h"
 
-#define RETAINED_MODE_REFRESH_DURATION_MS 100
+#define RETAINED_MODE_REFRESH_DURATION_MS 500
 
 struct AssetExplorerData {
 	EditorState* editor_state;
 	bool asset_opened_headers[ECS_ASSET_TYPE_COUNT];
 	bool resource_manager_opened_headers[(unsigned char)ResourceType::TypeCount];
+	
+	//Stream<Stream<wchar_t>> resource_manager_labels[(unsigned char)ResourceType::TypeCount];
+	//Stream<unsigned short> resource__manager_reference_counts[(unsigned char)ResourceType::TypeCount];
 
 	Timer retained_mode_timer;
 };
@@ -135,6 +138,7 @@ void AssetExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	drawer.NextRow();
 
 	drawer.Text("Resources in Resource Manager");
+
 	drawer.NextRow();
 	auto iterate_resource_type = [&](ResourceType resource_type) {
 		const char* resource_string = ResourceTypeString(resource_type);
@@ -173,12 +177,11 @@ void AssetExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	for (unsigned int index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
 		iterate_resource_type((ResourceType)index);
 	}
-
 }
 
 static bool AssetExplorerRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
 	AssetExplorerData* explorer_data = (AssetExplorerData*)window_data;
-	if (explorer_data->retained_mode_timer.GetDuration(ECS_TIMER_DURATION_MS) >= RETAINED_MODE_REFRESH_DURATION_MS) {
+	if (explorer_data->retained_mode_timer.GetDuration(ECS_TIMER_DURATION_MS) > RETAINED_MODE_REFRESH_DURATION_MS) {
 		explorer_data->retained_mode_timer.SetNewStart();
 		return false;
 	}

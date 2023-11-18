@@ -114,17 +114,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_COLLAPSING_HEADER_DO_NOT_INFER = (size_t)1 << 46;
 		constexpr size_t UI_CONFIG_COLLAPSING_HEADER_SELECTION = (size_t)1 << 47;
 		constexpr size_t UI_CONFIG_COLLAPSING_HEADER_BUTTONS = (size_t)1 << 48;
-
-		constexpr size_t UI_CONFIG_HIERARCHY_DO_NOT_OFFSET = (size_t)1 << 45;
-		constexpr size_t UI_CONFIG_HIERARCHY_DO_NOT_REDUCE_Y = (size_t)1 << 46;
-		constexpr size_t UI_CONFIG_HIERARCHY_NODE_DO_NOT_INFER_SCALE_X = (size_t)1 << 47;
-		constexpr size_t UI_CONFIG_HIERARCHY_SPRITE_TEXTURE = (size_t)1 << 48;
-		constexpr size_t UI_CONFIG_HIERARCHY_NO_ACTION_NO_NAME = (size_t)1 << 49;
-		constexpr size_t UI_CONFIG_HIERARCHY_SELECTABLE = (size_t)1 << 50;
-		constexpr size_t UI_CONFIG_HIERARCHY_DRAG_NODE = (size_t)1 << 51;
-		constexpr size_t UI_CONFIG_HIERARCHY_CHILD = (size_t)1 << 52;
-
-		constexpr size_t UI_CONFIG_LIST_NO_NAME = (size_t)1 << 45;
+		constexpr size_t UI_CONFIG_COLLAPSING_HEADER_CALLBACK = (size_t)1 << 49;
 
 		constexpr size_t UI_CONFIG_MENU_SPRITE = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_MENU_COPY_STATES = (size_t)1 << 46;
