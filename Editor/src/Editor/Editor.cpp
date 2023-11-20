@@ -147,56 +147,92 @@ public:
 
 					unsigned int frame_pacing = 0;
 
-					editor_state.Tick();
-					if (!IsIconic(hWnd)) {
-						graphics->BindRenderTargetViewFromInitialViews();
-
-						/*static float average = 0.0f;
-						static int average_count = 0;*/
-
-						timer.SetNewStart();
-						// Here write the Game/Scene windows to be focused, i.e. be drawn every single frame,
-						// While having all the other windows be drawn at a lesser frequency
-						ECS_STACK_CAPACITY_STREAM(char, focused_window_chars, ECS_KB * 2);
-						ECS_STACK_CAPACITY_STREAM(Stream<char>, focused_windows, 64);
-						unsigned int sandbox_count = GetSandboxCount(&editor_state);
-						for (unsigned int index = 0; index < sandbox_count; index++) {
-							unsigned int current_start = focused_window_chars.size;
-							GetSceneUIWindowName(index, focused_window_chars);
-							focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
-
-							current_start = focused_window_chars.size;
-							GetGameUIWindowName(index, focused_window_chars);
-							focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
+					auto handle_physical_memory_guards = [&editor_state](EXCEPTION_POINTERS* exception_pointers) {
+						OS::ExceptionInformation exception_information = OS::GetExceptionInformationFromNative(exception_pointers);
+						if (exception_information.error_code == OS::ECS_OS_EXCEPTION_PAGE_GUARD) {
+							unsigned int sandbox_count = GetSandboxCount(&editor_state);
+							unsigned int index = 0;
+							for (; index < sandbox_count; index++) {
+								EditorSandbox* sandbox = GetSandbox(&editor_state, index);
+								if (sandbox->world_profiling.HasOption(ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
+									// We can use thread_id 0 here since we are on the main thread
+									bool was_handled = sandbox->world_profiling.physical_memory_profiler.HandlePageGuardEnter(0, exception_information.faulting_page);
+									if (was_handled) {
+										break;
+									}
+								}
+							}
+							
+							if (index == sandbox_count) {
+								// It doesn't belong to the physical memory profiler range
+								return EXCEPTION_CONTINUE_SEARCH;
+							}
+							else {
+								// We can continue the execution
+								return EXCEPTION_CONTINUE_EXECUTION;
+							}
 						}
-						// We also need to add the visualize texture window
-						focused_windows.AddAssert(VISUALIZE_TEXTURE_WINDOW_NAME);
-
-						// At the moment use the classical drawing since some windows have problems
-						// With the retained snapshots where invalid references are kept when they shouldn't
-						// For example, the inspector can have snapshot runnables on text inputs and when the
-						// entity is changed the runnable will refer to an invalid field
-						frame_pacing = editor_state.ui_system->DoFrame();
-						//frame_pacing = editor_state.ui_system->DoFrame({ focused_windows, 33 });
-
-						/*float duration = timer.GetDuration(ECS_TIMER_DURATION_US);
-						if (duration < 5000) {
-							average = average * average_count + duration;
-							average_count++;
-							average /= average_count;
-						}*/
-
-						// Refresh the graphics object since it might be changed
-						graphics = editor_state.UIGraphics();
-
-						bool removed = graphics->SwapBuffers(0);
-						if (removed) {
-							__debugbreak();
+						else {
+							return EXCEPTION_CONTINUE_SEARCH;
 						}
+					};
 
-						mouse.Update();
-						keyboard.Update();						
+					// The main thread might run into page guards that the physical memory places
+					// So, we need to wrap this code into a section and check all sandboxes for their
+					// physical memory profilers in case the exception is of type PAGE_GUARD
+					__try {
+						editor_state.Tick();
+						if (!IsIconic(hWnd)) {
+							graphics->BindRenderTargetViewFromInitialViews();
+
+							/*static float average = 0.0f;
+							static int average_count = 0;*/
+
+							timer.SetNewStart();
+							// Here write the Game/Scene windows to be focused, i.e. be drawn every single frame,
+							// While having all the other windows be drawn at a lesser frequency
+							ECS_STACK_CAPACITY_STREAM(char, focused_window_chars, ECS_KB * 2);
+							ECS_STACK_CAPACITY_STREAM(Stream<char>, focused_windows, 64);
+							unsigned int sandbox_count = GetSandboxCount(&editor_state);
+							for (unsigned int index = 0; index < sandbox_count; index++) {
+								unsigned int current_start = focused_window_chars.size;
+								GetSceneUIWindowName(index, focused_window_chars);
+								focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
+
+								current_start = focused_window_chars.size;
+								GetGameUIWindowName(index, focused_window_chars);
+								focused_windows.AddAssert({ focused_window_chars.buffer + current_start, focused_window_chars.size - current_start });
+							}
+							// We also need to add the visualize texture window
+							focused_windows.AddAssert(VISUALIZE_TEXTURE_WINDOW_NAME);
+
+							// At the moment use the classical drawing since some windows have problems
+							// With the retained snapshots where invalid references are kept when they shouldn't
+							// For example, the inspector can have snapshot runnables on text inputs and when the
+							// entity is changed the runnable will refer to an invalid field
+							frame_pacing = editor_state.ui_system->DoFrame();
+							//frame_pacing = editor_state.ui_system->DoFrame({ focused_windows, 33 });
+
+							/*float duration = timer.GetDuration(ECS_TIMER_DURATION_US);
+							if (duration < 5000) {
+								average = average * average_count + duration;
+								average_count++;
+								average /= average_count;
+							}*/
+
+							// Refresh the graphics object since it might be changed
+							graphics = editor_state.UIGraphics();
+
+							bool removed = graphics->SwapBuffers(0);
+							if (removed) {
+								__debugbreak();
+							}
+
+							mouse.Update();
+							keyboard.Update();
+						}
 					}
+					__except (handle_physical_memory_guards(GetExceptionInformation())) {}
 
 					std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_AMOUNT[frame_pacing]));
 				}

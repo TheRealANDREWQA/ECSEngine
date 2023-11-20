@@ -2,6 +2,7 @@
 #include "WorldProfiling.h"
 #include "CPUFrameProfilerGlobal.h"
 #include "AllocatorProfilingGlobal.h"
+#include "PhysicalMemoryProfilerGlobal.h"
 #include "../ECS/World.h"
 #include "../ECS/ArchetypeQueryCache.h"
 
@@ -36,7 +37,7 @@ namespace ECSEngine {
 			ChangeCPUFrameProfilerGlobal(&cpu_profiler);
 		}
 		if (HasFlag(options, ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
-			// No global here
+			ChangePhysicalMemoryProfilerGlobal(&physical_memory_profiler);
 		}
 		if (HasFlag(options, ECS_WORLD_PROFILING_ALLOCATOR)) {
 			ChangeAllocatorProfilingGlobal(&allocator_profiler);
@@ -117,7 +118,7 @@ namespace ECSEngine {
 			);
 		}
 		if (HasFlag(descriptor->init_options, ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
-			physical_memory_profiler.Initialize(descriptor->allocator, descriptor->world->task_manager->GetThreadCount(), descriptor->entry_capacity);
+			physical_memory_profiler.Initialize(descriptor->allocator, descriptor->world->task_manager, descriptor->entry_capacity);
 		}
 		if (HasFlag(descriptor->init_options, ECS_WORLD_PROFILING_ALLOCATOR)) {
 			allocator_profiler.Initialize(descriptor->allocator, descriptor->entry_capacity);
@@ -139,7 +140,7 @@ namespace ECSEngine {
 	)
 	{
 		return CPUFrameProfilerAllocatorReserve(thread_count, cpu_thread_arena_capacity, cpu_thread_arena_backup_capacity) +
-			AllocatorProfilingEstimateAllocatorSize(thread_count, entry_capacity) + PhysicalMemoryProfilerAllocatorSize(entry_capacity);
+			AllocatorProfilingEstimateAllocatorSize(thread_count, entry_capacity) + PhysicalMemoryProfilerAllocatorSize(thread_count, entry_capacity);
 	}
 
 	void AddAllocatorProfilingWorldAllocators(AllocatorProfiling* allocator_profiler, const World* world) {
@@ -183,8 +184,8 @@ namespace ECSEngine {
 		// The global memory manager, the graphics allocator, the resource manager allocator, the task manager allocators,
 		// the task scheduler allocator and the debug drawer allocator
 		AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(world->memory), physical_memory_profiler);
-		AddAllocatorToPhysicalMemoryProfiling(world->graphics->Allocator(), physical_memory_profiler);
-		AddAllocatorToPhysicalMemoryProfiling(world->resource_manager->Allocator(), physical_memory_profiler);
+		//AddAllocatorToPhysicalMemoryProfiling(world->graphics->Allocator(), physical_memory_profiler);
+		//AddAllocatorToPhysicalMemoryProfiling(world->resource_manager->Allocator(), physical_memory_profiler);
 		unsigned int thread_count = world->task_manager->GetThreadCount();
 		for (unsigned int index = 0; index < thread_count; index++) {
 			AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(&world->task_manager->m_thread_linear_allocators[index].value), physical_memory_profiler);
@@ -194,9 +195,9 @@ namespace ECSEngine {
 				world->task_manager->m_dynamic_task_allocators[index].value.capacity 
 			});
 		}
-		AddAllocatorToPhysicalMemoryProfiling(world->task_scheduler->Allocator(), physical_memory_profiler);
+		//AddAllocatorToPhysicalMemoryProfiling(world->task_scheduler->Allocator(), physical_memory_profiler);
 		if (world->debug_drawer != nullptr) {
-			AddAllocatorToPhysicalMemoryProfiling(world->debug_drawer->Allocator(), physical_memory_profiler);
+			//AddAllocatorToPhysicalMemoryProfiling(world->debug_drawer->Allocator(), physical_memory_profiler);
 		}
 	}
 

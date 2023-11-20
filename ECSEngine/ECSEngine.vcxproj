@@ -280,6 +280,7 @@
     <ClInclude Include="src\ECSEngine\Profiling\CPUFrameProfilerGlobal.h" />
     <ClInclude Include="src\ECSEngine\Profiling\GPUStats.h" />
     <ClInclude Include="src\ECSEngine\Profiling\PhysicalMemoryProfiler.h" />
+    <ClInclude Include="src\ECSEngine\Profiling\PhysicalMemoryProfilerGlobal.h" />
     <ClInclude Include="src\ECSEngine\Profiling\Statistic.h" />
     <ClInclude Include="src\ECSEngine\Profiling\WorldProfiling.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Camera.h" />
@@ -525,6 +526,7 @@
     <ClCompile Include="src\ECSEngine\Profiling\CPUFrameProfilerGlobal.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\GPUStats.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\PhysicalMemoryProfiler.cpp" />
+    <ClCompile Include="src\ECSEngine\Profiling\PhysicalMemoryProfilerGlobal.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\Statistic.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\WorldProfiling.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Camera.cpp" />

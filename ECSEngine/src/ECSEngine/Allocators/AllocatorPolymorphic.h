@@ -266,13 +266,13 @@ namespace ECSEngine {
 	// It makes sense only for MemoryManager, ResizableLinearAllocator
 	// For all the other types it will do nothing
 	ECS_INLINE void FreeAllocator(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
-		ECS_FREE_ALLOCATOR_FUNCTIONS[allocator.allocation_type](allocator.allocator, debug_info);
+		ECS_FREE_ALLOCATOR_FUNCTIONS[allocator.allocator_type](allocator.allocator, debug_info);
 	}
 
 	// Returns the buffer from which the allocator was initialized. It doesn't make sense for the resizable allocators
 	// (MemoryManager, ResizableLinearAllocator). It returns nullptr for these
 	ECS_INLINE void* GetAllocatorBuffer(AllocatorPolymorphic allocator) {
-		return ECS_GET_ALLOCATOR_BUFFER_FUNCTIONS[allocator.allocation_type](allocator.allocator);
+		return ECS_GET_ALLOCATOR_BUFFER_FUNCTIONS[allocator.allocator_type](allocator.allocator);
 	}
 
 	// It finds the suitable to deallocate the memory allocated from the initial allocator

@@ -13,15 +13,18 @@ namespace ECSEngine {
 
 			memcpy(exception_information.thread_context.bytes, exception_pointers->ContextRecord, sizeof(*exception_pointers->ContextRecord));
 			ECS_OS_EXCEPTION_ERROR_CODE error_code = ECS_OS_EXCEPTION_UNKNOWN;
+			exception_information.faulting_page = nullptr;
 			switch (exception_pointers->ExceptionRecord->ExceptionCode) {
 			case EXCEPTION_ACCESS_VIOLATION:
 				error_code = ECS_OS_EXCEPTION_ACCESS_VIOLATION;
+				exception_information.faulting_page = (void*)exception_pointers->ExceptionRecord->ExceptionInformation[1];
 				break;
 			case EXCEPTION_DATATYPE_MISALIGNMENT:
 				error_code = ECS_OS_EXCEPTION_MISSALIGNMENT;
 				break;
 			case EXCEPTION_GUARD_PAGE:
-				error_code = ECS_OS_EXCEPTION_GUARD_PAGE;
+				error_code = ECS_OS_EXCEPTION_PAGE_GUARD;
+				exception_information.faulting_page = (void*)exception_pointers->ExceptionRecord->ExceptionInformation[1];
 				break;
 			case EXCEPTION_FLT_DENORMAL_OPERAND:
 				error_code = ECS_OS_EXCEPTION_FLOAT_DENORMAL;

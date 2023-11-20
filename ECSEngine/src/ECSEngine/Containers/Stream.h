@@ -1227,6 +1227,10 @@ namespace ECSEngine {
 			return buffer == other.buffer && size == other.size;
 		}
 
+		ECS_INLINE bool operator != (Stream<void> other) const {
+			return !(*this == other);
+		}
+
 		ECS_INLINE void Add(Stream<void> other) {
 			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
 			size += other.size;

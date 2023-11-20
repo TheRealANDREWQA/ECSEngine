@@ -10,7 +10,7 @@ namespace ECSEngine {
 			ECS_OS_EXCEPTION_ACCESS_VIOLATION,
 			ECS_OS_EXCEPTION_MISSALIGNMENT,
 			ECS_OS_EXCEPTION_STACK_OVERLOW,
-			ECS_OS_EXCEPTION_GUARD_PAGE,
+			ECS_OS_EXCEPTION_PAGE_GUARD,
 
 			// Floating point exceptions
 			ECS_OS_EXCEPTION_FLOAT_OVERFLOW,
@@ -46,6 +46,9 @@ namespace ECSEngine {
 
 		struct ExceptionInformation {
 			ECS_OS_EXCEPTION_ERROR_CODE error_code;
+			// This is defined for the GUARD_PAGE and ACCESS_VIOLATION
+			// Else it is nullptr
+			void* faulting_page;
 			// This is the context of the thread at the point of the crash
 			ThreadContext thread_context;
 		};

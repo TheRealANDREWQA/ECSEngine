@@ -86,9 +86,9 @@ namespace ECSEngine {
 		void* user_data;
 	};
 
-	// This handler will be called before the crash will be executed. This function
-	// gets to setup anything that might be needed before the crash
-	typedef void (*TaskManagerExceptionHandler)(TaskManagerExceptionHandlerData* function_data);
+	// This handler will be called to determine if the exception is to be handled
+	// In case it is unhandled, any necessary pre crash preparation could be done inside it
+	typedef OS::ECS_OS_EXCEPTION_CONTINUE_STATUS (*TaskManagerExceptionHandler)(TaskManagerExceptionHandlerData* function_data);
 
 	// The static threads are executed by a single thread
 	// The purpose of the static tasks is to dynamically detect how the data
@@ -321,6 +321,10 @@ namespace ECSEngine {
 		// Returns true if the thread is sleeping/spinning (ran out of tasks to perform) else false
 		bool IsSleeping(unsigned int thread_id) const;
 
+		void PopExceptionHandler();
+
+		void PushExceptionHandler(TaskManagerExceptionHandler handler, void* data, size_t data_size);
+
 		void ReserveTasks(unsigned int count);
 
 		// Resets all the temporary allocators, frees the static tasks and puts the threads to sleep
@@ -353,8 +357,6 @@ namespace ECSEngine {
 		// It will remove the last composed wrapper that was added, but you need
 		// To specify which of the wrappers to keep
 		void RemoveComposedStaticWrapper(bool keep_first_wrapper);
-
-		void SetExceptionHandler(TaskManagerExceptionHandler handler, void* data, size_t data_size);
 
 		// Sets a specific task, should only be used in initialization
 		void SetTask(StaticThreadTask task, unsigned int index, size_t task_data_size = 0);
@@ -480,13 +482,19 @@ namespace ECSEngine {
 		// Such that you can longjmp into the thread procedure
 		jmp_buf* m_threads_reset_point;
 
-		TaskManagerExceptionHandler m_exception_handler;
-		// Embed the data directly here to avoid another allocation
-		union {
-			size_t m_exception_handler_data[32];
-			void* m_exception_handler_data_ptr;
+		struct ExceptionHandler {
+			TaskManagerExceptionHandler function;
+			// Embed the data directly here to avoid another allocation
+			union {
+				size_t data[32];
+				void* data_ptr;
+			};
+			bool is_data_ptr;
 		};
-		bool m_is_exception_handler_data_ptr;
+
+		// This works like a stack. The last added handler has priority above all the others
+		// And can handle the exception before those
+		ResizableStream<ExceptionHandler> m_exception_handlers;
 
 #ifdef ECS_TASK_MANAGER_WRAPPER
 		// Embed the data directly here

@@ -6,9 +6,10 @@
 namespace ECSEngine {
 
 	struct World;
+	struct TaskManager;
 
 	// A default value for the allocator to fit the given entry count
-	ECSENGINE_API size_t PhysicalMemoryProfilerAllocatorSize(unsigned int entry_capacity);
+	ECSENGINE_API size_t PhysicalMemoryProfilerAllocatorSize(unsigned int thread_count, unsigned int entry_capacity);
 
 	struct ECSENGINE_API PhysicalMemoryProfiler {
 		ECS_INLINE AllocatorPolymorphic Allocator() const {
@@ -31,6 +32,8 @@ namespace ECSEngine {
 		// Returns true if the page guard came from one of these regions, else false
 		bool HandlePageGuardEnter(unsigned int thread_id, const void* page);
 
+		void UpdateExistingRegionsUtilizationIteration();
+
 		void StartFrame();
 		
 		// This needs to be called after the entries have been inserted
@@ -41,7 +44,7 @@ namespace ECSEngine {
 			return ConvertToByteUnit(memory_usage.GetValue(value_type), unit_type);
 		}
 
-		void Initialize(AllocatorPolymorphic allocator, unsigned int thread_count, unsigned int entry_capacity);
+		void Initialize(AllocatorPolymorphic allocator, TaskManager* task_manager, unsigned int entry_capacity);
 
 		struct Entry {
 			struct PhysicalRegion {
@@ -71,8 +74,28 @@ namespace ECSEngine {
 		Statistic<size_t> memory_usage;
 		ResizableStream<Entry> region_entries;
 		unsigned int thread_count;
+		// This index to cycle through the entries in the region_entries
+		// And re-verify the physical memory usage
+		unsigned int cyclic_region_index;
+		// This is the index inside the physical regions
+		unsigned int cyclic_subregion_index;
+		// If we detect a mismatch in the initial region and the current region value,
+		// This means that, either the a region swap has happened, or the current region
+		// Was extended. In either case, drop the information and restart again for this index
+		Stream<void> cyclic_initial_region;
+		Stream<void> cyclic_region_verify;
+		// This is used to aggregate the entire verification
+		// For that region
+		size_t cyclic_region_usage;
+		// When the simulation starts it will set the exception handler and when 
+		// the simulation ends it will remove it
+		TaskManager* task_manager;
 	};
 
 	ECSENGINE_API void AddAllocatorToPhysicalMemoryProfiling(AllocatorPolymorphic allocator, PhysicalMemoryProfiler* profiler);
+
+	ECSENGINE_API void SetTaskManagerPhysicalMemoryProfilingExceptionHandler(TaskManager* task_manager);
+
+	ECSENGINE_API void RemoveTaskManagerPhysicalMemoryProfilingExceptionHandler(TaskManager* task_manager);
 
 }

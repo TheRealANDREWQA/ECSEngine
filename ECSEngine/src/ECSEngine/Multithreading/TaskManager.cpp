@@ -191,7 +191,7 @@ namespace ECSEngine {
 		}
 
 		SetWaitType(ECS_TASK_MANAGER_WAIT_SLEEP);
-		SetExceptionHandler(nullptr, nullptr, 0);
+		m_exception_handlers.Initialize(m_tasks.allocator, 0);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -762,6 +762,32 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void TaskManager::PopExceptionHandler()
+	{
+		m_exception_handlers.size--;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void TaskManager::PushExceptionHandler(TaskManagerExceptionHandler handler, void* data, size_t data_size)
+	{
+		ECS_ASSERT(data_size <= sizeof(ExceptionHandler::data));
+		ExceptionHandler handler_element;
+		handler_element.function = handler;
+		if (data_size == 0) {
+			handler_element.data_ptr = data;
+			handler_element.is_data_ptr = true;
+		}
+		else {
+			handler_element.is_data_ptr = false;
+			memcpy(handler_element.data, data, data_size);
+		}
+
+		m_exception_handlers.Add(&handler_element);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::ReserveTasks(unsigned int count) {
 		m_tasks.ReserveNewElements(count);
 	}
@@ -860,22 +886,6 @@ namespace ECSEngine {
 		const ComposeWrapperData* wrapper_data = (const ComposeWrapperData*)m_static_wrapper.data;
 		ThreadFunctionWrapperData maintain_wrapper = GetWrapperFromComposed(wrapper_data, keep_first_wrapper ? 0 : 1);
 		ChangeStaticWrapperMode(maintain_wrapper);
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	void TaskManager::SetExceptionHandler(TaskManagerExceptionHandler handler, void* data, size_t data_size)
-	{
-		m_exception_handler = handler;
-		ECS_ASSERT(data_size <= sizeof(m_exception_handler_data));
-		if (data_size == 0) {
-			m_exception_handler_data_ptr = data;
-			m_is_exception_handler_data_ptr = true;
-		}
-		else {
-			m_is_exception_handler_data_ptr = false;
-			memcpy(m_exception_handler_data, data, data_size);
-		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1217,20 +1227,30 @@ namespace ECSEngine {
 	static int ThreadExceptionFilter(TaskManager* task_manager, unsigned int thread_id, EXCEPTION_POINTERS* exception) {
 		TaskManagerExceptionHandlerData handler_data;
 		handler_data.exception_information = OS::GetExceptionInformationFromNative(exception);
+		handler_data.thread_id = thread_id;
 
-		if (OS::IsExceptionCodeCritical(handler_data.exception_information.error_code)) {
-			if (task_manager->m_exception_handler) {
-				handler_data.user_data = task_manager->m_is_exception_handler_data_ptr ? task_manager->m_exception_handler_data_ptr : task_manager->m_exception_handler_data;
-				handler_data.thread_id = thread_id;
-				task_manager->m_exception_handler(&handler_data);
+		// The unhandled case means that we should crash in case it it a critical exception
+		OS::ECS_OS_EXCEPTION_CONTINUE_STATUS continue_status = OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED;
+		for (int64_t index = (int64_t)task_manager->m_exception_handlers.size - 1; index >= 0; index--) {
+			TaskManager::ExceptionHandler& current_handler = task_manager->m_exception_handlers[index];
+			handler_data.user_data = current_handler.is_data_ptr ? current_handler.data_ptr : current_handler.data;
+			continue_status = current_handler.function(&handler_data);
+			if (continue_status != OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED) {
+				break;
 			}
-			
-			ECS_FORMAT_TEMP_STRING(error_message, "Thread {#} has hard crashed with a ", thread_id);
-			OS::ExceptionCodeToString(handler_data.exception_information.error_code, error_message);
-			Crash(error_message);
-			return EXCEPTION_EXECUTE_HANDLER;
 		}
-		return EXCEPTION_CONTINUE_SEARCH;
+
+		if (continue_status == OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED) {
+			if (OS::IsExceptionCodeCritical(handler_data.exception_information.error_code)) {
+				ECS_FORMAT_TEMP_STRING(error_message, "Thread {#} has hard crashed with a ", thread_id);
+				OS::ExceptionCodeToString(handler_data.exception_information.error_code, error_message);
+				Crash(error_message);
+				return EXCEPTION_EXECUTE_HANDLER;
+			}
+		}
+		// We can reach this also from the unhandled case, and for both we want to continue the SEH search
+		// Only for the resolved we want to continue the execution
+		return continue_status == OS::ECS_OS_EXCEPTION_CONTINUE_RESOLVED ? EXCEPTION_CONTINUE_EXECUTION : EXCEPTION_CONTINUE_SEARCH;
 	}
 
 	void ThreadProcedure(
