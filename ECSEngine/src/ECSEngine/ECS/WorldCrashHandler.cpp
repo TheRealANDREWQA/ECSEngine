@@ -199,13 +199,14 @@ namespace ECSEngine {
 		SetFunction(descriptor, false);
 	}
 
-	static void WorldTaskManagerExceptionHandler(TaskManagerExceptionHandlerData* function_data) {
+	static OS::ECS_OS_EXCEPTION_CONTINUE_STATUS WorldTaskManagerExceptionHandler(TaskManagerExceptionHandlerData* function_data) {
 		SetWorldCrashHandlerThreadContext(&function_data->exception_information.thread_context);
+		return OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED;
 	}
 
 	void SetWorldCrashHandlerTaskManagerExceptionHandler(TaskManager* task_manager)
 	{
-		task_manager->SetExceptionHandler(WorldTaskManagerExceptionHandler, nullptr, 0);
+		task_manager->PushExceptionHandler(WorldTaskManagerExceptionHandler, nullptr, 0);
 	}
 
 }

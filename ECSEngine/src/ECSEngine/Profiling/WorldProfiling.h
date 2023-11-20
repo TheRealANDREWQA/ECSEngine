@@ -55,6 +55,10 @@ namespace ECSEngine {
 		// Should be called after the frame
 		void EndFrame();
 
+		ECS_INLINE bool HasOption(ECS_WORLD_PROFILING_OPTIONS option) const {
+			return HasFlag(options, option);
+		}
+
 		// This is a once time off initialization that needs to be done
 		// Before the simulation starts
 		void StartSimulation();

@@ -14,7 +14,7 @@ namespace ECSEngine {
 
 	typedef void (*AllocatorProfilingCustomExitFunction)(void* allocator);
 
-	//Global variable such that performance measuring macros / functions can simply
+	// Global variable such that performance measuring macros / functions can simply
 	// Refer to this one without having to provide the instance manually for each function
 	ECSENGINE_API extern AllocatorProfiling* ECS_ALLOCATOR_PROFILING_GLOBAL;
 
