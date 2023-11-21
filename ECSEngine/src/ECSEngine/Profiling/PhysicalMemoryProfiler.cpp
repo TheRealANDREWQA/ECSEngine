@@ -14,7 +14,7 @@
 namespace ECSEngine {
 
 	// Returns the index where the entry is located
-	// The GetRegion functor must return a Stream<void>&
+	// The GetRegion functor must return a Stream<void>*
 	template<typename GetRegion, typename RegionType>
 	static unsigned int AddPageToRegions(ResizableStream<RegionType>& regions, Stream<void> new_region, GetRegion&& get_region) {
 		unsigned int previous_region_index = -1;
@@ -22,7 +22,7 @@ namespace ECSEngine {
 
 		void* next_page = OffsetPointer(new_region);
 		for (unsigned int index = 0; index < regions.size; index++) {
-			Stream<void> current_region = get_region(index);
+			Stream<void> current_region = *get_region(index);
 			if (OffsetPointer(current_region) == new_region.buffer) {
 				previous_region_index = index;
 			}
@@ -35,32 +35,33 @@ namespace ECSEngine {
 		if (previous_region_index == -1 && next_region_index == -1) {
 			// No block is found, insert it as a new region
 			entry_index = regions.ReserveNewElement();
-			Stream<void>& entry_region = get_region(entry_index);
-			entry_region = new_region;
+			regions.size++;
+			Stream<void>* entry_region = get_region(entry_index);
+			*entry_region = new_region;
 		}
 		else if (previous_region_index != -1 && next_region_index != -1) {
-			Stream<void>& previous_region = get_region(previous_region_index);
-			Stream<void> next_region = get_region(next_region_index);
+			Stream<void>* previous_region = get_region(previous_region_index);
+			Stream<void> next_region = *get_region(next_region_index);
 
 			// Both blocks are found - can coalesce these 2
-			Stream<void> coalesced_region = { previous_region.buffer, previous_region.size + new_region.size + next_region.size };
+			Stream<void> coalesced_region = { previous_region->buffer, previous_region->size + new_region.size + next_region.size };
 			// Replace the previous value and replace swap back the next region
-			previous_region = coalesced_region;
+			*previous_region = coalesced_region;
 			regions.RemoveSwapBack(next_region_index);
 			entry_index = previous_region_index;
 		}
 		else if (previous_region_index != -1) {
 			// Only previous region
 			// Can increase its size
-			Stream<void>& previous_region = get_region(previous_region_index);
-			previous_region.size += new_region.size;
+			Stream<void>* previous_region = get_region(previous_region_index);
+			previous_region->size += new_region.size;
 			entry_index = previous_region_index;
 		}
 		else {
 			// Only next block, can bump back the pointer and increase the size
-			Stream<void>& next_region = get_region(next_region_index);
-			next_region.buffer = OffsetPointer(next_region.buffer, -(int64_t)new_region.size);
-			next_region.size += new_region.size;
+			Stream<void>* next_region = get_region(next_region_index);
+			next_region->buffer = OffsetPointer(next_region->buffer, -(int64_t)new_region.size);
+			next_region->size += new_region.size;
 			entry_index = next_region_index;
 		}	
 	
@@ -97,7 +98,14 @@ namespace ECSEngine {
 		}
 		if (index == region_entries.size) {
 			region_entries.ReserveNewElement();
-			region_entries[index].region = region;
+
+			size_t page_size = OS::GetPhysicalMemoryPageSize();
+			// We should monitor only the pages which are fully contained in this region
+			// Since those outer ones, when we protect them, it can make code that accesses nearby addresses
+			// Fault since it does not know that this comes from a protected page
+			void* region_start = AlignPointer(region.buffer, page_size);
+			void* region_end = (void*)(AlignPointerStack((uintptr_t)OffsetPointer(region.buffer, region.size), page_size) - page_size);
+			region_entries[index].region = { region_start, PointerDifference(region_end, region_start) };
 			region_entries[index].physical_regions.Initialize(Allocator(), PHYSICAL_REGION_INITIAL_CAPACITY);
 			region_entries[index].guard_pages_hit.Initialize(Allocator(), thread_count);
 			AllocatorPolymorphic multithreaded_allocator = Allocator();
@@ -120,6 +128,11 @@ namespace ECSEngine {
 			region_entries[index].guard_pages_hit.Deallocate(Allocator());
 		}
 		region_entries.FreeBuffer();
+		cyclic_initial_region = {};
+		cyclic_region_verify = {};
+		cyclic_region_index = 0;
+		cyclic_subregion_index = 0;
+		cyclic_region_usage = 0;
 	}
 
 	void PhysicalMemoryProfiler::CommitGuardPagesIntoPhysical()
@@ -127,30 +140,32 @@ namespace ECSEngine {
 		for (unsigned int region_index = 0; region_index < region_entries.size; region_index++) {
 			for (unsigned int thread_index = 0; thread_index < thread_count; thread_index++) {
 				ResizableStream<Stream<void>>& thread_pages = region_entries[region_index].guard_pages_hit[thread_index].value;
+				ResizableStream<Entry::PhysicalRegion>& physical_regions = region_entries[region_index].physical_regions;
 				for (unsigned int index = 0; index < thread_pages.size; index++) {
 					// We need the size in order to check later one if this is a new entry to correctly
 					// Attribute the physical memory usage
-					unsigned int physical_region_size = region_entries[region_index].physical_regions.size;
-					unsigned int entry_index = AddPageToRegions(region_entries[region_index].physical_regions, thread_pages[index], [&](unsigned int entry_index) {
-						return region_entries[region_index].physical_regions[entry_index].region;
+					unsigned int physical_region_size = physical_regions.size;
+					unsigned int entry_index = AddPageToRegions(physical_regions, thread_pages[index], [&](unsigned int entry_index) {
+						return &physical_regions[entry_index].region;
 					});
 
 					// Determine how much physical memory usage this thread region has. It should be close
 					// To the region size
 					size_t physical_memory = OS::GetPhysicalMemoryBytesForAllocation(thread_pages[index].buffer, thread_pages[index].size);
-					if (physical_region_size == region_entries[region_index].physical_regions.size) {
-						region_entries[region_index].physical_regions[entry_index].physical_memory_usage += physical_memory;
+					if (physical_region_size == physical_regions.size) {
+						physical_regions[entry_index].physical_memory_usage += physical_memory;
 					}
 					else {
-						region_entries[region_index].physical_regions[entry_index].physical_memory_usage = physical_memory;
+						physical_regions[entry_index].physical_memory_usage = physical_memory;
 					}
+					region_entries[region_index].current_usage += physical_memory;
 				}
 				if (thread_pages.capacity > GUARD_REGIONS_INITIAL_CAPACITY) {
 					// Resize to that size such that we can reduce memory consumption in case we get an overload
 					// Of pages for some threads
-					thread_pages.ResizeNoCopy(GUARD_REGIONS_INITIAL_CAPACITY);
-					thread_pages.Reset();
+					//thread_pages.ResizeNoCopy(GUARD_REGIONS_INITIAL_CAPACITY);
 				}
+				thread_pages.Reset();
 			}
 		}
 	}
@@ -168,33 +183,27 @@ namespace ECSEngine {
 	{
 		// Update the usage before that since it has a higher chance of not having mismatches
 		// Since the commit is done afterwards
+		Timer my_timer;
 		UpdateExistingRegionsUtilizationIteration();
+		float update_duration = my_timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 
 		// Commit the pages into the main buffers
 		CommitGuardPagesIntoPhysical();
+
+		float commit_duation = my_timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 
 		size_t total_usage = 0;
 		for (unsigned int index = 0; index < region_entries.size; index++) {
 			total_usage += region_entries[index].current_usage;
 		}
 		memory_usage.Add(total_usage);
+		float duration = my_timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 	}
 
 	unsigned int PhysicalMemoryProfiler::FindRegion(const void* page) const
 	{
-		// Align the page pointer to the next page boundary such that, in cases where
-		// for example we have a region that starts in the middle of the page, we want
-		// to catch accesses in the first half of the page
-		// We also have to do the same for the previous page boundary to catch accesses
-		// In the later half when the region straddles the first half only
-		size_t page_size = OS::GetPhysicalMemoryPageSize();
-		void* next_aligned_page = AlignPointer(page, page_size);
-		void* previous_aligned_page = OffsetPointer(page, -(int64_t)page_size);
 		for (unsigned int index = 0; index < region_entries.size; index++) {
-			if (IsPointerRange(region_entries[index].region.buffer, region_entries[index].region.size, next_aligned_page)) {
-				return index;
-			}
-			if (IsPointerRange(region_entries[index].region.buffer, region_entries[index].region.size, previous_aligned_page)) {
+			if (IsPointerRange(region_entries[index].region.buffer, region_entries[index].region.size, page)) {
 				return index;
 			}
 		}
@@ -206,9 +215,12 @@ namespace ECSEngine {
 		unsigned int region_index = FindRegion(page);
 		if (region_index != -1) {
 			size_t page_size = OS::GetPhysicalMemoryPageSize();
-			ResizableStream<Stream<void>>& thread_pages = region_entries[region_index].guard_pages_hit[thread_id].value;
-			AddPageToRegions(thread_pages, { page, page_size }, [thread_pages](unsigned int index) {
-				return thread_pages[index];
+			// We also need to align the pointer to the beginning of the page such that we can coalesce these
+			// Blocks later on
+			void* page_start = (void*)(AlignPointerStack((uintptr_t)page, page_size) - page_size);
+			ResizableStream<Stream<void>>* thread_pages = &region_entries[region_index].guard_pages_hit[thread_id].value;
+			AddPageToRegions(*thread_pages, { page_start, page_size }, [thread_pages](unsigned int index) {
+				return &thread_pages->buffer[index];
 			});
 			return true;
 		}
@@ -271,6 +283,7 @@ namespace ECSEngine {
 			cyclic_region_verify = cyclic_initial_region;
 		}
 
+
 		// Verify if the initial region still matches with the current region
 		if (region_entries[cyclic_region_index].physical_regions.size > 0) {
 			if (cyclic_initial_region != region_entries[cyclic_region_index].physical_regions[cyclic_subregion_index].region) {
@@ -279,47 +292,71 @@ namespace ECSEngine {
 				cyclic_region_usage = 0;
 			}
 
-			if (cyclic_region_verify.size == 0) {
-				// Commit the delta change
-				size_t usage_delta = cyclic_region_usage - region_entries[cyclic_region_index].physical_regions[cyclic_subregion_index].physical_memory_usage;
-				region_entries[cyclic_region_index].current_usage += usage_delta;
-				region_entries[cyclic_region_index].physical_regions[cyclic_subregion_index].physical_memory_usage = cyclic_region_usage;
+			auto handle_finished_region_case = [this]() {
+				if (cyclic_region_verify.size == 0) {
+					// Commit the delta change
+					size_t usage_delta = cyclic_region_usage - region_entries[cyclic_region_index].physical_regions[cyclic_subregion_index].physical_memory_usage;
+					region_entries[cyclic_region_index].current_usage += usage_delta;
+					region_entries[cyclic_region_index].physical_regions[cyclic_subregion_index].physical_memory_usage = cyclic_region_usage;
 
-				// Go to the next region/subregion
-				if (region_entries[cyclic_region_index].physical_regions.size + 1 <= cyclic_subregion_index) {
-					cyclic_region_index = (cyclic_region_index + 1) % region_entries.size;
-					// Try to find a region with physical regions - do this only until the end of the entries array
-					// We could loop back, but probably not worth it
-					while (cyclic_region_index < region_entries.size && region_entries[cyclic_region_index].physical_regions.size == 0) {
-						cyclic_region_index++;
+					// Go to the next region/subregion
+					if (region_entries[cyclic_region_index].physical_regions.size + 1 <= cyclic_subregion_index) {
+						cyclic_region_index = (cyclic_region_index + 1) % region_entries.size;
+						// Try to find a region with physical regions - do this only until the end of the entries array
+						// We could loop back, but probably not worth it
+						while (cyclic_region_index < region_entries.size && region_entries[cyclic_region_index].physical_regions.size == 0) {
+							cyclic_region_index++;
+						}
+						if (cyclic_region_index == region_entries.size) {
+							cyclic_region_index = 0;
+						}
+						cyclic_subregion_index = 0;
 					}
-					if (cyclic_region_index == region_entries.size) {
-						cyclic_region_index = 0;
+					else {
+						cyclic_subregion_index++;
 					}
-					cyclic_subregion_index = 0;
+					if (region_entries[cyclic_region_index].physical_regions.size > cyclic_subregion_index) {
+						cyclic_initial_region = region_entries[cyclic_region_index].physical_regions[cyclic_subregion_index].region;
+					}
+					else {
+						cyclic_initial_region = {};
+					}
+					cyclic_region_verify = cyclic_initial_region;
+					cyclic_region_usage = 0;
 				}
-				else {
-					cyclic_subregion_index++;
-				}
-				if (region_entries[cyclic_region_index].physical_regions.size > cyclic_subregion_index) {
-					cyclic_initial_region = region_entries[cyclic_region_index].physical_regions[cyclic_subregion_index].region;
-				}
-				else {
-					cyclic_initial_region = {};
-				}
-				cyclic_region_verify = cyclic_initial_region;
-				cyclic_region_usage = 0;
-			}
+			};
 
-			if (cyclic_region_verify.size > 0) {
+			handle_finished_region_case();
+
+			// Keep verifying regions until we either run out of frame check capacity
+			// Or we loop back to the same region
+			size_t frame_max_verify_count = CYCLIC_VERIFY_BYTES_PER_FRAME;
+			unsigned int iteration_starting_region_index = cyclic_region_index;
+
+			auto handle_iteration_check = [&]() {
 				// Determine the amount that we can verify in this iteration
-				size_t iteration_check_amount = ClampMax(cyclic_region_verify.size, CYCLIC_VERIFY_BYTES_PER_FRAME);
+				size_t iteration_check_amount = ClampMax(cyclic_region_verify.size, frame_max_verify_count);
 				size_t current_subregion_usage = OS::GetPhysicalMemoryBytesForAllocation(cyclic_region_verify.buffer, iteration_check_amount);
 				cyclic_region_usage += current_subregion_usage;
 
 				// Let the next iteration deal with the 0 case - when we exhaust this subregion
 				cyclic_region_verify.size -= iteration_check_amount;
+				frame_max_verify_count -= iteration_check_amount;
 				cyclic_region_verify.buffer = OffsetPointer(cyclic_region_verify.buffer, iteration_check_amount);
+
+				if (cyclic_region_verify.size == 0) {
+					handle_finished_region_case();
+				}
+			};
+
+			while (cyclic_region_index < region_entries.size && frame_max_verify_count > 0 && cyclic_region_verify.size > 0) {
+				handle_iteration_check();
+			}
+			if (frame_max_verify_count > 0) {
+				cyclic_region_index = 0;
+				while (cyclic_region_index < iteration_starting_region_index && frame_max_verify_count > 0 && cyclic_region_verify.size > 0) {
+					handle_iteration_check();
+				}
 			}
 		}
 	}

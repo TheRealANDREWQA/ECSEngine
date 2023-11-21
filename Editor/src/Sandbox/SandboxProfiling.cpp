@@ -4,7 +4,7 @@
 #include "SandboxFile.h"
 
 // More than enough for normal use cases
-#define PROFILING_ENTRIES 1024
+#define PROFILING_ENTRIES ECS_KB * 4
 
 void ChangeSandboxCPUStatisticsType(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_TYPE type) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -22,6 +22,18 @@ void ChangeSandboxGPUStatisticsType(EditorState* editor_state, unsigned int sand
 
 	// We need to synchronize now
 	SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_index);
+}
+
+void ChangeSandboxStatisticDisplayForm(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry, 
+	EDITOR_SANDBOX_STATISTIC_DISPLAY_FORM form
+)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->statistics_display.display_form[entry] = form;
+	SaveEditorSandboxFile(editor_state);
 }
 
 void ClearSandboxProfilers(EditorState* editor_state, unsigned int sandbox_index)

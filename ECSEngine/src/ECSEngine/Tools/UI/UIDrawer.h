@@ -5032,9 +5032,9 @@ namespace ECSEngine {
 			UIDrawerAcquireDragDrop acquire_drag_drop;
 			CapacityStream<void*> last_initialized_element_allocations;
 			CapacityStream<ResourceIdentifier> last_initialized_element_table_resources;
-			CapacityStream<unsigned int> late_hoverables;
-			CapacityStream<unsigned int> late_clickables[ECS_MOUSE_BUTTON_COUNT];
-			CapacityStream<unsigned int> late_generals;
+			ResizableStream<unsigned int> late_hoverables;
+			ResizableStream<unsigned int> late_clickables[ECS_MOUSE_BUTTON_COUNT];
+			ResizableStream<unsigned int> late_generals;
 			ActionData cached_filled_action_data;
 		};
 

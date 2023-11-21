@@ -108,6 +108,15 @@ namespace ECSEngine {
 
 		void Pop(unsigned int thread_id, float value);
 
+		// If thread_id is set to -1, then it will calculate for all threads
+		size_t ReduceCPUUsageToSamplesToGraph(unsigned int thread_id, Stream<float2> samples, double spike_threshold, unsigned int sample_offset) const;
+
+		// If thread_id is set to -1, then it will calculate for all threads
+		size_t ReduceSimulationFrameTimeToSamplesToGraph(Stream<float2> samples, double spike_threshold, unsigned int sample_offset) const;
+
+		// If thread_id is set to -1, then it will calculate for all threads
+		size_t ReduceOverallFrameTimeToSamplesToGraph(Stream<float2> samples, double spike_threshold, unsigned int sample_offset) const;
+
 		void Initialize(
 			AllocatorPolymorphic allocator, 
 			Stream<void*> thread_handles,

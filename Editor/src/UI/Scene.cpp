@@ -471,6 +471,12 @@ static void ScenePrivateAction(ActionData* action_data) {
 					else if (keyboard->IsPressed(ECS_KEY_V)) {
 						ChangeSandboxCPUStatisticsType(editor_state, sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_ADVANCED);
 					}
+					else if (keyboard->IsPressed(ECS_KEY_CLOSED_SQUARE_BRACKET)) {
+						ChangeSandboxStatisticDisplayForm(editor_state, sandbox_index, EDITOR_SANDBOX_STATISTIC_CPU_USAGE, EDITOR_SANDBOX_STATISTIC_DISPLAY_GRAPH);
+					}
+					else if (keyboard->IsPressed(ECS_KEY_OPEN_SQUARE_BRACKET)) {
+						ChangeSandboxStatisticDisplayForm(editor_state, sandbox_index, EDITOR_SANDBOX_STATISTIC_CPU_USAGE, EDITOR_SANDBOX_STATISTIC_DISPLAY_TEXT);
+					}
 				}
 
 				ECS_TRANSFORM_TOOL current_tool = sandbox->transform_tool;

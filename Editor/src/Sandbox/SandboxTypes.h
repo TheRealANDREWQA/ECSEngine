@@ -168,6 +168,10 @@ enum ECS_REFLECT EDITOR_SANDBOX_GPU_STATISTICS_TYPE : unsigned char {
 
 // We are reflecting this since we want this to be stored in the sandbox file
 struct ECS_REFLECT EditorSandboxStatisticsDisplay {
+	ECS_INLINE bool IsGraphDisplay(EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry) const {
+		return should_display[entry] && display_form[entry] == EDITOR_SANDBOX_STATISTIC_DISPLAY_GRAPH;
+	}
+
 	// This works like a master selection that hides all or allows the display
 	bool is_enabled;
 	bool should_display[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];

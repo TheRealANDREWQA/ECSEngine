@@ -409,7 +409,7 @@ namespace ECSEngine {
 
 		struct UIConfigGraphColor {
 			ECS_INLINE static size_t GetAssociatedBit() {
-				return UI_CONFIG_GRAPH_DROP_COLOR;
+				return UI_CONFIG_GRAPH_LINE_COLOR;
 			}
 
 			Color color;

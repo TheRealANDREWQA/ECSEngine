@@ -427,4 +427,151 @@ namespace ECSEngine {
 		}
 	}
 
+	// Doubles, floats and ints
+	template<typename FundamentalType>
+	ECS_INLINE FundamentalType FundamentalTypeMin() {
+		if constexpr (std::is_integral_v<FundamentalType>) {
+			FundamentalType min, max;
+			IntegerRange(min, max);
+			return min;
+		}
+		else if constexpr (std::is_same_v<float, FundamentalType>) {
+			return -FLT_MAX;
+		}
+		else if constexpr (std::is_same_v<double, FundamentalType>) {
+			return -DBL_MAX;
+		}
+		else {
+			static_assert(false, "Invalid fundamental type for Min");
+		}
+	}
+
+	template<typename FundamentalType>
+	ECS_INLINE FundamentalType FundamentalTypeMax() {
+		if constexpr (std::is_integral_v<FundamentalType>) {
+			FundamentalType min, max;
+			IntegerRange(min, max);
+			return max;
+		}
+		else if constexpr (std::is_same_v<float, FundamentalType>) {
+			return FLT_MAX;
+		}
+		else if constexpr (std::is_same_v<double, FundamentalType>) {
+			return DBL_MAX;
+		}
+		else {
+			static_assert(false, "Invalid fundamental type for Min");
+		}
+	}
+
+	template<typename FundamentalType>
+	ECS_INLINE void FundamentalTypeMinMax(FundamentalType& min, FundamentalType& max) {
+		min = FundamentalTypeMin<FundamentalType>();
+		max = FundamentalTypeMax<FundamentalType>();
+	}
+
+	// Attempts to reduce the numbers of samples into averages while also maintaining spikes (high values)
+	// The entire set is split into chunks for each a single sample is generated. The values are averaged,
+	// But the function will try to detect spikes in order to not be averaged out and lose them out of sight
+	// A spike is considered as being the highest value and it is larger than the spike_threshold multiplied by
+	// the average of the chunk.
+	// Returns the number of valid samples (it can happen that there are fewer entries)
+	template<typename FundamentalType, typename ContainerType, typename SampleStream, typename SetSampleIndex>
+	size_t ReduceSamplesImpl(SampleStream samples, ContainerType container, double spike_threshold, unsigned int sample_offset, SetSampleIndex set_index) {					
+		if constexpr (!IsStreamType<FundamentalType, ContainerType>() && !IsQueueType<FundamentalType, ContainerType>()) {
+			static_assert(false, "Invalid container type for ReduceSamples");
+		}
+
+		size_t entry_count = 0;
+		if constexpr (IsStreamType<FundamentalType, ContainerType>()) {
+			entry_count = container.size;
+		}
+		else {
+			entry_count = container.GetSize();
+		}
+		if (samples.size >= entry_count) {
+			if constexpr (IsStreamType<FundamentalType, ContainerType>()) {
+				for (size_t index = 0; index < entry_count; index++) {
+					set_index(index, container[index]);
+				}
+			}
+			else {
+				samples.size = 0;
+				container.ForEach([&](FundamentalType value) {
+					set_index(samples.size, (float)value);
+					samples.size++;
+				});
+			}
+			return entry_count;
+		}
+		else {
+			size_t per_chunk_count = entry_count / samples.size;
+			size_t chunk_remainder = entry_count % samples.size;
+			size_t entry_offset = 0;
+
+			size_t sample_offset_modulo = (size_t)sample_offset % per_chunk_count;
+			for (size_t index = 0; index < samples.size; index++) {
+				// Reduce the count by the sample offset to maintain a chunk order
+				size_t current_chunk_count = per_chunk_count + (chunk_remainder != 0) - sample_offset_modulo;
+				sample_offset_modulo -= sample_offset_modulo;
+				chunk_remainder = chunk_remainder == 0 ? 0 : chunk_remainder - 1;
+
+				// Use doubles for the averaging
+				double chunk_average = 0.0;
+				FundamentalType chunk_max = FundamentalTypeMin<FundamentalType>();
+				if constexpr (IsStreamType<FundamentalType, ContainerType>()) {
+					for (size_t subindex = entry_offset; subindex < entry_offset + current_chunk_count; subindex++) {
+						chunk_average += (double)container[subindex];
+						chunk_max = std::max(container[subindex], chunk_max);
+					}
+				}
+				else {
+					container.ForEachRange(entry_offset, entry_offset + current_chunk_count, [&](FundamentalType current_value) {
+						chunk_average += (double)current_value;
+						chunk_max = std::max(current_value, chunk_max);
+					});
+				}
+
+				chunk_average /= (double)current_chunk_count;
+				if ((double)chunk_max > spike_threshold * chunk_average) {
+					set_index(index, chunk_max);
+				}
+				else {
+					set_index(index, chunk_average);
+				}
+
+				entry_offset += current_chunk_count;
+			}
+
+			return samples.size;
+		}
+	}
+
+	// Attempts to reduce the numbers of samples into averages while also maintaining spikes (high values)
+	// The entire set is split into chunks for each a single sample is generated. The values are averaged,
+	// But the function will try to detect spikes in order to not be averaged out and lose them out of sight
+	// A spike is considered as being the highest value and it is larger than the spike_threshold multiplied by
+	// the average of the chunk.
+	// Returns the number of valid samples (it can happen that there are fewer entries)
+	template<typename FundamentalType, typename ContainerType>
+	size_t ReduceSamples(Stream<FundamentalType> samples, ContainerType container, double spike_threshold, unsigned int sample_offset) {
+		return ReduceSamplesImpl<FundamentalType>(samples, container, spike_threshold, sample_offset, [&](size_t index, FundamentalType value) {
+			samples[index] = value;
+		});
+	}
+
+	// Attempts to reduce the numbers of samples into averages while also maintaining spikes (high values)
+	// The entire set is split into chunks for each a single sample is generated. The values are averaged,
+	// But the function will try to detect spikes in order to not be averaged out and lose them out of sight
+	// A spike is considered as being the highest value and it is larger than the spike_threshold multiplied by
+	// the average of the chunk.
+	// Returns the number of valid samples (it can happen that there are fewer entries)
+	template<typename FundamentalType, typename ContainerType>
+	size_t ReduceSamplesToGraph(Stream<float2> samples, ContainerType container, double spike_threshold, unsigned int sample_offset) {
+		return ReduceSamplesImpl<FundamentalType>(samples, container, spike_threshold, sample_offset, [&](size_t index, FundamentalType value) {
+			const float step = 1.0f;
+			samples[index] = { index * step, (float)value };
+		});
+	}
+
 }

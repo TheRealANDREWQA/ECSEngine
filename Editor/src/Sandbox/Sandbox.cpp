@@ -1594,11 +1594,11 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-	size_t statistics_reserve_size = CPUFrameProfilerAllocatorReserve(std::thread::hardware_concurrency());
+	size_t profiling_reserve_size = ReserveSandboxProfilersAllocatorSize();
 	// Create a sandbox allocator - a global one - such that it can accomodate the default entity manager requirements
 	GlobalMemoryManager* allocator = (GlobalMemoryManager*)editor_state->editor_allocator->Allocate(sizeof(GlobalMemoryManager));
 	*allocator = CreateGlobalMemoryManager(
-		sandbox->runtime_descriptor.entity_manager_memory_size + ECS_MB * 10 + statistics_reserve_size,
+		sandbox->runtime_descriptor.entity_manager_memory_size + ECS_MB * 10 + profiling_reserve_size,
 		1024,
 		sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size + ECS_MB * 5
 	);
@@ -1882,6 +1882,12 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		sandbox->sandbox_world.task_manager = editor_state->render_task_manager;
 		sandbox->sandbox_world.task_scheduler = &viewport_task_scheduler;
 
+		// We need to set this up in case we have physical profiling activated
+		if (sandbox->world_profiling.HasOption(ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
+			ChangePhysicalMemoryProfilerGlobal(&sandbox->world_profiling.physical_memory_profiler);
+			SetTaskManagerPhysicalMemoryProfilingExceptionHandler(sandbox->sandbox_world.task_manager);
+		}
+
 		MemoryManager runtime_query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(GetAllocatorPolymorphic(editor_state->GlobalMemoryManager()));
 		ArchetypeQueryCache runtime_query_cache;
 
@@ -1906,6 +1912,10 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			sandbox->sandbox_world.task_manager = runtime_task_manager;
 			sandbox->sandbox_world.entity_manager = runtime_entity_manager;
 			sandbox->sandbox_world.task_scheduler = runtime_task_scheduler;
+
+			if (sandbox->world_profiling.HasOption(ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
+				RemoveTaskManagerPhysicalMemoryProfilingExceptionHandler(sandbox->sandbox_world.task_manager);
+			}
 
 			RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport);
 		};

@@ -46,7 +46,9 @@ namespace ECSEngine {
 
 		size_t GetPhysicalMemoryBytesForAllocation(void* allocation, size_t allocation_size)
 		{
-			size_t page_count = SlotsFor(allocation_size, PAGE_SIZE);
+			// Add another one in case we get straddling pages. For example 2 bytes could 
+			// be straddling 2 pages
+			size_t page_count = SlotsFor(allocation_size, PAGE_SIZE) + 1;
 			// Use a large heap size just in case this function wants to check for a large allocation
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 100);
 			size_t set_allocation_size = sizeof(PSAPI_WORKING_SET_EX_INFORMATION) * page_count;

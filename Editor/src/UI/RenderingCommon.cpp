@@ -164,7 +164,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 	struct DisplayValues {
 		unsigned char cpu_utilization;
 		unsigned char gpu_usage;
-		// This is the size in MB for the physical ram
+		// This value is in KB
 		size_t physical_ram_usage;
 		size_t vram_usage;
 		float simulation_fps;
@@ -173,20 +173,45 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 		float overall_ms;
 		float gpu_fps;
 		float gpu_ms;
+
+		// These are used for the graphs
+		union {
+			struct {
+				Stream<float2> cpu_utilization_samples;
+				Stream<float2> gpu_usage_samples;
+				// These are in KB
+				Stream<float2> physical_ram_usage_samples;
+				Stream<float2> vram_usage_samples;
+				Stream<float2> simulation_fps_samples;
+				Stream<float2> overall_fps_samples;
+				Stream<float2> gpu_fps_samples;
+			};
+			Stream<float2> samples[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];
+		};
+
 		Timer timer;
 	};
 
-	const char* RESOURCE_NAME = "__DISPLAY_VALUES";
+	const char* DISPLAY_VALUES_RESOURCE_NAME = "__DISPLAY_VALUES";
+
 	// In milliseconds
-	const size_t DISPLAY_VALUES_UPDATE_TICK_MS = 200;
+	const size_t DISPLAY_VALUES_UPDATE_TICK_MS = 250;
+	const size_t DISPLAY_GRAPH_SAMPLE_COUNT = 128;
 	DisplayValues* display_values = nullptr;
 	if (drawer.initializer) {
+		size_t display_sample_count_byte_size = sizeof(float2) * DISPLAY_GRAPH_SAMPLE_COUNT;
+
 		// Insert a structure to hold the display values for a small amount of time
-		display_values = drawer.GetMainAllocatorBufferAndStoreAsResource<DisplayValues>(RESOURCE_NAME);
+		display_values = drawer.GetMainAllocatorBufferAndStoreAsResource<DisplayValues>(DISPLAY_VALUES_RESOURCE_NAME);
 		display_values->timer.SetUninitialized();
+
+		// Initialize the sample buffers
+		for (size_t index = 0; index < EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT; index++) {
+			display_values->samples[index].InitializeFromBuffer(drawer.GetMainAllocatorBuffer(display_sample_count_byte_size), DISPLAY_GRAPH_SAMPLE_COUNT);
+		}
 	}
 	else {
-		display_values = (DisplayValues*)drawer.GetResource(RESOURCE_NAME);
+		display_values = (DisplayValues*)drawer.GetResource(DISPLAY_VALUES_RESOURCE_NAME);
 	}
 
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -205,7 +230,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			float overall_ms = sandbox->world_profiling.cpu_profiler.GetOverallFrameTime(statistic_value_type);
 			float overall_fps = overall_ms == 0.0f ? 0.0f : 1000.0f / overall_ms;
 
-			size_t physical_ram_usage = sandbox->world_profiling.physical_memory_profiler.GetUsage(statistic_value_type, ECS_BYTE_TO_MB);
+			size_t physical_ram_usage = sandbox->world_profiling.physical_memory_profiler.GetUsage(statistic_value_type, ECS_BYTE_TO_KB);
 
 			display_values->cpu_utilization = cpu_usage;
 			display_values->simulation_fps = simulation_fps;
@@ -214,6 +239,53 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			display_values->overall_fps = overall_fps;
 			display_values->physical_ram_usage = physical_ram_usage;
 			display_values->timer.SetNewStart();
+
+			const double SPIKE_THRESHOLD = 1.5;
+			if (sandbox->statistics_display.IsGraphDisplay(EDITOR_SANDBOX_STATISTIC_CPU_USAGE)) {
+				display_values->cpu_utilization_samples.size = DISPLAY_GRAPH_SAMPLE_COUNT;
+				display_values->cpu_utilization_samples.size = sandbox->world_profiling.cpu_profiler.ReduceCPUUsageToSamplesToGraph(
+					-1,
+					display_values->cpu_utilization_samples,
+					SPIKE_THRESHOLD,
+					sandbox->world_profiling.frame_index
+				);
+			}
+
+			if (sandbox->statistics_display.IsGraphDisplay(EDITOR_SANDBOX_STATISTIC_RAM_USAGE)) {
+				display_values->physical_ram_usage_samples.size = DISPLAY_GRAPH_SAMPLE_COUNT;
+				display_values->physical_ram_usage_samples.size = sandbox->world_profiling.physical_memory_profiler.memory_usage.ReduceSamplesToGraph(
+					display_values->physical_ram_usage_samples,
+					SPIKE_THRESHOLD,
+					sandbox->world_profiling.frame_index
+				);
+			}
+
+			if (sandbox->statistics_display.IsGraphDisplay(EDITOR_SANDBOX_STATISTIC_SANDBOX_TIME)) {
+				// First get the ms and then calculate the fps
+				display_values->simulation_fps_samples.size = DISPLAY_GRAPH_SAMPLE_COUNT;
+				display_values->simulation_fps_samples.size = sandbox->world_profiling.cpu_profiler.ReduceSimulationFrameTimeToSamplesToGraph(
+					display_values->simulation_fps_samples,
+					SPIKE_THRESHOLD,
+					sandbox->world_profiling.frame_index
+				);
+				for (size_t index = 0; index < display_values->simulation_fps_samples.size; index++) {
+					float current_ms = display_values->simulation_fps_samples[index].y;
+					display_values->simulation_fps_samples[index].y = current_ms == 0.0f ? 0.0f : 1000.0f / current_ms;
+				}
+			}
+
+			if (sandbox->statistics_display.IsGraphDisplay(EDITOR_SANDBOX_STATISTIC_FRAME_TIME)) {
+				display_values->overall_fps_samples.size = DISPLAY_GRAPH_SAMPLE_COUNT;
+				display_values->overall_fps_samples.size = sandbox->world_profiling.cpu_profiler.ReduceOverallFrameTimeToSamplesToGraph(
+					display_values->overall_fps_samples,
+					SPIKE_THRESHOLD,
+					sandbox->world_profiling.frame_index
+				);
+				for (size_t index = 0; index < display_values->overall_fps_samples.size; index++) {
+					float current_ms = display_values->overall_fps_samples[index].y;
+					display_values->overall_fps_samples[index].y = current_ms == 0.0f ? 0.0f : 1000.0f / current_ms;
+				}
+			}
 		}
 
 		UIConfigTextParameters text_parameters;
@@ -254,27 +326,101 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			drawer.NextRow();
 		};
 
-		auto draw_graph_info = [&](Stream<char> base_label, Color base_color, auto get_value_display_string) {
+		auto draw_graph_info = [&](
+			EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry, 
+			Stream<char> base_label, 
+			Color base_color,
+			float graph_max,
+			Stream<float> tags,
+			auto get_value_display_string
+		) {
+			UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+			row_layout.font_scaling = font_scaling;
+			row_layout.SetHorizontalAlignment(ECS_UI_ALIGN_RIGHT);
+			row_layout.AddElement(UI_CONFIG_RELATIVE_TRANSFORM, { 4.0f, 2.5f });
 
+			size_t graph_configuration = UI_CONFIG_GRAPH_LINE_COLOR | UI_CONFIG_LATE_DRAW | UI_CONFIG_GRAPH_NO_BACKGROUND;
+
+			UIConfigGraphMinY min_y;
+			min_y.value = 0.0f;
+			config.AddFlag(min_y);
+			graph_configuration |= UI_CONFIG_GRAPH_MIN_Y;
+
+			if (graph_max != -FLT_MAX) {
+				UIConfigGraphMaxY max_y;
+				max_y.value = graph_max;
+				config.AddFlag(max_y);
+				graph_configuration |= UI_CONFIG_GRAPH_MAX_Y;
+			}
+
+			auto draw_line = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				UIDrawerGraphTagData* data = (UIDrawerGraphTagData*)_data;
+				UIDrawer* drawer = (UIDrawer*)data->drawer;
+				drawer->Line(UI_CONFIG_LATE_DRAW, data->position, { data->position.x + data->graph_scale.x, data->position.y }, ECS_COLOR_WHITE);
+			};
+			if (tags.size > 0) {
+				UIConfigGraphTags graph_tags;
+				graph_tags.horizontal_tag_count = tags.size;
+				graph_tags.horizontal_tags[0] = draw_line;
+				graph_tags.horizontal_tags[1] = draw_line;
+				tags.CopyTo(graph_tags.horizontal_values);
+				config.AddFlag(graph_tags);
+				graph_configuration |= UI_CONFIG_GRAPH_TAGS;
+			}
+
+			UIConfigGraphColor graph_color;
+			graph_color.color = base_color;
+			config.AddFlag(graph_color);
+
+			row_layout.GetTransform(config, graph_configuration);
+			drawer.Graph(graph_configuration, config, display_values->samples[entry]);
+			config.flag_count = 0;
+			drawer.NextRow();
 		};
 
-		auto draw_entry = [&](EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry, Stream<char> base_label, Color base_color, auto get_value_display_string) {
+		auto draw_entry = [&](
+			EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry, 
+			Stream<char> base_label, 
+			Color base_color,
+			float graph_max,
+			Stream<float> graph_tags,
+			auto get_value_display_string
+		) {
 			if (sandbox->statistics_display.should_display[entry]) {
 				if (sandbox->statistics_display.display_form[entry] == EDITOR_SANDBOX_STATISTIC_DISPLAY_TEXT) {
 					draw_text_info(base_label, base_color, get_value_display_string);
 				}
 				else {
-					draw_graph_info(base_label, base_color, get_value_display_string);
+					draw_graph_info(entry, base_label, base_color, graph_max, graph_tags, get_value_display_string);
 				}
 			}
 		};
 
-		draw_entry(EDITOR_SANDBOX_STATISTIC_CPU_USAGE, "CPU Usage", EDITOR_STATISTIC_CPU_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
+		ECS_STACK_CAPACITY_STREAM(float, cpu_usage_tags, 2);
+		cpu_usage_tags[0] = 50.0f;
+		cpu_usage_tags[1] = 100.0f;
+		cpu_usage_tags.size = cpu_usage_tags.capacity;
+		draw_entry(
+			EDITOR_SANDBOX_STATISTIC_CPU_USAGE, 
+			"CPU Usage", 
+			EDITOR_STATISTIC_CPU_USAGE_COLOR,
+			100.0f,
+			cpu_usage_tags,
+		[&](CapacityStream<char>& value_label) {
 			ECS_FORMAT_STRING(value_label, "{#} %", display_values->cpu_utilization);
 		});
 
-		draw_entry(EDITOR_SANDBOX_STATISTIC_RAM_USAGE, "RAM Usage", EDITOR_STATISTIC_RAM_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
-			ECS_FORMAT_STRING(value_label, "{#} MB", display_values->physical_ram_usage);
+		draw_entry(
+			EDITOR_SANDBOX_STATISTIC_RAM_USAGE, 
+			"RAM Usage",
+			EDITOR_STATISTIC_RAM_USAGE_COLOR, 
+			sandbox->world_profiling.physical_memory_profiler.memory_usage.max,
+			{},
+			[&](CapacityStream<char>& value_label) 
+		{
+			ECS_FORMAT_STRING(value_label, "{#} KB", display_values->physical_ram_usage);
 		});
 
 		/*draw_entry(EDITOR_SANDBOX_STATISTIC_CPU_USAGE, "GPU Usage", EDITOR_STATISTIC_GPU_USAGE_COLOR, [&](CapacityStream<char>& value_label) {
@@ -285,11 +431,23 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 
 		});*/
 
-		draw_entry(EDITOR_SANDBOX_STATISTIC_SANDBOX_TIME, "Framerate (Simulation)", EDITOR_STATISTIC_SANDBOX_TIME_COLOR, [&](CapacityStream<char>& value_label) {
+		draw_entry(
+			EDITOR_SANDBOX_STATISTIC_SANDBOX_TIME, 
+			"Framerate (Simulation)", 
+			EDITOR_STATISTIC_SANDBOX_TIME_COLOR,
+			sandbox->world_profiling.cpu_profiler.simulation_frame_time.max,
+			{},
+			[&](CapacityStream<char>& value_label) {
 			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", display_values->simulation_fps, display_values->simulation_ms);
 		});
 
-		draw_entry(EDITOR_SANDBOX_STATISTIC_FRAME_TIME, "Framerate (Overall)", EDITOR_STATISTIC_FRAME_TIME_COLOR, [&](CapacityStream<char>& value_label) {
+		draw_entry(
+			EDITOR_SANDBOX_STATISTIC_FRAME_TIME, 
+			"Framerate (Overall)", 
+			EDITOR_STATISTIC_FRAME_TIME_COLOR, 
+			sandbox->world_profiling.cpu_profiler.overall_frame_time.max,
+			{},
+			[&](CapacityStream<char>& value_label) {
 			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", display_values->overall_fps, display_values->overall_ms);
 		});
 
@@ -306,7 +464,7 @@ void ResizeSandboxTextures(
 	EditorState* editor_state, 
 	const UIDrawer& drawer, 
 	EDITOR_SANDBOX_VIEWPORT viewport, 
-	ECSEngine::uint2* previous_size, 
+	uint2* previous_size, 
 	unsigned int threshold,
 	unsigned int sandbox_index
 )
