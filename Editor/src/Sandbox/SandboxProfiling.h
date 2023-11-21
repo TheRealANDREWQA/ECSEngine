@@ -4,10 +4,19 @@ struct EditorState;
 
 enum EDITOR_SANDBOX_CPU_STATISTICS_TYPE : unsigned char;
 enum EDITOR_SANDBOX_GPU_STATISTICS_TYPE : unsigned char;
+enum EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY : unsigned char;
+enum EDITOR_SANDBOX_STATISTIC_DISPLAY_FORM : unsigned char;
 
 void ChangeSandboxCPUStatisticsType(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_TYPE type);
 
 void ChangeSandboxGPUStatisticsType(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_GPU_STATISTICS_TYPE type);
+
+void ChangeSandboxStatisticDisplayForm(
+	EditorState* editor_state, 
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry,
+	EDITOR_SANDBOX_STATISTIC_DISPLAY_FORM form
+);
 
 void ClearSandboxProfilers(EditorState* editor_state, unsigned int sandbox_index);
 

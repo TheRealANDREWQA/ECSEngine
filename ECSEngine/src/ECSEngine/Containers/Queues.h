@@ -255,6 +255,46 @@ namespace ECSEngine {
 			return false;
 		}
 
+		template<bool early_exit = false, typename Functor>
+		bool ForEachRange(unsigned int starting_index, unsigned int ending_index, Functor&& functor) {
+			unsigned int difference = ending_index - starting_index;
+			unsigned int capacity = GetCapacity();
+			unsigned int current_index = m_first_item + starting_index;
+			current_index = current_index >= capacity ? current_index - capacity : current_index;
+			for (unsigned int index = 0; index < difference; index++) {
+				if constexpr (early_exit) {
+					if (functor(m_queue[current_index])) {
+						return true;
+					}
+				}
+				else {
+					functor(m_queue[current_index]);
+				}
+				current_index = current_index == capacity - 1 ? 0 : current_index + 1;
+			}
+			return false;
+		}
+
+		template<bool early_exit = false, typename Functor>
+		bool ForEachRange(unsigned int starting_index, unsigned int ending_index, Functor&& functor) const {
+			unsigned int difference = ending_index - starting_index;
+			unsigned int capacity = GetCapacity();
+			unsigned int current_index = m_first_item + starting_index;
+			current_index = current_index >= capacity ? current_index - capacity : current_index;
+			for (unsigned int index = 0; index < difference; index++) {
+				if constexpr (early_exit) {
+					if (functor(m_queue[current_index])) {
+						return true;
+					}
+				}
+				else {
+					functor(m_queue[current_index]);
+				}
+				current_index = current_index == capacity - 1 ? 0 : current_index + 1;
+			}
+			return false;
+		}
+
 		CapacityStream<T> m_queue;
 		unsigned int m_first_item;
 	};
@@ -691,6 +731,11 @@ namespace ECSEngine {
 	
 	template<typename T>
 	using ThreadSafeResizableQueue = ThreadSafeQueueAdapter<T, ResizableQueue<T>>;
+
+	template<typename ElementType, typename ContainerType>
+	constexpr bool IsQueueType() {
+		return std::is_same_v<ContainerType, Queue<ElementType>>;
+	}
 
 }
 

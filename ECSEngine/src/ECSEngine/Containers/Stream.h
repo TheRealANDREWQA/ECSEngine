@@ -2077,4 +2077,12 @@ namespace ECSEngine {
 		};
 	};
 
+	// Returns true if it is stream, capacity stream or resizable stream
+	template<typename ElementType, typename ContainerType>
+	constexpr bool IsStreamType() {
+		return std::is_same_v<ContainerType, Stream<ElementType>> ||
+			std::is_same_v<ContainerType, CapacityStream<ElementType>> ||
+			std::is_same_v<ContainerType, ResizableStream<ElementType>>;
+	}
+
 }

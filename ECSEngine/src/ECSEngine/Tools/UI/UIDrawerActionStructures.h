@@ -382,14 +382,12 @@ namespace ECSEngine {
 			Color line_color;
 			float2 line_start;
 			float2 line_end;
-			UITextTooltipHoverableData tool_tip_data;
 		};
 
 		struct UIDrawerHistogramHoverableData {
 			unsigned int sample_index;
 			float sample_value;
 			Color bar_color;
-			UITextTooltipHoverableData tool_tip_data;
 		};
 
 		// Name needs to be a stable reference; this does not allocate memory for it

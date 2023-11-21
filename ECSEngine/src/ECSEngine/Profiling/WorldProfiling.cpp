@@ -29,6 +29,7 @@ namespace ECSEngine {
 		ForEachProfiler(this, [](auto* profiler) {
 			profiler->Clear();
 		});
+		frame_index = 0;
 	}
 
 	void WorldProfiling::ChangeGlobals()
@@ -55,6 +56,9 @@ namespace ECSEngine {
 	void WorldProfiling::EnableOption(ECS_WORLD_PROFILING_OPTIONS option)
 	{
 		options = (ECS_WORLD_PROFILING_OPTIONS)SetFlag(options, option);
+		if (HasFlag(option, ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
+			SetTaskManagerPhysicalMemoryProfilingExceptionHandler(world->task_manager);
+		}
 	}
 
 	void WorldProfiling::EndSimulation()
@@ -73,6 +77,7 @@ namespace ECSEngine {
 			profiler->EndFrame();
 		});
 		in_frame = false;
+		frame_index++;
 	}
 
 	void WorldProfiling::StartSimulation()
@@ -181,23 +186,24 @@ namespace ECSEngine {
 
 	void AddPhysicalMemoryWorldAllocators(PhysicalMemoryProfiler* physical_memory_profiler, const World* world)
 	{
-		// The global memory manager, the graphics allocator, the resource manager allocator, the task manager allocators,
-		// the task scheduler allocator and the debug drawer allocator
+		// The global memory manager, the graphics allocator, the resource manager allocator, the task scheduler allocator 
+		// and the debug drawer allocator. The task manager allocators are probably not worth including
+		// Since they will consume a small amount of memory and increase the entry count by quite a bit
 		AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(world->memory), physical_memory_profiler);
-		//AddAllocatorToPhysicalMemoryProfiling(world->graphics->Allocator(), physical_memory_profiler);
-		//AddAllocatorToPhysicalMemoryProfiling(world->resource_manager->Allocator(), physical_memory_profiler);
-		unsigned int thread_count = world->task_manager->GetThreadCount();
-		for (unsigned int index = 0; index < thread_count; index++) {
-			AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(&world->task_manager->m_thread_linear_allocators[index].value), physical_memory_profiler);
-			// For the dynamic task allocators, we can insert them directly
-			physical_memory_profiler->AddEntry({ 
-				world->task_manager->m_dynamic_task_allocators[index].value.buffer, 
-				world->task_manager->m_dynamic_task_allocators[index].value.capacity 
-			});
-		}
-		//AddAllocatorToPhysicalMemoryProfiling(world->task_scheduler->Allocator(), physical_memory_profiler);
+		AddAllocatorToPhysicalMemoryProfiling(world->graphics->Allocator(), physical_memory_profiler);
+		AddAllocatorToPhysicalMemoryProfiling(world->resource_manager->Allocator(), physical_memory_profiler);
+		//unsigned int thread_count = world->task_manager->GetThreadCount();
+		//for (unsigned int index = 0; index < thread_count; index++) {
+		//	AddAllocatorToPhysicalMemoryProfiling(GetAllocatorPolymorphic(&world->task_manager->m_thread_linear_allocators[index].value), physical_memory_profiler);
+		//	// For the dynamic task allocators, we can insert them directly
+		//	physical_memory_profiler->AddEntry({ 
+		//		world->task_manager->m_dynamic_task_allocators[index].value.buffer, 
+		//		world->task_manager->m_dynamic_task_allocators[index].value.capacity 
+		//	});
+		//}
+		AddAllocatorToPhysicalMemoryProfiling(world->task_scheduler->Allocator(), physical_memory_profiler);
 		if (world->debug_drawer != nullptr) {
-			//AddAllocatorToPhysicalMemoryProfiling(world->debug_drawer->Allocator(), physical_memory_profiler);
+			AddAllocatorToPhysicalMemoryProfiling(world->debug_drawer->Allocator(), physical_memory_profiler);
 		}
 	}
 

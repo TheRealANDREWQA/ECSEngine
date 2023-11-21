@@ -3,6 +3,7 @@
 #include "../OS/Thread.h"
 #include "../OS/Misc.h"
 #include "../Multithreading/TaskManager.h"
+#include "../Allocators/ResizableLinearAllocator.h"
 
 namespace ECSEngine {
 
@@ -215,6 +216,38 @@ namespace ECSEngine {
 	void CPUFrameProfiler::Pop(unsigned int thread_id, float value)
 	{
 		threads[thread_id].Pop(value);
+	}
+
+	size_t CPUFrameProfiler::ReduceCPUUsageToSamplesToGraph(unsigned int thread_id, Stream<float2> samples, double spike_threshold, unsigned int sample_offset) const {
+		if (thread_id == -1) {
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+			Stream<unsigned char> usages;
+			usages.Initialize(GetAllocatorPolymorphic(&stack_allocator), entry_capacity);
+			usages.size = 0;
+			unsigned int entry_count = threads[0].frame_utilization.entries.GetSize();
+			for (unsigned int index = 0; index < entry_count; index++) {
+				unsigned int peek_index = entry_count - 1 - index;
+				float current_usage_average = 0.0f;
+				for (size_t thread_index = 0; thread_index < threads.size; thread_index++) {
+					current_usage_average += (float)threads[thread_index].frame_utilization.entries.PeekByIndex(peek_index);
+				}
+				current_usage_average /= (float)threads.size;
+				usages.Add((unsigned char)current_usage_average);
+			}
+
+			return ReduceSamplesToGraph<unsigned char>(samples, usages, spike_threshold, sample_offset);
+		}
+		else {
+			return threads[thread_id].frame_utilization.ReduceSamplesToGraph(samples, spike_threshold, sample_offset);
+		}
+	}
+
+	size_t CPUFrameProfiler::ReduceSimulationFrameTimeToSamplesToGraph(Stream<float2> samples, double spike_threshold, unsigned int sample_offset) const {
+		return simulation_frame_time.ReduceSamplesToGraph(samples, spike_threshold, sample_offset);
+	}
+
+	size_t CPUFrameProfiler::ReduceOverallFrameTimeToSamplesToGraph(Stream<float2> samples, double spike_threshold, unsigned int sample_offset) const {
+		return overall_frame_time.ReduceSamplesToGraph(samples, spike_threshold, sample_offset);
 	}
 
 	void CPUFrameProfiler::Initialize(

@@ -83,6 +83,7 @@ namespace ECSEngine {
 		AllocatorProfiling allocator_profiler;
 		ECS_WORLD_PROFILING_OPTIONS options;
 		bool in_frame;
+		unsigned int frame_index;
 	};
 
 	ECSENGINE_API void AddAllocatorProfilingWorldAllocators(AllocatorProfiling* allocator_profiler, const World* world);

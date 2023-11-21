@@ -65,20 +65,7 @@ namespace ECSEngine {
 		}
 
 		void InitializeMinMax() {
-			if constexpr (std::is_integral_v<T>) {
-				IntegerRange<T>(min, max);
-			}
-			else if constexpr (std::is_same_v<T, float>) {
-				min = -FLT_MAX;
-				max = FLT_MAX;
-			}
-			else if constexpr (std::is_same_v<T, double>) {
-				min = DBL_MAX;
-				max = -DBL_MAX;
-			}
-			else {
-				static_assert(false, "Statistic does not support types other than integers and floats/doubles");
-			}
+			FundamentalTypeMinMax(min, max);
 		}
 
 		void Initialize(AllocatorPolymorphic allocator, unsigned int entries_capacity) {
@@ -89,6 +76,26 @@ namespace ECSEngine {
 			void* allocation = AllocateEx(allocator, allocation_size);
 			uintptr_t allocation_ptr = (uintptr_t)allocation;
 			entries.InitializeFromBuffer(allocation_ptr, entries_capacity);
+		}
+		
+		// Attempts to reduce the numbers of samples into averages while also maintaining spikes (high values)
+		// The entire set is split into chunks for each a single sample is generated. The values are averaged,
+		// But the function will try to detect spikes in order to not be averaged out and lose them out of sight
+		// A spike is considered as being the highest value and it is larger than the spike_threshold multiplied by
+		// the average of the chunk.
+		// Returns the number of valid samples (it can happen that there are fewer entries)
+		size_t ReduceSamples(Stream<T> samples, double spike_threshold, unsigned int sample_offset) const {
+			return ECSEngine::ReduceSamples<T>(samples, entries, spike_threshold, sample_offset);
+		}
+
+		// Attempts to reduce the numbers of samples into averages while also maintaining spikes (high values)
+		// The entire set is split into chunks for each a single sample is generated. The values are averaged,
+		// But the function will try to detect spikes in order to not be averaged out and lose them out of sight
+		// A spike is considered as being the highest value and it is larger than the spike_threshold multiplied by
+		// the average of the chunk.
+		// Returns the number of valid samples (it can happen that there are fewer entries)
+		size_t ReduceSamplesToGraph(Stream<float2> samples, double spike_threshold, unsigned int sample_offset) const {
+			return ECSEngine::ReduceSamplesToGraph<T>(samples, entries, spike_threshold, sample_offset);
 		}
 
 		ECS_INLINE static size_t MemoryOf(unsigned int entry_capacity) {

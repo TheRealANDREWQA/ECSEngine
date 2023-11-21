@@ -61,13 +61,13 @@ namespace ECSEngine {
 		static void AddLateOrSystemAction(UIDrawer* drawer, size_t configuration, bool hoverable, bool general, ECS_MOUSE_BUTTON click_button) {
 			if (IsLateOrSystemConfiguration(configuration)) {
 				if (hoverable) {
-					drawer->late_hoverables.AddAssert(drawer->system->GetLastHoverableIndex(drawer->dockspace, drawer->border_index));
+					drawer->late_hoverables.Add(drawer->system->GetLastHoverableIndex(drawer->dockspace, drawer->border_index));
 				}
 				if (click_button != ECS_MOUSE_BUTTON_COUNT) {
-					drawer->late_clickables[click_button].AddAssert(drawer->system->GetLastClickableIndex(drawer->dockspace, drawer->border_index, click_button));
+					drawer->late_clickables[click_button].Add(drawer->system->GetLastClickableIndex(drawer->dockspace, drawer->border_index, click_button));
 				}
 				if (general) {
-					drawer->late_generals.AddAssert(drawer->system->GetLastGeneralIndex(drawer->dockspace, drawer->border_index));
+					drawer->late_generals.Add(drawer->system->GetLastGeneralIndex(drawer->dockspace, drawer->border_index));
 				}
 			}
 		}
@@ -7227,17 +7227,40 @@ namespace ECSEngine {
 					const UIConfigGraphMaxY* max = (const UIConfigGraphMaxY*)config.GetParameter(UI_CONFIG_GRAPH_MAX_Y);
 					max_y = max->value;
 				}
-				for (size_t index = 0; index < samples.size; index++) {
-					if (~configuration & UI_CONFIG_GRAPH_MIN_Y) {
-						min_y = std::min(min_y, samples[index].y);
-					}
-					if (~configuration & UI_CONFIG_GRAPH_MAX_Y) {
-						max_y = std::max(max_y, samples[index].y);
+				if ((~configuration & UI_CONFIG_GRAPH_MIN_Y) != 0 || (~configuration & UI_CONFIG_GRAPH_MAX_Y) != 0) {
+					for (size_t index = 0; index < samples.size; index++) {
+						if (~configuration & UI_CONFIG_GRAPH_MIN_Y) {
+							min_y = std::min(min_y, samples[index].y);
+						}
+						if (~configuration & UI_CONFIG_GRAPH_MAX_Y) {
+							max_y = std::max(max_y, samples[index].y);
+						}
 					}
 				}
 
 
 				difference.y = max_y - min_y;
+				float epsilon = 0.001f;
+				if (FloatCompare(difference.y, 0.0f, epsilon)) {
+					// If the min_y and max_y are really large, we will need to increase these by a large factor
+					// In order to cross the floating point error margin
+					// Bump these such that they line will be smack in the middle
+					if (min_y > 10000000.0f) {
+						epsilon = 10.0f;
+					}
+					else if (min_y > 1000000.0f) {
+						epsilon = 1.0f;
+					}
+					else if (min_y > 1000000.0f) {
+						epsilon = 0.1f;
+					}
+					else if (min_y > 100000.0f) {
+						epsilon = 0.01f;
+					}
+					max_y += epsilon * 0.5f;
+					min_y -= epsilon * 0.5f;
+					difference.y = epsilon;
+				}
 
 				Color font_color;
 				float character_spacing;
@@ -7326,14 +7349,16 @@ namespace ECSEngine {
 				}
 				end_index = index >= samples.size - 2 ? (int64_t)samples.size : index + 3;
 
-				SolidColorRectangle(configuration, config, position, scale);
+				if (~configuration & UI_CONFIG_GRAPH_NO_BACKGROUND) {
+					SolidColorRectangle(configuration, config, position, scale);
+				}
 
 				auto convert_absolute_position_to_graph_space = [](float2 position, float2 graph_position, float2 graph_scale,
 					float2 min, float2 inverse_sample_span) {
 						return float2(graph_position.x + graph_scale.x * (position.x - min.x) * inverse_sample_span.x, graph_position.y + graph_scale.y * (1.0f - (position.y - min.y) * inverse_sample_span.y));
 				};
 
-				float2 inverse_sample_span = { 1.0f / (samples[samples.size - 1].x - samples[0].x), 1.0f / (max_y - min_y) };
+				float2 inverse_sample_span = { 1.0f / (samples[samples.size - 1].x - samples[0].x), 1.0f / difference.y };
 				float2 min_values = { samples[0].x, min_y };
 				float2 previous_point_position = convert_absolute_position_to_graph_space(samples[starting_index], graph_position, graph_scale, min_values, inverse_sample_span);
 
@@ -8672,11 +8697,12 @@ namespace ECSEngine {
 				current_identifier.buffer = (char*)system->m_memory->Allocate(system->m_descriptors.misc.drawer_identifier_memory, 1);
 				current_identifier.size = 0;
 
-				late_hoverables.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
+				AllocatorPolymorphic system_allocator = system->Allocator();
+				late_hoverables.Initialize(system_allocator, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
-					late_clickables[button_type].Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
+					late_clickables[button_type].Initialize(system_allocator, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
 				});
-				late_generals.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
+				late_generals.Initialize(system_allocator, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
 
 				if (initializer) {
 					// For convinience, use separate allocations
@@ -8737,11 +8763,11 @@ namespace ECSEngine {
 				system->m_memory->Deallocate(current_identifier.buffer);
 				system->m_memory->Deallocate(identifier_stack.buffer);
 
-				system->m_memory->Deallocate(late_hoverables.buffer);
+				late_hoverables.FreeBuffer();
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
-					system->m_memory->Deallocate(late_clickables[button_type].buffer);
+					late_clickables[button_type].FreeBuffer();
 				});
-				system->m_memory->Deallocate(late_generals.buffer);
+				late_generals.FreeBuffer();
 
 				if (initializer) {
 					system->m_memory->Deallocate(last_initialized_element_allocations.buffer);
@@ -17346,7 +17372,7 @@ namespace ECSEngine {
 				if (parameters.y == 0.0f) {
 					parameters.y = row_scale.y / drawer->layout.default_element_y;
 				}
-				element_sizes[current_index] = parameters * float2(drawer->layout.default_element_x, drawer->layout.default_element_y);
+				element_sizes[current_index] = parameters;
 				element_transform_types[current_index] = transform_type;
 				float expanded_scale = parameters.y * drawer->layout.default_element_y;
 				UpdateRowYScale(expanded_scale);

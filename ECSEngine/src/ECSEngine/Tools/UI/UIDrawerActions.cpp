@@ -799,11 +799,13 @@ namespace ECSEngine {
 			tool_tip_stream.Add('y');
 			tool_tip_stream.Add(' ');
 			ConvertFloatToChars(tool_tip_stream, data->second_sample_values.y);
-			data->tool_tip_data.characters = tool_tip_characters;
-			data->tool_tip_data.base.offset_scale = { false, false };
-			data->tool_tip_data.base.offset = { mouse_position.x - position.x + system->m_descriptors.misc.graph_hover_offset.x, mouse_position.y - position.y + system->m_descriptors.misc.graph_hover_offset.y };
 
-			action_data->data = &data->tool_tip_data;
+			UITextTooltipHoverableData tool_tip_data;
+			tool_tip_data.characters = tool_tip_characters;
+			tool_tip_data.base.offset_scale = { false, false };
+			tool_tip_data.base.offset = { mouse_position.x - position.x + system->m_descriptors.misc.graph_hover_offset.x, mouse_position.y - position.y + system->m_descriptors.misc.graph_hover_offset.y };
+
+			action_data->data = &tool_tip_data;
 			TextTooltipHoverable(action_data);
 		}
 
@@ -825,9 +827,10 @@ namespace ECSEngine {
 			stack_stream.Add(' ');
 			ConvertFloatToChars(stack_stream, data->sample_value);
 
-			data->tool_tip_data.characters = stack_memory;
-			data->tool_tip_data.base.offset_scale = { false, false };
-			data->tool_tip_data.base.offset = mouse_position - position + system->m_descriptors.misc.histogram_hover_offset;
+			UITextTooltipHoverableData tool_tip_data;
+			tool_tip_data.characters = stack_memory;
+			tool_tip_data.base.offset_scale = { false, false };
+			tool_tip_data.base.offset = mouse_position - position + system->m_descriptors.misc.histogram_hover_offset;
 			
 			SetSolidColorRectangle(
 				position,
@@ -837,7 +840,7 @@ namespace ECSEngine {
 				counts
 			);
 
-			action_data->data = &data->tool_tip_data;
+			action_data->data = &tool_tip_data;
 			TextTooltipHoverable(action_data);
 		}
 
