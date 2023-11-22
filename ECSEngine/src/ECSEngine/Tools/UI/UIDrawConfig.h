@@ -80,6 +80,8 @@ namespace ECSEngine {
 				}
 			}
 
+			void RemoveFlag(size_t flag_index);
+
 			const void* GetParameter(size_t bit_flag) const;
 
 			size_t flag_count;

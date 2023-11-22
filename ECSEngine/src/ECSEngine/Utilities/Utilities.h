@@ -570,7 +570,7 @@ namespace ECSEngine {
 	size_t ReduceSamplesToGraph(Stream<float2> samples, ContainerType container, double spike_threshold, unsigned int sample_offset) {
 		return ReduceSamplesImpl<FundamentalType>(samples, container, spike_threshold, sample_offset, [&](size_t index, FundamentalType value) {
 			const float step = 1.0f;
-			samples[index] = { index * step, (float)value };
+			samples[index] = { (float)index * step, (float)value };
 		});
 	}
 

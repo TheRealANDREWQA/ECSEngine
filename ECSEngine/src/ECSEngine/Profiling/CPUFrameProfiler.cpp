@@ -226,10 +226,9 @@ namespace ECSEngine {
 			usages.size = 0;
 			unsigned int entry_count = threads[0].frame_utilization.entries.GetSize();
 			for (unsigned int index = 0; index < entry_count; index++) {
-				unsigned int peek_index = entry_count - 1 - index;
 				float current_usage_average = 0.0f;
 				for (size_t thread_index = 0; thread_index < threads.size; thread_index++) {
-					current_usage_average += (float)threads[thread_index].frame_utilization.entries.PeekByIndex(peek_index);
+					current_usage_average += (float)threads[thread_index].frame_utilization.entries.PeekByIndex(index);
 				}
 				current_usage_average /= (float)threads.size;
 				usages.Add((unsigned char)current_usage_average);

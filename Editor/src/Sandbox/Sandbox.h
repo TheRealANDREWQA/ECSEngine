@@ -28,6 +28,11 @@ bool AreAllDefaultSandboxesNotStarted(const EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns true if there are sandboxes that are to be run - default or non default
+bool AreSandboxesBeingRun(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------

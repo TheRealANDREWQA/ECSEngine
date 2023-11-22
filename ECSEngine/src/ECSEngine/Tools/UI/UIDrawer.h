@@ -46,7 +46,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		inline size_t DynamicConfiguration(size_t configuration) {
+		ECS_INLINE size_t DynamicConfiguration(size_t configuration) {
 			return SetFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_DYNAMIC_RESOURCE;
 		}
 
@@ -114,6 +114,13 @@ namespace ECSEngine {
 			void GetTransform(UIDrawConfig& config, size_t& configuration);
 
 			float2 GetScaleForElement(unsigned int index) const;
+
+			// If there are window sized elements, this should be called after get transform
+			float2 GetRowScale() const;
+
+			// This should be called in case the row is aligned to the middle or right and want to find out
+			// Where the position starts
+			float2 GetRowStart() const;
 
 			// Reduces the x scale
 			void IndentRow(float scale);

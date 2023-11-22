@@ -7193,6 +7193,23 @@ namespace ECSEngine {
 				}
 			}
 
+			float2 graph_no_info_position = position;
+			float2 graph_no_info_scale = scale;
+			UIConfigGraphInfoLabels info_labels;
+			bool is_info_labels = false;
+			if (configuration & UI_CONFIG_GRAPH_INFO_LABELS) {
+				info_labels = *(const UIConfigGraphInfoLabels*)config.GetParameter(UI_CONFIG_GRAPH_INFO_LABELS);
+				// Determine by how much to increase the scale
+				if (info_labels.GetTopLeft().size > 0 || info_labels.GetTopRight().size > 0) {
+					graph_no_info_position.y += layout.default_element_y;
+					scale.y += layout.default_element_y;
+				}
+				if (info_labels.GetBottomLeft().size > 0 || info_labels.GetBottomRight().size > 0) {
+					scale.y += layout.default_element_y;
+				}
+				is_info_labels = true;
+			}
+
 			HandleFitSpaceRectangle(configuration, position, scale);
 
 			if (configuration & UI_CONFIG_GET_TRANSFORM) {
@@ -7202,14 +7219,79 @@ namespace ECSEngine {
 			}
 
 			if (ValidatePosition(configuration, position, scale)) {
-				float2 initial_scale = scale;
-				float2 graph_scale = { scale.x - 2.0f * element_descriptor.graph_padding.x, scale.y - 2.0f * element_descriptor.graph_padding.y };
-				float2 graph_position = { position.x + element_descriptor.graph_padding.x, position.y + element_descriptor.graph_padding.y };
+				// We'll need these accross the info labels
+				Color font_color;
+				float character_spacing;
+				float2 font_size;
+
+				HandleText(configuration, config, font_color, font_size, character_spacing);
+				font_color.alpha = ECS_TOOLS_UI_GRAPH_TEXT_ALPHA;
+
+				if (configuration & UI_CONFIG_GRAPH_REDUCE_FONT) {
+					font_size.x *= element_descriptor.graph_reduce_font;
+					font_size.y *= element_descriptor.graph_reduce_font;
+				}
+
+				Color line_color;
+				if (configuration & UI_CONFIG_GRAPH_LINE_COLOR) {
+					const UIConfigGraphColor* color_desc = (const UIConfigGraphColor*)config.GetParameter(UI_CONFIG_GRAPH_LINE_COLOR);
+					line_color = color_desc->color;
+				}
+				else {
+					line_color = color_theme.graph_line;
+				}
+
+				float2 initial_scale = graph_no_info_scale;
+				float2 graph_scale = { graph_no_info_scale.x - 2.0f * element_descriptor.graph_padding.x, graph_no_info_scale.y - 2.0f * element_descriptor.graph_padding.y };
+				float2 graph_position = { graph_no_info_position.x + element_descriptor.graph_padding.x, graph_no_info_position.y + element_descriptor.graph_padding.y };
 
 				if (IsElementNameFirst(configuration, UI_CONFIG_GRAPH_NO_NAME)) {
 					if (name.size > 0) {
 						TextLabel(label_configuration, config, name, position, scale);
 						scale = initial_scale;
+					}
+				}
+
+				UIDrawConfig info_labels_config;
+				size_t INFO_LABEL_CONFIGURATION = ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_WINDOW_DEPENDENT_SIZE)
+					| UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_VALIDATE_POSITION;
+				memcpy(&info_labels_config, &config, sizeof(config));
+				if (HasFlag(configuration, UI_CONFIG_ABSOLUTE_TRANSFORM)) {
+					info_labels_config.RemoveFlag(UI_CONFIG_ABSOLUTE_TRANSFORM);
+				}
+				if (info_labels.inherit_line_color) {
+					UIConfigTextParameters text_parameters;
+					if (HasFlag(configuration, UI_CONFIG_TEXT_PARAMETERS)) {
+						text_parameters = *(const UIConfigTextParameters*)config.GetParameter(UI_CONFIG_TEXT_PARAMETERS);
+					}
+					text_parameters.color = line_color;
+					UIConfigTextParameters previous_text_parameters;
+					SetConfigParameter(configuration, info_labels_config, text_parameters, previous_text_parameters);
+					INFO_LABEL_CONFIGURATION = SetFlag(INFO_LABEL_CONFIGURATION, UI_CONFIG_TEXT_PARAMETERS);
+				}
+
+				// Draw the top info labels, if any
+				if (is_info_labels) {
+					float2 row_position = position + element_descriptor.graph_padding;
+					Stream<char> top_left_info = info_labels.GetTopLeft();
+					UIConfigAbsoluteTransform absolute_transform;
+					// We don't need the scale if we are using Text
+					absolute_transform.scale = { 0.0f, 0.0f };
+					if (top_left_info.size > 0) {
+						absolute_transform.position = row_position + region_render_offset;
+						info_labels_config.AddFlag(absolute_transform);
+						Text(INFO_LABEL_CONFIGURATION, info_labels_config, top_left_info);
+						info_labels_config.flag_count--;
+					}
+
+					Stream<char> top_right_info = info_labels.GetTopRight();
+					if (top_right_info.size > 0) {
+						float2 text_span = system->GetTextSpan(top_right_info, font_size.x, font_size.y, character_spacing);
+						absolute_transform.position = { row_position.x + graph_scale.x - text_span.x, row_position.y };
+						absolute_transform.position += region_render_offset;
+						info_labels_config.AddFlag(absolute_transform);
+						Text(INFO_LABEL_CONFIGURATION, info_labels_config, top_right_info);
+						info_labels_config.flag_count--;
 					}
 				}
 
@@ -7260,18 +7342,6 @@ namespace ECSEngine {
 					max_y += epsilon * 0.5f;
 					min_y -= epsilon * 0.5f;
 					difference.y = epsilon;
-				}
-
-				Color font_color;
-				float character_spacing;
-				float2 font_size;
-
-				HandleText(configuration, config, font_color, font_size, character_spacing);
-				font_color.alpha = ECS_TOOLS_UI_GRAPH_TEXT_ALPHA;
-
-				if (configuration & UI_CONFIG_GRAPH_REDUCE_FONT) {
-					font_size.x *= element_descriptor.graph_reduce_font;
-					font_size.y *= element_descriptor.graph_reduce_font;
 				}
 
 				float2 axis_bump = { 0.0f, 0.0f };
@@ -7352,6 +7422,17 @@ namespace ECSEngine {
 				if (~configuration & UI_CONFIG_GRAPH_NO_BACKGROUND) {
 					SolidColorRectangle(configuration, config, position, scale);
 				}
+				if (configuration & UI_CONFIG_GRAPH_CLICKABLE) {
+					const UIConfigGraphClickable* clickable = (const UIConfigGraphClickable*)config.GetParameter(UI_CONFIG_GRAPH_CLICKABLE);
+					AddClickable(
+						configuration,
+						position,
+						scale,
+						clickable->handler,
+						clickable->button_type,
+						clickable->copy_function
+					);
+				}
 
 				auto convert_absolute_position_to_graph_space = [](float2 position, float2 graph_position, float2 graph_scale,
 					float2 min, float2 inverse_sample_span) {
@@ -7362,14 +7443,6 @@ namespace ECSEngine {
 				float2 min_values = { samples[0].x, min_y };
 				float2 previous_point_position = convert_absolute_position_to_graph_space(samples[starting_index], graph_position, graph_scale, min_values, inverse_sample_span);
 
-				Color line_color;
-				if (configuration & UI_CONFIG_GRAPH_LINE_COLOR) {
-					const UIConfigGraphColor* color_desc = (const UIConfigGraphColor*)config.GetParameter(UI_CONFIG_GRAPH_LINE_COLOR);
-					line_color = color_desc->color;
-				}
-				else {
-					line_color = color_theme.graph_line;
-				}
 				Color initial_color = line_color;
 
 				Stream<UISpriteVertex> drop_color_stream;
@@ -7479,6 +7552,32 @@ namespace ECSEngine {
 					}
 				}
 
+				// Draw the bottom info labels, if any
+				if (is_info_labels) {
+					float2 row_position = position + element_descriptor.graph_padding;
+					row_position.y += position.y + scale.y - layout.default_element_y - element_descriptor.graph_padding.y;
+
+					Stream<char> bottom_left_info = info_labels.GetBottomLeft();
+					UIConfigAbsoluteTransform absolute_transform;
+					// We don't need the scale if we are using Text
+					absolute_transform.scale = { 0.0f, 0.0f };
+					if (bottom_left_info.size > 0) {
+						absolute_transform.position = row_position + region_render_offset;
+						info_labels_config.AddFlag(absolute_transform);
+						Text(INFO_LABEL_CONFIGURATION, info_labels_config, bottom_left_info);
+						info_labels_config.flag_count--;
+					}
+
+					Stream<char> bottom_right_info = info_labels.GetBottomRight();
+					if (bottom_right_info.size > 0) {
+						float2 text_span = system->GetTextSpan(bottom_right_info, font_size.x, font_size.y, character_spacing);
+						absolute_transform.position = { row_position.x + graph_scale.x - text_span.x, row_position.y };
+						absolute_transform.position += region_render_offset;
+						info_labels_config.AddFlag(absolute_transform);
+						Text(INFO_LABEL_CONFIGURATION, info_labels_config, bottom_right_info);
+						info_labels_config.flag_count--;
+					}
+				}
 			}
 
 			bool is_name_after = IsElementNameAfter(configuration, UI_CONFIG_GRAPH_NO_NAME);
@@ -17579,6 +17678,36 @@ namespace ECSEngine {
 			}
 
 			return { 0.0f, 0.0f };
+		}
+		
+		// --------------------------------------------------------------------------------------------------------------
+
+		float2 UIDrawerRowLayout::GetRowScale() const
+		{
+			float2 scale = float2::Splat(0.0f);
+			for (unsigned int index = 0; index < element_count; index++) {
+				float2 current_scale = GetScaleForElement(index);
+				scale.x += current_scale.x;
+				scale.y = std::max(scale.y, current_scale.y);
+				if (index < element_count - 1) {
+					scale.x += indentations[index + 1];
+				}
+			}
+			return scale;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		float2 UIDrawerRowLayout::GetRowStart() const
+		{
+			float2 base_position = float2(drawer->GetNextRowXPosition() + indentations[0], drawer->current_y);
+			if (offset_render_region.x) {
+				base_position.x += drawer->region_render_offset.x;
+			}
+			if (offset_render_region.y) {
+				base_position.y += drawer->region_render_offset.y;
+			}
+			return base_position;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

@@ -42,7 +42,7 @@ void DisplayCompilingSandbox(
 // These are the basic ones like CPU usage, RAM usage, GPU usage, etc
 void DisplaySandboxStatistics(
 	UIDrawer& drawer,
-	const EditorState* editor_state,
+	EditorState* editor_state,
 	unsigned int sandbox_index
 );
 
