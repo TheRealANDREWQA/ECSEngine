@@ -446,6 +446,17 @@ namespace ECSEngine {
 			float value;
 		};
 
+		struct UIConfigGraphClickable {
+			ECS_INLINE static size_t GetAssociatedBit() {
+				return UI_CONFIG_GRAPH_CLICKABLE;
+			}
+
+			UIActionHandler handler;
+			UIHandlerCopyBuffers copy_function = nullptr;
+			ECS_MOUSE_BUTTON button_type = ECS_MOUSE_LEFT;
+		};
+
+		// You need to draw using the tags. They will receive UIDrawerGraphTagData as data
 		struct UIConfigGraphTags {
 			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_TAGS;
@@ -457,6 +468,55 @@ namespace ECSEngine {
 			float horizontal_values[4];
 			unsigned int vertical_tag_count = 0;
 			unsigned int horizontal_tag_count = 0;
+		};
+
+		struct UIConfigGraphInfoLabels {
+			enum CORNERS : unsigned char {
+				TOP_LEFT,
+				TOP_RIGHT,
+				BOTTOM_LEFT,
+				BOTTOM_RIGHT
+			};
+
+			ECS_INLINE static size_t GetAssociatedBit() {
+				return UI_CONFIG_GRAPH_INFO_LABELS;
+			}
+
+			ECS_INLINE void SetTopLeft(Stream<char> label) {
+				labels[TOP_LEFT] = label;
+			}
+
+			ECS_INLINE void SetTopRight(Stream<char> label) {
+				labels[TOP_RIGHT] = label;
+			}
+
+			ECS_INLINE void SetBottomLeft(Stream<char> label) {
+				labels[BOTTOM_LEFT] = label;
+			}
+
+			ECS_INLINE void SetBottomRight(Stream<char> label) {
+				labels[BOTTOM_RIGHT] = label;
+			}
+
+			ECS_INLINE Stream<char> GetTopLeft() const {
+				return labels[TOP_LEFT];
+			}
+
+			ECS_INLINE Stream<char> GetTopRight() const {
+				return labels[TOP_RIGHT];
+			}
+
+			ECS_INLINE Stream<char> GetBottomLeft() const {
+				return labels[BOTTOM_LEFT];
+			}
+
+			ECS_INLINE Stream<char> GetBottomRight() const {
+				return labels[BOTTOM_RIGHT];
+			}
+
+			Stream<char> labels[4] = {};
+			// If set to true, then the text color will be set to this one
+			bool inherit_line_color = false;
 		};
 
 		struct UIDrawerMenuWindow {

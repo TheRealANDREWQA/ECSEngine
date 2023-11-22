@@ -150,6 +150,8 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_GRAPH_MIN_Y = (size_t)1 << 57;
 		constexpr size_t UI_CONFIG_GRAPH_MAX_Y = (size_t)1 << 58;
 		constexpr size_t UI_CONFIG_GRAPH_NO_BACKGROUND = (size_t)1 << 59;
+		constexpr size_t UI_CONFIG_GRAPH_CLICKABLE = (size_t)1 << 60;
+		constexpr size_t UI_CONFIG_GRAPH_INFO_LABELS = (size_t)1 << 61;
 
 		constexpr size_t UI_CONFIG_HISTOGRAM_COLOR = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_HISTOGRAM_REDUCE_FONT = (size_t)1 << 46;

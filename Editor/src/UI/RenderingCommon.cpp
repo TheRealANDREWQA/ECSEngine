@@ -3,6 +3,7 @@
 #include "HelperWindows.h"
 #include "../Sandbox/SandboxModule.h"
 #include "../Sandbox/Sandbox.h"
+#include "../Sandbox/SandboxProfiling.h"
 #include "../Modules/Module.h"
 #include "../Editor/EditorPalette.h"
 
@@ -154,7 +155,7 @@ void DisplayCompilingSandbox(UIDrawer& drawer, const EditorState* editor_state, 
 
 // ------------------------------------------------------------------------------------------------------------
 
-void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state, unsigned int sandbox_index)
+void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsigned int sandbox_index)
 {
 	const float font_scaling = 1.0f;
 	drawer.element_descriptor.label_padd = float2::Splat(0.0f);
@@ -240,7 +241,8 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			display_values->physical_ram_usage = physical_ram_usage;
 			display_values->timer.SetNewStart();
 
-			const double SPIKE_THRESHOLD = 1.5;
+			// Disable spike threshold since it can make the graph look quite weird
+			const double SPIKE_THRESHOLD = DBL_MAX;
 			if (sandbox->statistics_display.IsGraphDisplay(EDITOR_SANDBOX_STATISTIC_CPU_USAGE)) {
 				display_values->cpu_utilization_samples.size = DISPLAY_GRAPH_SAMPLE_COUNT;
 				display_values->cpu_utilization_samples.size = sandbox->world_profiling.cpu_profiler.ReduceCPUUsageToSamplesToGraph(
@@ -296,7 +298,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			return configuration | UI_CONFIG_TEXT_PARAMETERS | UI_CONFIG_LABEL_TRANSPARENT;
 		};
 
-		auto draw_text_info = [&](Stream<char> base_label, Color base_color, auto get_value_display_string) {
+		auto draw_text_info = [&](EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry, Stream<char> base_label, Color base_color, auto get_value_display_string) {
 			UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
 			row_layout.font_scaling = font_scaling;
 			row_layout.SetHorizontalAlignment(ECS_UI_ALIGN_RIGHT);
@@ -319,7 +321,30 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 
 			text_parameters.color = EDITOR_STATISTIC_TEXT_COLOR;
 			config.AddFlag(text_parameters);
-			drawer.TextLabel(get_text_configuration(), config, value_label);
+			
+			struct ChangeDisplayFormData {
+				EditorState* editor_state;
+				unsigned int sandbox_index;
+				EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry;
+			};
+
+			auto change_display_form = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				if (IsClickableTrigger(action_data, ECS_MOUSE_RIGHT)) {
+					ChangeDisplayFormData* data = (ChangeDisplayFormData*)_data;
+					ChangeSandboxStatisticDisplayForm(data->editor_state, data->sandbox_index, data->entry, EDITOR_SANDBOX_STATISTIC_DISPLAY_GRAPH);
+				}
+			};
+
+			ChangeDisplayFormData action_data = { editor_state, sandbox_index, entry };
+
+			size_t label_configuration = get_text_configuration();
+			drawer.TextLabel(label_configuration, config, value_label);
+
+			float2 action_position = row_layout.GetRowStart();
+			float2 action_scale = row_layout.GetRowScale();
+			drawer.AddClickable(label_configuration, action_position, action_scale, { change_display_form, &action_data, sizeof(action_data) }, ECS_MOUSE_RIGHT);
 
 			config.flag_count = 0;
 			configuration = 0;
@@ -330,8 +355,6 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry, 
 			Stream<char> base_label, 
 			Color base_color,
-			float graph_max,
-			Stream<float> tags,
 			auto get_value_display_string
 		) {
 			UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
@@ -339,43 +362,57 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			row_layout.SetHorizontalAlignment(ECS_UI_ALIGN_RIGHT);
 			row_layout.AddElement(UI_CONFIG_RELATIVE_TRANSFORM, { 4.0f, 2.5f });
 
-			size_t graph_configuration = UI_CONFIG_GRAPH_LINE_COLOR | UI_CONFIG_LATE_DRAW | UI_CONFIG_GRAPH_NO_BACKGROUND;
+			size_t graph_configuration = UI_CONFIG_GRAPH_LINE_COLOR | UI_CONFIG_LATE_DRAW | UI_CONFIG_GRAPH_NO_BACKGROUND 
+				| UI_CONFIG_GRAPH_CLICKABLE | UI_CONFIG_GRAPH_INFO_LABELS;
 
 			UIConfigGraphMinY min_y;
 			min_y.value = 0.0f;
 			config.AddFlag(min_y);
 			graph_configuration |= UI_CONFIG_GRAPH_MIN_Y;
 
-			if (graph_max != -FLT_MAX) {
-				UIConfigGraphMaxY max_y;
-				max_y.value = graph_max;
-				config.AddFlag(max_y);
-				graph_configuration |= UI_CONFIG_GRAPH_MAX_Y;
-			}
-
-			auto draw_line = [](ActionData* action_data) {
-				UI_UNPACK_ACTION_DATA;
-
-				UIDrawerGraphTagData* data = (UIDrawerGraphTagData*)_data;
-				UIDrawer* drawer = (UIDrawer*)data->drawer;
-				drawer->Line(UI_CONFIG_LATE_DRAW, data->position, { data->position.x + data->graph_scale.x, data->position.y }, ECS_COLOR_WHITE);
-			};
-			if (tags.size > 0) {
-				UIConfigGraphTags graph_tags;
-				graph_tags.horizontal_tag_count = tags.size;
-				graph_tags.horizontal_tags[0] = draw_line;
-				graph_tags.horizontal_tags[1] = draw_line;
-				tags.CopyTo(graph_tags.horizontal_values);
-				config.AddFlag(graph_tags);
-				graph_configuration |= UI_CONFIG_GRAPH_TAGS;
-			}
-
 			UIConfigGraphColor graph_color;
 			graph_color.color = base_color;
 			config.AddFlag(graph_color);
 
+			struct GraphClickActionData {
+				EditorState* editor_state;
+				unsigned int sandbox_index;
+				EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry;
+			};
+
+			auto graph_click_action = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				GraphClickActionData* data = (GraphClickActionData*)_data;
+				if (IsClickableTrigger(action_data, ECS_MOUSE_RIGHT)) {
+					ChangeSandboxStatisticDisplayForm(data->editor_state, data->sandbox_index, data->entry, EDITOR_SANDBOX_STATISTIC_DISPLAY_TEXT);
+				}
+			};
+
+			GraphClickActionData action_data;
+			action_data.editor_state = editor_state;
+			action_data.sandbox_index = sandbox_index;
+			action_data.entry = entry;
+
+			UIConfigGraphClickable graph_clickable;
+			graph_clickable.button_type = ECS_MOUSE_RIGHT;
+			graph_clickable.handler = { graph_click_action, &action_data, sizeof(action_data) };
+			config.AddFlag(graph_clickable);
+
+			ECS_STACK_CAPACITY_STREAM(char, top_right_label, 512);
+			get_value_display_string(top_right_label);
+
+			UIConfigGraphInfoLabels graph_labels;
+			graph_labels.SetTopLeft(base_label);
+			graph_labels.SetTopRight(top_right_label);
+			graph_labels.inherit_line_color = true;
+			config.AddFlag(graph_labels);
+
+			Timer my_timer;
 			row_layout.GetTransform(config, graph_configuration);
 			drawer.Graph(graph_configuration, config, display_values->samples[entry]);
+			float graph_duration = my_timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
+
 			config.flag_count = 0;
 			drawer.NextRow();
 		};
@@ -384,30 +421,22 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry, 
 			Stream<char> base_label, 
 			Color base_color,
-			float graph_max,
-			Stream<float> graph_tags,
 			auto get_value_display_string
 		) {
 			if (sandbox->statistics_display.should_display[entry]) {
 				if (sandbox->statistics_display.display_form[entry] == EDITOR_SANDBOX_STATISTIC_DISPLAY_TEXT) {
-					draw_text_info(base_label, base_color, get_value_display_string);
+					draw_text_info(entry, base_label, base_color, get_value_display_string);
 				}
 				else {
-					draw_graph_info(entry, base_label, base_color, graph_max, graph_tags, get_value_display_string);
+					draw_graph_info(entry, base_label, base_color, get_value_display_string);
 				}
 			}
 		};
 
-		ECS_STACK_CAPACITY_STREAM(float, cpu_usage_tags, 2);
-		cpu_usage_tags[0] = 50.0f;
-		cpu_usage_tags[1] = 100.0f;
-		cpu_usage_tags.size = cpu_usage_tags.capacity;
 		draw_entry(
 			EDITOR_SANDBOX_STATISTIC_CPU_USAGE, 
 			"CPU Usage", 
 			EDITOR_STATISTIC_CPU_USAGE_COLOR,
-			100.0f,
-			cpu_usage_tags,
 		[&](CapacityStream<char>& value_label) {
 			ECS_FORMAT_STRING(value_label, "{#} %", display_values->cpu_utilization);
 		});
@@ -416,8 +445,6 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			EDITOR_SANDBOX_STATISTIC_RAM_USAGE, 
 			"RAM Usage",
 			EDITOR_STATISTIC_RAM_USAGE_COLOR, 
-			sandbox->world_profiling.physical_memory_profiler.memory_usage.max,
-			{},
 			[&](CapacityStream<char>& value_label) 
 		{
 			ECS_FORMAT_STRING(value_label, "{#} KB", display_values->physical_ram_usage);
@@ -435,8 +462,6 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			EDITOR_SANDBOX_STATISTIC_SANDBOX_TIME, 
 			"Framerate (Simulation)", 
 			EDITOR_STATISTIC_SANDBOX_TIME_COLOR,
-			sandbox->world_profiling.cpu_profiler.simulation_frame_time.max,
-			{},
 			[&](CapacityStream<char>& value_label) {
 			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", display_values->simulation_fps, display_values->simulation_ms);
 		});
@@ -445,8 +470,6 @@ void DisplaySandboxStatistics(UIDrawer& drawer, const EditorState* editor_state,
 			EDITOR_SANDBOX_STATISTIC_FRAME_TIME, 
 			"Framerate (Overall)", 
 			EDITOR_STATISTIC_FRAME_TIME_COLOR, 
-			sandbox->world_profiling.cpu_profiler.overall_frame_time.max,
-			{},
 			[&](CapacityStream<char>& value_label) {
 			ECS_FORMAT_STRING(value_label, "{#} FPS ({#} ms)", display_values->overall_fps, display_values->overall_ms);
 		});

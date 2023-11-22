@@ -220,6 +220,10 @@ public:
 								average /= average_count;
 							}*/
 
+							if (AreSandboxesBeingRun(&editor_state)) {
+								frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
+							}
+
 							// Refresh the graphics object since it might be changed
 							graphics = editor_state.UIGraphics();
 

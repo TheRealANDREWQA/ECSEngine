@@ -474,6 +474,18 @@ bool AreAllDefaultSandboxesNotStarted(const EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool AreSandboxesBeingRun(const EditorState* editor_state)
+{
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) && !EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
+		return ForEachSandbox<true>(editor_state, [](const EditorSandbox* sandbox, unsigned int sandbox_index) {
+			return sandbox->run_state == EDITOR_SANDBOX_RUNNING;
+		});
+	}
+	return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -2636,18 +2648,8 @@ void TickSandboxes(EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UISetInstantFramePacing(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
-	system->RemoveFrameHandler(UISetInstantFramePacing, nullptr);
-}
-
 void TickSandboxRuntimes(EditorState* editor_state)
 {
-	// Add a system frame handler to the UI that will set the frame pacing to INSTANT no matter what
-	bool added_instant_frame_handle = false;
-
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH) && !EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 		ForEachSandbox<true>(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
@@ -2665,12 +2667,6 @@ void TickSandboxRuntimes(EditorState* editor_state)
 					}
 					// We can exit the loop now
 					return true;
-				}
-				else {
-					if (!added_instant_frame_handle) {
-						added_instant_frame_handle = true;
-						editor_state->ui_system->PushFrameHandler({ UISetInstantFramePacing, nullptr, 0 });
-					}
 				}
 			}
 			return false;
