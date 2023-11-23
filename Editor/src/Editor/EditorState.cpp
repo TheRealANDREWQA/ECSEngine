@@ -263,6 +263,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 			ResetProjectNeedsBackup(editor_state);
 		}
 
+		TickUpdateSandboxHIDInputs(editor_state);
 		TickModuleStatus(editor_state);
 
 		TickSandboxes(editor_state);
@@ -283,7 +284,8 @@ void EditorStateProjectTick(EditorState* editor_state) {
 
 		TickSaveProjectUIAutomatically(editor_state);
 
-		EditorGeneralInputTick(editor_state);
+		TickEditorGeneralInput(editor_state);
+		TickSandboxHIDInputs(editor_state);
 	}
 }
 

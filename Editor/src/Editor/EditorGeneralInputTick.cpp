@@ -6,7 +6,7 @@
 #include "../Sandbox/SandboxAccessor.h"
 #include "../Sandbox/SandboxScene.h"
 
-void EditorGeneralInputTick(EditorState* editor_state) {
+void TickEditorGeneralInput(EditorState* editor_state) {
 	if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_SAVE_PROJECT)) {
 		// Determine which sandboxes are dirty. If there is a single one dirty,
 		// Then save it directly without a prompt. Otherwise use the SaveScenePopUp
@@ -15,7 +15,8 @@ void EditorGeneralInputTick(EditorState* editor_state) {
 		unsigned int sandbox_count = GetSandboxCount(editor_state);
 		for (unsigned int index = 0; index < sandbox_count; index++) {
 			const EditorSandbox* sandbox = GetSandbox(editor_state, index);
-			if (sandbox->is_scene_dirty) {
+			// Exclude running or paused sandboxes - consider only scene sandboxes
+			if (sandbox->is_scene_dirty && sandbox->run_state == EDITOR_SANDBOX_SCENE) {
 				dirty_sandboxes.AddAssert(index);
 			}
 		}

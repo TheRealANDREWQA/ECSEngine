@@ -5170,10 +5170,6 @@ namespace ECSEngine {
 
 			for (size_t index = 0; index < default_data->type.fields.size; index++) {
 				switch (default_data->type.fields[index].element_index) {
-					CASE_START(Color, UIReflectionColorData)
-					*data->color = data->default_color;
-					CASE_END
-
 					CASE_START(FloatInput, UIReflectionFloatInputData)
 					*data->value = data->default_value;
 					CASE_END
@@ -5240,6 +5236,22 @@ namespace ECSEngine {
 						memcpy(data->values[subindex], (void*)value_ptr, data->byte_size);
 						value_ptr += data->byte_size;
 					}
+					CASE_END
+
+					CASE_START(CheckBox, UIReflectionCheckBoxData)
+					*data->value = data->default_value;
+					CASE_END
+				
+					CASE_START(Color, UIReflectionColorData)
+					*data->color = data->default_color;
+					CASE_END
+
+					CASE_START(ColorFloat, UIReflectionColorFloatData)
+					*data->color = data->default_color;
+					CASE_END
+
+					CASE_START(ComboBox, UIReflectionComboBoxData)
+					*data->active_label = data->default_label;
 					CASE_END
 				}
 			}

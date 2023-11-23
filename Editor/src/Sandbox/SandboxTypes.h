@@ -221,6 +221,8 @@ struct ECS_REFLECT EditorSandbox {
 	// Save these to the sandbox file
 	EditorSandboxStatisticsDisplay statistics_display;
 
+	float simulation_speed_up_factor;
+
 	ECS_FIELDS_END_REFLECT;
 
 	// This flag is set when initiating keyboard transform actions

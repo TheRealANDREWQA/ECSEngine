@@ -7,6 +7,12 @@ struct EditorState;
 struct ECS_REFLECT ProjectSettings {
 	// The time step is expressed in seconds
 	float fixed_timestep = 0.01f;
+	// If set to true, the input of one sandbox is used
+	// To update all of them
+	bool synchronized_sandbox_input = false;
+	// If set to true, then the input of the keyboard is updated
+	// When the sandbox is not focused
+	bool unfocused_keyboard_input = false;
 };
 
 // The project file must be set before calling this function

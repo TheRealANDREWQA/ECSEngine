@@ -173,6 +173,15 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 
 			OpenSandboxSettings open_data;
 			open_data = { editor_state, inspector_index };
+
+			if (GetInspectorMatchingSandbox(editor_state, inspector_index) == -1) {
+				// Disable the settings button
+				UIConfigActiveState active_state;
+				active_state.state = false;
+				configuration |= UI_CONFIG_ACTIVE_STATE;
+				config.AddFlag(active_state);
+			}
+
 			drawer.SpriteButton(
 				configuration,
 				config,
@@ -387,7 +396,6 @@ void SetInspectorMatchingSandbox(EditorState* editor_state, unsigned int inspect
 	editor_state->inspector_manager.data[inspector_index].matching_sandbox = sandbox_index;
 	// Reset the draw to nothing - some windows are dependent on the sandbox and changing it without anouncing
 	// them can result in inconsistent results
-
 	ChangeInspectorToNothing(editor_state, inspector_index);
 }
 

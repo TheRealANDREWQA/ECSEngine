@@ -181,7 +181,6 @@ public:
 					// So, we need to wrap this code into a section and check all sandboxes for their
 					// physical memory profilers in case the exception is of type PAGE_GUARD
 					__try {
-						editor_state.Tick();
 						if (!IsIconic(hWnd)) {
 							graphics->BindRenderTargetViewFromInitialViews();
 
@@ -231,10 +230,14 @@ public:
 							if (removed) {
 								__debugbreak();
 							}
-
-							mouse.Update();
-							keyboard.Update();
 						}
+
+						// Run the tick after the UI. At the moment, the mouse/keyboard sandbox
+						// Input is based on this ordering
+						editor_state.Tick();
+
+						mouse.Update();
+						keyboard.Update();
 					}
 					__except (handle_physical_memory_guards(GetExceptionInformation())) {}
 

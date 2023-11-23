@@ -7,9 +7,12 @@
 #include "../../Sandbox/Sandbox.h"
 #include "../../Sandbox/SandboxFile.h"
 #include "../../Sandbox/SandboxModule.h"
+#include "../../Sandbox/SandboxProfiling.h"
 
 #include "../CreateScene.h"
 #include "../../Modules/Module.h"
+
+#define NAME_PADDING_LENGTH 0.30f
 
 struct DrawSandboxSettingsData {
 	EditorState* editor_state;
@@ -17,9 +20,16 @@ struct DrawSandboxSettingsData {
 	WorldDescriptor ui_descriptor;
 	LinearAllocator runtime_settings_allocator;
 	size_t last_write_descriptor;
+	// This is used by the retained mode
+	// To determine when the sandbox changes the run state
+	// Such that we can redraw then
+	unsigned int sandbox_index;
+	EDITOR_SANDBOX_STATE run_state;
 
 	bool collapsing_module_state;
 	bool collapsing_runtime_state;
+	bool collapsing_modifiers_state;
+	bool collapsing_statistics_state;
 };
 
 void InspectorDrawSandboxSettingsClean(EditorState* editor_state, unsigned int inspector_index, void* _data) {
@@ -180,12 +190,12 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 
 	DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
 	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
+	data->sandbox_index = sandbox_index;
 
 	auto get_name = [](unsigned int index, CapacityStream<char>& name) {
 		name.CopyOther("Sandbox ");
 		ConvertIntToChars(name, index);
 	};
-
 
 	// Initialize the ui_reflection_instance if we haven't done so
 	if (data->ui_reflection_instance_name.size == 0) {
@@ -277,18 +287,21 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		drawer->TextWide(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, sandbox->scene_path);
 	}
 
+	config.flag_count--;
+	active_state.state = !IsSandboxStateRuntime(sandbox->run_state);
+	config.AddFlag(active_state);
 	ChangeSandboxSceneActionData change_scene_data = { editor_state, sandbox_index };
 	drawer->SpriteButton(
-		UI_CONFIG_MAKE_SQUARE,
+		UI_CONFIG_MAKE_SQUARE | UI_CONFIG_ACTIVE_STATE,
 		config,
 		{ ChangeSandboxSceneAction, &change_scene_data, sizeof(change_scene_data), ECS_UI_DRAW_SYSTEM },
 		ECS_TOOLS_UI_TEXTURE_FOLDER
 	);
 	drawer->NextRow();
+	config.flag_count = 0;
 
 	drawer->CollapsingHeader("Modules", &data->collapsing_module_state, [&]() {
 		// Display the count of modules in use
-
 		ECS_STACK_CAPACITY_STREAM(char, in_use_stream, 256);
 		in_use_stream.CopyOther("In use: ");
 		ConvertIntToChars(in_use_stream, sandbox->modules_in_use.size);
@@ -333,6 +346,8 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 
 			// Save the sandbox file as well
 			SaveEditorSandboxFile(data->editor_state);
+			// Redraw the window as well
+			action_data->redraw_window = true;
 		};
 
 		struct ActivateDeactivateData {
@@ -353,6 +368,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			}
 
 			SaveEditorSandboxFile(data->editor_state);
+			action_data->redraw_window = true;
 		};
 
 		ECS_STACK_CAPACITY_STREAM(unsigned int, module_display_order, 64);
@@ -447,12 +463,13 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		create_data.editor_state = editor_state;
 		create_data.sandbox_index = sandbox_index;
 		drawer->Button("Add Module", { CreateAddSandboxWindow, &create_data, sizeof(create_data), ECS_UI_DRAW_SYSTEM });
-		});
+	});
 
 	drawer->CollapsingHeader("Runtime Settings", &data->collapsing_runtime_state, [&]() {
+		config.flag_count = 0;
+
 		// Display all the available settings
 		ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, available_settings, 128);
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 		// Reload the values if the lazy evaluation has finished
 		if (data->last_write_descriptor != sandbox->runtime_settings_last_write) {
@@ -490,9 +507,9 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 				}
 			};
 
-			UIDrawConfig config;
+			UIDrawConfig local_config;
 			UIConfigWindowDependentSize dependent_size;
-			config.AddFlag(dependent_size);
+			local_config.AddFlag(dependent_size);
 
 			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 			for (unsigned int index = 0; index < available_settings.size; index++) {
@@ -503,7 +520,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 					configuration = ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
 				}
 
-				drawer->ButtonWide(configuration, config, available_settings[index], { select_action, &select_data, sizeof(select_data) });
+				drawer->ButtonWide(configuration, local_config, available_settings[index], { select_action, &select_data, sizeof(select_data) });
 				drawer->NextRow();
 			}
 		}
@@ -523,10 +540,14 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		UIConfigWindowDependentSize dependent_size;
 		config.AddFlag(dependent_size);
 
+		UIConfigNamePadding name_padding;
+		name_padding.total_length = NAME_PADDING_LENGTH;
+		config.AddFlag(name_padding);
+
 		UIReflectionDrawInstanceOptions options;
 		options.drawer = drawer;
 		options.config = &config;
-		options.global_configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+		options.global_configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
 		editor_state->ui_reflection->DrawInstance(data->ui_reflection_instance_name.buffer, &options);
 
 		struct SaveCallbackData {
@@ -550,10 +571,14 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 			}
 		};
 
+		UIConfigActiveState save_active_state;
+		save_active_state.state = !IsSandboxStateRuntime(sandbox->run_state);
+		config.AddFlag(save_active_state);
+
 		SaveCallbackData save_data;
 		save_data.data = data;
 		save_data.sandbox_index = sandbox_index;
-		drawer->Button("Save", { save_callback, &save_data, sizeof(save_data) });
+		drawer->Button(UI_CONFIG_ACTIVE_STATE, config, "Save", { save_callback, &save_data, sizeof(save_data) });
 
 		UIConfigAbsoluteTransform default_transform;
 		default_transform.scale = drawer->GetLabelScale("Default");
@@ -573,6 +598,176 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		drawer->NextRow();
 		drawer->CrossLine();
 	});
+
+	drawer->CollapsingHeader("Modifiers", &data->collapsing_modifiers_state, [&]() {
+		config.flag_count = 0;
+		const size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
+	
+		UIConfigNamePadding name_padding;
+		name_padding.total_length = NAME_PADDING_LENGTH;
+		config.AddFlag(name_padding);
+
+		drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
+
+		auto save_sandbox_file_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			SaveEditorSandboxFile((const EditorState*)_data);
+		};
+
+		UIConfigCheckBoxCallback check_box_callback;
+		check_box_callback.handler = { save_sandbox_file_action, editor_state, 0 };
+		config.AddFlag(check_box_callback);
+
+		const size_t CHECK_BOX_CONFIGURATION = CONFIGURATION | UI_CONFIG_CHECK_BOX_CALLBACK;
+		drawer->CheckBox(CHECK_BOX_CONFIGURATION, config, "Should Play", &sandbox->should_play);
+		drawer->CheckBox(CHECK_BOX_CONFIGURATION, config, "Should Pause", &sandbox->should_pause);
+		drawer->CheckBox(CHECK_BOX_CONFIGURATION, config, "Should Step", &sandbox->should_step);
+
+		config.flag_count--;
+
+		UIConfigWindowDependentSize dependent_size;
+		config.AddFlag(dependent_size);
+
+		struct SpeedUpCallbackData {
+			EditorState* editor_state;
+			unsigned int sandbox_index;
+		};
+		
+		auto speed_up_callback_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			SpeedUpCallbackData* data = (SpeedUpCallbackData*)_data;
+			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+			sandbox->sandbox_world.speed_up_factor = sandbox->simulation_speed_up_factor;
+			SaveEditorSandboxFile(data->editor_state);
+		};
+
+		SpeedUpCallbackData speed_up_data = { editor_state, sandbox_index };
+		UIConfigTextInputCallback speed_up_callback;
+		speed_up_callback.handler = { speed_up_callback_action, &speed_up_data, sizeof(speed_up_data) };
+		config.AddFlag(speed_up_callback);
+		drawer->FloatInput(
+			CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_INPUT_CALLBACK 
+				| UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_NUMBER_INPUT_RANGE, 
+			config, 
+			"Simulation Speed", 
+			&sandbox->simulation_speed_up_factor, 
+			1.0, 
+			0.001f, 
+			100.0f
+		);
+
+		config.flag_count = 0;
+		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
+	});
+
+	drawer->CollapsingHeader("Statistics", &data->collapsing_statistics_state, [&]() {
+		config.flag_count = 0;
+		const size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
+
+		drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
+		
+		UIConfigNamePadding name_padding;
+		name_padding.total_length = NAME_PADDING_LENGTH;
+		config.AddFlag(name_padding);
+
+		struct EditorSandboxActionData {
+			EditorState* editor_state;
+			unsigned int sandbox_index;
+		};
+
+		auto invert_enable_statistics_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			EditorSandboxActionData* data = (EditorSandboxActionData*)_data;
+			InvertSandboxStatisticsDisplay(data->editor_state, data->sandbox_index);
+			action_data->redraw_window = true;
+		};
+
+		EditorSandboxActionData editor_sandbox_action_data = { editor_state, sandbox_index };
+		UIConfigCheckBoxCallback check_box_callback;
+		check_box_callback.handler = { invert_enable_statistics_action, &editor_sandbox_action_data, sizeof(editor_sandbox_action_data) };
+		check_box_callback.disable_value_to_modify = true;
+		config.AddFlag(check_box_callback);
+
+		drawer->CheckBox(CONFIGURATION | UI_CONFIG_CHECK_BOX_CALLBACK, config, "Activated", &sandbox->statistics_display.is_enabled);
+		drawer->OffsetNextRow(drawer->layout.node_indentation);
+		// The row was already passed, we need to reset the X
+		drawer->SetCurrentX(drawer->GetNextRowXPosition());
+		config.flag_count--;
+
+		auto change_cpu_statistic_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			EditorSandboxActionData* data = (EditorSandboxActionData*)_data;
+			const EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+			// Here it is kinda weird to change the statistic type to the already one set, but the function
+			// Does a bit more than just setting
+			ChangeSandboxCPUStatisticsType(data->editor_state, data->sandbox_index, sandbox->cpu_statistics_type);
+			action_data->redraw_window = true;
+		};
+
+		UIConfigComboBoxCallback cpu_callback;
+		cpu_callback.handler = { change_cpu_statistic_action, &editor_sandbox_action_data, sizeof(editor_sandbox_action_data) };
+		config.AddFlag(cpu_callback);
+
+		const Reflection::ReflectionEnum* cpu_statistic_enum = editor_state->EditorReflectionManager()->GetEnum(STRING(EDITOR_SANDBOX_CPU_STATISTICS_TYPE));
+		Stream<Stream<char>> cpu_statistic_labels = cpu_statistic_enum->fields;
+		drawer->ComboBox(
+			CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK, 
+			config,
+			"CPU Statistic",
+			cpu_statistic_labels, 
+			cpu_statistic_labels.size, 
+			(unsigned char*)&sandbox->cpu_statistics_type
+		);
+		config.flag_count--;
+
+		auto change_gpu_statistic_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			EditorSandboxActionData* data = (EditorSandboxActionData*)_data;
+			const EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+			// Here it is kinda weird to change the statistic type to the already one set, but the function
+			// Does a bit more than just setting
+			ChangeSandboxGPUStatisticsType(data->editor_state, data->sandbox_index, sandbox->gpu_statistics_type);
+			action_data->redraw_window = true;
+		};
+
+		UIConfigComboBoxCallback gpu_callback;
+		gpu_callback.handler = { change_cpu_statistic_action, &editor_sandbox_action_data, sizeof(editor_sandbox_action_data) };
+		config.AddFlag(gpu_callback);
+
+		const Reflection::ReflectionEnum* gpu_statistic_enum = editor_state->EditorReflectionManager()->GetEnum(STRING(EDITOR_SANDBOX_GPU_STATISTICS_TYPE));
+		Stream<Stream<char>> gpu_statistic_labels = gpu_statistic_enum->fields;
+		drawer->ComboBox(
+			CONFIGURATION | UI_CONFIG_COMBO_BOX_CALLBACK,
+			config,
+			"GPU Statistic",
+			gpu_statistic_labels,
+			gpu_statistic_labels.size,
+			(unsigned char*)&sandbox->gpu_statistics_type
+		);
+		config.flag_count--;
+
+		drawer->StateTable("Enabled", gpu_statistic_labels, sandbox->statistics_display.should_display);
+
+		drawer->OffsetNextRow(-drawer->layout.node_indentation);
+		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
+	});
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+static bool InspectorSandboxSettingsRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+	DrawSandboxSettingsData* draw_data = (DrawSandboxSettingsData*)window_data;
+	EDITOR_SANDBOX_STATE current_state = GetSandboxState(draw_data->editor_state, draw_data->sandbox_index);
+	if (current_state != draw_data->run_state) {
+		draw_data->run_state = current_state;
+		return false;
+	}
+	return true;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -580,12 +775,12 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
 {
 	DrawSandboxSettingsData data;
+	memset(&data, 0, sizeof(data));
 	data.editor_state = editor_state;
-	data.ui_reflection_instance_name = { nullptr, 0 };
 	unsigned int matched_inspector_index = ChangeInspectorDrawFunction(
 		editor_state,
 		inspector_index,
-		{ InspectorDrawSandboxSettings, InspectorDrawSandboxSettingsClean },
+		{ InspectorDrawSandboxSettings, InspectorDrawSandboxSettingsClean, InspectorSandboxSettingsRetainedMode },
 		&data,
 		sizeof(data),
 		sandbox_index

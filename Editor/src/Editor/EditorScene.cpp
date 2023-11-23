@@ -142,6 +142,8 @@ bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_index, 
 	// Create the pointer remap
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
 
+	// TODO: At the moment, this function call ignores the speed up factor in the scene file
+	// It might be relevant later on
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	bool success = LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, filename, pointer_remapping.buffer);
 	if (success) {

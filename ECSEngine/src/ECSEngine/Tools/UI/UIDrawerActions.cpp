@@ -846,7 +846,11 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		constexpr float INPUT_DRAG_FACTOR = 40.0f;
+#define INPUT_DRAG_FACTOR 20.0f
+		// This factor is used to make value increases for integer inputs
+		// Larger, since by default, they will be quite small if we use only
+		// The input drag factor
+#define INTEGER_INPUT_DRAG_FACTOR 2.5f
 
 		template<typename FloatingPoint, typename DataType>
 		void FloatingPointInputDragValue(ActionData* action_data) {
@@ -913,9 +917,32 @@ namespace ECSEngine {
 			}
 			else if (mouse->IsDown(ECS_MOUSE_LEFT) || mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				float delta_to_position = mouse_position.x - data->last_position;
+				bool has_wrapped = mouse->HasWrapped();
+				if (has_wrapped) {
+					// In case it wrapped, don't let the delta explode
+					if (mouse_position.x < data->last_position) {
+						// It has wrapped from right to left
+						delta_to_position += 2.0f;
+					}
+					else {
+						// It has wrappe from left to right
+						delta_to_position -= 2.0f;
+					}
+				}
 				float shift_value = keyboard->IsDown(ECS_KEY_LEFT_SHIFT) ? 1.0f / 5.0f : 1.0f;
 				float ctrl_value = keyboard->IsDown(ECS_KEY_LEFT_CTRL) ? 5.0f : 1.0f;
-				float amount = delta_to_position * INPUT_DRAG_FACTOR * shift_value * ctrl_value;
+				float amount = delta_to_position * INPUT_DRAG_FACTOR * INTEGER_INPUT_DRAG_FACTOR * shift_value * ctrl_value;
+				if (has_wrapped) {
+					// In case there is a wrap around, we need to change the value right now
+					// Since if we don't, the next call will not see the wrap around but the last
+					// Position would stay the same and the delta would be huge
+					if (amount > 0.0f) {
+						amount = ClampMin(amount, 1.01f);
+					}
+					else {
+						amount = ClampMax(amount, -1.01f);
+					}
+				}
 				
 				bool is_negative = amount < 0.0f;
 				Integer value_before = *data->data.number;

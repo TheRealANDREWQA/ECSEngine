@@ -128,10 +128,16 @@ namespace ECSEngine {
 			return false;
 		}
 
+		float2 world_time_values;
+		ECS_ASSERT(ptr - (uintptr_t)file_allocation <= file_byte_size - sizeof(world_time_values));
+		memcpy((void*)ptr, &world_time_values, sizeof(world_time_values));
+		ptr += sizeof(world_time_values);
+			
 		if (load_data->delta_time != nullptr) {
-			ECS_ASSERT(ptr - (uintptr_t)file_allocation <= file_byte_size - sizeof(float));
-			memcpy((void*)ptr, load_data->delta_time, sizeof(*load_data->delta_time));
-			ptr += sizeof(*load_data->delta_time);
+			*load_data->delta_time = world_time_values.x;
+		}
+		if (load_data->speed_up_factor != nullptr) {
+			*load_data->speed_up_factor = world_time_values.y;
 		}
 		
 		return true;
@@ -240,7 +246,8 @@ namespace ECSEngine {
 		}
 
 		// Write the final float value
-		success = WriteFile(file_handle, &save_data->delta_time);
+		float2 world_time_values = { save_data->delta_time, save_data->speed_up_factor };
+		success = WriteFile(file_handle, &world_time_values);
 		if (!success) {
 			return false;
 		}

@@ -1614,6 +1614,7 @@ Stream<Stream<unsigned int>> GetNotLoadedAssets(
 	entries.Initialize(stack_allocator, ECS_ASSET_TYPE_COUNT);
 	for (size_t asset_type = 0; asset_type < ECS_ASSET_TYPE_COUNT; asset_type++) {
 		entries[asset_type].Initialize(stack_allocator, handles[asset_type].size);
+		entries[asset_type].size = 0;
 		for (size_t index = 0; index < handles[asset_type].size; index++) {
 			if (!IsAssetBeingLoaded(editor_state, handles[asset_type][index], (ECS_ASSET_TYPE)asset_type)) {
 				entries[asset_type].Add(handles[asset_type][index]);

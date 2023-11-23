@@ -75,6 +75,7 @@ namespace ECSEngine {
 		save_data.file = mutable_directory;
 		save_data.reflection_manager = reflection_manager;
 		save_data.delta_time = world->delta_time;
+		save_data.speed_up_factor = world->speed_up_factor;
 		bool success = SaveScene(&save_data);
 		if (!success) {
 			WriteErrorMessage(options, "Failed to write scene file\n");
@@ -372,6 +373,7 @@ namespace ECSEngine {
 
 		LoadSceneData load_data = *load_scene_data;
 		load_data.delta_time = &world->delta_time;
+		load_data.speed_up_factor = &world->speed_up_factor;
 		load_data.detailed_error_string = options->error_message;
 		load_data.allow_missing_components = false;
 		load_data.entity_manager = world->entity_manager;

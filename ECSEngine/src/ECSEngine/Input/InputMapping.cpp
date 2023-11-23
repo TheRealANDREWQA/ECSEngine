@@ -11,9 +11,6 @@ namespace ECSEngine {
 	bool InputMapping::IsTriggered(unsigned int index) const
 	{
 		InputMappingElement element = mappings[index];
-		if ((element.first.is_key || element.second.is_key || element.third.is_key) && keyboard->IsCaptureCharacters()) {
-			return false;
-		}
 		return element.first.IsTriggered(mouse, keyboard) && element.second.IsTriggered(mouse, keyboard) && element.third.IsTriggered(mouse, keyboard);
 	}
 

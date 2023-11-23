@@ -2,4 +2,4 @@
 
 struct EditorState;
 
-void EditorGeneralInputTick(EditorState* editor_state);
+void TickEditorGeneralInput(EditorState* editor_state);

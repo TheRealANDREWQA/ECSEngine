@@ -907,7 +907,10 @@ namespace ECSEngine {
 
 					// Only add the actions if it is visible in the y dimension
 					if (text_count_before != *text_count) {
-						size_t name_length = input->name.text_vertices.size;
+						// If it has name alignment and some name vertices get culled, this won't work correctly
+						// So we need to deduce the name vertex count from the difference of drawn text sprites
+						// And the input text sprite count
+						size_t name_length = *text_count - text_count_before - input->text->size * 6;
 						Stream<UISpriteVertex> stream;
 
 						float2 text_span = { 0.0f, 0.0f };
@@ -945,8 +948,7 @@ namespace ECSEngine {
 						UIDrawerFloatInputHoverableData hoverable_data;
 
 						hoverable_data.tool_tip.characters = tool_tip_characters;
-						hoverable_data.tool_tip.base.offset.y = 0.007f;
-						hoverable_data.tool_tip.base.offset_scale.y = true;
+						hoverable_data.tool_tip.base.offset.y = 0.017f;
 						hoverable_data.tool_tip.base.next_row_offset = 0.006f;
 						uintptr_t tool_tip_reinterpretation = (uintptr_t)&hoverable_data;
 						tool_tip_reinterpretation += sizeof(UITextTooltipHoverableData);

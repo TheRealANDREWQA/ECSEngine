@@ -421,7 +421,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 	unsigned int target_sandbox = GetActiveWindowSandbox(editor_state);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// If values are being entered into a field don't change the tool
-	if (target_sandbox == sandbox_index && !editor_state->Keyboard()->IsCaptureCharacters()) {
+	if (target_sandbox == sandbox_index) {
 		// Check to see if the camera wasd movement is activated
 		if (sandbox->is_camera_wasd_movement) {
 			HandleCameraWASDMovement(editor_state, sandbox_index);
@@ -455,28 +455,6 @@ static void ScenePrivateAction(ActionData* action_data) {
 				// Since the Game UI window will check for this as well
 				if (window_index == system->GetActiveWindow() && editor_state->input_mapping.IsTriggered(EDITOR_INPUT_SANDBOX_STATISTICS_TOGGLE)) {
 					InvertSandboxStatisticsDisplay(editor_state, sandbox_index);
-				}
-
-				// This is for testing only
-				if (window_index == system->GetActiveWindow()) {
-					if (keyboard->IsPressed(ECS_KEY_M)) {
-						InvertSandboxStatisticsDisplay(editor_state, sandbox_index);
-					}
-					else if (keyboard->IsPressed(ECS_KEY_N)) {
-						ChangeSandboxCPUStatisticsType(editor_state, sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_NONE);
-					}
-					else if (keyboard->IsPressed(ECS_KEY_B)) {
-						ChangeSandboxCPUStatisticsType(editor_state, sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_BASIC);
-					}
-					else if (keyboard->IsPressed(ECS_KEY_V)) {
-						ChangeSandboxCPUStatisticsType(editor_state, sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_ADVANCED);
-					}
-					else if (keyboard->IsPressed(ECS_KEY_CLOSED_SQUARE_BRACKET)) {
-						ChangeSandboxStatisticDisplayForm(editor_state, sandbox_index, EDITOR_SANDBOX_STATISTIC_CPU_USAGE, EDITOR_SANDBOX_STATISTIC_DISPLAY_GRAPH);
-					}
-					else if (keyboard->IsPressed(ECS_KEY_OPEN_SQUARE_BRACKET)) {
-						ChangeSandboxStatisticDisplayForm(editor_state, sandbox_index, EDITOR_SANDBOX_STATISTIC_CPU_USAGE, EDITOR_SANDBOX_STATISTIC_DISPLAY_TEXT);
-					}
 				}
 
 				ECS_TRANSFORM_TOOL current_tool = sandbox->transform_tool;
@@ -1233,9 +1211,6 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			DisplayNoGraphicsModule(drawer, multiple_graphics_module);
 		}
 	}
-
-	// Display the statistics
-	DisplaySandboxStatistics(drawer, editor_state, sandbox_index);
 
 	// Display the crash message if necessary
 	DisplayCrashedSandbox(drawer, editor_state, sandbox_index);
