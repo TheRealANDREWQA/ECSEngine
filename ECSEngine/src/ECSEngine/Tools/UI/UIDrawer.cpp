@@ -8567,6 +8567,7 @@ namespace ECSEngine {
 
 			bool omit_text = false;
 			bool has_name_padding = HasFlag(configuration, UI_CONFIG_NAME_PADDING);
+			float name_padding_total_length = 0.0f;
 			if (has_name_padding) {
 				const UIConfigNamePadding* name_padding = (const UIConfigNamePadding*)config.GetParameter(UI_CONFIG_NAME_PADDING);
 				alignment.horizontal = name_padding->alignment;
@@ -8574,6 +8575,8 @@ namespace ECSEngine {
 				scale.x += name_padding->offset_size;
 				label_configuration |= UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X;
 				omit_text = name_padding->omit_text;
+
+				name_padding_total_length = scale.x;
 
 				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
 					if (text->TextScale()->x >= scale.x - 2.0f * drawer->element_descriptor.label_padd.x) {
@@ -8614,7 +8617,12 @@ namespace ECSEngine {
 					if (!omit_text) {
 						drawer->TextLabelDrawer(label_configuration, label_config, text, position, scale);
 					}
-					draw_scale.x = text->scale.x + drawer->layout.element_indentation * !has_name_padding;
+					if (!has_name_padding) {
+						draw_scale.x = text->scale.x + drawer->layout.element_indentation;
+					}
+					else {
+						draw_scale.x = name_padding_total_length;
+					}
 					position.x += draw_scale.x;
 				}
 				else {

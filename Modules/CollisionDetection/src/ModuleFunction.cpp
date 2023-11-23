@@ -11,6 +11,9 @@ static void ApplyMovementTask(
 	if (for_each_data->world->keyboard->IsPressed(ECS_KEY_P)) {
 		translation->value.x = 0.0f;
 	}
+	if (for_each_data->world->mouse->IsPressed(ECS_MOUSE_LEFT)) {
+		translation->value.x = 0.0f;
+	}
 	//translation->value.y -= 1.50f * for_each_data->world->delta_time;
 	//translation->value.x -= 5.50f * for_each_data->world->delta_time;
 	//if (for_each_data->thread_id == 2) {

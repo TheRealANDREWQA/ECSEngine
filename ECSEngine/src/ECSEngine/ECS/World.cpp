@@ -135,6 +135,8 @@ namespace ECSEngine {
 		else {
 			debug_drawer = descriptor.debug_drawer;
 		}
+
+		speed_up_factor = 1.0f;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------

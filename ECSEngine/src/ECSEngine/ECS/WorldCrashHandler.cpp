@@ -76,6 +76,7 @@ namespace ECSEngine {
 
 			SaveSceneData save_data;
 			save_data.delta_time = WORLD_GLOBAL_DATA.descriptor.world->delta_time;
+			save_data.speed_up_factor = WORLD_GLOBAL_DATA.descriptor.world->speed_up_factor;
 			save_data.asset_database = WORLD_GLOBAL_DATA.descriptor.asset_database;
 			save_data.unique_overrides = WORLD_GLOBAL_DATA.descriptor.unique_infos;
 			save_data.shared_overrides = WORLD_GLOBAL_DATA.descriptor.shared_infos;

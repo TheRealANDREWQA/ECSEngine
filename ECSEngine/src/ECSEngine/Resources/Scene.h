@@ -48,6 +48,7 @@ namespace ECSEngine {
 
 		// You can retrieve the delta time of the simulation if you choose to
 		float* delta_time = nullptr;
+		float* speed_up_factor = nullptr;
 	};
 
 	ECSENGINE_API bool CreateEmptyScene(Stream<wchar_t> file);
@@ -72,6 +73,7 @@ namespace ECSEngine {
 
 		// This value will also be serialized such that upon loading the simulation can continue as before
 		float delta_time = 0.0f;
+		float speed_up_factor = 1.0f;
 	};
 
 	ECSENGINE_API bool SaveScene(SaveSceneData* save_data);

@@ -618,11 +618,19 @@ void TickSandboxes(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 
+void TickUpdateSandboxHIDInputs(EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Runs all the worlds of active sandboxes
 void TickSandboxRuntimes(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 
 void TickSandboxUpdateMasterButtons(EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void TickSandboxHIDInputs(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------

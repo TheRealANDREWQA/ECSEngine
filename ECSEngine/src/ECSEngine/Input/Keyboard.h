@@ -93,7 +93,7 @@ namespace ECSEngine {
         ECS_KEY_MULTIPLY,
         ECS_KEY_ADD,
         ECS_KEY_SEPARATOR,
-        ECS_KEY_SUBTRACT,
+        ECS_KEY_MINUS,
         ECS_KEY_DECIMAL,
         ECS_KEY_DIVIDE,
         ECS_KEY_F1,
@@ -181,6 +181,9 @@ namespace ECSEngine {
 		WPARAM wParam;
 		LPARAM lParam;
 	};
+
+    // Returns true if that key is used for character input
+    ECSENGINE_API bool IsAlphanumeric(ECS_KEY key);
 
 	struct ECSENGINE_API Keyboard : ButtonInput<ECS_KEY, ECS_KEY_COUNT>
 	{

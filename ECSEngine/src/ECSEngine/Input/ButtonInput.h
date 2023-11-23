@@ -84,6 +84,29 @@ namespace ECSEngine {
 			}
 		}
 
+		// It will take over all updates from the other input into this one
+		// This function does not tick
+		void UpdateFromOther(const ButtonInput<ButtonType, max_count>* other_input) {
+			for (size_t index = 0; index < max_count; index++) {
+				if (other_input->m_states[index] == ECS_BUTTON_PRESSED) {
+					UpdateButton((ButtonType)index, false);
+				}
+				else if (other_input->m_states[index] == ECS_BUTTON_RELEASED) {
+					UpdateButton((ButtonType)index, true);
+				}
+			}
+		}
+
+		// It will update all buttons that are pressed to be released
+		// This function does not tick
+		void UpdateRelease() {
+			for (size_t index = 0; index < max_count; index++) {
+				if (m_states[index] == ECS_BUTTON_HELD || m_states[index] == ECS_BUTTON_PRESSED) {
+					UpdateButton((ButtonType)index, true);
+				}
+			}
+		}
+
 		ECS_BUTTON_STATE m_states[max_count] = { ECS_BUTTON_RAISED };
 	};
 

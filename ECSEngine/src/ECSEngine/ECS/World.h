@@ -71,6 +71,10 @@ namespace ECSEngine {
 		);
 		World(const WorldDescriptor& descriptor);
 
+		ECS_INLINE float RealDeltaTime() const {
+			return delta_time / speed_up_factor;
+		}
+
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(World);
 
 		GlobalMemoryManager* memory;
@@ -89,6 +93,9 @@ namespace ECSEngine {
 		Timer timer;
 		// The delta time is expressed in seconds
 		float delta_time;
+		// This factor is used to increase/decrease the simulation speed
+		// If the simulation speed is too high, things might start to brake
+		float speed_up_factor;
 	};
 
 	// Destroys the graphics object if it was created internally, deallocates the global memory manager

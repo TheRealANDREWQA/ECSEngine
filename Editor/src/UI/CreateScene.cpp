@@ -346,6 +346,8 @@ void ChangeSandboxSceneAction(ActionData* action_data) {
 					// Update the sandbox file
 					// Already prints an error message
 					SaveEditorSandboxFile(data->editor_state);
+					// Also redraw the window
+					action_data->redraw_window = true;
 				}
 			}
 		}

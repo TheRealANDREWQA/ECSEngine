@@ -206,7 +206,8 @@ unsigned int ChangeInspectorDrawFunction(
 		inspector_data->clean_function = functions.clean_function;
 		inspector_data->data_size = data_size;
 		// Also change the target sandbox index
-		inspector_data->target_sandbox = sandbox_index;
+		// In case it is -1, use the matching sandbox value
+		inspector_data->target_sandbox = sandbox_index == -1 ? GetInspectorMatchingSandbox(editor_state, inspector_index) : sandbox_index;
 
 		// Same as the comment above, the window is firstly created
 		if (inspector_window_index != -1) {

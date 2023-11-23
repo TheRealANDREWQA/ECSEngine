@@ -486,6 +486,12 @@ EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 			// Update the link components
 			UpdateAssetsToComponents(editor_state, update_elements);
 
+			// Remove the assets from the loading array before deallocating the database streams
+			// Since then we won't be able to reference them back
+			data->database.ForEachAsset([editor_state](unsigned int handle, ECS_ASSET_TYPE type) {
+				RemoveLoadingAsset(editor_state, { handle, type });
+			});
+
 			data->database.DeallocateStreams();
 			DeallocateIfBelongs(allocator, data->failures->buffer);
 			Deallocate(allocator, data);
@@ -497,11 +503,6 @@ EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 				// Unlock the sandbox as well
 				UnlockSandbox(editor_state, data->sandbox_index);
 			}
-
-			// Lastly, we need to remove the assets from the loading array
-			data->database.ForEachAsset([editor_state](unsigned int handle, ECS_ASSET_TYPE type) {
-				RemoveLoadingAsset(editor_state, { handle, type });
-			});
 
 			return false;
 		}
@@ -1394,6 +1395,8 @@ void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigne
 	Stream<Stream<unsigned int>> not_loaded_assets = GetNotLoadedAssets(editor_state, GetAllocatorPolymorphic(&stack_allocator), assets_to_reload, &has_entries);
 
 	if (has_entries) {
+		AddLoadingAssets(editor_state, not_loaded_assets);
+
 		ReloadAssetsMetadataChangeEventData event_data;
 		event_data.asset_handles = StreamCoalescedDeepCopy(not_loaded_assets, editor_state->MultithreadedEditorAllocator());
 		EditorAddEvent(editor_state, ReloadAssetsMetadataChangeEvent, &event_data, sizeof(event_data));

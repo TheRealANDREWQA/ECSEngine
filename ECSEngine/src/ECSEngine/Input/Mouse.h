@@ -79,6 +79,14 @@ namespace ECSEngine {
 			return m_get_raw_input;
 		}
 
+		ECS_INLINE bool IsWrap() const {
+			return m_wrap_position;
+		}
+
+		ECS_INLINE bool HasWrapped() const {
+			return m_has_wrapped;
+		}
+
 		void SetCursorVisibility(bool visible, bool pin_mouse_on_invisible = true);
 
 		void SetPreviousPositionAndScroll();

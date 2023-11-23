@@ -10,6 +10,7 @@
 #include "../Assets/EditorSandboxAssets.h"
 #include "../Modules/Module.h"
 #include "../Project/ProjectFolders.h"
+#include "../Project/ProjectSettings.h"
 #include "../Modules/ModuleSettings.h"
 
 #include "../Editor/EditorScene.h"
@@ -669,14 +670,13 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->camera_wasd_speed = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED;
 	memset(sandbox->transform_tool_selected, 0, sizeof(sandbox->transform_tool_selected));
 
+	sandbox->simulation_speed_up_factor = 1.0f;
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	sandbox->locked_count = 0;
 	sandbox->flags = 0;
 
 	// Initialize the runtime settings string
 	sandbox->runtime_descriptor = GetDefaultWorldDescriptor();
-	sandbox->runtime_descriptor.mouse = editor_state->Mouse();
-	sandbox->runtime_descriptor.keyboard = editor_state->Keyboard();
 
 	sandbox->runtime_settings.Initialize(editor_state->EditorAllocator(), 0, RUNTIME_SETTINGS_STRING_CAPACITY);
 	sandbox->runtime_settings_last_write = 0;
@@ -720,9 +720,10 @@ bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int san
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, sandbox->modules_in_use.size);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
-		indices[index] = sandbox->modules_in_use[index].module_index;
+		if (!sandbox->modules_in_use[index].is_deactivated) {
+			indices.Add(sandbox->modules_in_use[index].module_index);
+		}
 	}
-	indices.size = sandbox->modules_in_use.size;
 	return ConstructSandboxSchedulingOrder(editor_state, sandbox_index, indices, disable_error_message);
 }
 
@@ -1656,14 +1657,24 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	*task_scheduler_allocator = TaskScheduler::DefaultAllocator(allocator);
 
 	new (task_scheduler) TaskScheduler(task_scheduler_allocator);
-
 	sandbox->runtime_descriptor.task_scheduler = task_scheduler;
+
+	// We also need to have separate mouse and keyboard controls
+	// Such that each sandbox can be controlled independently
+	// Coordinated inputs can be easily added the editor level
+	Mouse* sandbox_mouse = (Mouse*)allocator->Allocate(sizeof(Mouse));
+	*sandbox_mouse = Mouse();
+	Keyboard* sandbox_keyboard = (Keyboard*)allocator->Allocate(sizeof(Keyboard));
+	*sandbox_keyboard = Keyboard(allocator);
+	sandbox->runtime_descriptor.mouse = sandbox_mouse;
+	sandbox->runtime_descriptor.keyboard = sandbox_keyboard;
 
 	// Wait until the graphics initialization is finished, otherwise the debug drawer can fail
 	EditorStateWaitFlag(50, editor_state, EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED);
 
 	// Create the sandbox world
 	sandbox->sandbox_world = World(sandbox->runtime_descriptor);
+	sandbox->sandbox_world.speed_up_factor = sandbox->simulation_speed_up_factor;
 	sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
 	editor_state->editor_components.SetManagerComponents(sandbox->sandbox_world.entity_manager);
 
@@ -2244,7 +2255,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		// Check to see if we are in fixed time step mode
 		if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
 			// We need to change the delta time
-			sandbox->sandbox_world.delta_time = editor_state->project_settings.fixed_timestep;
+			sandbox->sandbox_world.delta_time = editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor;
 		}
 	}
 
@@ -2253,7 +2264,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		// We also need to update the delta time
 		float new_delta_time = (float)sandbox->sandbox_world.timer.GetDuration(ECS_TIMER_DURATION_US) / 1'000'000.0f;
 		if (new_delta_time <= ECS_WORLD_DELTA_TIME_REUSE_THRESHOLD) {
-			sandbox->sandbox_world.delta_time = new_delta_time;
+			sandbox->sandbox_world.delta_time = new_delta_time * sandbox->sandbox_world.speed_up_factor;
 		}
 	}
 	sandbox->sandbox_world.timer.SetNewStart();
@@ -2618,6 +2629,57 @@ void WaitSandboxUnlock(const EditorState* editor_state, unsigned int sandbox_ind
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void TickUpdateSandboxHIDInputs(EditorState* editor_state)
+{
+	const ProjectSettings* project_settings = &editor_state->project_settings;
+
+	// If we have synchronized inputs, we need to splat early the update
+	// Such that the tick will catch the modification
+	unsigned int active_window = editor_state->ui_system->GetActiveWindow();
+	bool was_input_synchronized = false;
+	unsigned int active_sandbox_index = -1;
+	ForEachSandbox<true>(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
+		if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+			unsigned int game_ui_index = GetGameUIWindowIndex(editor_state, sandbox_index);
+			if (game_ui_index == active_window) {
+				// Splat this sandbox' mouse input and/or keyboard input
+				if (project_settings->synchronized_sandbox_input) {
+					was_input_synchronized = true;
+					ForEachSandbox(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
+						if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+							sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
+							if (!project_settings->unfocused_keyboard_input) {
+								sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+							}
+						}
+						});
+				}
+				else {
+					sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
+					sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+				}
+				active_sandbox_index = sandbox_index;
+				return true;
+			}
+		}
+		return false;
+		});
+
+	if (!was_input_synchronized) {
+		ForEachSandbox(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
+			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+				if (active_sandbox_index != sandbox_index) {
+					// We need to update release these controls
+					sandbox->sandbox_world.mouse->UpdateRelease();
+					sandbox->sandbox_world.keyboard->UpdateRelease();
+				}
+			}
+		});
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void TickSandboxesRuntimeSettings(EditorState* editor_state) {
 	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_RUNTIME_SETTINGS, LAZY_EVALUATION_RUNTIME_SETTINGS)) {
 		ReloadSandboxRuntimeSettings(editor_state);
@@ -2739,5 +2801,13 @@ void TickSandboxUpdateMasterButtons(EditorState* editor_state)
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
+
+void TickSandboxHIDInputs(EditorState* editor_state)
+{
+	ForEachSandbox(editor_state, [](EditorSandbox* sandbox, unsigned int sandbox_index) {
+		sandbox->sandbox_world.mouse->Tick();
+		sandbox->sandbox_world.keyboard->Tick();
+	});
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------
