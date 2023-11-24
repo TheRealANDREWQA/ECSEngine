@@ -31,6 +31,18 @@ using namespace ECSEngine;
 
 #define LAZY_EVALUATION_RUNTIME_SETTINGS 500
 
+Stream<char> EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY_STRINGS[] = {
+	"CPU Usage",
+	"GPU Usage",
+	"RAM Usage",
+	"VRAM Usage",
+	"Simulation FPS/Time",
+	"Overall FPS/Time",
+	"GPU Simulation FPS/Time"
+};
+
+static_assert(std::size(EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY_STRINGS) == EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT);
+
 // -----------------------------------------------------------------------------------------------------------------------------
 
 ECS_INLINE static Stream<char> ColorDepthTextureString(bool color_texture) {

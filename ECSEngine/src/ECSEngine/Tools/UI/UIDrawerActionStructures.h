@@ -527,6 +527,7 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerStateTableAllButtonData {
+			UIDrawerStateTable* state_table;
 			bool all_true;
 			bool single_pointer;
 			Stream<bool*> states;

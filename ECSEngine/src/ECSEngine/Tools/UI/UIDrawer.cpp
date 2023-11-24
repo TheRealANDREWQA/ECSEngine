@@ -990,6 +990,11 @@ namespace ECSEngine {
 				}
 			}
 
+			if (configuration & UI_CONFIG_ALIGN_TO_ROW_Y) {
+				float y_position = AlignMiddle(position.y, current_row_y_scale, element->TextScale()->y);
+				TranslateTextY(y_position, 0, *element->TextStream());
+			}
+
 			if (element->GetZoomX() == zoom_ptr->x && element->GetZoomY() == zoom_ptr->y) {
 				if (ValidatePosition(configuration, *element->TextPosition(), *element->TextScale())) {
 					memcpy(current_buffer, element->TextBuffer(), sizeof(UISpriteVertex) * *element->TextSize());
@@ -1010,11 +1015,6 @@ namespace ECSEngine {
 					element->TextScale()->y * zoom_ptr->y * element->GetInverseZoomY()
 					}, *this);
 				HandleFitSpaceRectangle(configuration, position, new_scale);
-			}
-
-			if (configuration & UI_CONFIG_ALIGN_TO_ROW_Y) {
-				float y_position = AlignMiddle(position.y, current_row_y_scale, element->TextScale()->y);
-				TranslateTextY(y_position, 0, *element->TextStream());
 			}
 		}
 
@@ -9802,22 +9802,30 @@ namespace ECSEngine {
 				}
 
 				if (ValidatePosition(configuration, position, scale)) {
-					Color color = HandleColor(configuration, config);
-
+					Color background_color = HandleColor(configuration, config);
 					if (*state) {
-						color = LightenColorClamp(color, 1.4f);
+						background_color = LightenColorClamp(background_color, 1.4f);
 					}
-					SolidColorRectangle(configuration, position, scale, color);
+					if (~configuration & UI_CONFIG_SPRITE_STATE_BUTTON_NO_BACKGROUND_WHEN_DESELECTED) {
+						SolidColorRectangle(configuration, position, scale, background_color);
+					}
+					else {
+						if (*state) {
+							SolidColorRectangle(configuration, position, scale, background_color);
+						}
+					}
 					float2 sprite_scale;
 					float2 sprite_position = ExpandRectangle(position, scale, expand_factor, sprite_scale);
 					if (is_active) {
 						SpriteRectangle(configuration, position, scale, texture, color, top_left_uv, bottom_right_uv);
-						AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 }, nullptr, color);
+						AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 }, nullptr, background_color);
 					}
 					else {
 						color.alpha *= color_theme.alpha_inactive_item;
 						SpriteRectangle(configuration, position, scale, texture, color, top_left_uv, bottom_right_uv);
 					}
+
+					HandleBorder(configuration, config, position, scale);
 				}
 			}
 		}
@@ -15383,6 +15391,18 @@ namespace ECSEngine {
 					}
 				}
 
+				if (configuration & UI_CONFIG_STATE_TABLE_CALLBACK) {
+					const UIConfigStateTableCallback* callback = (const UIConfigStateTableCallback*)config.GetParameter(UI_CONFIG_STATE_TABLE_CALLBACK);
+					data->clickable_callback = callback->handler;
+					if (callback->handler.data_size > 0) {
+						data->clickable_callback.data = GetMainAllocatorBuffer(callback->handler.data_size);
+						memcpy(data->clickable_callback.data, callback->handler.data, callback->handler.data_size);
+					}
+				}
+				else {
+					data->clickable_callback = {};
+				}
+
 				return data;
 				});
 
@@ -15418,7 +15438,21 @@ namespace ECSEngine {
 				Color background_color = HandleColor(configuration, config);
 				Color checkbox_color = LightenColorClamp(background_color, 1.3f);
 
+				if (configuration & UI_CONFIG_STATE_TABLE_CALLBACK) {
+					const UIConfigStateTableCallback* callback = (const UIConfigStateTableCallback*)config.GetParameter(UI_CONFIG_STATE_TABLE_CALLBACK);
+					if (!callback->copy_on_initialization) {
+						if (callback->handler.data_size > 0) {
+							memcpy(data->clickable_callback.data, callback->handler.data, callback->handler.data_size);
+						}
+						else {
+							data->clickable_callback.data = callback->handler.data;
+						}
+						data->clickable_callback.action = callback->handler.action;
+					}
+				}
+
 				UIDrawerStateTableBoolClickable clickable_data;
+				clickable_data.state_table = data;
 				if (configuration & UI_CONFIG_STATE_TABLE_NOTIFY_ON_CHANGE) {
 					UIConfigStateTableNotify* notify_data = (UIConfigStateTableNotify*)config.GetParameter(UI_CONFIG_STATE_TABLE_NOTIFY_ON_CHANGE);
 					clickable_data.notifier = notify_data->notifier;
@@ -15537,6 +15571,7 @@ namespace ECSEngine {
 					UIDrawerStateTableAllButtonData button_data;
 					button_data.all_true = all_true;
 					button_data.single_pointer = false;
+					button_data.state_table = data;
 					if (configuration & UI_CONFIG_STATE_TABLE_SINGLE_POINTER) {
 						button_data.single_pointer = true;
 					}

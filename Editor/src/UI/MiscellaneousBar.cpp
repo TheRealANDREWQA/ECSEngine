@@ -7,10 +7,8 @@
 #include "../Modules/Module.h"
 #include "../Sandbox/Sandbox.h"
 
-using namespace ECSEngine;
-using namespace ECSEngine::Tools;
-
 #define TOOP_TIP_OFFSET 0.01f
+#define KEYBOARD_ICON_OFFSET 0.2f
 
 // ----------------------------------------------------------------------------------------------------------------------
 
@@ -135,7 +133,6 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	float2 total_button_scale = { button_scale.x * 3, button_scale.y };
 	float2 starting_position = drawer.GetAlignedToCenter(total_button_scale);
 
-
 	UIConfigAbsoluteTransform transform;
 	UIConfigBorder border;
 	border.color = EDITOR_GREEN_COLOR;
@@ -255,6 +252,21 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	drawer.SpriteRectangle(configuration, { triangle_position.x + scaled_scale.x, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, step_color);
 
 #pragma endregion
+
+
+	const size_t INPUT_ICON_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | UI_CONFIG_SPRITE_STATE_BUTTON_NO_BACKGROUND_WHEN_DESELECTED;
+	config.flag_count = 0;
+	config.AddFlag(border);
+
+	UIConfigAbsoluteTransform input_icon_transform;
+	input_icon_transform.scale = { button_scale.x * 1.5f, button_scale.y };
+	input_icon_transform.position = drawer.GetAlignedToRight(button_scale.x);
+	input_icon_transform.position.y = starting_position.y;
+	input_icon_transform.position.x -= KEYBOARD_ICON_OFFSET;
+	config.AddFlag(input_icon_transform);
+
+	ProjectSettings* project_settings = &editor_state->project_settings;
+	drawer.SpriteStateButton(INPUT_ICON_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_KEYBOARD, &project_settings->unfocused_keyboard_input, drawer.color_theme.text);
 }
 
 void MiscellaneousBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
