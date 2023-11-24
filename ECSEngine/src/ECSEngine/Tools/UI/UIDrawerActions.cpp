@@ -1477,6 +1477,12 @@ namespace ECSEngine {
 			if (data->notifier != nullptr) {
 				*data->notifier = true;
 			}
+			action_data->redraw_window = true;
+
+			if (data->state_table->clickable_callback.action != nullptr) {
+				action_data->data = data->state_table->clickable_callback.data;
+				data->state_table->clickable_callback.action(action_data);
+			}
 		}
 
 		void StateTableBoolClickable(ActionData* action_data)
@@ -1487,6 +1493,12 @@ namespace ECSEngine {
 			*data->state = !*data->state;
 			if (data->notifier != nullptr) {
 				*data->notifier = true;
+			}
+			action_data->redraw_window = true;
+		
+			if (data->state_table->clickable_callback.action != nullptr) {
+				action_data->data = data->state_table->clickable_callback.data;
+				data->state_table->clickable_callback.action(action_data);
 			}
 		}
 

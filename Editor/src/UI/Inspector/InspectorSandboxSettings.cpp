@@ -697,6 +697,10 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		drawer->SetCurrentX(drawer->GetNextRowXPosition());
 		config.flag_count--;
 
+		config.flag_count = 0;
+		name_padding.total_length -= drawer->layout.node_indentation;
+		config.AddFlag(name_padding);
+
 		auto change_cpu_statistic_action = [](ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
@@ -751,7 +755,26 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		);
 		config.flag_count--;
 
-		drawer->StateTable("Enabled", gpu_statistic_labels, sandbox->statistics_display.should_display);
+		auto should_display_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			EditorState* editor_state = (EditorState*)_data;
+			SaveEditorSandboxFile(editor_state);
+		};
+
+		UIConfigStateTableCallback enabled_callback;
+		enabled_callback.handler = { should_display_action, editor_state, 0 };
+		config.AddFlag(enabled_callback);
+
+		Stream<Stream<char>> enabled_statistic_labels = { EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY_STRINGS, EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT };
+		drawer->StateTable(
+			CONFIGURATION | UI_CONFIG_STATE_TABLE_ALL | UI_CONFIG_STATE_TABLE_CALLBACK, 
+			config, 
+			"Enabled Statistics", 
+			enabled_statistic_labels, 
+			sandbox->statistics_display.should_display
+		);
+		config.flag_count--;
 
 		drawer->OffsetNextRow(-drawer->layout.node_indentation);
 		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);

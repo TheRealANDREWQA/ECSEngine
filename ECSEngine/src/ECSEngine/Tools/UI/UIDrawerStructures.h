@@ -661,6 +661,7 @@ namespace ECSEngine {
 			UIDrawerTextElement name;
 			Stream<UIDrawerTextElement> labels;
 			unsigned int max_x_scale;
+			UIActionHandler clickable_callback;
 		};
 
 		struct ECSENGINE_API UIDrawerMenuButtonData {
@@ -717,7 +718,17 @@ namespace ECSEngine {
 
 		typedef UIConfigStateTableNotify UIConfigFilterMenuNotify;
 
+		struct UIConfigStateTableCallback {
+			ECS_INLINE static size_t GetAssociatedBit() {
+				return UI_CONFIG_STATE_TABLE_CALLBACK;
+			}
+
+			UIActionHandler handler;
+			bool copy_on_initialization = false;
+		};
+
 		struct UIDrawerStateTableBoolClickable {
+			UIDrawerStateTable* state_table;
 			bool* notifier;
 			bool* state;
 		};

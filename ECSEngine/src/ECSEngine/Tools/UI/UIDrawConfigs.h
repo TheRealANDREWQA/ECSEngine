@@ -170,6 +170,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_STATE_TABLE_SINGLE_POINTER = (size_t)1 << 46;
 		constexpr size_t UI_CONFIG_STATE_TABLE_ALL = (size_t)1 << 47;
 		constexpr size_t UI_CONFIG_STATE_TABLE_NOTIFY_ON_CHANGE = (size_t)1 << 48;
+		constexpr size_t UI_CONFIG_STATE_TABLE_CALLBACK = (size_t)1 << 49;
 
 		constexpr size_t UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES = (size_t)1 << 46;
 		constexpr size_t UI_CONFIG_FILTER_MENU_ALL = (size_t)1 << 47;
@@ -216,6 +217,8 @@ namespace ECSEngine {
 
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE = (size_t)1 << 61;
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_CALLBACK = (size_t)1 << 62;
+
+		constexpr size_t UI_CONFIG_SPRITE_STATE_BUTTON_NO_BACKGROUND_WHEN_DESELECTED = (size_t)1 << 45;
 	}
 
 }
