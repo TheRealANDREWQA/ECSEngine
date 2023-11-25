@@ -363,6 +363,11 @@ namespace ECSEngine {
 			Stream<char> target_window_name;
 		};
 
+		struct UIDrawerBoolClickableCallbackData {
+			bool* value;
+			UIActionHandler callback;
+		};
+
 		struct UIDrawerBoolClickableWithPinData {
 			bool* pointer;
 			bool is_horizontal = false;

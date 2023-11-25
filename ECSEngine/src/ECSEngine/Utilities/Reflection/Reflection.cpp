@@ -2532,23 +2532,23 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 			else {
 				if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					// Check to see if it exists
-					ReflectionType nested_type;
-					if (TryGetType(field->definition, nested_type)) {
-						// Set the field to its default values
-						SetInstanceDefaultData(field->definition, current_field);
-					}
-					else {
-						// Check blittable exceptions
-						unsigned int blittable_index = BlittableExceptionIndex(field->definition);
-						if (blittable_index == -1) {
+					// Check blittable exceptions
+					unsigned int blittable_index = BlittableExceptionIndex(field->definition);
+					if (blittable_index == -1) {
+						// Check to see if it exists
+						ReflectionType nested_type;
+						if (TryGetType(field->definition, nested_type)) {
+							// Set the field to its default values
+							SetInstanceDefaultData(field->definition, current_field);
+						}
+						else {
 							// Might be a custom type. These should be fine with memsetting to 0
 							memset(current_field, 0, field->info.byte_size);
 						}
-						else {
-							// Use the blittable exception default value
-							memcpy(current_field, blittable_types[blittable_index].default_data, field->info.byte_size);
-						}
+					}
+					else {
+						// Use the blittable exception default value
+						memcpy(current_field, blittable_types[blittable_index].default_data, field->info.byte_size);
 					}
 				}
 				else {
@@ -4975,30 +4975,33 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// If a user defined type is here, check that it too didn't change
 				// For custom types we shouldn't need to check (those are supposed to be fixed, like containers)
 				if (first_info->basic_type == ReflectionBasicFieldType::UserDefined) {
-					ReflectionType first_nested;
-					ReflectionType second_nested;
+					// Make sure it is not a blittable type
+					if (first_reflection_manager->FindBlittableException(first->fields[index].definition).x == -1) {
+						ReflectionType first_nested;
+						ReflectionType second_nested;
 
-					if (first_reflection_manager->TryGetType(first->fields[index].definition, first_nested)) {
-						if (second_reflection_manager->TryGetType(first->fields[index].definition, second_nested)) {
-							// Verify these as well
-							if (!CompareReflectionTypes(first_reflection_manager, second_reflection_manager, &first_nested, &second_nested)) {
+						if (first_reflection_manager->TryGetType(first->fields[index].definition, first_nested)) {
+							if (second_reflection_manager->TryGetType(first->fields[index].definition, second_nested)) {
+								// Verify these as well
+								if (!CompareReflectionTypes(first_reflection_manager, second_reflection_manager, &first_nested, &second_nested)) {
+									return false;
+								}
+							}
+							else {
+								// The first one has it but the second one doesn't have it.
+								// An error must be somewhere
 								return false;
 							}
 						}
 						else {
-							// The first one has it but the second one doesn't have it.
-							// An error must be somewhere
-							return false;
+							// Assume that it is a container type. Only check that the second one doesn't have it either
+							if (second_reflection_manager->TryGetType(first->fields[index].definition, second_nested)) {
+								// The second one has it but the first one doesn't have it.
+								// An error must be somewhere
+								return false;
+							}
+							// Else both don't have it (most likely is a container type)
 						}
-					}
-					else {
-						// Assume that it is a container type. Only check that the second one doesn't have it either
-						if (second_reflection_manager->TryGetType(first->fields[index].definition, second_nested)) {
-							// The second one has it but the first one doesn't have it.
-							// An error must be somewhere
-							return false;
-						}
-						// Else both don't have it (most likely is a container type)
 					}
 				}
 			}
