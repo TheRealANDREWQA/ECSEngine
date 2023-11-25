@@ -64,7 +64,7 @@ void ProjectSettingsDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 
 	UIDrawConfig config;
 	UIConfigNamePadding name_padding;
-	name_padding.total_length = 0.12f;
+	name_padding.total_length = 0.20f;
 	config.AddFlag(name_padding);
 
 	UIConfigWindowDependentSize dependent_size;

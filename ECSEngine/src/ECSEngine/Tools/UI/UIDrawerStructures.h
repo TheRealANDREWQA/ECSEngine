@@ -1798,6 +1798,14 @@ namespace ECSEngine {
 			Stream<char> target_window_name = {};
 		};
 
+		struct UIConfigSpriteStateButtonCallback {
+			ECS_INLINE static size_t GetAssociatedBit() {
+				return UI_CONFIG_SPRITE_STATE_BUTTON_CALLBACK;
+			}
+
+			UIActionHandler handler;
+		};
+
 	}
 
 }

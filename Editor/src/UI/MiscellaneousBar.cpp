@@ -6,6 +6,7 @@
 #include "../Editor/EditorEvent.h"
 #include "../Modules/Module.h"
 #include "../Sandbox/Sandbox.h"
+#include "../Project/ProjectSettings.h"
 
 #define TOOP_TIP_OFFSET 0.01f
 #define KEYBOARD_ICON_OFFSET 0.2f
@@ -254,7 +255,8 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 #pragma endregion
 
 
-	const size_t INPUT_ICON_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | UI_CONFIG_SPRITE_STATE_BUTTON_NO_BACKGROUND_WHEN_DESELECTED;
+	const size_t INPUT_ICON_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | 
+		UI_CONFIG_SPRITE_STATE_BUTTON_NO_BACKGROUND_WHEN_DESELECTED | UI_CONFIG_SPRITE_STATE_BUTTON_CALLBACK;
 	config.flag_count = 0;
 	config.AddFlag(border);
 
@@ -265,8 +267,38 @@ void MiscellaneousBarDraw(void* window_data, UIDrawerDescriptor* drawer_descript
 	input_icon_transform.position.x -= KEYBOARD_ICON_OFFSET;
 	config.AddFlag(input_icon_transform);
 
+	auto keyboard_button_action = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		EditorState* editor_state = (EditorState*)_data;
+		WriteProjectSettings(editor_state);
+	};
+
+	UIConfigSpriteStateButtonCallback keyboard_callback;
+	keyboard_callback.handler = { keyboard_button_action, editor_state, 0 };
+	config.AddFlag(keyboard_callback);
+
 	ProjectSettings* project_settings = &editor_state->project_settings;
 	drawer.SpriteStateButton(INPUT_ICON_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_KEYBOARD, &project_settings->unfocused_keyboard_input, drawer.color_theme.text);
+
+	config.flag_count -= 2;
+
+	input_icon_transform.position.x -= button_scale.x + border_size_horizontal;
+	input_icon_transform.scale.x = button_scale.x;
+	config.AddFlag(input_icon_transform);
+
+	auto synchronized_sandbox_input_action = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		EditorState* editor_state = (EditorState*)_data;
+		WriteProjectSettings(editor_state);
+	};
+
+	UIConfigSpriteStateButtonCallback synchronized_callback;
+	synchronized_callback.handler = { synchronized_sandbox_input_action, editor_state, 0 };
+	config.AddFlag(synchronized_callback);
+
+	drawer.SpriteStateButton(INPUT_ICON_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_SPLIT_CURSORS, &project_settings->synchronized_sandbox_input, drawer.color_theme.text);
 }
 
 void MiscellaneousBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)

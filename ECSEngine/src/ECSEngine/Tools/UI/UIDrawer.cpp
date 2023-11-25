@@ -9817,8 +9817,31 @@ namespace ECSEngine {
 					float2 sprite_scale;
 					float2 sprite_position = ExpandRectangle(position, scale, expand_factor, sprite_scale);
 					if (is_active) {
+						UIActionHandler custom_callback = {};
+						if (configuration & UI_CONFIG_SPRITE_STATE_BUTTON_CALLBACK) {
+							const UIConfigSpriteStateButtonCallback* callback = (const UIConfigSpriteStateButtonCallback*)config.GetParameter(UI_CONFIG_SPRITE_STATE_BUTTON_CALLBACK);
+							custom_callback = callback->handler;
+						}
+
+						size_t action_data_storage[512];
+						UIDrawerBoolClickableCallbackData* clickable_data = (UIDrawerBoolClickableCallbackData*)action_data_storage;
+						unsigned int total_write_size = sizeof(*clickable_data);
+						clickable_data->value = state;
+						clickable_data->callback = custom_callback;
+						if (custom_callback.data_size > 0) {
+							memcpy(OffsetPointer(clickable_data, total_write_size), custom_callback.data, custom_callback.data_size);
+							total_write_size += custom_callback.data_size;
+						}
+
 						SpriteRectangle(configuration, position, scale, texture, color, top_left_uv, bottom_right_uv);
-						AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 }, nullptr, background_color);
+						AddDefaultClickableHoverable(
+							configuration, 
+							position, 
+							scale, 
+							{ BoolClickableCallback, clickable_data, total_write_size, custom_callback.phase }, 
+							nullptr, 
+							background_color
+						);
 					}
 					else {
 						color.alpha *= color_theme.alpha_inactive_item;

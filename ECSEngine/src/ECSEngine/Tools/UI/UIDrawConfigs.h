@@ -219,6 +219,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_CALLBACK = (size_t)1 << 62;
 
 		constexpr size_t UI_CONFIG_SPRITE_STATE_BUTTON_NO_BACKGROUND_WHEN_DESELECTED = (size_t)1 << 45;
+		constexpr size_t UI_CONFIG_SPRITE_STATE_BUTTON_CALLBACK = (size_t)1 << 46;
 	}
 
 }

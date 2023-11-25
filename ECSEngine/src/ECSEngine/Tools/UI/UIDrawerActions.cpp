@@ -731,6 +731,27 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		void BoolClickableCallback(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerBoolClickableCallbackData* data = (UIDrawerBoolClickableCallbackData*)_data;
+			*data->value = !(*data->value);
+			action_data->redraw_window = true;
+
+			if (data->callback.action != nullptr) {
+				if (data->callback.data_size > 0) {
+					action_data->data = OffsetPointer(data, sizeof(*data));
+				}
+				else {
+					action_data->data = data->callback.data;
+				}
+				data->callback.action(action_data);
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
 		void BoolClickableWithPin(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
