@@ -151,3 +151,34 @@ void SynchronizeSandboxProfilingWithStatisticTypes(EditorState* editor_state, un
 		ECS_ASSERT(false, "Invalid editor GPU statistic type");
 	}
 }
+
+OS::ECS_OS_EXCEPTION_CONTINUE_STATUS HandleAllSandboxPhysicalMemoryException(TaskManagerExceptionHandlerData* handler_data)
+{
+	EditorState* editor_state = (EditorState*)handler_data->user_data;
+	if (handler_data->exception_information.error_code == OS::ECS_OS_EXCEPTION_PAGE_GUARD) {
+		unsigned int sandbox_count = GetSandboxCount(editor_state);
+		unsigned int index = 0;
+		for (; index < sandbox_count; index++) {
+			EditorSandbox* sandbox = GetSandbox(editor_state, index);
+			if (sandbox->world_profiling.HasOption(ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
+				// We can use thread_id 0 here since we are on the main thread
+				bool was_handled = sandbox->world_profiling.physical_memory_profiler.HandlePageGuardEnter(0, handler_data->exception_information.faulting_page);
+				if (was_handled) {
+					break;
+				}
+			}
+		}
+
+		if (index == sandbox_count) {
+			// It doesn't belong to the physical memory profiler range
+			return OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED;
+		}
+		else {
+			// We can continue the execution
+			return OS::ECS_OS_EXCEPTION_CONTINUE_RESOLVED;
+		}
+	}
+	else {
+		return OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED;
+	}
+}

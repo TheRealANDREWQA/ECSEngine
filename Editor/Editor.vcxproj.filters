@@ -76,6 +76,7 @@
     <ClInclude Include="src\UI\ProjectSettingsWindow.h" />
     <ClInclude Include="src\Sandbox\SandboxProfiling.h" />
     <ClInclude Include="src\Editor\EditorGeneralInputTick.h" />
+    <ClInclude Include="src\Assets\Prefab.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -144,6 +145,7 @@
     <ClCompile Include="src\UI\ProjectSettingsWindow.cpp" />
     <ClCompile Include="src\Sandbox\SandboxProfiling.cpp" />
     <ClCompile Include="src\Editor\EditorGeneralInputTick.cpp" />
+    <ClCompile Include="src\Assets\Prefab.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

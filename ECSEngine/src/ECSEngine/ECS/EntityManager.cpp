@@ -2801,9 +2801,11 @@ namespace ECSEngine {
 			unsigned int component_size = m_shared_components[index].info.size;
 			if (component_size != -1) {
 				// Allocate separetely the instances buffer
+				// The name also needs to be allocated
+				m_shared_components[index].info.name = entity_manager->m_shared_components[index].info.name.Copy(SmallAllocator());
 
 				unsigned int other_capacity = entity_manager->m_shared_components[index].instances.stream.capacity;
-				m_shared_components[index].instances.Initialize(GetAllocatorPolymorphic(&m_small_memory_manager), other_capacity);
+				m_shared_components[index].instances.Initialize(SmallAllocator(), other_capacity);
 
 				if (entity_manager->m_shared_components[index].instances.stream.size > 0) {
 					m_shared_components[index].instances.stream.Copy(entity_manager->m_shared_components[index].instances.stream);

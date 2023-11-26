@@ -186,6 +186,7 @@
     <ClInclude Include="src\Assets\AssetManagement.h" />
     <ClInclude Include="src\Assets\AssetTick.h" />
     <ClInclude Include="src\Assets\EditorSandboxAssets.h" />
+    <ClInclude Include="src\Assets\Prefab.h" />
     <ClInclude Include="src\Editor\EditorEvent.h" />
     <ClInclude Include="src\Editor\EditorEventDef.h" />
     <ClInclude Include="src\Editor\EditorFile.h" />
@@ -262,6 +263,7 @@
     <ClCompile Include="src\Assets\AssetManagement.cpp" />
     <ClCompile Include="src\Assets\AssetTick.cpp" />
     <ClCompile Include="src\Assets\EditorSandboxAssets.cpp" />
+    <ClCompile Include="src\Assets\Prefab.cpp" />
     <ClCompile Include="src\Editor\Editor.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">MaxSpeed</Optimization>
       <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdcpp17</LanguageStandard>

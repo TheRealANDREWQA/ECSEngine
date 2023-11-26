@@ -68,19 +68,19 @@ struct ECS_REFLECT_COMPONENT RenderEverything {
 //	bool my_flag;
 //};
 
-struct ECS_REFLECT_COMPONENT GTranslation {
-	constexpr static ECS_INLINE short ID() {
-		return GRAPHICS_COMPONENT_BASE + 3;
-	}
-
-	constexpr static ECS_INLINE bool IsShared() {
-		return true;
-	}
-
-	ECSEngine::float3 translation = { 1.0f, 10.0f, 0.0f };
-	ECSEngine::float3 interesting_new_field;
-	ECSEngine::CoalescedMesh* POGGERSmesh;
-};
+//struct ECS_REFLECT_COMPONENT GTranslation {
+//	constexpr static ECS_INLINE short ID() {
+//		return GRAPHICS_COMPONENT_BASE + 3;
+//	}
+//
+//	constexpr static ECS_INLINE bool IsShared() {
+//		return true;
+//	}
+//
+//	ECSEngine::float3 translation = { 1.0f, 10.0f, 0.0f };
+//	ECSEngine::float3 interesting_new_field;
+//	ECSEngine::CoalescedMesh* POGGERSmesh;
+//};
 
 struct ECS_REFLECT_COMPONENT RenderMesh {
 	constexpr static ECS_INLINE short ID() {

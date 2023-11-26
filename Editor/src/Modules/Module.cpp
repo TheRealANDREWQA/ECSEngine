@@ -263,19 +263,29 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-struct CheckBuildStatusThreadData {
+struct CheckBuildStatusEventData {
 	EditorState* editor_state;
 	Stream<wchar_t> path;
+	// This was previously atomic since it ran on a background thread
+	// But now it has been switched to an event
 	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status;
 	bool disable_logging;
+	Timer timer;
 };
 
-ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
-	CheckBuildStatusThreadData* data = (CheckBuildStatusThreadData*)_data;
+EDITOR_EVENT(CheckBuildStatusEvent) {
+	CheckBuildStatusEventData* data = (CheckBuildStatusEventData*)_data;
 
-	while (!ExistsFileOrFolder(data->path)) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(CHECK_FILE_STATUS_THREAD_SLEEP_TICK));
+	if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) >= CHECK_FILE_STATUS_THREAD_SLEEP_TICK) {
+		data->timer.SetNewStart();
+		if (!ExistsFileOrFolder(data->path)) {
+			return true;
+		}
 	}
+	else {
+		return true;
+	}
+
 	// Change the extension from .build/.rebuild/.clean to txt
 	Stream<wchar_t> extension = PathExtension(data->path);
 	ECS_STACK_CAPACITY_STREAM(wchar_t, log_path, 512);
@@ -306,7 +316,7 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 	}
 	else {
 		if (!data->disable_logging) {
-			ECS_FORMAT_TEMP_STRING(console_string, "An error has occured when determining the configuration of module {#}.", library_name);
+			ECS_FORMAT_TEMP_STRING(console_string, "An error has occured when determining the configuration of module {#}", library_name);
 			EditorSetConsoleError(console_string);
 		}
 	}
@@ -321,7 +331,7 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 		}
 		else {
 			if (!data->disable_logging) {
-				ECS_FORMAT_TEMP_STRING(console_string, "An error has occured when checking status of module {#}, configuration {#}. Could not locate module."
+				ECS_FORMAT_TEMP_STRING(console_string, "An error has occured when checking status of module {#}, configuration {#}. Could not locate module"
 					"(was it removed?)", library_name, configuration);
 				EditorSetConsoleError(console_string);
 			}
@@ -331,14 +341,14 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 			Stream<wchar_t> command(extension.buffer + 1, extension.size - 1);
 
 			if (!data->disable_logging) {
-				ECS_FORMAT_TEMP_STRING(console_string, "Command {#} for module {#} with configuration {#} completed successfully.", command, library_name, configuration);
+				ECS_FORMAT_TEMP_STRING(console_string, "Command {#} for module {#} with configuration {#} completed successfully", command, library_name, configuration);
 				EditorSetConsoleInfo(console_string);
 			}
 			if (command ==  L"build" || command == L"rebuild") {
 				bool success = LoadEditorModule(data->editor_state, module_index, int_configuration);
 				if (!success) {
 					if (!data->disable_logging) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Could not reload module {#} with configuration {#}, command {#} after successfully executing the command.", library_name, configuration, command);
+						ECS_FORMAT_TEMP_STRING(error_message, "Could not reload module {#} with configuration {#}, command {#} after successfully executing the command", library_name, configuration, command);
 						EditorSetConsoleError(error_message);
 					}
 				}
@@ -346,8 +356,8 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 		}
 		else {
 			if (!data->disable_logging) {
-				EditorSetConsoleWarn("Could not deduce build command type, library name or configuration for a module compilation.");
-				EditorSetConsoleInfo("A module finished building successfully.");
+				EditorSetConsoleWarn("Could not deduce build command type, library name or configuration for a module compilation");
+				EditorSetConsoleInfo("A module finished building successfully");
 			}
 		}
 
@@ -367,14 +377,15 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 
 		// Warn if the module could not be found in the launched module compilation
 		if (!was_found && !data->disable_logging) {
-			ECS_FORMAT_TEMP_STRING(console_string, "Module {#} with configuration {#} could not be found in the compilation list.", library_name, configuration);
+			ECS_FORMAT_TEMP_STRING(console_string, "Module {#} with configuration {#} could not be found in the compilation list", library_name, configuration);
 			EditorSetConsoleWarn(console_string);
 		}
 	}
 
 	// The path must be deallocated
-	data->editor_state->multithreaded_editor_allocator->Deallocate_ts(data->path.buffer);
+	data->editor_state->editor_allocator->Deallocate(data->path.buffer);
 	ECS_ASSERT(RemoveFile(data->path));
+	return false;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -762,14 +773,14 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		GetModuleBuildFlagFile(editor_state, index, configuration, command, flag_file);
 
 		// Log the command status
-		CheckBuildStatusThreadData check_data;
+		CheckBuildStatusEventData check_data;
 		check_data.editor_state = editor_state;
-		check_data.path.buffer = (wchar_t*)Allocate(editor_state->MultithreadedEditorAllocator(), sizeof(wchar_t) * flag_file.size);
+		check_data.path.buffer = (wchar_t*)Allocate(editor_state->EditorAllocator(), sizeof(wchar_t) * flag_file.size);
 		check_data.path.CopyOther(flag_file);
 		check_data.report_status = report_status;
 		check_data.disable_logging = disable_logging;
 
-		editor_state->task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(CheckBuildStatusThreadTask, &check_data, sizeof(check_data)));
+		EditorAddEvent(editor_state, CheckBuildStatusEvent, &check_data, sizeof(check_data));
 	}
 	return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
 #endif
@@ -799,6 +810,12 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	}
 	AddProjectModuleToLaunchedCompilationNoLock(editor_state, library_name, configuration);
 	editor_state->launched_module_compilation_lock.Unlock();
+
+	// We should release the streams and handles here since we know for sure that this call will result
+	// In a compilation. Before hand this call was used in the Build call even when the build would be skipped
+	// And that could result in a race condition where the background thread updates the module but the already executing
+	// Main thread would release the streams
+	ReleaseModuleStreamsAndHandle(editor_state, index, configuration);
 
 	ECS_STACK_CAPACITY_STREAM(unsigned int, external_references, 512);
 	// Get the external references. We need to unload these before trying to procede
@@ -870,7 +887,6 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 
 	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status != EDITOR_MODULE_LOAD_GOOD) {
-		ReleaseModuleStreamsAndHandle(editor_state, index, configuration);
 		return RunBuildCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status, disable_logging);
 	}
 	if (report_status != nullptr) {

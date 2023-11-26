@@ -26,7 +26,7 @@ extern "C" {
 
 #if 0
 
-	COLLISIONDETECTION_API void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData8 data);
+	COLLISIONDETECTION_API void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData* data);
 
 #endif
 
