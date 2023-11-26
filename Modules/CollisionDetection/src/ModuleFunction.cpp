@@ -61,3 +61,11 @@ void ModuleRegisterLinkComponentFunction(ECSEngine::ModuleRegisterLinkComponentF
 }
 
 #endif
+
+#if 0
+
+void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInformationFunctionData* data) {
+
+}
+
+#endif

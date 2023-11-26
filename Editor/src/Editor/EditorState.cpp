@@ -11,6 +11,7 @@
 #include "../Project/ProjectBackup.h"
 #include "../Project/ProjectUITemplate.h"
 #include "../Sandbox/Sandbox.h"
+#include "../Sandbox/SandboxProfiling.h"
 
 #include "../UI/CreateScene.h"
 #include "ECSEngineComponents.h"
@@ -434,10 +435,12 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	TaskManager* editor_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
 	new (editor_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1'000, 100);
 	editor_state->task_manager = editor_task_manager;
+	editor_task_manager->PushExceptionHandler(HandleAllSandboxPhysicalMemoryException, editor_state, 0);
 
 	TaskManager* render_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
 	new (render_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1'000, 100);
 	editor_state->render_task_manager = render_task_manager;
+	render_task_manager->PushExceptionHandler(HandleAllSandboxPhysicalMemoryException, editor_state, 0);
 
 	// Make a wrapper world that only references this task manager
 	World* task_manager_world = (World*)calloc(1, sizeof(World));
@@ -456,8 +459,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_task_manager->ChangeDynamicWrapperMode({ ThreadWrapperCountTasks, &wrapper_data, sizeof(wrapper_data) });
 	editor_task_manager->CreateThreads();
 	render_task_manager->CreateThreads();
-	render_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_VERY_LOW);
 	editor_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_LOW);
+	render_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_VERY_LOW);
 
 	ResizableMemoryArena* resizable_arena = (ResizableMemoryArena*)malloc(sizeof(ResizableMemoryArena));
 	*resizable_arena = DefaultUISystemAllocator(global_memory_manager);

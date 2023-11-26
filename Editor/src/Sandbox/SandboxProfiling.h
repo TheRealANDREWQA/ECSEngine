@@ -46,3 +46,7 @@ void StartSandboxSimulationProfiling(EditorState* editor_state, unsigned int san
 // Is synchronized with the flags from the editor. Useful after deserialization
 // Where we set the statistics types directly and with this function we can synchronize them
 void SynchronizeSandboxProfilingWithStatisticTypes(EditorState* editor_state, unsigned int sandbox_index);
+
+// A task manager handler that can be used to handle page guard faults accross the entire editor
+// Requires the editor state as the user data
+OS::ECS_OS_EXCEPTION_CONTINUE_STATUS HandleAllSandboxPhysicalMemoryException(TaskManagerExceptionHandlerData* handler_data);
