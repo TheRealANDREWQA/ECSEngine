@@ -635,7 +635,7 @@ void ChangeSandboxDebugDrawComponent(
 )
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	size_t index = sandbox->enabled_debug_draw.Find(ComponentWithType{ old_component, type }, [](ComponentWithType element) { return element; });
+	unsigned int index = sandbox->enabled_debug_draw.Find(ComponentWithType{ old_component, type }, [](ComponentWithType element) { return element; });
 	if (index != -1) {
 		sandbox->enabled_debug_draw[index].component = new_component;
 	}
@@ -2664,7 +2664,7 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 								sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
 							}
 						}
-						});
+					});
 				}
 				else {
 					sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
@@ -2675,7 +2675,7 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 			}
 		}
 		return false;
-		});
+	});
 
 	if (!was_input_synchronized) {
 		ForEachSandbox(editor_state, [&](EditorSandbox* sandbox, unsigned int sandbox_index) {
@@ -2683,7 +2683,12 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 				if (active_sandbox_index != sandbox_index) {
 					// We need to update release these controls
 					sandbox->sandbox_world.mouse->UpdateRelease();
-					sandbox->sandbox_world.keyboard->UpdateRelease();
+					if (project_settings->unfocused_keyboard_input) {
+						sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+					}
+					else {
+						sandbox->sandbox_world.keyboard->UpdateRelease();
+					}
 				}
 			}
 		});

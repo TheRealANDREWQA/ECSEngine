@@ -5,6 +5,7 @@
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorPalette.h"
 #include "../Editor/EditorEvent.h"
+#include "../Editor/EditorInputMapping.h"
 #include "../Modules/Module.h"
 #include "../Modules/ModuleSettings.h"
 #include "../Assets/AssetManagement.h"
@@ -23,17 +24,42 @@ constexpr float2 WINDOW_SIZE = float2(0.5f, 1.2f);
 constexpr size_t FUNCTION_TABLE_CAPACITY = 32;
 constexpr size_t INSPECTOR_FLAG_LOCKED = 1 << 0;
 
+#define INSPECTOR_TARGET_ALLOCATOR_CAPACITY ECS_KB * 16
+#define INSPECTOR_MAX_TARGET_COUNT 12
+#define INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY ECS_KB
+
 void InitializeInspectorTable(EditorState* editor_state);
 
 void InitializeInspectorInstance(EditorState* editor_state, unsigned int index);
 
-void InspectorDestroyCallback(ActionData* action_data) {
+// ----------------------------------------------------------------------------------------------------------------------------
+
+static void InspectorDestroyCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_additional_data;
 	unsigned int* inspector_index = (unsigned int*)_data;
 
 	DestroyInspectorInstance(editor_state, *inspector_index);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+static void InspectorPrivateAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_additional_data;
+	unsigned int* inspector_index = (unsigned int*)_data;
+
+	if (window_index == system->GetActiveWindow()) {
+		// Check for these actions only if we are the focused window
+		if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INSPECTOR_PREVIOUS_TARGET)) {
+			PopInspectorTarget(editor_state, *inspector_index);
+		}
+		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INSPECTOR_NEXT_TARGET)) {
+			RestoreInspectorTarget(editor_state, *inspector_index);
+		}
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -48,6 +74,10 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 	descriptor.destroy_action = InspectorDestroyCallback;
 	descriptor.destroy_action_data = stack_memory;
 	descriptor.destroy_action_data_size = sizeof(inspector_index);
+
+	descriptor.private_action = InspectorPrivateAction;
+	descriptor.private_action_data = stack_memory;
+	descriptor.private_action_data_size = sizeof(inspector_index);
 
 	CapacityStream<char> inspector_name(OffsetPointer(stack_memory, sizeof(unsigned int)), 0, 128);
 	GetInspectorName(inspector_index, inspector_name);
@@ -283,7 +313,7 @@ unsigned int CreateInspectorInstance(EditorState* editor_state) {
 	unsigned int inspector_index = editor_state->inspector_manager.data.ReserveNewElement();
 	InitializeInspectorInstance(editor_state, inspector_index);
 	editor_state->inspector_manager.data.size++;
-	ChangeInspectorToNothing(editor_state, inspector_index);
+	ChangeInspectorToNothing(editor_state, inspector_index, true);
 	return inspector_index;
 }
 
@@ -307,8 +337,8 @@ void CreateInspectorAction(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeInspectorToNothing(EditorState* editor_state, unsigned int inspector_index) {
-	ChangeInspectorDrawFunction(editor_state, inspector_index, { InspectorDrawNothing, InspectorCleanNothing }, nullptr, 0);
+void ChangeInspectorToNothing(EditorState* editor_state, unsigned int inspector_index, bool do_not_push_target_entry) {
+	ChangeInspectorDrawFunction(editor_state, inspector_index, { InspectorDrawNothing, InspectorCleanNothing }, nullptr, 0, -1, do_not_push_target_entry);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -443,6 +473,9 @@ void ChangeInspectorEntitySelection(EditorState* editor_state, unsigned int sand
 void DestroyInspectorInstance(EditorState* editor_state, unsigned int inspector_index)
 {
 	CleanInspectorData(editor_state, inspector_index);
+	// The target allocator always needs to be deallocated
+	editor_state->inspector_manager.data[inspector_index].target_allocator.Free();
+
 	// Deallocate the data if any is allocated
 	if (editor_state->inspector_manager.data[inspector_index].data_size > 0) {
 		editor_state->editor_allocator->Deallocate(editor_state->inspector_manager.data[inspector_index].draw_data);
@@ -513,6 +546,172 @@ void UnlockInspector(EditorState* editor_state, unsigned int inspector_index)
 {
 	InspectorData* data = editor_state->inspector_manager.data.buffer + inspector_index;
 	data->flags = ClearFlag(data->flags, INSPECTOR_FLAG_LOCKED);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void PushInspectorTarget(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	InspectorFunctions functions,
+	void* data,
+	size_t data_size,
+	unsigned int sandbox_index
+)
+{
+	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
+
+	// If we have left-over entries, we need to deallocate them
+	if (inspector_data->target_valid_count > inspector_data->targets.GetSize()) {
+		inspector_data->targets.ForEachRange(inspector_data->targets.GetSize(), inspector_data->target_valid_count, [inspector_data](const InspectorData::Target& entry) {
+			if (entry.data_size > 0) {
+				inspector_data->target_allocator.Deallocate(entry.data);
+			}
+			inspector_data->target_allocator.Deallocate(entry.initialize_allocator.GetAllocatedBuffer());
+		});
+	}
+
+	InspectorData::Target new_entry;
+	new_entry.data = CopyNonZero(&inspector_data->target_allocator, data, data_size);
+	new_entry.data_size = data_size;
+	new_entry.functions = functions;
+	new_entry.sandbox_index = sandbox_index;
+	new_entry.initialize = nullptr;
+	new_entry.initialize_data = nullptr;
+	new_entry.initialize_data_size = 0;
+	new_entry.initialize_allocator = LinearAllocator(
+		inspector_data->target_allocator.Allocate(INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY), 
+		INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY
+	);
+
+	InspectorData::Target overwritten_entry;
+	if (inspector_data->targets.PushOverwrite(&new_entry, &overwritten_entry)) {
+		if (overwritten_entry.data_size > 0) {
+			inspector_data->target_allocator.Deallocate(overwritten_entry.data);
+		}
+		inspector_data->target_allocator.Deallocate(overwritten_entry.initialize_allocator.GetAllocatedBuffer());
+	}
+	inspector_data->target_valid_count = inspector_data->targets.GetSize();
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void PopInspectorTarget(EditorState* editor_state, unsigned int inspector_index)
+{
+	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
+
+	if (inspector_data->targets.PopIndexOnly()) {
+		InspectorData::Target entry;
+		if (inspector_data->targets.Peek(entry)) {
+			// Change the inspector to this entry
+			ChangeInspectorDrawFunction(editor_state, inspector_index, entry.functions, entry.data, entry.data_size, entry.sandbox_index, true);
+			if (entry.initialize != nullptr) {
+				entry.initialize(editor_state, GetInspectorDrawFunctionData(editor_state, inspector_index), entry.initialize_data, inspector_index);
+			}
+		}
+		else {
+			ChangeInspectorToNothing(editor_state, inspector_index, true);
+		}
+	}
+	else {
+		ChangeInspectorToNothing(editor_state, inspector_index, true);
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void RestoreInspectorTarget(EditorState* editor_state, unsigned int inspector_index)
+{
+	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
+
+	// Check to see if we have remaining entries
+	if (inspector_data->target_valid_count > inspector_data->targets.GetSize()) {
+		inspector_data->targets.PushIndexOnly();
+		InspectorData::Target entry;
+		inspector_data->targets.Peek(entry);
+
+		// Change the inspector to this entry
+		ChangeInspectorDrawFunction(editor_state, inspector_index, entry.functions, entry.data, entry.data_size, entry.sandbox_index, true);
+		if (entry.initialize != nullptr) {
+			entry.initialize(editor_state, GetInspectorDrawFunctionData(editor_state, inspector_index), entry.initialize_data, inspector_index);
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void* AllocateLastInspectorTargetInitialize(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	size_t data_size
+) {
+	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
+	InspectorData::Target* target = inspector_data->targets.PeekIntrusive();
+	target->initialize_data = target->initialize_allocator.Allocate(data_size);
+	target->initialize_data_size = data_size;
+	return target->initialize_data;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+AllocatorPolymorphic GetLastInspectorTargetInitializeAllocator(const EditorState* editor_state, unsigned int inspector_index)
+{
+	const InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
+	const InspectorData::Target* target = inspector_data->targets.PeekConstant();
+	return GetAllocatorPolymorphic(&target->initialize_allocator);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void SetLastInspectorTargetInitializeFromAllocation(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	InspectorData::TargetInitialize initialize,
+	bool apply_on_current_data
+) {
+	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
+	InspectorData::Target* target = inspector_data->targets.PeekIntrusive();
+	target->initialize = initialize;
+	if (apply_on_current_data) {
+		initialize(editor_state, GetInspectorDrawFunctionData(editor_state, inspector_index), target->initialize_data, inspector_index);
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void* SetLastInspectorTargetInitialize(
+	EditorState* editor_state, 
+	unsigned int inspector_index, 
+	InspectorData::TargetInitialize initialize, 
+	void* initialize_data, 
+	size_t initialize_data_size,
+	bool apply_on_current_data
+)
+{
+	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
+	InspectorData::Target* target = inspector_data->targets.PeekIntrusive();
+	target->initialize = initialize;
+	target->initialize_data = CopyNonZero(GetLastInspectorTargetInitializeAllocator(editor_state, inspector_index), initialize_data, initialize_data_size);
+	target->initialize_data_size = initialize_data_size;
+
+	if (apply_on_current_data) {
+		initialize(editor_state, GetInspectorDrawFunctionData(editor_state, inspector_index), initialize_data, inspector_index);
+	}
+	return target->initialize_data;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void UpdateLastInspectorTargetData(EditorState* editor_state, unsigned int inspector_index, void* new_data)
+{
+	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
+	InspectorData::Target* target = inspector_data->targets.PeekIntrusive();
+	if (target->data_size > 0) {
+		memcpy(target->data, new_data, target->data_size);
+	}
+	else {
+		target->data = new_data;
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -626,6 +825,9 @@ void InitializeInspectorInstance(EditorState* editor_state, unsigned int index)
 	data->matching_sandbox = 0;
 	data->target_sandbox = 0;
 	data->table = &editor_state->inspector_manager.function_table;
+	data->target_allocator = MemoryManager(INSPECTOR_TARGET_ALLOCATOR_CAPACITY, ECS_KB, INSPECTOR_TARGET_ALLOCATOR_CAPACITY, editor_state->EditorAllocator());
+	data->targets.Initialize(GetAllocatorPolymorphic(&data->target_allocator), INSPECTOR_MAX_TARGET_COUNT);
+	data->target_valid_count = 0;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

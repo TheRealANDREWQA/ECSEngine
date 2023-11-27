@@ -4804,6 +4804,8 @@ namespace ECSEngine {
 						click_data->base.pointer = data;
 					}
 					click_data->base.is_vertical = true;
+					click_data->base.is_horizontal = false;
+					click_data->base.pin_count = 1;
 
 					UIActionHandler clickable_handler = { BoolClickableWithPin, &click_data->base, sizeof(click_data->base) };
 					if (configuration & UI_CONFIG_COLLAPSING_HEADER_CALLBACK) {

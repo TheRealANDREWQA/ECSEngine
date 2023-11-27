@@ -87,6 +87,16 @@ namespace ECSEngine {
 			}
 		}
 
+		ECS_INLINE void SetCtrlWith(ECS_KEY key, ECS_BUTTON_STATE state) {
+			SetFirstKey(ECS_KEY_LEFT_CTRL, ECS_BUTTON_HELD);
+			SetSecondKey(key, state);
+		}
+
+		ECS_INLINE void SetShiftWith(ECS_KEY key, ECS_BUTTON_STATE state) {
+			SetFirstKey(ECS_KEY_LEFT_SHIFT, ECS_BUTTON_HELD);
+			SetSecondKey(key, state);
+		}
+
 		InputMappingButton first;
 		InputMappingButton second;
 		InputMappingButton third;

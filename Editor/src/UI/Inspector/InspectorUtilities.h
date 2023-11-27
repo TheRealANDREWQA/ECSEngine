@@ -86,7 +86,8 @@ unsigned int ChangeInspectorDrawFunction(
 	InspectorFunctions functions,
 	void* data,
 	size_t data_size,
-	unsigned int sandbox_index = -1
+	unsigned int sandbox_index = -1,
+	bool do_not_push_target_entry = false
 );
 
 // The functor takes a parameter the data of the inspector to be compared and returns true

@@ -436,7 +436,7 @@ namespace ECSEngine {
 				success = false;
 				ECS_FORMAT_STRING(*error_message, "You have assigned a draw function for component {#}, type {#} which doesn't exist\n", 
 					debug_draw_elements[found_index + offset].component.value, ComponentTypeToString(debug_draw_elements[found_index + offset].component_type));
-				offset += found_index;
+				offset += found_index + 1;
 				found_index = SearchBytes(has_type.buffer + offset, has_type.size - offset, false, sizeof(bool));
 			}
 

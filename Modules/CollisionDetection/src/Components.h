@@ -20,3 +20,9 @@
 //
 //	ECSEngine::float3 my_value;
 //};
+
+struct ECS_REFLECT_SETTINGS CollisionSettings {
+	float factor;
+	float inverse;
+	unsigned int count;
+};

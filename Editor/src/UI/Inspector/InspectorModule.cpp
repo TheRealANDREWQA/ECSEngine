@@ -15,13 +15,14 @@ ECS_TOOLS;
 #define DRAW_MODULE_SETTINGS_ALLOCATOR_CAPACITY ECS_KB * 128
 #define DRAW_MODULE_SETTINGS_ALLOCATOR_POOL_COUNT 1024
 #define DRAW_MODULE_SETTINGS_ALLOCATOR_BACKUP_SIZE ECS_KB * 512
+#define MAX_HEADER_STATES 32
 
 struct DrawModuleData {
 	Stream<wchar_t> module_name;
 	CapacityStream<wchar_t> settings_name;
 	Stream<EditorModuleReflectedSetting> reflected_settings;
-	MemoryManager* settings_allocator;
-	LinearAllocator* linear_allocator;
+	MemoryManager settings_allocator;
+	LinearAllocator linear_allocator;
 	bool* header_states;
 	unsigned int window_index;
 	unsigned int inspector_index;
@@ -31,20 +32,20 @@ struct DrawModuleData {
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void AllocateInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
+static void AllocateInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
 	ECS_STACK_CAPACITY_STREAM(EditorModuleReflectedSetting, settings, 64);
 	DrawModuleData* draw_data = (DrawModuleData*)editor_state->inspector_manager.data[inspector_index].draw_data;
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(draw_data->settings_allocator);
+	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&draw_data->settings_allocator);
 
 	AllocateModuleSettings(editor_state, module_index, settings, allocator);
 	draw_data->reflected_settings.InitializeAndCopy(allocator, settings);
 }
 
-void CreateInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
+static void CreateInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
 	ECS_STACK_CAPACITY_STREAM(EditorModuleReflectedSetting, settings, 64);
 
 	DrawModuleData* draw_data = (DrawModuleData*)editor_state->inspector_manager.data[inspector_index].draw_data;
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(draw_data->settings_allocator);
+	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&draw_data->settings_allocator);
 	CreateModuleSettings(editor_state, module_index, settings, allocator, inspector_index);
 
 	draw_data->reflected_settings.InitializeAndCopy(allocator, settings);
@@ -52,16 +53,16 @@ void CreateInspectorSettingsHelper(EditorState* editor_state, unsigned int modul
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void DeallocateInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
+static void DeallocateInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
 	DrawModuleData* draw_data = (DrawModuleData*)editor_state->inspector_manager.data[inspector_index].draw_data;
 	DestroyModuleSettings(editor_state, module_index, draw_data->reflected_settings, inspector_index);
-	draw_data->settings_allocator->Clear();
+	draw_data->settings_allocator.Clear();
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
 // Returns true if it succeded. Else false
-bool LoadInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
+static bool LoadInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
 	DrawModuleData* draw_data = (DrawModuleData*)editor_state->inspector_manager.data[inspector_index].draw_data;
 	if (draw_data->reflected_settings.size > 0) {
 		DeallocateInspectorSettingsHelper(editor_state, module_index, inspector_index);
@@ -76,13 +77,13 @@ bool LoadInspectorSettingsHelper(EditorState* editor_state, unsigned int module_
 		module_index,
 		absolute_path,
 		draw_data->reflected_settings,
-		GetAllocatorPolymorphic(draw_data->settings_allocator)
+		GetAllocatorPolymorphic(&draw_data->settings_allocator)
 	);
 
 	return success;
 }
 
-bool SaveInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
+static bool SaveInspectorSettingsHelper(EditorState* editor_state, unsigned int module_index, unsigned int inspector_index) {
 	DrawModuleData* draw_data = (DrawModuleData*)editor_state->inspector_manager.data[inspector_index].draw_data;
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
@@ -103,7 +104,7 @@ struct CreateSettingsCallbackData {
 	unsigned int inspector_index;
 };
 
-void CreateModuleSettingsCallback(ActionData* action_data) {
+static void CreateModuleSettingsCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	CreateSettingsCallbackData* data = (CreateSettingsCallbackData*)_data;
@@ -120,13 +121,36 @@ void CreateModuleSettingsCallback(ActionData* action_data) {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, converted_name, 128);
 	ConvertASCIIToWide(converted_name, *characters);
 
-	draw_data->settings_name.InitializeAndCopy(GetAllocatorPolymorphic(data->editor_state->editor_allocator), converted_name);
+	draw_data->settings_name.InitializeAndCopy(data->editor_state->EditorAllocator(), converted_name);
 
 	// Write to a file the current values
 	bool success = SaveInspectorSettingsHelper(data->editor_state, data->module_index, data->inspector_index);
 	if (!success) {
 		EditorSetConsoleWarn("Could not save the new settings file.");
 	}
+}
+
+struct SetNewSettingData {
+	EditorState* editor_state;
+	Stream<wchar_t> name;
+	CapacityStream<wchar_t>* active_settings;
+	unsigned int module_index;
+	unsigned int inspector_index;
+};
+
+static void SetNewSetting(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	SetNewSettingData* data = (SetNewSettingData*)_data;
+	if (data->active_settings->size > 0) {
+		data->editor_state->editor_allocator->Deallocate(data->active_settings->buffer);
+	}
+	data->active_settings->InitializeAndCopy(data->editor_state->EditorAllocator(), data->name);
+	LoadInspectorSettingsHelper(data->editor_state, data->module_index, data->inspector_index);
+};
+
+static void InitializeDrawModuleData() {
+
 }
 
 #pragma endregion
@@ -142,26 +166,11 @@ void InspectorDrawModuleClean(EditorState* editor_state, unsigned int inspector_
 			DeallocateInspectorSettingsHelper(editor_state, module_index, data->inspector_index);
 		}
 	}
-
-	if (data->linear_allocator != nullptr) {
-		ui_system->RemoveWindowMemoryResource(data->window_index, data->linear_allocator->m_buffer);
-		ui_system->RemoveWindowMemoryResource(data->window_index, data->linear_allocator);
-
-		ui_system->m_memory->Deallocate(data->linear_allocator->m_buffer);
-		ui_system->m_memory->Deallocate(data->linear_allocator);
-	}
-
-	if (data->header_states != nullptr) {
-		ui_system->RemoveWindowMemoryResource(data->window_index, data->header_states);
-		ui_system->m_memory->Deallocate(data->header_states);
-	}
-
-	if (data->settings_allocator != nullptr) {
-		ui_system->RemoveWindowMemoryResource(data->window_index, data->settings_allocator);
-		data->settings_allocator->Free();
-	}
-
+	
+	editor_state->editor_allocator->Deallocate(data->linear_allocator.GetAllocatedBuffer());
+	editor_state->editor_allocator->Deallocate(data->header_states);
 	editor_state->editor_allocator->Deallocate(data->module_name.buffer);
+	data->settings_allocator.Free();
 }
 
 void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
@@ -173,32 +182,14 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 		return;
 	}
 
+	data->window_index = drawer->window_index;
 	LinearAllocator* linear_allocator = nullptr;
 	bool* collapsing_headers_state = nullptr;
-	if (data->linear_allocator == nullptr) {
-		linear_allocator = (LinearAllocator*)drawer->GetMainAllocatorBuffer(sizeof(LinearAllocator));
-		*linear_allocator = LinearAllocator(drawer->GetMainAllocatorBuffer(DRAW_MODULE_LINEAR_ALLOCATOR_CAPACITY), DRAW_MODULE_LINEAR_ALLOCATOR_CAPACITY);
-		data->linear_allocator = linear_allocator;
-		data->window_index = drawer->window_index;
 
-		data->header_states = (bool*)drawer->GetMainAllocatorBuffer(sizeof(bool) * 32);
-		memset(data->header_states, 0, sizeof(bool) * 32);
-		collapsing_headers_state = data->header_states;
+	linear_allocator = &data->linear_allocator;
+	linear_allocator->Clear();
 
-		data->settings_allocator = (MemoryManager*)drawer->GetMainAllocatorBuffer(sizeof(MemoryManager));
-		*data->settings_allocator = MemoryManager(
-			DRAW_MODULE_SETTINGS_ALLOCATOR_CAPACITY,
-			DRAW_MODULE_SETTINGS_ALLOCATOR_POOL_COUNT,
-			DRAW_MODULE_SETTINGS_ALLOCATOR_BACKUP_SIZE,
-			GetAllocatorPolymorphic(editor_state->GlobalMemoryManager())
-		);
-	}
-	else {
-		linear_allocator = data->linear_allocator;
-		linear_allocator->Clear();
-
-		collapsing_headers_state = data->header_states;
-	}
+	collapsing_headers_state = data->header_states;
 
 	UIDrawConfig config;
 
@@ -289,7 +280,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 			label_list_characters.size += labels[index].size;
 		}
 
-		labels.size = reflected_components.size;
+		labels.size = reflected_shared_components.size;
 		drawer->LabelList("Shared Components:", labels);
 	}
 
@@ -300,7 +291,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 	GetModuleSettingsUITypesIndices(editor_state, module_index, reflected_type_indices);
 
 	if (reflected_type_indices.size > 0) {
-		// Coallesce the string
+		// Coalesce the string
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, type_names, 32);
 		for (size_t index = 0; index < reflected_type_indices.size; index++) {
 			const UIReflectionType* type = editor_state->module_reflection->GetType(reflected_type_indices[index]);
@@ -309,6 +300,8 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 		type_names.size = reflected_type_indices.size;
 		drawer->LabelList(UI_CONFIG_LABEL_TRANSPARENT, config, "Module settings types", type_names);
 		drawer->NextRow();
+
+		ECS_ASSERT(reflected_type_indices.size < MAX_HEADER_STATES);
 	}
 	// No settings for this module
 	else {
@@ -362,7 +355,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 
 	drawer->CrossLine();
 
-	CreateSettingsCallbackData create_data = { editor_state, module_index };
+	CreateSettingsCallbackData create_data = { editor_state, module_index, inspector_index };
 	drawer->Button(
 		UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ACTIVE_STATE,
 		config,
@@ -401,25 +394,6 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 				bool is_active = data->active_settings != nullptr ? stem == *data->active_settings : false;
 				UIDrawConfig config;
 
-				struct SetNewSettingData {
-					EditorState* editor_state;
-					Stream<wchar_t> name;
-					CapacityStream<wchar_t>* active_settings;
-					unsigned int module_index;
-					unsigned int inspector_index;
-				};
-
-				auto set_new_setting = [](ActionData* action_data) {
-					UI_UNPACK_ACTION_DATA;
-
-					SetNewSettingData* data = (SetNewSettingData*)_data;
-					if (data->active_settings->size > 0) {
-						data->editor_state->editor_allocator->Deallocate(data->active_settings->buffer);
-					}
-					data->active_settings->InitializeAndCopy(GetAllocatorPolymorphic(data->editor_state->editor_allocator), data->name);
-					LoadInspectorSettingsHelper(data->editor_state, data->module_index, data->inspector_index);
-				};
-
 				wchar_t* name_allocation = (wchar_t*)data->temp_allocator->Allocate((stem.size + 1) * sizeof(wchar_t));
 				stem.CopyTo(name_allocation);
 				name_allocation[stem.size] = L'\0';
@@ -444,7 +418,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 				dependent_size.scale_factor.x = data->drawer->GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, { label_scale, 0.0f }).x;
 				config.AddFlag(dependent_size);
 
-				data->drawer->ButtonWide(label_configuration, config, stem, { set_new_setting, &callback_data, sizeof(callback_data) });
+				data->drawer->ButtonWide(label_configuration, config, stem, { SetNewSetting, &callback_data, sizeof(callback_data) });
 
 				struct DeleteActionData {
 					const wchar_t* filename;
@@ -620,31 +594,77 @@ void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int mod
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsigned int inspector_index) {
+void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsigned int inspector_index, Stream<wchar_t> initial_settings) {
 	ECS_ASSERT(index < editor_state->project_modules->size);
 
-	Stream<wchar_t> module_name = StringCopy(editor_state->EditorAllocator(), editor_state->project_modules->buffer[index].library_name);
 	DrawModuleData draw_data;
-	draw_data.linear_allocator = nullptr;
-	draw_data.module_name = module_name;
+	draw_data.module_name = {};
 	draw_data.window_index = 0;
 	draw_data.settings_name = { nullptr, 0 };
 	draw_data.header_states = nullptr;
-	draw_data.settings_allocator = nullptr;
 	draw_data.reflected_settings = { nullptr, 0 };
 
 	if (inspector_index == -1) {
 		inspector_index = GetMatchingIndexFromRobin(editor_state);
 	}
-	draw_data.inspector_index = inspector_index;
 
-	ChangeInspectorDrawFunction(
-		editor_state,
-		inspector_index,
-		{ InspectorDrawModule, InspectorDrawModuleClean },
-		&draw_data,
-		sizeof(draw_data)
-	);
+	if (inspector_index != -1) {
+		ChangeInspectorDrawFunction(
+			editor_state,
+			inspector_index,
+			{ InspectorDrawModule, InspectorDrawModuleClean },
+			&draw_data,
+			sizeof(draw_data)
+		);
+
+		struct InitializeData {
+			Stream<wchar_t> module_name;
+			Stream<wchar_t> initial_settings;
+		};
+
+		AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetInitializeAllocator(editor_state, inspector_index);
+		InitializeData initialize_data;
+		initialize_data.module_name = editor_state->project_modules->buffer[index].library_name.Copy(initialize_allocator);
+		initialize_data.initial_settings = initial_settings.Copy(initialize_allocator);
+
+		auto initialize = [](EditorState* editor_state, void* data, void* _initialize_data, unsigned int inspector_index) {
+			DrawModuleData* draw_data = (DrawModuleData*)data;
+			InitializeData* initialize_data = (InitializeData*)_initialize_data;
+
+			Stream<wchar_t> module_name = StringCopy(editor_state->EditorAllocator(), initialize_data->module_name);
+			draw_data->module_name = module_name;
+			draw_data->inspector_index = inspector_index;
+			draw_data->linear_allocator = LinearAllocator(editor_state->editor_allocator->Allocate(DRAW_MODULE_LINEAR_ALLOCATOR_CAPACITY), DRAW_MODULE_LINEAR_ALLOCATOR_CAPACITY);
+			draw_data->header_states = (bool*)editor_state->editor_allocator->Allocate(sizeof(bool) * MAX_HEADER_STATES);
+			memset(draw_data->header_states, false, sizeof(bool)* MAX_HEADER_STATES);
+			draw_data->settings_allocator = MemoryManager(
+				DRAW_MODULE_SETTINGS_ALLOCATOR_CAPACITY,
+				DRAW_MODULE_SETTINGS_ALLOCATOR_POOL_COUNT,
+				DRAW_MODULE_SETTINGS_ALLOCATOR_BACKUP_SIZE,
+				GetAllocatorPolymorphic(editor_state->GlobalMemoryManager())
+			);
+
+			if (initialize_data->initial_settings.size > 0) {
+				unsigned int module_index = GetModuleIndexFromName(editor_state, initialize_data->module_name);
+				if (module_index != -1) {
+					SetNewSettingData set_new_data;
+					set_new_data.active_settings = &draw_data->settings_name;
+					set_new_data.editor_state = editor_state;
+					set_new_data.inspector_index = inspector_index;
+					set_new_data.module_index = module_index;
+					set_new_data.name = initialize_data->initial_settings;
+
+					ActionData action_data;
+					action_data.data = &set_new_data;
+					action_data.system = nullptr;
+					SetNewSetting(&action_data);
+					memset(draw_data->header_states, true, sizeof(bool) * MAX_HEADER_STATES);
+				}
+			}
+		};
+
+		SetLastInspectorTargetInitialize(editor_state, inspector_index, initialize, &initialize_data, sizeof(initialize_data));
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

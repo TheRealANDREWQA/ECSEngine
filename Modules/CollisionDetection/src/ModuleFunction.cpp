@@ -1,11 +1,13 @@
 #include "pch.h"
 #include "ModuleFunction.h"
+#include "Components.h"
 
 static void ApplyMovementTask(
 	ForEachEntityData* for_each_data,
 	Translation* translation
 ) {
 	static bool was_used = false;
+	//CollisionSettings* settings = (CollisionSettings*)for_each_data->world->system_manager->GetSystemSettings(STRING(COLLISION_DETECTION), )
 
 	translation->value.x -= 5.50f * for_each_data->world->delta_time;
 	if (for_each_data->world->keyboard->IsPressed(ECS_KEY_P)) {
