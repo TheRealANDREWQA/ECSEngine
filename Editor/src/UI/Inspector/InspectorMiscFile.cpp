@@ -69,19 +69,24 @@ void ChangeInspectorToMiscFile(EditorState* editor_state, Stream<wchar_t> path, 
 		InspectorDrawMiscFileData* draw_data = (InspectorDrawMiscFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 		draw_data->asset.file = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->asset.file.CopyOther(path);
+		UpdateLastInspectorTargetData(editor_state, inspector_index, draw_data);
 
-		// Retrieve the name
-		ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
-		GetAssetNameFromThunkOrForwardingFile(editor_state, draw_data->asset.file, asset_name);
+		SetLastInspectorTargetInitialize(editor_state, inspector_index, [](EditorState* editor_state, void* data, unsigned int inspector_index) {
+			InspectorDrawMiscFileData* draw_data = (InspectorDrawMiscFileData*)data;
 
-		// Retrieve the data from the file, if any
-		bool success = editor_state->asset_database->ReadMiscFile(asset_name, draw_data->asset.file, &draw_data->asset);
-		asset_name = StringCopy(editor_state->EditorAllocator(), asset_name);
-		draw_data->asset.name = asset_name;
-		if (!success) {
-			// Set the default for the metadata
-			draw_data->asset.Default(asset_name, { nullptr, 0 });
-		}
+			// Retrieve the name
+			ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
+			GetAssetNameFromThunkOrForwardingFile(editor_state, draw_data->asset.file, asset_name);
+
+			// Retrieve the data from the file, if any
+			bool success = editor_state->asset_database->ReadMiscFile(asset_name, draw_data->asset.file, &draw_data->asset);
+			asset_name = StringCopy(editor_state->EditorAllocator(), asset_name);
+			draw_data->asset.name = asset_name;
+			if (!success) {
+				// Set the default for the metadata
+				draw_data->asset.Default(asset_name, { nullptr, 0 });
+			}
+		});
 	}
 }
 

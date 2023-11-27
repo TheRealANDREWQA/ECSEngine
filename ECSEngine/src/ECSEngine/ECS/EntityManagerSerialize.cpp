@@ -669,7 +669,9 @@ namespace ECSEngine {
 	// void ResetBuffering();
 	// void ClearBuffering();
 	// bool HasBuffering();
-	// auto ReadInstrument(); Must be uintptr_t& for the in memory version and ECS_FILE_HANDLE for the file version
+	// auto ReadInstrument(); Must be uintptr_t for the in memory version and ECS_FILE_HANDLE for the file version
+	// void SetReadInstrument(auto instrument); Useful only for the in memory version, since when using auto the reference is dropped
+	// So for that case we need to manually call this function to update the value
 	template<typename Functor>
 	static ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManagerImpl(
 		EntityManager* entity_manager,
@@ -1733,11 +1735,14 @@ namespace ECSEngine {
 
 #pragma endregion
 
+		// C++ gotcha here, when returning uintptr_t&, it will actually receive only
+		// uintptr_t by value. So we must manually call SetReadInstrument
 		auto read_instrument = functor.ReadInstrument();
 
 		// The base archetypes are missing their entities, but these will be restored after reading the entity pool,
 		// which can be read now
 		success = DeserializeEntityPool(entity_manager->m_entity_pool, read_instrument);
+		functor.SetReadInstrument(read_instrument);
 		if (!success) {
 			if (options->detailed_error_string) {
 				options->detailed_error_string->AddStreamAssert("Failed to deserialize the entity pool");
@@ -1791,6 +1796,8 @@ namespace ECSEngine {
 		entity_manager->m_hierarchy_allocator->Clear();
 		entity_manager->m_hierarchy = EntityHierarchy(entity_manager->m_hierarchy_allocator);
 		success = DeserializeEntityHierarchy(&entity_manager->m_hierarchy, read_instrument);
+		functor.SetReadInstrument(read_instrument);
+
 		if (!success) {
 			if (options->detailed_error_string) {
 				options->detailed_error_string->AddStreamAssert("Failed to deserialize the entity hierarchy");
@@ -1853,6 +1860,8 @@ namespace ECSEngine {
 				return file_handle;
 			}
 
+			ECS_INLINE void SetReadInstrument(ECS_FILE_HANDLE handle) {}
+
 			void* buffering;
 			unsigned int buffering_size;
 			unsigned int buffering_marker;
@@ -1896,6 +1905,10 @@ namespace ECSEngine {
 
 			ECS_INLINE uintptr_t& ReadInstrument() const {
 				return *ptr;
+			}
+
+			ECS_INLINE void SetReadInstrument(uintptr_t new_value) {
+				*ptr = new_value;
 			}
 
 			uintptr_t* ptr;

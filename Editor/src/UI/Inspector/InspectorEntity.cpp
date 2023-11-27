@@ -628,6 +628,7 @@ struct InspectorDrawEntityData {
 	bool header_state[ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
 	bool is_debug_draw_enabled[ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
 	bool is_global_component;
+	bool is_initialized;
 	union {
 		Entity entity;
 		Component global_component;
@@ -995,10 +996,10 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	InspectorDrawEntityData* data = (InspectorDrawEntityData*)_data;
 
 	bool is_initialized = data->name_input.buffer != nullptr;
-
 	if (!is_initialized) {
 		// The name input is embedded in the structure
 		data->name_input.buffer = (char*)OffsetPointer(data, sizeof(*data));
+		data->allocator = MemoryManager(ECS_KB * 64, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
 	}
 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
@@ -1676,12 +1677,13 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 	draw_data->matching_inputs.size = 0;
 	draw_data->created_instances.size = 0;
 	draw_data->link_components.size = 0;
+	draw_data->is_initialized = false;
 
 	memset(draw_data->header_state, 1, sizeof(bool) * (ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS));
 
 	DetermineDebugDrawStates(editor_state, sandbox_index, draw_data);
 
-	inspector_index = ChangeInspectorDrawFunction(
+	ChangeInspectorDrawFunction(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawEntity, InspectorCleanEntity },
@@ -1689,12 +1691,6 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 		sizeof(*draw_data) + INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY,
 		sandbox_index
 	);
-
-	if (inspector_index != -1) {
-		// Allocate the allocator - only if we get a match
-		draw_data = (InspectorDrawEntityData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
-		draw_data->allocator = MemoryManager(ECS_KB * 64, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
-	}
 }
 
 void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index)

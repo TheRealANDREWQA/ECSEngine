@@ -174,7 +174,8 @@ unsigned int ChangeInspectorDrawFunction(
 	InspectorFunctions functions,
 	void* data,
 	size_t data_size,
-	unsigned int sandbox_index
+	unsigned int sandbox_index,
+	bool do_not_push_target_entry
 )
 {
 	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
@@ -215,6 +216,10 @@ unsigned int ChangeInspectorDrawFunction(
 			unsigned int border_index = 0;
 			UIDockspace* dockspace = editor_state->ui_system->GetDockspaceFromWindow(inspector_window_index, border_index, type);
 			editor_state->ui_system->SetActiveWindowForDockspaceBorder(dockspace, border_index, inspector_window_index);
+		}
+
+		if (!do_not_push_target_entry) {
+			PushInspectorTarget(editor_state, inspector_index, functions, data, data_size, sandbox_index);
 		}
 	}
 

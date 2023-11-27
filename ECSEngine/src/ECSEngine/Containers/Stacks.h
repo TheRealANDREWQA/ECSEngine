@@ -12,8 +12,8 @@ namespace ECSEngine {
 	template<typename T>
 	struct Stack {
 	public:
-		Stack() : m_stack(nullptr, 0, 0), m_first_item(0) {}
-		Stack(void* buffer, unsigned int capacity) {
+		ECS_INLINE Stack() : m_stack(nullptr, 0, 0), m_first_item(0) {}
+		ECS_INLINE Stack(void* buffer, unsigned int capacity) {
 			InitializeFromBuffer(buffer, capacity);
 		}
 
@@ -29,7 +29,7 @@ namespace ECSEngine {
 		bool ForEachIndex(Functor&& functor) const {
 			unsigned int starting_index = m_first_item + m_stack.size;
 			unsigned int access_index = m_stack.capacity <= starting_index ? starting_index - m_stack.capacity : starting_index;
-			for (unsigned int index = 0; index < m_stack.size; index--) {
+			for (unsigned int index = 0; index < m_stack.size; index++) {
 				if constexpr (early_exit) {
 					if (functor(access_index)) {
 						return true;
@@ -60,8 +60,34 @@ namespace ECSEngine {
 		template<bool early_exit = false, typename Functor>
 		bool ForEach(Functor&& functor) const {
 			return ForEachIndex<early_exit>([&](unsigned int index) {
-				return functor(GetElement())
-				})
+				return functor(GetElement(index));
+			});
+		}
+
+		// This version allows you to iterate over elements that are outside the valid
+		// elements of this stack. This is useful for undo/redo stacks where there are
+		// elements outside the stack which are still valid. The starting_index and ending_index
+		// Are both relative to the first item. Starting index of 0 means the last added item
+		// (or m_first_item) and size means the next element after the last pushed element
+		template<bool early_exit = false, typename Functor>
+		bool ForEachRange(unsigned int starting_index, unsigned int ending_index, Functor&& functor) {
+			unsigned int iterate_count = ending_index - starting_index;
+
+			starting_index = m_first_item + starting_index;
+			unsigned int access_index = m_stack.capacity <= starting_index ? starting_index - m_stack.capacity : starting_index;
+			for (unsigned int index = 0; index < iterate_count; index++) {
+				if constexpr (early_exit) {
+					if (functor(m_stack[access_index])) {
+						return true;
+					}
+				}
+				else {
+					functor(m_stack[access_index]);
+				}
+				access_index = access_index == m_stack.capacity - 1 ? 0 : access_index + 1;
+			}
+
+			return false;
 		}
 
 		ECS_INLINE unsigned int GetSize() const {
@@ -98,6 +124,10 @@ namespace ECSEngine {
 			return m_stack.buffer + PeekIndex();
 		}
 
+		ECS_INLINE const T* PeekConstant() const {
+			return m_stack.buffer + PeekIndex();
+		}
+
 		ECS_INLINE bool Peek(T& element) const {
 			if (m_stack.size > 0) {
 				element = m_stack[PeekIndex()];
@@ -112,6 +142,15 @@ namespace ECSEngine {
 			if (m_stack.size > 0) {
 				unsigned int peek_index = PeekIndex();
 				element = m_stack[peek_index];
+				m_stack.size--;
+				return true;
+			}
+			return false;
+		}
+
+		// Only decrements the size, useful for redo/undo situations
+		bool PopIndexOnly() {
+			if (m_stack.size > 0) {
 				m_stack.size--;
 				return true;
 			}
@@ -142,6 +181,46 @@ namespace ECSEngine {
 			else {
 				m_stack.size++;
 			}
+		}
+
+		// This version returns true if an element is overwritten and fills it in the given pointer
+		bool PushOverwrite(T element, T* overwritten_element) {
+			unsigned int peek_index = PeekIndex();
+			peek_index = peek_index == (m_stack.capacity - 1) ? 0 : peek_index + 1;
+			m_stack[peek_index] = element;
+
+			if (m_stack.size == m_stack.capacity) {
+				*overwritten_element = m_stack[m_first_item];
+				m_first_item = m_first_item == m_stack.capacity - 1 ? 0 : m_first_item + 1;
+				return true;
+			}
+			else {
+				m_stack.size++;
+				return false;
+			}
+		}
+
+		// This version returns true if an element is overwritten and fills it in the given pointer
+		bool PushOverwrite(const T* element, T* overwritten_element) {
+			unsigned int peek_index = PeekIndex();
+			peek_index = peek_index == (m_stack.capacity - 1) ? 0 : peek_index + 1;
+			m_stack[peek_index] = *element;
+
+			if (m_stack.size == m_stack.capacity) {
+				*overwritten_element = m_stack[m_first_item];
+				m_first_item = m_first_item == m_stack.capacity - 1 ? 0 : m_first_item + 1;
+				return true;
+			}
+			else {
+				m_stack.size++;
+				return false;
+			}
+		}
+
+		// This only increases the count - useful for undo/redo
+		void PushIndexOnly() {
+			ECS_ASSERT(m_stack.size < m_stack.capacity);
+			m_stack.size++;
 		}
 
 		ECS_INLINE void Reset() {
@@ -200,6 +279,12 @@ namespace ECSEngine {
 		void Initialize(Allocator* allocator, unsigned int capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			size_t memory_size = MemoryOf(capacity);
 			void* allocation = allocator->Allocate(memory_size, alignof(T), debug_info);
+			InitializeFromBuffer(allocation, capacity);
+		}
+
+		void Initialize(AllocatorPolymorphic allocator, unsigned int capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			size_t memory_size = MemoryOf(capacity);
+			void* allocation = ECSEngine::AllocateEx(allocator, memory_size, debug_info);
 			InitializeFromBuffer(allocation, capacity);
 		}
 

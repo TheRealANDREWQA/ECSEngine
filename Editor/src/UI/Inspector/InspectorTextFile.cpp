@@ -128,7 +128,21 @@ void ChangeInspectorToTextFile(EditorState* editor_state, Stream<wchar_t> path, 
 
 		if (inspector_indices.y != -1) {
 			TextFileDrawData* inspector_data = (TextFileDrawData*)GetInspectorDrawFunctionData(editor_state, inspector_indices.y);
-			inspector_data->path = path.Copy(editor_state->ui_system->Allocator());
+			struct InitializeData {
+				Stream<wchar_t> path;
+			};
+
+			AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetInitializeAllocator(editor_state, inspector_indices.y);
+			InitializeData initialize_data;
+			initialize_data.path = path.Copy(initialize_allocator);
+
+			auto initialize = [](EditorState* editor_state, void* data, void* _initialize_data, unsigned int inspector_index) {
+				TextFileDrawData* inspector_data = (TextFileDrawData*)data;
+				InitializeData* initialize_data = (InitializeData*)_initialize_data;
+				inspector_data->path = initialize_data->path.Copy(editor_state->EditorAllocator());
+			};
+
+			SetLastInspectorTargetInitialize(editor_state, inspector_indices.y, initialize, &initialize_data, sizeof(initialize_data));
 		}
 	}
 	else {

@@ -134,15 +134,24 @@ void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 
 	if (sandbox_module->settings_name.size > 0) {
 		sandbox_module->settings_allocator.Deallocate(sandbox_module->settings_name.buffer);
+		ClearSandboxModuleSettings(editor_state, sandbox_index, module_index);
 	}
 
 	// Change the path
 	if (settings_name.size > 0) {
 		sandbox_module->settings_name = StringCopy(sandbox_module->Allocator(), settings_name);
+		bool success = LoadSandboxModuleSettings(editor_state, sandbox_index, module_index);
+		if (!success) {
+			Stream<wchar_t> library_name = editor_state->project_modules->buffer[module_index].library_name;
+			ECS_FORMAT_TEMP_STRING(message, "Failed to read the settings {#} for module {#}", settings_name, library_name);
+			EditorSetConsoleError(message);
+		}
 	}
 	else {
 		sandbox_module->settings_name = { nullptr, 0 };
 	}
+	// We need to save sandbox state now
+	SaveEditorSandboxFile(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

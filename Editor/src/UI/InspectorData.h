@@ -33,6 +33,25 @@ struct InspectorData {
 	unsigned int target_sandbox;
 	size_t flags;
 	InspectorTable* table;
+
+	typedef void (*TargetInitialize)(EditorState* editor_state, void* data, void* initialize_data, unsigned int inspector_index);
+
+	// This target is used to go back and forth between previous targets
+	// Of the inspector
+	struct Target {
+		InspectorFunctions functions;
+		void* data;
+		size_t data_size;
+		unsigned int sandbox_index;
+
+		LinearAllocator initialize_allocator;
+		TargetInitialize initialize;
+		void* initialize_data;
+		size_t initialize_data_size;
+	};
+	MemoryManager target_allocator;
+	ECSEngine::Stack<Target> targets;
+	unsigned int target_valid_count;
 };
 
 // A thin wrapper over an array of inspector data and a round robin indices in order to
@@ -92,3 +111,65 @@ unsigned int GetInspectorTargetSandboxFromUIWindow(const EditorState* editor_sta
 
 // It will change inspectors such that the selection will be shown (if possible)
 void ChangeInspectorEntitySelection(EditorState* editor_state, unsigned int sandbox_index);
+
+// Adds a new entry in the "stack" of the inspector such that "undo"/"redo" can be implemented
+void PushInspectorTarget(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	InspectorFunctions functions,
+	void* data,
+	size_t data_size,
+	unsigned int sandbox_index
+);
+
+// This only moves the current index and goes back to the previous target (if there is one)
+void PopInspectorTarget(EditorState* editor_state, unsigned int inspector_index);
+
+// If there is a slot for this, it will only bump back the index
+void RestoreInspectorTarget(EditorState* editor_state, unsigned int inspector_index);
+
+void* AllocateLastInspectorTargetInitialize(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	size_t data_size
+);
+
+AllocatorPolymorphic GetLastInspectorTargetInitializeAllocator(const EditorState* editor_state, unsigned int inspector_index);
+
+void SetLastInspectorTargetInitializeFromAllocation(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	InspectorData::TargetInitialize initialize,
+	bool apply_on_current_data = true
+);
+
+// Returns the allocated data, if there is any
+void* SetLastInspectorTargetInitialize(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	InspectorData::TargetInitialize initialize,
+	void* initialize_data,
+	size_t initialize_data_size,
+	bool apply_on_current_data = true
+);
+
+template<typename Functor>
+void SetLastInspectorTargetInitialize(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	Functor&& functor,
+	bool apply_on_current_data = true
+) {
+	auto wrapper = [](EditorState* editor_state, void* data, void* initialize_data, unsigned int inspector_index) {
+		Functor* functor = (Functor*)initialize_data;
+		(*functor)(editor_state, data, inspector_index);
+	};
+	SetLastInspectorTargetInitialize(editor_state, inspector_index, wrapper, &functor, sizeof(functor), apply_on_current_data);
+}
+
+// This performs a memcpy or changes the assigned data
+void UpdateLastInspectorTargetData(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	void* new_data
+);

@@ -17,6 +17,11 @@ namespace ECSEngine {
 		struct ReflectionType;
 	}
 
+	struct SceneModuleSetting {
+		Stream<char> name;
+		void* data;
+	};
+
 	struct LoadSceneData {
 		// ----------------------- Mandatory -----------------------------
 		EntityManager* entity_manager;
@@ -46,6 +51,12 @@ namespace ECSEngine {
 		// This is used to make each randomized asset again unique
 		CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remapping = nullptr;
 
+		// This is the allocator used to allocate the scene module data and name
+		// This must not be malloc
+		AllocatorPolymorphic scene_modules_allocator = { nullptr };
+		// These are the settings for the scene (if it has any - some scene may want to skip this information)
+		AdditionStream<SceneModuleSetting> scene_modules = {};
+
 		// You can retrieve the delta time of the simulation if you choose to
 		float* delta_time = nullptr;
 		float* speed_up_factor = nullptr;
@@ -61,7 +72,6 @@ namespace ECSEngine {
 		Stream<wchar_t> file;
 		const EntityManager* entity_manager;
 		const Reflection::ReflectionManager* reflection_manager;
-
 		// A database reference cannot be given. It must firstly be converted to 
 		// a standalone database and then written off
 		const AssetDatabase* asset_database;
@@ -70,6 +80,8 @@ namespace ECSEngine {
 		Stream<SerializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
 		Stream<SerializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
 		Stream<SerializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
+
+		Stream<SceneModuleSetting> scene_settings = { nullptr, 0 };
 
 		// This value will also be serialized such that upon loading the simulation can continue as before
 		float delta_time = 0.0f;

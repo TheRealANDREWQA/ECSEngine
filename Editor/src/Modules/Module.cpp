@@ -779,6 +779,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		check_data.path.CopyOther(flag_file);
 		check_data.report_status = report_status;
 		check_data.disable_logging = disable_logging;
+		check_data.timer.SetUninitialized();
 
 		EditorAddEvent(editor_state, CheckBuildStatusEvent, &check_data, sizeof(check_data));
 	}
@@ -1532,6 +1533,13 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 				LoadAppliedModule(&info->ecs_module, allocator, &error_message);
 				if (error_message.size > 0) {
 					// At the moment just warn
+					ECS_FORMAT_TEMP_STRING(
+						message,
+						"Module {#} with configuration {#} has failed validation for some parameters",
+						library_name,
+						MODULE_CONFIGURATIONS[configuration]
+					);
+					EditorSetConsoleWarn(message);
 					EditorSetConsoleWarn(error_message);
 				}
 
@@ -1542,6 +1550,13 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 				ModuleValidateDebugDrawComponentsExist(info->ecs_module.debug_draw_elements, editor_state->ModuleReflectionManager(), &error_message);
 				if (error_message.size > 0) {
 					// At the moment just warn - these are not critical
+					ECS_FORMAT_TEMP_STRING(
+						message, 
+						"Module {#} with configuration {#} has failed the debug draw component validation", 
+						library_name, 
+						MODULE_CONFIGURATIONS[configuration]
+					);
+					EditorSetConsoleWarn(message);
 					EditorSetConsoleWarn(error_message);
 				}
 

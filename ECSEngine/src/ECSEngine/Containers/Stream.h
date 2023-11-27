@@ -311,10 +311,16 @@ namespace ECSEngine {
 		}
 
 		void Reallocate(AllocatorPolymorphic allocator, size_t new_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			void* new_allocation = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_size), alignof(T), debug_info);
-			if (new_allocation != buffer) {
-				size_t copy_size = new_size > size ? size : new_size;
-				memcpy(new_allocation, buffer, MemoryOf(copy_size));
+			void* new_allocation = nullptr;
+			if (buffer != nullptr && size != 0) {
+				new_allocation = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_size), alignof(T), debug_info);
+				if (new_allocation != buffer) {
+					size_t copy_size = new_size > size ? size : new_size;
+					memcpy(new_allocation, buffer, MemoryOf(copy_size));
+				}
+			}
+			else {
+				new_allocation = ECSEngine::Allocate(allocator, MemoryOf(new_size), alignof(T), debug_info);
 			}
 			InitializeFromBuffer(new_allocation, new_size);
 		}
@@ -674,9 +680,15 @@ namespace ECSEngine {
 					memcpy(buffer, old_buffer, MemoryOf(size));
 				}
 				else {
-					void* new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(needed_elements), alignof(T), debug_info);
-					if (new_buffer != buffer) {
-						memcpy(new_buffer, buffer, MemoryOf(size));
+					void* new_buffer = nullptr;
+					if (buffer != nullptr && size > 0) {
+						new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(needed_elements), alignof(T), debug_info);
+						if (new_buffer != buffer) {
+							memcpy(new_buffer, buffer, MemoryOf(size));
+						}
+					}
+					else {
+						new_buffer = ECSEngine::Allocate(allocator, MemoryOf(needed_elements), alignof(T), debug_info);
 					}
 					InitializeFromBuffer(new_buffer, size, needed_elements);
 				}
@@ -1663,7 +1675,13 @@ namespace ECSEngine {
 
 		void Resize(unsigned int new_capacity, unsigned int element_byte_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (new_capacity > 0) {
-				void* new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size, debug_info);
+				void* new_buffer = 0;
+				if (capacity > 0 && buffer != nullptr) {
+					new_buffer = ReallocateEx(allocator, buffer, new_capacity * element_byte_size, debug_info);
+				}
+				else {
+					new_buffer = AllocateEx(allocator, new_capacity * element_byte_size, debug_info);
+				}
 				ECS_ASSERT(new_buffer != nullptr);
 
 				unsigned int size_to_copy = size < new_capacity ? size : new_capacity;

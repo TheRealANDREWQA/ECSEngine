@@ -6,9 +6,29 @@
 #include "AssetDatabaseReference.h"
 #include "../Allocators/ResizableLinearAllocator.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
+#include "../Utilities/Serialization/SerializationHelpers.h"
 #include "../Utilities/Path.h"
 
+#define FILE_VERSION 0
+
 namespace ECSEngine {
+
+	enum CHUNK_TYPE : unsigned char {
+		ASSET_DATABASE_CHUNK,
+		ENTITY_MANAGER_CHUNK,
+		TIME_CHUNK,
+		MODULE_SETTINGS_CHUNK,
+		CHUNK_COUNT
+	};
+
+	struct SceneFileHeader {
+		unsigned int header_size;
+		unsigned char version;
+		unsigned char reserved[3];
+		size_t chunk_offsets[CHUNK_COUNT];
+	};
+
+	typedef size_t ModuleSettingsCountType;
 
 	// ------------------------------------------------------------------------------------------------------------
 
@@ -53,7 +73,6 @@ namespace ECSEngine {
 		}
 
 		void* file_allocation = malloc(file_byte_size);
-
 		struct DeallocateMalloc {
 			void operator() () {
 				CloseFile(file_handle);
@@ -74,7 +93,22 @@ namespace ECSEngine {
 			return false;
 		}
 
-		uintptr_t ptr = (uintptr_t)file_allocation;
+		SceneFileHeader* file_header = (SceneFileHeader*)file_allocation;
+		if (file_header->version != FILE_VERSION) {
+			if (load_data->detailed_error_string) {
+				load_data->detailed_error_string->AddStreamAssert("Invalid scene file header");
+			}
+			return false;
+		}
+
+		uintptr_t file_allocation_ptr = (uintptr_t)file_allocation;
+		uintptr_t ptr = (uintptr_t)OffsetPointer(file_allocation, file_header->header_size);
+		if (file_header->chunk_offsets[ASSET_DATABASE_CHUNK] != ptr - file_allocation_ptr) {
+			if (load_data->detailed_error_string) {
+				load_data->detailed_error_string->AddStreamAssert("The scene file is corrupted (asset database chunk)");
+			}
+			return false;
+		}
 
 		bool randomize_assets = load_data->randomize_assets;
 		AssetDatabaseSnapshot asset_database_snapshot = database->GetSnapshot();
@@ -100,6 +134,15 @@ namespace ECSEngine {
 			database->RandomizePointers(asset_database_snapshot);
 		}
 
+		if (file_header->chunk_offsets[ENTITY_MANAGER_CHUNK] != ptr - file_allocation_ptr) {
+			// Restore the snapshot
+			database->RestoreSnapshot(asset_database_snapshot);
+			if (load_data->detailed_error_string) {
+				load_data->detailed_error_string->AddStreamAssert("The scene file is corrupted (entity manager chunk)");
+			}
+			return false;
+		}
+
 		// Create the deserialize tables firstly
 		DeserializeEntityManagerComponentTable component_table;
 		CreateDeserializeEntityManagerComponentTableAddOverrides(component_table, load_data->reflection_manager, stack_allocator, load_data->unique_overrides);
@@ -120,18 +163,24 @@ namespace ECSEngine {
 			load_data->entity_manager,
 			ptr,
 			&deserialize_options
-		);
-		
+		);	
 		if (deserialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
 			// Reset the database
 			database->RestoreSnapshot(asset_database_snapshot);
 			return false;
 		}
 
+		if (file_header->chunk_offsets[TIME_CHUNK] != ptr - file_allocation_ptr) {
+			// Restore the snapshot
+			database->RestoreSnapshot(asset_database_snapshot);
+			if (load_data->detailed_error_string) {
+				load_data->detailed_error_string->AddStreamAssert("The scene file is corrupted (time chunk)");
+			}
+			return false;
+		}
+
 		float2 world_time_values;
-		ECS_ASSERT(ptr - (uintptr_t)file_allocation <= file_byte_size - sizeof(world_time_values));
-		memcpy((void*)ptr, &world_time_values, sizeof(world_time_values));
-		ptr += sizeof(world_time_values);
+		Read<true>(&ptr, &world_time_values, sizeof(world_time_values));
 			
 		if (load_data->delta_time != nullptr) {
 			*load_data->delta_time = world_time_values.x;
@@ -139,7 +188,67 @@ namespace ECSEngine {
 		if (load_data->speed_up_factor != nullptr) {
 			*load_data->speed_up_factor = world_time_values.y;
 		}
+
+		if (file_header->chunk_offsets[MODULE_SETTINGS_CHUNK] != ptr - file_allocation_ptr) {
+			// Restore the snapshot
+			database->RestoreSnapshot(asset_database_snapshot);
+			if (load_data->detailed_error_string) {
+				load_data->detailed_error_string->AddStreamAssert("The scene file is corrupted (module settings chunk)");
+			}
+			return false;
+		}
+
+		ModuleSettingsCountType settings_count;
+		Read<true>(&ptr, &settings_count, sizeof(settings_count));
+		ECS_STACK_CAPACITY_STREAM(char, setting_name, 512);
+
+		if (load_data->scene_modules.IsInitialized()) {
+			load_data->scene_modules.AssertNewItems(settings_count);
+			for (size_t index = 0; index < settings_count; index++) {
+				unsigned short name_size = 0;
+				ReadWithSizeShort<true>(&ptr, setting_name.buffer, name_size);
+				Stream<char> allocated_name;
+				allocated_name.InitializeAndCopy(load_data->scene_modules_allocator, Stream<char>(setting_name.buffer, name_size));
+
+				Reflection::ReflectionType setting_type;
+				if (load_data->reflection_manager->TryGetType(allocated_name, setting_type)) {
+					SceneModuleSetting setting;
+					setting.name = allocated_name;
+					setting.data = Allocate(load_data->scene_modules_allocator, Reflection::GetReflectionTypeByteSize(&setting_type));
+
+					DeserializeOptions deserialize_options;
+					deserialize_options.backup_allocator = load_data->scene_modules_allocator;
+					deserialize_options.error_message = load_data->detailed_error_string;
+					deserialize_options.field_allocator = load_data->scene_modules_allocator;
+					ECS_DESERIALIZE_CODE deserialize_code = Deserialize(load_data->reflection_manager, &setting_type, setting.data, ptr, &deserialize_options);
+					if (deserialize_code != ECS_DESERIALIZE_OK) {
+						database->RestoreSnapshot(asset_database_snapshot);
+						return false;
+					}
+
+					load_data->scene_modules.Add(setting);
+				}
+				else {
+					database->RestoreSnapshot(asset_database_snapshot);
+					if (load_data->detailed_error_string) {
+						ECS_FORMAT_TEMP_STRING(message, "There is no reflection type for module setting type {#}", allocated_name);
+						load_data->detailed_error_string->AddStreamAssert(message);
+					}
+					return false;
+				}
+			}
+		}
+		else {
+			if (MODULE_SETTINGS_CHUNK < CHUNK_COUNT - 1) {
+				// We need to skip this data
+				for (size_t index = 0; index < settings_count; index++) {
+					IgnoreWithSizeShort(&ptr);
+					IgnoreDeserialize(ptr);
+				}
+			}
+		}
 		
+		ECS_ASSERT((ptr - (uintptr_t)file_allocation) == file_byte_size);	
 		return true;
 	}
 
@@ -206,15 +315,26 @@ namespace ECSEngine {
 		}
 		stack_deallocator.deallocator.file_handle = file_handle;
 
-		AssetDatabase final_database;
+		size_t file_write_size = 0;
+		SceneFileHeader header;
+		memset(&header, 0, sizeof(header));
+		header.version = FILE_VERSION;
+		header.header_size = sizeof(header);
+		// Write the unitialized header first
+		bool success = WriteFile(file_handle, &header);
+		if (!success) {
+			return false;
+		}
+		file_write_size += sizeof(header);
 
+		header.chunk_offsets[ASSET_DATABASE_CHUNK] = file_write_size;
+		AssetDatabase final_database;
 		size_t database_serialize_size = SerializeAssetDatabaseSize(save_data->asset_database);
 
 		void* asset_database_allocation = malloc(database_serialize_size);
 		uintptr_t ptr = (uintptr_t)asset_database_allocation;
 
-		bool success = SerializeAssetDatabase(save_data->asset_database, ptr) == ECS_SERIALIZE_OK;
-
+		success = SerializeAssetDatabase(save_data->asset_database, ptr) == ECS_SERIALIZE_OK;
 		if (!success) {
 			free(asset_database_allocation);
 			return false;
@@ -225,7 +345,9 @@ namespace ECSEngine {
 		if (!success) {
 			return false;
 		}
+		file_write_size += database_serialize_size;
 
+		header.chunk_offsets[ENTITY_MANAGER_CHUNK] = file_write_size;
 		// Create the deserialize tables firstly
 		SerializeEntityManagerComponentTable component_table;
 		CreateSerializeEntityManagerComponentTableAddOverrides(component_table, save_data->reflection_manager, stack_allocator, save_data->unique_overrides);
@@ -236,6 +358,7 @@ namespace ECSEngine {
 		SerializeEntityManagerGlobalComponentTable global_component_table;
 		CreateSerializeEntityManagerGlobalComponentTableAddOverrides(global_component_table, save_data->reflection_manager, stack_allocator, save_data->global_overrides);
 
+		size_t before_size = GetFileCursor(file_handle);
 		SerializeEntityManagerOptions serialize_options;
 		serialize_options.component_table = &component_table;
 		serialize_options.shared_component_table = &shared_component_table;
@@ -244,10 +367,67 @@ namespace ECSEngine {
 		if (!success) {
 			return false;
 		}
-
+		file_write_size = GetFileCursor(file_handle);
+		header.chunk_offsets[TIME_CHUNK] = file_write_size;
+		
 		// Write the final float value
 		float2 world_time_values = { save_data->delta_time, save_data->speed_up_factor };
 		success = WriteFile(file_handle, &world_time_values);
+		if (!success) {
+			return false;
+		}
+
+		_stack_allocator.Clear();
+		file_write_size += sizeof(world_time_values);
+		header.chunk_offsets[MODULE_SETTINGS_CHUNK] = file_write_size;
+
+		// Make a large allocation for this and assert that it fits
+		const size_t SERIALIZE_SETTING_ALLOCATION_CAPACITY = ECS_KB * 192;
+		void* serialize_setting_allocation = _stack_allocator.Allocate(SERIALIZE_SETTING_ALLOCATION_CAPACITY);
+		uintptr_t serialize_setting_allocation_ptr = (uintptr_t)serialize_setting_allocation;
+
+		ModuleSettingsCountType settings_count = save_data->scene_settings.size;
+		// Write the count at the beginning
+		Write<true>(&serialize_setting_allocation_ptr, &settings_count, sizeof(settings_count));
+
+		// Now we should write the settings chunk
+		for (size_t index = 0; index < save_data->scene_settings.size; index++) {
+			Reflection::ReflectionType setting_type;
+			if (save_data->reflection_manager->TryGetType(save_data->scene_settings[index].name, setting_type)) {
+				// Write the name before that
+				WriteWithSizeShort<true>(&serialize_setting_allocation_ptr, save_data->scene_settings[index].name);
+				ECS_ASSERT(serialize_setting_allocation_ptr - (uintptr_t)serialize_setting_allocation <= SERIALIZE_SETTING_ALLOCATION_CAPACITY);
+
+				ECS_SERIALIZE_CODE serialize_code = Serialize(
+					save_data->reflection_manager,
+					&setting_type,
+					save_data->scene_settings[index].data,
+					serialize_setting_allocation_ptr
+				);
+				if (serialize_code != ECS_SERIALIZE_OK) {
+					return false;
+				}
+
+				ECS_ASSERT(serialize_setting_allocation_ptr - (uintptr_t)serialize_setting_allocation <= SERIALIZE_SETTING_ALLOCATION_CAPACITY);
+			}
+			else {
+				// The module setting type is not reflected
+				return false;
+			}
+		}
+		// Write to file now the settings
+		success = WriteFile(file_handle, { serialize_setting_allocation, serialize_setting_allocation_ptr - (uintptr_t)serialize_setting_allocation });
+		if (!success) {
+			return false;
+		}
+
+		success = SetFileCursorBool(file_handle, 0, ECS_FILE_SEEK_BEG);
+		if (!success) {
+			return false;
+		}
+
+		// Write the header at the end
+		success = WriteFile(file_handle, &header);
 		if (!success) {
 			return false;
 		}

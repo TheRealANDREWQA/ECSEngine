@@ -2,6 +2,12 @@
 #include "ECSEngineUI.h"
 #include "ECSEngineAssets.h"
 
+/*
+	Each inspector window that is implemented should perform the initialization
+	Inside the window draw since when using the inspector targets the specific
+	Initialization phase is not caught in that case
+*/
+
 using namespace ECSEngine;
 ECS_TOOLS;
 
@@ -27,11 +33,11 @@ unsigned int CreateInspectorDockspace(EditorState* editor_state, unsigned int in
 void CreateInspectorAction(ActionData* action_data);
 
 // Inspector index means default behaviour - first round robin inspector
-void ChangeInspectorToNothing(EditorState* editor_state, unsigned int inspector_index = -1);
+void ChangeInspectorToNothing(EditorState* editor_state, unsigned int inspector_index = -1, bool do_not_push_target_entry = false);
 
 void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index = -1);
 
-void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsigned int inspector_index = -1);
+void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsigned int inspector_index = -1, Stream<wchar_t> initial_settings = {});
 
 // If inspector index is different from -1, it will change that inspector into the settings for the bound sandbox
 // If sandbox index is different from -1, it will find an inspector suitable or create one if it doesn't exist

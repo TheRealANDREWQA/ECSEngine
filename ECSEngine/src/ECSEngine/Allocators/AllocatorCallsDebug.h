@@ -25,7 +25,7 @@ namespace ECSEngine {
 
 	struct TrackedAllocation {
 		const void* allocated_pointer;
-		// At the moemnt, this is only used by the Reallocate
+		// At the moment, this is only used by the Reallocate
 		// which fills this value with the value of the returned pointer
 		const void* secondary_pointer = nullptr;
 		DebugInfo debug_info;
