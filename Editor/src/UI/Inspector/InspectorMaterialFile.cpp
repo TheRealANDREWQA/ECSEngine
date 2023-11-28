@@ -1244,90 +1244,94 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 	if (found_inspector_index.x == -1 && found_inspector_index.y != -1) {
 		inspector_index = found_inspector_index.y;
 		// Get the data and set the path
-		AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
-		
 		InspectorDrawMaterialFileData* draw_data = (InspectorDrawMaterialFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 		memset(draw_data->success, 0, sizeof(draw_data->success));
 		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.CopyOther(path);
+		UpdateLastInspectorTargetData(editor_state, inspector_index, draw_data);
 		
-		const size_t CONSTRUCT_PBR_INPUT_CAPACITY = 256;
-		draw_data->construct_pbr_from_prefix_characters.Initialize(editor_allocator, 0, CONSTRUCT_PBR_INPUT_CAPACITY);
+		SetLastInspectorTargetInitialize(editor_state, inspector_index, [](EditorState* editor_state, void* data, unsigned int inspector_index) {
+			InspectorDrawMaterialFileData* draw_data = (InspectorDrawMaterialFileData*)data;
+			AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 
-		draw_data->shader_override_data[VERTEX_ORDER] = editor_state->module_reflection->InitializeFieldOverride(VERTEX_TAG, "Vertex Shader");
-		draw_data->shader_override_data[PIXEL_ORDER] = editor_state->module_reflection->InitializeFieldOverride(PIXEL_TAG, "Pixel Shader");
-		// Initialize the reflection manager
-		InitializeReflectionManager(draw_data);
-		draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
-		draw_data->database_allocator = MemoryManager(
-			TEMPORARY_DATABASE_ALLOCATOR_CAPACITY,
-			ECS_KB,
-			TEMPORARY_DATABASE_ALLOCATOR_CAPACITY,
-			GetAllocatorPolymorphic(editor_state->GlobalMemoryManager())
-		);
-		draw_data->temporary_database = AssetDatabase(GetAllocatorPolymorphic(&draw_data->database_allocator), editor_state->asset_database->reflection_manager);
-		draw_data->temporary_database.SetFileLocation(editor_state->asset_database->metadata_file_location);
+			const size_t CONSTRUCT_PBR_INPUT_CAPACITY = 256;
+			draw_data->construct_pbr_from_prefix_characters.Initialize(editor_allocator, 0, CONSTRUCT_PBR_INPUT_CAPACITY);
 
-		for (size_t index = 0; index < ORDER_COUNT; index++) {
-			draw_data->cbuffers[index].size = 0;
-			draw_data->textures[index].size = 0;
-			draw_data->samplers[index].size = 0;
-			draw_data->shader_stamp[index] = 0;
-			draw_data->metadata_shader_stamp[index] = 0;
-			// Set this to true since most of the time you want to see these
-			draw_data->shader_collapsing_header_state[index] = true;
-			// Set these to true such that when the first reload occurs it won't trigger
-			// A reload event because the previous success is false
-			for (size_t subindex = 0; subindex < SUCCESS_COUNT; subindex++) {
-				draw_data->success[index][subindex] = true;
-			}
-
-			// Create the shader allocators
-			draw_data->shader_cbuffer_allocator_index[index] = 0;
-			for (size_t subindex = 0; subindex < 2; subindex++) {
-				draw_data->shader_cbuffer_allocator[index][subindex] = ResizableLinearAllocator(
-					SHADER_ALLOCATOR_CAPACITY, 
-					SHADER_ALLOCATOR_CAPACITY, 
-					editor_state->EditorAllocator()
-				);
-			}
-			draw_data->timer[index].DelayStart(-SHADER_LAZY_RELOAD_MS, ECS_TIMER_DURATION_MS);
-		}
-
-		ShaderModifyCallbackData shader_modify_data;
-		shader_modify_data.data = draw_data;
-		shader_modify_data.inspector_index = inspector_index;
-		shader_modify_data.order = VERTEX_ORDER;
-		AssetOverrideSetAllData set_all_data;
-		set_all_data.set_index.sandbox_index = -1;
-		set_all_data.callback = { ShaderModifyCallback, &shader_modify_data, sizeof(shader_modify_data) };
-		set_all_data.new_database.database = &draw_data->temporary_database;
-		editor_state->module_reflection->BindInstanceFieldOverride(draw_data->shader_override_data[VERTEX_ORDER], VERTEX_TAG, AssetOverrideSetAll, &set_all_data);
-
-		shader_modify_data.order = PIXEL_ORDER;
-		editor_state->module_reflection->BindInstanceFieldOverride(draw_data->shader_override_data[PIXEL_ORDER], PIXEL_TAG, AssetOverrideSetAll, &set_all_data);
-
-		// Try to read the metadata file
-		ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
-		GetAssetNameFromThunkOrForwardingFile(editor_state, draw_data->path, asset_name);
-		draw_data->material_asset.name = asset_name;
-
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 64, ECS_MB);
-		bool success = draw_data->temporary_database.ReadMaterialFile(asset_name, &draw_data->material_asset, GetAllocatorPolymorphic(&temporary_allocator));
-		draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
-		if (!success) {
-			// Set the default for the metadata
-			draw_data->material_asset.Default(asset_name, { nullptr, 0 });
-			// The default will make this nullptr
+			draw_data->shader_override_data[VERTEX_ORDER] = editor_state->module_reflection->InitializeFieldOverride(VERTEX_TAG, "Vertex Shader");
+			draw_data->shader_override_data[PIXEL_ORDER] = editor_state->module_reflection->InitializeFieldOverride(PIXEL_TAG, "Pixel Shader");
+			// Initialize the reflection manager
+			InitializeReflectionManager(draw_data);
 			draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
-		}
-		else {
-			// The buffers and the material are allocated from the asset database
-			// Reload the shaders and then determine what data to copy
-			// The reload will correctly copy the matching names for the resources it manages to read
-			ReloadShaders(draw_data, inspector_index, true);
-		}
-		draw_data->material_asset.name = StringCopy(editor_state->EditorAllocator(), asset_name);
+			draw_data->database_allocator = MemoryManager(
+				TEMPORARY_DATABASE_ALLOCATOR_CAPACITY,
+				ECS_KB,
+				TEMPORARY_DATABASE_ALLOCATOR_CAPACITY,
+				GetAllocatorPolymorphic(editor_state->GlobalMemoryManager())
+			);
+			draw_data->temporary_database = AssetDatabase(GetAllocatorPolymorphic(&draw_data->database_allocator), editor_state->asset_database->reflection_manager);
+			draw_data->temporary_database.SetFileLocation(editor_state->asset_database->metadata_file_location);
+
+			for (size_t index = 0; index < ORDER_COUNT; index++) {
+				draw_data->cbuffers[index].size = 0;
+				draw_data->textures[index].size = 0;
+				draw_data->samplers[index].size = 0;
+				draw_data->shader_stamp[index] = 0;
+				draw_data->metadata_shader_stamp[index] = 0;
+				// Set this to true since most of the time you want to see these
+				draw_data->shader_collapsing_header_state[index] = true;
+				// Set these to true such that when the first reload occurs it won't trigger
+				// A reload event because the previous success is false
+				for (size_t subindex = 0; subindex < SUCCESS_COUNT; subindex++) {
+					draw_data->success[index][subindex] = true;
+				}
+
+				// Create the shader allocators
+				draw_data->shader_cbuffer_allocator_index[index] = 0;
+				for (size_t subindex = 0; subindex < 2; subindex++) {
+					draw_data->shader_cbuffer_allocator[index][subindex] = ResizableLinearAllocator(
+						SHADER_ALLOCATOR_CAPACITY,
+						SHADER_ALLOCATOR_CAPACITY,
+						editor_state->EditorAllocator()
+					);
+				}
+				draw_data->timer[index].DelayStart(-SHADER_LAZY_RELOAD_MS, ECS_TIMER_DURATION_MS);
+			}
+
+			ShaderModifyCallbackData shader_modify_data;
+			shader_modify_data.data = draw_data;
+			shader_modify_data.inspector_index = inspector_index;
+			shader_modify_data.order = VERTEX_ORDER;
+			AssetOverrideSetAllData set_all_data;
+			set_all_data.set_index.sandbox_index = -1;
+			set_all_data.callback = { ShaderModifyCallback, &shader_modify_data, sizeof(shader_modify_data) };
+			set_all_data.new_database.database = &draw_data->temporary_database;
+			editor_state->module_reflection->BindInstanceFieldOverride(draw_data->shader_override_data[VERTEX_ORDER], VERTEX_TAG, AssetOverrideSetAll, &set_all_data);
+
+			shader_modify_data.order = PIXEL_ORDER;
+			editor_state->module_reflection->BindInstanceFieldOverride(draw_data->shader_override_data[PIXEL_ORDER], PIXEL_TAG, AssetOverrideSetAll, &set_all_data);
+
+			// Try to read the metadata file
+			ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
+			GetAssetNameFromThunkOrForwardingFile(editor_state, draw_data->path, asset_name);
+			draw_data->material_asset.name = asset_name;
+
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 64, ECS_MB);
+			bool success = draw_data->temporary_database.ReadMaterialFile(asset_name, &draw_data->material_asset, GetAllocatorPolymorphic(&temporary_allocator));
+			draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
+			if (!success) {
+				// Set the default for the metadata
+				draw_data->material_asset.Default(asset_name, { nullptr, 0 });
+				// The default will make this nullptr
+				draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
+			}
+			else {
+				// The buffers and the material are allocated from the asset database
+				// Reload the shaders and then determine what data to copy
+				// The reload will correctly copy the matching names for the resources it manages to read
+				ReloadShaders(draw_data, inspector_index, true);
+			}
+			draw_data->material_asset.name = StringCopy(editor_state->EditorAllocator(), asset_name);
+		});
 	}
 }
 

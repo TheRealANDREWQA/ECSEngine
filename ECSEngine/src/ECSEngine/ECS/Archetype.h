@@ -28,12 +28,20 @@ namespace ECSEngine {
 
 		void CopyOther(const Archetype* other);
 
+		// It writes and allocates the target buffer using the component allocator. It will write into the target memory
+		// Using the specified buffer type (stream or data pointer)
 		void CopyEntityBuffers(EntityInfo info, unsigned char deallocate_index, void* target_memory) const;
 
+		// It writes and allocates the target buffers using the component allocators. It will write into the target memory
+		// Using the specified buffer types (stream or data pointer). The source data must correspond to the deallocate_index
 		void CopyEntityBuffers(EntityInfo info, void** target_buffers) const;
 
+		// It writes and allocates the target buffer using the component allocator. It will write into the target memory
+		// Using the specified buffer type (stream or data pointer)
 		void CopyEntityBuffers(unsigned int stream_index, unsigned int base_index, unsigned char deallocate_index, void* target_memory) const;
 
+		// It writes and allocates the target buffers using the component allocators. It will write into the target memory
+		// Using the specified buffer types (stream or data pointer). The source data must correspond to the deallocate_index
 		void CopyEntityBuffers(unsigned int stream_index, unsigned int base_index, void** target_buffers) const;
 
 		// It will deallocate all of its base archetypes and then itself
@@ -132,6 +140,52 @@ namespace ECSEngine {
 
 		// Returns the total amount of entities in all base archetypes
 		unsigned int GetEntityCount() const;
+
+		// Fills in the current buffers for the entity for that component
+		void GetEntityBuffers(EntityInfo info, unsigned char deallocate_index, CapacityStream<Stream<void>>* buffers) const;
+		
+		// Fills in the current buffers for the entity for that component
+		void GetEntityBuffers(EntityInfo info, Component component, CapacityStream<Stream<void>>* buffers) const;
+
+		// Fills in the current buffers for the entity for that component
+		void GetEntityBuffers(unsigned int stream_index, unsigned int base_index, unsigned char deallocate_index, CapacityStream<Stream<void>>* buffers) const;
+
+		// Fills in the current buffers for the entity for that component
+		void GetEntityBuffers(unsigned int stream_index, unsigned int base_index, Component component, CapacityStream<Stream<void>>* buffers) const;
+
+		// Just restores the previous buffer as is - it does not allocate the previous data
+		void ReinstateEntityBuffers(EntityInfo info, unsigned char deallocate_index, Stream<Stream<void>> buffers);
+
+		// Just restores the previous buffer as is - it does not allocate the previous data
+		void ReinstateEntityBuffers(EntityInfo info, Component component, Stream<Stream<void>> buffers);
+
+		// Just restores the previous buffer as is - it does not allocate the previous data
+		void ReinstateEntityBuffers(unsigned int stream_index, unsigned int base_index, unsigned char deallocate_index, Stream<Stream<void>> buffers);
+
+		// Just restores the previous buffer as is - it does not allocate the previous data
+		void ReinstateEntityBuffers(unsigned int stream_index, unsigned int base_index, Component component, Stream<Stream<void>> buffers);
+
+		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
+		void SetEntityBuffers(EntityInfo info, unsigned char deallocate_index, const void* source_data);
+
+		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
+		// The source data must correspond to the deallocate_index
+		void SetEntityBuffers(EntityInfo info, const void** source_data);
+
+		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
+		// The source data must correspond to the signature
+		void SetEntityBuffers(EntityInfo info, ComponentSignature signature, const void** source_data);
+
+		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
+		void SetEntityBuffers(unsigned int stream_index, unsigned int base_index, unsigned char deallocate_index, const void* source_data);
+
+		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
+		// The source data must correspond to the deallocate_index
+		void SetEntityBuffers(unsigned int stream_index, unsigned int base_index, const void** source_data);
+
+		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
+		// The source data must correspond to the signature
+		void SetEntityBuffers(unsigned int stream_index, unsigned int base_index, ComponentSignature signature, const void** source_data);
 
 		struct InternalBase {
 			ArchetypeBase archetype;

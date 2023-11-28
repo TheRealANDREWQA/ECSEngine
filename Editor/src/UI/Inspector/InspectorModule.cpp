@@ -95,6 +95,10 @@ static bool SaveInspectorSettingsHelper(EditorState* editor_state, unsigned int 
 		absolute_path,
 		draw_data->reflected_settings
 	);
+	if (!success) {
+		ECS_FORMAT_TEMP_STRING(message, "Failed writing module settings to disk for path {#}", absolute_path);
+		EditorSetConsoleWarn(message);
+	}
 	return success;
 }
 

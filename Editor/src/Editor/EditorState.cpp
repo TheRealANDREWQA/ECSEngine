@@ -12,6 +12,7 @@
 #include "../Project/ProjectUITemplate.h"
 #include "../Sandbox/Sandbox.h"
 #include "../Sandbox/SandboxProfiling.h"
+#include "../Sandbox/SandboxModule.h"
 
 #include "../UI/CreateScene.h"
 #include "ECSEngineComponents.h"
@@ -281,6 +282,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickEvents(editor_state);
 
 		// At the end we need to tick the sandboxes that are running
+		TickModuleSettingsRefresh(editor_state);
 		TickSandboxRuntimes(editor_state);
 
 		TickSaveProjectUIAutomatically(editor_state);
@@ -616,7 +618,7 @@ void EditorStateDestroy(EditorState* editor_state) {
 
 	// If necessary, free all the malloc's for the individual allocations - but there are very small and insignificant
 	// Not worth freeing them since EditorStateInitialize won't be called more than a couple of times during the runtime of 
-	// an instance of the process
+	// an instance of the process (at the moment only once)
 }
 
 // -----------------------------------------------------------------------------------------------------------------

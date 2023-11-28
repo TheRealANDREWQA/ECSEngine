@@ -83,3 +83,10 @@ bool GetEditorSceneDeserializeOverrides(
 	ECSEngine::CapacityStream<ECSEngine::DeserializeEntityManagerGlobalComponentInfo>* global_overrides,
 	ECSEngine::AllocatorPolymorphic temporary_allocator
 );
+
+// Updates the link components to the new remapping from here
+void UpdateEditorScenePointerRemappings(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	const ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>* pointer_remapping
+);

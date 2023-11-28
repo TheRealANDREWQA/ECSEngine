@@ -43,7 +43,7 @@ static bool InspectorDrawTextRetainedMode(void* window_data, WindowRetainedModeI
 
 static void InspectorDrawTextFileCleanFunction(EditorState* editor_state, unsigned int inspector_index, void* window_data) {
 	TextFileDrawData* draw_data = (TextFileDrawData*)window_data;
-	DeallocateTextFileDrawData(draw_data, editor_state->ui_system->Allocator());
+	DeallocateTextFileDrawData(draw_data, editor_state->EditorAllocator());
 }
 
 static void InspectorDrawTextFileImplementation(

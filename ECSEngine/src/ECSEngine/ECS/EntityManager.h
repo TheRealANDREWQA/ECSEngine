@@ -277,6 +277,12 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// Single-threaded. Adds all the entities from the other entity manager into this one
+		// The unique/shared/global components that do not exist, are registered as well
+		void AddEntityManager(const EntityManager* other);
+
+		// ---------------------------------------------------------------------------------------------------
+
 		// Mostly for editor purposes, like when a component ID is changed (this function is given
 		// because the vector signature needs to be changed besides the ComponentSignature)
 		// It changes the registration of the component as well
@@ -490,6 +496,12 @@ namespace ECSEngine {
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Creates a new entity manager with a brand new entity hierarchy, entity pool and archetype query cache
+		// The given entities are not necessarly identified with the same identifiers. The can be remapped
+		EntityManager CreateSubset(Stream<Entity> entities, MemoryManager* memory_manager) const;
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -855,7 +867,7 @@ namespace ECSEngine {
 		}
 
 		// Return true to exit early, if desired.
-		// The functor receives the main archetype as Archetype* and the base archetype as ArchetypeBase*
+		// The functor receives (Archetype*, unsigned int base_index)
 		// This iterates over all base archetypes in the entity manager
 		template<bool early_exit = false, typename Functor>
 		bool ForEachBaseArchetype(Functor&& functor) {
@@ -864,14 +876,13 @@ namespace ECSEngine {
 				Archetype* archetype = GetArchetype(archetype_index);
 				unsigned int base_count = archetype->GetBaseCount();
 				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-					ArchetypeBase* base_archetype = archetype->GetBase(base_index);
 					if constexpr (early_exit) {
-						if (functor(archetype, base_archetype)) {
+						if (functor(archetype, base_index)) {
 							return true;
 						}
 					}
 					else {
-						functor(archetype, base_archetype);
+						functor(archetype, base_index);
 					}
 				}
 			}
@@ -880,7 +891,7 @@ namespace ECSEngine {
 
 		// CONST VARIANT
 		// Return true to exit early, if desired.
-		// The functor receives the main archetype as const Archetype* and the base archetype as const ArchetypeBase*
+		// The functor receives (const Archetype*, unsigned int base_index)
 		// This iterates over all base archetypes in the entity manager
 		template<bool early_exit = false, typename Functor>
 		bool ForEachBaseArchetype(Functor&& functor) const {
@@ -889,14 +900,13 @@ namespace ECSEngine {
 				const Archetype* archetype = GetArchetype(archetype_index);
 				unsigned int base_count = archetype->GetBaseCount();
 				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
-					const ArchetypeBase* base_archetype = archetype->GetBase(base_index);
 					if constexpr (early_exit) {
-						if (functor(archetype, base_archetype)) {
+						if (functor(archetype, base_index)) {
 							return true;
 						}
 					}
 					else {
-						functor(archetype, base_archetype);
+						functor(archetype, base_index);
 					}
 				}
 			}
@@ -1157,7 +1167,7 @@ namespace ECSEngine {
 			return component.value < m_shared_components.size&& m_shared_components[component.value].info.size != -1;
 		}
 
-		// Verifies if a shared component was already allocated at that slot
+		// Verifies if a global component was already allocated at that slot
 		ECS_INLINE bool ExistsGlobalComponent(Component component) const {
 			return SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component)) != -1;
 		}
@@ -1691,6 +1701,14 @@ namespace ECSEngine {
 		// Deferred call
 		// The tag should only be the bit index, not the actual value
 		void SetEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Takes care of the buffer copy (and deallocation if the entity already has data in it), if specified
+		void SetEntityComponentCommit(Entity entity, Component component, const void* data, bool allocate_buffers = true);
+
+		// Takes care of the buffer copy (and deallocation if the entity already has data in it), if specified
+		void SetEntityComponentsCommit(Entity entity, ComponentSignature component_signature, const void** data, bool allocate_buffers = true);
 
 		// ---------------------------------------------------------------------------------------------------
 
