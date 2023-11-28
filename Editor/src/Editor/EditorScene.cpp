@@ -148,25 +148,8 @@ bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_index, 
 	bool success = LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, filename, pointer_remapping.buffer);
 	if (success) {
 		// Check the pointer remap - we need to update the link components
-		size_t total_remapping_count = 0;
-		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			total_remapping_count += pointer_remapping[index].size;
-		}
-
-		CapacityStream<UpdateAssetToComponentElement> update_elements;
-		update_elements.Initialize(editor_state->EditorAllocator(), 0, total_remapping_count);
-
-		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			for (unsigned int subindex = 0; subindex < pointer_remapping[index].size; subindex++) {
-				const auto remapping = pointer_remapping[index][subindex];
-				// Update the link components
-				update_elements.Add({ { remapping.old_pointer, 0 }, { remapping.new_pointer, 0 }, (ECS_ASSET_TYPE)index });
-			}
-		}
-
-		UpdateAssetsToComponents(editor_state, update_elements, sandbox_index);
+		UpdateEditorScenePointerRemappings(editor_state, sandbox_index, pointer_remapping.buffer);
 	}
-
 	return success;
 }
 
@@ -283,6 +266,34 @@ bool GetEditorSceneDeserializeOverrides(
 		*global_overrides,
 		editor_state->ecs_link_components
 	);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void UpdateEditorScenePointerRemappings(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	const CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remapping
+)
+{
+	size_t total_remapping_count = 0;
+	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		total_remapping_count += pointer_remapping[index].size;
+	}
+
+	CapacityStream<UpdateAssetToComponentElement> update_elements;
+	update_elements.Initialize(editor_state->EditorAllocator(), 0, total_remapping_count);
+
+	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		for (unsigned int subindex = 0; subindex < pointer_remapping[index].size; subindex++) {
+			const auto remapping = pointer_remapping[index][subindex];
+			// Update the link components
+			update_elements.Add({ { remapping.old_pointer, 0 }, { remapping.new_pointer, 0 }, (ECS_ASSET_TYPE)index });
+		}
+	}
+
+	UpdateAssetsToComponents(editor_state, update_elements, sandbox_index);
+	update_elements.Deallocate(editor_state->EditorAllocator());
 }
 
 // ----------------------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 #include "editorpch.h"
 #include "ModuleSettings.h"
-#include "Editor\EditorState.h"
+#include "Editor/EditorState.h"
 #include "Module.h"
 #include "ModuleFile.h"
 #include "../Project/ProjectFolders.h"

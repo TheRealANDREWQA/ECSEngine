@@ -355,7 +355,7 @@ namespace ECSEngine {
 			create_info.arena_allocator_count = COMPONENT_ALLOCATOR_ARENA_COUNT;
 			create_info.arena_multipool_block_count = COMPONENT_ALLOCATOR_BLOCK_COUNT;
 			create_info.arena_nested_type = ECS_ALLOCATOR_MULTIPOOL;
-			create_info.arena_capacity = allocator_size * COMPONENT_ALLOCATOR_ARENA_COUNT;
+			create_info.arena_capacity = allocator_size;
 			size_t total_allocation_size = sizeof(MemoryArena) + MemoryArena::MemoryOf(COMPONENT_ALLOCATOR_ARENA_COUNT, create_info);
 			void* allocation = entity_manager->m_memory_manager->Allocate(total_allocation_size);
 			info.allocator = (MemoryArena*)allocation;
@@ -2098,7 +2098,7 @@ namespace ECSEngine {
 
 		// Allocate the query cache now - use a separate allocation
 		// Get a default allocator for it for the moment
-		MemoryManager* query_cache_allocator = (MemoryManager*)Allocate(m_memory_manager->m_backup, sizeof(MemoryManager));
+		MemoryManager* query_cache_allocator = (MemoryManager*)AllocateEx(m_memory_manager->m_backup, sizeof(MemoryManager));
 		*query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(descriptor.memory_manager->m_backup);
 		m_query_cache = (ArchetypeQueryCache*)m_memory_manager->Allocate(sizeof(ArchetypeQueryCache));
 		*m_query_cache = ArchetypeQueryCache(this, GetAllocatorPolymorphic(query_cache_allocator));
@@ -2469,6 +2469,141 @@ namespace ECSEngine {
 		data->entities = GetEntitiesFromActionParameters(entities, parameters, buffer);
 
 		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_ENTITY_ADD_SHARED_COMPONENT), debug_info });
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::AddEntityManager(const EntityManager* other)
+	{
+		// Register all the unique/shared/global components firstly
+		other->ForEachComponent([&](Component component) {
+			if (!ExistsComponent(component)) {
+				const ComponentInfo* component_info = &other->m_unique_components[component];
+				size_t allocator_size = component_info->allocator != nullptr ? component_info->allocator->InitialArenaCapacity() : 0;
+				RegisterComponentCommit(
+					component,
+					component_info->size,
+					allocator_size,
+					component_info->name,
+					{ component_info->component_buffers, component_info->component_buffers_count }
+				);
+			}
+		});
+
+		// For the shared instances, we need a remapping in order to have the correct
+		// values be maintained
+		struct RemappedInstance {
+			ECS_INLINE bool operator == (RemappedInstance other) const {
+				return component == other.component && other_instance == other.other_instance;
+			}
+
+			Component component;
+			SharedInstance other_instance;
+			SharedInstance current_instance;
+		};
+		ECS_STACK_CAPACITY_STREAM(RemappedInstance, remapped_instances, ECS_KB * 4);
+		other->ForEachSharedComponent([&](Component component) {
+			if (!ExistsSharedComponent(component)) {
+				const ComponentInfo* component_info = &other->m_shared_components[component].info;
+				size_t allocator_size = component_info->allocator != nullptr ? component_info->allocator->InitialArenaCapacity() : 0;
+				RegisterSharedComponentCommit(
+					component,
+					component_info->size,
+					allocator_size,
+					component_info->name,
+					{ component_info->component_buffers, component_info->component_buffers_count }
+				);
+			}
+
+			// Add all instances
+			other->ForEachSharedInstance(component, [&](SharedInstance instance) {
+				const void* data = other->GetSharedData(component, instance);
+				SharedInstance current_instance = RegisterSharedInstanceCommit(component, data);
+				remapped_instances.AddAssert({ component, instance, current_instance });
+			});
+		});
+
+		other->ForAllGlobalComponents([&](void* data, Component component) {
+			if (!ExistsGlobalComponent(component)) {
+				const ComponentInfo* component_info = other->m_global_components_info + component;
+				size_t allocator_size = component_info->allocator != nullptr ? component_info->allocator->InitialArenaCapacity() : 0;
+				ECS_ASSERT(allocator_size == 0, "Adding global components from other entity managers with buffers is not possible since those cannot be copied manually");
+				RegisterGlobalComponentCommit(
+					component,
+					component_info->size,
+					data,
+					allocator_size,
+					component_info->name
+				);
+			}
+		});
+
+		// Now create the necessary archetypes and copy the unique data
+		// We also need to hold a remapping of the other entities to the newly created
+		// Entities such that we can recreate the entity hierarchy later on
+		unsigned int total_entity_count = other->GetEntityCount();
+		Entity* other_entity_remapping = (Entity*)m_memory_manager->Allocate(sizeof(Entity) * total_entity_count);
+		Entity* current_entity_remapping = (Entity*)m_memory_manager->Allocate(sizeof(Entity) * total_entity_count);
+		unsigned int remapping_count = 0;
+
+		other->ForEachArchetype([&](const Archetype* other_archetype) {
+			ComponentSignature unique_signature = other_archetype->GetUniqueSignature();
+			ComponentSignature shared_signature = other_archetype->GetSharedSignature();
+			unsigned int main_index = FindOrCreateArchetype(unique_signature, shared_signature);
+			Archetype* current_archetype = GetArchetype(main_index);
+
+			unsigned int base_count = other_archetype->GetBaseCount();
+			ECS_STACK_CAPACITY_STREAM(SharedInstance, base_remapped_instances, ECS_ARCHETYPE_MAX_SHARED_COMPONENTS);
+			for (unsigned int index = 0; index < base_count; index++) {
+				const ArchetypeBase* other_archetype_base = other_archetype->GetBase(index);
+
+				base_remapped_instances.size = 0;
+				SharedComponentSignature base_shared_signature = other_archetype->GetSharedSignature(index);
+				for (unsigned char component_index = 0; component_index < base_shared_signature.count; component_index++) {
+					RemappedInstance remapped_instance = { base_shared_signature.indices[component_index], base_shared_signature.instances[component_index] };
+					unsigned int existing_index = remapped_instances.Find(remapped_instance);
+					base_remapped_instances[component_index] = remapped_instances[existing_index].current_instance;
+				}
+				base_shared_signature.instances = base_remapped_instances.buffer;
+
+				unsigned int copy_count = other_archetype_base->EntityCount();
+				unsigned int base_index = current_archetype->FindBaseIndex(base_shared_signature);
+				if (base_index == -1) {
+					base_index = CreateArchetypeBaseCommit(main_index, base_shared_signature, copy_count);
+				}
+				ArchetypeBase* base_archetype = current_archetype->GetBase(base_index);
+
+				// We need to copy all the entities from the other archetype base now
+				unsigned int copy_position = base_archetype->Reserve(copy_count);
+				Entity* allocated_entities = (Entity*)m_memory_manager->Allocate(sizeof(Entity) * copy_count);
+				m_entity_pool->AllocateEx({ allocated_entities, copy_count }, { main_index, base_index }, copy_position);
+				// Here we need to specify the entities of the other alongside the other entity pool
+				base_archetype->CopyFromAnotherArchetype({ copy_position, copy_count }, other_archetype_base, other_archetype_base->m_entities, other->m_entity_pool);
+				base_archetype->SetEntities({ allocated_entities, copy_count }, copy_position);
+				m_memory_manager->Deallocate(allocated_entities);
+
+				memcpy(other_entity_remapping + remapping_count, other_archetype_base->m_entities, sizeof(Entity) * copy_count);
+				memcpy(current_entity_remapping + remapping_count, allocated_entities, sizeof(Entity) * copy_count);
+				remapping_count += copy_count;
+			}
+		});
+
+		// At last, configure the entity hierarchy
+		for (unsigned int index = 0; index < total_entity_count; index++) {
+			// For each entity, if it has a parent, configure it the same in the current entity manager
+			Entity other_parent = other->GetEntityParent(other_entity_remapping[index]);
+			if (other_parent.IsValid()) {
+				size_t parent_index = SearchBytes(Stream<Entity>(other_entity_remapping, total_entity_count), other_parent);
+				ECS_ASSERT(parent_index != -1);
+				EntityPair pair;
+				pair.parent = current_entity_remapping[parent_index];
+				pair.child = current_entity_remapping[index];
+				ChangeOrSetEntityParentCommit({ &pair, 1 });
+			}
+		}
+
+		m_memory_manager->Deallocate(other_entity_remapping);
+		m_memory_manager->Deallocate(current_entity_remapping);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3299,6 +3434,112 @@ namespace ECSEngine {
 		data->copy_buffers = copy_buffers;
 
 		WriteCommandStream(this, { command_stream }, { DataPointer(allocation, action_type), debug_info });
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	EntityManager EntityManager::CreateSubset(Stream<Entity> entities, MemoryManager* memory_manager) const
+	{
+		// Create an entity pool for the subset manager, and then insert each entity one by one
+		EntityPool* entity_pool = (EntityPool*)memory_manager->Allocate(sizeof(EntityPool));
+		*entity_pool = EntityPool(memory_manager, PowerOfTwoGreaterEx(entities.size).y);
+
+		EntityManagerDescriptor descriptor;
+		descriptor.memory_manager = memory_manager;
+		descriptor.entity_pool = entity_pool;
+		EntityManager subset_manager(descriptor);
+		
+		struct ReferencedSharedData {
+			ECS_INLINE bool operator == (ReferencedSharedData other) const {
+				return component == other.component && instance == other.instance;
+			}
+
+			Component component;
+			SharedInstance instance;
+		};
+
+		// Do a prepass and determine all the unique/shared components that are necessary
+		
+		// For the shared data, we must determine all the referenced shared instances
+		// And write them only. We cannot use the ExistsSharedInstanceOnly since the
+		// Value might be different from the one stored in the subset manager
+		ECS_STACK_CAPACITY_STREAM(ReferencedSharedData, referenced_shared_data, ECS_KB * 2);
+		for (size_t index = 0; index < entities.size; index++) {
+			ComponentSignature unique_signature;
+			SharedComponentSignature shared_signature;
+			GetEntityCompleteSignatureStable(entities[index], &unique_signature, &shared_signature);
+
+			for (unsigned char unique_index = 0; unique_index < unique_signature.count; unique_index++) {
+				if (!subset_manager.ExistsComponent(unique_signature[unique_index])) {
+					const ComponentInfo* component_info = &m_unique_components[unique_signature[unique_index].value];
+					size_t allocator_size = component_info->allocator != nullptr ? component_info->allocator->InitialArenaCapacity() : 0;
+					subset_manager.RegisterComponentCommit(
+						unique_signature[unique_index],
+						component_info->size,
+						allocator_size,
+						component_info->name,
+						{ component_info->component_buffers, component_info->component_buffers_count }
+					);
+				}
+			}
+
+			for (unsigned char shared_index = 0; shared_index < shared_signature.count; shared_index++) {
+				if (!subset_manager.ExistsSharedComponent(shared_signature.indices[shared_index])) {
+					const ComponentInfo* component_info = &m_shared_components[shared_signature.indices[shared_index].value].info;
+					size_t allocator_size = component_info->allocator != nullptr ? component_info->allocator->InitialArenaCapacity() : 0;
+					subset_manager.RegisterSharedComponentCommit(
+						shared_signature.indices[shared_index],
+						component_info->size,
+						allocator_size,
+						component_info->name,
+						{ component_info->component_buffers, component_info->component_buffers_count }
+					);
+				}
+
+				ReferencedSharedData reference_data = { shared_signature.indices[shared_index], shared_signature.instances[shared_index] };
+				unsigned int existing_index = referenced_shared_data.Find(reference_data);
+				if (existing_index == -1) {
+					referenced_shared_data.AddAssert(reference_data);
+					const void* shared_data = GetSharedData(reference_data.component, reference_data.instance);
+					subset_manager.RegisterSharedInstanceCommit(reference_data.component, shared_data);
+				}
+			}
+		}
+
+		// We also need to have the correct entity hierarchy
+		// For this we need an entity remapping
+		Entity* entity_remapping = (Entity*)ECS_MALLOCA(sizeof(Entity) * entities.size);
+		for (size_t index = 0; index < entities.size; index++) {
+			// For each entity, we must create it and copy the current data
+			// For both the unique and shared
+			ComponentSignature unique_signature;
+			SharedComponentSignature shared_signature;
+			GetEntityCompleteSignatureStable(entities[index], &unique_signature, &shared_signature);
+			
+			Entity subset_entity = subset_manager.CreateEntityCommit(unique_signature, shared_signature);
+			ECS_STACK_CAPACITY_STREAM(void*, unique_components, ECS_ARCHETYPE_MAX_COMPONENTS);
+			GetComponent(entities[index], unique_signature, unique_components.buffer);
+			subset_manager.SetEntityComponentsCommit(subset_entity, unique_signature, (const void**)unique_components.buffer);
+
+			entity_remapping[index] = subset_entity;
+		}
+
+		for (size_t index = 0; index < entities.size; index++) {
+			// We can use only the parent information to construct the hierarchy
+			Entity current_parent = GetEntityParent(entities[index]);
+			if (current_parent.IsValid()) {
+				size_t remapping_index = SearchBytes(entities, current_parent);
+				if (remapping_index != -1) {
+					EntityPair pair;
+					pair.parent = entity_remapping[remapping_index];
+					pair.child = entity_remapping[index];
+					subset_manager.ChangeOrSetEntityParentCommit({ &pair, 1 });
+				}
+			} 
+		}
+
+		ECS_FREEA(entity_remapping);
+		return subset_manager;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5114,6 +5355,40 @@ namespace ECSEngine {
 
 		data->tag = tag;
 		WriteCommandStream(this, parameters, { DataPointer(data, DEFERRED_SET_ENTITY_TAGS), debug_info });
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::SetEntityComponentCommit(Entity entity, Component component, const void* data, bool allocate_buffers)
+	{
+		SetEntityComponentsCommit(entity, { &component, 1 }, &data);
+	}
+
+	void EntityManager::SetEntityComponentsCommit(Entity entity, ComponentSignature component_signature, const void** data, bool allocate_buffers)
+	{
+		EntityInfo entity_info = GetEntityInfo(entity);
+		ECS_STACK_CAPACITY_STREAM(Stream<void>, old_buffers, 16);
+		Archetype* archetype = GetArchetype(entity_info.main_archetype);
+
+		for (unsigned char index = 0; index < component_signature.count; index++) {
+			unsigned int component_size = ComponentSize(component_signature[index]);
+			void* component = GetComponent(entity, component_signature[index]);
+
+			if (allocate_buffers) {
+				// Before copying the data with memcpy, we need to record the previous data sources and
+				// Reinstate them such that the SetEntityBuffers works as expected (deallocating the old
+				// data and setting the new one)
+				old_buffers.size = 0;
+				archetype->GetEntityBuffers(entity_info, component_signature[index], &old_buffers);
+			}
+			memcpy(component, data[index], component_size);
+			if (allocate_buffers) {
+				// Reinstate the old buffers and then use the SetEntityBuffers function
+				// Which deallocates/reallocates as needed
+				archetype->ReinstateEntityBuffers(entity_info, component_signature[index], old_buffers);
+				archetype->SetEntityBuffers(entity_info, archetype->FindDeallocateComponentIndex(component_signature[index]), data[index]);
+			}
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

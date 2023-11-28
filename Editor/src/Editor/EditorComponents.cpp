@@ -2699,8 +2699,16 @@ void TickEditorComponents(EditorState* editor_state)
 			descriptor.initial_size_y = 0.5f;
 
 			descriptor.destroy_action = UserEventsWindowDestroy;
-
 			editor_state->ui_system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL ^ UI_POP_UP_WINDOW_FIT_TO_CONTENT | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X);
+
+			// Also, pause all running sandboxes since the user cannot interact with them
+			// And they could produce unexpected results
+			unsigned int sandbox_count = GetSandboxCount(editor_state);
+			for (unsigned int sandbox_index = 0; sandbox_index < sandbox_count; sandbox_index++) {
+				if (GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_RUNNING) {
+					PauseSandboxWorld(editor_state, sandbox_index);
+				}
+			}
 		}
 		else {
 			// Append to the list of the window

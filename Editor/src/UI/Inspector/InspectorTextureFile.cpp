@@ -14,11 +14,11 @@ using namespace ECSEngine;
 // ----------------------------------------------------------------------------------------------------------------------------
 
 struct InspectorDrawTextureData {
-	inline unsigned int* Size() {
+	ECS_INLINE unsigned int* Size() {
 		return &path_size;
 	}
 
-	inline Stream<wchar_t> Path() {
+	ECS_INLINE Stream<wchar_t> Path() {
 		return GetCoalescedStreamFromType(this).As<wchar_t>();
 	}
 
@@ -130,8 +130,23 @@ void ChangeInspectorToTextureFile(EditorState* editor_state, Stream<wchar_t> pat
 		}
 	);
 	
-	if (initial_name.size > 0 && indices.z != -1) {
-		ChangeInspectorTextureFileConfiguration(editor_state, indices.z, initial_name);
+	if (initial_name.size > 0) {
+		if (indices.z != -1) {
+			ChangeInspectorTextureFileConfiguration(editor_state, indices.z, initial_name);
+		}
+		else if (indices.y != -1) {
+			struct InitializeData {
+				Stream<char> name;
+			};
+
+			AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetInitializeAllocator(editor_state, inspector_index);
+			InitializeData initialize_data = { initial_name.Copy(initialize_allocator) };
+			auto initialize = [](EditorState* editor_state, void* data, void* _initialize_data, unsigned int inspector_index) {
+				InitializeData* initialize_data = (InitializeData*)_initialize_data;
+				ChangeInspectorTextureFileConfiguration(editor_state, inspector_index, initialize_data->name);
+			};
+			SetLastInspectorTargetInitialize(editor_state, indices.y, initialize, &initialize_data, sizeof(initialize_data));
+		}
 	}
 }
 

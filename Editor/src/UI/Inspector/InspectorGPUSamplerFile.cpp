@@ -129,31 +129,36 @@ void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> 
 		InspectorDrawGPUSamplerFileData* draw_data = (InspectorDrawGPUSamplerFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.CopyOther(path);
+		UpdateLastInspectorTargetData(editor_state, inspector_index, draw_data);
 
-		// Retrieve the name
-		ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
-		GetAssetNameFromThunkOrForwardingFile(editor_state, draw_data->path, asset_name);
-		draw_data->sampler_metadata.name = StringCopy(editor_state->EditorAllocator(), asset_name);
+		SetLastInspectorTargetInitialize(editor_state, inspector_index, [](EditorState* editor_state, void* data, unsigned int inspector_index) {
+			InspectorDrawGPUSamplerFileData* draw_data = (InspectorDrawGPUSamplerFileData*)data;
 
-		CapacityStream<char> anisotropic_chars(draw_data->anisotropic_label_storage, 0, ANISOTROPIC_CHAR_STORAGE);
+			// Retrieve the name
+			ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
+			GetAssetNameFromThunkOrForwardingFile(editor_state, draw_data->path, asset_name);
+			draw_data->sampler_metadata.name = StringCopy(editor_state->EditorAllocator(), asset_name);
 
-		// Initialize the anisotropic mapping
-		unsigned char anisotropic_start = 1;
-		for (size_t index = 0; index < ANISOTROPIC_LEVELS; index++) {
-			draw_data->anisotropic_mapping[index] = anisotropic_start;
-			anisotropic_start *= 2;
+			CapacityStream<char> anisotropic_chars(draw_data->anisotropic_label_storage, 0, ANISOTROPIC_CHAR_STORAGE);
 
-			unsigned int anisotropic_offset = anisotropic_chars.size;
-			size_t write_size = ConvertIntToChars(anisotropic_chars, draw_data->anisotropic_mapping[index]);
-			draw_data->anisotropic_labels[index] = { anisotropic_chars.buffer + anisotropic_offset, write_size };
-		}
+			// Initialize the anisotropic mapping
+			unsigned char anisotropic_start = 1;
+			for (size_t index = 0; index < ANISOTROPIC_LEVELS; index++) {
+				draw_data->anisotropic_mapping[index] = anisotropic_start;
+				anisotropic_start *= 2;
 
-		// Retrieve the data from the file, if any
-		bool success = editor_state->asset_database->ReadGPUSamplerFile(draw_data->sampler_metadata.name, &draw_data->sampler_metadata);
-		if (!success) {
-			// Set the default for the metadata
-			draw_data->sampler_metadata.Default(draw_data->sampler_metadata.name, { nullptr, 0 });
-		}
+				unsigned int anisotropic_offset = anisotropic_chars.size;
+				size_t write_size = ConvertIntToChars(anisotropic_chars, draw_data->anisotropic_mapping[index]);
+				draw_data->anisotropic_labels[index] = { anisotropic_chars.buffer + anisotropic_offset, write_size };
+			}
+
+			// Retrieve the data from the file, if any
+			bool success = editor_state->asset_database->ReadGPUSamplerFile(draw_data->sampler_metadata.name, &draw_data->sampler_metadata);
+			if (!success) {
+				// Set the default for the metadata
+				draw_data->sampler_metadata.Default(draw_data->sampler_metadata.name, { nullptr, 0 });
+			}
+		});
 	}
 }
 

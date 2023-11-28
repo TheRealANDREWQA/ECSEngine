@@ -13,6 +13,8 @@
 #define MODULE_ALLOCATOR_POOL_COUNT 1024
 #define MODULE_ALLOCATOR_BACKUP_SIZE ECS_KB * 128
 
+#define LAZY_EVALUATION_MS 100
+
 using namespace ECSEngine;
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -573,3 +575,90 @@ void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_in
 		}
 	}
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+{
+	ClearSandboxModuleSettings(editor_state, sandbox_index, module_index);
+	bool success = LoadSandboxModuleSettings(editor_state, sandbox_index, module_index);
+	if (!success) {
+		// In case we failed, set the default values
+		unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+		EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_index].modules_in_use.buffer + in_stream_index;
+
+		AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&sandbox_module->settings_allocator);
+		ECS_STACK_CAPACITY_STREAM(EditorModuleReflectedSetting, settings, 64);
+		AllocateModuleSettings(editor_state, module_index, settings, allocator);
+		sandbox_module->reflected_settings = settings;
+		SetModuleDefaultSettings(editor_state, module_index, sandbox_module->reflected_settings);
+		return false;
+	}
+	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void TickModuleSettingsRefresh(EditorState* editor_state)
+{
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_MODULE_SETTINGS_REFRESH, LAZY_EVALUATION_MS)) {
+		struct ReferencedSetting {
+			ECS_INLINE bool operator == (ReferencedSetting other) const {
+				return name == other.name && module_index == other.module_index && time_stamp == other.time_stamp;
+			}
+
+			Stream<wchar_t> name;
+			unsigned int module_index;
+			size_t time_stamp;
+		};
+		// Do a pre-determination phase to get all the referenced settings
+		ECS_STACK_CAPACITY_STREAM(ReferencedSetting, referenced_settings, 128);
+
+		unsigned int sandbox_count = GetSandboxCount(editor_state);
+		for (unsigned int index = 0; index < sandbox_count; index++) {
+			const EditorSandbox* sandbox = GetSandbox(editor_state, index);
+			for (unsigned int module_index = 0; module_index < sandbox->modules_in_use.size; module_index++) {
+				ReferencedSetting referenced_setting{ 
+					sandbox->modules_in_use[module_index].settings_name, 
+					sandbox->modules_in_use[module_index].module_index,
+					sandbox->modules_in_use[module_index].time_stamp
+				};
+				unsigned int existing_index = referenced_settings.Find(
+					referenced_setting,
+					[](auto value) {
+					return value;
+				});
+				if (existing_index == -1) {
+					referenced_settings.AddAssert(referenced_setting);
+				}
+			}
+		}
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, module_setting_path, 512);
+		for (unsigned int index = 0; index < referenced_settings.size; index++) {
+			module_setting_path.size = 0;
+			GetModuleSettingsFilePath(editor_state, referenced_settings[index].module_index, referenced_settings[index].name, module_setting_path);
+			size_t file_time_stamp = OS::GetFileLastWrite(module_setting_path);
+			if (file_time_stamp != -1 && file_time_stamp > referenced_settings[index].time_stamp) {
+				// Update all sandboxes that reference this setting
+				for (unsigned int sandbox_index = 0; sandbox_index < sandbox_count; sandbox_index++) {
+					EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+					for (unsigned int module_index = 0; module_index < sandbox->modules_in_use.size; module_index++) {
+						if (sandbox->modules_in_use[module_index].settings_name == referenced_settings[index].name
+							&& sandbox->modules_in_use[module_index].module_index == referenced_settings[index].module_index
+							&& sandbox->modules_in_use[module_index].time_stamp == referenced_settings[index].time_stamp) {
+							bool success = ReloadSandboxModuleSettings(editor_state, sandbox_index, sandbox->modules_in_use[module_index].module_index);
+							if (!success) {
+								Stream<wchar_t> module_name = GetModuleLibraryName(editor_state, referenced_settings[index].module_index);
+								ECS_FORMAT_TEMP_STRING(message, "Failed to reload settings {#} for module {#}", referenced_settings[index].name, module_name);
+								EditorSetConsoleError(message);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------

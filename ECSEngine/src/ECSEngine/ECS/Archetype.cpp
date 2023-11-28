@@ -114,8 +114,7 @@ namespace ECSEngine {
 		MemoryArena* arena = component_info->allocator;
 
 		for (unsigned int buffer_index = 0; buffer_index < component_info->component_buffers_count; buffer_index++) {
-			const void* current_buffer = OffsetPointer(component, component_info->component_buffers[buffer_index].pointer_offset);
-			ComponentBufferCopy(component_info->component_buffers[buffer_index], arena, current_buffer, target_memory);
+			ComponentBufferCopy(component_info->component_buffers[buffer_index], arena, component, target_memory);
 		}
 	}
 
@@ -149,8 +148,7 @@ namespace ECSEngine {
 
 	void DeallocateEntityBuffersImpl(const ComponentInfo* current_info, MemoryArena* arena, const void* current_component, unsigned int buffer_count) {
 		for (unsigned int buffer_index = 0; buffer_index < buffer_count; buffer_index++) {
-			const void* current_buffer = OffsetPointer(current_component, current_info->component_buffers[buffer_index].pointer_offset);
-			ComponentBufferDeallocate(current_info->component_buffers[buffer_index], arena, current_buffer);
+			ComponentBufferDeallocate(current_info->component_buffers[buffer_index], arena, current_component);
 		}
 	}
 
@@ -431,6 +429,135 @@ namespace ECSEngine {
 		}
 
 		return entity_count;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::GetEntityBuffers(EntityInfo info, unsigned char deallocate_index, CapacityStream<Stream<void>>* buffers) const
+	{
+		GetEntityBuffers(info.stream_index, info.base_archetype, deallocate_index, buffers);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::GetEntityBuffers(EntityInfo info, Component component, CapacityStream<Stream<void>>* buffers) const
+	{
+		GetEntityBuffers(info.stream_index, info.base_archetype, component, buffers);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::GetEntityBuffers(unsigned int stream_index, unsigned int base_index, unsigned char deallocate_index, CapacityStream<Stream<void>>* buffers) const
+	{
+		const ArchetypeBase* base = GetBase(base_index);
+		const void* component = base->GetComponentByIndex(stream_index, m_unique_components_to_deallocate[deallocate_index]);
+		const ComponentInfo* component_info = m_unique_infos + m_unique_components[m_unique_components_to_deallocate[deallocate_index]].value;
+		for (unsigned int buffer_index = 0; buffer_index < component_info->component_buffers_count; buffer_index++) {
+			Stream<void> data = ComponentBufferGetStream(component_info->component_buffers[buffer_index], component);
+			buffers->AddAssert(data);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::GetEntityBuffers(unsigned int stream_index, unsigned int base_index, Component component, CapacityStream<Stream<void>>* buffers) const
+	{
+		unsigned char deallocate_index = FindDeallocateComponentIndex(component);
+		if (deallocate_index != UCHAR_MAX) {
+			GetEntityBuffers(stream_index, base_index, deallocate_index, buffers);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::ReinstateEntityBuffers(EntityInfo info, unsigned char deallocate_index, Stream<Stream<void>> buffers)
+	{
+		ReinstateEntityBuffers(info.stream_index, info.base_archetype, deallocate_index, buffers);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::ReinstateEntityBuffers(EntityInfo info, Component component, Stream<Stream<void>> buffers)
+	{
+		ReinstateEntityBuffers(info.stream_index, info.base_archetype, component, buffers);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::ReinstateEntityBuffers(unsigned int stream_index, unsigned int base_index, unsigned char deallocate_index, Stream<Stream<void>> buffers)
+	{
+		ArchetypeBase* base = GetBase(base_index);
+		void* component = base->GetComponentByIndex(stream_index, m_unique_components_to_deallocate[deallocate_index]);
+		const ComponentInfo* component_info = m_unique_infos + m_unique_components[m_unique_components_to_deallocate[deallocate_index]].value;
+		for (unsigned int buffer_index = 0; buffer_index < component_info->component_buffers_count; buffer_index++) {
+			ComponentBufferSetStream(component_info->component_buffers[buffer_index], component, buffers[buffer_index]);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::ReinstateEntityBuffers(unsigned int stream_index, unsigned int base_index, Component component, Stream<Stream<void>> buffers)
+	{
+		unsigned char deallocate_index = FindDeallocateComponentIndex(component);
+		if (deallocate_index != UCHAR_MAX) {
+			ReinstateEntityBuffers(stream_index, base_index, deallocate_index, buffers);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::SetEntityBuffers(EntityInfo info, unsigned char deallocate_index, const void* source_data)
+	{
+		SetEntityBuffers(info.stream_index, info.base_archetype, deallocate_index, source_data);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::SetEntityBuffers(EntityInfo info, const void** source_data)
+	{
+		SetEntityBuffers(info.stream_index, info.base_archetype, source_data);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::SetEntityBuffers(EntityInfo info, ComponentSignature signature, const void** source_data)
+	{
+		SetEntityBuffers(info.stream_index, info.base_archetype, signature, source_data);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::SetEntityBuffers(unsigned int stream_index, unsigned int base_index, unsigned char deallocate_index, const void* source_data)
+	{
+		ArchetypeBase* base = GetBase(base_index);
+		void* component = base->GetComponentByIndex(stream_index, m_unique_components_to_deallocate[deallocate_index]);
+		const ComponentInfo* component_info = m_unique_infos + m_unique_components[m_unique_components_to_deallocate[deallocate_index]].value;
+		MemoryArena* arena = component_info->allocator;
+
+		for (unsigned int buffer_index = 0; buffer_index < component_info->component_buffers_count; buffer_index++) {
+			ComponentBufferReallocate(component_info->component_buffers[buffer_index], arena, source_data, component);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::SetEntityBuffers(unsigned int stream_index, unsigned int base_index, const void** source_data)
+	{
+		for (unsigned char index = 0; index < m_unique_components_to_deallocate_count; index++) {
+			SetEntityBuffers(stream_index, base_index, index, source_data[index]);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::SetEntityBuffers(unsigned int stream_index, unsigned int base_index, ComponentSignature signature, const void** source_data)
+	{
+		for (unsigned char index = 0; index < m_unique_components_to_deallocate_count; index++) {
+			unsigned char signature_index = signature.Find(m_unique_components[m_unique_components_to_deallocate[index]]);
+			if (signature_index != UCHAR_MAX) {
+				SetEntityBuffers(stream_index, base_index, index, source_data[signature_index]);
+			}
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

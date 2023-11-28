@@ -111,8 +111,8 @@ namespace ECSEngine {
 		// Make sure that there is an item in the stack.
 		ECS_INLINE unsigned int PeekIndex(unsigned int top_index = 0) const {
 			unsigned int last_index = m_first_item + m_stack.size - top_index;
-			last_index = last_index >= m_stack.capacity ? last_index - m_stack.capacity : last_index;
-			return last_index - 1;
+			last_index = last_index > m_stack.capacity ? last_index - m_stack.capacity - 1 : last_index - 1;
+			return last_index;
 		}
 
 	public:

@@ -14,6 +14,10 @@ namespace ECSEngine {
 			SetData(data);
 		}
 
+		ECS_INLINE DataPointer(Stream<void> data) : pointer(data.buffer) {
+			SetData(data.size);
+		}
+
 		DataPointer(const DataPointer& other) = default;
 		DataPointer& operator = (const DataPointer& other) = default;
 

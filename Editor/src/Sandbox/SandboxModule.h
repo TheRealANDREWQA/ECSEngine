@@ -154,11 +154,11 @@ bool IsModuleInfoUsed(
 
 // It will create the ReflectedSettings for that module and load the data from the file if a path is specified.
 // If no path is specified, it will use the default values.
-// It returns true if it succeded, else false. (it can fail only if it cannot the data from the file)
+// It returns true if it succeeded, else false. (it can fail only if it cannot read the data from the file)
 bool LoadSandboxModuleSettings(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	unsigned int module_index = -1
+	unsigned int module_index
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -175,5 +175,16 @@ void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox
 // All sandboxes will remove the given module from being used and deallocate any entities data stored
 // that was coming from that module
 void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// It returns true if it succeeded, else false. (it can fail only if it cannot read the data from the file)
+// If it fails, it will set the default values
+bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Determines which settings have been changed in order to refresh the data
+void TickModuleSettingsRefresh(EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------

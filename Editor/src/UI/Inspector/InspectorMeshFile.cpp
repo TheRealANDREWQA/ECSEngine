@@ -338,10 +338,29 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.CopyOther(path);
 		draw_data->path[draw_data->path.size] = L'\0';
-	}
+		UpdateLastInspectorTargetData(editor_state, inspector_index, draw_data);
 
-	if (initial_name.size > 0 && inspector_indices.z != -1) {
-		ChangeInspectorMeshFileConfiguration(editor_state, inspector_indices.z, initial_name);
+		if (initial_name.size > 0) {
+			struct InitializeData {
+				Stream<char> name;
+			};
+
+			AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetInitializeAllocator(editor_state, inspector_indices.y);
+			InitializeData initialize_data;
+			initialize_data.name = initial_name.Copy(initialize_allocator);
+			
+			auto initialize = [](EditorState* editor_state, void* data, void* _initialize_data, unsigned int inspector_index) {
+				InitializeData* initialize_data = (InitializeData*)_initialize_data;
+				ChangeInspectorMeshFileConfiguration(editor_state, inspector_index, initialize_data->name);
+			};
+
+			SetLastInspectorTargetInitialize(editor_state, inspector_index, initialize, &initialize_data, sizeof(initialize_data));
+		}
+	}
+	else {
+		if (initial_name.size > 0 && inspector_indices.z != -1) {
+			ChangeInspectorMeshFileConfiguration(editor_state, inspector_indices.z, initial_name);
+		}
 	}
 }
 

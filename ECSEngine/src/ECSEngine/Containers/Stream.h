@@ -272,6 +272,12 @@ namespace ECSEngine {
 			return -1;
 		}
 
+		size_t Find(T value) const {
+			return Find(value, [](T current_value) {
+				return current_value;
+			});
+		}
+
 		ECS_INLINE void Insert(size_t index, T value) {
 			DisplaceElements(index, 1);
 			buffer[index] = value;
@@ -727,6 +733,12 @@ namespace ECSEngine {
 			return -1;
 		}
 
+		unsigned int Find(T value) const {
+			return Find(value, [](T current_value) {
+				return current_value;
+			});
+		}
+
 		ECS_INLINE bool IsFull() const {
 			return size == capacity;
 		}
@@ -1035,6 +1047,12 @@ namespace ECSEngine {
 				}
 			}
 			return -1;
+		}
+
+		unsigned int Find(T value) const {
+			return Find(value, [](T current_value) {
+				return current_value;
+			});
 		}
 
 		void Insert(unsigned int index, T value) {
