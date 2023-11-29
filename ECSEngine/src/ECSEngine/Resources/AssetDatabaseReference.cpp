@@ -156,9 +156,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	void* AssetDatabaseReference::GetAsset(unsigned int index, ECS_ASSET_TYPE type)
+	void* AssetDatabaseReference::GetAssetByIndex(unsigned int index, ECS_ASSET_TYPE type)
 	{
 		return database->GetAsset(GetHandle(index, type), type);
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	void* AssetDatabaseReference::GetAsset(unsigned int handle, ECS_ASSET_TYPE type)
+	{
+		return database->GetAsset(handle, type);
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -380,6 +387,7 @@ namespace ECSEngine {
 
 		auto set_values = [&](const auto& standalone_metadata, auto& reference_metadata, ECS_ASSET_TYPE asset_type) {
 			auto stream = standalone_metadata.set.ToStream();
+
 			for (size_t index = 0; index < stream.size; index++) {
 				unsigned int original_handle = standalone_metadata.GetHandleFromIndex(index);
 				unsigned int reference_count = standalone_metadata[original_handle].reference_count;
@@ -419,9 +427,10 @@ namespace ECSEngine {
 		set_values(standalone_database->gpu_sampler_metadata, gpu_sampler_metadata, ECS_ASSET_GPU_SAMPLER);
 		set_values(standalone_database->shader_metadata, shader_metadata, ECS_ASSET_SHADER);
 
-		SetSerializeCustomMaterialDoNotIncrementDependencies(true);
+		// TODO: It seems that we no longer need this. But a proper analysis should be made
+		//SetSerializeCustomMaterialDoNotIncrementDependencies(true);
 		set_values(standalone_database->material_asset, material_asset, ECS_ASSET_MATERIAL);
-		SetSerializeCustomMaterialDoNotIncrementDependencies(false);
+		//SetSerializeCustomMaterialDoNotIncrementDependencies(false);
 
 		set_values(standalone_database->misc_asset, misc_asset, ECS_ASSET_MISC);
 

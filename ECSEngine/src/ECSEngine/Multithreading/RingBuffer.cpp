@@ -102,6 +102,7 @@ namespace ECSEngine {
 		size = 0;
 		last_in_use.store(0, ECS_RELAXED);
 		capacity = _capacity;
+		profiling_mode = false;
 
 		ptr += _capacity;
 	}

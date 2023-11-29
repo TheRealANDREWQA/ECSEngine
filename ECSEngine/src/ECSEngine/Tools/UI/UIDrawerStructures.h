@@ -825,6 +825,7 @@ namespace ECSEngine {
 			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL;
 			bool copy_on_initialization = false;
 			bool reject_same_label_drag = true;
+			bool call_on_mouse_hold = false;
 		};
 
 		struct UIConfigLabelHierarchyRenameCallback {
@@ -1562,7 +1563,7 @@ namespace ECSEngine {
 
 			void TriggerDoubleClick(ActionData* action_data);
 
-			void TriggerDrag(ActionData* action_data);
+			void TriggerDrag(ActionData* action_data, bool is_released);
 
 			void UpdateMonitorSelection(UIConfigLabelHierarchyMonitorSelection* monitor_selection) const;
 
@@ -1593,6 +1594,9 @@ namespace ECSEngine {
 			bool reject_same_label_drag;
 			bool determine_selection;
 			bool is_selection_cut;
+			// This is set to true when we need to call the callback
+			// When the mouse is dragging the label, not only on release
+			bool drag_callback_when_held;
 
 			// The byte size of the label. If default behaviour is used, this will be 0
 			unsigned short label_size;
@@ -1676,6 +1680,14 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerLabelHierarchyDragData {
+			// If this is set, then the callback is used
+			// When it is released over another label
+			// Else it means that it is dragging and you can perform
+			// Some other operations here
+			bool is_released;
+			// This is set to true if this is the initial call of the held drag
+			// When using only the released mode, this value is not used
+			bool has_started;
 			void* data;
 			Stream<void> source_labels; // The ones being dragged
 			void* destination_label; // The one where they are being dragged
@@ -1723,11 +1735,11 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerAcquireDragDrop {
-			Stream<void> payload;
+			Stream<char> region_name;
 			Stream<Stream<char>> names;
-			bool highlight_element;
 			Color highlight_color;
-			unsigned int matched_name;
+			bool highlight_element;
+			float highlight_thickness;
 		};
 
 		struct UIConfigElementNameAction {

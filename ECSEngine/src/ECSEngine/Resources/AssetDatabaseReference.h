@@ -133,30 +133,32 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE MeshMetadata* GetMesh(unsigned int index) {
-			return (MeshMetadata*)GetAsset(index, ECS_ASSET_MESH);
+			return (MeshMetadata*)GetAssetByIndex(index, ECS_ASSET_MESH);
 		}
 
 		ECS_INLINE TextureMetadata* GetTexture(unsigned int index) {
-			return (TextureMetadata*)GetAsset(index, ECS_ASSET_TEXTURE);
+			return (TextureMetadata*)GetAssetByIndex(index, ECS_ASSET_TEXTURE);
 		}
 
 		ECS_INLINE GPUSamplerMetadata* GetGPUSampler(unsigned int index) {
-			return (GPUSamplerMetadata*)GetAsset(index, ECS_ASSET_GPU_SAMPLER);
+			return (GPUSamplerMetadata*)GetAssetByIndex(index, ECS_ASSET_GPU_SAMPLER);
 		}
 
 		ECS_INLINE ShaderMetadata* GetShader(unsigned int index) {
-			return (ShaderMetadata*)GetAsset(index, ECS_ASSET_SHADER);
+			return (ShaderMetadata*)GetAssetByIndex(index, ECS_ASSET_SHADER);
 		}
 
 		ECS_INLINE MaterialAsset* GetMaterial(unsigned int index) {
-			return (MaterialAsset*)GetAsset(index, ECS_ASSET_MATERIAL);
+			return (MaterialAsset*)GetAssetByIndex(index, ECS_ASSET_MATERIAL);
 		}
 
 		ECS_INLINE MiscAsset* GetMisc(unsigned int index) {
-			return (MiscAsset*)GetAsset(index, ECS_ASSET_MISC);
+			return (MiscAsset*)GetAssetByIndex(index, ECS_ASSET_MISC);
 		}
 
-		void* GetAsset(unsigned int index, ECS_ASSET_TYPE type);
+		void* GetAssetByIndex(unsigned int index, ECS_ASSET_TYPE type);
+
+		void* GetAsset(unsigned int handle, ECS_ASSET_TYPE type);
 
 		ECS_INLINE unsigned int GetHandle(unsigned int index, ECS_ASSET_TYPE type) const {
 			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;

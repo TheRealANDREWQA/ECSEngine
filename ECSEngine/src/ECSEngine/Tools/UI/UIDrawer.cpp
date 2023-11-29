@@ -1531,19 +1531,46 @@ namespace ECSEngine {
 		void UIDrawer::HandleAcquireDrag(size_t configuration, float2 position, float2 scale)
 		{
 			if (acquire_drag_drop.names.size > 0) {
-				bool should_highlight = false;
-				acquire_drag_drop.payload = system->AcquireDragDrop(position, scale, acquire_drag_drop.names, &should_highlight, &acquire_drag_drop.matched_name);
-				if (should_highlight && acquire_drag_drop.highlight_element) {
-					float2 border_scale = { ECS_TOOLS_UI_ONE_PIXEL_X, ECS_TOOLS_UI_ONE_PIXEL_Y };
-					void** border_buffers = buffers;
-					if (configuration & UI_CONFIG_LATE_DRAW) {
-						border_buffers = buffers + ECS_TOOLS_UI_MATERIALS;
+				struct RunnableData {
+					Stream<char> region_name;
+					Stream<Stream<char>> names;
+					float2 position;
+					float2 scale;
+					Color border_color;
+					bool highlight_border;
+					float border_thickness;
+				};
+
+				auto border_runnable = [](void* _data, ActionData* action_data) {
+					RunnableData* data = (RunnableData*)_data;
+
+					bool should_highlight = false;
+					action_data->system->AcquireDragDrop(data->position, data->scale, data->region_name, action_data->window_index, data->names, &should_highlight);
+					if (should_highlight && data->highlight_border) {
+						float2 border_scale = { ECS_TOOLS_UI_ONE_PIXEL_X * data->border_thickness, ECS_TOOLS_UI_ONE_PIXEL_Y * data->border_thickness };
+						CreateSolidColorRectangleBorder<true>(data->position, data->scale, border_scale, data->border_color, action_data->counts, action_data->buffers);
 					}
-					else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-						border_buffers = system_buffers;
-					}
-					CreateSolidColorRectangleBorder<false>(position, scale, border_scale, acquire_drag_drop.highlight_color, HandleSolidColorCount(configuration), border_buffers);
+					return false;
+				};
+
+				RunnableData runnable_data;
+				if (record_snapshot_runnables) {
+					AllocatorPolymorphic allocator = SnapshotRunnableAllocator();
+					runnable_data.names = StreamCoalescedDeepCopy(acquire_drag_drop.names, allocator);
+					runnable_data.region_name = acquire_drag_drop.region_name.Copy(allocator);
 				}
+				else {
+					runnable_data.names = acquire_drag_drop.names;
+					runnable_data.region_name = acquire_drag_drop.region_name;
+				}
+
+				ECS_UI_DRAW_PHASE phase = HandlePhase(configuration);
+				runnable_data.border_color = acquire_drag_drop.highlight_color;
+				runnable_data.highlight_border = acquire_drag_drop.highlight_element;
+				runnable_data.border_thickness = acquire_drag_drop.highlight_thickness;
+				runnable_data.position = position;
+				runnable_data.scale = scale;
+				SnapshotRunnable({ border_runnable, &runnable_data, sizeof(runnable_data), phase });
 			}
 		}
 
@@ -13218,6 +13245,7 @@ namespace ECSEngine {
 					const UIConfigLabelHierarchyDragCallback* callback = (const UIConfigLabelHierarchyDragCallback*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_DRAG_LABEL);
 					set_callback(data->drag_action, data->drag_data, callback);
 					data->reject_same_label_drag = callback->reject_same_label_drag;
+					data->drag_callback_when_held = callback->call_on_mouse_hold;
 				}
 
 				if (configuration & UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL) {
@@ -14134,25 +14162,22 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::PushDragDrop(Stream<Stream<char>> names, bool highlight_border, Color highlight_color)
+		void UIDrawer::PushDragDrop(Stream<char> region_name, Stream<Stream<char>> names, bool highlight_border, Color highlight_color, float highlight_thickness)
 		{
+			acquire_drag_drop.region_name = region_name;
 			acquire_drag_drop.names = names;
 			acquire_drag_drop.highlight_color = highlight_color;
 			acquire_drag_drop.highlight_element = highlight_border;
+			acquire_drag_drop.highlight_thickness = highlight_thickness;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		Stream<void> UIDrawer::ReceiveDragDrop(bool remove_drag_drop, unsigned int* matched_name)
+		void UIDrawer::ReceiveDragDrop(bool remove_drag_drop)
 		{
-			Stream<void> data = acquire_drag_drop.payload;
-			if (matched_name != nullptr) {
-				*matched_name = acquire_drag_drop.matched_name;
-			}
 			if (remove_drag_drop) {
 				acquire_drag_drop.names.size = 0;
 			}
-			return data;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

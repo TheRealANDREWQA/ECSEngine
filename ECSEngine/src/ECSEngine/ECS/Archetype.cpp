@@ -513,6 +513,13 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void Archetype::SetEntityBuffers(EntityInfo info, Component component, const void* source_data)
+	{
+		SetEntityBuffers(info.stream_index, info.base_archetype, component, source_data);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void Archetype::SetEntityBuffers(EntityInfo info, const void** source_data)
 	{
 		SetEntityBuffers(info.stream_index, info.base_archetype, source_data);
@@ -536,6 +543,16 @@ namespace ECSEngine {
 
 		for (unsigned int buffer_index = 0; buffer_index < component_info->component_buffers_count; buffer_index++) {
 			ComponentBufferReallocate(component_info->component_buffers[buffer_index], arena, source_data, component);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::SetEntityBuffers(unsigned int stream_index, unsigned int base_index, Component component, const void* source_data)
+	{
+		unsigned char deallocate_index = FindDeallocateComponentIndex(component);
+		if (deallocate_index != UCHAR_MAX) {
+			SetEntityBuffers(stream_index, base_index, deallocate_index, source_data);
 		}
 	}
 

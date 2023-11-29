@@ -109,9 +109,18 @@ namespace ECSEngine {
 				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
-			// Returns { nullptr, 0 } if there is no drag data. If there is, it returns it.
-			// If highlight element is given, it will set it to true if it should highlight, else to fale
-			Stream<void> AcquireDragDrop(float2 position, float2 scale, Stream<Stream<char>> name, bool* highlight_element = nullptr, unsigned int* matched_name = nullptr);
+			// If highlight element is given, it will set it to true if it should highlight, else to false
+			// The drag action will be called in case there is a match
+			void AcquireDragDrop(
+				float2 position, 
+				float2 scale, 
+				Stream<char> region_name,
+				unsigned int window_index,
+				Stream<Stream<char>> matching_names, 
+				bool* highlight_element = nullptr
+			);
+
+			void AddDragExitHandler(float2 position, float2 scale, Stream<char> name);
 
 			void AddDefaultHoverable(const UISystemDefaultHoverableData& data);
 
@@ -881,6 +890,8 @@ namespace ECSEngine {
 			// Removes the given drag drop and deallocates everything used
 			void EndDragDrop(Stream<char> name);
 
+			bool ExistsDragDropExitHandler(Stream<char> name);
+
 			void FillActionDataSystemParameters(ActionData* action_data);
 
 			void FillWindowDataAfterFileLoad(Stream<UIWindowSerializedMissingData> data);
@@ -1268,6 +1279,9 @@ namespace ECSEngine {
 
 			float2 GetPreviousMousePosition() const;
 
+			// It will call all the drag handlers that want to be notified when they exit a region
+			void HandleDragExitRegions();
+
 			void HandleHoverable(float2 mouse_position, void** buffers, size_t* counts);
 
 			void HandleFocusedWindowClickable(float2 mouse_position, ECS_MOUSE_BUTTON button_type);
@@ -1455,6 +1469,9 @@ namespace ECSEngine {
 			void RemoveFrameHandler(unsigned int index);
 
 			void RemoveGlobalResource(Stream<char> name);
+
+			// Returns true if there is such an exit handler, else false
+			bool RemoveDragExitHandler(Stream<char> name);
 			
 			// removes the last sprite texture written
 			void RemoveSpriteTexture(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type = ECS_UI_SPRITE_NORMAL);
@@ -1688,7 +1705,13 @@ namespace ECSEngine {
 
 			// Used for inter window communication
 			// The interested elements need to use AcquireDragDrop() to be notified if they received something
-			void StartDragDrop(Stream<void> data, Stream<char> name);
+			// The handler will be called if a region is interested in this drag
+			// The action receives in the additional_data parameter a Stream<char>* with the name of the region
+			// If the trigger on hover is set to true, then the callback will be called while hovering as well
+			// To determine whether or not it is released, check the mouse click status
+			// You can also have the callback be triggered when the drag exists a region by setting the last parameter
+			// To true. In that case, the region_name in tha additional data will be empty
+			void StartDragDrop(UIActionHandler handler, Stream<char> name, bool trigger_on_hover = false, bool trigger_on_region_exit = false);
 
 			void TranslateDockspace(UIDockspace* dockspace, float2 translation);
 
@@ -1860,6 +1883,9 @@ namespace ECSEngine {
 			// The intended purpose of the global resources is to ease inter-window communication
 			// For example draggables across windows
 			UIGlobalResources m_global_resources;
+			// This is an array with all the drag regions that want to be notified
+			// When they exit a region.
+			ResizableStream<UISystemDragExitRegion> m_drag_exit_regions;
 			// This is used to set the default handler for windows
 			UIActionHandler m_window_handler;
 			size_t m_frame_index;

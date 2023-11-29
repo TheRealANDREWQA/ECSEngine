@@ -1,17 +1,18 @@
 #include "editorpch.h"
-#include "FileExplorer.h"
-#include "FileExplorerData.h"
-#include "../Editor/EditorState.h"
-#include "HelperWindows.h"
-#include "../Project/ProjectOperations.h"
-#include "Inspector.h"
-#include "../Editor/EditorPalette.h"
-#include "../Editor/EditorEvent.h"
-#include "ECSEngineUtilities.h"
 #include "ECSEngineRendering.h"
 #include "ECSEngineRenderingCompression.h"
 #include "ECSEngineAssets.h"
 #include "ECSEngineDebugDrawer.h"
+#include "FileExplorer.h"
+#include "FileExplorerData.h"
+#include "../Editor/EditorState.h"
+#include "HelperWindows.h"
+#include "PrefabSceneDrag.h"
+#include "../Project/ProjectOperations.h"
+#include "Inspector.h"
+#include "../Editor/EditorPalette.h"
+#include "../Editor/EditorEvent.h"
+#include "DragTargets.h"
 
 #include "CreateScene.h"
 #include "../Assets/AssetManagement.h"
@@ -1154,130 +1155,136 @@ void MeshExportSelectionAction(ActionData* action_data) {
 
 #pragma endregion
 
-void FileExplorerDrag(ActionData* action_data) {
+static void FileExplorerDrag(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	FileExplorerData* explorer_data = (FileExplorerData*)_data;
-	if (mouse->IsDown(ECS_MOUSE_LEFT)) {
+	EditorState* editor_state = (EditorState*)_data;
+	FileExplorerData* explorer_data = editor_state->file_explorer_data;
+	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
+		// We can start the drag for prefabs
+		PrefabStartDrag(editor_state);
+	}
+	else if (mouse->IsDown(ECS_MOUSE_LEFT)) {
 		// Display the hover only if the mouse exited the action box
 		if (!IsPointInRectangle(mouse_position, position, scale)) {
-			Color transparent_color = ECS_COLOR_WHITE;
-			transparent_color.alpha = 100;
-			Color theme_color = system->m_windows[window_index].descriptors->color_theme.theme;
-			theme_color.alpha = 100;
+			if (!IsPrefabFileSelected(editor_state)) {
+				Color transparent_color = ECS_COLOR_WHITE;
+				transparent_color.alpha = 100;
+				Color theme_color = system->m_windows[window_index].descriptors->color_theme.theme;
+				theme_color.alpha = 100;
 
-			float2 hover_scale = system->GetSquareScale(THUMBNAIL_SIZE) * system->m_windows[window_index].zoom;
-			float2 hover_position = { mouse_position.x - hover_scale.x * 0.5f, mouse_position.y - hover_scale.y + THUMBNAIL_TO_LABEL_SPACING };
+				float2 hover_scale = system->GetSquareScale(THUMBNAIL_SIZE) * system->m_windows[window_index].zoom;
+				float2 hover_position = { mouse_position.x - hover_scale.x * 0.5f, mouse_position.y - hover_scale.y + THUMBNAIL_TO_LABEL_SPACING };
 
-			// The theme transparent hover
-			system->SetSprite(
-				dockspace,
-				border_index,
-				ECS_TOOLS_UI_TEXTURE_MASK,
-				hover_position,
-				hover_scale,
-				buffers,
-				counts,
-				theme_color,
-				{ 0.0f, 0.0f },
-				{ 1.0f, 1.0f },
-				ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM
-			);
+				// The theme transparent hover
+				system->SetSprite(
+					dockspace,
+					border_index,
+					ECS_TOOLS_UI_TEXTURE_MASK,
+					hover_position,
+					hover_scale,
+					buffers,
+					counts,
+					theme_color,
+					{ 0.0f, 0.0f },
+					{ 1.0f, 1.0f },
+					ECS_UI_DRAW_SYSTEM
+				);
 
-			// The directory or last file type used
-			Stream<wchar_t> last_file = explorer_data->selected_files[explorer_data->selected_files.size - 1];
-			Stream<wchar_t> last_type_extension = PathExtension(last_file);
-			const wchar_t* texture = ECS_TOOLS_UI_TEXTURE_FOLDER;
-			ResourceView thumbnail_texture = nullptr;
-			ECS_STACK_CAPACITY_STREAM(wchar_t, texture_draw, 256);
+				// The directory or last file type used
+				Stream<wchar_t> last_file = explorer_data->selected_files[explorer_data->selected_files.size - 1];
+				Stream<wchar_t> last_type_extension = PathExtension(last_file);
+				const wchar_t* texture = ECS_TOOLS_UI_TEXTURE_FOLDER;
+				ResourceView thumbnail_texture = nullptr;
+				ECS_STACK_CAPACITY_STREAM(wchar_t, texture_draw, 256);
 
-			// If it has an extension, check to see existing files
-			if (last_type_extension.size != 0) {
-				Action action;
-				ResourceIdentifier identifier(last_type_extension.buffer, last_type_extension.size * sizeof(wchar_t));
-				bool success = explorer_data->file_functors.TryGetValue(identifier, action);
-				if (success) {
-					if (action == FileTextureDraw) {
-						texture_draw.CopyOther(last_file);
-						texture_draw.Add(L'\0');
-						texture = texture_draw.buffer;
-					}
-					else if (action == FileCDraw) {
-						texture = ECS_TOOLS_UI_TEXTURE_FILE_C;
-					}
-					else if (action == FileCppDraw) {
-						texture = ECS_TOOLS_UI_TEXTURE_FILE_CPP;
-					}
-					else if (action == FileConfigDraw) {
-						texture = ECS_TOOLS_UI_TEXTURE_FILE_CONFIG;
-					}
-					else if (action == FileTextDraw) {
-						texture = ECS_TOOLS_UI_TEXTURE_FILE_TEXT;
-					}
-					else if (action == FileShaderDraw) {
-						texture = ECS_TOOLS_UI_TEXTURE_FILE_SHADER;
-					}
-					else if (action == FileEditorDraw) {
-						texture = ECS_TOOLS_UI_TEXTURE_FILE_EDITOR;
-					}
-					else if (action == FileMeshDraw) {
-						// If it is a mesh draw, check to see if the thumbnail was generated
-						FileExplorerMeshThumbnail thumbnail;
-						if (explorer_data->mesh_thumbnails.TryGetValue({last_file.buffer, (unsigned int)last_file.size * sizeof(wchar_t)}, thumbnail)) {
-							if (thumbnail.could_be_read) {
-								// Set the thumbnail texture
-								thumbnail_texture = thumbnail.texture;
+				// If it has an extension, check to see existing files
+				if (last_type_extension.size != 0) {
+					Action action;
+					ResourceIdentifier identifier(last_type_extension.buffer, last_type_extension.size * sizeof(wchar_t));
+					bool success = explorer_data->file_functors.TryGetValue(identifier, action);
+					if (success) {
+						if (action == FileTextureDraw) {
+							texture_draw.CopyOther(last_file);
+							texture_draw.Add(L'\0');
+							texture = texture_draw.buffer;
+						}
+						else if (action == FileCDraw) {
+							texture = ECS_TOOLS_UI_TEXTURE_FILE_C;
+						}
+						else if (action == FileCppDraw) {
+							texture = ECS_TOOLS_UI_TEXTURE_FILE_CPP;
+						}
+						else if (action == FileConfigDraw) {
+							texture = ECS_TOOLS_UI_TEXTURE_FILE_CONFIG;
+						}
+						else if (action == FileTextDraw) {
+							texture = ECS_TOOLS_UI_TEXTURE_FILE_TEXT;
+						}
+						else if (action == FileShaderDraw) {
+							texture = ECS_TOOLS_UI_TEXTURE_FILE_SHADER;
+						}
+						else if (action == FileEditorDraw) {
+							texture = ECS_TOOLS_UI_TEXTURE_FILE_EDITOR;
+						}
+						else if (action == FileMeshDraw) {
+							// If it is a mesh draw, check to see if the thumbnail was generated
+							FileExplorerMeshThumbnail thumbnail;
+							if (explorer_data->mesh_thumbnails.TryGetValue({ last_file.buffer, (unsigned int)last_file.size * sizeof(wchar_t) }, thumbnail)) {
+								if (thumbnail.could_be_read) {
+									// Set the thumbnail texture
+									thumbnail_texture = thumbnail.texture;
+								}
+								else {
+									texture = ECS_TOOLS_UI_TEXTURE_FILE_MESH;
+								}
 							}
 							else {
 								texture = ECS_TOOLS_UI_TEXTURE_FILE_MESH;
 							}
 						}
-						else {
-							texture = ECS_TOOLS_UI_TEXTURE_FILE_MESH;
+						else if (action == FileSceneDraw) {
+							texture = ECS_TOOLS_UI_TEXTURE_FILE_SCENE;
 						}
 					}
-					else if (action == FileSceneDraw) {
-						texture = ECS_TOOLS_UI_TEXTURE_FILE_SCENE;
+					else {
+						texture = ECS_TOOLS_UI_TEXTURE_FILE_BLANK;
 					}
 				}
-				else {
-					texture = ECS_TOOLS_UI_TEXTURE_FILE_BLANK;
+
+				if (thumbnail_texture.view == nullptr) {
+					// The last file texture
+					system->SetSprite(
+						dockspace,
+						border_index,
+						texture,
+						hover_position,
+						hover_scale,
+						buffers,
+						counts,
+						transparent_color,
+						{ 0.0f, 0.0f },
+						{ 1.0f, 1.0f },
+						ECS_UI_DRAW_SYSTEM
+					);
 				}
+				else {
+					system->SetSprite(
+						dockspace,
+						border_index,
+						thumbnail_texture,
+						hover_position,
+						hover_scale,
+						buffers,
+						counts,
+						transparent_color,
+						{ 0.0f, 0.0f },
+						{ 1.0f, 1.0f },
+						ECS_UI_DRAW_SYSTEM
+					);
+				}
+				explorer_data->flags = SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
 			}
-
-			if (thumbnail_texture.view == nullptr) {
-				// The last file texture
-				system->SetSprite(
-					dockspace,
-					border_index,
-					texture,
-					hover_position,
-					hover_scale,
-					buffers,
-					counts,
-					transparent_color,
-					{ 0.0f, 0.0f },
-					{ 1.0f, 1.0f },
-					ECS_UI_DRAW_SYSTEM
-				);
-			}
-			else {
-				system->SetSprite(
-					dockspace,
-					border_index,
-					thumbnail_texture,
-					hover_position,
-					hover_scale,
-					buffers,
-					counts,
-					transparent_color,
-					{ 0.0f, 0.0f },
-					{ 1.0f, 1.0f },
-					ECS_UI_DRAW_SYSTEM
-				);
-			}
-
-			explorer_data->flags = SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
 		}
 	}
 	else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
@@ -1285,6 +1292,7 @@ void FileExplorerDrag(ActionData* action_data) {
 			explorer_data->flags = SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_MOVE_SELECTED_FILES);
 			explorer_data->flags = ClearFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
 		}
+		PrefabEndDrag(editor_state);
 	}
 
 }
@@ -2159,6 +2167,17 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 #pragma endregion
 
+#pragma region Acquire drag drop
+
+	ECS_STACK_CAPACITY_STREAM(Stream<char>, accept_drag_names, 1);
+	accept_drag_names[0] = ENTITIES_UI_DRAG_NAME;
+	accept_drag_names.size = accept_drag_names.capacity;
+
+	drawer.PushDragDrop(FILE_EXPLORER_DRAG_NAME, accept_drag_names, true, EDITOR_GREEN_COLOR, BORDER_DRAG_THICKNESS);
+	drawer.HandleAcquireDrag(UI_CONFIG_LATE_DRAW, drawer.GetRegionPosition(), drawer.GetRegionScale());
+
+#pragma endregion
+
 #pragma region Header
 
 	float row_padding = drawer.layout.next_row_padding;
@@ -2307,7 +2326,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		config.AddFlag(transform);
 
 		UIConfigClickableAction drag_click;
-		drag_click = { FileExplorerDrag, data, 0, ECS_UI_DRAW_SYSTEM };
+		drag_click = { FileExplorerDrag, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		config.AddFlag(drag_click);
 
 		ForEachData for_each_data;
@@ -2743,24 +2762,26 @@ void FileExplorerPrivateAction(ActionData* action_data) {
 
 	EditorState* editor_state = (EditorState*)_additional_data;
 	FileExplorerData* data = editor_state->file_explorer_data;
-	if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-		if (keyboard->IsPressed(ECS_KEY_C)) {
-			action_data->data = data;
-			FileExplorerCopySelection(action_data);
+	if (window_index == system->GetActiveWindow()) {
+		if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
+			if (keyboard->IsPressed(ECS_KEY_C)) {
+				action_data->data = data;
+				FileExplorerCopySelection(action_data);
+			}
+			else if (keyboard->IsPressed(ECS_KEY_V)) {
+				action_data->data = editor_state;
+				FileExplorerPasteElements(action_data);
+			}
+			else if (keyboard->IsPressed(ECS_KEY_X)) {
+				action_data->data = data;
+				FileExplorerCutSelection(action_data);
+			}
 		}
-		else if (keyboard->IsPressed(ECS_KEY_V)) {
-			action_data->data = editor_state;
-			FileExplorerPasteElements(action_data);
-		}
-		else if (keyboard->IsPressed(ECS_KEY_X)) {
-			action_data->data = data;
-			FileExplorerCutSelection(action_data);
-		}
-	}
 
-	if (keyboard->IsPressed(ECS_KEY_DELETE)) {
-		action_data->data = data;
-		FileExplorerDeleteSelection(action_data);
+		if (keyboard->IsPressed(ECS_KEY_DELETE)) {
+			action_data->data = data;
+			FileExplorerDeleteSelection(action_data);
+		}
 	}
 }
 

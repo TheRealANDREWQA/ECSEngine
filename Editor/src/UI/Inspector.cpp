@@ -9,6 +9,7 @@
 #include "../Modules/Module.h"
 #include "../Modules/ModuleSettings.h"
 #include "../Assets/AssetManagement.h"
+#include "../Assets/Prefab.h"
 #include "../Sandbox/Sandbox.h"
 
 #include "Inspector/InspectorUtilities.h"
@@ -24,7 +25,7 @@ constexpr float2 WINDOW_SIZE = float2(0.5f, 1.2f);
 constexpr size_t FUNCTION_TABLE_CAPACITY = 32;
 constexpr size_t INSPECTOR_FLAG_LOCKED = 1 << 0;
 
-#define INSPECTOR_TARGET_ALLOCATOR_CAPACITY ECS_KB * 16
+#define INSPECTOR_TARGET_ALLOCATOR_CAPACITY ECS_KB * 24
 #define INSPECTOR_MAX_TARGET_COUNT 12
 #define INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY ECS_KB
 
@@ -93,7 +94,7 @@ void CleanInspectorData(EditorState* editor_state, unsigned int inspector_index)
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawSceneFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
+static void InspectorDrawSceneFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
 	const wchar_t* _absolute_path = (const wchar_t*)_data;
 	Stream<wchar_t> absolute_path = _absolute_path;
 	if (!ExistsFileOrFolder(absolute_path)) {
@@ -107,7 +108,21 @@ void InspectorDrawSceneFile(EditorState* editor_state, unsigned int inspector_in
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeInspectorToSceneFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
+static void InspectorDrawPrefabFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
+	Stream<wchar_t> absolute_path = (const wchar_t*)_data;
+	if (!ExistsFileOrFolder(absolute_path)) {
+		ChangeInspectorToNothing(editor_state, inspector_index);
+	}
+
+	// TODO: What icon should we have for prefabs?
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, drawer->color_theme.text, drawer->color_theme.theme);
+	InspectorIconNameAndPath(drawer, absolute_path);
+	InspectorDrawFileTimes(drawer, absolute_path);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+static void ChangeInspectorToSceneFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 512);
 	null_terminated_path.CopyOther(path);
 	null_terminated_path.AddAssert(L'\0');
@@ -115,7 +130,20 @@ void ChangeInspectorToSceneFile(EditorState* editor_state, Stream<wchar_t> path,
 		[=](void* inspector_data) {
 			const wchar_t* other_data = (const wchar_t*)inspector_data;
 			return other_data == path;
-		});
+	});
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+static void ChangeInspectorToPrefabFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
+	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 512);
+	null_terminated_path.CopyOther(path);
+	null_terminated_path.AddAssert(L'\0');
+	ChangeInspectorDrawFunctionWithSearch(editor_state, inspector_index, { InspectorDrawPrefabFile, InspectorCleanNothing }, null_terminated_path.buffer, sizeof(wchar_t) * (path.size + 1), -1,
+		[=](void* inspector_data) {
+			const wchar_t* other_data = (const wchar_t*)inspector_data;
+			return other_data == path;
+	});
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -360,7 +388,8 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsi
 		InspectorDrawShaderFile,
 		InspectorDrawMaterialFile,
 		InspectorDrawMiscFile,
-		InspectorDrawSceneFile
+		InspectorDrawSceneFile,
+		InspectorDrawPrefabFile
 	};
 
 	auto mesh_wrapper = [](EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
@@ -378,8 +407,11 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsi
 		ChangeInspectorToShaderFile,
 		ChangeInspectorToMaterialFile,
 		ChangeInspectorToMiscFile,
-		ChangeInspectorToSceneFile
+		ChangeInspectorToSceneFile,
+		ChangeInspectorToPrefabFile
 	};
+	
+	static_assert(std::size(change_functions) == std::size(draw_functions));
 	
 	size_t index = 0;
 	size_t draw_function_count = std::size(draw_functions);
@@ -802,14 +834,16 @@ void InitializeInspectorTable(EditorState* editor_state) {
 	void* allocation = editor_state->editor_allocator->Allocate(InspectorTable::MemoryOf(FUNCTION_TABLE_CAPACITY));
 	editor_state->inspector_manager.function_table.InitializeFromBuffer(allocation, FUNCTION_TABLE_CAPACITY);
 	
-	AddInspectorTableFunction(&editor_state->inspector_manager.function_table, { InspectorDrawSceneFile, InspectorCleanNothing }, L".scene");
-	InspectorTextFileAddFunctors(&editor_state->inspector_manager.function_table);
-	InspectorTextureFileAddFunctors(&editor_state->inspector_manager.function_table);
-	InspectorMeshFileAddFunctors(&editor_state->inspector_manager.function_table);
-	InspectorMiscFileAddFunctors(&editor_state->inspector_manager.function_table);
-	InspectorShaderFileAddFunctors(&editor_state->inspector_manager.function_table);
-	InspectorMaterialFileAddFunctors(&editor_state->inspector_manager.function_table);
-	InspectorGPUSamplerFileAddFunctors(&editor_state->inspector_manager.function_table);
+	InspectorTable* inspector_table = &editor_state->inspector_manager.function_table;
+	AddInspectorTableFunction(inspector_table, { InspectorDrawSceneFile, InspectorCleanNothing }, EDITOR_SCENE_EXTENSION);
+	AddInspectorTableFunction(inspector_table, { InspectorDrawPrefabFile, InspectorCleanNothing }, PREFAB_FILE_EXTENSION);
+	InspectorTextFileAddFunctors(inspector_table);
+	InspectorTextureFileAddFunctors(inspector_table);
+	InspectorMeshFileAddFunctors(inspector_table);
+	InspectorMiscFileAddFunctors(inspector_table);
+	InspectorShaderFileAddFunctors(inspector_table);
+	InspectorMaterialFileAddFunctors(inspector_table);
+	InspectorGPUSamplerFileAddFunctors(inspector_table);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

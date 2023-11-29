@@ -1143,5 +1143,17 @@ namespace ECSEngine {
 			unsigned int window_index;
 		};
 
+		struct UISystemDragExitRegion {
+			Stream<char> name;
+			float2 position;
+			float2 scale;
+		};
+
+		struct UISystemDragHandler {
+			UIActionHandler handler;
+			bool trigger_on_hover;
+			bool call_on_region_exit;
+		};
+
 	}
 }

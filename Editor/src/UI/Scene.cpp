@@ -17,6 +17,7 @@
 #include "../Sandbox/SandboxModule.h"
 #include "../Sandbox/SandboxFile.h"
 #include "../Sandbox/SandboxProfiling.h"
+#include "DragTargets.h"
 
 // These defined the bounds under which the mouse
 // is considered that it clicked and not selected yet
@@ -1164,6 +1165,12 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	drawer.DisableZoom();
 	drawer.DisablePaddingForRenderSliders();
 
+	ECS_STACK_CAPACITY_STREAM(Stream<char>, acquire_drag, 1);
+	acquire_drag[0] = PREFAB_DRAG_NAME;
+	acquire_drag.size = acquire_drag.capacity;
+	drawer.PushDragDrop(SCENE_UI_DRAG_NAME, acquire_drag, true, EDITOR_GREEN_COLOR, BORDER_DRAG_THICKNESS);
+	drawer.HandleAcquireDrag(UI_CONFIG_LATE_DRAW, drawer.GetRegionPosition(), drawer.GetRegionScale());
+
 	SceneDrawData* data = (SceneDrawData*)window_data;
 	EditorState* editor_state = data->editor_state;
 
@@ -1263,12 +1270,18 @@ bool DisableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_ind
 	return false;
 }
 
-bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index)
+bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index, bool must_be_visible)
 {
 	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
 	if (scene_window_index != -1) {
-		bool is_scene_visible = editor_state->ui_system->IsWindowVisible(scene_window_index);
-		if (is_scene_visible) {
+		if (must_be_visible) {
+			bool is_scene_visible = editor_state->ui_system->IsWindowVisible(scene_window_index);
+			if (is_scene_visible) {
+				EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+				return true;
+			}
+		}
+		else {
 			EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 			return true;
 		}

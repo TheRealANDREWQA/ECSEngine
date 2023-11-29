@@ -217,7 +217,7 @@ namespace ECSEngine {
 		// Return true in the functor to early exit
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		bool ForEachAsset(ECS_ASSET_TYPE type, Functor&& functor) {
+		bool ForEachAsset(ECS_ASSET_TYPE type, Functor&& functor) const {
 			unsigned int count = GetAssetCount(type);
 			for (unsigned int index = 0; index < count; index++) {
 				unsigned int handle = GetAssetHandleFromIndex(index, type);
@@ -237,7 +237,7 @@ namespace ECSEngine {
 		// Return true in the functor to early exit
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		bool ForEachAsset(Functor&& functor) {
+		bool ForEachAsset(Functor&& functor) const {
 			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 				ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
 				unsigned int count = GetAssetCount(current_type);

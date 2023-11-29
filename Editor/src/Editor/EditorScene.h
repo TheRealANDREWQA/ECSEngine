@@ -90,3 +90,10 @@ void UpdateEditorScenePointerRemappings(
 	unsigned int sandbox_index,
 	const ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>* pointer_remapping
 );
+
+// Updates the link components to the new remapping from here
+void UpdateEditorScenePointerRemappings(
+	EditorState* editor_state,
+	ECSEngine::EntityManager* entity_manager,
+	const ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>* pointer_remapping
+);

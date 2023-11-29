@@ -1200,7 +1200,7 @@ namespace ECSEngine {
 						if (!exists_handle) {
 							// Check to see if it has dependencies and try to get them
 							ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
-							GetAssetDependencies(database_reference->GetAsset(index_to_remove, current_type), current_type, &dependencies);
+							GetAssetDependencies(database_reference->GetAssetByIndex(index_to_remove, current_type), current_type, &dependencies);
 							for (unsigned int dependency_index = 0; dependency_index < dependencies.size; dependency_index++) {
 								unsigned int dependency_handle = dependencies[dependency_index].handle;
 								ECS_ASSET_TYPE dependency_type = dependencies[dependency_index].type;

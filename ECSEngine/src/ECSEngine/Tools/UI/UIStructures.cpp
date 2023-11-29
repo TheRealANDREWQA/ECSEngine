@@ -971,6 +971,10 @@ namespace ECSEngine {
 					restore_info->runnable_data.buffers = restore_info->system_buffers;
 					restore_info->runnable_data.counts = restore_info->system_counts;
 				}
+				else if (runnables[index].draw_phase == ECS_UI_DRAW_LATE) {
+					restore_info->runnable_data.buffers = restore_info->buffers + ECS_TOOLS_UI_MATERIALS;
+					restore_info->runnable_data.counts = restore_info->counts + ECS_TOOLS_UI_MATERIALS;
+				}
 				else {
 					restore_info->runnable_data.buffers = restore_info->buffers;
 					restore_info->runnable_data.counts = restore_info->counts;

@@ -344,6 +344,11 @@ private:
 	char padding2[ECS_CACHE_LINE_SIZE];
 public:
 	AssetDatabase database;
+	// We need this array separately since there can be assets
+	// Which are already loaded and are brought in the database
+	// And when we try to remove them from the loading assets array
+	// They are not there
+	Stream<Stream<unsigned int>> missing_handles;
 
 	bool success;
 	bool has_launched;
@@ -486,15 +491,15 @@ EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 			// Update the link components
 			UpdateAssetsToComponents(editor_state, update_elements);
 
-			// Remove the assets from the loading array before deallocating the database streams
-			// Since then we won't be able to reference them back
-			data->database.ForEachAsset([editor_state](unsigned int handle, ECS_ASSET_TYPE type) {
-				RemoveLoadingAsset(editor_state, { handle, type });
-			});
+			RemoveLoadingAssets(editor_state, data->missing_handles);
 
 			data->database.DeallocateStreams();
 			DeallocateIfBelongs(allocator, data->failures->buffer);
 			Deallocate(allocator, data);
+			for (size_t asset_index = 0; asset_index < ECS_ASSET_TYPE_COUNT; asset_index++) {
+				data->missing_handles[asset_index].Deallocate(allocator);
+			}
+			data->missing_handles.Deallocate(allocator);
 
 			EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
 			EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
@@ -542,6 +547,10 @@ LoadSandboxMissingAssetsEventData* InitializeEventData(
 	LoadSandboxMissingAssetsEventData* data = InitializeEventDataBase(editor_state);
 	data->database = editor_state->asset_database->Copy(missing_assets, editor_state->EditorAllocator());
 	data->sandbox_index = sandbox_index;
+	data->missing_handles.Initialize(editor_state->EditorAllocator(), ECS_ASSET_TYPE_COUNT);
+	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		data->missing_handles[index].InitializeAndCopy(editor_state->EditorAllocator(), missing_assets[index]);
+	}
 	return data;
 }
 
@@ -553,6 +562,10 @@ LoadSandboxMissingAssetsEventData* InitializeEventData(
 	LoadSandboxMissingAssetsEventData* data = InitializeEventDataBase(editor_state, failures);
 	data->database = editor_state->asset_database->Copy(missing_assets.buffer, editor_state->EditorAllocator());
 	data->sandbox_index = -1;
+	data->missing_handles.Initialize(editor_state->EditorAllocator(), ECS_ASSET_TYPE_COUNT);
+	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		data->missing_handles[index].InitializeAndCopy(editor_state->EditorAllocator(), missing_assets[index]);
+	}
 	return data;
 }
 
@@ -631,14 +644,13 @@ static LinkComponentWithAssetFields GetLinkComponentWithAssetFieldForComponent(
 
 static void GetLinkComponentWithAssetFieldsImpl(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	const EntityManager* entity_manager,
 	LinkComponentWithAssetFields* link_with_fields,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
 	bool deep_search,
 	ECS_COMPONENT_TYPE component_type
 ) {
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 	if (component_type == ECS_COMPONENT_UNIQUE) {
 		entity_manager->ForEachComponent([&](Component component) {
 			link_with_fields[component.value] = GetLinkComponentWithAssetFieldForComponent(editor_state, component, component_type, allocator, asset_types, deep_search);
@@ -668,7 +680,21 @@ void GetLinkComponentsWithAssetFieldsUnique(
 	bool deep_search
 )
 {
-	GetLinkComponentWithAssetFieldsImpl(editor_state, sandbox_index, link_with_fields, allocator, asset_types, deep_search, ECS_COMPONENT_UNIQUE);
+	GetLinkComponentsWithAssetFieldsUnique(editor_state, ActiveEntityManager(editor_state, sandbox_index), link_with_fields, allocator, asset_types, deep_search);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetLinkComponentsWithAssetFieldsUnique(
+	const EditorState* editor_state,
+	const EntityManager* entity_manager,
+	LinkComponentWithAssetFields* link_with_fields,
+	AllocatorPolymorphic allocator,
+	Stream<ECS_ASSET_TYPE> asset_types,
+	bool deep_search
+)
+{
+	GetLinkComponentWithAssetFieldsImpl(editor_state, entity_manager, link_with_fields, allocator, asset_types, deep_search, ECS_COMPONENT_UNIQUE);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -682,7 +708,21 @@ void GetLinkComponentsWithAssetFieldsShared(
 	bool deep_search
 )
 {
-	GetLinkComponentWithAssetFieldsImpl(editor_state, sandbox_index, link_with_fields, allocator, asset_types, deep_search, ECS_COMPONENT_SHARED);
+	GetLinkComponentsWithAssetFieldsShared(editor_state, ActiveEntityManager(editor_state, sandbox_index), link_with_fields, allocator, asset_types, deep_search);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetLinkComponentsWithAssetFieldsShared(
+	const EditorState* editor_state,
+	const EntityManager* entity_manager,
+	LinkComponentWithAssetFields* link_with_fields,
+	AllocatorPolymorphic allocator,
+	Stream<ECS_ASSET_TYPE> asset_types,
+	bool deep_search
+)
+{
+	GetLinkComponentWithAssetFieldsImpl(editor_state, entity_manager, link_with_fields, allocator, asset_types, deep_search, ECS_COMPONENT_SHARED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -696,7 +736,21 @@ void GetLinkComponentsWithAssetFieldsGlobal(
 	bool deep_search
 )
 {
-	GetLinkComponentWithAssetFieldsImpl(editor_state, sandbox_index, link_with_fields, allocator, asset_types, deep_search, ECS_COMPONENT_GLOBAL);
+	GetLinkComponentsWithAssetFieldsGlobal(editor_state, ActiveEntityManager(editor_state, sandbox_index), link_with_fields, allocator, asset_types, deep_search);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetLinkComponentsWithAssetFieldsGlobal(
+	const EditorState* editor_state, 
+	const EntityManager* entity_manager, 
+	LinkComponentWithAssetFields* link_with_fields, 
+	AllocatorPolymorphic allocator, 
+	Stream<ECS_ASSET_TYPE> asset_types, 
+	bool deep_search
+)
+{
+	GetLinkComponentWithAssetFieldsImpl(editor_state, entity_manager, link_with_fields, allocator, asset_types, deep_search, ECS_COMPONENT_GLOBAL);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1420,6 +1474,20 @@ void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_inde
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<AssetTypedHandle> elements, UIActionHandler callback)
+{
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+	Stream<UnregisterSandboxAssetElement> unregister_elements;
+	unregister_elements.Initialize(&stack_allocator, elements.size);
+	for (size_t index = 0; index < elements.size; index++) {
+		unregister_elements[index].handle = elements[index].handle;
+		unregister_elements[index].type = elements[index].type;
+	}
+	AddUnregisterAssetEvent(editor_state, unregister_elements, true, sandbox_index, callback);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<Stream<unsigned int>> elements, UIActionHandler callback) 
 {
 	AddUnregisterAssetEventHomogeneous(editor_state, elements, true, sandbox_index, callback);
@@ -1539,6 +1607,24 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 		return;
 	}
 
+	// If we are in run mode, we need to update both entity managers. If in scene mode, only the scene entity manager
+	EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+	EntityManager* scene_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	UpdateAssetsToComponents(editor_state, elements, scene_entity_manager);
+	if (sandbox_state != EDITOR_SANDBOX_SCENE) {
+		EntityManager* runtime_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		UpdateAssetsToComponents(editor_state, elements, runtime_entity_manager);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToComponentElement> elements, EntityManager* entity_manager)
+{
+	if (elements.size == 0) {
+		return;
+	}
+
 	ECS_STACK_CAPACITY_STREAM(bool, valid_types, ECS_ASSET_TYPE_COUNT);
 	ECS_STACK_CAPACITY_STREAM(ECS_ASSET_TYPE, assets_to_check, ECS_ASSET_TYPE_COUNT);
 	memset(valid_types.buffer, 0, sizeof(bool) * ECS_ASSET_TYPE_COUNT);
@@ -1551,121 +1637,49 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 		}
 	}
 
-	auto perform_update = [&](EntityManager* entity_manager) {
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
-		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
+	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
 
-		// Firstly go through all unique components, get their reflection types, and asset fields
-		Component max_unique_count = entity_manager->GetMaxComponent();
-		max_unique_count.value = max_unique_count.value == -1 ? 0 : max_unique_count.value;
+	// Firstly go through all unique components, get their reflection types, and asset fields
+	Component max_unique_count = entity_manager->GetMaxComponent();
+	max_unique_count.value = max_unique_count.value == -1 ? 0 : max_unique_count.value;
 
-		CapacityStream<LinkComponentWithAssetFields> unique_types;
-		unique_types.Initialize(stack_allocator, 0, max_unique_count.value);
+	CapacityStream<LinkComponentWithAssetFields> unique_types;
+	unique_types.Initialize(stack_allocator, 0, max_unique_count.value);
 
-		GetLinkComponentsWithAssetFieldsUnique(editor_state, sandbox_index, unique_types.buffer, stack_allocator, assets_to_check);
+	GetLinkComponentsWithAssetFieldsUnique(editor_state, entity_manager, unique_types.buffer, stack_allocator, assets_to_check);
 
-		Component components_to_check[ECS_ARCHETYPE_MAX_COMPONENTS];
-		unsigned char components_indices[ECS_ARCHETYPE_MAX_COMPONENTS];
-		unsigned char components_to_check_count = 0;
+	Component components_to_check[ECS_ARCHETYPE_MAX_COMPONENTS];
+	unsigned char components_indices[ECS_ARCHETYPE_MAX_COMPONENTS];
+	unsigned char components_to_check_count = 0;
 
-		// Now iterate through all entities and update the asset fields
-		entity_manager->ForEachEntity(
-			// The archetype initialize
-			[&](Archetype* archetype) {
-				components_to_check_count = 0;
-				ComponentSignature signature = archetype->GetUniqueSignature();
-				for (unsigned int index = 0; index < signature.count; index++) {
-					if (unique_types[signature[index]].asset_fields.size > 0) {
-						components_indices[components_to_check_count] = index;
-						components_to_check[components_to_check_count++] = signature[index];
-					}
-				}
-			},
-			// The base archetype initialize - nothing to be done
-				[&](Archetype* archetype, ArchetypeBase* base_archetype) {
-
-			},
-				[&](Archetype* archetype, ArchetypeBase* base_archetype, Entity entity, void** unique_components) {
-				// Go through the components and update the value if it matches
-				for (unsigned char index = 0; index < components_to_check_count; index++) {
-					Stream<LinkComponentAssetField> asset_fields = unique_types[components_to_check[index]].asset_fields;
-					for (size_t subindex = 0; subindex < asset_fields.size; subindex++) {
-						for (size_t element_index = 0; element_index < elements.size; element_index++) {
-							ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
-								unique_types[components_to_check[index]].type,
-								asset_fields[subindex].field_index,
-								unique_components[components_indices[index]],
-								elements[element_index].new_asset,
-								elements[element_index].type,
-								elements[element_index].old_asset
-							);
-							if (result == ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
-								break;
-							}
-							ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_NONE);
-						}
-					}
+	// Now iterate through all entities and update the asset fields
+	entity_manager->ForEachEntity(
+		// The archetype initialize
+		[&](Archetype* archetype) {
+			components_to_check_count = 0;
+			ComponentSignature signature = archetype->GetUniqueSignature();
+			for (unsigned int index = 0; index < signature.count; index++) {
+				if (unique_types[signature[index]].asset_fields.size > 0) {
+					components_indices[components_to_check_count] = index;
+					components_to_check[components_to_check_count++] = signature[index];
 				}
 			}
-			);
+		},
+		// The base archetype initialize - nothing to be done
+			[&](Archetype* archetype, ArchetypeBase* base_archetype) {
 
-		// Clear the allocator
-		_stack_allocator.Clear();
-
-		// Do the same for shared components
-		entity_manager->ForEachSharedComponent([&](Component component) {
-			LinkComponentWithAssetFields link_with_fields = GetLinkComponentWithAssetFieldForComponent(
-				editor_state,
-				component,
-				ECS_COMPONENT_SHARED,
-				stack_allocator,
-				assets_to_check,
-				false
-			);
-
-			if (link_with_fields.asset_fields.size > 0) {
-				entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
-					void* instance_data = entity_manager->GetSharedData(component, instance);
-					for (size_t index = 0; index < link_with_fields.asset_fields.size; index++) {
-						for (size_t element_index = 0; element_index < elements.size; element_index++) {
-							ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
-								link_with_fields.type,
-								link_with_fields.asset_fields[index].field_index,
-								instance_data,
-								elements[element_index].new_asset,
-								elements[element_index].type,
-								elements[element_index].old_asset
-							);
-							if (result == ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
-								break;
-							}
-							ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_NONE);
-						}
-					}
-					});
-			}
-		});
-
-		_stack_allocator.Clear();
-
-		// Do the same for global components
-		entity_manager->ForAllGlobalComponents([&](void* data, Component component) {
-			LinkComponentWithAssetFields link_with_fields = GetLinkComponentWithAssetFieldForComponent(
-				editor_state,
-				component,
-				ECS_COMPONENT_GLOBAL,
-				stack_allocator,
-				assets_to_check,
-				false
-			);
-
-			if (link_with_fields.asset_fields.size > 0) {
-				for (size_t index = 0; index < link_with_fields.asset_fields.size; index++) {
+		},
+			[&](Archetype* archetype, ArchetypeBase* base_archetype, Entity entity, void** unique_components) {
+			// Go through the components and update the value if it matches
+			for (unsigned char index = 0; index < components_to_check_count; index++) {
+				Stream<LinkComponentAssetField> asset_fields = unique_types[components_to_check[index]].asset_fields;
+				for (size_t subindex = 0; subindex < asset_fields.size; subindex++) {
 					for (size_t element_index = 0; element_index < elements.size; element_index++) {
 						ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
-							link_with_fields.type,
-							link_with_fields.asset_fields[index].field_index,
-							data,
+							unique_types[components_to_check[index]].type,
+							asset_fields[subindex].field_index,
+							unique_components[components_indices[index]],
 							elements[element_index].new_asset,
 							elements[element_index].type,
 							elements[element_index].old_asset
@@ -1677,17 +1691,78 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 					}
 				}
 			}
-		});
-	};
+		}
+		);
 
-	// If we are in run mode, we need to update both entity managers. If in scene mode, only the scene entity manager
-	EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
-	EntityManager* scene_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-	perform_update(scene_entity_manager);
-	if (sandbox_state != EDITOR_SANDBOX_SCENE) {
-		EntityManager* runtime_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
-		perform_update(runtime_entity_manager);
-	}
+	// Clear the allocator
+	_stack_allocator.Clear();
+
+	// Do the same for shared components
+	entity_manager->ForEachSharedComponent([&](Component component) {
+		LinkComponentWithAssetFields link_with_fields = GetLinkComponentWithAssetFieldForComponent(
+			editor_state,
+			component,
+			ECS_COMPONENT_SHARED,
+			stack_allocator,
+			assets_to_check,
+			false
+		);
+
+		if (link_with_fields.asset_fields.size > 0) {
+			entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
+				void* instance_data = entity_manager->GetSharedData(component, instance);
+				for (size_t index = 0; index < link_with_fields.asset_fields.size; index++) {
+					for (size_t element_index = 0; element_index < elements.size; element_index++) {
+						ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
+							link_with_fields.type,
+							link_with_fields.asset_fields[index].field_index,
+							instance_data,
+							elements[element_index].new_asset,
+							elements[element_index].type,
+							elements[element_index].old_asset
+						);
+						if (result == ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
+							break;
+						}
+						ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_NONE);
+					}
+				}
+				});
+		}
+		});
+
+	_stack_allocator.Clear();
+
+	// Do the same for global components
+	entity_manager->ForAllGlobalComponents([&](void* data, Component component) {
+		LinkComponentWithAssetFields link_with_fields = GetLinkComponentWithAssetFieldForComponent(
+			editor_state,
+			component,
+			ECS_COMPONENT_GLOBAL,
+			stack_allocator,
+			assets_to_check,
+			false
+		);
+
+		if (link_with_fields.asset_fields.size > 0) {
+			for (size_t index = 0; index < link_with_fields.asset_fields.size; index++) {
+				for (size_t element_index = 0; element_index < elements.size; element_index++) {
+					ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
+						link_with_fields.type,
+						link_with_fields.asset_fields[index].field_index,
+						data,
+						elements[element_index].new_asset,
+						elements[element_index].type,
+						elements[element_index].old_asset
+					);
+					if (result == ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
+						break;
+					}
+					ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_NONE);
+				}
+			}
+		}
+	});
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
