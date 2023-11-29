@@ -1467,6 +1467,13 @@ namespace ECSEngine {
 			component_name = component_name_storage;
 		}
 
+		ECS_CRASH_CONDITION(
+			data->component_buffers_count <= ECS_COMPONENT_INFO_MAX_BUFFER_COUNT,
+			"EntityManager: Trying to create component {#} with too many buffers - max allowed {#}",
+			component_name,
+			ECS_COMPONENT_INFO_MAX_BUFFER_COUNT
+		);
+
 		// Crash if the allocator is specified but the buffer offsets are not
 		ECS_CRASH_CONDITION(
 			data->allocator_size == 0 || data->component_buffers_count > 0, 
@@ -1541,6 +1548,13 @@ namespace ECSEngine {
 			ConvertIntToChars(component_name_storage, data->component.value);
 			component_name = component_name_storage;
 		}
+
+		ECS_CRASH_CONDITION(
+			data->component_buffers_count <= ECS_COMPONENT_INFO_MAX_BUFFER_COUNT,
+			"EntityManager: Trying to create shared component {#} with too many buffers - max allowed {#}",
+			component_name,
+			ECS_COMPONENT_INFO_MAX_BUFFER_COUNT
+		);
 
 		// Crash if the allocator size is specified but the buffer offsets are not
 		ECS_CRASH_CONDITION(data->allocator_size == 0 || data->component_buffers_count > 0,
@@ -2473,8 +2487,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddEntityManager(const EntityManager* other)
+	void EntityManager::AddEntityManager(const EntityManager* other, CapacityStream<Entity>* created_entities)
 	{
+		if (created_entities != nullptr) {
+			ECS_ASSERT(created_entities->size + other->GetEntityCount() <= created_entities->capacity);
+		}
+
 		// Register all the unique/shared/global components firstly
 		other->ForEachComponent([&](Component component) {
 			if (!ExistsComponent(component)) {
@@ -2579,7 +2597,39 @@ namespace ECSEngine {
 				m_entity_pool->AllocateEx({ allocated_entities, copy_count }, { main_index, base_index }, copy_position);
 				// Here we need to specify the entities of the other alongside the other entity pool
 				base_archetype->CopyFromAnotherArchetype({ copy_position, copy_count }, other_archetype_base, other_archetype_base->m_entities, other->m_entity_pool);
+
+				// We also need to copy the entities buffers
+				ECS_STACK_CAPACITY_STREAM(Stream<void>, empty_buffers, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT);
+				for (unsigned int empty_index = 0; empty_index < empty_buffers.size; empty_index++) {
+					empty_buffers[empty_index] = {};
+				}
+				empty_buffers.size = empty_buffers.capacity;
+
+				for (unsigned char deallocate_index = 0; deallocate_index < current_archetype->m_unique_components_to_deallocate_count; deallocate_index++) {
+					unsigned char other_component_index = other_archetype->FindDeallocateComponentIndex(
+						current_archetype->m_unique_components[current_archetype->m_unique_components_to_deallocate[deallocate_index]]
+					);
+					ECS_ASSERT(other_component_index != -1);
+					for (unsigned int other_entity_index = 0; other_entity_index < other_archetype_base->EntityCount(); other_entity_index++) {
+						// Reinstate the buffers as empty in order to not have this function
+						// Trigger an incorrect reallocate
+						current_archetype->ReinstateEntityBuffers(
+							other_entity_index,
+							base_index,
+							deallocate_index,
+							empty_buffers
+						);
+						current_archetype->SetEntityBuffers(
+							other_entity_index, 
+							base_index, 
+							deallocate_index, 
+							other_archetype_base->GetComponentByIndex(other_entity_index, other_component_index)
+						);
+					}
+				}
+
 				base_archetype->SetEntities({ allocated_entities, copy_count }, copy_position);
+				base_archetype->m_size += copy_count;
 				m_memory_manager->Deallocate(allocated_entities);
 
 				memcpy(other_entity_remapping + remapping_count, other_archetype_base->m_entities, sizeof(Entity) * copy_count);
@@ -2600,6 +2650,16 @@ namespace ECSEngine {
 				pair.child = current_entity_remapping[index];
 				ChangeOrSetEntityParentCommit({ &pair, 1 });
 			}
+			else {
+				EntityPair pair;
+				pair.parent = -1;
+				pair.child = current_entity_remapping[index];
+				ChangeOrSetEntityParentCommit({ &pair, 1 });
+			}
+		}
+
+		if (created_entities != nullptr) {
+			created_entities->AddStream({ current_entity_remapping, total_entity_count });
 		}
 
 		m_memory_manager->Deallocate(other_entity_remapping);
@@ -3456,6 +3516,7 @@ namespace ECSEngine {
 
 			Component component;
 			SharedInstance instance;
+			SharedInstance remapped_instance;
 		};
 
 		// Do a prepass and determine all the unique/shared components that are necessary
@@ -3499,9 +3560,9 @@ namespace ECSEngine {
 				ReferencedSharedData reference_data = { shared_signature.indices[shared_index], shared_signature.instances[shared_index] };
 				unsigned int existing_index = referenced_shared_data.Find(reference_data);
 				if (existing_index == -1) {
-					referenced_shared_data.AddAssert(reference_data);
 					const void* shared_data = GetSharedData(reference_data.component, reference_data.instance);
-					subset_manager.RegisterSharedInstanceCommit(reference_data.component, shared_data);
+					reference_data.remapped_instance = subset_manager.RegisterSharedInstanceCommit(reference_data.component, shared_data);
+					referenced_shared_data.AddAssert(reference_data);
 				}
 			}
 		}
@@ -3509,12 +3570,20 @@ namespace ECSEngine {
 		// We also need to have the correct entity hierarchy
 		// For this we need an entity remapping
 		Entity* entity_remapping = (Entity*)ECS_MALLOCA(sizeof(Entity) * entities.size);
+		ECS_STACK_CAPACITY_STREAM(SharedInstance, remapped_instance, ECS_ARCHETYPE_MAX_SHARED_COMPONENTS);
 		for (size_t index = 0; index < entities.size; index++) {
 			// For each entity, we must create it and copy the current data
 			// For both the unique and shared
 			ComponentSignature unique_signature;
 			SharedComponentSignature shared_signature;
 			GetEntityCompleteSignatureStable(entities[index], &unique_signature, &shared_signature);
+			// We need to remap the current shared instance to the subset one
+			for (unsigned char shared_instance = 0; shared_instance < shared_signature.count; shared_instance++) {
+				unsigned int existing_index = referenced_shared_data.Find({ shared_signature.indices[shared_instance], shared_signature.instances[shared_instance] });
+				ECS_ASSERT(existing_index != -1);
+				remapped_instance[shared_instance] = referenced_shared_data[existing_index].remapped_instance;
+			}
+			shared_signature.instances = remapped_instance.buffer;
 			
 			Entity subset_entity = subset_manager.CreateEntityCommit(unique_signature, shared_signature);
 			ECS_STACK_CAPACITY_STREAM(void*, unique_components, ECS_ARCHETYPE_MAX_COMPONENTS);
@@ -3535,7 +3604,13 @@ namespace ECSEngine {
 					pair.child = entity_remapping[index];
 					subset_manager.ChangeOrSetEntityParentCommit({ &pair, 1 });
 				}
-			} 
+			}
+			else {
+				EntityPair pair;
+				pair.parent = -1;
+				pair.child = entity_remapping[index];
+				subset_manager.ChangeOrSetEntityParentCommit({ &pair, 1 });
+			}
 		}
 
 		ECS_FREEA(entity_remapping);
@@ -5386,7 +5461,7 @@ namespace ECSEngine {
 				// Reinstate the old buffers and then use the SetEntityBuffers function
 				// Which deallocates/reallocates as needed
 				archetype->ReinstateEntityBuffers(entity_info, component_signature[index], old_buffers);
-				archetype->SetEntityBuffers(entity_info, archetype->FindDeallocateComponentIndex(component_signature[index]), data[index]);
+				archetype->SetEntityBuffers(entity_info, component_signature[index], data[index]);
 			}
 		}
 	}

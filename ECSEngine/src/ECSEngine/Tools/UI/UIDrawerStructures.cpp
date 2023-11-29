@@ -696,7 +696,7 @@ namespace ECSEngine {
 			}
 		}
 
-		void UIDrawerLabelHierarchyData::TriggerDrag(ActionData* action_data)
+		void UIDrawerLabelHierarchyData::TriggerDrag(ActionData* action_data, bool is_released)
 		{
 			if (drag_action != nullptr) {
 				Stream<char> hovered_char_label = hovered_label.AsIs<char>();
@@ -719,6 +719,8 @@ namespace ECSEngine {
 					action_drag_data.data = drag_data;
 					action_drag_data.destination_label = untyped_label;
 					action_drag_data.source_labels = selected_labels;
+					action_drag_data.is_released = is_released;
+					action_drag_data.has_started = !is_dragging;
 
 					action_data->data = &action_drag_data;
 					drag_action(action_data);

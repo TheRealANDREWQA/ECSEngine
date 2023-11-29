@@ -3809,12 +3809,18 @@ namespace ECSEngine {
 					if (data->hierarchy->drag_action != nullptr) {
 						if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) >= drag_milliseconds && !IsPointInRectangle(mouse_position, position, scale)) {
 							if (mouse->IsDown(ECS_MOUSE_LEFT)) {
+								// We need to call this function first since it needs to know
+								// When the drag has started and that is deduced by the is_dragging
+								// To false
+								if (data->hierarchy->drag_callback_when_held) {
+									data->hierarchy->TriggerDrag(action_data, false);
+								}
 								data->hierarchy->is_dragging = true;
 							}
 							else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 								data->hierarchy->is_dragging = false;
 								// Call the drag handler now
-								data->hierarchy->TriggerDrag(action_data);
+								data->hierarchy->TriggerDrag(action_data, true);
 							}
 						}
 					}

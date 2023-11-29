@@ -279,7 +279,8 @@ namespace ECSEngine {
 
 		// Single-threaded. Adds all the entities from the other entity manager into this one
 		// The unique/shared/global components that do not exist, are registered as well
-		void AddEntityManager(const EntityManager* other);
+		// You can optionally give an array of entities to be filled in with the newly created entities
+		void AddEntityManager(const EntityManager* other, CapacityStream<Entity>* created_entities = nullptr);
 
 		// ---------------------------------------------------------------------------------------------------
 

@@ -515,13 +515,7 @@ void DeleteSandboxEntity(
 		// If we are in the runtime entity manager, we shouldn't remove the sandbox assets
 		// Since they are handled by the snapshot
 		if (entity_manager != RuntimeSandboxEntityManager(editor_state, sandbox_index)) {
-			ECS_STACK_CAPACITY_STREAM(UnregisterSandboxAssetElement, unregister_elements, 128);
-			for (unsigned int index = 0; index < entity_assets.size; index++) {
-				unregister_elements[index].handle = entity_assets[index].handle;
-				unregister_elements[index].type = entity_assets[index].type;
-			}
-			unregister_elements.size = entity_assets.size;
-			UnregisterSandboxAsset(editor_state, sandbox_index, unregister_elements);
+			UnregisterSandboxAsset(editor_state, sandbox_index, entity_assets);
 		}
 
 		entity_manager->DeleteEntityCommit(entity);
@@ -912,21 +906,33 @@ static void GetSandboxComponentAssetsImplementation(
 
 static void GetSandboxEntityComponentAssetsImplementation(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	const EntityManager* entity_manager,
 	Entity entity,
 	Component component,
 	CapacityStream<AssetTypedHandle>* handles,
-	ECS_COMPONENT_TYPE component_type,
-	EDITOR_SANDBOX_VIEWPORT viewport
+	ECS_COMPONENT_TYPE component_type
 ) {
-	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	if (component_type == ECS_COMPONENT_GLOBAL) {
-		const void* component_data = GetSandboxGlobalComponent(editor_state, sandbox_index, component, viewport);
+		const void* component_data = entity_manager->TryGetGlobalComponent(component);
 		GetSandboxComponentAssetsImplementation(editor_state, component_data, component, component_type, handles);
 	}
 	else {
 		if (entity_manager->ExistsEntity(entity)) {
-			const void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, component_type == ECS_COMPONENT_SHARED, viewport);
+			const void* component_data = nullptr;
+			if (component_type == ECS_COMPONENT_SHARED) {
+				if (entity_manager->ExistsSharedComponent(component)) {
+					if (entity_manager->HasSharedComponent(entity, component)) {
+						component_data = entity_manager->GetSharedData(component, entity_manager->GetSharedComponentInstance(component, entity));
+					}
+				}
+			}
+			else {
+				if (entity_manager->ExistsComponent(component)) {
+					if (entity_manager->HasComponent(entity, component)) {
+						component_data = entity_manager->GetComponent(entity, component);
+					}
+				}
+			}
 			GetSandboxComponentAssetsImplementation(editor_state, component_data, component, component_type, handles);
 		}
 	}
@@ -941,7 +947,7 @@ void GetSandboxEntityComponentAssets(
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
-	GetSandboxEntityComponentAssetsImplementation(editor_state, sandbox_index, entity, component, handles, ECS_COMPONENT_UNIQUE, viewport);
+	GetEntityComponentAssets(editor_state, GetSandboxEntityManager(editor_state, sandbox_index, viewport), entity, component, handles);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -955,7 +961,7 @@ void GetSandboxEntitySharedComponentAssets(
 	EDITOR_SANDBOX_VIEWPORT viewport
 )
 {
-	GetSandboxEntityComponentAssetsImplementation(editor_state, sandbox_index, entity, component, handles, ECS_COMPONENT_SHARED, viewport);
+	GetEntitySharedComponentAssets(editor_state, GetSandboxEntityManager(editor_state, sandbox_index, viewport), entity, component, handles);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1006,6 +1012,48 @@ void GetSandboxEntityAssets(
 
 	for (unsigned char index = 0; index < shared_signature.count; index++) {
 		GetSandboxEntitySharedComponentAssets(editor_state, sandbox_index, entity, shared_signature[index], handles, viewport);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetEntityComponentAssets(
+	const EditorState* editor_state, 
+	const EntityManager* entity_manager, 
+	Entity entity, 
+	Component component, 
+	CapacityStream<AssetTypedHandle>* handles
+)
+{
+	GetSandboxEntityComponentAssetsImplementation(editor_state, entity_manager, entity, component, handles, ECS_COMPONENT_UNIQUE);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetEntitySharedComponentAssets(
+	const EditorState* editor_state, 
+	const EntityManager* entity_manager, 
+	Entity entity, 
+	Component component, 
+	CapacityStream<AssetTypedHandle>* handles
+)
+{
+	GetSandboxEntityComponentAssetsImplementation(editor_state, entity_manager, entity, component, handles, ECS_COMPONENT_SHARED);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetEntityAssets(const EditorState* editor_state, const EntityManager* entity_manager, Entity entity, CapacityStream<AssetTypedHandle>* handles)
+{
+	ComponentSignature unique_signature = entity_manager->GetEntitySignatureStable(entity);
+	SharedComponentSignature shared_signature = entity_manager->GetEntitySharedSignatureStable(entity);
+
+	for (unsigned char index = 0; index < unique_signature.count; index++) {
+		GetEntityComponentAssets(editor_state, entity_manager, entity, unique_signature[index], handles);
+	}
+
+	for (unsigned char index = 0; index < shared_signature.count; index++) {
+		GetEntitySharedComponentAssets(editor_state, entity_manager, entity, shared_signature.indices[index], handles);
 	}
 }
 

@@ -4,9 +4,11 @@
 #include "../Sandbox/SandboxEntityOperations.h"
 #include "../Sandbox/Sandbox.h"
 #include "Inspector.h"
+#include "DragTargets.h"
 
 #include "ECSEngineComponents.h"
 #include "CreateScene.h"
+#include "../Assets/Prefab.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -307,18 +309,60 @@ static void DoubleClickCallback(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
+struct CreatePrefabCallbackData {
+	EditorState* editor_state;
+	unsigned int sandbox_index;
+	Entity entity;
+};
+
+static void CreatePrefabCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	CreatePrefabCallbackData* data = (CreatePrefabCallbackData*)_data;
+	Stream<char>* region_name = (Stream<char>*)_additional_data;
+
+	if (*region_name == FILE_EXPLORER_DRAG_NAME) {
+		bool success = SavePrefabFile(data->editor_state, data->sandbox_index, data->entity);
+		if (!success) {
+			ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
+			Stream<char> entity_name = GetEntityName(data->editor_state, data->sandbox_index, data->entity, entity_name_storage);
+			ECS_FORMAT_TEMP_STRING(message, "Failed to create prefab file for entity {#} from sandbox {#}", entity_name, data->sandbox_index);
+			EditorSetConsoleError(message);
+		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
 static void DragCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	UIDrawerLabelHierarchyDragData* drag_data = (UIDrawerLabelHierarchyDragData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)drag_data->data;
 
-	Entity* given_parent = (Entity*)drag_data->destination_label;
-	Entity parent = given_parent != nullptr ? *given_parent : Entity{ (unsigned int)-1 };
+	if (drag_data->is_released) {
+		Entity* given_parent = (Entity*)drag_data->destination_label;
+		Entity parent = given_parent != nullptr ? *given_parent : Entity{ (unsigned int)-1 };
 
-	// Make sure that we don't parent to virtual entities
-	if (IsNormalEntity(data, parent)) {
-		ParentSandboxEntities(data->editor_state, data->sandbox_index, drag_data->source_labels.AsIs<Entity>(), parent);
+		// Make sure that we don't parent to virtual entities
+		if (IsNormalEntity(data, parent)) {
+			ParentSandboxEntities(data->editor_state, data->sandbox_index, drag_data->source_labels.AsIs<Entity>(), parent);
+		}
+
+		if (drag_data->source_labels.size == 1) {
+			system->EndDragDrop(ENTITIES_UI_DRAG_NAME);
+		}
+	}
+	else {
+		if (drag_data->source_labels.size == 1) {
+			if (drag_data->has_started) {
+				CreatePrefabCallbackData callback_data;
+				callback_data.editor_state = data->editor_state;
+				callback_data.sandbox_index = data->sandbox_index;
+				callback_data.entity = drag_data->source_labels.AsIs<Entity>()[0];
+				system->StartDragDrop({ CreatePrefabCallback, &callback_data, sizeof(callback_data) }, ENTITIES_UI_DRAG_NAME);
+			}
+		}
 	}
 }
 
@@ -787,6 +831,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 				drag_callback.data = data;
 				drag_callback.data_size = 0;
 				drag_callback.reject_same_label_drag = true;
+				drag_callback.call_on_mouse_hold = true;
 				config.AddFlag(drag_callback);
 
 				IteratorPolymorphic iterator_polymorphic = iterator.AsPolymorphic();

@@ -169,6 +169,10 @@ namespace ECSEngine {
 		void SetEntityBuffers(EntityInfo info, unsigned char deallocate_index, const void* source_data);
 
 		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
+		// If the component doesn't have buffers, it will be skipped
+		void SetEntityBuffers(EntityInfo info, Component component, const void* source_data);
+
+		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
 		// The source data must correspond to the deallocate_index
 		void SetEntityBuffers(EntityInfo info, const void** source_data);
 
@@ -178,6 +182,10 @@ namespace ECSEngine {
 
 		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
 		void SetEntityBuffers(unsigned int stream_index, unsigned int base_index, unsigned char deallocate_index, const void* source_data);
+
+		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
+		// If the component doesn't have buffers, it will be skipped
+		void SetEntityBuffers(unsigned int stream_index, unsigned int base_index, Component component, const void* source_data);
 
 		// It will deallocate (or reallocate) the current buffer and replace it with the new given data
 		// The source data must correspond to the deallocate_index

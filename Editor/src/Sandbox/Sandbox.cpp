@@ -1040,10 +1040,10 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	// Clear the crashed status as well
 	sandbox->is_crashed = false;
 
-	if (EnableSceneUIRendering(editor_state, sandbox_index)) {
+	if (EnableSceneUIRendering(editor_state, sandbox_index, false)) {
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	}
-	if (EnableGameUIRendering(editor_state, sandbox_index)) {
+	if (EnableGameUIRendering(editor_state, sandbox_index, false)) {
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 
@@ -1575,8 +1575,8 @@ void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool wait_
 	sandbox->run_state = EDITOR_SANDBOX_PAUSED;
 
 	// Bring back the viewport rendering since it was disabled
-	EnableSceneUIRendering(editor_state, index);
-	EnableGameUIRendering(editor_state, index);
+	EnableSceneUIRendering(editor_state, index, false);
+	EnableGameUIRendering(editor_state, index, false);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -2331,7 +2331,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	if (!is_step) {
 		// Render the scene if it is visible - the runtime is rendered by the game now		
-		EnableSceneUIRendering(editor_state, sandbox_index);
+		EnableSceneUIRendering(editor_state, sandbox_index, true);
 	}
 
 	RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);

@@ -338,7 +338,7 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
 		draw_data->path.CopyOther(path);
 		draw_data->path[draw_data->path.size] = L'\0';
-		UpdateLastInspectorTargetData(editor_state, inspector_index, draw_data);
+		UpdateLastInspectorTargetData(editor_state, inspector_indices.y, draw_data);
 
 		if (initial_name.size > 0) {
 			struct InitializeData {
@@ -354,7 +354,7 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 				ChangeInspectorMeshFileConfiguration(editor_state, inspector_index, initialize_data->name);
 			};
 
-			SetLastInspectorTargetInitialize(editor_state, inspector_index, initialize, &initialize_data, sizeof(initialize_data));
+			SetLastInspectorTargetInitialize(editor_state, inspector_indices.y, initialize, &initialize_data, sizeof(initialize_data));
 		}
 	}
 	else {

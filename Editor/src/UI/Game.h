@@ -41,7 +41,7 @@ bool DisableGameUIRendering(EditorState* editor_state, unsigned int sandbox_inde
 
 // If the window is present, it will enable the UI rendering
 // Returns true if the window is present, else false
-bool EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index);
+bool EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index, bool must_be_visible);
 
 // Does nothing if the old_index doesn't exist
 void UpdateGameUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);

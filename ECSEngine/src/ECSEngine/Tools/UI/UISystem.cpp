@@ -311,31 +311,52 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		Stream<void> UISystem::AcquireDragDrop(float2 position, float2 scale, Stream<Stream<char>> name, bool* highlight_element, unsigned int* matched_name)
+		void UISystem::AcquireDragDrop(
+			float2 position, 
+			float2 scale, 
+			Stream<char> region_name, 
+			unsigned int window_index, 
+			Stream<Stream<char>> matching_names, 
+			bool* highlight_element
+		)
 		{
 			if (highlight_element != nullptr) {
-				for (size_t index = 0; index < name.size; index++) {
-					if (GetGlobalResource(name[index]).buffer != nullptr) {
-						*highlight_element = true;
-						break;
-					}
-				}
 				*highlight_element = false;
 			}
 
-			if (m_mouse->IsReleased(ECS_MOUSE_LEFT) && IsPointInRectangle(GetNormalizeMousePosition(), position, scale)) {
-				// Check to see if any name exists
-				for (size_t index = 0; index < name.size; index++) {
-					Stream<void> resource = GetGlobalResource(name[index]);
-					if (resource.buffer != nullptr) {
-						if (matched_name != nullptr) {
-							*matched_name = index;
+			float2 mouse_position = GetNormalizeMousePosition();
+			for (size_t index = 0; index < matching_names.size; index++) {
+				Stream<void> current_drag = GetGlobalResource(matching_names[index]);
+				if (current_drag.buffer != nullptr) {
+					if (highlight_element) {
+						*highlight_element = true;
+					}
+					UISystemDragHandler* drag_handler = (UISystemDragHandler*)current_drag.buffer;
+					if (IsPointInRectangle(mouse_position, position, scale)) {
+						if (drag_handler->trigger_on_hover || m_mouse->IsReleased(ECS_MOUSE_LEFT)) {
+							ActionData action_data = GetFilledActionData(window_index);
+							action_data.position = position;
+							action_data.scale = scale;
+							action_data.additional_data = &region_name;
+							action_data.data = drag_handler->handler.data_size == 0 ? drag_handler->handler.data : OffsetPointer(drag_handler, sizeof(*drag_handler));
+							drag_handler->handler.action(&action_data);
 						}
-						return resource;
+						if (drag_handler->call_on_region_exit) {
+							if (!ExistsDragDropExitHandler(matching_names[index])) {
+								AddDragExitHandler(position, scale, matching_names[index]);
+							}
+						}
 					}
 				}
 			}
-			return { nullptr, 0 };
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::AddDragExitHandler(float2 position, float2 scale, Stream<char> name)
+		{
+			name = name.Copy(Allocator());
+			m_drag_exit_regions.Add({ name, position, scale });
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -3881,6 +3902,7 @@ namespace ECSEngine {
 
 			m_graphics->EnableDepth();
 
+			HandleDragExitRegions();
 			HandleFrameHandlers();
 			UpdateFocusedWindowCleanupLocation();
 
@@ -5524,6 +5546,8 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			Stream<char>* name = (Stream<char>*)_data;
+			// We also need to remove the exit drap drop
+			system->RemoveDragExitHandler(*name);
 			system->RemoveGlobalResource(*name);
 			system->m_memory->Deallocate(name);
 			system->RemoveFrameHandler(EndDragDropFrameHandler, name);
@@ -5535,6 +5559,13 @@ namespace ECSEngine {
 			// Use a frame handler
 			void* allocation = CoalesceStreamWithData(GetAllocatorPolymorphic(m_memory), name, sizeof(char));
 			PushFrameHandler({ EndDragDropFrameHandler, allocation, 0 });
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		bool UISystem::ExistsDragDropExitHandler(Stream<char> name)
+		{
+			return m_drag_exit_regions.Find(name, [](const UISystemDragExitRegion& region) { return region.name; }) != -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7254,6 +7285,34 @@ namespace ECSEngine {
 		float2 UISystem::GetPreviousMousePosition() const
 		{
 			return NormalizedMousePosition(m_window_os_size, m_mouse->GetPreviousPosition());
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::HandleDragExitRegions()
+		{
+			float2 mouse_position = GetNormalizeMousePosition();
+			for (unsigned int index = 0; index < m_drag_exit_regions.size; index++) {
+				if (!IsPointInRectangle(mouse_position, m_drag_exit_regions[index].position, m_drag_exit_regions[index].scale)) {
+					Stream<void> resource = GetGlobalResource(m_drag_exit_regions[index].name);
+					Stream<char> empty_name = {};
+
+					// Here we need to assert that the handler is still valid
+					ECS_ASSERT(resource.buffer != nullptr);
+					UISystemDragHandler* drag_handler = (UISystemDragHandler*)resource.buffer;
+					ActionData action_data = GetFilledActionData(0);
+					action_data.window_index = -1;
+					action_data.position = m_drag_exit_regions[index].position;
+					action_data.scale = m_drag_exit_regions[index].scale;
+					action_data.additional_data = &empty_name;
+					action_data.data = drag_handler->handler.data_size == 0 ? drag_handler->handler.data : OffsetPointer(drag_handler, sizeof(*drag_handler));
+					drag_handler->handler.action(&action_data);
+
+					RemoveDragExitHandler(m_drag_exit_regions[index].name);
+					// Decrement the index since a remove swap back is done
+					index--;
+				}
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9714,9 +9773,20 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::StartDragDrop(Stream<void> data, Stream<char> name)
+		void UISystem::StartDragDrop(UIActionHandler handler, Stream<char> name, bool trigger_on_hover, bool trigger_on_region_exit)
 		{
-			AddGlobalResource(data, name);
+			size_t handler_data_storage[256];
+			UISystemDragHandler* stack_handler = (UISystemDragHandler*)handler_data_storage;
+			stack_handler->handler = handler;
+			stack_handler->trigger_on_hover = trigger_on_hover;
+			stack_handler->call_on_region_exit = trigger_on_region_exit;
+			size_t write_size = sizeof(*stack_handler);
+			if (handler.data_size > 0) {
+				memcpy(OffsetPointer(stack_handler, sizeof(*stack_handler)), handler.data, handler.data_size);
+				write_size += handler.data_size;
+			}
+
+			AddGlobalResource({ stack_handler, write_size }, name);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10121,6 +10191,21 @@ namespace ECSEngine {
 			}
 
 			m_global_resources.EraseFromIndex(index);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		bool UISystem::RemoveDragExitHandler(Stream<char> name)
+		{
+			unsigned int index = m_drag_exit_regions.Find(name, [](const UISystemDragExitRegion& region) {
+				return region.name;
+			});
+			if (index != -1) {
+				m_memory->Deallocate(m_drag_exit_regions[index].name.buffer);
+				m_drag_exit_regions.RemoveSwapBack(index);
+				return true;
+			}
+			return false;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

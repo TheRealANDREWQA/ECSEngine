@@ -8,10 +8,17 @@
 
 /*
 	The prefab works like a normal scene but with only a single entity
-	This allows for easy implementation using the existing API
+	This allows for an easy implementation using the existing API
 */
 
-#define PREFAB_EXTENSION L".prefab"
+bool AddPrefabToSandbox(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> path, Entity* created_entity)
+{
+	bool success = ReadPrefabFile(editor_state, sandbox_index, path, created_entity);
+	if (success) {
+		LoadPrefabAssets(editor_state, sandbox_index);
+	}
+	return success;
+}
 
 void LoadPrefabAssets(EditorState* editor_state, unsigned int sandbox_index)
 {
@@ -19,7 +26,14 @@ void LoadPrefabAssets(EditorState* editor_state, unsigned int sandbox_index)
 	LoadSandboxAssets(editor_state, sandbox_index);
 }
 
-bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, EntityManager* entity_manager, Stream<wchar_t> path) {
+bool ReadPrefabFile(
+	EditorState* editor_state, 
+	EntityManager* entity_manager, 
+	AssetDatabaseReference* database_reference, 
+	Stream<wchar_t> path, 
+	Entity* created_entity
+)
+{
 	// Load into a temporary entity manager and asset database
 	// And then commit into the main scene
 	// We can use large sizes since these will be virtual memory allocations anyways
@@ -32,31 +46,43 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Entit
 	temporary_descriptor.deferred_action_capacity = 0;
 	EntityManager temporary_manager(temporary_descriptor);
 
+	// We need a temporary database since the load scene core will
+	// Erase everything that is stored in the reference
 	AssetDatabaseReference temporary_database(editor_state->asset_database, GetAllocatorPolymorphic(&temporary_memory));
 
 	// Create the pointer remap
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
 	bool success = LoadEditorSceneCore(editor_state, &temporary_manager, &temporary_database, path, pointer_remapping.buffer);
 	if (success) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-		active_entity_manager->AddEntityManager(&temporary_manager);
+		CapacityStream<Entity> _created_entities;
+		CapacityStream<Entity>* created_entities = nullptr;
+		if (created_entity != nullptr) {
+			created_entities = &_created_entities;
+			created_entities->InitializeFromBuffer(created_entity, 0, 1);
+		}
+
+		entity_manager->AddEntityManager(&temporary_manager, created_entities);
 
 		// Add the handles from the temporary database into the sandbox database as well
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)index;
 			temporary_database.ForEachAssetDuplicates(asset_type, [&](unsigned int handle) {
-				sandbox->database.AddAsset(handle, asset_type);
+				database_reference->AddAsset(handle, asset_type);
 			});
 		}
 
 		// Update the pointer remappings after everything was comitted into the sandbox
-		UpdateEditorScenePointerRemappings(editor_state, sandbox_index, pointer_remapping.buffer);
+		UpdateEditorScenePointerRemappings(editor_state, entity_manager, pointer_remapping.buffer);
 	}
 
 	// We need to clear the memory manager only to release the temporary data
 	temporary_memory.Free();
 	return success;
+}
+
+bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> path, Entity* created_entity) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return ReadPrefabFile(editor_state, ActiveEntityManager(editor_state, sandbox_index), &sandbox->database, path, created_entity);
 }
 
 bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<wchar_t> path)
@@ -65,7 +91,7 @@ bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index,
 	// If the path doesn't have an extension, append ours
 	if (PathExtensionBoth(path).size == 0) {
 		path_with_extension.CopyOther(path);
-		path_with_extension.AddStreamAssert(PREFAB_EXTENSION);
+		path_with_extension.AddStreamAssert(PREFAB_FILE_EXTENSION);
 		path = path_with_extension;
 	}
 

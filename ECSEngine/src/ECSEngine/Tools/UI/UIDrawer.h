@@ -4118,14 +4118,17 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Instructs the drawer that for the upcoming elements to try and retrieve a drag payload.
-			void PushDragDrop(Stream<Stream<char>> names, bool highlight_border = true, Color highlight_color = ECS_COLOR_WHITE);
+			void PushDragDrop(
+				Stream<char> region_name, 
+				Stream<Stream<char>> names, 
+				bool highlight_border = true, 
+				Color highlight_color = ECS_COLOR_WHITE,
+				float highlight_thickness = 1.0f
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			// Returns the drag data for the last element. If there is no data, it returns { nullptr, 0 }. Can optionally ask the
-			// drawer to give you which name provided the drag data. If the remove drag drop is set to true, then the drag drop
-			// is deactivated for the next elements. Else it will be kept
-			Stream<void> ReceiveDragDrop(bool remove_drag_drop = true, unsigned int* matched_name = nullptr);
+			void ReceiveDragDrop(bool remove_drag_drop = true);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

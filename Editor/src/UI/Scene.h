@@ -41,8 +41,9 @@ unsigned int GetSceneUIWindowIndex(const EditorState* editor_state, unsigned int
 bool DisableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index);
 
 // If the window is present, it will enable the UI rendering
-// Returns true if the window is present, else false
-bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index);
+// Returns true if the window is present, else false. You can choose between having the
+// Window be actual visible to the user, or just that it exists
+bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index, bool must_be_visible);
 
 // Does nothing if the old_index doesn't exist
 void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);

@@ -153,12 +153,18 @@ bool DisableGameUIRendering(EditorState* editor_state, unsigned int sandbox_inde
 	return false;
 }
 
-bool EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index)
+bool EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index, bool must_be_visible)
 {
 	unsigned int game_window_index = GetGameUIWindowIndex(editor_state, sandbox_index);
 	if (game_window_index != -1) {
-		bool is_visible = editor_state->ui_system->IsWindowVisible(game_window_index);
-		if (is_visible) {
+		if (must_be_visible) {
+			bool is_visible = editor_state->ui_system->IsWindowVisible(game_window_index);
+			if (is_visible) {
+				EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+				return true;
+			}
+		}
+		else {
 			EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 			return true;
 		}

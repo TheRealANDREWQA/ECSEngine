@@ -276,6 +276,17 @@ void UpdateEditorScenePointerRemappings(
 	const CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remapping
 )
 {
+	UpdateEditorScenePointerRemappings(editor_state, ActiveEntityManager(editor_state, sandbox_index), pointer_remapping);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void UpdateEditorScenePointerRemappings(
+	EditorState* editor_state, 
+	EntityManager* entity_manager, 
+	const CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remapping
+)
+{
 	size_t total_remapping_count = 0;
 	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 		total_remapping_count += pointer_remapping[index].size;
@@ -292,7 +303,7 @@ void UpdateEditorScenePointerRemappings(
 		}
 	}
 
-	UpdateAssetsToComponents(editor_state, update_elements, sandbox_index);
+	UpdateAssetsToComponents(editor_state, update_elements, entity_manager);
 	update_elements.Deallocate(editor_state->EditorAllocator());
 }
 

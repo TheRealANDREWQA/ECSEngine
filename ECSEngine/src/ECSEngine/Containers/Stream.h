@@ -1199,6 +1199,10 @@ namespace ECSEngine {
 		}
 
 		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			// Set the size to 0 first such that
+			// The resize no copy won't trigger a reallocation
+			size = 0;
+
 			allocator = _allocator;
 			if (_capacity > 0) {
 				ResizeNoCopy(_capacity, debug_info);
@@ -1207,12 +1211,14 @@ namespace ECSEngine {
 				buffer = nullptr;
 				capacity = 0;
 			}
-			size = 0;
 		}
 
 		ResizableStream<T> InitializeAndCopy(AllocatorPolymorphic _allocator, Stream<T> stream, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			allocator = _allocator;
 			if (stream.size > 0) {
+				// Set the size 0 firstly such that the resize no copy
+				// Won't trigger a reallocation
+				size = 0;
 				ResizeNoCopy(stream.size, debug_info);
 				CopyOther(stream);
 			}

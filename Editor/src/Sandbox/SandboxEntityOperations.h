@@ -473,6 +473,35 @@ void GetSandboxEntityAssets(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+// Fills in the asset handles for the given component of the entity
+// (some can repeat if the component has multiple handles of the same type)
+void GetEntityComponentAssets(
+	const EditorState* editor_state,
+	const EntityManager* entity_manager,
+	Entity entity,
+	Component component,
+	CapacityStream<AssetTypedHandle>* handles
+);
+
+// Fills in the asset handles for the given shared component of the entity
+// (some can repeat if the component has multiple handles of the same type)
+void GetEntitySharedComponentAssets(
+	const EditorState* editor_state,
+	const EntityManager* entity_manager,
+	Entity entity,
+	Component component,
+	CapacityStream<AssetTypedHandle>* handles
+);
+
+// Fills in the asset handles that the entity uses (some can repeat if they appear multiple
+// times in the same component or in different components)
+void GetEntityAssets(
+	const EditorState* editor_state,
+	const EntityManager* entity_manager,
+	Entity entity,
+	CapacityStream<AssetTypedHandle>* handles
+);
+
 // Returns the translation midpoint of the given entities from the sandbox
 float3 GetSandboxEntitiesTranslationMidpoint(
 	const EditorState* editor_state,
