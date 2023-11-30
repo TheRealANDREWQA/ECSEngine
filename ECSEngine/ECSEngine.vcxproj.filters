@@ -266,6 +266,7 @@
     <ClInclude Include="src\ECSEngine\Profiling\AllocatorProfilingGlobal.h" />
     <ClInclude Include="src\ECSEngine\Profiling\WorldProfiling.h" />
     <ClInclude Include="src\ECSEngine\Profiling\PhysicalMemoryProfilerGlobal.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UI\UIReflectionMacros.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

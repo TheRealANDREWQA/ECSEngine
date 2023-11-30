@@ -1,122 +1,55 @@
 #include "editorpch.h"
-#include "Prefab.h"
 #include "../Editor/EditorState.h"
-#include "../Sandbox/SandboxAccessor.h"
-#include "../Editor/EditorScene.h"
-#include "EditorSandboxAssets.h"
-#include "../Sandbox/SandboxEntityOperations.h"
+#include "ECSEngineComponents.h"
 
-/*
-	The prefab works like a normal scene but with only a single entity
-	This allows for an easy implementation using the existing API
-*/
+ECS_INLINE static AllocatorPolymorphic PrefabAllocator(const EditorState* editor_state) {
+	return GetAllocatorPolymorphic(&editor_state->prefabs_allocator);
+}
 
-bool AddPrefabToSandbox(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> path, Entity* created_entity)
-{
-	bool success = ReadPrefabFile(editor_state, sandbox_index, path, created_entity);
-	if (success) {
-		LoadPrefabAssets(editor_state, sandbox_index);
+unsigned int AddPrefabID(EditorState* editor_state, Stream<wchar_t> path) {
+	unsigned int existing_id = FindPrefabID(editor_state, path);
+	if (existing_id == -1) {
+		// We need to create a new entry
+		path = path.Copy(PrefabAllocator(editor_state));
+		return editor_state->prefabs.Add({ 1, path });
 	}
-	return success;
-}
-
-void LoadPrefabAssets(EditorState* editor_state, unsigned int sandbox_index)
-{
-	// Loading the assets is just calling the load for the missing assets for the sandbox
-	LoadSandboxAssets(editor_state, sandbox_index);
-}
-
-bool ReadPrefabFile(
-	EditorState* editor_state, 
-	EntityManager* entity_manager, 
-	AssetDatabaseReference* database_reference, 
-	Stream<wchar_t> path, 
-	Entity* created_entity
-)
-{
-	// Load into a temporary entity manager and asset database
-	// And then commit into the main scene
-	// We can use large sizes since these will be virtual memory allocations anyways
-	MemoryManager temporary_memory = MemoryManager(ECS_MB * 500, ECS_KB * 4, ECS_GB, { nullptr });
-	EntityPool temporary_entity_pool(&temporary_memory, 4);
-
-	EntityManagerDescriptor temporary_descriptor;
-	temporary_descriptor.entity_pool = &temporary_entity_pool;
-	temporary_descriptor.memory_manager = &temporary_memory;
-	temporary_descriptor.deferred_action_capacity = 0;
-	EntityManager temporary_manager(temporary_descriptor);
-
-	// We need a temporary database since the load scene core will
-	// Erase everything that is stored in the reference
-	AssetDatabaseReference temporary_database(editor_state->asset_database, GetAllocatorPolymorphic(&temporary_memory));
-
-	// Create the pointer remap
-	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
-	bool success = LoadEditorSceneCore(editor_state, &temporary_manager, &temporary_database, path, pointer_remapping.buffer);
-	if (success) {
-		CapacityStream<Entity> _created_entities;
-		CapacityStream<Entity>* created_entities = nullptr;
-		if (created_entity != nullptr) {
-			created_entities = &_created_entities;
-			created_entities->InitializeFromBuffer(created_entity, 0, 1);
-		}
-
-		entity_manager->AddEntityManager(&temporary_manager, created_entities);
-
-		// Add the handles from the temporary database into the sandbox database as well
-		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)index;
-			temporary_database.ForEachAssetDuplicates(asset_type, [&](unsigned int handle) {
-				database_reference->AddAsset(handle, asset_type);
-			});
-		}
-
-		// Update the pointer remappings after everything was comitted into the sandbox
-		UpdateEditorScenePointerRemappings(editor_state, entity_manager, pointer_remapping.buffer);
+	else {
+		IncrementPrefabID(editor_state, existing_id);
+		return existing_id;
 	}
-
-	// We need to clear the memory manager only to release the temporary data
-	temporary_memory.Free();
-	return success;
 }
 
-bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> path, Entity* created_entity) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return ReadPrefabFile(editor_state, ActiveEntityManager(editor_state, sandbox_index), &sandbox->database, path, created_entity);
-}
-
-bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<wchar_t> path)
+void AddPrefabComponentToEntity(EditorState* editor_state, EntityManager* entity_manager, Entity entity, Stream<wchar_t> relative_assets_path)
 {
-	ECS_STACK_CAPACITY_STREAM(wchar_t, path_with_extension, 512);
-	// If the path doesn't have an extension, append ours
-	if (PathExtensionBoth(path).size == 0) {
-		path_with_extension.CopyOther(path);
-		path_with_extension.AddStreamAssert(PREFAB_FILE_EXTENSION);
-		path = path_with_extension;
+	unsigned int id = AddPrefabID(editor_state, relative_assets_path);
+	if (entity_manager->ExistsEntity(entity)) {
+		//entity_manager->AddComponentCommit(entity, PrefabComponent::ID(), )
 	}
-
-	// Create a subset of the entity manager containing just that entity
-	// And use the normal scene serialize function
-	// We can use large allocator sizes since these are virtual allocations anwyays
-	MemoryManager temp_memory_manager = MemoryManager(ECS_GB, ECS_KB * 4, ECS_GB, { nullptr });
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-
-	EntityManager temporary_manager = active_entity_manager->CreateSubset({ &entity, 1 }, &temp_memory_manager);
-	bool success = SaveEditorScene(editor_state, &temporary_manager, &sandbox->database, path);
-	// We just need to release the temporary memory manager to clean the subset
-	temp_memory_manager.Free();
-	return success;
 }
 
-bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
-{
-	ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-	Stream<char> entity_name = GetEntityName(editor_state, sandbox_index, entity, entity_name_storage);
+unsigned int FindPrefabID(const EditorState* editor_state, Stream<wchar_t> path) {
+	return editor_state->prefabs.Find(PrefabInstance{ 0, path });
+}
 
-	ECS_STACK_CAPACITY_STREAM(wchar_t, prefab_path, 512);
-	prefab_path.CopyOther(editor_state->file_explorer_data->current_directory);
-	prefab_path.Add(ECS_OS_PATH_SEPARATOR);
-	ConvertASCIIToWide(prefab_path, entity_name);
-	return SavePrefabFile(editor_state, sandbox_index, entity, prefab_path);
+unsigned int IncrementPrefabID(EditorState* editor_state, unsigned int id) {
+	editor_state->prefabs[id].reference_count++;
+	return editor_state->prefabs[id].reference_count;
+}
+
+unsigned int RemovePrefabID(EditorState* editor_state, Stream<wchar_t> path) {
+	unsigned int id = FindPrefabID(editor_state, path);
+	ECS_ASSERT(id != -1);
+	return RemovePrefabID(editor_state, id);
+}
+
+unsigned int RemovePrefabID(EditorState* editor_state, unsigned int id) {
+	PrefabInstance& instance = editor_state->prefabs[id];
+	instance.reference_count--;
+	if (instance.reference_count == 0) {
+		// We need to remove the entry
+		instance.path.Deallocate(PrefabAllocator(editor_state));
+		editor_state->prefabs.RemoveSwapBack(id);
+		return 0;
+	}
+	return instance.reference_count;
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include "UIDrawer.h"
 #include "../../Utilities/Reflection/Reflection.h"
+#include "UIReflectionMacros.h"
 
 namespace ECSEngine {
 
@@ -9,15 +10,6 @@ namespace ECSEngine {
 #define UI_REFLECTION_DRAWER_TYPE_TABLE_COUNT (128)
 #define UI_REFLECTION_DRAWER_INSTANCE_TABLE_COUNT (256)
 #define UI_REFLECTION_MAX_GROUPINGS_PER_TYPE 8
-
-#define ECS_UI_OMIT_FIELD_REFLECT
-
-		// Can tell the UI the default value for that element
-#define ECS_UI_DEFAULT_REFLECT(default_value)
-		// Can tell the UI the bounds for that element (ints, floats and doubles)
-#define ECS_UI_RANGE_REFLECT(lower_bound, upper_bound)
-		// Can tell the UI the default value + the bounds for that element(ints, floats and doubles)
-#define ECS_UI_PARAMETERS_REFLECT(default_value, lower_bound, upper_bound)
 
 		enum class UIReflectionElement : unsigned char {
 			FloatSlider,
@@ -665,5 +657,9 @@ namespace ECSEngine {
 			UIReflectionInstance instance;
 		};
 
+		// Returns true if the type is completely omitted from the UI side
+		ECSENGINE_API bool IsUIReflectionTypeOmitted(const Reflection::ReflectionType* type);
+
 	}
+
 }

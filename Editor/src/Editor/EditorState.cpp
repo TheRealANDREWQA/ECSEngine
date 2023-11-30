@@ -171,19 +171,18 @@ void TickEvents(EditorState* editor_state) {
 	// Get the event count and do the events that are now in the queue. Because some events might push them back
 	// in the event queue and doing that will generate an infinite loop
 	ECS_STACK_CAPACITY_STREAM(EditorEvent, current_events, 512);
-	ECS_STACK_CAPACITY_STREAM(EditorEvent, events_to_be_pushed_back, 512);
-
+	editor_state->readd_events.Reset();
 	unsigned int event_count = editor_state->event_queue.PopRangeAll(&current_events);
 
 	for (unsigned int event_index = 0; event_index < event_count; event_index++) {
 		EditorEventFunction event_function = (EditorEventFunction)current_events[event_index].function;
 		bool needs_push = event_function(editor_state, current_events[event_index].data);
 		if (needs_push) {
-			events_to_be_pushed_back.Add(current_events[event_index]);
+			editor_state->readd_events.Add(current_events[event_index]);
 		}
 	}
 
-	editor_state->event_queue.PushRange(events_to_be_pushed_back);
+	editor_state->event_queue.PushRange(editor_state->readd_events);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -504,6 +503,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->ui_reflection = editor_ui_reflection;
 
 	editor_state->event_queue.Initialize(editor_state->EditorAllocator(), EDITOR_EVENT_QUEUE_CAPACITY);
+	editor_state->readd_events.Initialize(editor_state->EditorAllocator(), 8);
 
 	// Register the link components for the engine components
 	editor_state->ecs_link_components = LoadModuleLinkComponentTargets(RegisterECSLinkComponents, editor_state->EditorAllocator());
@@ -581,10 +581,13 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	CreateWorldDescriptorUIReflectionType(editor_state);
 	OS::InitializeSymbolicLinksPaths({});
 
-	// Initialize the gpu_tasks, background tasks queues and the loading assets array
+	// Initialize the gpu_tasks, background tasks queues, the loading assets array
+	// And the prefabs container
 	editor_state->gpu_tasks.m_queue.Initialize(editor_state->EditorAllocator(), 8);
-	editor_state->pending_background_tasks.m_queue.Initialize(editor_state->EditorAllocator(), 8);
+	editor_state->pending_background_tasks.Initialize(editor_state->EditorAllocator(), 8);
 	editor_state->loading_assets.Initialize(editor_state->EditorAllocator(), 0);
+	editor_state->prefabs.Initialize(editor_state->EditorAllocator(), 16);
+	editor_state->prefabs_allocator = MemoryManager(ECS_KB * 32, ECS_KB * 4, ECS_KB * 32, editor_state->EditorAllocator());
 
 	// This will be run asynchronously for the graphics object
 	InitializeRuntime(editor_state);

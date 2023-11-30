@@ -1185,6 +1185,9 @@ namespace ECSEngine {
 
 			UIDrawerDescriptor GetDrawerDescriptor(unsigned int window_index);
 
+			// Returns the data for the drag drop handler. It asserts that it exists
+			void* GetDragDropData(Stream<char> name) const;
+
 			void* GetFrameHandlerData(unsigned int index) const;
 
 			unsigned int GetFrameHandlerCount() const;
@@ -1711,7 +1714,8 @@ namespace ECSEngine {
 			// To determine whether or not it is released, check the mouse click status
 			// You can also have the callback be triggered when the drag exists a region by setting the last parameter
 			// To true. In that case, the region_name in tha additional data will be empty
-			void StartDragDrop(UIActionHandler handler, Stream<char> name, bool trigger_on_hover = false, bool trigger_on_region_exit = false);
+			// Returns the allocated data (in case the data size is different from 0)
+			void* StartDragDrop(UIActionHandler handler, Stream<char> name, bool trigger_on_hover = false, bool trigger_on_region_exit = false);
 
 			void TranslateDockspace(UIDockspace* dockspace, float2 translation);
 

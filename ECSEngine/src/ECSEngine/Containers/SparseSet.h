@@ -298,13 +298,8 @@ namespace ECSEngine {
 		typedef T T;
 
 		ECS_INLINE ResizableSparseSet() {}
-		ResizableSparseSet(AllocatorPolymorphic _allocator, unsigned int initial_capacity = 0, DebugInfo debug_info = ECS_DEBUG_INFO) : allocator(_allocator) {
-			if (initial_capacity > 0) {
-				set = SparseSet<T>(AllocateEx(allocator, set.MemoryOf(initial_capacity), debug_info), initial_capacity);
-			}
-			else {
-				set = SparseSet<T>(nullptr, 0);
-			}
+		ECS_INLINE ResizableSparseSet(AllocatorPolymorphic _allocator, unsigned int initial_capacity = 0, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			Initialize(_allocator, initial_capacity, debug_info);
 		}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ResizableSparseSet);
@@ -478,6 +473,16 @@ namespace ECSEngine {
 
 			if (buffer_to_deallocate != nullptr) {
 				DeallocateEx(allocator, buffer_to_deallocate, debug_info);
+			}
+		}
+
+		void Initialize(AllocatorPolymorphic _allocator, unsigned int initial_capacity = 0, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			allocator = _allocator;
+			if (initial_capacity > 0) {
+				set = SparseSet<T>(AllocateEx(allocator, set.MemoryOf(initial_capacity), debug_info), initial_capacity);
+			}
+			else {
+				set = SparseSet<T>(nullptr, 0);
 			}
 		}
 

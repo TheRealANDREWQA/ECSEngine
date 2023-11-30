@@ -8,7 +8,7 @@
 
 #include "ECSEngineComponents.h"
 #include "CreateScene.h"
-#include "../Assets/Prefab.h"
+#include "../Assets/PrefabFile.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -258,7 +258,7 @@ static void RenameCallback(ActionData* action_data) {
 	EntitiesUIData* data = (EntitiesUIData*)rename_data->data;
 
 	Entity entity = *(Entity*)rename_data->previous_label;
-	ChangeEntityName(data->editor_state, data->sandbox_index, entity, rename_data->new_label);
+	ChangeSandboxEntityName(data->editor_state, data->sandbox_index, entity, rename_data->new_label);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -325,7 +325,7 @@ static void CreatePrefabCallback(ActionData* action_data) {
 		bool success = SavePrefabFile(data->editor_state, data->sandbox_index, data->entity);
 		if (!success) {
 			ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-			Stream<char> entity_name = GetEntityName(data->editor_state, data->sandbox_index, data->entity, entity_name_storage);
+			Stream<char> entity_name = GetSandboxEntityName(data->editor_state, data->sandbox_index, data->entity, entity_name_storage);
 			ECS_FORMAT_TEMP_STRING(message, "Failed to create prefab file for entity {#} from sandbox {#}", entity_name, data->sandbox_index);
 			EditorSetConsoleError(message);
 		}
@@ -669,7 +669,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 		config.flag_count = 0;
 
-		size_t scene_name_configuration = UI_CONFIG_LABEL_TRANSPARENT;
+		size_t scene_name_configuration = UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_ACTIVE_STATE;
 		row_layout.GetTransform(config, scene_name_configuration);
 
 		Stream<wchar_t> scene_name = PathStem(sandbox->scene_path);
@@ -677,6 +677,10 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 			// If empty then set a message
 			scene_name = L"No scene set";
 		}
+
+		UIConfigActiveState change_scene_active_state;
+		change_scene_active_state.state = GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE;
+		config.AddFlag(change_scene_active_state);
 
 		ChangeSandboxSceneActionData change_data;
 		change_data.editor_state = editor_state;

@@ -7129,6 +7129,16 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void* UISystem::GetDragDropData(Stream<char> name) const
+		{
+			Stream<void> resource = GetGlobalResource(name);
+			ECS_ASSERT(resource.size > 0);
+			UISystemDragHandler* handler = (UISystemDragHandler*)resource.buffer;
+			return handler->handler.data_size == 0 ? handler->handler.data : OffsetPointer(handler, sizeof(*handler));
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void* UISystem::GetFrameHandlerData(unsigned int index) const
 		{
 			return m_frame_handlers[index].data;
@@ -9773,7 +9783,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::StartDragDrop(UIActionHandler handler, Stream<char> name, bool trigger_on_hover, bool trigger_on_region_exit)
+		void* UISystem::StartDragDrop(UIActionHandler handler, Stream<char> name, bool trigger_on_hover, bool trigger_on_region_exit)
 		{
 			size_t handler_data_storage[256];
 			UISystemDragHandler* stack_handler = (UISystemDragHandler*)handler_data_storage;
@@ -9786,7 +9796,8 @@ namespace ECSEngine {
 				write_size += handler.data_size;
 			}
 
-			AddGlobalResource({ stack_handler, write_size }, name);
+			void* allocated_data = AddGlobalResource({ stack_handler, write_size }, name);
+			return OffsetPointer(allocated_data, sizeof(*stack_handler));
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

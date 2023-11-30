@@ -380,7 +380,7 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 								QuaternionIdentity(),
 								float3::Splat(1.0f),
 								selection_bounds.ToStorage(),
-								{ 1.0f, 0.0f }
+								{ 1.5f, 0.0f }
 							);
 							if (camera_position != float3::Splat(FLT_MAX)) {
 								float3 displacement = camera_position - scene_camera.translation;

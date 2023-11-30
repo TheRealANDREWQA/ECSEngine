@@ -57,6 +57,10 @@ namespace ECSEngine {
 
 		unsigned int AddAsset(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, bool* loaded_now = nullptr);
 
+		// Adds all the assets from the other database reference. If you set the increment to true,
+		// The the counts inside the main database are incremented as well
+		void AddOther(const AssetDatabaseReference* other, bool increment_main_database_counts = false);
+
 		// Copies the current contents into a new database using the allocator given
 		AssetDatabaseReference Copy(AllocatorPolymorphic allocator) const;
 
@@ -79,7 +83,7 @@ namespace ECSEngine {
 		// Return true in the functor to early exit
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		bool ForEachAsset(ECS_ASSET_TYPE type, Functor&& functor) {
+		bool ForEachAsset(ECS_ASSET_TYPE type, Functor&& functor) const {
 			unsigned int count = GetCount(type);
 			// We need to prune the entries - if there are multiple reference counts they will appear
 			// multiple times and we need to call the functor only once for each handle
@@ -116,7 +120,7 @@ namespace ECSEngine {
 		// Return true in the functor to early exit
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
-		bool ForEachAssetDuplicates(ECS_ASSET_TYPE type, Functor&& functor) {
+		bool ForEachAssetDuplicates(ECS_ASSET_TYPE type, Functor&& functor) const {
 			unsigned int count = GetCount(type);
 			for (unsigned int index = 0; index < count; index++) {
 				unsigned int handle = GetHandle(index, type);
@@ -190,6 +194,8 @@ namespace ECSEngine {
 			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
 			return streams[type].ToStream();
 		}
+
+		Stream<Stream<unsigned int>> GetUniqueHandles(AllocatorPolymorphic allocator) const;
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
 		// Can optionally fill in the fields of the evicted asset such that you can use it

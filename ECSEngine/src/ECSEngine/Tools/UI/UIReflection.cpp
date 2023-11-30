@@ -5160,7 +5160,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDefaultValueAction(ActionData* action_data) {
+		static void UIReflectionDefaultValueAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
 			UIReflectionDefaultValueData* default_data = (UIReflectionDefaultValueData*)_data;
@@ -5262,11 +5262,21 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		// ------------------------------------------------------------------------------------------------------------------------------
+		bool IsUIReflectionTypeOmitted(const Reflection::ReflectionType* type)
+		{
+			for (size_t index = 0; index < type->fields.size; index++) {
+				if (!type->fields[index].Has(STRING(ECS_UI_OMIT_FIELD_REFLECT))) {
+					return false;
+				}
+			}
+			return true;
+		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
+		// ------------------------------------------------------------------------------------------------------------------------------
 
+		// ------------------------------------------------------------------------------------------------------------------------------
 
 	}
 
