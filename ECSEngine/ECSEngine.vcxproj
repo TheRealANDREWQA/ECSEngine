@@ -320,6 +320,7 @@
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDrawTypes.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleUtilities.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UI\UIReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Algorithms.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Benchmark.h" />
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.h" />

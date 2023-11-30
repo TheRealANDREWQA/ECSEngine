@@ -180,17 +180,13 @@ void LoadSandboxMissingAssets(
 // -------------------------------------------------------------------------------------------------------------
 
 // It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
-// editor start runtimes. It will copy the current asset handles before forwarding to the event
+// editor start sandboxes. It will copy the current asset handles before forwarding to the event
 void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index);
 
 // It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
-// editor start runtimes. It will copy the current asset handles before forwarding to the event.
+// editor start sandboxes. It will copy the current asset handles before forwarding to the event.
 // After the load is finalized (with success or not), it will call the callback
 void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, EditorEventFunction callback, void* callback_data, size_t callback_data_size);
-
-// -------------------------------------------------------------------------------------------------------------
-
-void LoadAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsigned int>> handles);
 
 // -------------------------------------------------------------------------------------------------------------
 

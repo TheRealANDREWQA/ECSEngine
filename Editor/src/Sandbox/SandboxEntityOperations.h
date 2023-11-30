@@ -47,7 +47,7 @@ void AddSandboxSelectedEntity(
 	Entity entity
 );
 
-void AttachEntityName(
+void AttachSandboxEntityName(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Entity entity, 
@@ -55,7 +55,7 @@ void AttachEntityName(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-void ChangeEntityName(
+void ChangeSandboxEntityName(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Entity entity, 
@@ -105,7 +105,8 @@ Entity CopySandboxEntity(
 );
 
 // Creates an identical copy of the entity and returns it. If for some reason the entity doesn't exist
-// false (else true). Can give an entity buffer such that you can do some other operations on the newly copied entities
+// it returns false (else true). Can give an entity buffer such that you can do some other operations 
+// on the newly copied entities
 bool CopySandboxEntities(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
@@ -119,7 +120,7 @@ bool CopySandboxEntities(
 // mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
 // the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
 // If not given, the conversion function must deal with this case
-bool ConvertTargetToLinkComponent(
+bool ConvertSandboxTargetToLinkComponent(
 	const EditorState* editor_state,
 	unsigned int sandbox_index, 
 	Stream<char> link_component, 
@@ -135,7 +136,7 @@ bool ConvertTargetToLinkComponent(
 // mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
 // the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
 // If not given, the conversion function must deal with this case
-bool ConvertTargetToLinkComponent(
+bool ConvertSandboxTargetToLinkComponent(
 	const EditorState* editor_state,
 	Stream<char> link_component,
 	const void* target_data,
@@ -149,7 +150,7 @@ bool ConvertTargetToLinkComponent(
 // mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
 // the non asset fields). Be careful with shared components, as this will write in place the value (it will overwrite the shared
 // instance directly)
-bool ConvertLinkComponentToTarget(
+bool ConvertSandboxLinkComponentToTarget(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
 	Stream<char> link_component,
@@ -165,7 +166,7 @@ bool ConvertLinkComponentToTarget(
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
 // mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
 // the non asset fields)
-bool ConvertLinkComponentToTarget(
+bool ConvertSandboxLinkComponentToTarget(
 	EditorState* editor_state,
 	Stream<char> link_component,
 	void* target_data,
@@ -192,44 +193,8 @@ void DeleteSandboxEntity(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-// Readonly. It returns the archetype's components
-// Does nothing if the entity doesn't exist
-ComponentSignature EntityUniqueComponents(
-	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
-	Entity entity,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
-);
-
-// Readonly. It returns the archetype's components
-// Does nothing if the entity doesn't exist
-ComponentSignature EntitySharedComponents(
-	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
-	Entity entity,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
-);
-
-// Readonly. It returns the archetype's instances
-// Does nothing if the entity doesn't exist
-SharedComponentSignature EntitySharedInstances(
-	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
-	Entity entity,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
-);
-
-// Returns -1 if it the entity doesn't exist or the entity doesn't have the component
-SharedInstance EntitySharedInstance(
-	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
-	Entity entity, 
-	Component component,
-	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
-);
-
 // Searches for a shared instance that matches the given data or, if it doesn't exist, it will create one.
-SharedInstance FindOrCreateSharedComponentInstance(
+SharedInstance FindOrCreateSandboxSharedComponentInstance(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Component component, 
@@ -254,7 +219,7 @@ Entity GetSandboxEntity(
 );
 
 // If it doesn't exist, it will create it
-SharedInstance GetSharedComponentDefaultInstance(
+SharedInstance GetSandboxSharedComponentDefaultInstance(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Component component,
@@ -397,14 +362,14 @@ Transform GetSandboxEntityTransform(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
- MemoryArena* GetComponentAllocator(
+ MemoryArena* GetSandboxComponentAllocator(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-MemoryArena* GetSharedComponentAllocator(
+MemoryArena* GetSandboxSharedComponentAllocator(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Component component,
@@ -412,7 +377,7 @@ MemoryArena* GetSharedComponentAllocator(
 );
 
 // Might reference the internal storage or the given one
-Stream<char> GetEntityName(
+Stream<char> GetSandboxEntityName(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
 	Entity entity, 
@@ -473,35 +438,6 @@ void GetSandboxEntityAssets(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-// Fills in the asset handles for the given component of the entity
-// (some can repeat if the component has multiple handles of the same type)
-void GetEntityComponentAssets(
-	const EditorState* editor_state,
-	const EntityManager* entity_manager,
-	Entity entity,
-	Component component,
-	CapacityStream<AssetTypedHandle>* handles
-);
-
-// Fills in the asset handles for the given shared component of the entity
-// (some can repeat if the component has multiple handles of the same type)
-void GetEntitySharedComponentAssets(
-	const EditorState* editor_state,
-	const EntityManager* entity_manager,
-	Entity entity,
-	Component component,
-	CapacityStream<AssetTypedHandle>* handles
-);
-
-// Fills in the asset handles that the entity uses (some can repeat if they appear multiple
-// times in the same component or in different components)
-void GetEntityAssets(
-	const EditorState* editor_state,
-	const EntityManager* entity_manager,
-	Entity entity,
-	CapacityStream<AssetTypedHandle>* handles
-);
-
 // Returns the translation midpoint of the given entities from the sandbox
 float3 GetSandboxEntitiesTranslationMidpoint(
 	const EditorState* editor_state,
@@ -544,18 +480,6 @@ bool IsSandboxEntityValid(
 	unsigned int sandbox_index,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
-);
-
-// Returns true if the link component has an apply modifiers function given
-bool NeedsApplyModifierLinkComponent(
-	const EditorState* editor_state,
-	Stream<char> link_name
-);
-
-// Returns true if the link component has an apply button for the modifiers function
-bool NeedsApplyModifierButtonLinkComponent(
-	const EditorState* editor_state,
-	Stream<char> link_name
 );
 
 void ParentSandboxEntity(
@@ -654,6 +578,42 @@ void ResetSandboxGlobalComponent(
 );
 
 void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, Quaternion rotation_delta);
+
+// Readonly. It returns the archetype's components
+// Does nothing if the entity doesn't exist
+ComponentSignature SandboxEntityUniqueComponents(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// Readonly. It returns the archetype's components
+// Does nothing if the entity doesn't exist
+ComponentSignature SandboxEntitySharedComponents(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// Readonly. It returns the archetype's instances
+// Does nothing if the entity doesn't exist
+SharedComponentSignature SandboxEntitySharedInstances(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// Returns -1 if it the entity doesn't exist or the entity doesn't have the component
+SharedInstance SandboxEntitySharedInstance(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	Component component,
+	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
 
 // Single threaded at the moment
 void SandboxForEachEntity(

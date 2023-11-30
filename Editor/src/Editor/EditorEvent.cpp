@@ -47,23 +47,36 @@ bool EditorHasEvent(const EditorState* editor_state, EditorEventFunction functio
 void* EditorGetEventData(const EditorState* editor_state, EditorEventFunction function)
 {
 	void* ptr = nullptr;
-	editor_state->event_queue.ForEach<true>([&ptr, function](EditorEvent event_) {
+	if (!editor_state->event_queue.ForEach<true>([&ptr, function](EditorEvent event_) {
 		if (event_.function == function) {
 			ptr = event_.data;
 			return true;
 		}
 		return false;
-	});
+		})) {
+		// Check the pending events as well
+		for (unsigned int index = 0; index < editor_state->readd_events.size; index++) {
+			if (editor_state->readd_events[index].function == function) {
+				ptr = editor_state->readd_events[index].data;
+				break;
+			}
+		}
+	}
 	return ptr;
 }
 
-void EditorGetEventTypeData(const EditorState* editor_state, EditorEventFunction function, ECSEngine::CapacityStream<void*>* data)
+void EditorGetEventTypeData(const EditorState* editor_state, EditorEventFunction function, CapacityStream<void*>* data)
 {
 	editor_state->event_queue.ForEach([data, function](EditorEvent event_) {
 		if (event_.function == function) {
 			data->AddAssert(event_.data);
 		}
 	});
+	for (unsigned int index = 0; index < editor_state->readd_events.size; index++) {
+		if (editor_state->readd_events[index].function == function) {
+			data->AddAssert(editor_state->readd_events[index].data);
+		}
+	}
 }
 
 struct WaitEventWrapperData {

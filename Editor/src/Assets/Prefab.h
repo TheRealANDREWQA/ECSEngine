@@ -1,47 +1,36 @@
 #pragma once
+#include "ECSEngineContainers.h"
 #include "ECSEngineEntities.h"
 
-namespace ECSEngine {
-	struct AssetDatabaseReference;
-}
+using namespace ECSEngine;
 
 struct EditorState;
 
-#define PREFAB_FILE_EXTENSION L".prefab"
+struct PrefabInstance {
+	ECS_INLINE bool operator == (PrefabInstance other) const {
+		return path == other.path;
+	}
 
-// You can optionally retrieve the created entity by giving a pointer to it
-// Returns true if it succeeded, else false
-bool AddPrefabToSandbox(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<wchar_t> path, ECSEngine::Entity* created_entity = nullptr);
+	unsigned int reference_count;
+	Stream<wchar_t> path;
+};
 
-// It will add an event to load the assets that the prefab has introduced
-void LoadPrefabAssets(EditorState* editor_state, unsigned int sandbox_index);
+// If the prefab already exists, then it will increment the reference count and return the ID
+// If it doesn't exist, then it will create a new entry and return the ID
+unsigned int AddPrefabID(EditorState* editor_state, Stream<wchar_t> path);
 
-// The entity manager needs to be empty. It will create a single entity inside it
-// If it succeeds. You can optionally retrieve it by giving a pointer to an entity
-// Returns true if it succeeded, else false
-bool ReadPrefabFile(
-	EditorState* editor_state,
-	ECSEngine::EntityManager* entity_manager,
-	ECSEngine::AssetDatabaseReference* database_reference,
-	ECSEngine::Stream<wchar_t> path,
-	ECSEngine::Entity* created_entity = nullptr
-);
+// Adds the prefab component to the entity while at the same time incrementing the reference count
+// For that prefab, or if it doesn't exist, it will create a new entry
+void AddPrefabComponentToEntity(EditorState* editor_state, EntityManager* entity_manager, Entity entity, Stream<wchar_t> relative_assets_path);
 
-// The entity manager needs to be empty. It will create a single entity inside it
-// If it succeeds. You can optionally retrieve it by giving a pointer to an entity
-// Returns true if it succeeded, else false
-bool ReadPrefabFile(
-	EditorState* editor_state, 
-	unsigned int sandbox_index,
-	ECSEngine::Stream<wchar_t> path, 
-	ECSEngine::Entity* created_entity = nullptr
-);
+// Returns the prefab ID if it exists, else -1
+unsigned int FindPrefabID(const EditorState* editor_state, Stream<wchar_t> path);
 
-// Uses the entity information from the active entity manager
-// Returns true if it succeeded, else false
-bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Entity entity, ECSEngine::Stream<wchar_t> path);
+// Returns the new reference count
+unsigned int IncrementPrefabID(EditorState* editor_state, unsigned int id);
 
-// It will save the prefab in the current directory opened in the file explorer with the entity name
-// Uses the entity information from the active entity manager
-// Returns true if it succeeded, else false
-bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Entity entity);
+// Returns the new reference count for that prefab. It will be 0 if it was removed
+unsigned int RemovePrefabID(EditorState* editor_state, Stream<wchar_t> path);
+
+// Returns the new reference count for that prefab. It will be 0 if it was removed
+unsigned int RemovePrefabID(EditorState* editor_state, unsigned int id);

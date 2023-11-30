@@ -1,6 +1,7 @@
 #pragma once
 #include "ECSEngineAssets.h"
 #include "ECSEngineUI.h"
+#include "../Editor/EditorEventDef.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -191,6 +192,9 @@ bool ExistsAssetInResourceManager(const EditorState* editor_state, const void* m
 // Also, it will remove the time stamp associated with this asset from the database
 void EvictAssetFromDatabase(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
+// It will remove in place all the assets that are already loaded
+Stream<Stream<unsigned int>> FilterUnloadedAssets(const EditorState* editor_state, Stream<Stream<unsigned int>> handles);
+
 // Returns the handle of the asset. Returns -1 if it doesn't exist
 unsigned int FindAsset(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
 
@@ -299,6 +303,47 @@ void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_A
 
 // Returns true if the asset is being loaded in the background, else false
 bool IsAssetBeingLoaded(const EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
+
+enum LOAD_EDITOR_ASSETS_STATE : unsigned char {
+	LOAD_EDITOR_ASSETS_SUCCESS,
+	LOAD_EDITOR_ASSETS_FAILURE,
+	LOAD_EDITOR_ASSETS_PENDING
+};
+
+
+struct LoadEditorAssetsOptionalData {
+	// If specified, it will update the link components
+	// Only from this entity manager. Else it will update
+	// The link components in the editor (sandboxes and/or
+	// system settings)
+	EntityManager* update_link_entity_manager = nullptr;
+	EditorEventFunction callback = nullptr;
+	void* callback_data = nullptr;
+	size_t callback_data_size = 0;
+	std::atomic<LOAD_EDITOR_ASSETS_STATE>* state = nullptr;
+	unsigned int sandbox_index = -1;
+};
+
+// It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
+// editor start sandboxes. It will copy the current asset handles before forwarding to the event.
+// After the load is finalized (with success or not), it will call the callback (if there is one)
+void LoadEditorAssets(
+	EditorState* editor_state,
+	Stream<Stream<unsigned int>> handles,
+	LoadEditorAssetsOptionalData* optional_data
+);
+
+// It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
+// editor start sandboxes. It will copy the current asset handles before forwarding to the event.
+// After the load is finalized (with success or not), it will call the callback (if there is one specified,
+// It can be nullptr if you don't need one)
+void LoadEditorAssets(
+	EditorState* editor_state,
+	CapacityStream<unsigned int>* handles,
+	LoadEditorAssetsOptionalData* optional_data
+);
+
+void LoadAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsigned int>> handles);
 
 // The file is ignored for materials and samplers
 // It writes the handle of the asset. If the deserialization failed, it will write -1

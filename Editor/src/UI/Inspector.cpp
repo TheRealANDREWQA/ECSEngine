@@ -9,7 +9,7 @@
 #include "../Modules/Module.h"
 #include "../Modules/ModuleSettings.h"
 #include "../Assets/AssetManagement.h"
-#include "../Assets/Prefab.h"
+#include "../Assets/PrefabFile.h"
 #include "../Sandbox/Sandbox.h"
 
 #include "Inspector/InspectorUtilities.h"

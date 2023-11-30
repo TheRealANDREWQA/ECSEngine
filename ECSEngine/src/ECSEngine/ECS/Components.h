@@ -5,6 +5,7 @@
 
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Utilities/Reflection/ReflectionConstants.h"
+#include "../Tools/UI/UIReflectionMacros.h"
 #include "../Containers/Stream.h"
 #include "../Utilities/BasicTypes.h"
 #include "../Rendering/Camera.h"
@@ -31,11 +32,11 @@ namespace ECSEngine {
 	};
 
 	struct ECS_REFLECT_COMPONENT Translation {
-		constexpr static ECS_INLINE short ID() {
+		ECS_INLINE constexpr static short ID() {
 			return ECS_COMPONENT_BASE + 0;
 		}
 
-		constexpr static ECS_INLINE bool IsShared() {
+		ECS_INLINE constexpr static bool IsShared() {
 			return false;
 		}
 
@@ -43,11 +44,11 @@ namespace ECSEngine {
 	};
 
 	struct ECS_REFLECT_COMPONENT Rotation {
-		constexpr static ECS_INLINE short ID() {
+		ECS_INLINE constexpr static short ID() {
 			return ECS_COMPONENT_BASE + 1;
 		}
 
-		constexpr static ECS_INLINE bool IsShared() {
+		ECS_INLINE constexpr static bool IsShared() {
 			return false;
 		}
 
@@ -55,11 +56,11 @@ namespace ECSEngine {
 	};
 
 	struct ECS_REFLECT_COMPONENT Scale {
-		constexpr static ECS_INLINE short ID() {
+		ECS_INLINE constexpr static short ID() {
 			return ECS_COMPONENT_BASE + 2;
 		}
 
-		constexpr static ECS_INLINE bool IsShared() {
+		ECS_INLINE constexpr static bool IsShared() {
 			return false;
 		}
 
@@ -67,15 +68,15 @@ namespace ECSEngine {
 	};
 
 	struct ECS_REFLECT_COMPONENT Name {
-		constexpr static ECS_INLINE short ID() {
-			return ECS_COMPONENT_BASE + 4;
+		ECS_INLINE constexpr static short ID() {
+			return ECS_COMPONENT_BASE + 3;
 		}
 
-		constexpr static ECS_INLINE size_t AllocatorSize() {
+		ECS_INLINE constexpr static size_t AllocatorSize() {
 			return ECS_KB_R * 256;
 		}
 
-		constexpr static ECS_INLINE bool IsShared() {
+		ECS_INLINE constexpr static bool IsShared() {
 			return false;
 		}
 
@@ -83,11 +84,28 @@ namespace ECSEngine {
 	};
 
 	struct ECS_REFLECT_GLOBAL_COMPONENT CameraComponent {
-		constexpr static ECS_INLINE short ID() {
+		ECS_INLINE constexpr static short ID() {
 			return ECS_GLOBAL_COMPONENT_BASE + 0;
 		}
 
 		CameraCached value;
+	};
+
+	struct ECS_REFLECT_COMPONENT PrefabComponent {
+		ECS_INLINE constexpr static short ID() {
+			return ECS_COMPONENT_BASE + 4;
+		}
+
+		ECS_INLINE constexpr static bool IsShared() {
+			return false;
+		}
+
+		// This is a unique identifier that is to be implemented
+		// Inside the editor to keep track of each instance
+		unsigned int id; ECS_UI_OMIT_FIELD_REFLECT
+		// This value indicates whether or not the entity is detached
+		// From its prefab (the entity is no longer updated when the prefab is)
+		bool detached; ECS_UI_OMIT_FIELD_REFLECT
 	};
 
 	// ------------------------------------ Link Components -----------------------------------------------------------

@@ -84,6 +84,7 @@ namespace ECSEngine {
 	struct ECSENGINE_API EntityManager
 	{
 	public:
+		EntityManager() {}
 		EntityManager(const EntityManagerDescriptor& descriptor);
 
 		ECS_INLINE AllocatorPolymorphic SmallAllocator() {

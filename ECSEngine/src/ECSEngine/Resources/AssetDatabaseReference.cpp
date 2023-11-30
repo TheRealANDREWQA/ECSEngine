@@ -94,6 +94,18 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
+	void AssetDatabaseReference::AddOther(const AssetDatabaseReference* other, bool increment_main_database_counts)
+	{
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)index;
+			other->ForEachAssetDuplicates(asset_type, [&](unsigned int handle) {
+				AddAsset(handle, asset_type, increment_main_database_counts);
+			});
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
 	AssetDatabaseReference AssetDatabaseReference::Copy(AllocatorPolymorphic allocator) const
 	{
 		AssetDatabaseReference copy;
@@ -173,6 +185,25 @@ namespace ECSEngine {
 	unsigned int AssetDatabaseReference::GetReferenceCountHandle(unsigned int handle, ECS_ASSET_TYPE type) const
 	{
 		return database->GetReferenceCount(handle, type);
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	Stream<Stream<unsigned int>> AssetDatabaseReference::GetUniqueHandles(AllocatorPolymorphic allocator) const
+	{
+		const ResizableStream<unsigned int>* handles = (const ResizableStream<unsigned int>*)this;
+		Stream<Stream<unsigned int>> unique_handles;
+		unique_handles.Initialize(allocator, ECS_ASSET_TYPE_COUNT);
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			unique_handles[index].Initialize(allocator, handles[index].size);
+			for (unsigned int subindex = 0; subindex < handles[index].size; subindex++) {
+				size_t existing_index = SearchBytes(unique_handles[index], handles[index][subindex]);
+				if (existing_index == -1) {
+					unique_handles[index].Add(handles[index][subindex]);
+				}
+			}
+		}
+		return unique_handles;
 	}
 
 	// ------------------------------------------------------------------------------------------------

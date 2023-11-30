@@ -13,6 +13,7 @@
 #include "EditorStateTypes.h"
 #include "ECSEngineInput.h"
 #include "EditorVisualizeTexture.h"
+#include "../Assets/Prefab.h"
 
 #define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
 
@@ -138,6 +139,17 @@ struct EditorState {
 	// These will be played back on the main thread. If multithreaded tasks are desired,
 	// use the AddBackgroundTask function. It is used in a multithreaded context
 	ECSEngine::ThreadSafeResizableQueue<EditorEvent> event_queue;
+	// When ticking the events, here the events that want to be pushed back
+	// Will be placed here and if an action wants to check which events are still
+	// Active it can look here during event processing
+	ECSEngine::ResizableStream<EditorEvent> readd_events;
+
+	// We need to record globally all the prefabs
+	// Since they can be cross-referenced in multiple sandboxes
+	ECSEngine::ResizableSparseSet<PrefabInstance> prefabs;
+	// This is the allocator used for the path allocations
+	// For the prefabs
+	ECSEngine::MemoryManager prefabs_allocator;
 
 	ECSEngine::ResizableStream<EditorSandbox> sandboxes;
 	
