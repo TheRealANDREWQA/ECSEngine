@@ -1,15 +1,103 @@
 #include "editorpch.h"
+#include "ECSEngineScene.h"
+#include "ECSEngineSerializationHelpers.h"
 #include "EditorScene.h"
 #include "EditorState.h"
 #include "EditorEvent.h"
 
 #include "../Project/ProjectFolders.h"
 #include "Modules/Module.h"
-#include "ECSEngineScene.h"
 #include "../Assets/EditorSandboxAssets.h"
+#include "../Assets/Prefab.h"
 #include "../Sandbox/SandboxAccessor.h"
 
 using namespace ECSEngine;
+
+// ----------------------------------------------------------------------------------------------
+
+#define PREFAB_CHUNK_VERSION 0
+
+// Immediately after the chunk header the path sizes are written (as ushorts)
+// And then the paths themselves
+
+struct ScenePrefabChunkHeader {
+	unsigned char version;
+	unsigned char reserved[7];
+	size_t id_count;
+	size_t reserved_[4];
+};
+
+// In this chunk, we need to remap the written prefabs to the current values inside the editor state
+// In case a prefab is missing, we must add it
+static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
+	EditorState* editor_state = (EditorState*)function_data->user_data;
+
+	uintptr_t ptr = (uintptr_t)function_data->chunk_data.buffer;
+	ScenePrefabChunkHeader header;
+	Read<true>(&ptr, &header, sizeof(header));
+
+	if (header.version != PREFAB_CHUNK_VERSION) {
+		return false;
+	}
+
+	// Gather all prefab components from the entity manager such that we don't have
+	// To iterate the entity manager every time. We can use the global memory manager
+	// From the entity manager to preallocate for the entity count
+	unsigned int entity_count = function_data->entity_manager->GetEntityCount();
+	PrefabComponent** prefab_components = (PrefabComponent**)function_data->entity_manager->m_memory_manager->Allocate(sizeof(PrefabComponent*) * entity_count);
+	unsigned int prefab_component_count = 0;
+	function_data->entity_manager->ForEachEntityComponent(PrefabComponent::ID(), [&](Entity entity, void* data) {
+		prefab_components[prefab_component_count++] = (PrefabComponent*)data;
+	});
+
+	const unsigned short* path_sizes = (const unsigned short*)ptr;
+	ptr += sizeof(unsigned short) * header.id_count;
+
+	// Returns the count of occurences for that id
+	auto update_id = [&](unsigned int old_id, unsigned int new_id) {
+		unsigned int count = 0;
+		for (unsigned int index = 0; index < prefab_component_count; index++) {
+			if (prefab_components[index]->id == old_id) {
+				prefab_components[index]->id = new_id;
+				count++;
+			}
+		}
+		return count;
+	};
+
+	for (size_t index = 0; index < header.id_count; index++) {
+		Stream<wchar_t> current_path = { (wchar_t*)ptr, path_sizes[index] };
+		ptr += sizeof(wchar_t) * path_sizes[index];
+
+		unsigned int existing_id = FindPrefabID(editor_state, current_path);
+		if (existing_id == -1) {
+			// Create this new ID and update all entries
+			// If the entry count is 0, then remove it
+			existing_id = AddPrefabID(editor_state, current_path);
+			unsigned int update_count = update_id((unsigned int)index, existing_id);
+			if (update_count == 0) {
+				// Need to remove the entry
+				RemovePrefabID(editor_state, current_path);
+			}
+			else {
+				// We need to increment this new value by the update count - 1 to maintain
+				// The proper reference count
+				IncrementPrefabID(editor_state, existing_id, update_count - 1);
+			}
+		}
+		else {
+			// In case the ID is the same, we can still use the update function
+			// With the same value since it won't change the id, but it will give
+			// Us the count necessary to update the prefab reference count
+			unsigned int update_count = update_id((unsigned int)index, existing_id);
+			IncrementPrefabID(editor_state, existing_id, update_count);
+		}
+	}
+
+	// Make the deallocation
+	function_data->entity_manager->m_memory_manager->Deallocate(prefab_components);
+	return true;
+}
 
 // ----------------------------------------------------------------------------------------------
 

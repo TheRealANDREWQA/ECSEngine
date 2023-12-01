@@ -10,6 +10,7 @@ static void ApplyMovementTask(
 	CollisionSettings* settings = (CollisionSettings*)for_each_data->world->system_manager->GetSystemSettings("CollisionDetection", STRING(CollisionSettings));
 
 	translation->value.x -= settings->factor * for_each_data->world->delta_time;
+	//translation->value.x -= 5.5f * for_each_data->world->delta_time;
 	if (for_each_data->world->keyboard->IsPressed(ECS_KEY_P)) {
 		translation->value.x = 0.0f;
 	}

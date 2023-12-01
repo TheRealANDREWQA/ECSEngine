@@ -1,9 +1,12 @@
 #pragma once
 #include "../Core.h"
 #include "../Containers/Stream.h"
-#include "ResourceTypes.h"
 #include "../Rendering/RenderingStructures.h"
 #include "../ECS/EntityManagerSerializeTypes.h"
+
+// These are some chunks that can be used to fill in various information
+// Without a predefined connotation
+#define ECS_SCENE_EXTRA_CHUNKS 8
 
 namespace ECSEngine {
 
@@ -20,6 +23,50 @@ namespace ECSEngine {
 	struct SceneModuleSetting {
 		Stream<char> name;
 		void* data;
+	};
+
+	struct LoadSceneChunkFunctionData {
+		EntityManager* entity_manager;
+		const Reflection::ReflectionManager* reflection_manager;
+		size_t chunk_index;
+		size_t file_version;
+		Stream<void> chunk_data;
+		void* user_data;
+	};
+	
+	// This function can be used to extract the extra information from the scene
+	// It must return true if it succeeded, else false (the load overall fails as well)
+	typedef bool (*LoadSceneChunkFunction)(LoadSceneChunkFunctionData* data);
+
+	struct LoadSceneChunkFunctor {
+		LoadSceneChunkFunction function;
+		void* user_data;
+	};
+
+	// The write data will be empty ({ nullptr, 0}) when the function wants to know
+	// How much there is to written, then the function will be called once again
+	// To actually write the data after an allocation was prepared. The other write
+	// Mode is to actually use the file handle directly
+	struct SaveSceneChunkFunctionData {
+		ECS_INLINE SaveSceneChunkFunctionData() {}
+
+		const EntityManager* entity_manager;
+		const Reflection::ReflectionManager* reflection_manager;
+		size_t chunk_index;
+		union {
+			Stream<void> write_data;
+			ECS_FILE_HANDLE write_handle;
+		};
+		void* user_data;
+	};
+
+	typedef bool (*SaveSceneChunkFunction)(SaveSceneChunkFunctionData* data);
+
+	struct SaveSceneChunkFunctor {
+		SaveSceneChunkFunction function;
+		void* user_data;
+		// If this is specified, it will use the file handle directly to make the write
+		bool file_handle_write;
 	};
 
 	struct LoadSceneData {
@@ -60,6 +107,8 @@ namespace ECSEngine {
 		// You can retrieve the delta time of the simulation if you choose to
 		float* delta_time = nullptr;
 		float* speed_up_factor = nullptr;
+
+		LoadSceneChunkFunctor chunk_functors[ECS_SCENE_EXTRA_CHUNKS] = { {} };
 	};
 
 	ECSENGINE_API bool CreateEmptyScene(Stream<wchar_t> file);
@@ -86,6 +135,8 @@ namespace ECSEngine {
 		// This value will also be serialized such that upon loading the simulation can continue as before
 		float delta_time = 0.0f;
 		float speed_up_factor = 1.0f;
+
+		SaveSceneChunkFunctor chunk_functors[ECS_SCENE_EXTRA_CHUNKS] = { {} };
 	};
 
 	ECSENGINE_API bool SaveScene(SaveSceneData* save_data);

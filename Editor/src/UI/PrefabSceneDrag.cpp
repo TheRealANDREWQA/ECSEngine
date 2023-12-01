@@ -8,6 +8,7 @@
 #include "../Sandbox/SandboxEntityOperations.h"
 #include "../Sandbox/SandboxScene.h"
 #include "../Sandbox/Sandbox.h"
+#include "../Assets/EditorSandboxAssets.h"
 #include "../Assets/AssetManagement.h"
 
 ECS_TOOLS;
@@ -16,31 +17,21 @@ ECS_TOOLS;
 
 struct PrefabDragCallbackData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int hovered_sandbox_index;
 	// This is the entity created inside that sandbox
 	Entity entity;
 
 	// This can be updated from the main thread to
 	// Signal to the background thread to terminate itself
 	std::atomic<bool> cancel_call;
-	bool read_success;
 	std::atomic<LOAD_EDITOR_ASSETS_STATE> load_assets_success;
-	MemoryManager temporary_allocator;
-	EntityManager temporary_entity_manager;
-	AssetDatabaseReference database_reference;
+	bool read_success;
+	// This sandbox is a temporary sandbox where the asset load is happening
+	unsigned int load_sandbox;
 };
 
 static void DeallocatePrefabDragCallbackData(PrefabDragCallbackData* data) {
-	if (data->read_success) {
-		// Remove the assets from the database
-		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
-			data->database_reference.ForEachAssetDuplicates(current_type, [data, current_type](unsigned int handle) {
-				DecrementAssetReference(data->editor_state, handle, current_type);
-			});
-		}
-	}
-	data->temporary_allocator.Free();
+	DestroySandbox(data->editor_state, data->load_sandbox, false, true);
 }
 
 static void FileExplorerPrefabDragCallback(ActionData* action_data) {
@@ -70,13 +61,15 @@ static void FileExplorerPrefabDragCallback(ActionData* action_data) {
 			EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 			CapacityStream<Entity> _created_entity(&data->entity, 0, 1);
 			CapacityStream<Entity>* created_entity = &_created_entity;
-			active_entity_manager->AddEntityManager(&data->temporary_entity_manager, created_entity);
+
+			const EditorSandbox* load_sandbox = GetSandbox(editor_state, data->load_sandbox);
+			active_entity_manager->AddEntityManager(&load_sandbox->scene_entities, created_entity);
 			// Use the increment main database as well since the DeleteEntity when the drag
 			// Exists a window will decrement the reference counts from the main database as well
-			sandbox->database.AddOther(&data->database_reference, true);
+			sandbox->database.AddOther(&load_sandbox->database, true);
 
 			set_prefab_position(sandbox_index);
-			data->sandbox_index = sandbox_index;
+			data->hovered_sandbox_index = sandbox_index;
 		};
 
 		if (*region_name == SCENE_UI_DRAG_NAME) {
@@ -84,26 +77,26 @@ static void FileExplorerPrefabDragCallback(ActionData* action_data) {
 			unsigned int sandbox_index = SceneUITargetSandbox(editor_state, window_index);
 			ECS_ASSERT(sandbox_index != -1);
 
-			if (data->sandbox_index == -1) {
+			if (data->hovered_sandbox_index == -1) {
 				// We did not hover a scene before and now we do, insert this prefab into the world
 				add_prefab_to_sandbox(sandbox_index);
 			}
 			else {
-				if (data->sandbox_index == sandbox_index) {
+				if (data->hovered_sandbox_index == sandbox_index) {
 					// The same sandbox is hovered
 					set_prefab_position(sandbox_index);
 				}
 				else {
 					// We hovered a different sandbox - delete the old entity, which removes the
 					// asset handles as well and add it to the new sandbox
-					DeleteSandboxEntity(editor_state, data->sandbox_index, data->entity);
+					DeleteSandboxEntity(editor_state, data->hovered_sandbox_index, data->entity);
 					add_prefab_to_sandbox(sandbox_index);
 				}
 			}
 		}
 		else if (*region_name == Stream<char>()) {
-			DeleteSandboxEntity(editor_state, data->sandbox_index, data->entity);
-			data->sandbox_index = -1;
+			DeleteSandboxEntity(editor_state, data->hovered_sandbox_index, data->entity);
+			data->hovered_sandbox_index = -1;
 			data->entity = -1;
 		}
 	}
@@ -127,6 +120,42 @@ EDITOR_EVENT(PreloadAssetsFinishEvent) {
 	return false;
 }
 
+EDITOR_EVENT(LoadPrefabFileDeferred) {
+	PrefabDragCallbackData* data = (PrefabDragCallbackData*)_data;
+
+	if (!data->cancel_call) {
+		if (IsSandboxLocked(data->editor_state, data->load_sandbox)) {
+			return true;
+		}
+
+		data->read_success = ReadPrefabFile(
+			editor_state,
+			data->load_sandbox,
+			editor_state->file_explorer_data->selected_files[0],
+			&data->entity
+		);
+		if (data->read_success) {
+			// We need to load its assets
+			LoadEditorAssetsOptionalData optional_data;
+			optional_data.callback = PreloadAssetsFinishEvent;
+			optional_data.callback_data = data;
+			optional_data.callback_data_size = 0;
+			optional_data.state = &data->load_assets_success;
+			LoadSandboxAssets(editor_state, data->load_sandbox, &optional_data);
+		}
+		else {
+			Stream<wchar_t> stem = PathStem(editor_state->file_explorer_data->selected_files[0]);
+			ECS_FORMAT_TEMP_STRING(message, "Failed to load prefab {#} while dragging", stem);
+			EditorSetConsoleError(message);
+		}
+	}
+	else {
+		DeallocatePrefabDragCallbackData(data);
+		editor_state->ui_system->EndDragDrop(PREFAB_DRAG_NAME);
+	}
+	return false;
+}
+
 bool IsPrefabFileSelected(const EditorState* editor_state) {
 	const FileExplorerData* explorer_data = editor_state->file_explorer_data;
 	if (explorer_data->selected_files.size == 1) {
@@ -142,55 +171,23 @@ void PrefabStartDrag(EditorState* editor_state) {
 	if (IsPrefabFileSelected(editor_state)) {
 		PrefabDragCallbackData callback_data;
 		callback_data.editor_state = editor_state;
-		callback_data.sandbox_index = -1;
+		callback_data.hovered_sandbox_index = -1;
 		callback_data.entity = -1;
 		callback_data.cancel_call.store(false, ECS_RELAXED);
+		callback_data.load_sandbox = CreateSandboxTemporary(editor_state);
+		callback_data.read_success = false;
 
-		// We need to use the allocator after it was allocated since the entity manager
-		// And the database reference will reference its address
+		// If the sandbox is locked, then we will have to wait for the initialization
+		// To finish. That is signaled by the fact that the sandbox is unlocked. So push
+		// An event to monitor that. Also, start the drag drop since the EndDrag
+		// Will try to end it
 		PrefabDragCallbackData* allocated_data = (PrefabDragCallbackData*)editor_state->ui_system->StartDragDrop(
-			{ FileExplorerPrefabDragCallback, &callback_data, sizeof(callback_data) }, 
-			PREFAB_DRAG_NAME, 
-			true, 
+			{ FileExplorerPrefabDragCallback, &callback_data, sizeof(callback_data) },
+			PREFAB_DRAG_NAME,
+			true,
 			true
 		);
-		allocated_data->temporary_allocator = MemoryManager(ECS_MB * 500, ECS_KB * 4, ECS_GB, { nullptr });
-		allocated_data->database_reference = AssetDatabaseReference(editor_state->asset_database, GetAllocatorPolymorphic(&allocated_data->temporary_allocator));
-		EntityPool* allocated_entity_pool = (EntityPool*)allocated_data->temporary_allocator.Allocate(sizeof(EntityPool));
-		*allocated_entity_pool = EntityPool(&allocated_data->temporary_allocator, 4);
-		EntityManagerDescriptor manager_descriptor;
-		manager_descriptor.deferred_action_capacity = 0;
-		manager_descriptor.entity_pool = allocated_entity_pool;
-		manager_descriptor.memory_manager = &allocated_data->temporary_allocator;
-		allocated_data->temporary_entity_manager = EntityManager(manager_descriptor);
-
-		allocated_data->read_success = ReadPrefabFile(
-			editor_state,
-			&allocated_data->temporary_entity_manager,
-			&allocated_data->database_reference,
-			editor_state->file_explorer_data->selected_files[0],
-			&allocated_data->entity
-		);
-		if (allocated_data->read_success) {
-			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
-			Stream<Stream<unsigned int>> handles = allocated_data->database_reference.GetUniqueHandles(GetAllocatorPolymorphic(&stack_allocator));
-			// We need to filter the already loaded assets
-			handles = FilterUnloadedAssets(editor_state, handles);
-
-			// We need to load its assets
-			LoadEditorAssetsOptionalData optional_data;
-			optional_data.callback = PreloadAssetsFinishEvent;
-			optional_data.callback_data = allocated_data;
-			optional_data.callback_data_size = 0;
-			optional_data.state = &allocated_data->load_assets_success;
-			optional_data.update_link_entity_manager = &allocated_data->temporary_entity_manager;
-			LoadEditorAssets(editor_state, handles, &optional_data);
-		}
-		else {
-			Stream<wchar_t> stem = PathStem(editor_state->file_explorer_data->selected_files[0]);
-			ECS_FORMAT_TEMP_STRING(message, "Failed to load prefab {#} while dragging", stem);
-			EditorSetConsoleError(message);
-		}
+		EditorAddEvent(editor_state, LoadPrefabFileDeferred, allocated_data, 0);
 	}
 }
 
@@ -203,9 +200,9 @@ void PrefabEndDrag(EditorState* editor_state) {
 			if (callback_data->read_success) {
 				// If we succeeded, and we have a valid entity entry, make it the selected one
 				// For that sandbox
-				if (callback_data->entity.IsValid() && callback_data->sandbox_index != -1) {
-					ChangeSandboxSelectedEntities(editor_state, callback_data->sandbox_index, { &callback_data->entity, 1 });
-					ChangeInspectorEntitySelection(editor_state, callback_data->sandbox_index);
+				if (callback_data->entity.IsValid() && callback_data->hovered_sandbox_index != -1) {
+					ChangeSandboxSelectedEntities(editor_state, callback_data->hovered_sandbox_index, { &callback_data->entity, 1 });
+					ChangeInspectorEntitySelection(editor_state, callback_data->hovered_sandbox_index);
 				}
 			}
 			DeallocatePrefabDragCallbackData(callback_data);

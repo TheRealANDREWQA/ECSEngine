@@ -48,7 +48,11 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 
 		// Load the assets and trigger a re-render of the viewports
 		ChangeSceneRenderViewportsEventData event_data = { sandbox_index };
-		LoadSandboxAssets(editor_state, sandbox_index, ChangeSceneRenderViewportsEvent, &event_data, sizeof(event_data));
+		LoadEditorAssetsOptionalData load_optional_data;
+		load_optional_data.callback = ChangeSceneRenderViewportsEvent;
+		load_optional_data.callback_data = &event_data;
+		load_optional_data.callback_data_size = sizeof(event_data);
+		LoadSandboxAssets(editor_state, sandbox_index, &load_optional_data);
 	}
 
 	// If the load failed, the scene will be reset with an empty value

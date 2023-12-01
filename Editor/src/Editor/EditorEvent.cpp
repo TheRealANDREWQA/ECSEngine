@@ -28,15 +28,6 @@ void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, vo
 	return editor_event.data;
 }
 
-void* EditorEventLastData(EditorState* editor_state)
-{
-	EditorEvent event_;
-	if (editor_state->event_queue.Peek(event_)) {
-		return event_.data;
-	}
-	return nullptr;
-}
-
 bool EditorHasEvent(const EditorState* editor_state, EditorEventFunction function)
 {
 	return editor_state->event_queue.ForEach<true>([function](EditorEvent event_) {

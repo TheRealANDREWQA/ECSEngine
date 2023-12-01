@@ -162,11 +162,12 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 
 	UIConfigTextAlignment text_alignment;
 	text_alignment.horizontal = ECS_UI_ALIGN_LEFT;
-
-	ResizableStream<EditorSandbox>* sandboxes = &editor_state->sandboxes;
+	
+	// Exclude temporary sandboxes
+	unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 	// Display the number of sandboxes
-	if (sandboxes->size > 0) {
-		ECS_FORMAT_TEMP_STRING(count_string, "Project sandbox count: {#}", sandboxes->size);
+	if (sandbox_count > 0) {
+		ECS_FORMAT_TEMP_STRING(count_string, "Project sandbox count: {#}", sandbox_count);
 		drawer.Text(count_string.buffer);
 		drawer.NextRow();
 
@@ -192,7 +193,7 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		size_t label_configuration = button_configuration;
 
 		unsigned int base_display_size = display_labels.size;
-		for (unsigned int index = 0; index < sandboxes->size; index++) {
+		for (unsigned int index = 0; index < sandbox_count; index++) {
 			display_labels.size = base_display_size;
 			ConvertIntToChars(display_labels, index);
 

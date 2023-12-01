@@ -2,7 +2,6 @@
 #include "SandboxAccessor.h"
 #include "ECSEngineRendering.h"
 #include "ECSEngineResources.h"
-#include "editorpch.h"
 #include "../Modules/ModuleDefinition.h"
 
 struct EditorState;
@@ -71,6 +70,11 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime = true);
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns the sandbox index of that temporary sandbox
+unsigned int CreateSandboxTemporary(EditorState* editor_state, bool initialize_runtime = true);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Returns true if it succeeded in creating the scheduling order for the sandbox. Can disable the automatic
 // printing of the error message if it fails.
 bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_index, bool disable_error_message = false);
@@ -94,8 +98,9 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 // -------------------------------------------------------------------------------------------------------------
 
 // Can optionally disable the wait for the unlocking - by default you should leave this on
-// unless you have a very specific reason to ignore the value
-void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool wait_unlocking = true);
+// unless you have a very specific reason to ignore the value. Or you can choose to have an
+// Event destroy the sandbox in a deferred fashion
+void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool wait_unlocking = true, bool deferred_waiting = false);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -500,15 +505,17 @@ bool RunSandboxWorlds(EditorState* editor_state, bool is_step = false);
 
 // -------------------------------------------------------------------------------------------------------------
 
-// Return true to early exit
+// Return true to early exit. You have the option when iterating over all sandboxes whether or not it
+// should exclude temporary sandboxes
+// Returns true if it early exited, else false
 template<bool early_exit = false, typename Functor>
-void SandboxAction(const EditorState* editor_state, unsigned int sandbox_index, Functor&& functor) {
+bool SandboxAction(const EditorState* editor_state, unsigned int sandbox_index, Functor&& functor, bool exclude_temporary_sandboxes = false) {
 	if (sandbox_index == -1) {
-		unsigned int count = editor_state->sandboxes.size;
+		unsigned int count = GetSandboxCount(editor_state, exclude_temporary_sandboxes);
 		for (unsigned int index = 0; index < count; index++) {
 			if constexpr (early_exit) {
 				if (functor(index)) {
-					break;
+					return true;
 				}
 			}
 			else {
@@ -517,9 +524,17 @@ void SandboxAction(const EditorState* editor_state, unsigned int sandbox_index, 
 		}
 	}
 	else {
-		functor(sandbox_index);
+		if constexpr (early_exit) {
+			return functor(sandbox_index);
+		}
+		else {
+			functor(sandbox_index);
+		}
 	}
+	return false;
 }
+
+// -------------------------------------------------------------------------------------------------------------
 
 // Returns true if it succeded. On error it will print an error message
 bool SaveSandboxRuntimeSettings(const EditorState* editor_state, unsigned int sandbox_index);

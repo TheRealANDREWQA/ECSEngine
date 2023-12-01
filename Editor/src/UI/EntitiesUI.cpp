@@ -586,7 +586,8 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-	if (editor_state->sandboxes.size > 0) {
+	// Include temporary sandboxes as well
+	if (GetSandboxCount(editor_state) > 0) {
 		const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 
 		// Get the count of global components and update the virtual mapping of the global components if the count is different
@@ -693,7 +694,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		size_t HEADER_CONFIGURATION = UI_CONFIG_BORDER | UI_CONFIG_DO_NOT_UPDATE_RENDER_BOUNDS | UI_CONFIG_DO_NOT_VALIDATE_POSITION;
 
 		ECS_STACK_CAPACITY_STREAM(char, sandbox_labels, 512);
-		unsigned int sandbox_count = editor_state->sandboxes.size;
+		unsigned int sandbox_count = GetSandboxCount(editor_state);
 
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, combo_sandbox_labels, sandbox_count);
 

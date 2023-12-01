@@ -25,7 +25,7 @@ namespace ECSEngine {
 		unsigned int header_size;
 		unsigned char version;
 		unsigned char reserved[3];
-		size_t chunk_offsets[CHUNK_COUNT];
+		size_t chunk_offsets[CHUNK_COUNT + ECS_SCENE_EXTRA_CHUNKS];
 	};
 
 	typedef size_t ModuleSettingsCountType;
@@ -247,6 +247,50 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		// If there are any chunk functors specified, we should call them
+		for (size_t index = 0; index < ECS_SCENE_EXTRA_CHUNKS; index++) {
+			if (file_header->chunk_offsets[CHUNK_COUNT + index] != ptr - file_allocation_ptr) {
+				// Restore the snapshot
+				database->RestoreSnapshot(asset_database_snapshot);
+				if (load_data->detailed_error_string) {
+					ECS_FORMAT_TEMP_STRING(message, "The scene file is corrupted (extra chunk {#} offset invalid)", index);
+					load_data->detailed_error_string->AddStreamAssert(message);
+				}
+				return false;
+			}
+
+			size_t chunk_size = 0;
+			if (index < ECS_SCENE_EXTRA_CHUNKS - 1) {
+				chunk_size = file_header->chunk_offsets[CHUNK_COUNT + index + 1] - file_header->chunk_offsets[CHUNK_COUNT + index];
+			}
+			else {
+				size_t current_difference = ptr - (uintptr_t)file_allocation;
+				chunk_size = file_byte_size - current_difference;
+			}
+
+			if (load_data->chunk_functors[index].function != nullptr) {
+				LoadSceneChunkFunctionData functor_data;
+				functor_data.entity_manager = load_data->entity_manager;
+				functor_data.reflection_manager = load_data->reflection_manager;
+				functor_data.file_version = file_header->version;
+				functor_data.user_data = load_data->chunk_functors[index].user_data;
+				functor_data.chunk_index = index;
+				functor_data.chunk_data = { (void*)ptr, chunk_size };
+				
+				if (!load_data->chunk_functors[index].function(&functor_data)) {
+					// Restore the snapshot
+					database->RestoreSnapshot(asset_database_snapshot);
+					if (load_data->detailed_error_string) {
+						ECS_FORMAT_TEMP_STRING(message, "The scene file is corrupted (extra chunk {#} functor returned)", index);
+						load_data->detailed_error_string->AddStreamAssert(message);
+					}
+					return false;
+				}
+			}
+
+			ptr += chunk_size;
+		}
 		
 		ECS_ASSERT((ptr - (uintptr_t)file_allocation) == file_byte_size);	
 		return true;
@@ -415,10 +459,69 @@ namespace ECSEngine {
 				return false;
 			}
 		}
-		// Write to file now the settings
+
+		// Write to file the settings
 		success = WriteFile(file_handle, { serialize_setting_allocation, serialize_setting_allocation_ptr - (uintptr_t)serialize_setting_allocation });
 		if (!success) {
 			return false;
+		}
+
+		// Now write all the chunk functors
+		// Have a global memory manager to make allocations from it, if necessary
+		// But instantiate it lazily such that we don't create it for nothing
+		GlobalMemoryManager extra_chunk_allocator;
+		bool is_extra_chunk_allocator_initialized = false;
+
+		auto deallocate_extra_chunk_allocator = StackScope([&]() {
+			if (is_extra_chunk_allocator_initialized) {
+				extra_chunk_allocator.Free();
+			}
+		});
+
+		for (size_t index = 0; index < ECS_SCENE_EXTRA_CHUNKS; index++) {
+			size_t chunk_start_offset = GetFileCursor(file_handle);
+			ECS_ASSERT(chunk_start_offset != -1);
+			header.chunk_offsets[CHUNK_COUNT + index] = chunk_start_offset;
+			if (save_data->chunk_functors[index].function != nullptr) {
+				SaveSceneChunkFunctionData functor_data;
+				functor_data.chunk_index = index;
+				functor_data.entity_manager = save_data->entity_manager;
+				functor_data.reflection_manager = save_data->reflection_manager;
+				functor_data.user_data = save_data->chunk_functors[index].user_data;
+				if (save_data->chunk_functors[index].file_handle_write) {
+					functor_data.write_handle = file_handle;
+					if (!save_data->chunk_functors[index].function(&functor_data)) {
+						// We should fail as well if the function told us so
+						return false;
+					}
+				}
+				else {
+					if (!is_extra_chunk_allocator_initialized) {
+						is_extra_chunk_allocator_initialized = true;
+						extra_chunk_allocator = CreateGlobalMemoryManager(ECS_GB, ECS_KB, ECS_GB * 10);
+					}
+					functor_data.write_data = {};
+					if (!save_data->chunk_functors[index].function(&functor_data)) {
+						// For some reason the function failed (here we were requesting the write size only), we should fail as well
+						return false;
+					}
+
+					void* allocation = extra_chunk_allocator.Allocate(functor_data.write_data.size);
+					functor_data.write_data.buffer = allocation;
+					if (!save_data->chunk_functors[index].function(&functor_data)) {
+						// We should fail as well if the function told us so
+						return false;
+					}
+					
+					// We should commit directly to the file handle
+					if (!WriteFile(file_handle, functor_data.write_data)) {
+						return false;
+					}
+
+					// We should also free the allocation now
+					extra_chunk_allocator.Deallocate(allocation);
+				}
+			}
 		}
 
 		success = SetFileCursorBool(file_handle, 0, ECS_FILE_SEEK_BEG);

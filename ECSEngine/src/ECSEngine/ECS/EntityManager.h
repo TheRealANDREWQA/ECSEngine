@@ -1934,7 +1934,8 @@ namespace ECSEngine {
 
 	// Creates the allocator for the entity pool, the entity pool itself, the entity manager allocator,
 	// and the entity manager itself.
-	ECSENGINE_API EntityManager CreateEntityManagerWithPool(
+	ECSENGINE_API void CreateEntityManagerWithPool(
+		EntityManager* entity_manager,
 		size_t allocator_size, 
 		size_t allocator_pool_count,
 		size_t allocator_new_size, 

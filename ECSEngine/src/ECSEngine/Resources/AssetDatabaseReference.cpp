@@ -196,6 +196,7 @@ namespace ECSEngine {
 		unique_handles.Initialize(allocator, ECS_ASSET_TYPE_COUNT);
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			unique_handles[index].Initialize(allocator, handles[index].size);
+			unique_handles[index].size = 0;
 			for (unsigned int subindex = 0; subindex < handles[index].size; subindex++) {
 				size_t existing_index = SearchBytes(unique_handles[index], handles[index][subindex]);
 				if (existing_index == -1) {

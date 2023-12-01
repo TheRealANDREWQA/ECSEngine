@@ -152,8 +152,6 @@ void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 	else {
 		sandbox_module->settings_name = { nullptr, 0 };
 	}
-	// We need to save sandbox state now
-	SaveEditorSandboxFile(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -439,23 +437,22 @@ bool IsModuleInfoUsed(
 		}
 		else {
 			bool is_used = false;
-			unsigned int sandbox_count = editor_state->sandboxes.size;
-			for (unsigned int index = 0; index < sandbox_count; index++) {
-				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, index, module_index);
+			SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, sandbox_index, module_index);
 				if (sandbox_configuration == configuration) {
-					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, index);
+					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
 					if (running_state) {
 						if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
 							is_used = true;
-							sandbox_indices->AddAssert(index);
+							sandbox_indices->AddAssert(sandbox_index);
 						}
 					}
 					else {
 						is_used = true;
-						sandbox_indices->AddAssert(index);
+						sandbox_indices->AddAssert(sandbox_index);
 					}
 				}
-			}
+			});
 			return is_used;
 		}
 	}
@@ -468,11 +465,10 @@ bool IsModuleInfoUsed(
 			}
 		}
 		else {
-			unsigned int sandbox_count = editor_state->sandboxes.size;
-			for (unsigned int index = 0; index < sandbox_count; index++) {
-				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, index, module_index);
+			if (SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_index) {
+				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, sandbox_index, module_index);
 				if (sandbox_configuration == configuration) {
-					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, index);
+					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
 					if (running_state) {
 						if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
 							return true;
@@ -482,6 +478,9 @@ bool IsModuleInfoUsed(
 						return true;
 					}
 				}
+				return false;
+			})) {
+				return true;
 			}
 		}
 		return false;
@@ -614,6 +613,7 @@ void TickModuleSettingsRefresh(EditorState* editor_state)
 		// Do a pre-determination phase to get all the referenced settings
 		ECS_STACK_CAPACITY_STREAM(ReferencedSetting, referenced_settings, 128);
 
+		// Allow temporary sandboxes as well
 		unsigned int sandbox_count = GetSandboxCount(editor_state);
 		for (unsigned int index = 0; index < sandbox_count; index++) {
 			const EditorSandbox* sandbox = GetSandbox(editor_state, index);

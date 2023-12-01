@@ -245,7 +245,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 				}
 
 				// We need to prevent creating UI scenes and game windows if their respective sandbox doesn't exist
-				unsigned int sandbox_count = GetSandboxCount(editor_state);
+				unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 
 				// Now the game/scene
 				matched_index = get_indexed_window(GAME_WINDOW_NAME, std::min(sandbox_count, MAX_GAME_WINDOWS), GameSetDecriptor);

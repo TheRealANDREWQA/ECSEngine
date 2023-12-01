@@ -4,6 +4,7 @@
 #include "../Editor/EditorParameters.h"
 #include "../Project/ProjectUITemplate.h"
 #include "../Project/ProjectOperations.h"
+#include "../Sandbox/SandboxAccessor.h"
 
 #if 1
 
@@ -259,7 +260,8 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 	}
 
 	// If the number of sandboxes has changed, modify the buffer
-	if (editor_state->sandboxes.size != data->game_ui_handlers.size) {
+	size_t sandbox_count = GetSandboxCount(editor_state, true);
+	if (sandbox_count != data->game_ui_handlers.size) {
 		if (data->game_ui_handlers.size != 0) {
 			// Deallocate if valid
 			drawer.RemoveAllocation(data->game_ui_handlers.buffer);
@@ -268,24 +270,24 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		void* allocation = drawer.GetMainAllocatorBuffer((sizeof(UIActionHandler) * 2 + sizeof(CreateGameUIActionData) + sizeof(CreateSceneUIWindowActionData)) 
 			* editor_state->sandboxes.size);
 		data->game_ui_handlers.buffer = (UIActionHandler*)allocation;
-		allocation = OffsetPointer(allocation, sizeof(UIActionHandler) * editor_state->sandboxes.size);
+		allocation = OffsetPointer(allocation, sizeof(UIActionHandler) * sandbox_count);
 
 		data->scene_ui_handlers.buffer = (UIActionHandler*)allocation;
-		allocation = OffsetPointer(allocation, sizeof(UIActionHandler) * editor_state->sandboxes.size);
+		allocation = OffsetPointer(allocation, sizeof(UIActionHandler) * sandbox_count);
 
 		// Now initialize the action data
 		CreateGameUIActionData* game_action_data = (CreateGameUIActionData*)allocation;
-		allocation = OffsetPointer(allocation, sizeof(CreateGameUIActionData) * editor_state->sandboxes.size);
+		allocation = OffsetPointer(allocation, sizeof(CreateGameUIActionData) * sandbox_count);
 		CreateSceneUIWindowActionData* scene_action_data = (CreateSceneUIWindowActionData*)allocation;
 
-		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
+		for (unsigned int index = 0; index < sandbox_count; index++) {
 			game_action_data[index] = { editor_state, index };
 			scene_action_data[index] = { editor_state, index };
 			data->game_ui_handlers[index] = { CreateGameUIWindowAction, game_action_data + index, 0, ECS_UI_DRAW_SYSTEM };
 			data->scene_ui_handlers[index] = { CreateSceneUIWindowAction, scene_action_data + index, 0, ECS_UI_DRAW_SYSTEM };
 		}
-		data->game_ui_handlers.size = editor_state->sandboxes.size;
-		data->scene_ui_handlers.size = editor_state->sandboxes.size;
+		data->game_ui_handlers.size = sandbox_count;
+		data->scene_ui_handlers.size = sandbox_count;
 
 		if (data->game_ui_handlers.size == 0) {
 			data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_GAME_UI] = true;
@@ -355,6 +357,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 			game_ui_characters.AddStreamSafe(current_window_name);
 			game_ui_characters.Add('\n');
 
+			current_window_name.size = 0;
 			GetSceneUIWindowName(index, current_window_name);
 			scene_ui_characters.AddStreamSafe(current_window_name);
 			scene_ui_characters.Add('\n');

@@ -106,7 +106,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 		}
 
 		// Deallocate all the current sandboxes if any
-		size_t initial_sandbox_count = editor_state->sandboxes.size;
+		size_t initial_sandbox_count = GetSandboxCount(editor_state);
 		for (size_t index = 0; index < initial_sandbox_count; index++) {
 			DestroySandbox(editor_state, 0);
 		}
@@ -178,8 +178,9 @@ bool SaveEditorSandboxFile(const EditorState* editor_state)
 	void* stack_buffer = ECS_STACK_ALLOC(STACK_CAPACITY);
 	uintptr_t ptr = (uintptr_t)stack_buffer;
 
+	// Exclude the temporary sandboxes from being saved
 	SandboxFileHeader header;
-	header.count = editor_state->sandboxes.size;
+	header.count = GetSandboxCount(editor_state, true);
 	header.version = SANDBOX_FILE_HEADER_VERSION;
 
 	// Write the header first
@@ -196,7 +197,7 @@ bool SaveEditorSandboxFile(const EditorState* editor_state)
 	options.write_type_table = false;
 	options.error_message = &error_message;
 
-	for (size_t index = 0; index < editor_state->sandboxes.size; index++) {
+	for (size_t index = 0; index < header.count; index++) {
 		ECS_SERIALIZE_CODE code = Serialize(reflection_manager, sandbox_type, editor_state->sandboxes.buffer + index, ptr, &options);
 		if (code != ECS_SERIALIZE_OK) {
 			ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Faulty sandbox {#}. Detailed error message: {#}.", index, error_message);

@@ -68,6 +68,12 @@ void EndSandboxSimulationProfiling(EditorState* editor_state, unsigned int sandb
 	sandbox->world_profiling.EndSimulation();
 }
 
+bool IsSandboxStatisticEnabled(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::ECS_WORLD_PROFILING_OPTIONS profiling_option)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return sandbox->world_profiling.HasOption(profiling_option);
+}
+
 void InvertSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -156,7 +162,8 @@ OS::ECS_OS_EXCEPTION_CONTINUE_STATUS HandleAllSandboxPhysicalMemoryException(Tas
 {
 	EditorState* editor_state = (EditorState*)handler_data->user_data;
 	if (handler_data->exception_information.error_code == OS::ECS_OS_EXCEPTION_PAGE_GUARD) {
-		unsigned int sandbox_count = GetSandboxCount(editor_state);
+		// Exclude temporary sandboxes
+		unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 		unsigned int index = 0;
 		for (; index < sandbox_count; index++) {
 			EditorSandbox* sandbox = GetSandbox(editor_state, index);
