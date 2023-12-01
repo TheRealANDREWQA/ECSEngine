@@ -482,6 +482,8 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 				ConvertASCIIToWide(wide_setting_name, available_settings.string_labels[available_settings.label]);
 			}
 			ChangeSandboxModuleSettings(data->draw_data->editor_state, data->draw_data->sandbox_index, data->editor_module_index, wide_setting_name);
+			// Save the editor sandbox file as well
+			SaveEditorSandboxFile(data->draw_data->editor_state);
 		};
 
 		// Draw the modules in use, first the graphics modules	

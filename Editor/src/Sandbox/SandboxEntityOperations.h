@@ -120,6 +120,35 @@ bool CopySandboxEntities(
 // mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
 // the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
 // If not given, the conversion function must deal with this case
+bool ConvertEditorTargetToLinkComponent(
+	const EditorState* editor_state,
+	Stream<char> link_component,
+	const void* target_data,
+	void* link_data,
+	const void* previous_target_data,
+	const void* previous_link_data,
+	AllocatorPolymorphic allocator = { nullptr }
+);
+
+// Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
+// mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
+// the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
+// If not given, the conversion function must deal with this case
+bool ConvertEditorTargetToLinkComponent(
+	const EditorState* editor_state,
+	const EntityManager* entity_manager,
+	Stream<char> link_component,
+	Entity entity,
+	void* link_data,
+	const void* previous_link_data,
+	const void* previous_target_data,
+	AllocatorPolymorphic allocator = { nullptr }
+);
+
+// Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
+// mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
+// the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
+// If not given, the conversion function must deal with this case
 bool ConvertSandboxTargetToLinkComponent(
 	const EditorState* editor_state,
 	unsigned int sandbox_index, 
@@ -134,15 +163,32 @@ bool ConvertSandboxTargetToLinkComponent(
 
 // Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
 // mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields). The previous link data is used to help the conversion function perform a better/correct conversion
-// If not given, the conversion function must deal with this case
-bool ConvertSandboxTargetToLinkComponent(
-	const EditorState* editor_state,
+// the non asset fields). Be careful with shared components, as this will write in place the value (it will overwrite the shared
+// instance directly)
+bool ConvertEditorLinkComponentToTarget(
+	EditorState* editor_state,
 	Stream<char> link_component,
-	const void* target_data,
-	void* link_data,
+	void* target_data,
+	const void* link_data,
 	const void* previous_target_data,
 	const void* previous_link_data,
+	bool apply_modifier_function,
+	AllocatorPolymorphic allocator = { nullptr }
+);
+
+// Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
+// mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
+// the non asset fields). Be careful with shared components, as this will write in place the value (it will overwrite the shared
+// instance directly)
+bool ConvertEditorLinkComponentToTarget(
+	EditorState* editor_state,
+	EntityManager* entity_manager,
+	Stream<char> link_component,
+	Entity entity,
+	const void* link_data,
+	const void* previous_link_data,
+	bool apply_modifier_function,
+	const void* previous_target_data = nullptr,
 	AllocatorPolymorphic allocator = { nullptr }
 );
 
@@ -161,20 +207,6 @@ bool ConvertSandboxLinkComponentToTarget(
 	const void* previous_target_data = nullptr,
 	AllocatorPolymorphic allocator = { nullptr },
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
-);
-
-// Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
-// mismatch between the types. The allocator is used for the buffer allocations (if it is nullptr then it will just reference
-// the non asset fields)
-bool ConvertSandboxLinkComponentToTarget(
-	EditorState* editor_state,
-	Stream<char> link_component,
-	void* target_data,
-	const void* link_data,
-	const void* previous_target_data,
-	const void* previous_link_data,
-	bool apply_modifier_function,
-	AllocatorPolymorphic allocator = { nullptr }
 );
 
 // This does not remove the asset handles that the shared instances have
@@ -438,6 +470,43 @@ void GetSandboxEntityAssets(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
+void GetEditorComponentAssets(
+	const EditorState* editor_state,
+	const void* component_data,
+	Component component,
+	ECS_COMPONENT_TYPE component_type,
+	CapacityStream<AssetTypedHandle>* handles
+);
+
+// Fills in the asset handles for the given component of the entity
+// (some can repeat if the component has multiple handles of the same type)
+void GetEditorEntityComponentAssets(
+	const EditorState* editor_state,
+	const EntityManager* entity_manager,
+	Entity entity,
+	Component component,
+	CapacityStream<AssetTypedHandle>* handles
+);
+
+// Fills in the asset handles for the given shared component of the entity
+// (some can repeat if the component has multiple handles of the same type)
+void GetEditorEntitySharedComponentAssets(
+	const EditorState* editor_state,
+	const EntityManager* entity_manager,
+	Entity entity,
+	Component component,
+	CapacityStream<AssetTypedHandle>* handles
+);
+
+// Fills in the asset handles that the entity uses (some can repeat if they appear multiple
+// times in the same component or in different components)
+void GetEditorEntityAssets(
+	const EditorState* editor_state,
+	const EntityManager* entity_manager,
+	Entity entity,
+	CapacityStream<AssetTypedHandle>* handles
+);
+
 // Returns the translation midpoint of the given entities from the sandbox
 float3 GetSandboxEntitiesTranslationMidpoint(
 	const EditorState* editor_state,
@@ -480,6 +549,18 @@ bool IsSandboxEntityValid(
 	unsigned int sandbox_index,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
+);
+
+// Returns true if the link component has an apply modifiers function given
+bool NeedsApplyModifierLinkComponent(
+	const EditorState* editor_state,
+	Stream<char> link_name
+);
+
+// Returns true if the link component has an apply button for the modifiers function
+bool NeedsApplyModifierButtonLinkComponent(
+	const EditorState* editor_state,
+	Stream<char> link_name
 );
 
 void ParentSandboxEntity(

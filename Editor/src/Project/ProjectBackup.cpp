@@ -199,7 +199,8 @@ bool SaveProjectBackup(const EditorState* editor_state)
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, sandbox_scene_path, 512);
 	// Now copy the scenes in use by the sandboxes
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
+	// Exclude temporary sandboxes
+	unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 	for (unsigned int index = 0; index < sandbox_count; index++) {
 		sandbox_scene_path.size = 0;
 		GetSandboxScenePath(editor_state, index, sandbox_scene_path);

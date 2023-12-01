@@ -53,8 +53,14 @@ const ECSEngine::EntityManager* GetSandboxEntityManager(
 
 // -------------------------------------------------------------------------------------------------------------
 
-ECS_INLINE unsigned int GetSandboxCount(const EditorState* editor_state) {
-	return editor_state->sandboxes.size;
+ECS_INLINE unsigned int GetSandboxCount(const EditorState* editor_state, bool exclude_temporary_sandboxes = false) {
+	return exclude_temporary_sandboxes ? editor_state->sandboxes.size - editor_state->sandboxes_temporary_count : editor_state->sandboxes.size;
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+ECS_INLINE unsigned int GetSandboxTemporaryCount(const EditorState* editor_state) {
+	return editor_state->sandboxes_temporary_count;
 }
 
 // -------------------------------------------------------------------------------------------------------------

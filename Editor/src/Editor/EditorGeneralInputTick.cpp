@@ -12,7 +12,8 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 		// Then save it directly without a prompt. Otherwise use the SaveScenePopUp
 		// to inform the user about which sandbox to save
 		ECS_STACK_CAPACITY_STREAM(unsigned int, dirty_sandboxes, 512);
-		unsigned int sandbox_count = GetSandboxCount(editor_state);
+		// Exclude temporary sandboxes from consideration
+		unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 		for (unsigned int index = 0; index < sandbox_count; index++) {
 			const EditorSandbox* sandbox = GetSandbox(editor_state, index);
 			// Exclude running or paused sandboxes - consider only scene sandboxes

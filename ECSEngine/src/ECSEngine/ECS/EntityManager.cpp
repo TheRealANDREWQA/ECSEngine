@@ -5790,7 +5790,8 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	EntityManager CreateEntityManagerWithPool(
+	void CreateEntityManagerWithPool(
+		EntityManager* entity_manager,
 		size_t allocator_size,
 		size_t allocator_pool_count,
 		size_t allocator_new_size,
@@ -5814,7 +5815,8 @@ namespace ECSEngine {
 		descriptor.entity_pool = entity_pool;
 		descriptor.memory_manager = entity_manager_allocator;
 
-		return EntityManager(descriptor);
+		*entity_manager = EntityManager(descriptor);
+		entity_manager->m_query_cache->entity_manager = entity_manager;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

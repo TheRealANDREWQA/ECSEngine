@@ -150,7 +150,9 @@ public:
 					auto handle_physical_memory_guards = [&editor_state](EXCEPTION_POINTERS* exception_pointers) {
 						OS::ExceptionInformation exception_information = OS::GetExceptionInformationFromNative(exception_pointers);
 						if (exception_information.error_code == OS::ECS_OS_EXCEPTION_PAGE_GUARD) {
-							unsigned int sandbox_count = GetSandboxCount(&editor_state);
+							// We are not interested in temporary sandboxes since those should not have
+							// physical memory profiling activated
+							unsigned int sandbox_count = GetSandboxCount(&editor_state, true);
 							unsigned int index = 0;
 							for (; index < sandbox_count; index++) {
 								EditorSandbox* sandbox = GetSandbox(&editor_state, index);
@@ -192,7 +194,7 @@ public:
 							// While having all the other windows be drawn at a lesser frequency
 							ECS_STACK_CAPACITY_STREAM(char, focused_window_chars, ECS_KB * 2);
 							ECS_STACK_CAPACITY_STREAM(Stream<char>, focused_windows, 64);
-							unsigned int sandbox_count = GetSandboxCount(&editor_state);
+							unsigned int sandbox_count = GetSandboxCount(&editor_state, true);
 							for (unsigned int index = 0; index < sandbox_count; index++) {
 								unsigned int current_start = focused_window_chars.size;
 								GetSceneUIWindowName(index, focused_window_chars);

@@ -133,6 +133,11 @@ namespace ECSEngine {
 			size_t thread_arena_backup_capacity = ECS_CPU_FRAME_PROFILER_THREAD_ALLOCATOR_BACKUP_CAPACITY
 		);
 
+		// In case the simulation is stopped, this will refresh the overall frame time marker
+		// To the current moment, such that when the simulation is actually ran, it will give
+		// An accurate result
+		void RefreshOverallTime();
+
 		void StartFrame();
 
 		Stream<CPUFrameProfilerThread> threads;

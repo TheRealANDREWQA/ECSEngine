@@ -1956,11 +1956,11 @@ namespace ECSEngine {
 
 		if (is_byte_code) {
 			ECS_ASSERT(shader_source_code == nullptr, "Cannot retrieve shader source code from binary shader.");
-			contents = ReadWholeFileBinary(filename.buffer, allocator_polymorphic);
+			contents = ReadWholeFileBinary(filename, allocator_polymorphic);
 			shader = manager->m_graphics->CreateShader(filename, type, HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
 		}
 		else {
-			Stream<char> source_code = ReadWholeFileText(filename.buffer, allocator_polymorphic);
+			Stream<char> source_code = ReadWholeFileText(filename, allocator_polymorphic);
 			ShaderIncludeFiles include(manager->m_memory, manager->m_shader_directory);
 			shader = manager->m_graphics->CreateShaderFromSource(
 				source_code,
@@ -1980,7 +1980,7 @@ namespace ECSEngine {
 		}
 		else {
 			if (shader != nullptr) {
-				*shader_source_code = Stream<char>(contents.buffer, contents.size);
+				*shader_source_code = contents.As<char>();
 			}
 			else {
 				if (contents.size > 0) {

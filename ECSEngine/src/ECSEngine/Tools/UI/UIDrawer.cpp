@@ -3678,23 +3678,8 @@ namespace ECSEngine {
 				const UIConfigComboBoxMapping* mappings = (const UIConfigComboBoxMapping*)config.GetParameter(UI_CONFIG_COMBO_BOX_MAPPING);
 				if (!mappings->stable) {
 					size_t copy_size = data->labels.size * mappings->byte_size;
-					if (data->labels.size != data->mapping_capacity) {
-						if (data->mapping_capacity > 0) {
-							// Allocate a new buffer
-							RemoveAllocation(data->mappings);
-						}
-						data->mappings = GetMainAllocatorBuffer(copy_size);
-					}
 					memcpy(data->mappings, mappings->mappings, copy_size);
 					data->mapping_byte_size = mappings->byte_size;
-				}
-			}
-			else {
-				if (data->mapping_capacity > 0) {
-					RemoveAllocation(data->mappings);
-					data->mappings = nullptr;
-					data->mapping_byte_size = 0;
-					data->mapping_capacity = 0;
 				}
 			}
 
@@ -3703,20 +3688,7 @@ namespace ECSEngine {
 				const UIConfigComboBoxUnavailable* unavailables = (const UIConfigComboBoxUnavailable*)config.GetParameter(UI_CONFIG_COMBO_BOX_UNAVAILABLE);
 				if (!unavailables->stable) {
 					size_t copy_size = data->labels.size * sizeof(bool);
-					if (data->labels.size != data->unavailables_capacity) {
-						if (data->unavailables != nullptr && data->unavailables_capacity > 0) {
-							RemoveAllocation(data->unavailables);
-						}
-						data->unavailables = (bool*)GetMainAllocatorBuffer(copy_size);
-					}
 					memcpy(data->unavailables, unavailables->unavailables, copy_size);
-				}
-			}
-			else {
-				if (data->unavailables_capacity > 0) {
-					RemoveAllocation(data->unavailables);
-					data->unavailables = nullptr;
-					data->unavailables_capacity = 0;
 				}
 			}
 
@@ -10070,6 +10042,29 @@ namespace ECSEngine {
 						ECS_ASSERT(dynamic_index != -1);
 						system->ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, data->labels.buffer, allocation);
 						RemoveAllocation(data->labels.buffer);
+
+						if (configuration & UI_CONFIG_COMBO_BOX_UNAVAILABLE) {
+							// We need to check if we need to resize the allocation here as well
+							const UIConfigComboBoxUnavailable* unavailables = (const UIConfigComboBoxUnavailable*)config.GetParameter(UI_CONFIG_COMBO_BOX_UNAVAILABLE);
+							if (!unavailables->stable) {
+								void* new_allocation = GetMainAllocatorBuffer(sizeof(bool) * data->labels.size);
+								system->ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, data->unavailables, new_allocation);
+								RemoveAllocation(data->unavailables);
+								data->unavailables = (bool*)new_allocation;
+								data->unavailables_capacity = data->labels.size;
+							}
+						}
+
+						if (configuration & UI_CONFIG_COMBO_BOX_MAPPING) {
+							const UIConfigComboBoxMapping* mapping = (const UIConfigComboBoxMapping*)config.GetParameter(UI_CONFIG_COMBO_BOX_MAPPING);
+							if (!mapping->stable) {
+								void* new_allocation = GetMainAllocatorBuffer(data->mapping_byte_size * data->labels.size);
+								system->ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, data->mappings, new_allocation);
+								RemoveAllocation(data->mappings);
+								data->mappings = new_allocation;
+								data->mapping_capacity = data->labels.size;
+							}
+						}
 
 						uintptr_t ptr = (uintptr_t)allocation;
 						data->labels = StreamCoalescedDeepCopy(labels, ptr);

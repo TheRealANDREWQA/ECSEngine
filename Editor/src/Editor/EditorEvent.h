@@ -6,9 +6,6 @@
 // Can be called from multiple threads. It returns the pointer of data allocated or given if the event_data_size is 0
 void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, void* event_data, size_t event_data_size = 0);
 
-// Returns the last event data
-void* EditorEventLastData(EditorState* editor_state);
-
 // Returns true if it finds an event with the given function
 bool EditorHasEvent(const EditorState* editor_state, EditorEventFunction function);
 

@@ -175,7 +175,7 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 
 		const char* COMBO_PREFIX = "Sandbox: ";
 
-		unsigned int sandbox_count = editor_state->sandboxes.size;
+		unsigned int sandbox_count = GetSandboxCount(editor_state);
 
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, combo_labels, sandbox_count + 1);
 		// We need only to convert the sandbox indices. We will use a prefix to indicate that it is the sandbox index
@@ -283,11 +283,22 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 			combo_prefix.prefix = COMBO_PREFIX;
 			config.AddFlag(combo_prefix);
 
+			bool* sandbox_unavailables = (bool*)ECS_STACK_ALLOC(sizeof(bool) * (sandbox_count + 1));
+			memset(sandbox_unavailables, false, sizeof(bool) * (sandbox_count + 1));
+
+			unsigned int temporary_sandbox_count = GetSandboxTemporaryCount(editor_state);
+			memset(sandbox_unavailables + sandbox_count - temporary_sandbox_count, true, sizeof(bool) * temporary_sandbox_count);
+			// We also need to add the temporary sandboxes as unavailables
+			UIConfigComboBoxUnavailable unavailables;
+			unavailables.unavailables = sandbox_unavailables;
+			unavailables.stable = false;
+			config.AddFlag(unavailables);
+
 			// Draw the checkbox
 			// For the moment, cast the pointer to unsigned char even tho it is an unsigned int
 			// It behaves correctly since if the value stays lower than UCHAR_MAX
 			drawer.ComboBox(
-				configuration | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_CALLBACK,
+				configuration | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_CALLBACK | UI_CONFIG_COMBO_BOX_UNAVAILABLE,
 				config,
 				"Sandbox combo",
 				combo_labels,
@@ -877,7 +888,7 @@ void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sa
 // ----------------------------------------------------------------------------------------------------------------------------
 
 void RegisterInspectorSandboxChange(EditorState* editor_state) {
-	unsigned int sandbox_count = editor_state->sandboxes.size;
+	unsigned int sandbox_count = GetSandboxCount(editor_state);
 	if (sandbox_count > editor_state->inspector_manager.round_robin_index.size) {
 		// An addition was done - just copy to a new buffer
 		Stream<unsigned int> old_stream = editor_state->inspector_manager.round_robin_index;

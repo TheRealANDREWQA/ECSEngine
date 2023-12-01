@@ -1242,7 +1242,8 @@ unsigned int CreateSceneUIWindowOnly(EditorState* editor_state, unsigned int ind
 
 void DestroyInvalidSceneUIWindows(EditorState* editor_state)
 {
-	DestroyIndexedWindows(editor_state, SCENE_WINDOW_NAME, editor_state->sandboxes.size, MAX_SCENE_WINDOWS);
+	// Include the temporary sandboxes as well
+	DestroyIndexedWindows(editor_state, SCENE_WINDOW_NAME, GetSandboxCount(editor_state), MAX_SCENE_WINDOWS);
 }
 
 void GetSceneUIWindowName(unsigned int index, CapacityStream<char>& name) {

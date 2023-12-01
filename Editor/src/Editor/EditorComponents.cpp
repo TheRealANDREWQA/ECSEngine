@@ -2519,30 +2519,30 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 	ExecuteComponentEventData* data = (ExecuteComponentEventData*)_data;
 
 	bool was_handled = true;
-	for (unsigned int index = 0; index < data->editor_state->sandboxes.size; index++) {
+	SandboxAction(data->editor_state, -1, [&](unsigned int sandbox_index) {
 		// Update the runtime entity manager - if it paused or running
-		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(data->editor_state, index);
+		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(data->editor_state, sandbox_index);
 		if (sandbox_state != EDITOR_SANDBOX_SCENE) {
 			data->editor_state->editor_components.ResolveEvent(
 				data->editor_state,
-				index,
+				sandbox_index,
 				EDITOR_SANDBOX_VIEWPORT_RUNTIME,
 				data->editor_state->module_reflection->reflection,
 				data->event_to_handle,
-				data->runtime_options.buffer + index
+				data->runtime_options.buffer + sandbox_index
 			);
 		}
 
 		// Now handle the scene manager
 		was_handled &= data->editor_state->editor_components.ResolveEvent(
 			data->editor_state,
-			index,
+			sandbox_index,
 			EDITOR_SANDBOX_VIEWPORT_SCENE,
 			data->editor_state->module_reflection->reflection,
 			data->event_to_handle,
-			data->scene_options.buffer + index
+			data->scene_options.buffer + sandbox_index
 		);
-	}
+	});
 
 	if (!was_handled) {
 		data->unhandled_events->Add(data->event_to_handle);
@@ -2727,13 +2727,14 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 
 		editor_state->editor_components.GetUserEvents(user_events);
 
+		size_t sandbox_count = GetSandboxCount(editor_state);
 		// For each sandbox we must create its appropriate spin locks
 		size_t total_allocation_size = sizeof(Semaphore) + sizeof(SpinLock) + sizeof(EditorComponents::ResolveEventOptions) *
-			editor_state->sandboxes.size * 2;
-		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
-			total_allocation_size += EditorComponents::ResolveEventOptionsSize(editor_state->sandboxes[index].sandbox_world.entity_manager);
-			total_allocation_size += EditorComponents::ResolveEventOptionsSize(&editor_state->sandboxes[index].scene_entities);
-		}
+			 sandbox_count * 2;
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+			total_allocation_size += EditorComponents::ResolveEventOptionsSize(GetSandbox(editor_state, sandbox_index)->sandbox_world.entity_manager);
+			total_allocation_size += EditorComponents::ResolveEventOptionsSize(&GetSandbox(editor_state, sandbox_index)->scene_entities);
+		});
 
 		void* allocation = editor_state->multithreaded_editor_allocator->Allocate_ts(total_allocation_size);
 		Semaphore* semaphore = (Semaphore*)allocation;
@@ -2748,7 +2749,7 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 			editor_state->editor_components.allocator, 
 			sizeof(AtomicStream<EditorComponentEvent>)
 		);
-		unhandled_events->Initialize(editor_state->editor_components.allocator, editor_state->editor_components.events.size * editor_state->sandboxes.size);
+		unhandled_events->Initialize(editor_state->editor_components.allocator, editor_state->editor_components.events.size * sandbox_count);
 		ResizableStream<EditorComponentEvent>* handled_events = (ResizableStream<EditorComponentEvent>*)Allocate(
 			editor_state->editor_components.allocator,
 			sizeof(ResizableStream<EditorComponentEvent>)
@@ -2758,13 +2759,13 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 		Stream<EditorComponents::ResolveEventOptions> runtime_options;
 		Stream<EditorComponents::ResolveEventOptions> scene_options;
 
-		runtime_options.InitializeFromBuffer(ptr, editor_state->sandboxes.size);
-		scene_options.InitializeFromBuffer(ptr, editor_state->sandboxes.size);
+		runtime_options.InitializeFromBuffer(ptr, sandbox_count);
+		scene_options.InitializeFromBuffer(ptr, sandbox_count);
 
-		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
-			runtime_options[index] = EditorComponents::ResolveEventOptionsFromBuffer(editor_state->sandboxes[index].sandbox_world.entity_manager, ptr);
-			scene_options[index] = EditorComponents::ResolveEventOptionsFromBuffer(&editor_state->sandboxes[index].scene_entities, ptr);
-		}
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+			runtime_options[sandbox_index] = EditorComponents::ResolveEventOptionsFromBuffer(GetSandbox(editor_state, sandbox_index)->sandbox_world.entity_manager, ptr);
+			scene_options[sandbox_index] = EditorComponents::ResolveEventOptionsFromBuffer(&GetSandbox(editor_state, sandbox_index)->scene_entities, ptr);
+		});
 
 		semaphore->Enter(editor_state->editor_components.events.size);
 

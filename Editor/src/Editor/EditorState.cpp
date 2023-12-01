@@ -681,8 +681,10 @@ void EditorStateApplicationQuit(EditorState* editor_state, EDITOR_APPLICATION_QU
 	ApplicationQuitHandlerData quit_data;
 	quit_data.response = response;
 
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, sandbox_indices, editor_state->sandboxes.size);
-	sandbox_indices.size = editor_state->sandboxes.size;
+	// Exclude temporary sandboxes from consideration
+	unsigned int sandbox_count = GetSandboxCount(editor_state, true);
+	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, sandbox_indices, sandbox_count);
+	sandbox_indices.size = sandbox_indices.capacity;
 	MakeSequence(sandbox_indices);
 	CreateSaveScenePopUp(editor_state, sandbox_indices, { ApplicationQuitHandler, &quit_data, sizeof(quit_data) });
 }
@@ -703,10 +705,9 @@ void EditorStateBeforeExitCleanup(EditorState* editor_state)
 	// At the moment, this is not really necessary
 	/*editor_state->task_manager->SleepUntilDynamicTasksFinish();
 	
-	unsigned int sandbox_count = editor_state->sandboxes.size;
-	for (size_t index = 0; index < sandbox_count; index++) {
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 		DestroySandbox(editor_state, 0);
-	}
+	});
 
 	DestroyGraphics(editor_state->RuntimeGraphics());
 	DestroyGraphics(editor_state->UIGraphics());*/

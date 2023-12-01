@@ -80,7 +80,6 @@
     <ClInclude Include="src\UI\DragTargets.h" />
     <ClInclude Include="src\UI\PrefabSceneDrag.h" />
     <ClInclude Include="src\Assets\Prefab.h" />
-    <ClInclude Include="src\Editor\EditorBaseEntityOperations.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -152,7 +151,6 @@
     <ClCompile Include="src\Assets\PrefabFile.cpp" />
     <ClCompile Include="src\UI\PrefabSceneDrag.cpp" />
     <ClCompile Include="src\Assets\Prefab.cpp" />
-    <ClCompile Include="src\Editor\EditorBaseEntityOperations.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

@@ -187,14 +187,15 @@ namespace ECSEngine {
 		bool PushOverwrite(T element, T* overwritten_element) {
 			unsigned int peek_index = PeekIndex();
 			peek_index = peek_index == (m_stack.capacity - 1) ? 0 : peek_index + 1;
-			m_stack[peek_index] = element;
 
 			if (m_stack.size == m_stack.capacity) {
 				*overwritten_element = m_stack[m_first_item];
+				m_stack[peek_index] = element;
 				m_first_item = m_first_item == m_stack.capacity - 1 ? 0 : m_first_item + 1;
 				return true;
 			}
 			else {
+				m_stack[peek_index] = element;
 				m_stack.size++;
 				return false;
 			}
@@ -204,14 +205,15 @@ namespace ECSEngine {
 		bool PushOverwrite(const T* element, T* overwritten_element) {
 			unsigned int peek_index = PeekIndex();
 			peek_index = peek_index == (m_stack.capacity - 1) ? 0 : peek_index + 1;
-			m_stack[peek_index] = *element;
 
 			if (m_stack.size == m_stack.capacity) {
 				*overwritten_element = m_stack[m_first_item];
+				m_stack[peek_index] = *element;
 				m_first_item = m_first_item == m_stack.capacity - 1 ? 0 : m_first_item + 1;
 				return true;
 			}
 			else {
+				m_stack[peek_index] = *element;
 				m_stack.size++;
 				return false;
 			}

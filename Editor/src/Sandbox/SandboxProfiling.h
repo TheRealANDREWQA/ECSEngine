@@ -2,6 +2,10 @@
 
 struct EditorState;
 
+namespace ECSEngine {
+	enum ECS_WORLD_PROFILING_OPTIONS : unsigned char;
+}
+
 enum EDITOR_SANDBOX_CPU_STATISTICS_TYPE : unsigned char;
 enum EDITOR_SANDBOX_GPU_STATISTICS_TYPE : unsigned char;
 enum EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY : unsigned char;
@@ -27,6 +31,8 @@ void EnableSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sand
 void EndSandboxFrameProfiling(EditorState* editor_state, unsigned int sandbox_index);
 
 void EndSandboxSimulationProfiling(EditorState* editor_state, unsigned int sandbox_index);
+
+bool IsSandboxStatisticEnabled(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::ECS_WORLD_PROFILING_OPTIONS profiling_option);
 
 void InvertSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sandbox_index);
 

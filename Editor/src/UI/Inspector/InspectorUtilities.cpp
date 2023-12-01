@@ -3,6 +3,7 @@
 #include "ECSEngineUI.h"
 #include "../Inspector.h"
 #include "../../Editor/EditorState.h"
+#include "../../Sandbox/SandboxAccessor.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -142,7 +143,7 @@ unsigned int GetMatchingIndexFromRobin(EditorState* editor_state, unsigned int t
 		}
 	}
 
-	unsigned int round_robing_index = target_sandbox == -1 ? editor_state->sandboxes.size : target_sandbox;
+	unsigned int round_robing_index = target_sandbox == -1 ? GetSandboxCount(editor_state) : target_sandbox;
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
 		unsigned int current_inspector = (editor_state->inspector_manager.round_robin_index[round_robing_index] + index) % editor_state->inspector_manager.data.size;
 		bool matches_sandbox = target_sandbox == -1 || DoesInspectorMatchSandbox(editor_state, current_inspector, target_sandbox);

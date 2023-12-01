@@ -187,6 +187,10 @@ struct ECS_REFLECT EditorSandbox {
 		return (ECSEngine::GlobalMemoryManager*)modules_in_use.allocator.allocator;
 	}
 
+	ECS_INLINE const ECSEngine::GlobalMemoryManager* GlobalMemoryManager() const {
+		return (const ECSEngine::GlobalMemoryManager*)modules_in_use.allocator.allocator;
+	}
+
 	ECS_INLINE EditorSandbox& operator = (const EditorSandbox& other) {
 		memcpy(this, &other, sizeof(*this));
 		return *this;

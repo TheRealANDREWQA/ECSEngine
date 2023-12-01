@@ -286,6 +286,11 @@ namespace ECSEngine {
 		Initialize(allocator, thread_handles, entry_capacity, thread_arena_capacity, thread_arena_backup_capacity);
 	}
 
+	void CPUFrameProfiler::RefreshOverallTime()
+	{
+		timer.SetNewStart();
+	}
+
 	void CPUFrameProfiler::StartFrame()
 	{
 		if (timer.IsUninitialized()) {

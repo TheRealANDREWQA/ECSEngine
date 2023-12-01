@@ -30,11 +30,6 @@ struct RegisterAssetEventCallbackInfo {
 	bool success;
 };
 
-struct UnregisterSandboxAssetElement {
-	unsigned int handle;
-	ECS_ASSET_TYPE type;
-};
-
 struct UnregisterAssetEventCallbackInfo {
 	unsigned int handle;
 	ECS_ASSET_TYPE type;
@@ -53,9 +48,19 @@ void AddLoadingAssets(EditorState* editor_state, Stream<AssetTypedHandle> handle
 // a structure of type UnregisterAssetEventCallbackInfo
 void AddUnregisterAssetEvent(
 	EditorState* editor_state,
-	Stream<UnregisterSandboxAssetElement> elements,
+	Stream<AssetTypedHandle> elements,
 	bool sandbox_assets,
 	unsigned int sandbox_index = -1,
+	UIActionHandler callback = {}
+);
+
+// If the database reference is specified, then it will remove occurences from it as well
+// The callback receives in the additional info field
+// a structure of type UnregisterAssetEventCallbackInfo
+void AddUnregisterAssetEvent(
+	EditorState* editor_state,
+	Stream<AssetTypedHandle> elements,
+	AssetDatabaseReference* database_reference = nullptr,
 	UIActionHandler callback = {}
 );
 
@@ -68,6 +73,17 @@ void AddUnregisterAssetEventHomogeneous(
 	Stream<Stream<unsigned int>> elements,
 	bool sandbox_assets,
 	unsigned int sandbox_index = -1,
+	UIActionHandler callback = {}
+);
+
+// The sandbox_assets boolean should be true if the assets belong to a sandbox
+// If they belong to sandboxes and the sandbox_index is -1 then it will remove it
+// from every sandbox that contains it. The callback receives in the additional info field
+// a structure of type UnregisterAssetEventCallbackInfo
+void AddUnregisterAssetEventHomogeneous(
+	EditorState* editor_state,
+	Stream<Stream<unsigned int>> elements,
+	AssetDatabaseReference* database_reference = nullptr,
 	UIActionHandler callback = {}
 );
 
@@ -178,6 +194,16 @@ void DeleteMissingAssetSettings(const EditorState* editor_state);
 // Returns true if the asset was successfully decremented. It can fail if it is evicted and it could not be deallocated
 // If the sandbox index is different from -1, it will also remove a reference from the given sandbox
 bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1, bool* was_removed = nullptr);
+
+// Returns true if the asset was successfully decremented. It can fail if it is evicted and it could not be deallocated
+// If the database reference is not nullptr, it will remove a reference from it as well
+bool DecrementAssetReference(
+	EditorState* editor_state, 
+	unsigned int handle, 
+	ECS_ASSET_TYPE type, 
+	AssetDatabaseReference* database_reference, 
+	bool* was_removed = nullptr
+);
 
 // Returns true if the asset already exists in the asset database or not. For materials and samplers the file parameter is ignored
 bool ExistsAsset(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
@@ -395,7 +421,7 @@ void UnregisterGlobalAsset(EditorState* editor_state, unsigned int handle, ECS_A
 
 // This unregister is for assets that are not tied down to a sandbox.
 // Useful for example for inspectors. It will wait until the flag EDITOR_STATE_PREVENT_RESOURCE_LOADING is cleared
-void UnregisterGlobalAsset(EditorState* editor_state, Stream<UnregisterSandboxAssetElement> elements, UIActionHandler callback = {});
+void UnregisterGlobalAsset(EditorState* editor_state, Stream<AssetTypedHandle> elements, UIActionHandler callback = {});
 
 // This unregister is for assets that are not tied down to a sandbox.
 // Useful for example for inspectors. It will wait until the flag EDITOR_STATE_PREVENT_RESOURCE_LOADING is cleared

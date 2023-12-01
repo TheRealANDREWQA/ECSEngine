@@ -4,7 +4,6 @@
 #include "../../Sandbox/SandboxEntityOperations.h"
 #include "../../Sandbox/Sandbox.h"
 #include "../../Assets/EditorSandboxAssets.h"
-#include "../../Editor/EditorBaseEntityOperations.h"
 #include "InspectorUtilities.h"
 #include "ECSEngineComponents.h"
 #include "../../Modules/Module.h"
@@ -513,7 +512,7 @@ struct InspectorDrawEntityData {
 
 		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_name);
 		if (is_global_component) {
-			ConvertSandboxLinkComponentToTarget(
+			ConvertEditorLinkComponentToTarget(
 				editor_state,
 				link_name,
 				ActiveEntityManager(editor_state, sandbox_index)->GetGlobalComponent(global_component),
@@ -576,7 +575,7 @@ struct InspectorDrawEntityData {
 			compare_options.blittable_types = blittable_types;
 			if (!Reflection::CompareReflectionTypeInstances(editor_state->editor_components.internal_manager, target_name, target_data, current_data, 1, &compare_options)) {
 				// We need to convert the target to the link and update the target data copy
-				bool success = ConvertSandboxTargetToLinkComponent(
+				bool success = ConvertEditorTargetToLinkComponent(
 					editor_state,
 					link_name,
 					target_data,
@@ -1192,7 +1191,7 @@ static void DrawComponents(
 						);
 					}
 					else {
-						success = ConvertSandboxTargetToLinkComponent(
+						success = ConvertEditorTargetToLinkComponent(
 							editor_state,
 							link_component,
 							entity_manager->GetGlobalComponent(data->global_component),
@@ -1519,15 +1518,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
 	InspectorDrawEntityData* data = (InspectorDrawEntityData*)_data;
 
-	bool is_initialized = data->name_input.buffer != nullptr;
-	if (!is_initialized) {
-		// The name input is embedded in the structure
-		data->name_input.buffer = (char*)OffsetPointer(data, sizeof(*data));
-		data->allocator = MemoryManager(ECS_KB * 64, ECS_KB, ECS_KB * 512, editor_state->EditorAllocator());
-	}
-
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-
 	// Check to see if the entity or global component still exists - else revert to draw nothing
 	if (!data->is_global_component) {
 		if (!entity_manager->ExistsEntity(data->entity)) {
@@ -1726,8 +1717,8 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 template<typename CompareFunctor, typename SetInfoFunctor>
 static void ChangeInspectorToEntityOrGlobalComponentImpl(
-	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	EditorState* editor_state,
+	unsigned int sandbox_index,
 	unsigned int inspector_index,
 	CompareFunctor&& compare_functor,
 	SetInfoFunctor&& set_info_functor
@@ -1775,7 +1766,7 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 
 	DetermineDebugDrawStates(editor_state, sandbox_index, draw_data);
 
-	ChangeInspectorDrawFunction(
+	inspector_index = ChangeInspectorDrawFunction(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawEntity, InspectorCleanEntity },
@@ -1783,6 +1774,13 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 		sizeof(*draw_data) + INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY,
 		sandbox_index
 	);
+	if (inspector_index != -1) {
+		SetLastInspectorTargetInitialize(editor_state, inspector_index, [](EditorState* editor_state, void* _data, unsigned int inspector_index) {
+			InspectorDrawEntityData* draw_data = (InspectorDrawEntityData*)_data;
+			draw_data->name_input.buffer = (char*)OffsetPointer(draw_data, sizeof(*draw_data));
+			draw_data->allocator = MemoryManager(ECS_KB * 48, ECS_KB, ECS_KB * 256, editor_state->EditorAllocator());
+		});
+	}
 }
 
 void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index)

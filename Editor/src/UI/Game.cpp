@@ -124,7 +124,8 @@ unsigned int CreateGameUIWindowOnly(EditorState* editor_state, unsigned int inde
 
 void DestroyInvalidGameUIWindows(EditorState* editor_state)
 {
-	DestroyIndexedWindows(editor_state, GAME_WINDOW_NAME, editor_state->sandboxes.size, MAX_GAME_WINDOWS);
+	// Include temporary sandboxes as well
+	DestroyIndexedWindows(editor_state, GAME_WINDOW_NAME, GetSandboxCount(editor_state), MAX_GAME_WINDOWS);
 }
 
 void GetGameUIWindowName(unsigned int index, CapacityStream<char>& name)

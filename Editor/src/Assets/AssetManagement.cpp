@@ -119,7 +119,7 @@ EDITOR_EVENT(RegisterEvent) {
 		unsigned int previous_handle = *data->handle;
 		if (data->unregister_if_exists) {;
 			if (previous_handle != -1) {
-				UnregisterSandboxAssetElement element;
+				AssetTypedHandle element;
 				element.handle = previous_handle;
 				element.type = data->type;
 				AddUnregisterAssetEvent(editor_state, { &element, 1 }, data->sandbox_index != -1, data->sandbox_index);
@@ -207,6 +207,7 @@ EDITOR_EVENT(RegisterEvent) {
 // ----------------------------------------------------------------------------------------------
 
 struct UnregisterEventDataBase {
+	AssetDatabaseReference* database_reference;
 	unsigned int sandbox_index;
 	bool sandbox_assets;
 	UIActionHandler callback;
@@ -214,7 +215,7 @@ struct UnregisterEventDataBase {
 
 struct UnregisterEventData {
 	UnregisterEventDataBase base_data;
-	Stream<UnregisterSandboxAssetElement> elements;
+	Stream<AssetTypedHandle> elements;
 };
 
 struct UnregisterEventHomogeneousData {
@@ -265,7 +266,8 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 						data->callback.action(&dummy_data);
 					}
 
-					bool success = DecrementAssetReference(editor_state, handle, type, sandbox_index);
+					AssetDatabaseReference* database_reference = sandbox_index == -1 ? data->database_reference : &GetSandbox(editor_state, sandbox_index)->database;
+					bool success = DecrementAssetReference(editor_state, handle, type, database_reference);
 					if (!success) {
 						fail(asset_name, file, type, "Possible causes: internal error or the asset was not loaded in the first place.");
 					}
@@ -342,22 +344,22 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 
 EDITOR_EVENT(UnregisterAssetEvent) {
 	struct Extractor {
-		static unsigned int Handle(void* _data, size_t index) {
+		ECS_INLINE static unsigned int Handle(void* _data, size_t index) {
 			UnregisterEventData* data = (UnregisterEventData*)_data;
 			return data->elements[index].handle;
 		}
 
-		static ECS_ASSET_TYPE Type(void* _data, size_t index) {
+		ECS_INLINE static ECS_ASSET_TYPE Type(void* _data, size_t index) {
 			UnregisterEventData* data = (UnregisterEventData*)_data;
 			return data->elements[index].type;
 		}
 
-		static size_t Count(void* _data) {
+		ECS_INLINE static size_t Count(void* _data) {
 			UnregisterEventData* data = (UnregisterEventData*)_data;
 			return data->elements.size;
 		}
 
-		static void* Data(void* _data) {
+		ECS_INLINE static void* Data(void* _data) {
 			UnregisterEventData* data = (UnregisterEventData*)_data;
 			return data->elements.buffer;
 		}
@@ -367,22 +369,22 @@ EDITOR_EVENT(UnregisterAssetEvent) {
 
 EDITOR_EVENT(UnregisterAssetEventHomogeneous) {
 	struct Extractor {
-		static unsigned int Handle(void* _data, size_t index) {
+		ECS_INLINE static unsigned int Handle(void* _data, size_t index) {
 			UnregisterEventHomogeneousData* data = (UnregisterEventHomogeneousData*)_data;
 			return data->elements[index];
 		}
 
-		static ECS_ASSET_TYPE Type(void* _data, size_t index) {
+		ECS_INLINE static ECS_ASSET_TYPE Type(void* _data, size_t index) {
 			UnregisterEventHomogeneousData* data = (UnregisterEventHomogeneousData*)_data;
 			return data->type;
 		}
 
-		static size_t Count(void* _data) {
+		ECS_INLINE static size_t Count(void* _data) {
 			UnregisterEventData* data = (UnregisterEventData*)_data;
 			return data->elements.size;
 		}
 
-		static void* Data(void* _data) {
+		ECS_INLINE static void* Data(void* _data) {
 			UnregisterEventHomogeneousData* data = (UnregisterEventHomogeneousData*)_data;
 			return data->elements.buffer;
 		}
@@ -487,7 +489,7 @@ void AddLoadingAssets(EditorState* editor_state, Stream<AssetTypedHandle> handle
 
 void AddUnregisterAssetEvent(
 	EditorState* editor_state,
-	Stream<UnregisterSandboxAssetElement> elements,
+	Stream<AssetTypedHandle> elements,
 	bool sandbox_assets,
 	unsigned int sandbox_index,
 	UIActionHandler callback
@@ -498,7 +500,7 @@ void AddUnregisterAssetEvent(
 	}
 
 	callback.data = CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
-	UnregisterEventData event_data = { { sandbox_index, sandbox_assets, callback } };
+	UnregisterEventData event_data = { { nullptr, sandbox_index, sandbox_assets, callback } };
 	event_data.elements.InitializeAndCopy(editor_state->EditorAllocator(), elements);
 	EditorAddEvent(editor_state, UnregisterAssetEvent, &event_data, sizeof(event_data));
 
@@ -507,6 +509,20 @@ void AddUnregisterAssetEvent(
 			LockSandbox(editor_state, sandbox_index);
 		});
 	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void AddUnregisterAssetEvent(EditorState* editor_state, Stream<AssetTypedHandle> elements, AssetDatabaseReference* database_reference, UIActionHandler callback)
+{
+	if (elements.size == 0) {
+		return;
+	}
+
+	callback.data = CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
+	UnregisterEventData event_data = { { database_reference, -1, false, callback } };
+	event_data.elements.InitializeAndCopy(editor_state->EditorAllocator(), elements);
+	EditorAddEvent(editor_state, UnregisterAssetEvent, &event_data, sizeof(event_data));
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -521,7 +537,7 @@ void AddUnregisterAssetEventHomogeneous(
 {
 	for (size_t index = 0; index < elements.size; index++) {
 		if (elements[index].size > 0) {
-			UnregisterEventHomogeneousData event_data = { { sandbox_index, sandbox_assets, callback }, (ECS_ASSET_TYPE)index };
+			UnregisterEventHomogeneousData event_data = { { nullptr, sandbox_index, sandbox_assets, callback }, (ECS_ASSET_TYPE)index };
 			event_data.elements.InitializeAndCopy(editor_state->EditorAllocator(), elements[index]);
 			EditorAddEvent(editor_state, UnregisterAssetEventHomogeneous, &event_data, sizeof(event_data));
 
@@ -531,6 +547,24 @@ void AddUnregisterAssetEventHomogeneous(
 					LockSandbox(editor_state, sandbox_index);
 				});
 			}
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void AddUnregisterAssetEventHomogeneous(
+	EditorState* editor_state,
+	Stream<Stream<unsigned int>> elements,
+	AssetDatabaseReference* database_reference,
+	UIActionHandler callback
+)
+{
+	for (size_t index = 0; index < elements.size; index++) {
+		if (elements[index].size > 0) {
+			UnregisterEventHomogeneousData event_data = { { database_reference, -1, false, callback }, (ECS_ASSET_TYPE)index };
+			event_data.elements.InitializeAndCopy(editor_state->EditorAllocator(), elements[index]);
+			EditorAddEvent(editor_state, UnregisterAssetEventHomogeneous, &event_data, sizeof(event_data));
 		}
 	}
 }
@@ -591,7 +625,7 @@ bool AddRegisterAssetEvent(
 
 		if (unload_if_existing) {
 			if (previous_handle != -1) {
-				UnregisterSandboxAssetElement element;
+				AssetTypedHandle element;
 				element.handle = previous_handle;
 				element.type = type;
 				AddUnregisterAssetEvent(editor_state, { &element, 1 }, sandbox_index != -1, sandbox_index);
@@ -1025,11 +1059,11 @@ EDITOR_EVENT(DeleteAssetSettingEvent) {
 			editor_state->asset_database->RemoveAssetForced(handle, data->type);
 
 			// Remove it from the sandbox references
-			for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
+			SandboxAction(editor_state, -1, [&](unsigned int index) {
 				EditorSandbox* sandbox = GetSandbox(editor_state, index);
 				unsigned int reference_index = sandbox->database.GetIndex(handle, data->type);
 				sandbox->database.RemoveAssetThisOnly(reference_index, data->type);
-			}
+			});
 		}
 
 		// Now delete its disk file
@@ -1123,18 +1157,27 @@ void DeleteMissingAssetSettings(const EditorState* editor_state)
 
 bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index, bool* was_removed)
 {
+	AssetDatabaseReference* database_reference = sandbox_index != -1 ? &GetSandbox(editor_state, sandbox_index)->database : nullptr;
+	return DecrementAssetReference(editor_state, handle, type, database_reference, was_removed);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, AssetDatabaseReference* database_reference, bool* was_removed)
+{
 	auto remove_from_reference = [=]() {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		unsigned int reference_index = sandbox->database.GetIndex(handle, type);
-		if (reference_index != -1) {
-			sandbox->database.RemoveAssetThisOnly(reference_index, type);
+		if (database_reference != nullptr) {
+			unsigned int reference_index = database_reference->GetIndex(handle, type);
+			if (reference_index != -1) {
+				database_reference->RemoveAssetThisOnly(reference_index, type);
+			}
 		}
 	};
 
 	unsigned int reference_count = editor_state->asset_database->GetReferenceCount(handle, type);
 	if (reference_count == 1) {
 		bool success = RemoveAsset(editor_state, handle, type);
-		if (success && sandbox_index != -1) {
+		if (success) {
 			remove_from_reference();
 		}
 		if (was_removed != nullptr) {
@@ -1144,9 +1187,7 @@ bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS
 	}
 	else {
 		editor_state->asset_database->RemoveAsset(handle, type);
-		if (sandbox_index != -1) {
-			remove_from_reference();
-		}
+		remove_from_reference();
 		if (was_removed != nullptr) {
 			*was_removed = false;
 		}
@@ -2192,15 +2233,15 @@ bool WriteForwardingFile(Stream<wchar_t> absolute_path, Stream<wchar_t> target_p
 // ----------------------------------------------------------------------------------------------
 
 void UnregisterGlobalAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback) {
-	UnregisterSandboxAssetElement element;
+	AssetTypedHandle element;
 	element.handle = handle;
 	element.type = type;
-	UnregisterGlobalAsset(editor_state, Stream<UnregisterSandboxAssetElement>(&element, 1), callback);
+	UnregisterGlobalAsset(editor_state, Stream<AssetTypedHandle>(&element, 1), callback);
 }
 
 // ----------------------------------------------------------------------------------------------
 
-void UnregisterGlobalAsset(EditorState* editor_state, Stream<UnregisterSandboxAssetElement> elements, UIActionHandler callback) {
+void UnregisterGlobalAsset(EditorState* editor_state, Stream<AssetTypedHandle> elements, UIActionHandler callback) {
 	AddUnregisterAssetEvent(editor_state, elements, false, -1, callback);
 }
 
