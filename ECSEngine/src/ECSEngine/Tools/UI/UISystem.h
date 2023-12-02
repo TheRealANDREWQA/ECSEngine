@@ -1539,8 +1539,6 @@ namespace ECSEngine {
 				unsigned int& parent_count
 			);
 
-			void SetActiveWindowForDockspaceBorder(UIDockspace* dockspace, unsigned int border_index, unsigned int window_index);
-
 			void SetActiveWindow(unsigned int index);
 
 			void SetActiveWindow(Stream<char> name);

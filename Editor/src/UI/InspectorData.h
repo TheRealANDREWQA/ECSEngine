@@ -85,6 +85,11 @@ unsigned int GetInspectorIndex(ECSEngine::Stream<char> window_name);
 // Returns the inspector name according to an index
 void GetInspectorName(unsigned int inspector_index, ECSEngine::CapacityStream<char>& inspector_name);
 
+// Returns -1 if it doesn't exist
+unsigned int GetInspectorUIWindowIndex(const EditorState* editor_state, unsigned int inspector_index);
+
+void GetInspectorsForMatchingSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices);
+
 InspectorDrawFunction GetInspectorDrawFunction(const EditorState* editor_state, unsigned int inspector_index);
 
 void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices);

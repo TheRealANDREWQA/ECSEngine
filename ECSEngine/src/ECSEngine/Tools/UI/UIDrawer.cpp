@@ -17910,12 +17910,13 @@ namespace ECSEngine {
 					else {
 						fixed_row_scale += element_sizes[index].x * drawer->layout.default_element_x;
 					}
-
-					fixed_row_scale += indentations[index];
+				}
+				if (index < element_count - 1) {
+					fixed_row_scale += indentations[index + 1];
 				}
 			}
 
-			float dependent_element_size = row_scale.x - fixed_row_scale;
+			float dependent_element_size = (row_scale.x - fixed_row_scale) / window_dependent_elements.size;
 			for (unsigned int index = 0; index < window_dependent_elements.size; index++) {
 				element_sizes[window_dependent_elements[index]] = drawer->GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, { dependent_element_size, element_sizes[index].y });
 			}

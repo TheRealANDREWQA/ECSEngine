@@ -858,7 +858,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 // -------------------------------------------------------------------------------------------------------------
 
-void CreateEntitiesUI(EditorState* editor_state)
+unsigned int CreateEntitiesUI(EditorState* editor_state)
 {
 	UISystem* ui_system = editor_state->ui_system;
 
@@ -877,6 +877,7 @@ void CreateEntitiesUI(EditorState* editor_state)
 	if (sandbox_count > 0) {
 		SignalSandboxSelectedEntitiesCounter(editor_state, 0);
 	}
+	return window_index;
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -1001,6 +1002,14 @@ unsigned int EntitiesUITargetSandbox(const EditorState* editor_state, unsigned i
 	else {
 		return -1;
 	}
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+void SetEntitiesUITargetSandbox(const EditorState* editor_state, unsigned int window_index, unsigned int target_sandbox)
+{
+	EntitiesUIData* data = (EntitiesUIData*)editor_state->ui_system->GetWindowData(window_index);
+	data->sandbox_index = target_sandbox;
 }
 
 // -------------------------------------------------------------------------------------------------------------

@@ -35,6 +35,8 @@ unsigned int FindPrefabID(const EditorState* editor_state, Stream<wchar_t> path)
 
 Stream<wchar_t> GetPrefabPath(const EditorState* editor_state, unsigned int id);
 
+Stream<wchar_t> GetPrefabAbsolutePath(const EditorState* editor_state, unsigned int id, CapacityStream<wchar_t> storage);
+
 // Returns the new reference count
 unsigned int IncrementPrefabID(EditorState* editor_state, unsigned int id, unsigned int increment_count = 1);
 

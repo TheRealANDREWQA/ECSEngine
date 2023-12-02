@@ -2,7 +2,7 @@
 #include "ECSEngineUI.h"
 
 #define ENTITIES_UI_WINDOW_NAME "Entities "
-#define MAX_ENTITIES_UI_WINDOWS 8u
+#define MAX_ENTITIES_UI_WINDOWS 8
 
 struct EditorState;
 ECS_TOOLS;
@@ -14,8 +14,8 @@ void EntitiesUISetDescriptor(ECSEngine::Tools::UIWindowDescriptor& descriptor, E
 void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
 
 // It creates the dockspace and the window
-// A new window is created.
-void CreateEntitiesUI(EditorState* editor_state);
+// Returns the window index
+unsigned int CreateEntitiesUI(EditorState* editor_state);
 
 // It creates the dockspace and the window
 // The data pointer needs to be EditorState*
@@ -44,3 +44,6 @@ void UpdateEntitiesUITargetSandbox(EditorState* editor_state, unsigned int old_i
 
 // Returns the target sandbox index if the given UI window is an EntitiesUI window, else -1
 unsigned int EntitiesUITargetSandbox(const EditorState* editor_state, unsigned int window_index);
+
+// Window index is the UI index
+void SetEntitiesUITargetSandbox(const EditorState* editor_state, unsigned int window_index, unsigned int target_sandbox);

@@ -10,6 +10,7 @@
 #include "../../Modules/Module.h"
 #include "../AssetOverrides.h"
 #include "../../Assets/Prefab.h"
+#include "../OpenPrefab.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -923,20 +924,6 @@ void InspectorComponentCallback(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-struct InspectorOpenPrefabData {
-	EditorState* editor_state;
-	unsigned int prefab_id;
-};
-
-static void InspectorOpenPrefab(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	InspectorOpenPrefabData* data = (InspectorOpenPrefabData*)_data;
-
-}
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
 // There can be at max 3 buttons - the debug draw one is optional
 #define HEADER_BUTTON_COUNT 3
 
@@ -1697,6 +1684,43 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
 			size_t button_configuration = 0;
 			row_layout.GetTransform(config, button_configuration);
+
+			OpenPrefabActionData open_prefab_data;
+			open_prefab_data.editor_state = editor_state;
+			open_prefab_data.inspector_index = inspector_index;
+			open_prefab_data.launching_sandbox = sandbox_index;
+			open_prefab_data.prefab_id = prefab->id;
+			drawer->Button(
+				button_configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, 
+				config, 
+				"Edit", 
+				{ OpenPrefabAction, &open_prefab_data, sizeof(open_prefab_data), ECS_UI_DRAW_SYSTEM }
+			);
+
+			button_configuration = 0;
+			config.flag_count = 0;
+			row_layout.GetTransform(config, button_configuration);
+			struct HighlightPrefabPathData {
+				EditorState* editor_state;
+				unsigned int prefab_id;
+			};
+			auto highlight_prefab_path = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				HighlightPrefabPathData* data = (HighlightPrefabPathData*)_data;
+				ECS_STACK_CAPACITY_STREAM(wchar_t, prefab_absolute_path_storage, 512);
+				Stream<wchar_t> prefab_absolute_path = GetPrefabAbsolutePath(data->editor_state, data->prefab_id, prefab_absolute_path_storage);
+				ChangeFileExplorerFile(data->editor_state, prefab_absolute_path);
+				system->SetActiveWindow(FILE_EXPLORER_WINDOW_NAME);
+			};
+			HighlightPrefabPathData highlight_prefab_data = { editor_state, prefab->id };
+			drawer->Button(
+				button_configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, 
+				config, 
+				"Highlight", 
+				{ highlight_prefab_path, &highlight_prefab_data, sizeof(highlight_prefab_data) }
+			);
+			drawer->NextRow();
 
 			drawer->CrossLine();
 			config.flag_count = 0;

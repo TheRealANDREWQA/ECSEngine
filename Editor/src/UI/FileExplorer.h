@@ -1,8 +1,6 @@
 #pragma once
 #include "ECSEngineUI.h"
 
-#define FILE_EXPLORER_WINDOW_NAME "File Explorer"
-
 struct EditorState;
 ECS_TOOLS;
 
