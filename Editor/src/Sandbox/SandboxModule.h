@@ -54,6 +54,23 @@ void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Removes all sandboxes that are currently in use
+void ClearSandboxModulesInUse(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// It will clear any modules that are in the destination and add all modules from the source
+// This function does not add the module settings from the source
+void CopySandboxModulesFromAnother(EditorState* editor_state, unsigned int destination_index, unsigned int source_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// For each module (with the same index and configuration) that appears in both sandboxes, it will clear the current
+// Settings from the destination and replace them with the ones from the source
+void CopySandboxModuleSettingsFromAnother(EditorState* editor_state, unsigned int destination_index, unsigned int source_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // It just launches the compile command. Returns true if all modules are already compiled, else false
 // At the moment, you cannot wait for all the modules to be compiled and then continue (although that it is not
 // a good idea on the main thread since compiling can take a long amount of time)

@@ -1,15 +1,15 @@
 #include "editorpch.h"
+#include "ECSEngineModule.h"
+#include "ECSEngineComponents.h"
 #include "../Inspector.h"
 #include "../../Editor/EditorState.h"
 #include "../../Sandbox/SandboxEntityOperations.h"
 #include "../../Sandbox/Sandbox.h"
 #include "../../Assets/EditorSandboxAssets.h"
 #include "InspectorUtilities.h"
-#include "ECSEngineComponents.h"
 #include "../../Modules/Module.h"
 #include "../AssetOverrides.h"
-
-#include "ECSEngineModule.h"
+#include "../../Assets/Prefab.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -923,6 +923,20 @@ void InspectorComponentCallback(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+struct InspectorOpenPrefabData {
+	EditorState* editor_state;
+	unsigned int prefab_id;
+};
+
+static void InspectorOpenPrefab(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	InspectorOpenPrefabData* data = (InspectorOpenPrefabData*)_data;
+
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 // There can be at max 3 buttons - the debug draw one is optional
 #define HEADER_BUTTON_COUNT 3
 
@@ -1578,10 +1592,6 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		EntityToString(data->entity, base_entity_name, true);
 
 		if (name != nullptr) {
-			UIConfigRelativeTransform transform;
-			transform.scale.x = 2.0f;
-			config.AddFlag(transform);
-
 			struct CallbackData {
 				EditorState* editor_state;
 				unsigned int sandbox_index;
@@ -1602,10 +1612,14 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			UIConfigTextInputCallback input_callback = { { name_input_callback, &callback_data, sizeof(callback_data) } };
 			config.AddFlag(input_callback);
 
+			UIConfigWindowDependentSize transform;
+			transform.scale_factor.x = drawer->GetWindowSizeScaleUntilBorder().x;
+			config.AddFlag(transform);
+
 			// Cannot use a constant name because it will be transported to other entities when changing to them
 			// without changing the buffer being pointed
 			UIDrawerTextInput* text_input = drawer->TextInput(
-				UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_ALIGN_TO_ROW_Y,
+				UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_ALIGN_TO_ROW_Y,
 				config,
 				base_entity_name,
 				&data->name_input
@@ -1640,6 +1654,53 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	if (!data->is_global_component) {
 		unique_signature = entity_manager->GetEntitySignatureStable(data->entity);
 		shared_signature = entity_manager->GetEntitySharedSignatureStable(data->entity);
+
+		// If we have a prefab component, we should display the information about it
+		unsigned char prefab_idx = unique_signature.Find(PrefabComponent::ID());
+		if (prefab_idx != UCHAR_MAX) {
+			drawer->CrossLine();
+
+			drawer->current_row_y_scale = drawer->GetSquareScale().y;
+			PrefabComponent* prefab = entity_manager->GetComponent<PrefabComponent>(data->entity);
+			Stream<wchar_t> prefab_path = GetPrefabPath(editor_state, prefab->id);
+			ECS_FORMAT_TEMP_STRING(prefab_string, "Prefab: {#}", prefab_path);		
+			drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, prefab_string);
+
+			struct DetachEntityCallbackData {
+				EditorState* editor_state;
+				unsigned int index;
+			};
+
+			auto detach_entity_callback = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+				DetachEntityCallbackData* data = (DetachEntityCallbackData*)_data;
+				SetSandboxSceneDirty(data->editor_state, data->index);
+			};
+
+			DetachEntityCallbackData detach_data = { editor_state, sandbox_index };
+			UIConfigCheckBoxCallback detach_check_box_callback;
+			detach_check_box_callback.handler = { detach_entity_callback, &detach_data, sizeof(detach_data) };
+			config.AddFlag(detach_check_box_callback);
+
+			UIConfigCheckBoxDefault detach_default;
+			detach_default.value = true;
+			config.AddFlag(detach_default);
+
+			UIConfigAlignElement align_check_box;
+			align_check_box.horizontal = ECS_UI_ALIGN_RIGHT;
+			config.AddFlag(align_check_box);
+			drawer->CheckBox(UI_CONFIG_CHECK_BOX_CALLBACK | UI_CONFIG_CHECK_BOX_DEFAULT | UI_CONFIG_ALIGN_ELEMENT, config, "Detached", &prefab->detached);
+			drawer->NextRow();
+
+			UIDrawerRowLayout row_layout = drawer->GenerateRowLayout();
+			row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+			row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+			size_t button_configuration = 0;
+			row_layout.GetTransform(config, button_configuration);
+
+			drawer->CrossLine();
+			config.flag_count = 0;
+		}
 	}
 
 	UIConfigNamePadding name_padding;

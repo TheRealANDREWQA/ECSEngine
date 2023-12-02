@@ -205,6 +205,42 @@ void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void ClearSandboxModulesInUse(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	unsigned int destination_initial_module_count = sandbox->modules_in_use.size;
+	for (unsigned int index = 0; index < destination_initial_module_count; index++) {
+		RemoveSandboxModuleInStream(editor_state, sandbox_index, 0);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void CopySandboxModulesFromAnother(EditorState* editor_state, unsigned int destination_index, unsigned int source_index)
+{
+	const EditorSandbox* source = GetSandbox(editor_state, source_index);
+	ClearSandboxModulesInUse(editor_state, destination_index);
+
+	for (unsigned int index = 0; index < source->modules_in_use.size; index++) {
+		AddSandboxModule(editor_state, destination_index, source->modules_in_use[index].module_index, source->modules_in_use[index].module_configuration);
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void CopySandboxModuleSettingsFromAnother(EditorState* editor_state, unsigned int destination_index, unsigned int source_index)
+{
+	const EditorSandbox* source = GetSandbox(editor_state, source_index);
+	for (unsigned int index = 0; index < source->modules_in_use.size; index++) {
+		unsigned int destination_module_index = GetSandboxModuleInStreamIndex(editor_state, destination_index, source->modules_in_use[index].module_index);
+		if (destination_module_index != -1) {
+			ChangeSandboxModuleSettings(editor_state, destination_index, source->modules_in_use[index].module_index, source->modules_in_use[index].settings_name);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -534,11 +570,23 @@ void RemoveSandboxModule(EditorState* editor_state, unsigned int sandbox_index, 
 
 void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
 {
-	EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_index].modules_in_use.buffer + in_stream_index;
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + in_stream_index;
 	// Deallocate the reflected settings allocator
 	sandbox_module->settings_allocator.Free();
 
-	editor_state->sandboxes[sandbox_index].modules_in_use.RemoveSwapBack(in_stream_index);
+	// Destroy the reflected settings. This is related to the UI instances
+	// Do that for all possible inspector indices
+	for (size_t index = 0; index < MAX_INSPECTOR_WINDOWS; index++) {
+		DestroyModuleSettings(
+			editor_state,
+			sandbox->modules_in_use[index].module_index,
+			sandbox->modules_in_use[index].reflected_settings,
+			index
+		);
+	}
+
+	sandbox->modules_in_use.RemoveSwapBack(in_stream_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

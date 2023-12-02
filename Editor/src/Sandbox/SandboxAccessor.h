@@ -82,6 +82,12 @@ bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sa
 
 // -------------------------------------------------------------------------------------------------------------
 
+ECS_INLINE bool IsSandboxTemporary(const EditorState* editor_state, unsigned int sandbox_index) {
+	return GetSandboxCount(editor_state, true) <= sandbox_index && sandbox_index < GetSandboxCount(editor_state);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
 const ECSEngine::EntityManager* RuntimeSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------

@@ -10,6 +10,7 @@
 #include "../Sandbox/Sandbox.h"
 #include "../Assets/EditorSandboxAssets.h"
 #include "../Assets/AssetManagement.h"
+#include "../Project/ProjectFolders.h"
 
 ECS_TOOLS;
 

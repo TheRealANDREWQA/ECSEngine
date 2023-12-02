@@ -12,9 +12,9 @@
 	This allows for an easy implementation using the existing API
 */
 
-bool AddPrefabToSandbox(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> path, Entity* created_entity)
+bool AddPrefabToSandbox(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> path, Entity* created_entity, bool add_prefab_component)
 {
-	bool success = ReadPrefabFile(editor_state, sandbox_index, path, created_entity);
+	bool success = ReadPrefabFile(editor_state, sandbox_index, path, created_entity, add_prefab_component);
 	if (success) {
 		LoadPrefabAssets(editor_state, sandbox_index);
 	}
@@ -27,14 +27,11 @@ void LoadPrefabAssets(EditorState* editor_state, unsigned int sandbox_index)
 	LoadSandboxAssets(editor_state, sandbox_index);
 }
 
-bool ReadPrefabFile(
-	EditorState* editor_state, 
-	EntityManager* entity_manager, 
-	AssetDatabaseReference* database_reference, 
-	Stream<wchar_t> path, 
-	Entity* created_entity
-)
-{
+bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> path, Entity* created_entity, bool add_prefab_component) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	AssetDatabaseReference* database_reference = &sandbox->database;
+
 	// Load into a temporary entity manager and asset database
 	// And then commit into the main scene
 	// We can use large sizes since these will be virtual memory allocations anyways
@@ -55,26 +52,19 @@ bool ReadPrefabFile(
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
 	bool success = LoadEditorSceneCore(editor_state, &temporary_manager, &temporary_database, path, pointer_remapping.buffer);
 	if (success) {
-		CapacityStream<Entity> _created_entities;
-		CapacityStream<Entity>* created_entities = nullptr;
+		ECS_STACK_CAPACITY_STREAM(Entity, created_entity_stream, 1);
+		entity_manager->AddEntityManager(&temporary_manager, &created_entity_stream);
 		if (created_entity != nullptr) {
-			created_entities = &_created_entities;
-			created_entities->InitializeFromBuffer(created_entity, 0, 1);
+			*created_entity = created_entity_stream[0];
 		}
-
-		// We need to add the prefab component to the entity
-		Stream<wchar_t> relative_assets_path = GetProjectAssetRelativePath(editor_state, path);
-		ECS_ASSERT(relative_assets_path.size > 0);
-
-		entity_manager->AddEntityManager(&temporary_manager, created_entities);
+		if (add_prefab_component) {
+			Stream<wchar_t> relative_assets_path = GetProjectAssetRelativePath(editor_state, path);
+			ECS_ASSERT(relative_assets_path.size > 0);
+			AddPrefabComponentToEntity(editor_state, sandbox_index, created_entity_stream[0], relative_assets_path);
+		}
 
 		// Add the handles from the temporary database into the sandbox database as well
-		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)index;
-			temporary_database.ForEachAssetDuplicates(asset_type, [&](unsigned int handle) {
-				database_reference->AddAsset(handle, asset_type);
-			});
-		}
+		database_reference->AddOther(&temporary_database);
 
 		// Update the pointer remappings after everything was comitted into the sandbox
 		UpdateEditorScenePointerRemappings(editor_state, entity_manager, pointer_remapping.buffer);
@@ -83,11 +73,6 @@ bool ReadPrefabFile(
 	// We need to clear the memory manager only to release the temporary data
 	temporary_memory.Free();
 	return success;
-}
-
-bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> path, Entity* created_entity) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return ReadPrefabFile(editor_state, ActiveEntityManager(editor_state, sandbox_index), &sandbox->database, path, created_entity);
 }
 
 bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<wchar_t> path)

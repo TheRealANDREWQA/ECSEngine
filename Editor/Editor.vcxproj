@@ -250,6 +250,7 @@
     <ClInclude Include="src\UI\MiscellaneousBar.h" />
     <ClInclude Include="src\UI\ModuleExplorer.h" />
     <ClInclude Include="src\UI\NotificationBar.h" />
+    <ClInclude Include="src\UI\OpenPrefab.h" />
     <ClInclude Include="src\UI\PrefabSceneDrag.h" />
     <ClInclude Include="src\UI\ProjectSettingsWindow.h" />
     <ClInclude Include="src\UI\RenderingCommon.h" />
@@ -330,6 +331,7 @@
     <ClCompile Include="src\UI\MiscellaneousBar.cpp" />
     <ClCompile Include="src\UI\ModuleExplorer.cpp" />
     <ClCompile Include="src\UI\NotificationBar.cpp" />
+    <ClCompile Include="src\UI\OpenPrefab.cpp" />
     <ClCompile Include="src\UI\PrefabSceneDrag.cpp" />
     <ClCompile Include="src\UI\ProjectSettingsWindow.cpp" />
     <ClCompile Include="src\UI\RenderingCommon.cpp" />
