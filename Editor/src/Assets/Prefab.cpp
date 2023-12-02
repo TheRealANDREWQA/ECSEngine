@@ -2,6 +2,7 @@
 #include "../Editor/EditorState.h"
 #include "ECSEngineComponents.h"
 #include "../Sandbox/SandboxEntityOperations.h"
+#include "../Project/ProjectFolders.h"
 
 ECS_INLINE static AllocatorPolymorphic PrefabAllocator(const EditorState* editor_state) {
 	return GetAllocatorPolymorphic(&editor_state->prefabs_allocator);
@@ -51,6 +52,14 @@ unsigned int FindPrefabID(const EditorState* editor_state, Stream<wchar_t> path)
 Stream<wchar_t> GetPrefabPath(const EditorState* editor_state, unsigned int id)
 {
 	return editor_state->prefabs[id].path;
+}
+
+Stream<wchar_t> GetPrefabAbsolutePath(const EditorState* editor_state, unsigned int id, CapacityStream<wchar_t> storage)
+{
+	GetProjectAssetsFolder(editor_state, storage);
+	storage.Add(ECS_OS_PATH_SEPARATOR);
+	storage.AddStreamAssert(GetPrefabPath(editor_state, id));
+	return storage;
 }
 
 unsigned int IncrementPrefabID(EditorState* editor_state, unsigned int id, unsigned int increment_count) {

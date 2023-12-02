@@ -65,7 +65,6 @@
 #define STRICT
 
 #include <wrl.h>
-#include <DirectXMath.h>
 #include "../../Dependencies/DirectXTK/Inc/WICTextureLoader.h"
 
 #include <sdkddkver.h>

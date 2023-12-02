@@ -11449,17 +11449,6 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::SetActiveWindowForDockspaceBorder(UIDockspace* dockspace, unsigned int border_index, unsigned int window_index)
-		{
-			for (unsigned int index = 0; index < dockspace->borders[border_index].window_indices.size; index++) {
-				if (dockspace->borders[border_index].window_indices[index] == window_index) {
-					dockspace->borders[border_index].active_window = index;
-				}
-			}
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		void UISystem::SetActiveWindow(unsigned int window_index) {
 			DockspaceType type;
 			unsigned int border_index;

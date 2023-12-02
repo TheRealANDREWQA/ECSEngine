@@ -1230,7 +1230,7 @@ static void FileExplorerDrag(ActionData* action_data) {
 						else if (action == FileMeshDraw) {
 							// If it is a mesh draw, check to see if the thumbnail was generated
 							FileExplorerMeshThumbnail thumbnail;
-							if (explorer_data->mesh_thumbnails.TryGetValue({ last_file.buffer, (unsigned int)last_file.size * sizeof(wchar_t) }, thumbnail)) {
+							if (explorer_data->mesh_thumbnails.TryGetValue(last_file, thumbnail)) {
 								if (thumbnail.could_be_read) {
 									// Set the thumbnail texture
 									thumbnail_texture = thumbnail.texture;

@@ -159,6 +159,26 @@ unsigned int GetMatchingIndexFromRobin(EditorState* editor_state, unsigned int t
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+unsigned int GetInspectorUIWindowIndex(const EditorState* editor_state, unsigned int inspector_index)
+{
+	ECS_STACK_CAPACITY_STREAM(char, inspector_name, 128);
+	GetInspectorName(inspector_index, inspector_name);
+	return editor_state->ui_system->GetWindowFromName(inspector_name);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void GetInspectorsForMatchingSandbox(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* inspector_indices)
+{
+	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
+		if (DoesInspectorMatchSandbox(editor_state, index, sandbox_index)) {
+			inspector_indices->AddAssert(index);
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 InspectorDrawFunction GetInspectorDrawFunction(const EditorState* editor_state, unsigned int inspector_index)
 {
 	return editor_state->inspector_manager.data[inspector_index].draw_function;
@@ -213,10 +233,7 @@ unsigned int ChangeInspectorDrawFunction(
 
 		// Same as the comment above, the window is firstly created
 		if (inspector_window_index != -1) {
-			DockspaceType type = DockspaceType::Horizontal;
-			unsigned int border_index = 0;
-			UIDockspace* dockspace = editor_state->ui_system->GetDockspaceFromWindow(inspector_window_index, border_index, type);
-			editor_state->ui_system->SetActiveWindowForDockspaceBorder(dockspace, border_index, inspector_window_index);
+			editor_state->ui_system->SetActiveWindowInBorder(inspector_window_index);
 		}
 
 		if (!do_not_push_target_entry) {

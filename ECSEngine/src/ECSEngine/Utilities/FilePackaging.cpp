@@ -146,7 +146,7 @@ namespace ECSEngine {
 
 			// For the identifier - use it as a uint2 - the offset and the size of the string
 			unsigned int insert_position;
-			ECS_ASSERT(!lookup_table.Insert(offsets[index], { input[index].buffer, (unsigned int)input[index].size * sizeof(wchar_t) }, insert_position));
+			ECS_ASSERT(!lookup_table.Insert(offsets[index], input[index], insert_position));
 			ResourceIdentifier* identifier = lookup_table.GetIdentifierPtrFromIndex(insert_position);
 			identifier->ptr = (void*)((uintptr_t)string_bytes_written);
 
