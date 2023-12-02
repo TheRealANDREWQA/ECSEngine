@@ -143,7 +143,7 @@ namespace ECSEngine {
 
 			void UpdateSquareElements();
 
-			// At the moment just 1 window dependent scale element is accepted
+			// If there are more than 1 window depdendent elements, they have equal weight
 			void UpdateWindowDependentElements();
 
 			// Sets the new positions of the elements according to the alignment

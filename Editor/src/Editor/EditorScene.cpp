@@ -15,6 +15,7 @@ using namespace ECSEngine;
 
 // ----------------------------------------------------------------------------------------------
 
+#define PREFAB_CHUNK_INDEX 0
 #define PREFAB_CHUNK_VERSION 0
 
 // Immediately after the chunk header the path sizes are written (as ushorts)
@@ -30,6 +31,11 @@ struct ScenePrefabChunkHeader {
 // In this chunk, we need to remap the written prefabs to the current values inside the editor state
 // In case a prefab is missing, we must add it
 static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
+	// If the chunk size is 0, then skip this part
+	if (function_data->chunk_data.size == 0) {
+		return true;
+	}
+
 	EditorState* editor_state = (EditorState*)function_data->user_data;
 
 	uintptr_t ptr = (uintptr_t)function_data->chunk_data.buffer;
@@ -97,6 +103,60 @@ static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
 	// Make the deallocation
 	function_data->entity_manager->m_memory_manager->Deallocate(prefab_components);
 	return true;
+}
+
+static bool SaveScenePrefabChunk(SaveSceneChunkFunctionData* function_data) {
+	const EditorState* editor_state = (const EditorState*)function_data->user_data;
+
+	// Get all the prefabs that are referenced inside the entity manager
+	unsigned int prefab_count = editor_state->prefabs.set.size;
+	Stream<unsigned int> prefabs_in_use;
+	prefabs_in_use.Initialize(editor_state->EditorAllocator(), prefab_count);
+	prefabs_in_use.size = 0;
+	function_data->entity_manager->ForEachEntityComponent(PrefabComponent::ID(), [&](Entity entity, const void* data) {
+		const PrefabComponent* component = (const PrefabComponent*)data;
+		bool exists = SearchBytes(prefabs_in_use, component->id) != -1;
+		if (!exists) {
+			prefabs_in_use.Add(component->id);
+		}
+	});
+
+	size_t initial_header_allocation_size = sizeof(unsigned short) * prefabs_in_use.size + sizeof(ScenePrefabChunkHeader);
+	void* initial_header_allocation = editor_state->editor_allocator->Allocate(initial_header_allocation_size);
+	ScenePrefabChunkHeader* header = (ScenePrefabChunkHeader*)initial_header_allocation;
+	header->version = PREFAB_CHUNK_VERSION;
+	header->id_count = prefabs_in_use.size;
+
+	unsigned short* path_sizes = (unsigned short*)OffsetPointer(header, sizeof(*header));
+	size_t total_path_size = 0;
+	// We need to write the sizes first, and then the path characters
+	for (size_t index = 0; index < prefabs_in_use.size; index++) {
+		Stream<wchar_t> current_path = GetPrefabPath(editor_state, prefabs_in_use[index]);
+		path_sizes[index] = current_path.size;
+		total_path_size += current_path.size;
+	}
+
+	bool success = WriteFile(function_data->write_handle, { initial_header_allocation, initial_header_allocation_size });
+	editor_state->editor_allocator->Deallocate(initial_header_allocation);
+	if (!success) {
+		prefabs_in_use.Deallocate(editor_state->EditorAllocator());
+		return false;
+	}
+
+	if (total_path_size > 0) {
+		void* path_characters = editor_state->editor_allocator->Allocate(sizeof(wchar_t) * total_path_size);
+		void* path_characters_allocation = path_characters;
+		for (size_t index = 0; index < prefabs_in_use.size; index++) {
+			Stream<wchar_t> current_path = GetPrefabPath(editor_state, prefabs_in_use[index]);
+			current_path.CopyTo(path_characters);
+			path_characters = OffsetPointer(path_characters, sizeof(wchar_t) * current_path.size);
+		}
+
+		success = WriteFile(function_data->write_handle, Stream<void>(path_characters_allocation, sizeof(wchar_t) * total_path_size));
+		editor_state->editor_allocator->Deallocate(path_characters_allocation);
+	}
+	prefabs_in_use.Deallocate(editor_state->EditorAllocator());
+	return success;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -175,6 +235,9 @@ bool GetLoadSceneDataBase(
 	load_data->detailed_error_string = (CapacityStream<char>*)Allocate(stack_allocator, sizeof(CapacityStream<char>));
 	load_data->detailed_error_string->Initialize(stack_allocator, 0, 512);
 	load_data->allow_missing_components = true;
+
+	// Set the extra scene chunks - at the moment, only the prefab chunk is needed
+	load_data->chunk_functors[PREFAB_CHUNK_INDEX] = { LoadScenePrefabChunk, editor_state };
 	return true;
 }
 
@@ -283,8 +346,10 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 	save_data.shared_overrides = shared_overrides;
 	save_data.global_overrides = global_overrides;
 
-	entity_manager->DestroyArchetypesBaseEmptyCommit(true);
+	// Set the extra chunks - at the moment, only the prefab chunk is needed
+	save_data.chunk_functors[PREFAB_CHUNK_INDEX] = { SaveScenePrefabChunk, (void*)editor_state, true };
 
+	entity_manager->DestroyArchetypesBaseEmptyCommit(true);
 	return SaveScene(&save_data);
 }
 

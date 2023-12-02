@@ -29,6 +29,15 @@ void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_
 	component->detached = false;
 }
 
+void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int id)
+{
+	IncrementPrefabID(editor_state, id);
+	AddSandboxEntityComponent(editor_state, sandbox_index, entity, STRING(PrefabComponent));
+	PrefabComponent* component = GetSandboxEntityComponent<PrefabComponent>(editor_state, sandbox_index, entity);
+	component->id = id;
+	component->detached = false;
+}
+
 unsigned int DecrementPrefabID(EditorState* editor_state, unsigned int id, unsigned int decrement_count)
 {
 	editor_state->prefabs[id].reference_count -= decrement_count;
@@ -37,6 +46,11 @@ unsigned int DecrementPrefabID(EditorState* editor_state, unsigned int id, unsig
 
 unsigned int FindPrefabID(const EditorState* editor_state, Stream<wchar_t> path) {
 	return editor_state->prefabs.Find(PrefabInstance{ 0, path });
+}
+
+Stream<wchar_t> GetPrefabPath(const EditorState* editor_state, unsigned int id)
+{
+	return editor_state->prefabs[id].path;
 }
 
 unsigned int IncrementPrefabID(EditorState* editor_state, unsigned int id, unsigned int increment_count) {

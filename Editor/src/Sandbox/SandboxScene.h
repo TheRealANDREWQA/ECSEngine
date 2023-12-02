@@ -13,6 +13,11 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 
 // -------------------------------------------------------------------------------------------------------------
 
+// This function works only for temporary sandboxes - it will just change the path without loading or unloading data
+void ChangeTemporarySandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<wchar_t> new_scene);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Clears the entity manager and empties the asset database reference
 void ClearSandboxScene(EditorState* editor_state, unsigned int sandbox_index);
 

@@ -680,7 +680,8 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		}
 
 		UIConfigActiveState change_scene_active_state;
-		change_scene_active_state.state = GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE;
+		change_scene_active_state.state = GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE &&
+			!IsSandboxTemporary(editor_state, sandbox_index);
 		config.AddFlag(change_scene_active_state);
 
 		ChangeSandboxSceneActionData change_data;

@@ -134,7 +134,8 @@ struct EditorSandboxAssetHandlesSnapshot {
 
 enum EDITOR_SANDBOX_FLAG : size_t {
 	EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION = 1 << 0,
-	EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION = 1 << 1
+	EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION = 1 << 1,
+	EDITOR_SANDBOX_FLAG_PREFAB = 1 << 2 // Used to indicate that this sandbox is used for a prefab preview
 };
 
 enum ECS_REFLECT EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY : unsigned char {

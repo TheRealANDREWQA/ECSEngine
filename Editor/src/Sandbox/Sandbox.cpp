@@ -777,15 +777,10 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	// Unload the sandbox assets
 	UnloadSandboxAssets(editor_state, sandbox_index);
 
-	// Destroy the reflected settings
-	for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
-		DestroyModuleSettings(
-			editor_state,
-			sandbox->modules_in_use[index].module_index,
-			sandbox->modules_in_use[index].reflected_settings,
-			index
-		);
-	}
+	// We can also clear the modules in use - they use allocations from the global sandbox
+	// And that will get cleared at the end. But since they might do something unrelated
+	// To allocations in the future, let's call it
+	ClearSandboxModulesInUse(editor_state, sandbox_index);
 
 	// Before destroying the sandbox runtime we need to terminate the threads
 	sandbox->sandbox_world.task_manager->TerminateThreads(true);

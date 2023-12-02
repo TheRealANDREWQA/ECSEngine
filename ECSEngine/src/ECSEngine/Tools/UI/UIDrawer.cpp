@@ -3533,14 +3533,32 @@ namespace ECSEngine {
 				drawer->ElementName(name_configuration, *config_to_use, name, position, scale);
 			};
 
-			if (IsElementNameFirst(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
-				check_box_name();
+			if (configuration & UI_CONFIG_ALIGN_ELEMENT) {
+				float2 total_scale = scale;
+				if (~configuration & UI_CONFIG_CHECK_BOX_NO_NAME) {
+					if constexpr (std::is_same_v<Stream<char>, NameType>) {
+						float2 font_size;
+						float character_spacing;
+						Color font_color;
+						drawer->HandleText(configuration, config, font_color, font_size, character_spacing);
+						total_scale.x += drawer->system->GetTextSpan(name, font_size.x, font_size.y, character_spacing).x;
+					}
+					else {
+						total_scale.x += name->TextScale()->x;
+					}
+					total_scale.x += drawer->layout.element_indentation;
+				}
+				drawer->GetElementAlignedPosition(configuration, config, position, total_scale);
 			}
 
 			if (configuration & UI_CONFIG_GET_TRANSFORM) {
 				UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);
 				*get_transform->position = position;
 				*get_transform->scale = scale;
+			}
+
+			if (IsElementNameFirst(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
+				check_box_name();
 			}
 
 			if (drawer->ValidatePosition(configuration, position, scale)) {
@@ -17877,39 +17895,29 @@ namespace ECSEngine {
 
 		void UIDrawerRowLayout::UpdateWindowDependentElements()
 		{
-			float horizontal_scale_before = 0.0f;
-			float horizontal_scale_after = 0.0f;
-
+			// Determine the window dependent elements
+			const size_t ELEMENT_CAPACITY = sizeof(element_sizes) / sizeof(element_sizes[0]);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, window_dependent_elements, ELEMENT_CAPACITY);
+			float fixed_row_scale = 0.0f;
 			for (unsigned int index = 0; index < element_count; index++) {
 				if (element_transform_types[index] & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
-					// Calculate the after size
-					for (unsigned int subindex = index + 1; subindex < element_count; subindex++) {
-						if (HasFlag(element_transform_types[subindex], UI_CONFIG_ABSOLUTE_TRANSFORM) || HasFlag(element_transform_types[subindex], UI_CONFIG_MAKE_SQUARE)) {
-							horizontal_scale_after += element_sizes[subindex].x;
-						}
-						else {
-							horizontal_scale_after += element_sizes[subindex].x * drawer->layout.default_element_x;
-						}
-
-						//if (subindex < element_count - 1) {
-							horizontal_scale_after += indentations[subindex];
-						//}
-					}
-					float remaining_scale = row_scale.x - horizontal_scale_before - horizontal_scale_after;
-
-					element_sizes[index] = drawer->GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, { remaining_scale, element_sizes[index].y });
-					break;
+					window_dependent_elements.Add(index);
 				}
 				else {
 					if (HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
-						horizontal_scale_before += element_sizes[index].x;
+						fixed_row_scale += element_sizes[index].x;
 					}
 					else {
-						horizontal_scale_before += element_sizes[index].x * drawer->layout.default_element_x;
+						fixed_row_scale += element_sizes[index].x * drawer->layout.default_element_x;
 					}
 
-					horizontal_scale_before += indentations[index];
+					fixed_row_scale += indentations[index];
 				}
+			}
+
+			float dependent_element_size = row_scale.x - fixed_row_scale;
+			for (unsigned int index = 0; index < window_dependent_elements.size; index++) {
+				element_sizes[window_dependent_elements[index]] = drawer->GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, { dependent_element_size, element_sizes[index].y });
 			}
 		}
 

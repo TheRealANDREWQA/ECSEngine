@@ -62,6 +62,16 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void ChangeTemporarySandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> new_scene)
+{
+	ECS_ASSERT(IsSandboxTemporary(editor_state, sandbox_index));
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->scene_path.size = 0;
+	GetScenePath(editor_state, new_scene, sandbox->scene_path);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void ClearSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
 {
 	// Unload the assets currently used by this sandbox and reset the scene entities
