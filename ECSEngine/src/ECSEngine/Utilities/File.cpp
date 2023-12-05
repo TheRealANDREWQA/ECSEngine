@@ -741,20 +741,18 @@ namespace ECSEngine {
 			return  { nullptr, 0 };
 		}
 
-		void* allocation = nullptr;
 		// Add a '\0' at the end of the file in order to help with C functions parsing
-		if (allocator.allocator != nullptr) {
-			allocation = Allocate(allocator, file_size + 1);
-		}
-		else {
-			allocation = malloc(file_size + 1);
-		}
+		void* allocation = AllocateEx(allocator, file_size + 1);
 		unsigned int read_bytes = ReadFromFile(file_handle, { allocation, file_size });
+		if (read_bytes == -1) {
+			DeallocateEx(allocator, allocation);
+			return { nullptr, 0 };
+		}
+
 		// Text files will return a smaller number of bytes since it will convert line feed carriages
 		file_size = read_bytes;
 		char* characters = (char*)allocation;
 		characters[read_bytes] = '\0';
-
 		return { allocation, file_size };
 	}
 

@@ -20,6 +20,14 @@ namespace ECSEngine {
 
 		DataPointer(const DataPointer& other) = default;
 		DataPointer& operator = (const DataPointer& other) = default;
+		
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+			void* allocation = GetPointer();
+			if (allocation != nullptr && GetData() > 0) {
+				ECSEngine::Deallocate(allocator, allocation);
+				pointer = nullptr;
+			}
+		}
 
 		// Will prevent underflow; returns the new value
 		unsigned short DecrementData(unsigned short count);

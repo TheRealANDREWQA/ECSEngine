@@ -186,12 +186,12 @@ bool ExistScene(const EditorState* editor_state, Stream<wchar_t> path)
 // ----------------------------------------------------------------------------------------------
 
 // It can fail if the link components cannot be found
-bool GetLoadSceneDataBase(
+// Does not set the data source, you must do that manually
+static bool GetLoadSceneDataBase(
 	LoadSceneData* load_data,
 	EditorState* editor_state, 
 	EntityManager* entity_manager, 
 	const AssetDatabaseReference* database,
-	Stream<wchar_t> filename,
 	AllocatorPolymorphic stack_allocator
 ) {
 	CapacityStream<const AppliedModule*> applied_modules;
@@ -224,7 +224,6 @@ bool GetLoadSceneDataBase(
 		return false;
 	}
 
-	load_data->file = filename;
 	load_data->database = standalone_database;
 	load_data->entity_manager = entity_manager;
 	load_data->reflection_manager = editor_state->GlobalReflectionManager();
@@ -241,29 +240,31 @@ bool GetLoadSceneDataBase(
 	return true;
 }
 
-bool LoadEditorSceneCore(
-	EditorState* editor_state, 
-	EntityManager* entity_manager, 
-	AssetDatabaseReference* database, 
-	Stream<wchar_t> filename,
-	CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remap
-)
-{
+// The SetDataSourceFunctor receives as parameter (LoadSceneData*)
+template<typename SetDataSourceFunctor>
+static bool LoadEditorSceneCoreImpl(
+	EditorState* editor_state,
+	EntityManager* entity_manager,
+	AssetDatabaseReference* database,
+	Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remap,
+	SetDataSourceFunctor&& set_data_source
+) {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
 	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
 
 	LoadSceneData load_data;
-	bool initialize_data = GetLoadSceneDataBase(&load_data, editor_state, entity_manager, database, filename, stack_allocator);
+	bool initialize_data = GetLoadSceneDataBase(&load_data, editor_state, entity_manager, database, stack_allocator);
 	if (!initialize_data) {
 		return false;
 	}
 
+	set_data_source(&load_data);
 	bool success = LoadScene(&load_data);
 
 	if (success) {
 		// Now update the assets that have dependencies or that could have changed in the meantime
 		load_data.database->UpdateAssetsWithDependenciesFromFiles();
-		
+
 		// Update the asset database to reflect the assets from the entity manager
 		GetAssetReferenceCountsFromEntities(entity_manager, load_data.reflection_manager, load_data.database);
 
@@ -279,11 +280,41 @@ bool LoadEditorSceneCore(
 	}
 	else {
 		// Print the error message
+		Stream<wchar_t> filename = load_data.is_file_data ? load_data.file : L"In Memory";
 		ECS_FORMAT_TEMP_STRING(error_message, "The scene {#} could not be loaded. Reason: {#}", filename, *load_data.detailed_error_string);
 		EditorSetConsoleError(error_message);
 	}
 
 	return success;
+}
+
+bool LoadEditorSceneCore(
+	EditorState* editor_state, 
+	EntityManager* entity_manager, 
+	AssetDatabaseReference* database, 
+	Stream<wchar_t> filename,
+	Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remap
+)
+{
+	return LoadEditorSceneCoreImpl(editor_state, entity_manager, database, pointer_remap, [&](LoadSceneData* load_data) {
+		load_data->file = filename;
+	});
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool LoadEditorSceneCoreInMemory(
+	EditorState* editor_state, 
+	EntityManager* entity_manager, 
+	AssetDatabaseReference* database, 
+	Stream<void> in_memory_data, 
+	Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remap
+)
+{
+	return LoadEditorSceneCoreImpl(editor_state, entity_manager, database, pointer_remap, [&](LoadSceneData* load_data) {
+		load_data->in_memory_data = in_memory_data;
+		load_data->is_file_data = false;
+	});
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -292,14 +323,15 @@ bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_index, 
 {
 	// Create the pointer remap
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
+	pointer_remapping.size = pointer_remapping.capacity;
 
 	// TODO: At the moment, this function call ignores the speed up factor in the scene file
 	// It might be relevant later on
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	bool success = LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, filename, pointer_remapping.buffer);
+	bool success = LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, filename, pointer_remapping);
 	if (success) {
 		// Check the pointer remap - we need to update the link components
-		UpdateEditorScenePointerRemappings(editor_state, sandbox_index, pointer_remapping.buffer);
+		UpdateEditorScenePointerRemappings(editor_state, sandbox_index, pointer_remapping);
 	}
 	return success;
 }
@@ -363,7 +395,7 @@ bool SaveEditorScene(EditorState* editor_state, unsigned int sandbox_index, Stre
 
 // ----------------------------------------------------------------------------------------------
 
-bool SaveEditorSceneRuntime(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<wchar_t> filename)
+bool SaveEditorSceneRuntime(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> filename)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	return SaveEditorScene(editor_state, sandbox->sandbox_world.entity_manager, &sandbox->database, filename);
@@ -426,7 +458,7 @@ bool GetEditorSceneDeserializeOverrides(
 void UpdateEditorScenePointerRemappings(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	const CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remapping
+	Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remapping
 )
 {
 	UpdateEditorScenePointerRemappings(editor_state, ActiveEntityManager(editor_state, sandbox_index), pointer_remapping);
@@ -437,9 +469,10 @@ void UpdateEditorScenePointerRemappings(
 void UpdateEditorScenePointerRemappings(
 	EditorState* editor_state, 
 	EntityManager* entity_manager, 
-	const CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remapping
+	Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remapping
 )
 {
+	ECS_ASSERT(pointer_remapping.size == ECS_ASSET_TYPE_COUNT);
 	size_t total_remapping_count = 0;
 	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 		total_remapping_count += pointer_remapping[index].size;

@@ -573,8 +573,7 @@ static void FileExplorerSelectFromIndexNothing(FileExplorerData* data, unsigned 
 
 static void FileExplorerSelectFromIndexShift(FileExplorerData* data, unsigned int index, Stream<wchar_t> path) {
 	if (data->starting_shift_index <= index && index <= data->ending_shift_index) {
-		unsigned int index = data->selected_files.ReserveNewElement();
-		data->selected_files.size++;
+		unsigned int index = data->selected_files.Reserve();
 		void* new_allocation = Allocate(data->selected_files.allocator, data->selected_files[index].MemoryOf(path.size));
 		data->selected_files[index].InitializeFromBuffer(new_allocation, path.size);
 		data->selected_files[index].CopyOther(path);

@@ -39,8 +39,7 @@ void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_index, uns
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-	unsigned int sandbox_module_index = sandbox->modules_in_use.ReserveNewElement();
-	sandbox->modules_in_use.size++;
+	unsigned int sandbox_module_index = sandbox->modules_in_use.Reserve();
 	EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + sandbox_module_index;
 	sandbox_module->module_index = module_index;
 	sandbox_module->module_configuration = module_configuration;

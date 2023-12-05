@@ -26,7 +26,16 @@ bool LoadEditorSceneCore(
 	ECSEngine::EntityManager* entity_manager,
 	ECSEngine::AssetDatabaseReference* database,
 	ECSEngine::Stream<wchar_t> filename,
-	ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>* pointer_remap = nullptr
+	ECSEngine::Stream<ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>> pointer_remap = { nullptr, 0 }
+);
+
+// Loads only the entity manager + database reference. It does not load the referenced assets.
+bool LoadEditorSceneCoreInMemory(
+	EditorState* editor_state,
+	ECSEngine::EntityManager* entity_manager,
+	ECSEngine::AssetDatabaseReference* database,
+	ECSEngine::Stream<void> in_memory_data,
+	ECSEngine::Stream<ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>> pointer_remap = { nullptr, 0 }
 );
 
 // It does not unload or clear the scene before doing this. 
@@ -88,12 +97,12 @@ bool GetEditorSceneDeserializeOverrides(
 void UpdateEditorScenePointerRemappings(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	const ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>* pointer_remapping
+	ECSEngine::Stream<ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>> pointer_remapping
 );
 
 // Updates the link components to the new remapping from here
 void UpdateEditorScenePointerRemappings(
 	EditorState* editor_state,
 	ECSEngine::EntityManager* entity_manager,
-	const ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>* pointer_remapping
+	ECSEngine::Stream<ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>> pointer_remapping
 );

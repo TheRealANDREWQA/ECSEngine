@@ -276,26 +276,16 @@ namespace ECSEngine {
 			unsigned int folder_hierarchy;
 		};
 
+		struct ReflectionManager;
+		
 		struct ReflectionCustomTypeMatchData {
 			Stream<char> definition;
 		};
-
-		typedef bool (*ReflectionCustomTypeMatch)(ReflectionCustomTypeMatchData* data);
-
-#define ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(name) bool ReflectionCustomTypeMatch_##name(Reflection::ReflectionCustomTypeMatchData* data)
-
-		struct ReflectionManager;
 
 		struct ReflectionCustomTypeByteSizeData {
 			Stream<char> definition;
 			const ReflectionManager* reflection_manager;
 		};
-
-		// Return 0 if you cannot determine right now the byte size (e.g. you are template<typename T> struct { T data; ... })
-		// The x component is the byte size, the y component is the alignment
-		typedef ulong2 (*ReflectionCustomTypeByteSize)(ReflectionCustomTypeByteSizeData* data);
-
-#define ECS_REFLECTION_CUSTOM_TYPE_BYTE_SIZE_FUNCTION(name) ulong2 ReflectionCustomTypeByteSize_##name(Reflection::ReflectionCustomTypeByteSizeData* data)
 
 		// No need to allocate the strings, they can be referenced inside the definition since it is stable
 		struct ReflectionCustomTypeDependentTypesData {
@@ -303,18 +293,10 @@ namespace ECSEngine {
 			CapacityStream<Stream<char>> dependent_types;
 		};
 
-		typedef void (*ReflectionCustomTypeDependentTypes)(ReflectionCustomTypeDependentTypesData* data);
-
-#define ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(name) void ReflectionCustomTypeDependentTypes_##name(Reflection::ReflectionCustomTypeDependentTypesData* data)
-
 		struct ReflectionCustomTypeIsBlittableData {
 			Stream<char> definition;
 			const ReflectionManager* reflection_manager;
 		};
-
-		typedef bool (*ReflectionCustomTypeIsBlittable)(ReflectionCustomTypeIsBlittableData* data);
-
-#define ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(name) bool ReflectionCustomTypeIsBlittable_##name(Reflection::ReflectionCustomTypeIsBlittableData* data)
 
 		struct ReflectionCustomTypeCopyData {
 			const Reflection::ReflectionManager* reflection_manager;
@@ -322,11 +304,8 @@ namespace ECSEngine {
 			const void* source;
 			void* destination;
 			AllocatorPolymorphic allocator;
+			bool deallocate_existing_data = false;
 		};
-
-		typedef void (*ReflectionCustomTypeCopy)(ReflectionCustomTypeCopyData* data);
-
-#define ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(name) void ReflectionCustomTypeCopy_##name(Reflection::ReflectionCustomTypeCopyData* data)
 
 		struct ReflectionCustomTypeCompareData {
 			const Reflection::ReflectionManager* reflection_manager;
@@ -335,17 +314,20 @@ namespace ECSEngine {
 			const void* second;
 		};
 
-		typedef bool (*ReflectionCustomTypeCompare)(ReflectionCustomTypeCompareData* data);
+		struct ReflectionCustomTypeInterface {
+			virtual bool Match(Reflection::ReflectionCustomTypeMatchData* data) = 0;
 
-#define ECS_REFLECTION_CUSTOM_TYPE_COMPARE_FUNCTION(name) bool ReflectionCustomTypeCompare_##name(Reflection::ReflectionCustomTypeCompareData* data)
+			// Return 0 if you cannot determine right now the byte size (e.g. you are template<typename T> struct { T data; ... })
+			// The x component is the byte size, the y component is the alignment
+			virtual ulong2 GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data) = 0;
 
-		struct ReflectionCustomType {
-			ReflectionCustomTypeMatch match;
-			ReflectionCustomTypeDependentTypes dependent_types;
-			ReflectionCustomTypeByteSize byte_size;
-			ReflectionCustomTypeIsBlittable is_blittable;
-			ReflectionCustomTypeCopy copy;
-			ReflectionCustomTypeCompare compare;
+			virtual void GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) = 0;
+
+			virtual bool IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data) = 0;
+
+			virtual void Copy(Reflection::ReflectionCustomTypeCopyData* data) = 0;
+
+			virtual bool Compare(Reflection::ReflectionCustomTypeCompareData* data) = 0;
 		};
 
 		// Uses a jump table
@@ -440,16 +422,6 @@ namespace ECSEngine {
 			return type == ReflectionStreamFieldType::Stream || type == ReflectionStreamFieldType::CapacityStream
 				|| type == ReflectionStreamFieldType::ResizableStream;
 		}
-
-#define ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(name) ECSENGINE_API bool ReflectionCustomTypeMatch_##name(Reflection::ReflectionCustomTypeMatchData* data); \
-															ECSENGINE_API ulong2 ReflectionCustomTypeByteSize_##name(Reflection::ReflectionCustomTypeByteSizeData* data); \
-															ECSENGINE_API void ReflectionCustomTypeDependentTypes_##name(Reflection::ReflectionCustomTypeDependentTypesData* data); \
-															ECSENGINE_API bool ReflectionCustomTypeIsBlittable_##name(Reflection::ReflectionCustomTypeIsBlittableData* data); \
-															ECSENGINE_API void ReflectionCustomTypeCopy_##name(Reflection::ReflectionCustomTypeCopyData* data); \
-															ECSENGINE_API bool ReflectionCustomTypeCompare_##name(Reflection::ReflectionCustomTypeCompareData* data);
-
-#define ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name) { ReflectionCustomTypeMatch_##name, ReflectionCustomTypeDependentTypes_##name, ReflectionCustomTypeByteSize_##name, \
-		ReflectionCustomTypeIsBlittable_##name, ReflectionCustomTypeCopy_##name, ReflectionCustomTypeCompare_##name }
 
 	}
 

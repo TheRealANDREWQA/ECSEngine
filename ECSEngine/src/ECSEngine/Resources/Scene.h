@@ -70,9 +70,18 @@ namespace ECSEngine {
 	};
 
 	struct LoadSceneData {
+		LoadSceneData() {}
+
 		// ----------------------- Mandatory -----------------------------
 		EntityManager* entity_manager;
-		Stream<wchar_t> file;
+		// When using in memory data reading, it will advance the pointer
+		// By the amount necessary to read all the scene information
+		// You specify which of these options is active with the is_file_data boolean
+		union {
+			Stream<wchar_t> file;
+			Stream<void> in_memory_data;
+		};
+		bool is_file_data = true;
 		const Reflection::ReflectionManager* reflection_manager;
 
 		// One of these needs to be set
@@ -96,7 +105,7 @@ namespace ECSEngine {
 		CapacityStream<uint2>* handle_remapping = nullptr;
 		// When using randomized assets, these can clash when commiting into a master database afterwards.
 		// This is used to make each randomized asset again unique
-		CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remapping = nullptr;
+		Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remapping = { nullptr, 0 };
 
 		// This is the allocator used to allocate the scene module data and name
 		// This must not be malloc

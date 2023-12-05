@@ -503,7 +503,8 @@ namespace ECSEngine {
 		}
 
 		// If it has pointer remapping report the changed values
-		if (options.pointer_remapping != nullptr) {
+		if (options.pointer_remapping.size > 0) {
+			ECS_ASSERT(options.pointer_remapping.size == ECS_ASSET_TYPE_COUNT);
 			database->ForEachAsset([&](unsigned int handle, ECS_ASSET_TYPE type) {
 				const void* current_asset = database->GetAssetConst(handle, type);
 				unsigned int standalone_handle = standalone_database->FindAssetEx(database, handle, type);

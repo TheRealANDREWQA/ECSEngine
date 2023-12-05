@@ -13,7 +13,19 @@ namespace ECSEngine {
 		ECS_ASSET_MATERIAL_SERIALIZE_DO_NOT_INCREMENT_DEPENDENCIES
 	};
 
-	ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(MaterialAsset);
+	struct MaterialAssetCustomTypeInterface : public Reflection::ReflectionCustomTypeInterface {
+		bool Match(Reflection::ReflectionCustomTypeMatchData* data) override;
+
+		ulong2 GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data) override;
+
+		void GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) override;
+
+		bool IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data) override;
+
+		void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
+
+		bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+	};
 	
 	ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(MaterialAsset);
 

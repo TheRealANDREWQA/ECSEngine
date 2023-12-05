@@ -34,8 +34,7 @@ namespace ECSEngine {
 		unsigned int entry_index = -1;
 		if (previous_region_index == -1 && next_region_index == -1) {
 			// No block is found, insert it as a new region
-			entry_index = regions.ReserveNewElement();
-			regions.size++;
+			entry_index = regions.Reserve();
 			Stream<void>* entry_region = get_region(entry_index);
 			*entry_region = new_region;
 		}
@@ -97,7 +96,7 @@ namespace ECSEngine {
 			}
 		}
 		if (index == region_entries.size) {
-			region_entries.ReserveNewElement();
+			region_entries.Reserve();
 
 			size_t page_size = OS::GetPhysicalMemoryPageSize();
 			// We should monitor only the pages which are fully contained in this region
@@ -113,7 +112,6 @@ namespace ECSEngine {
 			for (unsigned int thread_index = 0; thread_index < thread_count; thread_index++) {
 				region_entries[index].guard_pages_hit[thread_index].value.Initialize(multithreaded_allocator, GUARD_REGIONS_INITIAL_CAPACITY);
 			}
-			region_entries.size++;
 		}
 	}
 

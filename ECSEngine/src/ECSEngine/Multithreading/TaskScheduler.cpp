@@ -17,8 +17,7 @@ namespace ECSEngine {
 
 	void TaskScheduler::Add(const TaskSchedulerElement& element, bool copy_data) {
 		if (copy_data) {
-			unsigned int index = elements.ReserveNewElement();
-			elements.size++;
+			unsigned int index = elements.Reserve();
 			TaskSchedulerElement* stream_element = &elements[index];
 			*stream_element = element.Copy(elements.allocator);
 		}
