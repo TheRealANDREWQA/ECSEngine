@@ -237,7 +237,7 @@ namespace ECSEngine {
 									dependent_data.definition = field->definition;
 									dependent_data.dependent_types = current_custom_dependent_types;
 
-									ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer_index].container_type.dependent_types(&dependent_data);
+									ECS_REFLECTION_CUSTOM_TYPES[custom_serializer_index]->GetDependentTypes(&dependent_data);
 									for (size_t subindex = 0; subindex < dependent_data.dependent_types.size; subindex++) {
 										custom_dependent_types.Push(dependent_data.dependent_types[subindex]);
 									}
@@ -268,7 +268,7 @@ namespace ECSEngine {
 					dependent_data.definition = current_dependent_type;
 					dependent_data.dependent_types = current_custom_dependent_types;
 
-					ECS_SERIALIZE_CUSTOM_TYPES[nested_custom_serializer].container_type.dependent_types(&dependent_data);
+					ECS_REFLECTION_CUSTOM_TYPES[nested_custom_serializer]->GetDependentTypes(&dependent_data);
 					for (size_t index = 0; index < dependent_data.dependent_types.size; index++) {
 						custom_dependent_types.Push(dependent_data.dependent_types[index]);
 					}
@@ -397,7 +397,7 @@ namespace ECSEngine {
 			ReflectionCustomTypeDependentTypesData dependent_data;
 			dependent_data.definition = definition;
 			dependent_data.dependent_types = dependent_types;
-			ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer].container_type.dependent_types(&dependent_data);
+			ECS_REFLECTION_CUSTOM_TYPES[custom_serializer]->GetDependentTypes(&dependent_data);
 
 			for (size_t subindex = 0; subindex < dependent_data.dependent_types.size; subindex++) {
 				ReflectionBasicFieldType basic_field_type;
@@ -1734,7 +1734,7 @@ namespace ECSEngine {
 						ReflectionCustomTypeDependentTypesData dependent_data;
 						dependent_data.definition = current_definition;
 						dependent_data.dependent_types = nested_dependent_types;
-						ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer_index].container_type.dependent_types(&dependent_data);
+						ECS_REFLECTION_CUSTOM_TYPES[custom_serializer_index]->GetDependentTypes(&dependent_data);
 
 						ReflectionBasicFieldType basic_type;
 						ReflectionStreamFieldType stream_type;

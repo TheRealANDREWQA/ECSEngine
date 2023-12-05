@@ -45,6 +45,8 @@ bool DisableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_ind
 // Window be actual visible to the user, or just that it exists
 bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index, bool must_be_visible);
 
+void FocusSceneUIOnSelection(EditorState* editor_state, unsigned int sandbox_index);
+
 // Does nothing if the old_index doesn't exist
 void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);
 

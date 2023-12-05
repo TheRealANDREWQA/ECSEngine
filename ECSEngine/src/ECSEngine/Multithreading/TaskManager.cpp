@@ -208,12 +208,10 @@ namespace ECSEngine {
 #else
 		task.task.name = StringCopy(StaticTaskAllocator(this), task.task.name).buffer;
 #endif
-		unsigned int index = m_tasks.ReserveNewElement();
+		unsigned int index = m_tasks.Reserve();
 		m_tasks[index].task = task.task;
 		m_tasks[index].barrier.ClearCount();
 		m_tasks[index].barrier.SetTarget(task.barrier_task ? GetThreadCount() : 1);
-
-		m_tasks.size++;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -789,7 +787,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::ReserveTasks(unsigned int count) {
-		m_tasks.ReserveNewElements(count);
+		m_tasks.Reserve(count);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

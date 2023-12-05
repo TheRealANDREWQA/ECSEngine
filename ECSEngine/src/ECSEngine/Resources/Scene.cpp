@@ -44,23 +44,10 @@ namespace ECSEngine {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
 		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
 
-		ECS_FILE_HANDLE file_handle = -1;
-		ECS_FILE_STATUS_FLAGS status = OpenFile(load_data->file, &file_handle, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL | ECS_FILE_ACCESS_BINARY);
-		if (status != ECS_FILE_STATUS_OK) {
-			if (load_data->detailed_error_string) {
-				load_data->detailed_error_string->AddStreamAssert("Failed to open the scene file");
-			}
-			return false;
-		}
-
 		bool normal_database = load_data->database != nullptr;
 		AssetDatabase* database = normal_database ? load_data->database : load_data->database_reference->database;
 
-		// If the file is empty, then the entity manager and the database reference is empty as well
-		size_t file_byte_size = GetFileByteSize(file_handle);
-		if (file_byte_size == 0) {
-			CloseFile(file_handle);
-
+		auto set_empty_scene = [&]() {
 			// Just reset the entity manager and database reference
 			load_data->entity_manager->Reset();
 			if (normal_database) {
@@ -69,31 +56,66 @@ namespace ECSEngine {
 			else {
 				load_data->database_reference->Reset();
 			}
-			return true;
-		}
+		};
 
-		void* file_allocation = malloc(file_byte_size);
 		struct DeallocateMalloc {
 			void operator() () {
-				CloseFile(file_handle);
-				free(allocation);
+				if (file_handle != -1) {
+					CloseFile(file_handle);
+				}
+				if (allocation != nullptr) {
+					free(allocation);
+				}
 			}
 
 			ECS_FILE_HANDLE file_handle;
 			void* allocation;
 		};
+		StackScope<DeallocateMalloc> deallocate_malloc({ -1, nullptr });
 
-		StackScope<DeallocateMalloc> deallocate_malloc({ file_handle, file_allocation });
-
-		bool success = ReadFile(file_handle, { file_allocation, file_byte_size });
-		if (!success) {
-			if (load_data->detailed_error_string) {
-				load_data->detailed_error_string->AddStreamAssert("Failed to read the scene file");
+		Stream<void> scene_data = {};
+		if (load_data->is_file_data) {
+			ECS_FILE_HANDLE file_handle = -1;
+			ECS_FILE_STATUS_FLAGS status = OpenFile(load_data->file, &file_handle, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL | ECS_FILE_ACCESS_BINARY);
+			if (status != ECS_FILE_STATUS_OK) {
+				if (load_data->detailed_error_string) {
+					load_data->detailed_error_string->AddStreamAssert("Failed to open the scene file");
+				}
+				return false;
 			}
-			return false;
+
+			// If the file is empty, then the entity manager and the database reference is empty as well
+			size_t file_byte_size = GetFileByteSize(file_handle);
+			if (file_byte_size == 0) {
+				CloseFile(file_handle);
+				set_empty_scene();
+				return true;
+			}
+
+			void* file_allocation = malloc(file_byte_size);
+			deallocate_malloc.deallocator.file_handle = file_handle;
+			deallocate_malloc.deallocator.allocation = file_allocation;
+
+			bool success = ReadFile(file_handle, { file_allocation, file_byte_size });
+			if (!success) {
+				if (load_data->detailed_error_string) {
+					load_data->detailed_error_string->AddStreamAssert("Failed to read the scene file");
+				}
+				return false;
+			}
+
+			scene_data = { file_allocation, file_byte_size };
+		}
+		else {
+			scene_data = load_data->in_memory_data;
+			if (scene_data.size == 0) {
+				set_empty_scene();
+				return true;
+			}
 		}
 
-		SceneFileHeader* file_header = (SceneFileHeader*)file_allocation;
+		uintptr_t data_start_ptr = (uintptr_t)scene_data.buffer;
+		SceneFileHeader* file_header = (SceneFileHeader*)scene_data.buffer;
 		if (file_header->version != FILE_VERSION) {
 			if (load_data->detailed_error_string) {
 				load_data->detailed_error_string->AddStreamAssert("Invalid scene file header");
@@ -101,9 +123,8 @@ namespace ECSEngine {
 			return false;
 		}
 
-		uintptr_t file_allocation_ptr = (uintptr_t)file_allocation;
-		uintptr_t ptr = (uintptr_t)OffsetPointer(file_allocation, file_header->header_size);
-		if (file_header->chunk_offsets[ASSET_DATABASE_CHUNK] != ptr - file_allocation_ptr) {
+		uintptr_t ptr = data_start_ptr + file_header->header_size;
+		if (file_header->chunk_offsets[ASSET_DATABASE_CHUNK] != ptr - data_start_ptr) {
 			if (load_data->detailed_error_string) {
 				load_data->detailed_error_string->AddStreamAssert("The scene file is corrupted (asset database chunk)");
 			}
@@ -113,6 +134,7 @@ namespace ECSEngine {
 		bool randomize_assets = load_data->randomize_assets;
 		AssetDatabaseSnapshot asset_database_snapshot = database->GetSnapshot();
 
+		bool success = true;
 		// Try to load the asset database first
 		if (load_data->database != nullptr) {
 			success = DeserializeAssetDatabase(load_data->database, ptr) == ECS_DESERIALIZE_OK;
@@ -134,7 +156,7 @@ namespace ECSEngine {
 			database->RandomizePointers(asset_database_snapshot);
 		}
 
-		if (file_header->chunk_offsets[ENTITY_MANAGER_CHUNK] != ptr - file_allocation_ptr) {
+		if (file_header->chunk_offsets[ENTITY_MANAGER_CHUNK] != ptr - data_start_ptr) {
 			// Restore the snapshot
 			database->RestoreSnapshot(asset_database_snapshot);
 			if (load_data->detailed_error_string) {
@@ -170,7 +192,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		if (file_header->chunk_offsets[TIME_CHUNK] != ptr - file_allocation_ptr) {
+		if (file_header->chunk_offsets[TIME_CHUNK] != ptr - data_start_ptr) {
 			// Restore the snapshot
 			database->RestoreSnapshot(asset_database_snapshot);
 			if (load_data->detailed_error_string) {
@@ -189,7 +211,7 @@ namespace ECSEngine {
 			*load_data->speed_up_factor = world_time_values.y;
 		}
 
-		if (file_header->chunk_offsets[MODULE_SETTINGS_CHUNK] != ptr - file_allocation_ptr) {
+		if (file_header->chunk_offsets[MODULE_SETTINGS_CHUNK] != ptr - data_start_ptr) {
 			// Restore the snapshot
 			database->RestoreSnapshot(asset_database_snapshot);
 			if (load_data->detailed_error_string) {
@@ -250,7 +272,7 @@ namespace ECSEngine {
 
 		// If there are any chunk functors specified, we should call them
 		for (size_t index = 0; index < ECS_SCENE_EXTRA_CHUNKS; index++) {
-			if (file_header->chunk_offsets[CHUNK_COUNT + index] != ptr - file_allocation_ptr) {
+			if (file_header->chunk_offsets[CHUNK_COUNT + index] != ptr - data_start_ptr) {
 				// Restore the snapshot
 				database->RestoreSnapshot(asset_database_snapshot);
 				if (load_data->detailed_error_string) {
@@ -265,8 +287,8 @@ namespace ECSEngine {
 				chunk_size = file_header->chunk_offsets[CHUNK_COUNT + index + 1] - file_header->chunk_offsets[CHUNK_COUNT + index];
 			}
 			else {
-				size_t current_difference = ptr - (uintptr_t)file_allocation;
-				chunk_size = file_byte_size - current_difference;
+				size_t current_difference = ptr - data_start_ptr;
+				chunk_size = scene_data.size - current_difference;
 			}
 
 			if (load_data->chunk_functors[index].function != nullptr) {
@@ -292,7 +314,7 @@ namespace ECSEngine {
 			ptr += chunk_size;
 		}
 		
-		ECS_ASSERT((ptr - (uintptr_t)file_allocation) == file_byte_size);	
+		ECS_ASSERT((ptr - data_start_ptr) == scene_data.size);	
 		return true;
 	}
 

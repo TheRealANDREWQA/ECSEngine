@@ -53,12 +53,11 @@ namespace ECSEngine {
 #define ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(name) ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name); \
 														ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name);
 
-#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name), SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, version, STRING(name), nullptr } 
+#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, version, STRING(name), nullptr } 
 
 #define ECS_SERIALIZE_CUSTOM_TYPE_SWITCH_CAPACITY 8
 
 	struct SerializeCustomType {
-		Reflection::ReflectionCustomType container_type;
 		SerializeCustomTypeWriteFunction write;
 		SerializeCustomTypeReadFunction read;
 		unsigned int version;
@@ -71,6 +70,7 @@ namespace ECSEngine {
 		bool switches[ECS_SERIALIZE_CUSTOM_TYPE_SWITCH_CAPACITY] = { false };
 	};
 
+	// Must be kept in sync with the ECS_REFLECTION_CUSTOM_TYPES
 	extern SerializeCustomType ECS_SERIALIZE_CUSTOM_TYPES[];
 
 	struct SerializeCustomTypeDeduceTypeHelperData {

@@ -61,4 +61,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void SparseSetDeallocateUntyped(void* sparse_set, AllocatorPolymorphic allocator)
+	{
+		// It is fine to type cast to any type
+		SparseSet<char>* typed_sparse_set = (SparseSet<char>*)sparse_set;
+		typed_sparse_set->Deallocate(allocator);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

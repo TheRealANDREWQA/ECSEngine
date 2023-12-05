@@ -200,10 +200,12 @@ void PrefabEndDrag(EditorState* editor_state) {
 		if (!callback_data->read_success || callback_data->load_assets_success.load(ECS_RELAXED) != LOAD_EDITOR_ASSETS_PENDING) {
 			if (callback_data->read_success) {
 				// If we succeeded, and we have a valid entity entry, make it the selected one
-				// For that sandbox
+				// For that sandbox and also make the active window that respective scene
 				if (callback_data->entity.IsValid() && callback_data->hovered_sandbox_index != -1) {
 					ChangeSandboxSelectedEntities(editor_state, callback_data->hovered_sandbox_index, { &callback_data->entity, 1 });
 					ChangeInspectorEntitySelection(editor_state, callback_data->hovered_sandbox_index);
+					unsigned int hovered_scene_ui_index = GetSceneUIWindowIndex(editor_state, callback_data->hovered_sandbox_index);
+					editor_state->ui_system->SetActiveWindow(hovered_scene_ui_index);
 				}
 			}
 			DeallocatePrefabDragCallbackData(callback_data);

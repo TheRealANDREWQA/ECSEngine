@@ -761,6 +761,15 @@ namespace ECSEngine {
 			return old_buffer;
 		}*/
 
+		// Asserts that there is enough space and increments the size with the given count
+		// Returns the index of the first entry
+		ECS_INLINE unsigned int Reserve(unsigned int count = 1) {
+			ECS_ASSERT(size + count <= capacity);
+			unsigned int index = size;
+			size += count;
+			return index;
+		}
+
 		ECS_INLINE void Reset() {
 			InitializeFromBuffer(nullptr, 0, 0);
 		}
@@ -946,11 +955,9 @@ namespace ECSEngine {
 
 		// Returns the first index
 		unsigned int AddStream(Stream<T> other) {
-			ReserveNewElements(other.size);
-			CopySlice(size, other);
-			unsigned int previous_size = size;
-			size += other.size;
-			return previous_size;
+			unsigned int write_index = Reserve(other.size);
+			CopySlice(write_index, other);
+			return write_index;
 		}
 
 		ECS_INLINE ResizableStream<T> Copy(AllocatorPolymorphic allocator) const {
@@ -1056,10 +1063,9 @@ namespace ECSEngine {
 		}
 
 		void Insert(unsigned int index, T value) {
-			ReserveNewElement();
+			Reserve();
 			DisplaceElements(index, 1);
 			buffer[index] = value;
-			size++;
 		}
 
 		ECS_INLINE void Reset() {
@@ -1079,19 +1085,17 @@ namespace ECSEngine {
 			buffer[index] = buffer[size];
 		}
 
-		// makes sure there is enough space for extra count elements
-		ECS_INLINE void ReserveNewElements(unsigned int count) {
+		// Makes sure there is enough space for extra count elements
+		// And increases the size with that count
+		ECS_INLINE unsigned int Reserve(unsigned int count = 1) {
+			unsigned int initial_size = size;
 			if (size + count > capacity) {
 				unsigned int new_capacity = ECS_RESIZABLE_STREAM_FACTOR * capacity + 1;
 				unsigned int resize_count = new_capacity < capacity + count ? capacity + count : new_capacity;
 				Resize(resize_count);
 			}
-		}
-
-		unsigned int ReserveNewElement() {
-			unsigned int index = size;
-			ReserveNewElements(1);
-			return index;
+			size += count;
+			return initial_size;
 		}
 
 		private:
@@ -1332,6 +1336,14 @@ namespace ECSEngine {
 
 		ECS_INLINE size_t CopySize() const {
 			return size;
+		}
+
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+			if (size > 0 && buffer != nullptr) {
+				ECSEngine::DeallocateEx(allocator, buffer);
+				buffer = nullptr;
+				size = 0;
+			}
 		}
 
 		ECS_INLINE bool Equals(Stream<void> other) const {
@@ -2064,7 +2076,9 @@ namespace ECSEngine {
 				ECS_ASSERT(capacity_stream->size + count <= capacity_stream->capacity);
 			}
 			else {
-				resizable_stream->ReserveNewElements(count);
+				resizable_stream->Reserve(count);
+				// Here, we don't want to actually
+				resizable_stream->size -= count;
 			}
 		}
 
@@ -2077,6 +2091,15 @@ namespace ECSEngine {
 		ECS_INLINE void SetSize(unsigned int value) {
 			// We can alias the 2 streams since they have the same layout
 			capacity_stream->size = value;
+		}
+
+		ECS_INLINE T* Reserve(unsigned int count = 1) {
+			if (is_capacity) {
+				return capacity_stream->buffer + capacity_stream->Reserve(count);
+			}
+			else {
+				return resizable_stream->buffer + resizable_stream->Reserve(count);
+			}
 		}
 
 		ECS_INLINE void RemoveSwapBack(unsigned int index) {

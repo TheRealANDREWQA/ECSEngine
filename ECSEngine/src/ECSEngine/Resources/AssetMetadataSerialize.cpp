@@ -7,20 +7,41 @@
 
 namespace ECSEngine {
 
-	// --------------------------------------------------------------------------------------------
+	using namespace Reflection;
 
-	ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(MaterialAsset) {}
-
-	// --------------------------------------------------------------------------------------------
-
-	ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(MaterialAsset) {
+	bool MaterialAssetCustomTypeInterface::Match(Reflection::ReflectionCustomTypeMatchData* data)
+	{
 		return data->definition == STRING(MaterialAsset);
 	}
 
-	// --------------------------------------------------------------------------------------------
-
-	ECS_REFLECTION_CUSTOM_TYPE_BYTE_SIZE_FUNCTION(MaterialAsset) {
+	ulong2 MaterialAssetCustomTypeInterface::GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data)
+	{
 		return { sizeof(MaterialAsset), alignof(MaterialAsset) };
+	}
+
+	void MaterialAssetCustomTypeInterface::GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) {}
+
+	bool MaterialAssetCustomTypeInterface::IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data)
+	{
+		return false;
+	}
+
+	void MaterialAssetCustomTypeInterface::Copy(Reflection::ReflectionCustomTypeCopyData* data)
+	{
+		const MaterialAsset* source = (const MaterialAsset*)data->source;
+		MaterialAsset* destination = (MaterialAsset*)data->destination;
+		if (data->deallocate_existing_data) {
+			destination->DeallocateMemory(data->allocator);
+		}
+		*destination = source->Copy(data->allocator);
+	}
+
+	bool MaterialAssetCustomTypeInterface::Compare(Reflection::ReflectionCustomTypeCompareData* data)
+	{
+		MaterialAsset* first = (MaterialAsset*)data->first;
+		MaterialAsset* second = (MaterialAsset*)data->second;
+
+		return first->name == second->name && first->CompareOptions(second);
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -473,29 +494,6 @@ namespace ECSEngine {
 		}
 
 		return read_size;
-	}
-
-	// --------------------------------------------------------------------------------------------
-
-	ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(MaterialAsset) {
-		return false;
-	}
-
-	// --------------------------------------------------------------------------------------------
-
-	ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(MaterialAsset) {
-		MaterialAsset* source = (MaterialAsset*)data->source;
-		MaterialAsset* destination = (MaterialAsset*)data->destination;
-		*destination = source->Copy(data->allocator);
-	}
-
-	// --------------------------------------------------------------------------------------------
-
-	ECS_REFLECTION_CUSTOM_TYPE_COMPARE_FUNCTION(MaterialAsset) {
-		MaterialAsset* first = (MaterialAsset*)data->first;
-		MaterialAsset* second = (MaterialAsset*)data->second;
-
-		return first->name == second->name && first->CompareOptions(second);
 	}
 
 	// --------------------------------------------------------------------------------------------

@@ -274,6 +274,9 @@ static void RegisterNewCBuffers(
 			}
 			else {
 				// It has changed. We need to convert the old type to the new type
+				Reflection::CopyReflectionDataOptions copy_options;
+				copy_options.allocator = current_allocator;
+				copy_options.always_allocate_for_buffers = true;
 				Reflection::CopyReflectionTypeToNewVersion(
 					reflection_manager,
 					reflection_manager,
@@ -281,8 +284,7 @@ static void RegisterNewCBuffers(
 					new_cbuffers.buffer + subindex,
 					buffer_data,
 					new_buffers[subindex].data.buffer,
-					current_allocator,
-					true
+					&copy_options
 				);
 			}
 		}

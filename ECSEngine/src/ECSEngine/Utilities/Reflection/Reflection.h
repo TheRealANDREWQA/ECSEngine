@@ -18,6 +18,7 @@ namespace ECSEngine {
 
 #define ECS_REFLECTION_MAX_TYPE_COUNT (128)
 #define ECS_REFLECTION_MAX_ENUM_COUNT (32)
+#define ECS_REFLECTION_TYPE_CHANGE_SET_MAX_INDICES (8)
 
 #pragma region Reflection Container Type functions
 
@@ -30,7 +31,8 @@ namespace ECSEngine {
 			ECS_REFLECTION_CUSTOM_TYPE_COUNT
 		};
 
-		extern ReflectionCustomType ECS_REFLECTION_CUSTOM_TYPES[];
+		// Must be kept in sync with the ECS_SERIALIZE_CUSTOM_TYPES
+		extern ReflectionCustomTypeInterface* ECS_REFLECTION_CUSTOM_TYPES[];
 
 		ECSENGINE_API void ReflectionCustomTypeDependentTypes_SingleTemplate(ReflectionCustomTypeDependentTypesData* data);
 
@@ -39,17 +41,47 @@ namespace ECSEngine {
 
 		ECSENGINE_API Stream<char> ReflectionCustomTypeGetTemplateArgument(Stream<char> definition);
 
-		// ---------------------------------------------------------------------------------------------------------------------
+		struct StreamCustomTypeInterface : public Reflection::ReflectionCustomTypeInterface {
+			bool Match(Reflection::ReflectionCustomTypeMatchData* data) override;
 
-		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(Stream);
+			ulong2 GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data) override;
 
-		// ---------------------------------------------------------------------------------------------------------------------
+			void GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) override;
 
-		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(SparseSet);
+			bool IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data) override;
 
-		// ---------------------------------------------------------------------------------------------------------------------
+			void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
 
-		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(DataPointer);
+			bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+		};
+
+		struct SparseSetCustomTypeInterface : public Reflection::ReflectionCustomTypeInterface {
+			bool Match(Reflection::ReflectionCustomTypeMatchData* data) override;
+
+			ulong2 GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data) override;
+
+			void GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) override;
+
+			bool IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data) override;
+
+			void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
+
+			bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+		};
+
+		struct DataPointerCustomTypeInterface : public Reflection::ReflectionCustomTypeInterface {
+			bool Match(Reflection::ReflectionCustomTypeMatchData* data) override;
+
+			ulong2 GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data) override;
+
+			void GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data) override;
+
+			bool IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data) override;
+
+			void Copy(Reflection::ReflectionCustomTypeCopyData* data) override;
+
+			bool Compare(Reflection::ReflectionCustomTypeCompareData* data) override;
+		};
 
 		// ---------------------------------------------------------------------------------------------------------------------
 		
@@ -258,7 +290,7 @@ namespace ECSEngine {
 
 			// It will memset to 0 initially then will set the other fields
 			// It will set the fields of the data according to the defaults
-			void SetInstanceFieldDefaultData(const ReflectionField* field, void* data) const;
+			void SetInstanceFieldDefaultData(const ReflectionField* field, void* data, bool offset_data = true) const;
 
 			// If ignoring some fields, you can set this value manually in order
 			// to correctly have the byte size
@@ -277,7 +309,7 @@ namespace ECSEngine {
 		};
 
 		// If there are no user defined types, this version will work
-		ECSENGINE_API void SetInstanceFieldDefaultData(const ReflectionField* field, void* data);
+		ECSENGINE_API void SetInstanceFieldDefaultData(const ReflectionField* field, void* data, bool offset_data = true);
 
 		ECSENGINE_API bool IsTypeCharacter(char character);
 
@@ -436,24 +468,6 @@ namespace ECSEngine {
 			ReflectionType* reflection_type
 		);
 
-		// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
-		ECSENGINE_API void CopyReflectionType(
-			const Reflection::ReflectionManager* reflection_manager,
-			const Reflection::ReflectionType* type,
-			const void* source,
-			void* destination,
-			AllocatorPolymorphic field_allocator
-		);
-
-		// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
-		ECSENGINE_API void CopyReflectionType(
-			const Reflection::ReflectionManager* reflection_manager,
-			Stream<char> definition,
-			const void* source,
-			void* destination,
-			AllocatorPolymorphic field_allocator
-		);
-
 		// Copies all blittable fields from one type instance to the other
 		ECSENGINE_API void CopyReflectionTypeBlittableFields(
 			const Reflection::ReflectionManager* reflection_manager,
@@ -579,6 +593,16 @@ namespace ECSEngine {
 			const CompareReflectionTypeInstancesOptions* options = {}
 		);
 
+		struct CopyReflectionDataOptions {
+			AllocatorPolymorphic allocator = { nullptr };
+			bool always_allocate_for_buffers = false;
+			bool set_padding_bytes_to_zero = false;
+			bool deallocate_existing_buffers = false;
+			// For fields copies, if this is set to true, it will offset
+			// Using the field pointer offset
+			bool offset_pointer_data_from_field = false;
+		};
+
 		// Copies the data from the old_type into the new type and checks for remappings
 		// The allocator is needed only when a stream type has changed its underlying type
 		// It will allocate memory in that case for the new stream. If the allocator is not specified,
@@ -591,13 +615,37 @@ namespace ECSEngine {
 		ECSENGINE_API void CopyReflectionTypeToNewVersion(
 			const ReflectionManager* old_reflection_manager,
 			const ReflectionManager* new_reflection_manager,
-			const ReflectionType* old_type,
-			const ReflectionType* new_type,
-			const void* old_data,
-			void* new_data,
-			AllocatorPolymorphic allocator = { nullptr },
-			bool always_allocate_for_buffers = false,
-			bool set_padding_bytes_to_zero = false
+			const ReflectionType* source_type,
+			const ReflectionType* destination_type,
+			const void* source_data,
+			void* destination_data,
+			const CopyReflectionDataOptions* options
+		);
+
+		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
+		// for buffers it will always allocate even when the type is the same
+		// The reflection manager can be made nullptr if you are sure there are no nested types or custom types. 
+		// By default, it will copy matching padding bytes between versions, but you can specify
+		// The last boolean in order to ignore that and set the padding bytes to zero for the new type
+		ECSENGINE_API void CopyReflectionTypeInstance(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type,
+			const void* source,
+			void* destination,
+			const CopyReflectionDataOptions* options
+		);
+
+		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
+		// for buffers it will always allocate even when the type is the same
+		// The reflection manager can be made nullptr if you are sure there are no nested types or custom types. 
+		// By default, it will copy matching padding bytes between versions, but you can specify
+		// The last boolean in order to ignore that and set the padding bytes to zero for the new type
+		ECSENGINE_API void CopyReflectionTypeInstance(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const void* source,
+			void* destination,
+			const CopyReflectionDataOptions* options
 		);
 
 		// It does a memcpy into the corresponding field of the instance
@@ -622,7 +670,7 @@ namespace ECSEngine {
 		// It works for used defined types as well
 		// The allocator is needed only when a stream type has changed its underlying type
 		// It will allocate memory in that case for the new stream. If the allocator is not specified,
-		// then it will not allocate and instead be with size 0 and nullptr (that means, the previous data will not be copied, not referenced)
+		// then it will not allocate and instead it will let the stream nullptr and 0 (that means, the previous data will not be copied, not referenced)
 		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
 		// for buffers it will always allocate even when the type is the same
 		// The old and the new reflection manager can be made nullptr if you are sure there are no nested types
@@ -630,12 +678,23 @@ namespace ECSEngine {
 		ECSENGINE_API void ConvertReflectionFieldToOtherField(
 			const ReflectionManager* first_reflection_manager,
 			const ReflectionManager* second_reflection_manager,
-			const ReflectionField* first_info,
-			const ReflectionField* second_info,
+			const ReflectionField* first_field,
+			const ReflectionField* second_field,
 			const void* first_data,
 			void* second_data,
-			AllocatorPolymorphic allocator = { nullptr },
-			bool always_allocate_for_buffers = false
+			const CopyReflectionDataOptions* options
+		);
+
+		// It works for used defined types as well
+		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
+		// for buffers it will always allocate even when the type is the same
+		// The reflection manager can be made nullptr if you are sure there are no nested types or custom types
+		ECSENGINE_API void CopyReflectionFieldInstance(
+			const ReflectionManager* reflection_manager,
+			const ReflectionField* field,
+			const void* source,
+			void* destination,
+			const CopyReflectionDataOptions* options
 		);
 
 		// Returns true if the type references in any of its fields the subtype
@@ -702,6 +761,66 @@ namespace ECSEngine {
 			Stream<ReflectionType> types, 
 			CapacityStream<Stream<char>>& ordered_types, 
 			CapacityStream<uint2>& subgroups
+		);
+		
+		enum ECS_REFLECTION_TYPE_CHANGE_TYPE : unsigned char {
+			ECS_REFLECTION_TYPE_CHANGE_ADD,
+			ECS_REFLECTION_TYPE_CHANGE_REMOVE,
+			ECS_REFLECTION_TYPE_CHANGE_UPDATE
+		};
+
+		// The addition index is the new type field index
+		// The removal index is the previous type field index
+		// The update index is the new type field index
+		// In case there is a nested type, there will be more than 1 index
+		struct ReflectionTypeChange {
+			ECS_REFLECTION_TYPE_CHANGE_TYPE change_type;
+			unsigned char indices_count = 0;
+			unsigned int indices[ECS_REFLECTION_TYPE_CHANGE_SET_MAX_INDICES];
+		};
+
+		// Determines which fields have been added/removed or updated (updated in case they changed their type)
+		ECSENGINE_API void DetermineReflectionTypeChangeSet(
+			const ReflectionManager* previous_reflection_manager,
+			const ReflectionManager* new_reflection_manager,
+			const ReflectionType* previous_type,
+			const ReflectionType* new_type,
+			AdditionStream<ReflectionTypeChange> changes
+		);
+
+		// The change type for all of them is going to be update
+		// For stream types, it will report an update if any entry
+		// is different.
+		ECSENGINE_API void DetermineReflectionTypeInstanceUpdates(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type,
+			const void* first_data,
+			const void* second_data,
+			AdditionStream<ReflectionTypeChange> updates
+		);
+
+		// Makes the data for the given destination fields the same as the source
+		// Ones specified from the change set. The allocator is used for the stream
+		// Allocations
+		ECSENGINE_API void UpdateReflectionTypeInstanceFromChanges(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type,
+			void* destination_data,
+			const void* source_data,
+			Stream<ReflectionTypeChange> changes,
+			AllocatorPolymorphic allocator
+		);
+
+		// Makes the data for the given destination fields the same as the source
+		// Ones specified from the change set. The allocator is used for the stream
+		// Allocations
+		ECSENGINE_API void UpdateReflectionTypeInstancesFromChanges(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type,
+			Stream<void*> destinations,
+			const void* source_data,
+			Stream<ReflectionTypeChange> changes,
+			AllocatorPolymorphic allocator
 		);
 
 	}

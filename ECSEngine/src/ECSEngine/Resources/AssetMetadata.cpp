@@ -505,6 +505,8 @@ namespace ECSEngine {
 					if (asset->buffers[material_shader][matching_index].reflection_type != nullptr &&
 						buffers[material_shader][index].reflection_type != nullptr && reflection_manager != nullptr
 						&& asset->reflection_manager != nullptr) {
+						Reflection::CopyReflectionDataOptions copy_options;
+						copy_options.set_padding_bytes_to_zero = true;
 						Reflection::CopyReflectionTypeToNewVersion(
 							asset->reflection_manager,
 							reflection_manager,
@@ -512,9 +514,7 @@ namespace ECSEngine {
 							buffers[material_shader][index].reflection_type,
 							asset->buffers[material_shader][matching_index].data.buffer,
 							buffers[material_shader][index].data.buffer,
-							{ nullptr },
-							false,
-							true
+							&copy_options
 						);
 					}
 				}
@@ -908,6 +908,9 @@ namespace ECSEngine {
 			memcpy(current_buffer->data.buffer, data, current_buffer->data.size);
 		}
 		else {
+			Reflection::CopyReflectionDataOptions copy_options;
+			copy_options.allocator = allocator;
+			copy_options.always_allocate_for_buffers = true;
 			// It has changed. We need to convert the old type to the new type
 			Reflection::CopyReflectionTypeToNewVersion(
 				reflection_manager,
@@ -916,8 +919,7 @@ namespace ECSEngine {
 				current_buffer->reflection_type,
 				data,
 				current_buffer->data.buffer,
-				allocator,
-				true
+				&copy_options
 			);
 		}
 	}

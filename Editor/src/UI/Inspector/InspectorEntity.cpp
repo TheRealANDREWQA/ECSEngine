@@ -266,12 +266,15 @@ struct InspectorDrawEntityData {
 		const void* target_data = TargetComponentData(editor_state, sandbox_index, link_index);
 		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
 		const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target_name);
-		Reflection::CopyReflectionType(
+		Reflection::CopyReflectionDataOptions copy_options;
+		copy_options.allocator = TargetAllocator(link_index);
+		copy_options.always_allocate_for_buffers = true;
+		Reflection::CopyReflectionTypeInstance(
 			editor_state->editor_components.internal_manager, 
 			target_type, 
 			target_data, 
 			link_components[link_index].target_data_copy, 
-			TargetAllocator(link_index)
+			&copy_options
 		);
 	}
 
@@ -288,12 +291,15 @@ struct InspectorDrawEntityData {
 
 		const Reflection::ReflectionType* reflection_type = editor_state->editor_components.GetType(link_components[link_index].name);
 		ResetModifierFieldsLinkComponent(reflection_type, link_components[link_index].data);
-		Reflection::CopyReflectionType(
+		Reflection::CopyReflectionDataOptions copy_options;
+		copy_options.allocator = Allocator();
+		copy_options.always_allocate_for_buffers = true;
+		Reflection::CopyReflectionTypeInstance(
 			editor_state->editor_components.internal_manager,
 			reflection_type,
 			link_components[link_index].data,
 			link_components[link_index].previous_data,
-			Allocator()
+			&copy_options
 		);
 	}
 
@@ -336,12 +342,15 @@ struct InspectorDrawEntityData {
 			bool is_shared = editor_state->editor_components.IsSharedComponent(target_type_name);
 			component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, target_component, is_shared);
 		}
-		Reflection::CopyReflectionType(
+		Reflection::CopyReflectionDataOptions copy_options;
+		copy_options.allocator = GetAllocatorPolymorphic(&allocator);
+		copy_options.always_allocate_for_buffers = true;
+		Reflection::CopyReflectionTypeInstance(
 			editor_state->editor_components.internal_manager,
 			target_type_name,
 			component_data,
 			link_components[link_index].apply_modifier_initial_target_data,
-			GetAllocatorPolymorphic(&allocator)
+			&copy_options
 		);
 
 		link_components[link_index].is_apply_modifier_in_progress = true;
@@ -535,12 +544,16 @@ struct InspectorDrawEntityData {
 
 		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_name);
 		if (!apply_modifier) {
-			Reflection::CopyReflectionType(
+			Reflection::CopyReflectionDataOptions copy_options;
+			copy_options.allocator = Allocator();
+			copy_options.always_allocate_for_buffers = true;
+			copy_options.deallocate_existing_buffers = true;
+			Reflection::CopyReflectionTypeInstance(
 				editor_state->editor_components.internal_manager,
 				link_type,
 				link_data,
 				previous_link_data,
-				Allocator()
+				&copy_options
 			);
 		}
 		// The else branch is executed before the update
@@ -548,12 +561,15 @@ struct InspectorDrawEntityData {
 		// Update the target data copy
 		ClearAllocator(TargetAllocator(link_index));
 		const void* target_data = TargetComponentData(editor_state, sandbox_index, link_index);
-		Reflection::CopyReflectionType(
+		Reflection::CopyReflectionDataOptions copy_options;
+		copy_options.allocator = TargetAllocator(link_index);
+		copy_options.always_allocate_for_buffers = true;
+		Reflection::CopyReflectionTypeInstance(
 			editor_state->editor_components.internal_manager,
 			target_name,
 			target_data,
 			link_components[link_index].target_data_copy,
-			TargetAllocator(link_index)
+			&copy_options
 		);
 	}
 
@@ -602,23 +618,30 @@ struct InspectorDrawEntityData {
 				}
 				else {
 					const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_name);
-					Reflection::CopyReflectionType(
+					Reflection::CopyReflectionDataOptions copy_options;
+					copy_options.allocator = Allocator();
+					copy_options.always_allocate_for_buffers = true;
+					copy_options.deallocate_existing_buffers = true;
+					Reflection::CopyReflectionTypeInstance(
 						editor_state->editor_components.internal_manager,
 						link_type,
 						link_components[index].data,
 						link_components[index].previous_data,
-						Allocator()
+						&copy_options
 					);
 				}
 
 				// Also copy the target data copy
 				ClearAllocator(TargetAllocator(index));
-				Reflection::CopyReflectionType(
+				Reflection::CopyReflectionDataOptions copy_options;
+				copy_options.allocator = TargetAllocator(index);
+				copy_options.always_allocate_for_buffers = true;
+				Reflection::CopyReflectionTypeInstance(
 					editor_state->editor_components.internal_manager,
 					target_name,
 					target_data,
 					current_data,
-					TargetAllocator(index)
+					&copy_options
 				);
 			}
 		}
@@ -1217,12 +1240,16 @@ static void DrawComponents(
 					}
 					else {
 						const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_component);
-						Reflection::CopyReflectionType(
+						Reflection::CopyReflectionDataOptions copy_options;
+						copy_options.allocator = editor_state->EditorAllocator();
+						copy_options.always_allocate_for_buffers = true;
+						copy_options.deallocate_existing_buffers = true;
+						Reflection::CopyReflectionTypeInstance(
 							editor_state->editor_components.internal_manager,
 							link_type,
 							current_component,
 							data->link_components[link_index].previous_data,
-							editor_state->EditorAllocator()
+							&copy_options
 						);
 					}
 				}

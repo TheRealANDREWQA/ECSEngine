@@ -51,6 +51,11 @@ static bool InitializePrefabSandboxInformation(OpenPrefabActionData* action_data
 		ChangeTemporarySandboxScenePath(editor_state, create_sandbox_index, prefab_relative_path);
 		CopySandboxModulesFromAnother(editor_state, create_sandbox_index, action_data->launching_sandbox);
 		CopySandboxModuleSettingsFromAnother(editor_state, create_sandbox_index, action_data->launching_sandbox);
+
+		// Set the scene camera position to be the one from the launching sandbox
+		OrientedPoint launching_camera = GetSandboxCameraPoint(editor_state, action_data->launching_sandbox, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		SetSandboxCameraTranslation(editor_state, create_sandbox_index, launching_camera.position, EDITOR_SANDBOX_VIEWPORT_SCENE, true);
+		SetSandboxCameraRotation(editor_state, create_sandbox_index, launching_camera.rotation, EDITOR_SANDBOX_VIEWPORT_SCENE, true);
 		return true;
 	}
 	else {
@@ -92,8 +97,7 @@ EDITOR_EVENT(DestroyAuxiliaryWindowsEvent) {
 	if (inspector_ui_index == -1 || entities_ui_index == -1 || scene_ui_index == -1) {
 		// One of the windows was destroyed, destroy all the other ones as well
 		if (inspector_ui_index != -1) {
-			editor_state->ui_system->RemoveWindowFromDockspaceRegion(inspector_ui_index);
-			editor_state->ui_system->DestroyWindow(inspector_ui_index);
+			editor_state->ui_system->DestroyWindowEx(inspector_ui_index);
 			// This window destruction will destroy the inspector instance as well
 
 			// We need to take again the entities ui index and scene ui index since
@@ -107,8 +111,7 @@ EDITOR_EVENT(DestroyAuxiliaryWindowsEvent) {
 		}
 
 		if (entities_ui_index != -1) {
-			editor_state->ui_system->RemoveWindowFromDockspaceRegion(entities_ui_index);
-			editor_state->ui_system->DestroyWindow(entities_ui_index);
+			editor_state->ui_system->DestroyWindowEx(entities_ui_index);
 			
 			// Need to re-get the scene ui index
 			if (scene_ui_index != -1) {
@@ -117,7 +120,6 @@ EDITOR_EVENT(DestroyAuxiliaryWindowsEvent) {
 		}
 
 		if (scene_ui_index != -1) {
-			editor_state->ui_system->RemoveWindowFromDockspaceRegion(scene_ui_index);
 			editor_state->ui_system->DestroyWindowEx(scene_ui_index);
 		}
 
@@ -218,6 +220,7 @@ static void CreatePrefabPreviewWindows(OpenPrefabActionData* action_data, unsign
 	Entity prefab_entity = 0;
 	ChangeSandboxSelectedEntities(editor_state, created_sandbox_index, { &prefab_entity, 1 });
 	ChangeInspectorEntitySelection(editor_state, created_sandbox_index);
+	FocusSceneUIOnSelection(editor_state, created_sandbox_index);
 
 	DestroyAuxiliaryWindowsEventData event_data;
 	event_data.launched_sandbox_index = action_data->launching_sandbox;

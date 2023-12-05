@@ -6,15 +6,15 @@
 
 namespace ECSEngine {
 
-	// --------------------------------------------------------------------------------------
+	using namespace Reflection;
 
-	ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(ReferenceCounted) {
+	bool ReferenceCountedCustomTypeInterface::Match(Reflection::ReflectionCustomTypeMatchData* data)
+	{
 		return Reflection::ReflectionCustomTypeMatchTemplate(data, "ReferenceCounted");
 	}
 
-	// --------------------------------------------------------------------------------------
-
-	ECS_REFLECTION_CUSTOM_TYPE_BYTE_SIZE_FUNCTION(ReferenceCounted) {
+	ulong2 ReferenceCountedCustomTypeInterface::GetByteSize(Reflection::ReflectionCustomTypeByteSizeData* data)
+	{
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 
 		ulong2 byte_size_alignment = Reflection::SearchReflectionUserDefinedTypeByteSizeAlignment(data->reflection_manager, template_type);
@@ -28,24 +28,26 @@ namespace ECSEngine {
 		return { byte_size_alignment.x + byte_size_alignment.y, byte_size_alignment.y };
 	}
 
-	// --------------------------------------------------------------------------------------
-
-	ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(ReferenceCounted) {
+	void ReferenceCountedCustomTypeInterface::GetDependentTypes(Reflection::ReflectionCustomTypeDependentTypesData* data)
+	{
 		ReflectionCustomTypeDependentTypes_SingleTemplate(data);
 	}
 
-	// --------------------------------------------------------------------------------------
-
-	ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(ReferenceCounted) {
+	bool ReferenceCountedCustomTypeInterface::IsBlittable(Reflection::ReflectionCustomTypeIsBlittableData* data)
+	{
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 		return SearchIsBlittable(data->reflection_manager, template_type);
 	}
 
-	// --------------------------------------------------------------------------------------
-
-	ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(ReferenceCounted) {
+	void ReferenceCountedCustomTypeInterface::Copy(Reflection::ReflectionCustomTypeCopyData* data)
+	{
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
-		CopyReflectionType(data->reflection_manager, template_type, data->source, data->destination, data->allocator);
+		CopyReflectionDataOptions copy_options;
+		copy_options.allocator = data->allocator;
+		copy_options.always_allocate_for_buffers = true;
+		copy_options.deallocate_existing_buffers = data->deallocate_existing_data;
+
+		CopyReflectionTypeInstance(data->reflection_manager, template_type, data->source, data->destination, &copy_options);
 
 		// Also copy the reference count
 		size_t byte_size = Reflection::SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
@@ -56,10 +58,9 @@ namespace ECSEngine {
 		*destination_value = *source_value;
 	}
 
-	// --------------------------------------------------------------------------------------
-
-	ECS_REFLECTION_CUSTOM_TYPE_COMPARE_FUNCTION(ReferenceCounted) {
-		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
+	bool ReferenceCountedCustomTypeInterface::Compare(Reflection::ReflectionCustomTypeCompareData* data)
+	{
+		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
 		if (!Reflection::CompareReflectionTypeInstances(data->reflection_manager, template_type, data->first, data->second, 1)) {
 			return false;
 		}

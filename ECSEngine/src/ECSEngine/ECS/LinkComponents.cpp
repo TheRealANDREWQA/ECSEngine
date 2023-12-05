@@ -1222,12 +1222,15 @@ namespace ECSEngine {
 				const void* source = OffsetPointer(target_data, base_data->target_type->fields[index].info.pointer_offset);
 				void* destination = OffsetPointer(link_data, base_data->link_type->fields[index].info.pointer_offset);
 				if (base_data->allocator.allocator != nullptr) {
-					CopyReflectionType(
+					Reflection::CopyReflectionDataOptions copy_options;
+					copy_options.allocator = base_data->allocator;
+					copy_options.always_allocate_for_buffers = true;
+					CopyReflectionTypeInstance(
 						base_data->reflection_manager,
 						base_data->link_type->fields[index].definition,
 						source,
 						destination,
-						base_data->allocator
+						&copy_options
 					);
 				}
 				else {
@@ -1406,12 +1409,15 @@ namespace ECSEngine {
 			void* destination = OffsetPointer(target_data, base_data->target_type->fields[index].info.pointer_offset);
 
 			if (base_data->allocator.allocator != nullptr) {
-				CopyReflectionType(
+				Reflection::CopyReflectionDataOptions copy_options;
+				copy_options.allocator = base_data->allocator;
+				copy_options.always_allocate_for_buffers = true;
+				CopyReflectionTypeInstance(
 					base_data->reflection_manager,
 					base_data->target_type->fields[index].definition,
 					source,
 					destination,
-					base_data->allocator
+					&copy_options
 				);
 			}
 			else {

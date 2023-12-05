@@ -210,8 +210,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 		return false;
 	}
 
-	module_index = project_modules->ReserveNewElement();
-	project_modules->size++;
+	module_index = project_modules->Reserve();
 	EditorModule* module = project_modules->buffer + module_index;
 
 	size_t total_size = (solution_path.size + library_name.size + 2) * sizeof(wchar_t);

@@ -50,7 +50,7 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 
 	// Create the pointer remap
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
-	bool success = LoadEditorSceneCore(editor_state, &temporary_manager, &temporary_database, path, pointer_remapping.buffer);
+	bool success = LoadEditorSceneCore(editor_state, &temporary_manager, &temporary_database, path, pointer_remapping);
 	if (success) {
 		ECS_STACK_CAPACITY_STREAM(Entity, created_entity_stream, 1);
 		entity_manager->AddEntityManager(&temporary_manager, &created_entity_stream);
@@ -67,7 +67,7 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 		database_reference->AddOther(&temporary_database);
 
 		// Update the pointer remappings after everything was comitted into the sandbox
-		UpdateEditorScenePointerRemappings(editor_state, entity_manager, pointer_remapping.buffer);
+		UpdateEditorScenePointerRemappings(editor_state, entity_manager, pointer_remapping);
 	}
 
 	// We need to clear the memory manager only to release the temporary data

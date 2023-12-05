@@ -1,16 +1,16 @@
 #include "editorpch.h"
+#include "ECSEngineSampleTexture.h"
+#include "ECSEngineComponents.h"
+#include "ECSEngineMath.h"
+#include "ECSEngineForEach.h"
 #include "Scene.h"
 #include "../Editor/EditorState.h"
 #include "HelperWindows.h"
 #include "Common.h"
 #include "../Editor/EditorPalette.h"
-#include "ECSEngineMath.h"
-#include "ECSEngineForEach.h"
 #include "../Modules/Module.h"
 #include "RenderingCommon.h"
 #include "../Sandbox/SandboxEntityOperations.h"
-#include "ECSEngineSampleTexture.h"
-#include "ECSEngineComponents.h"
 #include "../Editor/EditorInputMapping.h"
 #include "../Sandbox/SandboxScene.h"
 #include "../Sandbox/Sandbox.h"
@@ -18,6 +18,7 @@
 #include "../Sandbox/SandboxFile.h"
 #include "../Sandbox/SandboxProfiling.h"
 #include "DragTargets.h"
+#include "../Assets/PrefabFile.h"
 
 // These defined the bounds under which the mouse
 // is considered that it clicked and not selected yet
@@ -1169,7 +1170,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	acquire_drag[0] = PREFAB_DRAG_NAME;
 	acquire_drag.size = acquire_drag.capacity;
 	drawer.PushDragDrop(SCENE_UI_DRAG_NAME, acquire_drag, true, EDITOR_GREEN_COLOR, BORDER_DRAG_THICKNESS);
-	drawer.HandleAcquireDrag(UI_CONFIG_LATE_DRAW, drawer.GetRegionPosition(), drawer.GetRegionScale());
+	drawer.HandleAcquireDrag(UI_CONFIG_SYSTEM_DRAW, drawer.GetRegionPosition(), drawer.GetRegionScale());
 
 	SceneDrawData* data = (SceneDrawData*)window_data;
 	EditorState* editor_state = data->editor_state;
@@ -1223,6 +1224,58 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	DisplayCrashedSandbox(drawer, editor_state, sandbox_index);
 	// Display the compiling message if necessary
 	DisplayCompilingSandbox(drawer, editor_state, sandbox_index);
+
+	// There is one last thing. To display buttons for scene prefab controls
+	if (HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_PREFAB)) {
+		struct SavePrefabChangesData {
+			EditorState* editor_state;
+			unsigned int sandbox_index;
+		};
+
+		auto save_prefab_changes = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			SavePrefabChangesData* data = (SavePrefabChangesData*)_data;
+			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+			// The scene path of this sandbox is actually the path to the prefab
+			Entity prefab_entity = GetPrefabEntityFromSingle();
+			bool success = SavePrefabFile(data->editor_state, data->sandbox_index, prefab_entity, sandbox->scene_path);
+			if (success) {
+				// Destroy this window since we succeeded - the rest of the windows will be removed
+				// By the event handler
+				system->DestroyWindowEx(window_index);
+			}
+			else {
+				// We shouldn't destroy the window here since we failed saving and the user will
+				// Lose the changes if we destroyed the window
+				ECS_FORMAT_TEMP_STRING(message, "Failed to save prefab {#} file", sandbox->scene_path);
+				EditorSetConsoleError(message);
+			}
+		};
+
+		auto cancel_prefab_editing = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			// To cancel, we simply have to destroy this window
+			system->DestroyWindowEx(window_index);
+		};
+
+		SavePrefabChangesData save_change_data = { editor_state, sandbox_index };
+		UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+		row_layout.SetVerticalAlignment(ECS_UI_ALIGN_BOTTOM);
+		row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+		row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+
+		size_t button_configuration = 0;
+		UIDrawConfig config;
+		row_layout.GetTransform(config, button_configuration);		
+		drawer.Button(button_configuration | UI_CONFIG_LATE_DRAW, config, "Save", { save_prefab_changes, &save_change_data, sizeof(save_change_data), ECS_UI_DRAW_SYSTEM });
+
+		button_configuration = 0;
+		config.flag_count = 0;
+		row_layout.GetTransform(config, button_configuration);
+		drawer.Button(button_configuration | UI_CONFIG_LATE_DRAW, config, "Cancel", { cancel_prefab_editing, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+	}
 }
 
 void CreateSceneUIWindow(EditorState* editor_state, unsigned int index) {
@@ -1288,6 +1341,11 @@ bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_inde
 		}
 	}
 	return false;
+}
+
+void FocusSceneUIOnSelection(EditorState* editor_state, unsigned int sandbox_index)
+{
+	FocusOnSelection(editor_state, sandbox_index);
 }
 
 void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index) {

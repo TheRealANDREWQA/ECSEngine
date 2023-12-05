@@ -7716,15 +7716,11 @@ namespace ECSEngine {
 		{
 			if (phase == ECS_UI_DRAW_SYSTEM) {
 				auto stream = &m_resources.system_draw.sprite_textures[(unsigned int)type];
-				unsigned int before_size = stream->ReserveNewElement();
-				stream->size++;
-				return stream->buffer + before_size;
+				return stream->buffer + stream->Reserve();
 			}
 			else {
 				auto stream = &dockspace->borders[border_index].draw_resources.sprite_textures[(unsigned int)phase * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + (unsigned int)type];
-				unsigned int before_size = stream->ReserveNewElement();
-				stream->size++;
-				return stream->buffer + before_size;
+				return stream->buffer + stream->Reserve();
 			}
 		}
 

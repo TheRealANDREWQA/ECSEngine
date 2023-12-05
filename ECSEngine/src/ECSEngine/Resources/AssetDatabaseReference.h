@@ -27,7 +27,7 @@ namespace ECSEngine {
 	// There needs to be specified ECS_ASSET_TYPE_COUNT for each remapping (each asset type has its own stream)
 	struct AssetDatabaseReferenceFromStandaloneOptions {
 		CapacityStream<uint2>* handle_remapping = nullptr;
-		CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remapping = nullptr;
+		Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remapping = { nullptr, 0 };
 	};
 
 	struct ECSENGINE_API ECS_REFLECT AssetDatabaseReference {

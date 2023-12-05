@@ -111,7 +111,7 @@ namespace ECSEngine {
 
 				// This should not fail
 				ECS_ASSERT(result.custom_serializer_index != -1, "Failed to serialize custom stream");
-				current_type_byte_size = ECS_SERIALIZE_CUSTOM_TYPES[result.custom_serializer_index].container_type.byte_size(&byte_data).x;
+				current_type_byte_size = ECS_REFLECTION_CUSTOM_TYPES[result.custom_serializer_index]->GetByteSize(&byte_data).x;
 			}
 			else {
 				result.basic_type = ReflectionBasicFieldType::UserDefined;
@@ -919,6 +919,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
+	// Must be kept in sync with ECS_REFLECTION_CUSTOM_TYPES
 	SerializeCustomType ECS_SERIALIZE_CUSTOM_TYPES[] = {
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(Stream, SERIALIZE_CUSTOM_STREAM_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(ReferenceCounted, ECS_SERIALIZE_CUSTOM_TYPE_REFERENCE_COUNTED_VERSION),
@@ -936,7 +937,7 @@ namespace ECSEngine {
 		ReflectionCustomTypeMatchData match_data = { definition };
 
 		for (unsigned int index = 0; index < std::size(ECS_SERIALIZE_CUSTOM_TYPES); index++) {
-			if (ECS_SERIALIZE_CUSTOM_TYPES[index].container_type.match(&match_data)) {
+			if (ECS_REFLECTION_CUSTOM_TYPES[index]->Match(&match_data)) {
 				return index;
 			}
 		}

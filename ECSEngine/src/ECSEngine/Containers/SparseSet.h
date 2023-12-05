@@ -62,6 +62,13 @@ namespace ECSEngine {
 			InitializeFromBuffer(buffer, capacity);
 		}
 
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+			if (buffer != nullptr && capacity > 0) {
+				ECSEngine::Deallocate(allocator, buffer);
+				memset(this, 0, sizeof(*this));
+			}
+		}
+
 		ECS_INLINE T& operator [](unsigned int handle) {
 			unsigned int index = GetIndexFromHandle(handle);
 
@@ -243,8 +250,13 @@ namespace ECSEngine {
 		}
 
 		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			void* buffer = Allocate(allocator, MemoryOf(_capacity), alignof(void*), debug_info);
-			InitializeFromBuffer(buffer, _capacity);
+			if (_capacity > 0) {
+				void* buffer = Allocate(allocator, MemoryOf(_capacity), alignof(void*), debug_info);
+				InitializeFromBuffer(buffer, _capacity);
+			}
+			else {
+				memset(this, 0, sizeof(*this));
+			}
 		}
 
 		ECS_INLINE Stream<T> ToStream() const {
@@ -292,6 +304,8 @@ namespace ECSEngine {
 
 	// Destination needs to be a pointer to the SparseSet*
 	ECSENGINE_API void SparseSetInitializeUntyped(void* destination, unsigned int capacity, unsigned int element_byte_size, void* _buffer);
+
+	ECSENGINE_API void SparseSetDeallocateUntyped(void* sparse_set, AllocatorPolymorphic allocator);
 
 	template<typename T>
 	struct ResizableSparseSet {
