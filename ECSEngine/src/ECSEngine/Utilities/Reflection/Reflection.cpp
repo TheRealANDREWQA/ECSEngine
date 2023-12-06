@@ -5891,9 +5891,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				destination = OffsetPointer(destination, field->info.pointer_offset);
 			}
 
-			ResizableStream<void> initial_destination_stream_data;
 			if (options->deallocate_existing_buffers && IsStream(field->info.stream_type)) {
-				initial_destination_stream_data = GetReflectionFieldResizableStreamVoid(field->info, destination, false);
+				ResizableStream<void> destination_stream_data = GetReflectionFieldResizableStreamVoid(field->info, destination, false);
+				if (destination_stream_data.allocator.allocator == nullptr) {
+					destination_stream_data.allocator = options->allocator;
+				}
+				destination_stream_data.FreeBuffer();
 			}
 
 			// If not a user defined type, can copy it
@@ -6010,17 +6013,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						else {
 							// Enum or error.
 							// Call the default instance data
-							reflection_manager->SetInstanceFieldDefaultData(field, destination);
+							reflection_manager->SetInstanceFieldDefaultData(field, destination, false);
 						}
 					}
 				}
-			}
-
-			if (options->deallocate_existing_buffers && IsStream(field->info.stream_type)) {
-				if (initial_destination_stream_data.allocator.allocator == nullptr) {
-					initial_destination_stream_data.allocator = options->allocator;
-				}
-				initial_destination_stream_data.FreeBuffer();
 			}
 		}
 
@@ -6535,8 +6531,33 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			AllocatorPolymorphic allocator
 		)
 		{
+			ECS_STACK_CAPACITY_STREAM(ReflectionType, current_types, 512);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, data_offsets, 512);
+			current_types.Add(*type);
+			data_offsets.Add((unsigned int)0);
 			for (size_t index = 0; index < changes.size; index++) {
-
+				if (changes[index].indices_count > current_types.size) {
+					for (unsigned int subindex = current_types.size; subindex < changes[index].indices_count - 1; subindex++) {
+						data_offsets.Add(data_offsets[data_offsets.size - 1] + current_types[current_types.size - 1].fields[changes[index].indices[subindex]].info.pointer_offset);
+						const ReflectionType* nested_type = reflection_manager->GetType(current_types[subindex].fields[changes[index].indices[subindex]].definition);
+						current_types.AddAssert(*nested_type);
+					}
+				}
+				if (changes[index].indices_count < current_types.size) {
+					current_types.size = changes[index].indices_count;
+					data_offsets.size = changes[index].indices_count;
+				}
+				unsigned int current_data_offset = data_offsets[data_offsets.size - 1] + changes[index].indices[changes[index].indices_count - 1];
+				const void* current_source_data = OffsetPointer(source_data, current_data_offset);
+				const ReflectionField* field = &current_types[current_types.size - 1].fields[changes[index].indices[changes[index].indices_count - 1]];
+				CopyReflectionDataOptions copy_options;
+				copy_options.allocator = allocator;
+				copy_options.always_allocate_for_buffers = true;
+				copy_options.deallocate_existing_buffers = true;
+				for (size_t destination_index = 0; destination_index < destinations.size; destination_index++) {
+					void* current_destination_data = OffsetPointer(destinations[destination_index], current_data_offset);
+					CopyReflectionFieldInstance(reflection_manager, field, current_source_data, current_destination_data, &copy_options);
+				}
 			}
 		}
 

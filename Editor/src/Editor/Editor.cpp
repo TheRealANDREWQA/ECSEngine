@@ -208,9 +208,8 @@ public:
 							focused_windows.AddAssert(VISUALIZE_TEXTURE_WINDOW_NAME);
 
 							// At the moment use the classical drawing since some windows have problems
-							// With the retained snapshots where invalid references are kept when they shouldn't
-							// For example, the inspector can have snapshot runnables on text inputs and when the
-							// entity is changed the runnable will refer to an invalid field
+							// TODO: Almost all windows are ready to use retained drawing or need slight
+							// Modifications. Consider enabling selective drawing
 							frame_pacing = editor_state.ui_system->DoFrame();
 							//frame_pacing = editor_state.ui_system->DoFrame({ focused_windows, 33 });
 

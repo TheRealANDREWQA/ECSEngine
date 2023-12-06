@@ -97,6 +97,29 @@ namespace ECSEngine {
 		// and then use the deferred call to copy it
 		void* AllocateTemporaryBuffer(size_t size, size_t alignment = 8);
 
+		// It will sort the entities by their base archetype and call the functor
+		// With a sequence of contiguous entities that are from the same base archetype
+		// You can choose between in place shuffles inside the entities, or creating a temporary
+		// Array where the entries will be put
+		void ApplySortingEntityFunctor(
+			Stream<Entity> entities, 
+			void (*functor)(EntityManager* entity_manager, Stream<Entity> entities, void* user_data), 
+			void* user_data,
+			bool same_array_shuffle
+		);
+
+		// It will sort the entities by their base archetype and call the functor
+		// With a sequence of contiguous entities that are from the same base archetype
+		// It will shuffle the elements in place inside the entities stream
+		template<typename Functor>
+		void ApplySortingEntityFunctor(Stream<Entity> entities, bool same_array_shuffle, Functor functor) {
+			auto wrapper = [](EntityManager* entity_manager, Stream<Entity> entities, void* user_data) {
+				Functor* functor = (Functor*)user_data;
+				(*functor)(entity_manager, entities);
+			};
+			ApplySortingEntityFunctor(entities, wrapper, &functor, same_array_shuffle);
+		}
+
 		// ---------------------------------------------------------------------------------------------------
 
 		void AddComponentCommit(Entity entity, Component component);
@@ -139,45 +162,57 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// entities must belong to the same base archetype 
-		void AddComponentCommit(Stream<Entity> entities, Component component);
+		void AddComponentCommit(Stream<Entity> entities, Component component, bool entities_belong_to_same_base_archetype);
 
 		// Deferred Call - it will register it inside a command stream
-		// entities must belong to the same archetype
 		void AddComponent(
 			Stream<Entity> entities,
 			Component component,
+			bool entities_belong_to_same_base_archetype,
 			DeferredActionParameters parameters = {},
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// entities must belong to the same base archetype; data will be used to initialize all components to the same value
-		void AddComponentCommit(Stream<Entity> entities, Component component, const void* data);
+		// Data will be used to initialize all components to the same value
+		void AddComponentCommit(Stream<Entity> entities, Component component, const void* data, bool entities_belong_to_same_base_archetype);
 
 		// Deferred Call - it will register it inside a command stream
-		// entities must belong to the same base archetype; data will be used to initialize all components to the same value
-		void AddComponent(Stream<Entity> entities, Component component, const void* data, DeferredActionParameters parameters = {},
-			DebugInfo debug_info = ECS_DEBUG_INFO);
+		// Data will be used to initialize all components to the same value
+		void AddComponent(
+			Stream<Entity> entities, 
+			Component component, 
+			const void* data, 
+			bool entities_belong_to_same_base_archetype, 
+			DeferredActionParameters parameters = {},
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// entities must belong to the same base archetype
-		void AddComponentCommit(Stream<Entity> entities, ComponentSignature components);
+		void AddComponentCommit(Stream<Entity> entities, ComponentSignature components, bool entities_belong_to_same_base_archetype);
 
 		// Deferred Call - it will register it inside a command stream
-		// entities must belong to the same base archetype
-		void AddComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {},
-			DebugInfo debug_info = ECS_DEBUG_INFO);
+		void AddComponent(
+			Stream<Entity> entities, 
+			ComponentSignature components, 
+			bool entities_belong_to_same_base_archetype,
+			DeferredActionParameters parameters = {},
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// entities must belong to the same base archetype
-		void AddComponentCommit(Stream<Entity> entities, ComponentSignature components, const void** data, EntityManagerCopyEntityDataType copy_type);
+		void AddComponentCommit(
+			Stream<Entity> entities, 
+			ComponentSignature components, 
+			const void** data, 
+			EntityManagerCopyEntityDataType copy_type,
+			bool entities_belong_to_same_base_archetype
+		);
 
 		// Deferred Call - it will register it inside a command stream
-		// entities must belong to the same base archetype; data parsed by component
 		// data -> A B C ; each entity will have as components A, B, C
 		// components.count pointers must be present in data
 		void AddComponent(
@@ -185,6 +220,7 @@ namespace ECSEngine {
 			ComponentSignature components,
 			const void** data,
 			EntityManagerCopyEntityDataType copy_type,
+			bool entities_belong_to_same_base_archetype,
 			DeferredActionParameters parameters = {},
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
@@ -204,15 +240,14 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// entities must belong to the same base archetype
-		void AddSharedComponentCommit(Stream<Entity> entities, Component shared_component, SharedInstance instance);
+		void AddSharedComponentCommit(Stream<Entity> entities, Component shared_component, SharedInstance instance, bool entities_belong_to_same_base_archetype);
 
 		// Deferred Call
-		// entities must belong to the same base archetype
 		void AddSharedComponent(
 			Stream<Entity> entities,
 			Component shared_component,
 			SharedInstance instance,
+			bool entities_belong_to_same_base_archetype,
 			DeferredActionParameters parameters = {},
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
@@ -225,6 +260,19 @@ namespace ECSEngine {
 		void AddSharedComponent(
 			Entity entity,
 			SharedComponentSignature components,
+			DeferredActionParameters parameters = {},
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		void AddSharedComponentCommit(Stream<Entity> entities, SharedComponentSignature components, bool entities_belong_to_same_base_archetype);
+
+		// Deferred Call
+		void AddSharedComponent(
+			Stream<Entity> entities,
+			SharedComponentSignature components,
+			bool entities_belong_to_same_base_archetype,
 			DeferredActionParameters parameters = {},
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
@@ -261,20 +309,6 @@ namespace ECSEngine {
 		// Deferred call
 		// Sets the entities to be children of the given parent.
 		void AddEntitiesToParent(Stream<Entity> entities, Entity parent, DeferredActionParameters parameters, DebugInfo debug_info = ECS_DEBUG_INFO);
-
-		// ---------------------------------------------------------------------------------------------------
-
-		// Entities must belong to the same base archetype
-		void AddSharedComponentCommit(Stream<Entity> entities, SharedComponentSignature components);
-
-		// Deferred Call
-		// Entities must belong to the same base archetype
-		void AddSharedComponent(
-			Stream<Entity> entities,
-			SharedComponentSignature components,
-			DeferredActionParameters parameters = {},
-			DebugInfo debug_info = ECS_DEBUG_INFO
-		);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -1381,6 +1415,11 @@ namespace ECSEngine {
 		SharedInstance GetSharedComponentInstance(Component component, Entity entity) const;
 
 		SharedInstance GetNamedSharedComponentInstance(Component component, Stream<char> identifier) const;
+
+		// If there is an existing shared instance with that data, it will return that shared instance
+		// Else, it create a new entry and return it. Can optionally give a boolean that will be set to true
+		// if a new instance was created
+		SharedInstance GetOrCreateSharedComponentInstanceCommit(Component component, const void* data, bool* created_instance = nullptr);
 
 		// Fills in all the shared instances that are registered for that component
 		void GetSharedComponentInstanceAll(Component component, CapacityStream<SharedInstance>& shared_instances) const;

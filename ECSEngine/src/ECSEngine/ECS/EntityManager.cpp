@@ -7,9 +7,8 @@
 #define ENTITY_MANAGER_DEFAULT_SHARED_COMPONENTS (1 << 7)
 #define ENTITY_MANAGER_DEFAULT_ARCHETYPE_COUNT (1 << 7)
 
-#define ENTITY_MANAGER_TEMPORARY_ALLOCATOR_MAX_BACKUP (1 << 3)
-#define ENTITY_MANAGER_TEMPORARY_ALLOCATOR_CHUNK_SIZE 1 * ECS_MB
-#define ENTITY_MANAGER_TEMPORARY_ALLOCATOR_BACKUP_TRACK_CAPACITY (1 << 8)
+#define ENTITY_MANAGER_TEMPORARY_ALLOCATOR_INITIAL_CAPACITY ECS_MB * 5
+#define ENTITY_MANAGER_TEMPORARY_ALLOCATOR_BACKUP_CAPACITY ECS_MB * 50
 
 #define ENTITY_MANAGER_SMALL_ALLOCATOR_SIZE ECS_KB * 256
 #define ENTITY_MANAGER_SMALL_ALLOCATOR_CHUNKS ECS_KB * 2
@@ -2106,6 +2105,12 @@ namespace ECSEngine {
 		// Allocate the atomic streams - the deferred actions, clear tags and set tags
 		m_deferred_actions.Initialize(m_memory_manager, descriptor.deferred_action_capacity);
 
+		m_temporary_allocator = ResizableLinearAllocator(
+			ENTITY_MANAGER_TEMPORARY_ALLOCATOR_INITIAL_CAPACITY, 
+			ENTITY_MANAGER_TEMPORARY_ALLOCATOR_BACKUP_CAPACITY, 
+			GetAllocatorPolymorphic(m_memory_manager)
+		);
+
 		m_hierarchy_allocator = (MemoryManager*)m_memory_manager->Allocate(sizeof(MemoryManager));
 		*m_hierarchy_allocator = DefaultEntityHierarchyAllocator(m_memory_manager->m_backup);
 		m_hierarchy = EntityHierarchy(m_hierarchy_allocator, 0, 0, 0);
@@ -2127,10 +2132,43 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void EntityManager::ApplySortingEntityFunctor(
+		Stream<Entity> entities, 
+		void (*functor)(EntityManager* entity_manager, Stream<Entity>entities, void* user_data), 
+		void* user_data,
+		bool same_array_shuffle
+	)
+	{
+		if (!same_array_shuffle) {
+			Stream<Entity> temporary_entities = { AllocateTemporaryBuffer(sizeof(Entity) * entities.size), entities.size };
+			temporary_entities.CopyOther(entities);
+			entities = temporary_entities;
+		}
+		for (size_t index = 0; index < entities.size; index++) {
+			size_t iteration_start_index = index;
+			size_t iteration_entity_count = 1;
+			EntityInfo iteration_info = GetEntityInfo(entities[index]);
+			index++;
+			for (; index < entities.size; index++) {
+				EntityInfo current_info = GetEntityInfo(entities[index]);
+				if (iteration_info.main_archetype == current_info.main_archetype && iteration_info.base_archetype == current_info.base_archetype) {
+					// We need to swap the entry
+					entities.Swap(iteration_start_index + iteration_entity_count, index);
+					iteration_entity_count++;
+				}
+			}
+
+			functor(this, { entities.buffer + iteration_start_index, iteration_entity_count }, user_data);
+			index = iteration_start_index + iteration_entity_count - 1;
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	// Forward towards the multiple entities with size 1
 	void EntityManager::AddComponentCommit(Entity entity, Component component)
 	{
-		AddComponentCommit({ &entity, 1 }, component);
+		AddComponentCommit({ &entity, 1 }, component, true);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2138,7 +2176,7 @@ namespace ECSEngine {
 	// Forward towards the multiple entities with size 1
 	void EntityManager::AddComponent(Entity entity, Component component, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
-		AddComponent({ &entity, 1 }, component, parameters, debug_info);
+		AddComponent({ &entity, 1 }, component, true, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2162,7 +2200,7 @@ namespace ECSEngine {
 	// Forward towards the multiple entities with size 1
 	void EntityManager::AddComponentCommit(Entity entity, ComponentSignature components)
 	{
-		AddComponentCommit({ &entity, 1 }, components);
+		AddComponentCommit({ &entity, 1 }, components, true);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2170,7 +2208,7 @@ namespace ECSEngine {
 	// Forward towards the multiple entities with size 1
 	void EntityManager::AddComponent(Entity entity, ComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
-		AddComponent({ &entity, 1 }, components, parameters, debug_info);
+		AddComponent({ &entity, 1 }, components, true, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2178,7 +2216,7 @@ namespace ECSEngine {
 	// Forward towards the multiple entities with size 1
 	void EntityManager::AddComponentCommit(Entity entity, ComponentSignature components, const void** data)
 	{
-		AddComponentCommit({ &entity, 1 }, components, data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_BY_ENTITY);
+		AddComponentCommit({ &entity, 1 }, components, data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_BY_ENTITY, true);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2186,72 +2224,141 @@ namespace ECSEngine {
 	// Forward towards the multiple entities with size 1
 	void EntityManager::AddComponent(Entity entity, ComponentSignature components, const void** data, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
-		AddComponent({ &entity, 1 }, components, data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_BY_ENTITY, parameters, debug_info);
+		AddComponent({ &entity, 1 }, components, data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_BY_ENTITY, true, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponentCommit(Stream<Entity> entities, Component component)
+	void EntityManager::AddComponentCommit(Stream<Entity> entities, Component component, bool entities_belong_to_the_same_base_archetype)
 	{
-		DeferredAddComponentEntities commit_data;
-		commit_data.components = { &component, (unsigned char)1 };
-		commit_data.data = nullptr;
-		commit_data.entities = entities;
-		CommitEntityAddComponent<false>(this, &commit_data, nullptr);
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			DeferredAddComponentEntities commit_data;
+			commit_data.components = { &component, (unsigned char)1 };
+			commit_data.data = nullptr;
+			commit_data.entities = entities;
+			CommitEntityAddComponent<false>(entity_manager, &commit_data, nullptr);
+		};
+
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponent(Stream<Entity> entities, Component component, DeferredActionParameters parameters, DebugInfo debug_info)
+	void EntityManager::AddComponent(
+		Stream<Entity> entities, 
+		Component component, 
+		bool entities_belong_to_the_same_base_archetype, 
+		DeferredActionParameters parameters, 
+		DebugInfo debug_info
+	)
 	{
-		RegisterEntityAddComponent(this, entities, { &component, 1 }, nullptr, DEFERRED_ENTITY_ADD_COMPONENT, parameters, debug_info);
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			RegisterEntityAddComponent(entity_manager, entities, { &component, 1 }, nullptr, DEFERRED_ENTITY_ADD_COMPONENT, parameters, debug_info);
+		};
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponentCommit(Stream<Entity> entities, Component component, const void* data)
+	void EntityManager::AddComponentCommit(Stream<Entity> entities, Component component, const void* data, bool entities_belong_to_the_same_base_archetype)
 	{
-		DeferredAddComponentEntities commit_data;
-		commit_data.components = { &component, (unsigned char)1 };
-		commit_data.data = &data;
-		commit_data.entities = entities;
-		CommitEntityAddComponentSplatted(this, &commit_data, nullptr);
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			DeferredAddComponentEntities commit_data;
+			commit_data.components = { &component, (unsigned char)1 };
+			commit_data.data = &data;
+			commit_data.entities = entities;
+			CommitEntityAddComponentSplatted(this, &commit_data, nullptr);
+		};
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponent(Stream<Entity> entities, Component component, const void* data, DeferredActionParameters parameters, DebugInfo debug_info)
+	void EntityManager::AddComponent(
+		Stream<Entity> entities, 
+		Component component, 
+		const void* data, 
+		bool entities_belong_to_the_same_base_archetype, 
+		DeferredActionParameters parameters, 
+		DebugInfo debug_info
+	)
 	{
-		RegisterEntityAddComponent(this, entities, { &component, 1 }, &data, DEFERRED_ENTITY_ADD_COMPONENT_SPLATTED, parameters, debug_info);
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			RegisterEntityAddComponent(this, entities, { &component, 1 }, &data, DEFERRED_ENTITY_ADD_COMPONENT_SPLATTED, parameters, debug_info);
+		};
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponentCommit(Stream<Entity> entities, ComponentSignature components)
+	void EntityManager::AddComponentCommit(Stream<Entity> entities, ComponentSignature components, bool entities_belong_to_the_same_base_archetype)
 	{
-		DeferredAddComponentEntities commit_data;
-		commit_data.components = components;
-		commit_data.data = nullptr;
-		commit_data.entities = entities;
-		CommitEntityAddComponent<false>(this, &commit_data, nullptr);
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			DeferredAddComponentEntities commit_data;
+			commit_data.components = components;
+			commit_data.data = nullptr;
+			commit_data.entities = entities;
+			CommitEntityAddComponent<false>(this, &commit_data, nullptr);
+		};
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info)
+	void EntityManager::AddComponent(
+		Stream<Entity> entities, 
+		ComponentSignature components, 
+		bool entities_belong_to_the_same_base_archetype, 
+		DeferredActionParameters parameters, 
+		DebugInfo debug_info
+	)
 	{
-		RegisterEntityAddComponent(this, entities, components, nullptr, DEFERRED_ENTITY_ADD_COMPONENT, parameters, debug_info);
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			RegisterEntityAddComponent(this, entities, components, nullptr, DEFERRED_ENTITY_ADD_COMPONENT, parameters, debug_info);
+		};
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponentCommit(Stream<Entity> entities, ComponentSignature components, const void** data, EntityManagerCopyEntityDataType copy_type)
+	void EntityManager::AddComponentCommit(
+		Stream<Entity> entities, 
+		ComponentSignature components, 
+		const void** data, 
+		EntityManagerCopyEntityDataType copy_type,
+		bool entities_belong_to_the_same_base_archetype
+	)
 	{
-		DeferredAddComponentEntities commit_data;
-		commit_data.components = components;
-		commit_data.entities = entities;
-		commit_data.data = data;
-
 		DeferredCallbackFunctor callback = CommitEntityAddComponentSplatted;
 		switch (copy_type) {
 		case ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_BY_COMPONENTS_CONTIGUOUS:
@@ -2274,7 +2381,19 @@ namespace ECSEngine {
 		}
 		}
 
-		callback(this, &commit_data, nullptr);
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			DeferredAddComponentEntities commit_data;
+			commit_data.components = components;
+			commit_data.entities = entities;
+			commit_data.data = data;
+			callback(entity_manager, &commit_data, nullptr);
+		};
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2284,6 +2403,7 @@ namespace ECSEngine {
 		ComponentSignature components, 
 		const void** data,
 		EntityManagerCopyEntityDataType copy_type,
+		bool entities_belong_to_the_same_base_archetype,
 		DeferredActionParameters parameters,
 		DebugInfo debug_info
 	)
@@ -2313,52 +2433,134 @@ namespace ECSEngine {
 				GetComponentSignatureString(components, component_string_storage), entities[0].value);
 		}
 		}
-		RegisterEntityAddComponent(this, entities, components, data, action_type, parameters, debug_info);
+
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			RegisterEntityAddComponent(entity_manager, entities, components, data, action_type, parameters, debug_info);
+		};
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::AddSharedComponentCommit(Entity entity, Component shared_component, SharedInstance instance)
 	{
-		AddSharedComponentCommit({ &entity, 1 }, shared_component, instance);
+		AddSharedComponentCommit({ &entity, 1 }, shared_component, instance, true);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::AddSharedComponent(Entity entity, Component shared_component, SharedInstance instance, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
-		AddSharedComponent({ &entity, 1 }, shared_component, instance, parameters, debug_info);
+		AddSharedComponent({ &entity, 1 }, shared_component, instance, true, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddSharedComponentCommit(Stream<Entity> entities, Component shared_component, SharedInstance instance)
+	void EntityManager::AddSharedComponentCommit(Stream<Entity> entities, Component shared_component, SharedInstance instance, bool entities_belong_to_the_same_base_archetype)
 	{
-		DeferredAddSharedComponentEntities commit_data;
-		commit_data.components.indices = &shared_component;
-		commit_data.components.instances = &instance;
-		commit_data.components.count = 1;
-		commit_data.entities = entities;
-		CommitEntityAddSharedComponent(this, &commit_data, nullptr);
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			DeferredAddSharedComponentEntities commit_data;
+			commit_data.components.indices = &shared_component;
+			commit_data.components.instances = &instance;
+			commit_data.components.count = 1;
+			commit_data.entities = entities;
+			CommitEntityAddSharedComponent(entity_manager, &commit_data, nullptr);
+		};
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddSharedComponent(Stream<Entity> entities, Component shared_component, SharedInstance instance, DeferredActionParameters parameters, DebugInfo debug_info)
+	void EntityManager::AddSharedComponent(
+		Stream<Entity> entities, 
+		Component shared_component, 
+		SharedInstance instance, 
+		bool entities_belong_to_the_same_base_archetype,
+		DeferredActionParameters parameters, 
+		DebugInfo debug_info
+	)
 	{
-		AddSharedComponent(entities, { &shared_component, &instance, 1 }, parameters, debug_info);
+		AddSharedComponent(entities, { &shared_component, &instance, 1 }, entities_belong_to_the_same_base_archetype, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::AddSharedComponentCommit(Entity entity, SharedComponentSignature components) {
-		AddSharedComponentCommit({ &entity, 1 }, components);
+		AddSharedComponentCommit({ &entity, 1 }, components, true);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::AddSharedComponent(Entity entity, SharedComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info) {
-		AddSharedComponent({ &entity, 1 }, components, parameters, debug_info);
+		AddSharedComponent({ &entity, 1 }, components, true, parameters, debug_info);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::AddSharedComponentCommit(Stream<Entity> entities, SharedComponentSignature components, bool entities_belong_to_the_same_base_archetype) {
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			DeferredAddSharedComponentEntities commit_data;
+			commit_data.components = components;
+			commit_data.components.count = 1;
+			commit_data.entities = entities;
+			CommitEntityAddSharedComponent(entity_manager, &commit_data, nullptr);
+		};
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::AddSharedComponent(
+		Stream<Entity> entities, 
+		SharedComponentSignature components, 
+		bool entities_belong_to_the_same_base_archetype,
+		DeferredActionParameters parameters, 
+		DebugInfo debug_info
+	) {
+		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
+			size_t allocation_size = sizeof(DeferredAddSharedComponentEntities) + (sizeof(Component) + sizeof(SharedInstance)) * components.count;
+			allocation_size += parameters.entities_are_stable ? 0 : entities.MemoryOf(entities.size);
+
+			void* allocation = AllocateTemporaryBuffer(allocation_size);
+			uintptr_t buffer = (uintptr_t)allocation;
+			DeferredAddSharedComponentEntities* data = (DeferredAddSharedComponentEntities*)allocation;
+			buffer += sizeof(*data);
+
+			data->components.count = components.count;
+			data->components.indices = (Component*)buffer;
+			memcpy(data->components.indices, components.indices, sizeof(Component) * data->components.count);
+			buffer += sizeof(Component) * data->components.count;
+
+			data->components.instances = (SharedInstance*)buffer;
+			memcpy(data->components.instances, components.instances, sizeof(SharedInstance) * data->components.count);
+			buffer += sizeof(SharedInstance) * data->components.count;
+
+			buffer = AlignPointer(buffer, alignof(Entity));
+			data->entities = GetEntitiesFromActionParameters(entities, parameters, buffer);
+
+			WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_ENTITY_ADD_SHARED_COMPONENT), debug_info });
+		};
+		if (!entities_belong_to_the_same_base_archetype) {
+			ApplySortingEntityFunctor(entities, false, functor);
+		}
+		else {
+			functor(this, entities);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2447,42 +2649,6 @@ namespace ECSEngine {
 
 		data->parent = parent;
 		WriteCommandStream(this, parameters, { DataPointer(data, DEFERRED_ADD_ENTITIES_TO_PARENT_HIERARCHY), debug_info });
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void EntityManager::AddSharedComponentCommit(Stream<Entity> entities, SharedComponentSignature components) {
-		DeferredAddSharedComponentEntities commit_data;
-		commit_data.components = components;
-		commit_data.components.count = 1;
-		commit_data.entities = entities;
-		CommitEntityAddSharedComponent(this, &commit_data, nullptr);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void EntityManager::AddSharedComponent(Stream<Entity> entities, SharedComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info) {
-		size_t allocation_size = sizeof(DeferredAddSharedComponentEntities) + (sizeof(Component) + sizeof(SharedInstance)) * components.count;
-		allocation_size += parameters.entities_are_stable ? 0 : entities.MemoryOf(entities.size);
-
-		void* allocation = AllocateTemporaryBuffer(allocation_size);
-		uintptr_t buffer = (uintptr_t)allocation;
-		DeferredAddSharedComponentEntities* data = (DeferredAddSharedComponentEntities*)allocation;
-		buffer += sizeof(*data);
-
-		data->components.count = components.count;
-		data->components.indices = (Component*)buffer;
-		memcpy(data->components.indices, components.indices, sizeof(Component) * data->components.count);
-		buffer += sizeof(Component) * data->components.count;
-
-		data->components.instances = (SharedInstance*)buffer;
-		memcpy(data->components.instances, components.instances, sizeof(SharedInstance) * data->components.count);
-		buffer += sizeof(SharedInstance) * data->components.count;
-
-		buffer = AlignPointer(buffer, alignof(Entity));
-		data->entities = GetEntitiesFromActionParameters(entities, parameters, buffer);
-
-		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_ENTITY_ADD_SHARED_COMPONENT), debug_info });
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4672,6 +4838,23 @@ namespace ECSEngine {
 			" instance {#} of shared component type {#}.", identifier, GetSharedComponentName(component));
 
 		return instance;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	SharedInstance EntityManager::GetOrCreateSharedComponentInstanceCommit(Component component, const void* data, bool* created_instance)
+	{
+		SharedInstance existing_instance = GetSharedComponentInstance(component, data);
+		if (!existing_instance.IsValid()) {
+			if (created_instance != nullptr) {
+				*created_instance = true;
+			}
+			return RegisterSharedInstanceCommit(component, data);
+		}
+		if (created_instance != nullptr) {
+			*created_instance = false;
+		}
+		return existing_instance;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

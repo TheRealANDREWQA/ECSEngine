@@ -1,6 +1,7 @@
 #include "editorpch.h"
 #include "../Editor/EditorState.h"
 #include "ECSEngineComponents.h"
+#include "ECSEngineEntities.h"
 #include "../Sandbox/SandboxEntityOperations.h"
 #include "../Project/ProjectFolders.h"
 #include "../Editor/EditorScene.h"
@@ -111,136 +112,6 @@ unsigned int RemovePrefabID(EditorState* editor_state, unsigned int id, unsigned
 	return instance.reference_count;
 }
 
-#define PREFAB_CHANGE_MAX_FIELDS_CHANGE 32
-
-enum PREFAB_CHANGE_TYPE : unsigned char {
-	PREFAB_ADD,
-	PREFAB_REMOVE,
-	PREFAB_UPDATE
-};
-
-struct PrefabChange {
-	Component component;
-	PREFAB_CHANGE_TYPE type;
-	bool is_shared;
-	// This is relevant only for the update case, where we will record the change set
-	Stream<Reflection::ReflectionTypeChange> updated_fields;
-};
-
-// The allocator is needed to make the allocations for the update set
-static bool DetermineUpdateChangesForComponent(
-	const EditorState* editor_state,
-	const Reflection::ReflectionType* component_type,
-	const void* previous_data,
-	const void* new_data,
-	PrefabChange* change,
-	AllocatorPolymorphic allocator
-) {
-	ResizableStream<Reflection::ReflectionTypeChange> changes{ allocator, 0 };
-	AdditionStream<Reflection::ReflectionTypeChange> addition_stream = &changes;
-	Reflection::DetermineReflectionTypeInstanceUpdates(
-		editor_state->GlobalReflectionManager(),
-		component_type,
-		previous_data,
-		new_data,
-		addition_stream
-	);
-	if (addition_stream.Size() > 0) {
-		change->type = PREFAB_UPDATE;
-		change->updated_fields = changes.ToStream();
-		return true;
-	}
-	else {
-		return false;
-	}
-}
-
-// The allocator is needed to make the allocations for the update set
-static void DeterminePrefabChanges(
-	const EditorState* editor_state,
-	const EntityManager* previous_entity_manager,
-	const EntityManager* new_entity_manager,
-	CapacityStream<PrefabChange>* changes,
-	AllocatorPolymorphic allocator
-) {
-	Entity prefab_entity = GetPrefabEntityFromSingle();
-	
-	// Firstly, determine the components that were added/removed and then
-	// Those that have had their fields changed
-	ComponentSignature previous_unique_signature = previous_entity_manager->GetEntitySignatureStable(prefab_entity);
-	ComponentSignature previous_shared_signature = previous_entity_manager->GetEntitySharedSignatureStable(prefab_entity).ComponentSignature();
-
-	ComponentSignature new_unique_signature = new_entity_manager->GetEntitySignatureStable(prefab_entity);
-	ComponentSignature new_shared_signature = new_entity_manager->GetEntitySharedSignatureStable(prefab_entity).ComponentSignature();
-
-	// Loop through the new components and determine the additions
-	auto register_additions = [changes](ComponentSignature previous_components, ComponentSignature new_components, bool is_shared) {
-		for (unsigned char index = 0; index < new_components.count; index++) {
-			if (previous_components.Find(new_components[index]) == UCHAR_MAX) {
-				unsigned int change_index = changes->Reserve();
-				changes->buffer[change_index].type = PREFAB_ADD;
-				changes->buffer[change_index].is_shared = is_shared;
-				changes->buffer[change_index].component = new_components[index];
-			}
-		}
-	};
-	register_additions(previous_unique_signature, new_unique_signature, false);
-	register_additions(previous_shared_signature, new_shared_signature, true);
-
-	// Loop through the previous components and determine the removals
-	auto register_removals = [changes](ComponentSignature previous_components, ComponentSignature new_components, bool is_shared) {
-		for (unsigned char index = 0; index < previous_components.count; index++) {
-			if (new_components.Find(previous_components[index]) == UCHAR_MAX) {
-				unsigned int change_index = changes->Reserve();
-				changes->buffer[change_index].type = PREFAB_REMOVE;
-				changes->buffer[change_index].is_shared = is_shared;
-				changes->buffer[change_index].component = previous_components[index];
-			}
-		}
-	};
-	register_removals(previous_unique_signature, new_unique_signature, false);
-	register_removals(previous_shared_signature, new_shared_signature, true);
-
-	// Now determine the updates. We need separate algorithms for unique and shared
-	// Since the shared part is a little bit more involved
-	auto register_updates = [&](ComponentSignature previous_components, ComponentSignature new_components, bool is_shared) {
-		for (unsigned int index = 0; index < previous_components.count; index++) {
-			unsigned char new_index = new_components.Find(previous_components[index]);
-			if (new_index != UCHAR_MAX) {
-				const void* previous_data = nullptr;
-				const void* new_data = nullptr;
-				const Reflection::ReflectionType* component_type = nullptr;
-				PrefabChange prefab_change;
-				prefab_change.is_shared = is_shared;
-				prefab_change.component = new_components[new_index];
-
-				if (is_shared) {
-					previous_data = previous_entity_manager->GetSharedComponent(prefab_entity, previous_components[index]);
-					new_data = new_entity_manager->GetSharedComponent(prefab_entity, new_components[new_index]);
-					component_type = editor_state->GlobalReflectionManager()->GetType(editor_state->editor_components.ComponentFromID(
-						new_components[new_index], 
-						ECS_COMPONENT_UNIQUE
-					));
-				}
-				else {
-					previous_data = previous_entity_manager->GetComponent(prefab_entity, previous_components[index]);
-					new_data = new_entity_manager->GetComponent(prefab_entity, new_components[new_index]);
-					component_type = editor_state->GlobalReflectionManager()->GetType(editor_state->editor_components.ComponentFromID(
-						new_components[new_index], 
-						ECS_COMPONENT_SHARED
-					));
-				}
-
-				if (DetermineUpdateChangesForComponent(editor_state, component_type, previous_data, new_data, &prefab_change, allocator)) {
-					changes->AddAssert(prefab_change);
-				}
-			}
-		}
-	};
-	register_updates(previous_unique_signature, new_unique_signature, false);
-	register_updates(previous_shared_signature, new_shared_signature, true);
-}
-
 void TickPrefabFileChange(EditorState* editor_state) {
 	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_PREFAB_FILE_CHANGE, LAZY_CHANGE_MS)) {
 		// Check the prefab file time stamp, if it changed, we need to update all of its instances
@@ -303,9 +174,18 @@ void TickPrefabFileChange(EditorState* editor_state) {
 								// Update the pointer remappings and start the compare
 								UpdateEditorScenePointerRemappings(editor_state, &new_data_manager, pointer_remapping);
 
+								Entity prefab_entity = GetPrefabEntityFromSingle();
 								ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
-								ECS_STACK_CAPACITY_STREAM(PrefabChange, prefab_changes, 512);
-								DeterminePrefabChanges(editor_state, &previous_data_manager, &new_data_manager, &prefab_changes, GetAllocatorPolymorphic(&stack_allocator));
+								ECS_STACK_CAPACITY_STREAM(EntityChange, prefab_changes, 512);
+								DetermineEntityChanges(
+									editor_state->GlobalReflectionManager(),
+									&previous_data_manager, 
+									&new_data_manager,
+									prefab_entity,
+									prefab_entity,
+									&prefab_changes,
+									GetAllocatorPolymorphic(&stack_allocator)
+								);
 
 								if (prefab_changes.size > 0) {
 

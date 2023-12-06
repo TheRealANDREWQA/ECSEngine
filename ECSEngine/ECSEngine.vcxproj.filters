@@ -267,6 +267,7 @@
     <ClInclude Include="src\ECSEngine\Profiling\WorldProfiling.h" />
     <ClInclude Include="src\ECSEngine\Profiling\PhysicalMemoryProfilerGlobal.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIReflectionMacros.h" />
+    <ClInclude Include="src\ECSEngine\ECS\EntityChangeSet.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -424,6 +425,7 @@
     <ClCompile Include="src\ECSEngine\Profiling\AllocatorProfilingGlobal.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\WorldProfiling.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\PhysicalMemoryProfilerGlobal.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\EntityChangeSet.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />
