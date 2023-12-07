@@ -430,21 +430,74 @@ namespace ECSEngine {
 	// using DLL functions or the implicit conversion (TODO: Determine if there is a use case for this)
 	// There must be a Stream<unsigned int> for each asset type (ECS_ASSET_TYPE_COUNT in total)
 	// and each entry symbolizes the reference count for the asset at the given index
+	// If you remove assets from the database, the reference counts are no longer conforming
 	ECSENGINE_API void GetAssetReferenceCountsFromEntities(
 		const EntityManager* entity_manager,
 		const Reflection::ReflectionManager* reflection_manager,
 		const AssetDatabase* asset_database,
-		Stream<unsigned int>* asset_fields_reference_count,
+		Stream<Stream<unsigned int>> asset_fields_reference_count,
 		GetAssetReferenceCountsFromEntitiesOptions options = {}
 	);
 
-	// Prepares the Stream<unsigned int>* from a given allocator. There must be ECS_ASSET_TYPE_COUNT
+	// Determines the reference counts of the assets from the data stored in the entity manager's components
+	// using the reflection types from the reflection manager. It does not convert the target data into link components
+	// using DLL functions or the implicit conversion (TODO: Determine if there is a use case for this)
+	// There must be a Stream<uint2> for each asset type (ECS_ASSET_TYPE_COUNT in total)
+	// In the x component the handle for that asset is set and in the y the reference count
+	ECSENGINE_API void GetAssetReferenceCountsFromEntities(
+		const EntityManager* entity_manager,
+		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* asset_databae,
+		Stream<Stream<uint2>> asset_fields_reference_count,
+		GetAssetReferenceCountsFromEntitiesOptions options = {}
+	);
+
+	// Prepares the Stream<Stream<unsigned int>> from a given allocator. There must be ECS_ASSET_TYPE_COUNT
 	// Entries in the pointer
 	ECSENGINE_API void GetAssetReferenceCountsFromEntitiesPrepare(
-		Stream<unsigned int>* asset_fields_reference_counts, 
+		Stream<Stream<unsigned int>> asset_fields_reference_counts, 
 		AllocatorPolymorphic allocator,
 		const AssetDatabase* asset_database
 	);
+
+	// Prepares the Stream<Stream<uint2>> from a given allocator. There must be ECS_ASSET_TYPE_COUNT
+	// Entries in the pointer
+	ECSENGINE_API void GetAssetReferenceCountsFromEntitiesPrepare(
+		Stream<Stream<uint2>> asset_fields_reference_counts,
+		AllocatorPolymorphic allocator,
+		const AssetDatabase* asset_database
+	);
+
+	ECSENGINE_API void DeallocateAssetReferenceCountsFromEntities(Stream<Stream<unsigned int>> reference_counts, AllocatorPolymorphic allocator);
+
+	ECSENGINE_API void DeallocateAssetReferenceCountsFromEntities(Stream<Stream<uint2>> reference_counts, AllocatorPolymorphic allocator);
+
+	typedef void (*ForEachAssetReferenceDifferenceFunctor)(ECS_ASSET_TYPE type, unsigned int handle, int reference_count_change, void* user_data);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void ForEachAssetReferenceDifference(
+		const AssetDatabase* databae,
+		Stream<Stream<unsigned int>> previous_counts,
+		Stream<Stream<unsigned int>> current_counts,
+		ForEachAssetReferenceDifferenceFunctor functor,
+		void* functor_data
+	);
+
+	// The functor receives as arguments (ECS_ASSET_TYPE type, unsigned int handle, int reference_count_change)
+	template<typename Functor>
+	void ForEachAssetReferenceDifference(
+		const AssetDatabase* database,
+		Stream<Stream<unsigned int>> previous_counts,
+		Stream<Stream<unsigned int>> current_counts,
+		Functor functor
+	) {
+		auto wrapper = [](ECS_ASSET_TYPE type, unsigned int handle, int reference_count_change, void* user_data) {
+			Functor* functor = (Functor*)user_data;
+			(*functor)(type, handle, reference_count_change);
+		};
+		ForEachAssetReferenceDifference(previous_counts, current_counts, wrapper, &functor);
+	}
 
 	// ------------------------------------------------------------------------------------------------------------
 	

@@ -299,6 +299,8 @@ namespace ECSEngine {
 		transformed_bounds = TranslateAABB(transformed_bounds, displacement);
 
 		auto aabb_compare = [&](float current_distance, float epsilon) {
+			// Enhance this such that a point from the AABB is not behind the camera
+
 			Vector8 aabb_translation = camera_forward * Vector8(current_distance);
 			AABB current_aabb = TranslateAABB(transformed_bounds, aabb_translation);
 			// Project the min and max point on the screen and determine the percentage of coverage

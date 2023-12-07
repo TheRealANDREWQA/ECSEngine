@@ -50,6 +50,7 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 
 	// Create the pointer remap
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
+	pointer_remapping.size = pointer_remapping.capacity;
 	bool success = LoadEditorSceneCore(editor_state, &temporary_manager, &temporary_database, path, pointer_remapping);
 	if (success) {
 		ECS_STACK_CAPACITY_STREAM(Entity, created_entity_stream, 1);
@@ -60,7 +61,16 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 		if (add_prefab_component) {
 			Stream<wchar_t> relative_assets_path = GetProjectAssetRelativePath(editor_state, path);
 			ECS_ASSERT(relative_assets_path.size > 0);
-			AddPrefabComponentToEntity(editor_state, sandbox_index, created_entity_stream[0], relative_assets_path);
+			// If the entity already has a prefab component, then change its component values
+			// Else add a new component to it
+			PrefabComponent* existing_prefab = temporary_manager.TryGetComponent<PrefabComponent>(created_entity_stream[0]);
+			if (existing_prefab == nullptr) {
+				AddPrefabComponentToEntity(editor_state, sandbox_index, created_entity_stream[0], relative_assets_path);
+			}
+			else {
+				existing_prefab->id = AddPrefabID(editor_state, relative_assets_path);
+				existing_prefab->detached = false;
+			}
 		}
 
 		// Add the handles from the temporary database into the sandbox database as well

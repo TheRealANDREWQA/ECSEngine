@@ -4985,6 +4985,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const CompareReflectionTypeInstancesOptions* options
 		)
 		{
+			CompareReflectionTypeInstancesOptions default_options;
+			if (options == nullptr) {
+				options = &default_options;
+			}
+
 			if (offset_into_data) {
 				first = OffsetPointer(first, field->info.pointer_offset);
 				second = OffsetPointer(second, field->info.pointer_offset);
@@ -6483,6 +6488,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							TypeChangeAddIndexWithParent(update, current_level, index);
 						}
 					}
+					else {
+						ReflectionTypeChange* update = updates.Reserve();
+						update->change_type = ECS_REFLECTION_TYPE_CHANGE_UPDATE;
+						TypeChangeAddIndexWithParent(update, current_level, index);
+					}
 				}
 			}
 		}
@@ -6551,9 +6561,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				const void* current_source_data = OffsetPointer(source_data, current_data_offset);
 				const ReflectionField* field = &current_types[current_types.size - 1].fields[changes[index].indices[changes[index].indices_count - 1]];
 				CopyReflectionDataOptions copy_options;
-				copy_options.allocator = allocator;
-				copy_options.always_allocate_for_buffers = true;
-				copy_options.deallocate_existing_buffers = true;
+				if (allocator.allocator != nullptr) {
+					copy_options.allocator = allocator;
+					copy_options.always_allocate_for_buffers = true;
+					copy_options.deallocate_existing_buffers = true;
+				}
 				for (size_t destination_index = 0; destination_index < destinations.size; destination_index++) {
 					void* current_destination_data = OffsetPointer(destinations[destination_index], current_data_offset);
 					CopyReflectionFieldInstance(reflection_manager, field, current_source_data, current_destination_data, &copy_options);

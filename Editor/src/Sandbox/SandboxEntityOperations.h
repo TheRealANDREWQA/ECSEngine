@@ -799,6 +799,18 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 	SandboxUpdateLinkComponentForEntityInfo info = {}
 );
 
+void SandboxApplyEntityChanges(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_VIEWPORT viewport,
+	Stream<Entity> entities_to_be_updated,
+	ComponentSignature unique_signature,
+	const void** unique_components,
+	ComponentSignature shared_signature,
+	const void** shared_components,
+	Stream<EntityChange> changes
+);
+
 void ScaleSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 scale_delta);
 
 void TranslateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 delta);

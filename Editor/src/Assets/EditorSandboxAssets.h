@@ -141,6 +141,37 @@ void GetLinkComponentsWithAssetFieldsGlobal(
 
 // -------------------------------------------------------------------------------------------------------------
 
+struct SandboxReferenceCountsFromEntities {
+	ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+		DeallocateAssetReferenceCountsFromEntities(counts, allocator);
+		counts.Deallocate(allocator);
+	}
+	
+	Stream<Stream<unsigned int>> counts;
+};
+
+// Viewport can be count for the active entity manager
+// If you want to deallocate this 
+SandboxReferenceCountsFromEntities GetSandboxAssetReferenceCountsFromEntities(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_VIEWPORT viewport,
+	AllocatorPolymorphic allocator
+);
+
+// The functor receives as arguments (ECS_ASSET_TYPE type, unsigned int handle, int reference_count_change)
+template<typename Functor>
+void ForEachSandboxAssetReferenceDifference(
+	const EditorState* editor_state,
+	SandboxReferenceCountsFromEntities previous_counts,
+	SandboxReferenceCountsFromEntities current_counts,
+	Functor functor
+) {
+	ForEachAssetReferenceDifference(editor_state->asset_database, previous_counts.counts, current_counts.counts, functor);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
 void IncrementAssetReference(unsigned int handle, ECS_ASSET_TYPE type, AssetDatabaseReference* reference, unsigned int count = 1);
 
 // -------------------------------------------------------------------------------------------------------------
