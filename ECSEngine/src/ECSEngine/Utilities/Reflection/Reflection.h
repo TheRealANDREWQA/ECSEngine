@@ -569,7 +569,7 @@ namespace ECSEngine {
 			const void* first,
 			const void* second,
 			bool offset_into_data = true,
-			const CompareReflectionTypeInstancesOptions* options = {}
+			const CompareReflectionTypeInstancesOptions* options = nullptr
 		);
 
 		// Compares two instances of the same type to see if they contain the same data.
@@ -579,7 +579,7 @@ namespace ECSEngine {
 			const ReflectionType* type,
 			const void* first,
 			const void* second,
-			const CompareReflectionTypeInstancesOptions* options = {}
+			const CompareReflectionTypeInstancesOptions* options = nullptr
 		);
 
 		// Compares two instances of a certain type to see if they contain the same data.

@@ -6,6 +6,8 @@ using namespace ECSEngine;
 
 struct EditorState;
 
+enum EDITOR_SANDBOX_VIEWPORT : unsigned char;
+
 struct PrefabInstance {
 	ECS_INLINE bool operator == (PrefabInstance other) const {
 		return path == other.path;
@@ -53,6 +55,15 @@ unsigned int FindPrefabID(const EditorState* editor_state, Stream<wchar_t> path)
 Stream<wchar_t> GetPrefabPath(const EditorState* editor_state, unsigned int id);
 
 Stream<wchar_t> GetPrefabAbsolutePath(const EditorState* editor_state, unsigned int id, CapacityStream<wchar_t> storage);
+
+// Can use VIEWPORT_COUNT if you want the active entity manager
+Stream<Entity> GetPrefabEntitiesForSandbox(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	EDITOR_SANDBOX_VIEWPORT viewport,
+	unsigned int prefab_id, 
+	AllocatorPolymorphic allocator
+);
 
 // Returns the new reference count
 unsigned int IncrementPrefabID(EditorState* editor_state, unsigned int id, unsigned int increment_count = 1);

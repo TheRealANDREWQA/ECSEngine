@@ -517,6 +517,22 @@ void GetLinkComponentsWithAssetFieldsGlobal(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+SandboxReferenceCountsFromEntities GetSandboxAssetReferenceCountsFromEntities(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	EDITOR_SANDBOX_VIEWPORT viewport,
+	AllocatorPolymorphic allocator
+) {
+	SandboxReferenceCountsFromEntities counts;
+	counts.counts.Initialize(allocator, ECS_ASSET_TYPE_COUNT);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	GetAssetReferenceCountsFromEntitiesPrepare(counts.counts, allocator, editor_state->asset_database);
+	GetAssetReferenceCountsFromEntities(entity_manager, editor_state->editor_components.internal_manager, editor_state->asset_database, counts.counts);
+	return counts;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void IncrementAssetReference(unsigned int handle, ECS_ASSET_TYPE type, AssetDatabaseReference* reference, unsigned int count)
 {
 	for (unsigned int index = 0; index < count; index++) {

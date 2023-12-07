@@ -683,6 +683,17 @@ namespace ECSEngine {
 		ComponentSignature unique_signature = manager->GetEntitySignature(data->entities[0], unique_components);
 		SharedComponentSignature shared_signature = manager->GetEntitySharedSignatureStable(data->entities[0]);
 
+		// Make sure that the same component is not added twice
+		for (unsigned char new_index = 0; new_index < data->components.count; new_index++) {
+			ECS_STACK_CAPACITY_STREAM(char, signature_string, 512);
+			ECS_CRASH_CONDITION_RETURN_VOID(
+				unique_signature.Find(data->components[new_index]) == UCHAR_MAX,
+				"EntityManager: Trying to add the same component {#} twice to entity. Archetype components: {#}",
+				manager->GetComponentName(data->components[new_index]),
+				manager->GetComponentSignatureString(unique_signature, signature_string)
+			);
+		}
+
 		ComponentSignature initial_signature = unique_signature;
 		memcpy(unique_components + unique_signature.count, data->components.indices, data->components.count * sizeof(Component));
 		unique_signature.count += data->components.count;
@@ -862,9 +873,9 @@ namespace ECSEngine {
 				}
 			}
 			// If the component was not found, fail
-			ECS_CRASH_CONDITION(
+			ECS_CRASH_CONDITION_RETURN_VOID(
 				subindex != unique_signature.count, 
-				"EntityManager: Could not find component {#} when trying to remove components from entities. First entity is {#}.",
+				"EntityManager: Could not find component {#} when trying to remove it from entity. First entity is {#}",
 				manager->GetComponentName(data->components.indices[index]),
 				data->entities[0].index
 			);
@@ -1134,6 +1145,18 @@ namespace ECSEngine {
 
 		ComponentSignature unique_signature = old_archetype->GetUniqueSignature();
 		ComponentSignature _shared_signature = old_archetype->GetSharedSignature();
+
+		// Make sure that we do not try to add the same component twice
+		for (unsigned char new_index = 0; new_index < data->components.count; new_index++) {
+			ECS_STACK_CAPACITY_STREAM(char, signature_string, 512);
+			ECS_CRASH_CONDITION_RETURN_VOID(
+				_shared_signature.Find(data->components.indices[new_index]) == UCHAR_MAX,
+				"EntityManager: Trying to add shared component {#} twice for entities. The archetype components: {#}",
+				manager->GetSharedComponentName(data->components.indices[new_index]),
+				manager->GetSharedComponentSignatureString(_shared_signature, signature_string)
+			);
+		}
+
 		SharedComponentSignature shared_signature(_shared_components, _shared_instances, 0);
 		memcpy(shared_signature.indices, _shared_signature.indices, sizeof(Component) * _shared_signature.count);
 		const SharedInstance* current_instances = old_archetype->GetBaseInstances(info.base_archetype);
@@ -1819,10 +1842,10 @@ namespace ECSEngine {
 						component_instances.buffer, 
 						component_instances.size, 
 						current_instances[component_in_archetype_index].value, 
-						sizeof(component_instances.MemoryOf(1))
+						component_instances.MemoryOf(1)
 					);
 					if (stream_index != -1) {
-						component_instances.RemoveSwapBack(component_instances.size);
+						component_instances.RemoveSwapBack(stream_index);
 					}
 				}
 			}

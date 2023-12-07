@@ -1461,9 +1461,10 @@ namespace ECSEngine {
 			asset_reference_counts[index].Initialize(&stack_allocator, asset_database->GetAssetCount((ECS_ASSET_TYPE)index));
 			memset(asset_reference_counts[index].buffer, 0, asset_reference_counts[index].MemoryOf(asset_reference_counts[index].size));
 		}
+		asset_reference_counts.size = asset_reference_counts.capacity;
 
 		// Get the reference counts
-		GetAssetReferenceCountsFromEntities(entity_manager, reflection_manager, asset_database, asset_reference_counts.buffer);
+		GetAssetReferenceCountsFromEntities(entity_manager, reflection_manager, asset_database, asset_reference_counts);
 
 		unsigned int max_asset_count = asset_database->GetMaxAssetCount();
 
@@ -1510,14 +1511,18 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void GetAssetReferenceCountsFromEntities(
-		const EntityManager* entity_manager, 
-		const Reflection::ReflectionManager* reflection_manager, 
-		const AssetDatabase* asset_database, 
-		Stream<unsigned int>* asset_fields_reference_count,
-		GetAssetReferenceCountsFromEntitiesOptions options
-	)
-	{
+	// The functor receives as parameters (ECS_ASSET_TYPE type, unsigned int asset_index, unsigned int reference_count)
+	template<typename ElementType, typename IncrementFunctor>
+	static void GetAssetReferenceCountsFromEntitiesImpl(
+		const EntityManager* entity_manager,
+		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* asset_database,
+		Stream<Stream<ElementType>> asset_fields_reference_count,
+		GetAssetReferenceCountsFromEntitiesOptions options,
+		IncrementFunctor&& increment_functor
+	) {
+		ECS_ASSERT(asset_fields_reference_count.size == ECS_ASSET_TYPE_COUNT);
+
 		// Make sure that there are enough slots for each asset type
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSERT(asset_fields_reference_count[index].size >= asset_database->GetAssetCount((ECS_ASSET_TYPE)index));
@@ -1530,21 +1535,21 @@ namespace ECSEngine {
 		GetHierarchyComponentTypes(reflection_manager, -1, &unique_types, &shared_types, &global_types);
 
 		auto increment_reference_counts = [&](
-			Stream<LinkComponentAssetField> asset_fields, 
-			const Reflection::ReflectionType* reflection_type, 
-			const void* data, 
+			Stream<LinkComponentAssetField> asset_fields,
+			const Reflection::ReflectionType* reflection_type,
+			const void* data,
 			unsigned int increment_count
-		) {
-			ECS_STACK_CAPACITY_STREAM(unsigned int, handles, 512);
-			GetLinkComponentTargetHandles(reflection_type, asset_database, data, asset_fields, handles.buffer);
+			) {
+				ECS_STACK_CAPACITY_STREAM(unsigned int, handles, 512);
+				GetLinkComponentTargetHandles(reflection_type, asset_database, data, asset_fields, handles.buffer);
 
-			// For each handle increase the reference count for that asset type
-			for (unsigned int index = 0; index < asset_fields.size; index++) {
-				if (handles[index] != -1) {
-					unsigned int asset_index = asset_database->GetIndexFromAssetHandle(handles[index], asset_fields[index].type.type);
-					asset_fields_reference_count[asset_fields[index].type.type][asset_index] += increment_count;
+				// For each handle increase the reference count for that asset type
+				for (unsigned int index = 0; index < asset_fields.size; index++) {
+					if (handles[index] != -1) {
+						unsigned int asset_index = asset_database->GetIndexFromAssetHandle(handles[index], asset_fields[index].type.type);
+						increment_functor(asset_fields[index].type.type, asset_index, increment_count);
+					}
 				}
-			}
 		};
 
 		auto get_corresponding_reflection_type = [&](Component component, Stream<unsigned int> type_indices) {
@@ -1575,9 +1580,9 @@ namespace ECSEngine {
 				// If it has asset fields, then retrieve them and keep the count of reference counts
 				entity_manager->ForEachEntityComponent(component, [&](Entity entity, const void* data) {
 					increment_reference_counts(asset_fields, reflection_type, data, 1);
-				});
+					});
 			}
-		});
+			});
 
 		// Shared components
 		entity_manager->ForEachSharedComponent([&](Component component) {
@@ -1598,9 +1603,9 @@ namespace ECSEngine {
 					}
 					// If the options is activated, count the number of entities that reference this instance
 					increment_reference_counts(asset_fields, reflection_type, data, increase_count);
-				});
+					});
 			}
-		});
+			});
 
 		// Global components
 		entity_manager->ForAllGlobalComponents([&](const void* global_data, Component component) {
@@ -1616,7 +1621,7 @@ namespace ECSEngine {
 				// If it has asset fields, then retrieve them and keep the count of reference counts
 				increment_reference_counts(asset_fields, reflection_type, global_data, 1);
 			}
-		});
+			});
 
 		if (options.add_reference_counts_to_dependencies) {
 			// After we retrieved the reference counts for all assets from the scene, we need to increase reference counts
@@ -1628,26 +1633,120 @@ namespace ECSEngine {
 					asset_database->GetDependencies(asset_database->GetAssetHandleFromIndex(index, asset_type), asset_type, &asset_dependencies);
 					for (unsigned int subindex = 0; subindex < asset_dependencies.size; subindex++) {
 						unsigned int asset_index = asset_database->GetIndexFromAssetHandle(asset_dependencies[subindex].handle, asset_dependencies[subindex].type);
-						asset_fields_reference_count[asset_dependencies[subindex].type][asset_index]++;
+						increment_functor(asset_dependencies[subindex].type, asset_index, 1);
 					}
 				}
 			});
 		}
 	}
 
+	void GetAssetReferenceCountsFromEntities(
+		const EntityManager* entity_manager, 
+		const Reflection::ReflectionManager* reflection_manager, 
+		const AssetDatabase* asset_database, 
+		Stream<Stream<unsigned int>> asset_fields_reference_count,
+		GetAssetReferenceCountsFromEntitiesOptions options
+	)
+	{
+		GetAssetReferenceCountsFromEntitiesImpl(
+			entity_manager,
+			reflection_manager,
+			asset_database,
+			asset_fields_reference_count,
+			options,
+			[&asset_fields_reference_count](ECS_ASSET_TYPE type, unsigned int asset_index, unsigned int increment_count) {
+				asset_fields_reference_count[type][asset_index] += increment_count;
+			}
+		);
+	}
+
+	void GetAssetReferenceCountsFromEntities(
+		const EntityManager* entity_manager,
+		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* asset_database,
+		Stream<Stream<uint2>> asset_fields_reference_count,
+		GetAssetReferenceCountsFromEntitiesOptions options
+	)
+	{
+		GetAssetReferenceCountsFromEntitiesImpl(
+			entity_manager,
+			reflection_manager,
+			asset_database,
+			asset_fields_reference_count,
+			options,
+			[&asset_fields_reference_count](ECS_ASSET_TYPE type, unsigned int asset_index, unsigned int increment_count) {
+				asset_fields_reference_count[type][asset_index].y += increment_count;
+			}
+		);
+	}
+
 	// ------------------------------------------------------------------------------------------------------------
 
 	void GetAssetReferenceCountsFromEntitiesPrepare(
-		Stream<unsigned int>* asset_fields_reference_counts, 
+		Stream<Stream<unsigned int>> asset_fields_reference_counts, 
 		AllocatorPolymorphic allocator, 
 		const AssetDatabase* asset_database
 	)
 	{
+		ECS_ASSERT(asset_fields_reference_counts.size == ECS_ASSET_TYPE_COUNT);
+
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
 			unsigned int count = asset_database->GetAssetCount(current_type);
 			asset_fields_reference_counts[index].Initialize(allocator, count);
 			memset(asset_fields_reference_counts[index].buffer, 0, asset_fields_reference_counts[index].MemoryOf(count));
+		}
+	}
+
+	void GetAssetReferenceCountsFromEntitiesPrepare(
+		Stream<Stream<uint2>> asset_fields_reference_counts,
+		AllocatorPolymorphic allocator,
+		const AssetDatabase* asset_database
+	) {
+		ECS_ASSERT(asset_fields_reference_counts.size == ECS_ASSET_TYPE_COUNT);
+
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
+			unsigned int count = asset_database->GetAssetCount(current_type);
+			asset_fields_reference_counts[index].Initialize(allocator, count);
+			for (unsigned int subindex = 0; subindex < count; subindex++) {
+				asset_fields_reference_counts[index][subindex].x = asset_database->GetAssetHandleFromIndex(subindex, current_type);
+				asset_fields_reference_counts[index][subindex].y = 0;
+			}
+		}
+	}
+
+	void DeallocateAssetReferenceCountsFromEntities(Stream<Stream<unsigned int>> reference_counts, AllocatorPolymorphic allocator) {
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			reference_counts[index].Deallocate(allocator);
+		}
+	}
+
+	void DeallocateAssetReferenceCountsFromEntities(Stream<Stream<uint2>> reference_counts, AllocatorPolymorphic allocator) {
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			reference_counts[index].Deallocate(allocator);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ForEachAssetReferenceDifference(
+		const AssetDatabase* database,
+		Stream<Stream<unsigned int>> previous_counts,
+		Stream<Stream<unsigned int>> current_counts,
+		ForEachAssetReferenceDifferenceFunctor functor,
+		void* functor_data
+	) {
+		for (size_t asset_index = 0; asset_index < ECS_ASSET_TYPE_COUNT; asset_index++) {
+			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)asset_index;
+			ECS_ASSERT(previous_counts[current_type].size == current_counts[current_type].size);
+			for (size_t subindex = 0; subindex < previous_counts[current_type].size; subindex++) {
+				unsigned int previous = previous_counts[current_type][subindex];
+				unsigned int current = current_counts[current_type][subindex];
+				if (previous != current) {
+					functor(current_type, database->GetAssetHandleFromIndex(subindex, current_type), (int)(current - previous), functor_data);
+				}
+			}
 		}
 	}
 

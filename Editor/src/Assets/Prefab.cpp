@@ -3,6 +3,7 @@
 #include "ECSEngineComponents.h"
 #include "ECSEngineEntities.h"
 #include "../Sandbox/SandboxEntityOperations.h"
+#include "../Sandbox/Sandbox.h"
 #include "../Project/ProjectFolders.h"
 #include "../Editor/EditorScene.h"
 
@@ -87,6 +88,33 @@ Stream<wchar_t> GetPrefabAbsolutePath(const EditorState* editor_state, unsigned 
 	return GetPrefabAbsolutePath(editor_state, GetPrefabPath(editor_state, id), storage);
 }
 
+Stream<Entity> GetPrefabEntitiesForSandbox(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	EDITOR_SANDBOX_VIEWPORT viewport,
+	unsigned int prefab_id, 
+	AllocatorPolymorphic allocator
+)
+{
+	// Allocate the maximum number of references - these are from all sandboxes
+	// But this is a safe estimate of the maximum number of entities
+	unsigned int reference_count = editor_state->prefabs[prefab_id].reference_count;
+	Stream<Entity> entities;
+	entities.Initialize(allocator, reference_count);
+	entities.size = 0;
+
+	const EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	Component prefab_component = PrefabComponent::ID();
+	active_entity_manager->ForEachEntityComponent(prefab_component, [&](Entity entity, const void* data) {
+		const PrefabComponent* component = (const PrefabComponent*)data;
+		if (!component->detached && component->id == prefab_id) {
+			entities.Add(entity);
+		}
+	});
+
+	return entities;
+}
+
 unsigned int IncrementPrefabID(EditorState* editor_state, unsigned int id, unsigned int increment_count) {
 	editor_state->prefabs[id].reference_count += increment_count;
 	return editor_state->prefabs[id].reference_count;
@@ -124,7 +152,9 @@ void TickPrefabFileChange(EditorState* editor_state) {
 				// Don't do anything - the change set would be the same as removing all prefab components
 				// But the user probably doesn't want that
 				size_t last_write_stamp = OS::GetFileLastWrite(absolute_path);
-				if (last_write_stamp > prefabs[index].write_stamp || prefabs[index].write_stamp == -1) {
+				if (last_write_stamp != - 1 && (last_write_stamp > prefabs[index].write_stamp || prefabs[index].write_stamp == -1)) {
+					prefabs[index].write_stamp = last_write_stamp;
+
 					Stream<void> prefab_data = ReadWholeFileBinary(absolute_path, PrefabAllocator(editor_state));
 					if (prefab_data.size > 0) {
 						// Create 2 temporary entity managers and asset database references
@@ -159,7 +189,7 @@ void TickPrefabFileChange(EditorState* editor_state) {
 						if (previous_data_success) {
 							// Update the pointer remappings now, such that we can reuse these
 							UpdateEditorScenePointerRemappings(editor_state, &previous_data_manager, pointer_remapping);
-							for (unsigned int asset_type = 0; asset_type < pointer_remapping.size; index++) {
+							for (unsigned int asset_type = 0; asset_type < pointer_remapping.size; asset_type++) {
 								pointer_remapping[asset_type].size = 0;
 							}
 
@@ -188,8 +218,65 @@ void TickPrefabFileChange(EditorState* editor_state) {
 								);
 
 								if (prefab_changes.size > 0) {
+									ECS_STACK_CAPACITY_STREAM(const void*, prefab_components, ECS_ARCHETYPE_MAX_COMPONENTS);
+									ECS_STACK_CAPACITY_STREAM(const void*, prefab_shared_components, ECS_ARCHETYPE_MAX_SHARED_COMPONENTS);
+									ComponentSignature prefab_unique_signature = new_data_manager.GetEntitySignatureStable(prefab_entity);
+									SharedComponentSignature prefab_shared_signature = new_data_manager.GetEntitySharedSignatureStable(prefab_entity);
+									new_data_manager.GetComponent(prefab_entity, prefab_unique_signature, (void**)prefab_components.buffer);
+									for (unsigned char signature_index = 0; signature_index < prefab_shared_signature.count; signature_index++) {
+										prefab_shared_components[signature_index] = new_data_manager.GetSharedData(
+											prefab_shared_signature.indices[signature_index],
+											prefab_shared_signature.instances[signature_index]
+										);
+									}
 
+									// We need to apply the changes to all sandboxes
+									SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+										AllocatorPolymorphic entities_allocator = editor_state->GlobalMemoryManagerPolymorphic();
+										// Do the update for the scene data every time.
+										// For the runtime version, update it only if the sandbox is paused or running
+										for (size_t viewport_index = 0; viewport_index < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport_index++) {
+											EDITOR_SANDBOX_VIEWPORT viewport = (EDITOR_SANDBOX_VIEWPORT)viewport_index;
+
+											if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE || 
+												GetSandboxState(editor_state, sandbox_index) != EDITOR_SANDBOX_SCENE) {
+												Stream<Entity> prefab_entities = GetPrefabEntitiesForSandbox(
+													editor_state,
+													sandbox_index,
+													viewport,
+													editor_state->prefabs.GetHandleFromIndex(index),
+													entities_allocator
+												);
+
+												// For the scene case, we need to get the handle snapshot from the entities
+												// Before and after the operation, and update the reference counts
+												// Based on the difference between these 2 snapshots
+												const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+												SandboxApplyEntityChanges(
+													editor_state,
+													sandbox_index,
+													viewport,
+													prefab_entities,
+													prefab_unique_signature,
+													prefab_components.buffer,
+													prefab_shared_signature.ComponentSignature(),
+													prefab_shared_components.buffer,
+													prefab_changes
+												);
+												prefab_entities.Deallocate(entities_allocator);
+											}
+										}
+									});
 								}
+
+								// Update the prefab loaded data
+								prefabs[index].prefab_file_data.Deallocate(PrefabAllocator(editor_state));
+								prefabs[index].prefab_file_data = prefab_data;
+
+								// Clear the references from the 2 loaded databases
+								previous_data_asset_reference.Reset(true);
+								new_data_asset_reference.Reset(true);
 							}
 							else {
 								ECS_FORMAT_TEMP_STRING(message, "Failed to load new prefab data for id {#}, path {#}",

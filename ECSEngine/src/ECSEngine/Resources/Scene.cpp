@@ -132,7 +132,7 @@ namespace ECSEngine {
 		}
 
 		bool randomize_assets = load_data->randomize_assets;
-		AssetDatabaseSnapshot asset_database_snapshot = database->GetSnapshot();
+		AssetDatabaseSnapshot asset_database_snapshot = database->GetSnapshot(GetAllocatorPolymorphic(&_stack_allocator));
 
 		bool success = true;
 		// Try to load the asset database first

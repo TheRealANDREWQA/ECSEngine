@@ -281,11 +281,12 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
 
 	const AssetDatabase* database = editor_state->asset_database;
-	ECS_STACK_CAPACITY_STREAM(Stream<unsigned int>, asset_reference_counts, ECS_ASSET_TYPE_COUNT);
-	GetAssetReferenceCountsFromEntitiesPrepare(asset_reference_counts.buffer, stack_allocator, database);
-
-	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
-	GetAssetReferenceCountsFromEntities(entity_manager, editor_state->editor_components.internal_manager, database, asset_reference_counts.buffer);
+	SandboxReferenceCountsFromEntities asset_reference_counts = GetSandboxAssetReferenceCountsFromEntities(
+		editor_state, 
+		sandbox_index, 
+		EDITOR_SANDBOX_VIEWPORT_RUNTIME, 
+		stack_allocator
+	);
 
 	if (initialize) {
 		snapshot.allocator.Clear();
@@ -305,11 +306,11 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
-			for (size_t subindex = 0; subindex < asset_reference_counts[index].size; subindex++) {
+			for (size_t subindex = 0; subindex < asset_reference_counts.counts[index].size; subindex++) {
 				// Search for the handle in the stored snapshot
 				unsigned int current_handle = database->GetAssetHandleFromIndex(subindex, current_type);
 				size_t found_index = snapshot.FindHandle(current_handle, current_type);
-				unsigned int current_reference_count = asset_reference_counts[index][subindex];
+				unsigned int current_reference_count = asset_reference_counts.counts[index][subindex];
 				if (found_index != -1) {
 					was_found[found_index] = true;
 					// Compare the reference count

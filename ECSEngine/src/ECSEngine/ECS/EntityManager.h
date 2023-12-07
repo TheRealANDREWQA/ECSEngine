@@ -87,8 +87,12 @@ namespace ECSEngine {
 		EntityManager() {}
 		EntityManager(const EntityManagerDescriptor& descriptor);
 
-		ECS_INLINE AllocatorPolymorphic SmallAllocator() {
+		ECS_INLINE AllocatorPolymorphic SmallAllocator() const {
 			return GetAllocatorPolymorphic(&m_small_memory_manager);
+		}
+
+		ECS_INLINE AllocatorPolymorphic MainAllocator() const {
+			return GetAllocatorPolymorphic(m_memory_manager);
 		}
 
 		// Use this this if you want to pass this buffer to the deferred calls with a stable flag.
@@ -332,7 +336,7 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------
 
 		// Deferred call
-		// Entities must not belong to the same archetype, nor the components or shared instance. 
+		// Entities can belong to different archetypes, the same is valid for components and instances
 		// Can optionally specify if it should destroy the base archetype if it becomes empty
 		void ChangeEntitySharedInstance(
 			Stream<ChangeSharedComponentElement> elements,
@@ -341,7 +345,7 @@ namespace ECSEngine {
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		// Entities must not belong to the same archetype, nor the components or shared instance. 
+		// Entities can belong to different archetypes, the same is valid for components and instances
 		// Can optionally specify if it should destroy the base archetype if it becomes empty
 		void ChangeEntitySharedInstanceCommit(Stream<ChangeSharedComponentElement> elements, bool destroy_base_archetype = false);
 

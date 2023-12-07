@@ -19,6 +19,17 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
+	void AssetDatabaseSnapshot::Deallocate(AllocatorPolymorphic allocator)
+	{
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			if (stream_sizes[index] > 0) {
+				ECSEngine::DeallocateEx(allocator, reference_counts[index]);
+			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------
+
 	void AssetDatabaseFileDirectory(Stream<wchar_t> file_location, CapacityStream<wchar_t>& path, ECS_ASSET_TYPE type)
 	{
 		path.CopyOther(file_location);
@@ -1198,12 +1209,22 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	AssetDatabaseSnapshot AssetDatabase::GetSnapshot() const
+	AssetDatabaseSnapshot AssetDatabase::GetSnapshot(AllocatorPolymorphic allocator) const
 	{
 		AssetDatabaseSnapshot snapshot;
 
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			snapshot.stream_sizes[index] = GetAssetCount((ECS_ASSET_TYPE)index);
+			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
+			snapshot.stream_sizes[index] = GetAssetCount(current_type);
+			if (snapshot.stream_sizes[index] > 0) {
+				snapshot.reference_counts[index] = (unsigned int*)AllocateEx(allocator, sizeof(unsigned int) * snapshot.stream_sizes[index]);
+				for (unsigned int subindex = 0; subindex < snapshot.stream_sizes[index]; subindex++) {
+					snapshot.reference_counts[index][subindex] = GetReferenceCount(GetAssetHandleFromIndex(subindex, current_type), current_type);
+				}
+			}
+			else {
+				snapshot.reference_counts[index] = nullptr;
+			}
 		}
 
 		return snapshot;
@@ -1719,6 +1740,10 @@ namespace ECSEngine {
 			unsigned int current_count = GetAssetCount(asset_type);
 			for (unsigned int subindex = snapshot.stream_sizes[asset_type]; subindex < current_count; subindex++) {
 				RemoveAssetForced(GetAssetHandleFromIndex(subindex, asset_type), asset_type);
+			}
+			for (unsigned int subindex = 0; subindex < snapshot.stream_sizes[asset_type]; subindex++) {
+				unsigned int snapshot_reference_count = snapshot.reference_counts[asset_type][subindex];
+				SetAssetReferenceCount(GetAssetHandleFromIndex(subindex, asset_type), asset_type, snapshot_reference_count);
 			}
 		}
 	}

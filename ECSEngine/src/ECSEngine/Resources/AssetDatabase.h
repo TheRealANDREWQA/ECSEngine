@@ -24,8 +24,11 @@ namespace ECSEngine {
 		Stream<AssetDatabaseSameTargetAsset> miscs;
 	};
 
-	struct AssetDatabaseSnapshot {
+	struct ECSENGINE_API AssetDatabaseSnapshot {
+		void Deallocate(AllocatorPolymorphic allocator);
+
 		unsigned int stream_sizes[ECS_ASSET_TYPE_COUNT];
+		unsigned int* reference_counts[ECS_ASSET_TYPE_COUNT];
 	};
 
 	struct AssetDatabaseRemoveInfo {
@@ -331,7 +334,7 @@ namespace ECSEngine {
 		// Fills in the dependencies that the given asset has
 		void GetDependencies(unsigned int handle, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* dependencies) const;
 
-		AssetDatabaseSnapshot GetSnapshot() const;
+		AssetDatabaseSnapshot GetSnapshot(AllocatorPolymorphic allocator) const;
 
 		unsigned int GetRandomizedPointer(ECS_ASSET_TYPE type) const;
 

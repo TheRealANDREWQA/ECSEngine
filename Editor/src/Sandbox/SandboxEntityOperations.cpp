@@ -1874,6 +1874,33 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void SandboxApplyEntityChanges(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	EDITOR_SANDBOX_VIEWPORT viewport, 
+	Stream<Entity> entities_to_be_updated, 
+	ComponentSignature unique_signature, 
+	const void** unique_components, 
+	ComponentSignature shared_signature, 
+	const void** shared_components, 
+	Stream<EntityChange> changes
+)
+{
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	ApplyEntityChanges(
+		editor_state->GlobalReflectionManager(),
+		entity_manager,
+		entities_to_be_updated,
+		unique_components,
+		unique_signature,
+		shared_components,
+		shared_signature,
+		changes
+	);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void ScaleSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 scale_delta)
 {
 	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
