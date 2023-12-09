@@ -271,8 +271,8 @@ namespace ECSEngine {
 		const float min_distance = 0.0f;
 		const float max_distance = 10000.0f;
 
-		const float BINARY_SEARCH_EPSILON = 0.05f;
-		const float LINEAR_SEARCH_EPSILON = 0.01f;
+		const float BINARY_SEARCH_EPSILON = 0.25f;
+		const float LINEAR_SEARCH_EPSILON = 0.1f;
 		const float LINEAR_SEARCH_STEP_SIZE = 0.001f;
 
 		// Transform the AABB into the world space position
@@ -280,29 +280,25 @@ namespace ECSEngine {
 		Matrix view_projection_matrix = GetCameraViewProjectionMatrix(camera);
 
 		// Bring the center of the world space AABB right at the camera
+		// And then offset by the length of the half extent vector along the camera forward
+		// Such that the camera won't penetrate the object
 		// Inside the binary search and linear search we will offset in alongside the 
 		// negative forward vector of the camera
 		Vector8 transformed_bounds_center = AABBCenter(transformed_bounds);
 		Vector8 camera_forward = GetCameraForwardVector(camera);
 		Vector8 camera_translation = { camera->translation, camera->translation };
 
-		//// Get the closest point to the camera and push the camera away from the center
-		//// (by moving the aabb further from where the camera is such that we don't modify the camera)
-		//// By the projection of that point to the camera direction
-		//Vector8 aabb_corners[4];
-		//GetAABBCorners(transformed_bounds, aabb_corners);
-		//Vector8 closest_aabb_point = ClosestPoint({ aabb_corners, 4 }, camera_translation);
-		//Vector8 projection_point = ProjectPointOnLineDirectionNormalized(camera_translation, camera_forward, closest_aabb_point);
-		//Vector8 displacement = camera_translation - projection_point;
-
-		Vector8 displacement = camera_translation - transformed_bounds_center;
+		Vector8 half_extents = AABBHalfExtents(transformed_bounds) * Vector8(1.05f);
+		Vector8 displacement = camera_translation - transformed_bounds_center + Length(half_extents) * camera_forward;
 		transformed_bounds = TranslateAABB(transformed_bounds, displacement);
-
-		auto aabb_compare = [&](float current_distance, float epsilon) {
-			// Enhance this such that a point from the AABB is not behind the camera
-
+		
+		// In case it is not possible to attain, the
+		float resulting_distance = FLT_MAX;
+		float smallest_difference = FLT_MAX;
+		auto get_aabb_distance_info = [&](float current_distance, bool* is_out_of_frustum, bool* is_smaller, float2* coverage, float* current_difference) {
 			Vector8 aabb_translation = camera_forward * Vector8(current_distance);
 			AABB current_aabb = TranslateAABB(transformed_bounds, aabb_translation);
+
 			// Project the min and max point on the screen and determine the percentage of coverage
 			Vector8 projected_points = ApplyMatrixOnAABB(current_aabb, view_projection_matrix);
 			Vector8 ndc_values = ClipSpaceToNDC(projected_points);
@@ -311,41 +307,54 @@ namespace ECSEngine {
 			ndc_values.Store(scalar_ndc_values);
 			float2 min_pos = scalar_ndc_values[0].xy();
 			float2 max_pos = scalar_ndc_values[1].xy();
-			float2 coverage = AbsoluteDifference(min_pos, max_pos);
-			float current_difference = 0.0f;
-			bool is_smaller = false;
+			*coverage = AbsoluteDifference(min_pos, max_pos);
+			*is_out_of_frustum = !CullClipSpaceWhole(projected_points);
 
-			bool behind = !CullClipSpaceWWhole(projected_points);
 			if (view_space_proportion.x == 0.0f) {
 				// The Y proportion is specified
-				current_difference = AbsoluteDifference(view_space_proportion.y, coverage.y);
-				is_smaller = coverage.y < view_space_proportion.y;
+				*current_difference = AbsoluteDifference(view_space_proportion.y, coverage->y);
+				*is_smaller = coverage->y < view_space_proportion.y;
 			}
 			else {
 				// The X proportion is specified
-				current_difference = AbsoluteDifference(view_space_proportion.x, coverage.x);
-				is_smaller = coverage.x < view_space_proportion.x;
+				*current_difference = AbsoluteDifference(view_space_proportion.x, coverage->x);
+				*is_smaller = coverage->x < view_space_proportion.x;
 			}
-
+		};
+		auto aabb_compare = [&](float current_distance, float epsilon) {
+			float current_difference = 0.0f;
+			bool is_smaller = false;
+			bool is_out_of_frustum = false;
+			float2 coverage;
+			get_aabb_distance_info(current_distance, &is_out_of_frustum, &is_smaller, &coverage, &current_difference);
 			if (!isnan(current_difference) && current_difference < epsilon) {
 				return 0;
 			}
-			is_smaller = behind ? !is_smaller : is_smaller;
+			resulting_distance = std::min(current_distance, resulting_distance);
 			return is_smaller ? 1 : -1;
 		};
 
-		float resulting_distance = 0.0f;
-		if (BinaryIntoLinearSearch(min_distance, max_distance, 0.001f, 2.0f, LINEAR_SEARCH_STEP_SIZE, &resulting_distance,
+		// Do a precheck. In case this precheck returns that we need to be closer
+		bool initial_is_out_of_frustum;
+		bool initial_is_smaller;
+		float2 initial_coverage;
+		float initial_difference;
+		get_aabb_distance_info(0.0f, &initial_is_out_of_frustum, &initial_is_smaller, &initial_coverage, &initial_difference);
+		if (initial_is_smaller) {
+			// Move along
+			return transformed_bounds_center.AsFloat3Low() - camera_forward.AsFloat3Low() * Length(half_extents).AsFloat3Low();
+		}
+
+		BinaryIntoLinearSearch(min_distance, max_distance, 0.001f, 2.0f, LINEAR_SEARCH_STEP_SIZE, &resulting_distance,
 			[&](float current_distance) {
 				return aabb_compare(current_distance, BINARY_SEARCH_EPSILON);
 			},
 			[&](float current_distance) {
 				return aabb_compare(current_distance, LINEAR_SEARCH_EPSILON);
 			}
-		)) {
-			return transformed_bounds_center.AsFloat3Low() - camera_forward.AsFloat3Low() * float3::Splat(resulting_distance);
-		}
-		return float3::Splat(FLT_MAX);
+		);
+		resulting_distance += Length(half_extents).AsFloat3Low()[0];
+		return transformed_bounds_center.AsFloat3Low() - camera_forward.AsFloat3Low() * float3::Splat(resulting_distance);
 	}
 
 	ECS_TEMPLATE_FUNCTION_2_BEFORE(float3, FocusCameraOnObjectViewSpace, const Camera*, const CameraCached*, float3, Quaternion, float3, AABBStorage, float2);

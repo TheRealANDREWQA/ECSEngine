@@ -1,11 +1,12 @@
 #include "editorpch.h"
-#include "../Editor/EditorState.h"
 #include "ECSEngineComponents.h"
 #include "ECSEngineEntities.h"
+#include "../Editor/EditorState.h"
 #include "../Sandbox/SandboxEntityOperations.h"
 #include "../Sandbox/Sandbox.h"
 #include "../Project/ProjectFolders.h"
 #include "../Editor/EditorScene.h"
+#include "EditorSandboxAssets.h"
 
 #define LAZY_CHANGE_MS 300
 
@@ -217,6 +218,8 @@ void TickPrefabFileChange(EditorState* editor_state) {
 									GetAllocatorPolymorphic(&stack_allocator)
 								);
 
+								stack_allocator.SetMarker();
+
 								if (prefab_changes.size > 0) {
 									ECS_STACK_CAPACITY_STREAM(const void*, prefab_components, ECS_ARCHETYPE_MAX_COMPONENTS);
 									ECS_STACK_CAPACITY_STREAM(const void*, prefab_shared_components, ECS_ARCHETYPE_MAX_SHARED_COMPONENTS);
@@ -251,8 +254,17 @@ void TickPrefabFileChange(EditorState* editor_state) {
 												// For the scene case, we need to get the handle snapshot from the entities
 												// Before and after the operation, and update the reference counts
 												// Based on the difference between these 2 snapshots
+												SandboxReferenceCountsFromEntities before_apply_asset_counts;
 												const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-
+												stack_allocator.ReturnToMarker();
+												if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+													before_apply_asset_counts = GetSandboxAssetReferenceCountsFromEntities(
+														editor_state, 
+														sandbox_index, 
+														EDITOR_SANDBOX_VIEWPORT_SCENE, 
+														GetAllocatorPolymorphic(&stack_allocator)
+													);
+												}
 												SandboxApplyEntityChanges(
 													editor_state,
 													sandbox_index,
@@ -265,7 +277,33 @@ void TickPrefabFileChange(EditorState* editor_state) {
 													prefab_changes
 												);
 												prefab_entities.Deallocate(entities_allocator);
+												if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
+													SandboxReferenceCountsFromEntities current_asset_reference_counts = GetSandboxAssetReferenceCountsFromEntities(
+														editor_state,
+														sandbox_index,
+														EDITOR_SANDBOX_VIEWPORT_SCENE,
+														GetAllocatorPolymorphic(&stack_allocator)
+													);
+													ForEachSandboxAssetReferenceDifference(
+														editor_state,
+														before_apply_asset_counts,
+														current_asset_reference_counts,
+														[&](ECS_ASSET_TYPE type, unsigned int handle, int reference_count_change) {
+															if (reference_count_change < 0) {
+																DecrementAssetReference(editor_state, handle, type, sandbox_index, -reference_count_change);
+															}
+															else {
+																IncrementAssetReferenceInSandbox(editor_state, handle, type, sandbox_index, reference_count_change);
+															}
+														}
+													);
+													SetSandboxSceneDirty(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+												}
+												// Load any missing assets
+												LoadSandboxAssets(editor_state, sandbox_index);
 											}
+											// Also, trigger a redraw for this viewport
+											RenderSandbox(editor_state, sandbox_index, viewport);
 										}
 									});
 								}

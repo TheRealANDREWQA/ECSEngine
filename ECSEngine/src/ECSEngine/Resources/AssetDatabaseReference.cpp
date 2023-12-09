@@ -189,6 +189,17 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
+	unsigned int AssetDatabaseReference::GetCount() const
+	{
+		unsigned int total_count = 0;
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			total_count += GetCount((ECS_ASSET_TYPE)index);
+		}
+		return total_count;
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
 	Stream<Stream<unsigned int>> AssetDatabaseReference::GetUniqueHandles(AllocatorPolymorphic allocator) const
 	{
 		const ResizableStream<unsigned int>* handles = (const ResizableStream<unsigned int>*)this;
@@ -265,7 +276,7 @@ namespace ECSEngine {
 	{
 		unsigned int handle = GetHandle(index, type);
 		RemoveAssetThisOnly(index, type);
-		return database->RemoveAsset(handle, type, remove_info);
+		return database->RemoveAsset(handle, type, 1, remove_info);
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -278,13 +289,15 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::Reset(bool decrement_reference_counts)
+	void AssetDatabaseReference::Reset(bool decrement_reference_counts, bool remove_dependencies)
 	{
 		if (decrement_reference_counts) {
 			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
 			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 				for (unsigned int handle_index = 0; handle_index < streams[index].size; handle_index++) {
-					database->RemoveAsset(streams[index][handle_index], (ECS_ASSET_TYPE)index);
+					AssetDatabaseRemoveInfo remove_info;
+					remove_info.remove_dependencies = remove_dependencies;
+					database->RemoveAsset(streams[index][handle_index], (ECS_ASSET_TYPE)index, 1, &remove_info);
 				}
 			}
 		}

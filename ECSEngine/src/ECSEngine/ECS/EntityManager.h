@@ -338,22 +338,36 @@ namespace ECSEngine {
 		// Deferred call
 		// Entities can belong to different archetypes, the same is valid for components and instances
 		// Can optionally specify if it should destroy the base archetype if it becomes empty
+		// Or to not crash in case it is the same instance
 		void ChangeEntitySharedInstance(
 			Stream<ChangeSharedComponentElement> elements,
-			DeferredActionParameters parameters = {}, 
+			bool possibly_the_same_instance = false,
+			DeferredActionParameters parameters = {},
 			bool destroy_base_archetype = false,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// Entities can belong to different archetypes, the same is valid for components and instances
 		// Can optionally specify if it should destroy the base archetype if it becomes empty
-		void ChangeEntitySharedInstanceCommit(Stream<ChangeSharedComponentElement> elements, bool destroy_base_archetype = false);
+		// Or to not crash in case it is the same instance
+		void ChangeEntitySharedInstanceCommit(
+			Stream<ChangeSharedComponentElement> elements, 
+			bool possibly_the_same_instance = false, 
+			bool destroy_base_archetype = false
+		);
 
 		// When the entity already has the shared component but the instance needs to be changed.
+		// Can set the possibly_the_same_instance to not crash in case it is the same instance
 		// It returns the old shared instance of that entity. It has no deferred version at the moment.
 		// If the destroy archetypes is set, for the x component it will destroy the archetype if there are no more entities in it,
 		// for the y component it will destroy the base archetype if there are no more entities in it.
-		SharedInstance ChangeEntitySharedInstanceCommit(Entity entity, Component component, SharedInstance new_instance, bool destroy_base_archetype = false);
+		SharedInstance ChangeEntitySharedInstanceCommit(
+			Entity entity, 
+			Component component, 
+			SharedInstance new_instance, 
+			bool possibly_the_same_instance = false, 
+			bool destroy_base_archetype = false
+		);
 
 		// ---------------------------------------------------------------------------------------------------
 

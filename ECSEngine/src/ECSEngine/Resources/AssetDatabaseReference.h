@@ -185,6 +185,9 @@ namespace ECSEngine {
 			return database;
 		}
 
+		// Returns the count of all assets (includes duplicates)
+		unsigned int GetCount() const;
+
 		ECS_INLINE unsigned int GetCount(ECS_ASSET_TYPE type) const {
 			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
 			return streams[type].size;
@@ -245,8 +248,10 @@ namespace ECSEngine {
 			return database->RemoveAssetWithAction<only_main_asset, before_removal>(handle, type, functor);
 		}
 
-		// Clears all the assets that are inside.
-		void Reset(bool decrement_reference_counts = false);
+		// Clears all the assets that are inside
+		// If the remove dependencies is set to true, if an asset is removed the main
+		// database, its dependencies will get decremented
+		void Reset(bool decrement_reference_counts = false, bool remove_dependencies = true);
 
 		// Increases the reference count of all assets by one
 		// Can choose whether or not the reflected reference count increase to be reflected in this reference or not

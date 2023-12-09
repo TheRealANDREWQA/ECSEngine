@@ -1168,6 +1168,7 @@ namespace ECSEngine {
 		return current_mask;
 	}
 
+	// Returns true if the point is in the camera frustum
 	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		CullClipSpaceX,
 		4,
@@ -1175,6 +1176,7 @@ namespace ECSEngine {
 		FORWARD(vector)
 	);
 
+	// Returns true if the point is in the camera frustum
 	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		CullClipSpaceY,
 		4,
@@ -1182,6 +1184,7 @@ namespace ECSEngine {
 		FORWARD(vector)
 	);
 
+	// Returns true if the point is in the camera frustum
 	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		CullClipSpaceZ,
 		4,
@@ -1189,6 +1192,7 @@ namespace ECSEngine {
 		FORWARD(vector)
 	);
 
+	// Returns true if the point is in the camera frustum
 	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		CullClipSpaceW,
 		4,
@@ -1196,6 +1200,7 @@ namespace ECSEngine {
 		FORWARD(vector)
 	);
 
+	// Returns true if the point is in the camera frustum
 	ECS_SIMD_CREATE_BOOLEAN_FUNCTIONS_FOR_MASK_FIXED_LANE(
 		CullClipSpace,
 		4,

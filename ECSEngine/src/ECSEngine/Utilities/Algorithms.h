@@ -66,7 +66,9 @@ namespace ECSEngine {
 	// The evaluate functor must return an int with the following meaning
 	// 0 - switch to linear step size search when in binary search, else the value is found
 	// -1 - the value is greater than the current mid
+	// -2 - the value is greater than the current mid, extend the right side
 	// 1 - the value is smaller than the current mid
+	// 2 - the value is smaller than the current mid, extend the left
 	// The epsilon is a value that is added/subtracted to the left or right
 	// when a new binary search step is needed. Divide by two is a value that is used to
 	// divide the difference between left and right to obtain the mid
@@ -91,8 +93,16 @@ namespace ECSEngine {
 			else if (evaluation == -1) {
 				left = mid + epsilon;
 			}
+			else if (evaluation == -2) {
+				left = mid + epsilon;
+				right = right * divide_by_two;
+			}
+			else if (evaluation == 1) {
+				right = mid - epsilon;
+			}
 			else {
 				right = mid - epsilon;
+				left = left / divide_by_two;
 			}
 		}
 
@@ -110,6 +120,11 @@ namespace ECSEngine {
 			if (evaluation == 1) {
 				*result = left - linear_step / divide_by_two;
 				return true;
+			}
+			// The -1 case only needs to have the left incremented
+			else if (evaluation == -2) {
+				// Increase by the linear step
+				right += linear_step;
 			}
 			left += linear_step;
 		}

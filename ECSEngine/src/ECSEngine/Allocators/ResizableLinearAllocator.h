@@ -44,6 +44,9 @@ namespace ECSEngine {
 
 		void GetMarker(size_t* marker, size_t* current_usage) const;
 
+		// It will use the value stored in this structure's marker
+		void ReturnToMarker(DebugInfo debug_info = ECS_DEBUG_INFO);
+
 		// You need to restore both values from the GetMarker function
 		void ReturnToMarker(size_t marker, size_t usage, DebugInfo debug_info = ECS_DEBUG_INFO);
 

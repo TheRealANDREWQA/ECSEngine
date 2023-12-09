@@ -27,6 +27,10 @@ struct BaseDrawData {
 
 	Action callback_action;
 	void* callback_action_data;
+
+	Action registration_callback_action;
+	void* registration_callback_action_data;
+
 	bool callback_verify;
 	// Used only for deselection
 	bool callback_before_handle_update;
@@ -172,8 +176,14 @@ struct SelectActionData {
 	ECS_ASSET_TYPE type;
 	bool destroy_selection;
 
+	// This will be called when the asset has finished loading
 	Action action;
 	void* action_data;
+
+	// This will be called when the selection is changed
+	Action asset_registration_action;
+	void* asset_registration_action_data;
+
 	// You can set this boolean to indicate that the sandbox will be unregistered manually (or possibly skipped)
 	// By default this is set to false, as to not create leaks
 	bool do_not_unregister_asset;
@@ -245,6 +255,15 @@ void SelectAction(ActionData* action_data) {
 
 				wrapper_data.action = data->action;
 				wrapper_data.action_data = data->action_data;
+			}
+
+			if (data->asset_registration_action != nullptr) {
+				AssetOverrideCallbackRegistrationAdditionalInfo additional_info;
+				additional_info.handle = data->handle;
+				additional_info.type = data->type;
+				action_data->data = data->asset_registration_action_data;
+				action_data->additional_data = &additional_info;
+				data->asset_registration_action(action_data);
 			}
 			RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->handle, !data->do_not_unregister_asset, callback_handler);
 		}
@@ -413,6 +432,8 @@ static void CreateSelectActionData(SelectActionData* select_data, const BaseDraw
 	select_data->target_database = base_data->target_database;
 	select_data->callback_before_handle_update = base_data->callback_before_handle_update;
 	select_data->do_not_unregister_asset = base_data->callback_disable_selection_unregistering;
+	select_data->asset_registration_action = base_data->registration_callback_action;
+	select_data->asset_registration_action_data = base_data->registration_callback_action_data;
 }
 
 // The stack allocation must be at least ECS_KB * 4 large
@@ -882,7 +903,9 @@ struct OverrideBaseData {
 	CapacityStream<char> selection;
 	unsigned int sandbox_index;
 	bool callback_is_ptr;
+	bool registration_callback_is_ptr;
 	Action callback;
+	Action registration_callback;
 	bool callback_disable_selection_unregistering;
 	bool callback_verify;
 	// Used for deselection
@@ -892,6 +915,11 @@ struct OverrideBaseData {
 		// Embedd the data directly into it
 		size_t callback_data[8];
 		void* callback_data_ptr;
+	};
+	union {
+		// Embedd the data directly into it
+		size_t registration_callback_data[8];
+		void* registration_callback_data_ptr;
 	};
 };
 
@@ -920,6 +948,9 @@ void OverrideAssetHandle(
 	base_window_data->callback_verify = base_data->callback_verify;
 	base_window_data->callback_before_handle_update = base_data->callback_before_handle_update;
 	base_window_data->callback_disable_selection_unregistering = base_data->callback_disable_selection_unregistering;
+	base_window_data->registration_callback_action = base_data->registration_callback;
+	base_window_data->registration_callback_action_data = base_data->registration_callback_is_ptr ? base_data->registration_callback_data_ptr 
+		: base_data->registration_callback_data;
 
 	base_window_data->target_database = base_data->database;
 
@@ -1141,6 +1172,20 @@ ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback) {
 		memcpy(data->callback_data, modify_data->handler.data, modify_data->handler.data_size);
 		data->callback_is_ptr = false;
 	}
+
+	if (modify_data->registration_handler.action != nullptr) {
+		data->registration_callback = modify_data->registration_handler.action;
+		ECS_ASSERT(modify_data->registration_handler.data_size <= sizeof(data->registration_callback_data));
+		if (modify_data->registration_handler.data_size == 0) {
+			data->registration_callback_data_ptr = modify_data->registration_handler.data;
+			data->registration_callback_is_ptr = true;
+		}
+		else {
+			memcpy(data->registration_callback_data, modify_data->registration_handler.data, modify_data->registration_handler.data_size);
+			data->registration_callback_is_ptr = false;
+		}
+	}
+
 	data->callback_verify = modify_data->verify_handler;
 	data->callback_before_handle_update = modify_data->callback_before_handle_update;
 	data->callback_disable_selection_unregistering = modify_data->disable_selection_registering;
@@ -1231,6 +1276,7 @@ void AssetOverrideBindInstanceOverrides(
 	UIReflectionInstance* instance, 
 	unsigned int sandbox_index, 
 	UIActionHandler modify_action_handler,
+	UIActionHandler registration_modify_action_handler,
 	bool disable_selection_unregistering
 )
 {
@@ -1238,6 +1284,7 @@ void AssetOverrideBindInstanceOverrides(
 	set_data.set_index.sandbox_index = sandbox_index;
 	set_data.callback.handler = modify_action_handler;
 	set_data.callback.disable_selection_registering = disable_selection_unregistering;
+	set_data.callback.registration_handler = registration_modify_action_handler;
 
 	size_t count = AssetUIOverrideCount();
 	for (size_t index = 0; index < count; index++) {

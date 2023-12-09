@@ -325,9 +325,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 					}
 					else if (snapshot_reference_count > current_reference_count) {
 						unsigned int difference = snapshot_reference_count - current_reference_count;
-						for (unsigned int reference_index = 0; reference_index < difference; reference_index++) {
-							DecrementAssetReference(editor_state, current_handle, current_type, sandbox_index);
-						}
+						DecrementAssetReference(editor_state, current_handle, current_type, sandbox_index, difference);
 						// Record the delta change
 						snapshot.reference_counts_change[found_index] -= difference;
 						snapshot.reference_counts[found_index] = current_reference_count;
@@ -366,25 +364,23 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 			size_t final_index = missing_index + was_found_offset;
 			// Decrement all the reference counts from this sandbox
 			unsigned int reference_count = snapshot.reference_counts[final_index];
-			for (unsigned int index = 0; index < reference_count; index++) {
-				DecrementAssetReference(
-					editor_state, 
-					snapshot.handles[final_index],
-					snapshot.handle_types[final_index],
-					sandbox_index
-				);
-			}
+			DecrementAssetReference(
+				editor_state,
+				snapshot.handles[final_index],
+				snapshot.handle_types[final_index],
+				sandbox_index,
+				reference_count
+			);
 			// Take into account the existing delta change as well
 			if (snapshot.reference_counts_change[final_index] > 0) {
 				// We need to decrement these increments
-				for (unsigned int index = 0; index < snapshot.reference_counts_change[final_index]; index++) {
-					DecrementAssetReference(
-						editor_state,
-						snapshot.handles[final_index],
-						snapshot.handle_types[final_index],
-						sandbox_index
-					);
-				}
+				DecrementAssetReference(
+					editor_state,
+					snapshot.handles[final_index],
+					snapshot.handle_types[final_index],
+					sandbox_index,
+					snapshot.reference_counts_change[final_index]
+				);
 			}
 			else if (snapshot.reference_counts_change[final_index] < 0) {
 				IncrementAssetReferenceInSandbox(
@@ -1082,9 +1078,7 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 			);
 		}
 		else {
-			for (int counter = 0; counter < reference_count; counter++) {
-				DecrementAssetReference(editor_state, current_handle, sandbox->runtime_asset_handle_snapshot.handle_types[index], sandbox_index);
-			}
+			DecrementAssetReference(editor_state, current_handle, sandbox->runtime_asset_handle_snapshot.handle_types[index], sandbox_index, reference_count);
 		}
 	}
 

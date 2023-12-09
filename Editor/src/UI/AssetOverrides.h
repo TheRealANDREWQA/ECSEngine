@@ -45,6 +45,11 @@ struct AssetOverrideCallbackAdditionalInfo {
 	void* previous_asset;
 };
 
+struct AssetOverrideCallbackRegistrationAdditionalInfo {
+	unsigned int* handle;
+	ECSEngine::ECS_ASSET_TYPE type;
+};
+
 // Can optionally mark the callback as a verify callback that will receive
 // in the additional data field a AssetOverrideCallbackVerifyData* which
 // it can use to prevent the registering/unregistering part of the action.
@@ -53,8 +58,11 @@ struct AssetOverrideCallbackAdditionalInfo {
 // For deselection, if you wish the callback to be called after the handle has been made -1
 // but the handle will be the value before being deallocated
 // then clear callback_before_handle_update to false
+// The registration handler is used to make a change when the selection is pressed
+// Useful to set things up before the background asset load begins
 struct AssetOverrideBindCallbackData {
 	ECSEngine::Tools::UIActionHandler handler;
+	ECSEngine::Tools::UIActionHandler registration_handler = {};
 	bool verify_handler = false;
 	bool callback_before_handle_update = true;
 	bool disable_selection_registering = false;
@@ -83,5 +91,6 @@ void AssetOverrideBindInstanceOverrides(
 	ECSEngine::Tools::UIReflectionInstance* instance,
 	unsigned int sandbox_index,
 	ECSEngine::Tools::UIActionHandler modify_action_handler,
+	ECSEngine::Tools::UIActionHandler registration_modify_action_handler = {},
 	bool disable_selection_unregistering = false
 );

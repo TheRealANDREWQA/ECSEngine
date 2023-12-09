@@ -76,6 +76,7 @@ namespace ECSEngine {
 	struct DeferredChangeSharedInstanceEntities {
 		Stream<ChangeSharedComponentElement> elements;
 		bool destroy_base_archetype;
+		bool possibly_the_same_instance;
 	};
 
 	struct DeferredCopyEntities {
@@ -1251,13 +1252,28 @@ namespace ECSEngine {
 				data->elements[index].entity
 			);
 
-			ECS_CRASH_CONDITION(
-				manager->ExistsSharedInstanceOnly(data->elements[index].component, data->elements[index].new_instance),
-				"EntityManager: The shared instance {#} does not exist for component {#} when trying to change the shared instance for entity {#}.",
-				data->elements[index].new_instance,
-				manager->GetSharedComponentName(data->elements[index].component),
-				data->elements[index].entity
-			);
+			SharedInstance entity_instance = manager->GetSharedComponentInstance(data->elements[index].component, data->elements[index].entity);
+			if (data->possibly_the_same_instance) {
+				if (data->elements[index].new_instance == entity_instance) {
+					// Skip this element
+					continue;
+				}
+			}
+			else {
+				ECS_CRASH_CONDITION(
+					manager->ExistsSharedInstanceOnly(data->elements[index].component, data->elements[index].new_instance),
+					"EntityManager: The shared instance {#} does not exist for component {#} when trying to change the shared instance for entity {#}.",
+					data->elements[index].new_instance,
+					manager->GetSharedComponentName(data->elements[index].component),
+					data->elements[index].entity
+				);
+				ECS_CRASH_CONDITION(
+					data->elements[index].new_instance != entity_instance,
+					"EntityManager: Trying to change the shared instance for component {#} for entity {#} to the same instance",
+					manager->GetSharedComponentName(data->elements[index].component),
+					data->elements[index].entity.value
+				);
+			}
 
 			EntityInfo* entity_info = manager->m_entity_pool->GetInfoPtr(data->elements[index].entity);
 
@@ -2943,7 +2959,8 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::ChangeEntitySharedInstance(
-		Stream<ChangeSharedComponentElement> elements, 
+		Stream<ChangeSharedComponentElement> elements,
+		bool possibly_the_same_instance,
 		DeferredActionParameters parameters, 
 		bool destroy_base_archetype, 
 		DebugInfo debug_info
@@ -2958,19 +2975,27 @@ namespace ECSEngine {
 		buffer += sizeof(*data);
 		data->elements.InitializeAndCopy(buffer, elements);
 		data->destroy_base_archetype = destroy_base_archetype;
+		data->possibly_the_same_instance = possibly_the_same_instance;
 
 		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_ENTITY_CHANGE_SHARED_INSTANCE), debug_info });
 	}
 
-	void EntityManager::ChangeEntitySharedInstanceCommit(Stream<ChangeSharedComponentElement> elements, bool destroy_base_archetype)
+	void EntityManager::ChangeEntitySharedInstanceCommit(Stream<ChangeSharedComponentElement> elements, bool possible_the_same_instance, bool destroy_base_archetype)
 	{
 		DeferredChangeSharedInstanceEntities commit_data;
 		commit_data.destroy_base_archetype = destroy_base_archetype;
 		commit_data.elements = elements;
+		commit_data.possibly_the_same_instance = possible_the_same_instance;
 		CommitEntityChangeSharedInstance(this, &commit_data, nullptr);
 	}
 
-	SharedInstance EntityManager::ChangeEntitySharedInstanceCommit(Entity entity, Component component, SharedInstance new_instance, bool destroy_base_archetype)
+	SharedInstance EntityManager::ChangeEntitySharedInstanceCommit(
+		Entity entity, 
+		Component component, 
+		SharedInstance new_instance, 
+		bool possibly_the_same_instance, 
+		bool destroy_base_archetype
+	)
 	{
 		EntityInfo* info = m_entity_pool->GetInfoPtr(entity);
 		Archetype* archetype = GetArchetype(info->main_archetype);
@@ -2979,7 +3004,7 @@ namespace ECSEngine {
 			shared_index != UCHAR_MAX, 
 			{},
 			"EntityManager: Entity {#} doesn't have shared component {#} when trying to change shared instance to {#}.", 
-			entity.value, 
+			entity.value,
 			GetSharedComponentName(component), 
 			new_instance.value
 		);
@@ -2987,14 +3012,21 @@ namespace ECSEngine {
 		SharedInstance shared_instances[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
 		SharedComponentSignature shared_signature = archetype->GetSharedSignature(info->base_archetype);
 		// Check to see that the instance is indeed different
-		ECS_CRASH_CONDITION_RETURN(
-			shared_signature.instances[shared_index] != new_instance,
-			{},
-			"EntityManager: Trying to replace shared instance {#} with the same instance for entity {#}, component {#}.",
-			new_instance.value,
-			entity.value,
-			GetSharedComponentName(component)
-		);
+		if (!possibly_the_same_instance) {
+			ECS_CRASH_CONDITION_RETURN(
+				shared_signature.instances[shared_index] != new_instance,
+				{},
+				"EntityManager: Trying to replace shared instance {#} with the same instance for entity {#}, component {#}.",
+				new_instance.value,
+				entity.value,
+				GetSharedComponentName(component)
+			);
+		}
+		else {
+			if (shared_signature.instances[shared_index] == new_instance) {
+				return new_instance;
+			}
+		}
 
 		memcpy(shared_instances, shared_signature.instances, sizeof(SharedInstance) * shared_signature.count);
 		SharedInstance old_instance = shared_instances[shared_index];

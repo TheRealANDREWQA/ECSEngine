@@ -21,7 +21,6 @@ struct CreateAssetInternalDependenciesElement {
 	Stream<void> new_asset;
 };
 
-// Mirrors AssetOverrideCallbackAdditionalInfo in AssetOverrides.h
 struct RegisterAssetEventCallbackInfo {
 	// This is the handle value before the selection
 	unsigned int previous_handle;
@@ -193,7 +192,14 @@ void DeleteMissingAssetSettings(const EditorState* editor_state);
 
 // Returns true if the asset was successfully decremented. It can fail if it is evicted and it could not be deallocated
 // If the sandbox index is different from -1, it will also remove a reference from the given sandbox
-bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1, bool* was_removed = nullptr);
+bool DecrementAssetReference(
+	EditorState* editor_state, 
+	unsigned int handle, 
+	ECS_ASSET_TYPE type, 
+	unsigned int sandbox_index = -1, 
+	unsigned int decrement_count = 1,
+	bool* was_removed = nullptr
+);
 
 // Returns true if the asset was successfully decremented. It can fail if it is evicted and it could not be deallocated
 // If the database reference is not nullptr, it will remove a reference from it as well
@@ -201,7 +207,8 @@ bool DecrementAssetReference(
 	EditorState* editor_state, 
 	unsigned int handle, 
 	ECS_ASSET_TYPE type, 
-	AssetDatabaseReference* database_reference, 
+	AssetDatabaseReference* database_reference,
+	unsigned int decrement_count = 1,
 	bool* was_removed = nullptr
 );
 

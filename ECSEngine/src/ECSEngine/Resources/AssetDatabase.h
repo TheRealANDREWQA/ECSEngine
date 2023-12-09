@@ -36,6 +36,9 @@ namespace ECSEngine {
 		void* storage = nullptr;
 		// When set to true it will remove the dependencies as well
 		bool remove_dependencies = true;
+		// If you set this to false, it will decrement the dependencies
+		// Even when this asset is not removed
+		bool remove_dependencies_only_if_main_asset_removed = true;
 		// When set it will fill in the dependencies for this asset
 		CapacityStream<AssetTypedHandle>* dependencies = nullptr;
 
@@ -111,7 +114,7 @@ namespace ECSEngine {
 		// and increment the reference count. Else it will add it and return the handle
 		unsigned int AddFindAssetInternal(const void* asset, ECS_ASSET_TYPE type, unsigned int reference_count = 1);
 
-		// It increments by one the reference count for that asset.
+		// It increments by one the reference count for that asset. If it doesn't exist, it will load it
 		void AddAsset(unsigned int handle, ECS_ASSET_TYPE type, unsigned int reference_count = 1);
 
 		// Retrive the allocator for this database
@@ -393,31 +396,31 @@ namespace ECSEngine {
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveMesh(unsigned int handle, MeshMetadata* storage = nullptr);
+		bool RemoveMesh(unsigned int handle, unsigned int decrement_count = 1, MeshMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveTexture(unsigned int handle, TextureMetadata* storage = nullptr);
+		bool RemoveTexture(unsigned int handle, unsigned int decrement_count = 1, TextureMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveGPUSampler(unsigned int handle, GPUSamplerMetadata* storage = nullptr);
+		bool RemoveGPUSampler(unsigned int handle, unsigned int decrement_count = 1, GPUSamplerMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveShader(unsigned int handle, ShaderMetadata* storage = nullptr);
+		bool RemoveShader(unsigned int handle, unsigned int decrement_count = 1, ShaderMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveMaterial(unsigned int handle, AssetDatabaseRemoveInfo* remove_info = nullptr);
+		bool RemoveMaterial(unsigned int handle, unsigned int decrement_count = 1, AssetDatabaseRemoveInfo* remove_info = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveMisc(unsigned int handle, MiscAsset* storage = nullptr);
+		bool RemoveMisc(unsigned int handle, unsigned int decrement_count = 1, MiscAsset* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type, AssetDatabaseRemoveInfo* remove_info = nullptr);
+		bool RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type, unsigned int decrement_count = 1, AssetDatabaseRemoveInfo* remove_info = nullptr);
 
 		// Does not destroy the file. It will remove the asset no matter what the reference count is
 		// If the decrement_dependencies is set to true, then it will decrement the reference count of its dependencies
@@ -430,13 +433,11 @@ namespace ECSEngine {
 		// Returns true if the asset was removed. If the only_main_asset is set to true, the functor will not be called
 		// for dependencies
 		template<bool only_main_asset = false, bool before_removal = true, typename Functor>
-		bool RemoveAssetWithAction(unsigned int handle, ECS_ASSET_TYPE type, Functor&& functor) {
+		bool RemoveAssetWithAction(unsigned int handle, ECS_ASSET_TYPE type, Functor&& functor, unsigned int decrement_count = 1) {
 			// Returns true if the asset was removed
 			auto remove_lambda = [&](auto& sparse_set) {
 				auto& metadata = sparse_set[handle];
-				metadata.reference_count--;
-
-				if (metadata.reference_count == 0) {
+				if (metadata.reference_count <= decrement_count) {
 					if constexpr (before_removal) {
 						functor(handle, type, &metadata.value);
 					}
@@ -450,6 +451,9 @@ namespace ECSEngine {
 					}
 
 					return true;
+				}
+				else {
+					metadata.reference_count -= decrement_count;
 				}
 				return false;
 			};
@@ -530,7 +534,7 @@ namespace ECSEngine {
 						remove_info.storage = current_dependency;
 					}
 
-					bool removed = RemoveAsset(typed_handles[index].handle, typed_handles[index].type, &remove_info);
+					bool removed = RemoveAsset(typed_handles[index].handle, typed_handles[index].type, 1, &remove_info);
 					if constexpr (recurse) {
 						if (removed) {
 							RemoveAssetDependencies<recurse>(current_dependency, typed_handles[index].type, functor);
