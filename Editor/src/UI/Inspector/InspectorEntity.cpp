@@ -66,6 +66,10 @@ struct InspectorDrawEntityData {
 
 		void* apply_modifier_initial_target_data;
 		bool is_apply_modifier_in_progress;
+		// If there is an UI change triggered with a background asset registration,
+		// We need to block the conversion from the target to the link since it
+		// Will change it back to the original value
+		unsigned char is_ui_change_triggered;
 	};
 
 	ECS_INLINE AllocatorPolymorphic Allocator() const {
@@ -149,6 +153,7 @@ struct InspectorDrawEntityData {
 		link_components[write_index].apply_modifier_initial_target_data = nullptr;
 		link_components[write_index].is_apply_modifier_in_progress = false;
 		link_components[write_index].target_allocator = CreateLinkTargetAllocator(editor_state);
+		link_components[write_index].is_ui_change_triggered = false;
 
 		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(name);
 		const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target_name);
@@ -313,6 +318,17 @@ struct InspectorDrawEntityData {
 
 	ECS_INLINE unsigned int FindLinkComponent(Stream<char> name) const {
 		return FindString(name, link_components, [](LinkComponent component) { return component.name; });
+	}
+
+	// Finds a link component based on the fact that the pointer must belong to the link data
+	unsigned int FindLinkComponentFromPointer(const EditorState* editor_state, const void* pointer) const {
+		for (unsigned int index = 0; index < link_components.size; index++) {
+			unsigned short byte_size = editor_state->editor_components.GetComponentByteSize(link_components[index].name);
+			if (IsPointerRange(link_components[index].data, byte_size, pointer)) {
+				return index;
+			}
+		}
+		return -1;
 	}
 
 	bool IsCreatedInstanceValid(EditorState* editor_state, unsigned int index) const {
@@ -576,73 +592,76 @@ struct InspectorDrawEntityData {
 	// Updates all link components whose targets have changed
 	void UpdateLinkComponentsFromTargets(const EditorState* editor_state, unsigned int sandbox_index) {
 		for (size_t index = 0; index < link_components.size; index++) {
-			const void* target_data = TargetComponentData(editor_state, sandbox_index, index);
-			void* current_data = link_components[index].target_data_copy;
-			Stream<char> link_name = link_components[index].name;
-			Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_name);
+			// Perform this check only if there is no pending UI change
+			if (link_components[index].is_ui_change_triggered == 0) {
+				const void* target_data = TargetComponentData(editor_state, sandbox_index, index);
+				void* current_data = link_components[index].target_data_copy;
+				Stream<char> link_name = link_components[index].name;
+				Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_name);
 
-			ECS_STACK_CAPACITY_STREAM(Reflection::CompareReflectionTypeInstanceBlittableType, blittable_types, 32);
-			size_t blittable_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
-			// This will include the misc Stream<void> with a pointer but that is no problem, shouldn't really happen in code
-			for (size_t blittable_index = 0; blittable_index < blittable_count; blittable_index++) {
-				blittable_types.AddAssert({ ECS_ASSET_TARGET_FIELD_NAMES[blittable_index].name, Reflection::ReflectionStreamFieldType::Pointer });
-			}
-			blittable_types.AddAssert({ STRING(Stream<void>), Reflection::ReflectionStreamFieldType::Stream });
-			Reflection::CompareReflectionTypeInstancesOptions compare_options;
-			compare_options.blittable_types = blittable_types;
-			if (!Reflection::CompareReflectionTypeInstances(editor_state->editor_components.internal_manager, target_name, target_data, current_data, 1, &compare_options)) {
-				// We need to convert the target to the link and update the target data copy
-				bool success = ConvertEditorTargetToLinkComponent(
-					editor_state,
-					link_name,
-					target_data,
-					link_components[index].data,
-					link_components[index].target_data_copy,
-					link_components[index].previous_data,
-					Allocator()
-				);
-				if (!success) {
-					if (!is_global_component) {
-						ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-						Stream<char> entity_name = GetSandboxEntityName(editor_state, sandbox_index, entity, entity_name_storage);
+				ECS_STACK_CAPACITY_STREAM(Reflection::CompareReflectionTypeInstanceBlittableType, blittable_types, 32);
+				size_t blittable_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
+				// This will include the misc Stream<void> with a pointer but that is no problem, shouldn't really happen in code
+				for (size_t blittable_index = 0; blittable_index < blittable_count; blittable_index++) {
+					blittable_types.AddAssert({ ECS_ASSET_TARGET_FIELD_NAMES[blittable_index].name, Reflection::ReflectionStreamFieldType::Pointer });
+				}
+				blittable_types.AddAssert({ STRING(Stream<void>), Reflection::ReflectionStreamFieldType::Stream });
+				Reflection::CompareReflectionTypeInstancesOptions compare_options;
+				compare_options.blittable_types = blittable_types;
+				if (!Reflection::CompareReflectionTypeInstances(editor_state->editor_components.internal_manager, target_name, target_data, current_data, 1, &compare_options)) {
+					// We need to convert the target to the link and update the target data copy
+					bool success = ConvertEditorTargetToLinkComponent(
+						editor_state,
+						link_name,
+						target_data,
+						link_components[index].data,
+						link_components[index].target_data_copy,
+						link_components[index].previous_data,
+						Allocator()
+					);
+					if (!success) {
+						if (!is_global_component) {
+							ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
+							Stream<char> entity_name = GetSandboxEntityName(editor_state, sandbox_index, entity, entity_name_storage);
 
-						ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.",
-							link_components[index].name, entity_name, sandbox_index);
-						EditorSetConsoleError(error_message);
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.",
+								link_components[index].name, entity_name, sandbox_index);
+							EditorSetConsoleError(error_message);
+						}
+						else {
+							Stream<char> component_name = editor_state->editor_components.ComponentFromID(global_component, ECS_COMPONENT_GLOBAL);
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for global component {#} in sandbox {#}.",
+								link_components[index].name, component_name, sandbox_index);
+						}
 					}
 					else {
-						Stream<char> component_name = editor_state->editor_components.ComponentFromID(global_component, ECS_COMPONENT_GLOBAL);
-						ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for global component {#} in sandbox {#}.",
-							link_components[index].name, component_name, sandbox_index);
+						const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_name);
+						Reflection::CopyReflectionDataOptions copy_options;
+						copy_options.allocator = Allocator();
+						copy_options.always_allocate_for_buffers = true;
+						copy_options.deallocate_existing_buffers = true;
+						Reflection::CopyReflectionTypeInstance(
+							editor_state->editor_components.internal_manager,
+							link_type,
+							link_components[index].data,
+							link_components[index].previous_data,
+							&copy_options
+						);
 					}
-				}
-				else {
-					const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_name);
+
+					// Also copy the target data copy
+					ClearAllocator(TargetAllocator(index));
 					Reflection::CopyReflectionDataOptions copy_options;
-					copy_options.allocator = Allocator();
+					copy_options.allocator = TargetAllocator(index);
 					copy_options.always_allocate_for_buffers = true;
-					copy_options.deallocate_existing_buffers = true;
 					Reflection::CopyReflectionTypeInstance(
 						editor_state->editor_components.internal_manager,
-						link_type,
-						link_components[index].data,
-						link_components[index].previous_data,
+						target_name,
+						target_data,
+						current_data,
 						&copy_options
 					);
 				}
-
-				// Also copy the target data copy
-				ClearAllocator(TargetAllocator(index));
-				Reflection::CopyReflectionDataOptions copy_options;
-				copy_options.allocator = TargetAllocator(index);
-				copy_options.always_allocate_for_buffers = true;
-				Reflection::CopyReflectionTypeInstance(
-					editor_state->editor_components.internal_manager,
-					target_name,
-					target_data,
-					current_data,
-					&copy_options
-				);
 			}
 		}
 	}
@@ -1293,12 +1312,39 @@ static void DrawComponents(
 						}
 
 						InspectorComponentCallback(action_data);
+						// We also need to decrement the counter in order to signal that the asset load is finished
+						unsigned int linked_index = inspector_data->draw_data->FindLinkComponent(inspector_data->component_name);
+						ECS_ASSERT(linked_index != -1);
+						inspector_data->draw_data->link_components[linked_index].is_ui_change_triggered--;
 					};
 
+					struct RegisterAssetHandlerChangeData {
+						const EditorState* editor_state;
+						InspectorDrawEntityData* draw_data;
+					};
+					auto register_asset_handler_change = [](ActionData* action_data) {
+						UI_UNPACK_ACTION_DATA;
+
+						RegisterAssetHandlerChangeData* data = (RegisterAssetHandlerChangeData*)_data;
+						AssetOverrideCallbackRegistrationAdditionalInfo* additional_data = (AssetOverrideCallbackRegistrationAdditionalInfo*)_additional_data;
+						// To determine which asset handle has been changed, use the handle pointer from the additional info
+						unsigned int link_index = data->draw_data->FindLinkComponentFromPointer(data->editor_state, additional_data->handle);
+						ECS_ASSERT(link_index != -1);
+						data->draw_data->link_components[link_index].is_ui_change_triggered++;
+					};
+
+					RegisterAssetHandlerChangeData register_handler_data = { editor_state, data };
 					UIActionHandler modify_asset_handler = modify_value_handler;
 					modify_asset_handler.action = modify_asset_value;
 					// We must do this after the pointer have been bound
-					AssetOverrideBindInstanceOverrides(ui_drawer, instance, sandbox_index, modify_asset_handler, true);
+					AssetOverrideBindInstanceOverrides(
+						ui_drawer, 
+						instance, 
+						sandbox_index, 
+						modify_asset_handler, 
+						{ register_asset_handler_change, &register_handler_data, sizeof(register_handler_data) }, 
+						true
+					);
 				}
 				set_instance_inputs();
 			}

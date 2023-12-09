@@ -373,7 +373,7 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 
 						if (!CompareAABB(selection_bounds, ReverseInfiniteAABB())) {
 							Camera scene_camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-
+							
 							// If we have at least one AABB, then focus on it
 							float3 camera_position = FocusCameraOnObjectViewSpace(
 								&scene_camera,

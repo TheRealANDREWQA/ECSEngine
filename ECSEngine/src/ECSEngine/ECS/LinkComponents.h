@@ -496,7 +496,7 @@ namespace ECSEngine {
 			Functor* functor = (Functor*)user_data;
 			(*functor)(type, handle, reference_count_change);
 		};
-		ForEachAssetReferenceDifference(previous_counts, current_counts, wrapper, &functor);
+		ForEachAssetReferenceDifference(database, previous_counts, current_counts, wrapper, &functor);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

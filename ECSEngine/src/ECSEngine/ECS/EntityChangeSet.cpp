@@ -187,7 +187,7 @@ namespace ECSEngine {
 						}
 						else {
 							// Treat this as an update
-							entity_manager->ChangeEntitySharedInstanceCommit(current_entity, current_component, shared_instances[signature_index]);
+							entity_manager->ChangeEntitySharedInstanceCommit(current_entity, current_component, shared_instances[signature_index], true);
 						}
 					}
 					else {

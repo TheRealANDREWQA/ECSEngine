@@ -1155,27 +1155,43 @@ void DeleteMissingAssetSettings(const EditorState* editor_state)
 
 // ----------------------------------------------------------------------------------------------
 
-bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index, bool* was_removed)
+bool DecrementAssetReference(
+	EditorState* editor_state, 
+	unsigned int handle, 
+	ECS_ASSET_TYPE type, 
+	unsigned int sandbox_index, 
+	unsigned int decrement_count,
+	bool* was_removed
+)
 {
 	AssetDatabaseReference* database_reference = sandbox_index != -1 ? &GetSandbox(editor_state, sandbox_index)->database : nullptr;
-	return DecrementAssetReference(editor_state, handle, type, database_reference, was_removed);
+	return DecrementAssetReference(editor_state, handle, type, database_reference, decrement_count, was_removed);
 }
 
 // ----------------------------------------------------------------------------------------------
 
-bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, AssetDatabaseReference* database_reference, bool* was_removed)
+bool DecrementAssetReference(
+	EditorState* editor_state, 
+	unsigned int handle, 
+	ECS_ASSET_TYPE type, 
+	AssetDatabaseReference* database_reference, 
+	unsigned int decrement_count,
+	bool* was_removed
+)
 {
 	auto remove_from_reference = [=]() {
 		if (database_reference != nullptr) {
-			unsigned int reference_index = database_reference->GetIndex(handle, type);
-			if (reference_index != -1) {
-				database_reference->RemoveAssetThisOnly(reference_index, type);
+			for (unsigned int index = 0; index < decrement_count; index++) {
+				unsigned int reference_index = database_reference->GetIndex(handle, type);
+				if (reference_index != -1) {
+					database_reference->RemoveAssetThisOnly(reference_index, type);
+				}
 			}
 		}
 	};
 
 	unsigned int reference_count = editor_state->asset_database->GetReferenceCount(handle, type);
-	if (reference_count == 1) {
+	if (reference_count <= decrement_count) {
 		bool success = RemoveAsset(editor_state, handle, type);
 		if (success) {
 			remove_from_reference();
@@ -1186,7 +1202,9 @@ bool DecrementAssetReference(EditorState* editor_state, unsigned int handle, ECS
 		return success;
 	}
 	else {
-		editor_state->asset_database->RemoveAsset(handle, type);
+		for (unsigned int index = 0; index < decrement_count; index++) {
+			editor_state->asset_database->RemoveAsset(handle, type);
+		}
 		remove_from_reference();
 		if (was_removed != nullptr) {
 			*was_removed = false;
@@ -1919,9 +1937,11 @@ static EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 				UpdateAssetsToComponents(editor_state, update_elements);
 			}
 
+			// Re-render the sandbox, if present
 			if (data->sandbox_index != -1) {
 				// Unlock the sandbox as well
 				UnlockSandbox(editor_state, data->sandbox_index);
+				RenderSandboxViewports(editor_state, data->sandbox_index);
 			}
 
 			return false;

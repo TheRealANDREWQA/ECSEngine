@@ -6016,9 +6016,21 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							}
 						}
 						else {
-							// Enum or error.
-							// Call the default instance data
-							reflection_manager->SetInstanceFieldDefaultData(field, destination, false);
+							// Check the pointer case - pointer to user defined types
+							// Gets here
+							if (field->info.stream_type == ReflectionStreamFieldType::Pointer) {
+								// Can mempcy the pointer
+								memcpy(
+									destination,
+									source,
+									field->info.byte_size
+								);
+							}
+							else {
+								// Enum or error.
+								// Call the default instance data
+								reflection_manager->SetInstanceFieldDefaultData(field, destination, false);
+							}
 						}
 					}
 				}

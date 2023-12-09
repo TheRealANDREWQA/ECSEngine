@@ -14,12 +14,15 @@
 #include "Inspector.h"
 #include "EntitiesUI.h"
 #include "../Editor/EditorEvent.h"
+#include "../Assets/AssetManagement.h"
 
 using namespace ECSEngine;
 
 /*
 	The launching sandbox is used to inherit all the modules from that sandbox
 */
+
+#define DECREMENT_ASSET_REFERENCES_DURATION_MS 1000
 
 static unsigned int GetEntitiesUIIndexForSandbox(const EditorState* editor_state, unsigned int launching_sandbox_index) {
 	unsigned int entities_ui_index = -1;
@@ -68,6 +71,23 @@ static bool InitializePrefabSandboxInformation(OpenPrefabActionData* action_data
 		UnlockSandbox(editor_state, action_data->launching_sandbox);
 		return false;
 	}
+}
+
+struct DecrementDelayedAssetReferencesData {
+	Timer timer;
+	Stream<AssetTypedHandle> handles;
+};
+
+EDITOR_EVENT(DecrementDelayedAssetReferences) {
+	DecrementDelayedAssetReferencesData* data = (DecrementDelayedAssetReferencesData*)_data;
+	if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) >= DECREMENT_ASSET_REFERENCES_DURATION_MS) {
+		for (size_t index = 0; index < data->handles.size; index++) {
+			DecrementAssetReference(editor_state, data->handles[index].handle, data->handles[index].type, -1);
+		}
+		data->handles.Deallocate(editor_state->EditorAllocator());
+		return false;
+	}
+	return true;
 }
 
 struct DestroyAuxiliaryWindowsEventData {
@@ -153,6 +173,26 @@ EDITOR_EVENT(DestroyAuxiliaryWindowsEvent) {
 		}
 
 		// We can now safely destroy the prefab sandbox
+		// But before that an optimization: instead of removing the assets now
+		// And then having to reload them again later on in the sandboxes that are affected,
+		// We can do a trick - increment the reference count for all assets inside this sandbox
+		// And then one second later decrement the counts. In this way, all the assets will stay in
+		// Memory for the update of the assets
+		const EditorSandbox* sandbox = GetSandbox(editor_state, data->created_sandbox_index);
+		unsigned int sandbox_asset_count = sandbox->database.GetCount();
+		DecrementDelayedAssetReferencesData delayed_event_data;
+		delayed_event_data.handles.Initialize(editor_state->EditorAllocator(), sandbox_asset_count);
+		delayed_event_data.handles.size = 0;
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			ECS_ASSET_TYPE type = (ECS_ASSET_TYPE)index;
+			sandbox->database.ForEachAssetDuplicates(type, [&](unsigned int handle) {
+				delayed_event_data.handles.Add({ handle, type });
+				editor_state->asset_database->AddAsset(handle, type);
+			});
+		}
+		delayed_event_data.timer.SetNewStart();
+		EditorAddEvent(editor_state, DecrementDelayedAssetReferences, &delayed_event_data, sizeof(delayed_event_data));
+
 		DestroySandbox(editor_state, data->created_sandbox_index, false, true);
 		UnlockSandbox(editor_state, data->launched_sandbox_index);
 		return false;

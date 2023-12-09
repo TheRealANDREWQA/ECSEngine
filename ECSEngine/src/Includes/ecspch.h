@@ -78,4 +78,7 @@
 #include <ShellScalingApi.h>
 #include <dwmapi.h>
 
+#undef max
+#undef min
+
 #endif // ifdef ECSENGINE_PLATFORM_WINDOWS

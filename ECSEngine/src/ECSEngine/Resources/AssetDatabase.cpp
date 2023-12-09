@@ -1397,7 +1397,13 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------
 
 	// It will fill in the structures and perform the needed operations for the options selected in the remove_info
-	void ExecuteAssetDatabaseRemoveInfo(AssetDatabase* database, const void* metadata, ECS_ASSET_TYPE asset_type, AssetDatabaseRemoveInfo* remove_info) {
+	void ExecuteAssetDatabaseRemoveInfo(
+		AssetDatabase* database, 
+		const void* metadata, 
+		ECS_ASSET_TYPE asset_type, 
+		AssetDatabaseRemoveInfo* remove_info,
+		bool asset_will_be_removed
+	) {
 		bool has_info = remove_info != nullptr;
 
 		if (has_info) {
@@ -1408,7 +1414,7 @@ namespace ECSEngine {
 				starting_dependency_size = remove_info->dependencies->size;
 			}
 
-			if (remove_info->remove_dependencies) {
+			if (remove_info->remove_dependencies && (!remove_info->remove_dependencies_only_if_main_asset_removed || asset_will_be_removed)) {
 				bool has_storage_dependencies = remove_info->storage_dependencies != nullptr;
 				if (has_storage_dependencies) {
 					ECS_ASSERT(remove_info->storage_dependencies_allocation.capacity > 0);
@@ -1430,7 +1436,7 @@ namespace ECSEngine {
 						remove_info->storage_dependencies_allocation.size += AssetMetadataByteSize(dependencies[index].type);
 						remove_info->storage_dependencies_allocation.AssertCapacity();
 					}
-					bool evicted = database->RemoveAsset(dependencies[index].handle, dependencies[index].type, remove_info);
+					bool evicted = database->RemoveAsset(dependencies[index].handle, dependencies[index].type, 1, remove_info);
 					if (evicted && has_storage_dependencies) {
 						remove_info->storage_dependencies->AddAssert({ remove_info->storage, dependencies[index].type });
 					}
@@ -1446,16 +1452,16 @@ namespace ECSEngine {
 		AssetDatabase* database, 
 		AssetType& type, 
 		unsigned int handle, 
-		ECS_ASSET_TYPE asset_type, 
+		ECS_ASSET_TYPE asset_type,
+		unsigned int decrement_count,
 		void* storage, 
 		AssetDatabaseRemoveInfo* remove_info
 	) {
-		ExecuteAssetDatabaseRemoveInfo(database, &type[handle].value, asset_type, remove_info);
-
 		auto& metadata = type[handle];
-		metadata.reference_count--;
+		bool asset_will_be_removed = metadata.reference_count <= decrement_count;
+		ExecuteAssetDatabaseRemoveInfo(database, &type[handle].value, asset_type, remove_info, asset_will_be_removed);
 
-		if (metadata.reference_count == 0) {
+		if (asset_will_be_removed) {
 			if (storage != nullptr) {
 				memcpy(storage, &metadata.value, sizeof(metadata.value));
 			}
@@ -1464,6 +1470,9 @@ namespace ECSEngine {
 			metadata.value.DeallocateMemory(type.allocator);
 			type.RemoveSwapBack(handle);
 			return true;
+		}
+		else {
+			metadata.reference_count -= decrement_count;
 		}
 		return false;
 	}
@@ -1589,66 +1598,66 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::RemoveMesh(unsigned int handle, MeshMetadata* storage)
+	bool AssetDatabase::RemoveMesh(unsigned int handle, unsigned int decrement_count, MeshMetadata* storage)
 	{
-		return RemoveAssetImpl(this, mesh_metadata, handle, ECS_ASSET_MESH, storage, nullptr);
+		return RemoveAssetImpl(this, mesh_metadata, handle, ECS_ASSET_MESH, decrement_count, storage, nullptr);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::RemoveTexture(unsigned int handle, TextureMetadata* storage)
+	bool AssetDatabase::RemoveTexture(unsigned int handle, unsigned int decrement_count, TextureMetadata* storage)
 	{
-		return RemoveAssetImpl(this, texture_metadata, handle, ECS_ASSET_TEXTURE, storage, nullptr);
+		return RemoveAssetImpl(this, texture_metadata, handle, ECS_ASSET_TEXTURE, decrement_count, storage, nullptr);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::RemoveGPUSampler(unsigned int handle, GPUSamplerMetadata* storage)
+	bool AssetDatabase::RemoveGPUSampler(unsigned int handle, unsigned int decrement_count, GPUSamplerMetadata* storage)
 	{
-		return RemoveAssetImpl(this, gpu_sampler_metadata, handle, ECS_ASSET_GPU_SAMPLER, storage, nullptr);
+		return RemoveAssetImpl(this, gpu_sampler_metadata, handle, ECS_ASSET_GPU_SAMPLER, decrement_count, storage, nullptr);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::RemoveShader(unsigned int handle, ShaderMetadata* storage)
+	bool AssetDatabase::RemoveShader(unsigned int handle, unsigned int decrement_count, ShaderMetadata* storage)
 	{
-		return RemoveAssetImpl(this, shader_metadata, handle, ECS_ASSET_SHADER, storage, nullptr);
+		return RemoveAssetImpl(this, shader_metadata, handle, ECS_ASSET_SHADER, decrement_count, storage, nullptr);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::RemoveMaterial(unsigned int handle, AssetDatabaseRemoveInfo* remove_info)
+	bool AssetDatabase::RemoveMaterial(unsigned int handle, unsigned int decrement_count, AssetDatabaseRemoveInfo* remove_info)
 	{
 		void* storage = remove_info != nullptr ? remove_info->storage : nullptr;
-		return RemoveAssetImpl(this, material_asset, handle, ECS_ASSET_MATERIAL, storage, remove_info);
+		return RemoveAssetImpl(this, material_asset, handle, ECS_ASSET_MATERIAL, decrement_count, storage, remove_info);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::RemoveMisc(unsigned int handle, MiscAsset* storage)
+	bool AssetDatabase::RemoveMisc(unsigned int handle, unsigned int decrement_count, MiscAsset* storage)
 	{
-		return RemoveAssetImpl(this, misc_asset, handle, ECS_ASSET_MISC, storage, nullptr);
+		return RemoveAssetImpl(this, misc_asset, handle, ECS_ASSET_MISC, decrement_count, storage, nullptr);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type, AssetDatabaseRemoveInfo* remove_info)
+	bool AssetDatabase::RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type, unsigned int decrement_count, AssetDatabaseRemoveInfo* remove_info)
 	{
 		void* storage = remove_info != nullptr ? remove_info->storage : nullptr;
 
 		switch (type) {
 		case ECS_ASSET_MESH:
-			return RemoveMesh(handle, (MeshMetadata*)storage);
+			return RemoveMesh(handle, decrement_count, (MeshMetadata*)storage);
 		case ECS_ASSET_TEXTURE:
-			return RemoveTexture(handle, (TextureMetadata*)storage);
+			return RemoveTexture(handle, decrement_count, (TextureMetadata*)storage);
 		case ECS_ASSET_GPU_SAMPLER:
-			return RemoveGPUSampler(handle, (GPUSamplerMetadata*)storage);
+			return RemoveGPUSampler(handle, decrement_count, (GPUSamplerMetadata*)storage);
 		case ECS_ASSET_SHADER:
-			return RemoveShader(handle, (ShaderMetadata*)storage);
+			return RemoveShader(handle, decrement_count, (ShaderMetadata*)storage);
 		case ECS_ASSET_MATERIAL:
-			return RemoveMaterial(handle, remove_info);
+			return RemoveMaterial(handle, decrement_count, remove_info);
 		case ECS_ASSET_MISC:
-			return RemoveMisc(handle, (MiscAsset*)storage);
+			return RemoveMisc(handle, decrement_count, (MiscAsset*)storage);
 		}
 		ECS_ASSERT(false, "Invalid asset type");
 		return false;
@@ -1667,7 +1676,7 @@ namespace ECSEngine {
 
 	void AssetDatabase::RemoveAssetForced(unsigned int handle, ECS_ASSET_TYPE type, AssetDatabaseRemoveInfo* remove_info) {
 		const void* metadata = GetAssetConst(handle, type);
-		ExecuteAssetDatabaseRemoveInfo(this, metadata, type, remove_info);
+		ExecuteAssetDatabaseRemoveInfo(this, metadata, type, remove_info, true);
 		if (remove_info != nullptr && remove_info->storage != nullptr) {
 			memcpy(remove_info->storage, metadata, AssetMetadataByteSize(type));
 		}

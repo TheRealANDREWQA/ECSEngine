@@ -188,6 +188,13 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------
 
+	// It will use the value stored in this structure's marker
+	void ResizableLinearAllocator::ReturnToMarker(DebugInfo debug_info) {
+		ReturnToMarker(m_marker, m_marker_current_usage, debug_info);
+	}
+
+	// ---------------------------------------------------------------------------------
+
 	void ResizableLinearAllocator::ReturnToMarker(size_t marker, size_t usage, DebugInfo debug_info)
 	{
 		if (marker < m_initial_capacity) {
