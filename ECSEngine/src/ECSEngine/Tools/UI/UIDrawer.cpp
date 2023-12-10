@@ -5921,6 +5921,16 @@ namespace ECSEngine {
 				void* window_allocation = GetMainAllocatorBuffer(window_allocation_size);
 				data->windows = CapacityStream<UIDrawerMenuWindow>(window_allocation, 0, ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT);
 
+				if (menu_state->left_characters[menu_state->left_characters.size - 1] == '\n') {
+					// Eliminate a suffix '\n'
+					menu_state->left_characters.size--;
+				}
+				if (menu_state->right_characters.size > 0 && menu_state->right_characters.buffer != nullptr) {
+					if (menu_state->right_characters[menu_state->right_characters.size - 1] == '\n') {
+						// Eliminate a suffix '\n'					
+						menu_state->right_characters.size--;
+					}
+				}
 				InitializeMenuState(this, data, menu_state, HasFlag(configuration, UI_CONFIG_MENU_COPY_STATES));
 
 				return data;

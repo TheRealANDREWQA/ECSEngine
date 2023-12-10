@@ -8,7 +8,8 @@
 #include "../Editor/EditorScene.h"
 #include "EditorSandboxAssets.h"
 
-#define LAZY_CHANGE_MS 300
+#define LAZY_ACTIVE_IDS_MS 5000
+#define LAZY_FILE_CHANGE_MS 300
 
 ECS_INLINE static AllocatorPolymorphic PrefabAllocator(const EditorState* editor_state) {
 	return GetAllocatorPolymorphic(&editor_state->prefabs_allocator);
@@ -21,7 +22,7 @@ static Stream<wchar_t> GetPrefabAbsolutePath(const EditorState* editor_state, St
 	return storage;
 }
 
-unsigned int AddPrefabID(EditorState* editor_state, Stream<wchar_t> path, unsigned int increment_count) {
+unsigned int AddPrefabID(EditorState* editor_state, Stream<wchar_t> path) {
 	unsigned int existing_id = FindPrefabID(editor_state, path);
 	if (existing_id == -1) {
 		// We need to create a new entry
@@ -36,10 +37,9 @@ unsigned int AddPrefabID(EditorState* editor_state, Stream<wchar_t> path, unsign
 			prefab_data = ReadWholeFileBinary(absolute_path, PrefabAllocator(editor_state));
 		}
 
-		return editor_state->prefabs.Add({ 1, path, last_write, prefab_data });
+		return editor_state->prefabs.Add({ path, last_write, prefab_data });
 	}
 	else {
-		IncrementPrefabID(editor_state, existing_id, increment_count);
 		return existing_id;
 	}
 }
@@ -55,17 +55,10 @@ void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_
 
 void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int id)
 {
-	IncrementPrefabID(editor_state, id);
 	AddSandboxEntityComponent(editor_state, sandbox_index, entity, STRING(PrefabComponent));
 	PrefabComponent* component = GetSandboxEntityComponent<PrefabComponent>(editor_state, sandbox_index, entity);
 	component->id = id;
 	component->detached = false;
-}
-
-unsigned int DecrementPrefabID(EditorState* editor_state, unsigned int id, unsigned int decrement_count)
-{
-	editor_state->prefabs[id].reference_count -= decrement_count;
-	return editor_state->prefabs[id].reference_count;
 }
 
 bool ExistsPrefabFile(const EditorState* editor_state, Stream<wchar_t> path)
@@ -75,8 +68,13 @@ bool ExistsPrefabFile(const EditorState* editor_state, Stream<wchar_t> path)
 	return ExistsFileOrFolder(absolute_path);
 }
 
+bool ExistsPrefabID(const EditorState* editor_state, unsigned int id)
+{
+	return editor_state->prefabs.set.Exists(id);
+}
+
 unsigned int FindPrefabID(const EditorState* editor_state, Stream<wchar_t> path) {
-	return editor_state->prefabs.Find(PrefabInstance{ 0, path });
+	return editor_state->prefabs.Find(PrefabInstance{ path });
 }
 
 Stream<wchar_t> GetPrefabPath(const EditorState* editor_state, unsigned int id)
@@ -97,14 +95,13 @@ Stream<Entity> GetPrefabEntitiesForSandbox(
 	AllocatorPolymorphic allocator
 )
 {
-	// Allocate the maximum number of references - these are from all sandboxes
-	// But this is a safe estimate of the maximum number of entities
-	unsigned int reference_count = editor_state->prefabs[prefab_id].reference_count;
+	const EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+
+	unsigned int entity_count = active_entity_manager->GetEntityCountForComponent(PrefabComponent::ID());
 	Stream<Entity> entities;
-	entities.Initialize(allocator, reference_count);
+	entities.Initialize(allocator, entity_count);
 	entities.size = 0;
 
-	const EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
 	Component prefab_component = PrefabComponent::ID();
 	active_entity_manager->ForEachEntityComponent(prefab_component, [&](Entity entity, const void* data) {
 		const PrefabComponent* component = (const PrefabComponent*)data;
@@ -116,33 +113,56 @@ Stream<Entity> GetPrefabEntitiesForSandbox(
 	return entities;
 }
 
-unsigned int IncrementPrefabID(EditorState* editor_state, unsigned int id, unsigned int increment_count) {
-	editor_state->prefabs[id].reference_count += increment_count;
-	return editor_state->prefabs[id].reference_count;
-}
-
-unsigned int RemovePrefabID(EditorState* editor_state, Stream<wchar_t> path, unsigned int decrement_count) {
+void RemovePrefabID(EditorState* editor_state, Stream<wchar_t> path) {
 	unsigned int id = FindPrefabID(editor_state, path);
 	ECS_ASSERT(id != -1);
 	return RemovePrefabID(editor_state, id);
 }
 
-unsigned int RemovePrefabID(EditorState* editor_state, unsigned int id, unsigned int decrement_count) {
+void RemovePrefabID(EditorState* editor_state, unsigned int id) {
 	PrefabInstance& instance = editor_state->prefabs[id];
-	ECS_ASSERT(instance.reference_count >= decrement_count);
-	unsigned int reference_count = DecrementPrefabID(editor_state, id, decrement_count);
-	if (reference_count == 0) {
-		instance.path.Deallocate(PrefabAllocator(editor_state));
-		if (instance.prefab_file_data.size > 0) {
-			Deallocate(PrefabAllocator(editor_state), instance.prefab_file_data.buffer);
-		}
-		editor_state->prefabs.RemoveSwapBack(id);
+	instance.path.Deallocate(PrefabAllocator(editor_state));
+	if (instance.prefab_file_data.size > 0) {
+		Deallocate(PrefabAllocator(editor_state), instance.prefab_file_data.buffer);
 	}
-	return instance.reference_count;
+	editor_state->prefabs.RemoveSwapBack(id);
+}
+
+void TickPrefabUpdateActiveIDs(EditorState* editor_state)
+{
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_PREFAB_ACTIVE_IDS, LAZY_ACTIVE_IDS_MS)) {
+		// We need to refresh the ids in use. Those that are not referenced, need to be elimiated
+		// And add a consistency check to ensure that there is no invalid prefab id inside the entities
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 16);
+		ResizableStream<unsigned int> prefab_ids_in_use(GetAllocatorPolymorphic(&stack_allocator), 16);
+		AdditionStream<unsigned int> addition_prefab_ids_in_use = &prefab_ids_in_use;
+
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+			for (size_t viewport = 0; viewport < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport++) {
+				GetSandboxActivePrefabIDs(editor_state, sandbox_index, addition_prefab_ids_in_use, (EDITOR_SANDBOX_VIEWPORT)viewport);
+			}
+		});
+
+		for (unsigned int index = 0; index < editor_state->prefabs.set.size; index++) {
+			unsigned int id = editor_state->prefabs.GetHandleFromIndex(index);
+			bool exists_id = SearchBytes(prefab_ids_in_use.ToStream(), id) != -1;
+			if (!exists_id) {
+				RemovePrefabID(editor_state, id);
+			}
+		}
+
+		// This is an optional consistency check to ensure that no entity references an invalid prefab ID
+		for (unsigned int index = 0; index < prefab_ids_in_use.size; index++) {
+			if (!ExistsPrefabID(editor_state, prefab_ids_in_use[index])) {
+				ECS_FORMAT_TEMP_STRING(message, "Prefab ID {#} is referenced inside a sandbox but it is not registered", prefab_ids_in_use[index]);
+				EditorSetConsoleWarn(message);
+			}
+		}
+	}
 }
 
 void TickPrefabFileChange(EditorState* editor_state) {
-	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_PREFAB_FILE_CHANGE, LAZY_CHANGE_MS)) {
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_PREFAB_FILE_CHANGE, LAZY_FILE_CHANGE_MS)) {
 		// Check the prefab file time stamp, if it changed, we need to update all of its instances
 		Stream<PrefabInstance> prefabs = editor_state->prefabs.ToStream();
 		for (size_t index = 0; index < prefabs.size; index++) {
@@ -205,6 +225,7 @@ void TickPrefabFileChange(EditorState* editor_state) {
 								// Update the pointer remappings and start the compare
 								UpdateEditorScenePointerRemappings(editor_state, &new_data_manager, pointer_remapping);
 
+								// Disable changes to unique components
 								Entity prefab_entity = GetPrefabEntityFromSingle();
 								ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 								ECS_STACK_CAPACITY_STREAM(EntityChange, prefab_changes, 512);
@@ -215,7 +236,8 @@ void TickPrefabFileChange(EditorState* editor_state) {
 									prefab_entity,
 									prefab_entity,
 									&prefab_changes,
-									GetAllocatorPolymorphic(&stack_allocator)
+									GetAllocatorPolymorphic(&stack_allocator),
+									{ false, true }
 								);
 
 								stack_allocator.SetMarker();

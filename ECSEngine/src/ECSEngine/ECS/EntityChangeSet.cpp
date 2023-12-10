@@ -39,7 +39,8 @@ namespace ECSEngine {
 		Entity source_entity,
 		Entity destination_entity,
 		CapacityStream<EntityChange>* changes,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		bool2 check_components_type
 	) {
 		// Firstly, determine the components that were added/removed and then
 		// Those that have had their fields changed
@@ -64,8 +65,12 @@ namespace ECSEngine {
 				}
 			}
 		};
-		register_additions(previous_unique_signature, new_unique_signature, false);
-		register_additions(previous_shared_signature, new_shared_signature, true);
+		if (check_components_type.x) {
+			register_additions(previous_unique_signature, new_unique_signature, false);
+		}
+		if (check_components_type.y) {
+			register_additions(previous_shared_signature, new_shared_signature, true);
+		}
 
 		// Loop through the previous components and determine the removals
 		auto register_removals = [changes](ComponentSignature previous_components, ComponentSignature new_components, bool is_shared) {
@@ -78,8 +83,12 @@ namespace ECSEngine {
 				}
 			}
 		};
-		register_removals(previous_unique_signature, new_unique_signature, false);
-		register_removals(previous_shared_signature, new_shared_signature, true);
+		if (check_components_type.x) {
+			register_removals(previous_unique_signature, new_unique_signature, false);
+		}
+		if (check_components_type.y) {
+			register_removals(previous_shared_signature, new_shared_signature, true);
+		}
 
 		// Now determine the updates. We need separate algorithms for unique and shared
 		// Since the shared part is a little bit more involved
@@ -111,8 +120,12 @@ namespace ECSEngine {
 				}
 			}
 		};
-		register_updates(previous_unique_signature, new_unique_signature, false);
-		register_updates(previous_shared_signature, new_shared_signature, true);
+		if (check_components_type.x) {
+			register_updates(previous_unique_signature, new_unique_signature, false);
+		}
+		if (check_components_type.y) {
+			register_updates(previous_shared_signature, new_shared_signature, true);
+		}
 	}
 
 	void ApplyEntityChanges(

@@ -40,6 +40,8 @@ namespace ECSEngine {
 	// The allocator is needed to make the allocations for the update set
 	// The change set is generated such that the source will be updated to
 	// The destination if applying the change set
+	// The last argument can be used to disable unique or shared components
+	// Checking. In the x are the unique components, and in the y the shared componens
 	ECSENGINE_API void DetermineEntityChanges(
 		const Reflection::ReflectionManager* reflection_manager,
 		const EntityManager* source_entity_manager,
@@ -47,7 +49,8 @@ namespace ECSEngine {
 		Entity source_entity,
 		Entity destination_entity,
 		CapacityStream<EntityChange>* changes,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic allocator,
+		bool2 check_components_type = { true, true }
 	);
 
 	// Applies the modifications to all the given entities

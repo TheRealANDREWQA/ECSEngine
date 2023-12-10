@@ -63,7 +63,7 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 			ECS_ASSERT(relative_assets_path.size > 0);
 			// If the entity already has a prefab component, then change its component values
 			// Else add a new component to it
-			PrefabComponent* existing_prefab = temporary_manager.TryGetComponent<PrefabComponent>(created_entity_stream[0]);
+			PrefabComponent* existing_prefab = entity_manager->TryGetComponent<PrefabComponent>(created_entity_stream[0]);
 			if (existing_prefab == nullptr) {
 				AddPrefabComponentToEntity(editor_state, sandbox_index, created_entity_stream[0], relative_assets_path);
 			}

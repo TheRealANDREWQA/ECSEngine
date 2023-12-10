@@ -12,6 +12,7 @@ struct ProjectFile;
 #define PROJECT_CONFIGURATION_RELATIVE_PATH L"Configuration"
 #define PROJECT_BACKUP_RELATIVE_PATH L".backup"
 #define PROJECT_CRASH_RELATIVE_PATH L"Assets\\Crash"
+#define PROJECT_PREFABS_RELATIVE_PATH L"Assets\\Prefabs"
 
 #define PROJECT_CONFIGURATION_MODULES_RELATIVE_PATH L"Configuration\\Modules"
 #define PROJECT_CONFIGURATION_RUNTIME_RELATIVE_PATH L"Configuration\\Runtime"
@@ -58,6 +59,8 @@ void GetProjectBackupFolder(const EditorState* editor_state, ECSEngine::Capacity
 void GetProjectConfigurationRuntimeFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 void GetProjectCrashFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
+
+void GetProjectPrefabFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 void GetProjectRootPath(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 

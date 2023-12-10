@@ -4620,6 +4620,30 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	unsigned int EntityManager::GetEntityCountForComponent(Component component) const {
+		ComponentSignature unique_signature = { &component, 1 };
+		ComponentSignature shared_signature = {};
+		unsigned int total_count = 0;
+		ForEachArchetype({ unique_signature, shared_signature }, [&](const Archetype* archetype) {
+			total_count += archetype->GetEntityCount();
+		});
+		return total_count;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	unsigned int EntityManager::GetEntityCountForSharedComponent(Component component) const {
+		ComponentSignature unique_signature = {};
+		ComponentSignature shared_signature = { &component, 1 };
+		unsigned int total_count = 0;
+		ForEachArchetype({ unique_signature, shared_signature }, [&](const Archetype* archetype) {
+			total_count += archetype->GetEntityCount();
+			});
+		return total_count;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	Entity EntityManager::GetEntityFromIndex(unsigned int stream_index) const
 	{
 		Entity entity;

@@ -3,6 +3,7 @@
 #include "../Editor/EditorState.h"
 #include "../Sandbox/SandboxEntityOperations.h"
 #include "../Sandbox/Sandbox.h"
+#include "../Project/ProjectFolders.h"
 #include "Inspector.h"
 #include "DragTargets.h"
 
@@ -170,6 +171,32 @@ static void EntitiesWholeWindowCreateEmpty(ActionData* action_data) {
 	CreateSandboxEntity(data->editor_state, data->sandbox_index);
 }
 
+static void EntitiesWholeWindowAddPrefab(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EntitiesUIData* data = (EntitiesUIData*)_data;
+	// This lacks the extension
+	Stream<char>* prefab_relative_path = (Stream<char>*)_additional_data;
+	ECS_STACK_CAPACITY_STREAM(wchar_t, prefab_absolute_path, 512);
+	GetProjectPrefabFolder(data->editor_state, prefab_absolute_path);
+	prefab_absolute_path.Add(ECS_OS_PATH_SEPARATOR);
+	ConvertASCIIToWide(prefab_absolute_path, *prefab_relative_path);
+	prefab_absolute_path.AddStreamAssert(PREFAB_FILE_EXTENSION);
+	Entity created_entity;
+	bool success = AddPrefabToSandbox(data->editor_state, data->sandbox_index, prefab_absolute_path, &created_entity);
+	if (!success) {
+		ECS_FORMAT_TEMP_STRING(message, "Failed to instantiate prefab {#}", *prefab_relative_path);
+		EditorSetConsoleError(message);
+	}
+	else {
+		// Re-render the viewports
+		// Change the selection to this newly created entity
+		ChangeSandboxSelectedEntities(data->editor_state, data->sandbox_index, { &created_entity, 1 });
+		RenderSandboxViewports(data->editor_state, data->sandbox_index);
+		SetSandboxSceneDirty(data->editor_state, data->sandbox_index);
+	}
+}
+
 // -------------------------------------------------------------------------------------------------------------
 
 struct EntitiesCreateGlobalComponentData {
@@ -186,18 +213,83 @@ static void EntitiesCreateGlobalComponent(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
+static void GetProjectPrefabs(const EditorState* editor_state, AdditionStream<Stream<wchar_t>> project_prefabs, AllocatorPolymorphic allocator) {
+	ECS_STACK_CAPACITY_STREAM(wchar_t, prefabs_path, 512);
+	GetProjectPrefabFolder(editor_state, prefabs_path);
+
+	if (ExistsFileOrFolder(prefabs_path)) {
+		GetDirectoriesOrFilesOptions options;
+		options.relative_root = prefabs_path;
+		GetDirectoryFilesRecursive(prefabs_path, allocator, project_prefabs, options);
+
+		// Exclude all the files which don't have the prefab extension
+		for (unsigned int index = 0; index < project_prefabs.Size(); index++) {
+			if (PathExtension(project_prefabs[index], ECS_OS_PATH_SEPARATOR_REL) != PREFAB_FILE_EXTENSION) {
+				project_prefabs.RemoveSwapBack(index);
+				index--;
+			}
+		}
+	}
+}
+
 // Add a right click hoverable on the whole window
 static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_data) {
 	UIActionHandler handlers[] = {
-		{ EntitiesWholeWindowCreateEmpty, entities_data, 0 }
+		{ EntitiesWholeWindowCreateEmpty, entities_data, 0 },
+		{ nullptr, nullptr, 0 }
+	};
+	bool has_submenu[] = {
+		false,
+		true
+	};
+	UIDrawerMenuState state_submenus[] = {
+		{},
+		{}
 	};
 
+	static_assert(std::size(handlers) == std::size(has_submenu));
 	constexpr size_t handlers_size = std::size(handlers);
 
+	const size_t PREFABS_SUBMENU_INDEX = 1;
+
 	UIDrawerMenuState state;
-	state.left_characters = "Create Empty";
+	state.left_characters = "Create Empty\nPrefabs";
 	state.click_handlers = handlers;
 	state.row_count = handlers_size;
+	state.row_has_submenu = has_submenu;
+	state.submenues = state_submenus;
+
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 256, ECS_MB);
+	ResizableStream<Stream<wchar_t>> project_prefabs(GetAllocatorPolymorphic(&stack_allocator), 8);
+	GetProjectPrefabs(entities_data->editor_state, &project_prefabs, GetAllocatorPolymorphic(&stack_allocator));
+	
+	if (project_prefabs.size > 0) {
+		// We need to convert these paths into an ASCII string
+		UIDrawerMenuState* prefabs_submenu = state_submenus + PREFABS_SUBMENU_INDEX;
+		prefabs_submenu->row_count = project_prefabs.size;
+		prefabs_submenu->click_handlers = (UIActionHandler*)stack_allocator.Allocate(sizeof(UIActionHandler) * project_prefabs.size);
+		size_t total_character_count = 0;
+		for (unsigned int index = 0; index < project_prefabs.size; index++) {
+			total_character_count += project_prefabs[index].size + 1;
+		}
+		char* prefabs_submenu_string = (char*)stack_allocator.Allocate(sizeof(char) * total_character_count);
+		prefabs_submenu->left_characters = prefabs_submenu_string;
+		for (unsigned int index = 0; index < project_prefabs.size; index++) {
+			Stream<wchar_t> path_without_extension = PathNoExtension(project_prefabs[index]);
+			size_t current_string_count = path_without_extension.size;
+			ConvertWideCharsToASCII(path_without_extension.buffer, prefabs_submenu_string, current_string_count, total_character_count);
+			prefabs_submenu_string[current_string_count] = '\n';
+			total_character_count -= current_string_count + 1;
+			prefabs_submenu_string += current_string_count + 1;
+
+			// We can set the action handler here as well
+			prefabs_submenu->click_handlers[index] = { EntitiesWholeWindowAddPrefab, entities_data, 0 };
+		}
+	}
+	else {
+		// Eliminate the prefabs entry if there are no prefabs
+		state.row_count--;
+	}
 
 	ECS_STACK_CAPACITY_STREAM(Component, all_global_components, ECS_KB * 4);
 	entities_data->editor_state->editor_components.FillAllComponents(&all_global_components, ECS_COMPONENT_GLOBAL);
@@ -214,7 +306,6 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 	bool row_has_submenu[handlers_size + 1];
 	UIDrawerMenuState submenu_states[handlers_size + 1];
 
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 256, ECS_MB);
 	if (all_global_components.size > 0) {
 		UIActionHandler* global_component_handlers = (UIActionHandler*)stack_allocator.Allocate(sizeof(UIActionHandler) * all_global_components.size);
 		ResizableStream<char> global_components_string;

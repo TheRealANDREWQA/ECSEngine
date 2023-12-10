@@ -181,6 +181,13 @@ namespace ECSEngine {
 			return result;
 		}
 
+		Stream<char> GetUIDrawerMenuStateRowString(const UIDrawerMenuState* state, unsigned int row_index)
+		{
+			unsigned int offset = row_index == 0 ? 0 : state->left_row_substreams[row_index - 1] + 1;
+			unsigned int size = state->left_row_substreams[row_index] - offset;
+			return Stream<char>(state->left_characters.buffer + offset, size);
+		}
+
 		const void* UIDrawerLabelHierarchyDataAllocateLabel(
 			Stream<char>& copy_label,
 			UISystem* system,
