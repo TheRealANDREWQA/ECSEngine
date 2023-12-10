@@ -120,13 +120,15 @@ namespace ECSEngine {
 			float initial_value = slider->slider_position;
 			if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = true;
-				system->ActiveWrapCursorPosition();
-				//SetCapture((HWND)system->m_application->GetOSWindowHandle());
+				if (!slider->is_vertical) {
+					system->ActiveWrapCursorPosition();
+				}
 			}
 			else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 				slider->interpolate_value = false;
-				system->DeactiveWrapCursorPosition();
-				//ReleaseCapture();
+				if (!slider->is_vertical) {
+					system->DeactiveWrapCursorPosition();
+				}
 			}
 
 			float2 previous_mouse = system->GetPreviousMousePosition();
@@ -2660,9 +2662,8 @@ namespace ECSEngine {
 
 				struct ClickableWrapperData {
 					UIDrawerMenu* menu;
-					Action action;
-					void* data;
-					size_t data_size;
+					UIDrawerMenuState* current_state;
+					unsigned int row_index;
 				};
 
 				auto clickable_wrapper = [](ActionData* action_data) {
@@ -2671,13 +2672,16 @@ namespace ECSEngine {
 					ClickableWrapperData* data = (ClickableWrapperData*)_data;
 
 					if (IsClickableTrigger(action_data)) {
-						if (data->data_size > 0) {
+						unsigned int data_size = data->current_state->click_handlers[data->row_index].data_size;
+						if (data_size > 0) {
 							action_data->data = OffsetPointer(data, sizeof(*data));
 						}
 						else {
-							action_data->data = data->data;
+							action_data->data = data->current_state->click_handlers[data->row_index].data;
 						}
-						data->action(action_data);
+						Stream<char> row_characters = GetUIDrawerMenuStateRowString(data->current_state, data->row_index);
+						action_data->additional_data = &row_characters;
+						data->current_state->click_handlers[data->row_index].action(action_data);
 
 						UIDrawerMenuCleanupSystemHandlerData cleanup_data;
 						cleanup_data.window_count = data->menu->windows.size;
@@ -2709,14 +2713,18 @@ namespace ECSEngine {
 						}
 						else {
 							ClickableWrapperData* wrapper_data = (ClickableWrapperData*)_wrapper_data;
-							wrapper_data->action = state->click_handlers[index].action;
-							wrapper_data->data = state->click_handlers[index].data;
 							wrapper_data->menu = data->menu;
-							wrapper_data->data_size = state->click_handlers[index].data_size;
+							wrapper_data->current_state = state;
+							wrapper_data->row_index = index;
 							if (state->click_handlers[index].data_size > 0) {
 								memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), state->click_handlers[index].data, state->click_handlers[index].data_size);
 							}
-							clickable.handler = { clickable_wrapper, wrapper_data, (unsigned int)(sizeof(*wrapper_data) + wrapper_data->data_size), state->click_handlers[index].phase };
+							clickable.handler = { 
+								clickable_wrapper, 
+								wrapper_data, 
+								(unsigned int)(sizeof(*wrapper_data) + state->click_handlers[index].data_size), 
+								state->click_handlers[index].phase 
+							};
 						}
 
 						config.AddFlag(clickable);
@@ -2848,10 +2856,19 @@ namespace ECSEngine {
 
 						float2 window_size;
 						if (state->right_characters.size == 0) {
-							window_size = system->DrawToolTipSentenceSize(state->submenues[data->row_index].left_characters, &base);
+							window_size = system->DrawToolTipSentenceSize(
+								state->submenues[data->row_index].left_characters, 
+								&base,
+								state->submenues[data->row_index].row_count
+							);
 						}
 						else {
-							window_size = system->DrawToolTipSentenceWithTextToRightSize(state->submenues[data->row_index].left_characters, state->submenues[data->row_index].right_characters, &base);
+							window_size = system->DrawToolTipSentenceWithTextToRightSize(
+								state->submenues[data->row_index].left_characters, 
+								state->submenues[data->row_index].right_characters, 
+								&base,
+								state->submenues[data->row_index].row_count
+							);
 						}
 
 						window_size.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + base.next_row_offset;
@@ -3069,10 +3086,15 @@ namespace ECSEngine {
 
 					float2 window_dimensions;
 					if (menu->state.right_characters.size == 0) {
-						window_dimensions = system->DrawToolTipSentenceSize(menu->state.left_characters, &tool_tip_data);
+						window_dimensions = system->DrawToolTipSentenceSize(menu->state.left_characters, &tool_tip_data, menu->state.row_count);
 					}
 					else {
-						window_dimensions = system->DrawToolTipSentenceWithTextToRightSize(menu->state.left_characters, menu->state.right_characters, &tool_tip_data);
+						window_dimensions = system->DrawToolTipSentenceWithTextToRightSize(
+							menu->state.left_characters, 
+							menu->state.right_characters, 
+							&tool_tip_data,
+							menu->state.row_count
+						);
 					}
 					// The viewport offset must be also substracted
 					window_dimensions.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + tool_tip_data.next_row_offset + system->m_descriptors.dockspaces.viewport_padding_y;

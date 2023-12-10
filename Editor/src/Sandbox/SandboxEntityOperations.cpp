@@ -1212,6 +1212,26 @@ void GetSandboxEntitiesMidpoint(
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+void GetSandboxActivePrefabIDs(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	AdditionStream<unsigned int> prefab_ids, 
+	EDITOR_SANDBOX_VIEWPORT viewport
+)
+{
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	entity_manager->ForEachEntityComponent(PrefabComponent::ID(), [&](Entity entity, const void* component) {
+		const PrefabComponent* prefab = (const PrefabComponent*)component;
+		Stream<unsigned int> existing_ids = prefab_ids.ToStream();
+		size_t existing_index = SearchBytes(existing_ids, prefab->id);
+		if (existing_index == -1) {
+			prefab_ids.Add(prefab->id);
+		}
+	});
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 bool IsSandboxEntitySelected(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
 	return FindSandboxSelectedEntityIndex(editor_state, sandbox_index, entity) != -1;

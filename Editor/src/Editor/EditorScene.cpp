@@ -62,10 +62,12 @@ static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
 	// Returns the count of occurences for that id
 	auto update_id = [&](unsigned int old_id, unsigned int new_id) {
 		unsigned int count = 0;
-		for (unsigned int index = 0; index < prefab_component_count; index++) {
-			if (prefab_components[index]->id == old_id) {
-				prefab_components[index]->id = new_id;
-				count++;
+		if (old_id != new_id) {
+			for (unsigned int index = 0; index < prefab_component_count; index++) {
+				if (prefab_components[index]->id == old_id) {
+					prefab_components[index]->id = new_id;
+					count++;
+				}
 			}
 		}
 		return count;
@@ -75,29 +77,8 @@ static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
 		Stream<wchar_t> current_path = { (wchar_t*)ptr, path_sizes[index] };
 		ptr += sizeof(wchar_t) * path_sizes[index];
 
-		unsigned int existing_id = FindPrefabID(editor_state, current_path);
-		if (existing_id == -1) {
-			// Create this new ID and update all entries
-			// If the entry count is 0, then remove it
-			existing_id = AddPrefabID(editor_state, current_path);
-			unsigned int update_count = update_id((unsigned int)index, existing_id);
-			if (update_count == 0) {
-				// Need to remove the entry
-				RemovePrefabID(editor_state, current_path);
-			}
-			else {
-				// We need to increment this new value by the update count - 1 to maintain
-				// The proper reference count
-				IncrementPrefabID(editor_state, existing_id, update_count - 1);
-			}
-		}
-		else {
-			// In case the ID is the same, we can still use the update function
-			// With the same value since it won't change the id, but it will give
-			// Us the count necessary to update the prefab reference count
-			unsigned int update_count = update_id((unsigned int)index, existing_id);
-			IncrementPrefabID(editor_state, existing_id, update_count);
-		}
+		unsigned int existing_id = AddPrefabID(editor_state, current_path);
+		update_id((unsigned int)index, existing_id);
 	}
 
 	// Make the deallocation

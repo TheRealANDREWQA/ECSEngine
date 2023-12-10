@@ -5255,7 +5255,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		float2 UISystem::DrawToolTipSentenceSize(Stream<char> characters, UITooltipBaseData* data)
+		float2 UISystem::DrawToolTipSentenceSize(Stream<char> characters, UITooltipBaseData* data, unsigned int row_count)
 		{
 			unsigned int new_line_characters[256];
 			Stream<unsigned int> temp_stream = Stream<unsigned int>(new_line_characters, 0);
@@ -5266,6 +5266,10 @@ namespace ECSEngine {
 			}
 
 			temp_stream.Add(characters.size);
+			if (row_count != 0) {
+				temp_stream.size = row_count;
+			}
+
 			size_t word_start_index = 0;
 			size_t word_end_index = 0;
 
@@ -5290,7 +5294,7 @@ namespace ECSEngine {
 					position.x += text_span.x;
 				}
 
-				while (temp_stream[index] == temp_stream[index + 1] - 1) {
+				while (index < temp_stream.size - 1 && temp_stream[index] == temp_stream[index + 1] - 1) {
 					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 					max_bounds.x = std::max(max_bounds.x, position.x);
 					max_bounds.y = std::max(max_bounds.y, position.y);
@@ -5316,7 +5320,8 @@ namespace ECSEngine {
 		float2 UISystem::DrawToolTipSentenceWithTextToRightSize(
 			Stream<char> aligned_to_left_text,
 			Stream<char> aligned_to_right_text,
-			UITooltipBaseData* data
+			UITooltipBaseData* data,
+			unsigned int row_count
 		)
 		{
 			ConfigureToolTipBase(data);
@@ -5331,6 +5336,11 @@ namespace ECSEngine {
 
 			left_new_lines.Add(aligned_to_left_text.size);
 			right_new_lines.Add(aligned_to_right_text.size);
+
+			if (row_count != 0) {
+				left_new_lines.size = row_count;
+				right_new_lines.size = row_count;
+			}
 
 			ECS_ASSERT(left_new_lines.size == right_new_lines.size);
 

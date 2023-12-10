@@ -289,6 +289,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickEditorGeneralInput(editor_state);
 		TickSandboxHIDInputs(editor_state);
 		TickPrefabFileChange(editor_state);
+		TickPrefabUpdateActiveIDs(editor_state);
 	}
 }
 

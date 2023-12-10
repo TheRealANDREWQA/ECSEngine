@@ -869,16 +869,22 @@ namespace ECSEngine {
 				UITooltipBaseData* data
 			);
 
+			// If the row_count is left at 0, then it will parse the entire
+			// String. Else it will stop at the row given by that parameter
 			float2 DrawToolTipSentenceSize(
 				Stream<char> characters,
-				UITooltipBaseData* data
+				UITooltipBaseData* data,
+				unsigned int row_count = 0
 			);
 			
-			//aligned to left and right text characters pointers should have different rows separated by \n
+			// Aligned to left and right text characters pointers should have different rows separated by \n
+			// If the row_count is left at 0, then it will parse the entire
+			// String. Else it will stop at the row given by that parameter
 			float2 DrawToolTipSentenceWithTextToRightSize(
 				Stream<char> aligned_to_left_text,
 				Stream<char> aligned_to_right_text,
-				UITooltipBaseData* data
+				UITooltipBaseData* data,
+				unsigned int row_count = 0
 			);
 
 			bool ExistsWindowResource(unsigned int window_index, Stream<char> name) const;

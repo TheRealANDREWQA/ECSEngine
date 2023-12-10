@@ -1353,6 +1353,12 @@ namespace ECSEngine {
 			return m_entity_pool->GetCount();
 		}
 
+		// Returns the number of entities that have this component
+		unsigned int GetEntityCountForComponent(Component component) const;
+
+		// Returns the number of entities that have this shared component
+		unsigned int GetEntityCountForSharedComponent(Component component) const;
+
 		// Returns the entity which is alive at the indicated stream index, or an invalid entity if it doesn't exist
 		Entity GetEntityFromIndex(unsigned int stream_index) const;
 

@@ -15,7 +15,8 @@ const wchar_t* PROJECT_DIRECTORIES[] = {
 	PROJECT_CONFIGURATION_MODULES_RELATIVE_PATH,
 	PROJECT_CONFIGURATION_RUNTIME_RELATIVE_PATH,
 	PROJECT_BACKUP_RELATIVE_PATH,
-	PROJECT_CRASH_RELATIVE_PATH
+	PROJECT_CRASH_RELATIVE_PATH,
+	PROJECT_PREFABS_RELATIVE_PATH
 };
 
 size_t PROJECT_DIRECTORIES_SIZE()
@@ -129,9 +130,15 @@ void GetProjectConfigurationRuntimeFolder(const EditorState* editor_state, Capac
 
 // -------------------------------------------------------------------------------------------------------------
 
-void GetProjectCrashFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path)
+void GetProjectCrashFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path)
 {
 	GetProjectRootPath(editor_state, path, PROJECT_CRASH_RELATIVE_PATH);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+void GetProjectPrefabFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path) {
+	GetProjectRootPath(editor_state, path, PROJECT_PREFABS_RELATIVE_PATH);
 }
 
 // -------------------------------------------------------------------------------------------------------------

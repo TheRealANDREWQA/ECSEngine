@@ -773,6 +773,8 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	// Unload the sandbox assets
 	UnloadSandboxAssets(editor_state, sandbox_index);
 
+	// We also need to remove the prefab component references
+
 	// We can also clear the modules in use - they use allocations from the global sandbox
 	// And that will get cleared at the end. But since they might do something unrelated
 	// To allocations in the future, let's call it

@@ -528,6 +528,8 @@ namespace ECSEngine {
 		struct UIDrawerMenuState {
 			//  ------------------------------- User modifiable -------------------------
 			Stream<char> left_characters;
+			// The click handlers receive in the additional data the Stream<cbar>
+			// With the row's characters
 			UIActionHandler* click_handlers;
 			unsigned short row_count;
 
@@ -547,6 +549,8 @@ namespace ECSEngine {
 			unsigned short submenu_index;
 			// ----------------------------------- Reserved -----------------------------
 		};
+
+		ECSENGINE_API Stream<char> GetUIDrawerMenuStateRowString(const UIDrawerMenuState* state, unsigned int row_index);
 
 		struct UIDrawerMenu {
 			ECS_INLINE bool IsTheSameData(const UIDrawerMenu* other) const {
