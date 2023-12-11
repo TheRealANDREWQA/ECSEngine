@@ -1100,8 +1100,9 @@ namespace ECSEngine {
 
 				system->RemoveFrameHandler(RightClickMenuReleaseResource, data);
 
-				// Deallocate the menu resource name - it was previously allocated
+				// Deallocate the menu resource name and the parent window name - it was previously allocated
 				data->menu_resource_name.Deallocate(system->Allocator());
+				data->parent_window_name.Deallocate(system->Allocator());
 			}
 		}
 
@@ -2664,6 +2665,7 @@ namespace ECSEngine {
 					UIDrawerMenu* menu;
 					UIDrawerMenuState* current_state;
 					unsigned int row_index;
+					Stream<char> parent_window_name;
 				};
 
 				auto clickable_wrapper = [](ActionData* action_data) {
@@ -2681,6 +2683,12 @@ namespace ECSEngine {
 						}
 						Stream<char> row_characters = GetUIDrawerMenuStateRowString(data->current_state, data->row_index);
 						action_data->additional_data = &row_characters;
+
+						// Set the focused window to that of the parent, in case it is still there
+						// We must do this before the click handler in order to not override a possible
+						// Active window set from inside it
+						system->SetActiveWindow(data->parent_window_name);
+
 						data->current_state->click_handlers[data->row_index].action(action_data);
 
 						UIDrawerMenuCleanupSystemHandlerData cleanup_data;
@@ -2716,6 +2724,7 @@ namespace ECSEngine {
 							wrapper_data->menu = data->menu;
 							wrapper_data->current_state = state;
 							wrapper_data->row_index = index;
+							wrapper_data->parent_window_name = data->parent_window_name;
 							if (state->click_handlers[index].data_size > 0) {
 								memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), state->click_handlers[index].data, state->click_handlers[index].data_size);
 							}
@@ -2889,6 +2898,8 @@ namespace ECSEngine {
 							submenu_descriptor.initial_position_y = position.y - window_size.y;
 						}
 
+						// This window doesn't need the destroy callback since it will inherit the allocation
+						// From the first menu window spawned
 						UIDrawerMenuDrawWindowData window_data;
 						memcpy(&window_data, &data->draw_data, sizeof(window_data));
 						unsigned char last_position = window_data.GetLastPosition();
@@ -3103,8 +3114,16 @@ namespace ECSEngine {
 					float arrow_span = system->GetTextSpan(">", system->NormalizeHorizontalToWindowDimensions(system->m_descriptors.font.size), system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
 					window_dimensions.x += (menu->state.row_has_submenu != nullptr) * (arrow_span + system->m_descriptors.element_descriptor.label_padd.x);
 
+					auto destroy_callback = [](ActionData* action_data) {
+						UI_UNPACK_ACTION_DATA;
+
+						UIDrawerMenuDrawWindowData* window_data = (UIDrawerMenuDrawWindowData*)_additional_data;
+						window_data->parent_window_name.Deallocate(system->Allocator());
+					};
+
 					UIWindowDescriptor window_descriptor;
 					window_descriptor.draw = MenuDraw;
+					window_descriptor.destroy_action = destroy_callback;
 					window_descriptor.initial_position_x = position.x;
 					window_descriptor.initial_size_x = window_dimensions.x;
 					if (position.y + scale.y + window_dimensions.y + ECS_TOOLS_UI_MENU_PADDING > 1.0f) {
@@ -3117,6 +3136,7 @@ namespace ECSEngine {
 					UIDrawerMenuDrawWindowData window_data;
 					window_data.menu = menu;
 					window_data.submenu_offsets[0] = -1;
+					window_data.parent_window_name = Stream<char>(data->parent_window_name, data->parent_window_name_size).Copy(system->Allocator());
 
 					window_descriptor.initial_size_y = window_dimensions.y;
 					window_descriptor.window_name = menu->state.left_characters;
@@ -3201,6 +3221,11 @@ namespace ECSEngine {
 				general_data->initialize_from_right_click = true;
 				general_data->menu = (UIDrawerMenu*)drawer.GetResource(data->name);
 				general_data->is_opened_when_clicked = false;
+				Stream<char> window_name = system->GetWindowName(window_index);
+				if (window_name.size <= sizeof(general_data->parent_window_name)) {
+					window_name.CopyTo(general_data->parent_window_name);
+					general_data->parent_window_name_size = window_name.size;
+				}
 
 				action_data->data = general_data;
 				action_data->position.x = mouse_position.x;
@@ -3212,7 +3237,7 @@ namespace ECSEngine {
 
 				// Allocate the menu resource name - in order to make sure that it is stable
 				release_data.menu_resource_name = data->name.Copy(system->Allocator());
-				release_data.parent_window_name = system->m_windows[data->window_index].name;
+				release_data.parent_window_name = system->m_windows[data->window_index].name.Copy(system->Allocator());
 				release_data.menu_window_name = data->state.left_characters;
 
 				system->AddFrameHandler({ RightClickMenuReleaseResource, &release_data, sizeof(release_data) });

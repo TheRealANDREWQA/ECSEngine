@@ -111,7 +111,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 
 	InspectorIconNameAndPath(drawer, data->path);
 	InspectorDrawFileTimes(drawer, data->path);
-	InspectorOpenAndShowButton(drawer, data->path);
+	InspectorDefaultInteractButtons(editor_state, drawer, data->path);
 	drawer->CrossLine();
 
 	// Convert the absolute separator into relative

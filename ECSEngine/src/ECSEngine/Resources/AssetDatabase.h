@@ -394,6 +394,11 @@ namespace ECSEngine {
 			bool default_initialize_if_missing = false
 		) const;
 
+		// Changes the name of the asset and also modifies the metadata file if present
+		// Returns true if it succeeded, else false. It can return false if there is an asset
+		// Already with that name or the metadata file renaming failed
+		bool RenameAsset(unsigned int handle, ECS_ASSET_TYPE type, Stream<char> new_name);
+
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
 		bool RemoveMesh(unsigned int handle, unsigned int decrement_count = 1, MeshMetadata* storage = nullptr);

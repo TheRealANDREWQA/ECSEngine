@@ -331,7 +331,7 @@ namespace ECSEngine {
 		if (ExistsFileOrFolder(save_data->file)) {
 			renamed_file.CopyOther(PathFilename(save_data->file));
 			renamed_file.AddStream(L".temp");
-			if (!RenameFolderOrFile(save_data->file, renamed_file)) {
+			if (!RenameFile(save_data->file, renamed_file)) {
 				// If we fail, then return now.
 				return false;
 			}
@@ -353,14 +353,14 @@ namespace ECSEngine {
 						RemoveFile(original_file);
 
 						// Try to rename the previous file to this name
-						RenameFolderOrFile(renamed_file, original_file_filename);
+						RenameFile(renamed_file, original_file_filename);
 					}
 					else {
 						RemoveFile(renamed_file);
 					}
 				}
 				else {
-					RenameFolderOrFile(renamed_file, original_file_filename);
+					RenameFile(renamed_file, original_file_filename);
 				}
 			}
 

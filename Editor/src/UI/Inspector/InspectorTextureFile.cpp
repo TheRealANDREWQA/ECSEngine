@@ -46,7 +46,7 @@ void InspectorDrawTextureFile(EditorState* editor_state, unsigned int inspector_
 	InspectorIcon(drawer, path);
 	InspectorIconNameAndPath(drawer, path);
 	InspectorDrawFileTimes(drawer, path);
-	InspectorOpenAndShowButton(drawer, path);
+	InspectorDefaultInteractButtons(editor_state, drawer, path);
 	drawer->CrossLine();
 
 	Stream<wchar_t> relative_path = GetProjectAssetRelativePath(editor_state, path);

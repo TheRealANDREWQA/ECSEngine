@@ -238,6 +238,7 @@
     <ClInclude Include="src\UI\HubData.h" />
     <ClInclude Include="src\UI\Inspector.h" />
     <ClInclude Include="src\UI\InspectorData.h" />
+    <ClInclude Include="src\UI\Inspector\InspectorAssetUtilities.h" />
     <ClInclude Include="src\UI\Inspector\InspectorGPUSamplerFile.h" />
     <ClInclude Include="src\UI\Inspector\InspectorMaterialFile.h" />
     <ClInclude Include="src\UI\Inspector\InspectorMeshFile.h" />
@@ -317,6 +318,7 @@
     <ClCompile Include="src\UI\Game.cpp" />
     <ClCompile Include="src\UI\Hub.cpp" />
     <ClCompile Include="src\UI\Inspector.cpp" />
+    <ClCompile Include="src\UI\Inspector\InspectorAssetUtilities.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorEntity.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorGPUSamplerFile.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorMaterialFile.cpp" />

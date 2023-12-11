@@ -55,15 +55,9 @@ void ChooseDirectoryOrFileName(void* window_data, UIDrawerDescriptor* drawer_des
 // The callback can be omitted by making it nullptr
 unsigned int CreateChooseDirectoryOrFileNameDockspace(UISystem* system, ChooseDirectoryOrFileNameData data);
 
-unsigned int CreateRenameFileWizard(Stream<wchar_t> path, UISystem* system);
+unsigned int CreateRenameFileWizard(Stream<wchar_t> path, UISystem* system, UIActionHandler user_callback = {});
 
-// Data must be a Stream<wchar_t>*
-void CreateRenameFileWizardAction(ActionData* action_data);
-
-unsigned int CreateRenameFolderWizard(Stream<wchar_t> path, UISystem* system);
-
-// Data must be a Stream<wchar_t>*
-void CreateRenameFolderWizardAction(ActionData* action_data);
+unsigned int CreateRenameFolderWizard(Stream<wchar_t> path, UISystem* system, UIActionHandler user_callback = {});
 
 // Returns -1 if no window which targets a sandbox is selected
 // Else the sandbox index that is being targeted

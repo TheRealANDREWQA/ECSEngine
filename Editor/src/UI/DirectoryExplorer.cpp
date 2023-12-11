@@ -161,7 +161,7 @@ void DirectoryExplorerRenameFolderCallback(ActionData* action_data) {
 	unsigned int directory_explorer_index = system->GetWindowFromName(DIRECTORY_EXPLORER_WINDOW_NAME);
 	system->RemoveWindowMemoryResource(directory_explorer_index, choose_data->wide);
 
-	OS::RenameFolderOrFileWithError(*data->current_path, *choose_data->wide, system);
+	OS::RenameFolderWithError(*data->current_path, *choose_data->wide, system);
 
 	data->current_path->CopyOther(*data->current_path);
 	data->current_path->AddStream(*choose_data->wide);

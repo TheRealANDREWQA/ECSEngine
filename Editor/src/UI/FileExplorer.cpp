@@ -207,6 +207,11 @@ void ChangeFileExplorerDirectory(EditorState* editor_state, Stream<wchar_t> path
 
 void ChangeFileExplorerFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
 	FileExplorerData* data = editor_state->file_explorer_data;
+	// If the path's parent is different from the current path, we need to change the directory as well
+	Stream<wchar_t> path_parent = PathParent(path);
+	if (path_parent != data->current_directory) {
+		ChangeFileExplorerDirectory(editor_state, path_parent);
+	}
 	FileExplorerResetSelectedFiles(data);
 	FileExplorerAllocateSelectedFile(data, path);
 
@@ -2477,7 +2482,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 			FILTER_FUNCTORS[data->filter_stream.size > 0](&action_data);
 
-			if (is_valid && extension.size > 0) {
+			if (is_valid) {
 				bool is_selected = FileExplorerIsElementSelected(data, stream_path);
 				unsigned char color_alpha = FileExplorerIsElementCut(data, stream_path) ? COLOR_CUT_ALPHA : 255;
 

@@ -168,7 +168,11 @@ static void EntitiesWholeWindowCreateEmpty(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EntitiesUIData* data = (EntitiesUIData*)_data;
-	CreateSandboxEntity(data->editor_state, data->sandbox_index);
+	Entity created_entity = CreateSandboxEntity(data->editor_state, data->sandbox_index);
+	ChangeSandboxSelectedEntities(data->editor_state, data->sandbox_index, { &created_entity, 1 });
+	// We also need to manually change the inspector to this entity since
+	// The backend calls will not trigger the selectable UI callback
+	ChangeInspectorToEntity(data->editor_state, data->sandbox_index, created_entity);
 }
 
 static void EntitiesWholeWindowAddPrefab(ActionData* action_data) {
@@ -192,6 +196,9 @@ static void EntitiesWholeWindowAddPrefab(ActionData* action_data) {
 		// Re-render the viewports
 		// Change the selection to this newly created entity
 		ChangeSandboxSelectedEntities(data->editor_state, data->sandbox_index, { &created_entity, 1 });
+		// We also need to manually change the inspector to this entity since
+		// The backend calls will not trigger the selectable UI callback
+		ChangeInspectorToEntity(data->editor_state, data->sandbox_index, created_entity);
 		RenderSandboxViewports(data->editor_state, data->sandbox_index);
 		SetSandboxSceneDirty(data->editor_state, data->sandbox_index);
 	}

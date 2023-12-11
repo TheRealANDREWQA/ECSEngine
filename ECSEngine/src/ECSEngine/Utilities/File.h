@@ -241,10 +241,16 @@ namespace ECSEngine {
 	ECSENGINE_API bool FolderCut(Stream<wchar_t> from, Stream<wchar_t> to);
 
 	// New name must only be the directory name, not the fully qualified path
-	ECSENGINE_API bool RenameFolderOrFile(Stream<wchar_t> path, Stream<wchar_t> new_name);
+	ECSENGINE_API bool RenameFolder(Stream<wchar_t> path, Stream<wchar_t> new_name);
+
+	// New name must only be the filename, not the fully qualified path
+	ECSENGINE_API bool RenameFile(Stream<wchar_t> path, Stream<wchar_t> new_name);
 	
 	// This version takes the name as an absolute path
 	ECSENGINE_API bool RenameFileAbsolute(Stream<wchar_t> path, Stream<wchar_t> new_absolute_path);
+
+	// New name must only be the directory/filename name, not the fully qualified path
+	ECSENGINE_API bool RenameFileOrFolder(Stream<wchar_t> path, Stream<wchar_t> new_name);
 
 	ECSENGINE_API bool ResizeFile(Stream<wchar_t> file, int size);
 

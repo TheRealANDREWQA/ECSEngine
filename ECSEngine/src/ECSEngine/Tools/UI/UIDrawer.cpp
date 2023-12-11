@@ -71,11 +71,6 @@ namespace ECSEngine {
 				}
 			}
 		}
-		
-		ECS_INLINE static AllocatorPolymorphic TemporaryAllocator(const UIDrawer* drawer, ECS_UI_DRAW_PHASE phase) {
-			return drawer->record_snapshot_runnables ? drawer->SnapshotRunnableAllocator() : 
-				GetAllocatorPolymorphic(drawer->system->TemporaryAllocator(phase));
-		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -5684,6 +5679,11 @@ namespace ECSEngine {
 					UIDrawerMenuGeneralData general_data;
 					general_data.menu = data;
 					general_data.menu_initializer_index = 255;
+					Stream<char> parent_window_name = system->GetWindowName(window_index);
+					if (parent_window_name.size <= sizeof(general_data.parent_window_name)) {
+						parent_window_name.CopyTo(general_data.parent_window_name);
+						general_data.parent_window_name_size = parent_window_name.size;
+					}
 
 					AddDefaultHoverable(configuration, position, scale, HandleColor(configuration, config));
 					AddGeneral(configuration, position, scale, { MenuGeneral, &general_data, sizeof(general_data), ECS_UI_DRAW_SYSTEM });
@@ -12515,7 +12515,7 @@ namespace ECSEngine {
 						};
 
 						UIDrawerFilesystemHierarchySelectableData clickable_data = { data };
-						clickable_data.label = label_stream.Copy(TemporaryAllocator(this, selectable_callback_phase));
+						clickable_data.label = label_stream.Copy(TemporaryAllocator(selectable_callback_phase));
 						AddClickable(
 							configuration, 
 							initial_label_position, 
@@ -12596,7 +12596,7 @@ namespace ECSEngine {
 
 								RightClickWrapperData right_click;
 								right_click.data = data;
-								right_click.label = label_stream.Copy(TemporaryAllocator(this, right_click_phase));
+								right_click.label = label_stream.Copy(TemporaryAllocator(right_click_phase));
 								AddClickable(
 									configuration,
 									initial_label_position,
@@ -18026,7 +18026,7 @@ namespace ECSEngine {
 				
 				if (first_right_element != -1) {
 					if (middle_elements_size > 0.0f) {
-						indentations[first_right_element] = right_alignment - middle_alignment_space;
+						indentations[first_right_element] = middle_alignment_space;
 					}
 					else {
 						indentations[first_right_element] = right_alignment - left_elements_size;

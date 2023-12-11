@@ -268,6 +268,7 @@
     <ClInclude Include="src\ECSEngine\Profiling\PhysicalMemoryProfilerGlobal.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\ECS\EntityChangeSet.h" />
+    <ClInclude Include="src\Includes\ECSEngineResourceTypes.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

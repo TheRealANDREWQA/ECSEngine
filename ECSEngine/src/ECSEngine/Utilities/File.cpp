@@ -572,6 +572,38 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	bool RenameFolder(Stream<wchar_t> path, Stream<wchar_t> new_name) {
+		NULL_TERMINATE_WIDE(path);
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, new_name_stream, 512);
+		Stream<wchar_t> folder_parent = PathParentBoth(path);
+		new_name_stream.CopyOther(folder_parent);
+		new_name_stream.Add(ECS_OS_PATH_SEPARATOR);
+		new_name_stream.AddStream(new_name);
+		new_name_stream.AddAssert(L'\0');
+
+		return _wrename(path.buffer, new_name_stream.buffer) == 0;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool RenameFile(Stream<wchar_t> path, Stream<wchar_t> new_name) {
+		NULL_TERMINATE_WIDE(path);
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, new_name_stream, 512);
+		Stream<wchar_t> folder_parent = PathParentBoth(path);
+		new_name_stream.CopyOther(folder_parent);
+		new_name_stream.Add(ECS_OS_PATH_SEPARATOR);
+		new_name_stream.AddStream(new_name);
+		Stream<wchar_t> extension = PathExtensionBoth(path);
+		new_name_stream.AddStreamAssert(extension);
+		new_name_stream.AddAssert(L'\0');
+
+		return _wrename(path.buffer, new_name_stream.buffer) == 0;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	bool RenameFileAbsolute(Stream<wchar_t> path, Stream<wchar_t> new_absolute_path)
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_path, 512);
@@ -587,6 +619,18 @@ namespace ECSEngine {
 		NULL_TERMINATE_WIDE(new_absolute_path);
 
 		return _wrename(path.buffer, new_absolute_path.buffer) == 0;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool RenameFileOrFolder(Stream<wchar_t> path, Stream<wchar_t> new_name)
+	{
+		if (IsFolder(path)) {
+			return RenameFolder(path, new_name);
+		}
+		else {
+			return RenameFile(path, new_name);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------

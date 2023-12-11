@@ -3,7 +3,7 @@
 #include "ECSEngineReflectionMacros.h"
 #include "ECSEngineBasics.h"
 #include "ECSEngineAssetMacros.h"
-#include "ECSEngineResources.h"
+#include "ECSEngineResourceTypes.h"
 
 #define GRAPHICS_COMPONENT_BASE ECS_CONSTANT_REFLECT(100)
 

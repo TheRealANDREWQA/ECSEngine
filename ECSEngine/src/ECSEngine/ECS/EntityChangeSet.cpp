@@ -233,7 +233,7 @@ namespace ECSEngine {
 
 			// Perform the batch additions and removals
 			if (components_to_be_added.size > 0) {
-				entity_manager->AddComponentCommit(
+				entity_manager->AddComponentsCommit(
 					current_entity,
 					{ components_to_be_added.buffer, (unsigned char)components_to_be_added.size },
 					components_to_be_added_data.buffer
@@ -241,7 +241,7 @@ namespace ECSEngine {
 				components_to_be_added.size = 0;
 			}
 			if (shared_components_to_be_added.size > 0) {
-				entity_manager->AddSharedComponentCommit(
+				entity_manager->AddSharedComponentsCommit(
 					current_entity,
 					{ shared_components_to_be_added.buffer, shared_instances_to_be_added.buffer, (unsigned char)shared_components_to_be_added.size }
 				);

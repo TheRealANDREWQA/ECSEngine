@@ -92,6 +92,10 @@ void GetInspectorsForMatchingSandbox(const EditorState* editor_state, unsigned i
 
 InspectorDrawFunction GetInspectorDrawFunction(const EditorState* editor_state, unsigned int inspector_index);
 
+void* GetInspectorDrawFunctionData(EditorState* editor_state, unsigned int inspector_index);
+
+const void* GetInspectorDrawFunctionData(const EditorState* editor_state, unsigned int inspector_index);
+
 void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices);
 
 // It will resize the round robin index - can be used both when removing or adding

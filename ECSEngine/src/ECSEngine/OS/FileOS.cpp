@@ -828,8 +828,8 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system) {
-			bool success = RenameFolderOrFile(path, new_name);
+		void RenameFolderWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system) {
+			bool success = RenameFolder(path, new_name);
 			if (!success) {
 				char temp_characters[512];
 				size_t written_characters = FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
@@ -839,12 +839,32 @@ namespace ECSEngine {
 		}
 
 		void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name) {
-			bool success = RenameFolderOrFile(path, new_name);
+			bool success = RenameFolder(path, new_name);
 			if (!success) {
 				char temp_characters[512];
 				size_t written_characters = FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
 				ECS_ASSERT(written_characters < 512);
 				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+#define RENAME_FILE_ERROR_STRING "Renaming file {#} to failed. Incorrect path, invalid new name or access denied."
+
+		void RenameFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system) {
+			bool success = RenameFile(path, new_name);
+			if (!success) {
+				ECS_FORMAT_TEMP_STRING(message, RENAME_FILE_ERROR_STRING, path, new_name);
+				CreateErrorMessageWindow(system, message);
+			}
+		}
+
+		void RenameFileOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name) {
+			bool success = RenameFile(path, new_name);
+			if (!success) {
+				ECS_FORMAT_TEMP_STRING(message, RENAME_FILE_ERROR_STRING, path, new_name);
+				GetConsole()->Error(message);
 			}
 		}
 

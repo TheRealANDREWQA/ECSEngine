@@ -3622,6 +3622,12 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			ECS_INLINE AllocatorPolymorphic TemporaryAllocator(ECS_UI_DRAW_PHASE phase) {
+				return record_snapshot_runnables ? SnapshotRunnableAllocator() : GetAllocatorPolymorphic(system->TemporaryAllocator(phase));
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// Returns memory from the memory handler of the callbacks - it is temporary (valid for this drawer only)
 			void* GetHandlerBuffer(size_t size, ECS_UI_DRAW_PHASE phase);
 

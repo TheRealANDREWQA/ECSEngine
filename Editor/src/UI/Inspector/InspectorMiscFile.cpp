@@ -38,7 +38,7 @@ void InspectorDrawMiscFile(EditorState* editor_state, unsigned int inspector_ind
 
 	InspectorIconNameAndPath(drawer, path);
 	InspectorDrawFileTimes(drawer, path);
-	InspectorOpenAndShowButton(drawer, path);
+	InspectorDefaultInteractButtons(editor_state, drawer, path);
 	drawer->CrossLine();
 
 	// Draw the settings

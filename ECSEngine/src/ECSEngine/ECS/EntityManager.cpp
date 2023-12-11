@@ -2223,7 +2223,7 @@ namespace ECSEngine {
 	// Forward towards the multiple entities with size 1
 	void EntityManager::AddComponentCommit(Entity entity, Component component, const void* data)
 	{
-		AddComponentCommit({ &entity, 1 }, component, data);
+		AddComponentsCommit(entity, { &component, 1 }, (const void**)&data);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2231,59 +2231,46 @@ namespace ECSEngine {
 	// Forward towards the multiple entities with size 1
 	void EntityManager::AddComponent(Entity entity, Component component, const void* data, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
-		AddComponent({ &entity, 1 }, component, data, parameters, debug_info);
+		AddComponent({ &entity, 1 }, component, data, true, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	// Forward towards the multiple entities with size 1
-	void EntityManager::AddComponentCommit(Entity entity, ComponentSignature components)
+	void EntityManager::AddComponentsCommit(Entity entity, ComponentSignature components)
 	{
-		AddComponentCommit({ &entity, 1 }, components, true);
+		AddComponentsCommit({ &entity, 1 }, components, true);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	// Forward towards the multiple entities with size 1
-	void EntityManager::AddComponent(Entity entity, ComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info)
+	void EntityManager::AddComponents(Entity entity, ComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
-		AddComponent({ &entity, 1 }, components, true, parameters, debug_info);
+		AddComponents({ &entity, 1 }, components, true, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	// Forward towards the multiple entities with size 1
-	void EntityManager::AddComponentCommit(Entity entity, ComponentSignature components, const void** data)
+	void EntityManager::AddComponentsCommit(Entity entity, ComponentSignature components, const void** data)
 	{
-		AddComponentCommit({ &entity, 1 }, components, data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_BY_ENTITY, true);
+		AddComponentsCommit({ &entity, 1 }, components, data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_BY_ENTITY, true);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	// Forward towards the multiple entities with size 1
-	void EntityManager::AddComponent(Entity entity, ComponentSignature components, const void** data, DeferredActionParameters parameters, DebugInfo debug_info)
+	void EntityManager::AddComponents(Entity entity, ComponentSignature components, const void** data, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
-		AddComponent({ &entity, 1 }, components, data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_BY_ENTITY, true, parameters, debug_info);
+		AddComponents({ &entity, 1 }, components, data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_BY_ENTITY, true, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::AddComponentCommit(Stream<Entity> entities, Component component, bool entities_belong_to_the_same_base_archetype)
 	{
-		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
-			DeferredAddComponentEntities commit_data;
-			commit_data.components = { &component, (unsigned char)1 };
-			commit_data.data = nullptr;
-			commit_data.entities = entities;
-			CommitEntityAddComponent<false>(entity_manager, &commit_data, nullptr);
-		};
-
-		if (!entities_belong_to_the_same_base_archetype) {
-			ApplySortingEntityFunctor(entities, false, functor);
-		}
-		else {
-			functor(this, entities);
-		}
+		AddComponentsCommit(entities, { &component, 1 }, entities_belong_to_the_same_base_archetype);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2311,19 +2298,7 @@ namespace ECSEngine {
 
 	void EntityManager::AddComponentCommit(Stream<Entity> entities, Component component, const void* data, bool entities_belong_to_the_same_base_archetype)
 	{
-		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
-			DeferredAddComponentEntities commit_data;
-			commit_data.components = { &component, (unsigned char)1 };
-			commit_data.data = &data;
-			commit_data.entities = entities;
-			CommitEntityAddComponentSplatted(this, &commit_data, nullptr);
-		};
-		if (!entities_belong_to_the_same_base_archetype) {
-			ApplySortingEntityFunctor(entities, false, functor);
-		}
-		else {
-			functor(this, entities);
-		}
+		AddComponentsCommit(entities, { &component, 1 }, &data, ECS_ENTITY_MANAGER_COPY_ENTITY_DATA_SPLAT, entities_belong_to_the_same_base_archetype);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2350,7 +2325,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponentCommit(Stream<Entity> entities, ComponentSignature components, bool entities_belong_to_the_same_base_archetype)
+	void EntityManager::AddComponentsCommit(Stream<Entity> entities, ComponentSignature components, bool entities_belong_to_the_same_base_archetype)
 	{
 		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
 			DeferredAddComponentEntities commit_data;
@@ -2369,7 +2344,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponent(
+	void EntityManager::AddComponents(
 		Stream<Entity> entities, 
 		ComponentSignature components, 
 		bool entities_belong_to_the_same_base_archetype, 
@@ -2390,7 +2365,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponentCommit(
+	void EntityManager::AddComponentsCommit(
 		Stream<Entity> entities, 
 		ComponentSignature components, 
 		const void** data, 
@@ -2437,7 +2412,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddComponent(
+	void EntityManager::AddComponents(
 		Stream<Entity> entities, 
 		ComponentSignature components, 
 		const void** data,
@@ -2502,20 +2477,7 @@ namespace ECSEngine {
 
 	void EntityManager::AddSharedComponentCommit(Stream<Entity> entities, Component shared_component, SharedInstance instance, bool entities_belong_to_the_same_base_archetype)
 	{
-		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
-			DeferredAddSharedComponentEntities commit_data;
-			commit_data.components.indices = &shared_component;
-			commit_data.components.instances = &instance;
-			commit_data.components.count = 1;
-			commit_data.entities = entities;
-			CommitEntityAddSharedComponent(entity_manager, &commit_data, nullptr);
-		};
-		if (!entities_belong_to_the_same_base_archetype) {
-			ApplySortingEntityFunctor(entities, false, functor);
-		}
-		else {
-			functor(this, entities);
-		}
+		AddSharedComponentsCommit(entities, { &shared_component, &instance, 1 }, entities_belong_to_the_same_base_archetype);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2529,24 +2491,24 @@ namespace ECSEngine {
 		DebugInfo debug_info
 	)
 	{
-		AddSharedComponent(entities, { &shared_component, &instance, 1 }, entities_belong_to_the_same_base_archetype, parameters, debug_info);
+		AddSharedComponents(entities, { &shared_component, &instance, 1 }, entities_belong_to_the_same_base_archetype, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddSharedComponentCommit(Entity entity, SharedComponentSignature components) {
-		AddSharedComponentCommit({ &entity, 1 }, components, true);
+	void EntityManager::AddSharedComponentsCommit(Entity entity, SharedComponentSignature components) {
+		AddSharedComponentsCommit({ &entity, 1 }, components, true);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddSharedComponent(Entity entity, SharedComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info) {
-		AddSharedComponent({ &entity, 1 }, components, true, parameters, debug_info);
+	void EntityManager::AddSharedComponents(Entity entity, SharedComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info) {
+		AddSharedComponents({ &entity, 1 }, components, true, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddSharedComponentCommit(Stream<Entity> entities, SharedComponentSignature components, bool entities_belong_to_the_same_base_archetype) {
+	void EntityManager::AddSharedComponentsCommit(Stream<Entity> entities, SharedComponentSignature components, bool entities_belong_to_the_same_base_archetype) {
 		auto functor = [&](EntityManager* entity_manager, Stream<Entity> entities) {
 			DeferredAddSharedComponentEntities commit_data;
 			commit_data.components = components;
@@ -2564,7 +2526,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddSharedComponent(
+	void EntityManager::AddSharedComponents(
 		Stream<Entity> entities, 
 		SharedComponentSignature components, 
 		bool entities_belong_to_the_same_base_archetype,

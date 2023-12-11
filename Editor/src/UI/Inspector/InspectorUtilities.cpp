@@ -4,6 +4,7 @@
 #include "../Inspector.h"
 #include "../../Editor/EditorState.h"
 #include "../../Sandbox/SandboxAccessor.h"
+#include "../FileExplorerData.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -82,16 +83,46 @@ void InspectorShowButton(UIDrawer* drawer, Stream<wchar_t> path) {
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorOpenAndShowButton(UIDrawer* drawer, Stream<wchar_t> path) {
+struct HighlightPathActionData {
+	EditorState* editor_state;
+	Stream<wchar_t> path;
+};
+
+static void HighlightPathAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	HighlightPathActionData* data = (HighlightPathActionData*)_data;
+	ChangeFileExplorerFile(data->editor_state, data->path);
+}
+
+void InspectorDefaultInteractButtons(EditorState* editor_state, UIDrawer* drawer, Stream<wchar_t> path) {
 	UIDrawConfig config;
 
-	drawer->Button("Open", { OpenFileWithDefaultApplicationStreamAction, &path, sizeof(path) });
+	const char* OPEN_LABEL = "Open";
+	const char* HIGHLIGHT_LABEL = "Highlight";
+	const char* SHOW_LABEL = "Show";
 
-	UIConfigAbsoluteTransform transform;
-	transform.scale = drawer->GetLabelScale("Show");
-	transform.position = drawer->GetAlignedToRight(transform.scale.x);
-	config.AddFlag(transform);
-	drawer->Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, config, "Show", { LaunchFileExplorerStreamAction, &path, sizeof(path) });
+	UIDrawerRowLayout row_layout = drawer->GenerateRowLayout();
+	row_layout.AddLabel(OPEN_LABEL);
+	row_layout.AddLabel(HIGHLIGHT_LABEL, ECS_UI_ALIGN_MIDDLE);
+	row_layout.AddLabel(SHOW_LABEL, ECS_UI_ALIGN_RIGHT);
+
+	size_t configuration = 0;
+	row_layout.GetTransform(config, configuration);
+	drawer->Button(configuration, config, OPEN_LABEL, { OpenFileWithDefaultApplicationStreamAction, &path, sizeof(path) });
+	configuration = 0;
+	config.flag_count = 0;
+
+	row_layout.GetTransform(config, configuration);
+	// We can reference the path directly
+	HighlightPathActionData highlight_data = { editor_state };
+	highlight_data.path = path;
+	drawer->Button(configuration, config, HIGHLIGHT_LABEL, { HighlightPathAction, &highlight_data, sizeof(highlight_data) });
+	configuration = 0;
+	config.flag_count = 0;
+
+	row_layout.GetTransform(config, configuration);
+	drawer->Button(configuration, config, "Show", { LaunchFileExplorerStreamAction, &path, sizeof(path) });
 	drawer->NextRow();
 }
 
@@ -182,6 +213,18 @@ void GetInspectorsForMatchingSandbox(const EditorState* editor_state, unsigned i
 InspectorDrawFunction GetInspectorDrawFunction(const EditorState* editor_state, unsigned int inspector_index)
 {
 	return editor_state->inspector_manager.data[inspector_index].draw_function;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void* GetInspectorDrawFunctionData(EditorState* editor_state, unsigned int inspector_index) {
+	return (void*)GetInspectorDrawFunctionData((const EditorState*)editor_state, inspector_index);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+const void* GetInspectorDrawFunctionData(const EditorState* editor_state, unsigned int inspector_index) {
+	return editor_state->inspector_manager.data[inspector_index].draw_data;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -288,18 +331,6 @@ void FindInspectorWithDrawFunction(
 			}
 		}
 	}
-}
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
-void* GetInspectorDrawFunctionData(EditorState* editor_state, unsigned int inspector_index) {
-	return (void*)GetInspectorDrawFunctionData((const EditorState*)editor_state, inspector_index);
-}
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
-const void* GetInspectorDrawFunctionData(const EditorState* editor_state, unsigned int inspector_index) {
-	return editor_state->inspector_manager.data[inspector_index].draw_data;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

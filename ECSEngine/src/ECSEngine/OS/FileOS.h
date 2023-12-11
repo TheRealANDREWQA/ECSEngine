@@ -204,10 +204,15 @@ namespace ECSEngine {
 		// Uses the console to print the message
 		ECSENGINE_API void DeleteFileWithError(Stream<wchar_t> path);
 
-		ECSENGINE_API void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Tools::UISystem* system);
+		ECSENGINE_API void RenameFolderWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Tools::UISystem* system);
+
+		ECSENGINE_API void RenameFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Tools::UISystem* system);
 
 		// Uses the console to print the message
-		ECSENGINE_API void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name);
+		ECSENGINE_API void RenameFolderWithError(Stream<wchar_t> path, Stream<wchar_t> new_name);
+
+		// Uses the console to print the message
+		ECSENGINE_API void RenameFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name);
 
 		ECSENGINE_API void ResizeFileWithError(Stream<wchar_t> path, size_t new_size, Tools::UISystem* system);
 

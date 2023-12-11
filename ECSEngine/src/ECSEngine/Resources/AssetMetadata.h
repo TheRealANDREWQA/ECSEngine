@@ -190,6 +190,8 @@ namespace ECSEngine {
 		// Sets default values and aliases the name
 		void Default(Stream<char> name, Stream<wchar_t> file);
 
+		void Rename(Stream<char> new_name, AllocatorPolymorphic allocator);
+
 		bool SameTarget(const MeshMetadata* other) const;
 
 		ECS_INLINE void* Pointer() const {
@@ -225,6 +227,8 @@ namespace ECSEngine {
 		// Sets default values and aliases the name
 		void Default(Stream<char> name, Stream<wchar_t> file);
 
+		void Rename(Stream<char> new_name, AllocatorPolymorphic allocator);
+
 		bool SameTarget(const TextureMetadata* other) const;
 
 		ECS_INLINE void* Pointer() const {
@@ -257,6 +261,8 @@ namespace ECSEngine {
 		GPUSamplerMetadata Copy(AllocatorPolymorphic allocator) const;
 
 		void Default(Stream<char> name, Stream<wchar_t> file);
+
+		void Rename(Stream<char> new_name, AllocatorPolymorphic allocator);
 
 		ECS_INLINE void* Pointer() const {
 			return sampler.sampler;
@@ -302,6 +308,8 @@ namespace ECSEngine {
 
 		// Returns -1 if the macro is not found
 		unsigned int FindMacro(Stream<char> name) const;
+
+		void Rename(Stream<char> new_name, AllocatorPolymorphic allocator);
 
 		void RemoveMacro(unsigned int index, AllocatorPolymorphic allocator);
 
@@ -474,6 +482,8 @@ namespace ECSEngine {
 			return { buffers[0].buffer, GetBufferTotalCount() };
 		}
 
+		void Rename(Stream<char> new_name, AllocatorPolymorphic allocator);
+
 		// There must be ECS_MATERIAL_SHADER_COUNT elements for each pointer type
 		// If the do_not_copy flag is set to true, then it will not copy the data that is already stored in it
 		void Resize(
@@ -599,6 +609,8 @@ namespace ECSEngine {
 
 		void Default(Stream<char> name, Stream<wchar_t> file);
 
+		void Rename(Stream<char> new_name, AllocatorPolymorphic allocator);
+
 		ECS_INLINE void* Pointer() const {
 			return data.buffer;
 		}
@@ -702,6 +714,8 @@ namespace ECSEngine {
 	ECSENGINE_API void GetAssetDependenciesForMetadata(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* handles);
 
 	ECSENGINE_API void RemapAssetDependencies(void* metadata, ECS_ASSET_TYPE type, Stream<AssetTypedHandle> handles);
+
+	ECSENGINE_API void RenameAsset(void* metadata, ECS_ASSET_TYPE type, Stream<char> new_name, AllocatorPolymorphic allocator);
 
 	// The functor receives as arguments the handle and the asset type of the dependency
 	// When early_exit is desired, return true to exit.

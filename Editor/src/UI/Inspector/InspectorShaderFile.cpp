@@ -2,6 +2,7 @@
 #include "InspectorMiscFile.h"
 #include "../Inspector.h"
 #include "InspectorUtilities.h"
+#include "InspectorAssetUtilities.h"
 #include "../../Editor/EditorState.h"
 
 #include "../../Assets/AssetManagement.h"
@@ -300,7 +301,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 
 	InspectorIconNameAndPath(drawer, data->path);
 	InspectorDrawFileTimes(drawer, data->path);
-	InspectorOpenAndShowButton(drawer, data->path);
+	InspectorDefaultInteractButtons(editor_state, drawer, data->path);
 	drawer->CrossLine();
 
 	UIDrawConfig config;
@@ -716,6 +717,15 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 		| UI_CONFIG_ARRAY_DISABLE_DRAG | UI_CONFIG_ARRAY_PRE_POST_DRAW, BASE_CONFIGURATION, config, &array_macro_config, "Macros", &data->shader_macros, &draw_shader_macro_data, DrawShaderMacro);
 
 	drawer->CrossLine();
+
+	InspectorCopyCurrentAssetSettingData copy_data;
+	copy_data.editor_state = editor_state;
+	copy_data.asset_type = ECS_ASSET_SHADER;
+	copy_data.inspector_index = inspector_index;
+	copy_data.metadata = &data->shader_metadata;
+	copy_data.path = data->path;
+	copy_data.database = editor_state->asset_database;
+	InspectorDrawCopyCurrentAssetSetting(drawer, &copy_data);
 }
 
 void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
