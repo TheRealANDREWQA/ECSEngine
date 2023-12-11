@@ -1598,6 +1598,21 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
+	bool AssetDatabase::RenameAsset(unsigned int handle, ECS_ASSET_TYPE type, Stream<char> new_name)
+	{
+		void* metadata = GetAsset(handle, type);
+		size_t metadata_storage[AssetMetadataMaxSizetSize()];
+		// We can rename directly here. It will deallocate the previous name, but it is fine
+		// Since all deallocates use DeallocateIfBelongs and won't trigger an error when trying
+		// To update the asset
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 128, ECS_MB);
+		CopyAssetBase(metadata_storage, metadata, type, GetAllocatorPolymorphic(&temporary_allocator));
+		ECSEngine::RenameAsset(metadata_storage, type, new_name, Allocator());
+		return UpdateAsset(handle, metadata_storage, type);
+	}
+
+	// --------------------------------------------------------------------------------------
+
 	bool AssetDatabase::RemoveMesh(unsigned int handle, unsigned int decrement_count, MeshMetadata* storage)
 	{
 		return RemoveAssetImpl(this, mesh_metadata, handle, ECS_ASSET_MESH, decrement_count, storage, nullptr);
@@ -1932,7 +1947,13 @@ namespace ECSEngine {
 			}
 			else {
 				// Delete the renamed file if it exists
-				RemoveFile(renamed_file);
+				// Also, remove the original metadata file
+				if (renamed_file.size > 0) {
+					RemoveFile(renamed_file);
+				}
+				ECS_STACK_CAPACITY_STREAM(wchar_t, original_metadata_file, 512);
+				database->FileLocationAsset(previous_name, previous_file, original_metadata_file, type);
+				RemoveFile(original_metadata_file);
 			}
 			return success;
 		}

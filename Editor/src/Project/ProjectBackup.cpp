@@ -248,7 +248,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, to_path, 512);
 
 	auto rename_file_or_folder_temporary = [](Stream<wchar_t> to_path, Stream<wchar_t> temporary_name) {
-		bool rename_success = RenameFolderOrFile(to_path, temporary_name);
+		bool rename_success = RenameFileOrFolder(to_path, temporary_name);
 		if (!rename_success) {
 			ECS_FORMAT_TEMP_STRING(error_message, "An error has occured when trying to rename a file/folder to temporary during backup. "
 				"The file / folder {#} was not recovered from the backup.", to_path);
@@ -268,7 +268,7 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		absolute_temp_path[absolute_temp_path.size] = L'\0';
 
 		Stream<wchar_t> path_filename = PathFilename(to_path);
-		bool rename_success = RenameFolderOrFile(absolute_temp_path, path_filename);
+		bool rename_success = RenameFileOrFolder(absolute_temp_path, path_filename);
 		if (!rename_success) {
 			ECS_FORMAT_TEMP_STRING(error_message, "An error has occured when trying to rename a temporary file/folder to it's initial name. "
 				"The file/folder {#} should be renamed manually to {#}.", absolute_temp_path, path_filename);

@@ -5,6 +5,7 @@
 #include "InspectorMiscFile.h"
 #include "../Inspector.h"
 #include "InspectorUtilities.h"
+#include "InspectorAssetUtilities.h"
 #include "../../Editor/EditorState.h"
 #include "../../Editor/EditorPalette.h"
 #include "../../Assets/EditorSandboxAssets.h"
@@ -961,7 +962,7 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 
 	InspectorIconNameAndPath(drawer, data->path);
 	InspectorDrawFileTimes(drawer, data->path);
-	InspectorOpenAndShowButton(drawer, data->path);
+	InspectorDefaultInteractButtons(editor_state, drawer, data->path);
 	drawer->CrossLine();
 
 	// Draw the settings
@@ -1218,6 +1219,15 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 		drawer->Text("The current material does not need any input.");
 		drawer->NextRow();
 	}
+
+	InspectorCopyCurrentAssetSettingData copy_data;
+	copy_data.editor_state = editor_state;
+	copy_data.asset_type = ECS_ASSET_MATERIAL;
+	copy_data.inspector_index = inspector_index;
+	copy_data.metadata = &data->material_asset;
+	copy_data.path = data->path;
+	copy_data.database = &data->temporary_database;
+	InspectorDrawCopyCurrentAssetSetting(drawer, &copy_data);
 }
 
 // ------------------------------------------------------------------------------------------------------------

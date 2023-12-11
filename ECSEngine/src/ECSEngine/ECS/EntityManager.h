@@ -146,17 +146,17 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void AddComponentCommit(Entity entity, ComponentSignature components);
+		void AddComponentsCommit(Entity entity, ComponentSignature components);
 
 		// Deferred Call - it will register it inside the command stream
-		void AddComponent(Entity entity, ComponentSignature components, DeferredActionParameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
+		void AddComponents(Entity entity, ComponentSignature components, DeferredActionParameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void AddComponentCommit(Entity entity, ComponentSignature components, const void** data);
+		void AddComponentsCommit(Entity entity, ComponentSignature components, const void** data);
 
 		// Deferred Call - it will register it inside the command stream
-		void AddComponent(
+		void AddComponents(
 			Entity entity,
 			ComponentSignature components,
 			const void** data,
@@ -195,10 +195,10 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void AddComponentCommit(Stream<Entity> entities, ComponentSignature components, bool entities_belong_to_same_base_archetype);
+		void AddComponentsCommit(Stream<Entity> entities, ComponentSignature components, bool entities_belong_to_same_base_archetype);
 
 		// Deferred Call - it will register it inside a command stream
-		void AddComponent(
+		void AddComponents(
 			Stream<Entity> entities, 
 			ComponentSignature components, 
 			bool entities_belong_to_same_base_archetype,
@@ -208,7 +208,7 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void AddComponentCommit(
+		void AddComponentsCommit(
 			Stream<Entity> entities, 
 			ComponentSignature components, 
 			const void** data, 
@@ -219,7 +219,7 @@ namespace ECSEngine {
 		// Deferred Call - it will register it inside a command stream
 		// data -> A B C ; each entity will have as components A, B, C
 		// components.count pointers must be present in data
-		void AddComponent(
+		void AddComponents(
 			Stream<Entity> entities,
 			ComponentSignature components,
 			const void** data,
@@ -258,10 +258,10 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void AddSharedComponentCommit(Entity entity, SharedComponentSignature components);
+		void AddSharedComponentsCommit(Entity entity, SharedComponentSignature components);
 
 		// Deferred Call
-		void AddSharedComponent(
+		void AddSharedComponents(
 			Entity entity,
 			SharedComponentSignature components,
 			DeferredActionParameters parameters = {},
@@ -270,10 +270,10 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void AddSharedComponentCommit(Stream<Entity> entities, SharedComponentSignature components, bool entities_belong_to_same_base_archetype);
+		void AddSharedComponentsCommit(Stream<Entity> entities, SharedComponentSignature components, bool entities_belong_to_same_base_archetype);
 
 		// Deferred Call
-		void AddSharedComponent(
+		void AddSharedComponents(
 			Stream<Entity> entities,
 			SharedComponentSignature components,
 			bool entities_belong_to_same_base_archetype,

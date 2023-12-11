@@ -7,6 +7,8 @@ void InspectorTextFileAddFunctors(InspectorTable* table);
 
 void ChangeInspectorToTextFile(EditorState* editor_state, ECSEngine::Stream<wchar_t> path, unsigned int inspector_index);
 
+void ChangeInspectorToBlankFile(EditorState* editor_state, ECSEngine::Stream<wchar_t> path, unsigned int inspector_index);
+
 bool IsInspectorTextFileDraw(const EditorState* editor_state, unsigned int inspector_index);
 
 bool IsInspectorTextFileDraw(InspectorDrawFunction draw_function);

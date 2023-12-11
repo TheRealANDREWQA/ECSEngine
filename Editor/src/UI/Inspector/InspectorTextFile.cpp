@@ -15,6 +15,14 @@ constexpr float C_FILE_ROW_OFFSET = 1.2f;
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+static bool InspectorDrawBlankFileRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
+	// At the moment, always return true for this. The only information that gets lost
+	// Is the file times but those are not all that relevant anyway
+	return true;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void InspectorDrawBlankFile(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
 	const wchar_t* path = (const wchar_t*)data;
 
@@ -29,7 +37,7 @@ void InspectorDrawBlankFile(EditorState* editor_state, unsigned int inspector_in
 	InspectorIconNameAndPath(drawer, stream_path);
 
 	InspectorDrawFileTimes(drawer, path);
-	InspectorOpenAndShowButton(drawer, stream_path);
+	InspectorDefaultInteractButtons(editor_state, drawer, stream_path);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -66,7 +74,7 @@ static void InspectorDrawTextFileImplementation(
 	InspectorIconNameAndPath(drawer, data->path);
 
 	InspectorDrawFileTimes(drawer, data->path);
-	InspectorOpenAndShowButton(drawer, data->path);
+	InspectorDefaultInteractButtons(editor_state, drawer, data->path);
 
 	data->next_row_y_offset = drawer->layout.next_row_y_offset * row_offset_factor;
 	DrawTextFile(drawer, data);
@@ -105,6 +113,7 @@ void ChangeInspectorToTextFile(EditorState* editor_state, Stream<wchar_t> path, 
 	if (extension.size == 0 || !TryGetInspectorTableFunction(editor_state, functions, extension)) {
 		functions.draw_function = InspectorDrawBlankFile;
 		functions.clean_function = InspectorCleanNothing;
+		functions.retained_function = InspectorDrawBlankFileRetainedMode;
 	}
 
 	if (functions.draw_function != InspectorDrawBlankFile) {
@@ -155,6 +164,20 @@ void ChangeInspectorToTextFile(EditorState* editor_state, Stream<wchar_t> path, 
 				return other_data == path;
 		});
 	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void ChangeInspectorToBlankFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 512);
+	null_terminated_path.CopyOther(path);
+	null_terminated_path.AddAssert(L'\0');
+	ChangeInspectorDrawFunctionWithSearch(editor_state, inspector_index, { InspectorDrawBlankFile, InspectorCleanNothing }, null_terminated_path.buffer,
+		sizeof(wchar_t) * (path.size + 1), -1, [=](void* inspector_data) {
+			const wchar_t* other_data = (const wchar_t*)inspector_data;
+			return other_data == path;
+	});
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

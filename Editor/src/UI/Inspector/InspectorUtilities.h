@@ -45,7 +45,7 @@ void InspectorShowButton(Tools::UIDrawer* drawer, Stream<wchar_t> path);
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorOpenAndShowButton(Tools::UIDrawer* drawer, Stream<wchar_t> path);
+void InspectorDefaultInteractButtons(EditorState* editor_state, Tools::UIDrawer* drawer, Stream<wchar_t> path);
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
@@ -164,14 +164,6 @@ void FindInspectorWithDrawFunction(
 	CapacityStream<unsigned int>* inspector_indices,
 	unsigned int sandbox_index = -1
 );
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
-void* GetInspectorDrawFunctionData(EditorState* editor_state, unsigned int inspector_index);
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
-const void* GetInspectorDrawFunctionData(const EditorState* editor_state, unsigned int inspector_index);
 
 // ----------------------------------------------------------------------------------------------------------------------------
 

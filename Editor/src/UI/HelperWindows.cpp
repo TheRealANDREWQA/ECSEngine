@@ -221,23 +221,50 @@ unsigned int CreateChooseDirectoryOrFileNameDockspace(UISystem* system, ChooseDi
 	return system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_LOCK_WINDOW);
 }
 
+struct RenameData {
+	Stream<wchar_t> GetPath() const {
+		return { OffsetPointer(this, sizeof(*this)), path_size };
+	}
+
+	void* GetCallbackData() const {
+		return callback.data_size > 0 ? OffsetPointer(this, sizeof(*this) + path_size * sizeof(wchar_t)) : callback.data;
+	}
+
+	void WritePath(Stream<wchar_t> path) {
+		path.CopyTo(OffsetPointer(this, sizeof(*this)));
+		path_size = path.size;
+	}
+	
+	void WriteCallback(UIActionHandler _callback) {
+		callback = _callback;
+		if (_callback.data_size > 0) {
+			memcpy(OffsetPointer(this, sizeof(*this) + path_size * sizeof(wchar_t)), _callback.data, _callback.data_size);
+		}
+	}
+
+	unsigned int path_size;
+	UIActionHandler callback;
+};
+
 void RenameFileWizardCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	const wchar_t* path = (const wchar_t*)_data;
+	RenameData* data = (RenameData*)_data;
 	CapacityStream<char>* new_name = (CapacityStream<char>*)_additional_data;
+
+	Stream<wchar_t> path = data->GetPath();
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
 	ConvertASCIIToWide(wide_name, *new_name);
 
 	RenameFileActionData rename_data;
 	rename_data.new_name = wide_name;
-	rename_data.path = path;
+	rename_data.path = data->GetPath();
 	action_data->data = &rename_data;
 	RenameFileAction(action_data);
 }
 
-unsigned int CreateRenameFileWizard(Stream<wchar_t> path, UISystem* system)
+unsigned int CreateRenameFileWizard(Stream<wchar_t> path, UISystem* system, UIActionHandler user_callback)
 {
 	TextInputWizardData wizard_data;
 	wizard_data.input_name = RENAME_FILE_WIZARD_INPUT_NAME;
@@ -251,13 +278,6 @@ unsigned int CreateRenameFileWizard(Stream<wchar_t> path, UISystem* system)
 	wizard_data.callback_data_size = sizeof(wchar_t) * (path.size + 1);
 
 	return CreateTextInputWizard(&wizard_data, system);
-}
-
-void CreateRenameFileWizardAction(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	Stream<wchar_t>* data = (Stream<wchar_t>*)_data;
-	CreateRenameFileWizard(*data, system);
 }
 
 void RenameFolderWizardCallback(ActionData* action_data) {
@@ -276,7 +296,7 @@ void RenameFolderWizardCallback(ActionData* action_data) {
 	RenameFolderAction(action_data);
 }
 
-unsigned int CreateRenameFolderWizard(Stream<wchar_t> path, UISystem* system) {
+unsigned int CreateRenameFolderWizard(Stream<wchar_t> path, UISystem* system, UIActionHandler user_callback) {
 	TextInputWizardData wizard_data;
 	wizard_data.input_name = RENAME_FOLDER_WIZARD_INPUT_NAME;
 	wizard_data.window_name = RENAME_FOLDER_WIZARD_NAME;
@@ -289,13 +309,6 @@ unsigned int CreateRenameFolderWizard(Stream<wchar_t> path, UISystem* system) {
 	wizard_data.callback_data_size = sizeof(wchar_t) * (path.size + 1);
 
 	return CreateTextInputWizard(&wizard_data, system);
-}
-
-void CreateRenameFolderWizardAction(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	Stream<wchar_t>* data = (Stream<wchar_t>*)_data;
-	CreateRenameFolderWizard(*data, system);
 }
 
 unsigned int GetActiveWindowSandbox(const EditorState* editor_state)

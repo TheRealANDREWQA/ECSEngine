@@ -402,6 +402,7 @@
     <ClInclude Include="src\Includes\ECSEngineForEach.h" />
     <ClInclude Include="src\Includes\ECSEngineInput.h" />
     <ClInclude Include="src\Includes\ECSEngineOS.h" />
+    <ClInclude Include="src\Includes\ECSEngineResourceTypes.h" />
     <ClInclude Include="src\Includes\ECSEngineRuntimeCrash.h" />
     <ClInclude Include="src\Includes\ECSEngineSampleTexture.h" />
     <ClInclude Include="src\Includes\ECSEngineShaderApplicationStage.h" />

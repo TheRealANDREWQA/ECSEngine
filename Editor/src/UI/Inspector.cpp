@@ -25,7 +25,7 @@ constexpr float2 WINDOW_SIZE = float2(0.5f, 1.2f);
 constexpr size_t FUNCTION_TABLE_CAPACITY = 32;
 constexpr size_t INSPECTOR_FLAG_LOCKED = 1 << 0;
 
-#define INSPECTOR_TARGET_ALLOCATOR_CAPACITY ECS_KB * 24
+#define INSPECTOR_TARGET_ALLOCATOR_CAPACITY ECS_KB * 32
 #define INSPECTOR_MAX_TARGET_COUNT 12
 #define INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY ECS_KB
 
@@ -53,12 +53,14 @@ static void InspectorPrivateAction(ActionData* action_data) {
 	unsigned int* inspector_index = (unsigned int*)_data;
 
 	if (window_index == system->GetActiveWindow()) {
-		// Check for these actions only if we are the focused window
-		if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INSPECTOR_PREVIOUS_TARGET)) {
-			PopInspectorTarget(editor_state, *inspector_index);
-		}
-		else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INSPECTOR_NEXT_TARGET)) {
-			RestoreInspectorTarget(editor_state, *inspector_index);
+		if (!editor_state->Keyboard()->IsCaptureCharacters()) {
+			// Check for these actions only if we are the focused window
+			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INSPECTOR_PREVIOUS_TARGET)) {
+				PopInspectorTarget(editor_state, *inspector_index);
+			}
+			else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_INSPECTOR_NEXT_TARGET)) {
+				RestoreInspectorTarget(editor_state, *inspector_index);
+			}
 		}
 	}
 }
@@ -438,7 +440,7 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsi
 			ChangeInspectorToTextFile(editor_state, path, inspector_index);
 		}
 		else {
-			ECS_ASSERT(false, "Unknown inspector file");
+			ChangeInspectorToBlankFile(editor_state, path, inspector_index);
 		}
 	}
 }

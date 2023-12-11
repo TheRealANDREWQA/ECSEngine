@@ -9,6 +9,7 @@
 #include "../AssetIcons.h"
 #include "../AssetSettingHelper.h"
 #include "InspectorGPUSamplerFile.h"
+#include "InspectorAssetUtilities.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -42,7 +43,7 @@ void InspectorDrawGPUSamplerFile(EditorState* editor_state, unsigned int inspect
 
 	InspectorIconNameAndPath(drawer, data->path);
 	InspectorDrawFileTimes(drawer, data->path);
-	InspectorOpenAndShowButton(drawer, data->path);
+	InspectorDefaultInteractButtons(editor_state, drawer, data->path);
 	drawer->CrossLine();
 
 	AssetSettingsExtractPointerFromMainDatabase(editor_state, &data->sampler_metadata, ECS_ASSET_GPU_SAMPLER);
@@ -102,6 +103,15 @@ void InspectorDrawGPUSamplerFile(EditorState* editor_state, unsigned int inspect
 	drawer->NextRow();
 
 	drawer->CrossLine();
+
+	InspectorCopyCurrentAssetSettingData copy_data;
+	copy_data.editor_state = editor_state;
+	copy_data.asset_type = ECS_ASSET_GPU_SAMPLER;
+	copy_data.inspector_index = inspector_index;
+	copy_data.metadata = &data->sampler_metadata;
+	copy_data.path = data->path;
+	copy_data.database = editor_state->asset_database;
+	InspectorDrawCopyCurrentAssetSetting(drawer, &copy_data);
 }
 
 void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {

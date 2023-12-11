@@ -1,11 +1,9 @@
 #pragma once
 #include "../Core.h"
-#include "ecspch.h"
 #include "../Allocators/MemoryManager.h"
 #include "../Containers/Stream.h"
 #include "../Containers/HashTable.h"
 #include "../Containers/Stacks.h"
-#include "../ECS/InternalStructures.h"
 #include "../Containers/DataPointer.h"
 #include "../Rendering/Graphics.h"
 #include "../Rendering/TextureOperations.h"

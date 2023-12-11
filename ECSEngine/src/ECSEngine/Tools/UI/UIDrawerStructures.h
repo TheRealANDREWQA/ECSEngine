@@ -566,11 +566,15 @@ namespace ECSEngine {
 		struct UIDrawerMenuGeneralData {
 			UIDrawerMenu* menu;
 			UIDrawerMenuState* destroy_state = nullptr;
-			unsigned char menu_initializer_index = 255;
 			float2 destroy_position;
 			float2 destroy_scale;
+			unsigned char menu_initializer_index = 255;
 			bool initialize_from_right_click = false;
 			bool is_opened_when_clicked = false;
+			// This is the name of the window that created us
+			// To restore the active location to it once the click is finished
+			char parent_window_name[64];
+			char parent_window_name_size = 0;
 		};
 
 		struct ECSENGINE_API UIDrawerMenuDrawWindowData {
@@ -582,6 +586,8 @@ namespace ECSEngine {
 			// In this way we get reliable UIDrawerMenuState* even when the
 			// underlying menu is changed
 			unsigned char submenu_offsets[8];
+			// This is the name of the window that spawned the menu
+			Stream<char> parent_window_name;
 		};
 
 
