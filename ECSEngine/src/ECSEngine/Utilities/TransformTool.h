@@ -16,7 +16,7 @@ namespace ECSEngine {
 			return last_successful_direction.x != FLT_MAX;
 		}
 
-		ECS_TRANSFORM_TOOL_AXIS axis;
+		ECS_AXIS axis;
 		ECS_TRANSFORM_SPACE space;
 		float3 last_successful_direction;
 	};
@@ -46,7 +46,7 @@ namespace ECSEngine {
 			return last_circle_direction.x != FLT_MAX;
 		}
 
-		ECS_TRANSFORM_TOOL_AXIS axis;
+		ECS_AXIS axis;
 		ECS_TRANSFORM_SPACE space;
 		union {
 			// This is used by the roller rotation delta
@@ -76,7 +76,7 @@ namespace ECSEngine {
 			return projected_direction_sign.x != FLT_MAX;
 		}
 
-		ECS_TRANSFORM_TOOL_AXIS axis;
+		ECS_AXIS axis;
 	private:
 		// This is placed here in order to have the TransformToolDrag
 		// have the same layout such as when setting the space this tool is not affected
@@ -89,7 +89,7 @@ namespace ECSEngine {
 	union TransformToolDrag  {
 		TransformToolDrag() {}
 
-		ECS_INLINE ECS_TRANSFORM_TOOL_AXIS GetAxis() const {
+		ECS_INLINE ECS_AXIS GetAxis() const {
 			return translation.axis;
 		}
 
@@ -97,7 +97,7 @@ namespace ECSEngine {
 			return translation.space;
 		}
 
-		ECS_INLINE void SetAxis(ECS_TRANSFORM_TOOL_AXIS axis) {
+		ECS_INLINE void SetAxis(ECS_AXIS axis) {
 			// All types have the first field the axis - it's fine to reference any
 			translation.axis = axis;
 		}
@@ -140,7 +140,7 @@ namespace ECSEngine {
 		const CameraType* camera,
 		float3 plane_point,
 		Quaternion object_rotation,
-		ECS_TRANSFORM_TOOL_AXIS axis,
+		ECS_AXIS axis,
 		ECS_TRANSFORM_SPACE space,
 		uint2 window_size,
 		int2 mouse_texel_position,
@@ -154,7 +154,7 @@ namespace ECSEngine {
 		const CameraType* camera,
 		float3 plane_point,
 		Quaternion object_rotation,
-		ECS_TRANSFORM_TOOL_AXIS axis,
+		ECS_AXIS axis,
 		ECS_TRANSFORM_SPACE space,
 		float3 previous_ray_direction,
 		float3 current_ray_direction,

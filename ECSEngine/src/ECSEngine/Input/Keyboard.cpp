@@ -3,9 +3,15 @@
 
 namespace ECSEngine {
 
+	void Keyboard::Reset() {
+		ButtonInput<ECS_KEY, ECS_KEY_COUNT>::Reset();
+		m_pushed_character_count = 0;
+	}
+
 	void Keyboard::Update()
 	{
 		Tick();
+		m_pushed_character_count = 0;
 	}
 
 	void Keyboard::Procedure(const KeyboardProcedureInfo& info)
@@ -17,6 +23,7 @@ namespace ECSEngine {
 		case WM_CHAR:
 			if (m_process_characters) {
 				m_character_queue.Push(static_cast<char>(info.wParam));
+				m_pushed_character_count++;
 			}
 			return;
 			break;
@@ -430,6 +437,15 @@ namespace ECSEngine {
 
 		if (!IsAlphanumeric(ecs_key) || !m_process_characters) {
 			UpdateButton(ecs_key, !down);
+		}
+	}
+
+	void Keyboard::UpdateFromOther(const Keyboard* other)
+	{
+		ButtonInput<ECS_KEY, ECS_KEY_COUNT>::UpdateFromOther(other);
+		// We also need to update the character queue
+		for (unsigned int index = 0; index < other->m_pushed_character_count; index++) {
+			m_character_queue.Push(other->m_character_queue.PushPeekByIndex(index));
 		}
 	}
 

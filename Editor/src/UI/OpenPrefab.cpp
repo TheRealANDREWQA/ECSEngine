@@ -51,7 +51,7 @@ static bool InitializePrefabSandboxInformation(OpenPrefabActionData* action_data
 		// We need to assign the prefab flag, change the path and copy the modules + their settings
 		EditorSandbox* sandbox = GetSandbox(editor_state, create_sandbox_index);
 		sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_PREFAB);
-		ChangeTemporarySandboxScenePath(editor_state, create_sandbox_index, prefab_relative_path);
+		RenameSandboxScenePath(editor_state, create_sandbox_index, prefab_relative_path);
 		CopySandboxModulesFromAnother(editor_state, create_sandbox_index, action_data->launching_sandbox);
 		CopySandboxModuleSettingsFromAnother(editor_state, create_sandbox_index, action_data->launching_sandbox);
 

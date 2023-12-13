@@ -82,6 +82,7 @@
     <ClInclude Include="src\Assets\Prefab.h" />
     <ClInclude Include="src\UI\OpenPrefab.h" />
     <ClInclude Include="src\UI\Inspector\InspectorAssetUtilities.h" />
+    <ClInclude Include="src\Project\ProjectRenameFile.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -155,6 +156,7 @@
     <ClCompile Include="src\Assets\Prefab.cpp" />
     <ClCompile Include="src\UI\OpenPrefab.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorAssetUtilities.cpp" />
+    <ClCompile Include="src\Project\ProjectRenameFile.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

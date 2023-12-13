@@ -13,11 +13,6 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 
 // -------------------------------------------------------------------------------------------------------------
 
-// This function works only for temporary sandboxes - it will just change the path without loading or unloading data
-void ChangeTemporarySandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<wchar_t> new_scene);
-
-// -------------------------------------------------------------------------------------------------------------
-
 // Clears the entity manager and empties the asset database reference
 void ClearSandboxScene(EditorState* editor_state, unsigned int sandbox_index);
 
@@ -50,6 +45,11 @@ ECSEngine::Camera GetSandboxCamera(const EditorState* editor_state, unsigned int
 // -------------------------------------------------------------------------------------------------------------
 
 float GetSandboxViewportAspectRatio(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// It will just change the path without loading or unloading data
+void RenameSandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<wchar_t> new_scene, bool absolute_path = false);
 
 // -------------------------------------------------------------------------------------------------------------
 

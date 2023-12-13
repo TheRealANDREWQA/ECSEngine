@@ -305,6 +305,7 @@ namespace ECSEngine {
 		Stream<Stream<char>> GetMetadatasForFile(Stream<wchar_t> file, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator) const;
 
 		// Retrieves all the metadata files for a certain type. You need to extract the name and the file manually
+		// These files are relative to the root folder of the type
 		Stream<Stream<wchar_t>> GetMetadatasForType(ECS_ASSET_TYPE type, AllocatorPolymorphic allocator) const;
 
 		unsigned int GetAssetCount(ECS_ASSET_TYPE type) const;
@@ -383,7 +384,7 @@ namespace ECSEngine {
 		// It does not set the name or the file
 		bool ReadMiscFile(Stream<char> name, Stream<wchar_t> file, MiscAsset* asset, bool default_initialize_if_missing = false) const;
 
-		// It does not set the name or the file.  Can optionally provide an allocator for the buffers that are used
+		// It does not set the name or the file. Can optionally provide an allocator for the buffers that are used
 		// otherwise the allocator from this database will be used. (this is used only for shaders and materials)
 		bool ReadAssetFile(
 			Stream<char> name, 
@@ -394,10 +395,45 @@ namespace ECSEngine {
 			bool default_initialize_if_missing = false
 		) const;
 
+		// The metadata file needs to be the actual metadata file location.
+		// It does not set the name or the file for the asset. Can optionally provide an allocator for the buffers
+		// That are used otherwise the allocator from this database will be used. (this is used only for shaders and materials)
+		bool ReadAssetFile(
+			Stream<wchar_t> metadata_file,
+			void* metadata,
+			ECS_ASSET_TYPE asset_type,
+			AllocatorPolymorphic allocator = { nullptr }
+		);
+
 		// Changes the name of the asset and also modifies the metadata file if present
 		// Returns true if it succeeded, else false. It can return false if there is an asset
 		// Already with that name or the metadata file renaming failed
-		bool RenameAsset(unsigned int handle, ECS_ASSET_TYPE type, Stream<char> new_name);
+		bool RenameAsset(unsigned int handle, ECS_ASSET_TYPE type, Stream<char> new_name, bool* update_dependency_metadata_files = nullptr);
+
+		// Updates all the metadata files that target this asset, to have this new name
+		// Returns true if all metadata files were updated, else false
+		bool RenameAssetUpdateMetadataFiles(
+			Stream<char> previous_name, 
+			Stream<wchar_t> file, 
+			Stream<char> new_name, 
+			ECS_ASSET_TYPE type
+		) const;
+
+		// Changes the target file of the asset and also modifies the metadata file if present
+		// Returns true if it succeeded, else false. It can return false if there is an asset
+		// Already with that file and name or the metadata file renaming failed
+		// You can optionally specify that you want metadata files that target this asset
+		// To be updated as well. The pointer is set to true if it succeeded, else false
+		bool RenameAssetFile(
+			unsigned int handle, 
+			ECS_ASSET_TYPE type, 
+			Stream<wchar_t> new_path, 
+			bool* update_dependency_metadata_files = nullptr
+		);
+
+		// Updates all the metadata files that target this asset, to have this new file
+		// Returns true if all metadata files were updated, else false
+		bool RenameAssetFileUpdateMetadataFiles(Stream<wchar_t> previous_file, Stream<char> name, Stream<wchar_t> new_file, ECS_ASSET_TYPE type) const;
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file

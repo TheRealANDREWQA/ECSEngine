@@ -294,12 +294,20 @@ namespace ECSEngine {
 		struct ECSENGINE_API TextInputWizardData {
 			void AddExtraElement(Action extra_element, void* data, size_t data_size);
 
+			void SetInitialCharacters(Stream<char> characters) {
+				ECS_ASSERT(characters.size <= sizeof(initial_input_characters));
+				characters.CopyTo(initial_input_characters);
+				initial_input_character_count = characters.size;
+			}
+
 			const char* input_name;
 			const char* window_name;
 			Action callback;
 			void* callback_data;
 			size_t callback_data_size;
 			CapacityStream<char> input_stream = { nullptr, 0, 0 }; // Does not need to be initialized - it is used internally
+			char initial_input_characters[64];
+			size_t initial_input_character_count = 0;
 
 			Action extra_draw_elements[ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_CAPACITY];
 			void* extra_draw_elements_data[ECS_TEXT_INPUT_WINDOW_EXTRA_ELEMENTS_CAPACITY];

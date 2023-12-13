@@ -30,6 +30,13 @@ namespace ECSEngine {
 		unsigned short milliseconds;
 	};
 
+	enum ECS_AXIS : unsigned char {
+		ECS_AXIS_X,
+		ECS_AXIS_Y,
+		ECS_AXIS_Z,
+		ECS_AXIS_COUNT
+	};
+
 	ECSENGINE_API bool IsDateLater(Date first, Date second);
 
 #pragma region Alphabet and character type

@@ -1334,13 +1334,20 @@ namespace ECSEngine {
 					memcpy(allocation, data->callback_data, data->callback_data_size);
 					data->callback_data = allocation;
 				}
+
+				if (data->initial_input_character_count > 0) {
+					data->input_stream.CopyOther({ data->initial_input_characters, data->initial_input_character_count });
+				}
 			}
 
 			UIDrawConfig config;
 			UIConfigWindowDependentSize transform;
 			config.AddFlag(transform);
 
-			drawer.TextInput(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, data->input_name, &data->input_stream);
+			UIDrawerTextInput* input = drawer.TextInput(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_DO_CACHE, config, data->input_name, &data->input_stream);
+			if (initialize) {
+				input->is_currently_selected = true;
+			}
 			drawer.NextRow();
 
 			ActionData extra_action_data = drawer.GetDummyActionData();

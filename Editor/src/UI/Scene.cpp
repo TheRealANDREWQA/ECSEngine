@@ -514,7 +514,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 
 				// Check to see if the initiated transform mode is selected
 				if (sandbox->transform_display_axes) {
-					auto change_selected_axis = [&](ECS_TRANSFORM_TOOL_AXIS axis) {
+					auto change_selected_axis = [&](ECS_AXIS axis) {
 						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 						sandbox->transform_tool_selected[axis] = true;
 						trigger_rerender_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
@@ -544,21 +544,21 @@ static void ScenePrivateAction(ActionData* action_data) {
 					};
 
 					if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_X)) {
-						change_selected_axis(ECS_TRANSFORM_AXIS_X);
+						change_selected_axis(ECS_AXIS_X);
 					}
 					else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_Y)) {
-						change_selected_axis(ECS_TRANSFORM_AXIS_Y);
+						change_selected_axis(ECS_AXIS_Y);
 					}
 					else if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_AXIS_Z)) {
-						change_selected_axis(ECS_TRANSFORM_AXIS_Z);
+						change_selected_axis(ECS_AXIS_Z);
 					}
 
 					// Check to see if we have active keyboard action
 					unsigned char axes_select_count = 0;
-					ECS_TRANSFORM_TOOL_AXIS axis = ECS_TRANSFORM_AXIS_COUNT;
-					for (size_t index = 0; index < ECS_TRANSFORM_AXIS_COUNT; index++) {
+					ECS_AXIS axis = ECS_AXIS_COUNT;
+					for (size_t index = 0; index < ECS_AXIS_COUNT; index++) {
 						if (sandbox->transform_tool_selected[index]) {
-							axis = (ECS_TRANSFORM_TOOL_AXIS)index;
+							axis = (ECS_AXIS)index;
 							axes_select_count++;
 						}
 					}
@@ -879,7 +879,7 @@ struct SceneLeftClickableActionData {
 	bool is_selection_mode;
 	bool was_keyboard_transform_on_click;
 
-	ECS_TRANSFORM_TOOL_AXIS tool_axis;
+	ECS_AXIS tool_axis;
 	// This is cached such that it doesn't need to be calculated each time
 	float3 gizmo_translation_midpoint;
 	Quaternion gizmo_rotation_midpoint;
@@ -939,17 +939,17 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 				if (entity_slot.slot_type != EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
 					switch (entity_slot.slot_type) {
 					case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X:
-						data->tool_axis = ECS_TRANSFORM_AXIS_X;
+						data->tool_axis = ECS_AXIS_X;
 						break;
 					case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_Y:
-						data->tool_axis = ECS_TRANSFORM_AXIS_Y;
+						data->tool_axis = ECS_AXIS_Y;
 						break;
 					case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_Z:
-						data->tool_axis = ECS_TRANSFORM_AXIS_Z;
+						data->tool_axis = ECS_AXIS_Z;
 						break;
 					}
 
-					if (data->tool_axis != ECS_TRANSFORM_AXIS_COUNT) {
+					if (data->tool_axis != ECS_AXIS_COUNT) {
 						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
 						sandbox->transform_tool_selected[data->tool_axis] = true;
 
@@ -989,7 +989,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 		}
 	}
 	else if (!data->was_keyboard_transform_on_click) {
-		if (data->tool_axis == ECS_TRANSFORM_AXIS_COUNT) {
+		if (data->tool_axis == ECS_AXIS_COUNT) {
 			// Check to see if the RuntimeGraphics is available for copying to the CPU the values
 			if (data->cpu_framebuffer.values == nullptr) {
 				if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
@@ -1208,7 +1208,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			left_clickable_data.sandbox_index = sandbox_index;
 			left_clickable_data.click_ui_position = { FLT_MAX, FLT_MAX };
 			left_clickable_data.is_selection_mode = false;
-			left_clickable_data.tool_axis = ECS_TRANSFORM_AXIS_COUNT;
+			left_clickable_data.tool_axis = ECS_AXIS_COUNT;
 			// Set the phase to late to have the selection border be drawn over the main sprite
 			UIActionHandler selection_handler = { SceneLeftClickableAction, &left_clickable_data, sizeof(left_clickable_data), ECS_UI_DRAW_LATE };
 			drawer.SetWindowClickable(&selection_handler);

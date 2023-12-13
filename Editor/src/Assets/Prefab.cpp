@@ -18,7 +18,9 @@ ECS_INLINE static AllocatorPolymorphic PrefabAllocator(const EditorState* editor
 static Stream<wchar_t> GetPrefabAbsolutePath(const EditorState* editor_state, Stream<wchar_t> path, CapacityStream<wchar_t> storage) {
 	GetProjectAssetsFolder(editor_state, storage);
 	storage.Add(ECS_OS_PATH_SEPARATOR);
-	storage.AddStreamAssert(path);
+	unsigned int offset = storage.AddStreamAssert(path);
+	Stream<wchar_t> replace_path = storage.SliceAt(offset);
+	ReplaceCharacter(replace_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 	return storage;
 }
 
@@ -27,6 +29,7 @@ unsigned int AddPrefabID(EditorState* editor_state, Stream<wchar_t> path) {
 	if (existing_id == -1) {
 		// We need to create a new entry
 		path = path.Copy(PrefabAllocator(editor_state));
+		ReplaceCharacter(path, ECS_OS_PATH_SEPARATOR, ECS_OS_PATH_SEPARATOR_REL);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path_storage, 512);
 		Stream<wchar_t> absolute_path = GetPrefabAbsolutePath(editor_state, path, absolute_path_storage);
 
@@ -111,6 +114,13 @@ Stream<Entity> GetPrefabEntitiesForSandbox(
 	});
 
 	return entities;
+}
+
+void RenamePrefabID(EditorState* editor_state, unsigned int id, Stream<wchar_t> new_path)
+{
+	PrefabInstance& instance = editor_state->prefabs[id];
+	instance.path.Deallocate(PrefabAllocator(editor_state));
+	instance.path = new_path.Copy(PrefabAllocator(editor_state));
 }
 
 void RemovePrefabID(EditorState* editor_state, Stream<wchar_t> path) {

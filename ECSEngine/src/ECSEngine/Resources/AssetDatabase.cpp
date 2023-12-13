@@ -1480,25 +1480,14 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------
 
 	static bool ReadAssetFileImpl(
-		const AssetDatabase* database, 
-		Stream<char> name, 
-		Stream<wchar_t> file, 
-		void* asset, 
-		const char* asset_string, 
+		const AssetDatabase* database,
+		Stream<wchar_t> metadata_file,
+		void* asset,
+		const char* asset_string,
 		ECS_ASSET_TYPE asset_type,
-		AllocatorPolymorphic allocator,
-		bool default_initialize_if_missing
+		AllocatorPolymorphic allocator
 	) {
 		if (database->metadata_file_location.size > 0) {
-			ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
-			database->FileLocationAsset(name, file, path, asset_type);
-			if (default_initialize_if_missing) {
-				if (!ExistsFileOrFolder(path)) {
-					CreateDefaultAsset(asset, name, file, asset_type);
-					return true;
-				}
-			}
-
 			if (allocator.allocator == nullptr) {
 				allocator = database->Allocator();
 			}
@@ -1508,8 +1497,8 @@ namespace ECSEngine {
 
 			SetSerializeCustomMaterialAssetDatabase(database);
 
-			ECS_DESERIALIZE_CODE serialize_code = DeserializeEx(database->reflection_manager, asset_string, asset, path, &deserialize_options);
-			
+			ECS_DESERIALIZE_CODE serialize_code = DeserializeEx(database->reflection_manager, asset_string, asset, metadata_file, &deserialize_options);
+
 			SetSerializeCustomMaterialAssetDatabase((AssetDatabase*)nullptr);
 
 			if (serialize_code == ECS_DESERIALIZE_OK) {
@@ -1519,6 +1508,29 @@ namespace ECSEngine {
 		}
 		return true;
 	}
+
+	static bool ReadAssetFileImpl(
+		const AssetDatabase* database, 
+		Stream<char> name, 
+		Stream<wchar_t> file, 
+		void* asset, 
+		const char* asset_string, 
+		ECS_ASSET_TYPE asset_type,
+		AllocatorPolymorphic allocator,
+		bool default_initialize_if_missing
+	) {
+		ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
+		database->FileLocationAsset(name, file, path, asset_type);
+		if (default_initialize_if_missing) {
+			if (!ExistsFileOrFolder(path)) {
+				CreateDefaultAsset(asset, name, file, asset_type);
+				return true;
+			}
+		}
+		return ReadAssetFileImpl(database, path, asset, asset_string, asset_type, allocator);
+	}
+
+	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::ReadMeshFile(Stream<char> name, Stream<wchar_t> file, MeshMetadata* metadata, bool default_initialize_if_missing) const {
 		return ReadAssetFileImpl(this, name, file, metadata, STRING(MeshMetadata), ECS_ASSET_MESH, { nullptr }, default_initialize_if_missing);
@@ -1596,19 +1608,192 @@ namespace ECSEngine {
 		return false;
 	}
 
+	bool AssetDatabase::ReadAssetFile(
+		Stream<wchar_t> metadata_file, 
+		void* metadata, 
+		ECS_ASSET_TYPE asset_type, 
+		AllocatorPolymorphic allocator
+	)
+	{
+		switch (asset_type) {
+		case ECS_ASSET_MESH:
+			return ReadAssetFileImpl(this, metadata_file, metadata, STRING(MeshMetadata), asset_type, allocator);
+			break;
+		case ECS_ASSET_TEXTURE:
+			return ReadAssetFileImpl(this, metadata_file, metadata, STRING(TextureMetadata), asset_type, allocator);
+			break;
+		case ECS_ASSET_GPU_SAMPLER:
+			return ReadAssetFileImpl(this, metadata_file, metadata, STRING(GPUSamplerMetadata), asset_type, allocator);
+			break;
+		case ECS_ASSET_SHADER:
+			return ReadAssetFileImpl(this, metadata_file, metadata, STRING(ShaderMetadata), asset_type, allocator);
+			break;
+		case ECS_ASSET_MATERIAL:
+			return ReadAssetFileImpl(this, metadata_file, metadata, STRING(MaterialAsset), asset_type, allocator);
+			break;
+		case ECS_ASSET_MISC:
+			// At the moment, this asset doesn't have any metadata file
+			return true;
+			break;
+		default:
+			ECS_ASSERT(false, "Invalid asset type");
+		}
+
+		return false;
+	}
+
 	// --------------------------------------------------------------------------------------
 
-	bool AssetDatabase::RenameAsset(unsigned int handle, ECS_ASSET_TYPE type, Stream<char> new_name)
-	{
-		void* metadata = GetAsset(handle, type);
+	// The rename functor receives as parameters (void* metadata, AllocatorPolymorphic allocator)
+	// The update metadata files functor receives as parameters (Stream<char> previous_name, Stream<wchar_t> previous_file)
+	template<typename RenameFunctor, typename UpdateMetadataFilesFunctor>
+	static bool RenameAssetImpl(
+		AssetDatabase* database, 
+		unsigned int handle, 
+		ECS_ASSET_TYPE type, 
+		bool* update_dependency_metadata_files,
+		RenameFunctor&& rename_functor,
+		UpdateMetadataFilesFunctor&& update_metadata_files_functor
+	) {
+		void* metadata = database->GetAsset(handle, type);
 		size_t metadata_storage[AssetMetadataMaxSizetSize()];
 		// We can rename directly here. It will deallocate the previous name, but it is fine
 		// Since all deallocates use DeallocateIfBelongs and won't trigger an error when trying
 		// To update the asset
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 128, ECS_MB);
+		Stream<char> previous_name = {};
+		Stream<wchar_t> previous_file = {};
+		if (update_dependency_metadata_files != nullptr) {
+			previous_name = ECSEngine::GetAssetName(metadata, type).Copy(GetAllocatorPolymorphic(&temporary_allocator));
+			previous_file = ECSEngine::GetAssetFile(metadata, type).Copy(GetAllocatorPolymorphic(&temporary_allocator));
+		}
 		CopyAssetBase(metadata_storage, metadata, type, GetAllocatorPolymorphic(&temporary_allocator));
-		ECSEngine::RenameAsset(metadata_storage, type, new_name, Allocator());
-		return UpdateAsset(handle, metadata_storage, type);
+		rename_functor(metadata_storage, database->Allocator());
+		bool success = database->UpdateAsset(handle, metadata_storage, type);
+		if (success && update_dependency_metadata_files != nullptr) {
+			*update_dependency_metadata_files = update_metadata_files_functor(previous_name, previous_file);
+		}
+		return success;
+	}
+	
+	bool AssetDatabase::RenameAsset(unsigned int handle, ECS_ASSET_TYPE type, Stream<char> new_name, bool* update_dependency_metadata_files)
+	{
+		return RenameAssetImpl(this, handle, type, update_dependency_metadata_files, [=](void* metadata, AllocatorPolymorphic allocator) {
+			ECSEngine::RenameAsset(metadata, type, new_name, allocator);
+		}, [=](Stream<char> previous_name, Stream<wchar_t> previous_file) {
+			return RenameAssetUpdateMetadataFiles(previous_name, previous_file, new_name, type);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	// The functor is called with (void* dependency, Stream<char> dependency_name, Stream<wchar_t> dependency_file, AllocatorPolymorphic allocator)
+	// It must return true if there is a match, and if there is, it also performs the renaming
+	template<typename CompareRenameFunctor>
+	static bool RenameAssetUpdateMetadataFilesImpl(const AssetDatabase* database, ECS_ASSET_TYPE type, CompareRenameFunctor&& compare_rename_functor) {
+		if (ECSEngine::ExistsStaticArray(type, ECS_ASSET_TYPES_REFERENCEABLE)) {
+			bool success = true;
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
+			AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+			// We could load the metadata files directly into our database, but to keep things
+			// Clean and to not have to do any cleanup here, create a temporary database that uses
+			// This stack allocator
+			AssetDatabase temporary_database;
+			ECSEngine::ForEach(ECS_ASSET_TYPES_WITH_DEPENDENCIES, [&](ECS_ASSET_TYPE with_dependency_type) {
+				_stack_allocator.Clear();
+				// Reinitialize again the temporary database
+				temporary_database = AssetDatabase(stack_allocator, database->reflection_manager);
+				temporary_database.SetFileLocation(database->metadata_file_location);
+				Stream<Stream<wchar_t>> files = database->GetMetadatasForType(with_dependency_type, stack_allocator);
+
+				size_t metadata_storage[AssetMetadataMaxSizetSize()];
+				ECS_STACK_CAPACITY_STREAM(wchar_t, metadata_folder, 512);
+				AssetDatabaseFileDirectory(database->metadata_file_location, metadata_folder, with_dependency_type);
+				metadata_folder.Add(ECS_OS_PATH_SEPARATOR);
+				unsigned int metadata_folder_size = metadata_folder.size;
+				for (size_t index = 0; index < files.size; index++) {
+					metadata_folder.size = metadata_folder_size;
+					metadata_folder.AddStreamAssert(files[index]);
+					// Read the metadata file and compare
+					bool current_success = temporary_database.ReadAssetFile(
+						metadata_folder,
+						metadata_storage,
+						with_dependency_type
+					);
+					if (!current_success) {
+						success = false;
+					}
+					else {
+						// Check to see if this appears in the dependency for this file asset
+						ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, dependencies, 512);
+						GetAssetDependencies(metadata_storage, with_dependency_type, &dependencies);
+						for (unsigned int dependency_index = 0; dependency_index < dependencies.size; dependency_index++) {
+							ECS_ASSET_TYPE dependency_type = dependencies[dependency_index].type;
+							if (dependency_type == type) {
+								void* metadata = temporary_database.GetAsset(dependencies[dependency_index].handle, dependency_type);
+								Stream<char> dependency_name = ECSEngine::GetAssetName(metadata, dependency_type);
+								Stream<wchar_t> dependency_file = ECSEngine::GetAssetFile(metadata, dependency_type);
+								if (compare_rename_functor(metadata, dependency_name, dependency_file, temporary_database.Allocator())) {
+									// Write the metadata file again
+									current_success = temporary_database.WriteAssetFile(metadata_storage, with_dependency_type);
+									if (!current_success) {
+										success = false;
+									}
+									break;
+								}
+							}
+						}
+					}
+				}
+				});
+			return success;
+		}
+		return true;
+	}
+
+	bool AssetDatabase::RenameAssetUpdateMetadataFiles(Stream<char> previous_name, Stream<wchar_t> file, Stream<char> new_name, ECS_ASSET_TYPE type) const
+	{
+		return RenameAssetUpdateMetadataFilesImpl(this, type, [&](
+			void* dependency, 
+			Stream<char> dependency_name, 
+			Stream<wchar_t> dependency_file, 
+			AllocatorPolymorphic allocator
+		) {
+			if (dependency_name == previous_name && dependency_file == file) {
+				ECSEngine::RenameAsset(dependency, type, new_name, allocator);
+				return true;
+			}
+			return false;
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::RenameAssetFile(unsigned int handle, ECS_ASSET_TYPE type, Stream<wchar_t> new_path, bool* update_dependency_metadata_files)
+	{
+		return RenameAssetImpl(this, handle, type, update_dependency_metadata_files, [=](void* metadata, AllocatorPolymorphic allocator) {
+			ECSEngine::RenameAssetFile(metadata, type, new_path, allocator);
+			}, [=](Stream<char> previous_name, Stream<wchar_t> previous_file) {
+				return RenameAssetFileUpdateMetadataFiles(previous_file, previous_name, new_path, type);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::RenameAssetFileUpdateMetadataFiles(Stream<wchar_t> previous_file, Stream<char> name, Stream<wchar_t> new_file, ECS_ASSET_TYPE type) const
+	{
+		return RenameAssetUpdateMetadataFilesImpl(this, type, [&](
+			void* dependency,
+			Stream<char> dependency_name,
+			Stream<wchar_t> dependency_file,
+			AllocatorPolymorphic allocator
+		) {
+				if (dependency_name == name && dependency_file == previous_file) {
+					ECSEngine::RenameAssetFile(dependency, type, new_file, allocator);
+					return true;
+				}
+				return false;
+		});
 	}
 
 	// --------------------------------------------------------------------------------------

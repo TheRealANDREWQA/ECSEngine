@@ -192,6 +192,8 @@ namespace ECSEngine {
 
 		void Rename(Stream<char> new_name, AllocatorPolymorphic allocator);
 
+		void RenameFile(Stream<wchar_t> new_file, AllocatorPolymorphic allocator);
+
 		bool SameTarget(const MeshMetadata* other) const;
 
 		ECS_INLINE void* Pointer() const {
@@ -228,6 +230,8 @@ namespace ECSEngine {
 		void Default(Stream<char> name, Stream<wchar_t> file);
 
 		void Rename(Stream<char> new_name, AllocatorPolymorphic allocator);
+
+		void RenameFile(Stream<wchar_t> new_file, AllocatorPolymorphic allocator);
 
 		bool SameTarget(const TextureMetadata* other) const;
 
@@ -310,6 +314,8 @@ namespace ECSEngine {
 		unsigned int FindMacro(Stream<char> name) const;
 
 		void Rename(Stream<char> new_name, AllocatorPolymorphic allocator);
+
+		void RenameFile(Stream<wchar_t> new_file, AllocatorPolymorphic allocator);
 
 		void RemoveMacro(unsigned int index, AllocatorPolymorphic allocator);
 
@@ -611,6 +617,8 @@ namespace ECSEngine {
 
 		void Rename(Stream<char> new_name, AllocatorPolymorphic allocator);
 
+		void RenameFile(Stream<wchar_t> new_file, AllocatorPolymorphic allocator);
+
 		ECS_INLINE void* Pointer() const {
 			return data.buffer;
 		}
@@ -716,6 +724,8 @@ namespace ECSEngine {
 	ECSENGINE_API void RemapAssetDependencies(void* metadata, ECS_ASSET_TYPE type, Stream<AssetTypedHandle> handles);
 
 	ECSENGINE_API void RenameAsset(void* metadata, ECS_ASSET_TYPE type, Stream<char> new_name, AllocatorPolymorphic allocator);
+
+	ECSENGINE_API void RenameAssetFile(void* metadata, ECS_ASSET_TYPE type, Stream<wchar_t> new_file, AllocatorPolymorphic allocator);
 
 	// The functor receives as arguments the handle and the asset type of the dependency
 	// When early_exit is desired, return true to exit.
