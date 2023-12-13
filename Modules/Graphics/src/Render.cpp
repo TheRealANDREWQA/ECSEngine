@@ -248,23 +248,23 @@ ECS_THREAD_TASK(DrawSelectables) {
 						debug_options.wireframe = false;
 
 						Color gray_color = Color(100, 100, 100);
-						Color transform_colors[ECS_TRANSFORM_AXIS_COUNT] = {
+						Color transform_colors[ECS_AXIS_COUNT] = {
 								AxisXColor(),
 								AxisYColor(),
 								AxisZColor()
 						};
 
-						if (transform_tool.is_selected[ECS_TRANSFORM_AXIS_X]) {
-							transform_colors[ECS_TRANSFORM_AXIS_Y] = gray_color;
-							transform_colors[ECS_TRANSFORM_AXIS_Z] = gray_color;
+						if (transform_tool.is_selected[ECS_AXIS_X]) {
+							transform_colors[ECS_AXIS_Y] = gray_color;
+							transform_colors[ECS_AXIS_Z] = gray_color;
 						}
-						else if (transform_tool.is_selected[ECS_TRANSFORM_AXIS_Y]) {
-							transform_colors[ECS_TRANSFORM_AXIS_X] = gray_color;
-							transform_colors[ECS_TRANSFORM_AXIS_Z] = gray_color;
+						else if (transform_tool.is_selected[ECS_AXIS_Y]) {
+							transform_colors[ECS_AXIS_X] = gray_color;
+							transform_colors[ECS_AXIS_Z] = gray_color;
 						}
-						else if (transform_tool.is_selected[ECS_TRANSFORM_AXIS_Z]) {
-							transform_colors[ECS_TRANSFORM_AXIS_X] = gray_color;
-							transform_colors[ECS_TRANSFORM_AXIS_Y] = gray_color;
+						else if (transform_tool.is_selected[ECS_AXIS_Z]) {
+							transform_colors[ECS_AXIS_X] = gray_color;
+							transform_colors[ECS_AXIS_Y] = gray_color;
 						}
 
 						if (transform_tool.display_axes) {
@@ -272,7 +272,7 @@ ECS_THREAD_TASK(DrawSelectables) {
 							// Such that it will cover the entire screen - this info
 							// doesn't need instance thickness x, y, z
 							DebugOOBBCrossInfo info;
-							memcpy(&info.color_x, &transform_colors[ECS_TRANSFORM_AXIS_X], sizeof(Color) * ECS_TRANSFORM_AXIS_COUNT);
+							memcpy(&info.color_x, &transform_colors[ECS_AXIS_X], sizeof(Color) * ECS_AXIS_COUNT);
 							debug_drawer->AddOOBBCross(
 								translation_midpoint,
 								rotation_midpoint_storage,
@@ -289,12 +289,12 @@ ECS_THREAD_TASK(DrawSelectables) {
 							case ECS_TRANSFORM_TRANSLATION:
 							{
 								DebugAxesInfo axes_info;
-								axes_info.instance_thickness_x = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_X]);
-								axes_info.instance_thickness_y = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Y]);
-								axes_info.instance_thickness_z = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Z]);
-								axes_info.color_x = transform_colors[ECS_TRANSFORM_AXIS_X];
-								axes_info.color_y = transform_colors[ECS_TRANSFORM_AXIS_Y];
-								axes_info.color_z = transform_colors[ECS_TRANSFORM_AXIS_Z];
+								axes_info.instance_thickness_x = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_X]);
+								axes_info.instance_thickness_y = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_Y]);
+								axes_info.instance_thickness_z = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_Z]);
+								axes_info.color_x = transform_colors[ECS_AXIS_X];
+								axes_info.color_y = transform_colors[ECS_AXIS_Y];
+								axes_info.color_z = transform_colors[ECS_AXIS_Z];
 								debug_drawer->AddAxes(
 									translation_midpoint, 
 									rotation_midpoint_storage,
@@ -307,32 +307,32 @@ ECS_THREAD_TASK(DrawSelectables) {
 							case ECS_TRANSFORM_ROTATION:
 							{
 								Quaternion x_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisZ(90.0f));
-								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_X]);
+								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_X]);
 								debug_drawer->AddCircle(
 									translation_midpoint,
 									x_rotation.StorageLow(),
 									constant_viewport_size,
-									transform_colors[ECS_TRANSFORM_AXIS_X],
+									transform_colors[ECS_AXIS_X],
 									debug_options
 								);
 
 								Quaternion y_rotation = rotation_midpoint;
-								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Y]);
+								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_Y]);
 								debug_drawer->AddCircle(
 									translation_midpoint,
 									y_rotation.StorageLow(),
 									constant_viewport_size,
-									transform_colors[ECS_TRANSFORM_AXIS_Y],
+									transform_colors[ECS_AXIS_Y],
 									debug_options
 								);
 
-								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Z]);
+								debug_options.instance_thickness = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_Z]);
 								Quaternion z_rotation = AddWorldRotation(rotation_midpoint, QuaternionForAxisX(90.0f));
 								debug_drawer->AddCircle(
 									translation_midpoint,
 									z_rotation.StorageLow(),
 									constant_viewport_size,
-									transform_colors[ECS_TRANSFORM_AXIS_Z],
+									transform_colors[ECS_AXIS_Z],
 									debug_options
 								);
 							}
@@ -340,12 +340,12 @@ ECS_THREAD_TASK(DrawSelectables) {
 							case ECS_TRANSFORM_SCALE:
 							{
 								DebugOOBBCrossInfo info;
-								info.color_x = transform_colors[ECS_TRANSFORM_AXIS_X];
-								info.color_y = transform_colors[ECS_TRANSFORM_AXIS_Y];
-								info.color_z = transform_colors[ECS_TRANSFORM_AXIS_Z];
-								info.instance_thickness_x = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_X]);
-								info.instance_thickness_y = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Y]);
-								info.instance_thickness_z = GizmoRenderIndex(transform_tool.entity_ids[ECS_TRANSFORM_AXIS_Z]);
+								info.color_x = transform_colors[ECS_AXIS_X];
+								info.color_y = transform_colors[ECS_AXIS_Y];
+								info.color_z = transform_colors[ECS_AXIS_Z];
+								info.instance_thickness_x = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_X]);
+								info.instance_thickness_y = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_Y]);
+								info.instance_thickness_z = GizmoRenderIndex(transform_tool.entity_ids[ECS_AXIS_Z]);
 								debug_drawer->AddOOBBCross(
 									translation_midpoint,
 									rotation_midpoint_storage,

@@ -1292,8 +1292,16 @@ namespace ECSEngine {
 
 	void ShaderMetadata::Rename(Stream<char> new_name, AllocatorPolymorphic allocator)
 	{
-		DeallocateIfBelongs(allocator, new_name.buffer);
-		name = new_name.Copy(allocator);
+		name.DeallocateIfBelongs(allocator);
+		name = StringCopy(allocator, new_name);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void ShaderMetadata::RenameFile(Stream<wchar_t> new_file, AllocatorPolymorphic allocator)
+	{
+		file.DeallocateIfBelongs(allocator);
+		file = StringCopy(allocator, new_file);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1340,8 +1348,16 @@ namespace ECSEngine {
 
 	void MiscAsset::Rename(Stream<char> new_name, AllocatorPolymorphic allocator)
 	{
-		DeallocateIfBelongs(allocator, name.buffer);
-		name = new_name.Copy(allocator);
+		name.DeallocateIfBelongs(allocator);
+		name = StringCopy(allocator, new_name);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MiscAsset::RenameFile(Stream<wchar_t> new_file, AllocatorPolymorphic allocator)
+	{
+		file.DeallocateIfBelongs(allocator);
+		file = StringCopy(allocator, new_file);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1468,8 +1484,16 @@ namespace ECSEngine {
 
 	void TextureMetadata::Rename(Stream<char> new_name, AllocatorPolymorphic allocator)
 	{
-		DeallocateIfBelongs(allocator, name.buffer);
-		name = new_name.Copy(allocator);
+		name.DeallocateIfBelongs(allocator);
+		name = StringCopy(allocator, new_name);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void TextureMetadata::RenameFile(Stream<wchar_t> new_file, AllocatorPolymorphic allocator)
+	{
+		file.DeallocateIfBelongs(allocator);
+		file = StringCopy(allocator, new_file);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1542,8 +1566,16 @@ namespace ECSEngine {
 
 	void MeshMetadata::Rename(Stream<char> new_name, AllocatorPolymorphic allocator)
 	{
-		DeallocateIfBelongs(allocator, name.buffer);
-		name = new_name.Copy(allocator);
+		name.DeallocateIfBelongs(allocator);
+		name = StringCopy(allocator, new_name);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MeshMetadata::RenameFile(Stream<wchar_t> new_file, AllocatorPolymorphic allocator)
+	{
+		file.DeallocateIfBelongs(allocator);
+		file = StringCopy(allocator, new_file);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1914,6 +1946,42 @@ namespace ECSEngine {
 		ASSET_SWITCH(type, CASE);
 
 #undef CASE
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void RenameAssetFile(void* untyped_metadata, ECS_ASSET_TYPE type, Stream<wchar_t> new_file, AllocatorPolymorphic allocator) {
+		switch(type) {
+		case ECS_ASSET_MESH:
+		{
+			MeshMetadata* metadata = (MeshMetadata*)untyped_metadata;
+			metadata->RenameFile(new_file, allocator);
+		}
+		break;
+		case ECS_ASSET_TEXTURE:
+		{
+			TextureMetadata* metadata = (TextureMetadata*)untyped_metadata;
+			metadata->RenameFile(new_file, allocator);
+		}
+		break;
+		case ECS_ASSET_SHADER:
+		{
+			ShaderMetadata* metadata = (ShaderMetadata*)untyped_metadata;
+			metadata->RenameFile(new_file, allocator);
+		}
+		break;
+		case ECS_ASSET_MISC:
+		{
+			MiscAsset* metadata = (MiscAsset*)untyped_metadata;
+			metadata->RenameFile(new_file, allocator);
+		}
+		break;
+		case ECS_ASSET_GPU_SAMPLER:
+		case ECS_ASSET_MATERIAL:
+			break;
+		default:
+			ECS_ASSERT(false, "Invalid asset type");
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------

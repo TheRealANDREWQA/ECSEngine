@@ -55,8 +55,21 @@ void ChooseDirectoryOrFileName(void* window_data, UIDrawerDescriptor* drawer_des
 // The callback can be omitted by making it nullptr
 unsigned int CreateChooseDirectoryOrFileNameDockspace(UISystem* system, ChooseDirectoryOrFileNameData data);
 
+struct RenameWizardAdditionalData {
+	bool prevent_default_renaming;
+	// This is the file being renamed
+	Stream<wchar_t> path;
+	// These 2 names are the same, but given in ascii or wide form
+	Stream<char> new_name;
+	Stream<wchar_t> wide_new_name;
+};
+
+// The user callback receives in the additional data parameter a RenameWizardAdditionalData*
+// You can have the rename omitted and handled by you. The new name is given here
 unsigned int CreateRenameFileWizard(Stream<wchar_t> path, UISystem* system, UIActionHandler user_callback = {});
 
+// The user callback receives in the additional data parameter a RenameWizardAdditionalData*
+// You can have the rename omitted and handled by you. The new name is given here
 unsigned int CreateRenameFolderWizard(Stream<wchar_t> path, UISystem* system, UIActionHandler user_callback = {});
 
 // Returns -1 if no window which targets a sandbox is selected

@@ -196,6 +196,7 @@
     <ClInclude Include="src\Editor\EditorPalette.h" />
     <ClInclude Include="src\Editor\EditorParameters.h" />
     <ClInclude Include="src\editorpch.h" />
+    <ClInclude Include="src\Project\ProjectRenameFile.h" />
     <ClInclude Include="src\Project\ProjectSettings.h" />
     <ClInclude Include="src\Sandbox\Sandbox.h" />
     <ClInclude Include="src\Sandbox\SandboxCrashHandler.h" />
@@ -284,6 +285,7 @@
     </ClCompile>
     <ClCompile Include="src\Editor\EditorGeneralInputTick.cpp" />
     <ClCompile Include="src\Editor\EditorInputMapping.cpp" />
+    <ClCompile Include="src\Project\ProjectRenameFile.cpp" />
     <ClCompile Include="src\Project\ProjectSettings.cpp" />
     <ClCompile Include="src\Sandbox\Sandbox.cpp" />
     <ClCompile Include="src\Sandbox\SandboxCrashHandler.cpp" />

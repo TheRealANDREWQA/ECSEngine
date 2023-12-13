@@ -78,7 +78,7 @@ namespace ECSEngine {
 		unsigned int generation_count : 6;
 		unsigned int tags : 6;
 
-		// 32 bits for these 3 fields
+		// 32 bits for these 2 fields
 		unsigned int stream_index : 24;
 		unsigned int layer : 8;
 	};

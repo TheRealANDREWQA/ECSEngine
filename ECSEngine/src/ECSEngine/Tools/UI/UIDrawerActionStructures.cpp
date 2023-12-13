@@ -45,6 +45,13 @@ namespace ECSEngine {
 			return name.TextStream();
 		}
 
+		void UIDrawerTextInput::EnterSelection(Keyboard* keyboard)
+		{
+			is_currently_selected = true;
+			is_caret_display = true;
+			keyboard->CaptureCharacters();
+		}
+
 		float UIDrawerTextInput::GetLowestX() const
 		{
 			return name.GetLowestX();

@@ -56,6 +56,9 @@ namespace ECSEngine {
 			unsigned int* TextSize();
 			CapacityStream<UISpriteVertex>* TextStream();
 
+			// This can be used outside the UI to tell the input to enter in selection mode
+			void EnterSelection(Keyboard* keyboard);
+
 			float GetLowestX() const;
 			float GetLowestY() const;
 			float2 GetLowest() const;

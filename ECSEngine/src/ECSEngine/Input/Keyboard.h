@@ -213,12 +213,19 @@ namespace ECSEngine {
 			return m_character_queue.Pop(character);
 		}
 
+        void Reset();
+
         void Update();
 
 		void Procedure(const KeyboardProcedureInfo& info);
 
+        void UpdateFromOther(const Keyboard* other);
+
 		KeyboardCharacterQueue m_character_queue;
 		bool m_process_characters;
+        // Describes how many characters have been pushed since
+        // The last message handling pass
+        unsigned int m_pushed_character_count;
 	};
 }
 

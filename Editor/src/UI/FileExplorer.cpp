@@ -9,6 +9,7 @@
 #include "HelperWindows.h"
 #include "PrefabSceneDrag.h"
 #include "../Project/ProjectOperations.h"
+#include "../Project/ProjectRenameFile.h"
 #include "Inspector.h"
 #include "../Editor/EditorPalette.h"
 #include "../Editor/EditorEvent.h"
@@ -65,12 +66,6 @@ bool FILE_EXPLORER_DESELECTION_HAS_SUBMENUES[FILE_EXPLORER_DESELECTION_MENU_ROW_
 
 constexpr size_t FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT = 5;
 char* FILE_EXPLORER_DESELECTION_MENU_CREATE_CHARACTERS = "Scene\nSampler\nShader\nMaterial\nMisc";
-
-constexpr const char* RENAME_LABEL_FILE_NAME = "Rename File";
-constexpr const char* RENAME_LABEL_FILE_INPUT_NAME = "New file name";
-
-constexpr const char* RENAME_LABEL_FOLDER_NAME = "Rename Folder";
-constexpr const char* RENAME_LABEL_FOLDER_INPUT_NAME = "New folder name";
 
 constexpr size_t FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY = 256;
 constexpr size_t FILE_EXPLORER_CURRENT_SELECTED_CAPACITY = 16;
@@ -351,6 +346,34 @@ static void FileExplorerChangeDirectoryFromFile(ActionData* action_data) {
 	FileExplorerSetNewDirectory(data, explorer_data->selected_files[0], -1);
 }
 
+static void RenameFileCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	RenameWizardAdditionalData* additional_data = (RenameWizardAdditionalData*)_additional_data;
+	additional_data->prevent_default_renaming = true;
+	bool success = ProjectRenameFile(editor_state, additional_data->path, additional_data->wide_new_name);
+	if (!success) {
+		ECS_FORMAT_TEMP_STRING(message, "Failed to rename file {#} to {#}", additional_data->path, additional_data->wide_new_name);
+		EditorSetConsoleError(message);
+	}
+}
+
+static void FileExplorerMenuRenameCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	Stream<wchar_t> path = editor_state->file_explorer_data->right_click_stream;
+	bool is_file = IsFile(path);
+	UIActionHandler callback = { RenameFileCallback, editor_state, 0 };
+	if (is_file) {
+		CreateRenameFileWizard(path, system, callback);
+	}
+	else {
+		CreateRenameFolderWizard(path, system, callback);
+	}
+}
+
 static void FileExplorerLabelRenameCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
@@ -362,13 +385,9 @@ static void FileExplorerLabelRenameCallback(ActionData* action_data) {
 		if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 			if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
 				if (additional_data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) < DOUBLE_CLICK_DURATION) {
-					bool is_file = IsFile(data->selection);
-					if (is_file) {
-						CreateRenameFileWizard(data->selection, system);
-					}
-					else {
-						CreateRenameFolderWizard(data->selection, system);
-					}
+					// We can use this implementation
+					action_data->data = data->editor_state;
+					FileExplorerMenuRenameCallback(action_data);
 				}
 			}
 			data->timer.SetMarker();
@@ -2055,7 +2074,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_SYSTEM };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { RenameFileWizardStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { FileExplorerMenuRenameCallback, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
@@ -2069,7 +2088,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_OPEN] = { FileExplorerChangeDirectoryFromFile, editor_state, 0 };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_SYSTEM };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { RenameFolderWizardStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { FileExplorerMenuRenameCallback, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };

@@ -62,6 +62,9 @@ Stream<Entity> GetPrefabEntitiesForSandbox(
 	AllocatorPolymorphic allocator
 );
 
+// The path must be relative to the assets folder
+void RenamePrefabID(EditorState* editor_state, unsigned int id, Stream<wchar_t> new_path);
+
 // Removes the prefab from the active list
 void RemovePrefabID(EditorState* editor_state, Stream<wchar_t> relative_assets_path);
 

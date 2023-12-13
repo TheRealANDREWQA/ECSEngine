@@ -62,6 +62,8 @@ struct FileExplorerData {
 
 	// Right click handlers take as arguments Stream<wchar_t>, so an extra must be set
 	// By the right click callback in order to have them behave correctly
+	// This is also used as the callback path for renaming, show in explorer
+	// And other menu callbacks
 	ECSEngine::Stream<wchar_t> right_click_stream;
 	ECSEngine::ResizableStream<FileExplorerPreloadTexture> preloaded_textures;
 	// Each thread will commit its results into this staging textures that will be moved into the main pool

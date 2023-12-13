@@ -62,16 +62,6 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeTemporarySandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> new_scene)
-{
-	ECS_ASSERT(IsSandboxTemporary(editor_state, sandbox_index));
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->scene_path.size = 0;
-	GetScenePath(editor_state, new_scene, sandbox->scene_path);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 void ClearSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
 {
 	// Unload the assets currently used by this sandbox and reset the scene entities
@@ -95,7 +85,9 @@ void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int
 void GetScenePath(const EditorState* editor_state, Stream<wchar_t> scene_path, CapacityStream<wchar_t>& absolute_path) {
 	GetProjectAssetsFolder(editor_state, absolute_path);
 	absolute_path.Add(ECS_OS_PATH_SEPARATOR);
-	absolute_path.AddStream(scene_path);
+	unsigned int offset = absolute_path.AddStream(scene_path);
+	Stream<wchar_t> replace_path = absolute_path.SliceAt(offset);
+	ReplaceCharacter(replace_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 	absolute_path[absolute_path.size] = L'\0';
 	absolute_path.AssertCapacity();
 }
@@ -134,6 +126,20 @@ float GetSandboxViewportAspectRatio(const EditorState* editor_state, unsigned in
 
 	uint2 dimensions = GetTextureDimensions(view.AsTexture2D());
 	return (float)dimensions.x / (float)dimensions.y;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void RenameSandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> new_scene, bool absolute_path)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->scene_path.size = 0;
+	if (absolute_path) {
+		GetScenePath(editor_state, new_scene, sandbox->scene_path);
+	}
+	else {
+		sandbox->scene_path.CopyOther(new_scene);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
