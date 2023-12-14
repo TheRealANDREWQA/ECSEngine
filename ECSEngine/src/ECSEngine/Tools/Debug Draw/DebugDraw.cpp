@@ -2759,11 +2759,11 @@ namespace ECSEngine {
 	void FlushType(DebugDrawer* drawer, Deck* deck, ThreadStream* thread_buffering, DebugPrimitive debug_primitive, unsigned int thread_index) {
 		if (thread_buffering[thread_index].size > 0) {
 			drawer->thread_locks[debug_primitive]->Lock();
-			auto* copy_position = deck->GetEntries(thread_buffering[thread_index].size);
+			auto* copy_position = &deck[deck->ReserveIndices(thread_buffering[thread_index].size, true)];
 			if (copy_position == nullptr) {
 				drawer->allocator->Lock();
 				deck->AllocateChunks(1);
-				copy_position = deck->GetEntries(thread_buffering[thread_index].size);
+				copy_position = &deck[deck->ReserveIndices(thread_buffering[thread_index].size, true)];
 				drawer->allocator->Unlock();
 			}
 			thread_buffering[thread_index].CopyTo(copy_position);
@@ -3222,17 +3222,17 @@ namespace ECSEngine {
 
 	void DebugDrawer::Clear()
 	{
-		lines.FreeChunks();
-		spheres.FreeChunks();
-		points.FreeChunks();
-		rectangles.FreeChunks();
-		crosses.FreeChunks();
-		circles.FreeChunks();
-		arrows.FreeChunks();
-		triangles.FreeChunks();
-		aabbs.FreeChunks();
-		oobbs.FreeChunks();
-		strings.FreeChunks();
+		lines.Deallocate();
+		spheres.Deallocate();
+		points.Deallocate();
+		rectangles.Deallocate();
+		crosses.Deallocate();
+		circles.Deallocate();
+		arrows.Deallocate();
+		triangles.Deallocate();
+		aabbs.Deallocate();
+		oobbs.Deallocate();
+		strings.Deallocate();
 
 		for (unsigned int index = 0; index < thread_count; index++) {
 			thread_lines[index].Clear();

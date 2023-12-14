@@ -228,6 +228,28 @@ namespace ECSEngine {
 		return PowerOfTwoGreaterEx(number).x;
 	}
 
+	// Returns the byte that needs to be checked to get the value at that bit index
+	ECS_INLINE size_t GetByteIndexFromBit(size_t bit_index) {
+		return bit_index & (~(size_t)0x07);
+	}
+
+	// Returns the bit that needs to be checked to get the value at that bit index
+	ECS_INLINE size_t GetBitIndexFromBit(size_t bit_index) {
+		return (size_t)1 << (bit_index & (size_t)0x07);
+	}
+
+	ECS_INLINE void SetBit(void* bits, size_t bit_index) {
+		((unsigned char*)bits)[GetByteIndexFromBit(bit_index)] |= GetBitIndexFromBit(bit_index);
+	}
+
+	ECS_INLINE void ClearBit(void* bits, size_t bit_index) {
+		((unsigned char*)bits)[GetByteIndexFromBit(bit_index)] &= ~GetBitIndexFromBit(bit_index);
+	}
+
+	ECS_INLINE bool GetBit(void* bits, size_t bit_index) {
+		return ((const unsigned char*)bits)[GetByteIndexFromBit(bit_index)] & GetBitIndexFromBit(bit_index);
+	}
+
 	// pointers should be aligned preferably to 32 bytes at least
 	ECSENGINE_API void avx2_copy(void* destination, const void* source, size_t bytes);
 

@@ -243,13 +243,16 @@ static void GetProjectPrefabs(const EditorState* editor_state, AdditionStream<St
 static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_data) {
 	UIActionHandler handlers[] = {
 		{ EntitiesWholeWindowCreateEmpty, entities_data, 0 },
+		{ nullptr, nullptr, 0 },
 		{ nullptr, nullptr, 0 }
 	};
 	bool has_submenu[] = {
 		false,
+		true,
 		true
 	};
 	UIDrawerMenuState state_submenus[] = {
+		{},
 		{},
 		{}
 	};
@@ -259,10 +262,13 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 
 	const size_t PREFABS_SUBMENU_INDEX = 1;
 
+	ECS_STACK_CAPACITY_STREAM(char, menu_left_characters, 512);
+	menu_left_characters.CopyOther("Create Empty");
+
+	// The left characters are assigned at the end
 	UIDrawerMenuState state;
-	state.left_characters = "Create Empty\nPrefabs";
 	state.click_handlers = handlers;
-	state.row_count = handlers_size;
+	state.row_count = 1;
 	state.row_has_submenu = has_submenu;
 	state.submenues = state_submenus;
 
@@ -280,7 +286,7 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 			total_character_count += project_prefabs[index].size + 1;
 		}
 		char* prefabs_submenu_string = (char*)stack_allocator.Allocate(sizeof(char) * total_character_count);
-		prefabs_submenu->left_characters = prefabs_submenu_string;
+		prefabs_submenu->left_characters = { prefabs_submenu_string, total_character_count };
 		for (unsigned int index = 0; index < project_prefabs.size; index++) {
 			Stream<wchar_t> path_without_extension = PathNoExtension(project_prefabs[index]);
 			size_t current_string_count = path_without_extension.size;
@@ -292,10 +298,8 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 			// We can set the action handler here as well
 			prefabs_submenu->click_handlers[index] = { EntitiesWholeWindowAddPrefab, entities_data, 0 };
 		}
-	}
-	else {
-		// Eliminate the prefabs entry if there are no prefabs
-		state.row_count--;
+		menu_left_characters.AddStreamAssert("\nPrefab");
+		state.row_count++;
 	}
 
 	ECS_STACK_CAPACITY_STREAM(Component, all_global_components, ECS_KB * 4);
@@ -309,9 +313,6 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 			index--;
 		}
 	}
-
-	bool row_has_submenu[handlers_size + 1];
-	UIDrawerMenuState submenu_states[handlers_size + 1];
 
 	if (all_global_components.size > 0) {
 		UIActionHandler* global_component_handlers = (UIActionHandler*)stack_allocator.Allocate(sizeof(UIActionHandler) * all_global_components.size);
@@ -330,22 +331,17 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 		}
 		// Remove the last '\n'
 		global_components_string.size--;
+		unsigned int row_index = state.row_count;
+		state_submenus[row_index].left_characters = global_components_string;
+		state_submenus[row_index].click_handlers = global_component_handlers;
+		state_submenus[row_index].row_count = all_global_components.size;
+		state_submenus[row_index].submenu_index = 1;
 
-		memset(row_has_submenu, 0, sizeof(bool) * handlers_size);
-		row_has_submenu[handlers_size] = true;
-
-		memset(submenu_states + handlers_size, 0, sizeof(UIDrawerMenuState));
-		submenu_states[handlers_size].left_characters = global_components_string;
-		submenu_states[handlers_size].click_handlers = global_component_handlers;
-		submenu_states[handlers_size].row_count = all_global_components.size;
-		submenu_states[handlers_size].submenu_index = 1;
-
-		state.left_characters = "Create Empty\nGlobal Components";
+		menu_left_characters.AddStreamAssert("\nGlobal Components");
 		state.row_count++;
-		state.row_has_submenu = row_has_submenu;
-		state.submenues = submenu_states;
 	}
 
+	state.left_characters = menu_left_characters;
 	drawer.SetWindowClickable(&drawer.PrepareRightClickMenuHandler("Entities Right Click", &state), ECS_MOUSE_RIGHT);
 }
 

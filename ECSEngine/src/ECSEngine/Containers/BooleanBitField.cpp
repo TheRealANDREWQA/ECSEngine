@@ -9,7 +9,7 @@ namespace ECSEngine {
 	}
 
 	size_t GetBit(size_t index) {
-		return 1 << (index & (size_t)0x07);
+		return (size_t)1 << (index & (size_t)0x07);
 	}
 
 	BooleanBitField::BooleanBitField(void* buffer, size_t size) : m_buffer((unsigned char*)buffer), m_size(size) {}
@@ -22,7 +22,7 @@ namespace ECSEngine {
 		m_buffer[GetByte(index)] &= ~GetBit(index);
 	}
 
-	unsigned char BooleanBitField::Get(size_t index) const {
+	bool BooleanBitField::Get(size_t index) const {
 		return m_buffer[GetByte(index)] & GetBit(index);
 	}
 

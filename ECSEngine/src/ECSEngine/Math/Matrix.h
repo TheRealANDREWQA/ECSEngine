@@ -1,7 +1,6 @@
 #pragma once
 #include "../Core.h"
 #include "../Utilities/BasicTypes.h"
-#include "ecspch.h"
 #include "VCLExtensions.h"
 #include "Vector.h"
 #include <math.h>

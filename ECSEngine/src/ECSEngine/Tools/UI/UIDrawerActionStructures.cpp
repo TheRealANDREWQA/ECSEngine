@@ -1,5 +1,6 @@
 #include "ecspch.h"
 #include "UIDrawerActionStructures.h"
+#include "UIDrawer.h"
 
 namespace ECSEngine {
 
@@ -45,11 +46,22 @@ namespace ECSEngine {
 			return name.TextStream();
 		}
 
-		void UIDrawerTextInput::EnterSelection(Keyboard* keyboard)
+		static void UIDrawerTextInputChangeEnterSelection(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+			system->ChangeFocusedWindowGeneral({ TextInputAction, action_data->data, sizeof(UIDrawerTextInputActionData) });
+			system->RemoveFrameHandler(UIDrawerTextInputChangeEnterSelection, _data);
+		}
+
+		void UIDrawerTextInput::EnterSelection(UIDrawer* drawer, UIDrawerTextInputFilter filter)
 		{
-			is_currently_selected = true;
-			is_caret_display = true;
-			keyboard->CaptureCharacters();
+			// We need to replace the active general action
+			UIDrawerTextInputActionData action_data;
+			action_data.filter = filter;
+			action_data.input = this;
+			// Use a frame handler that removes itself after running in order to avoid cases
+			// Where this is set inside a pop up/locked window which clears the general handler
+			// After the initialization phase
+			drawer->system->PushFrameHandler({ UIDrawerTextInputChangeEnterSelection, &action_data, sizeof(action_data) });
 		}
 
 		float UIDrawerTextInput::GetLowestX() const

@@ -1346,7 +1346,7 @@ namespace ECSEngine {
 
 			UIDrawerTextInput* input = drawer.TextInput(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_DO_CACHE, config, data->input_name, &data->input_stream);
 			if (initialize) {
-				input->is_currently_selected = true;
+				input->EnterSelection(&drawer, UIDrawerTextInputFilterAll);
 			}
 			drawer.NextRow();
 
