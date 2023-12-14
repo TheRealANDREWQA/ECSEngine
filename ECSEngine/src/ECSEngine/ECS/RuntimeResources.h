@@ -29,8 +29,8 @@ namespace ECSEngine {
 		ECS_TRANSFORM_TOOL tool;
 		ECS_TRANSFORM_SPACE space;
 		bool display_axes;
-		bool is_selected[ECS_TRANSFORM_AXIS_COUNT];
-		Entity entity_ids[ECS_TRANSFORM_AXIS_COUNT];
+		bool is_selected[ECS_AXIS_COUNT];
+		Entity entity_ids[ECS_AXIS_COUNT];
 	};
 
 	// ------------------------------------------------------------------------------------------------------------

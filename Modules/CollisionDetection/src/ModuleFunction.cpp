@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "ModuleFunction.h"
 #include "Components.h"
+#include "Graphics/src/Components.h"
 
 static void ApplyMovementTask(
 	ForEachEntityData* for_each_data,
@@ -34,11 +35,29 @@ ECS_THREAD_TASK(ApplyMovement) {
 	ForEachEntity<get_query, QueryWrite<Translation>>(thread_id, world).Function<QueryExclude<Scale>>(ApplyMovementTask);
 }
 
+static void UpdateBroadphaseGrid(ForEachEntityData* for_each_data, const Translation* translation, const RenderMesh* mesh, const Rotation* rotation, const Scale* scale) {
+
+}
+
+template<bool get_query>
+ECS_THREAD_TASK(CollisionBroadphase) {
+	ForEachEntity<get_query, QueryRead<Translation>, QueryRead<RenderMesh>, QueryOptional<QueryRead<Rotation>>, QueryOptional<QueryRead<Scale>>>(thread_id, world).Function(UpdateBroadphaseGrid);
+}
+
+ECS_THREAD_TASK(InitializeCollisionBroadphase) {
+
+}
+
 void ModuleTaskFunction(ModuleTaskFunctionData* data) {
 	TaskSchedulerElement schedule_element;
 
 	schedule_element.task_group = ECS_THREAD_TASK_FINALIZE_LATE;
 	ECS_REGISTER_FOR_EACH_TASK(schedule_element, ApplyMovement, data);
+
+	TaskSchedulerElement broadphase_element;
+	broadphase_element.task_group = ECS_THREAD_TASK_INITIALIZE_EARLY;
+	broadphase_element.initialize_task_function = InitializeCollisionBroadphase;
+	ECS_REGISTER_FOR_EACH_TASK(broadphase_element, CollisionBroadphase, data);
 }
 
 #if 0

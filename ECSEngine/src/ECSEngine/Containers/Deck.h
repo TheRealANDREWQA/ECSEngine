@@ -27,7 +27,7 @@ namespace ECSEngine {
 				// The deck is completely full, need to reallocate the buffer of buffers and the chunks with elements
 				if (buffers.size == buffers.capacity) {
 					if (buffers.capacity > 0) {
-						Deallocate(buffers.allocator, chunks_with_elements.buffer);
+						chunks_with_elements.Deallocate(buffers.allocator);
 					}
 					buffers.Resize((size_t)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2.0f));
 					chunks_with_elements.Initialize(buffers.allocator, buffers.capacity);
@@ -111,6 +111,15 @@ namespace ECSEngine {
 				memcpy((void*)memory, buffers[index].buffer, sizeof(T) * buffers[index].size);
 				memory += sizeof(T) * buffers[index].size;
 			}
+		}
+
+		void Deallocate() {
+			for (unsigned int index = 0; index < buffers.size; index++) {
+				buffers[index].Deallocate(buffers.allocator);
+			}
+			buffers.FreeBuffer();
+			chunks_with_elements.Deallocate(buffers.allocator);
+			chunks_with_elements = {};
 		}
 
 		bool Exists(size_t index) const {
@@ -200,87 +209,16 @@ namespace ECSEngine {
 			return &buffers[chunk_index][in_chunk_index];
 		}
 
+		ECS_INLINE size_t GetChunkCount() const {
+			return buffers.size;
+		}
+
 		size_t GetElementCount() const {
 			size_t count = 0;
 			for (size_t index = 0; index < buffers.size; index++) {
 				count += buffers[index].size;
 			}
 			return count;
-		}
-
-		T* GetEntry() {
-			T* value;
-			ReserveNewElements(1);
-			unsigned int index = buffers[chunks_with_elements[0]].size++;
-			value = buffers[chunks_with_elements[0]].buffer + index;
-
-			if (buffers[chunks_with_elements[0]].size == buffers[chunks_with_elements[0]].capacity) {
-				chunks_with_elements.Remove(0);
-			}
-
-			return value;
-		}
-
-		// Returns a pointer to a contiguous portion with count elements 
-		// Nullptr will be returned if there is no such zone in the current buffers
-		// It does not allocate new chunks
-		T* GetEntries(size_t count) {
-			ECS_ASSERT(count <= chunk_size);
-
-			for (size_t index = 0; index < chunks_with_elements.size; index++) {
-				unsigned int difference = buffers[chunks_with_elements[0]].capacity - buffers[chunks_with_elements[0]].size;
-				if (difference >= count) {
-					unsigned int offset = buffers[chunks_with_elements[0]].size;
-					buffers[chunks_with_elements[0]].size += count;
-					if (difference == count) {
-						chunks_with_elements.RemoveSwapBack(0);
-					}
-					return buffers[chunks_with_elements[0]].buffer + offset;
-				}
-			}
-
-			return nullptr;
-		}
-
-		// Returns a pointer to a contiguous portion with count elements
-		// It does allocate a new block if it doesn't find such a zone in the current buffers
-		T* GetEntriesWithAllocation(size_t count) {
-			ECS_ASSERT(count <= chunk_size);
-
-			for (size_t index = 0; index < chunks_with_elements.size; index++) {
-				unsigned int difference = buffers[chunks_with_elements[0]].capacity - buffers[chunks_with_elements[0]].size;
-				if (difference >= count) {
-					unsigned int offset = buffers[chunks_with_elements[0]].size;
-					buffers[chunks_with_elements[0]].size += count;
-					if (difference == count) {
-						chunks_with_elements.RemoveSwapBack(0);
-					}
-					return buffers[chunks_with_elements[0]].buffer + offset;
-				}
-			}
-
-			// Allocate a new chunk
-			if (buffers.size == buffers.capacity) {
-				Resize((unsigned int)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR));
-			}
-
-			AllocateChunks(1);
-			T* pointer = buffers[buffers.size - 1].buffer;
-			buffers[buffers.size - 1].size += count;
-			// If a new chunk was requested, remove it from the available chunks
-			chunks_with_elements.size -= count == chunk_size;
-		}
-
-		// It will set the capacity to 0
-		void FreeChunks() {
-			if (buffers.capacity > 0) {
-				for (size_t index = 0; index < buffers.size; index++) {
-					Deallocate(buffers.allocator, buffers[index].buffer);
-				}
-				Deallocate(buffers.allocator, chunks_with_elements.buffer);
-				chunks_with_elements.size = 0;
-				buffers.FreeBuffer();
-			}
 		}
 
 		void RecalculateFreeChunks() {
@@ -304,6 +242,43 @@ namespace ECSEngine {
 			size_t chunk_index = RangeSelector::Chunk(index, chunk_size, miscellaneous);
 			size_t in_chunk_index = RangeSelector::Buffer(index, chunk_size, miscellaneous);
 			buffers[chunk_index].RemoveSwapBack(in_chunk_index);
+		}
+
+		// Returns a new entry index. The boolean controls whether or not it will
+		// Make a new allocation in case there is not enough space. If it doesn't
+		// make an allocation and there is no empty entry, it will return -1
+		size_t ReserveIndex(bool allocate_if_not_present = true) {
+			return ReserveIndices(1, allocate_if_not_present);
+		}
+
+		// Returns the starting index for a range large enough for the count
+		// The boolean controls whether or not it will make an allocation in
+		// case there is no such range available. Returns -1 in that case
+		size_t ReserveIndices(size_t count, bool allocate_if_not_available) {
+			ECS_ASSERT(count <= chunk_size);
+
+			for (size_t index = 0; index < chunks_with_elements.size; index++) {
+				unsigned int difference = buffers[chunks_with_elements[index]].capacity - buffers[chunks_with_elements[index]].size;
+				if (difference >= count) {
+					unsigned int offset = buffers[chunks_with_elements[index]].size;
+					buffers[chunks_with_elements[index]].size += count;
+					size_t final_index = chunks_with_elements[index] * chunk_size + offset;
+					if (difference == count) {
+						chunks_with_elements.RemoveSwapBack(index);
+					}
+					return final_index;
+				}
+			}
+
+			if (allocate_if_not_available) {
+				AllocateChunks(1);
+				T* pointer = buffers[buffers.size - 1].buffer;
+				buffers[buffers.size - 1].size += count;
+				// If a new chunk was requested and it is entirely occupated, remove it from the available chunks
+				chunks_with_elements.size -= count == chunk_size;
+				return (buffers.size - 1) * chunk_size;
+			}
+			return -1;
 		}
 
 		// Makes sure there is enough space for extra count elements
@@ -344,7 +319,7 @@ namespace ECSEngine {
 				bool should_deallocate_buffers = buffers.capacity > 0;
 				buffers.Resize(new_chunk_count);
 				if (should_deallocate_buffers) {
-					Deallocate(buffers.allocator, chunks_with_elements.buffer);
+					chunks_with_elements.Deallocate(buffers.allocator);
 				}
 				chunks_with_elements = { Allocate(buffers.allocator, sizeof(unsigned int) * new_chunk_count), new_chunk_count };
 				// Copy the old counts
@@ -366,12 +341,12 @@ namespace ECSEngine {
 		void ResizeNoCopy(size_t new_chunk_count) {
 			// Deallocate every chunk
 			for (size_t index = 0; index < buffers.size; index++) {
-				Deallocate(buffers.allocator, buffers[index].buffer);
+				buffers[index].Deallocate(buffers.allocator);
 			}
 
 			if (buffers.capacity > 0) {
 				// Deallocate the available chunks
-				Deallocate(buffers.allocator, chunks_with_elements.buffer);
+				chunks_with_elements.Deallocate(buffers.allocator);
 			}
 
 			// Reallocate the available chunks
@@ -383,7 +358,7 @@ namespace ECSEngine {
 			buffers.ResizeNoCopy(new_chunk_count);
 			// Allocate every chunk
 			for (size_t index = 0; index < new_chunk_count; index++) {
-				buffers[index] = { Allocate(buffers.allocator, sizeof(T) * chunk_size), 0, chunk_size };
+				buffers[index] = { Allocate(buffers.allocator, sizeof(T) * chunk_size), 0, (unsigned int)chunk_size };
 			}
 			buffers.size = new_chunk_count;
 		}
@@ -406,7 +381,7 @@ namespace ECSEngine {
 			
 			// If the chunk count is smaller than the current count, release the appropriate chunks
 			for (size_t index = chunk_count; index < buffers.size; index++) {
-				Deallocate(buffers.allocator, buffers[index].buffer);
+				buffers[index].Deallocate(buffers.allocator);
 
 				size_t copied_count = 0;
 				// Shift elements from the upper chunks into the lower ones
@@ -452,7 +427,7 @@ namespace ECSEngine {
 
 			// If the total chunk count is smaller than the current count, release the appropriate chunks
 			for (size_t index = total_chunk_count; index < buffers.size; index++) {
-				Deallocate(buffers.allocator, buffers[index].buffer);
+				buffers[index].Deallocate(buffers.allocator);
 			}
 
 			for (size_t index = chunk_count; index < buffers.size; index++) {

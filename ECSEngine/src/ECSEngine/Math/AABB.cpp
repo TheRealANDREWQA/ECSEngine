@@ -52,6 +52,20 @@ namespace ECSEngine {
 		};
 	}
 
+	bool AABBOverlapStorage(AABBStorage first, AABBStorage second)
+	{
+		if (first.max.x < second.min.x || first.min.x > second.max.x) {
+			return false;
+		}
+		if (first.max.y < second.min.y || first.min.y > second.max.y) {
+			return false;
+		}
+		if (first.max.z < second.min.z || first.min.z > second.max.z) {
+			return false;
+		}
+		return true;
+	}
+
 	void GetAABBCorners(AABB aabb, Vector8* corners)
 	{
 		Vector8 max_min = Permute2f128Helper<1, 0>(aabb.value, aabb.value);

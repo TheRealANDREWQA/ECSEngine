@@ -244,6 +244,24 @@ namespace ECSEngine {
 		return ReverseInfiniteAABBStorage();
 	}
 
+	ECS_INLINE bool ECS_VECTORCALL AABBOverlap(AABB first, AABB second) {
+		// Conditions: first.max < second.min || first.min > second.max -> false
+		//				If passes for all dimensions, return 0
+
+		AABB second_max_first_min_shuffle = Permute2f128Helper<3, 0>(first.value, second.value);
+		auto first_condition = first.value < second_max_first_min_shuffle.value;
+		auto second_condition = first.value > second_max_first_min_shuffle.value;
+		auto is_outside = BlendLowAndHigh(Vector8(second_condition), Vector8(first_condition));
+		// We need to zero out the 4th component such that it doesn't give a false
+		// Response that they overlap when there is garbage in that value
+		auto zero_vector = ZeroVector();
+		is_outside = PerLaneBlend<0, 1, 2, 7>(Vector8(is_outside), zero_vector);
+		// If any of the bits is set, then we have one of the
+		return horizontal_or(is_outside.AsMask());
+	}
+
+	ECSENGINE_API bool AABBOverlapStorage(AABBStorage first, AABBStorage second);
+
 	// There need to be 4 entries for the corners pointer
 	// The first 2 entries are the "left" face and the other
 	// 2 are for the "right" face

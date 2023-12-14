@@ -9,6 +9,8 @@ namespace ECSEngine {
 
 	namespace Tools {
 
+		struct UIDrawer;
+
 		ECS_INLINE bool UIDrawerTextInputFilterAll(char character, CharacterType type) {
 			return true;
 		}
@@ -57,7 +59,7 @@ namespace ECSEngine {
 			CapacityStream<UISpriteVertex>* TextStream();
 
 			// This can be used outside the UI to tell the input to enter in selection mode
-			void EnterSelection(Keyboard* keyboard);
+			void EnterSelection(UIDrawer* drawer, UIDrawerTextInputFilter filter);
 
 			float GetLowestX() const;
 			float GetLowestY() const;
