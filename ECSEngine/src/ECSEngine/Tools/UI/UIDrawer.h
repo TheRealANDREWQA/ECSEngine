@@ -3662,7 +3662,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// It will forward directly to the UI system; No HandleResourceIdentifier used
-			void* FindWindowResource(Stream<char> string);
+			void* FindWindowResource(Stream<char> string) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3688,6 +3688,11 @@ namespace ECSEngine {
 			ECS_INLINE float2 GetRenderSpan() const {
 				return { max_render_bounds.x - min_render_bounds.x, max_render_bounds.y - min_render_bounds.y };
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Returns the scroll factor in the 0.0f - 1.0f range
+			float GetScrollPercentage(bool vertical);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4209,6 +4214,10 @@ namespace ECSEngine {
 
 			// Sets the current x and y to the beginning of the normal render space
 			void SetCurrentPositionToStart();
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void SetRegionRenderOffset(float2 value);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

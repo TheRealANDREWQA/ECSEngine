@@ -36,6 +36,36 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void TaskScheduler::CallCleanupFunctions(
+		World* world, 
+		AllocatorPolymorphic allocator, 
+		CapacityStream<TaskSchedulerTransferStaticData>* transfer_data,
+		bool add_transfer_data_for_all_entries
+	)
+	{
+		for (unsigned int index = 0; index < elements.size; index++) {
+			ThreadTask task = world->task_manager->GetTask(index);
+			Stream<void> data = { task.data, task.data_size };
+			if (elements[index].cleanup_function != nullptr) {
+				bool was_deallocated = elements[index].cleanup_function(data.buffer, world);
+				if (!was_deallocated) {
+					data = CopyNonZero(allocator, data);
+					Stream<char> name = task.name.Copy(allocator);
+					transfer_data->AddAssert({ name, data });
+				}
+			}
+			else {
+				if (add_transfer_data_for_all_entries) {
+					data = CopyNonZero(allocator, data);
+					Stream<char> name = task.name.Copy(allocator);
+					transfer_data->AddAssert({ name, data });
+				}
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	void TaskScheduler::Copy(Stream<TaskSchedulerElement> stream, bool copy_data) {
 		Reset();
 		Add(stream, copy_data);
@@ -125,6 +155,24 @@ namespace ECSEngine {
 		unsigned int current_query_index = GetCurrentQueryIndex();
 		ECS_CRASH_CONDITION_RETURN(current_query_index < query_infos.size, nullptr, "TaskScheduler: Trying to retrieve query index over the bound");
 		return &query_infos[current_query_index];
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void TaskScheduler::GetTransferStaticData(
+		const TaskManager* task_manager, 
+		AllocatorPolymorphic allocator, 
+		CapacityStream<TaskSchedulerTransferStaticData>* transfer_data
+	) const
+	{
+		unsigned int task_count = task_manager->GetTaskCount();
+		transfer_data->AssertSpace(task_count);
+		for (unsigned int index = 0; index < task_count; index++) {
+			ThreadTask thread_task = task_manager->GetTask(index);
+			Stream<void> data = CopyNonZero(allocator, Stream<void>(thread_task.data, thread_task.data_size));
+			Stream<char> name = thread_task.name.Copy(allocator);
+			transfer_data->Add({ name, data });
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -506,10 +554,72 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void TaskScheduler::SetTaskManagerTasks(TaskManager* task_manager) const
+	void TaskScheduler::SetTaskManagerTasks(
+		TaskManager* task_manager, 
+		bool call_initialize_task_functions, 
+		bool preserve_data_flag,
+		Stream<TaskSchedulerTransferStaticData> transfer_data
+	) const
 	{
+		unsigned int initial_task_count = task_manager->GetTaskCount();
 		for (unsigned int index = 0; index < elements.size; index++) {
-			task_manager->AddTask({ { elements[index].task_function, nullptr, 0, elements[index].task_name }, elements[index].barrier_task });
+			ECS_STACK_VOID_STREAM(frame_data, ECS_KB * 16);
+			void* task_data = nullptr;
+			size_t task_data_size = 0;
+			if (call_initialize_task_functions) {
+				bool preserve_data = elements[index].preserve_data && preserve_data_flag;
+				if (elements[index].initialize_task_function != nullptr && !preserve_data) {
+					StaticThreadTaskInitializeInfo initialize_info;
+					initialize_info.frame_data = &frame_data;
+					initialize_info.previous_data = {};
+					if (transfer_data.size > 0) {
+						size_t transfer_index = transfer_data.Find(elements[index].task_name, [](TaskSchedulerTransferStaticData transfer_data) {
+							return transfer_data.task_name;
+						});
+						if (transfer_index != -1) {
+							initialize_info.previous_data = transfer_data[transfer_index].data;
+						}
+					}
+					elements[index].initialize_task_function(0, task_manager->m_world, &initialize_info);
+
+					frame_data.AssertCapacity();
+					// Check to see if there is any frame data
+					if (frame_data.size > 0) {
+						task_data = frame_data.buffer;
+						task_data_size = frame_data.size;
+					}
+				}
+				else if (preserve_data) {
+					// Check to see if we have transfer data
+					if (transfer_data.size > 0) {
+						size_t transfer_index = transfer_data.Find(elements[index].task_name, [](TaskSchedulerTransferStaticData transfer_data) {
+							return transfer_data.task_name;
+							});
+						if (transfer_index != -1) {
+							Stream<void> previous_data = transfer_data[transfer_index].data;
+							task_data = previous_data.buffer;
+							task_data_size = previous_data.size;
+						}
+					}
+				}
+			}
+			task_manager->AddTask({ { elements[index].task_function, task_data, task_data_size, elements[index].task_name }, elements[index].barrier_task });
+		}
+
+		// At the end, bind the initialize data from other tasks
+		for (unsigned int index = 0; index < elements.size; index++) {
+			if (elements[index].initialize_data_task_name.size > 0) {
+				unsigned int task_data_index = elements.Find(elements[index].initialize_data_task_name, [](const TaskSchedulerElement& element) {
+					return element.task_name;
+				});
+				if (task_data_index == -1) {
+					ECS_CRASH("Missing initialize task data name {#} for task {#}", elements[index].initialize_data_task_name, elements[index].task_name);
+				}
+
+				ThreadTask* task_ptr = task_manager->GetTaskPtr(initial_task_count + index);
+				task_ptr->data = task_manager->GetTaskPtr(initial_task_count + task_data_index)->data;
+				task_ptr->data_size = 0;
+			}
 		}
 	}
 

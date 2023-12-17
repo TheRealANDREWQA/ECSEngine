@@ -918,6 +918,7 @@ void SaveCurrentProjectWithConfirmation(EditorState* editor_state, Stream<char> 
 
 void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
 	descriptor.draw = ConsoleWindowDraw;
+	descriptor.retained_mode = ConsoleWindowRetainedMode;
 
 	ConsoleWindowData* window_data = (ConsoleWindowData*)stack_memory;
 	CreateConsoleWindowData(*window_data);

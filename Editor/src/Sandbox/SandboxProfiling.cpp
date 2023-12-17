@@ -135,7 +135,7 @@ void SynchronizeSandboxProfilingWithStatisticTypes(EditorState* editor_state, un
 	}
 	else if (sandbox->cpu_statistics_type == EDITOR_SANDBOX_CPU_STATISTICS_BASIC) {
 		sandbox->world_profiling.DisableOption(ECS_WORLD_PROFILING_ALLOCATOR);
-		sandbox->world_profiling.EnableOption(ECS_WORLD_PROFILING_CPU | ECS_WORLD_PROFILING_PHYSICAL_MEMORY);
+		sandbox->world_profiling.EnableOption(ECS_WORLD_PROFILING_CPU);
 	}
 	else if (sandbox->cpu_statistics_type == EDITOR_SANDBOX_CPU_STATISTICS_ADVANCED) {
 		sandbox->world_profiling.EnableOption(ECS_WORLD_PROFILING_CPU | ECS_WORLD_PROFILING_ALLOCATOR | ECS_WORLD_PROFILING_PHYSICAL_MEMORY);

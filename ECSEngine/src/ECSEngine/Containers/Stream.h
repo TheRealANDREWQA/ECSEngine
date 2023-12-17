@@ -548,6 +548,10 @@ namespace ECSEngine {
 			ECS_ASSERT(size <= capacity);
 		}
 
+		ECS_INLINE void AssertSpace(unsigned int count) const {
+			ECS_ASSERT(size + count <= capacity, "Not enough capacity for CapacityStream");
+		}
+
 		// Increments the pointer and decrements the size and the capacity
 		ECS_INLINE void Advance(int64_t amount = 1) {
 			size_t unsigned_amount = (size_t)amount;

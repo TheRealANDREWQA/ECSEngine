@@ -487,12 +487,20 @@ namespace ECSEngine {
 					ECS_CRASH_CONDITION(query_descriptor.unique_exclude.count == 0 && query_descriptor.shared_exclude.count == 0, "ECS ForEach:"
 						" You must specify the exclude components in the Function template parameter pack");
 
+					ForEachEntityBatchTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
+					if constexpr (~options & FOR_EACH_IS_COMMIT) {
+						if (function_pointer_data_size > 0) {
+							// We need to allocate this data, we can use the thread task manager allocator for this
+							wrapper_data.functor_data = world->task_manager->AllocateTempBuffer(thread_id, function_pointer_data_size);
+							memcpy(wrapper_data.functor_data, function_pointer_data, function_pointer_data_size);
+						}
+					}
 					if constexpr (options & FOR_EACH_IS_COMMIT) {
 						if constexpr (options & FOR_EACH_IS_BATCH) {
 							ForEachBatchCommitFunctor(
 								world,
 								Internal::ForEachEntityBatchTypeSafeWrapper<true, Functor, Components...>,
-								&functor,
+								&wrapper_data,
 								batch_size,
 								query_descriptor
 							);
@@ -501,18 +509,12 @@ namespace ECSEngine {
 							ForEachEntityCommitFunctor(
 								world,
 								Internal::ForEachEntityBatchTypeSafeWrapper<false, Functor, Components...>,
-								&functor,
+								&wrapper_data,
 								query_descriptor
 							);
 						}
 					}
 					else {
-						ForEachEntityBatchTypeSafeWrapperData<Functor> wrapper_data{ functor, function_pointer_data };
-						if (function_pointer_data_size > 0) {
-							// We need to allocate this data, we can use the thread task manager allocator for this
-							wrapper_data.functor_data = world->task_manager->AllocateTempBuffer(thread_id, function_pointer_data_size);
-							memcpy(wrapper_data.functor_data, function_pointer_data, function_pointer_data_size);
-						}
 						if constexpr (options & FOR_EACH_IS_BATCH) {
 							Internal::ForEachBatch(
 								thread_id,
@@ -638,7 +640,12 @@ namespace ECSEngine {
 	thread_task_function<true>(0, (ECSEngine::World*)&__register_info##thread_task_function, nullptr); \
 	schedule_element.task_function = thread_task_function<false>; \
 	schedule_element.task_name = STRING(thread_task_function); \
-	module_function_data->tasks->AddAssert(schedule_element)
+	module_function_data->tasks->AddAssert(&schedule_element)
+
+#define ECS_REGISTER_TASK(schedule_element, thread_task_function, module_function_data) \
+	schedule_element.task_function = thread_task_function; \
+	schedule_element.task_name = STRING(thread_task_function); \
+	module_function_data->tasks->AddAssert(&schedule_element);
 
 #define ECS_REGISTER_FOR_EACH_COMPONENTS(...) Internal::AddQueryComponents<__VA_ARGS__>((Internal::RegisterForEachInfo*)world);
 

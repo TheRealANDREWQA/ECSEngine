@@ -209,6 +209,27 @@ namespace ECSEngine {
 		unsigned short batch_size = 0;
 	};
 
+	// This function is necessary only for the case that the module is recompiled during
+	// Runtime and in order to not have leaks, this function will be called to perform
+	// The necessary cleanup. If it returns true, it is considered that the data was deallocated else,
+	// It assumes that the data is to be transfered for when the simulation is unpaused, so it will be
+	// Provided once again to the 
+	typedef bool (*StaticThreadTaskInitializeCleanup)(void* data, World* world);
+
+	// This information is received by the initialize task function
+	// It can allocate a structure from here and have it be passed to
+	// The normal function every time it is called. You ensure the given
+	// data is large enough to store your frame data. Another field that
+	// is given is the previous simulation data. This is useful for the
+	// Case that a module is recompiled and you want to transfer the previous
+	// Data to the new recompiled module. In this case, you can perform any
+	// Modifications you like to it, and also you need to deallocate it if
+	// you don't plan on using it otherwise it will be leaked
+	struct StaticThreadTaskInitializeInfo {
+		Stream<void> previous_data;
+		CapacityStream<void>* frame_data;
+	};
+
 	// This is the building block that the dependency solver and the scheduler will
 	// use in order to determine the order in which the tasks should run and how they
 	// should synchronize.
@@ -235,12 +256,22 @@ namespace ECSEngine {
 
 		ThreadFunction task_function;
 		Stream<char> task_name;
+		// If you want to inherit the data of another task, you can do that here
+		// It will be bound at initialization time and given as parameter to the
+		// Task function. You need to set this as the name of the task that you want
+		// To inherit
+		Stream<char> initialize_data_task_name = {};
 		ThreadFunction initialize_task_function = nullptr;
-		TaskComponentQuery component_query;
+		StaticThreadTaskInitializeCleanup cleanup_function = nullptr;
+		TaskComponentQuery component_query = {};
 		Stream<TaskDependency> task_dependencies = {};
 
-		ECS_THREAD_TASK_GROUP task_group;
+		ECS_THREAD_TASK_GROUP task_group = ECS_THREAD_TASK_GROUP_COUNT;
 		bool barrier_task = false;
+		// If this flag is set to true, it will auto inherit the previous data
+		// Even when the initialize task function is set. If you want to transfer
+		// the data, you need to set this flag to false
+		bool preserve_data = true;
 	};
 
 }

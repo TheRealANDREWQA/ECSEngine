@@ -64,7 +64,7 @@ struct FixedGrid {
 
 	bool IsLayerCollidingWith(unsigned char layer_index, unsigned char collision_layer) const;
 
-	void Initialize(AllocatorPolymorphic allocator, uint3 dimensions, uint3 cell_sizes, size_t deck_power_of_two);
+	void Initialize(AllocatorPolymorphic allocator, uint3 dimensions, uint3 cell_size_power_of_two, size_t deck_power_of_two);
 
 	// The AABB needs to be transformed already. It will fill in the collisions
 	// That it finds inside the given buffer
@@ -79,7 +79,7 @@ struct FixedGrid {
 	uint3 dimensions;
 	// These cell sizes must be a power of two
 	// We use modulo two trick to map the AABB
-	uint3 cell_sizes;
+	uint3 cell_size_power_of_two;
 	// We maintain the cells in a sparse hash table
 	// The unsigned int as resource identifier is the actual hash value
 	// The cell hash value must be computed by the user

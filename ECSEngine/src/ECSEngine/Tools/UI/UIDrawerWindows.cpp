@@ -9,6 +9,7 @@ namespace ECSEngine {
 	namespace Tools {
 
 		constexpr float2 CONSOLE_WINDOW_SIZE = { 1.0f, 0.4f };
+#define CONSOLE_RETAINED_COUNT 50
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -1765,11 +1766,15 @@ namespace ECSEngine {
 			};
 
 			drawer.NextRow(0.25f);
+			// Add some number of rows to draw such that the render region offset will be somewhat
+			// Large that we can have a decent slider granularity
+			unsigned int max_rows_to_draw = (unsigned int)(drawer.GetRegionScale().y / (drawer.layout.default_element_y + drawer.layout.next_row_y_offset)) + 7;
+			unsigned int rows_to_draw = ClampMax(data->filtered_message_indices.size, max_rows_to_draw);
+			float vertical_scroll = drawer.GetScrollPercentage(true);
 			if (data->collapse) {
 				// Draw only unique message alongside their counter
 				data->unique_messages.ForEachIndexConst([&](unsigned int index) {
 					UniqueConsoleMessage message = data->unique_messages.GetValueFromIndex(index);
-
 					bool do_draw = draw_sentence_collapsed(message.message, index);
 
 					if (do_draw) {
@@ -1797,8 +1802,10 @@ namespace ECSEngine {
 			}
 			else {
 				// Draw each message one by one
-				for (size_t index = 0; index < data->filtered_message_indices.size; index++) {
-					draw_sentence(data->console->messages[data->filtered_message_indices[index]], index);
+				// Starting from the offset
+				unsigned int offset = vertical_scroll * (data->filtered_message_indices.size - rows_to_draw);
+				for (unsigned int index = 0; index < rows_to_draw; index++) {
+					draw_sentence(data->console->messages[data->filtered_message_indices[offset + index]], offset + index);
 				}
 			}
 
@@ -1865,14 +1872,25 @@ namespace ECSEngine {
 				drawer.SolidColorRectangle(configuration | UI_CONFIG_BORDER, config, drawer.color_theme.theme);
 				config.flag_count--;
 
-				UIDrawerStateTableBoolClickable clickable_data;
-				clickable_data.notifier = &data->filter_message_type_changed;
-				clickable_data.state = filter;
+				struct IconClickableData {
+					bool* notifier;
+					bool* state;
+				};
+				auto icon_clickable = [](ActionData* action_data) {
+					UI_UNPACK_ACTION_DATA;
+
+					IconClickableData* data = (IconClickableData*)_data;
+					action_data->data = data->state;
+					BoolClickable(action_data);
+					*data->notifier = true;
+				};
+
+				IconClickableData clickable_data = { &data->filter_message_type_changed, filter };
 				drawer.AddDefaultClickableHoverable(
 					configuration,
 					{ transform.position.x, transform.position.y - drawer.region_render_offset.y }, 
 					transform.scale, 
-					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_LATE },
+					{ icon_clickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_LATE },
 					nullptr,
 					drawer.color_theme.theme
 				);
@@ -1968,7 +1986,8 @@ namespace ECSEngine {
 		{
 			unsigned int message_count = data->console->messages.WaitWrites();
 
-			bool recalculate_counts = (message_count != data->last_frame_message_count) || data->filter_message_type_changed
+			bool filter_was_changed = data->filter_message_type_changed;
+			bool recalculate_counts = (message_count != data->last_frame_message_count) || filter_was_changed
 				|| (data->console->verbosity_level != data->previous_verbosity_level) || data->system_filter_changed;
 			if (recalculate_counts) {
 				unsigned int* ptrs = data->type_count;
@@ -2029,7 +2048,8 @@ namespace ECSEngine {
 				};
 
 				// if more messages have been added, only account for them
-				if (data->last_frame_message_count < message_count) {
+				// And the filter has not changed
+				if (!filter_was_changed && data->last_frame_message_count < message_count) {
 					update_kernel(data->last_frame_message_count);
 				}
 				// else start from scratch; console has been cleared, type filter changed, verbosity filter changed,
@@ -2066,10 +2086,20 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
+		static bool ConsoleWindowRetainedMode(void* window_data, WindowRetainedModeInfo* retained_info) {
+			ConsoleWindowData* data = (ConsoleWindowData*)window_data;
+			if (data->retained_timer.GetDuration(ECS_TIMER_DURATION_MS) >= CONSOLE_RETAINED_COUNT) {
+				data->retained_timer.SetNewStart();
+				return false;
+			}
+			return true;
+		}
+
 		unsigned int CreateConsoleWindow(UISystem* system) {
 			UIWindowDescriptor descriptor;
 
 			descriptor.draw = ConsoleWindowDraw;
+			descriptor.retained_mode = ConsoleWindowRetainedMode;
 
 			descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, CONSOLE_WINDOW_SIZE.x);
 			descriptor.initial_size_x = CONSOLE_WINDOW_SIZE.x;
@@ -2077,6 +2107,7 @@ namespace ECSEngine {
 			descriptor.initial_size_y = CONSOLE_WINDOW_SIZE.y;
 
 			ConsoleWindowData window_data;
+			window_data.retained_timer.SetNewStart();
 			CreateConsoleWindowData(window_data);
 
 			descriptor.window_data = &window_data;

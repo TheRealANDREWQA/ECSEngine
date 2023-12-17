@@ -47,7 +47,7 @@
     <ClInclude Include="src\ECSEngine\Containers\Queues.h" />
     <ClInclude Include="src\ECSEngine\Containers\Stacks.h" />
     <ClInclude Include="src\ECSEngine\Rendering\GraphicsHelpers.h" />
-    <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
+    <ClInclude Include="src\ECSEngine\Math\Matrix_Inline.h" />
     <ClInclude Include="src\ECSEngine\Math\Vector.h" />
     <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\Reflection.h" />
@@ -269,6 +269,7 @@
     <ClInclude Include="src\ECSEngine\Tools\UI\UIReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\ECS\EntityChangeSet.h" />
     <ClInclude Include="src\Includes\ECSEngineResourceTypes.h" />
+    <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -427,6 +428,7 @@
     <ClCompile Include="src\ECSEngine\Profiling\WorldProfiling.cpp" />
     <ClCompile Include="src\ECSEngine\Profiling\PhysicalMemoryProfilerGlobal.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\EntityChangeSet.cpp" />
+    <ClCompile Include="src\ECSEngine\Math\Matrix.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

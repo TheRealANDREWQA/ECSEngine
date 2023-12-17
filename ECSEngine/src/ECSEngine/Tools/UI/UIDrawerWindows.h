@@ -362,6 +362,8 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		ECSENGINE_API void ConsoleWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize);
+		
+		ECSENGINE_API bool ConsoleWindowRetainedMode(void* window_data, WindowRetainedModeInfo* retained_info);
 
 		#define CONSOLE_WINDOW_NAME "Console"	
 
@@ -385,6 +387,8 @@ namespace ECSEngine {
 			CapacityStream<unsigned int> filtered_message_indices;
 			HashTableDefault<UniqueConsoleMessage> unique_messages;
 			Stream<bool> system_filter;
+
+			Timer retained_timer;
 		};
 
 		ECSENGINE_API void ConsoleFilterMessages(ConsoleWindowData* data, UIDrawer& drawer);

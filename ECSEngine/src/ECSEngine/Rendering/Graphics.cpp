@@ -459,8 +459,8 @@ namespace ECSEngine {
 	}
 	
 	static void EnumerateDiscreteGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
-		EnumGPU(adapters, DXGI_GPU_PREFERENCE_MINIMUM_POWER);
-		//EnumGPU(adapters, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE);
+		//EnumGPU(adapters, DXGI_GPU_PREFERENCE_MINIMUM_POWER);
+		EnumGPU(adapters, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE);
 	}
 
 	static void EnumerateIntegratedGPU(CapacityStream<IDXGIAdapter1*>& adapters) {

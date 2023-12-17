@@ -19,10 +19,51 @@ namespace ECSEngine {
 		ECS_ALLOCATION_MULTI
 	};
 
+	struct LinearAllocator;
+	struct StackAllocator;
+	struct MultipoolAllocator;
+	struct MemoryManager;
+	struct MemoryArena;
+	struct ResizableLinearAllocator;
+	struct MemoryProtectedAllocator;
+
 	struct AllocatorPolymorphic {
+		ECS_INLINE AllocatorPolymorphic() : allocator(nullptr) {}
+		ECS_INLINE AllocatorPolymorphic(std::nullptr_t nullptr_t) : allocator(nullptr) {}
+		ECS_INLINE AllocatorPolymorphic(LinearAllocator* _allocator) {
+			allocator = _allocator;
+			allocator_type = ECS_ALLOCATOR_LINEAR;
+		}
+		ECS_INLINE AllocatorPolymorphic(StackAllocator* _allocator) {
+			allocator = _allocator;
+			allocator_type = ECS_ALLOCATOR_STACK;
+		}
+		ECS_INLINE AllocatorPolymorphic(MultipoolAllocator* _allocator) {
+			allocator = _allocator;
+			allocator_type = ECS_ALLOCATOR_MULTIPOOL;
+		}
+		ECS_INLINE AllocatorPolymorphic(MemoryManager* _allocator) {
+			allocator = _allocator;
+			allocator_type = ECS_ALLOCATOR_MANAGER;
+		}
+		ECS_INLINE AllocatorPolymorphic(MemoryArena* _allocator) {
+			allocator = _allocator;
+			allocator_type = ECS_ALLOCATOR_ARENA;
+		}
+		ECS_INLINE AllocatorPolymorphic(ResizableLinearAllocator* _allocator) {
+			allocator = _allocator;
+			allocator_type = ECS_ALLOCATOR_RESIZABLE_LINEAR;
+		}
+		ECS_INLINE AllocatorPolymorphic(MemoryProtectedAllocator* _allocator) {
+			allocator = _allocator;
+			allocator_type = ECS_ALLOCATOR_MEMORY_PROTECTED;
+		}
+		ECS_INLINE AllocatorPolymorphic(void* _allocator, ECS_ALLOCATOR_TYPE _allocator_type, ECS_ALLOCATION_TYPE _allocation_type = ECS_ALLOCATION_SINGLE)
+			: allocator(_allocator), allocator_type(_allocator_type), allocation_type(_allocation_type) {}
+
 		void* allocator;
 		ECS_ALLOCATOR_TYPE allocator_type;
-		ECS_ALLOCATION_TYPE allocation_type;
+		ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE;
 	};
 
 	// Only linear/stack/multipool/arena allocators can be created

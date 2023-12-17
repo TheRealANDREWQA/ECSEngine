@@ -259,6 +259,7 @@
     <ClInclude Include="src\ECSEngine\Math\Intersection.h" />
     <ClInclude Include="src\ECSEngine\Math\MathHelpers.h" />
     <ClInclude Include="src\ECSEngine\Math\MathTypeSizes.h" />
+    <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
     <ClInclude Include="src\ECSEngine\Math\Plane.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\RingBuffer.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\TaskSchedulerTypes.h" />
@@ -430,7 +431,7 @@
     <ClInclude Include="src\ECSEngine\Containers\Stacks.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\AtomicLinearAllocator.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\TaskScheduler.h" />
-    <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
+    <ClInclude Include="src\ECSEngine\Math\Matrix_Inline.h" />
     <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
     <ClInclude Include="src\ECSEngine\Math\Vector.h" />
     <ClInclude Include="src\ECSEngine\Rendering\GraphicsHelpers.h" />
@@ -509,6 +510,12 @@
     <ClCompile Include="src\ECSEngine\Math\AABB.cpp" />
     <ClCompile Include="src\ECSEngine\Math\MathHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Math\MathTypeSizes.cpp" />
+    <ClCompile Include="src\ECSEngine\Math\Matrix.cpp">
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AnySuitable</InlineFunctionExpansion>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ECSENGINE_PLATFORM_WINDOWS;ECSENGINE_BUILD_DLL;ECSENGINE_DISTRIBUTION;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\ECSEngine\Multithreading\AtomicLinearAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\RingBuffer.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\TaskScheduler.cpp" />
@@ -577,7 +584,10 @@
     <ClCompile Include="src\ECSEngine\Rendering\ShaderInclude.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\ShaderReflection.cpp" />
     <ClCompile Include="src\ECSEngine\Resources\WriteTexture.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Disabled</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">OnlyExplicitInline</InlineFunctionExpansion>
+    </ClCompile>
     <ClCompile Include="src\ECSEngine\Tools\Modules\Module.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleUtilities.cpp" />

@@ -468,6 +468,13 @@ bool AreSandboxesBeingRun(const EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool AreSandboxRuntimeTasksInitialized(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -552,7 +559,37 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 			camera_component->value.aspect_ratio = GetSandboxViewportAspectRatio(editor_state, sandbox_index, viewport);
 		}
 	}
+}
 
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void CallSandboxRuntimeCleanupFunctions(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	ECS_STACK_CAPACITY_STREAM(TaskSchedulerTransferStaticData, transfer_data, ECS_KB * 2);
+	sandbox->sandbox_world_transfer_data_allocator.Clear();
+	sandbox->sandbox_world.task_scheduler->CallCleanupFunctions(
+		&sandbox->sandbox_world, 
+		GetAllocatorPolymorphic(&sandbox->sandbox_world_transfer_data_allocator), 
+		&transfer_data,
+		true
+	);
+	if (transfer_data.size > 0) {
+		// Allocate them from the same allocator
+		sandbox->sandbox_world_transfer_data = transfer_data.Copy(GetAllocatorPolymorphic(&sandbox->sandbox_world_transfer_data_allocator));
+	}
+	else {
+		sandbox->sandbox_world_transfer_data = {};
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void ClearSandboxRuntimeTransferData(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->sandbox_world_transfer_data_allocator.Clear();
+	sandbox->sandbox_world_transfer_data = {};
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -612,15 +649,12 @@ void ChangeSandboxDebugDrawComponent(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ClearSandboxTaskScheduler(EditorState* editor_state, unsigned int sandbox_index)
-{
-	GetSandbox(editor_state, sandbox_index)->sandbox_world.task_scheduler->Reset();
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_index)
 {
+	// Before resetting the task scheduler, we need to call the cleanup
+	// Task functions and register any transfer data
+	CallSandboxRuntimeCleanupFunctions(editor_state, sandbox_index);
+	
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	sandbox->sandbox_world.task_scheduler->Reset();
 	sandbox->sandbox_world.task_manager->Reset();
@@ -1087,9 +1121,12 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	ClearWorld(&sandbox->sandbox_world);
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	// Clear the waiting compilation flag
-	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
+	sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
 	// Clear the crashed status as well
 	sandbox->is_crashed = false;
+	// We can also clear the transfer data since it is no longer needed
+	// There shouldn't be any, but just in case
+	ClearSandboxRuntimeTransferData(editor_state, sandbox_index);
 
 	if (EnableSceneUIRendering(editor_state, sandbox_index, false)) {
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
@@ -1660,8 +1697,16 @@ bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sand
 	bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index);
 	if (success) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		bool tasks_were_initialized = AreSandboxRuntimeTasksInitialized(editor_state, sandbox_index);
 		// We also need to prepare the world concurrency
-		PrepareWorldConcurrency(&sandbox->sandbox_world);
+		// And forward the transfer data
+		PrepareWorldConcurrency(&sandbox->sandbox_world, true, !tasks_were_initialized, {}, sandbox->sandbox_world_transfer_data);
+		if (!tasks_were_initialized) {
+			sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
+		}
+		
+		// We can now clear the transfer data
+		ClearSandboxRuntimeTransferData(editor_state, sandbox_index);
 
 		SetSandboxCrashHandlerWrappers(editor_state, sandbox_index);
 
@@ -1772,6 +1817,10 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->virtual_entities_slots.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
 	sandbox->virtual_entity_slot_type.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
 	sandbox->virtual_entities_slots_recompute = false;
+
+	// Initialize the transfer data allocator
+	sandbox->sandbox_world_transfer_data_allocator = ResizableLinearAllocator(ECS_KB * 128, ECS_MB, GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
+	sandbox->sandbox_world_transfer_data = {};
 
 	InitializeSandboxProfilers(editor_state, sandbox_index);
 
@@ -2608,6 +2657,8 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
 			// Prepare the sandbox world
 			PrepareWorld(&sandbox->sandbox_world);
+			// Set the initialize task flag
+			sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
 
 			// We have to set the crash wrappers when starting the
 			// Simulation and after resuming after a module change
