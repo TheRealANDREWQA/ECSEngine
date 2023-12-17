@@ -41,13 +41,15 @@ void BuildModules(
 // Editor state is needed in order to print to console
 // Returns whether or not the command will actually will execute. It can be skipped 
 // if the module is in flight running on the same configuration a build command or if it is up to date
-// The build status can be used to query
+// The build status can be used to query. If the force build flag is set to true, it will build
+// the module even when the load status is GOOD
 EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	EditorState* editor_state,
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
 	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* build_status = nullptr,
-	bool disable_logging = false
+	bool disable_logging = false,
+	bool force_build = false
 );
 
 // Runs on multiple threads

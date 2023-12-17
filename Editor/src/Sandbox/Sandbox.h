@@ -32,7 +32,20 @@ bool AreSandboxesBeingRun(const EditorState* editor_state);
 
 // -------------------------------------------------------------------------------------------------------------
 
+bool AreSandboxRuntimeTasksInitialized(const EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// It will call the cleanup functions for the runtime sandbox and register any transfer data that there is
+void CallSandboxRuntimeCleanupFunctions(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void ClearSandboxRuntimeTransferData(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -52,10 +65,6 @@ void ChangeSandboxDebugDrawComponent(
 	ECSEngine::Component new_component,
 	ECSEngine::ECS_COMPONENT_TYPE type
 );
-
-// -------------------------------------------------------------------------------------------------------------
-
-void ClearSandboxTaskScheduler(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -369,12 +378,6 @@ bool LoadRuntimeSettings(
 ECS_INLINE void LockSandbox(EditorState* editor_state, unsigned int sandbox_index) {
 	GetSandbox(editor_state, sandbox_index)->locked_count.fetch_add(1, ECS_RELAXED);
 }
-
-// -------------------------------------------------------------------------------------------------------------
-
-// Launches the runtime for the selected runtime
-// Prints an error message in case it couldn't do it
-bool LaunchSandboxRuntime(EditorState* editor_state, unsigned int index);
 
 // -------------------------------------------------------------------------------------------------------------
 

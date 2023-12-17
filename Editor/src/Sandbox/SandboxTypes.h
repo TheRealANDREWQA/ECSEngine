@@ -135,7 +135,12 @@ struct EditorSandboxAssetHandlesSnapshot {
 enum EDITOR_SANDBOX_FLAG : size_t {
 	EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION = 1 << 0,
 	EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION = 1 << 1,
-	EDITOR_SANDBOX_FLAG_PREFAB = 1 << 2 // Used to indicate that this sandbox is used for a prefab preview
+	EDITOR_SANDBOX_FLAG_PREFAB = 1 << 2, // Used to indicate that this sandbox is used for a prefab preview
+	// This flag indicates whether or not the initialize functions were called
+	// When the sandbox was started. It can happen that one of the modules is not
+	// ready and when the sandbox finally resumes it is already in the run state
+	// and it needs to know whether or not this initialization was performed or not
+	EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS = 1 << 3
 };
 
 enum ECS_REFLECT EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY : unsigned char {
@@ -287,6 +292,10 @@ struct ECS_REFLECT EditorSandbox {
 	EditorSandboxAssetHandlesSnapshot runtime_asset_handle_snapshot;
 
 	ECSEngine::WorldProfiling world_profiling;
+
+	// This is data that is to be transfered in between module compilations
+	ECSEngine::ResizableLinearAllocator sandbox_world_transfer_data_allocator;
+	ECSEngine::Stream<ECSEngine::TaskSchedulerTransferStaticData> sandbox_world_transfer_data;
 
 	// Miscellaneous flags
 	size_t flags;

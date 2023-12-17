@@ -881,12 +881,13 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
 	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status,
-	bool disable_logging
+	bool disable_logging,
+	bool force_build
 ) {
 	ProjectModules* modules = editor_state->project_modules;
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 
-	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status != EDITOR_MODULE_LOAD_GOOD) {
+	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status != EDITOR_MODULE_LOAD_GOOD || force_build) {
 		return RunBuildCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status, disable_logging);
 	}
 	if (report_status != nullptr) {
@@ -894,6 +895,16 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	}
 	// The callback will check the status of this function and report accordingly to the console
 	return EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED;
+}
+
+static EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModuleNoForce(
+	EditorState* editor_state,
+	unsigned int index,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	std::atomic<EDITOR_FINISH_BUILD_COMMAND_STATUS>* report_status,
+	bool disable_logging
+) {
+	return BuildModule(editor_state, index, configuration, report_status, disable_logging);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -907,7 +918,7 @@ void BuildModules(
 	bool disable_logging
 )
 {
-	ForEachProjectModule(editor_state, indices, configurations, launch_statuses, build_statuses, disable_logging, BuildModule);
+	ForEachProjectModule(editor_state, indices, configurations, launch_statuses, build_statuses, disable_logging, BuildModuleNoForce);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -2024,13 +2035,12 @@ void ResetModules(EditorState* editor_state)
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void SetModuleLoadStatus(EditorState* editor_state, unsigned int module_index, bool has_failed, EDITOR_MODULE_CONFIGURATION configuration)
+void SetModuleLoadStatus(EditorState* editor_state, unsigned int module_index, bool success, EDITOR_MODULE_CONFIGURATION configuration)
 {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, configuration);
 
 	bool library_write_greater_than_solution = info->library_last_write_time >= editor_state->project_modules->buffer[module_index].solution_last_write_time;
-	info->load_status = (EDITOR_MODULE_LOAD_STATUS)((has_failed + library_write_greater_than_solution) * has_failed);
-	//if (info->load_status)
+	info->load_status = (EDITOR_MODULE_LOAD_STATUS)((success + library_write_greater_than_solution) * success);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

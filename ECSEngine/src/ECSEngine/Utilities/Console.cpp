@@ -166,7 +166,7 @@ namespace ECSEngine {
 
 	AtomicStream<char> DefaultConsoleMessageAllocator(GlobalMemoryManager* global_manager) {
 		// Estimate a large count of characters per message
-		const size_t CHARACTER_COUNT_PER_MESSAGE = 250;
+		const size_t CHARACTER_COUNT_PER_MESSAGE = 300;
 		size_t allocation_capacity = Console::MaxMessageCount() * CHARACTER_COUNT_PER_MESSAGE;
 		void* allocation = global_manager->Allocate(sizeof(char) * allocation_capacity);
 		return AtomicStream<char>(allocation, 0, allocation_capacity);

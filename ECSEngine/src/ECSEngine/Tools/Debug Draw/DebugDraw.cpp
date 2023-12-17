@@ -8,8 +8,11 @@
 #include "../../Utilities/FilePreprocessor.h"
 #include "../../Rendering/Camera.h"
 
-constexpr size_t SMALL_VERTEX_BUFFER_CAPACITY = 8;
-constexpr size_t PER_THREAD_RESOURCES = 32;
+#define SMALL_VERTEX_BUFFER_CAPACITY 8
+#define PER_THREAD_RESOURCES 32
+#define GRID_THREAD_CAPACITY 4
+
+#define LARGE_BUFFER_CAPACITY 100 * ECS_KB
 
 #define POINT_SIZE 0.3f
 #define CIRCLE_TESSELATION 32
@@ -145,6 +148,396 @@ namespace ECSEngine {
 			}
 		}
 		deck->RecalculateFreeChunks();
+	}
+
+	template<typename DebugType>
+	ECS_INLINE Color GetTypeColor(const DebugType* type) {
+		return type->color;
+	}
+
+	template<typename DebugType>
+	ECS_INLINE unsigned int GetTypeInstanceThickness(const DebugType* type) {
+		return type->options.instance_thickness;
+	}
+
+	template<typename Deck>
+	ECS_INLINE bool DeckHasOutputID(const Deck* deck) {
+		return deck->ForEach<true>([](const auto* element) {
+			return GetTypeInstanceThickness(element) != -1;
+			});
+	}
+
+	// The functor receives as parameters (InstancedVertex* positions, unsigned int index, const auto* element)
+	// and must fill in the positions accordingly
+	template<size_t flags = 0, typename DeckType, typename SetPositionsFunctor>
+	void DrawStructuredDeck(DebugDrawer* drawer, DeckType* deck, unsigned int vertex_count, float time_delta, DebugShaderOutput shader_output, SetPositionsFunctor&& set_positions_functor) {
+		// Calculate the maximum amount of vertices needed for every type
+		// and also get an integer mask to indicate the elements for each type
+		unsigned int counts[ELEMENT_COUNT] = { 0 };
+		ushort2* indices[ELEMENT_COUNT];
+		unsigned int total_count = deck->GetElementCount();
+
+		if (total_count > 0) {
+			// Allocate 4 times the memory needed to be sure that each type has enough indices
+			ushort2* type_indices = CalculateElementTypeCounts(drawer->allocator, counts, indices, deck, shader_output);
+
+			// Get the max
+			unsigned int instance_count = GetMaximumCount(counts);
+
+			if (instance_count > 0) {
+				// Create temporary buffers to hold the data
+				VertexBuffer position_buffer;
+				if (instance_count * vertex_count <= LARGE_BUFFER_CAPACITY) {
+					position_buffer = drawer->positions_large_vertex_buffer;
+				}
+				else {
+					position_buffer = drawer->graphics->CreateVertexBuffer(sizeof(InstancedVertex), instance_count * vertex_count, true);
+				}
+				// Bind the vertex buffer and the structured buffer now
+				drawer->graphics->BindVertexBuffer(position_buffer);
+
+				StructuredBuffer instanced_buffer;
+				StructuredBuffer matrix_buffer;
+				StructuredBuffer instance_pixel_thickness_buffer;
+				ResourceView instanced_view;
+				ResourceView matrix_view;
+				ResourceView instance_pixel_thickness_view;
+
+				if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+					if (instance_count <= LARGE_BUFFER_CAPACITY) {
+						instanced_buffer = drawer->output_large_instanced_structured_buffer;
+						instanced_view = drawer->output_large_instanced_buffer_view;
+					}
+					else {
+						instanced_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count, true);
+						instanced_view = drawer->graphics->CreateBufferView(instanced_buffer, true);
+					}
+					drawer->graphics->BindVertexResourceView(instanced_view);
+				}
+				else {
+					if (instance_count <= LARGE_BUFFER_CAPACITY) {
+						matrix_buffer = drawer->output_large_matrix_structured_buffer;
+						instance_pixel_thickness_buffer = drawer->output_large_id_structured_buffer;
+						matrix_view = drawer->output_large_matrix_buffer_view;
+						instance_pixel_thickness_view = drawer->output_large_id_buffer_view;
+					}
+					else {
+						matrix_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(Matrix), instance_count, true);
+						instance_pixel_thickness_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(unsigned int), instance_count, true);
+						matrix_view = drawer->graphics->CreateBufferView(matrix_buffer, true);
+						instance_pixel_thickness_view = drawer->graphics->CreateBufferView(instance_pixel_thickness_buffer, true);
+					}
+					ResourceView vertex_views[] = {
+						matrix_view,
+						instance_pixel_thickness_view
+					};
+					drawer->graphics->BindVertexResourceViews({ vertex_views, std::size(vertex_views) });
+				}
+
+				Matrix gpu_camera = MatrixGPU(drawer->camera_matrix);
+
+				unsigned int current_count = counts[WIREFRAME_DEPTH];
+				ushort2* current_indices = indices[WIREFRAME_DEPTH];
+
+				InstancedVertex* positions = nullptr;
+				void* instanced_data = nullptr;
+				Matrix* matrix_data = nullptr;
+				unsigned int* instance_pixel_thickness_data = nullptr;
+
+				auto draw_call = [&](DebugDrawCallOptions options) {
+					if (current_count > 0) {
+						// Map the buffers
+						positions = (InstancedVertex*)drawer->graphics->MapBuffer(position_buffer.buffer);
+						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+							instanced_data = drawer->graphics->MapBuffer(instanced_buffer.buffer);
+						}
+						else {
+							matrix_data = (Matrix*)drawer->graphics->MapBuffer(matrix_buffer.buffer);
+							instance_pixel_thickness_data = (unsigned int*)drawer->graphics->MapBuffer(instance_pixel_thickness_buffer.buffer);
+						}
+
+						// Fill the buffers
+						for (size_t index = 0; index < current_count; index++) {
+							const auto* element = &deck->buffers[current_indices[index].x][current_indices[index].y];
+							set_positions_functor(positions, index, element);
+							if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+								SetInstancedColor(instanced_data, index, GetTypeColor(element));
+								SetInstancedMatrix(instanced_data, index, gpu_camera);
+							}
+							else {
+								gpu_camera.Store(matrix_data + index);
+								instance_pixel_thickness_data[index] = GetTypeInstanceThickness(element);
+							}
+						}
+
+						// Unmap the buffers
+						drawer->graphics->UnmapBuffer(position_buffer.buffer);
+						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+							drawer->graphics->UnmapBuffer(instanced_buffer.buffer);
+						}
+						else {
+							drawer->graphics->UnmapBuffer(matrix_buffer.buffer);
+							drawer->graphics->UnmapBuffer(instance_pixel_thickness_buffer.buffer);
+						}
+
+						// Set the state
+						BindStructuredShaderState<flags>(drawer, options, shader_output);
+
+						// Issue the draw call
+						drawer->DrawCallStructured(vertex_count, current_count);
+					}
+				};
+
+				// Draw all the Wireframe depth elements
+				draw_call({ true, false });
+
+				// Draw all the Wireframe no depth elements
+				current_count = counts[WIREFRAME_NO_DEPTH];
+				current_indices = indices[WIREFRAME_NO_DEPTH];
+				draw_call({ true, true });
+
+				// Draw all the Solid depth elements
+				current_count = counts[SOLID_DEPTH];
+				current_indices = indices[SOLID_DEPTH];
+				draw_call({ false, false });
+
+				// Draw all the Solid no depth elements
+				current_count = counts[SOLID_NO_DEPTH];
+				current_indices = indices[SOLID_NO_DEPTH];
+				draw_call({ false, true });
+
+				// Update the duration and remove those elements that expired
+				if (time_delta != 0.0f) {
+					UpdateElementDurations(deck, time_delta);
+				}
+
+				// Release the temporary vertex buffer, structured buffer and the temporary allocation
+				if (instance_count * vertex_count > LARGE_BUFFER_CAPACITY) {
+					position_buffer.Release();
+				}
+				if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+					if (instance_count > LARGE_BUFFER_CAPACITY) {
+						instanced_view.Release();
+						instanced_buffer.Release();
+					}
+				}
+				else {
+					if (instance_count > LARGE_BUFFER_CAPACITY) {
+						matrix_view.Release();
+						matrix_buffer.Release();
+						instance_pixel_thickness_view.Release();
+						instance_pixel_thickness_buffer.Release();
+					}
+				}
+			}
+			drawer->allocator->Deallocate(type_indices);
+		}
+	}
+
+	// If the dynamic counts is set to true, it will keep retrieving items and filling
+	// The GPU buffers directly without the need for allocations. This works only for a single
+	// Type of draw - the options cannot be intermingled. It will also increment
+	// the counts as needed. The functor receives (unsigned int index, ElementType type)
+	// In both cases. When dynamic counts are activated, the functor must return nullptr
+	// when the elements have been exhausted
+	template<bool dynamic_counts, size_t flags = 0, typename GetElementFunctor>
+	static void DrawTransformCallCore(
+		DebugDrawer* drawer,
+		unsigned int instance_count,
+		unsigned int* per_type_counts,
+		DebugShaderOutput shader_output,
+		DebugVertexBuffers debug_vertex_buffer,
+		GetElementFunctor&& get_element_functor,
+		ElementType dynamic_options_type = ELEMENT_COUNT
+	) {
+		if constexpr (dynamic_counts) {
+			instance_count = 1;
+		}
+		if (instance_count > 0) {
+			if constexpr (dynamic_counts) {
+				instance_count = 0;
+				memset(per_type_counts, 0, sizeof(unsigned int) * ELEMENT_COUNT);
+			}
+
+			VertexBuffer instanced_buffer;
+			VertexBuffer matrix_buffer;
+			VertexBuffer instance_id_buffer;
+
+			// Create temporary buffers to hold the data
+			if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+				if (instance_count <= LARGE_BUFFER_CAPACITY) {
+					instanced_buffer = drawer->instanced_large_vertex_buffer;
+				}
+				else {
+					instanced_buffer = drawer->graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
+				}
+				drawer->graphics->BindVertexBuffer(instanced_buffer, 1);
+			}
+			else {
+				if (instance_count <= LARGE_BUFFER_CAPACITY) {
+					matrix_buffer = drawer->output_large_matrix_vertex_buffer;
+					instance_id_buffer = drawer->output_large_id_vertex_buffer;
+				}
+				else {
+					matrix_buffer = drawer->graphics->CreateVertexBuffer(sizeof(Matrix), instance_count, true);
+					instance_id_buffer = drawer->graphics->CreateVertexBuffer(sizeof(unsigned int), instance_count, true);
+				}
+
+				drawer->graphics->BindVertexBuffer(matrix_buffer, 1);
+				drawer->graphics->BindVertexBuffer(instance_id_buffer, 2);
+			}
+
+			void* instanced_data = nullptr;
+			Matrix* matrix_data = nullptr;
+			unsigned int* instance_id_data = nullptr;
+
+			unsigned int current_count = per_type_counts[WIREFRAME_DEPTH];
+			unsigned int mesh_index_count = BindTransformVertexBuffers<flags>(drawer, debug_vertex_buffer);
+
+			auto draw_call = [&](DebugDrawCallOptions options, ElementType element_type) {
+				bool exit_dynamic_loop = false;
+				unsigned int overall_dynamic_count = 0;
+				if constexpr (dynamic_counts) {
+					if (element_type == dynamic_options_type) {
+						current_count = 1;
+					}
+				}
+				while (current_count > 0 && !exit_dynamic_loop) {
+					if constexpr (dynamic_counts) {
+						current_count = 0;
+					}
+
+					// Map the buffers
+					if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+						instanced_data = drawer->graphics->MapBuffer(instanced_buffer.buffer);
+					}
+					else {
+						matrix_data = (Matrix*)drawer->graphics->MapBuffer(matrix_buffer.buffer);
+						instance_id_data = (unsigned int*)drawer->graphics->MapBuffer(instance_id_buffer.buffer);
+					}
+
+					auto iteration = [&](unsigned int index) {
+						const auto* element = get_element_functor(index, element_type);
+						if constexpr (dynamic_counts) {
+							if (element == nullptr) {
+								return false;
+							}
+						}
+						Matrix current_matrix = element->GetMatrix(drawer->camera_matrix);
+						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+							SetInstancedColor(instanced_data, index, GetTypeColor(element));
+							SetInstancedMatrix(instanced_data, index, current_matrix);
+						}
+						else {
+							current_matrix.Store(matrix_data + index);
+							instance_id_data[index] = GetTypeInstanceThickness(element);
+						}
+						return true;
+					};
+
+					if constexpr (dynamic_counts) {
+						bool iteration_entry = iteration(overall_dynamic_count);
+						while (iteration_entry && current_count < LARGE_BUFFER_CAPACITY) {
+							current_count++;
+							overall_dynamic_count++;
+							iteration_entry = iteration(overall_dynamic_count);
+						}
+						if (!iteration_entry) {
+							exit_dynamic_loop = true;
+						}
+					}
+					else {
+						// Fill the buffers
+						for (unsigned int index = 0; index < current_count; index++) {
+							iteration(index);
+						}
+					}
+
+					// Unmap the buffers
+					if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+						drawer->graphics->UnmapBuffer(instanced_buffer.buffer);
+					}
+					else {
+						drawer->graphics->UnmapBuffer(matrix_buffer.buffer);
+						drawer->graphics->UnmapBuffer(instance_id_buffer.buffer);
+					}
+
+					drawer->SetTransformShaderState(options, shader_output);
+					DrawCallTransformFlags<flags>(drawer, mesh_index_count, current_count);
+					if constexpr (!dynamic_counts) {
+						// Exit the loop
+						exit_dynamic_loop = true;
+					}
+					else {
+						current_count = 1;
+					}
+				}
+			};
+
+			// Draw all the Wireframe depth elements
+			draw_call({ true, false }, WIREFRAME_DEPTH);
+
+			// Draw all the Wireframe no depth elements
+			current_count = per_type_counts[WIREFRAME_NO_DEPTH];
+			draw_call({ true, true }, WIREFRAME_NO_DEPTH);
+
+			// Draw all the Solid depth elements
+			current_count = per_type_counts[SOLID_DEPTH];
+			draw_call({ false, false }, SOLID_DEPTH);
+
+			// Draw all the Solid no depth elements
+			current_count = per_type_counts[SOLID_NO_DEPTH];
+			draw_call({ false, true }, SOLID_NO_DEPTH);
+
+			// Release the temporary vertex buffers and the temporary allocation
+			if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
+				if (instance_count > LARGE_BUFFER_CAPACITY) {
+					instanced_buffer.Release();
+				}
+			}
+			else {
+				if (instance_count > LARGE_BUFFER_CAPACITY) {
+					matrix_buffer.Release();
+					instance_id_buffer.Release();
+				}
+			}
+		}
+	}
+
+	// The functor receives as parameters (const auto* element) and must return a matrix
+	template<size_t flags = 0, typename DeckElement>
+	static void DrawTransformDeck(
+		DebugDrawer* drawer,
+		DeckPowerOfTwo<DeckElement>* deck,
+		DebugVertexBuffers debug_vertex_buffer,
+		float time_delta,
+		DebugShaderOutput shader_output
+	) {
+		// Calculate the maximum amount of vertices needed for every type
+		// and also get an integer mask to indicate the elements for each type
+		unsigned int counts[ELEMENT_COUNT] = { 0 };
+		ushort2* indices[ELEMENT_COUNT];
+		unsigned int total_count = deck->GetElementCount();
+
+		if (total_count > 0) {
+			// Allocate 4 times the memory needed to be sure that each type has enough indices
+			ushort2* type_indices = CalculateElementTypeCounts(drawer->allocator, counts, indices, deck, shader_output);
+
+			// Get the max
+			unsigned int instance_count = GetMaximumCount(counts);
+
+			if (instance_count > 0) {
+				// Bind the vertex buffers now
+				DrawTransformCallCore<false, flags>(drawer, instance_count, counts, shader_output, debug_vertex_buffer, [deck, indices](unsigned int index, ElementType element_type) {
+					return &deck->buffers[indices[element_type][index].x][indices[element_type][index].y];
+					});
+				// Update the duration and remove those elements that expired
+				if (time_delta != 0.0f) {
+					UpdateElementDurations(deck, time_delta);
+				}
+			}
+			drawer->allocator->Deallocate(type_indices);
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -668,6 +1061,10 @@ namespace ECSEngine {
 		AddString(position, direction, size, text, color, options);
 	}
 
+	void DebugDrawer::AddGrid(const DebugGrid* grid, bool retrieve_entries_now)
+	{
+	}
+
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
@@ -921,6 +1318,10 @@ namespace ECSEngine {
 		}
 		Stream<char> string_copy = StringCopy(AllocatorTs(), text);
 		thread_strings[thread_index].Add({ position, RotateVectorQuaternion(rotation, RightVector()), size, string_copy, color, options });
+	}
+
+	void DebugDrawer::AddGridThread(unsigned int thread_index, const DebugGrid* grid, bool retrieve_entries_now)
+	{
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1641,297 +2042,37 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void DebugDrawer::DrawGrid(const DebugGrid* grid)
+	{
+		Timer my_timer;
+		DebugAABB aabb;
+		aabb.color = grid->color;
+		aabb.options = grid->options;
+		aabb.scale = grid->cell_size;
+		unsigned int per_type_counts[ELEMENT_COUNT];
+		DrawTransformCallCore<true>(this, 0, per_type_counts, ECS_DEBUG_SHADER_OUTPUT_COLOR, ECS_DEBUG_VERTEX_BUFFER_CUBE, [&](unsigned int index, ElementType type) {
+			aabb.translation = grid->translation + float3::Splat((float)index);
+			if (index < 10'000) {
+				return &aabb;
+			}
+			return (DebugAABB*)nullptr;
+		}, grid->options.ignore_depth ? SOLID_NO_DEPTH : SOLID_DEPTH);
+		float duration = my_timer.GetDurationFloat(ECS_TIMER_DURATION_US);
+		ECS_FORMAT_TEMP_STRING(message, "Duration {#}\n", duration);
+		OutputDebugStringA(message.buffer);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Draw Deck elements
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	template<typename DebugType>
-	ECS_INLINE Color GetTypeColor(const DebugType* type) {
-		return type->color;
-	}
-
-	template<typename DebugType>
-	ECS_INLINE unsigned int GetTypeInstanceThickness(const DebugType* type) {
-		return type->options.instance_thickness;
-	}
-
-	template<typename Deck>
-	ECS_INLINE bool DeckHasOutputID(const Deck* deck) {
-		return deck->ForEach<true>([](const auto* element) {
-			return GetTypeInstanceThickness(element) != -1;
-		});
-	}
-
-	// The functor receives as parameters (InstancedVertex* positions, unsigned int index, const auto* element)
-	// and must fill in the positions accordingly
-	template<size_t flags = 0, typename DeckType, typename SetPositionsFunctor>
-	void DrawStructuredDeck(DebugDrawer* drawer, DeckType* deck, unsigned int vertex_count, float time_delta, DebugShaderOutput shader_output, SetPositionsFunctor&& set_positions_functor) {
-		// Calculate the maximum amount of vertices needed for every type
-		// and also get an integer mask to indicate the elements for each type
-		unsigned int counts[ELEMENT_COUNT] = { 0 };
-		ushort2* indices[ELEMENT_COUNT];
-		unsigned int total_count = deck->GetElementCount();
-
-		if (total_count > 0) {
-			// Allocate 4 times the memory needed to be sure that each type has enough indices
-			ushort2* type_indices = CalculateElementTypeCounts(drawer->allocator, counts, indices, deck, shader_output);
-
-			// Get the max
-			unsigned int instance_count = GetMaximumCount(counts);
-
-			if (instance_count > 0) {
-				// Create temporary buffers to hold the data - each line has 2 endpoints
-				VertexBuffer position_buffer = drawer->graphics->CreateVertexBuffer(sizeof(InstancedVertex), instance_count * vertex_count, true);
-				// Bind the vertex buffer and the structured buffer now
-				drawer->graphics->BindVertexBuffer(position_buffer);
-
-				StructuredBuffer instanced_buffer;
-				StructuredBuffer matrix_buffer;
-				StructuredBuffer instance_pixel_thickness_buffer;
-				ResourceView instanced_view;
-				ResourceView matrix_view;
-				ResourceView instance_pixel_thickness_view;
-
-				if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-					instanced_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count, true);
-					instanced_view = drawer->graphics->CreateBufferView(instanced_buffer, true);
-					drawer->graphics->BindVertexResourceView(instanced_view);
-				}
-				else {
-					matrix_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(Matrix), instance_count, true);
-					instance_pixel_thickness_buffer = drawer->graphics->CreateStructuredBuffer(sizeof(unsigned int), instance_count, true);
-					matrix_view = drawer->graphics->CreateBufferView(matrix_buffer, true);
-					instance_pixel_thickness_view = drawer->graphics->CreateBufferView(instance_pixel_thickness_buffer, true);
-					ResourceView vertex_views[] = {
-						matrix_view,
-						instance_pixel_thickness_view
-					};
-					drawer->graphics->BindVertexResourceViews({ vertex_views, std::size(vertex_views) });
-				}
-
-				Matrix gpu_camera = MatrixGPU(drawer->camera_matrix);
-
-				unsigned int current_count = counts[WIREFRAME_DEPTH];
-				ushort2* current_indices = indices[WIREFRAME_DEPTH];
-
-				InstancedVertex* positions = nullptr;
-				void* instanced_data = nullptr;
-				Matrix* matrix_data = nullptr;
-				unsigned int* instance_pixel_thickness_data = nullptr;
-
-				auto draw_call = [&](DebugDrawCallOptions options) {
-					if (current_count > 0) {
-						// Map the buffers
-						positions = (InstancedVertex*)drawer->graphics->MapBuffer(position_buffer.buffer);
-						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-							instanced_data = drawer->graphics->MapBuffer(instanced_buffer.buffer);
-						}
-						else {
-							matrix_data = (Matrix*)drawer->graphics->MapBuffer(matrix_buffer.buffer);
-							instance_pixel_thickness_data = (unsigned int*)drawer->graphics->MapBuffer(instance_pixel_thickness_buffer.buffer);
-						}
-
-						// Fill the buffers
-						for (size_t index = 0; index < current_count; index++) {
-							const auto* element = &deck->buffers[current_indices[index].x][current_indices[index].y];
-							set_positions_functor(positions, index, element);
-							if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-								SetInstancedColor(instanced_data, index, GetTypeColor(element));
-								SetInstancedMatrix(instanced_data, index, gpu_camera);
-							}
-							else {
-								gpu_camera.Store(matrix_data + index);
-								instance_pixel_thickness_data[index] = GetTypeInstanceThickness(element);
-							}
-						}
-
-						// Unmap the buffers
-						drawer->graphics->UnmapBuffer(position_buffer.buffer);
-						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-							drawer->graphics->UnmapBuffer(instanced_buffer.buffer);
-						}
-						else {
-							drawer->graphics->UnmapBuffer(matrix_buffer.buffer);
-							drawer->graphics->UnmapBuffer(instance_pixel_thickness_buffer.buffer);
-						}
-
-						// Set the state
-						BindStructuredShaderState<flags>(drawer, options, shader_output);
-
-						// Issue the draw call
-						drawer->DrawCallStructured(vertex_count, current_count);
-					}
-				};
-
-				// Draw all the Wireframe depth elements
-				draw_call({ true, false });
-
-				// Draw all the Wireframe no depth elements
-				current_count = counts[WIREFRAME_NO_DEPTH];
-				current_indices = indices[WIREFRAME_NO_DEPTH];
-				draw_call({ true, true });
-
-				// Draw all the Solid depth elements
-				current_count = counts[SOLID_DEPTH];
-				current_indices = indices[SOLID_DEPTH];
-				draw_call({ false, false });
-
-				// Draw all the Solid no depth elements
-				current_count = counts[SOLID_NO_DEPTH];
-				current_indices = indices[SOLID_NO_DEPTH];
-				draw_call({ false, true });
-
-				// Update the duration and remove those elements that expired
-				if (time_delta != 0.0f) {
-					UpdateElementDurations(deck, time_delta);
-				}
-
-				// Release the temporary vertex buffer, structured buffer and the temporary allocation
-				position_buffer.Release();
-				if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-					instanced_view.Release();
-					instanced_buffer.Release();
-				}
-				else {
-					matrix_view.Release();
-					matrix_buffer.Release();
-					instance_pixel_thickness_view.Release();
-					instance_pixel_thickness_buffer.Release();
-				}
-			}
-			drawer->allocator->Deallocate(type_indices);
-		}
-	}
-
-	// The functor receives as parameters (const auto* element) and must return a matrix
-	template<size_t flags = 0, typename DeckElement, typename SetMatrixFunctor>
-	void DrawTransformDeck(
-		DebugDrawer* drawer,
-		DeckPowerOfTwo<DeckElement>* deck,
-		DebugVertexBuffers debug_vertex_buffer,
-		float time_delta,
-		DebugShaderOutput shader_output,
-		SetMatrixFunctor&& set_matrix_functor
-	) {
-		// Calculate the maximum amount of vertices needed for every type
-		// and also get an integer mask to indicate the elements for each type
-		unsigned int counts[ELEMENT_COUNT] = { 0 };
-		ushort2* indices[ELEMENT_COUNT];
-		unsigned int total_count = deck->GetElementCount();
-
-		if (total_count > 0) {
-			// Allocate 4 times the memory needed to be sure that each type has enough indices
-			ushort2* type_indices = CalculateElementTypeCounts(drawer->allocator, counts, indices, deck, shader_output);
-
-			// Get the max
-			unsigned int instance_count = GetMaximumCount(counts);
-
-			if (instance_count > 0) {
-				VertexBuffer instanced_buffer;
-				VertexBuffer matrix_buffer;
-				VertexBuffer instance_id_buffer;
-
-				// Create temporary buffers to hold the data
-				if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-					instanced_buffer = drawer->graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
-					drawer->graphics->BindVertexBuffer(instanced_buffer, 1);
-				}
-				else {
-					matrix_buffer = drawer->graphics->CreateVertexBuffer(sizeof(Matrix), instance_count, true);
-					drawer->graphics->BindVertexBuffer(matrix_buffer, 1);
-					instance_id_buffer = drawer->graphics->CreateVertexBuffer(sizeof(unsigned int), instance_count, true);
-					drawer->graphics->BindVertexBuffer(instance_id_buffer, 2);
-				}
-
-				// Bind the vertex buffers now
-				unsigned int mesh_index_count = BindTransformVertexBuffers<flags>(drawer, debug_vertex_buffer);
-
-				unsigned int current_count = counts[WIREFRAME_DEPTH];
-				ushort2* current_indices = indices[WIREFRAME_DEPTH];
-
-				void* instanced_data = nullptr;
-				Matrix* matrix_data = nullptr;
-				unsigned int* instance_id_data = nullptr;
-
-				auto draw_call = [&](DebugDrawCallOptions options) {
-					if (current_count > 0) {
-						// Map the buffers
-						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-							instanced_data = drawer->graphics->MapBuffer(instanced_buffer.buffer);
-						}
-						else {
-							matrix_data = (Matrix*)drawer->graphics->MapBuffer(matrix_buffer.buffer);
-							instance_id_data = (unsigned int*)drawer->graphics->MapBuffer(instance_id_buffer.buffer);
-						}
-
-						// Fill the buffers
-						for (size_t index = 0; index < current_count; index++) {
-							const auto* element = &deck->buffers[current_indices[index].x][current_indices[index].y];
-							Matrix current_matrix = set_matrix_functor(element);
-							if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-								SetInstancedColor(instanced_data, index, GetTypeColor(element));
-								SetInstancedMatrix(instanced_data, index, current_matrix);
-							}
-							else {
-								current_matrix.Store(matrix_data + index);
-								instance_id_data[index] = GetTypeInstanceThickness(element);
-							}
-						}
-
-						// Unmap the buffers
-						if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-							drawer->graphics->UnmapBuffer(instanced_buffer.buffer);
-						}
-						else {
-							drawer->graphics->UnmapBuffer(matrix_buffer.buffer);
-							drawer->graphics->UnmapBuffer(instance_id_buffer.buffer);
-						}
-
-						drawer->SetTransformShaderState(options, shader_output);
-						DrawCallTransformFlags<flags>(drawer, mesh_index_count, current_count);
-					}
-				};
-
-				// Draw all the Wireframe depth elements
-				draw_call({ true, false });
-
-				// Draw all the Wireframe no depth elements
-				current_count = counts[WIREFRAME_NO_DEPTH];
-				current_indices = indices[WIREFRAME_NO_DEPTH];
-				draw_call({ true, true });
-
-				// Draw all the Solid depth elements
-				current_count = counts[SOLID_DEPTH];
-				current_indices = indices[SOLID_DEPTH];
-				draw_call({ false, false });
-
-				// Draw all the Solid no depth elements
-				current_count = counts[SOLID_NO_DEPTH];
-				current_indices = indices[SOLID_NO_DEPTH];
-				draw_call({ false, true });
-
-				// Update the duration and remove those elements that expired
-				if (time_delta != 0.0f) {
-					UpdateElementDurations(deck, time_delta);
-				}
-
-				// Release the temporary vertex buffers and the temporary allocation
-				if (shader_output == ECS_DEBUG_SHADER_OUTPUT_COLOR) {
-					instanced_buffer.Release();
-				}
-				else {
-					matrix_buffer.Release();
-					instance_id_buffer.Release();
-				}
-			}
-			drawer->allocator->Deallocate(type_indices);
-		}
-	}
-
-	void DebugDrawer::DrawLineDeck(float time_delta, DebugShaderOutput shader_output) {
-		DrawStructuredDeck<DRAW_STRUCTURED_LINE_TOPOLOGY>(this, &lines, 2, time_delta, shader_output,
+	void DebugDrawer::DrawLineDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugLine>* custom_source) {
+		DeckPowerOfTwo<DebugLine>* source = custom_source != nullptr ? custom_source : &lines;
+		DrawStructuredDeck<DRAW_STRUCTURED_LINE_TOPOLOGY>(this, source, 2, time_delta, shader_output,
 			[](InstancedVertex* positions, unsigned int index, const DebugLine* line) {
 				SetLinePositions(positions, index, line->start, line->end);
 		});
@@ -1939,24 +2080,23 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawSphereDeck(float time_delta, DebugShaderOutput shader_output) {
-		DrawTransformDeck(this, &spheres, ECS_DEBUG_VERTEX_BUFFER_SPHERE, time_delta, shader_output, [&](const DebugSphere* sphere) {
-			return SphereMatrix(sphere->position, sphere->radius, camera_matrix);
-		});
+	void DebugDrawer::DrawSphereDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugSphere>* custom_source) {
+		DeckPowerOfTwo<DebugSphere>* source = custom_source != nullptr ? custom_source : &spheres;
+		DrawTransformDeck(this, source, ECS_DEBUG_VERTEX_BUFFER_SPHERE, time_delta, shader_output);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawPointDeck(float time_delta, DebugShaderOutput shader_output) {
-		DrawTransformDeck(this, &points, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, shader_output, [&](const DebugPoint* point) {
-			return PointMatrix(point->position, camera_matrix);
-		});
+	void DebugDrawer::DrawPointDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugPoint>* custom_source) {
+		DeckPowerOfTwo<DebugPoint>* source = custom_source != nullptr ? custom_source : &points;
+		DrawTransformDeck(this, source, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, shader_output);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawRectangleDeck(float time_delta, DebugShaderOutput shader_output) {
-		DrawStructuredDeck(this, &rectangles, 6, time_delta, shader_output,
+	void DebugDrawer::DrawRectangleDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugRectangle> * custom_source) {
+		DeckPowerOfTwo<DebugRectangle>* source = custom_source != nullptr ? custom_source : &rectangles;
+		DrawStructuredDeck(this, source, 6, time_delta, shader_output,
 			[](InstancedVertex* positions, unsigned int index, const DebugRectangle* rectangle) {
 				SetRectanglePositionsFront(positions, index, rectangle->corner0, rectangle->corner1);
 		});
@@ -1964,33 +2104,30 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCrossDeck(float time_delta, DebugShaderOutput shader_output) {
-		DrawTransformDeck(this, &crosses, ECS_DEBUG_VERTEX_BUFFER_CROSS, time_delta, shader_output, [&](const DebugCross* cross) {
-			return CrossMatrix(cross->position, cross->rotation, cross->size, camera_matrix);
-		});
+	void DebugDrawer::DrawCrossDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugCross>* custom_source) {
+		DeckPowerOfTwo<DebugCross>* source = custom_source != nullptr ? custom_source : &crosses;
+		DrawTransformDeck(this, source, ECS_DEBUG_VERTEX_BUFFER_CROSS, time_delta, shader_output);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCircleDeck(float time_delta, DebugShaderOutput shader_output) {
-		DrawTransformDeck<DRAW_TRANSFORM_CIRCLE_BUFFER>(this, &circles, ECS_DEBUG_VERTEX_BUFFER_COUNT, time_delta, shader_output,
-			[&](const DebugCircle* circle) {
-				return CircleMatrix(circle->position, circle->rotation, circle->radius, camera_matrix);
-		});
+	void DebugDrawer::DrawCircleDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugCircle>* custom_source) {
+		DeckPowerOfTwo<DebugCircle>* source = custom_source != nullptr ? custom_source : &circles;
+		DrawTransformDeck<DRAW_TRANSFORM_CIRCLE_BUFFER>(this, source, ECS_DEBUG_VERTEX_BUFFER_COUNT, time_delta, shader_output);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawArrowDeck(float time_delta, DebugShaderOutput shader_output) {
-		DrawTransformDeck(this, &arrows, ECS_DEBUG_VERTEX_BUFFER_ARROW, time_delta, shader_output, [&](const DebugArrow* arrow) {
-			return ArrowMatrix(arrow->translation, arrow->rotation, arrow->length, arrow->size, camera_matrix);
-		});
+	void DebugDrawer::DrawArrowDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugArrow>* custom_source) {
+		DeckPowerOfTwo<DebugArrow>* source = custom_source != nullptr ? custom_source : &arrows;
+		DrawTransformDeck(this, source, ECS_DEBUG_VERTEX_BUFFER_ARROW, time_delta, shader_output);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawTriangleDeck(float time_delta, DebugShaderOutput shader_output) {
-		DrawStructuredDeck(this, &triangles, 3, time_delta, shader_output,
+	void DebugDrawer::DrawTriangleDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugTriangle>* custom_source) {
+		DeckPowerOfTwo<DebugTriangle>* source = custom_source != nullptr ? custom_source : &triangles;
+		DrawStructuredDeck(this, source, 3, time_delta, shader_output,
 			[](InstancedVertex* positions, unsigned int index, const DebugTriangle* triangle) {
 				SetTrianglePositions(positions, index, triangle->point0, triangle->point1, triangle->point2);
 		});
@@ -1998,28 +2135,28 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawAABBDeck(float time_delta, DebugShaderOutput shader_output) {
-		DrawTransformDeck(this, &aabbs, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, shader_output, [&](const DebugAABB* aabb) {
-			return AABBMatrix(aabb->translation, aabb->scale, camera_matrix);
-		});
+	void DebugDrawer::DrawAABBDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugAABB>* custom_source) {
+		DeckPowerOfTwo<DebugAABB>* source = custom_source != nullptr ? custom_source : &aabbs;
+		DrawTransformDeck(this, source, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, shader_output);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawOOBBDeck(float time_delta, DebugShaderOutput shader_output) {
-		DrawTransformDeck(this, &oobbs, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, shader_output, [&](const DebugOOBB* oobb) {
-			return OOBBMatrix(oobb->translation, oobb->rotation, oobb->scale, camera_matrix);
-		});
+	void DebugDrawer::DrawOOBBDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugOOBB>* custom_source) {
+		DeckPowerOfTwo<DebugOOBB>* source = custom_source != nullptr ? custom_source : &oobbs;
+		DrawTransformDeck(this, source, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, shader_output);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawStringDeck(float time_delta, DebugShaderOutput shader_output) {
+	void DebugDrawer::DrawStringDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugString>* custom_source) {
+		DeckPowerOfTwo<DebugString>* source = custom_source != nullptr ? custom_source : &strings;
+		
 		// Calculate the maximum amount of vertices needed for every type
 		// and also get an integer mask to indicate the elements for each type
 		unsigned int counts[ELEMENT_COUNT] = { 0 };
 		ushort2* indices[ELEMENT_COUNT];
-		auto deck_pointer = &strings;
+		auto deck_pointer = source;
 		unsigned int total_count = deck_pointer->GetElementCount();
 
 		if (total_count > 0) {
@@ -2196,6 +2333,10 @@ namespace ECSEngine {
 			allocator->Deallocate(vertical_offsets);
 			allocator->Deallocate(checked_characters);
 		}
+	}
+
+	void DebugDrawer::DrawGridDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugGrid>* custom_source)
+	{
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2649,9 +2790,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugSphere> temp_deck = DeckPowerOfTwo<DebugSphere>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_SPHERE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugSphere* sphere) {
-			return SphereMatrix(sphere->position, sphere->radius, camera_matrix);
-		});
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_SPHERE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2660,9 +2799,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugPoint> temp_deck = DeckPowerOfTwo<DebugPoint>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugPoint* point) {
-			return PointMatrix(point->position, camera_matrix);
-		});
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_POINT, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2682,9 +2819,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugCross> temp_deck = DeckPowerOfTwo<DebugCross>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CROSS, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugCross* cross) {
-			return CrossMatrix(cross->position, cross->rotation, cross->size, camera_matrix);
-		});
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CROSS, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2693,9 +2828,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugCircle> temp_deck = DeckPowerOfTwo<DebugCircle>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck<DRAW_TRANSFORM_CIRCLE_BUFFER>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_COUNT, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugCircle* circle) {
-			return CircleMatrix(circle->position, circle->rotation, circle->radius, camera_matrix);
-		});
+		DrawTransformDeck<DRAW_TRANSFORM_CIRCLE_BUFFER>(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_COUNT, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2704,9 +2837,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugArrow> temp_deck = DeckPowerOfTwo<DebugArrow>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_ARROW, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugArrow* arrow) {
-			return ArrowMatrix(arrow->translation, arrow->rotation, arrow->length, arrow->size, camera_matrix);
-		});
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_ARROW, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2726,9 +2857,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugAABB> temp_deck = DeckPowerOfTwo<DebugAABB>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugAABB* aabb) {
-			return AABBMatrix(aabb->translation, aabb->scale, camera_matrix);
-		});
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2737,9 +2866,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_VOID_STREAM(temp_memory, 256);
 		DeckPowerOfTwo<DebugOOBB> temp_deck = DeckPowerOfTwo<DebugOOBB>::InitializeTempReference(addition_stream->ToStream(), temp_memory.buffer);
-		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugOOBB* oobb) {
-			return OOBBMatrix(oobb->translation, oobb->rotation, oobb->scale, camera_matrix);
-		});
+		DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2747,6 +2874,20 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexStringBulk(const AdditionStreamAtomic<DebugString>* addition_stream, float time_delta)
 	{
 		ECS_ASSERT(false, "Output instance index bulk write for debug strings is not yet implemented");
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::OutputInstanceIndexGridBulk(const AdditionStreamAtomic<DebugGrid>* addition_stream, float time_delta)
+	{
+		Stream<DebugGrid> grids = addition_stream->ToStream();
+		for (size_t index = 0; index < grids.size; index++) {
+
+		}
+
+		/*DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugOOBB* oobb) {
+			return OOBBMatrix(oobb->translation, oobb->rotation, oobb->scale, camera_matrix);
+		});*/
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2759,13 +2900,14 @@ namespace ECSEngine {
 	void FlushType(DebugDrawer* drawer, Deck* deck, ThreadStream* thread_buffering, DebugPrimitive debug_primitive, unsigned int thread_index) {
 		if (thread_buffering[thread_index].size > 0) {
 			drawer->thread_locks[debug_primitive]->Lock();
-			auto* copy_position = &deck[deck->ReserveIndices(thread_buffering[thread_index].size, true)];
-			if (copy_position == nullptr) {
+			size_t copy_index = deck->ReserveIndices(thread_buffering[thread_index].size, false);
+			if (copy_index == -1) {
 				drawer->allocator->Lock();
 				deck->AllocateChunks(1);
-				copy_position = &deck[deck->ReserveIndices(thread_buffering[thread_index].size, true)];
 				drawer->allocator->Unlock();
+				copy_index = deck->ReserveIndices(thread_buffering[thread_index].size, false);
 			}
+			auto* copy_position = &((*deck)[copy_index]);
 			thread_buffering[thread_index].CopyTo(copy_position);
 			thread_buffering[thread_index].size = 0;
 			drawer->thread_locks[debug_primitive]->Unlock();
@@ -2788,6 +2930,7 @@ namespace ECSEngine {
 			FlushAABB(index);
 			FlushOOBB(index);
 			FlushString(index);
+			FlushGrid(index);
 		}
 	}
 
@@ -2870,6 +3013,13 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void DebugDrawer::FlushGrid(unsigned int thread_index)
+	{
+		FlushType(this, &grids, thread_grids, ECS_DEBUG_PRIMITIVE_GRID, thread_index);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Set state
@@ -2919,6 +3069,18 @@ namespace ECSEngine {
 		output_instance_matrix_structured_view = graphics->CreateBufferView(output_instance_matrix_small_structured_buffer);
 		output_instance_id_small_structured_buffer = graphics->CreateStructuredBuffer(sizeof(unsigned int), SMALL_VERTEX_BUFFER_CAPACITY);
 		output_instance_id_structured_view = graphics->CreateBufferView(output_instance_id_small_structured_buffer);
+
+		// Initialize the large vertex buffers
+		positions_large_vertex_buffer = graphics->CreateVertexBuffer(sizeof(InstancedVertex), LARGE_BUFFER_CAPACITY);
+		instanced_large_vertex_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), LARGE_BUFFER_CAPACITY);
+		output_large_matrix_vertex_buffer = graphics->CreateVertexBuffer(sizeof(Matrix), LARGE_BUFFER_CAPACITY);
+		output_large_id_vertex_buffer = graphics->CreateVertexBuffer(sizeof(unsigned int), LARGE_BUFFER_CAPACITY);
+		output_large_instanced_structured_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedVertex), LARGE_BUFFER_CAPACITY);
+		output_large_instanced_buffer_view = graphics->CreateBufferView(output_large_instanced_structured_buffer);
+		output_large_matrix_structured_buffer = graphics->CreateStructuredBuffer(sizeof(Matrix), LARGE_BUFFER_CAPACITY);
+		output_large_matrix_buffer_view = graphics->CreateBufferView(output_large_matrix_structured_buffer);
+		output_large_id_structured_buffer = graphics->CreateStructuredBuffer(sizeof(unsigned int), LARGE_BUFFER_CAPACITY);
+		output_large_id_buffer_view = graphics->CreateBufferView(output_large_id_structured_buffer);
 
 		Stream<char> shader_source;
 		Stream<void> byte_code;
@@ -2993,6 +3155,7 @@ namespace ECSEngine {
 		total_memory += thread_aabbs->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
 		total_memory += thread_oobbs->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
 		total_memory += thread_strings->MemoryOf(PER_THREAD_RESOURCES) * thread_count;
+		total_memory += thread_grids->MemoryOf(GRID_THREAD_CAPACITY) * thread_count;
 
 		// Add the actual capacity stream sizes
 		total_memory += thread_capacity_stream_size * ECS_DEBUG_PRIMITIVE_COUNT;
@@ -3039,6 +3202,9 @@ namespace ECSEngine {
 		thread_strings = (CapacityStream<DebugString>*)buffer;
 		buffer += thread_capacity_stream_size;
 
+		thread_grids = (CapacityStream<DebugGrid>*)buffer;
+		buffer += thread_capacity_stream_size;
+
 		for (size_t index = 0; index < thread_count; index++) {
 			thread_lines[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
 			thread_spheres[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
@@ -3051,6 +3217,7 @@ namespace ECSEngine {
 			thread_aabbs[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
 			thread_oobbs[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
 			thread_strings[index].InitializeFromBuffer(buffer, 0, PER_THREAD_RESOURCES);
+			thread_grids[index].InitializeFromBuffer(buffer, 0, GRID_THREAD_CAPACITY);
 		}
 
 		thread_locks = (SpinLock**)buffer;
@@ -3077,7 +3244,7 @@ namespace ECSEngine {
 		aabbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
 		oobbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
 		strings.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-
+		grids.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
 
 #pragma region Primitive buffers
 
@@ -3370,6 +3537,73 @@ namespace ECSEngine {
 		DrawDebugFrustumImpl(frustum, [&](float3 start, float3 end) {
 			drawer->AddLineThread(thread_id, start, end, color, options);
 		});
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	template<typename Functor>
+	static void DrawDebugGridImpl(const DebugGrid* grid, DebugDrawCallOptions options, Functor&& functor) {
+		options.wireframe = true;
+		auto iterate = [&](auto has_residency_function) {
+			for (unsigned int x = 0; x < grid->dimensions.x; x++) {
+				for (unsigned int y = 0; y < grid->dimensions.y; y++) {
+					for (unsigned int z = 0; z < grid->dimensions.z; z++) {
+						bool is_resident = true;
+						if constexpr (has_residency_function) {
+							is_resident = grid->residency_function({ x, y, z }, grid->residency_function);
+						}
+						if (is_resident) {
+							float3 translation = grid->translation + float3{ uint3{x, y, z} } *	grid->cell_size;
+							functor(translation, options);
+						}
+					}
+				}
+			}
+		};
+
+		if (grid->residency_function != nullptr) {
+			iterate(std::true_type{});
+		}
+		else {
+			iterate(std::false_type{});
+		}
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	Matrix ECS_VECTORCALL DebugSphere::GetMatrix(Matrix camera_matrix) const
+	{
+		return SphereMatrix(position, radius, camera_matrix);
+	}
+
+	Matrix ECS_VECTORCALL DebugPoint::GetMatrix(Matrix camera_matrix) const
+	{
+		return PointMatrix(position, camera_matrix);
+	}
+
+	Matrix ECS_VECTORCALL DebugCross::GetMatrix(Matrix camera_matrix) const
+	{
+		return CrossMatrix(position, rotation, size, camera_matrix);
+	}
+
+	Matrix ECS_VECTORCALL DebugCircle::GetMatrix(Matrix camera_matrix) const
+	{
+		return CircleMatrix(position, rotation, radius, camera_matrix);
+	}
+
+	Matrix ECS_VECTORCALL DebugArrow::GetMatrix(Matrix camera_matrix) const
+	{
+		return ArrowMatrix(translation, rotation, length, size, camera_matrix);
+	}
+
+	Matrix ECS_VECTORCALL DebugAABB::GetMatrix(Matrix camera_matrix) const
+	{
+		return AABBMatrix(translation, scale, camera_matrix);
+	}
+
+	Matrix ECS_VECTORCALL DebugOOBB::GetMatrix(Matrix camera_matrix) const
+	{
+		return OOBBMatrix(translation, rotation, scale, camera_matrix);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

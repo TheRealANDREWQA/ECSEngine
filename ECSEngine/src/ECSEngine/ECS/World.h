@@ -117,8 +117,14 @@ namespace ECSEngine {
 
 	// This function sets up the necessary task_scheduler and task manager functions
 	// If the scheduler_elements are not specified, they need to be added to the world's task scheduler
-	// before calling PrepareWorld
-	ECSENGINE_API void PrepareWorldConcurrency(World* world, Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 });
+	// before calling PrepareWorld. You can optionally pass some transfer data if there is such data
+	ECSENGINE_API void PrepareWorldConcurrency(
+		World* world, 
+		bool call_initialize_functions,
+		bool preserve_functions_data,
+		Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 },
+		Stream<TaskSchedulerTransferStaticData> transfer_data = {}
+	);
 
 	// Initializes all the necessary one time actions needed before the actual run of the world
 	// If the scheduler_elements are not specified, they need to be added to the world's task scheduler

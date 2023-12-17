@@ -898,6 +898,8 @@ namespace ECSEngine {
 		// The callback receives as parameter in the additional_data field a structure of type
 		// UIConfigLabelHierarchyMonitorSelectionInfo that it can use to alter the behaviour
 		struct ECSENGINE_API UIConfigLabelHierarchyMonitorSelection {
+			ECS_INLINE UIConfigLabelHierarchyMonitorSelection() {}
+
 			ECS_INLINE static size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_MONITOR_SELECTION;
 			}
@@ -1124,6 +1126,8 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerInitializePathInput {
+			ECS_INLINE UIDrawerInitializePathInput() {}
+
 			UIDrawConfig* config;
 			Stream<char> name;
 			union {

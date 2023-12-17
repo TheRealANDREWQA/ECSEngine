@@ -383,7 +383,7 @@ void ModuleExplorerBuildModule(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ModuleExplorerRunModuleBuildCommandData* data = (ModuleExplorerRunModuleBuildCommandData*)_data;
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = BuildModule(data->editor_state, data->module_index, data->configuration);
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = BuildModule(data->editor_state, data->module_index, data->configuration, nullptr, false, true);
 	PrintConsoleMessageForBuildCommand(data->editor_state, data->module_index, data->configuration, command_status);
 }
 

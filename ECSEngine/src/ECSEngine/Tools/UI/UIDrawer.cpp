@@ -12,6 +12,9 @@
 #define ECS_TOOLS_UI_DRAWER_IDENTITY_SCALE [](float2 scale, const UIDrawer& drawer) {return scale;}
 #define ECS_TOOLS_UI_DRAWER_LABEL_SCALE [](float2 scale, const UIDrawer& drawer){return float2(scale.x + 2.0f * drawer.element_descriptor.label_padd.x, scale.y + 2.0f * drawer.element_descriptor.label_padd.y);}
 
+#define HORIZONTAL_SCROLL_SLIDER_NAME "##HorizontalSlider"
+#define VERTICAL_SCROLL_SLIDER_NAME "##VerticalSlider"
+
 namespace ECSEngine {
 
 	namespace Tools {
@@ -8887,8 +8890,8 @@ namespace ECSEngine {
 				}
 
 				ViewportRegionSliders(
-					"##HorizontalSlider",
-					"##VerticalSlider",
+					HORIZONTAL_SCROLL_SLIDER_NAME,
+					VERTICAL_SCROLL_SLIDER_NAME,
 					render_span,
 					render_zone,
 					&system->m_windows[window_index].render_region_offset
@@ -11841,7 +11844,6 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		// It will use HandleResourceIdentifier to construct the string
 		void* UIDrawer::GetResource(Stream<char> string) {
 			Stream<char> string_identifier = HandleResourceIdentifier(string);
 			return system->FindWindowResource(window_index, string_identifier);
@@ -11849,14 +11851,26 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		// It will forward directly to the UI system; No HandleResourceIdentifier used
-		void* UIDrawer::FindWindowResource(Stream<char> string) {
+		void* UIDrawer::FindWindowResource(Stream<char> string) const {
 			return system->FindWindowResource(window_index, string);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		// returns the viewport visible zone
+		float UIDrawer::GetScrollPercentage(bool vertical)
+		{
+			UIDrawerSlider* slider = nullptr;
+			if (vertical) {
+				slider = (UIDrawerSlider*)GetResource(VERTICAL_SCROLL_SLIDER_NAME);
+			}
+			else {
+				slider = (UIDrawerSlider*)GetResource(HORIZONTAL_SCROLL_SLIDER_NAME);
+			}
+			return slider->slider_position;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UIDrawer::GetRenderZone() const {
 			float horizontal_region_difference;
 			horizontal_region_difference = region_scale.x - 2 * layout.next_row_padding - system->m_descriptors.misc.render_slider_vertical_size + 0.001f;
@@ -14423,6 +14437,13 @@ namespace ECSEngine {
 		{
 			SetCurrentX(region_fit_space_horizontal_offset);
 			SetCurrentY(region_fit_space_vertical_offset);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::SetRegionRenderOffset(float2 value)
+		{
+			region_render_offset = value;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

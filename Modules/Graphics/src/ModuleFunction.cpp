@@ -6,7 +6,7 @@
 using namespace ECSEngine;
 
 void ModuleTaskFunction(ModuleTaskFunctionData* data) {
-	TaskSchedulerElement elements[5];
+	TaskSchedulerElement elements[5] = {};
 	
 	for (size_t index = 0; index < std::size(elements); index++) {
 		elements[index].task_group = ECS_THREAD_TASK_FINALIZE_LATE;

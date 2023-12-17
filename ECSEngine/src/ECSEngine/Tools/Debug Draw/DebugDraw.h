@@ -44,14 +44,18 @@ namespace ECSEngine {
 		DebugDrawCallOptions options;
 	};
 
-	struct DebugSphere {
+	struct ECSENGINE_API DebugSphere {
+		Matrix ECS_VECTORCALL GetMatrix(Matrix camera_matrix) const;
+
 		float3 position;
 		float radius;
 		Color color;
 		DebugDrawCallOptions options;
 	};
 
-	struct DebugPoint {
+	struct ECSENGINE_API DebugPoint {
+		Matrix ECS_VECTORCALL GetMatrix(Matrix camera_matrix) const;
+		
 		float3 position;
 		Color color;
 		DebugDrawCallOptions options;
@@ -64,7 +68,9 @@ namespace ECSEngine {
 		DebugDrawCallOptions options;
 	};
 
-	struct DebugCross {
+	struct ECSENGINE_API DebugCross {
+		Matrix ECS_VECTORCALL GetMatrix(Matrix camera_matrix) const;
+
 		float3 position;
 		QuaternionStorage rotation;
 		float size;
@@ -72,7 +78,9 @@ namespace ECSEngine {
 		DebugDrawCallOptions options;
 	};
 
-	struct DebugCircle {
+	struct ECSENGINE_API DebugCircle {
+		Matrix ECS_VECTORCALL GetMatrix(Matrix camera_matrix) const;
+
 		float3 position;
 		QuaternionStorage rotation;
 		float radius;
@@ -80,7 +88,9 @@ namespace ECSEngine {
 		DebugDrawCallOptions options;
 	};
 
-	struct DebugArrow {
+	struct ECSENGINE_API DebugArrow {
+		Matrix ECS_VECTORCALL GetMatrix(Matrix camera_matrix) const;
+
 		float3 translation;
 		QuaternionStorage rotation;
 		float length;
@@ -97,14 +107,18 @@ namespace ECSEngine {
 		DebugDrawCallOptions options;
 	};
 
-	struct DebugAABB {
+	struct ECSENGINE_API DebugAABB {
+		Matrix ECS_VECTORCALL GetMatrix(Matrix camera_matrix) const;
+
 		float3 translation;
 		float3 scale;
 		Color color;
 		DebugDrawCallOptions options;
 	};
 
-	struct DebugOOBB {
+	struct ECSENGINE_API DebugOOBB {
+		Matrix ECS_VECTORCALL GetMatrix(Matrix camera_matrix) const;
+
 		float3 translation;
 		QuaternionStorage rotation;
 		float3 scale;
@@ -170,6 +184,23 @@ namespace ECSEngine {
 		float size_override_z = 0.0f;
 	};
 
+	typedef bool (*DrawDebugGridResidencyFunction)(uint3 index, void* data);
+
+	struct DebugGrid {
+		uint3 dimensions;
+		float3 cell_size;
+		float3 translation;
+		Color color;
+		DebugDrawCallOptions options = {};
+		// The residency function is used to iterate through all cells and draw
+		// Only those that are considered to be resident
+		DrawDebugGridResidencyFunction residency_function = nullptr;
+		void* residency_data = nullptr;
+		// If this field is filled in, it will assume these are the cells that are
+		// to be drawn
+		Stream<float3> valid_cells = {};
+	};
+
 	struct ECSENGINE_API DebugDrawer {
 		DebugDrawer() : allocator(nullptr), graphics(nullptr) {}
 		DebugDrawer(MemoryManager* allocator, ResourceManager* manager, size_t thread_count);
@@ -227,6 +258,10 @@ namespace ECSEngine {
 		void AddString(float3 position, float3 direction, float size, Stream<char> text, Color color, DebugDrawCallOptions options = { false });
 
 		void AddStringRotation(float3 position, QuaternionStorage rotation, float size, Stream<char> text, Color color, DebugDrawCallOptions options = { false });
+
+		// If the retrieve entries now is set, it will get all the resident cells now
+		// Instead of delaying the deduction and using the function
+		void AddGrid(const DebugGrid* grid, bool retrieve_entries_now = false);
 
 #pragma endregion
 
@@ -298,6 +333,10 @@ namespace ECSEngine {
 			Color color,
 			DebugDrawCallOptions options = { false }
 		);
+
+		// If the retrieve entries now is set, it will get all the resident cells now
+		// Instead of delaying the deduction and using the function
+		void AddGridThread(unsigned int thread_index, const DebugGrid* grid, bool retrieve_entries_now = false);
 
 #pragma endregion
 
@@ -410,64 +449,71 @@ namespace ECSEngine {
 			DebugDrawCallOptions options = {}
 		);
 
+		void DrawGrid(const DebugGrid* grid);
+
 #pragma endregion
 
 #pragma region Draw Deck elements
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawLineDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawLineDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugLine>* custom_source = nullptr);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawSphereDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawSphereDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugSphere>* custom_source = nullptr);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawPointDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawPointDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugPoint>* custom_source = nullptr);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawRectangleDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawRectangleDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugRectangle>* custom_source = nullptr);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawCrossDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawCrossDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugCross>* custom_source = nullptr);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawCircleDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawCircleDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugCircle>* custom_source = nullptr);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawArrowDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawArrowDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugArrow>* custom_source = nullptr);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawTriangleDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawTriangleDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugTriangle>* custom_source = nullptr);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawAABBDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawAABBDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugAABB>* custom_source = nullptr);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawOOBBDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawOOBBDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugOOBB>* custom_source = nullptr);
 
 		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
-		// will be removed
-		void DrawStringDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR);
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawStringDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugString>* custom_source = nullptr);
+
+		// Draws all combinations - Wireframe depth, wireframe no depth, solid depth, solid no depth
+		// Elements that have their duration negative after substraction with time delta
+		// will be removed. You can provide a custom source instead of the deck inside this drawer
+		void DrawGridDeck(float time_delta, DebugShaderOutput shader_output = ECS_DEBUG_SHADER_OUTPUT_COLOR, DeckPowerOfTwo<DebugGrid>* custom_source = nullptr);
 
 		// Draws all combinations for all types - Wireframe depth, wireframe no depth, solid depth, solid no depth
 		// Elements that have their duration negative after substraction with time delta
@@ -618,6 +664,8 @@ namespace ECSEngine {
 			AllocatorPolymorphic allocator
 		);
 
+		void OutputInstanceIndexGrid(const DebugGrid* grid, AdditionStreamAtomic<DebugString>* addition_stream);
+
 #pragma endregion
 
 #pragma region Output Instance Bulk
@@ -689,6 +737,12 @@ namespace ECSEngine {
 			float time_delta = 0.0f
 		);
 
+		// The time delta is optional
+		void OutputInstanceIndexGridBulk(
+			const AdditionStreamAtomic<DebugGrid>* addition_stream,
+			float time_delta = 0.0f
+		);
+
 #pragma endregion
 
 #pragma region Flush
@@ -717,6 +771,8 @@ namespace ECSEngine {
 		void FlushOOBB(unsigned int thread_index);
 
 		void FlushString(unsigned int thread_index);
+		
+		void FlushGrid(unsigned int thread_index);
 
 #pragma endregion
 
@@ -779,6 +835,7 @@ namespace ECSEngine {
 		DeckPowerOfTwo<DebugAABB> aabbs;
 		DeckPowerOfTwo<DebugOOBB> oobbs;
 		DeckPowerOfTwo<DebugString> strings;
+		DeckPowerOfTwo<DebugGrid> grids;
 		CapacityStream<DebugLine>* thread_lines;
 		CapacityStream<DebugSphere>* thread_spheres;
 		CapacityStream<DebugPoint>* thread_points;
@@ -790,6 +847,7 @@ namespace ECSEngine {
 		CapacityStream<DebugAABB>* thread_aabbs;
 		CapacityStream<DebugOOBB>* thread_oobbs;
 		CapacityStream<DebugString>* thread_strings;
+		CapacityStream<DebugGrid>* thread_grids;
 		SpinLock** thread_locks;
 		unsigned int thread_count;
 		RasterizerState rasterizer_states[ECS_DEBUG_RASTERIZER_COUNT];
@@ -803,6 +861,18 @@ namespace ECSEngine {
 		ResourceView output_instance_matrix_structured_view;
 		StructuredBuffer output_instance_id_small_structured_buffer;
 		ResourceView output_instance_id_structured_view;
+
+		VertexBuffer positions_large_vertex_buffer;
+		VertexBuffer instanced_large_vertex_buffer;
+		VertexBuffer output_large_matrix_vertex_buffer;
+		VertexBuffer output_large_id_vertex_buffer;
+		StructuredBuffer output_large_instanced_structured_buffer;
+		StructuredBuffer output_large_matrix_structured_buffer;
+		StructuredBuffer output_large_id_structured_buffer;
+		ResourceView output_large_instanced_buffer_view;
+		ResourceView output_large_matrix_buffer_view;
+		ResourceView output_large_id_buffer_view;
+
 		Mesh* primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_COUNT];
 		CoalescedMesh* string_mesh;
 		VertexBuffer circle_buffer;
@@ -827,4 +897,22 @@ namespace ECSEngine {
 	// Adds to the per thread draws
 	ECSENGINE_API void AddDebugFrustumThread(const FrustumPoints& frustum, DebugDrawer* drawer, unsigned int thread_id, Color color, DebugDrawCallOptions options = {});
 
+	// Draws immediately
+	// The grid is assumed to be axis aligned
+	ECSENGINE_API void DrawDebugGrid(const DebugGrid* grid, DebugDrawer* drawer, Color color, DebugDrawCallOptions options = {});
+
+	// Adds the calls to the main deck
+	// The grid is assumed to be axis aligned
+	ECSENGINE_API void AddDebugGrid(const DebugGrid* grid, DebugDrawer* drawer, Color color, DebugDrawCallOptions options = {});
+
+	// Adds to the per thread draws
+	// The grid is assumed to be axis aligned
+	ECSENGINE_API void AddDebugGridThread(
+		const DebugGrid* grid,
+		DebugDrawer* drawer, 
+		unsigned int thread_id, 
+		Color color, 
+		DebugDrawCallOptions options = {}
+	);
+	
 }

@@ -257,18 +257,23 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-	void PrepareWorldConcurrency(World* world, Stream<TaskSchedulerElement> scheduler_elements)
+	void PrepareWorldConcurrency(
+		World* world, 
+		bool call_initialize_functions,
+		bool preserve_functions_data,
+		Stream<TaskSchedulerElement> scheduler_elements, 
+		Stream<TaskSchedulerTransferStaticData> transfer_data
+	)
 	{
 		if (scheduler_elements.size > 0) {
 			world->task_scheduler->Add(scheduler_elements);
 		}
+		world->task_manager->SetWorld(world);
 
 		// Set the task manager tasks now
-		world->task_scheduler->SetTaskManagerTasks(world->task_manager);
+		world->task_scheduler->SetTaskManagerTasks(world->task_manager, call_initialize_functions, preserve_functions_data, transfer_data);
 		world->task_scheduler->SetTaskManagerWrapper(world->task_manager);
 		world->task_scheduler->InitializeSchedulerInfo(world);
-
-		world->task_manager->SetWorld(world);
 
 		// TODO: Determine if task stealing is more overhead than letting the thread finish its work
 		// Allow the threads now to steal tasks and sleep wait when finishing their dynamic tasks
@@ -286,7 +291,7 @@ namespace ECSEngine {
 		world->entity_manager->ClearFrame();
 		world->delta_time = 0.0f;
 
-		PrepareWorldConcurrency(world, scheduler_elements);
+		PrepareWorldConcurrency(world, true, false, scheduler_elements);
 
 		// Don't clear the debug drawer - at the moment it is a use case to fill in
 		// The debug drawer before calling prepare world

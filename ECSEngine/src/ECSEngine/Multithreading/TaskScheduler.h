@@ -39,6 +39,11 @@ namespace ECSEngine {
 
 	struct World;
 
+	struct TaskSchedulerTransferStaticData {
+		Stream<char> task_name;
+		Stream<void> data;
+	};
+
 	struct ECSENGINE_API TaskScheduler {
 		TaskScheduler() = default;
 		TaskScheduler(MemoryManager* allocator);
@@ -54,6 +59,16 @@ namespace ECSEngine {
 
 		void Add(Stream<TaskSchedulerElement> stream, bool copy_data = false);
 
+		// It will call the cleanup functions for the static tasks and it will fill in the task that want the data to be kept around
+		// It will use the allocator given. You can optionally specify whether or not it should an entry for those tasks that do not
+		// have a cleanup function
+		void CallCleanupFunctions(
+			World* world, 
+			AllocatorPolymorphic allocator, 
+			CapacityStream<TaskSchedulerTransferStaticData>* transfer_data, 
+			bool add_transfer_data_for_all_entries = false
+		);
+
 		void Copy(Stream<TaskSchedulerElement> stream, bool copy_data = false);
 
 		void ClearFrame();
@@ -61,6 +76,10 @@ namespace ECSEngine {
 		unsigned int GetCurrentQueryIndex() const;
 
 		const TaskSchedulerInfo* GetCurrentQueryInfo() const;
+
+		// It will fill in an entry for each static task with its corresponding data
+		// It will allocate from the given allocator
+		void GetTransferStaticData(const TaskManager* task_manager, AllocatorPolymorphic allocator, CapacityStream<TaskSchedulerTransferStaticData>* transfer_data) const;
 
 		// Advances the thread's query index to the next one
 		void IncrementQueryIndex();
@@ -85,8 +104,14 @@ namespace ECSEngine {
 		// Performs the initialization phase of the systems
 		void RunInitializeTasks(World* world) const;
 
-		// Copies all the tasks
-		void SetTaskManagerTasks(TaskManager* task_manager) const;
+		// Copies all the tasks and optionally calls the initialize task function
+		// You can give previous simulation transfer data in case you have it
+		void SetTaskManagerTasks(
+			TaskManager* task_manager, 
+			bool call_initialize_functions = true,
+			bool preserve_data_flag = false,
+			Stream<TaskSchedulerTransferStaticData> transfer_data = {}
+		) const;
 
 		// It will set the wrapper for the task manager such that it will respect the scheduling
 		static void SetTaskManagerWrapper(TaskManager* task_manager);

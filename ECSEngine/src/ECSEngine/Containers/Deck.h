@@ -8,6 +8,8 @@ namespace ECSEngine {
 	// Miscellaneous is used as the exponent for the power of two range selector
 	template<typename T, typename RangeSelector>
 	struct Deck {
+		typedef T T;
+
 		ECS_INLINE Deck() : buffers({ nullptr }, 0), chunk_size(0), miscellaneous(0) {}
 		ECS_INLINE Deck(
 			const void* _buffers, 
@@ -36,7 +38,7 @@ namespace ECSEngine {
 				}
 
 				// A new chunk must be allocated
-				void* chunk_allocation = Allocate(buffers.allocator, sizeof(T) * chunk_size);
+				void* chunk_allocation = AllocateEx(buffers.allocator, sizeof(T) * chunk_size);
 				unsigned int add_position = buffers.Add({ chunk_allocation, 0, (unsigned int)chunk_size });
 				chunks_with_elements.Add(add_position);
 			}
@@ -74,7 +76,7 @@ namespace ECSEngine {
 			}
 
 			for (size_t index = buffers.size; index < buffers.size + count; index++) {
-				void* allocation = Allocate(buffers.allocator, buffers[index].MemoryOf(chunk_size));
+				void* allocation = AllocateEx(buffers.allocator, buffers[index].MemoryOf(chunk_size));
 				buffers[index].InitializeFromBuffer(allocation, 0, chunk_size);
 				chunks_with_elements.Add(index);
 			}
@@ -115,7 +117,7 @@ namespace ECSEngine {
 
 		void Deallocate() {
 			for (unsigned int index = 0; index < buffers.size; index++) {
-				buffers[index].Deallocate(buffers.allocator);
+				ECSEngine::DeallocateEx(buffers.allocator, buffers[index].buffer);
 			}
 			buffers.FreeBuffer();
 			chunks_with_elements.Deallocate(buffers.allocator);
@@ -139,9 +141,9 @@ namespace ECSEngine {
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
 		bool ForEachIndex(Functor&& functor) const {
-			for (size_t index = 0; index < chunks_with_elements.size; index++) {
-				for (unsigned int subindex = 0; subindex < buffers[chunks_with_elements[index]].size; subindex++) {
-					uint2 indices = { chunks_with_elements[index], subindex };
+			for (unsigned int index = 0; index < buffers.size; index++) {
+				for (unsigned int subindex = 0; subindex < buffers[index].size; subindex++) {
+					uint2 indices = { index, subindex };
 					if constexpr (early_exit) {
 						if (functor(indices)) {
 							return true;
@@ -159,9 +161,9 @@ namespace ECSEngine {
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
 		bool ForEach(Functor&& functor) {
-			for (size_t index = 0; index < chunks_with_elements.size; index++) {
-				for (unsigned int subindex = 0; subindex < buffers[chunks_with_elements[index]].size; subindex++) {
-					T* element = &buffers[chunks_with_elements[index]][subindex];
+			for (size_t index = 0; index < buffers.size; index++) {
+				for (unsigned int subindex = 0; subindex < buffers[index].size; subindex++) {
+					T* element = &buffers[index][subindex];
 					if constexpr (early_exit) {
 						if (functor(*element)) {
 							return true;
@@ -180,9 +182,9 @@ namespace ECSEngine {
 		// Returns true if it early exited, else false
 		template<bool early_exit = false, typename Functor>
 		bool ForEach(Functor&& functor) const {
-			for (size_t index = 0; index < chunks_with_elements.size; index++) {
-				for (unsigned int subindex = 0; subindex < buffers[chunks_with_elements[index]].size; subindex++) {
-					const T* element = &buffers[chunks_with_elements[index]][subindex];
+			for (size_t index = 0; index < buffers.size; index++) {
+				for (unsigned int subindex = 0; subindex < buffers[index].size; subindex++) {
+					const T* element = &buffers[index][subindex];
 					if constexpr (early_exit) {
 						if (functor(*element)) {
 							return true;
@@ -311,8 +313,9 @@ namespace ECSEngine {
 
 			if (new_chunk_count > buffers.capacity) {
 				// Keep the old valid chunks and copy them later into the new buffer
-				unsigned int* old_counts = (unsigned int*)ECS_STACK_ALLOC(sizeof(unsigned int) * buffers.size);
-				for (size_t index = 0; index < chunks_with_elements.size; index++) {
+				unsigned int old_chunk_count = chunks_with_elements.size;
+				unsigned int* old_counts = (unsigned int*)ECS_STACK_ALLOC(sizeof(unsigned int) * old_chunk_count);
+				for (size_t index = 0; index < old_chunk_count; index++) {
 					old_counts[index] = chunks_with_elements[index];
 				}
 
@@ -321,14 +324,14 @@ namespace ECSEngine {
 				if (should_deallocate_buffers) {
 					chunks_with_elements.Deallocate(buffers.allocator);
 				}
-				chunks_with_elements = { Allocate(buffers.allocator, sizeof(unsigned int) * new_chunk_count), new_chunk_count };
+				chunks_with_elements = { AllocateEx(buffers.allocator, sizeof(unsigned int) * new_chunk_count), new_chunk_count - old_chunk_count };
 				// Copy the old counts
-				for (size_t index = 0; index < old_count; index++) {
+				for (size_t index = 0; index < old_chunk_count; index++) {
 					chunks_with_elements[index] = old_counts[index];
 				}
 
 				for (size_t index = old_count; index < new_chunk_count; index++) {
-					chunks_with_elements[index] = index;
+					chunks_with_elements[index] = old_chunk_count + index;
 				}
 			}
 		}
@@ -341,7 +344,7 @@ namespace ECSEngine {
 		void ResizeNoCopy(size_t new_chunk_count) {
 			// Deallocate every chunk
 			for (size_t index = 0; index < buffers.size; index++) {
-				buffers[index].Deallocate(buffers.allocator);
+				ECSEngine::DeallocateEx(buffers.allocator, buffers[index].buffer);
 			}
 
 			if (buffers.capacity > 0) {
@@ -350,7 +353,7 @@ namespace ECSEngine {
 			}
 
 			// Reallocate the available chunks
-			chunks_with_elements = { Allocate(buffers.allocator, sizeof(unsigned int) * new_chunk_count), new_chunk_count };
+			chunks_with_elements = { AllocateEx(buffers.allocator, sizeof(unsigned int) * new_chunk_count), new_chunk_count };
 			for (size_t index = 0; index < new_chunk_count; index++) {
 				chunks_with_elements[index] = index;
 			}
@@ -358,7 +361,7 @@ namespace ECSEngine {
 			buffers.ResizeNoCopy(new_chunk_count);
 			// Allocate every chunk
 			for (size_t index = 0; index < new_chunk_count; index++) {
-				buffers[index] = { Allocate(buffers.allocator, sizeof(T) * chunk_size), 0, (unsigned int)chunk_size };
+				buffers[index].InitializeFromBuffer(AllocateEx(buffers.allocator, sizeof(T) * chunk_size), 0, chunk_size);
 			}
 			buffers.size = new_chunk_count;
 		}
@@ -381,7 +384,7 @@ namespace ECSEngine {
 			
 			// If the chunk count is smaller than the current count, release the appropriate chunks
 			for (size_t index = chunk_count; index < buffers.size; index++) {
-				buffers[index].Deallocate(buffers.allocator);
+				ECSEngine::DeallocateEx(buffers.allocator, buffers[index].buffer);
 
 				size_t copied_count = 0;
 				// Shift elements from the upper chunks into the lower ones
@@ -427,7 +430,7 @@ namespace ECSEngine {
 
 			// If the total chunk count is smaller than the current count, release the appropriate chunks
 			for (size_t index = total_chunk_count; index < buffers.size; index++) {
-				buffers[index].Deallocate(buffers.allocator);
+				ECSEngine::DeallocateEx(buffers.allocator, buffers[index].buffer);
 			}
 
 			for (size_t index = chunk_count; index < buffers.size; index++) {
@@ -476,9 +479,9 @@ namespace ECSEngine {
 			miscellaneous = _miscellaneous;
 			buffers.Initialize(_allocator, _initial_chunk_count);
 			buffers.size = _initial_chunk_count;
-			chunks_with_elements = { Allocate(_allocator, sizeof(unsigned int) * _initial_chunk_count), 0 };
+			chunks_with_elements = { AllocateEx(_allocator, sizeof(unsigned int) * _initial_chunk_count), 0 };
 			for (size_t index = 0; index < _initial_chunk_count; index++) {
-				void* chunk = Allocate(_allocator, sizeof(T) * chunk_size);
+				void* chunk = AllocateEx(_allocator, sizeof(T) * chunk_size);
 				buffers[index] = { chunk, 0, (unsigned int)chunk_size };
 				chunks_with_elements.Add((unsigned int)index);
 			}

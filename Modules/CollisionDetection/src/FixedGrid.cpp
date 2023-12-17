@@ -45,9 +45,9 @@ uint3 FixedGrid::CalculateCell(float3 position) const
 {
 	// Truncate the position to uints, then use modulo power of two trick
 	uint3 int_position = position;
-	int_position.x = int_position.x & (cell_sizes.x - 1);
-	int_position.y = int_position.y & (cell_sizes.y - 1);
-	int_position.z = int_position.z & (cell_sizes.z - 1);
+	int_position.x = (int_position.x >> cell_size_power_of_two.x) & (dimensions.x - 1);
+	int_position.y = (int_position.y >> cell_size_power_of_two.y) & (dimensions.y - 1);
+	int_position.z = (int_position.z >> cell_size_power_of_two.z) & (dimensions.z - 1);
 	return int_position;
 }
 
@@ -82,7 +82,7 @@ GridChunk* FixedGrid::CheckCollisions(uint3 cell_index, unsigned char layer, AAB
 		}
 		return chunk;
 	}
-	return nullptr;
+	return AddCell(cell_index);
 }
 
 void FixedGrid::Clear()
@@ -116,12 +116,12 @@ bool FixedGrid::IsLayerCollidingWith(unsigned char layer_index, unsigned char co
 	return GetBit((void*)layers[layer_index].entries, collision_layer);
 }
 
-void FixedGrid::Initialize(AllocatorPolymorphic _allocator, uint3 _dimensions, uint3 _cell_sizes, size_t deck_power_of_two)
+void FixedGrid::Initialize(AllocatorPolymorphic _allocator, uint3 _dimensions, uint3 _cell_size_power_of_two, size_t deck_power_of_two)
 {
 	memset(this, 0, sizeof(*this));
 	allocator = _allocator;
 	dimensions = _dimensions;
-	cell_sizes = _cell_sizes;
+	cell_size_power_of_two = _cell_size_power_of_two;
 	chunks.Initialize(allocator, 0, (size_t)1 << deck_power_of_two, deck_power_of_two);
 
 	// Initialize the layers as well
@@ -140,7 +140,7 @@ void FixedGrid::InsertEntry(Entity entity, unsigned char entity_layer, AABBStora
 	// In case it surpassed the cell threshold
 	uint3 iteration_count;
 	for (unsigned int index = 0; index < ECS_AXIS_COUNT; index++) {
-		iteration_count[index] = (min_cell[index] < max_cell[index] ? max_cell[index] - min_cell[index] : max_cell[index] - min_cell[index] + dimensions[index]) + 1;
+		iteration_count[index] = (min_cell[index] <= max_cell[index] ? max_cell[index] - min_cell[index] : max_cell[index] - min_cell[index] + dimensions[index]) + 1;
 	}
 
 	// For each cell that it collides with, test against the current entries

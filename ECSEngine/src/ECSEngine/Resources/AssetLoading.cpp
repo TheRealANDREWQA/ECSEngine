@@ -93,28 +93,34 @@ namespace ECSEngine {
 			}
 		}
 
+		// Returns true if the handle was successfully loaded
 		template<typename StreamType>
-		unsigned int FindIndex(StreamType stream, unsigned int handle) const {
+		bool FindIndex(StreamType stream, unsigned int handle, ECS_ASSET_TYPE type) const {
 			for (size_t index = 0; index < stream.size; index++) {
 				size_t subindex = SearchBytes(stream[index].different_handles.buffer, stream[index].different_handles.size, handle, sizeof(handle));
 				if (subindex != -1) {
-					return stream[index].IsValid() ? index : -1;
+					return stream[index].IsValid();
 				}
 			}
+			// Check to see if it already exists in the asset database and it was skipped
+			if (IsAssetPointerValid(GetAssetFromMetadata(database->GetAssetConst(handle, type), type).buffer)) {
+				return true;
+			}
+
 			// It wasn't found - a processing failure
-			return -1;
+			return false;
 		}
 
 		// Returns the index inside the textures stream where the given handle is located
 		// It returns -1 if the slot could not be loaded/processed
-		ECS_INLINE unsigned int FindTexture(unsigned int handle) const {
-			return FindIndex(textures, handle);
+		unsigned int FindTexture(unsigned int handle) const {
+			return FindIndex(textures, handle, ECS_ASSET_TEXTURE);
 		}
 
-		// Returns the index inside the textures stream where the given handle is located
+		// Returns the index inside the shaders stream where the given handle is located
 		// It returns -1 if the slot could not be loaded/processed
-		ECS_INLINE unsigned int FindShader(unsigned int handle) const {
-			return FindIndex(shaders, handle);
+		unsigned int FindShader(unsigned int handle) const {
+			return FindIndex(shaders, handle, ECS_ASSET_SHADER);
 		}
 
 		GlobalMemoryManager* global_managers;
@@ -750,15 +756,14 @@ namespace ECSEngine {
 			
 			if (is_valid) {
 				// Check to see that the corresponding shaders and textures have been loaded
-				unsigned int pixel_shader_index = data->FindShader(material_asset->pixel_shader_handle);
-
-				if (pixel_shader_index == -1) {
+				bool exists_pixel_shader = data->FindShader(material_asset->pixel_shader_handle);
+				if (!exists_pixel_shader) {
 					fail(index, true);
 					continue;
 				}
 
-				unsigned int vertex_shader_index = data->FindShader(material_asset->vertex_shader_handle);
-				if (vertex_shader_index == -1) {
+				bool exists_vertex_shader = data->FindShader(material_asset->vertex_shader_handle);
+				if (!exists_vertex_shader) {
 					fail(index, true);
 					continue;
 				}
@@ -768,8 +773,8 @@ namespace ECSEngine {
 				size_t subindex = 0;
 				for (; subindex < combined_textures.size; subindex++) {
 					if (combined_textures[subindex].metadata_handle != -1) {
-						unsigned int texture_index = data->FindTexture(combined_textures[subindex].metadata_handle);
-						if (texture_index == -1) {
+						bool exists_texture = data->FindTexture(combined_textures[subindex].metadata_handle);
+						if (!exists_texture) {
 							fail(index, true);
 							texture_failure = true;
 							break;
@@ -876,6 +881,20 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&stack_allocator);
 
 		AssetDatabaseSameTargetAll same_target = database->SameTargetAll(allocator);
+		// Go through all current assets and check to see if they exist already in the resource manager
+		// If they do, we can skip them
+		auto remove_existing_assets = [&](Stream<AssetDatabaseSameTargetAsset>& elements, ECS_ASSET_TYPE type) {
+			for (size_t index = 0; index < elements.size; index++) {
+				if (IsAssetFromMetadataLoaded(resource_manager, database->GetAssetConst(elements[index].handle, type), type, load_info->mount_point)) {
+					elements.RemoveSwapBack(index);
+					index--;
+				}
+			}
+		};
+		remove_existing_assets(same_target.meshes, ECS_ASSET_MESH);
+		remove_existing_assets(same_target.textures, ECS_ASSET_TEXTURE);
+		remove_existing_assets(same_target.shaders, ECS_ASSET_SHADER);
+		remove_existing_assets(same_target.miscs, ECS_ASSET_MISC);
 
 		// Create the control block
 		// Allocate it from the database allocator or the resource manager allocator

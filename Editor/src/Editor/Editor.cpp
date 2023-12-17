@@ -129,6 +129,15 @@ public:
 
 		}*/
 
+		//timer.SetMarker();
+		//void* large_allocation = malloc(ECS_GB / 2);
+		//float duratioosd = timer.GetDurationSinceMarkerFloat(ECS_TIMER_DURATION_US);
+		//timer.SetMarker();
+		//memset(large_allocation, 0, ECS_MB * 160);
+		//free(large_allocation);
+		//float durations_ = timer.GetDurationSinceMarkerFloat(ECS_TIMER_DURATION_US);
+
+
 		MSG message;
 		BOOL result = 0;
 

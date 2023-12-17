@@ -81,6 +81,11 @@ bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandb
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated) {
 			const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration);
+			// There is a small window where a module can be in load status good but the module itself is not loaded
+			// So, check for the base ecs module code as well
+			if (info->ecs_module.base_module.code != ECS_GET_MODULE_OK) {
+				return false;
+			}
 			if (exclude_out_of_date) {
 				if (info->load_status != EDITOR_MODULE_LOAD_GOOD) {
 					return false;
