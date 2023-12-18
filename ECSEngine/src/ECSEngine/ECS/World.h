@@ -120,16 +120,14 @@ namespace ECSEngine {
 	// before calling PrepareWorld. You can optionally pass some transfer data if there is such data
 	ECSENGINE_API void PrepareWorldConcurrency(
 		World* world, 
-		bool call_initialize_functions,
-		bool preserve_functions_data,
-		Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 },
-		Stream<TaskSchedulerTransferStaticData> transfer_data = {}
+		const TaskSchedulerSetManagerOptions* options,
+		Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 }	
 	);
 
 	// Initializes all the necessary one time actions needed before the actual run of the world
 	// If the scheduler_elements are not specified, they need to be added to the world's task scheduler
 	// before calling PrepareWorld
-	ECSENGINE_API void PrepareWorld(World* world, Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 });
+	ECSENGINE_API void PrepareWorld(World* world, const TaskSchedulerSetManagerOptions* options = nullptr, Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 });
 
 	// This will clear the system manager out of everything and the entity manager will also lose everything
 	// The debug drawer will also be cleared, if one is specified. If the boolean is set to true,

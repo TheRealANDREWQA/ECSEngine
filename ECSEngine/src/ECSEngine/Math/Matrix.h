@@ -7,10 +7,6 @@
 
 namespace ECSEngine {
 
-	struct Matrix;
-
-	ECSENGINE_API Matrix ECS_VECTORCALL MatrixMultiply(Matrix a, Matrix b);
-
 	struct ECSENGINE_API Matrix {
 		ECS_INLINE Matrix() {}
 
@@ -25,77 +21,34 @@ namespace ECSEngine {
 
 		Matrix(Vector8 _v1, Vector8 _v2);
 
-		ECS_INLINE Matrix(const Matrix& other) = default;
-		ECS_INLINE Matrix& ECS_VECTORCALL operator = (const Matrix& other) = default;
+		Matrix(const Matrix& other) = default;
+		Matrix& ECS_VECTORCALL operator = (const Matrix& other) = default;
 
 		bool ECS_VECTORCALL operator == (Matrix other);
 
-		ECS_INLINE bool ECS_VECTORCALL operator != (Matrix other) {
-			return !(*this == other);
-		}
+		bool ECS_VECTORCALL operator != (Matrix other);
 
-		ECS_INLINE Matrix ECS_VECTORCALL operator + (Matrix other) const {
-			return Matrix(v[0] + other.v[0], v[1] + other.v[1]);
-		}
+		Matrix ECS_VECTORCALL operator + (Matrix other) const;
 
-		ECS_INLINE Matrix ECS_VECTORCALL operator - (Matrix other) const {
-			return Matrix(v[0] - other.v[0], v[1] - other.v[1]);
-		}
+		Matrix ECS_VECTORCALL operator - (Matrix other) const;
 
-		ECS_INLINE Matrix operator * (float value) const {
-			Vector8 vector_value = Vector8(value);
-			return Matrix(v[0] * vector_value, v[1] * vector_value);
-		}
+		Matrix operator * (float value) const;
 
-		ECS_INLINE Matrix operator / (float value) const {
-			Vector8 vector_value = Vector8(1.0f / value);
-			return Matrix(v[0] * vector_value, v[1] * vector_value);
-		}
+		Matrix operator / (float value) const;
 
-		ECS_INLINE Matrix ECS_VECTORCALL operator * (Matrix other) const {
-			return MatrixMultiply(*this, other);
-		}
+		Matrix ECS_VECTORCALL operator * (Matrix other) const;
 
-		ECS_INLINE Matrix& ECS_VECTORCALL operator += (Matrix other) {
-			v[0] += other.v[0];
-			v[1] += other.v[1];
-			return *this;
-		}
+		Matrix& ECS_VECTORCALL operator += (Matrix other);
 
-		ECS_INLINE Matrix& ECS_VECTORCALL operator -= (Matrix other) {
-			v[0] -= other.v[0];
-			v[1] -= other.v[1];
-			return *this;
-		}
+		Matrix& ECS_VECTORCALL operator -= (Matrix other);
 
-		ECS_INLINE Matrix& operator *= (float value) {
-			Vector8 vector_value = Vector8(value);
-			v[0] *= vector_value;
-			v[1] *= vector_value;
-			return *this;
-		}
+		Matrix& operator *= (float value);
 
-		ECS_INLINE Matrix& operator /= (float value) {
-			Vector8 vector_value = Vector8(1.0f / value);
-			v[0] *= vector_value;
-			v[1] *= vector_value;
+		Matrix& operator /= (float value);
 
-			return *this;
-		}
+		Matrix& Load(const void* values);
 
-		ECS_INLINE Matrix& Load(const void* values) {
-			const float* float_values = (const float*)values;
-			v[0].Load(float_values);
-			v[1].Load(float_values + 8);
-			return *this;
-		}
-
-		ECS_INLINE Matrix& LoadAligned(const void* values) {
-			const float* float_values = (const float*)values;
-			v[0].LoadAligned(float_values);
-			v[1].LoadAligned(float_values + 8);
-			return *this;
-		}
+		Matrix& LoadAligned(const void* values);
 
 		void Store(void* values) const;
 

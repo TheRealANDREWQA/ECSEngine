@@ -511,10 +511,11 @@
     <ClCompile Include="src\ECSEngine\Math\MathHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Math\MathTypeSizes.cpp" />
     <ClCompile Include="src\ECSEngine\Math\Matrix.cpp">
-      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AnySuitable</InlineFunctionExpansion>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ECSENGINE_PLATFORM_WINDOWS;ECSENGINE_BUILD_DLL;ECSENGINE_DISTRIBUTION;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <FavorSizeOrSpeed Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Neither</FavorSizeOrSpeed>
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Multithreading\AtomicLinearAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\RingBuffer.cpp" />
@@ -587,6 +588,7 @@
     <ClCompile Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Disabled</Optimization>
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">OnlyExplicitInline</InlineFunctionExpansion>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Use</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Tools\Modules\Module.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleExtraInformation.cpp" />

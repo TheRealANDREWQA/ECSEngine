@@ -11,7 +11,9 @@ void InitializeInputMapping(EditorState* editor_state) {
 	editor_state->input_mapping.keyboard = editor_state->Keyboard();
 
 	InputMappingElement mappings[EDITOR_INPUT_MAPPING_COUNT];
-	memset(mappings, 0, sizeof(mappings));
+	for (size_t index = 0; index < EDITOR_INPUT_MAPPING_COUNT; index++) {
+		mappings[index] = InputMappingElement{};
+	}
 
 	mappings[EDITOR_INPUT_NEW_PROJECT].first.is_key = true;
 	mappings[EDITOR_INPUT_NEW_PROJECT].first.key = ECS_KEY_LEFT_CTRL;

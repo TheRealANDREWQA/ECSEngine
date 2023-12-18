@@ -74,3 +74,11 @@ void ModuleRegisterExtraInformationFunction(ECSEngine::ModuleRegisterExtraInform
 }
 
 #endif
+
+#if 1
+
+void ModuleRegisterDebugDrawTaskElementsFunction(ECSEngine::ModuleRegisterDebugDrawTaskElementsData* data) {
+	SetBroadphaseDebugTasks(data);
+}
+
+#endif

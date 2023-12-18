@@ -10,8 +10,8 @@ namespace ECSEngine {
 
 	bool InputMapping::IsTriggered(unsigned int index) const
 	{
-		InputMappingElement element = mappings[index];
-		return element.first.IsTriggered(mouse, keyboard) && element.second.IsTriggered(mouse, keyboard) && element.third.IsTriggered(mouse, keyboard);
+		bool return_value = mappings[index].IsTriggered(mouse, keyboard);
+		return return_value;
 	}
 
 	void InputMapping::ChangeMapping(unsigned int index, InputMappingElement mapping_element)

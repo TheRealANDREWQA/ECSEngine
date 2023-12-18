@@ -4,6 +4,7 @@
 #include "../../Multithreading/TaskSchedulerTypes.h"
 #include "../../Resources/AssetMetadata.h"
 #include "../../Tools/UI/UIStructures.h"
+#include "../../Input/InputMapping.h"
 
 namespace ECSEngine {
 
@@ -398,6 +399,38 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	struct ModuleDebugDrawTaskElement {
+		ECS_INLINE size_t CopySize() const {
+			return base_element.CopySize();
+		}
+
+		ECS_INLINE ModuleDebugDrawTaskElement CopyTo(uintptr_t& ptr) const {
+			ModuleDebugDrawTaskElement copy;
+			copy.base_element = base_element.CopyTo(ptr);
+			copy.scene_only = scene_only;
+			copy.input_element = input_element;
+			return copy;
+		}
+
+		// The component query is not used, the rest of the fields are
+		// The initialize function cannot output data, it can only inherit it
+		TaskSchedulerElement base_element;
+		bool scene_only = true;
+		// You can set an input mapping that activates/deactivates the state for this element
+		InputMappingElement input_element;
+	};
+	
+	struct ModuleRegisterDebugDrawTaskElementsData {
+		CapacityStream<ModuleDebugDrawTaskElement>* elements;
+	};
+
+	// This function will register all tasks that are considered to be debug draw tasks
+	// These are useful for the in editor context where they can be enabled and disabled
+	// without the task having to do that explicitely. They are treated like normal tasks
+	typedef void (*ModuleRegisterDebugDrawTaskElementsFunction)(ModuleRegisterDebugDrawTaskElementsData* data);
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	// Module function missing is returned for either graphics function missing
 	enum ECS_MODULE_STATUS : unsigned char {
 		ECS_GET_MODULE_OK,
@@ -417,6 +450,7 @@ namespace ECSEngine {
 		ModuleSetCurrentWorld set_world;
 		ModuleRegisterExtraInformationFunction extra_information;
 		ModuleRegisterDebugDrawFunction debug_draw;
+		ModuleRegisterDebugDrawTaskElementsFunction debug_draw_tasks;
 
 		void* os_module_handle;
 	};
@@ -432,6 +466,7 @@ namespace ECSEngine {
 		ModuleSerializeComponentStreams serialize_streams;
 		ModuleExtraInformation extra_information;
 		Stream<ModuleDebugDrawElement> debug_draw_elements;
+		Stream<ModuleDebugDrawTaskElement> debug_draw_task_elements;
 	};
 
 	// ----------------------------------------------------------------------------------------------------------------------

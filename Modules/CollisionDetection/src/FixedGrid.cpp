@@ -18,6 +18,12 @@ unsigned int HashGridCellIndices(uint3 indices) {
 	return Djb2Hash(indices.x, indices.y, indices.z);
 }
 
+bool FixedGridResidencyFunction(uint3 index, void* data)
+{
+	FixedGrid* grid = (FixedGrid*)data;
+	return grid->ExistsCell(index);
+}
+
 GridChunk* FixedGrid::AddCell(uint3 indices)
 {
 	unsigned int chunk_index = chunks.ReserveIndex();
@@ -89,6 +95,12 @@ void FixedGrid::Clear()
 {
 	cells.Deallocate(allocator);
 	chunks.Deallocate();
+}
+
+bool FixedGrid::ExistsCell(uint3 index) const
+{
+	unsigned int hash = HashGridCellIndices(index);
+	return cells.Find(hash) != -1;
 }
 
 void FixedGrid::EndFrame()

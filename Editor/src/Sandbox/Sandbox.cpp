@@ -749,7 +749,7 @@ unsigned int CreateSandboxTemporary(EditorState* editor_state, bool initialize_r
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_index, bool disable_error_message)
+bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_index, bool scene_order, bool disable_error_message)
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, sandbox->modules_in_use.size);
@@ -758,12 +758,18 @@ bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int san
 			indices.Add(sandbox->modules_in_use[index].module_index);
 		}
 	}
-	return ConstructSandboxSchedulingOrder(editor_state, sandbox_index, indices, disable_error_message);
+	return ConstructSandboxSchedulingOrder(editor_state, sandbox_index, indices, scene_order, disable_error_message);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_index, Stream<unsigned int> module_indices, bool disable_error_message)
+bool ConstructSandboxSchedulingOrder(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Stream<unsigned int> module_indices,
+	bool scene_order,
+	bool disable_error_message
+)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
@@ -781,6 +787,20 @@ bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int san
 			return false;
 		}
 		sandbox->sandbox_world.task_scheduler->Add(current_info->ecs_module.tasks);
+	}
+	if (scene_order) {
+		// We need to remove the scene order in case we are in scene mode - since those
+		// Tasks might need other tasks that are not yet loaded - since these probably
+		// Are to be used during runtime visualization
+		if (GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE) {
+			scene_order = false;
+		}
+	}
+	for (unsigned int index = 0; index < editor_state->project_modules->size; index++) {
+		const EditorModuleInfo* current_info = GetSandboxModuleInfo(editor_state, sandbox_index, index);
+		if (current_info->ecs_module.debug_draw_task_elements.size > 0) {
+			AddModuleDebugDrawTaskElementsToScheduler(sandbox->sandbox_world.task_scheduler, current_info->ecs_module.debug_draw_task_elements, scene_order);
+		}
 	}
 
 	// Now try to solve the graph
@@ -1694,13 +1714,17 @@ void PauseSandboxWorlds(EditorState* editor_state)
 
 bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_index)
 {
-	bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index);
+	bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, false);
 	if (success) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		bool tasks_were_initialized = AreSandboxRuntimeTasksInitialized(editor_state, sandbox_index);
 		// We also need to prepare the world concurrency
 		// And forward the transfer data
-		PrepareWorldConcurrency(&sandbox->sandbox_world, true, !tasks_were_initialized, {}, sandbox->sandbox_world_transfer_data);
+		TaskSchedulerSetManagerOptions set_options;
+		set_options.call_initialize_functions = true;
+		set_options.preserve_data_flag = !tasks_were_initialized;
+		set_options.transfer_data = sandbox->sandbox_world_transfer_data;
+		PrepareWorldConcurrency(&sandbox->sandbox_world, &set_options);
 		if (!tasks_were_initialized) {
 			sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
 		}
@@ -2068,14 +2092,23 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		};
 
 		// Prepare the task scheduler
-		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, { &in_stream_module_index, 1 }, disable_logging);
+		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, { &in_stream_module_index, 1 }, true, disable_logging);
 		if (!success) {
 			deallocate_temp_resources_and_restore();
 			return false;
 		}
 
 		// Prepare and run the world once
+		// We need to disable the initialize from other tasks and set them manually
+		// From the runtime task manager for the case when the sandbox is in PAUSED or RUNNING mode
+		TaskSchedulerSetManagerOptions set_options;
+		if (active_viewport != EDITOR_SANDBOX_VIEWPORT_SCENE) {
+			set_options.assert_exists_initialize_from_other_task = false;
+		}
 		PrepareWorld(&sandbox->sandbox_world);
+		if (active_viewport != EDITOR_SANDBOX_VIEWPORT_SCENE) {
+			sandbox->sandbox_world.task_scheduler->SetTasksDataFromOther(runtime_task_manager, true);
+		}
 
 		// Draw the sandbox debug elements before the actual frame
 		DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
