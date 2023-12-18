@@ -706,6 +706,15 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	unsigned int TaskManager::FindTask(Stream<char> task_name) const
+	{
+		return m_tasks.Find(task_name, [](const StaticTask& task) {
+			return task.task.name;
+		});
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	unsigned int TaskManager::FindThreadID(size_t os_thread_id) const
 	{
 		unsigned int thread_count = GetThreadCount();

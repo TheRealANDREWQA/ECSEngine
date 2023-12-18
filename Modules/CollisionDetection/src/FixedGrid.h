@@ -2,6 +2,7 @@
 #include "ECSEngineMath.h"
 #include "ECSEngineEntities.h"
 #include "ECSEngineContainers.h"
+#include "Export.h"
 
 using namespace ECSEngine;
 
@@ -55,6 +56,8 @@ struct FixedGrid {
 	GridChunk* CheckCollisions(uint3 cell_index, unsigned char layer, AABBStorage aabb, CapacityStream<CollisionInfo>* collisions);
 
 	void Clear();
+	
+	bool ExistsCell(uint3 index) const;
 
 	void EndFrame();
 
@@ -98,3 +101,6 @@ struct FixedGrid {
 unsigned int Djb2Hash(unsigned int x, unsigned int y, unsigned int z);
 
 unsigned int HashGridCellIndices(uint3 indices);
+
+// Data should be the fixed grid
+COLLISIONDETECTION_API bool FixedGridResidencyFunction(uint3 index, void* data);

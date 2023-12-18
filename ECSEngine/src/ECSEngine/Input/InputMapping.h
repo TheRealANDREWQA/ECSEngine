@@ -6,9 +6,18 @@
 namespace ECSEngine {
 
 	struct ECSENGINE_API InputMappingButton {
-		ECS_INLINE InputMappingButton() : exclude(false), is_key(false), key(ECS_KEY_NONE), state(ECS_BUTTON_STATE_COUNT) {}
+		ECS_INLINE InputMappingButton() : exclude(false), is_key(false), mouse_button(ECS_MOUSE_BUTTON_COUNT), state(ECS_BUTTON_STATE_COUNT) {}
 
 		bool IsTriggered(const Mouse* mouse, const Keyboard* keyboard) const;
+
+		ECS_INLINE bool IsInitialized() const {
+			if (is_key) {
+				return key != ECS_KEY_NONE;
+			}
+			else {
+				return mouse_button != ECS_MOUSE_BUTTON_COUNT;
+			}
+		}
 
 		ECS_INLINE void SetKey(ECS_KEY set_key, ECS_BUTTON_STATE set_state, bool set_exclude = false) {
 			is_key = true;
@@ -37,6 +46,16 @@ namespace ECSEngine {
 
 	// To initialize, you can memset to 0
 	struct InputMappingElement {
+		ECS_INLINE InputMappingElement() : first(InputMappingButton{}), second(InputMappingButton{}), third(InputMappingButton{}) {}
+
+		ECS_INLINE bool IsInitialized() const {
+			return first.IsInitialized();
+		}
+
+		ECS_INLINE bool IsTriggered(const Mouse* mouse, const Keyboard* keyboard) const {
+			return first.IsTriggered(mouse, keyboard) && second.IsTriggered(mouse, keyboard) && third.IsTriggered(mouse, keyboard);
+		}
+
 		ECS_INLINE void SetFirstKey(ECS_KEY key, ECS_BUTTON_STATE state, bool exclude = false) {
 			first.SetKey(key, state, exclude);
 		}

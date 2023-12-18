@@ -297,6 +297,30 @@ void DeactivateSandboxModuleInStream(EditorState* editor_state, unsigned int san
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void DisableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	DisableModuleDebugDrawTaskElement(sandbox->sandbox_world.task_manager, task_name);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EnableModuleDebugDrawTaskElement(sandbox->sandbox_world.task_manager, task_name);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void FlipSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	FlipModuleDebugDrawTaskElement(sandbox->sandbox_world.task_manager, task_name);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 EditorSandboxModule* GetSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
 {
 	return &GetSandbox(editor_state, sandbox_index)->modules_in_use[in_stream_index];

@@ -5,6 +5,135 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------
 
+	Matrix::Matrix(
+		float x00, float x01, float x02, float x03,
+		float x10, float x11, float x12, float x13,
+		float x20, float x21, float x22, float x23,
+		float x30, float x31, float x32, float x33
+	)
+	{
+		v[0] = Vec8f(x00, x01, x02, x03, x10, x11, x12, x13);
+		v[1] = Vec8f(x20, x21, x22, x23, x30, x31, x32, x33);
+	}
+
+	Matrix::Matrix(const float* values)
+	{
+		v[0].Load(values);
+		v[1].Load(values + 8);
+	}
+
+	Matrix::Matrix(const float4& row0, const float4& row1, const float4& row2, const float4& row3)
+	{
+		Vec4f first_row = Vec4f().load((const float*)&row0);
+		Vec4f second_row = Vec4f().load((const float*)&row1);
+		Vec4f third_row = Vec4f().load((const float*)&row2);
+		Vec4f fourth_row = Vec4f().load((const float*)&row3);
+
+		v[0] = Vec8f(first_row, second_row);
+		v[1] = Vec8f(third_row, fourth_row);
+	}
+
+	Matrix::Matrix(Vector8 _v1, Vector8 _v2)
+	{
+		v[0] = _v1;
+		v[1] = _v2;
+	}
+
+	bool ECS_VECTORCALL Matrix::operator == (Matrix other) {
+		Vec8f epsilon(ECS_MATRIX_EPSILON);
+		return horizontal_and(abs(v[0] - other.v[0]) < epsilon && abs(v[1] - other.v[1]) < epsilon);
+	}
+	
+	bool ECS_VECTORCALL Matrix::operator != (Matrix other) {
+		return !(*this == other);
+	}
+
+	Matrix ECS_VECTORCALL Matrix::operator + (Matrix other) const {
+		return Matrix(v[0] + other.v[0], v[1] + other.v[1]);
+	}
+
+	Matrix ECS_VECTORCALL Matrix::operator - (Matrix other) const {
+		return Matrix(v[0] - other.v[0], v[1] - other.v[1]);
+	}
+
+	Matrix Matrix::operator * (float value) const {
+		Vector8 vector_value = Vector8(value);
+		return Matrix(v[0] * vector_value, v[1] * vector_value);
+	}
+
+	Matrix Matrix::Matrix::operator / (float value) const {
+		Vector8 vector_value = Vector8(1.0f / value);
+		return Matrix(v[0] * vector_value, v[1] * vector_value);
+	}
+
+	Matrix ECS_VECTORCALL Matrix::operator * (Matrix other) const {
+		return MatrixMultiply(*this, other);
+	}
+
+	Matrix& ECS_VECTORCALL Matrix::operator += (Matrix other) {
+		v[0] += other.v[0];
+		v[1] += other.v[1];
+		return *this;
+	}
+
+	Matrix& ECS_VECTORCALL Matrix::operator -= (Matrix other) {
+		v[0] -= other.v[0];
+		v[1] -= other.v[1];
+		return *this;
+	}
+
+	Matrix& Matrix::operator *= (float value) {
+		Vector8 vector_value = Vector8(value);
+		v[0] *= vector_value;
+		v[1] *= vector_value;
+		return *this;
+	}
+
+	Matrix& Matrix::operator /= (float value) {
+		Vector8 vector_value = Vector8(1.0f / value);
+		v[0] *= vector_value;
+		v[1] *= vector_value;
+
+		return *this;
+	}
+
+	Matrix& Matrix::Load(const void* values) {
+		const float* float_values = (const float*)values;
+		v[0].Load(float_values);
+		v[1].Load(float_values + 8);
+		return *this;
+	}
+
+	Matrix& Matrix::LoadAligned(const void* values) {
+		const float* float_values = (const float*)values;
+		v[0].LoadAligned(float_values);
+		v[1].LoadAligned(float_values + 8);
+		return *this;
+	}
+
+	void Matrix::Store(void* values) const
+	{
+		float* float_values = (float*)values;
+		v[0].Store(float_values);
+		v[1].Store(float_values + 8);
+	}
+
+	void Matrix::StoreAligned(void* values) const
+	{
+		float* float_values = (float*)values;
+		v[0].StoreAligned(float_values);
+		v[1].StoreAligned(float_values + 8);
+	}
+
+	void Matrix::StoreStreamed(void* values) const
+	{
+		float* float_values = (float*)values;
+		v[0].StoreStreamed(float_values);
+		v[1].StoreStreamed(float_values + 8);
+	}
+
+	// -----------------------------------------------------------------------------------------------------
+
 	void ScalarMatrixMultiply(const float* ECS_RESTRICT a, const float* ECS_RESTRICT b, float* ECS_RESTRICT destination) {
 		for (size_t index = 0; index < 4; index++) {
 			for (size_t column_index = 0; column_index < 4; column_index++) {
@@ -976,65 +1105,5 @@ namespace ECSEngine {
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
-
-	Matrix::Matrix(
-		float x00, float x01, float x02, float x03, 
-		float x10, float x11, float x12, float x13, 
-		float x20, float x21, float x22, float x23, 
-		float x30, float x31, float x32, float x33
-	)
-	{
-		v[0] = Vec8f(x00, x01, x02, x03, x10, x11, x12, x13);
-		v[1] = Vec8f(x20, x21, x22, x23, x30, x31, x32, x33);
-	}
-
-	Matrix::Matrix(const float* values)
-	{
-		v[0].Load(values);
-		v[1].Load(values + 8);
-	}
-
-	Matrix::Matrix(const float4& row0, const float4& row1, const float4& row2, const float4& row3)
-	{
-		Vec4f first_row = Vec4f().load((const float*)&row0);
-		Vec4f second_row = Vec4f().load((const float*)&row1);
-		Vec4f third_row = Vec4f().load((const float*)&row2);
-		Vec4f fourth_row = Vec4f().load((const float*)&row3);
-
-		v[0] = Vec8f(first_row, second_row);
-		v[1] = Vec8f(third_row, fourth_row);
-	}
-
-	Matrix::Matrix(Vector8 _v1, Vector8 _v2)
-	{
-		v[0] = _v1;
-		v[1] = _v2;
-	}
-
-	bool ECS_VECTORCALL Matrix::operator == (Matrix other) {
-		Vec8f epsilon(ECS_MATRIX_EPSILON);
-		return horizontal_and(abs(v[0] - other.v[0]) < epsilon && abs(v[1] - other.v[1]) < epsilon);
-	}
-
-	void Matrix::Store(void* values) const
-	{
-		float* float_values = (float*)values;
-		v[0].Store(float_values);
-		v[1].Store(float_values + 8);
-	}
-
-	void Matrix::StoreAligned(void* values) const
-	{
-		float* float_values = (float*)values;
-		v[0].StoreAligned(float_values);
-		v[1].StoreAligned(float_values + 8);
-	}
-
-	void Matrix::StoreStreamed(void* values) const
-	{
-		float* float_values = (float*)values;
-		v[0].StoreStreamed(float_values);
-		v[1].StoreStreamed(float_values + 8);
-	}
 
 }

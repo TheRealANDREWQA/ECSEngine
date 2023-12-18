@@ -44,6 +44,13 @@ namespace ECSEngine {
 		Stream<void> data;
 	};
 
+	struct TaskSchedulerSetManagerOptions {
+		bool call_initialize_functions = true;
+		bool preserve_data_flag = false;
+		bool assert_exists_initialize_from_other_task = true;
+		Stream<TaskSchedulerTransferStaticData> transfer_data = {};
+	};
+
 	struct ECSENGINE_API TaskScheduler {
 		TaskScheduler() = default;
 		TaskScheduler(MemoryManager* allocator);
@@ -72,6 +79,12 @@ namespace ECSEngine {
 		void Copy(Stream<TaskSchedulerElement> stream, bool copy_data = false);
 
 		void ClearFrame();
+
+		// Returns nullptr if it doesn't find it
+		TaskSchedulerElement* FindElement(Stream<char> task_name);
+
+		// Returns nullptr if it doesn't find it
+		const TaskSchedulerElement* FindElement(Stream<char> task_name) const;
 
 		unsigned int GetCurrentQueryIndex() const;
 
@@ -108,10 +121,12 @@ namespace ECSEngine {
 		// You can give previous simulation transfer data in case you have it
 		void SetTaskManagerTasks(
 			TaskManager* task_manager, 
-			bool call_initialize_functions = true,
-			bool preserve_data_flag = false,
-			Stream<TaskSchedulerTransferStaticData> transfer_data = {}
+			const TaskSchedulerSetManagerOptions* options
 		) const;
+
+		// All the tasks which want to take the data from another task
+		// Will do so from this task manager
+		void SetTasksDataFromOther(TaskManager* task_manager, bool assert_if_not_set) const;
 
 		// It will set the wrapper for the task manager such that it will respect the scheduling
 		static void SetTaskManagerWrapper(TaskManager* task_manager);

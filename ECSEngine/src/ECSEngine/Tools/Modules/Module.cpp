@@ -5,6 +5,8 @@
 #include "../../Utilities/Path.h"
 #include "../UI/UIStructures.h"
 #include "../../OS/DLL.h"
+#include "../../Multithreading/TaskScheduler.h"
+#include "../../Utilities/Crash.h"
 
 namespace ECSEngine {
 
@@ -204,6 +206,7 @@ namespace ECSEngine {
 		module.set_world = (ModuleSetCurrentWorld)OS::GetDLLSymbol(module_handle, STRING(ModuleSetCurrentWorld));
 		module.extra_information = (ModuleRegisterExtraInformationFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterExtraInformationFunction));
 		module.debug_draw = (ModuleRegisterDebugDrawFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterDebugDrawFunction));
+		module.debug_draw_tasks = (ModuleRegisterDebugDrawTaskElementsFunction)OS::GetDLLSymbol(module_handle, STRING(ModuleRegisterDebugDrawTaskElementsFunction));
 
 		module.code = ECS_GET_MODULE_OK;
 		module.os_module_handle = module_handle;
@@ -226,6 +229,7 @@ namespace ECSEngine {
 		module->ui_descriptors = LoadModuleUIDescriptors(&module->base_module, allocator);
 		module->extra_information = LoadModuleExtraInformation(&module->base_module, allocator);
 		module->debug_draw_elements = LoadModuleDebugDrawElements(&module->base_module, allocator);
+		module->debug_draw_task_elements = LoadModuleDebugDrawTaskElements(&module->base_module, allocator, error_message);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -268,7 +272,7 @@ namespace ECSEngine {
 			}
 		}
 
-		return StreamCoalescedDeepCopy(tasks, allocator);	
+		return StreamCoalescedDeepCopy(tasks, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -544,6 +548,45 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
+	Stream<ModuleDebugDrawTaskElement> LoadModuleDebugDrawTaskElements(
+		const Module* module, 
+		AllocatorPolymorphic allocator, 
+		CapacityStream<char>* error_message
+	)
+	{
+		if (!module->debug_draw_tasks) {
+			return {};
+		}
+
+		return LoadModuleDebugDrawTaskElements(module->debug_draw_tasks, allocator, error_message);
+	}
+
+	Stream<ModuleDebugDrawTaskElement> LoadModuleDebugDrawTaskElements(
+		ModuleRegisterDebugDrawTaskElementsFunction function, 
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* error_message
+	)
+	{
+		const size_t STACK_MEMORY_CAPACITY = ECS_KB * 64;
+		void* stack_allocation = ECS_STACK_ALLOC(STACK_MEMORY_CAPACITY);
+		LinearAllocator temp_allocator(stack_allocation, STACK_MEMORY_CAPACITY);
+		AllocatorPolymorphic poly_allocator = GetAllocatorPolymorphic(&temp_allocator);
+
+		ECS_STACK_CAPACITY_STREAM(ModuleDebugDrawTaskElement, elements, 128);
+
+		ModuleRegisterDebugDrawTaskElementsData register_data;
+		register_data.elements = &elements;
+
+		function(&register_data);
+		elements.AssertCapacity();
+
+		Stream<ModuleDebugDrawTaskElement> stream_elements = elements;
+		ValidateModuleDebugDrawTaskElements(stream_elements, error_message);
+		return StreamCoalescedDeepCopy(stream_elements, allocator);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
 	void ReleaseModule(Module* module, bool* unload_debugging_symbols) {
 		if (module->code != ECS_GET_MODULE_FAULTY_PATH) {
 			ReleaseModuleHandle(module->os_module_handle, unload_debugging_symbols);
@@ -598,6 +641,11 @@ namespace ECSEngine {
 			DeallocateIfBelongs(allocator, module->debug_draw_elements.buffer);
 			module->debug_draw_elements = { nullptr, 0 };
 		}
+
+		if (module->debug_draw_task_elements.size > 0) {
+			DeallocateIfBelongs(allocator, module->debug_draw_task_elements.buffer);
+			module->debug_draw_task_elements = { nullptr, 0 };
+		}
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -606,6 +654,30 @@ namespace ECSEngine {
 	{
 		ReleaseAppliedModuleStreams(module, allocator);
 		ReleaseModule(&module->base_module, unload_debugging_symbols);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	bool ValidateModuleTask(const TaskSchedulerElement& element, CapacityStream<char>* error_message)
+	{
+		if (element.task_name.size == 0) {
+			if (error_message != nullptr) {
+				ECS_STACK_CAPACITY_STREAM(char, group_name, 64);
+				TaskGroupToString(element.task_group, group_name);
+
+				if (element.task_dependencies.size > 0) {
+					ECS_STACK_CAPACITY_STREAM(char, temp_string, 512);
+					StreamToString(element.task_dependencies, temp_string);
+					ECS_FORMAT_STRING(*error_message, "Task with dependencies {#} in group {#} has no name specified", temp_string, group_name);
+				}
+				else {
+					ECS_FORMAT_STRING(*error_message, "Task in group {#} has no name specified", group_name);
+				}
+			}
+
+			return true;
+		}
+		return false;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -636,24 +708,7 @@ namespace ECSEngine {
 	size_t ValidateModuleTasks(Stream<TaskSchedulerElement>& tasks, CapacityStream<char>* error_message) 
 	{
 		return ValidateModuleInformation(tasks, [=](const TaskSchedulerElement& element) {
-			if (element.task_name.size == 0) {
-				if (error_message != nullptr) {
-					ECS_STACK_CAPACITY_STREAM(char, group_name, 64);
-					TaskGroupToString(element.task_group, group_name);
-
-					if (element.task_dependencies.size > 0) {
-						ECS_STACK_CAPACITY_STREAM(char, temp_string, 512);
-						StreamToString(element.task_dependencies, temp_string);
-						ECS_FORMAT_STRING(*error_message, "Task with dependencies {#} in group {#} has no name specified", temp_string, group_name);
-					}
-					else {
-						ECS_FORMAT_STRING(*error_message, "Task in group {#} has no name specified", group_name);
-					}
-				}
-
-				return true;
-			}
-			return false;
+			return ValidateModuleTask(element, error_message);
 		});
 	}
 
@@ -718,6 +773,126 @@ namespace ECSEngine {
 
 			return false;
 		});
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	size_t ValidateModuleDebugDrawTaskElements(Stream<ModuleDebugDrawTaskElement>& elements, CapacityStream<char>* error_message)
+	{
+		return ValidateModuleInformation(elements, [=](const ModuleDebugDrawTaskElement& element) {
+			return ValidateModuleTask(element.base_element, error_message);
+		});
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	// In order to inherit the data of another task, we must do a trick
+	// We cannot inherit it directly, we ned to record the name here and
+	// Then look it up in the task manager the first time this function is called
+	// and keep the index cached. The name characters are immediately after this
+	// structure
+	struct ModuleDebugDrawWrapperData {
+		bool is_enabled;
+		InputMappingElement input_element;
+		unsigned int inherit_data_index;
+		unsigned int inherit_data_name_size;
+		ThreadFunction function;
+	};
+
+	static ECS_THREAD_TASK(ModuleDebugDrawWrapper) {
+		ModuleDebugDrawWrapperData* data = (ModuleDebugDrawWrapperData*)_data;
+		// Check the mapping before that
+		if (data->input_element.IsInitialized()) {
+			if (data->input_element.IsTriggered(world->mouse, world->keyboard)) {
+				data->is_enabled = !data->is_enabled;
+			}
+		}
+
+		if (data->is_enabled) {
+			void* function_data = nullptr;
+			if (data->inherit_data_name_size > 0) {
+				if (data->inherit_data_index == -1) {
+					Stream<char> inherit_name = { OffsetPointer(data, sizeof(*data)), data->inherit_data_name_size };
+					data->inherit_data_index = world->task_manager->FindTask(inherit_name);
+				}
+				function_data = world->task_manager->GetTaskPtr(data->inherit_data_index)->data;
+			}
+			data->function(thread_id, world, function_data);
+		}
+	}
+
+	struct ModuleDebugDrawWrapperInitializeData {
+		Stream<char> initialize_task_name;
+		ThreadFunction run_function;
+		ThreadFunction initialize_function;
+		InputMappingElement button_element;
+	};
+
+	static ECS_THREAD_TASK(ModuleDebugDrawWrapperInitialize) {
+		StaticThreadTaskInitializeInfo* initialize_info = (StaticThreadTaskInitializeInfo*)_data;
+		ModuleDebugDrawWrapperInitializeData* data = (ModuleDebugDrawWrapperInitializeData*)initialize_info->initialize_data;
+		if (data->initialize_function != nullptr) {
+			data->initialize_function(thread_id, world, initialize_info);
+		}
+
+		ModuleDebugDrawWrapperData* function_data = (ModuleDebugDrawWrapperData*)initialize_info->frame_data->buffer;
+		function_data->function = data->run_function;
+		function_data->is_enabled = false;
+		function_data->inherit_data_name_size = data->initialize_task_name.size;
+		function_data->inherit_data_index = -1;
+		function_data->input_element = data->button_element;
+		unsigned int write_size = sizeof(*function_data);
+		if (data->initialize_task_name.size > 0) {
+			write_size += data->initialize_task_name.size;
+			ECS_ASSERT(write_size <= initialize_info->frame_data->capacity);
+			data->initialize_task_name.CopyTo(OffsetPointer(function_data, sizeof(*function_data)));
+		}
+		initialize_info->frame_data->size = write_size;
+	}
+
+	void AddModuleDebugDrawTaskElementsToScheduler(TaskScheduler* scheduler, Stream<ModuleDebugDrawTaskElement> elements, bool scene_order)
+	{
+		for (size_t index = 0; index < elements.size; index++) {
+			if (!elements[index].scene_only || scene_order) {
+				ModuleDebugDrawWrapperInitializeData initialize_data;
+				initialize_data.initialize_function = elements[index].base_element.initialize_task_function;
+				initialize_data.initialize_task_name = elements[index].base_element.initialize_data_task_name;
+				initialize_data.run_function = elements[index].base_element.task_function;
+				initialize_data.button_element = elements[index].input_element;
+
+				TaskSchedulerElement element = elements[index].base_element;
+				element.initialize_task_function = ModuleDebugDrawWrapperInitialize;
+				element.task_function = ModuleDebugDrawWrapper;
+				element.SetInitializeData(&initialize_data, sizeof(initialize_data));
+				scheduler->Add(element);
+			}
+		}
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	void DisableModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name) {
+		unsigned int task_index = task_manager->FindTask(task_name);
+		ECS_ASSERT_FORMAT(task_index != -1, "Failed to disable debug draw task {#}", task_name);
+		void* task_data = task_manager->GetTaskPtr(task_index);
+		ModuleDebugDrawWrapperData* data = (ModuleDebugDrawWrapperData*)task_data;
+		data->is_enabled = false;
+	}
+
+	void EnableModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name) {
+		unsigned int task_index = task_manager->FindTask(task_name);
+		ECS_ASSERT_FORMAT(task_index != -1, "Failed to enable debug draw task {#}", task_name);
+		void* task_data = task_manager->GetTaskPtr(task_index);
+		ModuleDebugDrawWrapperData* data = (ModuleDebugDrawWrapperData*)task_data;
+		data->is_enabled = true;
+	}
+
+	void FlipModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name) {
+		unsigned int task_index = task_manager->FindTask(task_name);
+		ECS_ASSERT_FORMAT(task_index != -1, "Failed to flip state for debug draw task {#}", task_name);
+		void* task_data = task_manager->GetTaskPtr(task_index);
+		ModuleDebugDrawWrapperData* data = (ModuleDebugDrawWrapperData*)task_data;
+		data->is_enabled = !data->is_enabled;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

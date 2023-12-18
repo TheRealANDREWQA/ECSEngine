@@ -129,7 +129,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	void TaskScheduler::Remove(Stream<char> task_name) {
-		for (size_t index = 0; index < elements.size; index++) {
+		for (unsigned int index = 0; index < elements.size; index++) {
 			if (elements[index].task_name == task_name) {
 				// The task has a single coalesced block
 				DeallocateIfBelongs(elements.allocator, elements[index].GetAllocatedBuffer());
@@ -139,6 +139,24 @@ namespace ECSEngine {
 		}
 
 		ECS_ASSERT_FORMAT(false, "Invalid task name {#} when trying to remove from TaskScheduler", task_name);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	TaskSchedulerElement* TaskScheduler::FindElement(Stream<char> task_name)
+	{
+		return (TaskSchedulerElement*)(((const TaskScheduler*)this)->FindElement(task_name));
+	}
+
+	const TaskSchedulerElement* TaskScheduler::FindElement(Stream<char> task_name) const
+	{
+		unsigned int index = elements.Find(task_name, [](const TaskSchedulerElement& element) {
+			return element.task_name;
+		});
+		if (index != -1) {
+			return elements.buffer + index;
+		}
+		return nullptr;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -556,9 +574,7 @@ namespace ECSEngine {
 
 	void TaskScheduler::SetTaskManagerTasks(
 		TaskManager* task_manager, 
-		bool call_initialize_task_functions, 
-		bool preserve_data_flag,
-		Stream<TaskSchedulerTransferStaticData> transfer_data
+		const TaskSchedulerSetManagerOptions* options
 	) const
 	{
 		unsigned int initial_task_count = task_manager->GetTaskCount();
@@ -566,18 +582,19 @@ namespace ECSEngine {
 			ECS_STACK_VOID_STREAM(frame_data, ECS_KB * 16);
 			void* task_data = nullptr;
 			size_t task_data_size = 0;
-			if (call_initialize_task_functions) {
-				bool preserve_data = elements[index].preserve_data && preserve_data_flag;
+			if (options->call_initialize_functions) {
+				bool preserve_data = elements[index].preserve_data && options->preserve_data_flag;
 				if (elements[index].initialize_task_function != nullptr && !preserve_data) {
 					StaticThreadTaskInitializeInfo initialize_info;
 					initialize_info.frame_data = &frame_data;
 					initialize_info.previous_data = {};
-					if (transfer_data.size > 0) {
-						size_t transfer_index = transfer_data.Find(elements[index].task_name, [](TaskSchedulerTransferStaticData transfer_data) {
+					initialize_info.initialize_data = elements[index].initialize_task_function_data;
+					if (options->transfer_data.size > 0) {
+						size_t transfer_index = options->transfer_data.Find(elements[index].task_name, [](TaskSchedulerTransferStaticData transfer_data) {
 							return transfer_data.task_name;
 						});
 						if (transfer_index != -1) {
-							initialize_info.previous_data = transfer_data[transfer_index].data;
+							initialize_info.previous_data = options->transfer_data[transfer_index].data;
 						}
 					}
 					elements[index].initialize_task_function(0, task_manager->m_world, &initialize_info);
@@ -591,12 +608,12 @@ namespace ECSEngine {
 				}
 				else if (preserve_data) {
 					// Check to see if we have transfer data
-					if (transfer_data.size > 0) {
-						size_t transfer_index = transfer_data.Find(elements[index].task_name, [](TaskSchedulerTransferStaticData transfer_data) {
+					if (options->transfer_data.size > 0) {
+						size_t transfer_index = options->transfer_data.Find(elements[index].task_name, [](TaskSchedulerTransferStaticData transfer_data) {
 							return transfer_data.task_name;
 							});
 						if (transfer_index != -1) {
-							Stream<void> previous_data = transfer_data[transfer_index].data;
+							Stream<void> previous_data = options->transfer_data[transfer_index].data;
 							task_data = previous_data.buffer;
 							task_data_size = previous_data.size;
 						}
@@ -612,13 +629,45 @@ namespace ECSEngine {
 				unsigned int task_data_index = elements.Find(elements[index].initialize_data_task_name, [](const TaskSchedulerElement& element) {
 					return element.task_name;
 				});
+
 				if (task_data_index == -1) {
-					ECS_CRASH("Missing initialize task data name {#} for task {#}", elements[index].initialize_data_task_name, elements[index].task_name);
+					if (!options->assert_exists_initialize_from_other_task) {
+						ECS_CRASH("Missing initialize task data name {#} for task {#}", elements[index].initialize_data_task_name, elements[index].task_name);
+					}
+					else {
+						// We can skip this entry
+						continue;
+					}
 				}
 
 				ThreadTask* task_ptr = task_manager->GetTaskPtr(initial_task_count + index);
 				task_ptr->data = task_manager->GetTaskPtr(initial_task_count + task_data_index)->data;
 				task_ptr->data_size = 0;
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void TaskScheduler::SetTasksDataFromOther(TaskManager* task_manager, bool assert_if_not_found) const
+	{
+		for (size_t index = 0; index < elements.size; index++) {
+			if (elements[index].initialize_data_task_name.size > 0) {
+				unsigned int element_index = task_manager->FindTask(elements[index].task_name);
+				if (element_index != -1) {
+					unsigned int other_task_index = task_manager->FindTask(elements[index].initialize_data_task_name);
+					if (other_task_index != -1) {
+						ThreadTask* task = task_manager->GetTaskPtr(element_index);
+						task->data = task_manager->GetTaskPtr(other_task_index)->data;
+						task->data_size = 0;
+					}
+					else {
+						if (assert_if_not_found) {
+							ECS_ASSERT_FORMAT(false, "Failed to set initialize data from task {#} to task {#}", 
+								elements[index].initialize_data_task_name, elements[index].task_name);
+						}
+					}
+				}
 			}
 		}
 	}

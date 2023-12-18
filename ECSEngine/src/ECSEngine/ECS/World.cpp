@@ -259,10 +259,8 @@ namespace ECSEngine {
 
 	void PrepareWorldConcurrency(
 		World* world, 
-		bool call_initialize_functions,
-		bool preserve_functions_data,
-		Stream<TaskSchedulerElement> scheduler_elements, 
-		Stream<TaskSchedulerTransferStaticData> transfer_data
+		const TaskSchedulerSetManagerOptions* set_options,
+		Stream<TaskSchedulerElement> scheduler_elements
 	)
 	{
 		if (scheduler_elements.size > 0) {
@@ -271,7 +269,7 @@ namespace ECSEngine {
 		world->task_manager->SetWorld(world);
 
 		// Set the task manager tasks now
-		world->task_scheduler->SetTaskManagerTasks(world->task_manager, call_initialize_functions, preserve_functions_data, transfer_data);
+		world->task_scheduler->SetTaskManagerTasks(world->task_manager, set_options);
 		world->task_scheduler->SetTaskManagerWrapper(world->task_manager);
 		world->task_scheduler->InitializeSchedulerInfo(world);
 
@@ -285,13 +283,17 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-	void PrepareWorld(World* world, Stream<TaskSchedulerElement> scheduler_elements)
+	void PrepareWorld(World* world, const TaskSchedulerSetManagerOptions* options, Stream<TaskSchedulerElement> scheduler_elements)
 	{
 		world->entity_manager->ClearCache();
 		world->entity_manager->ClearFrame();
 		world->delta_time = 0.0f;
 
-		PrepareWorldConcurrency(world, true, false, scheduler_elements);
+		TaskSchedulerSetManagerOptions set_options;
+		if (options == nullptr) {
+			options = &set_options;
+		}
+		PrepareWorldConcurrency(world, options, scheduler_elements);
 
 		// Don't clear the debug drawer - at the moment it is a use case to fill in
 		// The debug drawer before calling prepare world

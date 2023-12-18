@@ -7,6 +7,7 @@
 #include "ECSEngineDebugDrawer.h"
 #include "ECSEngineCBufferTags.h"
 #include "ECSEngineMath.h"
+#include "CollisionDetection/src/FixedGrid.h"
 
 using namespace ECSEngine;
 
@@ -377,11 +378,6 @@ template<bool schedule_element>
 ECS_THREAD_TASK(FlushRenderCommands) {
 	if constexpr (!schedule_element) {
 		GraphicsPipelineRenderState render_state = world->debug_drawer->GetPreviousRenderState();
-		DebugGrid grid;
-		grid.color = ECS_COLOR_AQUA;
-		grid.cell_size = float3::Splat(1.0f);
-		grid.translation = float3::Splat(0.0f);
-		world->debug_drawer->DrawGrid(&grid);
 		world->debug_drawer->DrawAll(1.0f);
 		world->debug_drawer->RestorePreviousRenderState(&render_state);
 		world->graphics->GetContext()->Flush();

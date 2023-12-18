@@ -86,6 +86,18 @@ void DeactivateSandboxModuleInStream(EditorState* editor_state, unsigned int san
 
 // -------------------------------------------------------------------------------------------------------------
 
+void DisableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void FlipSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name);
+
+// -------------------------------------------------------------------------------------------------------------
+
 EditorSandboxModule* GetSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
 
 // -------------------------------------------------------------------------------------------------------------

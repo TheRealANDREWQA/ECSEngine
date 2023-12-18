@@ -269,6 +269,9 @@ namespace ECSEngine {
 		// when all the tasks have been finished
 		void FinishStaticTasks();
 
+		// Returns -1 if it doesn't find the task
+		unsigned int FindTask(Stream<char> task_name) const;
+
 		// Returns the thread id (the index) given the OS thread id. Returns -1 if it doesn't find it
 		unsigned int FindThreadID(size_t os_thread_id) const;
 

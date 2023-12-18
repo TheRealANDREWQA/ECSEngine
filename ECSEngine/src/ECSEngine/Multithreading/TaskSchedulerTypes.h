@@ -228,6 +228,8 @@ namespace ECSEngine {
 	struct StaticThreadTaskInitializeInfo {
 		Stream<void> previous_data;
 		CapacityStream<void>* frame_data;
+		// This is the data that was passed in when setting up the task element
+		const void* initialize_data;
 	};
 
 	// This is the building block that the dependency solver and the scheduler will
@@ -254,6 +256,11 @@ namespace ECSEngine {
 			return component_query.IsValid();
 		}
 
+		ECS_INLINE void SetInitializeData(const void* data, size_t data_size) {
+			ECS_ASSERT(data_size <= sizeof(initialize_task_function_data));
+			memcpy(initialize_task_function_data, data, data_size);
+		}
+
 		ThreadFunction task_function;
 		Stream<char> task_name;
 		// If you want to inherit the data of another task, you can do that here
@@ -262,6 +269,8 @@ namespace ECSEngine {
 		// To inherit
 		Stream<char> initialize_data_task_name = {};
 		ThreadFunction initialize_task_function = nullptr;
+		// This is some small embedded data that you can pass to the initialize function
+		size_t initialize_task_function_data[6];
 		StaticThreadTaskInitializeCleanup cleanup_function = nullptr;
 		TaskComponentQuery component_query = {};
 		Stream<TaskDependency> task_dependencies = {};
@@ -273,5 +282,8 @@ namespace ECSEngine {
 		// the data, you need to set this flag to false
 		bool preserve_data = true;
 	};
+
+#define ECS_SET_SCHEDULE_TASK_FUNCTION(element, function)	element.task_name = STRING(function); \
+															element.task_function = function;
 
 }

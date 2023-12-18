@@ -7,6 +7,9 @@
 
 namespace ECSEngine {
 
+	struct TaskScheduler;
+	struct TaskManager;
+
 	// Returns true if it has the associated DLL task function
 	// The other are optional and do not need to be present in order for the module to be valid
 	ECSENGINE_API bool FindModule(Stream<wchar_t> path);
@@ -103,6 +106,18 @@ namespace ECSEngine {
 
 	ECSENGINE_API Stream<ModuleDebugDrawElement> LoadModuleDebugDrawElements(ModuleRegisterDebugDrawFunction function, AllocatorPolymorphic allocator);
 
+	ECSENGINE_API Stream<ModuleDebugDrawTaskElement> LoadModuleDebugDrawTaskElements(
+		const Module* module, 
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* error_message = nullptr
+	);
+
+	ECSENGINE_API Stream<ModuleDebugDrawTaskElement> LoadModuleDebugDrawTaskElements(
+		ModuleRegisterDebugDrawTaskElementsFunction function, 
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* error_message = nullptr
+	);
+
 	// Frees the OS handle to the valid module function but it does not deallocate the tasks
 	// or any other stream that was previously allocated. They must be manually deallocated
 	// If the bool pointer is specified, it will attempt to unload the debugging symbols
@@ -119,6 +134,8 @@ namespace ECSEngine {
 	// and set the value with the success of that action
 	ECSENGINE_API void ReleaseAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator, bool* unload_debugging_symbols = nullptr);
 
+	ECSENGINE_API bool ValidateModuleTask(const TaskSchedulerElement& element, CapacityStream<char>* error_message = nullptr);
+
 	// It will move all the valid tasks in front of the stream while keeping the invalid ones at the end
 	// Returns the previous size, the new size will reflect the count of the valid tasks
 	ECSENGINE_API size_t ValidateModuleTasks(Stream<TaskSchedulerElement>& tasks, CapacityStream<char>* error_message = nullptr);
@@ -130,5 +147,17 @@ namespace ECSEngine {
 	// It will move all the valid link targets in front of the stream while keeping the invalid ones at the end
 	// Returns the previous size, the new size will reflect the count of the valid link targets
 	ECSENGINE_API size_t ValidateModuleLinkComponentTargets(Stream<ModuleLinkComponentTarget>& link_targets, CapacityStream<char>* error_message = nullptr);
+
+	// It will move all the valid link targets in front of the stream while keeping the invalid ones at the end
+	// Returns the previous size, the new size will reflect the count of the valid link targets
+	ECSENGINE_API size_t ValidateModuleDebugDrawTaskElements(Stream<ModuleDebugDrawTaskElement>& elements, CapacityStream<char>* error_message = nullptr);
+
+	ECSENGINE_API void AddModuleDebugDrawTaskElementsToScheduler(TaskScheduler* scheduler, Stream<ModuleDebugDrawTaskElement> elements, bool scene_order);
+
+	ECSENGINE_API void DisableModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name);
+
+	ECSENGINE_API void EnableModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name);
+
+	ECSENGINE_API void FlipModuleDebugDrawTaskElement(TaskManager* task_manager, Stream<char> task_name);
 
 }

@@ -24,8 +24,8 @@
 #define STRING_NEW_LINE_SIZE 0.85f
 #define STRING_CHARACTER_SPACING 0.05f
 
-#define DECK_CHUNK_SIZE 128
 #define DECK_POWER_OF_TWO 7
+#define DECK_CHUNK_SIZE (1 << DECK_POWER_OF_TWO)
 
 #define OOBB_CROSS_Y_SCALE 0.02f
 #define OOBB_CROSS_Z_SCALE 0.02f
@@ -1063,6 +1063,11 @@ namespace ECSEngine {
 
 	void DebugDrawer::AddGrid(const DebugGrid* grid, bool retrieve_entries_now)
 	{
+		DebugGrid temp_grid = *grid;
+		if (retrieve_entries_now) {
+			temp_grid.ExtractResidentCells(Allocator());
+		}
+		grids.Add(&temp_grid);
 	}
 
 
@@ -1322,6 +1327,14 @@ namespace ECSEngine {
 
 	void DebugDrawer::AddGridThread(unsigned int thread_index, const DebugGrid* grid, bool retrieve_entries_now)
 	{
+		if (thread_grids[thread_index].IsFull()) {
+			FlushGrid(thread_index);
+		}
+		DebugGrid temp_grid = *grid;
+		if (retrieve_entries_now) {
+			temp_grid.ExtractResidentCells(Allocator());
+		}
+		thread_grids[thread_index].Add(&temp_grid);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2042,21 +2055,72 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawGrid(const DebugGrid* grid)
+	void DebugDrawer::DrawGrid(const DebugGrid* grid, DebugShaderOutput shader_output)
 	{
 		Timer my_timer;
 		DebugAABB aabb;
 		aabb.color = grid->color;
 		aabb.options = grid->options;
+		aabb.options.wireframe = true;
 		aabb.scale = grid->cell_size;
 		unsigned int per_type_counts[ELEMENT_COUNT];
-		DrawTransformCallCore<true>(this, 0, per_type_counts, ECS_DEBUG_SHADER_OUTPUT_COLOR, ECS_DEBUG_VERTEX_BUFFER_CUBE, [&](unsigned int index, ElementType type) {
-			aabb.translation = grid->translation + float3::Splat((float)index);
-			if (index < 10'000) {
+		unsigned int x = 0;
+		unsigned int y = 0;
+		unsigned int z = 0;
+		if (grid->residency_function != nullptr) {
+			DrawTransformCallCore<true>(this, 0, per_type_counts, shader_output, ECS_DEBUG_VERTEX_BUFFER_CUBE, [&](unsigned int index, ElementType type) {
+				if (grid->residency_function(uint3(x, y, z), grid->residency_data)) {
+					aabb.translation = grid->translation + float3(uint3(x, y, z)) * aabb.scale;
+				}
+				z++;
+				if (z == grid->dimensions.z) {
+					z = 0;
+					y++;
+					if (y == grid->dimensions.y) {
+						y = 0;
+						x++;
+						if (x == grid->dimensions.x) {
+							return (DebugAABB*)nullptr;
+						}
+					}
+				}
 				return &aabb;
+				}, grid->options.ignore_depth ? WIREFRAME_NO_DEPTH : WIREFRAME_DEPTH
+			);
+		}
+		else {
+			float3 cell_offsets = aabb.scale * float3::Splat(2.0f);
+			memset(per_type_counts, 0, sizeof(per_type_counts));
+			size_t element_count = grid->valid_cells.GetElementCount();
+			if (element_count > 0) {
+				// We have the cells already determined
+				unsigned int instance_count = element_count;
+				per_type_counts[grid->options.ignore_depth ? WIREFRAME_NO_DEPTH : WIREFRAME_DEPTH] = instance_count;
+				DrawTransformCallCore<false>(this, instance_count, per_type_counts, shader_output, ECS_DEBUG_VERTEX_BUFFER_CUBE, [&](unsigned int index, ElementType type) {
+					aabb.translation = grid->valid_cells[index];
+					return &aabb;
+				});
 			}
-			return (DebugAABB*)nullptr;
-		}, grid->options.ignore_depth ? SOLID_NO_DEPTH : SOLID_DEPTH);
+			else {
+				unsigned int instance_count = grid->dimensions.x * grid->dimensions.y * grid->dimensions.z;
+				per_type_counts[grid->options.ignore_depth ? WIREFRAME_NO_DEPTH : WIREFRAME_DEPTH] = instance_count;
+				DrawTransformCallCore<false>(this, instance_count, per_type_counts, shader_output, ECS_DEBUG_VERTEX_BUFFER_CUBE,
+					[&](unsigned int index, ElementType type) {
+						aabb.translation = grid->translation + float3(uint3(x, y, z)) * cell_offsets;
+						z++;
+						if (z == grid->dimensions.z) {
+							z = 0;
+							y++;
+							if (y == grid->dimensions.y) {
+								y = 0;
+								x++;
+							}
+						}
+						return &aabb;
+					}
+				);
+			}
+		}
 		float duration = my_timer.GetDurationFloat(ECS_TIMER_DURATION_US);
 		ECS_FORMAT_TEMP_STRING(message, "Duration {#}\n", duration);
 		OutputDebugStringA(message.buffer);
@@ -2337,6 +2401,15 @@ namespace ECSEngine {
 
 	void DebugDrawer::DrawGridDeck(float time_delta, DebugShaderOutput shader_output, DeckPowerOfTwo<DebugGrid>* custom_source)
 	{
+		DeckPowerOfTwo<DebugGrid>* source = custom_source != nullptr ? custom_source : &grids;
+		source->ForEach([&](DebugGrid& grid) {
+			DrawGrid(&grid, shader_output);
+			grid.options.duration -= time_delta;
+			if (grid.options.duration < 0.0f) {
+				return true;
+			}
+			return false;
+		});
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2355,6 +2428,7 @@ namespace ECSEngine {
 		DrawAABBDeck(time_delta, shader_output);
 		DrawOOBBDeck(time_delta, shader_output);
 		DrawStringDeck(time_delta, shader_output);
+		DrawGridDeck(time_delta, shader_output);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2874,20 +2948,6 @@ namespace ECSEngine {
 	void DebugDrawer::OutputInstanceIndexStringBulk(const AdditionStreamAtomic<DebugString>* addition_stream, float time_delta)
 	{
 		ECS_ASSERT(false, "Output instance index bulk write for debug strings is not yet implemented");
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	void DebugDrawer::OutputInstanceIndexGridBulk(const AdditionStreamAtomic<DebugGrid>* addition_stream, float time_delta)
-	{
-		Stream<DebugGrid> grids = addition_stream->ToStream();
-		for (size_t index = 0; index < grids.size; index++) {
-
-		}
-
-		/*DrawTransformDeck(this, &temp_deck, ECS_DEBUG_VERTEX_BUFFER_CUBE, time_delta, ECS_DEBUG_SHADER_OUTPUT_ID, [&](const DebugOOBB* oobb) {
-			return OOBBMatrix(oobb->translation, oobb->rotation, oobb->scale, camera_matrix);
-		});*/
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -3604,6 +3664,30 @@ namespace ECSEngine {
 	Matrix ECS_VECTORCALL DebugOOBB::GetMatrix(Matrix camera_matrix) const
 	{
 		return OOBBMatrix(translation, rotation, scale, camera_matrix);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugGrid::ExtractResidentCells(AllocatorPolymorphic allocator)
+	{
+		// Use a reasonably small power of two exponent such that we don't
+		// Overcommit too much
+		const size_t POWER_OF_TWO_EXPONENT = 7; // 128
+
+		if (residency_function != nullptr) {
+			valid_cells.Initialize(allocator, 1, 1 << POWER_OF_TWO_EXPONENT, POWER_OF_TWO_EXPONENT);
+			float3 cell_offset = cell_size * float3::Splat(2.0f);
+
+			for (unsigned int x = 0; x < dimensions.x; x++) {
+				for (unsigned int y = 0; y < dimensions.y; y++) {
+					for (unsigned int z = 0; z < dimensions.z; z++) {
+						if (residency_function({ x, y, z }, residency_data)) {
+							valid_cells.Add(translation + float3(uint3(x, y, z)) * cell_offset);
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

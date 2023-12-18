@@ -459,8 +459,8 @@ namespace ECSEngine {
 	}
 	
 	static void EnumerateDiscreteGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
-		//EnumGPU(adapters, DXGI_GPU_PREFERENCE_MINIMUM_POWER);
-		EnumGPU(adapters, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE);
+		EnumGPU(adapters, DXGI_GPU_PREFERENCE_MINIMUM_POWER);
+		//EnumGPU(adapters, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE);
 	}
 
 	static void EnumerateIntegratedGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
@@ -507,7 +507,7 @@ namespace ECSEngine {
 			swap_chain_descriptor.SampleDesc.Count = 1;
 			swap_chain_descriptor.SampleDesc.Quality = 0;
 			swap_chain_descriptor.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;
-			swap_chain_descriptor.BufferCount = 2;
+			swap_chain_descriptor.BufferCount = 3;
 			swap_chain_descriptor.OutputWindow = descriptor->hWnd;
 			swap_chain_descriptor.Windowed = TRUE;
 			swap_chain_descriptor.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;

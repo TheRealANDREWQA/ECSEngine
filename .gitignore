@@ -13,3 +13,4 @@ Modules/*/bin
 RunGPUThunk.bat
 KillGPUThunk.bat
 ECSEngine.iml
+*.cap

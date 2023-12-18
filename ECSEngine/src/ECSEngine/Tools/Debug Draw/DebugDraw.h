@@ -186,7 +186,10 @@ namespace ECSEngine {
 
 	typedef bool (*DrawDebugGridResidencyFunction)(uint3 index, void* data);
 
-	struct DebugGrid {
+	struct ECSENGINE_API DebugGrid {
+		// It will extract the resident cells now from the grid using the residency function
+		void ExtractResidentCells(AllocatorPolymorphic allocator);
+
 		uint3 dimensions;
 		float3 cell_size;
 		float3 translation;
@@ -198,7 +201,7 @@ namespace ECSEngine {
 		void* residency_data = nullptr;
 		// If this field is filled in, it will assume these are the cells that are
 		// to be drawn
-		Stream<float3> valid_cells = {};
+		DeckPowerOfTwo<float3> valid_cells = {};
 	};
 
 	struct ECSENGINE_API DebugDrawer {
@@ -449,7 +452,7 @@ namespace ECSEngine {
 			DebugDrawCallOptions options = {}
 		);
 
-		void DrawGrid(const DebugGrid* grid);
+		void DrawGrid(const DebugGrid* grid, DebugShaderOutput shader_output);
 
 #pragma endregion
 
@@ -664,8 +667,6 @@ namespace ECSEngine {
 			AllocatorPolymorphic allocator
 		);
 
-		void OutputInstanceIndexGrid(const DebugGrid* grid, AdditionStreamAtomic<DebugString>* addition_stream);
-
 #pragma endregion
 
 #pragma region Output Instance Bulk
@@ -734,12 +735,6 @@ namespace ECSEngine {
 		// The allocator will be used to allocate the string
 		void OutputInstanceIndexStringBulk(
 			const AdditionStreamAtomic<DebugString>* addition_stream,
-			float time_delta = 0.0f
-		);
-
-		// The time delta is optional
-		void OutputInstanceIndexGridBulk(
-			const AdditionStreamAtomic<DebugGrid>* addition_stream,
 			float time_delta = 0.0f
 		);
 
