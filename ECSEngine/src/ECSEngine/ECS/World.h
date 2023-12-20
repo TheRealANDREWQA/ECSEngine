@@ -124,9 +124,12 @@ namespace ECSEngine {
 		Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 }	
 	);
 
+	// This performs all the necessary steps that are not related to the concurrency structures
+	ECSENGINE_API void PrepareWorldBase(World* world);
+
 	// Initializes all the necessary one time actions needed before the actual run of the world
 	// If the scheduler_elements are not specified, they need to be added to the world's task scheduler
-	// before calling PrepareWorld
+	// before calling PrepareWorld. This is a combination of PrepareWorldBase and PrepareWorldConcurrency
 	ECSENGINE_API void PrepareWorld(World* world, const TaskSchedulerSetManagerOptions* options = nullptr, Stream<TaskSchedulerElement> scheduler_elements = { nullptr, 0 });
 
 	// This will clear the system manager out of everything and the entity manager will also lose everything

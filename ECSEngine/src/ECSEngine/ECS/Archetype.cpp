@@ -14,7 +14,7 @@ namespace ECSEngine {
 		const ComponentInfo* unique_infos,
 		ComponentSignature unique_components,
 		ComponentSignature shared_components
-	) : m_small_memory_manager(small_memory_manager), m_memory_manager(memory_manager), m_base_archetypes(GetAllocatorPolymorphic(m_small_memory_manager), 1),
+	) : m_small_memory_manager(small_memory_manager), m_memory_manager(memory_manager), m_base_archetypes(m_small_memory_manager, 1),
 		m_unique_infos(unique_infos), m_unique_components_to_deallocate_count(0)
 	{
 		size_t allocation_size = sizeof(Component) * (unique_components.count + shared_components.count);

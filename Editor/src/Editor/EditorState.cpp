@@ -339,10 +339,10 @@ void PreinitializeRuntime(EditorState* editor_state) {
 
 	// And the asset database
 	ResizableMemoryArena* database_arena = (ResizableMemoryArena*)OffsetPointer(editor_state->runtime_resource_manager, sizeof(*editor_state->runtime_resource_manager));
-	*database_arena = CreateResizableMemoryArena(ECS_MB, 4, ECS_KB * 4, GetAllocatorPolymorphic(editor_state->GlobalMemoryManager()), ECS_MB * 5, 4, ECS_KB * 4);
+	*database_arena = CreateResizableMemoryArena(ECS_MB, 4, ECS_KB * 4, editor_state->GlobalMemoryManager(), ECS_MB * 5, 4, ECS_KB * 4);
 
 	AssetDatabase* database = (AssetDatabase*)OffsetPointer(database_arena, sizeof(*database_arena));
-	*database = AssetDatabase(GetAllocatorPolymorphic(database_arena), editor_state->ui_reflection->reflection);
+	*database = AssetDatabase(database_arena, editor_state->ui_reflection->reflection);
 	editor_state->asset_database = database;
 }
 
@@ -387,7 +387,7 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 	HubData* hub_data = (HubData*)malloc(sizeof(HubData));
 	hub_data->projects.Initialize(hub_allocator, 0, EDITOR_HUB_PROJECT_CAPACITY);
 	hub_data->projects.size = 0;
-	hub_data->allocator = GetAllocatorPolymorphic(hub_allocator);
+	hub_data->allocator = hub_allocator;
 	editor_state->hub_data = hub_data;
 
 	GlobalMemoryManager* console_global_memory = (GlobalMemoryManager*)malloc(sizeof(GlobalMemoryManager));
@@ -404,7 +404,7 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 
 void EditorStateInitialize(Application* application, EditorState* editor_state, HWND hWnd, Mouse* mouse, Keyboard* keyboard)
 {
-	// Initialize the Debug Allocator Manager
+	// Initialize the Debug SettingsAllocator Manager
 	DebugAllocatorManagerDescriptor debug_allocator_manager_descriptor;
 	debug_allocator_manager_descriptor.capacity = ECS_DEBUG_ALLOCATOR_MANAGER_CAPACITY_MEDIUM;
 	debug_allocator_manager_descriptor.enable_global_write_to_file = true;
@@ -422,16 +422,16 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	// and that will be slow. So instead we have to use the dedicated GPU for UI as well
 	CreateGraphicsForProcess(graphics, hWnd, global_memory_manager, true);
 
-	MemoryManager* editor_allocator = new MemoryManager(MEMORY_MANAGER_CAPACITY, 4 * ECS_KB, MEMORY_MANAGER_RESERVE_CAPACITY, GetAllocatorPolymorphic(global_memory_manager));
+	MemoryManager* editor_allocator = new MemoryManager(MEMORY_MANAGER_CAPACITY, 4 * ECS_KB, MEMORY_MANAGER_RESERVE_CAPACITY, global_memory_manager);
 	editor_state->editor_allocator = editor_allocator;
 	
-	AllocatorPolymorphic polymorphic_editor_allocator = GetAllocatorPolymorphic(editor_allocator);
+	AllocatorPolymorphic polymorphic_editor_allocator = editor_allocator;
 
 	MemoryManager* multithreaded_editor_allocator = new MemoryManager(
 		MULTITHREADED_MEMORY_MANAGER_CAPACITY, 
 		4 * ECS_KB, 
 		MULTITHREADED_MEMORY_MANAGER_RESERVE_CAPACITY, 
-		GetAllocatorPolymorphic(global_memory_manager)
+		global_memory_manager
 	);
 	editor_state->multithreaded_editor_allocator = multithreaded_editor_allocator;
 
@@ -484,7 +484,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->ui_system = ui;
 
 	Reflection::ReflectionManager* editor_reflection_manager = (Reflection::ReflectionManager*)malloc(sizeof(Reflection::ReflectionManager));
-	*editor_reflection_manager = Reflection::ReflectionManager(GetAllocatorPolymorphic(editor_allocator));
+	*editor_reflection_manager = Reflection::ReflectionManager(editor_allocator);
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
@@ -521,7 +521,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->editor_components.EmptyEventStream();
 
 	Reflection::ReflectionManager* module_reflection_manager = (Reflection::ReflectionManager*)malloc(sizeof(Reflection::ReflectionManager));
-	*module_reflection_manager = Reflection::ReflectionManager(GetAllocatorPolymorphic(editor_allocator));
+	*module_reflection_manager = Reflection::ReflectionManager(editor_allocator);
 
 	// Inherit the constants from the ui_reflection
 	module_reflection_manager->InheritConstants(editor_reflection_manager);
@@ -534,7 +534,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	// Override the module reflection with the assets overrides
 	ECS_STACK_CAPACITY_STREAM_DYNAMIC(UIReflectionFieldOverride, ui_asset_overrides, AssetUIOverrideCount());
-	GetEntityComponentUIOverrides(editor_state, ui_asset_overrides.buffer, GetAllocatorPolymorphic(&ui_asset_override_allocator));
+	GetEntityComponentUIOverrides(editor_state, ui_asset_overrides.buffer, &ui_asset_override_allocator);
 	// Set the overrides on the module reflection and on the engine side since we have some link components there as well
 	for (size_t index = 0; index < ui_asset_overrides.capacity; index++) {
 		editor_state->module_reflection->SetFieldOverride(ui_asset_overrides.buffer + index);
@@ -619,7 +619,7 @@ void EditorStateDestroy(EditorState* editor_state) {
 	editor_state->render_task_manager->DestroyThreads();
 
 	DestroyGraphics(editor_state->ui_system->m_graphics);
-	FreeAllocator(GetAllocatorPolymorphic(editor_state->GlobalMemoryManager()));
+	FreeAllocator(editor_state->GlobalMemoryManager());
 
 	// If necessary, free all the malloc's for the individual allocations - but there are very small and insignificant
 	// Not worth freeing them since EditorStateInitialize won't be called more than a couple of times during the runtime of 

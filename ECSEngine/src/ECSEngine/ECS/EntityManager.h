@@ -87,12 +87,12 @@ namespace ECSEngine {
 		EntityManager() {}
 		EntityManager(const EntityManagerDescriptor& descriptor);
 
-		ECS_INLINE AllocatorPolymorphic SmallAllocator() const {
-			return GetAllocatorPolymorphic(&m_small_memory_manager);
+		ECS_INLINE AllocatorPolymorphic SmallAllocator() {
+			return &m_small_memory_manager;
 		}
 
-		ECS_INLINE AllocatorPolymorphic MainAllocator() const {
-			return GetAllocatorPolymorphic(m_memory_manager);
+		ECS_INLINE AllocatorPolymorphic MainAllocator() {
+			return m_memory_manager;
 		}
 
 		// Use this this if you want to pass this buffer to the deferred calls with a stable flag.
@@ -1334,19 +1334,11 @@ namespace ECSEngine {
 
 		MemoryArena* GetComponentAllocator(Component component);
 
-		AllocatorPolymorphic GetComponentAllocatorPolymorphic(Component component);
-
 		MemoryArena* GetSharedComponentAllocator(Component component);
-
-		AllocatorPolymorphic GetSharedComponentAllocatorPolymorphic(Component component);
 
 		MemoryArena* GetGlobalComponentAllocator(Component component);
 
-		AllocatorPolymorphic GetGlobalComponentAllocatorPolymorphic(Component component);
-
 		MemoryArena* GetComponentAllocatorFromType(Component component, ECS_COMPONENT_TYPE type);
-
-		AllocatorPolymorphic GetComponentAllocatorPolymorphicFromType(Component component, ECS_COMPONENT_TYPE type);
 
 		// Returns how many entities exist
 		ECS_INLINE unsigned int GetEntityCount() const {

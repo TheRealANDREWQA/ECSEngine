@@ -176,7 +176,7 @@ namespace ECSEngine {
 
 		SerializeOptions serialize_options;
 		serialize_options.error_message = options->error_message;
-		serialize_options.allocator = GetAllocatorPolymorphic(&stack_allocator);
+		serialize_options.allocator = &stack_allocator;
 		ECS_SERIALIZE_CODE serialize_code = Serialize(
 			reflection_manager, 
 			reflection_manager->GetType(STRING(WorldDescriptor)), 
@@ -494,7 +494,7 @@ namespace ECSEngine {
 			DeserializeOptions deserialize_options;
 			deserialize_options.error_message = detailed_error;
 			deserialize_options.default_initialize_missing_fields = true;
-			deserialize_options.file_allocator = GetAllocatorPolymorphic(&stack_allocator);
+			deserialize_options.file_allocator = &stack_allocator;
 			ECS_DESERIALIZE_CODE deserialize_code = Deserialize(
 				reflection_manager, 
 				reflection_manager->GetType(STRING(WorldDescriptor)), 

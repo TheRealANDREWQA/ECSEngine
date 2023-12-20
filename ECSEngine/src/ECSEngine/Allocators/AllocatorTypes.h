@@ -61,6 +61,10 @@ namespace ECSEngine {
 		ECS_INLINE AllocatorPolymorphic(void* _allocator, ECS_ALLOCATOR_TYPE _allocator_type, ECS_ALLOCATION_TYPE _allocation_type = ECS_ALLOCATION_SINGLE)
 			: allocator(_allocator), allocator_type(_allocator_type), allocation_type(_allocation_type) {}
 
+		ECS_INLINE void SetMulti() {
+			allocation_type = ECS_ALLOCATION_MULTI;
+		}
+
 		void* allocator;
 		ECS_ALLOCATOR_TYPE allocator_type;
 		ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE;

@@ -14,7 +14,6 @@ namespace ECSEngine {
 		ECS_INLINE LinearAllocator() : m_buffer(nullptr), m_capacity(0), m_top(0), m_marker(0), m_debug_mode(false) {}
 		ECS_INLINE LinearAllocator(void* buffer, size_t capacity) : m_buffer(buffer), m_capacity(capacity), m_top(0), 
 			m_marker(0), m_spin_lock(), m_debug_mode(false), m_profiling_mode(false) {}
-		LinearAllocator(AllocatorPolymorphic allocator, size_t capacity);
 
 		void* Allocate(size_t size, size_t alignment = 8, DebugInfo debug_info = ECS_DEBUG_INFO);
 
@@ -61,6 +60,8 @@ namespace ECSEngine {
 		// Region start and region size are parallel arrays. Returns the count of regions
 		// Pointer capacity must represent the count of valid entries for the given pointers
 		size_t GetAllocatedRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const;
+
+		static LinearAllocator InitializeFrom(AllocatorPolymorphic allocator, size_t capacity);
 
 		// ---------------------- Thread safe variants -----------------------------
 		

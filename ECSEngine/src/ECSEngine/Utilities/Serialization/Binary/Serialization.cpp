@@ -906,7 +906,7 @@ namespace ECSEngine {
 		size_t field_count = type->fields.size;
 
 		auto read_type_table_from_file = [&]() {
-			deserialize_table = DeserializeFieldTableFromData(stream, GetAllocatorPolymorphic(&table_linear_allocator));
+			deserialize_table = DeserializeFieldTableFromData(stream, &table_linear_allocator);
 			// Check to see if the table is valid
 			if (deserialize_table.types.size == 0) {
 				// The file was corrupted
@@ -996,7 +996,7 @@ namespace ECSEngine {
 			if (deserialized_manager == nullptr) {
 				// Create a temporary deserialized manager that can be used with the ignore calls
 				_temporary_manager.type_definitions.Initialize(&temp_allocator, HashTableCapacityForElements(deserialize_table.types.size));
-				deserialize_table.ToNormalReflection(&_temporary_manager, GetAllocatorPolymorphic(&temp_allocator));
+				deserialize_table.ToNormalReflection(&_temporary_manager, &temp_allocator);
 				deserialized_manager = &_temporary_manager;
 			}
 			nested_options->deserialized_field_manager = deserialized_manager;
@@ -1815,7 +1815,7 @@ namespace ECSEngine {
 		void* stack_allocation = ECS_STACK_ALLOC(sizeof(char) * STACK_ALLOCATION_CAPACITY);
 		LinearAllocator allocator(stack_allocation, STACK_ALLOCATION_CAPACITY);
 
-		return DeserializeFieldTableFromDataRecursive<false>(data, GetAllocatorPolymorphic(&allocator), options).types.size;
+		return DeserializeFieldTableFromDataRecursive<false>(data, &allocator, options).types.size;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -1825,7 +1825,7 @@ namespace ECSEngine {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 
 		DeserializeFieldTable field_table;
-		field_table = DeserializeFieldTableFromData(data, GetAllocatorPolymorphic(&stack_allocator));
+		field_table = DeserializeFieldTableFromData(data, &stack_allocator);
 		IgnoreDeserialize(data, field_table, options);
 	}
 
@@ -1848,7 +1848,7 @@ namespace ECSEngine {
 		if (deserialized_manager == nullptr) {
 			deserialized_manager = &temp_manager;
 			temp_manager.type_definitions.Initialize(&linear_allocator, 256);
-			field_table.ToNormalReflection(&temp_manager, GetAllocatorPolymorphic(&linear_allocator));
+			field_table.ToNormalReflection(&temp_manager, &linear_allocator);
 		}
 
 		// The type to be ignored is the first one from the field table

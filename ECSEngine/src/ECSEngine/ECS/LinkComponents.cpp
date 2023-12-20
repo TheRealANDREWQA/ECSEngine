@@ -90,7 +90,7 @@ namespace ECSEngine {
 
 		ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 64, ECS_MB);
-		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+		AllocatorPolymorphic stack_allocator = &_stack_allocator;
 		
 		GetAssetFieldsFromLinkComponentTarget(type, asset_fields);
 

@@ -47,7 +47,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	// It will serialize into a memory buffer and then commit to the file
-	// Allocator nullptr means use malloc
+	// SettingsAllocator nullptr means use malloc
 	ECSENGINE_API bool TextSerializeFields(
 		Stream<TextSerializeField> fields,
 		Stream<wchar_t> file,
@@ -77,7 +77,7 @@ namespace ECSEngine {
 	ECS_ENUM_BITWISE_OPERATIONS(ECS_TEXT_DESERIALIZE_STATUS);
 
 	// It will read the whole file into a temporary memory buffer and then deserialize from memory
-	// Allocator nullptr means use malloc
+	// SettingsAllocator nullptr means use malloc
 	// Returns whether or not an error has occured during reading the file. If one field cannot be deserialized 
 	// (i.e. a value is not specified, incorrect type of data), then that field will be omitted from the fields stream
 	// Names will also be allocated from the pool
@@ -91,7 +91,7 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	// It will read the whole file into a temporary memory buffer and then deserialize from memory
-	// Allocator nullptr means use malloc
+	// SettingsAllocator nullptr means use malloc
 	// Returns whether or not an error has occured during reading the file. If one field cannot be deserialized 
 	// (i.e. a value is not specified, incorrect type of data), then that field will be omitted from the fields stream
 	// The names of the fields will also be allocated from the pointer allocator

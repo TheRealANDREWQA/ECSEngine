@@ -76,7 +76,7 @@ static void RegisterSandboxModuleSnapshots(EditorState* editor_state, unsigned i
 	sandbox->runtime_module_snapshots.capacity = 0;
 	sandbox->runtime_module_snapshots.Resize(sandbox->modules_in_use.size);
 	
-	AllocatorPolymorphic snapshot_allocator = GetAllocatorPolymorphic(&sandbox->runtime_module_snapshot_allocator);
+	AllocatorPolymorphic snapshot_allocator = &sandbox->runtime_module_snapshot_allocator;
 
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		// We need to copy the library name and the solution since the module index can change under us
@@ -278,7 +278,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 	EditorSandboxAssetHandlesSnapshot& snapshot = sandbox->runtime_asset_handle_snapshot;
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
-	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+	AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 	const AssetDatabase* database = editor_state->asset_database;
 	SandboxReferenceCountsFromEntities asset_reference_counts = GetSandboxAssetReferenceCountsFromEntities(
@@ -337,7 +337,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 					if (current_reference_count > 0) {
 						IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_index, current_reference_count);
 						SoAResizeIfFull(
-							GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()),
+							sandbox->GlobalMemoryManager(),
 							snapshot.handle_count,
 							snapshot.handle_capacity,
 							&snapshot.handles,
@@ -566,20 +566,25 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 void CallSandboxRuntimeCleanupFunctions(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	ECS_STACK_CAPACITY_STREAM(TaskSchedulerTransferStaticData, transfer_data, ECS_KB * 2);
-	sandbox->sandbox_world_transfer_data_allocator.Clear();
-	sandbox->sandbox_world.task_scheduler->CallCleanupFunctions(
-		&sandbox->sandbox_world, 
-		GetAllocatorPolymorphic(&sandbox->sandbox_world_transfer_data_allocator), 
-		&transfer_data,
-		true
-	);
-	if (transfer_data.size > 0) {
-		// Allocate them from the same allocator
-		sandbox->sandbox_world_transfer_data = transfer_data.Copy(GetAllocatorPolymorphic(&sandbox->sandbox_world_transfer_data_allocator));
-	}
-	else {
-		sandbox->sandbox_world_transfer_data = {};
+	// Perform this only if the task scheduler element count is greater than 0
+	// When a module fails to compile during runtime and then is fixed, this function
+	// Will be called once again and the transfer data is lost since the element count is 0
+	if (sandbox->sandbox_world.task_scheduler->elements.size > 0) {
+		ECS_STACK_CAPACITY_STREAM(TaskSchedulerTransferStaticData, transfer_data, ECS_KB * 2);
+		sandbox->sandbox_world_transfer_data_allocator.Clear();
+		sandbox->sandbox_world.task_scheduler->CallCleanupFunctions(
+			&sandbox->sandbox_world,
+			&sandbox->sandbox_world_transfer_data_allocator,
+			&transfer_data,
+			true
+		);
+		if (transfer_data.size > 0) {
+			// Allocate them from the same allocator
+			sandbox->sandbox_world_transfer_data = transfer_data.Copy(&sandbox->sandbox_world_transfer_data_allocator);
+		}
+		else {
+			sandbox->sandbox_world_transfer_data = {};
+		}
 	}
 }
 
@@ -798,7 +803,7 @@ bool ConstructSandboxSchedulingOrder(
 	}
 	for (unsigned int index = 0; index < editor_state->project_modules->size; index++) {
 		const EditorModuleInfo* current_info = GetSandboxModuleInfo(editor_state, sandbox_index, index);
-		if (current_info->ecs_module.debug_draw_task_elements.size > 0) {
+		if (current_info->load_status != EDITOR_MODULE_LOAD_FAILED && current_info->ecs_module.debug_draw_task_elements.size > 0) {
 			AddModuleDebugDrawTaskElementsToScheduler(sandbox->sandbox_world.task_scheduler, current_info->ecs_module.debug_draw_task_elements, scene_order);
 		}
 	}
@@ -1722,7 +1727,7 @@ bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sand
 		// And forward the transfer data
 		TaskSchedulerSetManagerOptions set_options;
 		set_options.call_initialize_functions = true;
-		set_options.preserve_data_flag = !tasks_were_initialized;
+		set_options.preserve_data_flag = tasks_were_initialized;
 		set_options.transfer_data = sandbox->sandbox_world_transfer_data;
 		PrepareWorldConcurrency(&sandbox->sandbox_world, &set_options);
 		if (!tasks_were_initialized) {
@@ -1759,7 +1764,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 		sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size + ECS_MB * 5
 	);
 
-	AllocatorPolymorphic sandbox_allocator = GetAllocatorPolymorphic(allocator);
+	AllocatorPolymorphic sandbox_allocator = allocator;
 
 	// Initialize the textures to nullptr - wait for the UI window to tell the sandbox what area it covers
 	memset(sandbox->viewport_render_destination, 0, sizeof(sandbox->viewport_render_destination));
@@ -1831,19 +1836,19 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 
 	// Initialize the runtime module snapshots and their allocator
 	sandbox->runtime_module_snapshot_allocator = MemoryManager(ECS_KB * 8, 1024, ECS_KB * 256, sandbox_allocator);
-	sandbox->runtime_module_snapshots.Initialize(GetAllocatorPolymorphic(&sandbox->runtime_module_snapshot_allocator), 0);
+	sandbox->runtime_module_snapshots.Initialize(&sandbox->runtime_module_snapshot_allocator, 0);
 
 	// Initialize the asset handle snapshots and their allocator
 	sandbox->runtime_asset_handle_snapshot.allocator = MemoryManager(ECS_KB * 128, ECS_KB, ECS_MB, sandbox_allocator);
 	sandbox->runtime_asset_handle_snapshot.handle_count = 0;
 	sandbox->runtime_asset_handle_snapshot.handle_capacity = 0;
 
-	sandbox->virtual_entities_slots.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
-	sandbox->virtual_entity_slot_type.Initialize(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()), 0);
+	sandbox->virtual_entities_slots.Initialize(sandbox->GlobalMemoryManager(), 0);
+	sandbox->virtual_entity_slot_type.Initialize(sandbox->GlobalMemoryManager(), 0);
 	sandbox->virtual_entities_slots_recompute = false;
 
 	// Initialize the transfer data allocator
-	sandbox->sandbox_world_transfer_data_allocator = ResizableLinearAllocator(ECS_KB * 128, ECS_MB, GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
+	sandbox->sandbox_world_transfer_data_allocator = ResizableLinearAllocator(ECS_KB * 128, ECS_MB, sandbox->GlobalMemoryManager());
 	sandbox->sandbox_world_transfer_data = {};
 
 	InitializeSandboxProfilers(editor_state, sandbox_index);
@@ -2059,11 +2064,11 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			SetTaskManagerPhysicalMemoryProfilingExceptionHandler(sandbox->sandbox_world.task_manager);
 		}
 
-		MemoryManager runtime_query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(GetAllocatorPolymorphic(editor_state->GlobalMemoryManager()));
+		MemoryManager runtime_query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(editor_state->GlobalMemoryManager());
 		ArchetypeQueryCache runtime_query_cache;
 
 		// We need to record the query cache to restore it later
-		sandbox->sandbox_world.entity_manager->CopyQueryCache(&runtime_query_cache, GetAllocatorPolymorphic(&runtime_query_cache_allocator));
+		sandbox->sandbox_world.entity_manager->CopyQueryCache(&runtime_query_cache, &runtime_query_cache_allocator);
 
 		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
 		if (active_viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
@@ -2108,12 +2113,21 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		PrepareWorld(&sandbox->sandbox_world);
 		if (active_viewport != EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			sandbox->sandbox_world.task_scheduler->SetTasksDataFromOther(runtime_task_manager, true);
+			RetrieveModuleDebugDrawTaskElementsInitializeData(sandbox->sandbox_world.task_scheduler, sandbox->sandbox_world.task_manager, runtime_task_manager);
+			
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, enabled_debug_draw_tasks, 1024);
+			AggregateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_index, &enabled_debug_draw_tasks);
+			SetEnabledModuleDebugDrawTaskElements(sandbox->sandbox_world.task_manager, enabled_debug_draw_tasks);
 		}
 
 		// Draw the sandbox debug elements before the actual frame
 		DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
 
 		DoFrame(&sandbox->sandbox_world);
+		if (active_viewport != EDITOR_SANDBOX_VIEWPORT_SCENE) {
+			// Record the changes for the enabled flag
+			UpdateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_index, sandbox->sandbox_world.task_manager);
+		}
 
 		sandbox->sandbox_world.entity_manager = runtime_entity_manager;
 		sandbox->sandbox_world.task_manager = runtime_task_manager;
@@ -2396,9 +2410,9 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
 
 	GraphicsResourceSnapshot graphics_snapshot = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
-	ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(GetAllocatorPolymorphic(&stack_allocator));
+	ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(&stack_allocator);
 
-	CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, GetAllocatorPolymorphic(&stack_allocator));
+	CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
 	StartSandboxFrameProfiling(editor_state, sandbox_index);
 
 	if (sandbox->sandbox_world.delta_time == 0.0f) {
@@ -2688,10 +2702,20 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 		if (success) {
 			// Copy the entities from the scene to the runtime
 			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
-			// Prepare the sandbox world
-			PrepareWorld(&sandbox->sandbox_world);
-			// Set the initialize task flag
-			sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
+			if (!waiting_sandbox_compile) {
+				// Prepare the sandbox world
+				PrepareWorld(&sandbox->sandbox_world);
+				// Set the initialize task flag
+				sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_INITIALIZED_TASKS);
+			}
+			else {
+				// Only prepare the base world
+				PrepareWorldBase(&sandbox->sandbox_world);
+				// We also have to manually change the task manager wrapper to the task
+				// Scheduler ones otherwise the next set wrappers call can fail because
+				// Of not enough space
+				sandbox->sandbox_world.task_scheduler->SetTaskManagerWrapper(sandbox->sandbox_world.task_manager);
+			}
 
 			// We have to set the crash wrappers when starting the
 			// Simulation and after resuming after a module change

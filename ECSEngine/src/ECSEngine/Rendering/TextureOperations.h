@@ -95,7 +95,7 @@ namespace ECSEngine {
 	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, Stream<wchar_t> filename, AllocatorPolymorphic allocator, size_t flags = 0);
 
 	// Convert a texture from ECS_GRAPHICS_FORMAT_R8_UNORM to ECS_GRAPHICS_FORMAT_RGBA8_UNORM texture
-	// Allocator nullptr means use malloc. In order to deallocate the data, just deallocate
+	// SettingsAllocator nullptr means use malloc. In order to deallocate the data, just deallocate
 	// the buffer of the stream of streams.
 	ECSENGINE_API Stream<Stream<void>> ConvertSingleChannelTextureToGrayscale(
 		Stream<Stream<void>> mip_data,
@@ -105,7 +105,7 @@ namespace ECSEngine {
 	);
 
 	// Convert a texture from ECS_GRAPHICS_FORMAT_R8_UNORM to ECS_GRAPHICS_FORMAT_RGBA8_UNORM texture
-	// Allocator nullptr means use malloc. In order to deallocate the data, just deallocate
+	// SettingsAllocator nullptr means use malloc. In order to deallocate the data, just deallocate
 	// the first buffer (it uses a coalesced allocation). It will overwrite the mip_data stream
 	ECSENGINE_API void ConvertSingleChannelTextureToGrayscaleInPlace(
 		Stream<Stream<void>> mip_data,
@@ -117,7 +117,7 @@ namespace ECSEngine {
 	// Convert a texture from 2, 3 or 4 8 bit channels into a single 8 bit channel texture
 	// If the channel to copy is specified, only the selected channel is used to copy into the new
 	// texture. Otherwise it will assume the red channel.
-	// Allocator nullptr means use malloc. In order to deallocate the data, just deallocate
+	// SettingsAllocator nullptr means use malloc. In order to deallocate the data, just deallocate
 	// the buffer of the return.
 	ECSENGINE_API Stream<Stream<void>> ConvertTextureToSingleChannel(
 		Stream<Stream<void>> mip_data,
@@ -131,7 +131,7 @@ namespace ECSEngine {
 	// Convert a texture from 2, 3 or 4 8 bit channels into a single 8 bit channel texture
 	// If the channel to copy is specified, only the selected channel is used to copy into the new
 	// texture. Otherwise it will assume the red channel.
-	// Allocator nullptr means use malloc. In order to deallocate the data, just deallocate
+	// SettingsAllocator nullptr means use malloc. In order to deallocate the data, just deallocate
 	// the first buffer (it uses a coalesced allocation). It will overwrite the mip_data stream
 	ECSENGINE_API void ConvertTextureToSingleChannelInPlace(
 		Stream<Stream<void>> mip_data,
@@ -143,7 +143,7 @@ namespace ECSEngine {
 	);
 
 	// Converts a texture with 3 8 bit channels into 4 8 bit channels with the alpha set to 255
-	// Allocator nullptr means use malloc. In order to deallocate the data, just deallocate
+	// SettingsAllocator nullptr means use malloc. In order to deallocate the data, just deallocate
 	// the buffer of the return
 	ECSENGINE_API Stream<Stream<void>> ConvertRGBTextureToRGBA(
 		Stream<Stream<void>> mip_data,
@@ -153,7 +153,7 @@ namespace ECSEngine {
 	);
 
 	// Converts a texture with 3 8 bit channels into 4 8 bit channels with the alpha set to 255
-	// Allocator nullptr means use malloc. In order to deallocate the data, just deallocate
+	// SettingsAllocator nullptr means use malloc. In order to deallocate the data, just deallocate
 	// the first buffer (it uses a coalesced allocation). It will overwrite the mip_data stream
 	ECSENGINE_API void ConvertRGBTexturetoRGBAInPlace(
 		Stream<Stream<void>> mip_data,

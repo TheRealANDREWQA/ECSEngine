@@ -570,7 +570,7 @@ void GetInspectorName(unsigned int inspector_index, CapacityStream<char>& inspec
 
 void InitializeInspectorManager(EditorState* editor_state)
 {
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
+	AllocatorPolymorphic allocator = editor_state->editor_allocator;
 	editor_state->inspector_manager.data.Initialize(allocator, 1);
 	editor_state->inspector_manager.round_robin_index.Initialize(allocator, 2);
 	InitializeInspectorTable(editor_state);
@@ -623,8 +623,8 @@ void PushInspectorTarget(
 	new_entry.initialize = nullptr;
 	new_entry.initialize_data = nullptr;
 	new_entry.initialize_data_size = 0;
-	new_entry.initialize_allocator = LinearAllocator(
-		inspector_data->target_allocator.Allocate(INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY), 
+	new_entry.initialize_allocator = LinearAllocator::InitializeFrom(
+		&inspector_data->target_allocator, 
 		INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY
 	);
 
@@ -698,11 +698,11 @@ void* AllocateLastInspectorTargetInitialize(
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-AllocatorPolymorphic GetLastInspectorTargetInitializeAllocator(const EditorState* editor_state, unsigned int inspector_index)
+AllocatorPolymorphic GetLastInspectorTargetInitializeAllocator(EditorState* editor_state, unsigned int inspector_index)
 {
-	const InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
-	const InspectorData::Target* target = inspector_data->targets.PeekConstant();
-	return GetAllocatorPolymorphic(&target->initialize_allocator);
+	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
+	InspectorData::Target* target = inspector_data->targets.PeekIntrusive();
+	return &target->initialize_allocator;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -872,7 +872,7 @@ void InitializeInspectorInstance(EditorState* editor_state, unsigned int index)
 	data->target_sandbox = 0;
 	data->table = &editor_state->inspector_manager.function_table;
 	data->target_allocator = MemoryManager(INSPECTOR_TARGET_ALLOCATOR_CAPACITY, ECS_KB, INSPECTOR_TARGET_ALLOCATOR_CAPACITY, editor_state->EditorAllocator());
-	data->targets.Initialize(GetAllocatorPolymorphic(&data->target_allocator), INSPECTOR_MAX_TARGET_COUNT);
+	data->targets.Initialize(&data->target_allocator, INSPECTOR_MAX_TARGET_COUNT);
 	data->target_valid_count = 0;
 }
 

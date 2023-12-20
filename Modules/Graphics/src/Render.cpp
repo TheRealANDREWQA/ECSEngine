@@ -466,7 +466,7 @@ ECS_THREAD_TASK(DrawInstancedFramebuffer) {
 				if (GetEditorRuntimeInstancedFramebuffer(system_manager, &instanced_views)) {
 					// Render the elements
 					ResizableStream<GenerateInstanceFramebufferElement> elements;
-					elements.Initialize(GetAllocatorPolymorphic(world->memory), 0);
+					elements.Initialize(world->memory, 0);
 					Matrix camera_matrix = camera.GetViewProjectionMatrix();
 
 					DrawInstancedFramebufferMeshTaskData draw_instanced_mesh_data = { &elements, camera_matrix };

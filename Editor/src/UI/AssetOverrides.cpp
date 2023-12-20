@@ -99,11 +99,11 @@ static bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 	if (base_data->timer.GetDuration(ECS_TIMER_DURATION_MS) > LAZY_EVALUATION_MILLISECONDS) {
 		base_data->resizable_allocator.Clear();
 
-		AllocatorPolymorphic base_allocator = GetAllocatorPolymorphic(&base_data->resizable_allocator);
+		AllocatorPolymorphic base_allocator = &base_data->resizable_allocator;
 		Stream<Stream<wchar_t>> paths = base_data->editor_state->asset_database->GetMetadatasForType(type, base_allocator);
 		if (type == ECS_ASSET_MESH || type == ECS_ASSET_TEXTURE || type == ECS_ASSET_SHADER || type == ECS_ASSET_MISC) {
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(table_allocator, ECS_KB * 128, ECS_MB);
-			AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(&table_allocator);
+			AllocatorPolymorphic allocator_polymorphic = &table_allocator;
 
 			HashTableDefault<Stream<Stream<char>>> hash_table;
 			hash_table.Initialize(&table_allocator, PowerOfTwoGreater(paths.size / 2 + 1));
@@ -118,7 +118,7 @@ static bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 				if (_target_file.size == 0 && IsThunkOrForwardingFile(type) && AssetHasFile(type)) {
 					size_t metadata_storage[AssetMetadataMaxSizetSize()];
 					ECS_STACK_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 8);
-					bool success = base_data->editor_state->asset_database->ReadAssetFile(allocated_name, {}, metadata_storage, type, GetAllocatorPolymorphic(&temporary_allocator));
+					bool success = base_data->editor_state->asset_database->ReadAssetFile(allocated_name, {}, metadata_storage, type, &temporary_allocator);
 					if (success) {
 						_target_file.CopyOther(GetAssetFile(metadata_storage, type));
 					}

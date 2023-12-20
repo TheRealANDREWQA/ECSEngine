@@ -58,7 +58,7 @@ namespace ECSEngine {
 	EntityPool::EntityPool(
 		MemoryManager* memory_manager,
 		unsigned int pool_power_of_two
-	) : m_memory_manager(memory_manager), m_pool_power_of_two(pool_power_of_two), m_entity_infos(GetAllocatorPolymorphic(memory_manager), 1) {}
+	) : m_memory_manager(memory_manager), m_pool_power_of_two(pool_power_of_two), m_entity_infos(memory_manager, 1) {}
 	
 	// ------------------------------------------------------------------------------------------------------------
 

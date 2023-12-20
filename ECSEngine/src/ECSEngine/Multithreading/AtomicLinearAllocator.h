@@ -4,7 +4,7 @@
 
 namespace ECSEngine {
 
-	// Allocator designed to be used as a bump allocator for multithreaded allocations
+	// SettingsAllocator designed to be used as a bump allocator for multithreaded allocations
 	// Uses atomic fetch_add for additions. The only difference between it and the 
 	// AtomicStream is that it can handle size_t data sizes and that it uses a single
 	// atomic variable instead of the 2 of the atomic stream

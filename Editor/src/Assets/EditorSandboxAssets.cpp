@@ -69,7 +69,7 @@ EDITOR_EVENT(DeallocateAssetWithRemappingEvent) {
 				}
 
 				// Set the new_asset for those assets that have been changed
-				update_assets.Expand(GetAllocatorPolymorphic(&stack_allocator), deallocate_dependencies.size);
+				update_assets.Expand(&stack_allocator, deallocate_dependencies.size);
 				FromDeallocateAssetDependencyToUpdateAssetToComponentElement(&update_assets, deallocate_dependencies);
 			}
 		}
@@ -146,7 +146,7 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 		update_assets.Initialize(&update_assets_allocator, 0, total_size);
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_file_asset_allocator, ECS_KB * 64, ECS_MB);
-		AllocatorPolymorphic file_asset_allocator = GetAllocatorPolymorphic(&_file_asset_allocator);
+		AllocatorPolymorphic file_asset_allocator = &_file_asset_allocator;
 
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
@@ -204,7 +204,7 @@ EDITOR_EVENT(DeallocateAssetWithRemappingMetadataChangeEvent) {
 							// It is fine to clear the allocator since copying the old elements into the new buffer
 							// is the same as copying in the same spot
 							update_assets_allocator.Clear();
-							update_assets.Expand(GetAllocatorPolymorphic(&update_assets_allocator), external_dependencies.size);
+							update_assets.Expand(&update_assets_allocator, external_dependencies.size);
 							FromDeallocateAssetDependencyToUpdateAssetToComponentElement(&update_assets, external_dependencies);
 
 							// Remove the assets that were previously dependencies for the metadata
@@ -581,7 +581,7 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 {
 	bool return_value = false;
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&_stack_allocator);
+	AllocatorPolymorphic allocator = &_stack_allocator;
 	Stream<void> asset_pointer = GetAssetFromMetadata(metadata, type);
 
 	SandboxAction<true>(editor_state, sandbox_index, [&](unsigned int sandbox_index) {
@@ -902,7 +902,7 @@ void ReloadAssets(EditorState* editor_state, Stream<Stream<unsigned int>> assets
 	// is the only case where it can happen) but also reload-reload conflicts
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 	bool has_entries = false;
-	Stream<Stream<unsigned int>> not_loaded_assets = GetNotLoadedAssets(editor_state, GetAllocatorPolymorphic(&stack_allocator), assets_to_reload, &has_entries);
+	Stream<Stream<unsigned int>> not_loaded_assets = GetNotLoadedAssets(editor_state, &stack_allocator, assets_to_reload, &has_entries);
 
 	if (has_entries) {
 		// Add the entries to the load array
@@ -959,7 +959,7 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 				Stream<Stream<unsigned int>> external_dependencies = editor_state->asset_database->GetDependentAssetsFor(
 					metadata,
 					asset_type,
-					GetAllocatorPolymorphic(&stack_allocator)
+					&stack_allocator
 				);
 				for (size_t subtype = 0; subtype < ECS_ASSET_TYPE_COUNT; subtype++) {
 					assets_to_add[subtype].AddStreamSafe(external_dependencies[subtype]);
@@ -1015,7 +1015,7 @@ EDITOR_EVENT(ReloadAssetsMetadataChangeEvent) {
 							current_file,
 							file_metadata,
 							asset_type,
-							GetAllocatorPolymorphic(&stack_allocator)
+							&stack_allocator
 						);
 						if (success) {
 							// Set the pointer of the file metadata to the one in the database and then update the database
@@ -1195,7 +1195,7 @@ void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigne
 	// The same as the other reload, check the loading assets entries to avoid load-reload or reload-reload conflicts
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 	bool has_entries = false;
-	Stream<Stream<unsigned int>> not_loaded_assets = GetNotLoadedAssets(editor_state, GetAllocatorPolymorphic(&stack_allocator), assets_to_reload, &has_entries);
+	Stream<Stream<unsigned int>> not_loaded_assets = GetNotLoadedAssets(editor_state, &stack_allocator, assets_to_reload, &has_entries);
 
 	if (has_entries) {
 		AddLoadingAssets(editor_state, not_loaded_assets);
@@ -1367,7 +1367,7 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 	}
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
-	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+	AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 	// Firstly go through all unique components, get their reflection types, and asset fields
 	Component max_unique_count = entity_manager->GetMaxComponent();

@@ -379,7 +379,7 @@ namespace ECSEngine {
 		// accessed it will cause a crash
 		memset(m_resource_types.buffer, 0, m_resource_types.MemoryOf(m_resource_types.size));
 
-		m_shader_directory.Initialize(GetAllocatorPolymorphic(m_memory), 0);
+		m_shader_directory.Initialize(m_memory, 0);
 
 		// Set the initial shader directory
 		AddShaderDirectory(ECS_SHADER_DIRECTORY);
@@ -475,16 +475,18 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	AllocatorPolymorphic ResourceManager::Allocator() const
+	AllocatorPolymorphic ResourceManager::Allocator()
 	{
-		return GetAllocatorPolymorphic(m_memory);
+		return m_memory;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	AllocatorPolymorphic ResourceManager::AllocatorTs() const
+	AllocatorPolymorphic ResourceManager::AllocatorTs()
 	{
-		return GetAllocatorPolymorphic(m_memory, ECS_ALLOCATION_MULTI);
+		AllocatorPolymorphic allocator = m_memory;
+		allocator.allocation_type = ECS_ALLOCATION_MULTI;
+		return allocator;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1952,7 +1954,7 @@ namespace ECSEngine {
 
 		void* shader = nullptr;
 		Stream<void> contents = { nullptr, 0 };
-		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(manager->m_memory, ECS_ALLOCATION_MULTI);
+		AllocatorPolymorphic allocator_polymorphic = manager->AllocatorTs();
 
 		if (is_byte_code) {
 			ECS_ASSERT(shader_source_code == nullptr, "Cannot retrieve shader source code from binary shader.");
@@ -2582,7 +2584,7 @@ namespace ECSEngine {
 			ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_INITIAL_SIZE, 
 			2048, 
 			ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE, 
-			GetAllocatorPolymorphic(global_allocator)
+			global_allocator
 		);
 	}
 
@@ -2624,7 +2626,7 @@ namespace ECSEngine {
 		//Mapping _mapping[ECS_PBR_MATERIAL_MAPPING_COUNT];
 		//Stream<Mapping> mappings(_mapping, 0);
 		//LinearAllocator _temporary_allocator(memory, ECS_KB * 8);
-		//AllocatorPolymorphic temporary_allocator = GetAllocatorPolymorphic(&_temporary_allocator);
+		//AllocatorPolymorphic temporary_allocator = &_temporary_allocator;
 
 		//unsigned int macro_texture_count = 0;
 

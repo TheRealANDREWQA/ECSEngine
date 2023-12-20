@@ -137,7 +137,7 @@ static void DeallocateCurrentShaderAllocator(InspectorDrawMaterialFileData* draw
 // ------------------------------------------------------------------------------------------------------------
 
 ECS_INLINE static AllocatorPolymorphic GetCurrentShaderAllocator(InspectorDrawMaterialFileData* draw_data, ORDER order) {
-	return GetAllocatorPolymorphic(draw_data->shader_cbuffer_allocator[order] + draw_data->shader_cbuffer_allocator_index[order]);
+	return draw_data->shader_cbuffer_allocator[order] + draw_data->shader_cbuffer_allocator_index[order];
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -540,13 +540,13 @@ static void ConstructFromNameAction(ActionData* action_data) {
 				data->material_asset.name,
 				data->construct_pbr_from_prefix_characters,
 				assets_folder,
-				GetAllocatorPolymorphic(&stack_allocator),
+				&stack_allocator,
 				create_options
 			);
 
 			// Check to see if it has textures
 			if (pbr_material.HasTextures()) {
-				bool success = CreateMaterialAssetFromPBRMaterial(&data->temporary_database, &data->material_asset, &pbr_material, GetAllocatorPolymorphic(&stack_allocator));
+				bool success = CreateMaterialAssetFromPBRMaterial(&data->temporary_database, &data->material_asset, &pbr_material, &stack_allocator);
 				if (!success) {
 					EditorSetConsoleError("Failed to construct the material from texture group");
 				}
@@ -600,7 +600,7 @@ static void ReloadShaders(InspectorDrawMaterialFileData* data, unsigned int insp
 		const ShaderReflection* shader_reflection = editor_state->UIGraphics()->GetShaderReflection();
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 64, ECS_MB);
-		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+		AllocatorPolymorphic stack_allocator = &_stack_allocator;
 		Stream<char> source_code = ReadWholeFileText(shader_path, stack_allocator);
 		if (source_code.buffer != nullptr) {
 			// Deallocate the current allocator - it will update the index
@@ -1278,9 +1278,9 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 				TEMPORARY_DATABASE_ALLOCATOR_CAPACITY,
 				ECS_KB,
 				TEMPORARY_DATABASE_ALLOCATOR_CAPACITY,
-				GetAllocatorPolymorphic(editor_state->GlobalMemoryManager())
+				editor_state->GlobalMemoryManager()
 			);
-			draw_data->temporary_database = AssetDatabase(GetAllocatorPolymorphic(&draw_data->database_allocator), editor_state->asset_database->reflection_manager);
+			draw_data->temporary_database = AssetDatabase(&draw_data->database_allocator, editor_state->asset_database->reflection_manager);
 			draw_data->temporary_database.SetFileLocation(editor_state->asset_database->metadata_file_location);
 
 			for (size_t index = 0; index < ORDER_COUNT; index++) {
@@ -1328,7 +1328,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 			draw_data->material_asset.name = asset_name;
 
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 64, ECS_MB);
-			bool success = draw_data->temporary_database.ReadMaterialFile(asset_name, &draw_data->material_asset, GetAllocatorPolymorphic(&temporary_allocator));
+			bool success = draw_data->temporary_database.ReadMaterialFile(asset_name, &draw_data->material_asset, &temporary_allocator);
 			draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
 			if (!success) {
 				// Set the default for the metadata

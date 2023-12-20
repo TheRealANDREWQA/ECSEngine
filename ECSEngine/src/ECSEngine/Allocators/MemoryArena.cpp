@@ -85,7 +85,7 @@ namespace ECSEngine {
 							DebugAllocatorManagerAddEntry(arena, ECS_ALLOCATOR_ARENA, &tracked);
 						}
 						if (arena->m_profiling_mode) {
-							AllocatorProfilingAddAllocation(arena, arena->GetCurrentUsage(), AllocatorPolymorphicBlockCount(GetAllocatorPolymorphic(arena)));
+							AllocatorProfilingAddAllocation(arena, arena->GetCurrentUsage(), AllocatorPolymorphicBlockCount(arena));
 						}
 					}
 					return allocation;
@@ -171,7 +171,7 @@ namespace ECSEngine {
 		}
 		if (arena->m_profiling_mode) {
 			AllocatorProfilingAddDeallocation(arena);
-			AllocatorProfilingAddAllocation(arena, arena->GetCurrentUsage(), AllocatorPolymorphicBlockCount(GetAllocatorPolymorphic(arena)));
+			AllocatorProfilingAddAllocation(arena, arena->GetCurrentUsage(), AllocatorPolymorphicBlockCount(arena));
 		}
 
 		return reallocation;

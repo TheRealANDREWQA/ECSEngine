@@ -2250,7 +2250,7 @@ namespace ECSEngine {
 							if (!is_text_input && !is_path_input)
 							{
 								UIReflectionBindResizableStreamAllocator bind;
-								bind.allocator = GetAllocatorPolymorphic(data->ui_reflection->allocator);
+								bind.allocator = data->ui_reflection->allocator;
 								bind.field_name = data->sections[index].elements[subindex].name;
 								data->ui_reflection->BindInstanceResizableStreamAllocator(instance, { &bind, 1 });
 

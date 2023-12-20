@@ -445,38 +445,6 @@ namespace ECSEngine {
 	struct ResizableLinearAllocator;
 	struct MemoryProtectedAllocator;
 
-	template<typename Allocator>
-	ECS_INLINE AllocatorPolymorphic GetAllocatorPolymorphic(Allocator* allocator, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE) {
-		ECS_ALLOCATOR_TYPE allocator_type = ECS_ALLOCATOR_LINEAR;
-
-		if constexpr (std::is_same_v<std::remove_const_t<Allocator>, LinearAllocator>) {
-			allocator_type = ECS_ALLOCATOR_LINEAR;
-		}
-		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, StackAllocator>) {
-			allocator_type = ECS_ALLOCATOR_STACK;
-		}
-		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, MultipoolAllocator>) {
-			allocator_type = ECS_ALLOCATOR_MULTIPOOL;
-		}
-		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, MemoryManager>) {
-			allocator_type = ECS_ALLOCATOR_MANAGER;
-		}
-		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, MemoryArena>) {
-			allocator_type = ECS_ALLOCATOR_ARENA;
-		}
-		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, ResizableLinearAllocator>) {
-			allocator_type = ECS_ALLOCATOR_RESIZABLE_LINEAR;
-		}
-		else if constexpr (std::is_same_v<std::remove_const_t<Allocator>, MemoryProtectedAllocator>) {
-			allocator_type = ECS_ALLOCATOR_MEMORY_PROTECTED;
-		}
-		else {
-			static_assert(false, "Incorrect allocator type for GetAllocatorPolymorphic");
-		}
-
-		return { (void*)allocator, allocator_type, allocation_type };
-	}
-
 	ECSENGINE_API void SetInternalImageAllocator(DirectX::ScratchImage* image, AllocatorPolymorphic allocator);
 
 	// The returned string is a constant literal

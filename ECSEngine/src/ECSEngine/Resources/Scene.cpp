@@ -42,7 +42,7 @@ namespace ECSEngine {
 	bool LoadScene(LoadSceneData* load_data)
 	{
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
-		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+		AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 		bool normal_database = load_data->database != nullptr;
 		AssetDatabase* database = normal_database ? load_data->database : load_data->database_reference->database;
@@ -132,7 +132,7 @@ namespace ECSEngine {
 		}
 
 		bool randomize_assets = load_data->randomize_assets;
-		AssetDatabaseSnapshot asset_database_snapshot = database->GetSnapshot(GetAllocatorPolymorphic(&_stack_allocator));
+		AssetDatabaseSnapshot asset_database_snapshot = database->GetSnapshot(&_stack_allocator);
 
 		bool success = true;
 		// Try to load the asset database first
@@ -323,7 +323,7 @@ namespace ECSEngine {
 	bool SaveScene(SaveSceneData* save_data)
 	{
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 256, ECS_MB * 8);
-		AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+		AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 		// Rename the file to a temporary name such that if we fail to serialize we don't lose the previous data
 		// Do this only if the file exists at that location

@@ -11,7 +11,7 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------------------
 
 	// A temporary buffer will be allocated and filled with the serialization data and then commited to the file
-	// Allocator nullptr means use malloc
+	// SettingsAllocator nullptr means use malloc
 	// It will return false if the file write fails
 	ECSENGINE_API bool SerializeSection(
 		Stream<SerializeSectionData> data,

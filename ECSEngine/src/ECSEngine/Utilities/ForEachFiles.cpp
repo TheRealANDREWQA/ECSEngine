@@ -126,7 +126,7 @@ namespace ECSEngine {
 		void* allocation = ECS_STACK_ALLOC(MultipoolAllocator::MemoryOf(MAX_SIMULTANEOUS_DIRECTORIES, STACK_ALLOCATION));
 		MultipoolAllocator allocator((unsigned char*)allocation, STACK_ALLOCATION, MAX_SIMULTANEOUS_DIRECTORIES);
 
-		Stream<wchar_t> allocator_directory = StringCopy(GetAllocatorPolymorphic(&allocator), directory);
+		Stream<wchar_t> allocator_directory = StringCopy(&allocator, directory);
 		subdirectories.Add(allocator_directory.buffer);
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_string, 512);
@@ -160,7 +160,7 @@ namespace ECSEngine {
 					}
 
 					if (find_data.attrib & _A_SUBDIR) {
-						Stream<wchar_t> copied_string = StringCopy(GetAllocatorPolymorphic(&allocator), temp_string);
+						Stream<wchar_t> copied_string = StringCopy(&allocator, temp_string);
 						subdirectories.AddAssert(copied_string.buffer);
 					}
 				}
@@ -190,7 +190,7 @@ namespace ECSEngine {
 		void* allocation = ECS_STACK_ALLOC(MultipoolAllocator::MemoryOf(MAX_SIMULTANEOUS_DIRECTORIES, STACK_ALLOCATION));
 		MultipoolAllocator allocator((unsigned char*)allocation, STACK_ALLOCATION, MAX_SIMULTANEOUS_DIRECTORIES);
 
-		Stream<wchar_t> allocator_directory = StringCopy(GetAllocatorPolymorphic(&allocator), directory);
+		Stream<wchar_t> allocator_directory = StringCopy(&allocator, directory);
 		subdirectories.Add(allocator_directory.buffer);
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_string, 512);
@@ -239,7 +239,7 @@ namespace ECSEngine {
 				}
 
 				if (find_data.attrib & _A_SUBDIR) {
-					Stream<wchar_t> copied_string = StringCopy(GetAllocatorPolymorphic(&allocator), temp_string);
+					Stream<wchar_t> copied_string = StringCopy(&allocator, temp_string);
 					subdirectories.AddAssert(copied_string.buffer);
 				}
 			}

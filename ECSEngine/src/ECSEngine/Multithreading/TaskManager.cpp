@@ -18,7 +18,7 @@
 namespace ECSEngine {
 
 	ECS_INLINE AllocatorPolymorphic StaticTaskAllocator(TaskManager* manager) {
-		return GetAllocatorPolymorphic(&manager->m_static_task_data_allocator);
+		return &manager->m_static_task_data_allocator;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -176,7 +176,7 @@ namespace ECSEngine {
 		m_threads_reset_point = (jmp_buf*)AlignPointer(buffer_start, ECS_CACHE_LINE_SIZE);
 		buffer_start += sizeof(jmp_buf) * thread_count;
 
-		m_tasks = ResizableStream<StaticTask>(GetAllocatorPolymorphic(memory), 0);
+		m_tasks = ResizableStream<StaticTask>(memory, 0);
 
 		// Now the thread local allocators
 		m_thread_linear_allocators = (CacheAligned<LinearAllocator>*)memory->Allocate(

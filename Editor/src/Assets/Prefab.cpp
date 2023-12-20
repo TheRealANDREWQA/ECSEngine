@@ -11,8 +11,8 @@
 #define LAZY_ACTIVE_IDS_MS 5000
 #define LAZY_FILE_CHANGE_MS 300
 
-ECS_INLINE static AllocatorPolymorphic PrefabAllocator(const EditorState* editor_state) {
-	return GetAllocatorPolymorphic(&editor_state->prefabs_allocator);
+ECS_INLINE static AllocatorPolymorphic PrefabAllocator(EditorState* editor_state) {
+	return &editor_state->prefabs_allocator;
 }
 
 static Stream<wchar_t> GetPrefabAbsolutePath(const EditorState* editor_state, Stream<wchar_t> path, CapacityStream<wchar_t> storage) {
@@ -144,7 +144,7 @@ void TickPrefabUpdateActiveIDs(EditorState* editor_state)
 		// We need to refresh the ids in use. Those that are not referenced, need to be elimiated
 		// And add a consistency check to ensure that there is no invalid prefab id inside the entities
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 16);
-		ResizableStream<unsigned int> prefab_ids_in_use(GetAllocatorPolymorphic(&stack_allocator), 16);
+		ResizableStream<unsigned int> prefab_ids_in_use(&stack_allocator, 16);
 		AdditionStream<unsigned int> addition_prefab_ids_in_use = &prefab_ids_in_use;
 
 		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
@@ -201,8 +201,8 @@ void TickPrefabFileChange(EditorState* editor_state) {
 
 						EntityManager previous_data_manager;
 						EntityManager new_data_manager;
-						AssetDatabaseReference previous_data_asset_reference(editor_state->asset_database, GetAllocatorPolymorphic(&temporary_global_manager));
-						AssetDatabaseReference new_data_asset_reference(editor_state->asset_database, GetAllocatorPolymorphic(&temporary_global_manager));
+						AssetDatabaseReference previous_data_asset_reference(editor_state->asset_database, &temporary_global_manager);
+						AssetDatabaseReference new_data_asset_reference(editor_state->asset_database, &temporary_global_manager);
 
 						CreateEntityManagerWithPool(&previous_data_manager, ECS_MB * 200, ECS_KB * 4, ECS_MB * 400, 4, &temporary_global_manager);
 						CreateEntityManagerWithPool(&new_data_manager, ECS_MB * 200, ECS_KB * 4, ECS_MB * 400, 4, &temporary_global_manager);
@@ -246,7 +246,7 @@ void TickPrefabFileChange(EditorState* editor_state) {
 									prefab_entity,
 									prefab_entity,
 									&prefab_changes,
-									GetAllocatorPolymorphic(&stack_allocator),
+									&stack_allocator,
 									{ false, true }
 								);
 
@@ -294,7 +294,7 @@ void TickPrefabFileChange(EditorState* editor_state) {
 														editor_state, 
 														sandbox_index, 
 														EDITOR_SANDBOX_VIEWPORT_SCENE, 
-														GetAllocatorPolymorphic(&stack_allocator)
+														&stack_allocator
 													);
 												}
 												SandboxApplyEntityChanges(
@@ -314,7 +314,7 @@ void TickPrefabFileChange(EditorState* editor_state) {
 														editor_state,
 														sandbox_index,
 														EDITOR_SANDBOX_VIEWPORT_SCENE,
-														GetAllocatorPolymorphic(&stack_allocator)
+														&stack_allocator
 													);
 													ForEachSandboxAssetReferenceDifference(
 														editor_state,

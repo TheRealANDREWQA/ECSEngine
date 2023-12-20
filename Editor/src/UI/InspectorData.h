@@ -143,7 +143,7 @@ void* AllocateLastInspectorTargetInitialize(
 	size_t data_size
 );
 
-AllocatorPolymorphic GetLastInspectorTargetInitializeAllocator(const EditorState* editor_state, unsigned int inspector_index);
+AllocatorPolymorphic GetLastInspectorTargetInitializeAllocator(EditorState* editor_state, unsigned int inspector_index);
 
 void SetLastInspectorTargetInitializeFromAllocation(
 	EditorState* editor_state,

@@ -75,8 +75,8 @@ struct HierarchyIteratorImpl {
 		Initialize(ui_data, hierarchy, entity_manager, name_component);
 	}
 	
-	ECS_INLINE AllocatorPolymorphic GetAllocator() const {
-		return GetAllocatorPolymorphic(implementation.hierarchy->allocator);
+	ECS_INLINE AllocatorPolymorphic GetAllocator() {
+		return implementation.hierarchy->allocator;
 	}
 
 	ECS_INLINE Stream<StorageType> GetChildren(StorageType value, AllocatorPolymorphic allocator) {
@@ -273,8 +273,8 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 	state.submenues = state_submenus;
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 256, ECS_MB);
-	ResizableStream<Stream<wchar_t>> project_prefabs(GetAllocatorPolymorphic(&stack_allocator), 8);
-	GetProjectPrefabs(entities_data->editor_state, &project_prefabs, GetAllocatorPolymorphic(&stack_allocator));
+	ResizableStream<Stream<wchar_t>> project_prefabs(&stack_allocator, 8);
+	GetProjectPrefabs(entities_data->editor_state, &project_prefabs, &stack_allocator);
 	
 	if (project_prefabs.size > 0) {
 		// We need to convert these paths into an ASCII string
@@ -317,7 +317,7 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 	if (all_global_components.size > 0) {
 		UIActionHandler* global_component_handlers = (UIActionHandler*)stack_allocator.Allocate(sizeof(UIActionHandler) * all_global_components.size);
 		ResizableStream<char> global_components_string;
-		global_components_string.Initialize(GetAllocatorPolymorphic(&stack_allocator), 0);
+		global_components_string.Initialize(&stack_allocator, 0);
 		global_components_string.ResizeNoCopy(ECS_KB * 4);
 		for (unsigned int index = 0; index < all_global_components.size; index++) {
 			EntitiesCreateGlobalComponentData* global_handler_data = (EntitiesCreateGlobalComponentData*)stack_allocator.Allocate(sizeof(EntitiesCreateGlobalComponentData));
@@ -919,7 +919,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 				const EntityHierarchy* hierarchy = &entity_manager->m_hierarchy;
 				HierarchyIteratorImpl implementation(data, hierarchy, entity_manager, editor_state->editor_components.GetComponentID(STRING(Name)));
 
-				AllocatorPolymorphic iterator_allocator = GetAllocatorPolymorphic(entity_manager->m_memory_manager);
+				AllocatorPolymorphic iterator_allocator = entity_manager->m_memory_manager;
 
 				// Use the allocator from the entity manager because the one from the hierarchy can cause deallocating the roots
 				DFSUIHierarchy iterator(iterator_allocator, implementation, hierarchy->children_table.GetCount());

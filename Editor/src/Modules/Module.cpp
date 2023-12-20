@@ -1317,12 +1317,12 @@ void GetModuleDLLImports(EditorState* editor_state, unsigned int index)
 	editor_state->project_modules->buffer[index].dll_imports.Deallocate(editor_state->EditorAllocator());
 	editor_state->project_modules->buffer[index].dll_imports = GetModuleDLLDependenciesFromVCX(
 		editor_state->project_modules->buffer[index].solution_path, 
-		GetAllocatorPolymorphic(&_stack_allocator), 
+		&_stack_allocator, 
 		true
 	);
 
 	Stream<char> search_token = "_$(Configuration)";
-	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+	AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 	Stream<Stream<char>> dll_imports = editor_state->project_modules->buffer[index].dll_imports;
 
@@ -1537,7 +1537,7 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 			info->ecs_module.base_module = LoadModule(temporary_library, &load_debugging_symbols);
 			// The load succeded, now try to retrieve the streams for this module
 			if (info->ecs_module.base_module.code == ECS_GET_MODULE_OK) {
-				AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
+				AllocatorPolymorphic allocator = editor_state->EditorAllocator();
 
 				ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB * 32);
 				LoadAppliedModule(&info->ecs_module, allocator, &error_message);
@@ -1781,6 +1781,26 @@ void GetModuleDebugDrawComponents(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+unsigned int GetDebugDrawTasksBelongingModule(const EditorState* editor_state, Stream<char> task_name, EDITOR_MODULE_CONFIGURATION configuration)
+{
+	unsigned int module_count = editor_state->project_modules->size;
+	for (unsigned int index = 0; index < module_count; index++) {
+		EDITOR_MODULE_CONFIGURATION optimal_configuration = GetModuleLoadedConfiguration(editor_state, index);
+		if (optimal_configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
+			const EditorModuleInfo* module_info = GetModuleInfo(editor_state, index, optimal_configuration);
+			bool exists = module_info->ecs_module.debug_draw_task_elements.Find(task_name, [](const ModuleDebugDrawTaskElement& element) {
+				return element.base_element.task_name;
+			}) != -1;
+			if (exists) {
+				return index;
+			}
+		}
+	}
+	return -1;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 void GetModuleMatchedDebugDrawComponents(
 	const EditorState* editor_state, 
 	unsigned int module_index, 
@@ -1835,7 +1855,7 @@ void ReleaseModuleStreamsAndHandle(EditorState* editor_state, unsigned int index
 	}
 
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
+	AllocatorPolymorphic allocator = editor_state->editor_allocator;
 
 	// Also release the debugging symbols for the module
 	// Don't verify if it succeeded or not since it is of not much relevance

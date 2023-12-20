@@ -14,7 +14,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// The allocator polymorphic is needed to allocate the buffer to which the contents will be written and then commited to disk
-	// Allocator nullptr means use malloc
+	// SettingsAllocator nullptr means use malloc
 	ECSENGINE_API bool SerializeMultisection(Stream<SerializeMultisectionData> data, Stream<wchar_t> file, AllocatorPolymorphic allocator = { nullptr }, Stream<void> header = {nullptr, 0});
 
 	// ---------------------------------------------------------------------------------------------------------------

@@ -33,7 +33,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 	// Use malloc for extra large allocations
 	ResizableLinearAllocator linear_allocator(stack_allocation, STACK_ALLOCATION_CAPACITY, BACKUP_CAPACITY, { nullptr });
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&linear_allocator);
+	AllocatorPolymorphic allocator = &linear_allocator;
 	Stream<void> contents = ReadWholeFileBinary(sandbox_file_path, allocator);
 
 	struct DeallocateAllocator {
@@ -149,6 +149,9 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 					if (sandboxes[index].modules_in_use[subindex].is_deactivated) {
 						DeactivateSandboxModuleInStream(editor_state, index, subindex);
+					}
+					for (unsigned int enabled_index = 0; enabled_index < sandboxes[index].modules_in_use[subindex].enabled_debug_tasks.size; enabled_index++) {
+						AddSandboxModuleDebugDrawTask(editor_state, index, subindex, sandboxes[index].modules_in_use[subindex].enabled_debug_tasks[enabled_index]);
 					}
 				}
 			}

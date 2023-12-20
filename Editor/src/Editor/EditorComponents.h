@@ -405,7 +405,7 @@ struct EditorComponents {
 	// Initializes a default allocator. The size must be the one given from default allocator size
 	void Initialize(void* buffer);
 
-	void Initialize(AllocatorPolymorphic allocator);
+	void InitializeAllocator(AllocatorPolymorphic allocator);
 
 	static size_t DefaultAllocatorSize();
 

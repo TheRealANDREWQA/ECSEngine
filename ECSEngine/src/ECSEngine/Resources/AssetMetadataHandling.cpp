@@ -268,7 +268,7 @@ namespace ECSEngine {
 		}
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
-		AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&stack_allocator);
+		AllocatorPolymorphic allocator = &stack_allocator;
 		
 		// At the moment allow unbound resources - samplers or textures
 		// Instead bind nullptr resources - for samplers it will generate warnings but that is fine
@@ -1057,7 +1057,7 @@ namespace ECSEngine {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 
 		UserMaterial user_material;
-		ConvertMaterialAssetToUserMaterial(database, material, &user_material, GetAllocatorPolymorphic(&stack_allocator), mount_point);
+		ConvertMaterialAssetToUserMaterial(database, material, &user_material, &stack_allocator, mount_point);
 		ResourceManagerLoadDesc load_desc;
 		load_desc.load_flags = check_resource ? ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE : 0;
 		load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS;
@@ -1296,10 +1296,10 @@ namespace ECSEngine {
 				UserMaterial previous_user_material;
 				UserMaterial current_user_material;
 				ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
-				ConvertMaterialAssetToUserMaterial(database, current_material, &current_user_material, GetAllocatorPolymorphic(&stack_allocator), mount_point);
+				ConvertMaterialAssetToUserMaterial(database, current_material, &current_user_material, &stack_allocator, mount_point);
 				// Perform the conversion only if the previous was valid
 				if (IsAssetPointerValid(previous_material->material_pointer)) {
-					ConvertMaterialAssetToUserMaterial(database, previous_material, &previous_user_material, GetAllocatorPolymorphic(&stack_allocator), mount_point);
+					ConvertMaterialAssetToUserMaterial(database, previous_material, &previous_user_material, &stack_allocator, mount_point);
 				}
 				else {
 					memset(&previous_user_material, 0, sizeof(previous_user_material));
@@ -1838,7 +1838,7 @@ namespace ECSEngine {
 
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 
-		Stream<char> source_code = ReadWholeFileText(absolute_path, GetAllocatorPolymorphic(&stack_allocator));
+		Stream<char> source_code = ReadWholeFileText(absolute_path, &stack_allocator);
 		ECS_RELOAD_ASSET_METADATA_STATUS status = ECS_RELOAD_ASSET_METADATA_NO_CHANGE;
 		if (source_code.size > 0) {
 			// Preprocess the file - taking into account the shader macro definitions
@@ -1858,7 +1858,7 @@ namespace ECSEngine {
 
 			// Load the new values
 			ReflectedShader reflected_shader;
-			reflected_shader.allocator = GetAllocatorPolymorphic(&stack_allocator);
+			reflected_shader.allocator = &stack_allocator;
 
 			reflected_shader.buffers = &reflected_buffers;
 			reflected_shader.buffer_options.only_constant_buffers = true;
@@ -2067,7 +2067,7 @@ namespace ECSEngine {
 		auto add_texture = [&](Stream<wchar_t> texture, Stream<char> macro_string, Stream<char> display_name, unsigned char slot) {
 			if (texture.size > 0 && success) {
 				// Get the default setting for the texture, or any one of them if there is no "Default" setting
-				Stream<Stream<char>> settings = database->GetMetadatasForFile(texture, ECS_ASSET_TEXTURE, GetAllocatorPolymorphic(&stack_allocator));
+				Stream<Stream<char>> settings = database->GetMetadatasForFile(texture, ECS_ASSET_TEXTURE, &stack_allocator);
 				if (settings.size > 0) {
 					pixel_metadata->AddMacro(macro_string, "", allocator);
 					unsigned int default_texture_index = FindString("Default", settings);

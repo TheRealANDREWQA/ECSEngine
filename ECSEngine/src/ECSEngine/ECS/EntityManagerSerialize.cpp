@@ -1232,7 +1232,7 @@ namespace ECSEngine {
 				// If it has a name, search for its match
 				const DeserializeEntityManagerSharedComponentInfo* component_info = cached_shared_infos[index].info;
 
-				AllocatorPolymorphic component_allocator = entity_manager->GetSharedComponentAllocatorPolymorphic(shared_component_pairs[index].component);
+				AllocatorPolymorphic component_allocator = entity_manager->GetSharedComponentAllocator(shared_component_pairs[index].component);
 				ECS_STACK_CAPACITY_STREAM(size_t, component_storage, 1024);
 
 				unsigned int current_instance_offset = 0;
@@ -1315,7 +1315,7 @@ namespace ECSEngine {
 
 				// Allocate the data from the entity manager allocator
 				void* global_data = entity_manager->GetGlobalComponent(cached_global_infos[index].found_at);
-				AllocatorPolymorphic component_allocator = entity_manager->GetGlobalComponentAllocatorPolymorphic(cached_global_infos[index].found_at);
+				AllocatorPolymorphic component_allocator = entity_manager->GetGlobalComponentAllocator(cached_global_infos[index].found_at);
 
 				DeserializeEntityManagerComponentData function_data;
 				function_data.components = global_data;
@@ -1537,7 +1537,7 @@ namespace ECSEngine {
 						function_data.file_data = starting_component_data;
 						function_data.components = archetype_buffer;
 						function_data.version = component_info.version;
-						function_data.component_allocator = entity_manager->GetComponentAllocatorPolymorphic(current_component);
+						function_data.component_allocator = entity_manager->GetComponentAllocator(current_component);
 
 						bool is_data_valid = component_info.info->function(&function_data);
 						if (!is_data_valid) {

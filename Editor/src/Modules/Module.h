@@ -223,6 +223,14 @@ void GetModuleDebugDrawComponents(
 	AdditionStream<ComponentWithType> components
 );
 
+// Returns -1 if there is no module matched. If the configuration is COUNT, it will choose
+// The most "optimal" configuration for each module
+unsigned int GetDebugDrawTasksBelongingModule(
+	const EditorState* editor_state,
+	Stream<char> task_name,
+	EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_COUNT
+);
+
 // The debug_elements must have components.size entries in it
 // In case a component is not matched, it will leave it as it is
 void GetModuleMatchedDebugDrawComponents(

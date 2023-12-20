@@ -41,7 +41,9 @@ namespace ECSEngine {
 			Stream<wchar_t> current_filename = PathFilename(path);
 
 			if (current_filename == data->include_filename) {
-				Stream<char> file_data = ReadWholeFileText(path, GetAllocatorPolymorphic(data->manager, ECS_ALLOCATION_MULTI));
+				AllocatorPolymorphic allocator = data->manager;
+				allocator.allocation_type = ECS_ALLOCATION_MULTI;
+				Stream<char> file_data = ReadWholeFileText(path, allocator);
 				if (file_data.buffer != nullptr) {
 					*data->byte_pointer = file_data.size;
 					*data->data_pointer = file_data.buffer;

@@ -79,7 +79,7 @@ namespace ECSEngine {
 	// A master block of data that all the threads will reference
 	struct AssetLoadingControlBlock {
 		ECS_INLINE AllocatorPolymorphic GetThreadAllocator(unsigned int index) {
-			return GetAllocatorPolymorphic(&global_managers[index]);
+			return &global_managers[index];
 		}
 
 		// Sets the success flag to false
@@ -878,7 +878,7 @@ namespace ECSEngine {
 	) {
 		// Start by getting all the unique handles and preload them, then apply the processing upon that data
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 12);
-		AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&stack_allocator);
+		AllocatorPolymorphic allocator = &stack_allocator;
 
 		AssetDatabaseSameTargetAll same_target = database->SameTargetAll(allocator);
 		// Go through all current assets and check to see if they exist already in the resource manager

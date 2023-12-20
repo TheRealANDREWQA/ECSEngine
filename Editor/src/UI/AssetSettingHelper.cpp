@@ -25,8 +25,7 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 		helper_data->is_new_name = false;
 
 		const size_t ALLOCATOR_CAPACITY = ECS_KB * 32;
-		void* allocator_buffer = editor_state->editor_allocator->Allocate(ALLOCATOR_CAPACITY);
-		helper_data->temp_allocator = LinearAllocator(allocator_buffer, ALLOCATOR_CAPACITY);
+		helper_data->temp_allocator = LinearAllocator::InitializeFrom(editor_state->editor_allocator, ALLOCATOR_CAPACITY);
 		helper_data->lazy_timer.DelayStart(-LAZY_TIMER_RELOAD_MS, ECS_TIMER_DURATION_MS);
 	}
 
@@ -34,7 +33,7 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 
 	ECS_STACK_CAPACITY_STREAM(unsigned int, handles, MAX_SETTINGS);
 	// Display a selection box for the available settings
-	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&helper_data->temp_allocator);
+	AllocatorPolymorphic allocator = &helper_data->temp_allocator;
 
 	Stream<wchar_t> file = GetAssetFile(helper_data->metadata, asset_type);
 
@@ -410,8 +409,8 @@ void SetAssetBuiltinAction(ActionData* action_data)
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 
 		size_t asset_storage[AssetMetadataMaxSizetSize()];
-		SetAssetBuiltin(data->editor_state, data->builtin_index, data->asset, data->asset_type, asset_storage, GetAllocatorPolymorphic(&stack_allocator));
-		Stream<wchar_t> current_path = data->current_path.Copy(GetAllocatorPolymorphic(&stack_allocator));
+		SetAssetBuiltin(data->editor_state, data->builtin_index, data->asset, data->asset_type, asset_storage, &stack_allocator);
+		Stream<wchar_t> current_path = data->current_path.Copy(&stack_allocator);
 
 		unsigned int inspector_index = GetInspectorIndex(system->GetWindowName(window_index));
 		ChangeInspectorToNothing(data->editor_state, inspector_index);

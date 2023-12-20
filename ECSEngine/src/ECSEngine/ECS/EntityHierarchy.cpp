@@ -72,7 +72,7 @@ namespace ECSEngine {
         parent_table_initial_size = parent_table_initial_size == -1 ? PARENT_TABLE_INITIAL_SIZE : parent_table_initial_size;
 
         allocator = memory_manager;
-        roots.Initialize(GetAllocatorPolymorphic(memory_manager), root_initial_size);
+        roots.Initialize(memory_manager, root_initial_size);
         children_table.Initialize(memory_manager, children_table_initial_size);
         parent_table.Initialize(memory_manager, parent_table_initial_size);
     }
@@ -142,7 +142,7 @@ namespace ECSEngine {
     {
         // The roots can be just memcpy'ed
         roots.FreeBuffer();
-        roots.Initialize(GetAllocatorPolymorphic(allocator), other->roots.size);
+        roots.Initialize(allocator, other->roots.size);
 
         roots.CopyOther(other->roots);
 
@@ -151,14 +151,14 @@ namespace ECSEngine {
         if (allocated_buffer != nullptr) {
             allocator->Deallocate(allocated_buffer);
         }
-        parent_table.Copy(GetAllocatorPolymorphic(allocator), &other->parent_table);
+        parent_table.Copy(allocator, &other->parent_table);
 
         // The children cannot be memcpy'ed because of the children allocations
         allocated_buffer = children_table.GetAllocatedBuffer();
         if (allocated_buffer != nullptr) {
             allocator->Deallocate(allocated_buffer);
         }
-        children_table.Copy(GetAllocatorPolymorphic(allocator), &other->children_table);
+        children_table.Copy(allocator, &other->children_table);
 
         other->children_table.ForEachIndexConst([&](unsigned int index) {
             Children other_children = other->children_table.GetValueFromIndex(index);
@@ -659,7 +659,7 @@ namespace ECSEngine {
     BFSEntityHierarchyIterator GetEntityHierarchyBFSIterator(const EntityHierarchy* hierarchy, AllocatorPolymorphic allocator)
     {
         if (allocator.allocator == nullptr) {
-            allocator = GetAllocatorPolymorphic(hierarchy->allocator);
+            allocator = hierarchy->allocator;
         }
 
         // Use a default capacity of the number of entries in the children table
@@ -669,7 +669,7 @@ namespace ECSEngine {
     DFSEntityHierarchyIterator GetEntityHierarchyDFSIterator(const EntityHierarchy* hierarchy, AllocatorPolymorphic allocator)
     {
         if (allocator.allocator == nullptr) {
-            allocator = GetAllocatorPolymorphic(hierarchy->allocator);
+            allocator = hierarchy->allocator;
         }
 
         // Use a default capacity of the number of entries in the children table

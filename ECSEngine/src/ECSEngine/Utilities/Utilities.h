@@ -219,9 +219,10 @@ namespace ECSEngine {
 		// Use bitscan to quickly find this out
 		// Example 00011010 -> 00100000
 
-		unsigned int index = FirstMSB(number);
+		unsigned int index = FirstMSB64(number);
 		// This works out even when index is -1 (that is number is 0, index + 1 will be 0 so the returned value will be 1)
-		return { (size_t)1 << (index + 1), (size_t)index + 1 };
+		// When it is -1, let the exponent be 0
+		return { (size_t)1 << (index + 1), index == -1 ? (size_t)0 : (size_t)index + 1 };
 	}
 
 	ECS_INLINE size_t PowerOfTwoGreater(size_t number) {

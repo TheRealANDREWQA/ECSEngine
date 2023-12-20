@@ -1066,7 +1066,7 @@ namespace ECSEngine {
 				Entity* copied_parents;
 				Stream<Entity> children;
 			};
-			ResizableQueue<ParentWithChildren> process_queue(GetAllocatorPolymorphic(&manager->m_small_memory_manager), 128);
+			ResizableQueue<ParentWithChildren> process_queue(&manager->m_small_memory_manager, 128);
 			process_queue.Push({ entities, manager->GetHierarchyChildren(data->entity, temporary_static_entities + temporary_static_count * ECS_ENTITY_HIERARCHY_STATIC_STORAGE) });
 			temporary_static_count = 1;
 
@@ -2109,7 +2109,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	EntityManager::EntityManager(const EntityManagerDescriptor& descriptor) : m_entity_pool(descriptor.entity_pool), m_memory_manager(descriptor.memory_manager),
-		m_archetypes(GetAllocatorPolymorphic(descriptor.memory_manager), ENTITY_MANAGER_DEFAULT_ARCHETYPE_COUNT)
+		m_archetypes(descriptor.memory_manager, ENTITY_MANAGER_DEFAULT_ARCHETYPE_COUNT)
 	{
 		// Create a small memory manager in order to not fragment the memory of the main allocator
 		m_small_memory_manager = MemoryManager(
@@ -2147,7 +2147,7 @@ namespace ECSEngine {
 		m_temporary_allocator = ResizableLinearAllocator(
 			ENTITY_MANAGER_TEMPORARY_ALLOCATOR_INITIAL_CAPACITY, 
 			ENTITY_MANAGER_TEMPORARY_ALLOCATOR_BACKUP_CAPACITY, 
-			GetAllocatorPolymorphic(m_memory_manager)
+			m_memory_manager
 		);
 
 		m_hierarchy_allocator = (MemoryManager*)m_memory_manager->Allocate(sizeof(MemoryManager));
@@ -2159,7 +2159,7 @@ namespace ECSEngine {
 		MemoryManager* query_cache_allocator = (MemoryManager*)AllocateEx(m_memory_manager->m_backup, sizeof(MemoryManager));
 		*query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(descriptor.memory_manager->m_backup);
 		m_query_cache = (ArchetypeQueryCache*)m_memory_manager->Allocate(sizeof(ArchetypeQueryCache));
-		*m_query_cache = ArchetypeQueryCache(this, GetAllocatorPolymorphic(query_cache_allocator));
+		*m_query_cache = ArchetypeQueryCache(this, query_cache_allocator);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3209,7 +3209,7 @@ namespace ECSEngine {
 					entity_manager->m_shared_components[index].named_instances.ForEachIndexConst([&](unsigned int subindex) {
 						ResourceIdentifier current_identifier = entity_manager->m_shared_components[index].named_instances.GetIdentifierFromIndex(subindex);
 						Stream<void> identifier = Copy(
-							GetAllocatorPolymorphic(&m_small_memory_manager),
+							&m_small_memory_manager,
 							{ current_identifier.ptr, current_identifier.size }
 						);
 						*m_shared_components[index].named_instances.GetIdentifierPtrFromIndex(subindex) = identifier;
@@ -3257,7 +3257,7 @@ namespace ECSEngine {
 
 		// Copy the actual archetypes now
 		m_archetypes.FreeBuffer();
-		m_archetypes.Initialize(GetAllocatorPolymorphic(&m_small_memory_manager), entity_manager->m_archetypes.capacity);
+		m_archetypes.Initialize(&m_small_memory_manager, entity_manager->m_archetypes.capacity);
 
 		// For every archetype copy the other one
 		for (size_t index = 0; index < entity_manager->m_archetypes.size; index++) {
@@ -4520,24 +4520,10 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	AllocatorPolymorphic EntityManager::GetComponentAllocatorPolymorphic(Component component)
-	{
-		return GetAllocatorPolymorphic(GetComponentAllocator(component));
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
 	MemoryArena* EntityManager::GetSharedComponentAllocator(Component component)
 	{
 		ECS_CRASH_CONDITION_RETURN(ExistsSharedComponent(component), nullptr, "The shared component {#} doesn't exist when retrieving its allocator.", GetSharedComponentName(component));
 		return m_shared_components[component.value].info.allocator;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	AllocatorPolymorphic EntityManager::GetSharedComponentAllocatorPolymorphic(Component component)
-	{
-		return GetAllocatorPolymorphic(GetSharedComponentAllocator(component));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4547,13 +4533,6 @@ namespace ECSEngine {
 		size_t index = SearchBytes(m_global_components, m_global_component_count, component.value, sizeof(component));
 		ECS_CRASH_CONDITION_RETURN(index != -1, nullptr, "The global component {#} doesn't exist when retrieving its allocator.", component.value);
 		return m_global_components_info[index].allocator;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	AllocatorPolymorphic EntityManager::GetGlobalComponentAllocatorPolymorphic(Component component)
-	{
-		return GetAllocatorPolymorphic(GetGlobalComponentAllocator(component));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4572,12 +4551,6 @@ namespace ECSEngine {
 
 		// Shouldn't reach here
 		return nullptr;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	AllocatorPolymorphic EntityManager::GetComponentAllocatorPolymorphicFromType(Component component, ECS_COMPONENT_TYPE type) {
-		return GetAllocatorPolymorphic(GetComponentAllocatorFromType(component, type));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5585,7 +5558,7 @@ namespace ECSEngine {
 		// Change the allocator of the hierarchy allocator, is going to point to the temporary memory. The roots allocator needs to be changed too
 		// The same goes for the query cache with the entity manager reference
 		m_hierarchy.allocator = m_hierarchy_allocator;
-		m_hierarchy.roots.allocator = GetAllocatorPolymorphic(m_hierarchy_allocator);
+		m_hierarchy.roots.allocator = m_hierarchy_allocator;
 
 		// The allocator for the query cache is stable because it is allocated from the memory manager
 		m_query_cache->entity_manager = this;
@@ -6029,7 +6002,7 @@ namespace ECSEngine {
 		// Share the allocator between the memory pool and the entity manager
 		// The entity pool will make few allocations
 		MemoryManager* entity_manager_allocator = (MemoryManager*)allocation;
-		*entity_manager_allocator = MemoryManager(allocator_size, allocator_pool_count, allocator_new_size, GetAllocatorPolymorphic(global_memory_manager));
+		*entity_manager_allocator = MemoryManager(allocator_size, allocator_pool_count, allocator_new_size, global_memory_manager);
 
 		allocation = OffsetPointer(allocation, sizeof(MemoryManager));
 		EntityPool* entity_pool = (EntityPool*)allocation;

@@ -199,9 +199,9 @@ namespace ECSEngine {
 
 		void* AllocateTs(size_t size);
 
-		AllocatorPolymorphic Allocator() const;
+		AllocatorPolymorphic Allocator();
 
-		AllocatorPolymorphic AllocatorTs() const;
+		AllocatorPolymorphic AllocatorTs();
 
 		// Returns the old time stamp
 		size_t ChangeTimeStamp(ResourceIdentifier identifier, ResourceType resource_type, size_t new_time_stamp, Stream<void> suffix = { nullptr, 0 });

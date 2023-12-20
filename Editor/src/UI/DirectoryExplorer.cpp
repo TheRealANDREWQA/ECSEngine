@@ -255,7 +255,7 @@ void DirectoryExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descrip
 		data->directories_ptrs.Initialize(editor_allocator, 0, POINTER_CAPACITY);
 		data->directories_ptrs.size = 0;
 
-		data->allocator = LinearAllocator(editor_allocator, LINEAR_ALLOCATOR_SIZE);
+		data->allocator = LinearAllocator::InitializeFrom(editor_allocator, LINEAR_ALLOCATOR_SIZE);
 
 		size_t total_right_click_menu_size = (sizeof(UIActionHandler) + sizeof(bool)) * RIGHT_CLICK_ROW_COUNT + sizeof(UIDrawerMenuState);
 		void* right_click_allocation = Allocate(editor_allocator, total_right_click_menu_size);

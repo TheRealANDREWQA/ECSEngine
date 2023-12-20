@@ -462,7 +462,18 @@ namespace ECSEngine {
 			Stream<char> closed_bracket = FindCharacterReverse(opened_bracket, '>');
 			ECS_ASSERT(closed_bracket.buffer != nullptr);
 
-			data->dependent_types.AddAssert({ opened_bracket.buffer + 1, PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 });
+			// Check to see if it is a trivial type or not - do not report trivial types as dependent types
+			Stream<char> type_name = { opened_bracket.buffer + 1, PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 };
+			ReflectionBasicFieldType basic_field_type;
+			ReflectionStreamFieldType stream_field_type;
+			ConvertStringToPrimitiveType(type_name, basic_field_type, stream_field_type);
+			if (basic_field_type == ReflectionBasicFieldType::Unknown || basic_field_type == ReflectionBasicFieldType::UserDefined
+				|| stream_field_type == ReflectionStreamFieldType::Unknown) {
+				// One more exception here, void, treat it as a special case
+				if (type_name != "void") {
+					data->dependent_types.AddAssert(type_name);
+				}
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -890,7 +901,7 @@ namespace ECSEngine {
 		{
 			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 			ECS_STACK_CAPACITY_STREAM(BlittableType, blittable_types, 64);
-			GetKnownBlittableExceptions(&blittable_types, GetAllocatorPolymorphic(&stack_allocator));
+			GetKnownBlittableExceptions(&blittable_types, &stack_allocator);
 
 			for (unsigned int index = 0; index < blittable_types.size; index++) {
 				AddBlittableException(blittable_types[index].name, blittable_types[index].byte_size, blittable_types[index].alignment, blittable_types[index].default_data);
@@ -1129,7 +1140,7 @@ namespace ECSEngine {
 
 					Stream<SkippedField> allocated_skipped_fields = { nullptr, 0 };
 					if (current_skipped_fields.size > 0) {
-						allocated_skipped_fields.InitializeAndCopy(GetAllocatorPolymorphic(&stack_allocator), current_skipped_fields);
+						allocated_skipped_fields.InitializeAndCopy(&stack_allocator, current_skipped_fields);
 					}
 					skipped_fields_table.Insert(allocated_skipped_fields, data_type->name);
 				}
@@ -3727,6 +3738,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					ecsengine_namespace = FindFirstToken(ecsengine_namespace, namespace_string);
 					// Don't forget to remove this from the total memory pool
 					data->total_memory -= namespace_string.size;
+					field.definition.size -= namespace_string.size;
 				}
 
 				if (embedded_array_size_body.size > 0) {
